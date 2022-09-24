@@ -21,7 +21,7 @@ Comp: Compute<()> = {
             arg, body, ann: ()
         })),
     <v:ValBox> "'" <e:CompBox> => Compute::App(e, v, ()),
-    "if" <cond:ValBox> ":" <thn:CompBox> "else:" <els:CompBox> => Compute::If {
+    "if" <cond:ValBox> "{" <thn:CompBox> "}" "else" "{" <els:CompBox> "}" => Compute::If {
         cond, thn, els, ann: ()
     },
 }
