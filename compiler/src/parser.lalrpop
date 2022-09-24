@@ -3,7 +3,9 @@ use crate::syntax::{TValue, TCompute, Value, Compute};
 
 grammar;
 
-pub CompBox: Box<Compute<()>> = Boxed<Comp>;
+pub Computation: Box<Compute<()>> = <CompBox>;
+
+CompBox: Box<Compute<()>> = Boxed<Comp>;
 
 Comp: Compute<()> = {
     "let" <x:Id> "=" <v:ValBox> ";" <e:CompBox> => Compute::Let(x, v, e, ()),
@@ -11,7 +13,7 @@ Comp: Compute<()> = {
     "!" <v:ValBox> => Compute::Force(v, ()),
     "ret" <v:ValBox> => Compute::Return(v, ()),
     "fn" "(" <x:Id> ":" <t:TValBox> ")" "{" <e:CompBox> "}" => Compute::Lam(x, t, e, ()),
-    "app" "(" <e:CompBox> "," <v:ValBox> ")" => Compute::App(e, v, ()),
+    <v:ValBox> "'" <e:CompBox> => Compute::App(e, v, ()),
     "if" <cond:ValBox> ":" <e1:CompBox> "else:" <e2:CompBox> => Compute::If(cond, e1, e2, ()),
 }
 
