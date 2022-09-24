@@ -12,9 +12,23 @@ Comp: Compute<()> = {
     "do" <x:Id> "<-" <def:CompBox> ";" <e:CompBox> => Compute::Do(x, def, e, ()),
     "!" <v:ValBox> => Compute::Force(v, ()),
     "ret" <v:ValBox> => Compute::Return(v, ()),
-    "fn" "(" <x:Id> ":" <t:TValBox> ")" "{" <e:CompBox> "}" => Compute::Lam(x, t, e, ()),
+    "fn" "(" <a:Args> ")" "{" <e:CompBox> "}" => {
+        *a.into_iter().fold(e, |e, (x, t)| Box::new(Compute::Lam(x, t, e, ())))
+    },
     <v:ValBox> "'" <e:CompBox> => Compute::App(e, v, ()),
     "if" <cond:ValBox> ":" <e1:CompBox> "else:" <e2:CompBox> => Compute::If(cond, e1, e2, ()),
+}
+
+Args: Vec<(String, Box<TValue<()>>)> = {
+    <a:Arg> "," <mut b:Args> => {
+        b.push(a);
+        b
+    },
+    <a:Arg> => vec![a],
+}
+
+Arg: (String, Box<TValue<()>>) = {
+    <x:Id> ":" <t:TValBox> => (x, t),
 }
 
 ValBox: Box<Value<()>> = Boxed<Val>;
@@ -44,6 +58,7 @@ Boxed<T> : Box<T> = {
 }
 
 Id: String = <s:r"[a-zA-Z][a-zA-Z0-9_-]*"> => String::from(s);
+
 Bool: bool = {
     "true" => true,
     "false" => false,
