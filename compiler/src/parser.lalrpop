@@ -1,0 +1,48 @@
+// use std::str::FromStr;
+use crate::syntax::{TValue, TCompute, Value, Compute};
+
+grammar;
+
+pub CompBox: Box<Compute<()>> = Boxed<Comp>;
+
+Comp: Compute<()> = {
+    "let" <x:Id> "=" <v:ValBox> ";" <e:CompBox> => Compute::Let(x, v, e, ()),
+    "do" <x:Id> "<-" <def:CompBox> ";" <e:CompBox> => Compute::Do(x, def, e, ()),
+    "!" <v:ValBox> => Compute::Force(v, ()),
+    "ret" <v:ValBox> => Compute::Return(v, ()),
+    "fn" "(" <x:Id> ":" <t:TValBox> ")" "{" <e:CompBox> "}" => Compute::Lam(x, t, e, ()),
+    "app" "(" <e:CompBox> "," <v:ValBox> ")" => Compute::App(e, v, ()),
+    "if" <cond:ValBox> ":" <e1:CompBox> "else:" <e2:CompBox> => Compute::If(cond, e1, e2, ()),
+}
+
+ValBox: Box<Value<()>> = Boxed<Val>;
+
+Val: Value<()> = {
+    <x:Id> => Value::Var(x, ()),
+    "{" <e:CompBox> "}" => Value::Thunk(e, ()),
+    <b:Bool> => Value::Bool(b, ()),
+}
+
+TCompBox: Box<TCompute<()>> = Boxed<TComp>;
+
+TComp: TCompute<()> = {
+    "Ret" "(" <t:TValBox> ")" => TCompute::Ret(t, ()),
+    <tv:TValBox> "->" <tc:TCompBox> => TCompute::Lam(tv, tc, ()),
+}
+
+TValBox: Box<TValue<()>> = Boxed<TVal>;
+
+TVal: TValue<()> = {
+    "Comp" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
+    "Bool" => TValue::Bool(()),
+}
+
+Boxed<T> : Box<T> = {
+    T => Box::new(<>)
+}
+
+Id: String = <s:r"[a-zA-Z][a-zA-Z0-9_-]*"> => String::from(s);
+Bool: bool = {
+    "true" => true,
+    "false" => false,
+}
