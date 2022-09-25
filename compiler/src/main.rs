@@ -16,10 +16,12 @@ fn main() -> Result<(), ()> {
 
 fn repl_mode() {
     let stdin = std::io::stdin();
-    for line in stdin.lines() {
+    for (i, line) in stdin.lines().enumerate() {
         let line = line.unwrap();
-        let comp = ComputationParser::new().parse(&line).unwrap();
-        println!("{}", comp.fmt());
+        let res = Main::acc_single_run(&format!("#{}", i), &line);
+        if res.is_err() {
+            println!("(>_<)");
+        }
     }
 }
 
@@ -38,7 +40,7 @@ fn acc_test_mode() -> Result<(), ()> {
                 .trim();
             println!(">>> [{}]", title);
             println!("{}", buffer);
-            let res = acc_single_run(title, &buffer);
+            let res = Main::acc_single_run(title, &buffer);
             if res.is_err() {
                 err_names.push(title.to_owned());
             }
@@ -52,16 +54,27 @@ fn acc_test_mode() -> Result<(), ()> {
     }
     println!("Conclusion: {} errors", err_names.len());
     for name in &err_names {
-        println!("  {}", name);
+        println!("- {}", name);
     }
 
-    fn acc_single_run(title: &str, buffer: &str) -> Result<(TCompute<()>, Value<()>), ()> {
+    if err_names.is_empty() {
+        println!("\\^o^/");
+        Ok(())
+    } else {
+        println!("(>_<)");
+        Err(())
+    }
+}
+
+struct Main;
+impl Main {
+    pub fn acc_single_run(title: &str, buffer: &str) -> Result<(TCompute<()>, Value<()>), ()> {
         println!("=== [{}] <parse>", title);
-        let computation = parse(&buffer)?;
+        let computation = Main::parse(&buffer)?;
         println!("=== [{}] <tyck>", title);
-        let ty = tyck(&computation)?;
+        let ty = Main::tyck(&computation)?;
         println!("=== [{}] <eval>", title);
-        let value = eval(*computation)?;
+        let value = Main::eval(*computation)?;
         Ok((ty, value))
     }
 
@@ -101,13 +114,5 @@ fn acc_test_mode() -> Result<(), ()> {
                 println!("Eval error ()");
                 Err(())
             })
-    }
-
-    if err_names.is_empty() {
-        println!("\\^o^/");
-        Ok(())
-    } else {
-        println!("(>_<)");
-        Err(())
     }
 }
