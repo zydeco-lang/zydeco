@@ -29,32 +29,17 @@ impl<Ann> TypeEqv for TCompute<Ann> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Typ<Ann> {
-    TVal(TValue<Ann>),
-    TComp(TCompute<Ann>),
-}
-
 #[derive(Clone, Debug)]
-pub struct Ctx<Ann>(Vec<(String, Typ<Ann>)>);
+pub struct Ctx<Ann>(HashMap<String, TValue<Ann>>);
 impl<Ann> Ctx<Ann> {
     pub fn new() -> Self {
-        Self(Vec::new())
+        Self(HashMap::new())
     }
-    fn push(&mut self, x: String, t: Typ<Ann>) {
-        self.0.push((x, t))
+    fn push(&mut self, x: String, t: TValue<Ann>) {
+        self.0.insert(x, t);
     }
-    fn lookup_val(&self, x: &str) -> Option<&TValue<Ann>> {
-        self.0.iter().rev().find_map(|(y, t)| match t {
-            Typ::TVal(t) if x == y => Some(t),
-            _ => None,
-        })
-    }
-    fn lookup_comp(&self, x: &str) -> Option<&TCompute<Ann>> {
-        self.0.iter().rev().find_map(|(y, t)| match t {
-            Typ::TComp(t) if x == y => Some(t),
-            _ => None,
-        })
+    fn lookup(&self, x: &str) -> Option<&TValue<Ann>> {
+        self.0.get(x)
     }
 }
 
@@ -97,7 +82,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let mut ctx = ctx.clone();
                 let (x, def) = binding;
                 let t = def.tyck(&ctx)?;
-                ctx.push(x.clone(), Typ::TVal(t));
+                ctx.push(x.clone(), t);
                 body.tyck(&ctx)
             }
             Compute::Do { binding, body, ann } => {
@@ -106,7 +91,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let te = def.tyck(&ctx)?;
                 match te {
                     TCompute::Ret(tv, ann) => {
-                        ctx.push(x.clone(), Typ::TVal(*tv));
+                        ctx.push(x.clone(), *tv);
                         body.tyck(&ctx)
                     }
                     _ => Err(TCompExpect {
@@ -132,7 +117,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
             Compute::Lam { arg, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, t) = arg;
-                ctx.push(x.clone(), Typ::TVal(*t.clone()));
+                ctx.push(x.clone(), *t.clone());
                 let tbody = body.tyck(&ctx)?;
                 Ok(TCompute::Lam(t.clone(), Box::new(tbody), ann.clone()))
             }
@@ -186,7 +171,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
     type Type = TValue<Ann>;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         match self {
-            Value::Var(x, ann) => ctx.lookup_val(x.as_str()).cloned().ok_or(UnboundVar {
+            Value::Var(x, ann) => ctx.lookup(x.as_str()).cloned().ok_or(UnboundVar {
                 var: x.clone(),
                 ann: ann.clone(),
             }),
