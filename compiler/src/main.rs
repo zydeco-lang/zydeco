@@ -1,7 +1,8 @@
 use vituloid_compiler::{
     parser::ComputationParser,
-    statics::tyck::{Ctx, TypeCheck},
     syntax::Compute,
+    statics::tyck::{Ctx, TypeCheck},
+    dynamics
 };
 
 fn main() -> Result<(), ()> {
@@ -35,6 +36,8 @@ fn acc_test_mode() -> Result<(), ()> {
             let computation = parse(&buffer)?;
             println!("=== [{}] <tyck>", title);
             let _ = tyck(&computation)?;
+            println!("=== [{}] <eval>", title);
+            let _ = eval(*computation);
             println!("<<< [{}]", title);
             println!();
             buffer.clear()
@@ -66,6 +69,20 @@ fn acc_test_mode() -> Result<(), ()> {
             }
             Err(err) => {
                 println!("Type error: {:?}", err);
+                Err(())
+            }
+        }
+    }
+
+    fn eval(comp: Compute<()>) -> Result<(), ()> {
+        let eval = dynamics::eval::eval(comp);
+        match eval {
+            Some(eval) => {
+                println!("{:?}", eval);
+                Ok(())
+            }
+            None => {
+                println!("Eval error ()");
                 Err(())
             }
         }
