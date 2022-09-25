@@ -47,7 +47,7 @@ fn acc_test_mode() -> Result<(), ()> {
         let computation = ComputationParser::new().parse(input);
         match computation {
             Ok(comp) => {
-                println!("{:#?}", comp);
+                println!("{:?}", comp);
                 Ok(comp)
             }
             Err(err) => {

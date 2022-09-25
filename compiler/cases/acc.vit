@@ -4,9 +4,8 @@ fn (x: Bool, y: Comp(Bool -> Ret(Bool))) { x ' !y }
 @@@ fn & app, x2
 let x = true,
     y = {ret false};
-let f = { fn (b: Bool, g: Comp(Bool -> Ret(Bool))) { b ' !g } };
-do  f <- !f,
-    rx <- x ' ret f,
-    ry <- do y <- !y; y ' ret f;
-if x { ret rx } else { ret y }
+let f = { fn (b: Bool) { ret b } };
+do  rx <- x ' !f,
+    ry <- do y <- !y; y ' !f;
+if x { ret rx } else { ret ry }
 @@@ multiple bindings everywhere

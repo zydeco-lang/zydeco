@@ -103,9 +103,17 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
             Compute::Do { binding, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, def) = binding;
-                let t = def.tyck(&ctx)?;
-                ctx.push(x.clone(), Typ::TComp(t));
-                body.tyck(&ctx)
+                let te = def.tyck(&ctx)?;
+                match te {
+                    TCompute::Ret(tv, ann) => {
+                        ctx.push(x.clone(), Typ::TVal(*tv));
+                        body.tyck(&ctx)
+                    }
+                    _ => Err(TCompExpect {
+                        expected: format!("Ret({{...}})"),
+                        found: te,
+                    }),
+                }
             }
             Compute::Force(comp, ann) => {
                 let t = comp.tyck(&ctx)?;
