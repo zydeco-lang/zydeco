@@ -38,7 +38,7 @@ enum Typ<Ann> {
 #[derive(Clone, Debug)]
 pub struct Ctx<Ann>(Vec<(String, Typ<Ann>)>);
 impl<Ann> Ctx<Ann> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self(Vec::new())
     }
     fn push(&mut self, x: String, t: Typ<Ann>) {
@@ -58,53 +58,93 @@ impl<Ann> Ctx<Ann> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum TypeCheckError<Ann> {
+    UnboundVar {
+        var: String,
+        ann: Ann,
+    },
+    TValMismatch {
+        expected: TValue<Ann>,
+        found: TValue<Ann>,
+    },
+    TCompMismatch {
+        expected: TCompute<Ann>,
+        found: TCompute<Ann>,
+    },
+    TValExpect {
+        expected: String,
+        found: TValue<Ann>,
+    },
+    TCompExpect {
+        expected: String,
+        found: TCompute<Ann>,
+    },
+    InConsistentBranches(Vec<TCompute<Ann>>),
+}
+use TypeCheckError::*;
+
 pub trait TypeCheck<Ann> {
     type Type;
-    fn tyck(self, ctx: &Ctx<Ann>) -> Result<Self::Type, ()>;
+    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>>;
 }
 
 impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
     type Type = TCompute<Ann>;
-    fn tyck(self, ctx: &Ctx<Ann>) -> Result<Self::Type, ()> {
+    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         match self {
             Compute::Let { binding, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, def) = binding;
                 let t = def.tyck(&ctx)?;
-                ctx.push(x, Typ::TVal(t));
+                ctx.push(x.clone(), Typ::TVal(t));
                 body.tyck(&ctx)
             }
             Compute::Do { binding, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, def) = binding;
                 let t = def.tyck(&ctx)?;
-                ctx.push(x, Typ::TComp(t));
+                ctx.push(x.clone(), Typ::TComp(t));
                 body.tyck(&ctx)
             }
-            Compute::Force(comp, ann) => match *comp {
-                Value::Thunk(body, ann) => body.tyck(&ctx),
-                _ => Err(()),
-            },
+            Compute::Force(comp, ann) => {
+                let t = comp.tyck(&ctx)?;
+                match t {
+                    TValue::Comp(body, ann) => Ok(*body),
+                    _ => Err(TValExpect {
+                        expected: format!("Comp({{...}})"),
+                        found: t,
+                    }),
+                }
+            }
             Compute::Return(v, ann) => {
                 let t = v.tyck(&ctx)?;
-                Ok(TCompute::Ret(Box::new(t), ann))
+                Ok(TCompute::Ret(Box::new(t), ann.clone()))
             }
             Compute::Lam { arg, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, t) = arg;
-                ctx.push(x, Typ::TVal(*t.clone()));
+                ctx.push(x.clone(), Typ::TVal(*t.clone()));
                 let tbody = body.tyck(&ctx)?;
-                Ok(TCompute::Lam(t, Box::new(tbody), ann))
+                Ok(TCompute::Lam(t.clone(), Box::new(tbody), ann.clone()))
             }
             Compute::App(e, v, _) => {
                 let tfn = e.tyck(&ctx)?;
                 let targ = v.tyck(&ctx)?;
                 match tfn {
                     TCompute::Lam(tpara, tbody, ann) => {
-                        TValue::eqv(&targ, &tpara).then_some(()).ok_or(())?;
+                        TValue::eqv(&targ, &tpara)
+                            .then_some(())
+                            .ok_or(TValMismatch {
+                                expected: *tpara,
+                                found: targ,
+                            })?;
                         Ok(*tbody)
                     }
-                    _ => Err(()),
+                    _ => Err(TCompExpect {
+                        expected: format!("{{...}} -> {{...}}"),
+                        found: tfn,
+                    }),
                 }
             }
             Compute::If {
@@ -118,10 +158,16 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                     TValue::Bool(_) => {
                         let tthn = thn.tyck(&ctx)?;
                         let tels = els.tyck(&ctx)?;
-                        TCompute::eqv(&tthn, &tels).then_some(()).ok_or(())?;
-                        Ok(tels)
+                        let tfinal = tels.clone();
+                        TCompute::eqv(&tthn, &tels)
+                            .then_some(())
+                            .ok_or_else(|| InConsistentBranches(vec![tthn, tels]))?;
+                        Ok(tfinal)
                     }
-                    _ => Err(()),
+                    _ => Err(TValExpect {
+                        expected: format!("Bool"),
+                        found: tcond,
+                    }),
                 }
             }
         }
@@ -130,14 +176,17 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
 
 impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
     type Type = TValue<Ann>;
-    fn tyck(self, ctx: &Ctx<Ann>) -> Result<Self::Type, ()> {
+    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         match self {
-            Value::Var(x, ann) => ctx.lookup_val(x.as_str()).cloned().ok_or(()),
+            Value::Var(x, ann) => ctx.lookup_val(x.as_str()).cloned().ok_or(UnboundVar {
+                var: x.clone(),
+                ann: ann.clone(),
+            }),
             Value::Thunk(e, ann) => {
                 let t = e.tyck(&ctx)?;
-                Ok(TValue::Comp(Box::new(t), ann))
+                Ok(TValue::Comp(Box::new(t), ann.clone()))
             }
-            Value::Bool(_, ann) => Ok(TValue::Bool(ann)),
+            Value::Bool(_, ann) => Ok(TValue::Bool(ann.clone())),
         }
     }
 }

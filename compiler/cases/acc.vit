@@ -1,5 +1,7 @@
-fn (x: Bool, y: Comp(Bool -> Ret(Bool))) { x'!y }
+fn (x: Bool, y: Comp(Bool -> Ret(Bool))) { x ' !y }
 @@@ fn & app
+{ fn (x: Bool) { ret x } } ' true ' fn (x: Bool, y: Comp(Bool -> Ret(Bool))) { x ' !y }
+@@@ fn & app, x2
 let x = true,
     y = {ret false};
 let f = { fn (b: Bool, g: Comp(Bool -> Ret(Bool))) { b ' !g } };
