@@ -16,22 +16,14 @@ Comp: Compute<()> = {
     },
     "!" <v:ValBox> => Compute::Force(v, ()),
     "ret" <v:ValBox> => Compute::Return(v, ()),
-    "fn" "(" <a:Args> ")" "{" <e:CompBox> "}" =>
-        *a.into_iter().fold(e, |body, arg| Box::new(Compute::Lam{
+    "fn" "(" <args:CommaOnce<Arg>> ")" "{" <e:CompBox> "}" =>
+        *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Lam{
             arg, body, ann: ()
         })),
     <v:ValBox> "'" <e:CompBox> => Compute::App(e, v, ()),
     "if" <cond:ValBox> "{" <thn:CompBox> "}" "else" "{" <els:CompBox> "}" => Compute::If {
         cond, thn, els, ann: ()
     },
-}
-
-Args: Vec<(String, Box<TValue<()>>)> = {
-    <a:Arg> "," <mut b:Args> => {
-        b.push(a);
-        b
-    },
-    <a:Arg> => vec![a],
 }
 
 Arg: (String, Box<TValue<()>>) = {
@@ -62,6 +54,13 @@ TVal: TValue<()> = {
 
 Boxed<T> : Box<T> = {
     T => Box::new(<>)
+}
+
+CommaOnce<T>: Vec<T> = {
+    <e:T> <mut v:("," <T>)*> <s:(",")?> => {
+        v.insert(0, e);
+        v
+    }
 }
 
 Id: String = <s:r"[a-zA-Z][a-zA-Z0-9_-]*"> => String::from(s);
