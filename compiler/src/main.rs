@@ -1,8 +1,8 @@
 use vituloid_compiler::{
+    dynamics,
     parser::ComputationParser,
-    syntax::Compute,
     statics::tyck::{Ctx, TypeCheck},
-    dynamics
+    syntax::Compute,
 };
 
 fn main() -> Result<(), ()> {
@@ -47,45 +47,41 @@ fn acc_test_mode() -> Result<(), ()> {
     }
 
     fn parse(input: &str) -> Result<Box<Compute<()>>, ()> {
-        let computation = ComputationParser::new().parse(input);
-        match computation {
-            Ok(comp) => {
+        ComputationParser::new()
+            .parse(input)
+            .and_then(|comp| {
                 println!("{:?}", comp);
                 Ok(comp)
-            }
-            Err(err) => {
+            })
+            .or_else(|err| {
                 println!("Parse error: {}", err);
                 Err(())
-            }
-        }
+            })
     }
 
     fn tyck(comp: &Compute<()>) -> Result<(), ()> {
-        let tyck = comp.tyck(&Ctx::new());
-        match tyck {
-            Ok(tyck) => {
-                println!("{:?}", tyck);
+        comp.tyck(&Ctx::new())
+            .and_then(|ty| {
+                println!("{:?}", ty);
                 Ok(())
-            }
-            Err(err) => {
+            })
+            .or_else(|err| {
                 println!("Type error: {:?}", err);
                 Err(())
-            }
-        }
+            })
     }
 
     fn eval(comp: Compute<()>) -> Result<(), ()> {
-        let eval = dynamics::eval::eval(comp);
-        match eval {
-            Some(eval) => {
-                println!("{:?}", eval);
+        dynamics::eval::eval(comp)
+            .ok_or(())
+            .and_then(|val| {
+                println!("{:?}", val);
                 Ok(())
-            }
-            None => {
+            })
+            .or_else(|()| {
                 println!("Eval error ()");
                 Err(())
-            }
-        }
+            })
     }
 
     Ok(())
