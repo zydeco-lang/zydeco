@@ -65,7 +65,7 @@ pub enum TypeCheckError<Ann> {
         expected: String,
         found: TCompute<Ann>,
     },
-    InConsistentBranches(Vec<TCompute<Ann>>),
+    InconsistentBranches(Vec<TCompute<Ann>>),
 }
 use TypeCheckError::*;
 
@@ -154,7 +154,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                         let tfinal = tels.clone();
                         TCompute::eqv(&tthn, &tels)
                             .then_some(())
-                            .ok_or_else(|| InConsistentBranches(vec![tthn, tels]))?;
+                            .ok_or_else(|| InconsistentBranches(vec![tthn, tels]))?;
                         Ok(tfinal)
                     }
                     _ => Err(TValExpect {

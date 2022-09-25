@@ -68,6 +68,13 @@ Boxed<T> : Box<T> = {
     T => Box::new(<>)
 }
 
+// SemiColonOnce<T>: Vec<T> = {
+//     <e:T> <mut v:(";" <T>)*> <s:(";")?> => {
+//         v.insert(0, e);
+//         v
+//     }
+// }
+
 CommaOnce<T>: Vec<T> = {
     <e:T> <mut v:("," <T>)*> <s:(",")?> => {
         v.insert(0, e);
