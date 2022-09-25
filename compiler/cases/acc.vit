@@ -9,3 +9,11 @@ do  rx <- x ' !f,
     ry <- do y <- !y; y ' !f;
 if x { ret rx } else { ret ry }
 @@@ multiple bindings everywhere
+let not = { fn (x: Bool) { if x { ret false } else { ret true } } },
+    and = { fn (x: Bool, y: Bool) { if x { ret y } else { ret false } } },
+    or = { fn (x: Bool, y: Bool) { if x { ret true } else { ret y } } };
+do  a <- true ' false ' !and,
+    b <- true ' false ' !or,
+    c <- a ' !not;
+b ' c ' !and
+@@@ boolean operations

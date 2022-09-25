@@ -2,7 +2,7 @@ use vituloid_compiler::{
     dynamics,
     parser::ComputationParser,
     statics::tyck::{Ctx, TypeCheck},
-    syntax::Compute,
+    syntax::{Compute, Value},
 };
 
 fn main() -> Result<(), ()> {
@@ -71,12 +71,12 @@ fn acc_test_mode() -> Result<(), ()> {
             })
     }
 
-    fn eval(comp: Compute<()>) -> Result<(), ()> {
+    fn eval(comp: Compute<()>) -> Result<Value<()>, ()> {
         dynamics::eval::eval(comp)
             .ok_or(())
             .and_then(|val| {
                 println!("{:?}", val);
-                Ok(())
+                Ok(val)
             })
             .or_else(|()| {
                 println!("Eval error ()");
