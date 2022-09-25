@@ -58,72 +58,86 @@ impl<Ann> Ctx<Ann> {
     }
 }
 
-pub fn tyck_compute<Ann: Clone>(mut ctx: Ctx<Ann>, e: Compute<Ann>) -> Result<TCompute<Ann>, ()> {
-    match e {
-        Compute::Let { binding, body, ann } => {
-            let (x, def) = binding;
-            let t = tyck_value(&ctx, *def)?;
-            ctx.push(x, Typ::TVal(t));
-            tyck_compute(ctx, *body)
-        }
-        Compute::Do { binding, body, ann } => {
-            let (x, def) = binding;
-            let t = tyck_compute(ctx.clone(), *def)?;
-            ctx.push(x, Typ::TComp(t));
-            tyck_compute(ctx, *body)
-        }
-        Compute::Force(comp, ann) => match *comp {
-            Value::Thunk(body, ann) => tyck_compute(ctx, *body),
-            _ => Err(()),
-        },
-        Compute::Return(v, ann) => {
-            let t = tyck_value(&ctx, *v)?;
-            Ok(TCompute::Ret(Box::new(t), ann))
-        }
-        Compute::Lam { arg, body, ann } => {
-            let (x, t) = arg;
-            ctx.push(x, Typ::TVal(*t.clone()));
-            let tbody = tyck_compute(ctx, *body)?;
-            Ok(TCompute::Lam(t, Box::new(tbody), ann))
-        }
-        Compute::App(e, v, _) => {
-            let tfn = tyck_compute(ctx.clone(), *e)?;
-            let targ = tyck_value(&ctx, *v)?;
-            match tfn {
-                TCompute::Lam(tpara, tbody, ann) => {
-                    TValue::eqv(&targ, &tpara).then_some(()).ok_or(())?;
-                    Ok(*tbody)
-                }
-                _ => Err(()),
+pub trait TypeCheck<Ann> {
+    type Type;
+    fn tyck(self, ctx: &Ctx<Ann>) -> Result<Self::Type, ()>;
+}
+
+impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
+    type Type = TCompute<Ann>;
+    fn tyck(self, ctx: &Ctx<Ann>) -> Result<Self::Type, ()> {
+        match self {
+            Compute::Let { binding, body, ann } => {
+                let mut ctx = ctx.clone();
+                let (x, def) = binding;
+                let t = def.tyck(&ctx)?;
+                ctx.push(x, Typ::TVal(t));
+                body.tyck(&ctx)
             }
-        }
-        Compute::If {
-            cond,
-            thn,
-            els,
-            ann,
-        } => {
-            let tcond = tyck_value(&ctx, *cond)?;
-            match tcond {
-                TValue::Bool(_) => {
-                    let tthn = tyck_compute(ctx.clone(), *thn)?;
-                    let tels = tyck_compute(ctx, *els)?;
-                    TCompute::eqv(&tthn, &tels).then_some(()).ok_or(())?;
-                    Ok(tels)
-                }
+            Compute::Do { binding, body, ann } => {
+                let mut ctx = ctx.clone();
+                let (x, def) = binding;
+                let t = def.tyck(&ctx)?;
+                ctx.push(x, Typ::TComp(t));
+                body.tyck(&ctx)
+            }
+            Compute::Force(comp, ann) => match *comp {
+                Value::Thunk(body, ann) => body.tyck(&ctx),
                 _ => Err(()),
+            },
+            Compute::Return(v, ann) => {
+                let t = v.tyck(&ctx)?;
+                Ok(TCompute::Ret(Box::new(t), ann))
+            }
+            Compute::Lam { arg, body, ann } => {
+                let mut ctx = ctx.clone();
+                let (x, t) = arg;
+                ctx.push(x, Typ::TVal(*t.clone()));
+                let tbody = body.tyck(&ctx)?;
+                Ok(TCompute::Lam(t, Box::new(tbody), ann))
+            }
+            Compute::App(e, v, _) => {
+                let tfn = e.tyck(&ctx)?;
+                let targ = v.tyck(&ctx)?;
+                match tfn {
+                    TCompute::Lam(tpara, tbody, ann) => {
+                        TValue::eqv(&targ, &tpara).then_some(()).ok_or(())?;
+                        Ok(*tbody)
+                    }
+                    _ => Err(()),
+                }
+            }
+            Compute::If {
+                cond,
+                thn,
+                els,
+                ann,
+            } => {
+                let tcond = cond.tyck(&ctx)?;
+                match tcond {
+                    TValue::Bool(_) => {
+                        let tthn = thn.tyck(&ctx)?;
+                        let tels = els.tyck(&ctx)?;
+                        TCompute::eqv(&tthn, &tels).then_some(()).ok_or(())?;
+                        Ok(tels)
+                    }
+                    _ => Err(()),
+                }
             }
         }
     }
 }
 
-fn tyck_value<Ann: Clone>(ctx: &Ctx<Ann>, v: Value<Ann>) -> Result<TValue<Ann>, ()> {
-    match v {
-        Value::Var(x, ann) => ctx.lookup_val(x.as_str()).cloned().ok_or(()),
-        Value::Thunk(e, ann) => {
-            let t = tyck_compute(ctx.clone(), *e)?;
-            Ok(TValue::Comp(Box::new(t), ann))
+impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
+    type Type = TValue<Ann>;
+    fn tyck(self, ctx: &Ctx<Ann>) -> Result<Self::Type, ()> {
+        match self {
+            Value::Var(x, ann) => ctx.lookup_val(x.as_str()).cloned().ok_or(()),
+            Value::Thunk(e, ann) => {
+                let t = e.tyck(&ctx)?;
+                Ok(TValue::Comp(Box::new(t), ann))
+            }
+            Value::Bool(_, ann) => Ok(TValue::Bool(ann)),
         }
-        Value::Bool(_, ann) => Ok(TValue::Bool(ann)),
     }
 }
