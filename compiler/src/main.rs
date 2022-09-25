@@ -1,6 +1,22 @@
 use vituloid_compiler::parser::ComputationParser;
 
 fn main() {
+    if std::env::args().len() > 1 {
+        repl_mode()
+    } else {
+        acc_test_mode()
+    }
+}
+
+fn repl_mode() {
+    let stdin = std::io::stdin();
+    for line in stdin.lines() {
+        let line = line.unwrap();
+        println!("{:?}", ComputationParser::new().parse(&line).unwrap());
+    }
+}
+
+fn acc_test_mode() {
     let stdin = std::io::stdin();
     let mut buffer = String::new();
     const MARKER: &str = "@@@";
