@@ -1,3 +1,5 @@
+pub mod fmt;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TValue<Ann> {
     Comp(Box<TCompute<Ann>>, Ann),

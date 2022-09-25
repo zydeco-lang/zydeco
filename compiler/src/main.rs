@@ -2,22 +2,24 @@ use vituloid_compiler::{
     dynamics,
     parser::ComputationParser,
     statics::tyck::{Ctx, TypeCheck},
-    syntax::{Compute, TCompute, Value},
+    syntax::{fmt::FmtDefault, Compute, TCompute, Value},
 };
 
 fn main() -> Result<(), ()> {
     if std::env::args().len() > 1 {
-        Ok(repl_mode())
+        repl_mode()
     } else {
-        acc_test_mode()
+        acc_test_mode().unwrap_or_default();
     }
+    Ok(())
 }
 
 fn repl_mode() {
     let stdin = std::io::stdin();
     for line in stdin.lines() {
         let line = line.unwrap();
-        println!("{:?}", ComputationParser::new().parse(&line).unwrap());
+        let comp = ComputationParser::new().parse(&line).unwrap();
+        println!("{}", comp.fmt());
     }
 }
 
@@ -67,7 +69,7 @@ fn acc_test_mode() -> Result<(), ()> {
         ComputationParser::new()
             .parse(input)
             .and_then(|comp| {
-                println!("{:?}", comp);
+                println!("{}", comp.fmt());
                 Ok(comp)
             })
             .or_else(|err| {
@@ -79,7 +81,7 @@ fn acc_test_mode() -> Result<(), ()> {
     fn tyck(comp: &Compute<()>) -> Result<TCompute<()>, ()> {
         comp.tyck(&Ctx::new())
             .and_then(|ty| {
-                println!("{:?}", ty);
+                println!("{}", ty.fmt());
                 Ok(ty)
             })
             .or_else(|err| {
@@ -92,7 +94,7 @@ fn acc_test_mode() -> Result<(), ()> {
         dynamics::eval::eval(comp)
             .ok_or(())
             .and_then(|val| {
-                println!("{:?}", val);
+                println!("{}", val.fmt());
                 Ok(val)
             })
             .or_else(|()| {
