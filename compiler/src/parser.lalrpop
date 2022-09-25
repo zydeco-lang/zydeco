@@ -8,11 +8,15 @@ pub Computation: Box<Compute<()>> = <CompBox>;
 CompBox: Box<Compute<()>> = Boxed<Comp>;
 
 Comp: Compute<()> = {
-    "let" <x:Id> "=" <def:ValBox> ";" <body:CompBox> => Compute::Let {
-        binding: (x, def), body, ann: ()
+    "let" <bindings: CommaOnce<BindVal>> ";" <body:CompBox> => {
+        *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Let {
+            binding, body, ann: ()
+        }))
     },
-    "do" <x:Id> "<-" <def:CompBox> ";" <body:CompBox> => Compute::Do {
-        binding: (x, def), body, ann: ()
+    "do" <bindings: CommaOnce<BindComp>> ";" <body:CompBox> => {
+        *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Do {
+            binding, body, ann: ()
+        }))
     },
     "!" <v:ValBox> => Compute::Force(v, ()),
     "ret" <v:ValBox> => Compute::Return(v, ()),
@@ -24,6 +28,14 @@ Comp: Compute<()> = {
     "if" <cond:ValBox> "{" <thn:CompBox> "}" "else" "{" <els:CompBox> "}" => Compute::If {
         cond, thn, els, ann: ()
     },
+}
+
+BindVal: (String, Box<Value<()>>) = {
+    <x:Id> "=" <v:ValBox> => (x, v),
+}
+
+BindComp: (String, Box<Compute<()>>) = {
+    <x:Id> "<-" <c:CompBox> => (x, c),
 }
 
 Arg: (String, Box<TValue<()>>) = {
