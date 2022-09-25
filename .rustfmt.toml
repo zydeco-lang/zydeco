@@ -9,7 +9,7 @@ fn_args_layout = "Compressed"
 
 # group_imports = "StdExternalCrate"
 # imports_granularity = "Crate"
-# reorder_modules = true
+reorder_modules = false
 
 # match_arm_leading_pipes = "Never"
 # wrap_comments = true
