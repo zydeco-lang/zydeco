@@ -1,15 +1,21 @@
 use crate::syntax::{Compute, Value};
-use std::collections::HashMap;
 
-type Env<Ann> = HashMap<String, Vec<Value<Ann>>>;
+type Env<Ann> = std::collections::HashMap<String, Value<Ann>>;
+
+fn get_val<Ann: Clone>(env: &Env<Ann>, val: Value<Ann>) -> Option<Value<Ann>> {
+    if let Value::Var(name, _) = val {
+        env.get(&name).cloned()
+    } else {
+        Some(val)
+    }
+}
 
 fn with_eval<Ann: Clone>(
     env: &mut Env<Ann>, name: &String, val: Value<Ann>, exp: Compute<Ann>,
 ) -> Option<Value<Ann>> {
-    env.entry(name.clone()).or_default().push(val);
-    let res = eval_env(env, exp);
-    env.get_mut(name).unwrap().pop();
-    res
+    let val = get_val(env, val)?;
+    env.insert(name.clone(), val);
+    eval_env(env, exp)
 }
 
 fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<Ann>> {
@@ -22,18 +28,19 @@ fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<A
         }
         Do { binding, body, .. } => {
             let (name, compute) = binding;
-            let val = eval_env(env, *compute)?;
+            let mut new_env = env.clone();
+            let val = eval_env(&mut new_env, *compute)?;
             with_eval(env, &name, val, *body)
         }
         Force(val, _) => {
-            if let Value::Thunk(compute, _) = *val {
+            if let Value::Thunk(compute, _) = get_val(env, *val)? {
                 eval_env(env, *compute)
             } else {
                 None
             }
         }
-        Return(val, _) => Some(*val.clone()),
-        Lam { arg, body, ann } => Some(Value::Thunk(
+        Return(val, _) => get_val(env, *val),
+        Lam { arg, body, ann } => Some(Thunk(
             Box::new(Lam {
                 arg,
                 body,
@@ -42,7 +49,8 @@ fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<A
             ann,
         )),
         App(f, arg, _) => {
-            if let Value::Thunk(compute, _) = eval_env(env, *f)? {
+            let f = eval_env(env, *f)?;
+            if let Value::Thunk(compute, _) = get_val(env, f)? {
                 if let Compute::Lam {
                     arg: (name, _),
                     body,
@@ -58,7 +66,7 @@ fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<A
             }
         }
         If { cond, thn, els, .. } => {
-            if let Bool(b, _) = *cond {
+            if let Bool(b, _) = get_val(env, *cond)? {
                 eval_env(env, if b { *thn } else { *els })
             } else {
                 None
