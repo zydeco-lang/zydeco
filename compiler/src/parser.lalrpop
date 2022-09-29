@@ -8,6 +8,7 @@ pub Computation: Box<Compute<()>> = <CompBox>;
 CompBox: Box<Compute<()>> = Boxed<Comp>;
 
 Comp: Compute<()> = {
+    <CompAtom>,
     "let" <bindings: CommaOnce<BindVal>> ";" <body:CompBox> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Let {
             binding, body, ann: ()
@@ -18,16 +19,24 @@ Comp: Compute<()> = {
             binding, body, ann: ()
         }))
     },
-    "!" <v:ValBox> => Compute::Force(v, ()),
     "ret" <v:ValBox> => Compute::Return(v, ()),
-    "fn" "(" <args:CommaOnce<Arg>> ")" "{" <e:CompBox> "}" =>
-        *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Lam{
-            arg, body, ann: ()
-        })),
-    <v:ValBox> "'" <e:CompBox> => Compute::App(e, v, ()),
     "if" <cond:ValBox> "{" <thn:CompBox> "}" "else" "{" <els:CompBox> "}" => Compute::If {
         cond, thn, els, ann: ()
     },
+}
+
+CompAtomBox: Box<Compute<()>> = {
+    Boxed<CompAtom>,
+    "(" <CompBox> ")" => <>,
+}
+
+CompAtom: Compute<()> = {
+    "!" <v:ValBox> => Compute::Force(v, ()),
+    "fn" "(" <args:CommaOnce<Arg>> ")" "{" <e:CompBox> "}" =>
+    *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Lam{
+        arg, body, ann: ()
+        })),
+    <e:CompAtomBox> <v:ValBox> => Compute::App(e, v, ()),
 }
 
 BindVal: (String, Box<Value<()>>) = {
@@ -68,19 +77,21 @@ Boxed<T> : Box<T> = {
     T => Box::new(<>)
 }
 
-// SemiColonOnce<T>: Vec<T> = {
-//     <e:T> <mut v:(";" <T>)*> <s:(";")?> => {
-//         v.insert(0, e);
-//         v
-//     }
-// }
-
-CommaOnce<T>: Vec<T> = {
-    <e:T> <mut v:("," <T>)*> <s:(",")?> => {
+Once<Sym, T> : Vec<T> = {
+    <e:T> <mut v:(Rhs<Sym, T>)*> <s:(<Sym>)?> => {
         v.insert(0, e);
         v
     }
 }
+
+Rhs<L, R> : R = {
+    <l:L> <r:R> => r,
+}
+
+CommaOnce<T> : Vec<T> = Once<Comma, T>;
+
+Comma: () = ",";
+SemiColon: () = ";";
 
 Id: String = <s:r"[a-zA-Z][a-zA-Z0-9_-]*"> => String::from(s);
 
