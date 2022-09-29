@@ -8,24 +8,24 @@ pub struct Program<Ann> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Declare<Ann>(std::marker::PhantomData<Ann>);
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TValue<Ann> {
-    Comp(Box<TCompute<Ann>>, Ann),
-    Bool(Ann),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TCompute<Ann> {
-    Ret(Box<TValue<Ann>>, Ann),
-    Lam(Box<TValue<Ann>>, Box<TCompute<Ann>>, Ann),
+pub enum Declare<Ann> {
+    Data {
+        name: TVar<Ann>,
+        ctors: Vec<(Ctor<Ann>, Vec<TValue<Ann>>)>,
+        ann: Ann,
+    },
+    Codata {
+        name: TVar<Ann>,
+        dtors: Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>,
+        ann: Ann,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value<Ann> {
     Var(VVar<Ann>, Ann),
     Thunk(Box<Compute<Ann>>, Ann),
+    Ctor(Ctor<Ann>, Vec<Value<Ann>>, Ann),
     Bool(bool, Ann),
 }
 
@@ -55,6 +55,29 @@ pub enum Compute<Ann> {
         els: Box<Compute<Ann>>,
         ann: Ann,
     },
+    Match {
+        scrut: Box<Value<Ann>>,
+        cases: Vec<(Ctor<Ann>, Vec<VVar<Ann>>, Box<Compute<Ann>>)>,
+        ann: Ann,
+    },
+    CoMatch {
+        cases: Vec<(Dtor<Ann>, Vec<VVar<Ann>>, Box<Compute<Ann>>)>,
+        ann: Ann,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TValue<Ann> {
+    Var(TVar<Ann>, Ann),
+    Comp(Box<TCompute<Ann>>, Ann),
+    Bool(Ann),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TCompute<Ann> {
+    Var(TVar<Ann>, Ann),
+    Ret(Box<TValue<Ann>>, Ann),
+    Lam(Box<TValue<Ann>>, Box<TCompute<Ann>>, Ann),
 }
 
 macro_rules! var {
@@ -85,5 +108,7 @@ macro_rules! var {
     };
 }
 
+var!(Ctor);
+var!(Dtor);
 var!(TVar);
 var!(VVar);

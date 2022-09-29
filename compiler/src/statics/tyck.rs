@@ -163,6 +163,8 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                     }),
                 }
             }
+            Compute::Match { scrut, cases, ann } => todo!(),
+            Compute::CoMatch { cases, ann } => todo!(),
         }
     }
 }
@@ -179,6 +181,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
                 let t = e.tyck(&ctx)?;
                 Ok(TValue::Comp(Box::new(t), ann.clone()))
             }
+            Value::Ctor(ctor, vs, ann) => todo!(),
             Value::Bool(_, ann) => Ok(TValue::Bool(ann.clone())),
         }
     }

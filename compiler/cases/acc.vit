@@ -17,3 +17,18 @@ do  a <- !and false true,
     c <- !not a;
 !and c b
 @@@ boolean operations
+data Boolean where
+  | True(),
+  | False(),
+codata CoBoolean where
+  .then_(): Then,
+  .else_(): Else,
+let v = True();
+match v
+  | True() -> (
+    comatch
+      .then_() -> ret true
+      .else_() -> ret false
+  )
+  | False() -> ret false
+@@@ data and codata syntax

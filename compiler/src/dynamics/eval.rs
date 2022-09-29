@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::syntax::{Compute, Value, VVar};
 
 type Env<Ann> = std::collections::HashMap<VVar<Ann>, Value<Ann>>;
@@ -72,6 +73,9 @@ fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<A
                 None
             }
         }
+        Match { scrut, cases, ann } => todo!(),
+        CoMatch { cases, ann } => todo!(),
+        
     }
 }
 

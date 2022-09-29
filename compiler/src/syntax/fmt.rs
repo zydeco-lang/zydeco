@@ -36,6 +36,7 @@ impl<Ann> FmtWithArgs for Program<Ann> {
 impl<Ann> FmtWithArgs for TValue<Ann> {
     fn fmt_with_args(&self, args: Args) -> String {
         match self {
+            TValue::Var(x, _) => format!("{}", x.fmt_with_args(args)),
             TValue::Comp(c, _) => format!("Comp({})", c.fmt_with_args(args)),
             TValue::Bool(_) => format!("Bool"),
         }
@@ -45,6 +46,7 @@ impl<Ann> FmtWithArgs for TValue<Ann> {
 impl<Ann> FmtWithArgs for TCompute<Ann> {
     fn fmt_with_args(&self, args: Args) -> String {
         match self {
+            TCompute::Var(x, _) => format!("{}", x.fmt_with_args(args)),
             TCompute::Ret(v, _) => format!("Ret({})", v.fmt_with_args(args)),
             TCompute::Lam(t, c, _) => {
                 format!(
@@ -62,6 +64,14 @@ impl<Ann> FmtWithArgs for Value<Ann> {
         match self {
             Value::Var(x, _) => format!("{}", x.fmt_with_args(args)),
             Value::Thunk(e, _) => format!("{{ {} }}", e.fmt_with_args(args)),
+            Value::Ctor(ctor, vs, _) => format!(
+                "{}({})",
+                ctor.fmt_with_args(args.clone()),
+                vs.into_iter()
+                    .map(|v| v.fmt_with_args(args.clone()))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
             Value::Bool(b, _) => format!("{}", b),
         }
     }
@@ -120,19 +130,49 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                     els.fmt_with_args(args)
                 )
             }
+            Compute::Match { scrut, cases, .. } => {
+                format!("match {} {}", scrut.fmt_with_args(args.clone()), {
+                    let args = args.indent();
+                    cases
+                        .into_iter()
+                        .map(|(ctor, vs, e)| {
+                            format!(
+                                "{}| {}({}) => {}",
+                                args.gen_space(),
+                                ctor.fmt_with_args(args.clone()),
+                                vs.into_iter()
+                                    .map(|v| v.fmt_with_args(args.clone()))
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                                e.fmt_with_args(args.clone()),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("")
+                })
+            }
+            Compute::CoMatch { cases, .. } => {
+                format!("comatch {}", {
+                    let args = args.indent();
+                    cases
+                        .into_iter()
+                        .map(|(dtor, vs, e)| {
+                            format!(
+                                "{}.{}({}) => {}",
+                                args.gen_space(),
+                                dtor.fmt_with_args(args.clone()),
+                                vs.into_iter()
+                                    .map(|v| v.fmt_with_args(args.clone()))
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                                e.fmt_with_args(args.clone()),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("")
+                })
+            }
         }
-    }
-}
-
-impl<Ann> FmtWithArgs for TVar<Ann> {
-    fn fmt_with_args(&self, _args: Args) -> String {
-        self.0.clone()
-    }
-}
-
-impl<Ann> FmtWithArgs for VVar<Ann> {
-    fn fmt_with_args(&self, _args: Args) -> String {
-        self.0.clone()
     }
 }
 
@@ -147,5 +187,18 @@ impl FmtDefault for TValue<()> {}
 impl FmtDefault for TCompute<()> {}
 impl FmtDefault for Value<()> {}
 impl FmtDefault for Compute<()> {}
-impl FmtDefault for TVar<()> {}
-impl FmtDefault for VVar<()> {}
+
+macro_rules! var_fmt {
+    ($Var:ident) => {
+        impl<Ann> FmtWithArgs for $Var<Ann> {
+            fn fmt_with_args(&self, _args: Args) -> String {
+                format!("{}", self.0)
+            }
+        }
+    };
+}
+
+var_fmt!(TVar);
+var_fmt!(Ctor);
+var_fmt!(Dtor);
+var_fmt!(VVar);
