@@ -27,6 +27,12 @@ impl Args {
     }
 }
 
+impl<Ann> FmtWithArgs for Var<Ann> {
+    fn fmt_with_args(&self, _args: Args) -> String {
+        self.0.clone()
+    }
+}
+
 impl<Ann> FmtWithArgs for TValue<Ann> {
     fn fmt_with_args(&self, args: Args) -> String {
         match self {
@@ -54,7 +60,7 @@ impl<Ann> FmtWithArgs for TCompute<Ann> {
 impl<Ann> FmtWithArgs for Value<Ann> {
     fn fmt_with_args(&self, args: Args) -> String {
         match self {
-            Value::Var(x, _) => format!("{}", x),
+            Value::Var(x, _) => format!("{}", x.fmt_with_args(args)),
             Value::Thunk(e, _) => format!("{{ {} }}", e.fmt_with_args(args)),
             Value::Bool(b, _) => format!("{}", b),
         }
@@ -68,7 +74,7 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                 let (x, v) = binding;
                 format!(
                     "let {} = {};{}{}",
-                    x,
+                    x.fmt_with_args(args.clone()),
                     v.fmt_with_args(args.clone()),
                     args.gen_space(),
                     body.fmt_with_args(args)
@@ -78,7 +84,7 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                 let (x, v) = binding;
                 format!(
                     "do {} <- {};{}{}",
-                    x,
+                    x.fmt_with_args(args.clone()),
                     v.fmt_with_args(args.clone()),
                     args.gen_space(),
                     body.fmt_with_args(args)
@@ -94,7 +100,7 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                 let (x, t) = arg;
                 format!(
                     "fn ({}: {}) {{ {} }}",
-                    x,
+                    x.fmt_with_args(args.clone()),
                     t.fmt_with_args(args.clone()),
                     body.fmt_with_args(args)
                 )

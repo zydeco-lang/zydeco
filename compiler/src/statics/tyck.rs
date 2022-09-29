@@ -30,15 +30,15 @@ impl<Ann> TypeEqv for TCompute<Ann> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Ctx<Ann>(HashMap<String, TValue<Ann>>);
+pub struct Ctx<Ann>(HashMap<Var<Ann>, TValue<Ann>>);
 impl<Ann> Ctx<Ann> {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
-    fn push(&mut self, x: String, t: TValue<Ann>) {
+    fn push(&mut self, x: Var<Ann>, t: TValue<Ann>) {
         self.0.insert(x, t);
     }
-    fn lookup(&self, x: &str) -> Option<&TValue<Ann>> {
+    fn lookup(&self, x: &Var<Ann>) -> Option<&TValue<Ann>> {
         self.0.get(x)
     }
 }
@@ -46,7 +46,7 @@ impl<Ann> Ctx<Ann> {
 #[derive(Clone, Debug)]
 pub enum TypeCheckError<Ann> {
     UnboundVar {
-        var: String,
+        var: Var<Ann>,
         ann: Ann,
     },
     TValMismatch {
@@ -171,7 +171,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
     type Type = TValue<Ann>;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         match self {
-            Value::Var(x, ann) => ctx.lookup(x.as_str()).cloned().ok_or(UnboundVar {
+            Value::Var(x, ann) => ctx.lookup(&x).cloned().ok_or(UnboundVar {
                 var: x.clone(),
                 ann: ann.clone(),
             }),

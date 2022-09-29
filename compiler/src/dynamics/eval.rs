@@ -1,6 +1,6 @@
-use crate::syntax::{Compute, Value};
+use crate::syntax::{Compute, Value, Var};
 
-type Env<Ann> = std::collections::HashMap<String, Value<Ann>>;
+type Env<Ann> = std::collections::HashMap<Var<Ann>, Value<Ann>>;
 
 fn get_val<Ann: Clone>(env: &Env<Ann>, val: Value<Ann>) -> Option<Value<Ann>> {
     if let Value::Var(name, _) = val {
@@ -11,7 +11,7 @@ fn get_val<Ann: Clone>(env: &Env<Ann>, val: Value<Ann>) -> Option<Value<Ann>> {
 }
 
 fn with_eval<Ann: Clone>(
-    env: &mut Env<Ann>, name: &String, val: Value<Ann>, exp: Compute<Ann>,
+    env: &mut Env<Ann>, name: &Var<Ann>, val: Value<Ann>, exp: Compute<Ann>,
 ) -> Option<Value<Ann>> {
     let val = get_val(env, val)?;
     env.insert(name.clone(), val);
