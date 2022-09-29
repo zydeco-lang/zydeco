@@ -27,6 +27,12 @@ impl Args {
     }
 }
 
+impl<Ann> FmtWithArgs for Program<Ann> {
+    fn fmt_with_args(&self, args: Args) -> String {
+        self.comp.fmt_with_args(args)
+    }
+}
+
 impl<Ann> FmtWithArgs for TValue<Ann> {
     fn fmt_with_args(&self, args: Args) -> String {
         match self {
@@ -118,13 +124,13 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
     }
 }
 
-impl<Ann> FmtWithArgs for VVar<Ann> {
+impl<Ann> FmtWithArgs for TVar<Ann> {
     fn fmt_with_args(&self, _args: Args) -> String {
         self.0.clone()
     }
 }
 
-impl<Ann> FmtWithArgs for TVar<Ann> {
+impl<Ann> FmtWithArgs for VVar<Ann> {
     fn fmt_with_args(&self, _args: Args) -> String {
         self.0.clone()
     }
@@ -136,7 +142,10 @@ pub trait FmtDefault: FmtWithArgs {
     }
 }
 
+impl FmtDefault for Program<()> {}
 impl FmtDefault for TValue<()> {}
 impl FmtDefault for TCompute<()> {}
 impl FmtDefault for Value<()> {}
 impl FmtDefault for Compute<()> {}
+impl FmtDefault for TVar<()> {}
+impl FmtDefault for VVar<()> {}

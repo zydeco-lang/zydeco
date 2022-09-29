@@ -1,8 +1,8 @@
 use vituloid_compiler::{
     dynamics,
-    parser::ComputationParser,
+    parser::VitProgramParser,
     statics::tyck::{Ctx, TypeCheck},
-    syntax::{fmt::FmtDefault, Compute, TCompute, Value},
+    syntax::{fmt::FmtDefault, Compute, Program, TCompute, Value},
 };
 
 fn main() -> Result<(), ()> {
@@ -70,20 +70,20 @@ struct Main;
 impl Main {
     pub fn acc_single_run(title: &str, buffer: &str) -> Result<(TCompute<()>, Value<()>), ()> {
         println!("=== [{}] <parse>", title);
-        let computation = Main::parse(&buffer)?;
+        let program = Main::parse(&buffer)?;
         println!("=== [{}] <tyck>", title);
-        let ty = Main::tyck(&computation)?;
+        let ty = Main::tyck(&program.comp)?;
         println!("=== [{}] <eval>", title);
-        let value = Main::eval(*computation)?;
+        let value = Main::eval(*program.comp)?;
         Ok((ty, value))
     }
 
-    fn parse(input: &str) -> Result<Box<Compute<()>>, ()> {
-        ComputationParser::new()
+    fn parse(input: &str) -> Result<Program<()>, ()> {
+        VitProgramParser::new()
             .parse(input)
-            .and_then(|comp| {
-                println!("{}", comp.fmt());
-                Ok(comp)
+            .and_then(|prog| {
+                println!("{}", prog.fmt());
+                Ok(prog)
             })
             .or_else(|err| {
                 println!("Parse error: {}", err);

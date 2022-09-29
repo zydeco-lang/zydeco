@@ -1,6 +1,16 @@
 pub mod fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Program<Ann> {
+    pub decls: Vec<Declare<Ann>>,
+    pub comp: Box<Compute<Ann>>,
+    pub ann: Ann,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Declare<Ann>(std::marker::PhantomData<Ann>);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TValue<Ann> {
     Comp(Box<TCompute<Ann>>, Ann),
     Bool(Ann),
@@ -67,8 +77,13 @@ macro_rules! var {
                 self.0.hash(state);
             }
         }
-    }
+        impl<Ann> std::fmt::Display for $Var<Ann> {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
 }
 
-var!(VVar);
 var!(TVar);
+var!(VVar);

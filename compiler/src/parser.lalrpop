@@ -1,9 +1,13 @@
 // use std::str::FromStr;
-use crate::syntax::{VVar, TValue, TCompute, Value, Compute};
+use crate::syntax::{Program, TValue, TCompute, Value, Compute, VVar, TVar};
 
 grammar;
 
-pub Computation: Box<Compute<()>> = <CompBox>;
+pub VitProgram: Program<()> = <c:CompBox> => Program {
+    decls: Vec::new(),
+    comp: c,
+    ann: (),
+};
 
 CompBox: Box<Compute<()>> = Boxed<Comp>;
 
@@ -93,11 +97,8 @@ CommaOnce<T> : Vec<T> = Once<Comma, T>;
 Comma: () = ",";
 SemiColon: () = ";";
 
-VVar: VVar<()> = {
-    <x:Id> => VVar::new(x, ()),
-}
-
-Id: String = <s:r"[a-zA-Z][a-zA-Z0-9_-]*"> => String::from(s);
+TVar: TVar<()> = <r"[A-Z][a-zA-Z0-9_-]*"> => TVar::new(String::from(<>), ());
+VVar: VVar<()> = <r"[a-z][a-zA-Z0-9_-]*"> => VVar::new(String::from(<>), ());
 
 Bool: bool = {
     "true" => true,
