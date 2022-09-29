@@ -1,5 +1,5 @@
 // use std::str::FromStr;
-use crate::syntax::{Var, TValue, TCompute, Value, Compute};
+use crate::syntax::{VVar, TValue, TCompute, Value, Compute};
 
 grammar;
 
@@ -39,22 +39,22 @@ CompAtom: Compute<()> = {
     <e:CompAtomBox> <v:ValBox> => Compute::App(e, v, ()),
 }
 
-BindVal: (Var<()>, Box<Value<()>>) = {
-    <x:Var> "=" <v:ValBox> => (x, v),
+BindVal: (VVar<()>, Box<Value<()>>) = {
+    <x:VVar> "=" <v:ValBox> => (x, v),
 }
 
-BindComp: (Var<()>, Box<Compute<()>>) = {
-    <x:Var> "<-" <c:CompBox> => (x, c),
+BindComp: (VVar<()>, Box<Compute<()>>) = {
+    <x:VVar> "<-" <c:CompBox> => (x, c),
 }
 
-Arg: (Var<()>, Box<TValue<()>>) = {
-    <x:Var> ":" <t:TValBox> => (x, t),
+Arg: (VVar<()>, Box<TValue<()>>) = {
+    <x:VVar> ":" <t:TValBox> => (x, t),
 }
 
 ValBox: Box<Value<()>> = Boxed<Val>;
 
 Val: Value<()> = {
-    <x:Var> => Value::Var(x, ()),
+    <x:VVar> => Value::Var(x, ()),
     "{" <e:CompBox> "}" => Value::Thunk(e, ()),
     <b:Bool> => Value::Bool(b, ()),
 }
@@ -93,8 +93,8 @@ CommaOnce<T> : Vec<T> = Once<Comma, T>;
 Comma: () = ",";
 SemiColon: () = ";";
 
-Var: Var<()> = {
-    <x:Id> => Var::new(x, ()),
+VVar: VVar<()> = {
+    <x:Id> => VVar::new(x, ()),
 }
 
 Id: String = <s:r"[a-zA-Z][a-zA-Z0-9_-]*"> => String::from(s);

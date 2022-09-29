@@ -27,12 +27,6 @@ impl Args {
     }
 }
 
-impl<Ann> FmtWithArgs for Var<Ann> {
-    fn fmt_with_args(&self, _args: Args) -> String {
-        self.0.clone()
-    }
-}
-
 impl<Ann> FmtWithArgs for TValue<Ann> {
     fn fmt_with_args(&self, args: Args) -> String {
         match self {
@@ -121,6 +115,18 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                 )
             }
         }
+    }
+}
+
+impl<Ann> FmtWithArgs for VVar<Ann> {
+    fn fmt_with_args(&self, _args: Args) -> String {
+        self.0.clone()
+    }
+}
+
+impl<Ann> FmtWithArgs for TVar<Ann> {
+    fn fmt_with_args(&self, _args: Args) -> String {
+        self.0.clone()
     }
 }
 
