@@ -195,6 +195,7 @@ macro_rules! var_fmt {
                 format!("{}", self.0)
             }
         }
+        impl<Ann> FmtDefault for $Var<Ann> {}
     };
 }
 

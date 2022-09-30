@@ -18,11 +18,11 @@ do  a <- !and false true,
 !and c b
 @@@ boolean operations
 data Boolean where
-  | True(),
-  | False(),
-codata CoBoolean where
-  .then_(): Then,
-  .else_(): Else,
+  | True()
+  | False()
+codata If where
+  .then_(): Then
+  .else_(): Else
 let v = True();
 match v
   | True() -> (

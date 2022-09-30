@@ -14,12 +14,12 @@ pub VitProgram: Program<()> = <decls:Decl*> <comp:CompBox> => Program {
 //* ------------------------------ Declarations ------------------------------ */
 
 Decl: Declare<()> = {
-    "data" <name:TVar> "where" <ctors:Kleene<",", CtorBranch>> => Declare::Data {
-        name,
+    "data" <name:TVar> "where" <ctors:CtorBranch*> => Declare::Data {
+    name,
         ctors,
         ann: (),
     },
-    "codata" <name:TVar> "where" <dtors:Kleene<",", DtorBranch>> => Declare::Codata {
+    "codata" <name:TVar> "where" <dtors:DtorBranch*> => Declare::Codata {
         name,
         dtors,
         ann: (),

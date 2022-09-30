@@ -79,39 +79,29 @@ impl Main {
     }
 
     fn parse(input: &str) -> Result<Program<()>, ()> {
-        VitProgramParser::new()
-            .parse(input)
-            .and_then(|prog| {
-                println!("{}", prog.fmt());
-                Ok(prog)
-            })
-            .or_else(|err| {
-                println!("Parse error: {}", err);
-                Err(())
-            })
+        Self::phase(VitProgramParser::new().parse(input), "Parse")
     }
 
     fn tyck(comp: &Compute<()>) -> Result<TCompute<()>, ()> {
-        comp.tyck(&Ctx::new())
-            .and_then(|ty| {
-                println!("{}", ty.fmt());
-                Ok(ty)
-            })
-            .or_else(|err| {
-                println!("Type error: {:?}", err);
-                Err(())
-            })
+        Self::phase(comp.tyck(&Ctx::new()), "Tyck")
     }
 
     fn eval(comp: Compute<()>) -> Result<Value<()>, ()> {
-        dynamics::eval::eval(comp)
-            .ok_or(())
-            .and_then(|val| {
-                println!("{}", val.fmt());
-                Ok(val)
+        Self::phase(dynamics::eval::eval(comp).ok_or(()), "Eval")
+    }
+
+    fn phase<T, E>(input: Result<T, E>, name: &'static str) -> Result<T, ()>
+    where
+        T: FmtDefault,
+        E: std::fmt::Debug,
+    {
+        input
+            .and_then(|res| {
+                println!("{}", res.fmt());
+                Ok(res)
             })
-            .or_else(|()| {
-                println!("Eval error ()");
+            .or_else(|err| {
+                println!("{} error: {:?}", name, err);
                 Err(())
             })
     }
