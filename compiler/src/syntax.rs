@@ -27,6 +27,7 @@ pub enum Value<Ann> {
     Thunk(Box<Compute<Ann>>, Ann),
     Ctor(Ctor<Ann>, Vec<Value<Ann>>, Ann),
     Bool(bool, Ann),
+    Int(i64, Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,6 +72,7 @@ pub enum TValue<Ann> {
     Var(TVar<Ann>, Ann),
     Comp(Box<TCompute<Ann>>, Ann),
     Bool(Ann),
+    Int(Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

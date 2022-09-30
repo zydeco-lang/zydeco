@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use crate::syntax::*;
 grammar;
 
@@ -109,6 +110,7 @@ Val: Value<()> = {
     "{" <e:CompBox> "}" => Value::Thunk(e, ()),
     <ctor:Ctor> "(" <vs:Kleene<",", <Val>>> ")" => Value::Ctor(ctor, vs, ()),
     <b:Bool> => Value::Bool(b, ()),
+    <n:Int> => Value::Int(n,()),
 }
 
 
@@ -128,6 +130,7 @@ TVal: TValue<()> = {
     <x:TVar> => TValue::Var(x, ()),
     "Comp" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
     "Bool" => TValue::Bool(()),
+    "Int" => TValue::Int(()),
 }
 
 
@@ -145,6 +148,8 @@ Bool: bool = {
     "true" => true,
     "false" => false,
 }
+
+Int: i64 = <s:r"[-]?[0-9]+"> => i64::from_str(s).unwrap();
 
 
 //* -------------------------------- Utilities ------------------------------- */

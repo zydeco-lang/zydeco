@@ -32,3 +32,7 @@ match v
   )
   | False() -> ret false
 @@@ data and codata syntax
+fn (x: Bool) { ret 1 } true
+fn (x: Int) { ret true } 123
+fn (x: Int) { ret true } -123
+@@@ basic number

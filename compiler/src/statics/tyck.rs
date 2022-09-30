@@ -12,6 +12,7 @@ impl<Ann> TypeEqv for TValue<Ann> {
         match (self, other) {
             (TValue::Comp(a, _), TValue::Comp(b, _)) => TCompute::eqv(a, b),
             (TValue::Bool(_), TValue::Bool(_)) => true,
+            (TValue::Int(_), TValue::Int(_)) => true,
             _ => false,
         }
     }
@@ -183,6 +184,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
             }
             Value::Ctor(ctor, vs, ann) => todo!(),
             Value::Bool(_, ann) => Ok(TValue::Bool(ann.clone())),
+            Value::Int(_, ann) => Ok(TValue::Int(ann.clone())),
         }
     }
 }

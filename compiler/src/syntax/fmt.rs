@@ -39,6 +39,7 @@ impl<Ann> FmtWithArgs for TValue<Ann> {
             TValue::Var(x, _) => format!("{}", x.fmt_with_args(args)),
             TValue::Comp(c, _) => format!("Comp({})", c.fmt_with_args(args)),
             TValue::Bool(_) => format!("Bool"),
+            TValue::Int(_) => format!("Int"),
         }
     }
 }
@@ -73,6 +74,7 @@ impl<Ann> FmtWithArgs for Value<Ann> {
                     .join(",")
             ),
             Value::Bool(b, _) => format!("{}", b),
+            Value::Int(n, _) => format!("{}", n),
         }
     }
 }
