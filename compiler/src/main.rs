@@ -1,3 +1,5 @@
+use std::panic::catch_unwind;
+
 use vituloid_compiler::{
     dynamics,
     parser::VitProgramParser,
@@ -79,23 +81,29 @@ impl Main {
     }
 
     fn parse(input: &str) -> Result<Program<()>, ()> {
-        Self::phase(VitProgramParser::new().parse(input), "Parse")
+        Self::phase(|| VitProgramParser::new().parse(input), "Parse")
     }
 
     fn tyck(comp: &Compute<()>) -> Result<TCompute<()>, ()> {
-        Self::phase(comp.tyck(&Ctx::new()), "Tyck")
+        Self::phase(|| comp.tyck(&Ctx::new()), "Tyck")
     }
 
     fn eval(comp: Compute<()>) -> Result<Value<()>, ()> {
-        Self::phase(dynamics::eval::eval(comp).ok_or(()), "Eval")
+        Self::phase(|| dynamics::eval::eval(comp).ok_or(()), "Eval")
     }
 
-    fn phase<T, E>(input: Result<T, E>, name: &'static str) -> Result<T, ()>
+    fn phase<F, T, E>(input: F, name: &'static str) -> Result<T, ()>
     where
+        F: FnOnce() -> Result<T, E> + std::panic::UnwindSafe,
         T: FmtDefault,
         E: std::fmt::Debug,
     {
-        input
+        std::panic::set_hook(Box::new(|_| {}));
+        catch_unwind(input)
+            .or_else(|err| {
+                println!("{} panicked: {:?}", name, err);
+                Err(())
+            })?
             .and_then(|res| {
                 println!("{}", res.fmt());
                 Ok(res)
