@@ -1,17 +1,17 @@
-fn (x: Bool, y: Comp(Bool -> Ret(Bool))) { !y x }
+fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x
 @@@ fn & app
-fn (x: Bool, y: Comp(Bool -> Ret(Bool))) { !y x } true { fn (x: Bool) { ret x } }
+(fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x) true { fn (x: Bool) -> ret x }
 @@@ fn & app, x2
 let x = true,
     y = {ret false};
-let f = { fn (b: Bool) { ret b } };
+let f = { fn (b: Bool) -> ret b };
 do  rx <- !f x,
     ry <- do y <- !y; !f x;
-if x { ret rx } else { ret ry }
+if x: ret rx else: ret ry
 @@@ multiple bindings everywhere
-let not = { fn (x: Bool) { if x { ret false } else { ret true } } },
-    and = { fn (x: Bool, y: Bool) { if x { ret y } else { ret false } } },
-    or = { fn (x: Bool, y: Bool) { if x { ret true } else { ret y } } };
+let not = { fn (x: Bool) -> if x: ret false else: ret true },
+    and = { fn (x: Bool, y: Bool) -> if x: ret y else: ret false },
+    or = { fn (x: Bool, y: Bool) -> if x: ret true else: ret y };
 do  a <- !and false true,
     b <- !or false true,
     c <- !not a;
@@ -32,7 +32,8 @@ match v
   )
   | False() -> ret false
 @@@ data and codata syntax
-fn (x: Bool) { ret 1 } true
-fn (x: Int) { ret true } 123
-fn (x: Int) { ret true } -123
+do x <- (fn (x: Bool) -> ret 1) true;
+do y <- (fn (x: Int) -> ret true) 123;
+do z <- (fn (x: Int) -> ret true) -123;
+ret x
 @@@ basic number

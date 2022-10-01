@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use crate::syntax::*;
 grammar;
 
@@ -55,7 +54,11 @@ Comp: Compute<()> = {
             binding, body, ann: ()
         }))
     },
-    "if" <cond:ValBox> "{" <thn:CompBox> "}" "else" "{" <els:CompBox> "}" => Compute::If {
+    "fn" "(" <args:Once<",", FnArg>> ")" "->" <e:CompBox> =>
+        *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Lam{
+            arg, body, ann: ()
+            })),
+    "if" <cond:ValBox> ":" <thn:CompBox> "else:" <els:CompBox> => Compute::If {
         cond, thn, els, ann: ()
     },
     "match" <scrut:ValBox> <cases:MatchBranch*> => Compute::Match {
@@ -82,10 +85,6 @@ CompAtomBox: Box<Compute<()>> = {
 CompAtom: Compute<()> = {
     "!" <v:ValBox> => Compute::Force(v, ()),
     "ret" <v:ValBox> => Compute::Return(v, ()),
-    "fn" "(" <args:Once<",", FnArg>> ")" "{" <e:CompBox> "}" =>
-        *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Lam{
-            arg, body, ann: ()
-            })),
     <e:CompAtomBox> <v:ValBox> => Compute::App(e, v, ()),
 }
 
@@ -149,7 +148,7 @@ Bool: bool = {
     "false" => false,
 }
 
-Int: i64 = <s:r"[-]?[0-9]+"> => i64::from_str(s).unwrap();
+Int: i64 = <s:r"[-]?[0-9]+"> => s.parse().unwrap();
 
 
 //* -------------------------------- Utilities ------------------------------- */
