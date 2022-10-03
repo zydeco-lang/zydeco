@@ -33,7 +33,7 @@ match v
   | False() -> ret false
 @@@ data and codata syntax
 do x <- (fn (x: Bool) -> ret 1) true;
-do y <- (fn (x: Int) -> ret true) 123;
+do y <- (fn (x: Int) -> ret true) +123;
 do z <- (fn (x: Int) -> ret true) -123;
 ret x
 @@@ basic number

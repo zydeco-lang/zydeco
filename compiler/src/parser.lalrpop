@@ -15,7 +15,7 @@ pub VitProgram: Program<()> = <decls:Decl*> <comp:CompBox> => Program {
 
 Decl: Declare<()> = {
     "data" <name:TVar> "where" <ctors:CtorBranch*> => Declare::Data {
-    name,
+        name,
         ctors,
         ann: (),
     },
@@ -148,7 +148,7 @@ Bool: bool = {
     "false" => false,
 }
 
-Int: i64 = <s:r"[-]?[0-9]+"> => s.parse().unwrap();
+Int: i64 = <s:r"[\+-]?[0-9]+"> => s.parse().unwrap();
 
 
 //* -------------------------------- Utilities ------------------------------- */
