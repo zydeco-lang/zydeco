@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use crate::syntax::*;
+use crate::parse::syntax::*;
 use std::collections::HashMap;
 
 pub trait TypeEqv {

@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::syntax::{Compute, Value, VVar};
+use crate::parse::syntax::{Compute, Value, VVar};
 
 type Env<Ann> = std::collections::HashMap<VVar<Ann>, Value<Ann>>;
 

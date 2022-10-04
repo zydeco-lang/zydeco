@@ -1,4 +1,4 @@
-use super::*;
+use super::syntax::*;
 
 pub trait FmtWithArgs {
     fn fmt_with_args(&self, args: Args) -> String;
@@ -186,7 +186,7 @@ macro_rules! var_fmt {
     ($Var:ident) => {
         impl<Ann> FmtWithArgs for $Var<Ann> {
             fn fmt_with_args(&self, _args: Args) -> String {
-                format!("{}", self.0)
+                format!("{}", self.name())
             }
         }
         impl<Ann> FmtDefault for $Var<Ann> {}

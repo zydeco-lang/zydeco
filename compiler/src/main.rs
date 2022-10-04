@@ -2,9 +2,12 @@ use std::panic::catch_unwind;
 
 use vituloid_compiler::{
     dynamics,
-    parser::VitProgramParser,
+    parse::VitProgramParser,
+    parse::{
+        fmt::FmtDefault,
+        syntax::{Compute, Program, TCompute, Value},
+    },
     statics::tyck::{Ctx, TypeCheck},
-    syntax::{fmt::FmtDefault, Compute, Program, TCompute, Value},
 };
 
 fn main() -> Result<(), ()> {

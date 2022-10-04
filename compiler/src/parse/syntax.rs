@@ -1,5 +1,3 @@
-pub mod fmt;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program<Ann> {
     pub decls: Vec<Declare<Ann>>,
@@ -89,6 +87,12 @@ macro_rules! var {
         impl<Ann> $Var<Ann> {
             pub fn new(s: String, ann: Ann) -> Self {
                 Self(s, ann)
+            }
+            pub fn name(&self) -> &str {
+                &self.0
+            }
+            pub fn ann(&self) -> &Ann {
+                &self.1
             }
         }
         impl<Ann> std::cmp::PartialEq for $Var<Ann> {
