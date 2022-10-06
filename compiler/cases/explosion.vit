@@ -1,0 +1,6 @@
+rec loop: Comp(Ret(Bool)) = {!loop};
+!loop
+@@@ non-halt
+rec explosion: Bool = explosion;
+ret explosion
+@@@ My name is megumi!

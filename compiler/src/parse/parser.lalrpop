@@ -27,23 +27,25 @@ Decl: Declare<()> = {
 }
 
 CtorBranch: (Ctor<()>, Vec<TValue<()>>) = {
-    "|" <ctor:Ctor> "(" <args: Kleene<",", TVal>> ")" => {
+    "|" <ctor:Ctor> "(" <args:Kleene<",", TVal>> ")" => {
         (ctor, args)
     }
 }
 
 DtorBranch: (Dtor<()>, Vec<TValue<()>>, TCompute<()>) = {
-    "." <dtor:Dtor> "(" <args: Kleene<",", TVal>> ")" ":" <res:TComp> => {
+    "." <dtor:Dtor> "(" <args:Kleene<",", TVal>> ")" ":" <res:TComp> => {
         (dtor, args, res)
     }
 }
 
 //* ------------------------------- Expressions ------------------------------ */
 
-CompBox: Box<Compute<()>> = Boxed<Comp>;
+CompBox: Box<Compute<()>> = {
+    <CompHeadBox>,
+    Boxed<Comp>,
+}
 
 Comp: Compute<()> = {
-    <CompAtom>,
     "let" <bindings: Once<",", BindVal>> ";" <body:CompBox> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Let {
             binding, body, ann: ()
@@ -82,6 +84,17 @@ MatchBranch: (Ctor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
 CoMatchBranch: (Dtor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
     "." <d:Dtor> "(" <vs:VVar*> ")" "->" <e:CompAtomBox> => (d, vs, e),
     "." <d:Dtor> "->" <e:CompAtomBox> => (d, vec!(), e),
+}
+
+CompHeadBox: Box<Compute<()>> = {
+    <CompAtomBox>,
+    Boxed<CompHead>,
+}
+
+CompHead: Compute<()> = {
+    <scrut:CompAtomBox> "." <dtor:Dtor> "(" <args:Kleene<",", Val>> ")" => Compute::CoApp {
+        scrut, dtor, args, ann: ()
+    },
 }
 
 CompAtomBox: Box<Compute<()>> = {

@@ -72,6 +72,7 @@ pub enum Compute<Ann> {
         scrut: Box<Compute<Ann>>,
         dtor: Dtor<Ann>,
         args: Vec<Value<Ann>>,
+        ann: Ann,
     },
 }
 

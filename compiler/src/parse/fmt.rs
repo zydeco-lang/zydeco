@@ -154,7 +154,7 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                         .join("")
                 })
             }
-            Compute::CoApp { scrut, dtor, args } => {
+            Compute::CoApp { scrut, dtor, args, .. } => {
                 format!(
                     "{}.{}({})",
                     scrut.fmt_with_args(fmta),
