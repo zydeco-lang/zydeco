@@ -13,6 +13,8 @@ impl<Ann> TypeEqv for TValue<Ann> {
             (TValue::Comp(a, _), TValue::Comp(b, _)) => TCompute::eqv(a, b),
             (TValue::Bool(_), TValue::Bool(_)) => true,
             (TValue::Int(_), TValue::Int(_)) => true,
+            // Being nominal here
+            (TValue::Var(a, _), TValue::Var(b, _)) => a == b,
             _ => false,
         }
     }
@@ -25,6 +27,8 @@ impl<Ann> TypeEqv for TCompute<Ann> {
             (TCompute::Lam(a, b, _), TCompute::Lam(c, d, _)) => {
                 TValue::eqv(a, c) && TCompute::eqv(b, d)
             }
+            // Being nominal here
+            (TCompute::Var(a, _), TCompute::Var(b, _)) => a == b,
             _ => false,
         }
     }
@@ -34,14 +38,18 @@ impl<Ann> TypeEqv for TCompute<Ann> {
 pub struct Ctx<Ann> {
     vmap: HashMap<VVar<Ann>, TValue<Ann>>,
     data: HashMap<TVar<Ann>, Vec<(Ctor<Ann>, Vec<TValue<Ann>>)>>,
+    ctors: HashMap<Ctor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>)>,
     codata: HashMap<TVar<Ann>, Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>>,
+    dtors: HashMap<Dtor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>,
 }
 impl<Ann: Clone> Ctx<Ann> {
     pub fn new() -> Self {
         Self {
             vmap: HashMap::new(),
             data: HashMap::new(),
+            ctors: HashMap::new(),
             codata: HashMap::new(),
+            dtors: HashMap::new(),
         }
     }
     fn push(&mut self, x: VVar<Ann>, t: TValue<Ann>) {
@@ -53,20 +61,46 @@ impl<Ann: Clone> Ctx<Ann> {
     fn decl(&mut self, d: &Declare<Ann>) -> Result<(), TypeCheckError<Ann>> {
         match d.clone() {
             Declare::Data { name, ctors, ann } => {
-                self.data.insert(name.clone(), ctors).map_or(Ok(()), |_| {
-                    Err(TypeCheckError::DuplicateDeclaration {
-                        name: name.name().to_string(),
-                        ann,
-                    })
-                })
+                self.data
+                    .insert(name.clone(), ctors.clone())
+                    .map_or(Ok(()), |_| {
+                        Err(TypeCheckError::DuplicateDeclaration {
+                            name: name.name().to_string(),
+                            ann: ann.clone(),
+                        })
+                    })?;
+                for (ctor, args) in ctors {
+                    self.ctors
+                        .insert(ctor.clone(), (name.clone(), args))
+                        .map_or(Ok(()), |_| {
+                            Err(TypeCheckError::DuplicateDeclaration {
+                                name: ctor.name().to_string(),
+                                ann: ann.clone(),
+                            })
+                        })?;
+                }
+                Ok(())
             }
             Declare::Codata { name, dtors, ann } => {
-                self.codata.insert(name.clone(), dtors).map_or(Ok(()), |_| {
-                    Err(TypeCheckError::DuplicateDeclaration {
-                        name: name.name().to_string(),
-                        ann,
-                    })
-                })
+                self.codata
+                    .insert(name.clone(), dtors.clone())
+                    .map_or(Ok(()), |_| {
+                        Err(TypeCheckError::DuplicateDeclaration {
+                            name: name.name().to_string(),
+                            ann: ann.clone(),
+                        })
+                    });
+                for (dtor, args, ret) in dtors {
+                    self.dtors
+                        .insert(dtor.clone(), (name.clone(), args, ret))
+                        .map_or(Ok(()), |_| {
+                            Err(TypeCheckError::DuplicateDeclaration {
+                                name: dtor.name().to_string(),
+                                ann: ann.clone(),
+                            })
+                        })?;
+                }
+                Ok(())
             }
         }
     }
@@ -99,6 +133,7 @@ pub enum TypeCheckError<Ann> {
         name: String,
         ann: Ann,
     },
+    Explosion(String),
 }
 use TypeCheckError::*;
 
@@ -220,7 +255,24 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 }
             }
             Compute::Match { scrut, cases, ann } => todo!(),
-            Compute::CoMatch { cases, ann } => todo!(),
+            Compute::CoMatch { cases, ann } => {
+                let mut ty: Option<TCompute<Ann>> = None;
+                // Hack: we need to know what type it is; now we just synthesize it
+                for (dtor, vars, comp) in cases {
+                    let t = TCompute::Var(
+                        ctx.dtors
+                            .get(dtor)
+                            .ok_or_else(|| Explosion(format!("unknown dtor")))?
+                            .0
+                            .clone(),
+                        ann.clone(),
+                    );
+                    ty = ty
+                        .and_then(|t_| TCompute::eqv(&t, &t_).then_some(t_))
+                        .or_else(|| Some(t));
+                }
+                ty.ok_or_else(|| Explosion(format!("empty CoMatch")))
+            }
             Compute::CoApp {
                 scrut,
                 dtor,
@@ -228,7 +280,30 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 ann,
             } => {
                 let tscrut = scrut.tyck(&ctx)?;
-                todo!()
+                match tscrut.clone() {
+                    TCompute::Var(tv, ann) => {
+                        let tv = ctx
+                            .dtors
+                            .get(dtor)
+                            .ok_or_else(|| Explosion(format!("unknown dtor")))?;
+                        let t_ = TCompute::Var(tv.0.clone(), ann);
+                        TCompute::eqv(&tscrut, &t_)
+                            .then_some(())
+                            .ok_or_else(|| TCompMismatch {
+                                expected: t_,
+                                found: tscrut,
+                            })?;
+                        for arg in args {
+                            arg.tyck(&ctx)?;
+                            // TODO: check that args are correct
+                        }
+                        Ok(tv.2.clone())
+                    }
+                    _ => Err(TCompExpect {
+                        expected: format!("Var({{...}})"),
+                        found: tscrut,
+                    }),
+                }
             }
             Compute::Prim2(op, l, r, _) => todo!(),
         }
