@@ -74,6 +74,7 @@ Comp: Compute<()> = {
     "comatch" <cases:CoMatchBranch*> => Compute::CoMatch {
         cases, ann: ()
     },
+    Arith
 }
 
 MatchBranch: (Ctor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
@@ -122,6 +123,16 @@ BindComp: (VVar<()>, Box<Compute<()>>) = {
 
 FnArg: (VVar<()>, Box<TValue<()>>) = {
     <x:VVar> ":" <t:TValBox> => (x, t),
+}
+
+//* ----------------------------- Arithmetic --------------------------------- */
+
+Arith: Compute<()> = <l:ValBox> <op:ArithOp> <r:ValBox> => Compute::Prim2(op, l, r, ());
+
+ArithOp: Prim2 = {
+    "+" => Prim2::Add,
+    "-" => Prim2::Sub,
+    "*" => Prim2::Mul
 }
 
 //* ---------------------------------- Value --------------------------------- */

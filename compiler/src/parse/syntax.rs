@@ -74,6 +74,14 @@ pub enum Compute<Ann> {
         args: Vec<Value<Ann>>,
         ann: Ann,
     },
+    Prim2(Prim2, Box<Value<Ann>>, Box<Value<Ann>>, Ann),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Prim2 {
+    Add,
+    Sub,
+    Mul,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

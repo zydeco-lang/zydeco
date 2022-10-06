@@ -165,6 +165,9 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                         .join(", ")
                 )
             }
+            Compute::Prim2(op, l, r, _) => {
+                format!("{:?} {} {}", op, l.fmt_with_args(fmta), r.fmt_with_args(fmta))
+            }
         }
     }
 }

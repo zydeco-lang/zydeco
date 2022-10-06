@@ -79,6 +79,7 @@ fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<A
         Match { scrut, cases, ann } => todo!(),
         CoMatch { cases, ann } => todo!(),
         CoApp { scrut, dtor, args, ann } => todo!(),
+        Prim2(op, l, r, _) => todo!(),
     }
 }
 

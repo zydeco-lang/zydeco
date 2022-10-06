@@ -230,6 +230,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let tscrut = scrut.tyck(&ctx)?;
                 todo!()
             }
+            Compute::Prim2(op, l, r, _) => todo!(),
         }
     }
 }
