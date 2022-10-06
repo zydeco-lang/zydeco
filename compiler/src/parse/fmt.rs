@@ -66,10 +66,11 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                 )
             }
             Compute::Rec { binding, body, .. } => {
-                let (x, v) = binding;
+                let (x, t, v) = binding;
                 format!(
-                    "rec {} = {};{}{}",
+                    "rec {}: {} = {};{}{}",
                     x.fmt_with_args(args),
+                    t.fmt_with_args(args),
                     v.fmt_with_args(args),
                     args.force_space(),
                     body.fmt_with_args(args)

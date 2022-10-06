@@ -36,7 +36,7 @@ pub enum Compute<Ann> {
         ann: Ann,
     },
     Rec {
-        binding: (VVar<Ann>, Box<Value<Ann>>),
+        binding: (VVar<Ann>, Box<TValue<Ann>>, Box<Value<Ann>>),
         body: Box<Compute<Ann>>,
         ann: Ann,
     },

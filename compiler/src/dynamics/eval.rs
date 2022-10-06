@@ -1,11 +1,11 @@
 #![allow(unused)]
-use crate::parse::syntax::{Compute, Value, VVar};
+use crate::parse::syntax::{Compute, VVar, Value};
 
 type Env<Ann> = std::collections::HashMap<VVar<Ann>, Value<Ann>>;
 
 fn get_val<Ann: Clone>(env: &Env<Ann>, val: Value<Ann>) -> Option<Value<Ann>> {
     if let Value::Var(name, _) = val {
-        env.get(&name).cloned()
+        get_val(env, env.get(&name)?.clone())
     } else {
         Some(val)
     }
@@ -14,7 +14,6 @@ fn get_val<Ann: Clone>(env: &Env<Ann>, val: Value<Ann>) -> Option<Value<Ann>> {
 fn with_eval<Ann: Clone>(
     env: &mut Env<Ann>, name: &VVar<Ann>, val: Value<Ann>, exp: Compute<Ann>,
 ) -> Option<Value<Ann>> {
-    let val = get_val(env, val)?;
     env.insert(name.clone(), val);
     eval_env(env, exp)
 }
@@ -27,7 +26,10 @@ fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<A
             let (name, val) = binding;
             with_eval(env, &name, *val, *body)
         }
-        Rec { .. } => todo!(),
+        Rec { binding, body, ann } => {
+            let (name, _, val) = binding;
+            with_eval(env, &name, *val, *body)
+        }
         Do { binding, body, .. } => {
             let (name, compute) = binding;
             let mut new_env = env.clone();
@@ -59,7 +61,7 @@ fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<A
                     ..
                 } = *compute
                 {
-                with_eval(env, &name, *arg, *body)
+                    with_eval(env, &name, *arg, *body)
                 } else {
                     None
                 }
@@ -76,7 +78,6 @@ fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<A
         }
         Match { scrut, cases, ann } => todo!(),
         CoMatch { cases, ann } => todo!(),
-        
     }
 }
 

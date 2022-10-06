@@ -86,7 +86,18 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 ctx.push(x.clone(), t);
                 body.tyck(&ctx)
             }
-            Compute::Rec { .. } => todo!(),
+            Compute::Rec { binding, body, ann } => {
+                let mut ctx = ctx.clone();
+                let (x, t, def) = binding;
+                ctx.push(x.clone(), *t.clone());
+                let tdef = def.tyck(&ctx)?;
+                TValue::eqv(t, &tdef)
+                    .then_some(body.tyck(&ctx))
+                    .ok_or_else(|| TValMismatch {
+                        expected: *t.clone(),
+                        found: tdef,
+                    })?
+            }
             Compute::Do { binding, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, def) = binding;

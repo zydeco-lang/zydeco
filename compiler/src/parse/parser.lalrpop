@@ -49,7 +49,7 @@ Comp: Compute<()> = {
             binding, body, ann: ()
         }))
     },
-    "rec" <bindings: Once<",", BindVal>> ";" <body:CompBox> => {
+    "rec" <bindings: Once<",", BindAnnVal>> ";" <body:CompBox> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Rec {
             binding, body, ann: ()
         }))
@@ -97,6 +97,10 @@ CompAtom: Compute<()> = {
 
 BindVal: (VVar<()>, Box<Value<()>>) = {
     <x:VVar> "=" <v:ValBox> => (x, v),
+}
+
+BindAnnVal: (VVar<()>, Box<TValue<()>>, Box<Value<()>>) = {
+    <x:VVar> ":" <t:TValBox> "=" <v:ValBox> => (x, t, v),
 }
 
 BindComp: (VVar<()>, Box<Compute<()>>) = {
