@@ -25,12 +25,12 @@ codata If where
   .else_(): Else
 let v = True();
 match v
-  | True() -> (
+  | True -> (
     comatch
-      .then_() -> ret true
-      .else_() -> ret false
+      .then_ -> ret true
+      .else_ -> ret false
   )
-  | False() -> ret false
+  | False -> ret false
 @@@ data and codata syntax
 do x <- (fn (x: Bool) -> ret 1) true;
 do y <- (fn (x: Int) -> ret true) +123;

@@ -71,10 +71,12 @@ Comp: Compute<()> = {
 
 MatchBranch: (Ctor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
     "|" <c:Ctor> "(" <vs:VVar*> ")" "->" <e:CompAtomBox> => (c, vs, e),
+    "|" <c:Ctor> "->" <e:CompAtomBox> => (c, vec!(), e),
 }
 
 CoMatchBranch: (Dtor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
     "." <d:Dtor> "(" <vs:VVar*> ")" "->" <e:CompAtomBox> => (d, vs, e),
+    "." <d:Dtor> "->" <e:CompAtomBox> => (d, vec!(), e),
 }
 
 CompAtomBox: Box<Compute<()>> = {
