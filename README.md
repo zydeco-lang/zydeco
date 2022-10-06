@@ -4,7 +4,7 @@ A proof-of-concept language adopting call-by-push-value as its evaluation order.
 
 ## Repository Structure
 
-```
+```plain
 .
 ├── Cargo.lock
 ├── Cargo.toml
@@ -16,6 +16,7 @@ A proof-of-concept language adopting call-by-push-value as its evaluation order.
 ```
 
 `/compiler/`: compiler for Vituloid; uses lalrpop as its parser generator.
+
 - `src/`:
   - `lib.rs`: the top-level module for all compiler utilities
   - `main.rs`: a basic cli
@@ -32,6 +33,7 @@ rlwrap cargo run -- repl
 ## Testing
 
 An accumulative test file `compiler/cases/acc.vit` is kept for adding small, incremental while convenient test cases under heavy development. To add a test case,
+
 1. Type a complete vituloid term
 2. Type `@@@` at the start of the line, followed by descriptions to the test
 3. (TBD) Type `w/...` where `...` is a sequence of single letters representing phases to run
@@ -60,5 +62,5 @@ cargo run -- < compiler/cases/acc.vit
 
 ## Related Work
 
-- Fiddle: https://github.com/maxsnew/modal-scheme
-- Riddle: https://github.com/UMjoeypeng/riddle_compiler
+- Fiddle: <https://github.com/maxsnew/modal-scheme>
+- Riddle: <https://github.com/UMjoeypeng/riddle_compiler>
