@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use crate::parse::syntax::*;
+use crate::statics::builtins::*;
 use std::collections::HashMap;
 
 pub trait TypeEqv {
@@ -54,6 +55,9 @@ impl<Ann: Clone> Ctx<Ann> {
     }
     fn push(&mut self, x: VVar<Ann>, t: TValue<Ann>) {
         self.vmap.insert(x, t);
+    }
+    fn extend(&mut self, other: HashMap<VVar<Ann>, TValue<Ann>>) {
+        self.vmap.extend(other);
     }
     fn lookup(&self, x: &VVar<Ann>) -> Option<&TValue<Ann>> {
         self.vmap.get(x)
@@ -146,6 +150,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Program<Ann> {
     type Type = TCompute<Ann>;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         let mut ctx = ctx.clone();
+        ctx.extend(builtin_ctx(self.ann.clone()));
         for decl in &self.decls {
             ctx.decl(&decl)?;
         }
