@@ -31,16 +31,44 @@ impl<Ann> TypeEqv for TCompute<Ann> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Ctx<Ann>(HashMap<VVar<Ann>, TValue<Ann>>);
-impl<Ann> Ctx<Ann> {
+pub struct Ctx<Ann> {
+    vmap: HashMap<VVar<Ann>, TValue<Ann>>,
+    data: HashMap<TVar<Ann>, Vec<(Ctor<Ann>, Vec<TValue<Ann>>)>>,
+    codata: HashMap<TVar<Ann>, Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>>,
+}
+impl<Ann: Clone> Ctx<Ann> {
     pub fn new() -> Self {
-        Self(HashMap::new())
+        Self {
+            vmap: HashMap::new(),
+            data: HashMap::new(),
+            codata: HashMap::new(),
+        }
     }
     fn push(&mut self, x: VVar<Ann>, t: TValue<Ann>) {
-        self.0.insert(x, t);
+        self.vmap.insert(x, t);
     }
     fn lookup(&self, x: &VVar<Ann>) -> Option<&TValue<Ann>> {
-        self.0.get(x)
+        self.vmap.get(x)
+    }
+    fn decl(&mut self, d: &Declare<Ann>) -> Result<(), TypeCheckError<Ann>> {
+        match d.clone() {
+            Declare::Data { name, ctors, ann } => {
+                self.data.insert(name.clone(), ctors).map_or(Ok(()), |_| {
+                    Err(TypeCheckError::DuplicateDeclaration {
+                        name: name.name().to_string(),
+                        ann,
+                    })
+                })
+            }
+            Declare::Codata { name, dtors, ann } => {
+                self.codata.insert(name.clone(), dtors).map_or(Ok(()), |_| {
+                    Err(TypeCheckError::DuplicateDeclaration {
+                        name: name.name().to_string(),
+                        ann,
+                    })
+                })
+            }
+        }
     }
 }
 
@@ -67,12 +95,27 @@ pub enum TypeCheckError<Ann> {
         found: TCompute<Ann>,
     },
     InconsistentBranches(Vec<TCompute<Ann>>),
+    DuplicateDeclaration {
+        name: String,
+        ann: Ann,
+    },
 }
 use TypeCheckError::*;
 
 pub trait TypeCheck<Ann> {
     type Type;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>>;
+}
+
+impl<Ann: Clone> TypeCheck<Ann> for Program<Ann> {
+    type Type = TCompute<Ann>;
+    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+        let mut ctx = ctx.clone();
+        for decl in &self.decls {
+            ctx.decl(&decl)?;
+        }
+        self.comp.tyck(&ctx)
+    }
 }
 
 impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
@@ -178,7 +221,15 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
             }
             Compute::Match { scrut, cases, ann } => todo!(),
             Compute::CoMatch { cases, ann } => todo!(),
-            Compute::CoApp { scrut, dtor, args, ann } => todo!(),
+            Compute::CoApp {
+                scrut,
+                dtor,
+                args,
+                ann,
+            } => {
+                let tscrut = scrut.tyck(&ctx)?;
+                todo!()
+            }
         }
     }
 }

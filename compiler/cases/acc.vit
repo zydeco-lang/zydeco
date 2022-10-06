@@ -1,7 +1,5 @@
 fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x
 @@@ fn & app
-(fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x) true { fn (x: Bool) -> ret x }
-@@@ fn & app, x2
 let x = true,
     y = { ret false };
 let f = { fn (b: Bool) -> ret b };
@@ -26,9 +24,9 @@ codata If where
 let v = True();
 match v
   | True -> (
-    comatch
+    (comatch
       .then_ -> ret true
-      .else_ -> ret false
+      .else_ -> ret false).then_()
   )
   | False -> ret false
 @@@ data and codata syntax

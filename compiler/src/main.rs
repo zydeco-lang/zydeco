@@ -77,7 +77,7 @@ impl Main {
         println!("=== [{}] <parse>", title);
         let program = Main::parse(&buffer)?;
         println!("=== [{}] <tyck>", title);
-        let ty = Main::tyck(&program.comp)?;
+        let ty = Main::tyck(&program)?;
         println!("=== [{}] <eval>", title);
         let value = Main::eval(*program.comp)?;
         Ok((ty, value))
@@ -87,8 +87,8 @@ impl Main {
         Self::phase(|| VitProgramParser::new().parse(input), "Parse")
     }
 
-    fn tyck(comp: &Compute<()>) -> Result<TCompute<()>, ()> {
-        Self::phase(|| comp.tyck(&Ctx::new()), "Tyck")
+    fn tyck(prog: &Program<()>) -> Result<TCompute<()>, ()> {
+        Self::phase(|| prog.tyck(&Ctx::new()), "Tyck")
     }
 
     fn eval(comp: Compute<()>) -> Result<Value<()>, ()> {

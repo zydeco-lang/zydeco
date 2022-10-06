@@ -1,0 +1,2 @@
+(fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x) true { fn (x: Bool) -> ret x }
+@@@ fn & app, x2
