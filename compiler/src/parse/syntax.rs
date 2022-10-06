@@ -35,6 +35,11 @@ pub enum Compute<Ann> {
         body: Box<Compute<Ann>>,
         ann: Ann,
     },
+    Rec {
+        binding: (VVar<Ann>, Box<Value<Ann>>),
+        body: Box<Compute<Ann>>,
+        ann: Ann,
+    },
     Do {
         binding: (VVar<Ann>, Box<Compute<Ann>>),
         body: Box<Compute<Ann>>,

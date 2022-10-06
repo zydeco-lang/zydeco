@@ -27,6 +27,7 @@ fn eval_env<Ann: Clone>(env: &mut Env<Ann>, exp: Compute<Ann>) -> Option<Value<A
             let (name, val) = binding;
             with_eval(env, &name, *val, *body)
         }
+        Rec { .. } => todo!(),
         Do { binding, body, .. } => {
             let (name, compute) = binding;
             let mut new_env = env.clone();

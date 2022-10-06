@@ -86,6 +86,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 ctx.push(x.clone(), t);
                 body.tyck(&ctx)
             }
+            Compute::Rec { .. } => todo!(),
             Compute::Do { binding, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, def) = binding;
