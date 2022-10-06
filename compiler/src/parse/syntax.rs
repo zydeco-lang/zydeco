@@ -68,6 +68,11 @@ pub enum Compute<Ann> {
         cases: Vec<(Dtor<Ann>, Vec<VVar<Ann>>, Box<Compute<Ann>>)>,
         ann: Ann,
     },
+    CoApp {
+        scrut: Box<Compute<Ann>>,
+        dtor: Dtor<Ann>,
+        args: Vec<Value<Ann>>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -3,7 +3,7 @@ fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x
 (fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x) true { fn (x: Bool) -> ret x }
 @@@ fn & app, x2
 let x = true,
-    y = {ret false};
+    y = { ret false };
 let f = { fn (b: Bool) -> ret b };
 do  rx <- !f x,
     ry <- do y <- !y; !f x;

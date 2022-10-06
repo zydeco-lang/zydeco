@@ -178,6 +178,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
             }
             Compute::Match { scrut, cases, ann } => todo!(),
             Compute::CoMatch { cases, ann } => todo!(),
+            Compute::CoApp { scrut, dtor, args } => todo!(),
         }
     }
 }

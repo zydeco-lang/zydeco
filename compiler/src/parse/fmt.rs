@@ -53,68 +53,68 @@ impl<Ann> FmtWithArgs for Value<Ann> {
 }
 
 impl<Ann> FmtWithArgs for Compute<Ann> {
-    fn fmt_with_args(&self, args: Args) -> String {
+    fn fmt_with_args(&self, fmta: Args) -> String {
         match self {
             Compute::Let { binding, body, .. } => {
                 let (x, v) = binding;
                 format!(
                     "let {} = {};{}{}",
-                    x.fmt_with_args(args),
-                    v.fmt_with_args(args),
-                    args.force_space(),
-                    body.fmt_with_args(args)
+                    x.fmt_with_args(fmta),
+                    v.fmt_with_args(fmta),
+                    fmta.force_space(),
+                    body.fmt_with_args(fmta)
                 )
             }
             Compute::Rec { binding, body, .. } => {
                 let (x, t, v) = binding;
                 format!(
                     "rec {}: {} = {};{}{}",
-                    x.fmt_with_args(args),
-                    t.fmt_with_args(args),
-                    v.fmt_with_args(args),
-                    args.force_space(),
-                    body.fmt_with_args(args)
+                    x.fmt_with_args(fmta),
+                    t.fmt_with_args(fmta),
+                    v.fmt_with_args(fmta),
+                    fmta.force_space(),
+                    body.fmt_with_args(fmta)
                 )
             }
             Compute::Do { binding, body, .. } => {
                 let (x, v) = binding;
                 format!(
                     "do {} <- {};{}{}",
-                    x.fmt_with_args(args),
-                    v.fmt_with_args(args),
-                    args.force_space(),
-                    body.fmt_with_args(args)
+                    x.fmt_with_args(fmta),
+                    v.fmt_with_args(fmta),
+                    fmta.force_space(),
+                    body.fmt_with_args(fmta)
                 )
             }
             Compute::Force(v, _) => {
-                format!("!{}", v.fmt_with_args(args))
+                format!("!{}", v.fmt_with_args(fmta))
             }
             Compute::Return(v, _) => {
-                format!("ret {}", v.fmt_with_args(args))
+                format!("ret {}", v.fmt_with_args(fmta))
             }
             Compute::Lam { arg, body, .. } => {
                 let (x, t) = arg;
                 format!(
                     "fn ({}: {}) -> {}",
-                    x.fmt_with_args(args),
-                    t.fmt_with_args(args),
-                    body.fmt_with_args(args)
+                    x.fmt_with_args(fmta),
+                    t.fmt_with_args(fmta),
+                    body.fmt_with_args(fmta)
                 )
             }
             Compute::App(e, v, _) => {
-                format!("{} {}", e.fmt_with_args(args), v.fmt_with_args(args),)
+                format!("{} {}", e.fmt_with_args(fmta), v.fmt_with_args(fmta),)
             }
             Compute::If { cond, thn, els, .. } => {
                 format!(
                     "if {}: {} else: {}",
-                    cond.fmt_with_args(args),
-                    thn.fmt_with_args(args),
-                    els.fmt_with_args(args)
+                    cond.fmt_with_args(fmta),
+                    thn.fmt_with_args(fmta),
+                    els.fmt_with_args(fmta)
                 )
             }
             Compute::Match { scrut, cases, .. } => {
-                format!("match {} {}", scrut.fmt_with_args(args), {
-                    let args = args.indent();
+                format!("match {} {}", scrut.fmt_with_args(fmta), {
+                    let args = fmta.indent();
                     cases
                         .into_iter()
                         .map(|(ctor, vs, e)| {
@@ -135,7 +135,7 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
             }
             Compute::CoMatch { cases, .. } => {
                 format!("comatch {}", {
-                    let args = args.indent();
+                    let args = fmta.indent();
                     cases
                         .into_iter()
                         .map(|(dtor, vs, e)| {
@@ -153,6 +153,17 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                         .collect::<Vec<_>>()
                         .join("")
                 })
+            }
+            Compute::CoApp { scrut, dtor, args } => {
+                format!(
+                    "{}.{}({})",
+                    scrut.fmt_with_args(fmta),
+                    dtor.fmt_with_args(fmta),
+                    args.into_iter()
+                        .map(|v| v.fmt_with_args(fmta))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
         }
     }
