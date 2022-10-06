@@ -127,12 +127,16 @@ FnArg: (VVar<()>, Box<TValue<()>>) = {
 
 //* ----------------------------- Arithmetic --------------------------------- */
 
-Arith: Compute<()> = <l:ValBox> <op:ArithOp> <r:ValBox> => Compute::Prim2(op, l, r, ());
+Arith: Compute<()> = <l:ValBox> <op:ArithOp> <r:ValBox> => 
+    Compute::App(Box::new(Compute::App(op, l, ())), r, ());
 
-ArithOp: Prim2 = {
-    "+" => Prim2::Add,
-    "-" => Prim2::Sub,
-    "*" => Prim2::Mul
+ArithOp: Box<Compute<()>> = <ArithOpName> => 
+    Box::new(Compute::Force(Box::new(Value::Var(VVar::new(<>, ()), ())), ()));
+
+ArithOpName: String = {
+    "+" => "add".to_string(),
+    "-" => "sub".to_string(),
+    "*" => "mul".to_string(),
 }
 
 //* ---------------------------------- Value --------------------------------- */

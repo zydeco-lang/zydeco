@@ -305,7 +305,6 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                     }),
                 }
             }
-            Compute::Prim2(op, l, r, _) => todo!(),
         }
     }
 }
