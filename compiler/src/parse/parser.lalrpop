@@ -149,6 +149,7 @@ Val: Value<()> = {
     <ctor:Ctor> "(" <vs:Kleene<",", <Val>>> ")" => Value::Ctor(ctor, vs, ()),
     <b:Bool> => Value::Bool(b, ()),
     <n:Int> => Value::Int(n,()),
+    <s:String> => Value::String(s,()),
 }
 
 
@@ -169,6 +170,7 @@ TVal: TValue<()> = {
     "Comp" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
     "Bool" => TValue::Bool(()),
     "Int" => TValue::Int(()),
+    "String" => TValue::String(()),
 }
 
 
@@ -188,6 +190,9 @@ Bool: bool = {
 }
 
 Int: i64 = <s:r"[\+-]?[0-9]+"> => s.parse().unwrap();
+
+String: String = <s:r#""[^"\\]*(?:\\.[^"\\]*)*""#> => 
+    s[1..s.len()-1].to_string().replace("\\\"", "\"");
 
 
 //* -------------------------------- Utilities ------------------------------- */

@@ -26,6 +26,7 @@ pub enum Value<Ann> {
     Ctor(Ctor<Ann>, Vec<Value<Ann>>, Ann),
     Bool(bool, Ann),
     Int(i64, Ann),
+    String(String, Ann),
 }
 
 type Binding<Ty, Def, Ann> = (VVar<Ann>, Option<Box<Ty>>, Box<Def>);
@@ -84,6 +85,7 @@ pub enum TValue<Ann> {
     Comp(Box<TCompute<Ann>>, Ann),
     Bool(Ann),
     Int(Ann),
+    String(Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

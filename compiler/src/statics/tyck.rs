@@ -12,7 +12,9 @@ impl<Ann> TypeEqv for TValue<Ann> {
     fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TValue::Comp(a, _), TValue::Comp(b, _)) => TCompute::eqv(a, b),
-            (TValue::Bool(_), TValue::Bool(_)) | (TValue::Int(_), TValue::Int(_)) => Some(()),
+            (TValue::Bool(_), TValue::Bool(_))
+            | (TValue::Int(_), TValue::Int(_))
+            | (TValue::String(_), TValue::String(_)) => Some(()),
             // Note: being nominal here
             (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
             _ => None,
@@ -400,6 +402,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
             }
             Value::Bool(_, ann) => Ok(TValue::Bool(ann.clone())),
             Value::Int(_, ann) => Ok(TValue::Int(ann.clone())),
+            Value::String(_, ann) => Ok(TValue::String(ann.clone())),
         }
     }
 }
