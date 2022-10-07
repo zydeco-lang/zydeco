@@ -18,9 +18,9 @@ do  a <- !and false true,
 data Boolean where
   | True()
   | False()
-codata If where
-  .then_(): Then
-  .else_(): Else
+codata And where
+  .then_(): Ret(Bool)
+  .else_(): Ret(Bool)
 let v = True();
 match v
   | True -> (
