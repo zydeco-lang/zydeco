@@ -174,6 +174,13 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let (x, t, def) = binding;
                 ctx.push(x.clone(), *t.clone());
                 let tdef = def.tyck(&ctx)?;
+                match &tdef {
+                    TValue::Comp(tdefe, _) => (),
+                    _ => Err(TValExpect {
+                        expected: "TValue::Comp".to_string(),
+                        found: tdef.clone(),
+                    })?,
+                }
                 TValue::eqv(t, &tdef)
                     .then_some(body.tyck(&ctx))
                     .ok_or_else(|| TValMismatch {
