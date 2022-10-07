@@ -121,7 +121,7 @@ fn step<'a, Ann: Clone>(
     use Value::*;
     match exp {
         Let { binding, body, .. } => {
-            let (var, val) = binding;
+            let (var, _, val) = binding;
             rt.insert(var.clone(), *val.clone());
             Some(&*body)
         }
@@ -220,7 +220,7 @@ fn eval_env<Ann: Clone>(env: &mut EnvMap<Ann>, exp: Compute<Ann>) -> Option<Valu
     use Value::*;
     match exp {
         Let { binding, body, .. } => {
-            let (name, val) = binding;
+            let (name, _, val) = binding;
             with_eval(env, &name, *val, *body)
         }
         Rec { binding, body, ann } => {

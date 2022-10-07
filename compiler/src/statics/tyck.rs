@@ -182,7 +182,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
         match self {
             Compute::Let { binding, body, ann } => {
                 let mut ctx = ctx.clone();
-                let (x, def) = binding;
+                let (x, _, def) = binding;
                 let t = def.tyck(&ctx)?;
                 ctx.push(x.clone(), t);
                 body.tyck(&ctx)

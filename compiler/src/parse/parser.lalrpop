@@ -77,6 +77,26 @@ Comp: Compute<()> = {
     Arith
 }
 
+BindVal: (VVar<()>, Option<Box<TValue<()>>>, Box<Value<()>>) = {
+    <Bind<"=", TValBox, ValBox>>
+}
+
+BindAnnVal: (VVar<()>, Box<TValue<()>>, Box<Value<()>>) = {
+    <x:VVar> ":" <t:TValBox> "=" <v:ValBox> => (x, t, v),
+}
+
+BindComp: (VVar<()>, Box<Compute<()>>) = {
+    <x:VVar> "<-" <c:CompBox> => (x, c),
+}
+
+Bind<Delim, Typ, Def>: (VVar<()>, Option<Typ>, Def) = {
+    <x:VVar> <ty:(":" <Typ>)?> <delim:Delim> <def:Def> => (x, ty, def),
+}
+
+FnArg: (VVar<()>, Box<TValue<()>>) = {
+    <x:VVar> ":" <t:TValBox> => (x, t),
+}
+
 MatchBranch: (Ctor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
     "|" <c:Ctor> "(" <vs:VVar*> ")" "->" <e:CompAtomBox> => (c, vs, e),
     "|" <c:Ctor> "->" <e:CompAtomBox> => (c, vec!(), e),
@@ -107,22 +127,6 @@ CompAtom: Compute<()> = {
     "!" <v:ValBox> => Compute::Force(v, ()),
     "ret" <v:ValBox> => Compute::Return(v, ()),
     <e:CompAtomBox> <v:ValBox> => Compute::App(e, v, ()),
-}
-
-BindVal: (VVar<()>, Box<Value<()>>) = {
-    <x:VVar> "=" <v:ValBox> => (x, v),
-}
-
-BindAnnVal: (VVar<()>, Box<TValue<()>>, Box<Value<()>>) = {
-    <x:VVar> ":" <t:TValBox> "=" <v:ValBox> => (x, t, v),
-}
-
-BindComp: (VVar<()>, Box<Compute<()>>) = {
-    <x:VVar> "<-" <c:CompBox> => (x, c),
-}
-
-FnArg: (VVar<()>, Box<TValue<()>>) = {
-    <x:VVar> ":" <t:TValBox> => (x, t),
 }
 
 //* ----------------------------- Arithmetic --------------------------------- */

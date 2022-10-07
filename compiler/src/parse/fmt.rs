@@ -56,7 +56,7 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
     fn fmt_with_args(&self, fmta: Args) -> String {
         match self {
             Compute::Let { binding, body, .. } => {
-                let (x, v) = binding;
+                let (x, _, v) = binding;
                 format!(
                     "let {} = {};{}{}",
                     x.fmt_with_args(fmta),

@@ -31,7 +31,7 @@ pub enum Value<Ann> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Compute<Ann> {
     Let {
-        binding: (VVar<Ann>, Box<Value<Ann>>),
+        binding: (VVar<Ann>, Option<Box<TValue<Ann>>>, Box<Value<Ann>>),
         body: Box<Compute<Ann>>,
         ann: Ann,
     },
