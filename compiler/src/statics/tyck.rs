@@ -3,35 +3,33 @@
 use crate::parse::syntax::*;
 use crate::statics::builtins::*;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 pub trait TypeEqv {
-    fn eqv(&self, other: &Self) -> bool;
+    fn eqv(&self, other: &Self) -> Option<()>;
 }
 
 impl<Ann> TypeEqv for TValue<Ann> {
-    fn eqv(&self, other: &Self) -> bool {
+    fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TValue::Comp(a, _), TValue::Comp(b, _)) => TCompute::eqv(a, b),
-            (TValue::Bool(_), TValue::Bool(_)) => true,
-            (TValue::Int(_), TValue::Int(_)) => true,
-            // Being nominal here
-            (TValue::Var(a, _), TValue::Var(b, _)) => a == b,
-            _ => false,
+            (TValue::Bool(_), TValue::Bool(_)) | (TValue::Int(_), TValue::Int(_)) => Some(()),
+            // Note: being nominal here
+            (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
+            _ => None,
         }
     }
 }
 
 impl<Ann> TypeEqv for TCompute<Ann> {
-    fn eqv(&self, other: &Self) -> bool {
+    fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TCompute::Ret(a, _), TCompute::Ret(b, _)) => TValue::eqv(a, b),
             (TCompute::Lam(a, b, _), TCompute::Lam(c, d, _)) => {
-                TValue::eqv(a, c) && TCompute::eqv(b, d)
+                TValue::eqv(a, c).and_then(|()| TCompute::eqv(b, d))
             }
-            // Being nominal here
-            (TCompute::Var(a, _), TCompute::Var(b, _)) => a == b,
-            _ => false,
+            // Note: being nominal here
+            (TCompute::Var(a, _), TCompute::Var(b, _)) => (a == b).then_some(()),
+            _ => None,
         }
     }
 }
@@ -182,12 +180,11 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                         found: tdef.clone(),
                     })?,
                 }
-                TValue::eqv(t, &tdef)
-                    .then_some(body.tyck(&ctx))
-                    .ok_or_else(|| TValMismatch {
-                        expected: *t.clone(),
-                        found: tdef,
-                    })?
+                TValue::eqv(t, &tdef).ok_or_else(|| TValMismatch {
+                    expected: *t.clone(),
+                    found: tdef,
+                })?;
+                body.tyck(&ctx)
             }
             Compute::Do { binding, body, ann } => {
                 let mut ctx = ctx.clone();
@@ -230,12 +227,10 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let targ = v.tyck(&ctx)?;
                 match tfn {
                     TCompute::Lam(tpara, tbody, ann) => {
-                        TValue::eqv(&targ, &tpara)
-                            .then_some(())
-                            .ok_or(TValMismatch {
-                                expected: *tpara,
-                                found: targ,
-                            })?;
+                        TValue::eqv(&targ, &tpara).ok_or_else(|| TValMismatch {
+                            expected: *tpara,
+                            found: targ,
+                        })?;
                         Ok(*tbody)
                     }
                     _ => Err(TCompExpect {
@@ -257,7 +252,6 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                         let tels = els.tyck(&ctx)?;
                         let tfinal = tels.clone();
                         TCompute::eqv(&tthn, &tels)
-                            .then_some(())
                             .ok_or_else(|| InconsistentBranches(vec![tthn, tels]))?;
                         Ok(tfinal)
                     }
@@ -281,7 +275,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                         ann.clone(),
                     );
                     ty = ty
-                        .and_then(|t_| TCompute::eqv(&t, &t_).then_some(t_))
+                        .and_then(|t_| TCompute::eqv(&t, &t_).and_then(|_| Some(t_)))
                         .or_else(|| Some(t));
                 }
                 ty.ok_or_else(|| Explosion(format!("empty CoMatch")))
@@ -300,19 +294,15 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                             .get(dtor)
                             .ok_or_else(|| Explosion(format!("unknown dtor")))?;
                         let t_ = TCompute::Var(tv.0.clone(), ann);
-                        TCompute::eqv(&tscrut, &t_)
-                            .then_some(())
-                            .ok_or_else(|| TCompMismatch {
-                                expected: t_,
-                                found: tscrut,
-                            })?;
+                        TCompute::eqv(&tscrut, &t_).ok_or_else(|| TCompMismatch {
+                            expected: t_,
+                            found: tscrut,
+                        })?;
                         for (arg, expected) in args.iter().zip(&tv.1) {
                             let targ = arg.tyck(&ctx)?;
-                            Arc::new(targ.eqv(expected).then_some(())).ok_or_else(|| {
-                                TValMismatch {
-                                    expected: expected.clone(),
-                                    found: targ,
-                                }
+                            targ.eqv(expected).ok_or_else(|| TValMismatch {
+                                expected: expected.clone(),
+                                found: targ,
                             })?;
                         }
                         Ok(tv.2.clone())
