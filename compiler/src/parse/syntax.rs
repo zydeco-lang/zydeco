@@ -28,27 +28,29 @@ pub enum Value<Ann> {
     Int(i64, Ann),
 }
 
+type Binding<Ty, Def, Ann> = (VVar<Ann>, Option<Box<Ty>>, Box<Def>);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Compute<Ann> {
     Let {
-        binding: (VVar<Ann>, Option<Box<TValue<Ann>>>, Box<Value<Ann>>),
+        binding: Binding<TValue<Ann>, Value<Ann>, Ann>,
         body: Box<Compute<Ann>>,
         ann: Ann,
     },
     Rec {
-        binding: (VVar<Ann>, Box<TValue<Ann>>, Box<Value<Ann>>),
+        binding: Binding<TValue<Ann>, Value<Ann>, Ann>,
         body: Box<Compute<Ann>>,
         ann: Ann,
     },
     Do {
-        binding: (VVar<Ann>, Box<Compute<Ann>>),
+        binding: Binding<TCompute<Ann>, Compute<Ann>, Ann>,
         body: Box<Compute<Ann>>,
         ann: Ann,
     },
     Force(Box<Value<Ann>>, Ann),
     Return(Box<Value<Ann>>, Ann),
     Lam {
-        arg: (VVar<Ann>, Box<TValue<Ann>>),
+        arg: (VVar<Ann>, Option<Box<TValue<Ann>>>),
         body: Box<Compute<Ann>>,
         ann: Ann,
     },

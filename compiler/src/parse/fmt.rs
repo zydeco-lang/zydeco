@@ -66,18 +66,19 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                 )
             }
             Compute::Rec { binding, body, .. } => {
-                let (x, t, v) = binding;
+                let (x, _, v) = binding;
                 format!(
-                    "rec {}: {} = {};{}{}",
+                    "rec {} = {};{}{}",
+                    // "rec {}: {} = {};{}{}",
                     x.fmt_with_args(fmta),
-                    t.fmt_with_args(fmta),
+                    // t.fmt_with_args(fmta),
                     v.fmt_with_args(fmta),
                     fmta.force_space(),
                     body.fmt_with_args(fmta)
                 )
             }
             Compute::Do { binding, body, .. } => {
-                let (x, v) = binding;
+                let (x, _, v) = binding;
                 format!(
                     "do {} <- {};{}{}",
                     x.fmt_with_args(fmta),
@@ -93,11 +94,12 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                 format!("ret {}", v.fmt_with_args(fmta))
             }
             Compute::Lam { arg, body, .. } => {
-                let (x, t) = arg;
+                let (x, _) = arg;
                 format!(
-                    "fn ({}: {}) -> {}",
+                    "fn ({}) -> {}",
+                    // "fn ({}: {}) -> {}",
                     x.fmt_with_args(fmta),
-                    t.fmt_with_args(fmta),
+                    // t.fmt_with_args(fmta),
                     body.fmt_with_args(fmta)
                 )
             }
@@ -154,7 +156,9 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                         .join("")
                 })
             }
-            Compute::CoApp { scrut, dtor, args, .. } => {
+            Compute::CoApp {
+                scrut, dtor, args, ..
+            } => {
                 format!(
                     "{}.{}({})",
                     scrut.fmt_with_args(fmta),

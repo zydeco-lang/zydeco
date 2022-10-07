@@ -1,7 +1,7 @@
 #![allow(unused)]
 
-use crate::parse::syntax::*;
 use super::builtins::*;
+use crate::parse::syntax::*;
 use std::collections::HashMap;
 
 pub trait TypeEqv {
@@ -190,6 +190,9 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
             Compute::Rec { binding, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, t, def) = binding;
+                let t = t
+                    .as_ref()
+                    .ok_or_else(|| Explosion("rec must have type annotation".to_string()))?;
                 ctx.push(x.clone(), *t.clone());
                 let tdef = def.tyck(&ctx)?;
                 match &tdef {
@@ -199,7 +202,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                         found: tdef.clone(),
                     })?,
                 }
-                TValue::eqv(t, &tdef).ok_or_else(|| TValMismatch {
+                t.eqv(&tdef).ok_or_else(|| TValMismatch {
                     expected: *t.clone(),
                     found: tdef,
                 })?;
@@ -207,7 +210,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
             }
             Compute::Do { binding, body, ann } => {
                 let mut ctx = ctx.clone();
-                let (x, def) = binding;
+                let (x, _, def) = binding;
                 let te = def.tyck(&ctx)?;
                 match te {
                     TCompute::Ret(tv, ann) => {
@@ -237,6 +240,9 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
             Compute::Lam { arg, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, t) = arg;
+                let t = t
+                    .as_ref()
+                    .ok_or_else(|| Explosion("lam must have type annotation".to_string()))?;
                 ctx.push(x.clone(), *t.clone());
                 let tbody = body.tyck(&ctx)?;
                 Ok(TCompute::Lam(t.clone(), Box::new(tbody), ann.clone()))

@@ -131,7 +131,7 @@ fn step<'a, Ann: Clone>(
             Some(&*body)
         }
         Do { binding, body, .. } => {
-            let (var, exp) = binding;
+            let (var, _, exp) = binding;
             rt.kont(&*body, var.clone());
             Some(&*exp)
         }
@@ -228,7 +228,7 @@ fn eval_env<Ann: Clone>(env: &mut EnvMap<Ann>, exp: Compute<Ann>) -> Option<Valu
             with_eval(env, &name, *val, *body)
         }
         Do { binding, body, .. } => {
-            let (name, compute) = binding;
+            let (name, _, compute) = binding;
             let mut new_env = env.clone();
             let val = eval_env(&mut new_env, *compute)?;
             with_eval(env, &name, val, *body)

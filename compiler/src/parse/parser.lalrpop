@@ -51,7 +51,7 @@ Comp: Compute<()> = {
             binding, body, ann: ()
         }))
     },
-    "rec" <bindings: Once<",", BindAnnVal>> ";" <body:CompBox> => {
+    "rec" <bindings: Once<",", BindVal>> ";" <body:CompBox> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Rec {
             binding, body, ann: ()
         }))
@@ -81,20 +81,16 @@ BindVal: (VVar<()>, Option<Box<TValue<()>>>, Box<Value<()>>) = {
     <Bind<"=", TValBox, ValBox>>
 }
 
-BindAnnVal: (VVar<()>, Box<TValue<()>>, Box<Value<()>>) = {
-    <x:VVar> ":" <t:TValBox> "=" <v:ValBox> => (x, t, v),
-}
-
-BindComp: (VVar<()>, Box<Compute<()>>) = {
-    <x:VVar> "<-" <c:CompBox> => (x, c),
+BindComp: (VVar<()>, Option<Box<TCompute<()>>>, Box<Compute<()>>) = {
+    <Bind<"<-", TCompBox, CompBox>>
 }
 
 Bind<Delim, Typ, Def>: (VVar<()>, Option<Typ>, Def) = {
     <x:VVar> <ty:(":" <Typ>)?> <delim:Delim> <def:Def> => (x, ty, def),
 }
 
-FnArg: (VVar<()>, Box<TValue<()>>) = {
-    <x:VVar> ":" <t:TValBox> => (x, t),
+FnArg: (VVar<()>, Option<Box<TValue<()>>>) = {
+    <x:VVar> <t:(":" <TValBox>)?> => (x, t),
 }
 
 MatchBranch: (Ctor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
