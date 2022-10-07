@@ -3,6 +3,7 @@
 use crate::parse::syntax::*;
 use crate::statics::builtins::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub trait TypeEqv {
     fn eqv(&self, other: &Self) -> bool;
@@ -305,9 +306,14 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                                 expected: t_,
                                 found: tscrut,
                             })?;
-                        for arg in args {
-                            arg.tyck(&ctx)?;
-                            // TODO: check that args are correct
+                        for (arg, expected) in args.iter().zip(&tv.1) {
+                            let targ = arg.tyck(&ctx)?;
+                            Arc::new(targ.eqv(expected).then_some(())).ok_or_else(|| {
+                                TValMismatch {
+                                    expected: expected.clone(),
+                                    found: targ,
+                                }
+                            })?;
                         }
                         Ok(tv.2.clone())
                     }
