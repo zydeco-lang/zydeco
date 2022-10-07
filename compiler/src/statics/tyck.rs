@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use crate::parse::syntax::*;
-use crate::statics::builtins::*;
+use super::builtins::*;
 use std::collections::HashMap;
 
 pub trait TypeEqv {
@@ -34,6 +34,25 @@ impl<Ann> TypeEqv for TCompute<Ann> {
     }
 }
 
+pub struct ZipEq<Ann> {
+    _marker: std::marker::PhantomData<Ann>,
+}
+impl<'a, Ann> ZipEq<Ann> {
+    pub fn new<T: Clone, U: Clone>(
+        a: &'a Vec<T>, b: &'a Vec<U>,
+    ) -> Result<
+        std::iter::Zip<
+            std::iter::Cloned<std::slice::Iter<'a, T>>,
+            std::iter::Cloned<std::slice::Iter<'a, U>>,
+        >,
+        TypeCheckError<Ann>,
+    > {
+        (a.len() == b.len())
+            .then(|| a.iter().cloned().zip(b.iter().cloned()))
+            .ok_or_else(|| TypeCheckError::Explosion(format!("wrong number of arguments")))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Ctx<Ann> {
     vmap: HashMap<VVar<Ann>, TValue<Ann>>,
@@ -55,7 +74,7 @@ impl<Ann: Clone> Ctx<Ann> {
     fn push(&mut self, x: VVar<Ann>, t: TValue<Ann>) {
         self.vmap.insert(x, t);
     }
-    fn extend(&mut self, other: HashMap<VVar<Ann>, TValue<Ann>>) {
+    fn extend(&mut self, other: impl IntoIterator<Item = (VVar<Ann>, TValue<Ann>)>) {
         self.vmap.extend(other);
     }
     fn lookup(&self, x: &VVar<Ann>) -> Option<&TValue<Ann>> {
@@ -261,22 +280,52 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                     }),
                 }
             }
-            Compute::Match { scrut, cases, ann } => todo!(),
+            Compute::Match { scrut, cases, ann } => {
+                let data = scrut.tyck(&ctx)?;
+                let mut ty = None;
+                for (ctor, args, body) in cases {
+                    let (tvar, targs) = ctx
+                        .ctors
+                        .get(&ctor)
+                        .ok_or_else(|| Explosion(format!("unknown ctor: {}", ctor)))?;
+                    data.eqv(&TValue::Var(tvar.clone(), ann.clone()))
+                        .ok_or_else(|| TValMismatch {
+                            expected: TValue::Var(tvar.clone(), ann.clone()),
+                            found: data.clone(),
+                        })?;
+                    let mut ctx = ctx.clone();
+                    ctx.extend(ZipEq::new(args, targs)?);
+                    let tbranch = body.tyck(&ctx)?;
+                    ty = match ty {
+                        Some(tret) => {
+                            TCompute::eqv(&tret, &tbranch)
+                                .ok_or_else(|| InconsistentBranches(vec![tret.clone(), tbranch]))?;
+                            Some(tret)
+                        }
+                        None => Some(tbranch),
+                    }
+                }
+                ty.ok_or_else(|| Explosion(format!("empty Match")))
+            }
             Compute::CoMatch { cases, ann } => {
                 let mut ty: Option<TCompute<Ann>> = None;
                 // Hack: we need to know what type it is; now we just synthesize it
                 for (dtor, vars, comp) in cases {
-                    let t = TCompute::Var(
-                        ctx.dtors
-                            .get(dtor)
-                            .ok_or_else(|| Explosion(format!("unknown dtor")))?
-                            .0
-                            .clone(),
-                        ann.clone(),
-                    );
+                    let (codata, targs, tret) = ctx
+                        .dtors
+                        .get(dtor)
+                        .ok_or_else(|| Explosion(format!("unknown dtor: {}", dtor)))?;
+                    let t = TCompute::Var(codata.clone(), ann.clone());
                     ty = ty
                         .and_then(|t_| TCompute::eqv(&t, &t_).and_then(|_| Some(t_)))
                         .or_else(|| Some(t));
+                    let mut ctx = ctx.clone();
+                    ctx.extend(ZipEq::new(vars, targs)?);
+                    let tret_ = comp.tyck(&ctx)?;
+                    TCompute::eqv(&tret_, &tret).ok_or_else(|| TCompMismatch {
+                        expected: tret.clone(),
+                        found: tret_,
+                    })?;
                 }
                 ty.ok_or_else(|| Explosion(format!("empty CoMatch")))
             }
@@ -289,23 +338,23 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let tscrut = scrut.tyck(&ctx)?;
                 match tscrut.clone() {
                     TCompute::Var(tv, ann) => {
-                        let tv = ctx
+                        let (codata, targs, tret) = ctx
                             .dtors
                             .get(dtor)
-                            .ok_or_else(|| Explosion(format!("unknown dtor")))?;
-                        let t_ = TCompute::Var(tv.0.clone(), ann);
+                            .ok_or_else(|| Explosion(format!("unknown dtor: {}", dtor)))?;
+                        let t_ = TCompute::Var(codata.clone(), ann);
                         TCompute::eqv(&tscrut, &t_).ok_or_else(|| TCompMismatch {
                             expected: t_,
                             found: tscrut,
                         })?;
-                        for (arg, expected) in args.iter().zip(&tv.1) {
+                        for (arg, expected) in ZipEq::new(args, targs)? {
                             let targ = arg.tyck(&ctx)?;
-                            targ.eqv(expected).ok_or_else(|| TValMismatch {
+                            targ.eqv(&expected).ok_or_else(|| TValMismatch {
                                 expected: expected.clone(),
                                 found: targ,
                             })?;
                         }
-                        Ok(tv.2.clone())
+                        Ok(tret.clone())
                     }
                     _ => Err(TCompExpect {
                         expected: format!("Var({{...}})"),
@@ -329,7 +378,20 @@ impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
                 let t = e.tyck(&ctx)?;
                 Ok(TValue::Comp(Box::new(t), ann.clone()))
             }
-            Value::Ctor(ctor, vs, ann) => todo!(),
+            Value::Ctor(ctor, args, ann) => {
+                let (data, targs) = ctx
+                    .ctors
+                    .get(ctor)
+                    .ok_or_else(|| Explosion(format!("unknown ctor")))?;
+                for (arg, targ) in ZipEq::new(args, targs)? {
+                    let t = arg.tyck(&ctx)?;
+                    t.eqv(&targ).ok_or_else(|| TValMismatch {
+                        expected: targ,
+                        found: t,
+                    })?;
+                }
+                Ok(TValue::Var(data.clone(), ann.clone()))
+            }
             Value::Bool(_, ann) => Ok(TValue::Bool(ann.clone())),
             Value::Int(_, ann) => Ok(TValue::Int(ann.clone())),
         }
