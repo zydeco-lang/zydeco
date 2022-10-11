@@ -1,4 +1,4 @@
-# Vituloid
+# Zydeco
 
 A proof-of-concept language adopting call-by-push-value as its evaluation order.
 
@@ -15,7 +15,7 @@ A proof-of-concept language adopting call-by-push-value as its evaluation order.
 └── README.md
 ```
 
-`/compiler/`: compiler for Vituloid; uses lalrpop as its parser generator.
+`/compiler/`: compiler for Zydeco; uses lalrpop as its parser generator.
 
 - `src/`:
   - `lib.rs`: the top-level module for all compiler utilities
@@ -34,7 +34,7 @@ rlwrap cargo run -- repl
 
 An accumulative test file `compiler/cases/acc.vit` is kept for adding small, incremental while convenient test cases under heavy development. To add a test case,
 
-1. Type a complete vituloid term
+1. Type a complete Zydeco term
 2. Type `@@@` at the start of the line, followed by descriptions to the test
 3. (TBD) Type `w/...` where `...` is a sequence of single letters representing phases to run
 
