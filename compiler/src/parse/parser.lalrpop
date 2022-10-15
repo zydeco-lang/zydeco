@@ -64,7 +64,7 @@ Comp: Compute<()> = {
     "fn" "(" <args:Once<",", FnArg>> ")" "->" <e:CompBox> =>
         *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Lam{
             arg, body, ann: ()
-            })),
+        })),
     "if" <cond:ValBox> ":" <thn:CompBox> "else:" <els:CompBox> => Compute::If {
         cond, thn, els, ann: ()
     },
