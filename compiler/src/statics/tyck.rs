@@ -1,6 +1,8 @@
 #![allow(unused)]
 
 use super::builtins::*;
+use super::ctx::*;
+use super::resolve::*;
 use crate::parse::syntax::*;
 use std::collections::HashMap;
 
@@ -56,81 +58,6 @@ impl<'a, Ann> ZipEq<Ann> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Ctx<Ann> {
-    vmap: HashMap<VVar<Ann>, TValue<Ann>>,
-    data: HashMap<TVar<Ann>, Vec<(Ctor<Ann>, Vec<TValue<Ann>>)>>,
-    ctors: HashMap<Ctor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>)>,
-    codata: HashMap<TVar<Ann>, Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>>,
-    dtors: HashMap<Dtor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>,
-}
-impl<Ann: Clone> Ctx<Ann> {
-    pub fn new() -> Self {
-        Self {
-            vmap: HashMap::new(),
-            data: HashMap::new(),
-            ctors: HashMap::new(),
-            codata: HashMap::new(),
-            dtors: HashMap::new(),
-        }
-    }
-    fn push(&mut self, x: VVar<Ann>, t: TValue<Ann>) {
-        self.vmap.insert(x, t);
-    }
-    fn extend(&mut self, other: impl IntoIterator<Item = (VVar<Ann>, TValue<Ann>)>) {
-        self.vmap.extend(other);
-    }
-    fn lookup(&self, x: &VVar<Ann>) -> Option<&TValue<Ann>> {
-        self.vmap.get(x)
-    }
-    fn decl(&mut self, d: &Declare<Ann>) -> Result<(), TypeCheckError<Ann>> {
-        match d.clone() {
-            Declare::Data { name, ctors, ann } => {
-                self.data
-                    .insert(name.clone(), ctors.clone())
-                    .map_or(Ok(()), |_| {
-                        Err(TypeCheckError::DuplicateDeclaration {
-                            name: name.name().to_string(),
-                            ann: ann.clone(),
-                        })
-                    })?;
-                for (ctor, args) in ctors {
-                    self.ctors
-                        .insert(ctor.clone(), (name.clone(), args))
-                        .map_or(Ok(()), |_| {
-                            Err(TypeCheckError::DuplicateDeclaration {
-                                name: ctor.name().to_string(),
-                                ann: ann.clone(),
-                            })
-                        })?;
-                }
-                Ok(())
-            }
-            Declare::Codata { name, dtors, ann } => {
-                self.codata
-                    .insert(name.clone(), dtors.clone())
-                    .map_or(Ok(()), |_| {
-                        Err(TypeCheckError::DuplicateDeclaration {
-                            name: name.name().to_string(),
-                            ann: ann.clone(),
-                        })
-                    });
-                for (dtor, args, ret) in dtors {
-                    self.dtors
-                        .insert(dtor.clone(), (name.clone(), args, ret))
-                        .map_or(Ok(()), |_| {
-                            Err(TypeCheckError::DuplicateDeclaration {
-                                name: dtor.name().to_string(),
-                                ann: ann.clone(),
-                            })
-                        })?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
 pub enum TypeCheckError<Ann> {
     UnboundVar {
         var: VVar<Ann>,
@@ -153,10 +80,7 @@ pub enum TypeCheckError<Ann> {
         found: TCompute<Ann>,
     },
     InconsistentBranches(Vec<TCompute<Ann>>),
-    DuplicateDeclaration {
-        name: String,
-        ann: Ann,
-    },
+    NameResolve(NameResolveError<Ann>),
     Explosion(String),
 }
 use TypeCheckError::*;
@@ -172,7 +96,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Program<Ann> {
         let mut ctx = ctx.clone();
         ctx.extend(builtin_ctx(self.ann.clone()));
         for decl in &self.decls {
-            ctx.decl(&decl)?;
+            ctx.decl(&decl).map_err(|err| NameResolve(err))?;
         }
         self.comp.tyck(&ctx)
     }

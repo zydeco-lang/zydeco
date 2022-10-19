@@ -2,12 +2,13 @@ use std::panic::catch_unwind;
 
 use vituloid_compiler::{
     dynamics,
-    parse::VitProgramParser,
+    parse::ZydecoParser,
     parse::{
         fmt::FmtDefault,
         syntax::{Compute, Program, TCompute, Value},
     },
-    statics::tyck::{Ctx, TypeCheck},
+    statics::ctx::Ctx,
+    statics::tyck::TypeCheck,
 };
 
 fn main() -> Result<(), ()> {
@@ -84,7 +85,7 @@ impl Main {
     }
 
     fn parse(input: &str) -> Result<Program<()>, ()> {
-        Self::phase(|| VitProgramParser::new().parse(input), "Parse")
+        Self::phase(|| ZydecoParser::new().parse(input), "Parse")
     }
 
     fn tyck(prog: &Program<()>) -> Result<TCompute<()>, ()> {
