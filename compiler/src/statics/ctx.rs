@@ -1,6 +1,6 @@
+use super::resolve::*;
 use crate::parse::syntax::*;
 use std::collections::HashMap;
-use super::resolve::*;
 
 #[derive(Clone, Debug)]
 pub struct Ctx<Ann> {

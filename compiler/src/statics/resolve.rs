@@ -17,5 +17,3 @@ pub enum NamespaceSort {
 pub struct NamespaceResolver {
     pub namespaces: HashMap<(NamespaceSort, String), usize>,
 }
-
-

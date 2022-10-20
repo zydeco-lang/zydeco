@@ -1,6 +1,6 @@
 use std::panic::catch_unwind;
 
-use vituloid_compiler::{
+use zydeco_compiler::{
     dynamics,
     parse::ZydecoParser,
     parse::{
