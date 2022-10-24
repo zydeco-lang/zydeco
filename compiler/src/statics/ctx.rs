@@ -10,6 +10,7 @@ pub struct Ctx<Ann> {
     codata: HashMap<TVar<Ann>, Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>>,
     pub dtors: HashMap<Dtor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>,
 }
+
 impl<Ann: Clone> Ctx<Ann> {
     pub fn new() -> Self {
         Self {

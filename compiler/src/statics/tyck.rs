@@ -41,6 +41,7 @@ impl<Ann> TypeEqv for TCompute<Ann> {
 pub struct ZipEq<Ann> {
     _marker: std::marker::PhantomData<Ann>,
 }
+
 impl<'a, Ann> ZipEq<Ann> {
     pub fn new<T: Clone, U: Clone>(
         a: &'a Vec<T>, b: &'a Vec<U>,
@@ -83,6 +84,7 @@ pub enum TypeCheckError<Ann> {
     NameResolve(NameResolveError<Ann>),
     Explosion(String),
 }
+
 use TypeCheckError::*;
 
 pub trait TypeCheck<Ann> {

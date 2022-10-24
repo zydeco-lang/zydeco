@@ -1,8 +1,12 @@
 #![allow(unused, deprecated)]
 
-use crate::parse::syntax::{Compute, VVar, Value};
+use crate::parse::syntax::{Compute, Declare, Dtor, VVar, Value};
 
-use std::{collections::HashMap, mem::swap, rc::Rc};
+use std::{
+    collections::HashMap,
+    mem::{replace, swap},
+    rc::Rc,
+};
 
 type EnvMap<Ann> = HashMap<VVar<Ann>, Value<Ann>>;
 
@@ -47,30 +51,31 @@ impl<Ann> Clone for Env<Ann> {
     }
 }
 
-enum Frame<'a, Ann> {
-    Kont(&'a Compute<Ann>, Env<Ann>, VVar<Ann>),
+enum Frame<Ann> {
+    Kont(Compute<Ann>, Env<Ann>, VVar<Ann>),
     Call(Value<Ann>),
+    Dtor(Dtor<Ann>, Vec<Value<Ann>>),
 }
 
-enum Stack<'a, Ann> {
+enum Stack<Ann> {
     Done,
-    Frame(Frame<'a, Ann>, Rc<Stack<'a, Ann>>),
+    Frame(Frame<Ann>, Rc<Stack<Ann>>),
 }
 
-impl<'a, Ann> Stack<'a, Ann> {
+impl<Ann> Stack<Ann> {
     fn new() -> Self {
         Stack::Done
     }
 }
 
 #[derive(Clone)]
-struct Runtime<'a, Ann> {
-    stack: Rc<Stack<'a, Ann>>,
+struct Runtime<Ann> {
+    stack: Rc<Stack<Ann>>,
     env: Env<Ann>,
     map: EnvMap<Ann>,
 }
 
-impl<'a, Ann: Clone> Runtime<'a, Ann> {
+impl<'rt, Ann: Clone> Runtime<Ann> {
     fn new() -> Self {
         Runtime {
             stack: Rc::new(Stack::new()),
@@ -83,15 +88,24 @@ impl<'a, Ann: Clone> Runtime<'a, Ann> {
         self.map.get(var).or_else(|| self.env.get(var))
     }
 
-    fn call(&mut self, mut arg: Value<Ann>) {
-        if let Value::Var(var, _) = &mut arg {
-            let content = self.get(var).unwrap().clone();
-            swap(&mut arg, &mut content.clone());
+    fn lookup(&'rt self, val: &'rt Value<Ann>) -> Option<&'rt Value<Ann>> {
+        if let Value::Var(var, _) = val {
+            self.get(&var)
+        } else {
+            Some(&val)
         }
-        self.stack = Rc::new(Stack::Frame(Frame::Call(arg), self.stack.clone()));
     }
 
-    fn kont(&mut self, comp: &'a Compute<Ann>, var: VVar<Ann>) {
+    fn call(&mut self, arg: Value<Ann>) {
+        let arg = self.lookup(&arg).unwrap();
+        self.stack = Rc::new(Stack::Frame(Frame::Call(arg.clone()), self.stack.clone()));
+    }
+
+    fn dtor(&mut self, dtor: Dtor<Ann>, args: Vec<Value<Ann>>) {
+        self.stack = Rc::new(Stack::Frame(Frame::Dtor(dtor, args), self.stack.clone()));
+    }
+
+    fn kont(&mut self, comp: Compute<Ann>, var: VVar<Ann>) {
         let env = self.env.clone();
         self.push();
         self.stack = Rc::new(Stack::Frame(
@@ -101,98 +115,125 @@ impl<'a, Ann: Clone> Runtime<'a, Ann> {
     }
 
     fn push(&mut self) {
-        let map = std::mem::replace(&mut self.map, HashMap::new());
-        self.env = self.env.push(map);
+        self.env = self.env.push(replace(&mut self.map, HashMap::new()));
     }
 
-    fn insert(&mut self, var: VVar<Ann>, mut val: Value<Ann>) {
-        if let Value::Var(var, _) = &mut val {
-            let content = self.get(var).unwrap().clone();
-            swap(&mut val, &mut content.clone());
-        }
-        self.map.insert(var, val);
+    fn insert(&mut self, var: VVar<Ann>, val: Value<Ann>) {
+        self.map.insert(var, self.lookup(&val).unwrap().clone());
     }
-}
 
-fn step<'a, Ann: Clone>(
-    rt: &'a mut Runtime<'a, Ann>, exp: &'a Compute<Ann>,
-) -> Option<&'a Compute<Ann>> {
-    use Compute::*;
-    use Value::*;
-    match exp {
-        Let { binding, body, .. } => {
-            let (var, _, val) = binding;
-            rt.insert(var.clone(), *val.clone());
-            Some(&*body)
-        }
-        Rec { binding, body, .. } => {
-            let (var, _, val) = binding;
-            rt.insert(var.clone(), *val.clone());
-            Some(&*body)
-        }
-        Do { binding, body, .. } => {
-            let (var, _, exp) = binding;
-            rt.kont(&*body, var.clone());
-            Some(&*exp)
-        }
-        Force(val, _) => {
-            let val = if let Var(var, _) = &**val {
-                rt.get(var)?
-            } else {
-                &*val
-            };
-            if let Thunk(exp, _) = val {
-                // TODO: make it a closure
-                Some(&*exp)
-            } else {
-                None
+    fn step(&mut self, comp: Compute<Ann>) -> Option<Compute<Ann>> {
+        use {Compute::*, Value::*};
+        match comp {
+            Let { binding, body, .. } => {
+                let (var, _, val) = binding;
+                self.insert(var.clone(), *val.clone());
+                Some(*body)
+            }
+            Rec { binding, body, .. } => {
+                // TODO: inject binder of rec
+                let (var, _, val) = binding;
+                self.insert(var.clone(), *val.clone());
+                Some(*body)
+            }
+            Do { binding, body, .. } => {
+                let (var, _, comp) = binding;
+                self.kont(*body, var.clone());
+                Some(*comp)
+            }
+            Force(val, _) => {
+                if let Thunk(comp, _) = self.lookup(&val)? {
+                    // TODO: make it a closure
+                    Some(*comp.clone())
+                } else {
+                    None
+                }
+            }
+            Return(val, _) => {
+                let val = self.lookup(&val)?.clone();
+                let stack = self.stack.to_owned();
+                if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack {
+                    self.stack = prev.clone();
+                    self.env = env.clone();
+                    self.insert(var.clone(), val);
+                    Some(comp.clone())
+                } else {
+                    None
+                }
+            }
+            Lam { arg, body, ann } => {
+                let (var, _) = arg;
+                let stack = self.stack.to_owned();
+                if let Stack::Frame(Frame::Call(arg), prev) = &*stack {
+                    self.stack = prev.clone();
+                    self.insert(var.clone(), arg.clone());
+                    Some(*body)
+                } else {
+                    None
+                }
+            }
+            App(f, arg, _) => {
+                self.call(*arg.clone());
+                Some(*f)
+            }
+            If { cond, thn, els, .. } => {
+                let cond = self.lookup(&cond)?;
+                if let Bool(cond, _) = cond {
+                    Some(*if *cond { thn } else { els })
+                } else {
+                    None
+                }
+            }
+            Match { scrut, cases, .. } => {
+                if let Ctor(ctor, args, _) = self.lookup(&scrut)?.clone() {
+                    let (_, vars, comp) = cases.iter().find(|(pat, ..)| *pat == ctor)?;
+                    for (var, arg) in vars.iter().zip(args.iter()) {
+                        self.insert(var.clone(), arg.clone());
+                    }
+                    Some(*comp.clone())
+                } else {
+                    None
+                }
+            }
+            CoMatch { cases, .. } => {
+                let stack = self.stack.to_owned();
+                if let Stack::Frame(Frame::Dtor(dtor, args), prev) = &*stack {
+                    self.stack = prev.clone();
+                    let (_, vars, comp) = cases.iter().find(|(pat, ..)| *pat == *dtor)?;
+                    for (var, arg) in vars.iter().zip(args.iter()) {
+                        self.insert(var.clone(), arg.clone());
+                    }
+                    Some(*comp.clone())
+                } else {
+                    None
+                }
+            }
+            CoApp {
+                scrut, dtor, args, ..
+            } => {
+                self.dtor(dtor, args);
+                Some(*scrut)
             }
         }
-        Return(val, _) => {
-            let val = if let Var(var, _) = &**val {
-                rt.get(var).cloned()?
+    }
+
+    fn eval(&mut self, mut comp: Compute<Ann>) -> Option<Value<Ann>> {
+        use {Compute::*, Value::*};
+        const MAX_STEPS: usize = 1000;
+        let mut steps = 0;
+        while steps <= MAX_STEPS {
+            if let Return(val, _) = &comp {
+                if let Stack::Done = &*self.stack {
+                    return Some(*val.clone());
+                };
+            } else if let Some(next) = self.step(comp) {
+                comp = next;
+                steps += 1;
             } else {
-                *val.clone()
-            };
-            let stack = rt.stack.to_owned();
-            if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack {
-                rt.stack = prev.clone();
-                rt.env = env.clone();
-                rt.insert(var.clone(), val);
-                Some(&*comp)
-            } else {
-                None
+                return None;
             }
         }
-        Lam { arg, body, ann } => {
-            let (var, _) = arg;
-            let stack = rt.stack.to_owned();
-            if let Stack::Frame(Frame::Call(arg), prev) = &*stack {
-                rt.stack = prev.clone();
-                rt.insert(var.clone(), arg.clone());
-                Some(&*body)
-            } else {
-                None
-            }
-        }
-        App(f, arg, _) => {
-            rt.call(*arg.clone());
-            Some(&*f)
-        }
-        If { cond, thn, els, .. } => {
-            let cond = if let Var(var, _) = &**cond {
-                rt.get(var).cloned()?
-            } else {
-                *cond.clone()
-            };
-            if let Bool(cond, _) = cond {
-                Some(&*if cond { thn } else { els })
-            } else {
-                None
-            }
-        }
-        // TODO: implement the rest
-        _ => todo!(),
+        panic!("step limit exceeded")
     }
 }
 
@@ -284,7 +325,12 @@ fn eval_env<Ann: Clone>(env: &mut EnvMap<Ann>, exp: Compute<Ann>) -> Option<Valu
     }
 }
 
-pub fn eval<Ann: Clone>(exp: Compute<Ann>) -> Option<Value<Ann>> {
+#[deprecated]
+pub fn eval_old<Ann: Clone>(exp: Compute<Ann>) -> Option<Value<Ann>> {
     let mut env = EnvMap::new();
     eval_env(&mut env, exp)
+}
+
+pub fn eval<Ann: Clone>(comp: Compute<Ann>) -> Option<Value<Ann>> {
+    Runtime::new().eval(comp)
 }
