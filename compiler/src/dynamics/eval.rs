@@ -15,6 +15,7 @@ pub enum EvalError<Ann> {
 
 type EnvMap<Ann> = HashMap<VVar<Ann>, Value<Ann>>;
 
+#[derive(Debug, Clone)]
 enum EnvStack<Ann> {
     Empty,
     Entry(EnvMap<Ann>, Rc<EnvStack<Ann>>),
@@ -39,6 +40,7 @@ impl<Ann: Clone> EnvStack<Ann> {
     }
 }
 
+#[derive(Debug, Clone)]
 struct Env<Ann>(Rc<EnvStack<Ann>>);
 
 impl<Ann: Clone> Env<Ann> {
@@ -55,18 +57,14 @@ impl<Ann: Clone> Env<Ann> {
     }
 }
 
-impl<Ann> Clone for Env<Ann> {
-    fn clone(&self) -> Self {
-        Env(self.0.clone())
-    }
-}
-
+#[derive(Debug, Clone)]
 enum Frame<Ann> {
     Kont(Compute<Ann>, Env<Ann>, VVar<Ann>),
     Call(Value<Ann>),
     Dtor(Dtor<Ann>, Vec<Value<Ann>>),
 }
 
+#[derive(Debug, Clone)]
 enum Stack<Ann> {
     Done,
     Frame(Frame<Ann>, Rc<Stack<Ann>>),
@@ -121,10 +119,9 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
     }
 
     fn kont(&mut self, comp: Compute<Ann>, var: VVar<Ann>) {
-        let env = self.env.clone();
         self.push();
         self.stack = Rc::new(Stack::Frame(
-            Frame::Kont(comp, env, var),
+            Frame::Kont(comp, self.env.clone(), var),
             self.stack.clone(),
         ));
     }
@@ -172,7 +169,15 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 let stack = self.stack.to_owned();
                 if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack {
                     self.stack = prev.clone();
-                    self.env = env.clone();
+                    if let EnvStack::Entry(map, env) = &*env.0 {
+                        self.env = Env(env.clone());
+                        self.map = map.clone();
+                    } else {
+                        Err(EvalError::ErrStr(
+                            format!("EnvStack is empty"),
+                            val.ann().clone(),
+                        ))?
+                    }
                     self.insert(var.clone(), val);
                     Ok(comp.clone())
                 } else {
@@ -263,10 +268,9 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         const MAX_STEPS: usize = 1000;
         let mut steps = 0;
         while steps <= MAX_STEPS {
-            // println!("<$> {:?}", comp);
             if let Return(val, _) = &comp {
                 if let Stack::Done = &*self.stack {
-                    return Ok(*val.clone());
+                    return Ok(self.lookup(val)?.clone());
                 };
             }
             comp = self.step(comp)?;
