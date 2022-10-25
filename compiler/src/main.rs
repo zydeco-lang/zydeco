@@ -93,7 +93,7 @@ impl Main {
     }
 
     fn eval(comp: Compute<()>) -> Result<Value<()>, ()> {
-        Self::phase(|| dynamics::eval::eval(comp).ok_or(()), "Eval")
+        Self::phase(|| dynamics::eval::eval(comp), "Eval")
     }
 
     fn phase<F, T, E>(input: F, name: &'static str) -> Result<T, ()>

@@ -8,6 +8,11 @@ use std::{
     rc::Rc,
 };
 
+#[derive(Debug, Clone)]
+pub enum EvalError<Ann> {
+    ErrStr(String, Ann),
+}
+
 type EnvMap<Ann> = HashMap<VVar<Ann>, Value<Ann>>;
 
 enum EnvStack<Ann> {
@@ -15,23 +20,28 @@ enum EnvStack<Ann> {
     Entry(EnvMap<Ann>, Rc<EnvStack<Ann>>),
 }
 
-impl<Ann> EnvStack<Ann> {
+impl<Ann: Clone> EnvStack<Ann> {
     fn new() -> Self {
         EnvStack::Empty
     }
 
-    fn get(&self, var: &VVar<Ann>) -> Option<&Value<Ann>> {
+    fn get(&self, var: &VVar<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
         if let EnvStack::Entry(map, prev) = self {
-            map.get(var).or_else(|| prev.get(var))
+            map.get(var)
+                .ok_or_else(|| EvalError::ErrStr(format!("Variable {} not found", var), var.ann()))
+                .or_else(|_| prev.get(var))
         } else {
-            None
+            Err(EvalError::ErrStr(
+                format!("Variable {} not found", var),
+                (var.ann()).clone(),
+            ))
         }
     }
 }
 
 struct Env<Ann>(Rc<EnvStack<Ann>>);
 
-impl<Ann> Env<Ann> {
+impl<Ann: Clone> Env<Ann> {
     fn new() -> Self {
         Env(Rc::new(EnvStack::new()))
     }
@@ -40,7 +50,7 @@ impl<Ann> Env<Ann> {
         Env(Rc::new(EnvStack::Entry(map, self.0.clone())))
     }
 
-    fn get(&self, var: &VVar<Ann>) -> Option<&Value<Ann>> {
+    fn get(&self, var: &VVar<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
         self.0.get(var)
     }
 }
@@ -75,7 +85,7 @@ struct Runtime<Ann> {
     map: EnvMap<Ann>,
 }
 
-impl<'rt, Ann: Clone> Runtime<Ann> {
+impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
     fn new() -> Self {
         Runtime {
             stack: Rc::new(Stack::new()),
@@ -84,15 +94,20 @@ impl<'rt, Ann: Clone> Runtime<Ann> {
         }
     }
 
-    fn get(&self, var: &VVar<Ann>) -> Option<&Value<Ann>> {
-        self.map.get(var).or_else(|| self.env.get(var))
+    fn get(&self, var: &VVar<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
+        self.map
+            .get(var)
+            .ok_or_else(|| {
+                EvalError::ErrStr(format!("Variable {} not found", var), var.ann().clone())
+            })
+            .or_else(|_| self.env.get(var))
     }
 
-    fn lookup(&'rt self, val: &'rt Value<Ann>) -> Option<&'rt Value<Ann>> {
+    fn lookup(&'rt self, val: &'rt Value<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
         if let Value::Var(var, _) = val {
             self.get(&var)
         } else {
-            Some(&val)
+            Ok(&val)
         }
     }
 
@@ -122,31 +137,34 @@ impl<'rt, Ann: Clone> Runtime<Ann> {
         self.map.insert(var, self.lookup(&val).unwrap().clone());
     }
 
-    fn step(&mut self, comp: Compute<Ann>) -> Option<Compute<Ann>> {
+    fn step(&mut self, comp: Compute<Ann>) -> Result<Compute<Ann>, EvalError<Ann>> {
         use {Compute::*, Value::*};
         match comp {
             Let { binding, body, .. } => {
                 let (var, _, val) = binding;
                 self.insert(var.clone(), *val.clone());
-                Some(*body)
+                Ok(*body)
             }
             Rec { binding, body, .. } => {
                 // TODO: inject binder of rec
                 let (var, _, val) = binding;
                 self.insert(var.clone(), *val.clone());
-                Some(*body)
+                Ok(*body)
             }
             Do { binding, body, .. } => {
                 let (var, _, comp) = binding;
                 self.kont(*body, var.clone());
-                Some(*comp)
+                Ok(*comp)
             }
             Force(val, _) => {
                 if let Thunk(comp, _) = self.lookup(&val)? {
                     // TODO: make it a closure
-                    Some(*comp.clone())
+                    Ok(*comp.clone())
                 } else {
-                    None
+                    Err(EvalError::ErrStr(
+                        format!("Force on non-thunk value: {:?}", val),
+                        val.ann().clone(),
+                    ))
                 }
             }
             Return(val, _) => {
@@ -156,9 +174,12 @@ impl<'rt, Ann: Clone> Runtime<Ann> {
                     self.stack = prev.clone();
                     self.env = env.clone();
                     self.insert(var.clone(), val);
-                    Some(comp.clone())
+                    Ok(comp.clone())
                 } else {
-                    None
+                    Err(EvalError::ErrStr(
+                        format!("Return on non-kont frame: {:?}", val),
+                        val.ann().clone(),
+                    ))
                 }
             }
             Lam { arg, body, ann } => {
@@ -167,71 +188,89 @@ impl<'rt, Ann: Clone> Runtime<Ann> {
                 if let Stack::Frame(Frame::Call(arg), prev) = &*stack {
                     self.stack = prev.clone();
                     self.insert(var.clone(), arg.clone());
-                    Some(*body)
+                    Ok(*body)
                 } else {
-                    None
+                    Err(EvalError::ErrStr(
+                        format!("Lam on non-call frame"),
+                        ann.clone(),
+                    ))
                 }
             }
             App(f, arg, _) => {
                 self.call(*arg.clone());
-                Some(*f)
+                Ok(*f)
             }
-            If { cond, thn, els, .. } => {
+            If {
+                cond,
+                thn,
+                els,
+                ann,
+            } => {
                 let cond = self.lookup(&cond)?;
                 if let Bool(cond, _) = cond {
-                    Some(*if *cond { thn } else { els })
+                    Ok(*if *cond { thn } else { els })
                 } else {
-                    None
+                    Err(EvalError::ErrStr(
+                        format!("If on non-bool value: {:?}", cond),
+                        ann,
+                    ))
                 }
             }
-            Match { scrut, cases, .. } => {
+            Match { scrut, cases, ann } => {
                 if let Ctor(ctor, args, _) = self.lookup(&scrut)?.clone() {
-                    let (_, vars, comp) = cases.iter().find(|(pat, ..)| *pat == ctor)?;
+                    let (_, vars, comp) = cases
+                        .iter()
+                        .find(|(pat, ..)| *pat == ctor)
+                        .ok_or_else(|| EvalError::ErrStr(format!("Ctor mismatch"), ann))?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
                         self.insert(var.clone(), arg.clone());
                     }
-                    Some(*comp.clone())
+                    Ok(*comp.clone())
                 } else {
-                    None
+                    Err(EvalError::ErrStr(
+                        format!("Match on non-ctor value: {:?}", scrut),
+                        ann,
+                    ))
                 }
             }
-            CoMatch { cases, .. } => {
+            CoMatch { cases, ann } => {
                 let stack = self.stack.to_owned();
                 if let Stack::Frame(Frame::Dtor(dtor, args), prev) = &*stack {
                     self.stack = prev.clone();
-                    let (_, vars, comp) = cases.iter().find(|(pat, ..)| *pat == *dtor)?;
+                    let (_, vars, comp) = cases
+                        .iter()
+                        .find(|(pat, ..)| *pat == *dtor)
+                        .ok_or_else(|| EvalError::ErrStr(format!("Dtor mismatch"), ann))?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
                         self.insert(var.clone(), arg.clone());
                     }
-                    Some(*comp.clone())
+                    Ok(*comp.clone())
                 } else {
-                    None
+                    Err(EvalError::ErrStr(format!("CoMatch on non-dtor frame"), ann))
                 }
             }
             CoApp {
                 scrut, dtor, args, ..
             } => {
                 self.dtor(dtor, args);
-                Some(*scrut)
+                Ok(*scrut)
             }
         }
     }
 
-    fn eval(&mut self, mut comp: Compute<Ann>) -> Option<Value<Ann>> {
+    fn eval(&mut self, mut comp: Compute<Ann>) -> Result<Value<Ann>, EvalError<Ann>> {
         use {Compute::*, Value::*};
         const MAX_STEPS: usize = 1000;
         let mut steps = 0;
         while steps <= MAX_STEPS {
+            // println!("<$> {:?}", comp);
             if let Return(val, _) = &comp {
                 if let Stack::Done = &*self.stack {
-                    return Some(*val.clone());
+                    return Ok(*val.clone());
                 };
-            } else if let Some(next) = self.step(comp) {
-                comp = next;
-                steps += 1;
-            } else {
-                return None;
             }
+            comp = self.step(comp)?;
+            steps += 1;
         }
         panic!("step limit exceeded")
     }
@@ -331,6 +370,8 @@ pub fn eval_old<Ann: Clone>(exp: Compute<Ann>) -> Option<Value<Ann>> {
     eval_env(&mut env, exp)
 }
 
-pub fn eval<Ann: Clone>(comp: Compute<Ann>) -> Option<Value<Ann>> {
+pub fn eval<Ann: Clone + std::fmt::Debug>(
+    comp: Compute<Ann>,
+) -> Result<Value<Ann>, EvalError<Ann>> {
     Runtime::new().eval(comp)
 }
