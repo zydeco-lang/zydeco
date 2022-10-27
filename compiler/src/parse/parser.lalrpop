@@ -165,7 +165,7 @@ TComp: TCompute<()> = {
 
 TValBox: Box<TValue<()>> = Boxed<TVal>;
 
-TVal: TValue<()> = {
+pub TVal: TValue<()> = {
     <x:TVar> => TValue::Var(x, ()),
     "Comp" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
     "Bool" => TValue::Bool(()),

@@ -7,8 +7,8 @@ use zydeco_compiler::{
         fmt::FmtDefault,
         syntax::{Compute, Program, TCompute, Value},
     },
-    statics::ctx::Ctx,
     statics::tyck::TypeCheck,
+    statics::builtins::builtin_ctx,
 };
 
 fn main() -> Result<(), ()> {
@@ -89,7 +89,7 @@ impl Main {
     }
 
     fn tyck(prog: &Program<()>) -> Result<TCompute<()>, ()> {
-        Self::phase(|| prog.tyck(&Ctx::new()), "Tyck")
+        Self::phase(|| prog.tyck(&builtin_ctx()), "Tyck")
     }
 
     fn eval(comp: Compute<()>) -> Result<Value<()>, ()> {
