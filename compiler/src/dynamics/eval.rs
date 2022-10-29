@@ -1,60 +1,12 @@
 #![allow(unused, deprecated)]
 
-use crate::parse::syntax::{Compute, Declare, Dtor, VVar, Value};
-
-use std::{
-    collections::HashMap,
-    mem::{replace, swap},
-    rc::Rc,
-};
+use super::env::*;
+use crate::parse::syntax::{Compute, Dtor, VVar, Value};
+use std::{mem::replace, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum EvalError<Ann> {
     ErrStr(String, Ann),
-}
-
-type EnvMap<Ann> = HashMap<VVar<Ann>, Value<Ann>>;
-
-#[derive(Debug, Clone)]
-enum EnvStack<Ann> {
-    Empty,
-    Entry(EnvMap<Ann>, Rc<EnvStack<Ann>>),
-}
-
-impl<Ann: Clone> EnvStack<Ann> {
-    fn new() -> Self {
-        EnvStack::Empty
-    }
-
-    fn get(&self, var: &VVar<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
-        if let EnvStack::Entry(map, prev) = self {
-            map.get(var)
-                .ok_or_else(|| EvalError::ErrStr(format!("Variable {} not found", var), var.ann()))
-                .or_else(|_| prev.get(var))
-        } else {
-            Err(EvalError::ErrStr(
-                format!("Variable {} not found", var),
-                (var.ann()).clone(),
-            ))
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Env<Ann>(Rc<EnvStack<Ann>>);
-
-impl<Ann: Clone> Env<Ann> {
-    fn new() -> Self {
-        Env(Rc::new(EnvStack::new()))
-    }
-
-    fn push(&self, map: EnvMap<Ann>) -> Self {
-        Env(Rc::new(EnvStack::Entry(map, self.0.clone())))
-    }
-
-    fn get(&self, var: &VVar<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
-        self.0.get(var)
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +32,6 @@ impl<Ann> Stack<Ann> {
 struct Runtime<Ann> {
     stack: Rc<Stack<Ann>>,
     env: Env<Ann>,
-    map: EnvMap<Ann>,
 }
 
 impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
@@ -88,17 +39,13 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         Runtime {
             stack: Rc::new(Stack::new()),
             env: Env::new(),
-            map: HashMap::new(),
         }
     }
 
     fn get(&self, var: &VVar<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
-        self.map
-            .get(var)
-            .ok_or_else(|| {
-                EvalError::ErrStr(format!("Variable {} not found", var), var.ann().clone())
-            })
-            .or_else(|_| self.env.get(var))
+        self.env.get(var).ok_or_else(|| {
+            EvalError::ErrStr(format!("Variable {} not found", var), var.ann().clone())
+        })
     }
 
     fn lookup(&'rt self, val: &'rt Value<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
@@ -127,11 +74,12 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
     }
 
     fn push(&mut self) {
-        self.env = self.env.push(replace(&mut self.map, HashMap::new()));
+        let env = replace(&mut self.env, Env::new());
+        self.env = env.push();
     }
 
     fn insert(&mut self, var: VVar<Ann>, val: Value<Ann>) {
-        self.map.insert(var, self.lookup(&val).unwrap().clone());
+        self.env.insert(var, self.lookup(&val).unwrap().clone());
     }
 
     fn step(&mut self, comp: Compute<Ann>) -> Result<Compute<Ann>, EvalError<Ann>> {
@@ -169,15 +117,9 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 let stack = self.stack.to_owned();
                 if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack {
                     self.stack = prev.clone();
-                    if let EnvStack::Entry(map, env) = &*env.0 {
-                        self.env = Env(env.clone());
-                        self.map = map.clone();
-                    } else {
-                        Err(EvalError::ErrStr(
-                            format!("EnvStack is empty"),
-                            val.ann().clone(),
-                        ))?
-                    }
+                    self.env = env.clone().pop().ok_or_else(|| {
+                        EvalError::ErrStr(format!("EnvStack is empty"), val.ann().clone())
+                    })?;
                     self.insert(var.clone(), val);
                     Ok(comp.clone())
                 } else {
