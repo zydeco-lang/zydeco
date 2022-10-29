@@ -15,6 +15,10 @@ do  a <- !and false true,
     c <- !not a;
 !and c b
 @@@ boolean operations
+let nor = { fn (x: Bool, y: Bool) -> if x: if y: ret true else: ret false else: ret false };
+do  a <- !nor false false;
+!nor a a
+@@@ boolean operations but better
 data Boolean where
   | True()
   | False()

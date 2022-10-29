@@ -276,7 +276,10 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
             comp = self.step(comp)?;
             steps += 1;
         }
-        panic!("step limit exceeded")
+        Err(EvalError::ErrStr(
+            format!("My name is megumi! Exceeded max steps: {}", MAX_STEPS),
+            comp.ann().clone(),
+        ))
     }
 }
 
