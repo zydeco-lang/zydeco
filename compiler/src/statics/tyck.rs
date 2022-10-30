@@ -1,6 +1,5 @@
 #![allow(unused)]
 
-use super::builtins::*;
 use super::ctx::*;
 use super::resolve::*;
 use crate::parse::syntax::*;
@@ -96,7 +95,6 @@ impl<Ann: Clone> TypeCheck<Ann> for Program<Ann> {
     type Type = TCompute<Ann>;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         let mut ctx = ctx.clone();
-        ctx.extend(builtin_ctx(self.ann.clone()));
         for decl in &self.decls {
             ctx.decl(&decl).map_err(|err| NameResolve(err))?;
         }

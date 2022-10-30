@@ -6,3 +6,4 @@ pub mod syntax;
 mod ann;
 
 pub use parser::ZydecoParser;
+pub use parser::TValParser;
