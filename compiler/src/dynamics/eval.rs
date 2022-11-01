@@ -51,16 +51,23 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         })
     }
 
-    fn lookup(&self, val: Rc<ZValue<Ann>>) -> Result<Rc<ZValue<Ann>>, EvalError<Ann>> {
-        if let ZValue::Var(var, _) = &*val {
-            self.get(&var)
-        } else {
-            Ok(val)
+    fn eval_value(&self, val: Rc<ZValue<Ann>>) -> Result<Rc<ZValue<Ann>>, EvalError<Ann>> {
+        match &*val {
+            ZValue::Var(var, _) => self.get(var),
+            ZValue::Thunk(thunk, None, ann) => {
+                let env = self.env.clone().push();
+                Ok(Rc::new(ZValue::Thunk(
+                    thunk.clone(),
+                    Some(env),
+                    ann.clone(),
+                )))
+            }
+            _ => Ok(val),
         }
     }
 
     fn call(&mut self, arg: Rc<ZValue<Ann>>) {
-        let arg = self.lookup(arg).unwrap();
+        let arg = self.eval_value(arg).unwrap();
         self.stack = Rc::new(Stack::Frame(Frame::Call(arg.clone()), self.stack.clone()));
     }
 
@@ -82,7 +89,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
     }
 
     fn insert(&mut self, var: VVar<Ann>, val: Rc<ZValue<Ann>>) {
-        self.env.insert(var, self.lookup(val).unwrap().clone());
+        self.env.insert(var, self.eval_value(val).unwrap().clone());
     }
 
     fn step(&mut self, comp: ZCompute<Ann>) -> Result<Rc<ZCompute<Ann>>, EvalError<Ann>> {
@@ -114,8 +121,9 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 Ok(comp)
             }
             Force(val, _) => {
-                if let Thunk(comp, env, _) = &*self.lookup(val.clone())? {
-                    // TODO: make it a closure
+                if let Thunk(comp, Some(env), _) = &*self.eval_value(val.clone())? {
+                    // FIXME: what about the original env?
+                    self.env = env.clone();
                     Ok(comp.clone())
                 } else {
                     Err(EvalError::ErrStr(
@@ -125,11 +133,11 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 }
             }
             Return(val, _) => {
-                let val = self.lookup(val)?.clone();
+                let val = self.eval_value(val)?.clone();
                 let stack = self.stack.to_owned();
                 if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack {
                     self.stack = prev.clone();
-                    self.env = env.clone().pop().ok_or_else(|| {
+                    self.env = env.pop().ok_or_else(|| {
                         EvalError::ErrStr(format!("EnvStack is empty"), val.ann().clone())
                     })?;
                     self.insert(var.clone(), val);
@@ -168,7 +176,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 els,
                 ann,
             } => {
-                let cond = self.lookup(cond)?;
+                let cond = self.eval_value(cond)?;
                 if let Bool(cond, _) = &*cond {
                     Ok(if *cond { thn } else { els })
                 } else {
@@ -179,7 +187,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 }
             }
             Match { scrut, cases, ann } => {
-                if let Ctor(ctor, args, _) = &*self.lookup(scrut.clone())?.clone() {
+                if let Ctor(ctor, args, _) = &*self.eval_value(scrut.clone())?.clone() {
                     let (_, vars, comp) = cases
                         .into_iter()
                         .find(|(pat, ..)| pat == ctor)
@@ -227,7 +235,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         while steps <= MAX_STEPS {
             match (comp, &*self.stack) {
                 (Return(val, ann), Stack::Done) => {
-                    return Ok(self.lookup(val)?.as_ref().clone());
+                    return Ok(self.eval_value(val)?.as_ref().clone());
                 }
                 (c, _) => {
                     comp = self.step(c)?.as_ref().clone();

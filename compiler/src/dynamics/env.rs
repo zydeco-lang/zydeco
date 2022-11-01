@@ -45,7 +45,7 @@ impl<Ann: Clone> Env<Ann> {
         }
     }
 
-    pub fn pop(self) -> Option<Self> {
+    pub fn pop(&self) -> Option<Self> {
         if let EnvStack::Entry(map, prev) = &*self.stack {
             Some(Env {
                 stack: prev.clone(),
