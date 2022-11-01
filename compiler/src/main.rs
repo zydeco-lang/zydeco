@@ -1,14 +1,17 @@
 use std::panic::catch_unwind;
 
 use zydeco_compiler::{
-    dynamics,
+    dynamics::{
+        self,
+        syntax::{ZCompute, ZValue},
+    },
     parse::ZydecoParser,
     parse::{
         fmt::FmtDefault,
-        syntax::{Compute, Program, TCompute, Value},
+        syntax::{Compute, Program, TCompute},
     },
-    statics::tyck::TypeCheck,
     statics::builtins::builtin_ctx,
+    statics::tyck::TypeCheck,
 };
 
 fn main() -> Result<(), ()> {
@@ -74,14 +77,16 @@ fn acc_test_mode() -> Result<(), ()> {
 
 struct Main;
 impl Main {
-    pub fn acc_single_run(title: &str, buffer: &str) -> Result<(TCompute<()>, Value<()>), ()> {
+    pub fn acc_single_run(title: &str, buffer: &str) -> Result<(TCompute<()>, ZValue<()>), ()> {
         println!("=== [{}] <parse>", title);
         let program = Main::parse(&buffer)?;
         println!("=== [{}] <tyck>", title);
         let ty = Main::tyck(&program)?;
+        println!("=== [{}] <elab>", title);
+        let comp = Main::elab(*program.comp)?;
         println!("=== [{}] <eval>", title);
-        let value = Main::eval(*program.comp)?;
-        Ok((ty, value))
+        let zvalue = Main::eval(comp)?;
+        Ok((ty, zvalue))
     }
 
     fn parse(input: &str) -> Result<Program<()>, ()> {
@@ -92,7 +97,14 @@ impl Main {
         Self::phase(|| prog.tyck(&builtin_ctx()), "Tyck")
     }
 
-    fn eval(comp: Compute<()>) -> Result<Value<()>, ()> {
+    fn elab(comp: Compute<()>) -> Result<ZCompute<()>, ()> {
+        Self::phase(
+            || -> Result<ZCompute<()>, ()> { Ok(ZCompute::from(comp)) },
+            "Eval",
+        )
+    }
+
+    fn eval(comp: ZCompute<()>) -> Result<ZValue<()>, ()> {
         Self::phase(|| dynamics::eval::eval(comp), "Eval")
     }
 

@@ -14,9 +14,9 @@ pub enum EvalError<Ann> {
 
 #[derive(Debug, Clone)]
 enum Frame<Ann> {
-    Kont(ZCompute<Ann>, Env<Ann>, VVar<Ann>),
-    Call(ZValue<Ann>),
-    Dtor(Dtor<Ann>, Vec<ZValue<Ann>>),
+    Kont(Rc<ZCompute<Ann>>, Env<Ann>, VVar<Ann>),
+    Call(Rc<ZValue<Ann>>),
+    Dtor(Dtor<Ann>, Vec<Rc<ZValue<Ann>>>),
 }
 
 #[derive(Debug, Clone)]
@@ -45,30 +45,30 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         }
     }
 
-    fn get(&self, var: &VVar<Ann>) -> Result<&ZValue<Ann>, EvalError<Ann>> {
+    fn get(&self, var: &VVar<Ann>) -> Result<Rc<ZValue<Ann>>, EvalError<Ann>> {
         self.env.get(var).ok_or_else(|| {
             EvalError::ErrStr(format!("Variable {} not found", var), var.ann().clone())
         })
     }
 
-    fn lookup(&'rt self, val: &'rt ZValue<Ann>) -> Result<&ZValue<Ann>, EvalError<Ann>> {
-        if let ZValue::Var(var, _) = val {
+    fn lookup(&self, val: Rc<ZValue<Ann>>) -> Result<Rc<ZValue<Ann>>, EvalError<Ann>> {
+        if let ZValue::Var(var, _) = &*val {
             self.get(&var)
         } else {
-            Ok(&val)
+            Ok(val)
         }
     }
 
-    fn call(&mut self, arg: ZValue<Ann>) {
-        let arg = self.lookup(&arg).unwrap();
+    fn call(&mut self, arg: Rc<ZValue<Ann>>) {
+        let arg = self.lookup(arg).unwrap();
         self.stack = Rc::new(Stack::Frame(Frame::Call(arg.clone()), self.stack.clone()));
     }
 
-    fn dtor(&mut self, dtor: Dtor<Ann>, args: Vec<ZValue<Ann>>) {
+    fn dtor(&mut self, dtor: Dtor<Ann>, args: Vec<Rc<ZValue<Ann>>>) {
         self.stack = Rc::new(Stack::Frame(Frame::Dtor(dtor, args), self.stack.clone()));
     }
 
-    fn kont(&mut self, comp: ZCompute<Ann>, var: VVar<Ann>) {
+    fn kont(&mut self, comp: Rc<ZCompute<Ann>>, var: VVar<Ann>) {
         self.push();
         self.stack = Rc::new(Stack::Frame(
             Frame::Kont(comp, self.env.clone(), var),
@@ -81,11 +81,11 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         self.env = env.push();
     }
 
-    fn insert(&mut self, var: VVar<Ann>, val: ZValue<Ann>) {
-        self.env.insert(var, self.lookup(&val).unwrap().clone());
+    fn insert(&mut self, var: VVar<Ann>, val: Rc<ZValue<Ann>>) {
+        self.env.insert(var, self.lookup(val).unwrap().clone());
     }
 
-    fn step(&mut self, comp: ZCompute<Ann>) -> Result<ZCompute<Ann>, EvalError<Ann>> {
+    fn step(&mut self, comp: ZCompute<Ann>) -> Result<Rc<ZCompute<Ann>>, EvalError<Ann>> {
         use {ZCompute::*, ZValue::*};
         match comp {
             Let {
@@ -93,8 +93,8 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 body,
                 ..
             } => {
-                self.insert(var.clone(), *val.clone());
-                Ok(*body)
+                self.insert(var.clone(), val);
+                Ok(body)
             }
             Rec {
                 binding: (var, val),
@@ -102,30 +102,30 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 ..
             } => {
                 // TODO: inject binder of rec
-                self.insert(var.clone(), *val.clone());
-                Ok(*body)
+                self.insert(var.clone(), val);
+                Ok(body)
             }
             Do {
                 binding: (var, comp),
                 body,
                 ..
             } => {
-                self.kont(*body, var.clone());
-                Ok(*comp)
+                self.kont(body, var.clone());
+                Ok(comp)
             }
             Force(val, _) => {
-                if let Thunk(comp, env, _) = self.lookup(&val)? {
+                if let Thunk(comp, env, _) = &*self.lookup(val.clone())? {
                     // TODO: make it a closure
-                    Ok(*comp.clone())
+                    Ok(comp.clone())
                 } else {
                     Err(EvalError::ErrStr(
-                        format!("Force on non-thunk value: {:?}", val),
+                        format!("Force on non-thunk value: {:?}", val.as_ref()),
                         val.ann().clone(),
                     ))
                 }
             }
             Return(val, _) => {
-                let val = self.lookup(&val)?.clone();
+                let val = self.lookup(val)?.clone();
                 let stack = self.stack.to_owned();
                 if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack {
                     self.stack = prev.clone();
@@ -150,7 +150,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 if let Stack::Frame(Frame::Call(arg), prev) = &*stack {
                     self.stack = prev.clone();
                     self.insert(var.clone(), arg.clone());
-                    Ok(*body)
+                    Ok(body)
                 } else {
                     Err(EvalError::ErrStr(
                         format!("Lam on non-call frame"),
@@ -159,8 +159,8 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 }
             }
             App(f, arg, _) => {
-                self.call(*arg.clone());
-                Ok(*f)
+                self.call(arg.clone());
+                Ok(f)
             }
             If {
                 cond,
@@ -168,9 +168,9 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 els,
                 ann,
             } => {
-                let cond = self.lookup(&cond)?;
-                if let Bool(cond, _) = cond {
-                    Ok(*if *cond { thn } else { els })
+                let cond = self.lookup(cond)?;
+                if let Bool(cond, _) = &*cond {
+                    Ok(if *cond { thn } else { els })
                 } else {
                     Err(EvalError::ErrStr(
                         format!("If on non-bool value: {:?}", cond),
@@ -179,18 +179,18 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 }
             }
             Match { scrut, cases, ann } => {
-                if let Ctor(ctor, args, _) = self.lookup(&scrut)?.clone() {
+                if let Ctor(ctor, args, _) = &*self.lookup(scrut.clone())?.clone() {
                     let (_, vars, comp) = cases
-                        .iter()
-                        .find(|(pat, ..)| *pat == ctor)
+                        .into_iter()
+                        .find(|(pat, ..)| pat == ctor)
                         .ok_or_else(|| EvalError::ErrStr(format!("Ctor mismatch"), ann))?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
                         self.insert(var.clone(), arg.clone());
                     }
-                    Ok(*comp.clone())
+                    Ok(comp)
                 } else {
                     Err(EvalError::ErrStr(
-                        format!("Match on non-ctor value: {:?}", scrut),
+                        format!("Match on non-ctor value: {:?}", scrut.as_ref()),
                         ann,
                     ))
                 }
@@ -206,7 +206,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                     for (var, arg) in vars.iter().zip(args.iter()) {
                         self.insert(var.clone(), arg.clone());
                     }
-                    Ok(*comp.clone())
+                    Ok(comp.clone())
                 } else {
                     Err(EvalError::ErrStr(format!("CoMatch on non-dtor frame"), ann))
                 }
@@ -215,7 +215,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 scrut, dtor, args, ..
             } => {
                 self.dtor(dtor, args);
-                Ok(*scrut)
+                Ok(scrut)
             }
         }
     }
@@ -225,12 +225,18 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         const MAX_STEPS: usize = 1000;
         let mut steps = 0;
         while steps <= MAX_STEPS {
-            if let Return(val, _) = &comp {
-                if let Stack::Done = &*self.stack {
-                    return Ok(self.lookup(val)?.clone());
-                };
+            match comp {
+                Return(val, ann) => {
+                    if let Stack::Done = &*self.stack {
+                        return Ok(self.lookup(val)?.as_ref().clone());
+                    } else {
+                        comp = self.step(Return(val, ann))?.as_ref().clone();
+                    }
+                }
+                c => {
+                    comp = self.step(c)?.as_ref().clone();
+                }
             }
-            comp = self.step(comp)?;
             steps += 1;
         }
         Err(EvalError::ErrStr(

@@ -2,7 +2,7 @@ use super::syntax::ZValue;
 use crate::parse::syntax::VVar;
 use std::{collections::HashMap, rc::Rc};
 
-pub type EnvMap<Ann> = HashMap<VVar<Ann>, ZValue<Ann>>;
+pub type EnvMap<Ann> = HashMap<VVar<Ann>, Rc<ZValue<Ann>>>;
 
 #[derive(Debug, Clone)]
 pub enum EnvStack<Ann> {
@@ -15,9 +15,9 @@ impl<Ann: Clone> EnvStack<Ann> {
         EnvStack::Empty
     }
 
-    pub fn get(&self, var: &VVar<Ann>) -> Option<&ZValue<Ann>> {
+    pub fn get(&self, var: &VVar<Ann>) -> Option<Rc<ZValue<Ann>>> {
         if let EnvStack::Entry(map, prev) = self {
-            map.get(var).or_else(|| prev.get(var))
+            map.get(var).cloned().or_else(|| prev.get(var))
         } else {
             None
         }
@@ -56,11 +56,11 @@ impl<Ann: Clone> Env<Ann> {
         }
     }
 
-    pub fn insert(&mut self, var: VVar<Ann>, val: ZValue<Ann>) {
+    pub fn insert(&mut self, var: VVar<Ann>, val: Rc<ZValue<Ann>>) {
         self.map.insert(var, val);
     }
 
-    pub fn get(&self, var: &VVar<Ann>) -> Option<&ZValue<Ann>> {
-        self.map.get(var).or_else(|| self.stack.get(var))
+    pub fn get(&self, var: &VVar<Ann>) -> Option<Rc<ZValue<Ann>>> {
+        self.map.get(var).cloned().or_else(|| self.stack.get(var))
     }
 }

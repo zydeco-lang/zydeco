@@ -23,7 +23,7 @@ impl<Ann> From<Program<Ann>> for ZProgram<Ann> {
 pub enum ZValue<Ann> {
     Var(VVar<Ann>, Ann),
     Thunk(Rc<ZCompute<Ann>>, Option<Env<Ann>>, Ann),
-    Ctor(Ctor<Ann>, Vec<ZValue<Ann>>, Ann),
+    Ctor(Ctor<Ann>, Vec<Rc<ZValue<Ann>>>, Ann),
     Bool(bool, Ann),
     Int(i64, Ann),
     String(String, Ann),
@@ -35,7 +35,7 @@ impl<Ann> From<Value<Ann>> for ZValue<Ann> {
             Value::Var(var, ann) => ZValue::Var(var, ann),
             Value::Thunk(compute, ann) => ZValue::Thunk(Rc::new((*compute).into()), None, ann),
             Value::Ctor(ctor, args, ann) => {
-                ZValue::Ctor(ctor, args.into_iter().map(Into::into).collect(), ann)
+                ZValue::Ctor(ctor, args.into_iter().map(Into::into).map(Rc::new).collect(), ann)
             }
             Value::Bool(b, ann) => ZValue::Bool(b, ann),
             Value::Int(i, ann) => ZValue::Int(i, ann),
@@ -89,7 +89,7 @@ pub enum ZCompute<Ann> {
     CoApp {
         scrut: Rc<ZCompute<Ann>>,
         dtor: Dtor<Ann>,
-        args: Vec<ZValue<Ann>>,
+        args: Vec<Rc<ZValue<Ann>>>,
         ann: Ann,
     },
 }
@@ -172,7 +172,7 @@ impl<Ann> From<Compute<Ann>> for ZCompute<Ann> {
             } => ZCompute::CoApp {
                 scrut: Rc::new((*scrut).into()),
                 dtor,
-                args: args.into_iter().map(Into::into).collect(),
+                args: args.into_iter().map(Into::into).map(Rc::new).collect(),
                 ann,
             },
         }
