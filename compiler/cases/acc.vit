@@ -39,3 +39,13 @@ do y <- (fn (x: Int) -> ret true) +123;
 do z <- (fn (x: Int) -> ret true) -123;
 ret x
 @@@ basic number
+data Nat where | Z() | S(Nat)
+rec add: Comp(Nat -> Nat -> Ret(Nat)) = {
+  fn (x: Nat, y: Nat) -> (
+    match x
+    | Z -> ret y
+    | S(x) -> !add x S(y)
+  )
+};
+!add S(S(Z())) S(Z())
+@@@ Nat

@@ -100,7 +100,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 body,
                 ..
             } => {
-                self.insert(var.clone(), val);
+                self.insert(var, val);
                 Ok(body)
             }
             Rec {
@@ -108,8 +108,13 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 body,
                 ..
             } => {
-                // TODO: inject binder of rec
-                self.insert(var.clone(), val);
+                // TODO: this is a hack, we should have a better env
+                self.env.insert(var.clone(), val.clone());
+                self.env.insert(var.clone(), self.eval_value(val.clone())?);
+                self.env.insert(var.clone(), self.eval_value(val.clone())?);
+                self.env.insert(var.clone(), self.eval_value(val.clone())?);
+                self.env.insert(var.clone(), self.eval_value(val.clone())?);
+                self.env.insert(var.clone(), self.eval_value(val.clone())?);
                 Ok(body)
             }
             Do {
@@ -117,12 +122,11 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 body,
                 ..
             } => {
-                self.kont(body, var.clone());
+                self.kont(body, var);
                 Ok(comp)
             }
             Force(val, _) => {
                 if let Thunk(comp, Some(env), _) = &*self.eval_value(val.clone())? {
-                    // FIXME: what about the original env?
                     self.env = env.clone();
                     Ok(comp.clone())
                 } else {
@@ -133,7 +137,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 }
             }
             Return(val, _) => {
-                let val = self.eval_value(val)?.clone();
+                let val = self.eval_value(val)?;
                 let stack = self.stack.to_owned();
                 if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack {
                     self.stack = prev.clone();
@@ -239,6 +243,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 }
                 (c, _) => {
                     comp = self.step(c)?.as_ref().clone();
+                    println!("{:?}", comp);
                 }
             }
             steps += 1;
