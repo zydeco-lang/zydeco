@@ -1,5 +1,5 @@
 use super::syntax::*;
-use crate::parse::fmt::{FmtWithArgs, FmtDefault};
+use crate::parse::fmt::{FmtDefault, FmtWithArgs};
 use std::fmt::Debug;
 
 impl<Ann: Debug> FmtWithArgs for ZProgram<Ann> {

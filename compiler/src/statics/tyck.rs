@@ -31,7 +31,9 @@ impl<Ann> TypeEqv for TCompute<Ann> {
                 TValue::eqv(a, c).and_then(|()| TCompute::eqv(b, d))
             }
             // Note: being nominal here
-            (TCompute::Var(a, _), TCompute::Var(b, _)) => (a == b).then_some(()),
+            (TCompute::Var(a, _), TCompute::Var(b, _)) => {
+                (a == b).then_some(())
+            }
             _ => None,
         }
     }
@@ -53,32 +55,19 @@ impl<'a, Ann> ZipEq<Ann> {
     > {
         (a.len() == b.len())
             .then(|| a.iter().cloned().zip(b.iter().cloned()))
-            .ok_or_else(|| TypeCheckError::Explosion(format!("wrong number of arguments")))
+            .ok_or_else(|| {
+                TypeCheckError::Explosion(format!("wrong number of arguments"))
+            })
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum TypeCheckError<Ann> {
-    UnboundVar {
-        var: VVar<Ann>,
-        ann: Ann,
-    },
-    TValMismatch {
-        expected: TValue<Ann>,
-        found: TValue<Ann>,
-    },
-    TCompMismatch {
-        expected: TCompute<Ann>,
-        found: TCompute<Ann>,
-    },
-    TValExpect {
-        expected: String,
-        found: TValue<Ann>,
-    },
-    TCompExpect {
-        expected: String,
-        found: TCompute<Ann>,
-    },
+    UnboundVar { var: VVar<Ann>, ann: Ann },
+    TValMismatch { expected: TValue<Ann>, found: TValue<Ann> },
+    TCompMismatch { expected: TCompute<Ann>, found: TCompute<Ann> },
+    TValExpect { expected: String, found: TValue<Ann> },
+    TCompExpect { expected: String, found: TCompute<Ann> },
     InconsistentBranches(Vec<TCompute<Ann>>),
     NameResolve(NameResolveError<Ann>),
     Explosion(String),
@@ -116,9 +105,9 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
             Compute::Rec { binding, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, t, def) = binding;
-                let t = t
-                    .as_ref()
-                    .ok_or_else(|| Explosion("rec must have type annotation".to_string()))?;
+                let t = t.as_ref().ok_or_else(|| {
+                    Explosion("rec must have type annotation".to_string())
+                })?;
                 ctx.push(x.clone(), *t.clone());
                 let tdef = def.tyck(&ctx)?;
                 match &tdef {
@@ -166,9 +155,9 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
             Compute::Lam { arg, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, t) = arg;
-                let t = t
-                    .as_ref()
-                    .ok_or_else(|| Explosion("lam must have type annotation".to_string()))?;
+                let t = t.as_ref().ok_or_else(|| {
+                    Explosion("lam must have type annotation".to_string())
+                })?;
                 ctx.push(x.clone(), *t.clone());
                 let tbody = body.tyck(&ctx)?;
                 Ok(TCompute::Lam(t.clone(), Box::new(tbody), ann.clone()))
@@ -178,9 +167,8 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let targ = v.tyck(&ctx)?;
                 match tfn {
                     TCompute::Lam(tpara, tbody, ann) => {
-                        TValue::eqv(&targ, &tpara).ok_or_else(|| TValMismatch {
-                            expected: *tpara,
-                            found: targ,
+                        TValue::eqv(&targ, &tpara).ok_or_else(|| {
+                            TValMismatch { expected: *tpara, found: targ }
                         })?;
                         Ok(*tbody)
                     }
@@ -190,20 +178,16 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                     }),
                 }
             }
-            Compute::If {
-                cond,
-                thn,
-                els,
-                ann,
-            } => {
+            Compute::If { cond, thn, els, ann } => {
                 let tcond = cond.tyck(&ctx)?;
                 match tcond {
                     TValue::Bool(_) => {
                         let tthn = thn.tyck(&ctx)?;
                         let tels = els.tyck(&ctx)?;
                         let tfinal = tels.clone();
-                        TCompute::eqv(&tthn, &tels)
-                            .ok_or_else(|| InconsistentBranches(vec![tthn, tels]))?;
+                        TCompute::eqv(&tthn, &tels).ok_or_else(|| {
+                            InconsistentBranches(vec![tthn, tels])
+                        })?;
                         Ok(tfinal)
                     }
                     _ => Err(TValExpect {
@@ -216,10 +200,10 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let data = scrut.tyck(&ctx)?;
                 let mut ty = None;
                 for (ctor, args, body) in cases {
-                    let (tvar, targs) = ctx
-                        .ctors
-                        .get(&ctor)
-                        .ok_or_else(|| Explosion(format!("unknown ctor: {}", ctor)))?;
+                    let (tvar, targs) =
+                        ctx.ctors.get(&ctor).ok_or_else(|| {
+                            Explosion(format!("unknown ctor: {}", ctor))
+                        })?;
                     data.eqv(&TValue::Var(tvar.clone(), ann.clone()))
                         .ok_or_else(|| TValMismatch {
                             expected: TValue::Var(tvar.clone(), ann.clone()),
@@ -230,8 +214,14 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                     let tbranch = body.tyck(&ctx)?;
                     ty = match ty {
                         Some(tret) => {
-                            TCompute::eqv(&tret, &tbranch)
-                                .ok_or_else(|| InconsistentBranches(vec![tret.clone(), tbranch]))?;
+                            TCompute::eqv(&tret, &tbranch).ok_or_else(
+                                || {
+                                    InconsistentBranches(vec![
+                                        tret.clone(),
+                                        tbranch,
+                                    ])
+                                },
+                            )?;
                             Some(tret)
                         }
                         None => Some(tbranch),
@@ -243,47 +233,44 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let mut ty: Option<TCompute<Ann>> = None;
                 // Hack: we need to know what type it is; now we just synthesize it
                 for (dtor, vars, comp) in cases {
-                    let (codata, targs, tret) = ctx
-                        .dtors
-                        .get(dtor)
-                        .ok_or_else(|| Explosion(format!("unknown dtor: {}", dtor)))?;
+                    let (codata, targs, tret) =
+                        ctx.dtors.get(dtor).ok_or_else(|| {
+                            Explosion(format!("unknown dtor: {}", dtor))
+                        })?;
                     let t = TCompute::Var(codata.clone(), ann.clone());
                     ty = ty
-                        .and_then(|t_| TCompute::eqv(&t, &t_).and_then(|_| Some(t_)))
+                        .and_then(|t_| {
+                            TCompute::eqv(&t, &t_).and_then(|_| Some(t_))
+                        })
                         .or_else(|| Some(t));
                     let mut ctx = ctx.clone();
                     ctx.extend(ZipEq::new(vars, targs)?);
                     let tret_ = comp.tyck(&ctx)?;
-                    TCompute::eqv(&tret_, &tret).ok_or_else(|| TCompMismatch {
-                        expected: tret.clone(),
-                        found: tret_,
+                    TCompute::eqv(&tret_, &tret).ok_or_else(|| {
+                        TCompMismatch { expected: tret.clone(), found: tret_ }
                     })?;
                 }
                 ty.ok_or_else(|| Explosion(format!("empty CoMatch")))
             }
-            Compute::CoApp {
-                scrut,
-                dtor,
-                args,
-                ann,
-            } => {
+            Compute::CoApp { scrut, dtor, args, ann } => {
                 let tscrut = scrut.tyck(&ctx)?;
                 match tscrut.clone() {
                     TCompute::Var(tv, ann) => {
-                        let (codata, targs, tret) = ctx
-                            .dtors
-                            .get(dtor)
-                            .ok_or_else(|| Explosion(format!("unknown dtor: {}", dtor)))?;
+                        let (codata, targs, tret) =
+                            ctx.dtors.get(dtor).ok_or_else(|| {
+                                Explosion(format!("unknown dtor: {}", dtor))
+                            })?;
                         let t_ = TCompute::Var(codata.clone(), ann);
-                        TCompute::eqv(&tscrut, &t_).ok_or_else(|| TCompMismatch {
-                            expected: t_,
-                            found: tscrut,
+                        TCompute::eqv(&tscrut, &t_).ok_or_else(|| {
+                            TCompMismatch { expected: t_, found: tscrut }
                         })?;
                         for (arg, expected) in ZipEq::new(args, targs)? {
                             let targ = arg.tyck(&ctx)?;
-                            targ.eqv(&expected).ok_or_else(|| TValMismatch {
-                                expected: expected.clone(),
-                                found: targ,
+                            targ.eqv(&expected).ok_or_else(|| {
+                                TValMismatch {
+                                    expected: expected.clone(),
+                                    found: targ,
+                                }
                             })?;
                         }
                         Ok(tret.clone())
@@ -302,10 +289,10 @@ impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
     type Type = TValue<Ann>;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         match self {
-            Value::Var(x, ann) => ctx.lookup(&x).cloned().ok_or(UnboundVar {
-                var: x.clone(),
-                ann: ann.clone(),
-            }),
+            Value::Var(x, ann) => ctx
+                .lookup(&x)
+                .cloned()
+                .ok_or(UnboundVar { var: x.clone(), ann: ann.clone() }),
             Value::Thunk(e, ann) => {
                 let t = e.tyck(&ctx)?;
                 Ok(TValue::Comp(Box::new(t), ann.clone()))

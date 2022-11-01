@@ -39,19 +39,21 @@ struct Runtime<Ann> {
 
 impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
     fn new() -> Self {
-        Runtime {
-            stack: Rc::new(Stack::new()),
-            env: Env::new(),
-        }
+        Runtime { stack: Rc::new(Stack::new()), env: Env::new() }
     }
 
     fn get(&self, var: &VVar<Ann>) -> Result<Rc<ZValue<Ann>>, EvalError<Ann>> {
         self.env.get(var).ok_or_else(|| {
-            EvalError::ErrStr(format!("Variable {} not found", var), var.ann().clone())
+            EvalError::ErrStr(
+                format!("Variable {} not found", var),
+                var.ann().clone(),
+            )
         })
     }
 
-    fn eval_value(&self, val: Rc<ZValue<Ann>>) -> Result<Rc<ZValue<Ann>>, EvalError<Ann>> {
+    fn eval_value(
+        &self, val: Rc<ZValue<Ann>>,
+    ) -> Result<Rc<ZValue<Ann>>, EvalError<Ann>> {
         match &*val {
             ZValue::Var(var, _) => self.get(var),
             ZValue::Thunk(thunk, None, ann) => {
@@ -68,11 +70,13 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
 
     fn call(&mut self, arg: Rc<ZValue<Ann>>) {
         let arg = self.eval_value(arg).unwrap();
-        self.stack = Rc::new(Stack::Frame(Frame::Call(arg.clone()), self.stack.clone()));
+        self.stack =
+            Rc::new(Stack::Frame(Frame::Call(arg.clone()), self.stack.clone()));
     }
 
     fn dtor(&mut self, dtor: Dtor<Ann>, args: Vec<Rc<ZValue<Ann>>>) {
-        self.stack = Rc::new(Stack::Frame(Frame::Dtor(dtor, args), self.stack.clone()));
+        self.stack =
+            Rc::new(Stack::Frame(Frame::Dtor(dtor, args), self.stack.clone()));
     }
 
     fn kont(&mut self, comp: Rc<ZCompute<Ann>>, var: VVar<Ann>) {
@@ -92,22 +96,16 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         self.env.insert(var, self.eval_value(val).unwrap().clone());
     }
 
-    fn step(&mut self, comp: ZCompute<Ann>) -> Result<Rc<ZCompute<Ann>>, EvalError<Ann>> {
+    fn step(
+        &mut self, comp: ZCompute<Ann>,
+    ) -> Result<Rc<ZCompute<Ann>>, EvalError<Ann>> {
         use {ZCompute::*, ZValue::*};
         match comp {
-            Let {
-                binding: (var, val),
-                body,
-                ..
-            } => {
+            Let { binding: (var, val), body, .. } => {
                 self.insert(var, val);
                 Ok(body)
             }
-            Rec {
-                binding: (var, val),
-                body,
-                ..
-            } => {
+            Rec { binding: (var, val), body, .. } => {
                 // TODO: this is a hack, we should have a better env
                 self.env.insert(var.clone(), val.clone());
                 self.env.insert(var.clone(), self.eval_value(val.clone())?);
@@ -117,16 +115,14 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 self.env.insert(var.clone(), self.eval_value(val.clone())?);
                 Ok(body)
             }
-            Do {
-                binding: (var, comp),
-                body,
-                ..
-            } => {
+            Do { binding: (var, comp), body, .. } => {
                 self.kont(body, var);
                 Ok(comp)
             }
             Force(val, _) => {
-                if let Thunk(comp, Some(env), _) = &*self.eval_value(val.clone())? {
+                if let Thunk(comp, Some(env), _) =
+                    &*self.eval_value(val.clone())?
+                {
                     self.env = env.clone();
                     Ok(comp.clone())
                 } else {
@@ -139,10 +135,14 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
             Return(val, _) => {
                 let val = self.eval_value(val)?;
                 let stack = self.stack.to_owned();
-                if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack {
+                if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack
+                {
                     self.stack = prev.clone();
                     self.env = env.pop().ok_or_else(|| {
-                        EvalError::ErrStr(format!("EnvStack is empty"), val.ann().clone())
+                        EvalError::ErrStr(
+                            format!("EnvStack is empty"),
+                            val.ann().clone(),
+                        )
                     })?;
                     self.insert(var.clone(), val);
                     Ok(comp.clone())
@@ -153,11 +153,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                     ))
                 }
             }
-            Lam {
-                arg: var,
-                body,
-                ann,
-            } => {
+            Lam { arg: var, body, ann } => {
                 let stack = self.stack.to_owned();
                 if let Stack::Frame(Frame::Call(arg), prev) = &*stack {
                     self.stack = prev.clone();
@@ -174,12 +170,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 self.call(arg.clone());
                 Ok(f)
             }
-            If {
-                cond,
-                thn,
-                els,
-                ann,
-            } => {
+            If { cond, thn, els, ann } => {
                 let cond = self.eval_value(cond)?;
                 if let Bool(cond, _) = &*cond {
                     Ok(if *cond { thn } else { els })
@@ -191,18 +182,25 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 }
             }
             Match { scrut, cases, ann } => {
-                if let Ctor(ctor, args, _) = &*self.eval_value(scrut.clone())?.clone() {
+                if let Ctor(ctor, args, _) =
+                    &*self.eval_value(scrut.clone())?.clone()
+                {
                     let (_, vars, comp) = cases
                         .into_iter()
                         .find(|(pat, ..)| pat == ctor)
-                        .ok_or_else(|| EvalError::ErrStr(format!("Ctor mismatch"), ann))?;
+                        .ok_or_else(|| {
+                            EvalError::ErrStr(format!("Ctor mismatch"), ann)
+                        })?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
                         self.insert(var.clone(), arg.clone());
                     }
                     Ok(comp)
                 } else {
                     Err(EvalError::ErrStr(
-                        format!("Match on non-ctor value: {:?}", scrut.as_ref()),
+                        format!(
+                            "Match on non-ctor value: {:?}",
+                            scrut.as_ref()
+                        ),
                         ann,
                     ))
                 }
@@ -214,25 +212,30 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                     let (_, vars, comp) = cases
                         .iter()
                         .find(|(pat, ..)| *pat == *dtor)
-                        .ok_or_else(|| EvalError::ErrStr(format!("Dtor mismatch"), ann))?;
+                        .ok_or_else(|| {
+                            EvalError::ErrStr(format!("Dtor mismatch"), ann)
+                        })?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
                         self.insert(var.clone(), arg.clone());
                     }
                     Ok(comp.clone())
                 } else {
-                    Err(EvalError::ErrStr(format!("CoMatch on non-dtor frame"), ann))
+                    Err(EvalError::ErrStr(
+                        format!("CoMatch on non-dtor frame"),
+                        ann,
+                    ))
                 }
             }
-            CoApp {
-                scrut, dtor, args, ..
-            } => {
+            CoApp { scrut, dtor, args, .. } => {
                 self.dtor(dtor, args);
                 Ok(scrut)
             }
         }
     }
 
-    fn eval(&mut self, mut comp: ZCompute<Ann>) -> Result<ZValue<Ann>, EvalError<Ann>> {
+    fn eval(
+        &mut self, mut comp: ZCompute<Ann>,
+    ) -> Result<ZValue<Ann>, EvalError<Ann>> {
         use {ZCompute::*, ZValue::*};
         const MAX_STEPS: usize = 1000;
         let mut steps = 0;

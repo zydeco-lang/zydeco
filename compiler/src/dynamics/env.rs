@@ -32,10 +32,7 @@ pub struct Env<Ann> {
 
 impl<Ann: Clone> Env<Ann> {
     pub fn new() -> Self {
-        Env {
-            stack: Rc::new(EnvStack::new()),
-            map: HashMap::new(),
-        }
+        Env { stack: Rc::new(EnvStack::new()), map: HashMap::new() }
     }
 
     pub fn push(self) -> Self {
@@ -47,10 +44,7 @@ impl<Ann: Clone> Env<Ann> {
 
     pub fn pop(&self) -> Option<Self> {
         if let EnvStack::Entry(map, prev) = &*self.stack {
-            Some(Env {
-                stack: prev.clone(),
-                map: map.clone(),
-            })
+            Some(Env { stack: prev.clone(), map: map.clone() })
         } else {
             None
         }

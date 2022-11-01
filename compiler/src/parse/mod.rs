@@ -5,5 +5,5 @@ pub mod fmt;
 pub mod syntax;
 mod ann;
 
-pub use parser::ZydecoParser;
 pub use parser::TValParser;
+pub use parser::ZydecoParser;

@@ -11,16 +11,10 @@ pub struct Args {
 }
 impl Args {
     pub fn new(indent_unit: usize) -> Self {
-        Self {
-            indent_unit,
-            indent: 0,
-        }
+        Self { indent_unit, indent: 0 }
     }
     pub fn indent(&self) -> Self {
-        Self {
-            indent: self.indent + self.indent_unit,
-            ..self.clone()
-        }
+        Self { indent: self.indent + self.indent_unit, ..self.clone() }
     }
     pub fn force_space(&self) -> String {
         format!("\n{}", " ".repeat(self.indent))
@@ -157,9 +151,7 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                         .join("")
                 })
             }
-            Compute::CoApp {
-                scrut, dtor, args, ..
-            } => {
+            Compute::CoApp { scrut, dtor, args, .. } => {
                 format!(
                     "{}.{}({})",
                     scrut.fmt_with_args(fmta),
@@ -192,7 +184,11 @@ impl<Ann> FmtWithArgs for TCompute<Ann> {
             TCompute::Var(x, _) => format!("{}", x.fmt_with_args(args)),
             TCompute::Ret(v, _) => format!("Ret({})", v.fmt_with_args(args)),
             TCompute::Lam(t, c, _) => {
-                format!("{} -> {}", t.fmt_with_args(args), c.fmt_with_args(args))
+                format!(
+                    "{} -> {}",
+                    t.fmt_with_args(args),
+                    c.fmt_with_args(args)
+                )
             }
         }
     }

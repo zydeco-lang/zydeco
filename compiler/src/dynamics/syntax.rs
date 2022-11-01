@@ -1,5 +1,7 @@
 use super::env::Env;
-use crate::parse::syntax::{Compute, Ctor, Declare, Dtor, Program, VVar, Value};
+use crate::parse::syntax::{
+    Compute, Ctor, Declare, Dtor, Program, VVar, Value,
+};
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
@@ -11,11 +13,7 @@ pub struct ZProgram<Ann> {
 
 impl<Ann> From<Program<Ann>> for ZProgram<Ann> {
     fn from(Program { decls, comp, ann }: Program<Ann>) -> Self {
-        ZProgram {
-            decls,
-            comp: (*comp).into(),
-            ann,
-        }
+        ZProgram { decls, comp: (*comp).into(), ann }
     }
 }
 
@@ -33,10 +31,14 @@ impl<Ann> From<Value<Ann>> for ZValue<Ann> {
     fn from(value: Value<Ann>) -> Self {
         match value {
             Value::Var(var, ann) => ZValue::Var(var, ann),
-            Value::Thunk(compute, ann) => ZValue::Thunk(Rc::new((*compute).into()), None, ann),
-            Value::Ctor(ctor, args, ann) => {
-                ZValue::Ctor(ctor, args.into_iter().map(Into::into).map(Rc::new).collect(), ann)
+            Value::Thunk(compute, ann) => {
+                ZValue::Thunk(Rc::new((*compute).into()), None, ann)
             }
+            Value::Ctor(ctor, args, ann) => ZValue::Ctor(
+                ctor,
+                args.into_iter().map(Into::into).map(Rc::new).collect(),
+                ann,
+            ),
             Value::Bool(b, ann) => ZValue::Bool(b, ann),
             Value::Int(i, ann) => ZValue::Int(i, ann),
             Value::String(s, ann) => ZValue::String(s, ann),
@@ -97,53 +99,40 @@ pub enum ZCompute<Ann> {
 impl<Ann> From<Compute<Ann>> for ZCompute<Ann> {
     fn from(compute: Compute<Ann>) -> Self {
         match compute {
-            Compute::Let {
-                binding: (name, _, def),
-                body,
-                ann,
-            } => ZCompute::Let {
-                binding: (name, Rc::new((*def).into())),
-                body: Rc::new((*body).into()),
-                ann,
-            },
-            Compute::Rec {
-                binding: (name, _, def),
-                body,
-                ann,
-            } => ZCompute::Rec {
-                binding: (name, Rc::new((*def).into())),
-                body: Rc::new((*body).into()),
-                ann,
-            },
-            Compute::Do {
-                binding: (name, _, def),
-                body,
-                ann,
-            } => ZCompute::Do {
-                binding: (name, Rc::new((*def).into())),
-                body: Rc::new((*body).into()),
-                ann,
-            },
-            Compute::Force(value, ann) => ZCompute::Force(Rc::new((*value).into()), ann),
-            Compute::Return(value, ann) => ZCompute::Return(Rc::new((*value).into()), ann),
-            Compute::Lam {
-                arg: (arg, _),
-                body,
-                ann,
-            } => ZCompute::Lam {
-                arg,
-                body: Rc::new((*body).into()),
-                ann,
-            },
+            Compute::Let { binding: (name, _, def), body, ann } => {
+                ZCompute::Let {
+                    binding: (name, Rc::new((*def).into())),
+                    body: Rc::new((*body).into()),
+                    ann,
+                }
+            }
+            Compute::Rec { binding: (name, _, def), body, ann } => {
+                ZCompute::Rec {
+                    binding: (name, Rc::new((*def).into())),
+                    body: Rc::new((*body).into()),
+                    ann,
+                }
+            }
+            Compute::Do { binding: (name, _, def), body, ann } => {
+                ZCompute::Do {
+                    binding: (name, Rc::new((*def).into())),
+                    body: Rc::new((*body).into()),
+                    ann,
+                }
+            }
+            Compute::Force(value, ann) => {
+                ZCompute::Force(Rc::new((*value).into()), ann)
+            }
+            Compute::Return(value, ann) => {
+                ZCompute::Return(Rc::new((*value).into()), ann)
+            }
+            Compute::Lam { arg: (arg, _), body, ann } => {
+                ZCompute::Lam { arg, body: Rc::new((*body).into()), ann }
+            }
             Compute::App(f, arg, ann) => {
                 ZCompute::App(Rc::new((*f).into()), Rc::new((*arg).into()), ann)
             }
-            Compute::If {
-                cond,
-                thn,
-                els,
-                ann,
-            } => ZCompute::If {
+            Compute::If { cond, thn, els, ann } => ZCompute::If {
                 cond: Rc::new((*cond).into()),
                 thn: Rc::new((*thn).into()),
                 els: Rc::new((*els).into()),
@@ -153,23 +142,22 @@ impl<Ann> From<Compute<Ann>> for ZCompute<Ann> {
                 scrut: Rc::new((*scrut).into()),
                 cases: cases
                     .into_iter()
-                    .map(|(ctor, vars, body)| (ctor, vars, Rc::new((*body).into())))
+                    .map(|(ctor, vars, body)| {
+                        (ctor, vars, Rc::new((*body).into()))
+                    })
                     .collect(),
                 ann,
             },
             Compute::CoMatch { cases, ann } => ZCompute::CoMatch {
                 cases: cases
                     .into_iter()
-                    .map(|(dtor, vars, body)| (dtor, vars, Rc::new((*body).into())))
+                    .map(|(dtor, vars, body)| {
+                        (dtor, vars, Rc::new((*body).into()))
+                    })
                     .collect(),
                 ann,
             },
-            Compute::CoApp {
-                scrut,
-                dtor,
-                args,
-                ann,
-            } => ZCompute::CoApp {
+            Compute::CoApp { scrut, dtor, args, ann } => ZCompute::CoApp {
                 scrut: Rc::new((*scrut).into()),
                 dtor,
                 args: args.into_iter().map(Into::into).map(Rc::new).collect(),

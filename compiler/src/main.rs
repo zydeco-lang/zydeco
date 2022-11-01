@@ -43,10 +43,8 @@ fn acc_test_mode() -> Result<(), ()> {
         let line = line.unwrap();
         if line.starts_with(MARKER) {
             buffer.pop(); // '\n'
-            let title = line
-                .trim_start_matches(MARKER)
-                .trim_end_matches(MARKER)
-                .trim();
+            let title =
+                line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
             println!(">>> [{}]", title);
             println!("{}", buffer);
             let res = Main::acc_single_run(title, &buffer);
@@ -77,7 +75,9 @@ fn acc_test_mode() -> Result<(), ()> {
 
 struct Main;
 impl Main {
-    pub fn acc_single_run(title: &str, buffer: &str) -> Result<(TCompute<()>, ZValue<()>), ()> {
+    pub fn acc_single_run(
+        title: &str, buffer: &str,
+    ) -> Result<(TCompute<()>, ZValue<()>), ()> {
         println!("=== [{}] <parse>", title);
         let program = Main::parse(&buffer)?;
         println!("=== [{}] <tyck>", title);
