@@ -1,7 +1,10 @@
 #![allow(unused, deprecated)]
 
-use super::env::*;
-use crate::parse::syntax::{Compute, Dtor, VVar, Value};
+use super::{
+    env::*,
+    syntax::{ZCompute, ZProgram, ZValue},
+};
+use crate::parse::syntax::{Dtor, VVar};
 use std::{mem::replace, rc::Rc};
 
 #[derive(Debug, Clone)]
@@ -11,9 +14,9 @@ pub enum EvalError<Ann> {
 
 #[derive(Debug, Clone)]
 enum Frame<Ann> {
-    Kont(Compute<Ann>, Env<Ann>, VVar<Ann>),
-    Call(Value<Ann>),
-    Dtor(Dtor<Ann>, Vec<Value<Ann>>),
+    Kont(ZCompute<Ann>, Env<Ann>, VVar<Ann>),
+    Call(ZValue<Ann>),
+    Dtor(Dtor<Ann>, Vec<ZValue<Ann>>),
 }
 
 #[derive(Debug, Clone)]
@@ -42,30 +45,30 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         }
     }
 
-    fn get(&self, var: &VVar<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
+    fn get(&self, var: &VVar<Ann>) -> Result<&ZValue<Ann>, EvalError<Ann>> {
         self.env.get(var).ok_or_else(|| {
             EvalError::ErrStr(format!("Variable {} not found", var), var.ann().clone())
         })
     }
 
-    fn lookup(&'rt self, val: &'rt Value<Ann>) -> Result<&Value<Ann>, EvalError<Ann>> {
-        if let Value::Var(var, _) = val {
+    fn lookup(&'rt self, val: &'rt ZValue<Ann>) -> Result<&ZValue<Ann>, EvalError<Ann>> {
+        if let ZValue::Var(var, _) = val {
             self.get(&var)
         } else {
             Ok(&val)
         }
     }
 
-    fn call(&mut self, arg: Value<Ann>) {
+    fn call(&mut self, arg: ZValue<Ann>) {
         let arg = self.lookup(&arg).unwrap();
         self.stack = Rc::new(Stack::Frame(Frame::Call(arg.clone()), self.stack.clone()));
     }
 
-    fn dtor(&mut self, dtor: Dtor<Ann>, args: Vec<Value<Ann>>) {
+    fn dtor(&mut self, dtor: Dtor<Ann>, args: Vec<ZValue<Ann>>) {
         self.stack = Rc::new(Stack::Frame(Frame::Dtor(dtor, args), self.stack.clone()));
     }
 
-    fn kont(&mut self, comp: Compute<Ann>, var: VVar<Ann>) {
+    fn kont(&mut self, comp: ZCompute<Ann>, var: VVar<Ann>) {
         self.push();
         self.stack = Rc::new(Stack::Frame(
             Frame::Kont(comp, self.env.clone(), var),
@@ -78,31 +81,40 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         self.env = env.push();
     }
 
-    fn insert(&mut self, var: VVar<Ann>, val: Value<Ann>) {
+    fn insert(&mut self, var: VVar<Ann>, val: ZValue<Ann>) {
         self.env.insert(var, self.lookup(&val).unwrap().clone());
     }
 
-    fn step(&mut self, comp: Compute<Ann>) -> Result<Compute<Ann>, EvalError<Ann>> {
-        use {Compute::*, Value::*};
+    fn step(&mut self, comp: ZCompute<Ann>) -> Result<ZCompute<Ann>, EvalError<Ann>> {
+        use {ZCompute::*, ZValue::*};
         match comp {
-            Let { binding, body, .. } => {
-                let (var, _, val) = binding;
+            Let {
+                binding: (var, val),
+                body,
+                ..
+            } => {
                 self.insert(var.clone(), *val.clone());
                 Ok(*body)
             }
-            Rec { binding, body, .. } => {
+            Rec {
+                binding: (var, val),
+                body,
+                ..
+            } => {
                 // TODO: inject binder of rec
-                let (var, _, val) = binding;
                 self.insert(var.clone(), *val.clone());
                 Ok(*body)
             }
-            Do { binding, body, .. } => {
-                let (var, _, comp) = binding;
+            Do {
+                binding: (var, comp),
+                body,
+                ..
+            } => {
                 self.kont(*body, var.clone());
                 Ok(*comp)
             }
             Force(val, _) => {
-                if let Thunk(comp, _) = self.lookup(&val)? {
+                if let Thunk(comp, env, _) = self.lookup(&val)? {
                     // TODO: make it a closure
                     Ok(*comp.clone())
                 } else {
@@ -129,8 +141,11 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                     ))
                 }
             }
-            Lam { arg, body, ann } => {
-                let (var, _) = arg;
+            Lam {
+                arg: var,
+                body,
+                ann,
+            } => {
                 let stack = self.stack.to_owned();
                 if let Stack::Frame(Frame::Call(arg), prev) = &*stack {
                     self.stack = prev.clone();
@@ -205,8 +220,8 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         }
     }
 
-    fn eval(&mut self, mut comp: Compute<Ann>) -> Result<Value<Ann>, EvalError<Ann>> {
-        use {Compute::*, Value::*};
+    fn eval(&mut self, mut comp: ZCompute<Ann>) -> Result<ZValue<Ann>, EvalError<Ann>> {
+        use {ZCompute::*, ZValue::*};
         const MAX_STEPS: usize = 1000;
         let mut steps = 0;
         while steps <= MAX_STEPS {
@@ -225,102 +240,102 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
     }
 }
 
-#[deprecated]
-fn get_val_map<Ann: Clone>(env: &EnvMap<Ann>, val: Value<Ann>) -> Option<Value<Ann>> {
-    if let Value::Var(name, _) = val {
-        env.get(&name).cloned()
-    } else {
-        Some(val)
-    }
-}
+// #[deprecated]
+// fn get_val_map<Ann: Clone>(env: &EnvMap<Ann>, val: ZValue<Ann>) -> Option<ZValue<Ann>> {
+//     if let ZValue::Var(name, _) = val {
+//         env.get(&name).cloned()
+//     } else {
+//         Some(val)
+//     }
+// }
 
-#[deprecated]
-fn with_eval<Ann: Clone>(
-    env: &mut EnvMap<Ann>, name: &VVar<Ann>, val: Value<Ann>, exp: Compute<Ann>,
-) -> Option<Value<Ann>> {
-    let val = get_val_map(env, val)?;
-    env.insert(name.clone(), val);
-    eval_env(env, exp)
-}
+// #[deprecated]
+// fn with_eval<Ann: Clone>(
+//     env: &mut EnvMap<Ann>, name: &VVar<Ann>, val: ZValue<Ann>, exp: ZCompute<Ann>,
+// ) -> Option<ZValue<Ann>> {
+//     let val = get_val_map(env, val)?;
+//     env.insert(name.clone(), val);
+//     eval_env(env, exp)
+// }
 
-#[deprecated]
-fn eval_env<Ann: Clone>(env: &mut EnvMap<Ann>, exp: Compute<Ann>) -> Option<Value<Ann>> {
-    use Compute::*;
-    use Value::*;
-    match exp {
-        Let { binding, body, .. } => {
-            let (name, _, val) = binding;
-            with_eval(env, &name, *val, *body)
-        }
-        Rec { binding, body, ann } => {
-            let (name, _, val) = binding;
-            with_eval(env, &name, *val, *body)
-        }
-        Do { binding, body, .. } => {
-            let (name, _, compute) = binding;
-            let mut new_env = env.clone();
-            let val = eval_env(&mut new_env, *compute)?;
-            with_eval(env, &name, val, *body)
-        }
-        Force(val, _) => {
-            if let Value::Thunk(compute, _) = get_val_map(env, *val)? {
-                eval_env(env, *compute)
-            } else {
-                None
-            }
-        }
-        Return(val, _) => get_val_map(env, *val),
-        Lam { arg, body, ann } => Some(Thunk(
-            Box::new(Lam {
-                arg,
-                body,
-                ann: ann.clone(),
-            }),
-            ann,
-        )),
-        App(f, arg, _) => {
-            let f = eval_env(env, *f)?;
-            if let Value::Thunk(compute, _) = get_val_map(env, f)? {
-                if let Compute::Lam {
-                    arg: (name, _),
-                    body,
-                    ..
-                } = *compute
-                {
-                    with_eval(env, &name, *arg, *body)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
-        If { cond, thn, els, .. } => {
-            if let Bool(b, _) = get_val_map(env, *cond)? {
-                eval_env(env, if b { *thn } else { *els })
-            } else {
-                None
-            }
-        }
-        Match { scrut, cases, ann } => todo!(),
-        CoMatch { cases, ann } => todo!(),
-        CoApp {
-            scrut,
-            dtor,
-            args,
-            ann,
-        } => todo!(),
-    }
-}
+// #[deprecated]
+// fn eval_env<Ann: Clone>(env: &mut EnvMap<Ann>, exp: ZCompute<Ann>) -> Option<ZValue<Ann>> {
+//     use ZCompute::*;
+//     use ZValue::*;
+//     match exp {
+//         Let { binding, body, .. } => {
+//             let (name, _, val) = binding;
+//             with_eval(env, &name, *val, *body)
+//         }
+//         Rec { binding, body, ann } => {
+//             let (name, _, val) = binding;
+//             with_eval(env, &name, *val, *body)
+//         }
+//         Do { binding, body, .. } => {
+//             let (name, _, compute) = binding;
+//             let mut new_env = env.clone();
+//             let val = eval_env(&mut new_env, *compute)?;
+//             with_eval(env, &name, val, *body)
+//         }
+//         Force(val, _) => {
+//             if let ZValue::Thunk(compute, _) = get_val_map(env, *val)? {
+//                 eval_env(env, *compute)
+//             } else {
+//                 None
+//             }
+//         }
+//         Return(val, _) => get_val_map(env, *val),
+//         Lam { arg, body, ann } => Some(Thunk(
+//             Box::new(Lam {
+//                 arg,
+//                 body,
+//                 ann: ann.clone(),
+//             }),
+//             ann,
+//         )),
+//         App(f, arg, _) => {
+//             let f = eval_env(env, *f)?;
+//             if let ZValue::Thunk(compute, _) = get_val_map(env, f)? {
+//                 if let ZCompute::Lam {
+//                     arg: (name, _),
+//                     body,
+//                     ..
+//                 } = *compute
+//                 {
+//                     with_eval(env, &name, *arg, *body)
+//                 } else {
+//                     None
+//                 }
+//             } else {
+//                 None
+//             }
+//         }
+//         If { cond, thn, els, .. } => {
+//             if let Bool(b, _) = get_val_map(env, *cond)? {
+//                 eval_env(env, if b { *thn } else { *els })
+//             } else {
+//                 None
+//             }
+//         }
+//         Match { scrut, cases, ann } => todo!(),
+//         CoMatch { cases, ann } => todo!(),
+//         CoApp {
+//             scrut,
+//             dtor,
+//             args,
+//             ann,
+//         } => todo!(),
+//     }
+// }
 
-#[deprecated]
-pub fn eval_old<Ann: Clone>(exp: Compute<Ann>) -> Option<Value<Ann>> {
-    let mut env = EnvMap::new();
-    eval_env(&mut env, exp)
-}
+// #[deprecated]
+// pub fn eval_old<Ann: Clone>(exp: ZCompute<Ann>) -> Option<ZValue<Ann>> {
+//     let mut env = EnvMap::new();
+//     eval_env(&mut env, exp)
+// }
 
 pub fn eval<Ann: Clone + std::fmt::Debug>(
-    comp: Compute<Ann>,
-) -> Result<Value<Ann>, EvalError<Ann>> {
+    comp: ZCompute<Ann>,
+) -> Result<ZValue<Ann>, EvalError<Ann>> {
     Runtime::new().eval(comp)
 }

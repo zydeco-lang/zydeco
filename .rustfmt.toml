@@ -1,6 +1,7 @@
 max_width = 100
 use_try_shorthand = true
 use_field_init_shorthand = true
+# use_small_heuristics = "Max"
 
 # fn_single_line = true
 fn_args_layout = "Compressed"
