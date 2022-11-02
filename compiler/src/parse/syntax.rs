@@ -38,11 +38,6 @@ pub enum Compute<Ann> {
         body: Box<Compute<Ann>>,
         ann: Ann,
     },
-    Rec {
-        binding: Binding<TValue<Ann>, Value<Ann>, Ann>,
-        body: Box<Compute<Ann>>,
-        ann: Ann,
-    },
     Do {
         binding: Binding<TCompute<Ann>, Compute<Ann>, Ann>,
         body: Box<Compute<Ann>>,
@@ -51,6 +46,11 @@ pub enum Compute<Ann> {
     Force(Box<Value<Ann>>, Ann),
     Return(Box<Value<Ann>>, Ann),
     Lam {
+        arg: (VVar<Ann>, Option<Box<TValue<Ann>>>),
+        body: Box<Compute<Ann>>,
+        ann: Ann,
+    },
+    Rec {
         arg: (VVar<Ann>, Option<Box<TValue<Ann>>>),
         body: Box<Compute<Ann>>,
         ann: Ann,

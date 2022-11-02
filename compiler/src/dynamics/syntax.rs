@@ -55,11 +55,6 @@ pub enum ZCompute<Ann> {
         body: Rc<ZCompute<Ann>>,
         ann: Ann,
     },
-    Rec {
-        binding: Binding<ZValue<Ann>, Ann>,
-        body: Rc<ZCompute<Ann>>,
-        ann: Ann,
-    },
     Do {
         binding: Binding<ZCompute<Ann>, Ann>,
         body: Rc<ZCompute<Ann>>,
@@ -68,6 +63,11 @@ pub enum ZCompute<Ann> {
     Force(Rc<ZValue<Ann>>, Ann),
     Return(Rc<ZValue<Ann>>, Ann),
     Lam {
+        arg: VVar<Ann>,
+        body: Rc<ZCompute<Ann>>,
+        ann: Ann,
+    },
+    Rec {
         arg: VVar<Ann>,
         body: Rc<ZCompute<Ann>>,
         ann: Ann,
@@ -106,13 +106,6 @@ impl<Ann> From<Compute<Ann>> for ZCompute<Ann> {
                     ann,
                 }
             }
-            Compute::Rec { binding: (name, _, def), body, ann } => {
-                ZCompute::Rec {
-                    binding: (name, Rc::new((*def).into())),
-                    body: Rc::new((*body).into()),
-                    ann,
-                }
-            }
             Compute::Do { binding: (name, _, def), body, ann } => {
                 ZCompute::Do {
                     binding: (name, Rc::new((*def).into())),
@@ -128,6 +121,9 @@ impl<Ann> From<Compute<Ann>> for ZCompute<Ann> {
             }
             Compute::Lam { arg: (arg, _), body, ann } => {
                 ZCompute::Lam { arg, body: Rc::new((*body).into()), ann }
+            }
+            Compute::Rec { arg: (arg, _), body, ann } => {
+                ZCompute::Rec { arg, body: Rc::new((*body).into()), ann }
             }
             Compute::App(f, arg, ann) => {
                 ZCompute::App(Rc::new((*f).into()), Rc::new((*arg).into()), ann)

@@ -51,11 +51,6 @@ Comp: Compute<()> = {
             binding, body, ann: ()
         }))
     },
-    "rec" <bindings: Once<",", BindVal>> ";" <body:CompBox> => {
-        *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Rec {
-            binding, body, ann: ()
-        }))
-    },
     "do" <bindings: Once<",", BindComp>> ";" <body:CompBox> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Do {
             binding, body, ann: ()
@@ -65,6 +60,9 @@ Comp: Compute<()> = {
         *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Lam{
             arg, body, ann: ()
         })),
+    "rec" "(" <arg:FnArg> ")" "->" <body:CompBox> => Compute::Rec{
+        arg, body, ann: ()
+    },
     "if" <cond:ValBox> ":" <thn:CompBox> "else:" <els:CompBox> => Compute::If {
         cond, thn, els, ann: ()
     },

@@ -1,6 +1,4 @@
-rec loop: Comp(Ret(Bool)) = {!loop};
+let loop = { rec (loop: Comp(Ret(Bool))) -> !loop };
 !loop
-@@@ non-halt
-rec explosion: Bool = explosion;
-ret explosion
-@@@ My name is megumi!
+@@@ non-halt: "My name is megumi!"
+

@@ -60,18 +60,6 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                     body.fmt_with_args(fmta)
                 )
             }
-            Compute::Rec { binding, body, .. } => {
-                let (x, _, v) = binding;
-                format!(
-                    "rec {} = {};{}{}",
-                    // "rec {}: {} = {};{}{}",
-                    x.fmt_with_args(fmta),
-                    // t.fmt_with_args(fmta),
-                    v.fmt_with_args(fmta),
-                    fmta.force_space(),
-                    body.fmt_with_args(fmta)
-                )
-            }
             Compute::Do { binding, body, .. } => {
                 let (x, _, v) = binding;
                 format!(
@@ -95,6 +83,14 @@ impl<Ann> FmtWithArgs for Compute<Ann> {
                     // "fn ({}: {}) -> {}",
                     x.fmt_with_args(fmta),
                     // t.fmt_with_args(fmta),
+                    body.fmt_with_args(fmta)
+                )
+            }
+            Compute::Rec { arg, body, .. } => {
+                let (x, _) = arg;
+                format!(
+                    "rec ({}) -> {}",
+                    x.fmt_with_args(fmta),
                     body.fmt_with_args(fmta)
                 )
             }

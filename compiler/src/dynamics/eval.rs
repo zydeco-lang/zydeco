@@ -105,16 +105,16 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 self.insert(var, val);
                 Ok(body)
             }
-            Rec { binding: (var, val), body, .. } => {
-                // TODO: this is a hack, we should have a better env
-                self.env.insert(var.clone(), val.clone());
-                self.env.insert(var.clone(), self.eval_value(val.clone())?);
-                self.env.insert(var.clone(), self.eval_value(val.clone())?);
-                self.env.insert(var.clone(), self.eval_value(val.clone())?);
-                self.env.insert(var.clone(), self.eval_value(val.clone())?);
-                self.env.insert(var.clone(), self.eval_value(val.clone())?);
-                Ok(body)
-            }
+            // Rec { binding: (var, val), body, .. } => {
+            //     // TODO: this is a hack, we should have a better env
+            //     self.env.insert(var.clone(), val.clone());
+            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
+            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
+            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
+            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
+            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
+            //     Ok(body)
+            // }
             Do { binding: (var, comp), body, .. } => {
                 self.kont(body, var);
                 Ok(comp)
@@ -165,6 +165,9 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                         ann.clone(),
                     ))
                 }
+            }
+            Rec { arg, body, ann } => {
+                todo!()
             }
             App(f, arg, _) => {
                 self.call(arg.clone());
