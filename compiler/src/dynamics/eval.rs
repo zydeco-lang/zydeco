@@ -162,6 +162,17 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                     ))
                 }
             }
+            Prim { arity, body, ann } => {
+                let mut args = Vec::new();
+                for _ in 0..arity {
+                    let stack = self.stack.to_owned();
+                    if let Stack::Frame(Frame::Call(arg), prev) = stack.as_ref() {
+                        self.stack = prev.clone();
+                        args.push((**arg).clone());
+                    }
+                }
+                Ok(Rc::new(ZCompute::Return(Rc::new(body(args, ann.clone())), ann.clone())))
+            }   
             Rec { arg, body, ann } => {
                 self.insert(
                     arg.clone(),

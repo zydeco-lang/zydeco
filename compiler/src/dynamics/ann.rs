@@ -27,6 +27,7 @@ impl<Ann> ZCompute<Ann> {
             ZCompute::Match { ann, .. } => ann,
             ZCompute::CoMatch { ann, .. } => ann,
             ZCompute::CoApp { ann, .. } => ann,
+            ZCompute::Prim { ann , .. } => ann,
         }
     }
 }
