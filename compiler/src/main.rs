@@ -28,9 +28,7 @@ fn repl_mode() {
     for (i, line) in stdin.lines().enumerate() {
         let line = line.unwrap();
         let res = Main::acc_single_run(&format!("#{}", i), &line);
-        if res.is_err() {
-            println!("(>_<)");
-        }
+        println!("{}", response(res.is_ok()));
     }
 }
 
@@ -85,37 +83,37 @@ impl Main {
     pub fn acc_single_run(
         title: &str, buffer: &str,
     ) -> Result<(TCompute<()>, ZValue<()>), ()> {
-        println!("=== [{}] <parse>", title);
+        let header = |name: &str| {
+            println!("=== [{}] <{}>", title, name);
+        };
+        header("parse");
         let program = Main::parse(&buffer)?;
-        println!("=== [{}] <tyck>", title);
+        header("tyck");
         let ty = Main::tyck(&program)?;
-        println!("=== [{}] <elab>", title);
+        header("elab");
         let comp = Main::elab(*program.comp)?;
-        println!("=== [{}] <eval>", title);
+        header("eval");
         let zvalue = Main::eval(comp)?;
         Ok((ty, zvalue))
     }
 
     fn parse(input: &str) -> Result<Program<()>, ()> {
-        Self::phase(|| ZydecoParser::new().parse(input), "Parse")
+        Self::phase(|| ZydecoParser::new().parse(input))
     }
 
     fn tyck(prog: &Program<()>) -> Result<TCompute<()>, ()> {
-        Self::phase(|| prog.tyck(&builtin_ctx()), "Tyck")
+        Self::phase(|| prog.tyck(&builtin_ctx()))
     }
 
     fn elab(comp: Compute<()>) -> Result<ZCompute<()>, ()> {
-        Self::phase(
-            || -> Result<ZCompute<()>, ()> { Ok(ZCompute::from(comp)) },
-            "Elab",
-        )
+        Self::phase(|| -> Result<ZCompute<()>, ()> { Ok(comp.into()) })
     }
 
     fn eval(comp: ZCompute<()>) -> Result<ZValue<()>, ()> {
-        Self::phase(|| dynamics::eval::eval(comp), "Eval")
+        Self::phase(|| dynamics::eval::eval(comp))
     }
 
-    fn phase<F, T, E>(input: F, name: &'static str) -> Result<T, ()>
+    fn phase<F, T, E>(input: F) -> Result<T, ()>
     where
         F: FnOnce() -> Result<T, E> + std::panic::UnwindSafe,
         T: FmtDefault,
@@ -124,7 +122,7 @@ impl Main {
         std::panic::set_hook(Box::new(|_| {}));
         catch_unwind(input)
             .or_else(|err| {
-                println!("{} panicked: {:?}", name, err);
+                println!("Panic: {:?}", err);
                 Err(())
             })?
             .and_then(|res| {
@@ -132,7 +130,7 @@ impl Main {
                 Ok(res)
             })
             .or_else(|err| {
-                println!("{} error: {:?}", name, err);
+                println!("Error: {:?}", err);
                 Err(())
             })
     }
