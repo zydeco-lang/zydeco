@@ -255,8 +255,8 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 }
                 (c, _) => {
                     comp = self.step(c)?.as_ref().clone();
-                    println!("|- {:?}", self.env);
-                    println!("|> {:?}", comp);
+                    // println!("|- {:?}", self.env);
+                    // println!("|> {:?}", comp);
                 }
             }
             steps += 1;
