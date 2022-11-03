@@ -153,7 +153,7 @@ impl<Ann> From<Compute<Ann>> for ZCompute<Ann> {
                     .collect(),
                 ann,
             },
-            Compute::CoApp { scrut, dtor, args, ann } => ZCompute::CoApp {
+            Compute::CoApp { body: scrut, dtor, args, ann } => ZCompute::CoApp {
                 scrut: Rc::new((*scrut).into()),
                 dtor,
                 args: args.into_iter().map(Into::into).map(Rc::new).collect(),

@@ -1,8 +1,6 @@
-#![allow(unused)]
-
 use super::{
     env::*,
-    syntax::{ZCompute, ZProgram, ZValue},
+    syntax::{ZCompute, ZValue},
 };
 use crate::parse::syntax::{Dtor, VVar};
 use std::{mem::replace, rc::Rc};
@@ -248,12 +246,12 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
     fn eval(
         &mut self, mut comp: ZCompute<Ann>,
     ) -> Result<ZValue<Ann>, EvalError<Ann>> {
-        use {ZCompute::*, ZValue::*};
+        use ZCompute::*;
         const MAX_STEPS: usize = 1000;
         let mut steps = 0;
         while steps <= MAX_STEPS {
             match (comp, self.stack.as_ref()) {
-                (Return(val, ann), Stack::Done) => {
+                (Return(val, _ann), Stack::Done) => {
                     return Ok(self.resolve_value(val)?.as_ref().clone());
                 }
                 (c, _) => {

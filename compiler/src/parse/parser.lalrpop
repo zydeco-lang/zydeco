@@ -119,8 +119,8 @@ CompHeadBox: Box<Compute<()>> = {
 }
 
 CompHead: Compute<()> = {
-    <scrut:CompAtomBox> "." <dtor:Dtor> "(" <args:Kleene<",", Val>> ")" => Compute::CoApp {
-        scrut, dtor, args, ann: ()
+    <body:CompAtomBox> "." <dtor:Dtor> "(" <args:Kleene<",", Val>> ")" => Compute::CoApp {
+        body, dtor, args, ann: ()
     },
 }
 

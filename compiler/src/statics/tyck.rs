@@ -1,9 +1,6 @@
-#![allow(unused)]
-
 use super::ctx::*;
 use super::resolve::*;
 use crate::parse::syntax::*;
-use std::collections::HashMap;
 
 pub trait TypeEqv {
     fn eqv(&self, other: &Self) -> Option<()>;
@@ -95,19 +92,19 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
     type Type = TCompute<Ann>;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         match self {
-            Compute::Let { binding, body, ann } => {
+            Compute::Let { binding, body, .. } => {
                 let mut ctx = ctx.clone();
                 let (x, _, def) = binding;
                 let t = def.tyck(&ctx)?;
                 ctx.push(x.clone(), t);
                 body.tyck(&ctx)
             }
-            Compute::Do { binding, body, ann } => {
+            Compute::Do { binding, body, .. } => {
                 let mut ctx = ctx.clone();
                 let (x, _, def) = binding;
                 let te = def.tyck(&ctx)?;
                 match te {
-                    TCompute::Ret(tv, ann) => {
+                    TCompute::Ret(tv, ..) => {
                         ctx.push(x.clone(), *tv);
                         body.tyck(&ctx)
                     }
@@ -117,10 +114,10 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                     }),
                 }
             }
-            Compute::Force(comp, ann) => {
+            Compute::Force(comp, ..) => {
                 let t = comp.tyck(&ctx)?;
                 match t {
-                    TValue::Comp(body, ann) => Ok(*body),
+                    TValue::Comp(body, ..) => Ok(*body),
                     _ => Err(TValExpect {
                         expected: format!("Comp({{...}})"),
                         found: t,
@@ -141,7 +138,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let tbody = body.tyck(&ctx)?;
                 Ok(TCompute::Lam(t.clone(), Box::new(tbody), ann.clone()))
             }
-            Compute::Rec { arg, body, ann } => {
+            Compute::Rec { arg, body, .. } => {
                 let mut ctx = ctx.clone();
                 let (x, t) = arg;
                 let t = t.as_ref().ok_or_else(|| {
@@ -166,7 +163,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 let tfn = e.tyck(&ctx)?;
                 let targ = v.tyck(&ctx)?;
                 match tfn {
-                    TCompute::Lam(tpara, tbody, ann) => {
+                    TCompute::Lam(tpara, tbody, ..) => {
                         TValue::eqv(&targ, &tpara).ok_or_else(|| {
                             TValMismatch { expected: *tpara, found: targ }
                         })?;
@@ -178,7 +175,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                     }),
                 }
             }
-            Compute::If { cond, thn, els, ann } => {
+            Compute::If { cond, thn, els, .. } => {
                 let tcond = cond.tyck(&ctx)?;
                 match tcond {
                     TValue::Bool(_) => {
@@ -252,10 +249,10 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 }
                 ty.ok_or_else(|| Explosion(format!("empty CoMatch")))
             }
-            Compute::CoApp { scrut, dtor, args, ann } => {
-                let tscrut = scrut.tyck(&ctx)?;
+            Compute::CoApp { body, dtor, args, .. } => {
+                let tscrut = body.tyck(&ctx)?;
                 match tscrut.clone() {
-                    TCompute::Var(tv, ann) => {
+                    TCompute::Var(_, ann) => {
                         let (codata, targs, tret) =
                             ctx.dtors.get(dtor).ok_or_else(|| {
                                 Explosion(format!("unknown dtor: {}", dtor))
