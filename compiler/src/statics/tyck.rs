@@ -1,6 +1,6 @@
 use super::ctx::*;
 use super::resolve::*;
-use crate::parse::syntax::*;
+use crate::{parse::syntax::*, utils::ann::AnnT};
 
 pub trait TypeEqv {
     fn eqv(&self, other: &Self) -> Option<()>;
@@ -77,7 +77,7 @@ pub trait TypeCheck<Ann> {
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>>;
 }
 
-impl<Ann: Clone> TypeCheck<Ann> for Program<Ann> {
+impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
     type Type = TCompute<Ann>;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         let mut ctx = ctx.clone();
@@ -88,7 +88,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Program<Ann> {
     }
 }
 
-impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
+impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
     type Type = TCompute<Ann>;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         match self {
@@ -282,7 +282,7 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
     }
 }
 
-impl<Ann: Clone> TypeCheck<Ann> for Value<Ann> {
+impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
     type Type = TValue<Ann>;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         match self {

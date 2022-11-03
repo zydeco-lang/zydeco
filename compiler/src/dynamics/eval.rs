@@ -2,7 +2,10 @@ use super::{
     env::*,
     syntax::{ZCompute, ZValue},
 };
-use crate::parse::syntax::{Dtor, VVar};
+use crate::{
+    parse::syntax::{Dtor, VVar},
+    utils::ann::AnnT,
+};
 use std::{mem::replace, rc::Rc};
 
 #[derive(Debug, Clone)]
@@ -35,7 +38,7 @@ struct Runtime<Ann> {
     env: Env<Ann>,
 }
 
-impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
+impl<'rt, Ann: AnnT> Runtime<Ann> {
     fn new() -> Self {
         Runtime { stack: Rc::new(Stack::new()), env: Env::new() }
     }
@@ -269,7 +272,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
     }
 }
 
-pub fn eval<Ann: Clone + std::fmt::Debug>(
+pub fn eval<Ann: AnnT>(
     comp: ZCompute<Ann>,
 ) -> Result<ZValue<Ann>, EvalError<Ann>> {
     Runtime::new().eval(comp)

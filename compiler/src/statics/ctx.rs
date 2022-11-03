@@ -1,5 +1,5 @@
 use super::resolve::*;
-use crate::parse::syntax::*;
+use crate::{parse::syntax::*, utils::ann::AnnT};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -12,7 +12,7 @@ pub struct Ctx<Ann> {
     pub dtors: HashMap<Dtor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>,
 }
 
-impl<Ann: Clone> Ctx<Ann> {
+impl<Ann: AnnT> Ctx<Ann> {
     pub fn new() -> Self {
         Self {
             vmap: HashMap::new(),

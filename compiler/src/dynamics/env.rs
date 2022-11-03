@@ -1,5 +1,5 @@
 use super::syntax::ZValue;
-use crate::parse::syntax::VVar;
+use crate::{parse::syntax::VVar, utils::ann::AnnT};
 use std::{collections::HashMap, rc::Rc};
 
 pub type EnvMap<Ann> = HashMap<VVar<Ann>, Rc<ZValue<Ann>>>;
@@ -10,7 +10,7 @@ pub enum EnvStack<Ann> {
     Entry(EnvMap<Ann>, Rc<EnvStack<Ann>>),
 }
 
-impl<Ann: Clone> EnvStack<Ann> {
+impl<Ann: AnnT> EnvStack<Ann> {
     pub fn new() -> Self {
         EnvStack::Empty
     }
@@ -30,7 +30,7 @@ pub struct Env<Ann> {
     pub map: EnvMap<Ann>,
 }
 
-impl<Ann: Clone> Env<Ann> {
+impl<Ann: AnnT> Env<Ann> {
     pub fn new() -> Self {
         Env { stack: Rc::new(EnvStack::new()), map: HashMap::new() }
     }
