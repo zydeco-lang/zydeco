@@ -50,4 +50,25 @@ let add = {
   )
 };
 !add S(S(Z())) S(Z())
-@@@ Nat
+@@@ nat, our favorite
+data Nat where | Z() | S(Nat)
+let odd = {
+  rec (odd: Comp(Nat -> Ret(Bool))) -> (
+    let even = {
+      rec (even: Comp(Nat -> Ret(Bool))) -> (
+        fn (x: Nat) -> (
+          match x
+          | Z -> ret true
+          | S(x) -> !odd x
+        )
+      )
+    };
+    fn (x: Nat) -> (
+      match x
+      | Z -> ret false
+      | S(x) -> !even x
+    )
+  )
+};
+!odd S(S(S(Z())))
+@@@ odd and even
