@@ -46,12 +46,23 @@ CompBox: Box<Compute<()>> = {
 }
 
 Comp: Compute<()> = {
-    "let" <bindings: Once<",", BindVal>> ";" <body:CompBox> => {
+    "let" <bindings: Once<",", BindVal<"=">>> ";" <body:CompBox> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Let {
             binding, body, ann: ()
         }))
     },
-    "do" <bindings: Once<",", BindComp>> ";" <body:CompBox> => {
+    "let" "rec" <binding: BindComp<"=">> ";" <e:CompBox> => {
+        let (x, tcomp, body) = binding;
+        let tval = tcomp.and_then(|tcomp| Some(Box::new(TValue::Comp(tcomp, ()))));
+        Compute::Let {
+            binding: (x.clone(), tval.clone(), Box::new(Value::Thunk(Box::new(Compute::Rec {
+                arg: (x, tval), body, ann: ()
+            }), ()))),
+            body: e,
+            ann: (),
+        }
+    },
+    "do" <bindings: Once<",", BindComp<"<-">>> ";" <body:CompBox> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Do {
             binding, body, ann: ()
         }))
@@ -76,12 +87,12 @@ Comp: Compute<()> = {
     Arith
 }
 
-BindVal: (VVar<()>, Option<Box<TValue<()>>>, Box<Value<()>>) = {
-    <Bind<"=", TValBox, ValBox>>
+BindVal<Delim>: (VVar<()>, Option<Box<TValue<()>>>, Box<Value<()>>) = {
+    <Bind<Delim, TValBox, ValBox>>
 }
 
-BindComp: (VVar<()>, Option<Box<TCompute<()>>>, Box<Compute<()>>) = {
-    <Bind<"<-", TCompBox, CompBox>>
+BindComp<Delim>: (VVar<()>, Option<Box<TCompute<()>>>, Box<Compute<()>>) = {
+    <Bind<Delim, TCompBox, CompBox>>
 }
 
 Bind<Delim, Typ, Def>: (VVar<()>, Option<Typ>, Def) = {
