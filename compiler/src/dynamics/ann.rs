@@ -1,7 +1,8 @@
 use super::syntax::*;
+use crate::utils::ann::{AnnHolder, AnnT};
 
-impl<Ann> ZValue<Ann> {
-    pub fn ann(&self) -> &Ann {
+impl<Ann: AnnT> AnnHolder<Ann> for ZValue<Ann> {
+    fn ann(&self) -> &Ann {
         match self {
             ZValue::Var(_, ann) => ann,
             ZValue::Thunk(_, _, ann) => ann,
@@ -13,8 +14,8 @@ impl<Ann> ZValue<Ann> {
     }
 }
 
-impl<Ann> ZCompute<Ann> {
-    pub fn ann(&self) -> &Ann {
+impl<Ann: AnnT> AnnHolder<Ann> for ZCompute<Ann> {
+    fn ann(&self) -> &Ann {
         match self {
             ZCompute::Let { ann, .. } => ann,
             ZCompute::Rec { ann, .. } => ann,
@@ -27,7 +28,7 @@ impl<Ann> ZCompute<Ann> {
             ZCompute::Match { ann, .. } => ann,
             ZCompute::CoMatch { ann, .. } => ann,
             ZCompute::CoApp { ann, .. } => ann,
-            ZCompute::Prim { ann , .. } => ann,
+            ZCompute::Prim { ann, .. } => ann,
         }
     }
 }

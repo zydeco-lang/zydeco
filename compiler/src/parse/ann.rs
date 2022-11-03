@@ -1,7 +1,9 @@
+use crate::utils::ann::{AnnHolder, AnnT};
+
 use super::syntax::*;
 
-impl<Ann> Value<Ann> {
-    pub fn ann(&self) -> &Ann {
+impl<Ann: AnnT> AnnHolder<Ann> for Value<Ann> {
+    fn ann(&self) -> &Ann {
         match self {
             Value::Var(_, ann) => ann,
             Value::Thunk(_, ann) => ann,
@@ -13,8 +15,8 @@ impl<Ann> Value<Ann> {
     }
 }
 
-impl<Ann> Compute<Ann> {
-    pub fn ann(&self) -> &Ann {
+impl<Ann: AnnT> AnnHolder<Ann> for Compute<Ann> {
+    fn ann(&self) -> &Ann {
         match self {
             Compute::Let { ann, .. } => ann,
             Compute::Rec { ann, .. } => ann,

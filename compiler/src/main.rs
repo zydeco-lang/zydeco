@@ -5,13 +5,12 @@ use zydeco_compiler::{
         self,
         syntax::{ZCompute, ZValue},
     },
-    parse::ZydecoParser,
     parse::{
-        fmt::FmtDefault,
         syntax::{Compute, Program, TCompute},
+        ZydecoParser,
     },
-    statics::builtins::builtin_ctx,
-    statics::tyck::TypeCheck,
+    statics::{self, tyck::TypeCheck},
+    utils::fmt::FmtDefault,
 };
 
 fn main() -> Result<(), ()> {
@@ -102,7 +101,7 @@ impl Main {
     }
 
     fn tyck(prog: &Program<()>) -> Result<TCompute<()>, ()> {
-        Self::phase(|| prog.tyck(&builtin_ctx()))
+        Self::phase(|| prog.tyck(&statics::builtins::builtin_ctx()))
     }
 
     fn elab(comp: Compute<()>) -> Result<ZCompute<()>, ()> {

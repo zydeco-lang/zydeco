@@ -11,3 +11,7 @@ impl AnnT for () {
     fn internal(_: &'static str) -> Self {}
     fn span(&self) -> Self::Span {}
 }
+
+pub trait AnnHolder<Ann: AnnT> {
+    fn ann(&self) -> &Ann;
+}

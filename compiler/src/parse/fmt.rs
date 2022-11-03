@@ -1,25 +1,5 @@
 use super::syntax::*;
-
-pub trait FmtWithArgs {
-    fn fmt_with_args(&self, args: Args) -> String;
-}
-
-#[derive(Clone, Copy)]
-pub struct Args {
-    indent_unit: usize,
-    pub indent: usize,
-}
-impl Args {
-    pub fn new(indent_unit: usize) -> Self {
-        Self { indent_unit, indent: 0 }
-    }
-    pub fn indent(&self) -> Self {
-        Self { indent: self.indent + self.indent_unit, ..self.clone() }
-    }
-    pub fn force_space(&self) -> String {
-        format!("\n{}", " ".repeat(self.indent))
-    }
-}
+use crate::utils::fmt::{Args, FmtDefault, FmtWithArgs};
 
 impl<Ann> FmtWithArgs for Program<Ann> {
     fn fmt_with_args(&self, args: Args) -> String {
@@ -187,12 +167,6 @@ impl<Ann> FmtWithArgs for TCompute<Ann> {
                 )
             }
         }
-    }
-}
-
-pub trait FmtDefault: FmtWithArgs {
-    fn fmt(&self) -> String {
-        self.fmt_with_args(Args::new(2))
     }
 }
 
