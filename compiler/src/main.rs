@@ -18,7 +18,7 @@ fn main() -> Result<(), ()> {
     if std::env::args().len() > 1 {
         repl_mode()
     } else {
-        acc_test_mode().unwrap_or_default();
+        acc_test_mode()?
     }
     Ok(())
 }
@@ -35,14 +35,17 @@ fn repl_mode() {
 }
 
 fn acc_test_mode() -> Result<(), ()> {
+    const MARKER: &str = "@@@";
+    let chapter_div = ".\n".repeat(5);
+
     let stdin = std::io::stdin();
     let mut buffer = String::new();
     let mut err_names = Vec::new();
-    const MARKER: &str = "@@@";
+
     for line in stdin.lines() {
         let line = line.unwrap();
         if line.starts_with(MARKER) {
-            buffer.pop(); // '\n'
+            buffer = buffer.trim().to_owned();
             let title =
                 line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
             println!(">>> [{}]", title);
@@ -52,13 +55,14 @@ fn acc_test_mode() -> Result<(), ()> {
                 err_names.push(title.to_owned());
             }
             println!("<<< [{}]", title);
-            println!();
+            print!("{}", chapter_div);
             buffer.clear()
         } else {
             buffer.push_str(&line);
             buffer.push_str("\n");
         }
     }
+
     println!("Conclusion: {} errors", err_names.len());
     for name in &err_names {
         println!("- {}", name);
@@ -100,7 +104,7 @@ impl Main {
     fn elab(comp: Compute<()>) -> Result<ZCompute<()>, ()> {
         Self::phase(
             || -> Result<ZCompute<()>, ()> { Ok(ZCompute::from(comp)) },
-            "Eval",
+            "Elab",
         )
     }
 

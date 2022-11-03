@@ -1,24 +1,28 @@
 ret { fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x }
 @@@ fn & app
+
 let x = true,
     y = { ret false };
 let f = { fn (b: Bool) -> ret b };
-do  rx <- !f x,
-    ry <- do y <- !y; !f x;
+do rx <- !f x,
+   ry <- do y <- !y; !f x;
 if x: ret rx else: ret ry
 @@@ multiple bindings everywhere
+
 let not = { fn (x: Bool) -> if x: ret false else: ret true },
     and = { fn (x: Bool, y: Bool) -> if x: ret y else: ret false },
     or = { fn (x: Bool, y: Bool) -> if x: ret true else: ret y };
-do  a <- !and false true,
-    b <- !or false true,
-    c <- !not a;
+do a <- !and false true,
+   b <- !or false true,
+   c <- !not a;
 !and c b
 @@@ boolean operations
+
 let nor = { fn (x: Bool, y: Bool) -> if x: if y: ret true else: ret false else: ret false };
-do  a <- !nor false false;
+do a <- !nor false false;
 !nor a a
 @@@ boolean operations but better
+
 data Boolean where
   | True()
   | False()
@@ -34,11 +38,39 @@ match v
   )
   | False -> ret false
 @@@ data and codata syntax
+
 do x <- (fn (x: Bool) -> ret 1) true;
 do y <- (fn (x: Int) -> ret true) +123;
 do z <- (fn (x: Int) -> ret true) -123;
 ret x
 @@@ basic number
+
+data Nat where | Z() | S(Nat)
+let zero = Z();
+let suc = {
+  fn (x: Nat) -> ret S(x)
+};
+let ifz = {
+  fn (z: Bool, pred: Comp(Nat -> Ret(Bool)), x: Nat) -> (
+    match x
+    | Z() -> ret z
+    | S(x) -> !pred x
+  )
+};
+do one <- !suc zero,
+   two <- !suc one;
+let ifz = {
+  fn (x: Nat) -> (
+    !ifz false { fn (_: Nat) -> ret false } x
+  )
+};
+do two' <- !ifz two;
+do one' <- !ifz one;
+do zero' <- !ifz zero;
+if two': if one': if zero': ret true
+else: ret false else: ret false else: ret false
+@@@ nat, our favorite
+
 data Nat where | Z() | S(Nat)
 let add = {
   rec (add: Comp(Nat -> Nat -> Ret(Nat))) -> (
@@ -49,8 +81,17 @@ let add = {
     )
   )
 };
-!add S(S(Z())) S(Z())
-@@@ nat, our favorite
+let rec add': Nat -> Nat -> Ret(Nat) = (
+  fn (x: Nat, y: Nat) -> (
+    match x
+    | Z -> ret y
+    | S(x) -> !add x S(y)
+  )
+);
+do x <- !add S(S(Z())) S(Z());
+!add' x S(S(S(Z())))
+@@@ add, adder
+
 data Nat where | Z() | S(Nat)
 let rec odd: Nat -> Ret(Bool) = (
   let even = {
@@ -70,6 +111,7 @@ let rec odd: Nat -> Ret(Bool) = (
 );
 !odd S(S(S(Z())))
 @@@ odd and even
+
 data Nat where | Z() | S(Nat)
 data OddEven where | OddEven(Comp(Nat -> Ret(Bool)), Comp(Nat -> Ret(Bool)))
 let rec fp: Ret(OddEven) = (
@@ -95,3 +137,4 @@ do odd <- (
 );
 !odd S(S(S(Z())))
 @@@ odd and even, but mutual recursion
+
