@@ -15,12 +15,12 @@ impl Args {
     }
 }
 
-pub trait FmtWithArgs {
-    fn fmt_with_args(&self, args: Args) -> String;
+pub trait FmtArgs {
+    fn fmt_args(&self, args: Args) -> String;
 }
 
-pub trait FmtDefault: FmtWithArgs {
+pub trait FmtDefault: FmtArgs {
     fn fmt(&self) -> String {
-        self.fmt_with_args(Args::new(2))
+        self.fmt_args(Args::new(2))
     }
 }
