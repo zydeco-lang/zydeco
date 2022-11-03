@@ -1,8 +1,8 @@
 use super::env::Env;
 use super::builtins::*;
-use crate::parse::syntax::{
+use crate::{parse::syntax::{
     Compute, Ctor, Declare, Dtor, Program, VVar, Value,
-};
+}, utils::ann::AnnT};
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
@@ -12,7 +12,7 @@ pub struct ZProgram<Ann> {
     pub ann: Ann,
 }
 
-impl<Ann: Clone> From<Program<Ann>> for ZProgram<Ann> {
+impl<Ann: AnnT> From<Program<Ann>> for ZProgram<Ann> {
     fn from(Program { decls, comp, ann }: Program<Ann>) -> Self {
         ZProgram { decls, comp: (*comp).into(), ann }
     }
@@ -28,7 +28,7 @@ pub enum ZValue<Ann> {
     String(String, Ann),
 }
 
-impl<Ann: Clone> From<Value<Ann>> for ZValue<Ann> {
+impl<Ann: AnnT> From<Value<Ann>> for ZValue<Ann> {
     fn from(value: Value<Ann>) -> Self {
         match value {
             Value::Var(var, ann) => {
@@ -75,7 +75,7 @@ pub enum ZCompute<Ann> {
     },
     Prim {
         arity: u64,
-        body: fn(Vec<ZValue<Ann>>, Ann) -> ZValue<Ann>,
+        body: fn(Vec<ZValue<Ann>>) -> ZValue<Ann>,
         ann: Ann,
     },
     Rec {
@@ -107,7 +107,7 @@ pub enum ZCompute<Ann> {
     },
 }
 
-impl<Ann: Clone> From<Compute<Ann>> for ZCompute<Ann> {
+impl<Ann: AnnT> From<Compute<Ann>> for ZCompute<Ann> {
     fn from(compute: Compute<Ann>) -> Self {
         match compute {
             Compute::Let { binding: (name, _, def), body, ann } => {
