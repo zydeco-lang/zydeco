@@ -102,27 +102,6 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 ctx.push(x.clone(), t);
                 body.tyck(&ctx)
             }
-            // Compute::Rec { binding, body, ann } => {
-            //     let mut ctx = ctx.clone();
-            //     let (x, t, def) = binding;
-            //     let t = t.as_ref().ok_or_else(|| {
-            //         Explosion("rec must have type annotation".to_string())
-            //     })?;
-            //     ctx.push(x.clone(), *t.clone());
-            //     let tdef = def.tyck(&ctx)?;
-            //     match &tdef {
-            //         TValue::Comp(tdefe, _) => (),
-            //         _ => Err(TValExpect {
-            //             expected: "TValue::Comp".to_string(),
-            //             found: tdef.clone(),
-            //         })?,
-            //     }
-            //     t.eqv(&tdef).ok_or_else(|| TValMismatch {
-            //         expected: *t.clone(),
-            //         found: tdef,
-            //     })?;
-            //     body.tyck(&ctx)
-            // }
             Compute::Do { binding, body, ann } => {
                 let mut ctx = ctx.clone();
                 let (x, _, def) = binding;
@@ -177,11 +156,9 @@ impl<Ann: Clone> TypeCheck<Ann> for Compute<Ann> {
                 };
                 ctx.push(x.clone(), *t.clone());
                 let tbody_ = body.tyck(&ctx)?;
-                tbody.eqv(&tbody_).ok_or_else(|| {
-                    TCompMismatch {
-                        expected: tbody.clone(),
-                        found: tbody_,
-                    }
+                tbody.eqv(&tbody_).ok_or_else(|| TCompMismatch {
+                    expected: tbody.clone(),
+                    found: tbody_,
                 })?;
                 Ok(tbody)
             }

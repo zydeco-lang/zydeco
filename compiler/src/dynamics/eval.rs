@@ -1,4 +1,4 @@
-#![allow(unused, deprecated)]
+#![allow(unused)]
 
 use super::{
     env::*,
@@ -54,7 +54,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
     fn eval_value(
         &self, val: Rc<ZValue<Ann>>,
     ) -> Result<Rc<ZValue<Ann>>, EvalError<Ann>> {
-        match &*val {
+        match val.as_ref() {
             ZValue::Var(var, _) => self.get(var),
             ZValue::Thunk(thunk, None, ann) => {
                 let env = self.env.clone().push();
@@ -105,16 +105,6 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 self.insert(var, val);
                 Ok(body)
             }
-            // Rec { binding: (var, val), body, .. } => {
-            //     // TODO: this is a hack, we should have a better env
-            //     self.env.insert(var.clone(), val.clone());
-            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
-            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
-            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
-            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
-            //     self.env.insert(var.clone(), self.eval_value(val.clone())?);
-            //     Ok(body)
-            // }
             Do { binding: (var, comp), body, .. } => {
                 self.kont(body, var);
                 Ok(comp)
@@ -167,7 +157,19 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
                 }
             }
             Rec { arg, body, ann } => {
-                todo!()
+                self.insert(
+                    arg.clone(),
+                    Rc::new(Thunk(
+                        Rc::new(Rec {
+                            arg,
+                            body: body.clone(),
+                            ann: ann.clone(),
+                        }),
+                        Some(self.env.clone()),
+                        ann,
+                    )),
+                );
+                Ok(body)
             }
             App(f, arg, _) => {
                 self.call(arg.clone());
@@ -243,13 +245,14 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
         const MAX_STEPS: usize = 1000;
         let mut steps = 0;
         while steps <= MAX_STEPS {
-            match (comp, &*self.stack) {
+            match (comp, self.stack.as_ref()) {
                 (Return(val, ann), Stack::Done) => {
                     return Ok(self.eval_value(val)?.as_ref().clone());
                 }
                 (c, _) => {
                     comp = self.step(c)?.as_ref().clone();
-                    println!("{:?}", comp);
+                    println!("|- {:?}", self.env);
+                    println!("|> {:?}", comp);
                 }
             }
             steps += 1;
