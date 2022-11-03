@@ -71,29 +71,27 @@ let rec odd: Nat -> Ret(Bool) = (
 !odd S(S(S(Z())))
 @@@ odd and even
 data Nat where | Z() | S(Nat)
-data FnPair where | FnPair(Comp(Nat -> Ret(Bool)), Comp(Nat -> Ret(Bool)))
-let fp = {
-  rec (_fp: Comp(Ret(FnPair))) -> (
-    ret FnPair({
-      do _fp <- !_fp;
-      match _fp | FnPair(odd, even) -> (fn (x: Nat) -> (
-        match x
-        | Z -> ret false
-        | S(x) -> !even x
-      ))
-    }, {
-      do _fp <- !_fp;
-      match _fp | FnPair(odd, even) -> (fn (x: Nat) -> (
-        match x
-        | Z -> ret true
-        | S(x) -> !odd x
-      ))
-    })
-  )
-};
+data OddEven where | OddEven(Comp(Nat -> Ret(Bool)), Comp(Nat -> Ret(Bool)))
+let rec fp: Ret(OddEven) = (
+  ret OddEven({
+    do fp <- !fp;
+    match fp | OddEven(odd, even) -> (fn (x: Nat) -> (
+      match x
+      | Z -> ret false
+      | S(x) -> !even x
+    ))
+  }, {
+    do fp <- !fp;
+    match fp | OddEven(odd, even) -> (fn (x: Nat) -> (
+      match x
+      | Z -> ret true
+      | S(x) -> !odd x
+    ))
+  })
+);
 do odd <- (
   do fp <- !fp;
-  match fp | FnPair(odd, even) -> ret odd
+  match fp | OddEven(odd, even) -> ret { !odd }
 );
 !odd S(S(S(Z())))
 @@@ odd and even, but mutual recursion
