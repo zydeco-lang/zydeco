@@ -43,7 +43,7 @@ impl<Ann: Clone> Env<Ann> {
     }
 
     pub fn pop(&self) -> Option<Self> {
-        if let EnvStack::Entry(map, prev) = &*self.stack {
+        if let EnvStack::Entry(map, prev) = self.stack.as_ref() {
             Some(Env { stack: prev.clone(), map: map.clone() })
         } else {
             None

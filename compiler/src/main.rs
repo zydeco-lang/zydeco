@@ -67,13 +67,16 @@ fn acc_test_mode() -> Result<(), ()> {
     for name in &err_names {
         println!("- {}", name);
     }
+    println!("{}", response(err_names.is_empty()));
 
-    if err_names.is_empty() {
-        println!("\\^o^/");
-        Ok(())
+    err_names.is_empty().then_some(()).ok_or(())
+}
+
+fn response(res: bool) -> String {
+    if res {
+        format!("\\^o^/")
     } else {
-        println!("(>_<)");
-        Err(())
+        format!("(>_<)")
     }
 }
 

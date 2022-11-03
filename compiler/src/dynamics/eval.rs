@@ -115,13 +115,13 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
             }
             Force(val, _) => {
                 if let Thunk(comp, Some(env), _) =
-                    &*self.resolve_value(val.clone())?
+                    self.resolve_value(val.clone())?.as_ref()
                 {
                     self.env = env.clone();
                     Ok(comp.clone())
                 } else {
                     Err(EvalError::ErrStr(
-                        format!("Force on non-thunk value: {:?}", val.as_ref()),
+                        format!("Force on non-thunk value: {:?}", val),
                         val.ann().clone(),
                     ))
                 }
@@ -129,7 +129,8 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
             Return(val, _) => {
                 let val = self.resolve_value(val)?;
                 let stack = self.stack.to_owned();
-                if let Stack::Frame(Frame::Kont(comp, env, var), prev) = &*stack
+                if let Stack::Frame(Frame::Kont(comp, env, var), prev) =
+                    stack.as_ref()
                 {
                     self.stack = prev.clone();
                     self.env = env.pop().ok_or_else(|| {
@@ -149,9 +150,9 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
             }
             Lam { arg: var, body, ann } => {
                 let stack = self.stack.to_owned();
-                if let Stack::Frame(Frame::Call(arg), prev) = &*stack {
+                if let Stack::Frame(Frame::Call(arg), prev) = stack.as_ref() {
                     self.stack = prev.clone();
-                    self.insert(var.clone(), arg.clone());
+                    self.insert(var, arg.clone());
                     Ok(body)
                 } else {
                     Err(EvalError::ErrStr(
@@ -181,7 +182,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
             }
             If { cond, thn, els, ann } => {
                 let cond = self.resolve_value(cond)?;
-                if let Bool(cond, _) = &*cond {
+                if let Bool(cond, _) = cond.as_ref() {
                     Ok(if *cond { thn } else { els })
                 } else {
                     Err(EvalError::ErrStr(
@@ -192,7 +193,7 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
             }
             Match { scrut, cases, ann } => {
                 if let Ctor(ctor, args, _) =
-                    &*self.resolve_value(scrut.clone())?.clone()
+                    self.resolve_value(scrut.clone())?.as_ref()
                 {
                     let (_, vars, comp) = cases
                         .into_iter()
@@ -216,7 +217,9 @@ impl<'rt, Ann: Clone + std::fmt::Debug> Runtime<Ann> {
             }
             CoMatch { cases, ann } => {
                 let stack = self.stack.to_owned();
-                if let Stack::Frame(Frame::Dtor(dtor, args), prev) = &*stack {
+                if let Stack::Frame(Frame::Dtor(dtor, args), prev) =
+                    stack.as_ref()
+                {
                     self.stack = prev.clone();
                     let (_, vars, comp) = cases
                         .iter()
