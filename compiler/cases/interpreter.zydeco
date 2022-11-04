@@ -1,0 +1,88 @@
+data SynVal where
+  | Var(String)
+  | True()
+  | False()
+  | Thunk(SynComp)
+
+data SynComp where
+  | If(SynVal, SynComp, SynComp)
+  | Force(SynVal)
+  | Lam(String, SynComp)
+  | App(SynComp, SynVal)
+  | Ret(SynVal)
+  | Bind(SynComp, String, SynComp)
+
+data Env where
+  | Empty()
+  | Cons(String, SynVal, Env)
+
+data SemVal where
+  | True()
+  | False()
+  | Thunk(U SynComp)
+
+data OptionSemVal where
+  | Ok(SemVal)
+  | Err()
+
+codata SemComp where
+  .App(SemVal) : SemComp
+  .Bind()      : Ret OptionSemVal
+
+codata Interpreter where
+  .Valu(SynVal, Env) -> Ret Semval
+  .Comp(SynComp, Env) -> SemComp
+
+rec lookup: String -> Env -> Ret OptionSemVal = {
+  fn (x : String) fn (g : Env) ->
+    match g
+    | Empty() -> ret Err()
+    | Cons(y,v,g) ->
+      do b <- ! string-equal x y;
+      match b
+      | True() -> ret Ok(v)
+      | False() -> ! lookup x g
+}
+
+rec error: SemComp = {
+  comatch
+    .App(_) -> ! error
+    .Bind() -> Ret Err()
+}
+
+rec interp: Interpreter = {
+  comatch
+    .Valu(v, g) ->
+      match v
+      | Var(x) -> ! lookup g x
+      | True() -> ret True()
+      | False() -> ret False()
+      | Thunk(m) -> ret { ! interp m g }
+    .Comp(m, g) ->
+      match m
+      | If(True(), mt, mf) -> ! interp .Comp(mt, g)
+      | If(True(), mt, mf) -> ! interp .Comp(mf, g)
+      | Force(syn_val) ->
+        do v <- ! interp .Valu(syn_val, g);
+        match v
+        | Thunk(t) -> ! t
+        | _ -> ! error
+      | Ret(syn_val) ->
+        do v <- ! interp .Valu(syn_val, g);
+        comatch
+          .Bind() -> ret Ok(v)
+          _ -> ! error
+      | Bind(m, x, k) ->
+        v? <- ! interp .Comp(m, g) .Bind();
+        match v?
+        | Ok(v) -> ! interp .Comp(k, Cons(x, v, g))
+        | Err() -> ! error
+      | Lam(x, m) ->
+        comatch
+          .App(v) -> ! interp .Comp(m, Cons(x, v, g))
+          _ -> ! error
+      | App(m, v) -> ! interp .Comp(m) .App(v)
+      | _ -> ! error
+}
+
+! interp .Comp(App(Lambda("x", Ret(Var("x"))), False()), Empty())
