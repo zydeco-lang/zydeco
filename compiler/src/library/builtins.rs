@@ -23,11 +23,16 @@ fn builtin<'a>(
     Builtin { name, ztype, arity, body }
 }
 
+// Only need to change here (and provide impl) to add new builtin function
 fn std_library() -> Vec<Builtin<'static>> {
     vec![
         builtin("add", "Comp(Int -> Int -> Ret(Int))", 2, add),
         builtin("sub", "Comp(Int -> Int -> Ret(Int))", 2, sub),
         builtin("mul", "Comp(Int -> Int -> Ret(Int))", 2, mul),
+        builtin("str_append", "Comp(String -> String -> Ret(String))", 2, str_append),
+        builtin("str_eq", "Comp(String -> String -> Ret(Bool))", 2, str_eq),
+        builtin("read_line", "Comp(Ret(String))", 0, read_line),
+        builtin("write_line", "Comp(String -> Ret(()))", 1, write_line),
     ]
 }
 

@@ -26,6 +26,7 @@ pub enum ZValue<Ann: AnnT> {
     Bool(bool, Ann),
     Int(i64, Ann),
     String(String, Ann),
+    Unit(Ann),
 }
 
 impl<Ann: AnnT> From<Value<Ann>> for ZValue<Ann> {
