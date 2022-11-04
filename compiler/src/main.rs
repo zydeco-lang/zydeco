@@ -17,7 +17,7 @@ fn main() -> Result<(), ()> {
     if std::env::args().len() > 1 {
         repl_mode()
     } else {
-        acc_test_mode()?
+        acc_mode()?
     }
     Ok(())
 }
@@ -31,9 +31,10 @@ fn repl_mode() {
     }
 }
 
-fn acc_test_mode() -> Result<(), ()> {
-    const MARKER: &str = "@@@";
-    let chapter_div = ".\n".repeat(5);
+const MARKER: &str = "@@@";
+
+fn acc_mode() -> Result<(), ()> {
+    let chap_div = ".\n".repeat(5);
 
     let stdin = std::io::stdin();
     let mut buffer = String::new();
@@ -42,22 +43,20 @@ fn acc_test_mode() -> Result<(), ()> {
     for line in stdin.lines() {
         let line = line.unwrap();
         if line.starts_with(MARKER) {
-            buffer = buffer.trim().to_owned();
-            let title =
-                line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
-            println!(">>> [{}]", title);
-            println!("{}", buffer);
-            let res = Main::acc_single_run(title, &buffer);
-            if res.is_err() {
-                err_names.push(title.to_owned());
-            }
-            println!("<<< [{}]", title);
-            print!("{}", chapter_div);
-            buffer.clear()
+            single_run(
+                &mut buffer,
+                line.as_str(),
+                &mut err_names,
+                chap_div.as_str(),
+            )
         } else {
             buffer.push_str(&line);
             buffer.push_str("\n");
         }
+    }
+
+    if !buffer.trim().is_empty() {
+        single_run(&mut buffer, MARKER, &mut err_names, chap_div.as_str())
     }
 
     println!("Conclusion: {} errors", err_names.len());
@@ -67,6 +66,23 @@ fn acc_test_mode() -> Result<(), ()> {
     println!("{}", response(err_names.is_empty()));
 
     err_names.is_empty().then_some(()).ok_or(())
+}
+
+fn single_run(
+    buffer: &mut String, line: &str, err_names: &mut Vec<String>,
+    chap_div: &str,
+) {
+    *buffer = buffer.trim().to_owned();
+    let title = line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
+    println!(">>> [{}]", title);
+    println!("{}", buffer);
+    let res = Main::acc_single_run(title, &buffer);
+    if res.is_err() {
+        err_names.push(title.to_owned());
+    }
+    println!("<<< [{}]", title);
+    print!("{}", chap_div);
+    buffer.clear()
 }
 
 fn response(res: bool) -> String {
