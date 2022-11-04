@@ -33,13 +33,13 @@ impl<Ann: AnnT> Stack<Ann> {
 }
 
 #[derive(Clone)]
-struct Runtime<Ann: AnnT> {
+pub struct Runtime<Ann: AnnT> {
     stack: Rc<Stack<Ann>>,
     env: Env<Ann>,
 }
 
 impl<'rt, Ann: AnnT> Runtime<Ann> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Runtime { stack: Rc::new(Stack::new()), env: Env::new() }
     }
 
@@ -97,7 +97,7 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
         self.env = env.push();
     }
 
-    fn insert(&mut self, var: VVar<Ann>, val: Rc<ZValue<Ann>>) {
+    pub fn insert(&mut self, var: VVar<Ann>, val: Rc<ZValue<Ann>>) {
         self.env.insert(var, self.resolve_value(val).unwrap().clone());
     }
 
@@ -285,7 +285,7 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
 }
 
 pub fn eval<Ann: AnnT>(
-    comp: ZCompute<Ann>,
+    comp: ZCompute<Ann>, runtime: &mut Runtime<Ann>
 ) -> Result<ZValue<Ann>, EvalError<Ann>> {
-    Runtime::new().eval(comp)
+    runtime.eval(comp)
 }

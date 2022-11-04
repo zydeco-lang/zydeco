@@ -3,14 +3,15 @@ use std::panic::catch_unwind;
 use zydeco_compiler::{
     dynamics::{
         self,
-        syntax::{ZCompute, ZValue},
+        syntax::{ZCompute, ZValue}
     },
     parse::{
         syntax::{Compute, Program, TCompute},
         ZydecoParser,
     },
-    statics::{self, tyck::TypeCheck},
+    statics::tyck::TypeCheck,
     utils::fmt::FmtDefault,
+    library::builtins::{builtin_ctx, builtin_runtime},
 };
 
 fn main() -> Result<(), ()> {
@@ -101,7 +102,7 @@ impl Main {
     }
 
     fn tyck(prog: &Program<()>) -> Result<TCompute<()>, ()> {
-        Self::phase(|| prog.tyck(&statics::builtins::builtin_ctx()))
+        Self::phase(|| prog.tyck(&builtin_ctx()))
     }
 
     fn elab(comp: Compute<()>) -> Result<ZCompute<()>, ()> {
@@ -109,7 +110,7 @@ impl Main {
     }
 
     fn eval(comp: ZCompute<()>) -> Result<ZValue<()>, ()> {
-        Self::phase(|| dynamics::eval::eval(comp))
+        Self::phase(|| dynamics::eval::eval(comp, &mut builtin_runtime()))
     }
 
     fn phase<F, T, E>(input: F) -> Result<T, ()>
