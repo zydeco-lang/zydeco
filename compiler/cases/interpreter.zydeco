@@ -9,81 +9,97 @@ data SynComp where
   | Force(SynVal)
   | Lam(String, SynComp)
   | App(SynComp, SynVal)
-  | Ret(SynVal)
+  | Return(SynVal)
   | Bind(SynComp, String, SynComp)
 
 data Env where
   | Empty()
-  | Cons(String, SynVal, Env)
+  | Cons(String, SemVal, Env)
 
 data SemVal where
-  | True()
-  | False()
-  | Thunk(U SynComp)
+  | True'()
+  | False'()
+  | Thunk'(Comp(SemComp))
 
 data OptionSemVal where
   | Ok(SemVal)
   | Err()
 
 codata SemComp where
-  .App(SemVal) : SemComp
-  .Bind()      : Ret OptionSemVal
+  .app(SemVal) : SemComp
+  .bind()      : Ret(OptionSemVal)
 
 codata Interpreter where
-  .Valu(SynVal, Env) -> Ret Semval
-  .Comp(SynComp, Env) -> SemComp
+  .valu(SynVal, Env): Ret(OptionSemVal)
+  .comp(SynComp, Env): SemComp
 
-rec lookup: String -> Env -> Ret OptionSemVal = {
-  fn (x : String) fn (g : Env) ->
+let rec lookup: String -> Env -> Ret(OptionSemVal) =
+  fn (x : String, g : Env) ->
     match g
     | Empty() -> ret Err()
-    | Cons(y,v,g) ->
+    | Cons(y,v,g) -> (
       do b <- ! string-equal x y;
-      match b
-      | True() -> ret Ok(v)
-      | False() -> ! lookup x g
-}
+      if b: ret Ok(v)
+      else: ! lookup x g
+    );
 
-rec error: SemComp = {
+let rec error: SemComp = (
   comatch
-    .App(_) -> ! error
-    .Bind() -> Ret Err()
-}
+    .app(_) -> ! error
+    .bind() -> ret Err()
+);
 
-rec interp: Interpreter = {
+let rec interp: Interpreter =
   comatch
-    .Valu(v, g) ->
+    .valu(v, g) -> (
       match v
-      | Var(x) -> ! lookup g x
-      | True() -> ret True()
-      | False() -> ret False()
-      | Thunk(m) -> ret { ! interp m g }
-    .Comp(m, g) ->
+      | Var(x) -> ! lookup x g
+      | True() -> ret Ok(True'())
+      | False() -> ret Ok(False'())
+      | Thunk(m) -> ret Ok(Thunk'({ ! interp .comp(m, g) }))
+    )
+    .comp(m, g) -> (
       match m
-      | If(True(), mt, mf) -> ! interp .Comp(mt, g)
-      | If(True(), mt, mf) -> ! interp .Comp(mf, g)
-      | Force(syn_val) ->
-        do v <- ! interp .Valu(syn_val, g);
-        match v
-        | Thunk(t) -> ! t
-        | _ -> ! error
-      | Ret(syn_val) ->
-        do v <- ! interp .Valu(syn_val, g);
-        comatch
-          .Bind() -> ret Ok(v)
-          _ -> ! error
-      | Bind(m, x, k) ->
-        v? <- ! interp .Comp(m, g) .Bind();
+      | If(cond, mt, mf) -> (
+        match cond
+        | True() -> ! interp .comp(mt, g)
+        | False() -> ! interp .comp(mf, g)
+      )
+      | Force(syn_val) -> (
+        do v? <- ! interp .valu(syn_val, g);
         match v?
-        | Ok(v) -> ! interp .Comp(k, Cons(x, v, g))
+        | Ok(v) -> (
+          match v
+          | Thunk'(t) -> ! t
+          | True'() -> ! error
+          | False'() -> ! error
+        )
         | Err() -> ! error
-      | Lam(x, m) ->
+      )
+      | Return(syn_val) -> (
+        do v <- ! interp .valu(syn_val, g);
         comatch
-          .App(v) -> ! interp .Comp(m, Cons(x, v, g))
-          _ -> ! error
-      | App(m, v) -> ! interp .Comp(m) .App(v)
-      | _ -> ! error
-}
+          .bind() -> ret v
+          .app(_) -> ! error
+      )
+      | Bind(m, x, k) -> (
+        do v? <- ! interp .comp(m, g) .bind();
+        match v?
+        | Ok(v) -> ! interp .comp(k, Cons(x, v, g))
+        | Err() -> ! error
+      )
+      | Lam(x, m) -> (
+        comatch
+          .app(v) -> (! interp .comp(m, Cons(x, v, g)))
+          .bind() -> ret Err()
+      )
+      | App(m, v) -> (
+        do v? <- ! interp .valu(v, g);
+        match v?
+        | Ok(v) -> ! interp .comp(m, g) .app(v)
+        | Err() -> ! error
+      )
+    );
 
-! interp .Comp(App(Lambda("x", Ret(Var("x"))), False()), Empty())
+! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty()) .bind()
 @@@ interpreter
