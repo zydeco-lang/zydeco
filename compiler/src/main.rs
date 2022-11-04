@@ -36,12 +36,22 @@ const MARKER: &str = "@@@";
 fn acc_mode() -> Result<(), ()> {
     let chap_div = ".\n".repeat(5);
 
-    let stdin = std::io::stdin();
     let mut buffer = String::new();
     let mut err_names = Vec::new();
-
-    for line in stdin.lines() {
-        let line = line.unwrap();
+    
+    loop {
+        let mut line = String::new();
+        {
+            let stdin = std::io::stdin();
+            match stdin.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    return Err(());
+                }
+            }
+        }
         if line.starts_with(MARKER) {
             single_run(
                 &mut buffer,
