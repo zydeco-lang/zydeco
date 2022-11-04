@@ -17,11 +17,10 @@ fn wrap_prim<Ann: AnnT>(
 }
 
 fn add<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZValue<Ann> {
-    if let (ZValue::Int(a, _), ZValue::Int(b, _)) =
-        (args[0].clone(), args[1].clone())
-    {
-        ZValue::Int(a + b, Ann::internal(""))
-    } else {
-        ZValue::Int(0, Ann::internal(""))
+    match args.as_slice() {
+        [ZValue::Int(a, _), ZValue::Int(b, _)] => {
+            ZValue::Int(a + b, Ann::internal(""))
+        }
+        _ => unreachable!(""),
     }
 }

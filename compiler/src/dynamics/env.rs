@@ -36,9 +36,13 @@ impl<Ann: AnnT> Env<Ann> {
     }
 
     pub fn push(self) -> Self {
-        Env {
-            stack: Rc::new(EnvStack::Entry(self.map, self.stack.clone())),
-            map: HashMap::new(),
+        if self.map.len() != 0 {
+            Env {
+                stack: Rc::new(EnvStack::Entry(self.map, self.stack.clone())),
+                map: HashMap::new(),
+            }
+        } else {
+            self
         }
     }
 
