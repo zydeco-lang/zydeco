@@ -298,7 +298,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 let (data, targs) = ctx
                     .ctors
                     .get(ctor)
-                    .ok_or_else(|| Explosion(format!("unknown ctor")))?;
+                    .ok_or_else(|| Explosion(format!("unknown ctor: {}", ctor)))?;
                 for (arg, targ) in ZipEq::new(args, targs)? {
                     let t = arg.tyck(&ctx)?;
                     t.eqv(&targ).ok_or_else(|| TValMismatch {
