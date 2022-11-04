@@ -14,12 +14,12 @@ data SynComp where
 
 data Env where
   | Empty()
-  | Cons(String, SynVal, Env)
+  | Cons(String, SemVal, Env)
 
 data SemVal where
   | True'()
   | False'()
-  | Thunk'(SynComp)
+  | Thunk'(Comp(SemComp))
 
 data OptionSemVal where
   | Ok(SemVal)
@@ -30,7 +30,7 @@ codata SemComp where
   .bind()      : Ret(OptionSemVal)
 
 codata Interpreter where
-  .valu(SynVal, Env): Ret(SemVal)
+  .valu(SynVal, Env): Ret(OptionSemVal)
   .comp(SynComp, Env): SemComp
 
 let rec lookup: String -> Env -> Ret(OptionSemVal) =
@@ -39,9 +39,8 @@ let rec lookup: String -> Env -> Ret(OptionSemVal) =
     | Empty() -> ret Err()
     | Cons(y,v,g) -> (
       do b <- ! string-equal x y;
-      match b
-      | True() -> ret Ok(v)
-      | False() -> ! lookup x g
+      if b: ret Ok(v)
+      else: ! lookup x g
     );
 
 let rec error: SemComp = (
@@ -54,10 +53,10 @@ let rec interp: Interpreter =
   comatch
     .valu(v, g) -> (
       match v
-      | Var(x) -> ! lookup g x
-      | True() -> ret True'()
-      | False() -> ret False'()
-      | Thunk(m) -> ret { ! interp m g }
+      | Var(x) -> ! lookup x g
+      | True() -> ret Ok(True'())
+      | False() -> ret Ok(False'())
+      | Thunk(m) -> ret Ok(Thunk'({ ! interp .comp(m, g) }))
     )
     .comp(m, g) -> (
       match m
@@ -67,16 +66,20 @@ let rec interp: Interpreter =
         | False() -> ! interp .comp(mf, g)
       )
       | Force(syn_val) -> (
-        do v <- ! interp .valu(syn_val, g);
-        match v
-        | Thunk'(t) -> ! t
-        | True'() -> ! error
-        | False'() -> ! error
+        do v? <- ! interp .valu(syn_val, g);
+        match v?
+        | Ok(v) -> (
+          match v
+          | Thunk'(t) -> ! t
+          | True'() -> ! error
+          | False'() -> ! error
+        )
+        | Err() -> ! error
       )
       | Return(syn_val) -> (
         do v <- ! interp .valu(syn_val, g);
         comatch
-          .bind() -> ret Ok(v)
+          .bind() -> ret v
           .app(_) -> ! error
       )
       | Bind(m, x, k) -> (
@@ -88,10 +91,15 @@ let rec interp: Interpreter =
       | Lam(x, m) -> (
         comatch
           .app(v) -> (! interp .comp(m, Cons(x, v, g)))
-          .bind() -> ! error
+          .bind() -> ret Err()
       )
-      | App(m, v) -> ! interp .comp(m) .app(v)
+      | App(m, v) -> (
+        do v? <- ! interp .valu(v, g);
+        match v?
+        | Ok(v) -> ! interp .comp(m, g) .app(v)
+        | Err() -> ! error
+      )
     );
 
-! interp .comp(App(Lambda("x", Return(Var("x"))), False()), Empty())
+! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty())
 @@@ interpreter
