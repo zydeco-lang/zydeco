@@ -21,7 +21,7 @@ A proof-of-concept language adopting call-by-push-value as its evaluation order.
   - `lib.rs`: the top-level module for all compiler utilities
   - `main.rs`: a basic cli
 - `cases/`: test cases and example code
-  - `acc.vit`: accumulative test cases
+  - `acc.zydeco`: accumulative test cases
 - `tests/`: (WIP) test utils
 
 ## Running REPL
@@ -30,35 +30,45 @@ A proof-of-concept language adopting call-by-push-value as its evaluation order.
 rlwrap cargo run -- repl
 ```
 
+To conclude the program, type `@@@ <optional name><CR>`.
+
 ## Testing
 
-An accumulative test file `compiler/cases/acc.vit` is kept for adding small, incremental while convenient test cases under heavy development. To add a test case,
+An accumulative test file `compiler/cases/acc.zydeco` is kept for adding small, incremental while convenient test cases under heavy development. To add a test case,
 
 1. Type a complete Zydeco term
-2. Type `@@@` at the start of the line, followed by descriptions to the test
-3. (TBD) Type `w/...` where `...` is a sequence of single letters representing phases to run
+2. Type `@@@` at the start of the line, followed by descriptions for the test
 
 To run in terminal,
 
 ```bash
-cargo run -- < compiler/cases/acc.vit
+cargo run -- < compiler/cases/acc.zydeco
 ```
+## Features
 
-## Worklist
-
-### Feature List
-
-1. Continuation (w/ letcc?)
+1. Environment-based Evaluator
 2. Inductive and Co-inductive Types
-3. Polymorphism (System F)
-4. Product and Sum
-5. Arithmetics
+
+## Roadmap
+
+### Features
+
+1. Arithmetics
+2. String and IO
+3. Modules
+4. Continuation (w/ letcc?)
+5. Polymorphism (System F)
+6. Product and Sum
 
 ### Syntax
 
 1. Formatter (for better debug experience)
 2. Encode currying and multiple binding in AST
 3. Automatic Insertion of `ret` & `Ret()` and `{}` & `Comp()`
+
+## Pointers to the Literature
+
+Call-by-push-value by Paul Blain Levy: https://dl.acm.org/doi/10.1145/3537668.3537670
 
 ## Related Work
 

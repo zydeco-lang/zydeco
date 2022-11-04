@@ -86,3 +86,4 @@ rec interp: Interpreter = {
 }
 
 ! interp .Comp(App(Lambda("x", Ret(Var("x"))), False()), Empty())
+@@@ interpreter
