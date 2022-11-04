@@ -84,7 +84,14 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
         for decl in &self.decls {
             ctx.decl(&decl).map_err(|err| NameResolve(err))?;
         }
-        self.comp.tyck(&ctx)
+        let typ = self.comp.tyck(&ctx)?;
+        match &typ {
+            TCompute::Ret(_, _) => Ok(typ),
+            _ => Err(TCompExpect {
+                expected: format!("Ret(...)"),
+                found: typ,
+            }),
+        }
     }
 }
 
@@ -147,7 +154,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 let tbody = match t.as_ref() {
                     TValue::Comp(tbody, _) => *tbody.clone(),
                     _ => Err(TValExpect {
-                        expected: format!("Comp({{...}})"),
+                        expected: format!("Comp(...)"),
                         found: *t.clone(),
                     })?,
                 };

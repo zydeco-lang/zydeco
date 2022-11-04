@@ -1,6 +1,6 @@
 use super::syntax::ZValue;
 use crate::{parse::syntax::VVar, utils::ann::AnnT};
-use std::{collections::HashMap, rc::Rc, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, rc::Rc};
 
 pub type EnvMap<Ann> = HashMap<VVar<Ann>, Rc<ZValue<Ann>>>;
 
@@ -72,7 +72,11 @@ impl<Ann: AnnT> Debug for Env<Ann> {
             match ptr {
                 EnvStack::Empty => break,
                 EnvStack::Entry(map, prev) => {
-                    v.extend(map);
+                    v.extend(
+                        map.into_iter()
+                            .map(|(k, _v)| format!("[{}: ...]", k.name())),
+                        // .map(|(k, v)| format!("[{}: {:?}]", k.name(), v)),
+                    );
                     ptr = prev.as_ref();
                 }
             }

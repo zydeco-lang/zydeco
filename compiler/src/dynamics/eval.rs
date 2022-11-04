@@ -6,18 +6,28 @@ use crate::{
     parse::syntax::{Dtor, VVar},
     utils::ann::{AnnHolder, AnnT},
 };
-use std::{mem::replace, rc::Rc};
+use std::{mem::replace, rc::Rc, fmt::Debug};
 
 #[derive(Debug, Clone)]
 pub enum EvalError<Ann> {
     ErrStr(String, Ann),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 enum Frame<Ann: AnnT> {
     Kont(Rc<ZCompute<Ann>>, Env<Ann>, VVar<Ann>),
     Call(Rc<ZValue<Ann>>),
     Dtor(Dtor<Ann>, Vec<Rc<ZValue<Ann>>>),
+}
+
+impl<Ann: AnnT> Debug for Frame<Ann> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Frame::Kont(_, _, var) => write!(f, "Kont({})", var.name()),
+            Frame::Call(_) => write!(f, "Call"),
+            Frame::Dtor(dtor, _) => write!(f, "Dtor({})", dtor.name()),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -73,10 +83,11 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
         }
     }
 
-    fn call(&mut self, arg: Rc<ZValue<Ann>>) {
-        let arg = self.resolve_value(arg).unwrap();
+    fn call(&mut self, arg: Rc<ZValue<Ann>>) -> Result<(), EvalError<Ann>> {
+        let arg = self.resolve_value(arg)?;
         self.stack =
             Rc::new(Stack::Frame(Frame::Call(arg.clone()), self.stack.clone()));
+        Ok(())
     }
 
     fn dtor(&mut self, dtor: Dtor<Ann>, args: Vec<Rc<ZValue<Ann>>>) {
@@ -97,8 +108,11 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
         self.env = env.push();
     }
 
-    pub fn insert(&mut self, var: VVar<Ann>, val: Rc<ZValue<Ann>>) {
-        self.env.insert(var, self.resolve_value(val).unwrap().clone());
+    pub fn insert(
+        &mut self, var: VVar<Ann>, val: Rc<ZValue<Ann>>,
+    ) -> Result<(), EvalError<Ann>> {
+        self.env.insert(var, self.resolve_value(val)?.clone());
+        Ok(())
     }
 
     fn step(
@@ -107,7 +121,7 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
         use {ZCompute::*, ZValue::*};
         match comp {
             Let { binding: (var, val), body, .. } => {
-                self.insert(var, val);
+                self.insert(var, val)?;
                 Ok(body)
             }
             Do { binding: (var, comp), body, .. } => {
@@ -140,7 +154,7 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                             val.ann().clone(),
                         )
                     })?;
-                    self.insert(var.clone(), val);
+                    self.insert(var.clone(), val)?;
                     Ok(comp.clone())
                 } else {
                     Err(EvalError::ErrStr(
@@ -153,7 +167,7 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                 let stack = self.stack.to_owned();
                 if let Stack::Frame(Frame::Call(arg), prev) = stack.as_ref() {
                     self.stack = prev.clone();
-                    self.insert(var, arg.clone());
+                    self.insert(var, arg.clone())?;
                     Ok(body)
                 } else {
                     Err(EvalError::ErrStr(
@@ -186,11 +200,11 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                         Some(self.env.clone()),
                         ann,
                     )),
-                );
+                )?;
                 Ok(body)
             }
             App(f, arg, _) => {
-                self.call(arg.clone());
+                self.call(arg.clone())?;
                 Ok(f)
             }
             If { cond, thn, els, ann } => {
@@ -212,10 +226,13 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                         .into_iter()
                         .find(|(pat, ..)| pat == ctor)
                         .ok_or_else(|| {
-                            EvalError::ErrStr(format!("Ctor mismatch"), ann)
+                            EvalError::ErrStr(
+                                format!("Ctor {:?} mismatch", ctor),
+                                ann,
+                            )
                         })?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
-                        self.insert(var.clone(), arg.clone());
+                        self.insert(var.clone(), arg.clone())?;
                     }
                     Ok(comp)
                 } else {
@@ -241,7 +258,7 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                             EvalError::ErrStr(format!("Dtor mismatch"), ann)
                         })?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
-                        self.insert(var.clone(), arg.clone());
+                        self.insert(var.clone(), arg.clone())?;
                     }
                     Ok(comp.clone())
                 } else {
@@ -252,7 +269,12 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                 }
             }
             CoApp { scrut, dtor, args, .. } => {
-                self.dtor(dtor, args);
+                self.dtor(
+                    dtor,
+                    args.into_iter()
+                        .map(|val| self.resolve_value(val))
+                        .collect::<Result<_, _>>()?,
+                );
                 Ok(scrut)
             }
         }
@@ -271,8 +293,14 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                 }
                 (c, _) => {
                     comp = self.step(c)?.as_ref().clone();
-                    // println!("|- {:?}", self.env);
+                    // println!("|- {:#?}", self.env);
+                    // println!();
+                    // println!(":: {:#?}", self.stack);
+                    // println!();
                     // println!("|> {:?}", comp);
+                    // println!();
+                    // println!();
+                    // println!();
                 }
             }
             steps += 1;

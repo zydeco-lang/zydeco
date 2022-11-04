@@ -58,7 +58,7 @@ pub fn builtin_runtime() -> Runtime<()> {
                 None,
                 (),
             )),
-        );
+        ).unwrap();
     }
     runtime
 }
