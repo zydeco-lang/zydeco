@@ -14,26 +14,26 @@ pub enum EvalError<Ann> {
 }
 
 #[derive(Debug, Clone)]
-enum Frame<Ann> {
+enum Frame<Ann: AnnT> {
     Kont(Rc<ZCompute<Ann>>, Env<Ann>, VVar<Ann>),
     Call(Rc<ZValue<Ann>>),
     Dtor(Dtor<Ann>, Vec<Rc<ZValue<Ann>>>),
 }
 
 #[derive(Debug, Clone)]
-enum Stack<Ann> {
+enum Stack<Ann: AnnT> {
     Done,
     Frame(Frame<Ann>, Rc<Stack<Ann>>),
 }
 
-impl<Ann> Stack<Ann> {
+impl<Ann: AnnT> Stack<Ann> {
     fn new() -> Self {
         Stack::Done
     }
 }
 
 #[derive(Clone)]
-struct Runtime<Ann> {
+struct Runtime<Ann: AnnT> {
     stack: Rc<Stack<Ann>>,
     env: Env<Ann>,
 }

@@ -6,7 +6,7 @@ use crate::{parse::syntax::{
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct ZProgram<Ann> {
+pub struct ZProgram<Ann: AnnT> {
     pub decls: Vec<Declare<Ann>>,
     pub comp: ZCompute<Ann>,
     pub ann: Ann,
@@ -19,7 +19,7 @@ impl<Ann: AnnT> From<Program<Ann>> for ZProgram<Ann> {
 }
 
 #[derive(Clone, Debug)]
-pub enum ZValue<Ann> {
+pub enum ZValue<Ann: AnnT> {
     Var(VVar<Ann>, Ann),
     Thunk(Rc<ZCompute<Ann>>, Option<Env<Ann>>, Ann),
     Ctor(Ctor<Ann>, Vec<Rc<ZValue<Ann>>>, Ann),
@@ -55,7 +55,7 @@ impl<Ann: AnnT> From<Value<Ann>> for ZValue<Ann> {
 type Binding<Def, Ann> = (VVar<Ann>, Rc<Def>);
 
 #[derive(Clone, Debug)]
-pub enum ZCompute<Ann> {
+pub enum ZCompute<Ann: AnnT> {
     Let {
         binding: Binding<ZValue<Ann>, Ann>,
         body: Rc<ZCompute<Ann>>,

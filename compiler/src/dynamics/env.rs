@@ -1,11 +1,11 @@
 use super::syntax::ZValue;
 use crate::{parse::syntax::VVar, utils::ann::AnnT};
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, fmt::Debug};
 
 pub type EnvMap<Ann> = HashMap<VVar<Ann>, Rc<ZValue<Ann>>>;
 
-#[derive(Debug, Clone)]
-pub enum EnvStack<Ann> {
+#[derive(Clone)]
+pub enum EnvStack<Ann: AnnT> {
     Empty,
     Entry(EnvMap<Ann>, Rc<EnvStack<Ann>>),
 }
@@ -24,8 +24,8 @@ impl<Ann: AnnT> EnvStack<Ann> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Env<Ann> {
+#[derive(Clone)]
+pub struct Env<Ann: AnnT> {
     pub stack: Rc<EnvStack<Ann>>,
     pub map: EnvMap<Ann>,
 }
@@ -60,5 +60,27 @@ impl<Ann: AnnT> Env<Ann> {
 
     pub fn get(&self, var: &VVar<Ann>) -> Option<Rc<ZValue<Ann>>> {
         self.map.get(var).cloned().or_else(|| self.stack.get(var))
+    }
+}
+
+impl<Ann: AnnT> Debug for Env<Ann> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut v = Vec::new();
+        let env = self.clone().push();
+        let mut ptr = env.stack.as_ref();
+        loop {
+            match ptr {
+                EnvStack::Empty => break,
+                EnvStack::Entry(map, prev) => {
+                    v.extend(map);
+                    ptr = prev.as_ref();
+                }
+            }
+        }
+        if f.alternate() {
+            write!(f, "{:#?}", v)
+        } else {
+            write!(f, "{:?}", v)
+        }
     }
 }
