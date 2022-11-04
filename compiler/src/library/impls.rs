@@ -49,6 +49,7 @@ pub fn str_eq<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZValue<Ann> {
 pub fn read_line<Ann: AnnT>(_args: Vec<ZValue<Ann>>) -> ZValue<Ann> {
     let mut line = String::new();
     std::io::stdin().read_line(&mut line).unwrap();
+    line.pop();
     ZValue::String(line, Ann::internal(""))
 }
 
