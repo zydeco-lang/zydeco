@@ -38,38 +38,33 @@ fn acc_mode() -> Result<(), ()> {
 
     let mut buffer = String::new();
     let mut err_names = Vec::new();
-    
+    let mut cnt = 0;
+
     loop {
         let mut line = String::new();
         {
             let stdin = std::io::stdin();
             match stdin.read_line(&mut line) {
-                Ok(0) => break,
-                Ok(_) => (),
+                Ok(0) if buffer.trim().is_empty() => break,
+                Ok(n) if n != 0 && !line.starts_with(MARKER) => {
+                    buffer.push_str(&line)
+                }
+                Ok(_) => single_run(
+                    &mut buffer,
+                    line.as_str(),
+                    &mut err_names,
+                    &mut cnt,
+                    chap_div.as_str(),
+                ),
                 Err(e) => {
                     eprintln!("Error: {}", e);
                     return Err(());
                 }
             }
         }
-        if line.starts_with(MARKER) {
-            single_run(
-                &mut buffer,
-                line.as_str(),
-                &mut err_names,
-                chap_div.as_str(),
-            )
-        } else {
-            buffer.push_str(&line);
-            buffer.push_str("\n");
-        }
     }
 
-    if !buffer.trim().is_empty() {
-        single_run(&mut buffer, MARKER, &mut err_names, chap_div.as_str())
-    }
-
-    println!("Conclusion: {} errors", err_names.len());
+    println!("Conclusion: {} errors / {} tests", err_names.len(), cnt);
     for name in &err_names {
         println!("- {}", name);
     }
@@ -80,7 +75,7 @@ fn acc_mode() -> Result<(), ()> {
 
 fn single_run(
     buffer: &mut String, line: &str, err_names: &mut Vec<String>,
-    chap_div: &str,
+    cnt: &mut usize, chap_div: &str,
 ) {
     *buffer = buffer.trim().to_owned();
     let title = line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
@@ -90,6 +85,7 @@ fn single_run(
     if res.is_err() {
         err_names.push(title.to_owned());
     }
+    *cnt += 1;
     println!("<<< [{}]", title);
     print!("{}", chap_div);
     buffer.clear()
