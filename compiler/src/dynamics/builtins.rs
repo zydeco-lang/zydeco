@@ -5,6 +5,8 @@ use std::rc::Rc;
 pub fn get_builtin<Ann: AnnT>(var: &VVar<Ann>) -> Option<ZValue<Ann>> {
     if var.name() == "add" {
         Some(ZValue::Thunk(Rc::new(wrap_prim(add, 2)), None, Ann::internal("")))
+    } else if var.name() == "string-equal" {
+        Some(ZValue::Thunk(Rc::new(wrap_prim(string_equal, 2)), None, Ann::internal("")))
     } else {
         None
     }
@@ -20,6 +22,15 @@ fn add<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZValue<Ann> {
     match args.as_slice() {
         [ZValue::Int(a, _), ZValue::Int(b, _)] => {
             ZValue::Int(a + b, Ann::internal(""))
+        }
+        _ => unreachable!(""),
+    }
+}
+
+fn string_equal<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZValue<Ann> {
+    match args.as_slice() {
+        [ZValue::String(a, _), ZValue::String(b, _)] => {
+            ZValue::Bool(a == b, Ann::internal(""))
         }
         _ => unreachable!(""),
     }

@@ -10,5 +10,9 @@ pub fn builtin_ctx() -> Ctx<()> {
     let mut ctx = Ctx::new();
     ARITH_OPS
         .map(|op| ctx.push(VVar::new(op.to_string(), ()), arith_type.clone()));
+    ctx.push(
+        VVar::new(format!("string-equal"), ()),
+        TValParser::new().parse("Comp(String -> String -> Ret(Bool))").unwrap(),
+    );
     ctx
 }
