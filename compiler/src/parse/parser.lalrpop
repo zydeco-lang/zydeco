@@ -104,8 +104,8 @@ FnArg: (VVar<()>, Option<Box<TValue<()>>>) = {
 }
 
 MatchBranch: (Ctor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
-    "|" <c:Ctor> "(" <vs:Kleene<",", VVar>> ")" "->" <e:CompAtomBox> => (c, vs, e),
-    "|" <c:Ctor> "->" <e:CompAtomBox> => (c, vec!(), e),
+    "|" <c:Ctor> "(" <vs:Kleene<",", VVar>> ")" "->" <e:CompHeadBox> => (c, vs, e),
+    "|" <c:Ctor> "->" <e:CompHeadBox> => (c, vec!(), e),
 }
 
 CoMatchBranch: (Dtor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
@@ -119,7 +119,7 @@ CompHeadBox: Box<Compute<()>> = {
 }
 
 CompHead: Compute<()> = {
-    <body:CompAtomBox> "." <dtor:Dtor> "(" <args:Kleene<",", Val>> ")" => Compute::CoApp {
+    <body:CompHeadBox> "." <dtor:Dtor> "(" <args:Kleene<",", Val>> ")" => Compute::CoApp {
         body, dtor, args, ann: ()
     },
 }
@@ -191,8 +191,8 @@ Dtor: Dtor<()> = <SmallId> => Dtor::new(<>, ());
 TVar: TVar<()> = <BigId> => TVar::new(<>, ());
 VVar: VVar<()> = <SmallId> => VVar::new(<>, ());
 
-BigId: String = <r"[A-Z]([a-zA-Z0-9_-]|')*"> => String::from(<>);
-SmallId: String = <r"[_a-z]([a-zA-Z0-9_-]|')*"> => String::from(<>);
+BigId: String = <r"[A-Z]([a-zA-Z0-9_-]|'|\?)*"> => String::from(<>);
+SmallId: String = <r"[_a-z]([a-zA-Z0-9_-]|'|\?)*"> => String::from(<>);
 
 Bool: bool = {
     "true" => true,
