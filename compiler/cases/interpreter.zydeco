@@ -101,5 +101,5 @@ let rec interp: Interpreter =
       )
     );
 
-! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty())
+! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty()) .bind()
 @@@ interpreter
