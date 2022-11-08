@@ -38,7 +38,7 @@ let rec lookup: String -> Env -> Ret(OptionSemVal) =
     match g
     | Empty() -> ret Err()
     | Cons(y,v,g) -> (
-      do b <- ! string-equal x y;
+      do b <- ! str_eq x y;
       if b: ret Ok(v)
       else: ! lookup x g
     );

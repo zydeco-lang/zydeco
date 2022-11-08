@@ -32,7 +32,7 @@ fn std_library() -> Vec<Builtin<'static>> {
         builtin("str_append", "Comp(String -> String -> Ret(String))", 2, str_append),
         builtin("str_eq", "Comp(String -> String -> Ret(Bool))", 2, str_eq),
         builtin("read_line", "Comp(Ret(String))", 0, read_line),
-        builtin("write_line", "Comp(String -> Ret(()))", 1, write_line),
+        builtin("write_line", "Comp(String -> Ret(Unit))", 1, write_line),
     ]
 }
 

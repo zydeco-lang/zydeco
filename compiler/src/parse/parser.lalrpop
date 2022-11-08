@@ -181,7 +181,7 @@ pub TVal: TValue<()> = {
     "Bool" => TValue::Bool(()),
     "Int" => TValue::Int(()),
     "String" => TValue::String(()),
-    "()" => TValue::Unit(()),
+    "Unit" => TValue::Unit(()),
 }
 
 
