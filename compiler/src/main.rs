@@ -1,18 +1,6 @@
 use clap::Parser;
-use std::{io::Read, panic::catch_unwind};
-use zydeco_compiler::{
-    cli::{Cli, Commands},
-    dynamics::{
-        self,
-        syntax::{ZCompute, ZValue},
-    },
-    parse::{
-        syntax::{Compute, Program, TCompute},
-        ZydecoParser,
-    },
-    statics::{self, tyck::TypeCheck},
-    utils::fmt::FmtDefault,
-};
+use std::io::Read;
+use zydeco_compiler::cli::{Cli, Commands, Zydeco};
 
 fn main() -> Result<(), ()> {
     match Cli::parse().command.ok_or(())? {
@@ -22,7 +10,7 @@ fn main() -> Result<(), ()> {
                 .map_err(|_| ())?
                 .read_to_string(&mut buf)
                 .map_err(|_| ())?;
-            let _ = Main::run(
+            let _ = Zydeco::run(
                 file.file_name()
                     .map(|s| s.to_str().map(|s| s.to_owned()))
                     .flatten()
@@ -36,7 +24,7 @@ fn main() -> Result<(), ()> {
                 .map_err(|_| ())?
                 .read_to_string(&mut buf)
                 .map_err(|_| ())?;
-            let _ = Main::check(
+            let _ = Zydeco::check(
                 file.file_name()
                     .map(|s| s.to_str().map(|s| s.to_owned()))
                     .flatten()
@@ -48,7 +36,7 @@ fn main() -> Result<(), ()> {
             let stdin = std::io::stdin();
             for (i, line) in stdin.lines().enumerate() {
                 let line = line.unwrap();
-                let res = Main::run(format!("#{}", i), &line);
+                let res = Zydeco::run(format!("#{}", i), &line);
                 println!("{}", response(res.is_ok()));
             }
         }
@@ -107,7 +95,7 @@ fn single_run(
     let title = line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
     println!(">>> [{}]", title);
     println!("{}", buffer);
-    let res = Main::run(title.to_owned(), &buffer);
+    let res = Zydeco::run(title.to_owned(), &buffer);
     if res.is_err() {
         err_names.push(title.to_owned());
     }
@@ -122,81 +110,5 @@ fn response(res: bool) -> String {
         format!("\\^o^/")
     } else {
         format!("(>_<)")
-    }
-}
-
-struct Main {
-    header: Box<dyn Fn(&'static str) -> ()>,
-}
-
-impl Main {
-    pub fn run(
-        title: String, buffer: &str,
-    ) -> Result<(TCompute<()>, ZValue<()>), ()> {
-        let main = Main {
-            header: Box::new(move |name| {
-                println!("=== [{}] <{}>", title, name)
-            }),
-        };
-        let program = main.parse(&buffer)?;
-        let ty = main.tyck(&program)?;
-        let comp = main.elab(*program.comp)?;
-        let zvalue = main.eval(comp)?;
-        Ok((ty, zvalue))
-    }
-
-    pub fn check(
-        title: String, buffer: &str,
-    ) -> Result<(TCompute<()>, ()), ()> {
-        let main = Main {
-            header: Box::new(move |name| {
-                println!("=== [{}] <{}>", title, name)
-            }),
-        };
-        let program = main.parse(&buffer)?;
-        let ty = main.tyck(&program)?;
-        Ok((ty, ()))
-    }
-
-    fn parse(&self, input: &str) -> Result<Program<()>, ()> {
-        (self.header)("parse");
-        Self::phase(|| ZydecoParser::new().parse(input))
-    }
-
-    fn tyck(&self, prog: &Program<()>) -> Result<TCompute<()>, ()> {
-        (self.header)("tyck");
-        Self::phase(|| prog.tyck(&statics::builtins::builtin_ctx()))
-    }
-
-    fn elab(&self, comp: Compute<()>) -> Result<ZCompute<()>, ()> {
-        (self.header)("elab");
-        Self::phase(|| -> Result<ZCompute<()>, ()> { Ok(comp.into()) })
-    }
-
-    fn eval(&self, comp: ZCompute<()>) -> Result<ZValue<()>, ()> {
-        (self.header)("eval");
-        Self::phase(|| dynamics::eval::eval(comp))
-    }
-
-    fn phase<F, T, E>(input: F) -> Result<T, ()>
-    where
-        F: FnOnce() -> Result<T, E> + std::panic::UnwindSafe,
-        T: FmtDefault,
-        E: std::fmt::Debug,
-    {
-        std::panic::set_hook(Box::new(|_| {}));
-        catch_unwind(input)
-            .or_else(|err| {
-                println!("Panic: {:?}", err);
-                Err(())
-            })?
-            .and_then(|res| {
-                println!("{}", res.fmt());
-                Ok(res)
-            })
-            .or_else(|err| {
-                println!("Error: {:?}", err);
-                Err(())
-            })
     }
 }
