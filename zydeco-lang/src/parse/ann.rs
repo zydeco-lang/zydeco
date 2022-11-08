@@ -11,6 +11,7 @@ impl<Ann: AnnT> AnnHolder<Ann> for Value<Ann> {
             Value::Bool(_, ann) => ann,
             Value::Int(_, ann) => ann,
             Value::String(_, ann) => ann,
+            Value::Triv(ann) => ann,
         }
     }
 }

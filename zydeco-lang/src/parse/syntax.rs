@@ -5,6 +5,8 @@ pub struct Program<Ann> {
     pub ann: Ann,
 }
 
+pub type Binding<Ty, Def, Ann> = (VVar<Ann>, Option<Box<Ty>>, Box<Def>);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declare<Ann> {
     Data {
@@ -17,6 +19,11 @@ pub enum Declare<Ann> {
         dtors: Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>,
         ann: Ann,
     },
+    Define {
+        public: bool,
+        binding: Binding<TValue<Ann>, Value<Ann>, Ann>,
+        ann: Ann,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,9 +34,8 @@ pub enum Value<Ann> {
     Bool(bool, Ann),
     Int(i64, Ann),
     String(String, Ann),
+    Triv(Ann),
 }
-
-type Binding<Ty, Def, Ann> = (VVar<Ann>, Option<Box<Ty>>, Box<Def>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Compute<Ann> {

@@ -318,6 +318,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
             Value::Bool(_, ann) => Ok(TValue::Bool(ann.clone())),
             Value::Int(_, ann) => Ok(TValue::Int(ann.clone())),
             Value::String(_, ann) => Ok(TValue::String(ann.clone())),
+            Value::Triv(ann) => Ok(TValue::Unit(ann.clone())),
         }
     }
 }

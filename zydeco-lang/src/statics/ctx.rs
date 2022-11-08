@@ -84,6 +84,7 @@ impl<Ann: AnnT> Ctx<Ann> {
                 }
                 Ok(())
             }
+            Declare::Define { .. } => todo!(),
         }
     }
 }

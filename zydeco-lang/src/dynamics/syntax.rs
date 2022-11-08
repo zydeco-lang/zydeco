@@ -26,7 +26,7 @@ pub enum ZValue<Ann: AnnT> {
     Bool(bool, Ann),
     Int(i64, Ann),
     String(String, Ann),
-    Unit(Ann),
+    Triv(Ann),
 }
 
 impl<Ann: AnnT> From<Value<Ann>> for ZValue<Ann> {
@@ -44,6 +44,7 @@ impl<Ann: AnnT> From<Value<Ann>> for ZValue<Ann> {
             Value::Bool(b, ann) => ZValue::Bool(b, ann),
             Value::Int(i, ann) => ZValue::Int(i, ann),
             Value::String(s, ann) => ZValue::String(s, ann),
+            Value::Triv(ann) => ZValue::Triv(ann),
         }
     }
 }

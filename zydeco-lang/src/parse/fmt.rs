@@ -23,6 +23,7 @@ impl<Ann> FmtArgs for Value<Ann> {
             Value::Bool(b, _) => format!("{}", b),
             Value::Int(n, _) => format!("{}", n),
             Value::String(s, _) => format!("\"{}\"", s),
+            Value::Triv(_) => format!("()"),
         }
     }
 }

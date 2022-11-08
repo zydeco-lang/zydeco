@@ -60,5 +60,5 @@ pub fn write_line<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZValue<Ann> {
         }
         _ => unreachable!(""),
     }
-    ZValue::Unit(Ann::internal(""))
+    ZValue::Triv(Ann::internal(""))
 }

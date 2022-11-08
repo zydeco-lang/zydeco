@@ -24,6 +24,16 @@ Decl: Declare<()> = {
         dtors,
         ann: (),
     },
+    "define" <binding:BindVal<"=">> ";" => Declare::Define {
+        public: false,
+        binding,
+        ann: (),
+    },
+    "pub" "define" <binding:BindVal<"=">> ";" => Declare::Define {
+        public: true,
+        binding,
+        ann: (),
+    },
 }
 
 CtorBranch: (Ctor<()>, Vec<TValue<()>>) = {
@@ -46,12 +56,12 @@ CompBox: Box<Compute<()>> = {
 }
 
 Comp: Compute<()> = {
-    "let" <bindings: Once<",", BindVal<"=">>> ";" <body:CompBox> => {
+    "let" <bindings:Once<",", BindVal<"=">>> ";" <body:CompBox> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Let {
             binding, body, ann: ()
         }))
     },
-    "let" "rec" <binding: BindComp<"=">> ";" <e:CompBox> => {
+    "let" "rec" <binding:BindComp<"=">> ";" <e:CompBox> => {
         let (x, tcomp, body) = binding;
         let tval = tcomp.and_then(|tcomp| Some(Box::new(TValue::Comp(tcomp, ()))));
         Compute::Let {
@@ -62,7 +72,7 @@ Comp: Compute<()> = {
             ann: (),
         }
     },
-    "do" <bindings: Once<",", BindComp<"<-">>> ";" <body:CompBox> => {
+    "do" <bindings:Once<",", BindComp<"<-">>> ";" <body:CompBox> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Do {
             binding, body, ann: ()
         }))
@@ -159,7 +169,8 @@ Val: Value<()> = {
     <ctor:Ctor> "(" <vs:Kleene<",", <Val>>> ")" => Value::Ctor(ctor, vs, ()),
     <b:Bool> => Value::Bool(b, ()),
     <n:Int> => Value::Int(n,()),
-    <s:String> => Value::String(s,()),
+    <s:Str> => Value::String(s,()),
+    "(" ")" => Value::Triv(()),
 }
 
 
@@ -202,7 +213,7 @@ Bool: bool = {
 
 Int: i64 = <s:r"[\+-]?[0-9]+"> => s.parse().unwrap();
 
-String: String = <s:r#""[^"\\]*(?:\\.[^"\\]*)*""#> => 
+Str: String = <s:r#""[^"\\]*(?:\\.[^"\\]*)*""#> => 
     s[1..s.len()-1].to_string().replace("\\\"", "\"");
 
 
@@ -212,20 +223,20 @@ Kleene<Sym, T>: Vec<T> = {
     Sym? => vec![],
     Once<Sym, T>,
 }
-Once<Sym, T> : Vec<T> = {
+Once<Sym, T>: Vec<T> = {
     <e:T> <mut v:Rhs<Sym, T>*> <s:(<Sym>)?> => {
         v.insert(0, e);
         v
     }
 }
 
-Lhs<L, R> : L = {
+Lhs<L, R>: L = {
     <l:L> <r:R> => l,
 }
-Rhs<L, R> : R = {
+Rhs<L, R>: R = {
     <l:L> <r:R> => r,
 }
 
-Boxed<T> : Box<T> = {
+Boxed<T>: Box<T> = {
     T => Box::new(<>)
 }
