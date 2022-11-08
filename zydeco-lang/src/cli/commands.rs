@@ -13,7 +13,7 @@ pub enum Commands {
     /// Run a zydeco program
     Run {
         /// Path to the file to run
-        #[arg(short, long, value_name = "FILE")]
+        #[arg(value_name = "FILE")]
         file: PathBuf,
         #[arg(long, default_value_t = false)]
         dry: bool,
@@ -21,7 +21,7 @@ pub enum Commands {
     /// Check a zydeco program
     Check {
         /// Path to the file to check
-        #[arg(short, long, value_name = "FILE")]
+        #[arg(value_name = "FILE")]
         file: PathBuf,
     },
     /// Start a REPL

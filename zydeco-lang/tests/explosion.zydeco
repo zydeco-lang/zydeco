@@ -1,4 +1,3 @@
 let loop = { rec (loop: Comp(Ret(Bool))) -> !loop };
 !loop
-@@@ non-halt: "My name is megumi!"
-
+@@@ non-halt megumi

@@ -1,8 +1,8 @@
 [package]
-name = "zydeco_compiler"
+name = "zydeco-lang"
 version = "0.1.0"
 edition = "2021"
-description = "A compiler for zydeco, a call-by-push-value language"
+description = "A language implementation for zydeco, a call-by-push-value language"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

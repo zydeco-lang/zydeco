@@ -1,0 +1,47 @@
+ret { fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x }
+@@@ fn & app
+
+let x = true,
+    y = { ret false };
+let f = { fn (b: Bool) -> ret b };
+do rx <- !f x,
+   ry <- do y <- !y; !f x;
+if x: ret rx else: ret ry
+@@@ multiple bindings everywhere
+
+(fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x) true { fn (x: Bool) -> ret x }
+@@@ fn & app, x2
+
+let tt = true,
+    ff = false;
+let not_ = {
+    let not__ = { fn (x: Bool) -> if x: ret ff else: ret tt };
+    fn (x: Bool) -> !not__ x
+};
+let not = { !not_ };
+let a = 1;
+do  b <- !not tt;
+ret a
+@@@ thunk
+
+data Boolean where
+  | True()
+  | False()
+codata And where
+  .then_(): Ret(Bool)
+  .else_(): Ret(Bool)
+let v = True();
+match v
+  | True -> (
+    (comatch
+      .then_ -> ret true
+      .else_ -> ret false).then_()
+  )
+  | False -> ret false
+@@@ data and codata syntax
+
+do x <- (fn (x: Bool) -> ret 1) true;
+do y <- (fn (x: Int) -> ret true) +123;
+do z <- (fn (x: Int) -> ret true) -123;
+ret x
+@@@ basic number
