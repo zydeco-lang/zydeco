@@ -8,21 +8,29 @@ A proof-of-concept language adopting call-by-push-value as its evaluation order.
 .
 ├── Cargo.lock
 ├── Cargo.toml
-├── compiler
-│  ├── cases
+├── zydeco
+├── zydeco-lang
 │  ├── src
 │  └── tests
 └── README.md
 ```
 
-`/compiler/`: compiler for Zydeco; uses lalrpop as its parser generator.
+`/zydeco/`: interesting test cases and standard libraries in zydeco.
+
+`/zydeco-lang/`: an implementation for Zydeco language; uses lalrpop as its parser generator.
 
 - `src/`:
   - `lib.rs`: the top-level module for all compiler utilities
   - `main.rs`: a basic cli
-- `cases/`: test cases and example code
-  - `acc.zydeco`: accumulative test cases
-- `tests/`: (WIP) test utils
+- `tests/`: test cases and example code
+
+## Running Zydeco
+
+```bash
+cargo run -- run zydeco/interpreter.zydeco
+```
+
+This runs an "interpreter" of zydeco, written in zydeco.
 
 ## Running REPL
 
@@ -34,7 +42,7 @@ To conclude the program, type `@@@ <optional name><CR>`.
 
 ## Testing
 
-An accumulative test file `compiler/cases/acc.zydeco` is kept for adding small, incremental while convenient test cases under heavy development. To add a test case,
+An accumulative test file `zydeco-lang/tests/basics.zydeco` is kept for adding small, incremental while convenient test cases under heavy development. To add a test case,
 
 1. Type a complete Zydeco term
 2. Type `@@@` at the start of the line, followed by descriptions for the test
@@ -42,29 +50,30 @@ An accumulative test file `compiler/cases/acc.zydeco` is kept for adding small, 
 To run in terminal,
 
 ```bash
-cargo run -- < compiler/cases/acc.zydeco
+cargo run -- test < zydeco-lang/tests/basics.zydeco
 ```
+
 ## Features
 
 1. Environment-based Evaluator
 2. Inductive and Co-inductive Types
+3. String and IO
 
 ## Roadmap
 
 ### Features
 
 1. Arithmetics
-2. String and IO
-3. Modules
-4. Continuation (w/ letcc?)
-5. Polymorphism (System F)
-6. Product and Sum
+2. Modules
+3. Continuation (w/ letcc?)
+4. Polymorphism (System F)
+5. Product and Sum (as builtin)
 
 ### Syntax
 
 1. Formatter (for better debug experience)
 2. Encode currying and multiple binding in AST
-3. Automatic Insertion of `ret` & `Ret()` and `{}` & `Comp()`
+3. Automatic Insertion of `ret` & `Ret()`
 
 ## Pointers to the Literature
 
