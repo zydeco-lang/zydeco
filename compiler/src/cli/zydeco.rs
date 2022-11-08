@@ -3,11 +3,12 @@ use crate::{
         self,
         syntax::{ZCompute, ZValue},
     },
+    library::builtins,
     parse::{
         syntax::{Compute, Program, TCompute},
         ZydecoParser,
     },
-    statics::{self, tyck::TypeCheck},
+    statics::tyck::TypeCheck,
     utils::fmt::FmtDefault,
 };
 use std::panic;
@@ -52,7 +53,7 @@ impl Zydeco {
 
     fn tyck(&self, prog: &Program<()>) -> Result<TCompute<()>, ()> {
         (self.header)("tyck");
-        Self::phase(|| prog.tyck(&statics::builtins::builtin_ctx()))
+        Self::phase(|| prog.tyck(&builtins::builtin_ctx()))
     }
 
     fn elab(&self, comp: Compute<()>) -> Result<ZCompute<()>, ()> {
@@ -62,7 +63,9 @@ impl Zydeco {
 
     fn eval(&self, comp: ZCompute<()>) -> Result<ZValue<()>, ()> {
         (self.header)("eval");
-        Self::phase(|| dynamics::eval::eval(comp))
+        Self::phase(|| {
+            dynamics::eval::eval(comp, &mut builtins::builtin_runtime())
+        })
     }
 
     fn phase<F, T, E>(input: F) -> Result<T, ()>

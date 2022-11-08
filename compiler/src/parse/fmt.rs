@@ -150,6 +150,7 @@ impl<Ann> FmtArgs for TValue<Ann> {
             TValue::Bool(_) => format!("Bool"),
             TValue::Int(_) => format!("Int"),
             TValue::String(_) => format!("String"),
+            TValue::Unit(_) => format!("()"),
         }
     }
 }

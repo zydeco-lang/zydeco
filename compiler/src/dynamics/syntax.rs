@@ -1,8 +1,8 @@
 use super::env::Env;
-use super::builtins::*;
-use crate::{parse::syntax::{
-    Compute, Ctor, Declare, Dtor, Program, VVar, Value,
-}, utils::ann::AnnT};
+use crate::{
+    parse::syntax::{Compute, Ctor, Declare, Dtor, Program, VVar, Value},
+    utils::ann::AnnT,
+};
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
@@ -26,17 +26,13 @@ pub enum ZValue<Ann: AnnT> {
     Bool(bool, Ann),
     Int(i64, Ann),
     String(String, Ann),
+    Unit(Ann),
 }
 
 impl<Ann: AnnT> From<Value<Ann>> for ZValue<Ann> {
     fn from(value: Value<Ann>) -> Self {
         match value {
-            Value::Var(var, ann) => {
-                match get_builtin(&var) {
-                    Some(builtin) => builtin,
-                    None => ZValue::Var(var, ann),
-                }
-            },
+            Value::Var(var, ann) => ZValue::Var(var, ann),
             Value::Thunk(compute, ann) => {
                 ZValue::Thunk(Rc::new((*compute).into()), None, ann)
             }
@@ -164,12 +160,18 @@ impl<Ann: AnnT> From<Compute<Ann>> for ZCompute<Ann> {
                     .collect(),
                 ann,
             },
-            Compute::CoApp { body: scrut, dtor, args, ann } => ZCompute::CoApp {
-                scrut: Rc::new((*scrut).into()),
-                dtor,
-                args: args.into_iter().map(Into::into).map(Rc::new).collect(),
-                ann,
-            },
+            Compute::CoApp { body: scrut, dtor, args, ann } => {
+                ZCompute::CoApp {
+                    scrut: Rc::new((*scrut).into()),
+                    dtor,
+                    args: args
+                        .into_iter()
+                        .map(Into::into)
+                        .map(Rc::new)
+                        .collect(),
+                    ann,
+                }
+            }
         }
     }
 }

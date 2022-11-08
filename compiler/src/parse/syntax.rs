@@ -86,6 +86,7 @@ pub enum TValue<Ann> {
     Bool(Ann),
     Int(Ann),
     String(Ann),
+    Unit(Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

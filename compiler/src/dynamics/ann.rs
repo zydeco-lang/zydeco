@@ -10,6 +10,7 @@ impl<Ann: AnnT> AnnHolder<Ann> for ZValue<Ann> {
             ZValue::Bool(_, ann) => ann,
             ZValue::Int(_, ann) => ann,
             ZValue::String(_, ann) => ann,
+            ZValue::Unit(_) => todo!(),
         }
     }
 }
