@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod parse;
 pub mod statics;
 pub mod dynamics;
