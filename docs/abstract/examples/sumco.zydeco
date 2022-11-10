@@ -1,0 +1,17 @@
+codata Sum where
+  .more(Int): Sum
+  .done(): F(Int)
+
+let sum = {
+  rec (sum: U(Sum)) ->
+    comatch
+      .more(x) ->
+        ( comatch
+          .more(y) ->
+            ( do z <- x + y;
+              ! sum .more(z) )
+          .done() -> ret x )
+      .done() -> ret 0
+};
+
+! sum .more(1) .more(2) .done()

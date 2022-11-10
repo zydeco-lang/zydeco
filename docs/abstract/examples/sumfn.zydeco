@@ -1,0 +1,15 @@
+data Sum where
+  | Done()
+  | More (Int, Sum)
+
+let sum = {
+  rec (sum: U(Sum -> F(Int))) ->
+    fn (xs: Sum) ->
+      match xs
+        | Done() -> ret 0
+        | More (x, xs) ->
+          ( do y <- ! sum xs;
+            x + y )
+};
+
+! sum (More (1, More (2, Done())))

@@ -1,0 +1,6 @@
+data ListInt where
+  | Nil()
+  | Cons(Int, ListInt)
+
+let f : U(Int -> F(Int)) = { fn (x: Int) -> x * 2 };
+let l : ListInt = Cons(3, Cons(2, Cons(1, Nil())));

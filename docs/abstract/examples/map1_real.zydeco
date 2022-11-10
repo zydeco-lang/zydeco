@@ -1,0 +1,21 @@
+data ListInt where
+  | Nil()
+  | Cons(Int, ListInt)
+let f : U(Int -> F(Int)) =
+  { fn (x: Int) -> x * 2 };
+let l : ListInt =
+  Cons(3, Cons(2, Cons(1, Nil())));
+let map1 = {
+  rec (map: U(U(Int -> F(Int))
+    -> ListInt -> F(ListInt))) ->
+    fn (f: U(Int -> F(Int))) ->
+      fn (l: ListInt) ->
+        match l
+          | Nil() -> ret Nil()
+          | Cons(x, xs) -> (
+            do x <- !f x;
+            do xs <- !map f xs;
+            ret Cons(x, xs)
+          )
+};
+!map1 f l
