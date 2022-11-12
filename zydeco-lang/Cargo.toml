@@ -1,6 +1,6 @@
 [package]
 name = "zydeco-lang"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 description = "A language implementation for zydeco, a call-by-push-value language"
 
