@@ -12,7 +12,7 @@
 
 \textit{Call-By-Push-Value(CBPV)}, introduced by Paul Blain Levy, is a programming paradigm that exploits stack for passing arguments when calling functions. By explicitly separating values and computations under the slogan "a value is, a computation does", CBPV has shown great potential for expressing computations. Though motivated by reconciling call-by-name (CBN) and call-by-value (CBV), CBPV ended up developing a powerful stack semantics that is ideal for expressing evaluation order and side effects.
 
-The goal of this project is to experiment with the potential of call-by-push-value. To be specific, the project aims to encode the status of the stack, i.e. the status of the computation currently being performed, into the type system. The significance of codata, which is the dual of the algebraic datatype, is recognized and utilized as a good fit for manipulating the stack by explicitly doing pattern matching on the stack. By leveraging the stack semantics, Zydeco aims to be a functional programming language that is easy for the programmer to reason about the stack and operate on it directly.
+The goal of this project is to experiment with the potential of call-by-push-value. To be specific, the project aims to encode the status of the stack, i.e. the status of the computation currently being performed, into the type system. The significance of codatatype, which is the dual of the algebraic datatype, is recognized and utilized as a good fit for manipulating the stack by explicitly doing pattern matching on the stack. By leveraging the stack semantics, Zydeco aims to be a functional programming language that is easy for the programmer to reason about the stack and operate on it directly.
 
 \section{Encoding Calling Conventions In Types}
 
@@ -47,11 +47,11 @@ Adding thunks significantly changes our type system by bringing in $U$ types - t
 
 As an illuminating example, Listing \ref{code: map}. demonstrates two versions of $\texttt{map}$ functions: the first one demands both $\texttt{f}$ and the list passed in to start computing, while the second one is curried and can return a concrete mapper that can be cached and applied later. Note that the types now indicate the computational properties of the function.
 
-\section{Functions as Computations; Functions are Codata}
+\section{Functions as Computations; Functions are Codatatypes}
 
 A subtle question may have arisen from the type system described above: why is the arrow type listed as a computation type instead of a value type? Indeed, functions are treated as values in most languages because functions don't step. For example, in CBV languages it's a common technique to wrap a term with a function that takes a unit to achieve the effect of a thunk. Nevertheless, it's not the case in CBPV. In CBPV, arguments are pushed onto the stack and when the function is evaluated, it takes arguments from the top of the stack, which is exactly where Call-By-Push-Value gets its name. Since the functions do step in CBPV, we should treat them as computations. The ``function'' in CBV  is now just a ``thunk'' in CBPV.
 
-Moreover, we can see that functions are codata types. Codata type is a generalization of function, which does a pattern matching on the stack top. We can see how functions are encoded as codata types in Listing \ref{code: codata}.
+Moreover, we can see that function is codatatype. Codatatype is a generalization of function, which does a pattern matching on the stack top. We can see how the function type is encoded as codatatype in Listing \ref{code: codata}.
 
 \begin{listing}[ht]
     \begin{multicols}{2}
@@ -60,22 +60,22 @@ Moreover, we can see that functions are codata types. Codata type is a generaliz
         \inputminted{Haskell}{examples/fn_multi.zydeco}
         \vfill
     \end{multicols}
-    \captionof{listing}{Function as codata type}
+    \captionof{listing}{Functions are codatatypes}
     \label{code: codata}
 \end{listing}
 
 To write a function is just removing the argument from the stack top and doing the computation. Here \texttt{.arg} is called a destructor. To call a function is just pushing the argument onto the stack top. For a variadic function, two destructors are needed: one to push more arguments to the stack, and the other to conclude the function call. A \texttt{comatch} structure will pop the stack and see whether it's \texttt{.more} or \texttt{.done}.
 
-The roles of the ``function'' type in the CBV sense are now separated into thunk and codata. Thunk is responsible for suspending the computation, and codata is responsible for stack manipulation. The function type in CBPV is just a syntax sugar for codata.
+The roles of the ``function'' type in the CBV sense are now separated into thunk and codatatype. Thunk is responsible for suspending the computation, and codatatype is responsible for stack manipulation. The function type in CBPV is just a syntax sugar for codatatype.
 
-\section{Manipulating Stack With Codata}
+\section{Manipulating Stack With Codatatype}
 
+Codatatype plays a key role in characterizing computations. Codatatype is the dual of datatype. Same as function type, it is a negative type where its introduction form pops from the stack and its elimination form pushes to the stack.
 % \begin{listing}[h]
 %     \inputminted{Haskell}{examples/abort.zydeco}
-%     \captionof{listing}{Function as codata type}
+%     \captionof{listing}{Function as codatatype}
 %     \label{code: abort}
 % \end{listing}
-
 \begin{listing}[ht]
     \begin{multicols}{2}
         \inputminted{Haskell}{examples/sumfn.zydeco}
@@ -83,18 +83,22 @@ The roles of the ``function'' type in the CBV sense are now separated into thunk
         \inputminted{Haskell}{examples/sumco.zydeco}
         \vfill
     \end{multicols}
-    \captionof{listing}{Comparing a tail-recursive sum function with a sum in comatch}
+    \captionof{listing}{Comparing a tail-recursive sum function with a sum implemented in \texttt{comatch}}
     \label{code: sum}
 \end{listing}
+
+Listing \ref{code: sum} shows a tail-recursive sum function that uses datatype to encode a linked list and a sum implemented in \texttt{comatch}, the introduction form of codatatype, that uses the stack directly. The main difference between the two approaches is that by explicitly pattern matching on the stack, the \texttt{comatch} version is more concise and direct. All states are maintained on the stack and the traceback is transparent to the user.
 
 % \section{Compilation}
 
 \section{Previous Work on Call-By-Push-Value}
 
+In his thesis \textit{Gradual Type Theory}, Max S. New et al. utilized call-by-push-value 
+
 \section{Current Status and Future Goals}
 
-Currently, the project is still at an early stage. By far our implementation covers the parser and a small type checker supporting monomorphic data and codata types, and a CEK-machine style evaluator.
+Currently, the project is still at an early stage. By far our implementation covers the parser and a small type checker supporting monomorphic datatype and codatatype, and a CEK-machine style evaluator.
 
-The ultimate goal is to make Zydeco a research language for CBPV as well as an ideal intermediate representation and compilation target. We plan to explore the possibility of extending the language with more features. On the front-end side, adding parametric polymorphism (à la System $F$) and type constructors (à la System $F_\omega$) would be natural extensions. As for compilation, it might be interesting to perform optimization passes on CPBV and see how much effort can be saved by changing the calling convention, which potentially becomes friendlier to the compiler.
+The ultimate goal is to make Zydeco a research language for CBPV as well as an ideal intermediate representation and compilation target. The well-defined operational semantics makes CBPV an ideal target for embedding both CBV and CBN programs, even effectful programs. We also plan to explore the possibility of extending the language with more features. On the front-end side, adding parametric polymorphism (à la System $F$) and type constructors (à la System $F_\omega$) would be natural extensions. As for compilation, it might be interesting to perform optimization passes on CPBV and see how much effort can be saved by changing the calling convention, which potentially becomes friendlier to the compiler.
 
 \end{document}

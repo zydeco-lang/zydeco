@@ -5,6 +5,6 @@ codata Fn where
 ( rec (abort: U(Int -> Fn)) ->
     fn (x: Int) ->
       comatch
-      .app(_) -> ! abort x
-      .return() -> ret x
+      | .app(_) -> ! abort x
+      | .return() -> ret x
 ) 0 .app(1) .app(2) .app(3) .return()

@@ -5,11 +5,11 @@ codata Sum where
 let sum = {
   rec (sum: U(Sum)) ->
     comatch
-    .done() -> ret 0
-    .more(x) ->
+    | .done() -> ret 0
+    | .more(x) ->
       ( comatch
-        .done() -> ret x 
-        .more(y) ->
+        | .done() -> ret x 
+        | .more(y) ->
           ( do z <- x + y;
             ! sum .more(z) ) )
 };
