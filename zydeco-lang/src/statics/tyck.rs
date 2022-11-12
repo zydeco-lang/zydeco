@@ -70,6 +70,46 @@ pub enum TypeCheckError<Ann> {
     Explosion(String),
 }
 
+use std::fmt;
+impl<Ann> fmt::Display for TypeCheckError<Ann>
+where
+    Ann: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UnboundVar { var, ann } => {
+                write!(f, "Unbound variable {} (Info: {:?})", var, ann)
+            }
+            TValMismatch { expected, found } => write!(
+                f,
+                "Type mismatch, expected {:?}, but got {:?}",
+                expected, found
+            ),
+
+            TValExpect { expected, found } => write!(
+                f,
+                "Type mismatch, expected {:?}, but got {:?}",
+                expected, found
+            ),
+            TCompMismatch { expected, found } => write!(
+                f,
+                "Type mismatch, expected {:?}, but got {:?}",
+                expected, found
+            ),
+            TCompExpect { expected, found } => write!(
+                f,
+                "Type mismatch, expected {:?}, but got {:?}",
+                expected, found
+            ),
+            InconsistentBranches(types) => {
+                write!(f, "Branches have mismatched types: {:?}", types)
+            }
+            NameResolve(nr) => write!(f, "{}", nr),
+            Explosion(s) => write!(f, "explosion, whatever that means: {}", s),
+        }
+    }
+}
+
 use TypeCheckError::*;
 
 pub trait TypeCheck<Ann> {
@@ -87,10 +127,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
         let typ = self.comp.tyck(&ctx)?;
         match &typ {
             TCompute::Ret(_, _) => Ok(typ),
-            _ => Err(TCompExpect {
-                expected: format!("Ret(...)"),
-                found: typ,
-            }),
+            _ => Err(TCompExpect { expected: format!("Ret(...)"), found: typ }),
         }
     }
 }
@@ -302,10 +339,9 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 Ok(TValue::Comp(Box::new(t), ann.clone()))
             }
             Value::Ctor(ctor, args, ann) => {
-                let (data, targs) = ctx
-                    .ctors
-                    .get(ctor)
-                    .ok_or_else(|| Explosion(format!("unknown ctor: {}", ctor)))?;
+                let (data, targs) = ctx.ctors.get(ctor).ok_or_else(|| {
+                    Explosion(format!("unknown ctor: {}", ctor))
+                })?;
                 for (arg, targ) in ZipEq::new(args, targs)? {
                     let t = arg.tyck(&ctx)?;
                     t.eqv(&targ).ok_or_else(|| TValMismatch {

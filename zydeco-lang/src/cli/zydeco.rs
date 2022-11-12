@@ -17,6 +17,14 @@ pub struct Zydeco {
     header: Box<dyn Fn(&'static str) -> ()>,
 }
 
+enum Void {}
+
+impl std::fmt::Display for Void {
+    fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {}
+    }
+}
+
 impl Zydeco {
     pub fn run(
         title: String, buffer: &str,
@@ -52,13 +60,13 @@ impl Zydeco {
     }
 
     fn tyck(&self, prog: &Program<()>) -> Result<TCompute<()>, ()> {
-        (self.header)("tyck");
+        (self.header)("check");
         Self::phase(|| prog.tyck(&builtins::builtin_ctx()))
     }
 
     fn elab(&self, comp: Compute<()>) -> Result<ZCompute<()>, ()> {
         (self.header)("elab");
-        Self::phase(|| -> Result<ZCompute<()>, ()> { Ok(comp.into()) })
+        Self::phase(|| -> Result<ZCompute<()>, Void> { Ok(comp.into()) })
     }
 
     fn eval(&self, comp: ZCompute<()>) -> Result<ZValue<()>, ()> {
@@ -72,7 +80,7 @@ impl Zydeco {
     where
         F: FnOnce() -> Result<T, E> + std::panic::UnwindSafe,
         T: FmtDefault,
-        E: std::fmt::Debug,
+        E: std::fmt::Display,
     {
         panic::set_hook(Box::new(|_| {}));
         panic::catch_unwind(input)
@@ -85,7 +93,7 @@ impl Zydeco {
                 Ok(res)
             })
             .or_else(|err| {
-                println!("Error: {:?}", err);
+                println!("Error: {}", err);
                 Err(())
             })
     }

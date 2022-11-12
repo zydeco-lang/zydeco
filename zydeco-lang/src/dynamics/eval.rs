@@ -6,11 +6,22 @@ use crate::{
     parse::syntax::{Dtor, VVar},
     utils::ann::{AnnHolder, AnnT},
 };
-use std::{mem::replace, rc::Rc, fmt::Debug};
+use std::{fmt::Debug, mem::replace, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum EvalError<Ann> {
     ErrStr(String, Ann),
+}
+
+use std::fmt;
+impl<Ann> fmt::Display for EvalError<Ann> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            EvalError::ErrStr(s, _) => {
+                write!(f, "{}", s)
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -313,7 +324,7 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
 }
 
 pub fn eval<Ann: AnnT>(
-    comp: ZCompute<Ann>, runtime: &mut Runtime<Ann>
+    comp: ZCompute<Ann>, runtime: &mut Runtime<Ann>,
 ) -> Result<ZValue<Ann>, EvalError<Ann>> {
     runtime.eval(comp)
 }
