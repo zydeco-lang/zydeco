@@ -3,7 +3,7 @@ use clap::Parser;
 use std::io::Read;
 
 pub fn main() -> Result<(), ()> {
-    match Cli::parse().command.ok_or(())? {
+    match Cli::parse().command {
         Commands::Run { file, dry: false } => {
             let mut buf = String::new();
             std::fs::File::open(file.clone())
