@@ -1,0 +1,72 @@
+\documentclass[acmsmall,nonacm]{acmart}
+\input{preamble/preamble}
+
+\title{Zydeco: A Stack-Based Functional Programming Language}
+
+\begin{document}
+\renewcommand{\thesection}{\Alph{section}}
+
+\maketitle
+
+\section{Motivation}
+
+\textit{Call-By-Push-Value(CBPV)}, introduced by Paul Blain Levy, is a programming paradigm that exploits stack for passing arguments when calling functions. By explicitly separating values and computations under the slogan "a value is, a computation does", CBPV has shown great potential for expressing computations. Though motivated by reconciling call-by-name (CBN) and call-by-value (CBV), CBPV ended up developing a powerful stack semantics that is ideal for expressing evaluation order and side effects.
+
+The goal of this project is to experiment with the potential of call-by-push-value. To be specific, we want to encode the status of the stack, i.e. the status of the computation currently being performed, into the type system. By leveraging the stack semantics, we aim to build a functional programming language that is easy for the programmer to reason about the situation of the stack and operate it directly. We claim that codata is a good fit for manipulating the stack by explicitly doing pattern matching on the stack top.
+
+\section{Encoding Calling Conventions In Types}
+
+It would be nice if the programmer can just tell from the type signature whether the computation is going to be eagerly evaluated or lazy evaluated. Consider the type of a regex matcher: Rule -> String -> Bool. As a user of this matcher, we may wonder what's the exact behavior of the matcher: is it supposed to be a ``compiler'' that takes the rule and turns it into a state machine with fast checking speed, or merely a curried version of an ``interpreter'' that inspects the rule on the fly? Staring at the type, there is no hint of how the function is supposed to be used: is it useful to pass in a rule and cache it for later use or not?
+
+\begin{listing}[h]
+    \begin{multicols}{3}
+        \inputminted{Haskell}{examples/mappre1.zydeco}
+        \vfill
+        \inputminted{Haskell}{examples/mappre2.zydeco}
+        \vfill
+    \end{multicols}
+    \begin{multicols}{2}
+        \inputminted{Haskell}{examples/map1.zydeco}
+        \vfill
+        \inputminted{Haskell}{examples/map2.zydeco}
+        \vfill
+    \end{multicols}
+    \captionof{listing}{The comparison between an eager and a lazy version of map}
+    \label{code: map}
+\end{listing}
+
+
+A type system that adopts call-by-push-value can ease such confusion. All types are classified by two categories: \textit{Value $\mathcal{A}$} and \textit{Computation $\mathcal{B}$}. All computations are done on objects $b$ of sort $\mathcal{B}$, while all objects $a$ of sort $\mathcal{A}$ are delivered as is. To defer or freeze a computation $b$, one can wrap it in a \textit{thunk}, denoted by $\{ b \}$, which is an instance of sort $\mathcal{A}$. To return a value as is, one can use \textit{return}, denoted by $\texttt{ret}~a$. To unwrap a thunk and continue the calculation, one can use the \textit{force} operator, denoted by $!~a$. And finally, to complete computation and bind the returned result to a variable, one can use the \textit{do} structure, denoted by $\texttt{do}~x \leftarrow b_1;~b_2$. The key observation here is that by introducing thunks and ways of manipulating thunks, the programmer gains much better control over computation.
+
+Adding thunks significantly changes our type system by bringing in $U$ types - thunk types, and $F$ types - returner types. Just as the name indicates, a thunk-captured computation will have $U B$ types, while return values will have $F A$ types. The type system is extended with the following rules:
+
+% rules
+
+Listing \ref{code: map}. demonstrates two versions of $\texttt{map}$ functions: the first one demands both $\texttt{f}$ and the list passed in to start computing, while the second one is curried and can return a concrete mapper that can be cached and applied later.
+
+\section{Manipulating Stack With Codata}
+
+\inputminted{Haskell}{examples/abort.zydeco}
+
+\begin{listing}[h]
+    \begin{multicols}{2}
+        \inputminted{Haskell}{examples/sumfn.zydeco}
+        \vfill
+        \inputminted{Haskell}{examples/sumco.zydeco}
+        \vfill
+    \end{multicols}
+    \captionof{listing}{Function as codata type}
+    \label{code: codata}
+\end{listing}
+
+\section{Compilation}
+
+\section{Previous Work on Call-By-Push-Value}
+
+\section{Current Status and Future Goals}
+
+Currently, the project is still at an early stage. By far our implementation covers the parser and a small type checker supporting monomorphic inductive and coinductive data types, and a CEK-machine style evaluator.
+
+We will also explore the possibility of extending the language with more features.
+
+\end{document}
