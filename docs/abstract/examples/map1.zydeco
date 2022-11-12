@@ -4,10 +4,10 @@ let map1 = {
     fn (f: U(Int -> F(Int))) ->
       fn (l: ListInt) ->
         match l
-          | Nil() -> ret Nil()
-          | Cons(x, xs) ->
-            ( do x <- ! f x;
-              do xs <- ! map f xs;
-              ret Cons(x, xs) )
+        | Nil() -> ret Nil()
+        | Cons(x, xs) ->
+          ( do x <- ! f x;
+            do xs <- ! map f xs;
+            ret Cons(x, xs) )
 };
 ! map1 f l

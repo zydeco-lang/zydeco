@@ -5,12 +5,12 @@ let map2 = {
       ret {
         fn (l: ListInt) ->
           match l
-            | Nil() -> ret Nil()
-            | Cons(x, xs) ->
-              ( do x <- ! f x;
-                do map' <- ! map f;
-                do xs' <- ! map' xs;
-                ret Cons(x, xs') )
+          | Nil() -> ret Nil()
+          | Cons(x, xs) ->
+            ( do x <- ! f x;
+              do map' <- ! map f;
+              do xs' <- ! map' xs;
+              ret Cons(x, xs') )
       }
 };
 do map2' <- ! map2 f;
