@@ -1,0 +1,3 @@
+codata A *-> B where
+  .more(A): A *-> B
+  .done(): B
