@@ -12,10 +12,16 @@ impl<Ann> TypeEqv for TValue<Ann> {
             (TValue::Comp(a, _), TValue::Comp(b, _)) => TCompute::eqv(a, b),
             (TValue::Bool(_), TValue::Bool(_))
             | (TValue::Int(_), TValue::Int(_))
-            | (TValue::String(_), TValue::String(_)) => Some(()),
+            | (TValue::String(_), TValue::String(_))
+            | (TValue::Unit(_), TValue::Unit(_)) => Some(()),
             // Note: being nominal here
             (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
-            _ => None,
+            (TValue::Bool(_), _)
+            | (TValue::Int(_), _)
+            | (TValue::String(_), _)
+            | (TValue::Var(_, _), _)
+            | (TValue::Unit(_), _)
+            | (TValue::Comp(_, _), _) => None,
         }
     }
 }
@@ -31,7 +37,9 @@ impl<Ann> TypeEqv for TCompute<Ann> {
             (TCompute::Var(a, _), TCompute::Var(b, _)) => {
                 (a == b).then_some(())
             }
-            _ => None,
+            (TCompute::Ret(_, _), _)
+            | (TCompute::Lam(_, _, _), _)
+            | (TCompute::Var(_, _), _) => None,
         }
     }
 }
