@@ -2,7 +2,7 @@ data SynVal where
   | Var(String)
   | True()
   | False()
-  | Thunk(SynComp)
+  | ThunkV(SynComp)
 
 data SynComp where
   | If(SynVal, SynComp, SynComp)
@@ -19,7 +19,7 @@ data Env where
 data SemVal where
   | True'()
   | False'()
-  | Thunk'(Comp(SemComp))
+  | ThunkV'(Comp(SemComp))
 
 data OptionSemVal where
   | Ok(SemVal)
@@ -56,7 +56,7 @@ let rec interp: Interpreter =
       | Var(x) -> ! lookup x g
       | True() -> ret Ok(True'())
       | False() -> ret Ok(False'())
-      | Thunk(m) -> ret Ok(Thunk'({ ! interp .comp(m, g) }))
+      | ThunkV(m) -> ret Ok(ThunkV'({ ! interp .comp(m, g) }))
     )
     | .comp(m, g) -> (
       match m
@@ -70,7 +70,7 @@ let rec interp: Interpreter =
         match v?
         | Ok(v) -> (
           match v
-          | Thunk'(t) -> ! t
+          | ThunkV'(t) -> ! t
           | True'() -> ! error
           | False'() -> ! error
         )

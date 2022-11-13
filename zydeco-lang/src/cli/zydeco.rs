@@ -3,6 +3,7 @@ use crate::{
         self,
         syntax::{ZCompute, ZValue},
     },
+    lex::token::Tok,
     library::builtins,
     parse::{
         syntax::{Compute, Program, TCompute},
@@ -11,6 +12,7 @@ use crate::{
     statics::tyck::TypeCheck,
     utils::fmt::FmtDefault,
 };
+use logos::Logos;
 use std::panic;
 
 pub struct Zydeco {
@@ -56,7 +58,14 @@ impl Zydeco {
 
     fn parse(&self, input: &str) -> Result<Program<()>, ()> {
         (self.header)("parse");
-        Self::phase(|| ZydecoParser::new().parse(input))
+        Self::phase(|| {
+            let lexer = Tok::lexer(input)
+                .spanned()
+                .map(|(tok, range)| (range.start, tok, range.end));
+            ZydecoParser::new()
+                .parse(input, lexer)
+                .map_err(|e| format!("{:?}", e))
+        })
     }
 
     fn tyck(&self, prog: &Program<()>) -> Result<TCompute<()>, ()> {

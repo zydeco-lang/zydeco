@@ -1,7 +1,6 @@
-// use crate::lex::token::*;
+use crate::lex::token::*;
 use crate::parse::syntax::*;
-// use crate::utils::span::Span1;
-grammar;
+grammar<'input>(input: &'input str);
 
 
 //* -------------------------------- TopLevel -------------------------------- */
@@ -181,21 +180,24 @@ Val: Value<()> = {
 
 //* ---------------------------------- Types --------------------------------- */
 
-TCompBox: Box<TCompute<()>> = Boxed<TComp>;
+TCompBox: Box<TCompute<()>> = {
+    Boxed<TComp>,
+    // "(" <TCompBox> ")" => <>,
+}
 
 TComp: TCompute<()> = {
     <x:TVar> => TCompute::Var(x, ()),
-    "Ret" "(" <t:TValBox> ")" => TCompute::Ret(t, ()),
     "F" "(" <t:TValBox> ")" => TCompute::Ret(t, ()),
     <tv:TValBox> "->" <tc:TCompBox> => TCompute::Lam(tv, tc, ()),
 }
 
-TValBox: Box<TValue<()>> = Boxed<TVal>;
+TValBox: Box<TValue<()>> = {
+    Boxed<TVal>,
+    // "(" <TValBox> ")" => <>,
+}
 
 pub TVal: TValue<()> = {
     <x:TVar> => TValue::Var(x, ()),
-    "Thunk" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
-    "Comp" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
     "U" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
     "Bool" => TValue::Bool(()),
     "Int" => TValue::Int(()),
@@ -211,8 +213,8 @@ Dtor: Dtor<()> = <SmallId> => Dtor::new(<>, ());
 TVar: TVar<()> = <BigId> => TVar::new(<>, ());
 VVar: VVar<()> = <SmallId> => VVar::new(<>, ());
 
-BigId: String = <r"[A-Z]([a-zA-Z0-9_-]|'|\?)*"> => String::from(<>);
-SmallId: String = <r"[_a-z]([a-zA-Z0-9_-]|'|\?)*"> => String::from(<>);
+BigId: String = "BigId" => String::from(<>);
+SmallId: String = "SmallId" => String::from(<>);
 
 Bool: bool = {
     "true" => true,
@@ -227,59 +229,59 @@ Str: String = <s:r#""[^"\\]*(?:\\.[^"\\]*)*""#> =>
 
 //* --------------------------------- Tokens --------------------------------- */
 
-// extern {
-//     type Location = usize;
-//     type Error = ();
+extern {
+    type Location = usize;
+    type Error = ();
     
-//     enum Tok<'input> {
-//         "data" => Tok::Keyword(<&'input str>),
-//         "codata" => Tok::Keyword(<&'input str>),
-//         "where" => Tok::Keyword(<&'input str>),
-//         "pub" => Tok::Keyword(<&'input str>),
-//         "define" => Tok::Keyword(<&'input str>),
-//         "let" => Tok::Keyword(<&'input str>),
-//         "do" => Tok::Keyword(<&'input str>),
-//         "ret" => Tok::Keyword(<&'input str>),
-//         "fn" => Tok::Keyword(<&'input str>),
-//         "rec" => Tok::Keyword(<&'input str>),
-//         "match" => Tok::Keyword(<&'input str>),
-//         "comatch" => Tok::Keyword(<&'input str>),
-//         "if" => Tok::Keyword(<&'input str>),
-//         "else" => Tok::Keyword(<&'input str>),
+    enum Tok<'input> {
+        "BigId" => Tok::IdentBig(<&'input str>),
+        "SmallId" => Tok::IdentSmall(<&'input str>),
 
-//         "true" => Tok::Literal(<&'input str>),
-//         "false" => Tok::Literal(<&'input str>),
-//         r"[\+-]?[0-9]+" => Tok::Literal(<&'input str>),
-//         r#""[^"\\]*(?:\\.[^"\\]*)*""# => Tok::Literal(<&'input str>),
+        "data" => Tok::Data,
+        "codata" => Tok::Codata,
+        "where" => Tok::Where,
+        "pub" => Tok::Pub,
+        "define" => Tok::Define,
+        "let" => Tok::Let,
+        "do" => Tok::Do,
+        "ret" => Tok::Ret,
+        "fn" => Tok::Fn,
+        "rec" => Tok::Rec,
+        "match" => Tok::Match,
+        "comatch" => Tok::Comatch,
+        "if" => Tok::If,
+        "else" => Tok::Else,
 
-//         "Ret" => Tok::Keyword(<&'input str>),
-//         "Comp" => Tok::Keyword(<&'input str>),
-//         "Bool" => Tok::Keyword(<&'input str>),
-//         "Int" => Tok::Keyword(<&'input str>),
-//         "String" => Tok::Keyword(<&'input str>),
-//         "Unit" => Tok::Keyword(<&'input str>),
+        "true" => Tok::True,
+        "false" => Tok::False,
+        r"[\+-]?[0-9]+" => Tok::NumLit(<&'input str>),
+        r#""[^"\\]*(?:\\.[^"\\]*)*""# => Tok::StrLit(<&'input str>),
 
-//         r"[A-Z]([a-zA-Z0-9_-]|'|\?)*" => Tok::IdentBig(<&'input str>),
-//         r"[_a-z]([a-zA-Z0-9_-]|'|\?)*" => Tok::IdentSmall(<&'input str>),
+        "F" => Tok::RetType,
+        "U" => Tok::CompType,
+        "Bool" => Tok::BoolType,
+        "Int" => Tok::IntType,
+        "String" => Tok::StringType,
+        "Unit" => Tok::UnitType,
 
-//         "(" => Tok::ParenOpen,
-//         ")" => Tok::ParenClose,
-//         "{" => Tok::ParenOpen,
-//         "}" => Tok::ParenClose,
-//         "," => Tok::Keyword(<&'input str>),
-//         ":" => Tok::Keyword(<&'input str>),
-//         "=" => Tok::Keyword(<&'input str>),
-//         ";" => Tok::Keyword(<&'input str>),
-//         "!" => Tok::Keyword(<&'input str>),
-//         "|" => Tok::Keyword(<&'input str>),
-//         "." => Tok::Keyword(<&'input str>),
-//         "->" => Tok::Keyword(<&'input str>),
-//         "<-" => Tok::Keyword(<&'input str>),
-//         "+" => Tok::Keyword(<&'input str>),
-//         "-" => Tok::Keyword(<&'input str>),
-//         "*" => Tok::Keyword(<&'input str>),
-//     }
-// }
+        "(" => Tok::ParenOpen,
+        ")" => Tok::ParenClose,
+        "{" => Tok::BraceOpen,
+        "}" => Tok::BraceClose,
+        "," => Tok::Comma,
+        ":" => Tok::Colon,
+        "=" => Tok::Equals,
+        ";" => Tok::Semicolon,
+        "!" => Tok::Force,
+        "|" => Tok::Branch,
+        "." => Tok::Dot,
+        "->" => Tok::Arrow,
+        "<-" => Tok::Assign,
+        "+" => Tok::Plus,
+        "-" => Tok::Minus,
+        "*" => Tok::Star,
+    }
+}
 
 //* -------------------------------- Utilities ------------------------------- */
 

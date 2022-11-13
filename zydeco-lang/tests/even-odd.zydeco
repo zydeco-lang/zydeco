@@ -5,10 +5,10 @@ codata OddEven where
 
 let rec eo : OddEven = (
   comatch
-    .even() -> (fn (n : Nat) -> match n
+    | .even() -> (fn (n : Nat) -> match n
       | Z()  -> ret true
       | S(n) -> ((! eo .odd()) n))
-    .odd()  -> (fn(n : Nat) -> match n
+    | .odd()  -> (fn(n : Nat) -> match n
       | Z()  -> ret false
       | S(n) -> (! eo.even()) n)
 );

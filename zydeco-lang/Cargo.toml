@@ -7,9 +7,10 @@ description = "A language implementation for zydeco, a call-by-push-value langua
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lalrpop-util = { version = "0.19", features = ["lexer"] }
-regex = "1"
 clap = { version = "4", features = ["derive"] }
+regex = "1"
+logos = "0.12"
+lalrpop-util = { version = "0.19", features = ["lexer"] }
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]
