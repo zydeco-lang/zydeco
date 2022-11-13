@@ -1,0 +1,3 @@
+do _ <- ! write_line "I will echo what you say";
+do s <- ! read_line;
+! write_line s

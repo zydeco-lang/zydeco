@@ -88,7 +88,7 @@ where
 
             TValExpect { expected, found } => write!(
                 f,
-                "Type mismatch, expected {:?}, but got {:?}",
+                "Type mismatch, expected {}, but got {:?}",
                 expected, found
             ),
             TCompMismatch { expected, found } => write!(
@@ -98,7 +98,7 @@ where
             ),
             TCompExpect { expected, found } => write!(
                 f,
-                "Type mismatch, expected {:?}, but got {:?}",
+                "Type mismatch, expected {}, but got {:?}",
                 expected, found
             ),
             InconsistentBranches(types) => {
