@@ -231,7 +231,6 @@ Str: String = <s:r#""[^"\\]*(?:\\.[^"\\]*)*""#> =>
 
 extern {
     type Location = usize;
-    type Error = ();
     
     enum Tok<'input> {
         "BigId" => Tok::IdentBig(<&'input str>),

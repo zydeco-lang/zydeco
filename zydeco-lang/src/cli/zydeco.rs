@@ -64,7 +64,7 @@ impl Zydeco {
                 .map(|(tok, range)| (range.start, tok, range.end));
             ZydecoParser::new()
                 .parse(input, lexer)
-                .map_err(|e| format!("{:?}", e))
+                .map_err(|e| format!("{}", e))
         })
     }
 
