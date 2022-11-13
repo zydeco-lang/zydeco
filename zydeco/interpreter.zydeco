@@ -45,20 +45,20 @@ let rec lookup: String -> Env -> Ret(OptionSemVal) =
 
 let rec error: SemComp = (
   comatch
-    .app(_) -> ! error
-    .bind() -> ret Err()
+    | .app(_) -> ! error
+    | .bind() -> ret Err()
 );
 
 let rec interp: Interpreter =
   comatch
-    .valu(v, g) -> (
+    | .valu(v, g) -> (
       match v
       | Var(x) -> ! lookup x g
       | True() -> ret Ok(True'())
       | False() -> ret Ok(False'())
       | Thunk(m) -> ret Ok(Thunk'({ ! interp .comp(m, g) }))
     )
-    .comp(m, g) -> (
+    | .comp(m, g) -> (
       match m
       | If(cond, mt, mf) -> (
         match cond
@@ -79,8 +79,8 @@ let rec interp: Interpreter =
       | Return(syn_val) -> (
         do v <- ! interp .valu(syn_val, g);
         comatch
-          .bind() -> ret v
-          .app(_) -> ! error
+          | .bind() -> ret v
+          | .app(_) -> ! error
       )
       | Bind(m, x, k) -> (
         do v? <- ! interp .comp(m, g) .bind();
@@ -90,8 +90,8 @@ let rec interp: Interpreter =
       )
       | Lam(x, m) -> (
         comatch
-          .app(v) -> (! interp .comp(m, Cons(x, v, g)))
-          .bind() -> ret Err()
+          | .app(v) -> (! interp .comp(m, Cons(x, v, g)))
+          | .bind() -> ret Err()
       )
       | App(m, v) -> (
         do v? <- ! interp .valu(v, g);

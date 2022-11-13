@@ -1,4 +1,6 @@
+// use crate::lex::token::*;
 use crate::parse::syntax::*;
+// use crate::utils::span::Span1;
 grammar;
 
 
@@ -85,7 +87,7 @@ Comp: Compute<()> = {
         *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Rec{
             arg, body, ann: ()
         })),
-    "if" <cond:ValBox> ":" <thn:CompBox> "else:" <els:CompBox> => Compute::If {
+    "if" <cond:ValBox> ":" <thn:CompBox> "else" ":" <els:CompBox> => Compute::If {
         cond, thn, els, ann: ()
     },
     "match" <scrut:ValBox> <cases:MatchBranch*> => Compute::Match {
@@ -119,8 +121,8 @@ MatchBranch: (Ctor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
 }
 
 CoMatchBranch: (Dtor<()>, Vec<VVar<()>>, Box<Compute<()>>) = {
-    "." <d:Dtor> "(" <vs:Kleene<",", VVar>> ")" "->" <e:CompAtomBox> => (d, vs, e),
-    "." <d:Dtor> "->" <e:CompAtomBox> => (d, vec!(), e),
+    "|" "." <d:Dtor> "(" <vs:Kleene<",", VVar>> ")" "->" <e:CompHeadBox> => (d, vs, e),
+    "|" "." <d:Dtor> "->" <e:CompAtomBox> => (d, vec!(), e),
 }
 
 CompHeadBox: Box<Compute<()>> = {
@@ -161,7 +163,10 @@ ArithOpName: String = {
 
 //* ---------------------------------- Value --------------------------------- */
 
-ValBox: Box<Value<()>> = Boxed<Val>;
+ValBox: Box<Value<()>> = {
+    Boxed<Val>,
+    "(" <ValBox> ")" => <>,
+}
 
 Val: Value<()> = {
     <x:VVar> => Value::Var(x, ()),
@@ -181,6 +186,7 @@ TCompBox: Box<TCompute<()>> = Boxed<TComp>;
 TComp: TCompute<()> = {
     <x:TVar> => TCompute::Var(x, ()),
     "Ret" "(" <t:TValBox> ")" => TCompute::Ret(t, ()),
+    "F" "(" <t:TValBox> ")" => TCompute::Ret(t, ()),
     <tv:TValBox> "->" <tc:TCompBox> => TCompute::Lam(tv, tc, ()),
 }
 
@@ -189,6 +195,7 @@ TValBox: Box<TValue<()>> = Boxed<TVal>;
 pub TVal: TValue<()> = {
     <x:TVar> => TValue::Var(x, ()),
     "Comp" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
+    "U" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
     "Bool" => TValue::Bool(()),
     "Int" => TValue::Int(()),
     "String" => TValue::String(()),
@@ -216,6 +223,62 @@ Int: i64 = <s:r"[\+-]?[0-9]+"> => s.parse().unwrap();
 Str: String = <s:r#""[^"\\]*(?:\\.[^"\\]*)*""#> => 
     s[1..s.len()-1].to_string().replace("\\\"", "\"");
 
+
+//* --------------------------------- Tokens --------------------------------- */
+
+// extern {
+//     type Location = usize;
+//     type Error = ();
+    
+//     enum Tok<'input> {
+//         "data" => Tok::Keyword(<&'input str>),
+//         "codata" => Tok::Keyword(<&'input str>),
+//         "where" => Tok::Keyword(<&'input str>),
+//         "pub" => Tok::Keyword(<&'input str>),
+//         "define" => Tok::Keyword(<&'input str>),
+//         "let" => Tok::Keyword(<&'input str>),
+//         "do" => Tok::Keyword(<&'input str>),
+//         "ret" => Tok::Keyword(<&'input str>),
+//         "fn" => Tok::Keyword(<&'input str>),
+//         "rec" => Tok::Keyword(<&'input str>),
+//         "match" => Tok::Keyword(<&'input str>),
+//         "comatch" => Tok::Keyword(<&'input str>),
+//         "if" => Tok::Keyword(<&'input str>),
+//         "else" => Tok::Keyword(<&'input str>),
+
+//         "true" => Tok::Literal(<&'input str>),
+//         "false" => Tok::Literal(<&'input str>),
+//         r"[\+-]?[0-9]+" => Tok::Literal(<&'input str>),
+//         r#""[^"\\]*(?:\\.[^"\\]*)*""# => Tok::Literal(<&'input str>),
+
+//         "Ret" => Tok::Keyword(<&'input str>),
+//         "Comp" => Tok::Keyword(<&'input str>),
+//         "Bool" => Tok::Keyword(<&'input str>),
+//         "Int" => Tok::Keyword(<&'input str>),
+//         "String" => Tok::Keyword(<&'input str>),
+//         "Unit" => Tok::Keyword(<&'input str>),
+
+//         r"[A-Z]([a-zA-Z0-9_-]|'|\?)*" => Tok::IdentBig(<&'input str>),
+//         r"[_a-z]([a-zA-Z0-9_-]|'|\?)*" => Tok::IdentSmall(<&'input str>),
+
+//         "(" => Tok::ParenOpen,
+//         ")" => Tok::ParenClose,
+//         "{" => Tok::ParenOpen,
+//         "}" => Tok::ParenClose,
+//         "," => Tok::Keyword(<&'input str>),
+//         ":" => Tok::Keyword(<&'input str>),
+//         "=" => Tok::Keyword(<&'input str>),
+//         ";" => Tok::Keyword(<&'input str>),
+//         "!" => Tok::Keyword(<&'input str>),
+//         "|" => Tok::Keyword(<&'input str>),
+//         "." => Tok::Keyword(<&'input str>),
+//         "->" => Tok::Keyword(<&'input str>),
+//         "<-" => Tok::Keyword(<&'input str>),
+//         "+" => Tok::Keyword(<&'input str>),
+//         "-" => Tok::Keyword(<&'input str>),
+//         "*" => Tok::Keyword(<&'input str>),
+//     }
+// }
 
 //* -------------------------------- Utilities ------------------------------- */
 

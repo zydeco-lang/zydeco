@@ -34,8 +34,8 @@ let v = True();
 match v
   | True -> (
     (comatch
-      .then_ -> ret true
-      .else_ -> ret false).then_()
+      | .then_ -> ret true
+      | .else_ -> ret false).then_()
   )
   | False -> ret false
 @@@ data and codata syntax
