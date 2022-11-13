@@ -10,21 +10,13 @@ use crate::{
         ZydecoParser,
     },
     statics::tyck::TypeCheck,
-    utils::fmt::FmtDefault,
+    utils::{fmt::FmtDefault, never::Never},
 };
 use logos::Logos;
 use std::panic;
 
 pub struct Zydeco {
     header: Box<dyn Fn(&'static str) -> ()>,
-}
-
-enum Void {}
-
-impl std::fmt::Display for Void {
-    fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match *self {}
-    }
 }
 
 impl Zydeco {
@@ -75,7 +67,7 @@ impl Zydeco {
 
     fn elab(&self, comp: Compute<()>) -> Result<ZCompute<()>, ()> {
         (self.header)("elab");
-        Self::phase(|| -> Result<ZCompute<()>, Void> { Ok(comp.into()) })
+        Self::phase(|| -> Result<ZCompute<()>, Never> { Ok(comp.into()) })
     }
 
     fn eval(&self, comp: ZCompute<()>) -> Result<ZValue<()>, ()> {
