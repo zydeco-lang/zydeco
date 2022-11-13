@@ -1,5 +1,5 @@
 use logos::Logos;
-use std::fmt::{Display, Debug};
+use std::fmt::{Debug, Display};
 
 #[derive(Logos, Clone, Debug, PartialEq)]
 pub enum Tok<'input> {
@@ -103,7 +103,53 @@ pub enum Tok<'input> {
 
 impl<'input> Display for Tok<'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // self.fmt(f)
-        Debug::fmt(self, f)
+        match self {
+            Tok::IdentBig(s) => write!(f, "IdentBig({})", s),
+            Tok::IdentSmall(s) => write!(f, "IdentSmall({})", s),
+            Tok::Data => write!(f, "Data"),
+            Tok::Codata => write!(f, "Codata"),
+            Tok::Where => write!(f, "Where"),
+            Tok::Pub => write!(f, "Pub"),
+            Tok::Define => write!(f, "Define"),
+            Tok::Let => write!(f, "Let"),
+            Tok::Do => write!(f, "Do"),
+            Tok::Ret => write!(f, "Ret"),
+            Tok::Fn => write!(f, "Fn"),
+            Tok::Rec => write!(f, "Rec"),
+            Tok::Match => write!(f, "Match"),
+            Tok::Comatch => write!(f, "Comatch"),
+            Tok::If => write!(f, "If"),
+            Tok::Else => write!(f, "Else"),
+            Tok::True => write!(f, "True"),
+            Tok::False => write!(f, "False"),
+            Tok::NumLit(s) => write!(f, "NumLit({})", s),
+            Tok::StrLit(s) => write!(f, "StrLit({})", s),
+            Tok::RetType => write!(f, "RetType"),
+            Tok::CompType => write!(f, "CompType"),
+            Tok::BoolType => write!(f, "BoolType"),
+            Tok::IntType => write!(f, "IntType"),
+            Tok::StringType => write!(f, "StringType"),
+            Tok::UnitType => write!(f, "UnitType"),
+            Tok::ParenOpen => write!(f, "ParenOpen"),
+            Tok::ParenClose => write!(f, "ParenClose"),
+            Tok::BraceOpen => write!(f, "BraceOpen"),
+            Tok::BraceClose => write!(f, "BraceClose"),
+            // Tok::BracketOpen => write!(f, "BracketOpen"),
+            // Tok::BracketClose => write!(f, "BracketClose"),
+            Tok::Comma => write!(f, "Comma"),
+            Tok::Colon => write!(f, "Colon"),
+            Tok::Equals => write!(f, "Equals"),
+            Tok::Semicolon => write!(f, "Semicolon"),
+            Tok::Force => write!(f, "Force"),
+            Tok::Branch => write!(f, "Branch"),
+            Tok::Dot => write!(f, "Dot"),
+            Tok::Arrow => write!(f, "Arrow"),
+            Tok::Assign => write!(f, "Assign"),
+            Tok::Plus => write!(f, "Plus"),
+            Tok::Minus => write!(f, "Minus"),
+            Tok::Star => write!(f, "Star"),
+
+            Tok::Error => write!(f, "Error"),
+        }
     }
 }
