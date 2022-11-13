@@ -97,7 +97,8 @@ pub enum Tok<'input> {
     Star,
 
     #[error]
-    #[regex(r"[ \t\n\f]+", logos::skip)]
+    #[regex(r"#.*\n", logos::skip, priority = 2)]
+    #[regex(r"[ \t\n\f]+", logos::skip, priority = 1)]
     Error,
 }
 

@@ -46,6 +46,10 @@ do z <- (fn (x: Int) -> ret true) -123;
 ret x
 @@@ basic number
 
+# xxx
+ret 1
+@@@ comments
+
 define x = 1;
 define x': Int = 1;
 pub define y = 2;
