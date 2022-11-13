@@ -1,3 +1,7 @@
+let rec echo : Ret(Unit) =
+  do s <- ! read_line;
+  do _ <- ! write_line s;
+  ! echo;
 do _ <- ! write_line "I will echo what you say";
-do s <- ! read_line;
-! write_line s
+   ! echo
+
