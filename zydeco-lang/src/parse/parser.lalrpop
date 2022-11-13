@@ -194,6 +194,7 @@ TValBox: Box<TValue<()>> = Boxed<TVal>;
 
 pub TVal: TValue<()> = {
     <x:TVar> => TValue::Var(x, ()),
+    "Thunk" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
     "Comp" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
     "U" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
     "Bool" => TValue::Bool(()),
