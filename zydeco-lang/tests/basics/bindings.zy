@@ -1,0 +1,6 @@
+let x = true,
+    y = { ret false };
+let f = { fn (b: Bool) -> ret b };
+do rx <- !f x,
+   ry <- do y <- !y; !f x;
+if x: ret rx else: ret ry

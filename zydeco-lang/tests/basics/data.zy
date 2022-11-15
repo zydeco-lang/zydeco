@@ -1,0 +1,14 @@
+data Boolean where
+  | True()
+  | False()
+codata And where
+  .then_(): Ret(Bool)
+  .else_(): Ret(Bool)
+let v = True();
+match v
+  | True -> (
+    (comatch
+      | .then_ -> ret true
+      | .else_ -> ret false).then_()
+  )
+  | False -> ret false

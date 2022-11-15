@@ -1,0 +1,24 @@
+data Nat where | Z() | S(Nat)
+let zero = Z();
+let suc = {
+  fn (x: Nat) -> ret S(x)
+};
+let ifz = {
+  fn (z: Bool, pred: Comp(Nat -> Ret(Bool)), x: Nat) -> (
+    match x
+    | Z() -> ret z
+    | S(x) -> !pred x
+  )
+};
+do one <- !suc zero,
+   two <- !suc one;
+let ifz = {
+  fn (x: Nat) -> (
+    !ifz false { fn (_: Nat) -> ret false } x
+  )
+};
+do two' <- !ifz two;
+do one' <- !ifz one;
+do zero' <- !ifz zero;
+if two': if one': if zero': ret true
+else: ret false else: ret false else: ret false

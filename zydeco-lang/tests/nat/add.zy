@@ -1,0 +1,19 @@
+data Nat where | Z() | S(Nat)
+let add = {
+  rec (add: Comp(Nat -> Nat -> Ret(Nat))) -> (
+    fn (x: Nat, y: Nat) -> (
+      match x
+      | Z -> ret y
+      | S(x) -> !add x S(y)
+    )
+  )
+};
+let rec add': Nat -> Nat -> Ret(Nat) = (
+  fn (x: Nat, y: Nat) -> (
+    match x
+    | Z -> ret y
+    | S(x) -> !add x S(y)
+  )
+);
+do x <- !add S(S(Z())) S(Z());
+!add' x S(S(S(Z())))

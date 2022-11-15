@@ -1,0 +1,24 @@
+data Nat where | Z() | S(Nat)
+data OddEven where | OddEven(Comp(Nat -> Ret(Bool)), Comp(Nat -> Ret(Bool)))
+let rec fp: Ret(OddEven) = (
+  ret OddEven({
+    do fp <- !fp;
+    match fp | OddEven(odd, even) -> (fn (x: Nat) -> (
+      match x
+      | Z -> ret false
+      | S(x) -> !even x
+    ))
+  }, {
+    do fp <- !fp;
+    match fp | OddEven(odd, even) -> (fn (x: Nat) -> (
+      match x
+      | Z -> ret true
+      | S(x) -> !odd x
+    ))
+  })
+);
+do odd <- (
+  do fp <- !fp;
+  match fp | OddEven(odd, even) -> ret { !odd }
+);
+!odd S(S(S(Z())))
