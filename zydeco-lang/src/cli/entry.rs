@@ -4,39 +4,45 @@ use std::io::Read;
 
 pub fn main() -> Result<(), ()> {
     match Cli::parse().command {
-        Commands::Run { file, dry: false } => {
+        Commands::Run { file, dry: false, verbose } => {
             let mut buf = String::new();
             std::fs::File::open(file.clone())
                 .map_err(|_| ())?
                 .read_to_string(&mut buf)
                 .map_err(|_| ())?;
-            let _ = Zydeco::run(
-                file.file_name()
+            let _ = Zydeco {
+                title: file
+                    .file_name()
                     .map(|s| s.to_str().map(|s| s.to_owned()))
                     .flatten()
                     .unwrap_or_default(),
-                buf.as_str(),
-            )?;
+                verbose,
+            }
+            .run(buf.as_str())?;
         }
-        Commands::Run { file, dry: true } | Commands::Check { file } => {
+        Commands::Run { file, dry: true, verbose }
+        | Commands::Check { file, verbose } => {
             let mut buf = String::new();
             std::fs::File::open(file.clone())
                 .map_err(|_| ())?
                 .read_to_string(&mut buf)
                 .map_err(|_| ())?;
-            let _ = Zydeco::check(
-                file.file_name()
+            let _ = Zydeco {
+                title: file
+                    .file_name()
                     .map(|s| s.to_str().map(|s| s.to_owned()))
                     .flatten()
                     .unwrap_or_default(),
-                buf.as_str(),
-            )?;
+                verbose,
+            }
+            .check(buf.as_str())?;
         }
         Commands::Repl {} => {
             let stdin = std::io::stdin();
             for (i, line) in stdin.lines().enumerate() {
                 let line = line.unwrap();
-                let res = Zydeco::run(format!("#{}", i), &line);
+                let res = Zydeco { title: format!("#{}", i), verbose: false }
+                    .run(&line);
                 println!("{}", response(res.is_ok()));
             }
         }
@@ -95,7 +101,7 @@ fn single_run(
     let title = line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
     println!(">>> [{}]", title);
     println!("{}", buffer);
-    let res = Zydeco::run(title.to_owned(), &buffer);
+    let res = Zydeco { title: title.to_owned(), verbose: false }.run(&buffer);
     if res.is_err() {
         err_names.push(title.to_owned());
     }

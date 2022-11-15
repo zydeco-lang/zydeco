@@ -16,41 +16,27 @@ use logos::Logos;
 use std::panic;
 
 pub struct Zydeco {
-    header: Box<dyn Fn(&'static str) -> ()>,
+    pub title: String,
+    pub verbose: bool,
 }
 
 impl Zydeco {
-    pub fn run(
-        title: String, buffer: &str,
-    ) -> Result<(TCompute<()>, ZValue<()>), ()> {
-        let main = Zydeco {
-            header: Box::new(move |name| {
-                println!("=== [{}] <{}>", title, name)
-            }),
-        };
-        let program = main.parse(&buffer)?;
-        let ty = main.tyck(&program)?;
-        let comp = main.elab(*program.comp)?;
-        let zvalue = main.eval(comp)?;
+    pub fn run(&self, buffer: &str) -> Result<(TCompute<()>, ZValue<()>), ()> {
+        let program = self.parse(&buffer)?;
+        let ty = self.tyck(&program)?;
+        let comp = self.elab(*program.comp)?;
+        let zvalue = self.eval(comp)?;
         Ok((ty, zvalue))
     }
 
-    pub fn check(
-        title: String, buffer: &str,
-    ) -> Result<(TCompute<()>, ()), ()> {
-        let main = Zydeco {
-            header: Box::new(move |name| {
-                println!("=== [{}] <{}>", title, name)
-            }),
-        };
-        let program = main.parse(&buffer)?;
-        let ty = main.tyck(&program)?;
+    pub fn check(&self, buffer: &str) -> Result<(TCompute<()>, ()), ()> {
+        let program = self.parse(&buffer)?;
+        let ty = self.tyck(&program)?;
         Ok((ty, ()))
     }
 
     fn parse(&self, input: &str) -> Result<Program<()>, ()> {
-        (self.header)("parse");
-        Self::phase(|| {
+        self.phase("parse", false, || {
             let lexer = Tok::lexer(input)
                 .spanned()
                 .map(|(tok, range)| (range.start, tok, range.end));
@@ -61,41 +47,51 @@ impl Zydeco {
     }
 
     fn tyck(&self, prog: &Program<()>) -> Result<TCompute<()>, ()> {
-        (self.header)("check");
-        Self::phase(|| prog.tyck(&builtins::builtin_ctx()))
+        self.phase("check", false, || prog.tyck(&builtins::builtin_ctx()))
     }
 
     fn elab(&self, comp: Compute<()>) -> Result<ZCompute<()>, ()> {
-        (self.header)("elab");
-        Self::phase(|| -> Result<ZCompute<()>, Never> { Ok(comp.into()) })
+        self.phase("elab", false, || -> Result<ZCompute<()>, Never> {
+            Ok(comp.into())
+        })
     }
 
     fn eval(&self, comp: ZCompute<()>) -> Result<ZValue<()>, ()> {
-        (self.header)("eval");
-        Self::phase(|| {
+        self.phase("eval", true, || {
             dynamics::eval::eval(comp, &mut builtins::builtin_runtime())
         })
     }
 
-    fn phase<F, T, E>(input: F) -> Result<T, ()>
+    fn phase<F, T, E>(&self, name: &'static str, aloud: bool, input: F) -> Result<T, ()>
     where
         F: FnOnce() -> Result<T, E> + std::panic::UnwindSafe,
         T: FmtDefault,
         E: std::fmt::Display,
     {
+        if self.verbose {
+            println!("=== [{}] <{}>", self.title, name);
+        }
+        let mut output = String::new();
         panic::set_hook(Box::new(|_| {}));
-        panic::catch_unwind(input)
+        let res = panic::catch_unwind(input)
             .or_else(|err| {
-                println!("Panic: {:?}", err);
+                output += &format!("Panic: {:?}", err);
+                output += "\n";
                 Err(())
             })?
             .and_then(|res| {
-                println!("{}", res.fmt());
+                output += &format!("{}", res.fmt());
+                output += "\n";
                 Ok(res)
             })
             .or_else(|err| {
-                println!("Error: {}", err);
+                output += &format!("Error: {}", err);
+                output += "\n";
                 Err(())
-            })
+            });
+        if self.verbose || aloud {
+            print!("{}", output);
+        }
+        res
     }
 }
