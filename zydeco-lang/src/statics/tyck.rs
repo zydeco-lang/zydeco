@@ -44,26 +44,20 @@ impl<Ann> TypeEqv for TCompute<Ann> {
     }
 }
 
-pub struct ZipEq<Ann> {
-    _marker: std::marker::PhantomData<Ann>,
-}
-
-impl<'a, Ann> ZipEq<Ann> {
-    pub fn new<T: Clone, U: Clone>(
-        a: &'a Vec<T>, b: &'a Vec<U>,
-    ) -> Result<
-        std::iter::Zip<
-            std::iter::Cloned<std::slice::Iter<'a, T>>,
-            std::iter::Cloned<std::slice::Iter<'a, U>>,
-        >,
-        TypeCheckError<Ann>,
-    > {
-        (a.len() == b.len())
-            .then(|| a.iter().cloned().zip(b.iter().cloned()))
-            .ok_or_else(|| {
-                TypeCheckError::Explosion(format!("wrong number of arguments"))
-            })
-    }
+fn zip_eq<'a, T: Clone, U: Clone, Ann>(
+    a: &'a Vec<T>, b: &'a Vec<U>,
+) -> Result<
+    std::iter::Zip<
+        std::iter::Cloned<std::slice::Iter<'a, T>>,
+        std::iter::Cloned<std::slice::Iter<'a, U>>,
+    >,
+    TypeCheckError<Ann>,
+> {
+    (a.len() == b.len())
+        .then(|| a.iter().cloned().zip(b.iter().cloned()))
+        .ok_or_else(|| {
+            TypeCheckError::Explosion(format!("wrong number of arguments"))
+        })
 }
 
 #[derive(Clone, Debug)]
@@ -259,7 +253,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                             found: data.clone(),
                         })?;
                     let mut ctx = ctx.clone();
-                    ctx.extend(ZipEq::new(args, targs)?);
+                    ctx.extend(zip_eq(args, targs)?);
                     let tbranch = body.tyck(&ctx)?;
                     ty = match ty {
                         Some(tret) => {
@@ -293,7 +287,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         })
                         .or_else(|| Some(t));
                     let mut ctx = ctx.clone();
-                    ctx.extend(ZipEq::new(vars, targs)?);
+                    ctx.extend(zip_eq(vars, targs)?);
                     let tret_ = comp.tyck(&ctx)?;
                     TCompute::eqv(&tret_, &tret).ok_or_else(|| {
                         TCompMismatch { expected: tret.clone(), found: tret_ }
@@ -313,7 +307,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         TCompute::eqv(&tscrut, &t_).ok_or_else(|| {
                             TCompMismatch { expected: t_, found: tscrut }
                         })?;
-                        for (arg, expected) in ZipEq::new(args, targs)? {
+                        for (arg, expected) in zip_eq(args, targs)? {
                             let targ = arg.tyck(&ctx)?;
                             targ.eqv(&expected).ok_or_else(|| {
                                 TValMismatch {
@@ -350,7 +344,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 let (data, targs) = ctx.ctors.get(ctor).ok_or_else(|| {
                     Explosion(format!("unknown ctor: {}", ctor))
                 })?;
-                for (arg, targ) in ZipEq::new(args, targs)? {
+                for (arg, targ) in zip_eq(args, targs)? {
                     let t = arg.tyck(&ctx)?;
                     t.eqv(&targ).ok_or_else(|| TValMismatch {
                         expected: targ,
