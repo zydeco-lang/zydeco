@@ -108,6 +108,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "zydeco-lang",
+]
+
+[[package]]
 name = "crunchy"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -660,7 +668,6 @@ checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
 name = "zydeco-lang"
 version = "0.0.1"
 dependencies = [
- "clap",
  "lalrpop",
  "lalrpop-util",
  "logos",
