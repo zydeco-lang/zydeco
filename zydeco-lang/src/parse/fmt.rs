@@ -23,6 +23,7 @@ impl<Ann> FmtArgs for Value<Ann> {
             Value::Bool(b, _) => format!("{}", b),
             Value::Int(n, _) => format!("{}", n),
             Value::String(s, _) => format!("\"{}\"", s),
+            Value::Char(c, _) => format!("'{}'", c),
             Value::Triv(_) => format!("()"),
         }
     }
@@ -150,6 +151,7 @@ impl<Ann> FmtArgs for TValue<Ann> {
             TValue::Comp(c, _) => format!("Comp({})", c.fmt_args(args)),
             TValue::Bool(_) => format!("Bool"),
             TValue::Int(_) => format!("Int"),
+            TValue::Char(_) => format!("Char"),
             TValue::String(_) => format!("String"),
             TValue::Unit(_) => format!("()"),
         }

@@ -34,6 +34,7 @@ pub enum Value<Ann> {
     Bool(bool, Ann),
     Int(i64, Ann),
     String(String, Ann),
+    Char(char, Ann),
     Triv(Ann),
 }
 
@@ -92,6 +93,7 @@ pub enum TValue<Ann> {
     Bool(Ann),
     Int(Ann),
     String(Ann),
+    Char(Ann),
     Unit(Ann),
 }
 

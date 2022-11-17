@@ -13,6 +13,7 @@ impl<Ann> TypeEqv for TValue<Ann> {
             (TValue::Bool(_), TValue::Bool(_))
             | (TValue::Int(_), TValue::Int(_))
             | (TValue::String(_), TValue::String(_))
+            | (TValue::Char(_), TValue::Char(_))
             | (TValue::Unit(_), TValue::Unit(_)) => Some(()),
             // Note: being nominal here
             (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
@@ -356,6 +357,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
             Value::Bool(_, ann) => Ok(TValue::Bool(ann.clone())),
             Value::Int(_, ann) => Ok(TValue::Int(ann.clone())),
             Value::String(_, ann) => Ok(TValue::String(ann.clone())),
+            Value::Char(_, ann) => Ok(TValue::Char(ann.clone())),
             Value::Triv(ann) => Ok(TValue::Unit(ann.clone())),
         }
     }

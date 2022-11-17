@@ -174,6 +174,7 @@ Val: Value<()> = {
     <b:Bool> => Value::Bool(b, ()),
     <n:Int> => Value::Int(n,()),
     <s:Str> => Value::String(s,()),
+    <c:Char> => Value::Char(c,()),
     "(" ")" => Value::Triv(()),
 }
 
@@ -202,6 +203,7 @@ pub TVal: TValue<()> = {
     "Bool" => TValue::Bool(()),
     "Int" => TValue::Int(()),
     "String" => TValue::String(()),
+    "Char" => TValue::Char(()),
     "Unit" => TValue::Unit(()),
 }
 
@@ -226,6 +228,7 @@ Int: i64 = <s:r"[\+-]?[0-9]+"> => s.parse().unwrap();
 Str: String = <s:r#""[^"\\]*(?:\\.[^"\\]*)*""#> => 
     s[1..s.len()-1].to_string().replace("\\\"", "\"");
 
+Char: char = <s:r#"'[ -~]'"#> => s.chars().nth(1).unwrap();
 
 //* --------------------------------- Tokens --------------------------------- */
 

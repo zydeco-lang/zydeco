@@ -10,7 +10,8 @@ impl<Ann: AnnT> AnnHolder<Ann> for ZValue<Ann> {
             ZValue::Bool(_, ann) => ann,
             ZValue::Int(_, ann) => ann,
             ZValue::String(_, ann) => ann,
-            ZValue::Triv(_) => todo!(),
+            ZValue::Char(_, ann) => ann,
+            ZValue::Triv(ann) => ann,
         }
     }
     fn set_ann(&mut self, ann2: Ann) {
@@ -21,7 +22,8 @@ impl<Ann: AnnT> AnnHolder<Ann> for ZValue<Ann> {
             ZValue::Bool(_, ann) => *ann = ann2,
             ZValue::Int(_, ann) => *ann = ann2,
             ZValue::String(_, ann) => *ann = ann2,
-            ZValue::Triv(_) => todo!(),
+            ZValue::Char(_, ann) => *ann = ann2,
+            ZValue::Triv(ann) => *ann = ann2,
         }
     }
 }
