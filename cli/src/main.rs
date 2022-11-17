@@ -1,8 +1,9 @@
-use super::{Cli, Commands, Zydeco};
 use clap::Parser;
+use cli::{Cli, Commands};
 use std::io::Read;
+use zydeco_lang::Zydeco;
 
-pub fn main() -> Result<(), ()> {
+fn main() -> Result<(), ()> {
     match Cli::parse().command {
         Commands::Run { file, dry: false, verbose } => {
             let mut buf = String::new();
