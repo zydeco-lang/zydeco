@@ -1,7 +1,7 @@
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
 
-use zydeco_lang::Zydeco;
+use zydeco_lang::{utils::fmt::FmtDefault, Zydeco};
 
 const EXAMPLE: &str = "
 let f = {
@@ -12,7 +12,7 @@ let f = {
 
 #[function_component(ZydecoUI)]
 fn ui() -> Html {
-    let cur_buf: UseStateHandle<String> = use_state(|| String::from(""));
+    let cur_buf: UseStateHandle<String> = use_state(|| String::from(EXAMPLE));
     let display_text = use_state(|| String::from(""));
     let text_update = {
         let cur_buf_hdl = cur_buf.clone();
@@ -31,8 +31,13 @@ fn ui() -> Html {
         let cur_buf_hdl: UseStateHandle<String> = cur_buf;
         let display_hdl = display_text.clone();
         Callback::from(move |_: MouseEvent| {
-            match Zydeco::run(String::from("input"), &cur_buf_hdl) {
-                Ok((b, v)) => display_hdl.set(format!("{:?}", v)),
+            match (Zydeco { title: String::from("input"), verbose: false })
+                .run(&cur_buf_hdl)
+            {
+                Ok((_b, v)) => {
+                    // Note: to display type of `v`, use `_b.fmt()`
+                    display_hdl.set(format!("{}", v.fmt()))
+                }
                 Err(()) => display_hdl.set(String::from("Error!")),
             }
         })
