@@ -1,10 +1,10 @@
 use crate::dynamics::syntax::{ZCompute, ZValue};
 use crate::utils::ann::{AnnHolder, AnnT};
+use std::rc::Rc;
 
 /* Function helpers */
 
 fn ret<Ann: AnnT>(value: ZValue<Ann>) -> ZCompute<Ann> {
-    use std::rc::Rc;
     let ann = value.ann().clone();
     ZCompute::Return(Rc::new(value), ann)
 }
@@ -117,23 +117,22 @@ pub fn str_to_int<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
 
 pub fn write_line<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     match args.as_slice() {
-        [ZValue::String(s, _), ZValue::Thunk(comp, _, _)] => {
+        [ZValue::String(s, _), e @ ZValue::Thunk(_comp, _, _)] => {
             println!("{}", s);
-            comp.as_ref().clone()
+            ZCompute::Force(Rc::new(e.clone()), Ann::internal(""))
         }
         _ => unreachable!(""),
     }
 }
 
 pub fn read_line<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
-    use std::rc::Rc;
     match args.as_slice() {
-        [ZValue::Thunk(comp, _, _)] => {
+        [e @ ZValue::Thunk(_comp, _, _)] => {
             let mut line = String::new();
             std::io::stdin().read_line(&mut line).unwrap();
             line.pop();
             ZCompute::App(
-                comp.clone(),
+                Rc::new(ZCompute::Force(Rc::new(e.clone()), Ann::internal(""))),
                 Rc::new(ZValue::String(line, Ann::internal(""))),
                 Ann::internal(""),
             )
