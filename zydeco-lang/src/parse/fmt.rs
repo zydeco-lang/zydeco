@@ -170,6 +170,7 @@ impl<Ann> FmtArgs for TCompute<Ann> {
                     c.fmt_args(args)
                 )
             }
+            TCompute::Os => format!("Os"),
         }
     }
 }

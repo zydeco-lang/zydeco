@@ -172,7 +172,9 @@ impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
                     }
                 },
             ),
-            TCompute::Ret(_, _) | TCompute::Lam(_, _, _) => Ok(()),
+            TCompute::Ret(_, _) | TCompute::Lam(_, _, _) | TCompute::Os => {
+                Ok(())
+            }
         }
     }
 }

@@ -35,9 +35,11 @@ impl<Ann> TCompute<Ann> {
             (TCompute::Var(a, _), TCompute::Var(b, _)) => {
                 (a == b).then_some(())
             }
+            (TCompute::Os, TCompute::Os) => Some(()),
             (TCompute::Ret(_, _), _)
             | (TCompute::Lam(_, _, _), _)
-            | (TCompute::Var(_, _), _) => None,
+            | (TCompute::Var(_, _), _)
+            | (TCompute::Os, _) => None,
         }
     }
 }
@@ -59,12 +61,27 @@ fn zip_eq<'a, T: Clone, U: Clone, Ann>(
 }
 
 #[derive(Clone, Debug)]
+pub enum THetero<Ann> {
+    TVal(TValue<Ann>),
+    TComp(TCompute<Ann>),
+}
+
+impl<Ann> From<TValue<Ann>> for THetero<Ann> {
+    fn from(x: TValue<Ann>) -> Self {
+        THetero::TVal(x)
+    }
+}
+impl<Ann> From<TCompute<Ann>> for THetero<Ann> {
+    fn from(x: TCompute<Ann>) -> Self {
+        THetero::TComp(x)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum TypeCheckError<Ann> {
     UnboundVar { var: VVar<Ann>, ann: Ann },
-    TValMismatch { expected: TValue<Ann>, found: TValue<Ann> },
-    TCompMismatch { expected: TCompute<Ann>, found: TCompute<Ann> },
-    TValExpect { expected: String, found: TValue<Ann> },
-    TCompExpect { expected: String, found: TCompute<Ann> },
+    TypeMismatch { expected: THetero<Ann>, found: THetero<Ann> },
+    TypeExpected { expected: String, found: THetero<Ann> },
     InconsistentBranches(Vec<TCompute<Ann>>),
     NameResolve(NameResolveError<Ann>),
     Explosion(String),
@@ -80,27 +97,14 @@ where
             UnboundVar { var, ann } => {
                 write!(f, "Unbound variable {} (Info: {:?})", var, ann)
             }
-            TValMismatch { expected, found } => write!(
+            TypeMismatch { expected, found } => write!(
                 f,
                 "Type mismatch, expected {:?}, but got {:?}",
                 expected, found
             ),
-
-            TValExpect { expected, found } => write!(
-                f,
-                "Type mismatch, expected {}, but got {:?}",
-                expected, found
-            ),
-            TCompMismatch { expected, found } => write!(
-                f,
-                "Type mismatch, expected {:?}, but got {:?}",
-                expected, found
-            ),
-            TCompExpect { expected, found } => write!(
-                f,
-                "Type mismatch, expected {}, but got {:?}",
-                expected, found
-            ),
+            TypeExpected { expected, found } => {
+                write!(f, "Type {} expected, but got {:?}", expected, found)
+            }
             InconsistentBranches(types) => {
                 write!(f, "Branches have mismatched types: {:?}", types)
             }
@@ -128,7 +132,10 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
         let typ = self.comp.tyck(&ctx)?;
         match &typ {
             TCompute::Ret(_, _) => Ok(typ),
-            _ => Err(TCompExpect { expected: format!("Ret(...)"), found: typ }),
+            _ => Err(TypeExpected {
+                expected: format!("Ret(...)"),
+                found: typ.into(),
+            }),
         }
     }
 }
@@ -153,9 +160,9 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         ctx.push(x.clone(), *tv);
                         body.tyck(&ctx)
                     }
-                    _ => Err(TCompExpect {
+                    _ => Err(TypeExpected {
                         expected: format!("Ret({{...}})"),
-                        found: te,
+                        found: te.into(),
                     }),
                 }
             }
@@ -163,9 +170,9 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 let t = comp.tyck(&ctx)?;
                 match t {
                     TValue::Comp(body, ..) => Ok(*body),
-                    _ => Err(TValExpect {
+                    _ => Err(TypeExpected {
                         expected: format!("Comp({{...}})"),
-                        found: t,
+                        found: t.into(),
                     }),
                 }
             }
@@ -191,16 +198,16 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 })?;
                 let tbody = match t.as_ref() {
                     TValue::Comp(tbody, _) => *tbody.clone(),
-                    _ => Err(TValExpect {
+                    _ => Err(TypeExpected {
                         expected: format!("Comp(...)"),
-                        found: *t.clone(),
+                        found: t.as_ref().to_owned().into(),
                     })?,
                 };
                 ctx.push(x.clone(), *t.clone());
                 let tbody_ = body.tyck(&ctx)?;
-                tbody.eqv(&tbody_).ok_or_else(|| TCompMismatch {
-                    expected: tbody.clone(),
-                    found: tbody_,
+                tbody.eqv(&tbody_).ok_or_else(|| TypeMismatch {
+                    expected: tbody.clone().into(),
+                    found: tbody_.into(),
                 })?;
                 Ok(tbody)
             }
@@ -210,13 +217,16 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 match tfn {
                     TCompute::Lam(tpara, tbody, ..) => {
                         TValue::eqv(&targ, &tpara).ok_or_else(|| {
-                            TValMismatch { expected: *tpara, found: targ }
+                            TypeMismatch {
+                                expected: tpara.as_ref().to_owned().into(),
+                                found: targ.into(),
+                            }
                         })?;
                         Ok(*tbody)
                     }
-                    _ => Err(TCompExpect {
+                    _ => Err(TypeExpected {
                         expected: format!("{{...}} -> {{...}}"),
-                        found: tfn,
+                        found: tfn.into(),
                     }),
                 }
             }
@@ -232,9 +242,9 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         })?;
                         Ok(tfinal)
                     }
-                    _ => Err(TValExpect {
+                    _ => Err(TypeExpected {
                         expected: format!("Bool"),
-                        found: tcond,
+                        found: tcond.into(),
                     }),
                 }
             }
@@ -247,9 +257,10 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                             Explosion(format!("unknown ctor: {}", ctor))
                         })?;
                     data.eqv(&TValue::Var(tvar.clone(), ann.clone()))
-                        .ok_or_else(|| TValMismatch {
-                            expected: TValue::Var(tvar.clone(), ann.clone()),
-                            found: data.clone(),
+                        .ok_or_else(|| TypeMismatch {
+                            expected: TValue::Var(tvar.clone(), ann.clone())
+                                .into(),
+                            found: data.clone().into(),
                         })?;
                     let mut ctx = ctx.clone();
                     ctx.extend(zip_eq(args, targs)?);
@@ -289,7 +300,10 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                     ctx.extend(zip_eq(vars, targs)?);
                     let tret_ = comp.tyck(&ctx)?;
                     TCompute::eqv(&tret_, &tret).ok_or_else(|| {
-                        TCompMismatch { expected: tret.clone(), found: tret_ }
+                        TypeMismatch {
+                            expected: tret.clone().into(),
+                            found: tret_.into(),
+                        }
                     })?;
                 }
                 ty.ok_or_else(|| Explosion(format!("empty CoMatch")))
@@ -304,22 +318,25 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                             })?;
                         let t_ = TCompute::Var(codata.clone(), ann);
                         TCompute::eqv(&tscrut, &t_).ok_or_else(|| {
-                            TCompMismatch { expected: t_, found: tscrut }
+                            TypeMismatch {
+                                expected: t_.into(),
+                                found: tscrut.into(),
+                            }
                         })?;
                         for (arg, expected) in zip_eq(args, targs)? {
                             let targ = arg.tyck(&ctx)?;
                             targ.eqv(&expected).ok_or_else(|| {
-                                TValMismatch {
-                                    expected: expected.clone(),
-                                    found: targ,
+                                TypeMismatch {
+                                    expected: expected.clone().into(),
+                                    found: targ.into(),
                                 }
                             })?;
                         }
                         Ok(tret.clone())
                     }
-                    _ => Err(TCompExpect {
+                    _ => Err(TypeExpected {
                         expected: format!("Var({{...}})"),
-                        found: tscrut,
+                        found: tscrut.into(),
                     }),
                 }
             }
@@ -345,9 +362,9 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 })?;
                 for (arg, targ) in zip_eq(args, targs)? {
                     let t = arg.tyck(&ctx)?;
-                    t.eqv(&targ).ok_or_else(|| TValMismatch {
-                        expected: targ,
-                        found: t,
+                    t.eqv(&targ).ok_or_else(|| TypeMismatch {
+                        expected: targ.into(),
+                        found: t.into(),
                     })?;
                 }
                 Ok(TValue::Var(data.clone(), ann.clone()))

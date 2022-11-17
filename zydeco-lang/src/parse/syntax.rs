@@ -102,6 +102,7 @@ pub enum TCompute<Ann> {
     Var(TVar<Ann>, Ann),
     Ret(Box<TValue<Ann>>, Ann),
     Lam(Box<TValue<Ann>>, Box<TCompute<Ann>>, Ann),
+    Os,
 }
 
 macro_rules! var {
