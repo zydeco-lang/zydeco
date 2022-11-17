@@ -2,12 +2,8 @@ use super::ctx::*;
 use super::resolve::*;
 use crate::{parse::syntax::*, utils::ann::AnnT};
 
-pub trait TypeEqv {
-    fn eqv(&self, other: &Self) -> Option<()>;
-}
-
-impl<Ann> TypeEqv for TValue<Ann> {
-    fn eqv(&self, other: &Self) -> Option<()> {
+impl<Ann> TValue<Ann> {
+    pub fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TValue::Comp(a, _), TValue::Comp(b, _)) => TCompute::eqv(a, b),
             (TValue::Bool(_), TValue::Bool(_))
@@ -28,8 +24,8 @@ impl<Ann> TypeEqv for TValue<Ann> {
     }
 }
 
-impl<Ann> TypeEqv for TCompute<Ann> {
-    fn eqv(&self, other: &Self) -> Option<()> {
+impl<Ann> TCompute<Ann> {
+    pub fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TCompute::Ret(a, _), TCompute::Ret(b, _)) => TValue::eqv(a, b),
             (TCompute::Lam(a, b, _), TCompute::Lam(c, d, _)) => {
