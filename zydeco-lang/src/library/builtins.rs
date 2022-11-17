@@ -41,8 +41,9 @@ fn std_library() -> Vec<Builtin<'static>> {
         builtin("char_to_str", "Comp(Char -> Ret(String))", 1, char_to_str),
         builtin("bool_to_str", "Comp(Bool -> Ret(String))", 1, bool_to_str),
         builtin("str_to_int", "Comp(String -> Ret(Int))", 1, str_to_int),
-        builtin("read_line", "Comp(Ret(String))", 0, read_line),
-        builtin("write_line", "Comp(String -> Ret(Unit))", 1, write_line),
+        builtin("read_line", "Comp(Comp(String -> OS) -> OS)", 1, read_line),
+        builtin("write_line", "Comp(String -> Comp(OS) -> OS)", 2, write_line),
+        builtin("exit", "Comp(Int -> OS)", 1, exit),
     ]
 }
 

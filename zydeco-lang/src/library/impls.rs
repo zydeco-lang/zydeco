@@ -1,5 +1,5 @@
 use crate::dynamics::syntax::{ZCompute, ZValue};
-use crate::utils::ann::{AnnT, AnnHolder};
+use crate::utils::ann::{AnnHolder, AnnT};
 
 /* Function helpers */
 
@@ -69,9 +69,10 @@ pub fn str_eq<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
 
 pub fn str_index<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     match args.as_slice() {
-        [ZValue::String(a, _), ZValue::Int(b, _)] => {
-            ret(ZValue::Char(a.chars().nth(*b as usize).unwrap(), Ann::internal("")))
-        }
+        [ZValue::String(a, _), ZValue::Int(b, _)] => ret(ZValue::Char(
+            a.chars().nth(*b as usize).unwrap(),
+            Ann::internal(""),
+        )),
         _ => unreachable!(""),
     }
 }
@@ -80,7 +81,9 @@ pub fn str_index<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
 
 pub fn int_to_str<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     match args.as_slice() {
-        [ZValue::Int(a, _)] => ret(ZValue::String(a.to_string(), Ann::internal(""))),
+        [ZValue::Int(a, _)] => {
+            ret(ZValue::String(a.to_string(), Ann::internal("")))
+        }
         _ => unreachable!(""),
     }
 }
@@ -103,16 +106,6 @@ pub fn bool_to_str<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     }
 }
 
-pub fn write_line<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
-    match args.as_slice() {
-        [ZValue::String(s, _)] => {
-            println!("{}", s)
-        }
-        _ => unreachable!(""),
-    }
-    ret(ZValue::Triv(Ann::internal("")))
-}
-
 pub fn str_to_int<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     match args.as_slice() {
         [ZValue::String(s, _)] => {
@@ -122,9 +115,36 @@ pub fn str_to_int<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     }
 }
 
-pub fn read_line<Ann: AnnT>(_args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
-    let mut line = String::new();
-    std::io::stdin().read_line(&mut line).unwrap();
-    line.pop();
-    ret(ZValue::String(line, Ann::internal("")))
+pub fn write_line<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
+    match args.as_slice() {
+        [ZValue::String(s, _), ZValue::Thunk(comp, _, _)] => {
+            println!("{}", s);
+            comp.as_ref().clone()
+        }
+        _ => unreachable!(""),
+    }
+}
+
+pub fn read_line<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
+    use std::rc::Rc;
+    match args.as_slice() {
+        [ZValue::Thunk(comp, _, _)] => {
+            let mut line = String::new();
+            std::io::stdin().read_line(&mut line).unwrap();
+            line.pop();
+            ZCompute::App(
+                comp.clone(),
+                Rc::new(ZValue::String(line, Ann::internal(""))),
+                Ann::internal(""),
+            )
+        }
+        _ => unreachable!(""),
+    }
+}
+
+pub fn exit<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
+    match args.as_slice() {
+        [ZValue::Int(a, _)] => std::process::exit(*a as i32),
+        _ => unreachable!(""),
+    }
 }
