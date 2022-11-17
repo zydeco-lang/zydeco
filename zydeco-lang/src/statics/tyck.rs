@@ -124,6 +124,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
         for decl in &self.decls {
             ctx.decl(&decl).map_err(|err| NameResolve(err))?;
         }
+        ctx.tyck()?;
         let typ = self.comp.tyck(&ctx)?;
         match &typ {
             TCompute::Ret(_, _) => Ok(typ),

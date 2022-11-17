@@ -1,10 +1,20 @@
-use super::resolve::*;
+use super::{
+    resolve::*,
+    tyck::{TypeCheck, TypeCheckError},
+};
 use crate::{parse::syntax::*, utils::ann::AnnT};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
+enum Sort {
+    TVal,
+    TComp,
+}
+
+#[derive(Clone, Debug)]
 pub struct Ctx<Ann> {
     vmap: HashMap<VVar<Ann>, TValue<Ann>>,
+    tmap: HashMap<TVar<Ann>, Sort>,
     data: HashMap<TVar<Ann>, Vec<(Ctor<Ann>, Vec<TValue<Ann>>)>>,
     pub ctors: HashMap<Ctor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>)>,
     codata:
@@ -16,6 +26,7 @@ impl<Ann: AnnT> Ctx<Ann> {
     pub fn new() -> Self {
         Self {
             vmap: HashMap::new(),
+            tmap: HashMap::new(),
             data: HashMap::new(),
             ctors: HashMap::new(),
             codata: HashMap::new(),
@@ -47,6 +58,7 @@ impl<Ann: AnnT> Ctx<Ann> {
                         })
                     },
                 )?;
+                self.tmap.insert(name.clone(), Sort::TVal);
                 for (ctor, args) in ctors {
                     self.ctors
                         .insert(ctor.clone(), (name.clone(), args.clone()))
@@ -69,6 +81,7 @@ impl<Ann: AnnT> Ctx<Ann> {
                         })
                     },
                 )?;
+                self.tmap.insert(name.clone(), Sort::TComp);
                 for (dtor, args, ret) in dtors {
                     self.dtors
                         .insert(
@@ -85,6 +98,81 @@ impl<Ann: AnnT> Ctx<Ann> {
                 Ok(())
             }
             Declare::Define { .. } => todo!(),
+        }
+    }
+    pub fn tyck(&self) -> Result<(), TypeCheckError<Ann>> {
+        for (_, ctors) in &self.data {
+            for (_, args) in ctors {
+                for arg in args {
+                    arg.tyck(self)?;
+                }
+            }
+        }
+        for (_, dtors) in &self.codata {
+            for (_, args, ret) in dtors {
+                for arg in args {
+                    arg.tyck(self)?;
+                }
+                ret.tyck(self)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
+    type Type = ();
+    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+        match self {
+            TValue::Var(x, ann) => ctx.tmap.get(x).map_or(
+                Err(TypeCheckError::NameResolve(
+                    NameResolveError::UnknownIdentifier {
+                        name: x.name().to_owned(),
+                        ann: ann.clone(),
+                    },
+                )),
+                |sort| {
+                    if let Sort::TVal = sort {
+                        Ok(())
+                    } else {
+                        Err(TypeCheckError::Explosion(format!(
+                            "expect value type, found computation type"
+                        )))
+                    }
+                },
+            ),
+            TValue::Comp(_, _)
+            | TValue::Bool(_)
+            | TValue::Int(_)
+            | TValue::String(_)
+            | TValue::Char(_)
+            | TValue::Unit(_) => Ok(()),
+        }
+    }
+}
+
+impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
+    type Type = ();
+    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+        match self {
+            TCompute::Var(x, ann) => ctx.tmap.get(x).map_or(
+                Err(TypeCheckError::NameResolve(
+                    NameResolveError::UnknownIdentifier {
+                        name: x.name().to_owned(),
+                        ann: ann.clone(),
+                    },
+                )),
+                |sort| {
+                    if let Sort::TComp = sort {
+                        Ok(())
+                    } else {
+                        Err(TypeCheckError::Explosion(format!(
+                            "expect value type, found computation type"
+                        )))
+                    }
+                },
+            ),
+            TCompute::Ret(_, _) | TCompute::Lam(_, _, _) => Ok(()),
         }
     }
 }
