@@ -190,6 +190,7 @@ TComp: TCompute<()> = {
     <x:TVar> => TCompute::Var(x, ()),
     "F" "(" <t:TValBox> ")" => TCompute::Ret(t, ()),
     <tv:TValBox> "->" <tc:TCompBox> => TCompute::Lam(tv, tc, ()),
+    "OS" => TCompute::Os,
 }
 
 TValBox: Box<TValue<()>> = {
@@ -262,6 +263,7 @@ extern {
 
         "F" => Tok::RetType,
         "U" => Tok::CompType,
+        "OS" => Tok::OSType,
         "Bool" => Tok::BoolType,
         "Int" => Tok::IntType,
         "String" => Tok::StringType,

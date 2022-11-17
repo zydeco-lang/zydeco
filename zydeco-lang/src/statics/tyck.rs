@@ -75,7 +75,8 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
         ctx.tyck()?;
         let typ = self.comp.tyck(&ctx)?;
         match &typ {
-            TCompute::Ret(_, _) => Ok(typ),
+            TCompute::Os => Ok(typ),
+            // TCompute::Ret(_, _) => Ok(typ),
             _ => Err(TypeExpected {
                 expected: format!("Ret(...)"),
                 found: typ.into(),

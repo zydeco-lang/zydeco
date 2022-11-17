@@ -52,6 +52,8 @@ pub enum Tok<'input> {
     RetType,
     #[regex("(U|Comp|Thunk)")]
     CompType,
+    #[token("OS")]
+    OSType,
     #[token("Bool")]
     BoolType,
     #[token("Int")]
@@ -132,6 +134,7 @@ impl<'input> Display for Tok<'input> {
             Tok::CharLit(s) => write!(f, "CharLit({})", s),
             Tok::RetType => write!(f, "RetType"),
             Tok::CompType => write!(f, "CompType"),
+            Tok::OSType => write!(f, "OSType"),
             Tok::BoolType => write!(f, "BoolType"),
             Tok::IntType => write!(f, "IntType"),
             Tok::StringType => write!(f, "StringType"),
