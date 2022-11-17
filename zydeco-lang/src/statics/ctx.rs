@@ -1,7 +1,4 @@
-use super::{
-    resolve::*,
-    tyck::{TypeCheck, TypeCheckError},
-};
+use super::{err::TypeCheckError, resolve::*, tyck::TypeCheck};
 use crate::{parse::syntax::*, utils::ann::AnnT};
 use std::collections::HashMap;
 
