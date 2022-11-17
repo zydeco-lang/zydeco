@@ -20,6 +20,14 @@ pub struct Zydeco {
     pub verbose: bool,
 }
 
+#[derive(PartialEq)]
+enum Aloud {
+    Quiet,
+    AloudBody,
+    AloudAll,
+}
+use Aloud::*;
+
 impl Zydeco {
     pub fn run(&self, buffer: &str) -> Result<(TCompute<()>, ZValue<()>), ()> {
         let program = self.parse(&buffer)?;
@@ -36,7 +44,7 @@ impl Zydeco {
     }
 
     fn parse(&self, input: &str) -> Result<Program<()>, ()> {
-        self.phase("parse", false, || {
+        self.phase("parse", Quiet, || {
             let lexer = Tok::lexer(input)
                 .spanned()
                 .map(|(tok, range)| (range.start, tok, range.end));
@@ -47,34 +55,34 @@ impl Zydeco {
     }
 
     fn tyck(&self, prog: &Program<()>) -> Result<TCompute<()>, ()> {
-        self.phase("check", false, || prog.tyck(&builtins::builtin_ctx()))
+        self.phase("check", Quiet, || prog.tyck(&builtins::builtin_ctx()))
     }
 
     fn elab(&self, comp: Compute<()>) -> Result<ZCompute<()>, ()> {
-        self.phase("elab", false, || -> Result<ZCompute<()>, Never> {
+        self.phase("elab", Quiet, || -> Result<ZCompute<()>, Never> {
             Ok(comp.into())
         })
     }
 
     fn eval(&self, comp: ZCompute<()>) -> Result<ZValue<()>, ()> {
-        self.phase("eval", true, || {
+        self.phase("eval", AloudBody, || {
             dynamics::eval::eval(comp, &mut builtins::builtin_runtime())
         })
     }
 
-    fn phase<F, T, E>(&self, name: &'static str, aloud: bool, input: F) -> Result<T, ()>
+    fn phase<F, T, E>(
+        &self, name: &'static str, mut aloud: Aloud, input: F,
+    ) -> Result<T, ()>
     where
         F: FnOnce() -> Result<T, E> + std::panic::UnwindSafe,
         T: FmtDefault,
         E: std::fmt::Display,
     {
-        if self.verbose {
-            println!("=== [{}] <{}>", self.title, name);
-        }
         let mut output = String::new();
         panic::set_hook(Box::new(|_| {}));
         let res = panic::catch_unwind(input)
             .or_else(|err| {
+                aloud = AloudAll;
                 output += &format!("Panic: {:?}", err);
                 output += "\n";
                 Err(())
@@ -85,11 +93,15 @@ impl Zydeco {
                 Ok(res)
             })
             .or_else(|err| {
+                aloud = AloudAll;
                 output += &format!("Error: {}", err);
                 output += "\n";
                 Err(())
             });
-        if self.verbose || aloud {
+        if self.verbose || aloud == AloudAll {
+            println!("=== [{}] <{}>", self.title, name);
+        }
+        if self.verbose || matches!(aloud, AloudAll | AloudBody) {
             print!("{}", output);
         }
         res

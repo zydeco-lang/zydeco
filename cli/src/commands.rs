@@ -17,7 +17,7 @@ pub enum Commands {
         file: PathBuf,
         #[arg(long, default_value_t = false)]
         dry: bool,
-        #[arg(long, default_value_t = false)]
+        #[arg(short, long, default_value_t = false)]
         verbose: bool,
     },
     /// Check a zydeco program
@@ -25,7 +25,7 @@ pub enum Commands {
         /// Path to the file to check
         #[arg(value_name = "FILE")]
         file: PathBuf,
-        #[arg(long, default_value_t = false)]
+        #[arg(short, long, default_value_t = false)]
         verbose: bool,
     },
     /// Start a REPL
