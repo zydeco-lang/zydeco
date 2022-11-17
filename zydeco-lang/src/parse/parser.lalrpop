@@ -258,12 +258,14 @@ extern {
         "false" => Tok::False,
         r"[\+-]?[0-9]+" => Tok::NumLit(<&'input str>),
         r#""[^"\\]*(?:\\.[^"\\]*)*""# => Tok::StrLit(<&'input str>),
+        r#"'[ -~]'"# => Tok::CharLit(<&'input str>),
 
         "F" => Tok::RetType,
         "U" => Tok::CompType,
         "Bool" => Tok::BoolType,
         "Int" => Tok::IntType,
         "String" => Tok::StringType,
+        "Char" => Tok::CharType,
         "Unit" => Tok::UnitType,
 
         "(" => Tok::ParenOpen,

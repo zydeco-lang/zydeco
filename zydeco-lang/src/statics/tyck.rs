@@ -20,6 +20,7 @@ impl<Ann> TypeEqv for TValue<Ann> {
             (TValue::Bool(_), _)
             | (TValue::Int(_), _)
             | (TValue::String(_), _)
+            | (TValue::Char(_), _)
             | (TValue::Var(_, _), _)
             | (TValue::Unit(_), _)
             | (TValue::Comp(_, _), _) => None,

@@ -45,6 +45,8 @@ pub enum Tok<'input> {
     NumLit(&'input str),
     #[regex(r#""[^"\\]*(?:\\.[^"\\]*)*""#)]
     StrLit(&'input str),
+    #[regex(r#"'[ -~]'"#)]
+    CharLit(&'input str),
 
     #[regex("(F|Ret)")]
     RetType,
@@ -56,6 +58,8 @@ pub enum Tok<'input> {
     IntType,
     #[token("String")]
     StringType,
+    #[token("Char")]
+    CharType,
     #[token("Unit")]
     UnitType,
 
@@ -125,11 +129,13 @@ impl<'input> Display for Tok<'input> {
             Tok::False => write!(f, "False"),
             Tok::NumLit(s) => write!(f, "NumLit({})", s),
             Tok::StrLit(s) => write!(f, "StrLit({})", s),
+            Tok::CharLit(s) => write!(f, "CharLit({})", s),
             Tok::RetType => write!(f, "RetType"),
             Tok::CompType => write!(f, "CompType"),
             Tok::BoolType => write!(f, "BoolType"),
             Tok::IntType => write!(f, "IntType"),
             Tok::StringType => write!(f, "StringType"),
+            Tok::CharType => write!(f, "CharType"),
             Tok::UnitType => write!(f, "UnitType"),
             Tok::ParenOpen => write!(f, "ParenOpen"),
             Tok::ParenClose => write!(f, "ParenClose"),
