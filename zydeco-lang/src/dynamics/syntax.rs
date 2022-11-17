@@ -5,19 +5,6 @@ use crate::{
 };
 use std::rc::Rc;
 
-// #[derive(Clone, Debug)]
-// pub struct ZProgram<Ann: AnnT> {
-//     pub decls: Vec<Declare<Ann>>,
-//     pub comp: ZCompute<Ann>,
-//     pub ann: Ann,
-// }
-
-// impl<Ann: AnnT> From<Program<Ann>> for ZProgram<Ann> {
-//     fn from(Program { decls, comp, ann }: Program<Ann>) -> Self {
-//         ZProgram { decls, comp: (*comp).into(), ann }
-//     }
-// }
-
 #[derive(Clone, Debug)]
 pub enum ZValue<Ann: AnnT> {
     Var(VVar<Ann>, Ann),

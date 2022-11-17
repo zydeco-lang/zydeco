@@ -4,12 +4,6 @@ use crate::utils::{
     fmt::{Args, FmtArgs, FmtDefault},
 };
 
-// impl<Ann: AnnT> FmtArgs for ZProgram<Ann> {
-//     fn fmt_args(&self, _args: Args) -> String {
-//         format!("{:?}", self)
-//     }
-// }
-
 impl<Ann: AnnT> FmtArgs for ZValue<Ann> {
     fn fmt_args(&self, args: Args) -> String {
         match self {
