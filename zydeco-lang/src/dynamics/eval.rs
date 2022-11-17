@@ -187,7 +187,7 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                     ))
                 }
             }
-            Prim { arity, body, ann } => {
+            Prim { arity, body, .. } => {
                 let mut args = Vec::new();
                 for _ in 0..arity {
                     let stack = self.stack.to_owned();
@@ -197,7 +197,7 @@ impl<'rt, Ann: AnnT> Runtime<Ann> {
                         args.push((**arg).clone());
                     }
                 }
-                Ok(Rc::new(ZCompute::Return(Rc::new(body(args)), ann.clone())))
+                Ok(Rc::new(body(args)))
             }
             Rec { arg, body, ann } => {
                 self.insert(

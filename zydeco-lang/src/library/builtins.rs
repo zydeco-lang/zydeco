@@ -12,17 +12,17 @@ use crate::{
 use logos::Logos;
 use std::rc::Rc;
 
-type ZPrim = fn(Vec<ZValue<()>>) -> ZValue<()>;
+type ZPrim<Ann> = fn(Vec<ZValue<Ann>>) -> ZCompute<Ann>;
 
 struct Builtin<'a> {
     name: &'a str,
     ztype: &'a str,
     arity: u64,
-    body: ZPrim,
+    body: ZPrim<()>,
 }
 
 fn builtin<'a>(
-    name: &'a str, ztype: &'a str, arity: u64, body: ZPrim,
+    name: &'a str, ztype: &'a str, arity: u64, body: ZPrim<()>,
 ) -> Builtin<'a> {
     Builtin { name, ztype, arity, body }
 }
@@ -78,8 +78,6 @@ pub fn builtin_runtime() -> Runtime<()> {
     runtime
 }
 
-fn wrap_prim<Ann: AnnT>(
-    func: fn(Vec<ZValue<Ann>>) -> ZValue<Ann>, arity: u64,
-) -> ZCompute<Ann> {
+fn wrap_prim<Ann: AnnT>(func: ZPrim<Ann>, arity: u64) -> ZCompute<Ann> {
     ZCompute::Prim { arity, body: func, ann: Ann::internal("") }
 }

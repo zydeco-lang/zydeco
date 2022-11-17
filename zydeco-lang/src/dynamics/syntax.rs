@@ -61,7 +61,7 @@ pub enum ZCompute<Ann: AnnT> {
     },
     Prim {
         arity: u64,
-        body: fn(Vec<ZValue<Ann>>) -> ZValue<Ann>,
+        body: fn(Vec<ZValue<Ann>>) -> ZCompute<Ann>,
         ann: Ann,
     },
     Rec {
