@@ -39,12 +39,17 @@ fn main() -> Result<(), ()> {
             .check(buf.as_str())?;
         }
         Commands::Repl {} => {
-            let stdin = std::io::stdin();
-            for (i, line) in stdin.lines().enumerate() {
-                let line = line.unwrap();
-                let res = Zydeco { title: format!("#{}", i), verbose: false }
+            let mut cnt = 0;
+            loop {
+                let mut line = String::new();
+                {
+                    let stdin = std::io::stdin();
+                    stdin.read_line(&mut line).map_err(|_| ())?;
+                }
+                let res = Zydeco { title: format!("#{}", cnt), verbose: false }
                     .run(&line);
                 println!("{}", response(res.is_ok()));
+                cnt += 1;
             }
         }
         Commands::Test {} => acc_mode()?,
