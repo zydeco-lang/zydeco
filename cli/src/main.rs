@@ -14,8 +14,7 @@ fn main() -> Result<(), ()> {
             let _ = Zydeco {
                 title: file
                     .file_name()
-                    .map(|s| s.to_str().map(|s| s.to_owned()))
-                    .flatten()
+                    .and_then(|s| s.to_str().map(|s| s.to_owned()))
                     .unwrap_or_default(),
                 verbose,
             }
@@ -31,24 +30,26 @@ fn main() -> Result<(), ()> {
             let _ = Zydeco {
                 title: file
                     .file_name()
-                    .map(|s| s.to_str().map(|s| s.to_owned()))
-                    .flatten()
+                    .and_then(|s| s.to_str().map(|s| s.to_owned()))
                     .unwrap_or_default(),
                 verbose,
             }
             .check(buf.as_str())?;
         }
-        Commands::Repl {} => {
+        Commands::Repl { verbose } => {
             let mut cnt = 0;
+            println!("Zydeco v0.0.1");
             loop {
                 let mut line = String::new();
                 {
+                    use std::io::Write;
+                    print!("> ");
+                    std::io::stdout().flush().unwrap();
                     let stdin = std::io::stdin();
                     stdin.read_line(&mut line).map_err(|_| ())?;
                 }
-                let res = Zydeco { title: format!("#{}", cnt), verbose: false }
-                    .run(&line);
-                println!("{}", response(res.is_ok()));
+                let _ =
+                    Zydeco { title: format!("#{}", cnt), verbose }.run(&line);
                 cnt += 1;
             }
         }
@@ -107,7 +108,7 @@ fn single_run(
     let title = line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
     println!(">>> [{}]", title);
     println!("{}", buffer);
-    let res = Zydeco { title: title.to_owned(), verbose: false }.run(&buffer);
+    let res = Zydeco { title: title.to_owned(), verbose: false }.run(buffer);
     if res.is_err() {
         err_names.push(title.to_owned());
     }

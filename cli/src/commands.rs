@@ -29,7 +29,10 @@ pub enum Commands {
         verbose: bool,
     },
     /// Start a REPL
-    Repl {},
+    Repl {
+        #[arg(short, long, default_value_t = false)]
+        verbose: bool,
+    },
     /// Run tests
     Test {},
 }
