@@ -44,22 +44,6 @@ impl<Ann> TCompute<Ann> {
     }
 }
 
-fn zip_eq<'a, T: Clone, U: Clone, Ann>(
-    a: &'a Vec<T>, b: &'a Vec<U>,
-) -> Result<
-    std::iter::Zip<
-        std::iter::Cloned<std::slice::Iter<'a, T>>,
-        std::iter::Cloned<std::slice::Iter<'a, U>>,
-    >,
-    TypeCheckError<Ann>,
-> {
-    (a.len() == b.len())
-        .then(|| a.iter().cloned().zip(b.iter().cloned()))
-        .ok_or_else(|| {
-            TypeCheckError::Explosion(format!("wrong number of arguments"))
-        })
-}
-
 pub trait TypeCheck<Ann> {
     type Type;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>>;
@@ -70,7 +54,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         let mut ctx = ctx.clone();
         for decl in &self.decls {
-            ctx.decl(&decl).map_err(|err| NameResolve(err))?;
+            ctx.decl(decl).map_err(|err| NameResolve(err))?;
         }
         ctx.tyck()?;
         let typ = self.comp.tyck(&ctx)?;
@@ -78,7 +62,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
             TCompute::Os => Ok(typ),
             // TCompute::Ret(_, _) => Ok(typ),
             _ => Err(TypeExpected {
-                expected: format!("Ret(...)"),
+                expected: "OS".to_string(),
                 found: typ.into(),
             }),
         }
@@ -129,7 +113,10 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 let mut ctx = ctx.clone();
                 let (x, t) = arg;
                 let t = t.as_ref().ok_or_else(|| {
-                    Explosion("lam must have type annotation".to_string())
+                    Explosion(format!(
+                        "lambda parameter \"{}\" needs a type annotation",
+                        arg.0
+                    ))
                 })?;
                 ctx.push(x.clone(), *t.clone());
                 let tbody = body.tyck(&ctx)?;
@@ -139,7 +126,10 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 let mut ctx = ctx.clone();
                 let (x, t) = arg;
                 let t = t.as_ref().ok_or_else(|| {
-                    Explosion("rec must have type annotation".to_string())
+                    Explosion(format!(
+                        "recursive thunk \"{}\" must have type annotation",
+                        arg.0
+                    ))
                 })?;
                 let tbody = match t.as_ref() {
                     TValue::Comp(tbody, _) => *tbody.clone(),
@@ -208,7 +198,10 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                             found: data.clone().into(),
                         })?;
                     let mut ctx = ctx.clone();
-                    ctx.extend(zip_eq(args, targs)?);
+                    if args.len() != targs.len() {
+                        return Err(Explosion(format!("In `match` arm for {}, expected {} arguments but got {}", ctor, args.len(), targs.len())));
+                    }
+                    ctx.extend(args.iter().cloned().zip(targs.iter().cloned()));
                     let tbranch = body.tyck(&ctx)?;
                     ty = match ty {
                         Some(tret) => {
@@ -242,7 +235,10 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         })
                         .or_else(|| Some(t));
                     let mut ctx = ctx.clone();
-                    ctx.extend(zip_eq(vars, targs)?);
+                    if vars.len() != targs.len() {
+                        return Err(Explosion(format!("In `comatch` arm for {}, expected {} arguments but got {}", dtor, vars.len(), targs.len())));
+                    }
+                    ctx.extend(vars.iter().cloned().zip(targs.iter().cloned()));
                     let tret_ = comp.tyck(&ctx)?;
                     TCompute::eqv(&tret_, &tret).ok_or_else(|| {
                         TypeMismatch {
@@ -268,19 +264,20 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                                 found: tscrut.into(),
                             }
                         })?;
-                        for (arg, expected) in zip_eq(args, targs)? {
-                            let targ = arg.tyck(&ctx)?;
-                            targ.eqv(&expected).ok_or_else(|| {
-                                TypeMismatch {
-                                    expected: expected.clone().into(),
-                                    found: targ.into(),
-                                }
+                        if args.len() != targs.len() {
+                            return Err(Explosion(format!("In application of destructor {}, got {} args but expected {}", dtor, args.len(), targs.len())));
+                        }
+                        for (arg, expected) in args.iter().zip(targs.iter()) {
+                            let targ = arg.tyck(ctx)?;
+                            targ.eqv(expected).ok_or_else(|| TypeMismatch {
+                                expected: expected.clone().into(),
+                                found: targ.into(),
                             })?;
                         }
                         Ok(tret.clone())
                     }
                     _ => Err(TypeExpected {
-                        expected: format!("Var({{...}})"),
+                        expected: "a codata type".to_string(),
                         found: tscrut.into(),
                     }),
                 }
@@ -305,10 +302,14 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 let (data, targs) = ctx.ctors.get(ctor).ok_or_else(|| {
                     Explosion(format!("unknown ctor: {}", ctor))
                 })?;
-                for (arg, targ) in zip_eq(args, targs)? {
-                    let t = arg.tyck(&ctx)?;
-                    t.eqv(&targ).ok_or_else(|| TypeMismatch {
-                        expected: targ.into(),
+                if args.len() != targs.len() {
+                    return Err(Explosion(format!("In application of constructor {}, got {} args but expected {}", ctor, args.len(), targs.len())));
+                }
+
+                for (arg, targ) in args.iter().zip(targs.iter()) {
+                    let t = arg.tyck(ctx)?;
+                    t.eqv(targ).ok_or_else(|| TypeMismatch {
+                        expected: targ.clone().into(),
                         found: t.into(),
                     })?;
                 }
