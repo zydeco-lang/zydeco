@@ -1,0 +1,68 @@
+data Tok where
+  | LParen()
+  | RParen()
+
+data LazyTokList where
+  | Nil()
+  | Cons(Tok, Thunk(Ret(LazyTokList)))
+
+data ParenCounterState where
+  | Ok()
+  | Reject()
+
+codata ParenCounterStk where
+  .none() : Ret(Bool)
+  .some() : ParenCounterStk
+
+let rec foldr : Thunk(Ret(LazyTokList)) -> Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk) -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk =
+    fn (ll : Thunk(Ret(LazyTokList)), step : Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk), final : Thunk(ParenCounterState -> ParenCounterStk)) ->
+    do l <- ! ll;
+    match l
+    | Nil()      -> ! final
+    | Cons(c, k) -> ! step c { ! foldr k step final };
+
+let rec reject : ParenCounterStk =
+  comatch
+  | .none() -> ret false
+  | .some() -> ! reject;
+
+let try_accept = {
+  comatch
+  | .none() -> ret true
+  | .some() -> ! reject
+};
+
+let accept_or_not = {
+  fn (s : ParenCounterState) ->
+  match s
+  | Ok()     -> ! try_accept
+  | Reject() -> ! reject
+};
+
+let paren_counter_step = {
+    fn (c : Tok, k : Thunk(ParenCounterState -> ParenCounterStk), state : ParenCounterState) ->
+    match c
+    | LParen() -> ! k state .some()
+    | RParen() ->
+    (comatch
+    | .none() -> ! k Reject() .none() # Note: would be more efficient to just ! reject here
+    | .some() -> ! k state)
+};
+
+let demonstrate = {
+  fn (s: String, toks: Thunk(Ret(LazyTokList)), t : Thunk(OS)) ->
+     do s' <- ! str_append "The following parens are balanced? "  s;
+     do b <- ! foldr toks paren_counter_step accept_or_not Ok() .none();
+     do s <- ! bool_to_str b;
+     ! write_line s' { ! write_line s t }
+};
+
+! demonstrate "(())" {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
+! demonstrate "()()" {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
+! demonstrate ")(()" {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
+! demonstrate "()(" {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Nil()})})})} {
+! demonstrate "()" {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})} {
+! demonstrate "(" {ret Cons(LParen(), {ret Nil()})} {
+! demonstrate ")" {ret Cons(RParen(), {ret Nil()})} {
+! demonstrate "" {ret Nil()} {
+! exit 0 }}}}}}}}
