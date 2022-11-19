@@ -1,0 +1,44 @@
+codata Y where
+  .y(U(Y)): Int -> F(Int)
+
+# \f. (\x. f (x x)) (\x. f (x x))
+# The famous Y combinator in call-by-name sense actually works
+# under call-by-push-value - thanks to thunks, we are able to
+# preserve the intention of lazy evaluation in `x` above.
+
+let y = {
+  fn (f: U(U(Int -> F(Int)) -> Int -> F(Int))) ->
+    ret {
+      (comatch | .y(x) -> ! f { ! x .y(x) })
+      .y({ comatch | .y(x) -> ! f { ! x .y(x) } })
+    }
+};
+
+# `int_eq` implemented by `str_eq`;
+# should be replaced after `int_eq` is builtin
+let int_eq = {
+  fn (x: Int, y: Int) ->
+    do x <- ! int_to_str x;
+    do y <- ! int_to_str y;
+    ! str_eq x y
+};
+
+# good old factorial
+let fact = {
+  fn (f: U(Int -> F(Int))) ->
+    fn (n: Int) ->
+      do is_zero <- ! int_eq n 0;
+      if is_zero:
+        ret 1
+      else:
+        do rest <-
+          do n-1 <- !sub n 1;
+          ! f n-1;
+        ! mul n rest
+};
+
+do fact <- ! y fact;
+do x <- ! fact 5;
+do x <- ! int_to_str x;
+! write_line x {
+! exit 0 }
