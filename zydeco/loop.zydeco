@@ -1,2 +1,2 @@
-let rec loop : Ret(Unit) = ! loop;
+let rec loop : OS = ! loop;
 ! loop

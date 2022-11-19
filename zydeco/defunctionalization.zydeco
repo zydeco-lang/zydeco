@@ -130,4 +130,6 @@ let sum = {
     ! sumBest xs .add(0)
 };
 
-! sum (Cons(5, Cons(13, Empty())))
+do x <- ! sum (Cons(5, Cons(13, Empty())));
+do s <- ! int_to_str x;
+   ! write_line s { ! exit 0 }

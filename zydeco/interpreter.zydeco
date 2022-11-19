@@ -52,6 +52,14 @@ codata Interpreter where
   .valu(SynVal, Env)  : Ret(OptionSemVal)
   .comp(SynComp, Env) : SemComp
 
+let sem_val_to_str = {
+    fn (s : SemVal)  ->
+    match s
+    | True'() -> ret "true"
+    | False'() -> ret "false"
+    | ThunkV'(_) -> ret "<thunk>"
+};
+
 let rec lookup: String -> Env -> Ret(OptionSemVal) =
   fn (x : String, g : Env) ->
     match g
@@ -122,4 +130,9 @@ let rec interp: Interpreter =
     );
 
 # An example
-! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty()) .bind()
+do x <- ! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty()) .bind();
+match x
+| Err() -> ! write_line "ERROR" { ! exit 1 }
+| Ok(sv) ->
+  (do s <- ! sem_val_to_str sv;
+      ! write_line s { ! exit 0 })
