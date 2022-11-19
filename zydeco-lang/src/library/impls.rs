@@ -9,7 +9,7 @@ fn ret<Ann: AnnT>(value: ZValue<Ann>) -> ZCompute<Ann> {
     ZCompute::Return(Rc::new(value), ann)
 }
 
-/* Arithmetics */
+/* Arithmetic */
 
 pub fn add<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     match args.as_slice() {
@@ -48,6 +48,14 @@ pub fn modulo<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
 }
 
 /* Strings */
+pub fn str_length<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
+    match args.as_slice() {
+        [ZValue::String(a, _)] => {
+            ret(ZValue::Int(a.len() as i64, Ann::internal("")))
+        }
+        _ => unreachable!(""),
+    }
+}
 
 pub fn str_append<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     match args.as_slice() {

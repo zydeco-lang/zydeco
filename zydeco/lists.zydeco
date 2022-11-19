@@ -1,0 +1,21 @@
+data StrList where
+  | Nil()
+  | Cons(String, StrList)
+
+let rec foldl : StrList -> Thunk(String -> Int -> Ret(Int)) -> Int -> Ret(Int) =
+  fn (l : StrList, step : Thunk(String -> Int -> Ret(Int)), s : Int) ->
+    match l
+    | Nil() -> ret s
+    | Cons(x, xs) -> (
+      do s' <- ! step x s;
+      ! foldl xs step s'
+    );
+
+do l <- ! foldl (Cons("abc", Cons("", Cons("y", Nil()))))
+                { fn (s : String, i : Int) ->
+                  do i' <- ! str_length s;
+                  ! add i i'
+                }
+                0;
+do s <- ! int_to_str l;
+! write_line s { ! exit 0 }
