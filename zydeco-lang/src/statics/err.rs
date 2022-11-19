@@ -25,6 +25,7 @@ pub enum TypeCheckError<Ann> {
     TypeExpected { expected: String, found: THetero<Ann> },
     InconsistentBranches(Vec<TCompute<Ann>>),
     NameResolve(NameResolveError<Ann>),
+    WrongMain { found: TCompute<Ann> },
     Explosion(String),
 }
 use TypeCheckError::*;
@@ -51,6 +52,11 @@ where
                 write!(f, "Branches have mismatched types: {:?}", types)
             }
             NameResolve(nr) => write!(f, "{}", nr),
+            WrongMain { found } => write!(
+                f,
+                "The type of the main expression should be OS but got {:?}",
+                found
+            ),
             Explosion(s) => write!(f, "explosion, whatever that means: {}", s),
         }
     }

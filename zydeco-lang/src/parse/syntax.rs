@@ -5,6 +5,12 @@ pub struct Program<Ann> {
     pub ann: Ann,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ValOrComp<Ann> {
+    Val(Value<Ann>),
+    Comp(Compute<Ann>),
+}
+
 pub type Binding<Ty, Def, Ann> = (VVar<Ann>, Option<Box<Ty>>, Box<Def>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]

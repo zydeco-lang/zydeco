@@ -50,7 +50,7 @@ pub trait TypeCheck<Ann> {
 }
 
 impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
-    type Type = TCompute<Ann>;
+    type Type = ();
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
         let mut ctx = ctx.clone();
         for decl in &self.decls {
@@ -59,12 +59,8 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
         ctx.tyck()?;
         let typ = self.comp.tyck(&ctx)?;
         match &typ {
-            TCompute::Os => Ok(typ),
-            // TCompute::Ret(_, _) => Ok(typ),
-            _ => Err(TypeExpected {
-                expected: "OS".to_string(),
-                found: typ.into(),
-            }),
+            TCompute::Os => Ok(()),
+            _ => Err(WrongMain { found: typ.into() }),
         }
     }
 }

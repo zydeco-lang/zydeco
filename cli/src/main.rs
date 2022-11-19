@@ -1,16 +1,19 @@
 use clap::Parser;
 use cli::{Cli, Commands};
 use std::io::Read;
+use zydeco_lang::parse::syntax::TCompute;
+use zydeco_lang::parse::syntax::ValOrComp;
+use zydeco_lang::zydeco;
 use zydeco_lang::Zydeco;
 
-fn main() -> Result<(), ()> {
+fn main() -> Result<(), String> {
     match Cli::parse().command {
         Commands::Run { file, dry: false, verbose } => {
             let mut buf = String::new();
             std::fs::File::open(file.clone())
-                .map_err(|_| ())?
+                .map_err(|e| e.to_string())?
                 .read_to_string(&mut buf)
-                .map_err(|_| ())?;
+                .map_err(|e| e.to_string())?;
             let _ = Zydeco {
                 title: file
                     .file_name()
@@ -18,26 +21,20 @@ fn main() -> Result<(), ()> {
                     .unwrap_or_default(),
                 verbose,
             }
-            .run(buf.as_str())?;
+            .run(buf.as_str())
+            .map_err(|_| "")?;
         }
-        Commands::Run { file, dry: true, verbose }
-        | Commands::Check { file, verbose } => {
+        Commands::Run { file, dry: true, .. }
+        | Commands::Check { file, .. } => {
             let mut buf = String::new();
-            std::fs::File::open(file.clone())
-                .map_err(|_| ())?
+            std::fs::File::open(file)
+                .map_err(|e| e.to_string())?
                 .read_to_string(&mut buf)
-                .map_err(|_| ())?;
-            let _ = Zydeco {
-                title: file
-                    .file_name()
-                    .and_then(|s| s.to_str().map(|s| s.to_owned()))
-                    .unwrap_or_default(),
-                verbose,
-            }
-            .check(buf.as_str())?;
+                .map_err(|e| e.to_string())?;
+            let p = zydeco::parse_prog(&buf)?;
+            zydeco::typecheck_prog(&p)?
         }
         Commands::Repl { verbose } => {
-            let mut cnt = 0;
             println!("Zydeco v0.0.1");
             loop {
                 let mut line = String::new();
@@ -46,14 +43,40 @@ fn main() -> Result<(), ()> {
                     print!("> ");
                     std::io::stdout().flush().unwrap();
                     let stdin = std::io::stdin();
-                    stdin.read_line(&mut line).map_err(|_| ())?;
+                    stdin.read_line(&mut line).map_err(|e| e.to_string())?;
                 }
-                let _ =
-                    Zydeco { title: format!("#{}", cnt), verbose }.run(&line);
-                cnt += 1;
+                match zydeco::parse_exp(&line) {
+                    Err(e) => println!("Parse Error: {}", e),
+                    Ok(ValOrComp::Val(v)) => {
+                        match zydeco::typecheck_value(&v) {
+                            Err(e) => println!("Type Error: {}", e),
+                            Ok(a) => println!("{:?} : {:?}", v, a)
+                        }
+                    }
+                    Ok(ValOrComp::Comp(m)) => {
+                        match zydeco::typecheck_computation(&m) {
+                            Err(e) => println!("Type Error: {}", e),
+                            Ok(TCompute::Os) => {
+                                match zydeco::eval_os_computation(m) {
+                                    Err(e) => println!("Runtime Error: {}", e),
+                                    Ok(_) => {}
+                                }
+                            }
+
+                            Ok(TCompute::Ret(_, _))  => {
+                                match zydeco::eval_returning_computation(m) {
+                                    Err(e) => println!("Runtime Error: {}", e),
+                                    Ok(v) => println!("{:?}", v)
+                                }
+                            }
+                            Ok(b) => println!("Can't run computation of type {:?}\nCan only run computations of type OS or Ret(a)", b)
+
+                        }
+                    }
+                }
             }
         }
-        Commands::Test {} => acc_mode()?,
+        Commands::Test {} => acc_mode().map_err(|_| "")?,
     }
     Ok(())
 }
