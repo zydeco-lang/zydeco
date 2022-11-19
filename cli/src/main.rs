@@ -50,7 +50,7 @@ fn main() -> Result<(), String> {
                     Ok(ValOrComp::Val(v)) => {
                         match zydeco::typecheck_value(&v) {
                             Err(e) => println!("Type Error: {}", e),
-                            Ok(a) => println!("{:?} : {:?}", v, a)
+                            Ok(a) => println!("{:?} : {}", v, a)
                         }
                     }
                     Ok(ValOrComp::Comp(m)) => {
@@ -69,7 +69,7 @@ fn main() -> Result<(), String> {
                                     Ok(v) => println!("{:?}", v)
                                 }
                             }
-                            Ok(b) => println!("Can't run computation of type {:?}\nCan only run computations of type OS or Ret(a)", b)
+                            Ok(b) => println!("Can't run computation of type {}\nCan only run computations of type OS or Ret(a)", b)
 
                         }
                     }
