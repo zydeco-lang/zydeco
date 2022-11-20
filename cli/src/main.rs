@@ -1,7 +1,6 @@
 use clap::Parser;
 use cli::{Cli, Commands};
 use std::io::Read;
-use zydeco_lang::utils::fmt::FmtDefault;
 use zydeco_lang::zydeco;
 
 fn main() -> Result<(), String> {
@@ -32,7 +31,7 @@ fn run(
     announce_phase(verbose, title, "parse");
     let p = zydeco::parse_prog(input)?;
     if verbose {
-        println!("{}", p.fmt())
+        println!("{}", p)
     }
     // type check
     announce_phase(verbose, title, "tyck");
@@ -41,7 +40,7 @@ fn run(
     announce_phase(verbose, title, "elab");
     let sem_m = zydeco::elab_prog(p);
     if verbose {
-        println!("{}", sem_m.fmt());
+        println!("{}", sem_m);
     }
     // eval
     if !dry_run {
