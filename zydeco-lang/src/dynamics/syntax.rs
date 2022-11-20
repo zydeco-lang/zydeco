@@ -1,6 +1,5 @@
 use super::env::Env;
 use crate::parse::syntax::{Compute, Value};
-use std::fmt;
 use std::io::{BufRead, Write};
 use std::rc::Rc;
 
@@ -21,31 +20,6 @@ pub enum ZValue {
     String(String),
     Char(char),
     Triv(),
-}
-
-impl fmt::Display for ZValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ZValue::Var(v) => write!(f, "{}", v),
-            ZValue::Thunk(_, _) => write!(f, "<thunk>"),
-            ZValue::Ctor(ctor, vs) => {
-                write!(f, "{}(", ctor)?;
-                for (i, v) in vs.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", {}", v)?;
-                    } else {
-                        write!(f, "{}", v)?;
-                    }
-                }
-                write!(f, ")")
-            }
-            ZValue::Bool(b) => write!(f, "{}", b),
-            ZValue::Int(n) => write!(f, "{}", n),
-            ZValue::String(s) => write!(f, "\"{}\"", s),
-            ZValue::Char(c) => write!(f, "'{}'", c),
-            ZValue::Triv() => write!(f, "()"),
-        }
-    }
 }
 
 impl<Ann> From<Value<Ann>> for ZValue {

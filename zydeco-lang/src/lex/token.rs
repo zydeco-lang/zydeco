@@ -3,9 +3,9 @@ use std::fmt::{Debug, Display};
 
 #[derive(Logos, Clone, Debug, PartialEq)]
 pub enum Tok<'input> {
-    #[regex(r"[A-Z]([a-zA-Z0-9_-]|'|\?)*")]
+    #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*")]
     IdentBig(&'input str),
-    #[regex(r"[_a-z]([a-zA-Z0-9_-]|'|\?)*")]
+    #[regex(r"(([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*)|((\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=)*)")]
     IdentSmall(&'input str),
 
     #[token("data")]
@@ -95,12 +95,6 @@ pub enum Tok<'input> {
     Arrow,
     #[token("<-")]
     Assign,
-    #[token("+")]
-    Plus,
-    #[token("-")]
-    Minus,
-    #[token("*")]
-    Star,
 
     #[error]
     #[regex(r"#.*\n", logos::skip, priority = 2)]
@@ -155,9 +149,6 @@ impl<'input> Display for Tok<'input> {
             Tok::Dot => write!(f, "Dot"),
             Tok::Arrow => write!(f, "Arrow"),
             Tok::Assign => write!(f, "Assign"),
-            Tok::Plus => write!(f, "Plus"),
-            Tok::Minus => write!(f, "Minus"),
-            Tok::Star => write!(f, "Star"),
 
             Tok::Error => write!(f, "Error"),
         }

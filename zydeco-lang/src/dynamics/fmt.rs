@@ -1,13 +1,11 @@
 use super::syntax::*;
-use crate::utils::fmt::{Args, FmtArgs, FmtDefault};
+use crate::utils::fmt::{Args, FmtArgs};
 
 impl FmtArgs for ZValue {
     fn fmt_args(&self, args: Args) -> String {
         match self {
-            ZValue::Var(var) => var.clone(),
-            ZValue::Thunk(compute, _) => {
-                format!("{{ {} }}", compute.fmt_args(args))
-            }
+            ZValue::Var(var) => var.to_string(),
+            ZValue::Thunk(_, _) => format!("<thunk>"),
             ZValue::Ctor(ctor, cargs) => {
                 let cargs: Vec<_> =
                     cargs.iter().map(|arg| arg.fmt_args(args)).collect();
@@ -15,8 +13,8 @@ impl FmtArgs for ZValue {
             }
             ZValue::Bool(b) => format!("{}", b),
             ZValue::Int(i) => format!("{}", i),
-            ZValue::String(s) => format!("{:?}", s),
-            ZValue::Char(c) => format!("{:?}", c),
+            ZValue::String(s) => format!("\"{}\"", s),
+            ZValue::Char(c) => format!("\'{}\'", c),
             ZValue::Triv() => format!("()"),
         }
     }
@@ -103,5 +101,13 @@ impl FmtArgs for ZCompute {
 }
 
 // impl FmtDefault for ZProgram<()> {}
-impl FmtDefault for ZValue {}
-impl FmtDefault for ZCompute {}
+impl std::fmt::Display for ZValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.fmt_args(Args::new(2)))
+    }
+}
+impl std::fmt::Display for ZCompute {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.fmt_args(Args::new(2)))
+    }
+}

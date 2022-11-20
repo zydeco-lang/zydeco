@@ -18,9 +18,3 @@ impl Args {
 pub trait FmtArgs {
     fn fmt_args(&self, args: Args) -> String;
 }
-
-pub trait FmtDefault: FmtArgs {
-    fn fmt(&self) -> String {
-        self.fmt_args(Args::new(2))
-    }
-}

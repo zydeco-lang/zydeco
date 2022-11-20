@@ -1,5 +1,5 @@
 use super::syntax::*;
-use crate::utils::fmt::{Args, FmtDefault, FmtArgs};
+use crate::utils::fmt::{Args, FmtArgs};
 
 impl<Ann> FmtArgs for Program<Ann> {
     fn fmt_args(&self, args: Args) -> String {
@@ -70,11 +70,7 @@ impl<Ann> FmtArgs for Compute<Ann> {
             }
             Compute::Rec { arg, body, .. } => {
                 let (x, _) = arg;
-                format!(
-                    "rec ({}) -> {}",
-                    x.fmt_args(fmta),
-                    body.fmt_args(fmta)
-                )
+                format!("rec ({}) -> {}", x.fmt_args(fmta), body.fmt_args(fmta))
             }
             Compute::App(e, v, _) => {
                 format!("{} {}", e.fmt_args(fmta), v.fmt_args(fmta),)
@@ -148,7 +144,7 @@ impl<Ann> FmtArgs for TValue<Ann> {
     fn fmt_args(&self, args: Args) -> String {
         match self {
             TValue::Var(x, _) => format!("{}", x.fmt_args(args)),
-            TValue::Comp(c, _) => format!("Comp({})", c.fmt_args(args)),
+            TValue::Comp(c, _) => format!("Thunk({})", c.fmt_args(args)),
             TValue::Bool(_) => format!("Bool"),
             TValue::Int(_) => format!("Int"),
             TValue::Char(_) => format!("Char"),
@@ -164,22 +160,38 @@ impl<Ann> FmtArgs for TCompute<Ann> {
             TCompute::Var(x, _) => format!("{}", x.fmt_args(args)),
             TCompute::Ret(v, _) => format!("Ret({})", v.fmt_args(args)),
             TCompute::Lam(t, c, _) => {
-                format!(
-                    "{} -> {}",
-                    t.fmt_args(args),
-                    c.fmt_args(args)
-                )
+                format!("{} -> {}", t.fmt_args(args), c.fmt_args(args))
             }
             TCompute::Os => format!("Os"),
         }
     }
 }
 
-impl FmtDefault for Program<()> {}
-impl FmtDefault for TValue<()> {}
-impl FmtDefault for TCompute<()> {}
-impl FmtDefault for Value<()> {}
-impl FmtDefault for Compute<()> {}
+impl<Ann> std::fmt::Display for Program<Ann> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fmt_args(Args::new(2)))
+    }
+}
+impl<Ann> std::fmt::Display for TValue<Ann> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fmt_args(Args::new(2)))
+    }
+}
+impl<Ann> std::fmt::Display for TCompute<Ann> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fmt_args(Args::new(2)))
+    }
+}
+impl<Ann> std::fmt::Display for Value<Ann> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fmt_args(Args::new(2)))
+    }
+}
+impl<Ann> std::fmt::Display for Compute<Ann> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fmt_args(Args::new(2)))
+    }
+}
 
 macro_rules! var_fmt {
     ($Var:ident) => {
@@ -188,7 +200,11 @@ macro_rules! var_fmt {
                 format!("{}", self.name())
             }
         }
-        impl<Ann> FmtDefault for $Var<Ann> {}
+        impl<Ann> std::fmt::Display for $Var<Ann> {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}", self.fmt_args(Args::new(2)))
+            }
+        }
     };
 }
 
