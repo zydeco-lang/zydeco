@@ -1,84 +1,60 @@
 use clap::Parser;
 use cli::{Cli, Commands};
 use std::io::Read;
-use zydeco_lang::parse::syntax::TCompute;
-use zydeco_lang::parse::syntax::ValOrComp;
-use zydeco_lang::zydeco;
-use zydeco_lang::Zydeco;
+use zydeco_lang::utils::fmt::FmtDefault;
+use zydeco_lang::zydeco::{self, eval_sem_computation};
 
 fn main() -> Result<(), String> {
     match Cli::parse().command {
-        Commands::Run { file, dry: false, verbose } => {
-            let mut buf = String::new();
-            std::fs::File::open(file.clone())
-                .map_err(|e| e.to_string())?
-                .read_to_string(&mut buf)
-                .map_err(|e| e.to_string())?;
-            let _ = Zydeco {
-                title: file
-                    .file_name()
-                    .and_then(|s| s.to_str().map(|s| s.to_owned()))
-                    .unwrap_or_default(),
-                verbose,
-            }
-            .run(buf.as_str())
-            .map_err(|_| "")?;
-        }
-        Commands::Run { file, dry: true, .. }
-        | Commands::Check { file, .. } => {
-            let mut buf = String::new();
-            std::fs::File::open(file)
-                .map_err(|e| e.to_string())?
-                .read_to_string(&mut buf)
-                .map_err(|e| e.to_string())?;
-            let p = zydeco::parse_prog(&buf)?;
-            zydeco::typecheck_prog(&p)?
-        }
-        Commands::Repl { verbose } => {
-            println!("Zydeco v0.0.1");
-            loop {
-                let mut line = String::new();
-                {
-                    use std::io::Write;
-                    print!("> ");
-                    std::io::stdout().flush().unwrap();
-                    let stdin = std::io::stdin();
-                    stdin.read_line(&mut line).map_err(|e| e.to_string())?;
-                }
-                match zydeco::parse_exp(&line) {
-                    Err(e) => println!("Parse Error: {}", e),
-                    Ok(ValOrComp::Val(v)) => {
-                        match zydeco::typecheck_value(&v) {
-                            Err(e) => println!("Type Error: {}", e),
-                            Ok(a) => println!("{:?} : {}", v, a)
-                        }
-                    }
-                    Ok(ValOrComp::Comp(m)) => {
-                        match zydeco::typecheck_computation(&m) {
-                            Err(e) => println!("Type Error: {}", e),
-                            Ok(TCompute::Os) => {
-                                match zydeco::eval_os_computation(m) {
-                                    Err(e) => println!("Runtime Error: {}", e),
-                                    Ok(_) => {}
-                                }
-                            }
+        Commands::Run { file, dry, verbose } => run_file(file, dry, verbose),
+        Commands::Check { file, verbose } => run_file(file, true, verbose),
+        Commands::Repl { .. } => cli::repl::launch(),
+        Commands::Test {} => acc_mode().map_err(|_| "".to_string()),
+    }
+}
 
-                            Ok(TCompute::Ret(_, _))  => {
-                                match zydeco::eval_returning_computation(m) {
-                                    Err(e) => println!("Runtime Error: {}", e),
-                                    Ok(v) => println!("{:?}", v)
-                                }
-                            }
-                            Ok(b) => println!("Can't run computation of type {}\nCan only run computations of type OS or Ret(a)", b)
+fn run_file(
+    file: std::path::PathBuf, dry_run: bool, verbose: bool,
+) -> Result<(), String> {
+    let mut buf = String::new();
+    std::fs::File::open(file.clone())
+        .map_err(|e| e.to_string())?
+        .read_to_string(&mut buf)
+        .map_err(|e| e.to_string())?;
+    let title = format!("{}", file.display());
+    run(&buf, &title, dry_run, verbose)
+}
 
-                        }
-                    }
-                }
-            }
-        }
-        Commands::Test {} => acc_mode().map_err(|_| "")?,
+fn run(
+    input: &str, title: &str, dry_run: bool, verbose: bool,
+) -> Result<(), String> {
+    // parse
+    announce_phase(verbose, title, "parse");
+    let p = zydeco::parse_prog(input)?;
+    if verbose {
+        println!("{}", p.fmt())
+    }
+    // type check
+    announce_phase(verbose, title, "tyck");
+    zydeco::typecheck_prog(&p)?;
+    // elab
+    announce_phase(verbose, title, "elab");
+    let sem_m = zydeco::elab_prog(p);
+    if verbose {
+        println!("{}", sem_m.fmt());
+    }
+    // eval
+    if !dry_run {
+        announce_phase(verbose, title, "eval");
+        zydeco::eval_sem_computation(sem_m)?;
     }
     Ok(())
+}
+
+fn announce_phase(verbose: bool, title: &str, phase: &str) {
+    if verbose {
+        println!("=== [{}] <{}>", title, phase)
+    }
 }
 
 const MARKER: &str = "@@@";
@@ -131,7 +107,7 @@ fn single_run(
     let title = line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
     println!(">>> [{}]", title);
     println!("{}", buffer);
-    let res = Zydeco { title: title.to_owned(), verbose: false }.run(buffer);
+    let res = run(buffer, title, false, false);
     if res.is_err() {
         err_names.push(title.to_owned());
     }

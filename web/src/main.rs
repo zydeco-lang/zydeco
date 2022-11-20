@@ -1,7 +1,7 @@
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
-
-use zydeco_lang::{utils::fmt::FmtDefault, Zydeco};
+use zydeco_lang::parse::syntax::TCompute;
+use zydeco_lang::zydeco;
 
 const EXAMPLE: &str = "
 let f = {
@@ -30,16 +30,9 @@ fn ui() -> Html {
     let run = {
         let cur_buf_hdl: UseStateHandle<String> = cur_buf;
         let display_hdl = display_text.clone();
-        Callback::from(move |_: MouseEvent| {
-            match (Zydeco { title: String::from("input"), verbose: false })
-                .run(&cur_buf_hdl)
-            {
-                Ok((_b, v)) => {
-                    // Note: to display type of `v`, use `_b.fmt()`
-                    display_hdl.set(format!("{}", v.fmt()))
-                }
-                Err(()) => display_hdl.set(String::from("Error!")),
-            }
+        Callback::from(move |_: MouseEvent| match run(&cur_buf_hdl) {
+            Ok(s) => display_hdl.set(s),
+            Err(e) => display_hdl.set(format!("Error: {}", e)),
         })
     };
 
@@ -52,6 +45,18 @@ fn ui() -> Html {
             <p>{ cur_text }</p>
         </>
     }
+}
+
+fn run(input: &str) -> Result<String, String> {
+    let p = zydeco::parse_prog(input)?;
+    let b = zydeco::typecheck_computation(&p.comp)?;
+    match b {
+        TCompute::Ret(_, _) => {},
+        _ => return Err(format!("Your computation had type {}, but the Web interpreter only support computations of type Ret(a)", b))
+    }
+    let v = zydeco::eval_returning_computation(*p.comp)?;
+
+    Ok(format!("{:?}", v))
 }
 
 fn main() {
