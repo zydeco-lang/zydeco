@@ -85,8 +85,6 @@ pub fn str_index<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     }
 }
 
-/* IO */
-
 pub fn int_to_str<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     match args.as_slice() {
         [ZValue::Int(a, _)] => {
@@ -123,11 +121,24 @@ pub fn str_to_int<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     }
 }
 
+/* IO */
 pub fn write_line<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     match args.as_slice() {
         [ZValue::String(s, _), e @ ZValue::Thunk(_comp, _, _)] => {
             println!("{}", s);
             ZCompute::Force(Rc::new(e.clone()), Ann::internal(""))
+        }
+        _ => unreachable!(""),
+    }
+}
+
+pub fn write_line_virt<Ann: AnnT, R, W: std::io::Write>(
+    args: Vec<ZValue<Ann>>, _r: &mut R, w: &mut W,
+) -> Result<ZCompute<Ann>, i32> {
+    match args.as_slice() {
+        [ZValue::String(s, _), e @ ZValue::Thunk(_comp, _, _)] => {
+            writeln!(w, "{}", s).unwrap();
+            Ok(ZCompute::Force(Rc::new(e.clone()), Ann::internal("")))
         }
         _ => unreachable!(""),
     }
@@ -149,9 +160,36 @@ pub fn read_line<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     }
 }
 
+pub fn read_line_virt<Ann: AnnT, R: std::io::BufRead, W>(
+    args: Vec<ZValue<Ann>>, r: &mut R, _w: &mut W,
+) -> Result<ZCompute<Ann>, i32> {
+    match args.as_slice() {
+        [e @ ZValue::Thunk(_comp, _, _)] => {
+            let mut line = String::new();
+            r.read_line(&mut line).unwrap();
+            line.pop();
+            Ok(ZCompute::App(
+                Rc::new(ZCompute::Force(Rc::new(e.clone()), Ann::internal(""))),
+                Rc::new(ZValue::String(line, Ann::internal(""))),
+                Ann::internal(""),
+            ))
+        }
+        _ => unreachable!(""),
+    }
+}
+
 pub fn exit<Ann: AnnT>(args: Vec<ZValue<Ann>>) -> ZCompute<Ann> {
     match args.as_slice() {
         [ZValue::Int(a, _)] => std::process::exit(*a as i32),
+        _ => unreachable!(""),
+    }
+}
+
+pub fn exit_virt<Ann: AnnT, R, W>(
+    args: Vec<ZValue<Ann>>, _r: &mut R, _w: &mut W,
+) -> Result<ZCompute<Ann>, i32> {
+    match args.as_slice() {
+        [ZValue::Int(a, _)] => Err(*a as i32),
         _ => unreachable!(""),
     }
 }

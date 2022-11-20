@@ -10,8 +10,11 @@ use crate::{
     lex::token::Tok,
 };
 use logos::Logos;
+use std::io::{BufRead, Write};
 use std::rc::Rc;
 
+type EffPrim<Ann, R, W> =
+    dyn Fn(Vec<ZValue<Ann>>, &mut R, &mut W) -> Result<ZCompute<Ann>, i32>;
 type ZPrim<Ann> = fn(Vec<ZValue<Ann>>) -> ZCompute<Ann>;
 
 struct Builtin<'a> {
@@ -19,6 +22,12 @@ struct Builtin<'a> {
     ztype: &'a str,
     arity: u64,
     body: ZPrim<()>,
+}
+
+fn pure_prim<Ann: AnnT + 'static, R, W>(
+    f: ZPrim<Ann>,
+) -> Box<EffPrim<Ann, R, W>> {
+    Box::new(move |vs, _r, _w| Ok(f(vs)))
 }
 
 fn builtin<'a>(
