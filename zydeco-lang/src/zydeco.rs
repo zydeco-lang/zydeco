@@ -1,6 +1,7 @@
 use crate::{
     dynamics::{
         self,
+        eval::Exit,
         syntax::{ZCompute, ZValue},
     },
     lex::token::Tok,
@@ -10,6 +11,7 @@ use crate::{
         {ExpressionParser, ZydecoParser},
     },
     statics::tyck::TypeCheck,
+    utils::never::Never,
 };
 use logos::Logos;
 
@@ -39,7 +41,7 @@ pub fn typecheck_value(v: &Value<()>) -> Result<TValue<()>, String> {
     v.tyck(&builtins::builtin_ctx()).map_err(|e| e.to_string())
 }
 
-pub fn eval_prog(p: Program<()>) -> Result<(), String> {
+pub fn eval_prog(p: Program<()>) -> Result<Never, String> {
     eval_os_computation(*p.comp)
 }
 
@@ -47,18 +49,33 @@ pub fn elab_prog(p: Program<()>) -> ZCompute {
     (*p.comp).into()
 }
 
-pub fn eval_sem_computation(sem_comp: ZCompute) -> Result<(), String> {
-    dynamics::eval::eval(sem_comp, &mut builtins::builtin_runtime())
-        .map_err(|e| e.to_string())?;
-    Ok(())
+pub fn eval_os_sem_computation(sem_comp: ZCompute) -> Result<Never, String> {
+    let mut input = std::io::BufReader::new(std::io::stdin());
+    let mut output = std::io::stdout();
+    match dynamics::eval::eval(
+        sem_comp,
+        &mut builtins::builtin_runtime(&mut input, &mut output),
+    ) {
+        Err(Exit::ExitCode(exit_code)) => std::process::exit(exit_code),
+        Err(Exit::Err(s)) => Err(s),
+        Ok(_) => unreachable!(),
+    }
 }
 
-pub fn eval_os_computation(m: Compute<()>) -> Result<(), String> {
-    eval_sem_computation(m.into())
+pub fn eval_os_computation(m: Compute<()>) -> Result<Never, String> {
+    eval_os_sem_computation(m.into())
 }
 
 pub fn eval_returning_computation(m: Compute<()>) -> Result<ZValue, String> {
     let sem_comp: ZCompute = m.into();
-    dynamics::eval::eval(sem_comp, &mut builtins::builtin_runtime())
-        .map_err(|e| e.to_string())
+    let mut input = std::io::empty();
+    let mut output = std::io::sink();
+    dynamics::eval::eval(
+        sem_comp,
+        &mut builtins::builtin_runtime(&mut input, &mut output),
+    )
+    .map_err(|e| match e {
+        Exit::Err(s) => s,
+        Exit::ExitCode(_) => unreachable!(),
+    })
 }

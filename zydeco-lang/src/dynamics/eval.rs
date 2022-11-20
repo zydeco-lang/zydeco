@@ -2,21 +2,21 @@ use super::{
     env::*,
     syntax::{ZCompute, ZValue},
 };
-use std::{fmt::Debug, mem::replace, rc::Rc};
+use std::{
+    fmt::Debug,
+    io::{BufRead, Write},
+    mem::replace,
+    rc::Rc,
+};
 
-#[derive(Debug, Clone)]
-pub enum EvalError {
-    ErrStr(String),
+pub enum Exit {
+    ExitCode(i32),
+    Err(String),
 }
 
-use std::fmt;
-impl fmt::Display for EvalError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            EvalError::ErrStr(s) => {
-                write!(f, "{}", s)
-            }
-        }
+impl From<String> for Exit {
+    fn from(e: String) -> Self {
+        Exit::Err(e)
     }
 }
 
@@ -49,24 +49,25 @@ impl Stack {
     }
 }
 
-#[derive(Clone)]
-pub struct Runtime {
+pub struct Runtime<'rt> {
     stack: Rc<Stack>,
     env: Env,
+    input: &'rt mut (dyn BufRead),
+    output: &'rt mut (dyn Write),
 }
 
-impl<'rt> Runtime {
-    pub fn new() -> Self {
-        Runtime { stack: Rc::new(Stack::new()), env: Env::new() }
+impl<'rt> Runtime<'rt> {
+    pub fn new(
+        input: &'rt mut (dyn BufRead), output: &'rt mut (dyn Write),
+    ) -> Self {
+        Runtime { stack: Rc::new(Stack::new()), env: Env::new(), input, output }
     }
 
-    fn get(&self, var: &str) -> Result<Rc<ZValue>, EvalError> {
-        self.env.get(var).ok_or_else(|| {
-            EvalError::ErrStr(format!("Variable {} not found", var))
-        })
+    fn get(&self, var: &str) -> Result<Rc<ZValue>, String> {
+        self.env.get(var).ok_or_else(|| format!("Variable {} not found", var))
     }
 
-    fn resolve_value(&self, val: Rc<ZValue>) -> Result<Rc<ZValue>, EvalError> {
+    fn resolve_value(&self, val: Rc<ZValue>) -> Result<Rc<ZValue>, String> {
         use ZValue::*;
         match val.as_ref() {
             Var(var) => self.get(var),
@@ -85,7 +86,7 @@ impl<'rt> Runtime {
         }
     }
 
-    fn call(&mut self, arg: Rc<ZValue>) -> Result<(), EvalError> {
+    fn call(&mut self, arg: Rc<ZValue>) -> Result<(), Exit> {
         let arg = self.resolve_value(arg)?;
         self.stack =
             Rc::new(Stack::Frame(Frame::Call(arg.clone()), self.stack.clone()));
@@ -112,12 +113,12 @@ impl<'rt> Runtime {
 
     pub fn insert(
         &mut self, var: String, val: Rc<ZValue>,
-    ) -> Result<(), EvalError> {
+    ) -> Result<(), String> {
         self.env.insert(var, self.resolve_value(val)?.clone());
         Ok(())
     }
 
-    fn step(&mut self, comp: ZCompute) -> Result<Rc<ZCompute>, EvalError> {
+    fn step(&mut self, comp: ZCompute) -> Result<Rc<ZCompute>, Exit> {
         use {ZCompute::*, ZValue::*};
         match comp {
             Let { binding: (var, val), body, .. } => {
@@ -135,10 +136,7 @@ impl<'rt> Runtime {
                     self.env = env.clone();
                     Ok(comp.clone())
                 } else {
-                    Err(EvalError::ErrStr(format!(
-                        "Force on non-thunk value: {:?}",
-                        val
-                    )))
+                    Err(Exit::Err(format!("Force on non-thunk value: {}", val)))
                 }
             }
             Return(val) => {
@@ -149,15 +147,12 @@ impl<'rt> Runtime {
                 {
                     self.stack = prev.clone();
                     self.env = env.pop().ok_or_else(|| {
-                        EvalError::ErrStr(format!("EnvStack is empty"))
+                        Exit::Err(format!("EnvStack is empty"))
                     })?;
                     self.insert(var.clone(), val)?;
                     Ok(comp.clone())
                 } else {
-                    Err(EvalError::ErrStr(format!(
-                        "Return on non-kont frame: {:?}",
-                        val
-                    )))
+                    Err(Exit::Err(format!("Return on non-kont frame: {}", val)))
                 }
             }
             Lam { arg: var, body } => {
@@ -167,7 +162,7 @@ impl<'rt> Runtime {
                     self.insert(var, arg.clone())?;
                     Ok(body)
                 } else {
-                    Err(EvalError::ErrStr(format!("Lam on non-call frame")))
+                    Err(Exit::Err(format!("Lam on non-call frame")))
                 }
             }
             Prim { arity, body, .. } => {
@@ -180,7 +175,10 @@ impl<'rt> Runtime {
                         args.push((**arg).clone());
                     }
                 }
-                Ok(Rc::new(body(args)))
+                match body(args, self.input, self.output) {
+                    Ok(m) => Ok(Rc::new(m)),
+                    Err(exit_code) => Err(Exit::ExitCode(exit_code)),
+                }
             }
             Rec { arg, body } => {
                 self.insert(
@@ -201,10 +199,7 @@ impl<'rt> Runtime {
                 if let Bool(cond) = cond.as_ref() {
                     Ok(if *cond { thn } else { els })
                 } else {
-                    Err(EvalError::ErrStr(format!(
-                        "If on non-bool value: {:?}",
-                        cond
-                    )))
+                    Err(Exit::Err(format!("If on non-bool value: {}", cond)))
                 }
             }
             Match { scrut, cases } => {
@@ -215,18 +210,15 @@ impl<'rt> Runtime {
                         .into_iter()
                         .find(|(pat, ..)| pat == ctor)
                         .ok_or_else(|| {
-                            EvalError::ErrStr(format!(
-                                "Ctor {:?} mismatch",
-                                ctor
-                            ))
+                            Exit::Err(format!("Ctor {:?} mismatch", ctor))
                         })?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
                         self.insert(var.clone(), arg.clone())?;
                     }
                     Ok(comp)
                 } else {
-                    Err(EvalError::ErrStr(format!(
-                        "Match on non-ctor value: {:?}",
+                    Err(Exit::Err(format!(
+                        "Match on non-ctor value: {}",
                         scrut.as_ref()
                     )))
                 }
@@ -240,15 +232,13 @@ impl<'rt> Runtime {
                     let (_, vars, comp) = cases
                         .iter()
                         .find(|(pat, ..)| *pat == *dtor)
-                        .ok_or_else(|| {
-                            EvalError::ErrStr(format!("Dtor mismatch"))
-                        })?;
+                        .ok_or_else(|| Exit::Err(format!("Dtor mismatch")))?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
                         self.insert(var.clone(), arg.clone())?;
                     }
                     Ok(comp.clone())
                 } else {
-                    Err(EvalError::ErrStr(format!("CoMatch on non-dtor frame")))
+                    Err(Exit::Err(format!("CoMatch on non-dtor frame")))
                 }
             }
             CoApp { scrut, dtor, args, .. } => {
@@ -263,9 +253,9 @@ impl<'rt> Runtime {
         }
     }
 
-    fn eval(&mut self, mut comp: ZCompute) -> Result<ZValue, EvalError> {
+    fn eval(&mut self, mut comp: ZCompute) -> Result<ZValue, Exit> {
         use ZCompute::*;
-        const MAX_STEPS: usize = 1000;
+        const MAX_STEPS: usize = 1000; // TODO: make this programmable too
         let mut steps = 0;
         while steps <= MAX_STEPS {
             match (comp, self.stack.as_ref()) {
@@ -286,15 +276,13 @@ impl<'rt> Runtime {
             }
             steps += 1;
         }
-        Err(EvalError::ErrStr(format!(
+        Err(Exit::Err(format!(
             "My name is megumi! Exceeded max steps: {}",
             MAX_STEPS
         )))
     }
 }
 
-pub fn eval(
-    comp: ZCompute, runtime: &mut Runtime,
-) -> Result<ZValue, EvalError> {
+pub fn eval(comp: ZCompute, runtime: &mut Runtime) -> Result<ZValue, Exit> {
     runtime.eval(comp)
 }

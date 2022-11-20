@@ -1,5 +1,4 @@
 use super::syntax::ZValue;
-use crate::parse::syntax::VVar;
 use std::{collections::HashMap, fmt::Debug, rc::Rc};
 
 pub type EnvMap = HashMap<String, Rc<ZValue>>;
