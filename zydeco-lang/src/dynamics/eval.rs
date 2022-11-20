@@ -9,12 +9,13 @@ use std::{
     rc::Rc,
 };
 
+type EvalErr = String;
 pub enum Exit {
     ExitCode(i32),
-    Err(String),
+    Err(EvalErr),
 }
 
-impl From<String> for Exit {
+impl From<EvalErr> for Exit {
     fn from(e: String) -> Self {
         Exit::Err(e)
     }
@@ -63,11 +64,11 @@ impl<'rt> Runtime<'rt> {
         Runtime { stack: Rc::new(Stack::new()), env: Env::new(), input, output }
     }
 
-    fn get(&self, var: &str) -> Result<Rc<ZValue>, String> {
+    fn get(&self, var: &str) -> Result<Rc<ZValue>, EvalErr> {
         self.env.get(var).ok_or_else(|| format!("Variable {} not found", var))
     }
 
-    fn resolve_value(&self, val: Rc<ZValue>) -> Result<Rc<ZValue>, String> {
+    fn resolve_value(&self, val: Rc<ZValue>) -> Result<Rc<ZValue>, EvalErr> {
         use ZValue::*;
         match val.as_ref() {
             Var(var) => self.get(var),
@@ -113,7 +114,7 @@ impl<'rt> Runtime<'rt> {
 
     pub fn insert(
         &mut self, var: String, val: Rc<ZValue>,
-    ) -> Result<(), String> {
+    ) -> Result<(), EvalErr> {
         self.env.insert(var, self.resolve_value(val)?.clone());
         Ok(())
     }

@@ -8,7 +8,6 @@ pub type PrimComp = fn(
     &mut (dyn BufRead),
     &mut (dyn Write),
 ) -> Result<ZCompute, i32>;
-pub type PurePrimComp = fn(Vec<ZValue>) -> ZCompute;
 
 #[derive(Clone)]
 pub enum ZValue {
