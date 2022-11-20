@@ -5,6 +5,12 @@ pub struct Program<Ann> {
     pub ann: Ann,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ValOrComp<Ann> {
+    Val(Value<Ann>),
+    Comp(Compute<Ann>),
+}
+
 pub type Binding<Ty, Def, Ann> = (VVar<Ann>, Option<Box<Ty>>, Box<Def>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -97,12 +103,37 @@ pub enum TValue<Ann> {
     Unit(Ann),
 }
 
+impl<Ann> std::fmt::Display for TValue<Ann> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            TValue::Var(var, _) => write!(f, "{}", var),
+            TValue::Comp(b, _) => write!(f, "Thunk({})", b),
+            TValue::Bool(_) => write!(f, "Bool"),
+            TValue::Int(_) => write!(f, "Int"),
+            TValue::String(_) => write!(f, "String"),
+            TValue::Char(_) => write!(f, "Char"),
+            TValue::Unit(_) => write!(f, "Unit"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TCompute<Ann> {
     Var(TVar<Ann>, Ann),
     Ret(Box<TValue<Ann>>, Ann),
     Lam(Box<TValue<Ann>>, Box<TCompute<Ann>>, Ann),
     Os,
+}
+
+impl<Ann> std::fmt::Display for TCompute<Ann> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            TCompute::Var(var, _) => write!(f, "{}", var),
+            TCompute::Ret(a, _) => write!(f, "Ret({})", a),
+            TCompute::Lam(dom, cod, _) => write!(f, "{} -> {}", dom, cod),
+            TCompute::Os => write!(f, "OS"),
+        }
+    }
 }
 
 macro_rules! var {

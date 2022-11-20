@@ -3,6 +3,7 @@ use crate::{
     parse::syntax::{Compute, Ctor, Dtor, VVar, Value},
     utils::ann::AnnT,
 };
+use std::fmt;
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]
@@ -15,6 +16,31 @@ pub enum ZValue<Ann: AnnT> {
     String(String, Ann),
     Char(char, Ann),
     Triv(Ann),
+}
+
+impl<Ann: AnnT> fmt::Display for ZValue<Ann> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ZValue::Var(v, _) => write!(f, "{}", v),
+            ZValue::Thunk(_, _, _) => write!(f, "<thunk>"),
+            ZValue::Ctor(ctor, vs, _) => {
+                write!(f, "{}(", ctor)?;
+                for (i, v) in vs.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", {}", v)?;
+                    } else {
+                        write!(f, "{}", v)?;
+                    }
+                }
+                write!(f, ")")
+            }
+            ZValue::Bool(b, _) => write!(f, "{}", b),
+            ZValue::Int(n, _) => write!(f, "{}", n),
+            ZValue::String(s, _) => write!(f, "\"{}\"", s),
+            ZValue::Char(c, _) => write!(f, "'{}'", c),
+            ZValue::Triv(_) => write!(f, "()"),
+        }
+    }
 }
 
 impl<Ann: AnnT> From<Value<Ann>> for ZValue<Ann> {

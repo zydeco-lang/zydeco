@@ -11,6 +11,11 @@ pub Zydeco: Program<()> = <decls:Decl*> <comp:CompBox> => Program {
     ann: (),
 };
 
+pub Expression: ValOrComp<()> = {
+    <val : ValBox>  => ValOrComp::Val(*val),
+    <comp: CompBox> => ValOrComp::Comp(*comp),
+}
+
 
 //* ------------------------------ Declarations ------------------------------ */
 
@@ -95,7 +100,6 @@ Comp: Compute<()> = {
     "comatch" <cases:CoMatchBranch*> => Compute::CoMatch {
         cases, ann: ()
     },
-    Arith
 }
 
 BindVal<Delim>: (VVar<()>, Option<Box<TValue<()>>>, Box<Value<()>>) = {
@@ -144,20 +148,6 @@ CompAtom: Compute<()> = {
     "!" <v:ValBox> => Compute::Force(v, ()),
     "ret" <v:ValBox> => Compute::Return(v, ()),
     <e:CompAtomBox> <v:ValBox> => Compute::App(e, v, ()),
-}
-
-//* ----------------------------- Arithmetic --------------------------------- */
-
-Arith: Compute<()> = <l:ValBox> <op:ArithOp> <r:ValBox> => 
-    Compute::App(Box::new(Compute::App(op, l, ())), r, ());
-
-ArithOp: Box<Compute<()>> = <ArithOpName> => 
-    Box::new(Compute::Force(Box::new(Value::Var(VVar::new(<>, ()), ())), ()));
-
-ArithOpName: String = {
-    "+" => "add".to_string(),
-    "-" => "sub".to_string(),
-    "*" => "mul".to_string(),
 }
 
 //* ---------------------------------- Value --------------------------------- */
@@ -283,9 +273,6 @@ extern {
         "." => Tok::Dot,
         "->" => Tok::Arrow,
         "<-" => Tok::Assign,
-        "+" => Tok::Plus,
-        "-" => Tok::Minus,
-        "*" => Tok::Star,
     }
 }
 
