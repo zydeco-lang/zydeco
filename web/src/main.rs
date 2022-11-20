@@ -50,13 +50,13 @@ fn ui() -> Html {
 fn run(input: &str) -> Result<String, String> {
     let p = zydeco::parse_prog(input)?;
     let b = zydeco::typecheck_computation(&p.comp)?;
-    match b {
-        TCompute::Ret(_, _) => {},
+    let a = match b {
+        TCompute::Ret(a, _) => a,
         _ => return Err(format!("Your computation had type {}, but the Web interpreter only support computations of type Ret(a)", b))
-    }
+    };
     let v = zydeco::eval_returning_computation(*p.comp)?;
 
-    Ok(format!("{:?}", v))
+    Ok(format!("{} : {}", v, a))
 }
 
 fn main() {

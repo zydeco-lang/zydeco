@@ -2,7 +2,7 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use std::io::Read;
 use zydeco_lang::utils::fmt::FmtDefault;
-use zydeco_lang::zydeco::{self, eval_sem_computation};
+use zydeco_lang::zydeco;
 
 fn main() -> Result<(), String> {
     match Cli::parse().command {
