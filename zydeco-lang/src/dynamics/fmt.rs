@@ -1,31 +1,28 @@
 use super::syntax::*;
-use crate::utils::{
-    ann::AnnT,
-    fmt::{Args, FmtArgs, FmtDefault},
-};
+use crate::utils::fmt::{Args, FmtArgs, FmtDefault};
 
-impl<Ann: AnnT> FmtArgs for ZValue<Ann> {
+impl FmtArgs for ZValue {
     fn fmt_args(&self, args: Args) -> String {
         match self {
-            ZValue::Var(var, _) => var.fmt_args(args),
-            ZValue::Thunk(compute, _, _) => {
+            ZValue::Var(var) => var.clone(),
+            ZValue::Thunk(compute, _) => {
                 format!("{{ {} }}", compute.fmt_args(args))
             }
-            ZValue::Ctor(ctor, cargs, _) => {
+            ZValue::Ctor(ctor, cargs) => {
                 let cargs: Vec<_> =
                     cargs.iter().map(|arg| arg.fmt_args(args)).collect();
                 format!("{}({})", ctor, cargs.join(", "))
             }
-            ZValue::Bool(b, _) => format!("{}", b),
-            ZValue::Int(i, _) => format!("{}", i),
-            ZValue::String(s, _) => format!("{:?}", s),
-            ZValue::Char(c, _) => format!("{:?}", c),
-            ZValue::Triv(_) => format!("()"),
+            ZValue::Bool(b) => format!("{}", b),
+            ZValue::Int(i) => format!("{}", i),
+            ZValue::String(s) => format!("{:?}", s),
+            ZValue::Char(c) => format!("{:?}", c),
+            ZValue::Triv() => format!("()"),
         }
     }
 }
 
-impl<Ann: AnnT> FmtArgs for ZCompute<Ann> {
+impl FmtArgs for ZCompute {
     fn fmt_args(&self, args: Args) -> String {
         match self {
             ZCompute::Let { binding, body, .. } => format!(
@@ -40,8 +37,8 @@ impl<Ann: AnnT> FmtArgs for ZCompute<Ann> {
                 binding.1.fmt_args(args),
                 body.fmt_args(args)
             ),
-            ZCompute::Force(e, _) => format!("!{}", e.fmt_args(args)),
-            ZCompute::Return(e, _) => format!("ret {}", e.fmt_args(args)),
+            ZCompute::Force(e) => format!("!{}", e.fmt_args(args)),
+            ZCompute::Return(e) => format!("ret {}", e.fmt_args(args)),
             ZCompute::Lam { arg, body, .. } => {
                 format!("fn ({}) -> {}", arg, body.fmt_args(args))
             }
@@ -49,7 +46,7 @@ impl<Ann: AnnT> FmtArgs for ZCompute<Ann> {
             ZCompute::Rec { arg, body, .. } => {
                 format!("rec ({}) -> {}", arg, body.fmt_args(args))
             }
-            ZCompute::App(e, v, _) => {
+            ZCompute::App(e, v) => {
                 format!("{} {}", e.fmt_args(args), v.fmt_args(args))
             }
             ZCompute::If { cond, thn, els, .. } => format!(
@@ -106,5 +103,5 @@ impl<Ann: AnnT> FmtArgs for ZCompute<Ann> {
 }
 
 // impl FmtDefault for ZProgram<()> {}
-impl FmtDefault for ZValue<()> {}
-impl FmtDefault for ZCompute<()> {}
+impl FmtDefault for ZValue {}
+impl FmtDefault for ZCompute {}

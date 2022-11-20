@@ -1,5 +1,3 @@
-# -*- mode: default-generic -*-
-
 # This file implements an interpreter for a simple CBPV language.
 
 # As it is a CBPV language, our syntax distinguishes between values

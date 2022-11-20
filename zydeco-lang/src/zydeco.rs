@@ -43,11 +43,11 @@ pub fn eval_prog(p: Program<()>) -> Result<(), String> {
     eval_os_computation(*p.comp)
 }
 
-pub fn elab_prog(p: Program<()>) -> ZCompute<()> {
+pub fn elab_prog(p: Program<()>) -> ZCompute {
     (*p.comp).into()
 }
 
-pub fn eval_sem_computation(sem_comp: ZCompute<()>) -> Result<(), String> {
+pub fn eval_sem_computation(sem_comp: ZCompute) -> Result<(), String> {
     dynamics::eval::eval(sem_comp, &mut builtins::builtin_runtime())
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -57,10 +57,8 @@ pub fn eval_os_computation(m: Compute<()>) -> Result<(), String> {
     eval_sem_computation(m.into())
 }
 
-pub fn eval_returning_computation(
-    m: Compute<()>,
-) -> Result<ZValue<()>, String> {
-    let sem_comp: ZCompute<()> = m.into();
+pub fn eval_returning_computation(m: Compute<()>) -> Result<ZValue, String> {
+    let sem_comp: ZCompute = m.into();
     dynamics::eval::eval(sem_comp, &mut builtins::builtin_runtime())
         .map_err(|e| e.to_string())
 }
