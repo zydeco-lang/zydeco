@@ -1,4 +1,9 @@
 do x <- (fn (x: Bool) -> ret 1) true;
 do y <- (fn (x: Int) -> ret true) +123;
 do z <- (fn (x: Int) -> ret true) -123;
-ret x
+let + = add;
+let - = sub;
+let * = mul;
+do x <- !* 1 -1;
+do x <- !+ 1 x;
+! exit x
