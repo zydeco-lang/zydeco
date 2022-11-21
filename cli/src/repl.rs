@@ -19,7 +19,7 @@ pub fn launch() -> Result<(), String> {
                 match zydeco::typecheck_value(&v) {
                     Err(e) => println!("Type Error: {}", e),
                     Ok(a) => {
-                        let sem_v: ZValue<()> = v.into();
+                        let sem_v: ZValue = v.into();
                         println!("{} : {}", sem_v, a)
                     }
                 }

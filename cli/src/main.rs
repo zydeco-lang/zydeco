@@ -45,7 +45,7 @@ fn run(
     // eval
     if !dry_run {
         announce_phase(verbose, title, "eval");
-        zydeco::eval_sem_computation(sem_m)?;
+        zydeco::eval_os_sem_computation(sem_m)?;
     }
     Ok(())
 }
