@@ -1,0 +1,29 @@
+# zydeco std
+
+# data Bool where
+#   | True()
+#   | False()
+
+# arithmetic operations
+pub define add: Thunk(Int -> Int -> Ret(Int));
+pub define sub: Thunk(Int -> Int -> Ret(Int));
+pub define mul: Thunk(Int -> Int -> Ret(Int));
+pub define mod: Thunk(Int -> Int -> Ret(Int));
+
+# string operations
+pub define str_append: Thunk(String -> String -> Ret(String));
+pub define str_eq: Thunk(String -> String -> Ret(Bool));
+pub define str_index: Thunk(String -> Int -> Ret(Char));
+
+# conversions
+pub define int_to_str: Thunk(Int -> Ret(String));
+pub define char_to_str: Thunk(Char -> Ret(String));
+pub define bool_to_str: Thunk(Bool -> Ret(String));
+pub define str_to_int: Thunk(String -> Ret(Int));
+
+# OS operations
+pub define write_line: Thunk(String -> Thunk(OS) -> OS);
+pub define read_line: Thunk(Thunk(String -> OS) -> OS);
+pub define exit: Thunk(Int -> OS);
+
+ret 0

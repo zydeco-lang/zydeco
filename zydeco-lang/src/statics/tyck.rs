@@ -1,4 +1,4 @@
-use super::{ctx::*, err::TypeCheckError};
+use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
 use crate::{parse::syntax::*, utils::ann::AnnT};
 use TypeCheckError::*;
 
@@ -316,6 +316,65 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
             Value::String(_, ann) => Ok(TValue::String(ann.clone())),
             Value::Char(_, ann) => Ok(TValue::Char(ann.clone())),
             Value::Triv(ann) => Ok(TValue::Unit(ann.clone())),
+        }
+    }
+}
+
+impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
+    type Type = ();
+    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+        match self {
+            TValue::Var(x, ann) => ctx.tmap.get(x).map_or(
+                Err(TypeCheckError::NameResolve(
+                    NameResolveError::UnknownIdentifier {
+                        name: x.name().to_owned(),
+                        ann: ann.clone(),
+                    },
+                )),
+                |sort| {
+                    if let Sort::TVal = sort {
+                        Ok(())
+                    } else {
+                        Err(TypeCheckError::Explosion(format!(
+                            "expect value type, found computation type"
+                        )))
+                    }
+                },
+            ),
+            TValue::Comp(_, _)
+            | TValue::Bool(_)
+            | TValue::Int(_)
+            | TValue::String(_)
+            | TValue::Char(_)
+            | TValue::Unit(_) => Ok(()),
+        }
+    }
+}
+
+impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
+    type Type = ();
+    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+        match self {
+            TCompute::Var(x, ann) => ctx.tmap.get(x).map_or(
+                Err(TypeCheckError::NameResolve(
+                    NameResolveError::UnknownIdentifier {
+                        name: x.name().to_owned(),
+                        ann: ann.clone(),
+                    },
+                )),
+                |sort| {
+                    if let Sort::TComp = sort {
+                        Ok(())
+                    } else {
+                        Err(TypeCheckError::Explosion(format!(
+                            "expect value type, found computation type"
+                        )))
+                    }
+                },
+            ),
+            TCompute::Ret(_, _) | TCompute::Lam(_, _, _) | TCompute::Os => {
+                Ok(())
+            }
         }
     }
 }

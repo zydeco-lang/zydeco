@@ -27,7 +27,9 @@ pub enum Declare<Ann> {
     },
     Define {
         public: bool,
-        binding: Binding<TValue<Ann>, Value<Ann>, Ann>,
+        name: VVar<Ann>,
+        ty: Option<Box<TValue<Ann>>>,
+        def: Option<Box<Value<Ann>>>,
         ann: Ann,
     },
 }

@@ -3,7 +3,7 @@ use crate::{parse::syntax::*, utils::ann::AnnT};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
-enum Sort {
+pub enum Sort {
     TVal,
     TComp,
 }
@@ -11,7 +11,7 @@ enum Sort {
 #[derive(Clone, Debug)]
 pub struct Ctx<Ann> {
     vmap: HashMap<VVar<Ann>, TValue<Ann>>,
-    tmap: HashMap<TVar<Ann>, Sort>,
+    pub tmap: HashMap<TVar<Ann>, Sort>,
     data: HashMap<TVar<Ann>, Vec<(Ctor<Ann>, Vec<TValue<Ann>>)>>,
     pub ctors: HashMap<Ctor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>)>,
     codata:
@@ -94,7 +94,11 @@ impl<Ann: AnnT> Ctx<Ann> {
                 }
                 Ok(())
             }
-            Declare::Define { .. } => todo!(),
+            Declare::Define { name, ty: Some(ty), .. } => {
+                self.push(name.clone(), *ty.to_owned());
+                Ok(())
+            }
+            _ => panic!("define in module is not unimplemented"),
         }
     }
     pub fn tyck(&self) -> Result<(), TypeCheckError<Ann>> {
@@ -114,64 +118,5 @@ impl<Ann: AnnT> Ctx<Ann> {
             }
         }
         Ok(())
-    }
-}
-
-impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
-    type Type = ();
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
-        match self {
-            TValue::Var(x, ann) => ctx.tmap.get(x).map_or(
-                Err(TypeCheckError::NameResolve(
-                    NameResolveError::UnknownIdentifier {
-                        name: x.name().to_owned(),
-                        ann: ann.clone(),
-                    },
-                )),
-                |sort| {
-                    if let Sort::TVal = sort {
-                        Ok(())
-                    } else {
-                        Err(TypeCheckError::Explosion(format!(
-                            "expect value type, found computation type"
-                        )))
-                    }
-                },
-            ),
-            TValue::Comp(_, _)
-            | TValue::Bool(_)
-            | TValue::Int(_)
-            | TValue::String(_)
-            | TValue::Char(_)
-            | TValue::Unit(_) => Ok(()),
-        }
-    }
-}
-
-impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
-    type Type = ();
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
-        match self {
-            TCompute::Var(x, ann) => ctx.tmap.get(x).map_or(
-                Err(TypeCheckError::NameResolve(
-                    NameResolveError::UnknownIdentifier {
-                        name: x.name().to_owned(),
-                        ann: ann.clone(),
-                    },
-                )),
-                |sort| {
-                    if let Sort::TComp = sort {
-                        Ok(())
-                    } else {
-                        Err(TypeCheckError::Explosion(format!(
-                            "expect value type, found computation type"
-                        )))
-                    }
-                },
-            ),
-            TCompute::Ret(_, _) | TCompute::Lam(_, _, _) | TCompute::Os => {
-                Ok(())
-            }
-        }
     }
 }

@@ -30,15 +30,25 @@ Decl: Declare<()> = {
         dtors,
         ann: (),
     },
-    "define" <binding:BindVal<"=">> ";" => Declare::Define {
-        public: false,
-        binding,
-        ann: (),
+    "define" <binding:BindDefVal<"=">> ";" => {
+        let (name, ty, def) = binding;
+        Declare::Define {
+            public: false,
+            name,
+            ty,
+            def,
+            ann: (),
+        }
     },
-    "pub" "define" <binding:BindVal<"=">> ";" => Declare::Define {
-        public: true,
-        binding,
-        ann: (),
+    "pub" "define" <binding:BindDefVal<"=">> ";" => {
+        let (name, ty, def) = binding;
+        Declare::Define {
+            public: true,
+            name,
+            ty,
+            def,
+            ann: (),
+        }
     },
 }
 
@@ -104,6 +114,10 @@ Comp: Compute<()> = {
 
 BindVal<Delim>: (VVar<()>, Option<Box<TValue<()>>>, Box<Value<()>>) = {
     <Bind<Delim, TValBox, ValBox>>
+}
+
+BindDefVal<Delim>: (VVar<()>, Option<Box<TValue<()>>>, Option<Box<Value<()>>>) = {
+    <x:VVar> <ty:(":" <TValBox>)?> <def:(Rhs<Delim, ValBox>)?> => (x, ty, def),
 }
 
 BindComp<Delim>: (VVar<()>, Option<Box<TCompute<()>>>, Box<Compute<()>>) = {
