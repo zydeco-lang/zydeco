@@ -30,20 +30,20 @@ Decl: Declare<()> = {
         dtors,
         ann: (),
     },
-    "define" <binding:BindDefVal<"=">> ";" => {
+    // "define" <binding:BindDefVal<"=">> ";" => {
+    //     let (name, ty, def) = binding;
+    //     Declare::Define {
+    //         public: false,
+    //         name,
+    //         ty,
+    //         def,
+    //         ann: (),
+    //     }
+    // },
+    <p:"pub"?> "define" <binding:BindDefVal<"=">> ";" => {
         let (name, ty, def) = binding;
         Declare::Define {
-            public: false,
-            name,
-            ty,
-            def,
-            ann: (),
-        }
-    },
-    "pub" "define" <binding:BindDefVal<"=">> ";" => {
-        let (name, ty, def) = binding;
-        Declare::Define {
-            public: true,
+            public: p.is_some(),
             name,
             ty,
             def,
