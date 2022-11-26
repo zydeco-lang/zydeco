@@ -27,7 +27,7 @@ pub fn launch() -> Result<(), String> {
             Ok(ValOrComp::Comp(m)) => {
                 match zydeco::typecheck_computation(&m) {
                     Err(e) => println!("Type Error: {}", e),
-                    Ok(TCompute::Os) => {
+                    Ok(TCompute::OSType) => {
                         if let Err(e) = zydeco::eval_os_computation(m) {
                             println!("Runtime Error: {}", e)
                         }

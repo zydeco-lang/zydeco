@@ -5,11 +5,10 @@ use TypeCheckError::*;
 impl<Ann> TValue<Ann> {
     pub fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
-            (TValue::Comp(a, _), TValue::Comp(b, _)) => TCompute::eqv(a, b),
+            (TValue::Thunk(a, _), TValue::Thunk(b, _)) => TCompute::eqv(a, b),
             // Note: being nominal here
             (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
-            | (TValue::Var(_, _), _)
-            | (TValue::Comp(_, _), _) => None,
+            (TValue::Var(_, _), _) | (TValue::Thunk(_, _), _) => None,
         }
     }
 }
@@ -25,11 +24,11 @@ impl<Ann> TCompute<Ann> {
             (TCompute::Var(a, _), TCompute::Var(b, _)) => {
                 (a == b).then_some(())
             }
-            (TCompute::Os, TCompute::Os) => Some(()),
+            (TCompute::OSType, TCompute::OSType) => Some(()),
             (TCompute::Ret(_, _), _)
             | (TCompute::Lam(_, _, _), _)
             | (TCompute::Var(_, _), _)
-            | (TCompute::Os, _) => None,
+            | (TCompute::OSType, _) => None,
         }
     }
 }
@@ -49,7 +48,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
         ctx.tyck()?;
         let typ = self.comp.tyck(&ctx)?;
         match &typ {
-            TCompute::Os => Ok(()),
+            TCompute::OSType => Ok(()),
             _ => Err(WrongMain { found: typ.into() }),
         }
     }
@@ -84,7 +83,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
             Compute::Force(comp, ..) => {
                 let t = comp.tyck(&ctx)?;
                 match t {
-                    TValue::Comp(body, ..) => Ok(*body),
+                    TValue::Thunk(body, ..) => Ok(*body),
                     _ => Err(TypeExpected {
                         expected: format!("Comp({{...}})"),
                         found: t.into(),
@@ -118,7 +117,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                     ))
                 })?;
                 let tbody = match t.as_ref() {
-                    TValue::Comp(tbody, _) => *tbody.clone(),
+                    TValue::Thunk(tbody, _) => *tbody.clone(),
                     _ => Err(TypeExpected {
                         expected: format!("Comp(...)"),
                         found: t.as_ref().to_owned().into(),
@@ -282,7 +281,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 .ok_or(UnboundVar { var: x.clone(), ann: ann.clone() }),
             Value::Thunk(e, ann) => {
                 let t = e.tyck(&ctx)?;
-                Ok(TValue::Comp(Box::new(t), ann.clone()))
+                Ok(TValue::Thunk(Box::new(t), ann.clone()))
             }
             Value::Ctor(ctor, args, ann) => {
                 let (data, targs) = ctx.ctors.get(ctor).ok_or_else(|| {
@@ -339,7 +338,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
                     }
                 },
             ),
-            TValue::Comp(_, _) => Ok(()),
+            TValue::Thunk(_, _) => Ok(()),
         }
     }
 }
@@ -365,7 +364,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
                     }
                 },
             ),
-            TCompute::Ret(_, _) | TCompute::Lam(_, _, _) | TCompute::Os => {
+            TCompute::Ret(_, _) | TCompute::Lam(_, _, _) | TCompute::OSType => {
                 Ok(())
             }
         }

@@ -53,18 +53,19 @@ impl<Ann> FmtArgs for Compute<Ann> {
                 )
             }
             Compute::Force(v, _) => {
-                format!("!{}", v.fmt_args(fmta))
+                format!("! {}", v.fmt_args(fmta))
             }
             Compute::Return(v, _) => {
                 format!("ret {}", v.fmt_args(fmta))
             }
-            Compute::Lam { arg, body, .. } => {
-                let (x, _) = arg;
+            Compute::Lam { arg: (x, None), body, .. } => {
+                format!("fn ({}) -> {}", x.fmt_args(fmta), body.fmt_args(fmta))
+            }
+            Compute::Lam { arg: (x, Some(t)), body, .. } => {
                 format!(
-                    "fn ({}) -> {}",
-                    // "fn ({}: {}) -> {}",
+                    "fn ({}: {}) -> {}",
                     x.fmt_args(fmta),
-                    // t.fmt_args(fmta),
+                    t.fmt_args(fmta),
                     body.fmt_args(fmta)
                 )
             }
@@ -144,7 +145,7 @@ impl<Ann> FmtArgs for TValue<Ann> {
     fn fmt_args(&self, args: Args) -> String {
         match self {
             TValue::Var(x, _) => format!("{}", x.fmt_args(args)),
-            TValue::Comp(c, _) => format!("Thunk({})", c.fmt_args(args)),
+            TValue::Thunk(c, _) => format!("Thunk({})", c.fmt_args(args)),
         }
     }
 }
@@ -157,7 +158,7 @@ impl<Ann> FmtArgs for TCompute<Ann> {
             TCompute::Lam(t, c, _) => {
                 format!("{} -> {}", t.fmt_args(args), c.fmt_args(args))
             }
-            TCompute::Os => format!("OS"),
+            TCompute::OSType => format!("OS"),
         }
     }
 }

@@ -23,10 +23,7 @@ pub struct Span2 {
 impl AnnT for Span1 {
     type Span = Span1;
     fn internal(_sort: &'static str) -> Self {
-        Self {
-            start_ix: 0,
-            end_ix: 0,
-        }
+        Self { start_ix: 0, end_ix: 0 }
     }
     fn span(&self) -> Self::Span {
         self.clone()
@@ -36,12 +33,7 @@ impl AnnT for Span1 {
 impl AnnT for Span2 {
     type Span = Span2;
     fn internal(_sort: &'static str) -> Self {
-        Self {
-            start_line: 0,
-            start_col: 0,
-            end_line: 0,
-            end_col: 0,
-        }
+        Self { start_line: 0, start_col: 0, end_line: 0, end_col: 0 }
     }
     fn span(&self) -> Self::Span {
         self.clone()

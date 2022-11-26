@@ -97,7 +97,7 @@ pub enum Compute<Ann> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TValue<Ann> {
     Var(TVar<Ann>, Ann),
-    Comp(Box<TCompute<Ann>>, Ann),
+    Thunk(Box<TCompute<Ann>>, Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,7 +105,7 @@ pub enum TCompute<Ann> {
     Var(TVar<Ann>, Ann),
     Ret(Box<TValue<Ann>>, Ann),
     Lam(Box<TValue<Ann>>, Box<TCompute<Ann>>, Ann),
-    Os,
+    OSType,
 }
 
 macro_rules! var {

@@ -69,7 +69,7 @@ Comp: Compute<()> = {
     },
     "let" "rec" <binding:BindComp<"=">> ";" <e:CompBox> => {
         let (x, tcomp, body) = binding;
-        let tval = tcomp.and_then(|tcomp| Some(Box::new(TValue::Comp(tcomp, ()))));
+        let tval = tcomp.and_then(|tcomp| Some(Box::new(TValue::Thunk(tcomp, ()))));
         Compute::Let {
             binding: (x.clone(), tval.clone(), Box::new(Value::Thunk(Box::new(Compute::Rec {
                 arg: (x, tval), body, ann: ()
@@ -184,7 +184,7 @@ TComp: TCompute<()> = {
     <x:TVar> => TCompute::Var(x, ()),
     "F" "(" <t:TValBox> ")" => TCompute::Ret(t, ()),
     <tv:TValBox> "->" <tc:TCompBox> => TCompute::Lam(tv, tc, ()),
-    "OS" => TCompute::Os,
+    "OS" => TCompute::OSType,
 }
 
 TValBox: Box<TValue<()>> = {
@@ -194,19 +194,19 @@ TValBox: Box<TValue<()>> = {
 
 pub TVal: TValue<()> = {
     <x:TVar> => TValue::Var(x, ()),
-    "U" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
+    "U" "(" <t:TCompBox> ")" => TValue::Thunk(t, ()),
 }
 
 
 //* ------------------------------- Terminals ------------------------------ */
 
-Ctor: Ctor<()> = <BigId> => Ctor::new(<>, ());
-Dtor: Dtor<()> = <SmallId> => Dtor::new(<>, ());
-TVar: TVar<()> = <BigId> => TVar::new(<>, ());
-VVar: VVar<()> = <SmallId> => VVar::new(<>, ());
+Ctor: Ctor<()> = <UpperId> => Ctor::new(<>, ());
+Dtor: Dtor<()> = <LowerId> => Dtor::new(<>, ());
+TVar: TVar<()> = <UpperId> => TVar::new(<>, ());
+VVar: VVar<()> = <LowerId> => VVar::new(<>, ());
 
-BigId: String = "BigId" => String::from(<>);
-SmallId: String = "SmallId" => String::from(<>);
+UpperId: String = "UpperId" => String::from(<>);
+LowerId: String = "LowerId" => String::from(<>);
 
 Bool: bool = {
     "true" => true,
@@ -226,8 +226,8 @@ extern {
     type Location = usize;
     
     enum Tok<'input> {
-        "BigId" => Tok::IdentBig(<&'input str>),
-        "SmallId" => Tok::IdentSmall(<&'input str>),
+        "UpperId" => Tok::UpperIdent(<&'input str>),
+        "LowerId" => Tok::LowerIdent(<&'input str>),
 
         "data" => Tok::Data,
         "codata" => Tok::Codata,
