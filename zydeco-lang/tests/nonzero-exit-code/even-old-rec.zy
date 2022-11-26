@@ -15,4 +15,6 @@ let rec odd: Nat -> Ret(Bool) = (
     | S(x) -> !even x
   )
 );
-!odd S(S(S(Z())))
+do b <- !odd S(S(S(Z())));
+if b: ! exit 0 else: ! exit 1
+

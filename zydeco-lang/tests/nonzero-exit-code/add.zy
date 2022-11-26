@@ -15,5 +15,6 @@ let rec add': Nat -> Nat -> Ret(Nat) = (
     | S(x) -> !add x S(y)
   )
 );
-do x <- !add S(S(Z())) S(Z());
-!add' x S(S(S(Z())))
+do x <- ! add S(S(Z())) S(Z());
+do y <- ! add' x S(S(S(Z())));
+! exit 0

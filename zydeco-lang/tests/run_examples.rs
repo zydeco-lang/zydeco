@@ -1,10 +1,19 @@
-#[test]
-fn pure_test() -> Result<(), String> {
+fn wrapper<T>(r: Result<T, String>) {
+    match r {
+        Ok(_) => {}
+        Err(e) => panic!("{}", e),
+    }
+}
+
+fn pure_test(f: &str) -> Result<(), String> {
     use std::io::Read;
+    use std::path::PathBuf;
     use zydeco_lang::parse::syntax::{TCompute, ValOrComp};
     use zydeco_lang::zydeco;
+    let mut path = PathBuf::from("tests/pure");
+    path.push(f);
     let mut buf = String::new();
-    std::fs::File::open("tests/booleans.zy")
+    std::fs::File::open(path)
         .map_err(|e| e.to_string())?
         .read_to_string(&mut buf)
         .map_err(|e| e.to_string())?;
@@ -13,17 +22,19 @@ fn pure_test() -> Result<(), String> {
             TCompute::Ret(_, _) => zydeco::eval_returning_computation(m)?,
             a => Err(format!("Wrong output type: {}", a))?,
         },
-        _ => Err(format!("Didn't parse"))?,
+        _ => Err("Didn't parse".to_string())?,
     };
     Ok(())
 }
 
-#[test]
-fn batch_test() -> Result<(), String> {
+fn batch_test(f: &str) -> Result<(), String> {
     use std::io::Read;
+    use std::path::PathBuf;
     use zydeco_lang::zydeco;
     let mut buf = String::new();
-    std::fs::File::open("../zydeco/deterministic-pushdown-automaton.zydeco")
+    let mut path = PathBuf::from("tests/nonzero-exit-code");
+    path.push(f);
+    std::fs::File::open(path)
         .map_err(|e| e.to_string())?
         .read_to_string(&mut buf)
         .map_err(|e| e.to_string())?;
@@ -38,4 +49,104 @@ fn batch_test() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn check_test(f: &str) -> Result<(), String> {
+    use std::io::Read;
+    use std::path::PathBuf;
+    use zydeco_lang::zydeco;
+    let mut buf = String::new();
+    let mut path = PathBuf::from("tests/check-only");
+    path.push(f);
+    std::fs::File::open(path)
+        .map_err(|e| e.to_string())?
+        .read_to_string(&mut buf)
+        .map_err(|e| e.to_string())?;
+    let p = zydeco::parse_prog(&buf)?;
+    zydeco::typecheck_prog(&p)?;
+    Ok(())
+}
+
+macro_rules! mk_pure_test {
+    ($test_name:ident, $file_name : expr) => {
+        #[test]
+        fn $test_name() {
+            wrapper(pure_test($file_name))
+        }
+    };
+}
+
+macro_rules! mk_batch_test {
+    ($test_name:ident, $file_name : expr) => {
+        #[test]
+        fn $test_name() {
+            wrapper(batch_test($file_name))
+        }
+    };
+}
+
+macro_rules! mk_check_test {
+    ($test_name:ident, $file_name : expr) => {
+        #[test]
+        fn $test_name() {
+            wrapper(check_test($file_name))
+        }
+    };
+}
+mod batch_tests {
+    use super::*;
+    mk_batch_test!(btest0, "defunctionalization.zydeco");
+    mk_batch_test!(btest1, "deterministic-pushdown-automaton.zydeco");
+    mk_batch_test!(btest2, "interpreter.zydeco");
+    mk_batch_test!(btest3, "lists.zydeco");
+    mk_batch_test!(btest4, "Y.zydeco");
+    mk_batch_test!(btest5, "num.zy");
+    mk_batch_test!(btest6, "even-odd-data.zy");
+    mk_batch_test!(btest7, "even-old-rec.zy");
+    mk_batch_test!(btest8, "data.zy");
+    mk_batch_test!(btest9, "even-odd-codata.zy");
+    mk_batch_test!(btest10, "nat.zy");
+    mk_batch_test!(btest11, "add.zy");
+}
+mod pure_tests {
+    use super::*;
+    mk_pure_test!(ptest1, "bindings.zy");
+    mk_pure_test!(ptest2, "booleans.zy");
+    mk_pure_test!(ptest3, "comments.zy");
+    mk_pure_test!(ptest8, "fn'.zy");
+    mk_pure_test!(ptest9, "fn.zy");
+    mk_pure_test!(ptest12, "thunk.zy");
+}
+mod tyck_tests {
+    use super::*;
+    mk_check_test!(chk_test0, "loop.zydeco");
+    mk_check_test!(chk_test1, "explosion.zy");
+}
+
+mod custom_tests {
+    #[test]
+    fn custom_test0() -> Result<(), String> {
+        use std::io::Read;
+        use std::path::PathBuf;
+        use zydeco_lang::zydeco;
+        let mut buf = String::new();
+        let path = PathBuf::from("tests/custom/echo_once.zydeco");
+        std::fs::File::open(path)
+            .map_err(|e| e.to_string())?
+            .read_to_string(&mut buf)
+            .map_err(|e| e.to_string())?;
+        let p = zydeco::parse_prog(&buf)?;
+        zydeco::typecheck_prog(&p)?;
+
+        let mut input = std::io::Cursor::new("hello\n");
+        let mut output: Vec<u8> = Vec::new();
+        let exit_code = zydeco::eval_virtual_prog(p, &mut input, &mut output)?;
+        if exit_code != 0 {
+            Err(format!("Non-zero exit code: {}", exit_code))?
+        }
+        let s = std::str::from_utf8(&output).unwrap();
+        assert_eq!("hello\n", s);
+
+        Ok(())
+    }
 }

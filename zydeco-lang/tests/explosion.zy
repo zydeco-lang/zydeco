@@ -1,2 +1,0 @@
-let loop = { rec (loop: Comp(Ret(Bool))) -> !loop };
-!loop

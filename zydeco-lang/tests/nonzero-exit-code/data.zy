@@ -5,10 +5,11 @@ codata And where
   .then_(): Ret(Bool)
   .else_(): Ret(Bool)
 let v = True();
-match v
+do b <- (match v
   | True -> (
     (comatch
       | .then_ -> ret true
       | .else_ -> ret false).then_()
   )
-  | False -> ret false
+  | False -> ret false);
+if b: ! exit 0 else: ! exit 1
