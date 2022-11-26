@@ -45,7 +45,8 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
         for decl in &self.decls {
             ctx.decl(decl).map_err(|err| NameResolve(err))?;
         }
-        ctx.tyck()?;
+        ctx.tyck_pre()?;
+        ctx.tyck_post()?;
         let typ = self.comp.tyck(&ctx)?;
         match &typ {
             TCompute::OSType => Ok(()),

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 #[derive(Clone, Debug)]
 pub enum NameResolveError<Ann> {
     DuplicateDeclaration { name: String, ann: Ann },
+    EmptyDeclaration { name: String, ann: Ann },
     UnknownIdentifier { name: String, ann: Ann },
 }
 use std::fmt;
@@ -16,8 +17,11 @@ where
             DuplicateDeclaration { name, ann } => {
                 write!(f, "{} declared multiple times ({:?})", name, ann)
             }
+            EmptyDeclaration { name, ann } => {
+                write!(f, "{} declared with neither type signature nor binding ({:?})", name, ann)
+            }
             UnknownIdentifier { name, ann } => {
-                write!(f, "Unknown identifier {} at {:?}", name, ann)
+                write!(f, "Unknown identifier {} ({:?})", name, ann)
             }
         }
     }
