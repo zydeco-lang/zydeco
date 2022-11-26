@@ -10,7 +10,7 @@ use crate::{
         syntax::{Compute, Program, TCompute, TValue, ValOrComp, Value},
         {ExpressionParser, ZydecoParser},
     },
-    statics::tyck::TypeCheck,
+    statics::{tyck::TypeCheck, ctx::Ctx},
     utils::never::Never,
 };
 use logos::Logos;
@@ -49,15 +49,15 @@ pub fn parse_exp(input: &str) -> Result<ValOrComp<()>, String> {
 }
 
 pub fn typecheck_prog(p: &Program<()>) -> Result<(), String> {
-    p.tyck(&builtins::builtin_ctx()).map_err(|e| e.to_string())
+    p.tyck(&Ctx::new()).map_err(|e| e.to_string())
 }
 
 pub fn typecheck_computation(m: &Compute<()>) -> Result<TCompute<()>, String> {
-    m.tyck(&builtins::builtin_ctx()).map_err(|e| e.to_string())
+    m.tyck(&Ctx::new()).map_err(|e| e.to_string())
 }
 
 pub fn typecheck_value(v: &Value<()>) -> Result<TValue<()>, String> {
-    v.tyck(&builtins::builtin_ctx()).map_err(|e| e.to_string())
+    v.tyck(&Ctx::new()).map_err(|e| e.to_string())
 }
 
 pub fn eval_prog(p: Program<()>) -> Result<Never, String> {

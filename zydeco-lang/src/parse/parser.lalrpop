@@ -187,7 +187,7 @@ TValBox: Box<TValue<()>> = {
     // "(" <TValBox> ")" => <>,
 }
 
-pub TVal: TValue<()> = {
+TVal: TValue<()> = {
     <x:TVar> => TValue::Var(x, ()),
     "U" "(" <t:TCompBox> ")" => TValue::Thunk(t, ()),
 }
