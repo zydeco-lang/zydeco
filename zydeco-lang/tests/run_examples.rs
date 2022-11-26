@@ -1,3 +1,19 @@
+/*
+* Test files are sorted by how they should be run
+* - non-zero-exit-code/ holds tests that are OS programs don't read
+*   anything from stdin, stdout is ignored and the exit code must be
+*   0 to succeed
+
+*
+* - check-only/ holds tests that should typecheck as OS programs but
+*   are not executed
+*
+* - pure/ holds tests that consist of a single expression of type
+*   Ret(a) and pass if the test runs without error
+*
+* - custom/ holds tests that need custom I/O mocking to execute.
+*/
+
 fn wrapper<T>(r: Result<T, String>) {
     match r {
         Ok(_) => {}
