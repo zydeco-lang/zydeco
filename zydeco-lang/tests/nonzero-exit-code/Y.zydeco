@@ -28,17 +28,37 @@ let fact = {
   fn (f: U(Int -> F(Int))) ->
     fn (n: Int) ->
       do is_zero <- ! int_eq n 0;
-      if is_zero:
-        ret 1
-      else:
+      match is_zero
+      | True() -> ret 1
+      | False() -> (
         do rest <-
           do n-1 <- !sub n 1;
           ! f n-1;
         ! mul n rest
+      )
 };
 
 do fact <- ! y fact;
-do x <- ! fact 5;
-do x <- ! int_to_str x;
-! write_line x {
-! exit 0 }
+
+# tests
+let main = { fn (input: Int, expected: Int, t: Thunk(OS)) ->
+  do x <- ! fact input;
+  do correct <- ! int_eq x expected;
+  match correct
+  | True() -> ! t
+  | False() -> (
+    do input <- ! int_to_str input;
+    do expected <- ! int_to_str expected;
+    do got <- ! int_to_str x;
+    do msg <- ! str_append "f " input;
+    do msg <- ! str_append msg " = ";
+    do msg <- ! str_append msg expected;
+    do msg <- ! str_append msg ", got ";
+    do msg <- ! str_append msg got;
+    ! write_line msg { ! exit 1 }
+  )
+};
+
+! main 5 120 {
+! main 10 3628800 {
+! exit 0 }}
