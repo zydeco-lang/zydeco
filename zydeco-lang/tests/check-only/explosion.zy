@@ -1,0 +1,2 @@
+let loop = { rec (loop: Comp(OS)) -> !loop };
+!loop

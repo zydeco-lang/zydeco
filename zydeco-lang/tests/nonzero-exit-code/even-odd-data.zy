@@ -21,4 +21,5 @@ do odd <- (
   do fp <- !fp;
   match fp | OddEven(odd, even) -> ret { !odd }
 );
-!odd S(S(S(Z())))
+do b <- !odd S(S(S(Z())));
+if b: ! exit 0 else: ! exit 1

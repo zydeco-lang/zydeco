@@ -64,6 +64,12 @@ pub fn eval_prog(p: Program<()>) -> Result<Never, String> {
     eval_os_computation(*p.comp)
 }
 
+pub fn eval_virtual_prog(
+    p: Program<()>, r: &mut dyn std::io::BufRead, w: &mut dyn std::io::Write,
+) -> Result<i32, String> {
+    eval_virtual_os_computation(*p.comp, r, w)
+}
+
 pub fn elab_prog(p: Program<()>) -> ZCompute {
     (*p.comp).into()
 }
@@ -83,6 +89,16 @@ pub fn eval_os_sem_computation(sem_comp: ZCompute) -> Result<Never, String> {
 
 pub fn eval_os_computation(m: Compute<()>) -> Result<Never, String> {
     eval_os_sem_computation(m.into())
+}
+
+pub fn eval_virtual_os_computation(
+    m: Compute<()>, r: &mut dyn std::io::BufRead, w: &mut dyn std::io::Write,
+) -> Result<i32, String> {
+    match dynamics::eval::eval(m.into(), &mut builtins::builtin_runtime(r, w)) {
+        Err(Exit::Err(s)) => Err(s),
+        Err(Exit::ExitCode(exit_code)) => Ok(exit_code),
+        Ok(_) => unreachable!(),
+    }
 }
 
 pub fn eval_returning_computation(m: Compute<()>) -> Result<ZValue, String> {

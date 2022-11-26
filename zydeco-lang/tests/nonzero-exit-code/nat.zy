@@ -20,5 +20,6 @@ let ifz = {
 do two' <- !ifz two;
 do one' <- !ifz one;
 do zero' <- !ifz zero;
-if two': if one': if zero': ret true
-else: ret false else: ret false else: ret false
+do b <- (if two': if one': if zero': ret true
+         else: ret false else: ret false else: ret false);
+if b: ! exit 1 else: ! exit 0

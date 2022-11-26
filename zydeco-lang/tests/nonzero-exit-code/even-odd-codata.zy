@@ -12,6 +12,7 @@ let rec eo : OddEven = (
       | Z()  -> ret false
       | S(n) -> (! eo.even()) n)
 );
-(! eo .even()) S(S(S(S(Z()))))
+do b <- (! eo .even()) S(S(S(S(Z()))));
+if b: ! exit 0 else: ! exit 1
 
 
