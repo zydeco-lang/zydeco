@@ -14,19 +14,32 @@ use crate::{
     utils::never::Never,
 };
 use logos::Logos;
+use std::fs;
+
+const STDPATH: &str = "zydeco-lang/src/library/std.zydeco";
+
+pub fn preprocess(input: &str) -> String {
+    let mut output = fs::read_to_string(STDPATH).unwrap();
+    output.push_str(input);
+    output
+}
 
 pub fn parse_prog(input: &str) -> Result<Program<()>, String> {
-    let lexer = Tok::lexer(input)
+    let preprocessed = preprocess(input);
+    let lexer = Tok::lexer(&preprocessed)
         .spanned()
         .map(|(tok, range)| (range.start, tok, range.end));
-    ZydecoParser::new().parse(input, lexer).map_err(|e| e.to_string())
+    ZydecoParser::new().parse(&preprocessed, lexer).map_err(|e| e.to_string())
 }
 
 pub fn parse_exp(input: &str) -> Result<ValOrComp<()>, String> {
-    let lexer = Tok::lexer(input)
+    let preprocessed = preprocess(input);
+    let lexer = Tok::lexer(&preprocessed)
         .spanned()
         .map(|(tok, range)| (range.start, tok, range.end));
-    ExpressionParser::new().parse(input, lexer).map_err(|e| e.to_string())
+    ExpressionParser::new()
+        .parse(&preprocessed, lexer)
+        .map_err(|e| e.to_string())
 }
 
 pub fn typecheck_prog(p: &Program<()>) -> Result<(), String> {

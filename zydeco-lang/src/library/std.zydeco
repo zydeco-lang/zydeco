@@ -29,4 +29,3 @@ pub define write_line: Thunk(String -> Thunk(OS) -> OS);
 pub define read_line: Thunk(Thunk(String -> OS) -> OS);
 pub define exit: Thunk(Int -> OS);
 
-ret 0
