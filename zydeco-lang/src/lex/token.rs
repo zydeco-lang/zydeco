@@ -56,14 +56,6 @@ pub enum Tok<'input> {
     CompType,
     #[token("OS")]
     OSType,
-    #[token("Bool")]
-    BoolType,
-    #[token("Int")]
-    IntType,
-    #[token("String")]
-    StringType,
-    #[token("Char")]
-    CharType,
 
     #[token("(")]
     ParenOpen,
@@ -130,10 +122,6 @@ impl<'input> Display for Tok<'input> {
             Tok::RetType => write!(f, "RetType"),
             Tok::CompType => write!(f, "CompType"),
             Tok::OSType => write!(f, "OSType"),
-            Tok::BoolType => write!(f, "BoolType"),
-            Tok::IntType => write!(f, "IntType"),
-            Tok::StringType => write!(f, "StringType"),
-            Tok::CharType => write!(f, "CharType"),
             Tok::ParenOpen => write!(f, "ParenOpen"),
             Tok::ParenClose => write!(f, "ParenClose"),
             Tok::BraceOpen => write!(f, "BraceOpen"),

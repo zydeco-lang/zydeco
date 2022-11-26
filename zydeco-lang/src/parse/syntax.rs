@@ -97,10 +97,6 @@ pub enum Compute<Ann> {
 pub enum TValue<Ann> {
     Var(TVar<Ann>, Ann),
     Comp(Box<TCompute<Ann>>, Ann),
-    Bool(Ann),
-    Int(Ann),
-    String(Ann),
-    Char(Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -144,10 +144,6 @@ impl<Ann> FmtArgs for TValue<Ann> {
         match self {
             TValue::Var(x, _) => format!("{}", x.fmt_args(args)),
             TValue::Comp(c, _) => format!("Thunk({})", c.fmt_args(args)),
-            TValue::Bool(_) => format!("Bool"),
-            TValue::Int(_) => format!("Int"),
-            TValue::Char(_) => format!("Char"),
-            TValue::String(_) => format!("String"),
         }
     }
 }
@@ -160,7 +156,7 @@ impl<Ann> FmtArgs for TCompute<Ann> {
             TCompute::Lam(t, c, _) => {
                 format!("{} -> {}", t.fmt_args(args), c.fmt_args(args))
             }
-            TCompute::Os => format!("Os"),
+            TCompute::Os => format!("OS"),
         }
     }
 }

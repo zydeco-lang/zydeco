@@ -6,16 +6,8 @@ impl<Ann> TValue<Ann> {
     pub fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TValue::Comp(a, _), TValue::Comp(b, _)) => TCompute::eqv(a, b),
-            (TValue::Bool(_), TValue::Bool(_))
-            | (TValue::Int(_), TValue::Int(_))
-            | (TValue::String(_), TValue::String(_))
-            | (TValue::Char(_), TValue::Char(_)) => Some(()),
             // Note: being nominal here
             (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
-            (TValue::Bool(_), _)
-            | (TValue::Int(_), _)
-            | (TValue::String(_), _)
-            | (TValue::Char(_), _)
             | (TValue::Var(_, _), _)
             | (TValue::Comp(_, _), _) => None,
         }
@@ -162,7 +154,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
             Compute::If { cond, thn, els, .. } => {
                 let tcond = cond.tyck(&ctx)?;
                 match tcond {
-                    TValue::Bool(_) => {
+                    TValue::Var(x, _) if x.name() == "Bool" => {
                         let tthn = thn.tyck(&ctx)?;
                         let tels = els.tyck(&ctx)?;
                         let tfinal = tels.clone();
@@ -309,11 +301,19 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 }
                 Ok(TValue::Var(data.clone(), ann.clone()))
             }
-            Value::Bool(_, ann) => Ok(TValue::Bool(ann.clone())),
-            Value::Int(_, ann) => Ok(TValue::Int(ann.clone())),
-            Value::String(_, ann) => Ok(TValue::String(ann.clone())),
-            Value::Char(_, ann) => Ok(TValue::Char(ann.clone())),
+            Value::Bool(_, ann) => Ok(TValue::internal("Bool", ann.clone())),
+            Value::Int(_, ann) => Ok(TValue::internal("Int", ann.clone())),
+            Value::String(_, ann) => {
+                Ok(TValue::internal("String", ann.clone()))
+            }
+            Value::Char(_, ann) => Ok(TValue::internal("Char", ann.clone())),
         }
+    }
+}
+
+impl<Ann: AnnT> TValue<Ann> {
+    fn internal(name: &str, ann: Ann) -> Self {
+        TValue::Var(TVar::new(format!("{}", name), Ann::internal("tyck")), ann)
     }
 }
 
@@ -338,11 +338,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
                     }
                 },
             ),
-            TValue::Comp(_, _)
-            | TValue::Bool(_)
-            | TValue::Int(_)
-            | TValue::String(_)
-            | TValue::Char(_) => Ok(()),
+            TValue::Comp(_, _) => Ok(()),
         }
     }
 }

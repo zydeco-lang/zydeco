@@ -40,8 +40,6 @@ pub extern define str_to_int: Thunk(String -> Ret(Int));
 
 ## OS operations
 
-extern codata OS where
-
 pub extern define write_line: Thunk(String -> Thunk(OS) -> OS);
 pub extern define read_line: Thunk(Thunk(String -> OS) -> OS);
 pub extern define exit: Thunk(Int -> OS);

@@ -194,10 +194,6 @@ TValBox: Box<TValue<()>> = {
 pub TVal: TValue<()> = {
     <x:TVar> => TValue::Var(x, ()),
     "U" "(" <t:TCompBox> ")" => TValue::Comp(t, ()),
-    "Bool" => TValue::Bool(()),
-    "Int" => TValue::Int(()),
-    "String" => TValue::String(()),
-    "Char" => TValue::Char(()),
 }
 
 
@@ -257,10 +253,6 @@ extern {
         "F" => Tok::RetType,
         "U" => Tok::CompType,
         "OS" => Tok::OSType,
-        "Bool" => Tok::BoolType,
-        "Int" => Tok::IntType,
-        "String" => Tok::StringType,
-        "Char" => Tok::CharType,
 
         "(" => Tok::ParenOpen,
         ")" => Tok::ParenClose,
