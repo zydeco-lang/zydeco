@@ -24,7 +24,6 @@ impl<Ann> FmtArgs for Value<Ann> {
             Value::Int(n, _) => format!("{}", n),
             Value::String(s, _) => format!("\"{}\"", s),
             Value::Char(c, _) => format!("'{}'", c),
-            Value::Triv(_) => format!("()"),
         }
     }
 }
@@ -149,7 +148,6 @@ impl<Ann> FmtArgs for TValue<Ann> {
             TValue::Int(_) => format!("Int"),
             TValue::Char(_) => format!("Char"),
             TValue::String(_) => format!("String"),
-            TValue::Unit(_) => format!("()"),
         }
     }
 }

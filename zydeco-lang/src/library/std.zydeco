@@ -4,6 +4,9 @@
 #   | True()
 #   | False()
 
+data Unit where
+    | Unit()
+
 # arithmetic operations
 pub define add: Thunk(Int -> Int -> Ret(Int));
 pub define sub: Thunk(Int -> Int -> Ret(Int));

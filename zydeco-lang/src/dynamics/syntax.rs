@@ -36,7 +36,6 @@ impl<Ann> From<Value<Ann>> for ZValue {
             Value::Int(i, _) => ZValue::Int(i),
             Value::String(s, _) => ZValue::String(s),
             Value::Char(s, _) => ZValue::Char(s),
-            Value::Triv(_) => ZValue::Triv(),
         }
     }
 }

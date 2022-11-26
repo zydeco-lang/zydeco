@@ -43,7 +43,6 @@ pub enum Value<Ann> {
     Int(i64, Ann),
     String(String, Ann),
     Char(char, Ann),
-    Triv(Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -102,7 +101,6 @@ pub enum TValue<Ann> {
     Int(Ann),
     String(Ann),
     Char(Ann),
-    Unit(Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

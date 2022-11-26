@@ -9,8 +9,7 @@ impl<Ann> TValue<Ann> {
             (TValue::Bool(_), TValue::Bool(_))
             | (TValue::Int(_), TValue::Int(_))
             | (TValue::String(_), TValue::String(_))
-            | (TValue::Char(_), TValue::Char(_))
-            | (TValue::Unit(_), TValue::Unit(_)) => Some(()),
+            | (TValue::Char(_), TValue::Char(_)) => Some(()),
             // Note: being nominal here
             (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
             (TValue::Bool(_), _)
@@ -18,7 +17,6 @@ impl<Ann> TValue<Ann> {
             | (TValue::String(_), _)
             | (TValue::Char(_), _)
             | (TValue::Var(_, _), _)
-            | (TValue::Unit(_), _)
             | (TValue::Comp(_, _), _) => None,
         }
     }
@@ -315,7 +313,6 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
             Value::Int(_, ann) => Ok(TValue::Int(ann.clone())),
             Value::String(_, ann) => Ok(TValue::String(ann.clone())),
             Value::Char(_, ann) => Ok(TValue::Char(ann.clone())),
-            Value::Triv(ann) => Ok(TValue::Unit(ann.clone())),
         }
     }
 }
@@ -345,8 +342,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
             | TValue::Bool(_)
             | TValue::Int(_)
             | TValue::String(_)
-            | TValue::Char(_)
-            | TValue::Unit(_) => Ok(()),
+            | TValue::Char(_) => Ok(()),
         }
     }
 }

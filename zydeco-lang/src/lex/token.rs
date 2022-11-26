@@ -62,8 +62,6 @@ pub enum Tok<'input> {
     StringType,
     #[token("Char")]
     CharType,
-    #[token("Unit")]
-    UnitType,
 
     #[token("(")]
     ParenOpen,
@@ -133,7 +131,6 @@ impl<'input> Display for Tok<'input> {
             Tok::IntType => write!(f, "IntType"),
             Tok::StringType => write!(f, "StringType"),
             Tok::CharType => write!(f, "CharType"),
-            Tok::UnitType => write!(f, "UnitType"),
             Tok::ParenOpen => write!(f, "ParenOpen"),
             Tok::ParenClose => write!(f, "ParenClose"),
             Tok::BraceOpen => write!(f, "BraceOpen"),

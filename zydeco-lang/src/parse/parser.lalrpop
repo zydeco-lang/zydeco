@@ -179,7 +179,6 @@ Val: Value<()> = {
     <n:Int> => Value::Int(n,()),
     <s:Str> => Value::String(s,()),
     <c:Char> => Value::Char(c,()),
-    "(" ")" => Value::Triv(()),
 }
 
 
@@ -209,7 +208,6 @@ pub TVal: TValue<()> = {
     "Int" => TValue::Int(()),
     "String" => TValue::String(()),
     "Char" => TValue::Char(()),
-    "Unit" => TValue::Unit(()),
 }
 
 
@@ -272,7 +270,6 @@ extern {
         "Int" => Tok::IntType,
         "String" => Tok::StringType,
         "Char" => Tok::CharType,
-        "Unit" => Tok::UnitType,
 
         "(" => Tok::ParenOpen,
         ")" => Tok::ParenClose,
