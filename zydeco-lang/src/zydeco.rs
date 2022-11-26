@@ -19,7 +19,14 @@ use std::fs;
 const STDPATH: &str = "zydeco-lang/src/library/std.zydeco";
 
 pub fn preprocess(input: &str) -> String {
-    let mut output = fs::read_to_string(STDPATH).unwrap();
+    // Original implementation. Doesn't work if executable is run at another folder
+    // let mut output = fs::read_to_string(STDPATH).unwrap();
+
+    // Resolve std library at compile time. Probably won't work in the future if
+    // there are more library files to include
+    let std = include_str!("library/std.zydeco");
+    let mut output = std.to_string();
+    
     output.push_str(input);
     output
 }
