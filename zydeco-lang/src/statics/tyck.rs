@@ -86,7 +86,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         body.tyck(&ctx)
                     }
                     _ => Err(TypeExpected {
-                        expected: format!("Ret({{...}})"),
+                        expected: format!("Ret(a?)"),
                         found: te.into(),
                     }),
                 }
@@ -96,7 +96,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 match t {
                     TValue::Comp(body, ..) => Ok(*body),
                     _ => Err(TypeExpected {
-                        expected: format!("Comp({{...}})"),
+                        expected: format!("Thunk(b?)"),
                         found: t.into(),
                     }),
                 }
@@ -130,7 +130,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 let tbody = match t.as_ref() {
                     TValue::Comp(tbody, _) => *tbody.clone(),
                     _ => Err(TypeExpected {
-                        expected: format!("Comp(...)"),
+                        expected: format!("Thunk(b?)"),
                         found: t.as_ref().to_owned().into(),
                     })?,
                 };
@@ -156,7 +156,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         Ok(*tbody)
                     }
                     _ => Err(TypeExpected {
-                        expected: format!("{{...}} -> {{...}}"),
+                        expected: format!("a? -> b?"),
                         found: tfn.into(),
                     }),
                 }
