@@ -20,27 +20,17 @@ pub Expression: ValOrComp<()> = {
 //* ------------------------------ Declarations ------------------------------ */
 
 Decl: Declare<()> = {
-    "data" <name:TVar> "where" <ctors:CtorBranch*> => Declare::Data {
+    <ext:"extern"?> "data" <name:TVar> "where" <ctors:CtorBranch*> => Declare::Data {
         name,
         ctors,
         ann: (),
     },
-    "codata" <name:TVar> "where" <dtors:DtorBranch*> => Declare::Codata {
+    <ext:"extern"?> "codata" <name:TVar> "where" <dtors:DtorBranch*> => Declare::Codata {
         name,
         dtors,
         ann: (),
     },
-    // "define" <binding:BindDefVal<"=">> ";" => {
-    //     let (name, ty, def) = binding;
-    //     Declare::Define {
-    //         public: false,
-    //         name,
-    //         ty,
-    //         def,
-    //         ann: (),
-    //     }
-    // },
-    <p:"pub"?> "define" <binding:BindDefVal<"=">> ";" => {
+    <p:"pub"?> <ext:"extern"?> "define" <binding:BindDefVal<"=">> ";" => {
         let (name, ty, def) = binding;
         Declare::Define {
             public: p.is_some(),
@@ -226,12 +216,12 @@ Bool: bool = {
     "false" => false,
 }
 
-Int: i64 = <s:r"[\+-]?[0-9]+"> => s.parse().unwrap();
+Int: i64 = <s:"NumLit"> => s.parse().unwrap();
 
-Str: String = <s:r#""[^"\\]*(?:\\.[^"\\]*)*""#> => 
+Str: String = <s:"StrLit"> => 
     s[1..s.len()-1].to_string().replace("\\\"", "\"");
 
-Char: char = <s:r#"'[ -~]'"#> => s.chars().nth(1).unwrap();
+Char: char = <s:"CharLit"> => s.chars().nth(1).unwrap();
 
 //* --------------------------------- Tokens --------------------------------- */
 
@@ -246,6 +236,7 @@ extern {
         "codata" => Tok::Codata,
         "where" => Tok::Where,
         "pub" => Tok::Pub,
+        "extern" => Tok::Extern,
         "define" => Tok::Define,
         "let" => Tok::Let,
         "do" => Tok::Do,
@@ -259,9 +250,9 @@ extern {
 
         "true" => Tok::True,
         "false" => Tok::False,
-        r"[\+-]?[0-9]+" => Tok::NumLit(<&'input str>),
-        r#""[^"\\]*(?:\\.[^"\\]*)*""# => Tok::StrLit(<&'input str>),
-        r#"'[ -~]'"# => Tok::CharLit(<&'input str>),
+        "NumLit" => Tok::NumLit(<&'input str>),
+        "StrLit" => Tok::StrLit(<&'input str>),
+        "CharLit" => Tok::CharLit(<&'input str>),
 
         "F" => Tok::RetType,
         "U" => Tok::CompType,

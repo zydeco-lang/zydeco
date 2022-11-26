@@ -16,6 +16,8 @@ pub enum Tok<'input> {
     Where,
     #[token("pub")]
     Pub,
+    #[token("extern")]
+    Extern,
     #[token("define")]
     Define,
     #[token("let")]
@@ -109,6 +111,7 @@ impl<'input> Display for Tok<'input> {
             Tok::Codata => write!(f, "Codata"),
             Tok::Where => write!(f, "Where"),
             Tok::Pub => write!(f, "Pub"),
+            Tok::Extern => write!(f, "Extern"),
             Tok::Define => write!(f, "Define"),
             Tok::Let => write!(f, "Let"),
             Tok::Do => write!(f, "Do"),

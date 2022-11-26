@@ -14,19 +14,18 @@ use crate::{
     utils::never::Never,
 };
 use logos::Logos;
-use std::fs;
-
-const STDPATH: &str = "zydeco-lang/src/library/std.zydeco";
 
 pub fn preprocess(input: &str) -> String {
-    // Original implementation. Doesn't work if executable is run at another folder
-    // let mut output = fs::read_to_string(STDPATH).unwrap();
+    // Dynamic linking. Doesn't work if executable is running at another folder.
+    // Consider shipping std.zydeco with the executable.
+    // const STDPATH: &str = "zydeco-lang/src/library/std.zydeco";
+    // let mut output = std::fs::read_to_string(STDPATH).unwrap();
 
-    // Resolve std library at compile time. Probably won't work in the future if
-    // there are more library files to include
+    // Static linking. Resolve std library at compile time. Probably won't work in the future if
+    // there are more library files to include.
     let std = include_str!("library/std.zydeco");
     let mut output = std.to_string();
-    
+
     output.push_str(input);
     output
 }
