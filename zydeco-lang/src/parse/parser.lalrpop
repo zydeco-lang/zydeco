@@ -91,9 +91,6 @@ Comp: Compute<()> = {
         *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Rec{
             arg, body, ann: ()
         })),
-    "if" <cond:ValBox> ":" <thn:CompBox> "else" ":" <els:CompBox> => Compute::If {
-        cond, thn, els, ann: ()
-    },
     "match" <scrut:ValBox> <cases:MatchBranch*> => Compute::Match {
         scrut, cases, ann: ()
     },
@@ -165,11 +162,9 @@ Val: Value<()> = {
     <x:VVar> => Value::Var(x, ()),
     "{" <e:CompBox> "}" => Value::Thunk(e, ()),
     <ctor:Ctor> "(" <vs:Kleene<",", <Val>>> ")" => Value::Ctor(ctor, vs, ()),
-    <b:Bool> => Value::Bool(b, ()),
     <n:Int> => Value::Int(n,()),
     <s:Str> => Value::String(s,()),
     <c:Char> => Value::Char(c,()),
-    "(" ")" => Value::String(format!("()"),()),
 }
 
 
@@ -208,11 +203,6 @@ VVar: VVar<()> = <LowerId> => VVar::new(<>, ());
 UpperId: String = "UpperId" => String::from(<>);
 LowerId: String = "LowerId" => String::from(<>);
 
-Bool: bool = {
-    "true" => true,
-    "false" => false,
-}
-
 Int: i64 = <s:"NumLit"> => s.parse().unwrap();
 
 Str: String = <s:"StrLit"> => 
@@ -242,11 +232,7 @@ extern {
         "rec" => Tok::Rec,
         "match" => Tok::Match,
         "comatch" => Tok::Comatch,
-        "if" => Tok::If,
-        "else" => Tok::Else,
 
-        "true" => Tok::True,
-        "false" => Tok::False,
         "NumLit" => Tok::NumLit(<&'input str>),
         "StrLit" => Tok::StrLit(<&'input str>),
         "CharLit" => Tok::CharLit(<&'input str>),

@@ -20,11 +20,9 @@ impl<Ann> FmtArgs for Value<Ann> {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-            Value::Bool(b, _) => format!("{}", b),
             Value::Int(n, _) => format!("{}", n),
             Value::String(s, _) => format!("\"{}\"", s),
             Value::Char(c, _) => format!("'{}'", c),
-            Value::Unit(_) => format!("()"),
         }
     }
 }
@@ -75,14 +73,6 @@ impl<Ann> FmtArgs for Compute<Ann> {
             }
             Compute::App(e, v, _) => {
                 format!("{} {}", e.fmt_args(fmta), v.fmt_args(fmta),)
-            }
-            Compute::If { cond, thn, els, .. } => {
-                format!(
-                    "if {}: {} else: {}",
-                    cond.fmt_args(fmta),
-                    thn.fmt_args(fmta),
-                    els.fmt_args(fmta)
-                )
             }
             Compute::Match { scrut, cases, .. } => {
                 format!("match {} {}", scrut.fmt_args(fmta), {

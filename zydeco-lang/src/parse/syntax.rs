@@ -39,11 +39,9 @@ pub enum Value<Ann> {
     Var(VVar<Ann>, Ann),
     Thunk(Box<Compute<Ann>>, Ann),
     Ctor(Ctor<Ann>, Vec<Value<Ann>>, Ann),
-    Bool(bool, Ann),
     Int(i64, Ann),
     String(String, Ann),
     Char(char, Ann),
-    Unit(Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,12 +69,6 @@ pub enum Compute<Ann> {
         ann: Ann,
     },
     App(Box<Compute<Ann>>, Box<Value<Ann>>, Ann),
-    If {
-        cond: Box<Value<Ann>>,
-        thn: Box<Compute<Ann>>,
-        els: Box<Compute<Ann>>,
-        ann: Ann,
-    },
     Match {
         scrut: Box<Value<Ann>>,
         cases: Vec<(Ctor<Ann>, Vec<VVar<Ann>>, Box<Compute<Ann>>)>,

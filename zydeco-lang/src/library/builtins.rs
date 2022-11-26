@@ -60,12 +60,6 @@ fn std_library() -> Vec<Builtin> {
             1,
             char_to_str,
         ),
-        Builtin::new(
-            "bool_to_str",
-            "Comp(Bool -> Ret(String))",
-            1,
-            bool_to_str,
-        ),
         Builtin::new("str_to_int", "Comp(String -> Ret(Int))", 1, str_to_int),
         Builtin::new(
             "write_line",

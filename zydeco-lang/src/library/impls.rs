@@ -2,10 +2,19 @@ use crate::dynamics::syntax::{ZCompute, ZValue};
 use std::io::{BufRead, Write};
 use std::rc::Rc;
 
-/* Function helpers */
+// /* Function helpers */
 
 fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
     Ok(ZCompute::Return(Rc::new(value)))
+}
+
+// /* Bool */
+fn bool(b: bool) -> ZValue {
+    let b = match b {
+        true => "True",
+        false => "False",
+    };
+    ZValue::Ctor(format!("{}", b), vec![])
 }
 
 // /* Arithmetic */
@@ -70,7 +79,7 @@ pub fn str_eq(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write,
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        [ZValue::String(a), ZValue::String(b)] => ret(ZValue::Bool(a == b)),
+        [ZValue::String(a), ZValue::String(b)] => ret(bool(a == b)),
         _ => unreachable!(""),
     }
 }
@@ -100,15 +109,6 @@ pub fn char_to_str(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [ZValue::Char(a)] => ret(ZValue::String(a.to_string())),
-        _ => unreachable!(""),
-    }
-}
-
-pub fn bool_to_str(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write,
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        [ZValue::Bool(a)] => ret(ZValue::String(a.to_string())),
         _ => unreachable!(""),
     }
 }

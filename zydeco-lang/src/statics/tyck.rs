@@ -150,24 +150,6 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                     }),
                 }
             }
-            Compute::If { cond, thn, els, .. } => {
-                let tcond = cond.tyck(&ctx)?;
-                match tcond {
-                    TValue::Var(x, _) if x.name() == "Bool" => {
-                        let tthn = thn.tyck(&ctx)?;
-                        let tels = els.tyck(&ctx)?;
-                        let tfinal = tels.clone();
-                        TCompute::eqv(&tthn, &tels).ok_or_else(|| {
-                            InconsistentBranches(vec![tthn, tels])
-                        })?;
-                        Ok(tfinal)
-                    }
-                    _ => Err(TypeExpected {
-                        expected: format!("Bool"),
-                        found: tcond.into(),
-                    }),
-                }
-            }
             Compute::Match { scrut, cases, ann } => {
                 let data = scrut.tyck(&ctx)?;
                 let mut ty = None;
@@ -300,13 +282,11 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 }
                 Ok(TValue::Var(data.clone(), ann.clone()))
             }
-            Value::Bool(_, ann) => Ok(TValue::internal("Bool", ann.clone())),
             Value::Int(_, ann) => Ok(TValue::internal("Int", ann.clone())),
             Value::String(_, ann) => {
                 Ok(TValue::internal("String", ann.clone()))
             }
             Value::Char(_, ann) => Ok(TValue::internal("Char", ann.clone())),
-            Value::Unit(ann) => Ok(TValue::internal("Unit", ann.clone())),
         }
     }
 }

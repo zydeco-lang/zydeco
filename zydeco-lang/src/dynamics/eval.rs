@@ -195,14 +195,6 @@ impl<'rt> Runtime<'rt> {
                 self.call(arg.clone())?;
                 Ok(f)
             }
-            If { cond, thn, els } => {
-                let cond = self.resolve_value(cond)?;
-                if let Bool(cond) = cond.as_ref() {
-                    Ok(if *cond { thn } else { els })
-                } else {
-                    Err(Exit::Err(format!("If on non-bool value: {}", cond)))
-                }
-            }
             Match { scrut, cases } => {
                 if let Ctor(ctor, args) =
                     self.resolve_value(scrut.clone())?.as_ref()

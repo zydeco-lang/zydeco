@@ -2,19 +2,46 @@
 
 ## 1 and 2 types
 
-extern data Unit where
-# | ()
-extern data Bool where
-# | true | false
-### we don't externally support of their constructors because
-### the parsers of their constructors are customized
-### so the type is registered as a data type but the constructors
-### are not implemented as external constructors
+data Unit where
+  | Unit()
 
+pub define unit_to_str : Thunk(Unit -> Ret(String)) = {
+  fn (u : Unit) ->
+    match u
+    | Unit() -> ret "()"
+};
+### Moving the function from unit.zydeco to here
+
+data Bool where
+  | True()
+  | False()
+
+pub define true : Bool = True();
+pub define false : Bool = False();
+
+# pub define if : Thunk(Bool -> Thunk(a) -> Thunk(a) -> Ret(a)) = {
+#   fn (b : Bool, t : Thunk(a), f : Thunk(a)) ->
+#     match b
+#     | True() -> ! t
+#     | False() -> ! f
+# };
+### Waiting for polymorphism
+
+pub define bool_to_str : Thunk(Bool -> Ret(String)) = {
+  fn (b : Bool) ->
+    match b
+    | True() -> ret "True"
+    | False() -> ret "False"
+};
+### Moving the built-in function to internal
 
 ## arithmetic operations
 
 extern data Int where
+### we support the constructors externally because
+### the parsers of their constructors are customized
+### so the type is registered as a data type but the constructors
+### are not implemented as internal constructors
 
 pub extern define add: Thunk(Int -> Int -> Ret(Int));
 pub extern define sub: Thunk(Int -> Int -> Ret(Int));
@@ -26,6 +53,7 @@ pub extern define mod: Thunk(Int -> Int -> Ret(Int));
 
 extern data Char where
 extern data String where
+### we support the constructors externally
 
 pub extern define str_append: Thunk(String -> String -> Ret(String));
 pub extern define str_eq: Thunk(String -> String -> Ret(Bool));
@@ -36,7 +64,6 @@ pub extern define str_index: Thunk(String -> Int -> Ret(Char));
 
 pub extern define int_to_str: Thunk(Int -> Ret(String));
 pub extern define char_to_str: Thunk(Char -> Ret(String));
-pub extern define bool_to_str: Thunk(Bool -> Ret(String));
 pub extern define str_to_int: Thunk(String -> Ret(Int));
 
 

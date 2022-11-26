@@ -5,7 +5,8 @@ use std::fmt::{Debug, Display};
 pub enum Tok<'input> {
     #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*")]
     UpperIdent(&'input str),
-    #[regex(r"(([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*)|((\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=)*)")]
+    #[regex(r"(([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*)")]
+    #[regex(r"((\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=)*)")]
     LowerIdent(&'input str),
 
     #[token("data")]
@@ -34,15 +35,7 @@ pub enum Tok<'input> {
     Match,
     #[token("comatch")]
     Comatch,
-    #[token("if")]
-    If,
-    #[token("else")]
-    Else,
 
-    #[token("true")]
-    True,
-    #[token("false")]
-    False,
     #[regex(r"[\+-]?[0-9]+")]
     NumLit(&'input str),
     #[regex(r#""[^"\\]*(?:\\.[^"\\]*)*""#)]
@@ -112,10 +105,6 @@ impl<'input> Display for Tok<'input> {
             Tok::Rec => write!(f, "rec"),
             Tok::Match => write!(f, "match"),
             Tok::Comatch => write!(f, "comatch"),
-            Tok::If => write!(f, "if"),
-            Tok::Else => write!(f, "else"),
-            Tok::True => write!(f, "true"),
-            Tok::False => write!(f, "false"),
             Tok::NumLit(s) => write!(f, "NumLiteral({})", s),
             Tok::StrLit(s) => write!(f, "StrLiteral({})", s),
             Tok::CharLit(s) => write!(f, "CharLiteral({})", s),

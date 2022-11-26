@@ -1,10 +1,5 @@
 # Unit defined in std.zydeco
 
-let rec unit_to_str : Unit -> Ret(String) = 
-    fn (u : Unit) -> 
-        match u
-        | Unit() -> ret "()";
-
 let v = Unit();
 do x <- !unit_to_str v;
 !write_line x {!exit 0}
