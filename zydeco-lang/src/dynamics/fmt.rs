@@ -15,7 +15,7 @@ impl FmtArgs for ZValue {
             ZValue::Int(i) => format!("{}", i),
             ZValue::String(s) => format!("\"{}\"", s),
             ZValue::Char(c) => format!("\'{}\'", c),
-            ZValue::Triv() => format!("()"),
+            ZValue::Unit() => format!("()"),
         }
     }
 }

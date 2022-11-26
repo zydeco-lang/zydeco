@@ -24,6 +24,7 @@ impl<Ann> FmtArgs for Value<Ann> {
             Value::Int(n, _) => format!("{}", n),
             Value::String(s, _) => format!("\"{}\"", s),
             Value::Char(c, _) => format!("'{}'", c),
+            Value::Unit(_) => format!("()"),
         }
     }
 }

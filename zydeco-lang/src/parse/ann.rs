@@ -12,6 +12,7 @@ impl<Ann: AnnT> AnnHolder<Ann> for Value<Ann> {
             Value::Int(_, ann) => ann,
             Value::String(_, ann) => ann,
             Value::Char(_, ann) => ann,
+            Value::Unit(ann) => ann,
         }
     }
     fn set_ann(&mut self, ann2: Ann) {
@@ -23,6 +24,7 @@ impl<Ann: AnnT> AnnHolder<Ann> for Value<Ann> {
             Value::Int(_, ann) => *ann = ann2,
             Value::String(_, ann) => *ann = ann2,
             Value::Char(_, ann) => *ann = ann2,
+            Value::Unit(ann) => *ann = ann2,
         }
     }
 }

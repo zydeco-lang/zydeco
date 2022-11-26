@@ -307,6 +307,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 Ok(TValue::internal("String", ann.clone()))
             }
             Value::Char(_, ann) => Ok(TValue::internal("Char", ann.clone())),
+            Value::Unit(ann) => Ok(TValue::internal("Unit", ann.clone())),
         }
     }
 }

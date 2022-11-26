@@ -169,6 +169,7 @@ Val: Value<()> = {
     <n:Int> => Value::Int(n,()),
     <s:Str> => Value::String(s,()),
     <c:Char> => Value::Char(c,()),
+    "(" ")" => Value::String(format!("()"),()),
 }
 
 

@@ -43,6 +43,7 @@ pub enum Value<Ann> {
     Int(i64, Ann),
     String(String, Ann),
     Char(char, Ann),
+    Unit(Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

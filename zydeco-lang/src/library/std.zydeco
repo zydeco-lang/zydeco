@@ -2,12 +2,14 @@
 
 ## 1 and 2 types
 
-data Unit where
-  | Unit()
-
-data Bool where
-  | True()
-  | False()
+extern data Unit where
+# | ()
+extern data Bool where
+# | true | false
+### we don't externally support of their constructors because
+### the parsers of their constructors are customized
+### so the type is registered as a data type but the constructors
+### are not implemented as external constructors
 
 
 ## arithmetic operations

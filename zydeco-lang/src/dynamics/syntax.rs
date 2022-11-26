@@ -18,7 +18,7 @@ pub enum ZValue {
     Int(i64),
     String(String),
     Char(char),
-    Triv(),
+    Unit(),
 }
 
 impl<Ann> From<Value<Ann>> for ZValue {
@@ -36,6 +36,7 @@ impl<Ann> From<Value<Ann>> for ZValue {
             Value::Int(i, _) => ZValue::Int(i),
             Value::String(s, _) => ZValue::String(s),
             Value::Char(s, _) => ZValue::Char(s),
+            Value::Unit(_) => ZValue::Unit(),
         }
     }
 }
