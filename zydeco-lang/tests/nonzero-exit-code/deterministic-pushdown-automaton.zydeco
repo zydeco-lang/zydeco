@@ -23,12 +23,12 @@ let rec foldr : Thunk(Ret(LazyTokList)) -> Thunk(Tok -> Thunk(ParenCounterState 
 
 let rec reject : ParenCounterStk =
   comatch
-  | .none() -> ret false
+  | .none() -> ret False()
   | .some() -> ! reject;
 
 let try_accept = {
   comatch
-  | .none() -> ret true
+  | .none() -> ret True()
   | .some() -> ! reject
 };
 
@@ -49,30 +49,25 @@ let paren_counter_step = {
     | .some() -> ! k state)
 };
 
-let bool_eq = {
-  fn (b: Bool, b': Bool) ->
-    if b: ret b'
-    else: (if b': ret false else: ret true)
-};
-
 let demonstrate = {
   fn (s: String, expect: Bool, toks: Thunk(Ret(LazyTokList)), t : Thunk(OS)) ->
      do s' <- ! str_append "The following parens are balanced? "  s;
      do b <- ! foldr toks paren_counter_step accept_or_not Ok() .none();
      do pass <- ! bool_eq expect b;
-     if pass:
+     match pass
+     | True() -> (
        do s <- ! bool_to_str b;
-       ! write_line s' { ! write_line s t }
-     else:
-       ! write_line "WRONG ANSWER" { ! exit 1 }
+       ! write_line s' { ! write_line s t })
+     | False() -> (
+      ! write_line "WRONG ANSWER" { ! exit 1 })
 };
 
-! demonstrate "(())" true {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
-! demonstrate "()()" true {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
-! demonstrate ")(()" false {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
-! demonstrate "()(" false {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Nil()})})})} {
-! demonstrate "()" true {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})} {
-! demonstrate "(" false {ret Cons(LParen(), {ret Nil()})} {
-! demonstrate ")" false {ret Cons(RParen(), {ret Nil()})} {
-! demonstrate ""  true {ret Nil()} {
+! demonstrate "(())" True() {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
+! demonstrate "()()" True() {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
+! demonstrate ")(()" False() {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
+! demonstrate "()(" False() {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Nil()})})})} {
+! demonstrate "()" True() {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})} {
+! demonstrate "(" False() {ret Cons(LParen(), {ret Nil()})} {
+! demonstrate ")" False() {ret Cons(RParen(), {ret Nil()})} {
+! demonstrate ""  True() {ret Nil()} {
 ! exit 0 }}}}}}}}

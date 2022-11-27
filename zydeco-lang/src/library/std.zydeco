@@ -14,8 +14,44 @@ data Bool where
   | True()
   | False()
 
-pub define true : Bool = True();
-pub define false : Bool = False();
+pub define not : Thunk(Bool -> Ret(Bool)) = {
+  fn (x: Bool) ->
+    match x
+    | True() -> ret False()
+    | False() -> ret True()
+};
+
+pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn (x: Bool, y: Bool) ->
+    match x
+    | True() -> ret y
+    | False() -> ret False()
+};
+
+pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn (x: Bool, y: Bool) ->
+    match x
+    | True() -> ret True()
+    | False() -> ret y
+};
+
+pub define nand = {
+  fn (x: Bool, y: Bool) ->
+    do a <- ! and x y;
+    ! not a
+};
+
+pub define nor = { fn (x: Bool, y: Bool) ->
+  do a <- ! or x y;
+  ! not a
+};
+
+pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn (b: Bool, b': Bool) ->
+    match b
+    | True() -> ret b'
+    | False() -> ! not b'
+};
 
 # pub define if : Thunk(Bool -> Thunk(a) -> Thunk(a) -> Ret(a)) = {
 #   fn (b : Bool, t : Thunk(a), f : Thunk(a)) ->

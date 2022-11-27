@@ -14,9 +14,9 @@ pub struct Ctx<Ann> {
     pub tmap: HashMap<TVar<Ann>, Sort>,
     data: HashMap<TVar<Ann>, Vec<(Ctor<Ann>, Vec<TValue<Ann>>)>>,
     pub ctors: HashMap<Ctor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>)>,
-    codata:
-        HashMap<TVar<Ann>, Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>>,
+    coda: HashMap<TVar<Ann>, Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>>,
     pub dtors: HashMap<Dtor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>,
+    pub defs: HashMap<VVar<Ann>, (Option<TValue<Ann>>, Value<Ann>)>,
 }
 
 impl<Ann: AnnT> Ctx<Ann> {
@@ -26,8 +26,9 @@ impl<Ann: AnnT> Ctx<Ann> {
             tmap: HashMap::new(),
             data: HashMap::new(),
             ctors: HashMap::new(),
-            codata: HashMap::new(),
+            coda: HashMap::new(),
             dtors: HashMap::new(),
+            defs: HashMap::new(),
         }
     }
     pub fn push(&mut self, x: VVar<Ann>, t: TValue<Ann>) {
@@ -69,7 +70,7 @@ impl<Ann: AnnT> Ctx<Ann> {
                 Ok(())
             }
             Declare::Codata { name, dtors, ann } => {
-                self.codata.insert(name.clone(), dtors.clone()).map_or(
+                self.coda.insert(name.clone(), dtors.clone()).map_or(
                     Ok(()),
                     |_| {
                         Err(NameResolveError::DuplicateDeclaration {
@@ -94,14 +95,29 @@ impl<Ann: AnnT> Ctx<Ann> {
                 }
                 Ok(())
             }
-            Declare::Define { name, ty: Some(ty), .. } => {
+            Declare::Define { name, ty: Some(ty), def: None, .. } => {
                 self.push(name.clone(), *ty.to_owned());
                 Ok(())
             }
-            _ => panic!("define in module is not unimplemented"),
+            Declare::Define { name, ty, def: Some(def), .. } => {
+                if let Some(ty) = ty {
+                    self.push(name.clone(), *ty.to_owned());
+                }
+                self.defs.insert(
+                    name.clone(),
+                    (ty.clone().map(|t| *t), def.as_ref().clone()),
+                );
+                Ok(())
+            }
+            Declare::Define { name, ty: None, def: None, ann, .. } => {
+                Err(NameResolveError::EmptyDeclaration {
+                    name: name.name().to_owned(),
+                    ann: ann.clone(),
+                })
+            }
         }
     }
-    pub fn tyck(&self) -> Result<(), TypeCheckError<Ann>> {
+    pub fn tyck_pre(&self) -> Result<(), TypeCheckError<Ann>> {
         for (_, ctors) in &self.data {
             for (_, args) in ctors {
                 for arg in args {
@@ -109,12 +125,41 @@ impl<Ann: AnnT> Ctx<Ann> {
                 }
             }
         }
-        for (_, dtors) in &self.codata {
+        for (_, dtors) in &self.coda {
             for (_, args, ret) in dtors {
                 for arg in args {
                     arg.tyck(self)?;
                 }
                 ret.tyck(self)?;
+            }
+        }
+        for (_, (ty, def)) in &self.defs {
+            match ty {
+                Some(ty) => {
+                    def.tyck(self)?;
+                    let ty_ = def.tyck(self)?;
+                    ty.eqv(&ty_).ok_or_else(|| {
+                        TypeCheckError::TypeMismatch {
+                            expected: ty.clone().into(),
+                            found: ty_.clone().into(),
+                        }
+                    })?
+                }
+                None => {
+                    def.tyck(self)?;
+                }
+            }
+        }
+        Ok(())
+    }
+    pub fn tyck_post(&mut self) -> Result<(), TypeCheckError<Ann>> {
+        for (name, (ty, def)) in self.defs.to_owned() {
+            match ty {
+                Some(_) => {}
+                None => {
+                    let ty = def.tyck(self).expect("checked in tyck_pre");
+                    self.push(name, ty)
+                }
             }
         }
         Ok(())

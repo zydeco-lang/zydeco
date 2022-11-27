@@ -1,10 +1,10 @@
-let tt = true,
-    ff = false;
+let tt = True(),
+    ff = False();
 let not_ = {
-    let not__ = { fn (x: Bool) -> if x: ret ff else: ret tt };
-    fn (x: Bool) -> !not__ x
+    let not__ = { fn (x: Bool) -> match x | True() -> ret ff | False() -> ret tt };
+    fn (x: Bool) -> ! not__ x
 };
-let not = { !not_ };
+let not = { ! not_ };
 let a = 1;
-do  b <- !not tt;
+do  b <- ! not tt;
 ret a
