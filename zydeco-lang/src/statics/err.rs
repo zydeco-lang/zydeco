@@ -32,10 +32,11 @@ pub enum TypeCheckError<Ann> {
     UnboundVar { var: VVar<Ann>, ann: Ann },
     TypeMismatch { expected: THetero<Ann>, found: THetero<Ann> },
     TypeExpected { expected: String, found: THetero<Ann> },
+    ArityMismatch { context: String, expected: usize, found: usize },
     InconsistentBranches(Vec<TCompute<Ann>>),
     NameResolve(NameResolveError<Ann>),
     WrongMain { found: TCompute<Ann> },
-    Explosion(String),
+    ErrStr(String),
 }
 use TypeCheckError::*;
 
@@ -57,6 +58,11 @@ where
             TypeExpected { expected, found } => {
                 write!(f, "Type {} expected, but got {}", expected, found)
             }
+            ArityMismatch { context, expected, found } => write!(
+                f,
+                "In {}, expected {} arguments but got {}",
+                context, expected, found
+            ),
             InconsistentBranches(types) => {
                 write!(f, "Branches have mismatched types: {:?}", types)
             }
@@ -66,7 +72,7 @@ where
                 "The type of the main expression should be OS but got {}",
                 found
             ),
-            Explosion(s) => write!(f, "explosion, whatever that means: {}", s),
+            ErrStr(s) => write!(f, "explosion, whatever that means: {}", s),
         }
     }
 }

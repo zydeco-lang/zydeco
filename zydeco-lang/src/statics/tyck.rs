@@ -2,37 +2,6 @@ use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
 use crate::{parse::syntax::*, utils::ann::AnnT};
 use TypeCheckError::*;
 
-impl<Ann> TValue<Ann> {
-    pub fn eqv(&self, other: &Self) -> Option<()> {
-        match (self, other) {
-            (TValue::Thunk(a, _), TValue::Thunk(b, _)) => TCompute::eqv(a, b),
-            // Note: being nominal here
-            (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
-            (TValue::Var(_, _), _) | (TValue::Thunk(_, _), _) => None,
-        }
-    }
-}
-
-impl<Ann> TCompute<Ann> {
-    pub fn eqv(&self, other: &Self) -> Option<()> {
-        match (self, other) {
-            (TCompute::Ret(a, _), TCompute::Ret(b, _)) => TValue::eqv(a, b),
-            (TCompute::Lam(a, b, _), TCompute::Lam(c, d, _)) => {
-                TValue::eqv(a, c).and_then(|()| TCompute::eqv(b, d))
-            }
-            // Note: being nominal here
-            (TCompute::Var(a, _), TCompute::Var(b, _)) => {
-                (a == b).then_some(())
-            }
-            (TCompute::OSType, TCompute::OSType) => Some(()),
-            (TCompute::Ret(_, _), _)
-            | (TCompute::Lam(_, _, _), _)
-            | (TCompute::Var(_, _), _)
-            | (TCompute::OSType, _) => None,
-        }
-    }
-}
-
 pub trait TypeCheck<Ann> {
     type Type;
     fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>>;
@@ -99,7 +68,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 let mut ctx = ctx.clone();
                 let (x, t) = arg;
                 let t = t.as_ref().ok_or_else(|| {
-                    Explosion(format!(
+                    ErrStr(format!(
                         "lambda parameter \"{}\" needs a type annotation",
                         arg.0
                     ))
@@ -112,7 +81,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 let mut ctx = ctx.clone();
                 let (x, t) = arg;
                 let t = t.as_ref().ok_or_else(|| {
-                    Explosion(format!(
+                    ErrStr(format!(
                         "recursive thunk \"{}\" must have type annotation",
                         arg.0
                     ))
@@ -154,10 +123,10 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
             Compute::Match { scrut, cases, ann } => {
                 let data = scrut.tyck(&ctx)?;
                 let mut ty = None;
-                for (ctor, args, body) in cases {
+                for (ctor, vars, body) in cases {
                     let (tvar, targs) =
                         ctx.ctors.get(&ctor).ok_or_else(|| {
-                            Explosion(format!("unknown ctor: {}", ctor))
+                            ErrStr(format!("unknown ctor: {}", ctor))
                         })?;
                     data.eqv(&TValue::Var(tvar.clone(), ann.clone()))
                         .ok_or_else(|| TypeMismatch {
@@ -166,10 +135,14 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                             found: data.clone().into(),
                         })?;
                     let mut ctx = ctx.clone();
-                    if args.len() != targs.len() {
-                        return Err(Explosion(format!("In `match` arm for {}, expected {} arguments but got {}", ctor, args.len(), targs.len())));
+                    if vars.len() != targs.len() {
+                        return Err(ArityMismatch {
+                            context: format!("`match` arm for {}", ctor),
+                            expected: vars.len(),
+                            found: targs.len(),
+                        });
                     }
-                    ctx.extend(args.iter().cloned().zip(targs.iter().cloned()));
+                    ctx.extend(vars.iter().cloned().zip(targs.iter().cloned()));
                     let tbranch = body.tyck(&ctx)?;
                     ty = match ty {
                         Some(tret) => {
@@ -186,7 +159,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         None => Some(tbranch),
                     }
                 }
-                ty.ok_or_else(|| Explosion(format!("empty Match")))
+                ty.ok_or_else(|| ErrStr(format!("empty Match")))
             }
             Compute::CoMatch { cases, ann } => {
                 let mut ty: Option<TCompute<Ann>> = None;
@@ -194,7 +167,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 for (dtor, vars, comp) in cases {
                     let (codata, targs, tret) =
                         ctx.dtors.get(dtor).ok_or_else(|| {
-                            Explosion(format!("unknown dtor: {}", dtor))
+                            ErrStr(format!("unknown dtor: {}", dtor))
                         })?;
                     let t = TCompute::Var(codata.clone(), ann.clone());
                     ty = ty
@@ -204,7 +177,11 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         .or_else(|| Some(t));
                     let mut ctx = ctx.clone();
                     if vars.len() != targs.len() {
-                        return Err(Explosion(format!("In `comatch` arm for {}, expected {} arguments but got {}", dtor, vars.len(), targs.len())));
+                        return Err(ArityMismatch {
+                            context: format!("`comatch` arm for {}", dtor),
+                            expected: vars.len(),
+                            found: targs.len(),
+                        });
                     }
                     ctx.extend(vars.iter().cloned().zip(targs.iter().cloned()));
                     let tret_ = comp.tyck(&ctx)?;
@@ -215,7 +192,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                         }
                     })?;
                 }
-                ty.ok_or_else(|| Explosion(format!("empty CoMatch")))
+                ty.ok_or_else(|| ErrStr(format!("empty CoMatch")))
             }
             Compute::CoApp { body, dtor, args, .. } => {
                 let tscrut = body.tyck(&ctx)?;
@@ -223,7 +200,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                     TCompute::Var(_, ann) => {
                         let (codata, targs, tret) =
                             ctx.dtors.get(dtor).ok_or_else(|| {
-                                Explosion(format!("unknown dtor: {}", dtor))
+                                ErrStr(format!("unknown dtor: {}", dtor))
                             })?;
                         let t_ = TCompute::Var(codata.clone(), ann);
                         TCompute::eqv(&tscrut, &t_).ok_or_else(|| {
@@ -233,7 +210,13 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                             }
                         })?;
                         if args.len() != targs.len() {
-                            return Err(Explosion(format!("In application of destructor {}, got {} args but expected {}", dtor, args.len(), targs.len())));
+                            return Err(
+                                ArityMismatch {
+                                    context: format!("application of destructor {}", dtor),
+                                    expected: targs.len(),
+                                    found: args.len(),
+                                }
+                            );
                         }
                         for (arg, expected) in args.iter().zip(targs.iter()) {
                             let targ = arg.tyck(ctx)?;
@@ -267,11 +250,18 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                 Ok(TValue::Thunk(Box::new(t), ann.clone()))
             }
             Value::Ctor(ctor, args, ann) => {
-                let (data, targs) = ctx.ctors.get(ctor).ok_or_else(|| {
-                    Explosion(format!("unknown ctor: {}", ctor))
-                })?;
+                let (data, targs) = ctx
+                    .ctors
+                    .get(ctor)
+                    .ok_or_else(|| ErrStr(format!("unknown ctor: {}", ctor)))?;
                 if args.len() != targs.len() {
-                    return Err(Explosion(format!("In application of constructor {}, got {} args but expected {}", ctor, args.len(), targs.len())));
+                    return Err(
+                        ArityMismatch {
+                            context: format!("application of constructor {}", ctor),
+                            expected: targs.len(),
+                            found: args.len(),
+                        }
+                    );
                 }
 
                 for (arg, targ) in args.iter().zip(targs.iter()) {
@@ -313,7 +303,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
                     if let Sort::TVal = sort {
                         Ok(())
                     } else {
-                        Err(TypeCheckError::Explosion(format!(
+                        Err(TypeCheckError::ErrStr(format!(
                             "expect value type, found computation type"
                         )))
                     }
@@ -339,7 +329,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
                     if let Sort::TComp = sort {
                         Ok(())
                     } else {
-                        Err(TypeCheckError::Explosion(format!(
+                        Err(TypeCheckError::ErrStr(format!(
                             "expect value type, found computation type"
                         )))
                     }
@@ -348,6 +338,37 @@ impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
             TCompute::Ret(_, _) | TCompute::Lam(_, _, _) | TCompute::OSType => {
                 Ok(())
             }
+        }
+    }
+}
+
+impl<Ann> TValue<Ann> {
+    pub fn eqv(&self, other: &Self) -> Option<()> {
+        match (self, other) {
+            (TValue::Thunk(a, _), TValue::Thunk(b, _)) => TCompute::eqv(a, b),
+            // Note: being nominal here
+            (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
+            (TValue::Var(_, _), _) | (TValue::Thunk(_, _), _) => None,
+        }
+    }
+}
+
+impl<Ann> TCompute<Ann> {
+    pub fn eqv(&self, other: &Self) -> Option<()> {
+        match (self, other) {
+            (TCompute::Ret(a, _), TCompute::Ret(b, _)) => TValue::eqv(a, b),
+            (TCompute::Lam(a, b, _), TCompute::Lam(c, d, _)) => {
+                TValue::eqv(a, c).and_then(|()| TCompute::eqv(b, d))
+            }
+            // Note: being nominal here
+            (TCompute::Var(a, _), TCompute::Var(b, _)) => {
+                (a == b).then_some(())
+            }
+            (TCompute::OSType, TCompute::OSType) => Some(()),
+            (TCompute::Ret(_, _), _)
+            | (TCompute::Lam(_, _, _), _)
+            | (TCompute::Var(_, _), _)
+            | (TCompute::OSType, _) => None,
         }
     }
 }
