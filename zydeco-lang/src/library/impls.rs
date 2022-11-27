@@ -18,41 +18,40 @@ fn bool(b: bool) -> ZValue {
 }
 
 // /* Arithmetic */
-pub fn add(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write,
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        [ZValue::Int(a), ZValue::Int(b)] => ret(ZValue::Int(a + b)),
-        _ => unreachable!(""),
-    }
+macro_rules! arith {
+    ( $name:ident, $op:tt ) => {
+        pub fn $name(
+            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write,
+        ) -> Result<ZCompute, i32> {
+            match args.as_slice() {
+                [ZValue::Int(a), ZValue::Int(b)] => ret(ZValue::Int(a $op b)),
+                _ => unreachable!(""),
+            }
+        }
+    };
 }
 
-pub fn sub(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write,
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        [ZValue::Int(a), ZValue::Int(b)] => ret(ZValue::Int(a - b)),
-        _ => unreachable!(""),
-    }
+arith!(add, +);
+arith!(sub, -);
+arith!(mul, *);
+arith!(modulo, %);
+
+macro_rules! intcomp {
+    ( $name:ident, $op:tt ) => {
+        pub fn $name(
+            args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write,
+        ) -> Result<ZCompute, i32> {
+            match args.as_slice() {
+                [ZValue::Int(a), ZValue::Int(b)] => ret(bool(a $op b)),
+                _ => unreachable!(""),
+            }
+        }
+    };
 }
 
-pub fn mul(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write,
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        [ZValue::Int(a), ZValue::Int(b)] => ret(ZValue::Int(a * b)),
-        _ => unreachable!(""),
-    }
-}
-
-pub fn modulo(
-    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write,
-) -> Result<ZCompute, i32> {
-    match args.as_slice() {
-        [ZValue::Int(a), ZValue::Int(b)] => ret(ZValue::Int(a % b)),
-        _ => unreachable!(""),
-    }
-}
+intcomp!(int_eq, ==);
+intcomp!(int_lt, <);
+intcomp!(int_gt, >);
 
 // /* Strings */
 pub fn str_length(
