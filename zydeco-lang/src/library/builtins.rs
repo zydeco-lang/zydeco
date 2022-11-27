@@ -3,7 +3,6 @@ use crate::dynamics::{
     eval::Runtime,
     syntax::{PrimComp, ZCompute, ZValue},
 };
-use std::io::{BufRead, Write};
 use std::rc::Rc;
 
 struct Builtin {
@@ -41,24 +40,20 @@ fn std_library() -> Vec<Builtin> {
     ]
 }
 
-pub fn builtin_runtime<'rt>(
-    input: &'rt mut (dyn BufRead), output: &'rt mut (dyn Write),
-) -> Runtime<'rt> {
-    let mut runtime = Runtime::new(input, output);
+pub fn builtin_runtime<'rt>(runtime: &'rt mut Runtime) {
     for builtin in std_library() {
         runtime
             .insert(
                 builtin.name.to_string(),
                 Rc::new(ZValue::Thunk(
-                    Rc::new(wrap_prim(*builtin.behavior, builtin.arity)),
+                    Rc::new({
+                        let arity = builtin.arity;
+                        let body = *builtin.behavior;
+                        ZCompute::Prim { arity, body }
+                    }),
                     None,
                 )),
             )
             .unwrap();
     }
-    runtime
-}
-
-fn wrap_prim(func: PrimComp, arity: u64) -> ZCompute {
-    ZCompute::Prim { arity, body: func }
 }

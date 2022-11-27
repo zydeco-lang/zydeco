@@ -1,7 +1,7 @@
 use crate::{
     dynamics::{
         self,
-        eval::Exit,
+        eval::{Exit, Runtime},
         syntax::{ZCompute, ZValue},
     },
     lex::token::Tok,
@@ -10,7 +10,7 @@ use crate::{
         syntax::{Compute, Program, TCompute, TValue, ValOrComp, Value},
         {ExpressionParser, ZydecoParser},
     },
-    statics::{tyck::TypeCheck, ctx::Ctx},
+    statics::{ctx::Ctx, tyck::TypeCheck},
     utils::never::Never,
 };
 use logos::Logos;
@@ -77,10 +77,9 @@ pub fn elab_prog(p: Program<()>) -> ZCompute {
 pub fn eval_os_sem_computation(sem_comp: ZCompute) -> Result<Never, String> {
     let mut input = std::io::BufReader::new(std::io::stdin());
     let mut output = std::io::stdout();
-    match dynamics::eval::eval(
-        sem_comp,
-        &mut builtins::builtin_runtime(&mut input, &mut output),
-    ) {
+    let mut runtime = Runtime::new(&mut input, &mut output);
+    builtins::builtin_runtime(&mut runtime);
+    match dynamics::eval::eval(sem_comp, &mut runtime) {
         Err(Exit::ExitCode(exit_code)) => std::process::exit(exit_code),
         Err(Exit::Err(s)) => Err(s),
         Ok(_) => unreachable!(),
@@ -94,7 +93,9 @@ pub fn eval_os_computation(m: Compute<()>) -> Result<Never, String> {
 pub fn eval_virtual_os_computation(
     m: Compute<()>, r: &mut dyn std::io::BufRead, w: &mut dyn std::io::Write,
 ) -> Result<i32, String> {
-    match dynamics::eval::eval(m.into(), &mut builtins::builtin_runtime(r, w)) {
+    let mut runtime = Runtime::new(r, w);
+    builtins::builtin_runtime(&mut runtime);
+    match dynamics::eval::eval(m.into(), &mut runtime) {
         Err(Exit::Err(s)) => Err(s),
         Err(Exit::ExitCode(exit_code)) => Ok(exit_code),
         Ok(_) => unreachable!(),
@@ -105,11 +106,9 @@ pub fn eval_returning_computation(m: Compute<()>) -> Result<ZValue, String> {
     let sem_comp: ZCompute = m.into();
     let mut input = std::io::empty();
     let mut output = std::io::sink();
-    dynamics::eval::eval(
-        sem_comp,
-        &mut builtins::builtin_runtime(&mut input, &mut output),
-    )
-    .map_err(|e| match e {
+    let mut runtime = Runtime::new(&mut input, &mut output);
+    builtins::builtin_runtime(&mut runtime);
+    dynamics::eval::eval(sem_comp, &mut runtime).map_err(|e| match e {
         Exit::Err(s) => s,
         Exit::ExitCode(_) => unreachable!(),
     })
