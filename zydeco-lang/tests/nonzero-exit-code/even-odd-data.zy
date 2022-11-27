@@ -5,14 +5,14 @@ let rec fp: Ret(OddEven) = (
     do fp <- !fp;
     match fp | OddEven(odd, even) -> (fn (x: Nat) -> (
       match x
-      | Z -> ret false
+      | Z -> ret False()
       | S(x) -> !even x
     ))
   }, {
     do fp <- !fp;
     match fp | OddEven(odd, even) -> (fn (x: Nat) -> (
       match x
-      | Z -> ret true
+      | Z -> ret True()
       | S(x) -> !odd x
     ))
   })
@@ -22,4 +22,6 @@ do odd <- (
   match fp | OddEven(odd, even) -> ret { !odd }
 );
 do b <- !odd S(S(S(Z())));
-if b: ! exit 0 else: ! exit 1
+match b
+| True() -> ! exit 0
+| False() -> ! exit 1

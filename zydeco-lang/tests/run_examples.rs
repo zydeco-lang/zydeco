@@ -21,6 +21,7 @@ fn wrapper<T>(r: Result<T, String>) {
     }
 }
 
+#[allow(unused)]
 fn pure_test(f: &str) -> Result<(), String> {
     use std::io::Read;
     use std::path::PathBuf;
@@ -83,6 +84,7 @@ fn check_test(f: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(unused)]
 macro_rules! mk_pure_test {
     ($test_name:ident, $file_name : expr) => {
         #[test]
@@ -119,19 +121,18 @@ mod batch_tests {
     mk_batch_test!(btest5, "num.zy");
     mk_batch_test!(btest6, "even-odd-data.zy");
     mk_batch_test!(btest7, "even-old-rec.zy");
-    mk_batch_test!(btest8, "data.zy");
     mk_batch_test!(btest9, "even-odd-codata.zy");
     mk_batch_test!(btest10, "nat.zy");
     mk_batch_test!(btest11, "add.zy");
 }
 mod pure_tests {
-    use super::*;
-    mk_pure_test!(ptest1, "bindings.zy");
-    mk_pure_test!(ptest2, "booleans.zy");
-    mk_pure_test!(ptest3, "comments.zy");
-    mk_pure_test!(ptest8, "fn'.zy");
-    mk_pure_test!(ptest9, "fn.zy");
-    mk_pure_test!(ptest12, "thunk.zy");
+    // use super::*;
+    // mk_pure_test!(ptest1, "bindings.zy");
+    // mk_pure_test!(ptest2, "booleans.zy");
+    // mk_pure_test!(ptest3, "comments.zy");
+    // mk_pure_test!(ptest8, "fn'.zy");
+    // mk_pure_test!(ptest9, "fn.zy");
+    // mk_pure_test!(ptest12, "thunk.zy");
 }
 mod tyck_tests {
     use super::*;

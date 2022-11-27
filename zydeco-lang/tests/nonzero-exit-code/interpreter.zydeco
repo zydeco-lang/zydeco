@@ -4,8 +4,8 @@
 # and computations
 data SynVal where
   | Var(String)
-  | True()
-  | False()
+  | TrueSyn()
+  | FalseSyn()
   | ThunkV(SynComp)
 
 data SynComp where
@@ -64,8 +64,9 @@ let rec lookup: String -> Env -> Ret(OptionSemVal) =
     | Empty() -> ret Err()
     | Cons(y,v,g) -> (
       do b <- ! str_eq x y;
-      if b: ret Ok(v)
-      else: ! lookup x g
+      match b
+      | True() -> ret Ok(v)
+      | False() -> ! lookup x g
     );
 
 let rec error: SemComp = (
@@ -79,8 +80,8 @@ let rec interp: Interpreter =
     | .valu(v, g) -> (
       match v
       | Var(x) -> ! lookup x g
-      | True() -> ret Ok(True'())
-      | False() -> ret Ok(False'())
+      | TrueSyn() -> ret Ok(True'())
+      | FalseSyn() -> ret Ok(False'())
       # Here we use the meta-language closures to capture the environment g 
       | ThunkV(m) -> ret Ok(ThunkV'({ ! interp .comp(m, g) }))
     )
@@ -88,8 +89,8 @@ let rec interp: Interpreter =
       match m
       | If(cond, mt, mf) -> (
         match cond
-        | True() -> ! interp .comp(mt, g)
-        | False() -> ! interp .comp(mf, g)
+        | TrueSyn() -> ! interp .comp(mt, g)
+        | FalseSyn() -> ! interp .comp(mf, g)
       )
       | Force(syn_val) -> (
         do v? <- ! interp .valu(syn_val, g);
@@ -128,7 +129,7 @@ let rec interp: Interpreter =
     );
 
 # An example
-do x <- ! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty()) .bind();
+do x <- ! interp .comp(App(Lam("x", Return(Var("x"))), FalseSyn()), Empty()) .bind();
 match x
 | Err() -> ! write_line "ERROR" { ! exit 1 }
 | Ok(sv) ->

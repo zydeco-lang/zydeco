@@ -6,9 +6,8 @@ data Unit where
   | Unit()
 
 pub define unit_to_str : Thunk(Unit -> Ret(String)) = {
-  fn (u : Unit) -> ret "()"
+  fn (_u : Unit) -> ret "()"
 };
-### Moving the function from unit.zydeco to here
 
 data Bool where
   | True()
@@ -35,16 +34,15 @@ pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
     | False() -> ret y
 };
 
-pub define nand = {
-  fn (x: Bool, y: Bool) ->
-    do a <- ! and x y;
-    ! not a
-};
+# pub define nand = { fn (x: Bool, y: Bool) ->
+#   do a <- ! and x y;
+#   ! not a
+# };
 
-pub define nor = { fn (x: Bool, y: Bool) ->
-  do a <- ! or x y;
-  ! not a
-};
+# pub define nor = { fn (x: Bool, y: Bool) ->
+#   do a <- ! or x y;
+#   ! not a
+# };
 
 pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
   fn (b: Bool, b': Bool) ->
@@ -93,6 +91,7 @@ extern data Char where
 extern data String where
 ### we support the constructors externally
 
+pub extern define str_length: Thunk(String -> Ret(Int));
 pub extern define str_append: Thunk(String -> String -> Ret(String));
 pub extern define str_eq: Thunk(String -> String -> Ret(Bool));
 pub extern define str_index: Thunk(String -> Int -> Ret(Char));

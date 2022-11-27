@@ -6,13 +6,15 @@ codata OddEven where
 let rec eo : OddEven = (
   comatch
     | .even() -> (fn (n : Nat) -> match n
-      | Z()  -> ret true
+      | Z()  -> ret True()
       | S(n) -> ((! eo .odd()) n))
     | .odd()  -> (fn(n : Nat) -> match n
-      | Z()  -> ret false
+      | Z()  -> ret False()
       | S(n) -> (! eo.even()) n)
 );
 do b <- (! eo .even()) S(S(S(S(Z()))));
-if b: ! exit 0 else: ! exit 1
+match b
+| True() -> ! exit 0
+| False() -> ! exit 1
 
 

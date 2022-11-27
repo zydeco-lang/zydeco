@@ -49,6 +49,27 @@ let paren_counter_step = {
     | .some() -> ! k state)
 };
 
+let not = {
+  fn (x: Bool) ->
+    match x
+    | True() -> ret False()
+    | False() -> ret True()
+};
+
+let bool_eq = {
+  fn (b: Bool, b': Bool) ->
+    match b
+    | True() -> ret b'
+    | False() -> ! not b'
+};
+
+let bool_to_str = {
+  fn (b : Bool) ->
+    match b
+    | True() -> ret "True"
+    | False() -> ret "False"
+};
+
 let demonstrate = {
   fn (s: String, expect: Bool, toks: Thunk(Ret(LazyTokList)), t : Thunk(OS)) ->
      do s' <- ! str_append "The following parens are balanced? "  s;

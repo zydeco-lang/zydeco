@@ -1,6 +1,6 @@
-do x <- (fn (x: Bool) -> ret 1) true;
-do y <- (fn (x: Int) -> ret true) +123;
-do z <- (fn (x: Int) -> ret true) -123;
+do x <- (fn (x: Bool) -> ret 1) True();
+do y <- (fn (x: Int) -> ret True()) +123;
+do z <- (fn (x: Int) -> ret True()) -123;
 let + = add;
 let - = sub;
 let * = mul;

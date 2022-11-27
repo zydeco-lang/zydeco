@@ -4,17 +4,19 @@ let rec odd: Nat -> Ret(Bool) = (
     rec (even: Comp(Nat -> Ret(Bool))) -> (
       fn (x: Nat) -> (
         match x
-        | Z -> ret true
+        | Z -> ret True()
         | S(x) -> !odd x
       )
     )
   };
   fn (x: Nat) -> (
     match x
-    | Z -> ret false
+    | Z -> ret False()
     | S(x) -> !even x
   )
 );
 do b <- !odd S(S(S(Z())));
-if b: ! exit 0 else: ! exit 1
+match b
+| True() -> ! exit 0
+| False() -> ! exit 1
 

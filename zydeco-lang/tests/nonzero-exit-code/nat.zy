@@ -14,12 +14,25 @@ do one <- !suc zero,
    two <- !suc one;
 let ifz = {
   fn (x: Nat) -> (
-    !ifz false { fn (_: Nat) -> ret false } x
+    !ifz False() { fn (_: Nat) -> ret True() } x
   )
 };
 do two' <- !ifz two;
 do one' <- !ifz one;
 do zero' <- !ifz zero;
-do b <- (if two': if one': if zero': ret true
-         else: ret false else: ret false else: ret false);
-if b: ! exit 1 else: ! exit 0
+do b <- (
+  match two'
+  | True() -> (
+    match one'
+    | True() -> (
+      match zero'
+      | False() -> ret True()
+      | True() -> ret False()
+    )
+    | False() -> ret False()
+  )
+  | False() -> ret False()
+);
+match b
+| True() -> ! exit 0
+| False() -> ! exit 1
