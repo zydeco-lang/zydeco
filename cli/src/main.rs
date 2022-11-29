@@ -1,7 +1,7 @@
 use clap::Parser;
 use cli::{Cli, Commands};
 use std::io::Read;
-use zydeco_lang::{zydeco, dynamics::env::Env, link::{linker, builtins}};
+use zydeco_lang::{zydeco, dynamics::env::Env, library::{linker, builtins}};
 
 fn main() -> Result<(), String> {
     match Cli::parse().command {

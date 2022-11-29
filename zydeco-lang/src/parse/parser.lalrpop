@@ -11,6 +11,8 @@ pub Zydeco: Program<()> = <decls:Decl*> <comp:CompBox> => Program {
     ann: (),
 };
 
+pub Declarations: Vec<Declare<()>> = <Decl*>;
+
 pub Expression: ValOrComp<()> = {
     <val : ValBox>  => ValOrComp::Val(*val),
     <comp: CompBox> => ValOrComp::Comp(*comp),

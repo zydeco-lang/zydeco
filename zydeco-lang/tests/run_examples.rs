@@ -14,7 +14,7 @@
 * - custom/ holds tests that need custom I/O mocking to execute.
 */
 
-use zydeco_lang::{dynamics::env::Env, link::builtins};
+use zydeco_lang::{dynamics::env::Env, library::builtins};
 
 fn wrapper<T>(r: Result<T, String>) {
     match r {

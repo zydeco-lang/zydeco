@@ -72,7 +72,7 @@ where
                 "The type of the main expression should be OS but got {}",
                 found
             ),
-            ErrStr(s) => write!(f, "explosion, whatever that means: {}", s),
+            ErrStr(s) => write!(f, "{}", s),
         }
     }
 }

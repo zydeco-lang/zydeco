@@ -6,7 +6,7 @@ use crate::{
         syntax::{ZCompute, ZValue},
     },
     lex::token::Tok,
-    link::{builtins, linker},
+    library::{builtins, linker},
     parse::{
         syntax::{Compute, Program, TCompute, TValue, ValOrComp, Value},
         {ExpressionParser, ZydecoParser},
@@ -16,37 +16,18 @@ use crate::{
 };
 use logos::Logos;
 
-pub fn preprocess(input: &str) -> String {
-    // Dynamic linking. Doesn't work if executable is running at another folder.
-    // Consider shipping std.zydeco with the executable.
-    // const STDPATH: &str = "zydeco-lang/src/library/std.zydeco";
-    // let mut output = std::fs::read_to_string(STDPATH).unwrap();
-
-    // Static linking. Resolve std library at compile time. Probably won't work in the future if
-    // there are more library files to include.
-    let std = include_str!("link/std.zydeco");
-    let mut output = std.to_string();
-
-    output.push_str(input);
-    output
-}
-
 pub fn parse_prog(input: &str) -> Result<Program<()>, String> {
-    let preprocessed = preprocess(input);
-    let lexer = Tok::lexer(&preprocessed)
+    let lexer = Tok::lexer(&input)
         .spanned()
         .map(|(tok, range)| (range.start, tok, range.end));
-    ZydecoParser::new().parse(&preprocessed, lexer).map_err(|e| e.to_string())
+    ZydecoParser::new().parse(&input, lexer).map_err(|e| e.to_string())
 }
 
 pub fn parse_exp(input: &str) -> Result<ValOrComp<()>, String> {
-    let preprocessed = preprocess(input);
-    let lexer = Tok::lexer(&preprocessed)
+    let lexer = Tok::lexer(&input)
         .spanned()
         .map(|(tok, range)| (range.start, tok, range.end));
-    ExpressionParser::new()
-        .parse(&preprocessed, lexer)
-        .map_err(|e| e.to_string())
+    ExpressionParser::new().parse(&input, lexer).map_err(|e| e.to_string())
 }
 
 pub fn typecheck_prog(p: &Program<()>) -> Result<(), String> {

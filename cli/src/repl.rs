@@ -1,6 +1,6 @@
 use zydeco_lang::dynamics::env::Env;
 use zydeco_lang::dynamics::syntax::ZValue;
-use zydeco_lang::link::builtins;
+use zydeco_lang::library::builtins;
 use zydeco_lang::parse::syntax::{TCompute, ValOrComp};
 use zydeco_lang::zydeco;
 

@@ -1,16 +1,21 @@
 use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
-use crate::{parse::syntax::*, utils::ann::AnnT};
+use crate::{library::tyck::std_decls, parse::syntax::*};
 use TypeCheckError::*;
 
-pub trait TypeCheck<Ann> {
+pub trait TypeCheck {
     type Type;
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>>;
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>>;
 }
 
-impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
+impl TypeCheck for Program<()> {
     type Type = ();
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
         let mut ctx = ctx.clone();
+        for decl in
+            &std_decls().map_err(|e| TypeCheckError::ErrStr(e.to_string()))?
+        {
+            ctx.decl(decl).map_err(|err| NameResolve(err))?;
+        }
         for decl in &self.decls {
             ctx.decl(decl).map_err(|err| NameResolve(err))?;
         }
@@ -24,9 +29,9 @@ impl<Ann: AnnT> TypeCheck<Ann> for Program<Ann> {
     }
 }
 
-impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
-    type Type = TCompute<Ann>;
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+impl TypeCheck for Compute<()> {
+    type Type = TCompute<()>;
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
         match self {
             Compute::Let { binding, body, .. } => {
                 let mut ctx = ctx.clone();
@@ -162,7 +167,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                 ty.ok_or_else(|| ErrStr(format!("empty Match")))
             }
             Compute::CoMatch { cases, ann } => {
-                let mut ty: Option<TCompute<Ann>> = None;
+                let mut ty: Option<TCompute<()>> = None;
                 // Hack: we need to know what type it is; now we just synthesize it
                 for (dtor, vars, comp) in cases {
                     let (codata, targs, tret) =
@@ -210,13 +215,14 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
                             }
                         })?;
                         if args.len() != targs.len() {
-                            return Err(
-                                ArityMismatch {
-                                    context: format!("application of destructor {}", dtor),
-                                    expected: targs.len(),
-                                    found: args.len(),
-                                }
-                            );
+                            return Err(ArityMismatch {
+                                context: format!(
+                                    "application of destructor {}",
+                                    dtor
+                                ),
+                                expected: targs.len(),
+                                found: args.len(),
+                            });
                         }
                         for (arg, expected) in args.iter().zip(targs.iter()) {
                             let targ = arg.tyck(ctx)?;
@@ -237,9 +243,9 @@ impl<Ann: AnnT> TypeCheck<Ann> for Compute<Ann> {
     }
 }
 
-impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
-    type Type = TValue<Ann>;
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+impl TypeCheck for Value<()> {
+    type Type = TValue<()>;
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
         match self {
             Value::Var(x, ann) => ctx
                 .lookup(&x)
@@ -255,13 +261,11 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
                     .get(ctor)
                     .ok_or_else(|| ErrStr(format!("unknown ctor: {}", ctor)))?;
                 if args.len() != targs.len() {
-                    return Err(
-                        ArityMismatch {
-                            context: format!("application of constructor {}", ctor),
-                            expected: targs.len(),
-                            found: args.len(),
-                        }
-                    );
+                    return Err(ArityMismatch {
+                        context: format!("application of constructor {}", ctor),
+                        expected: targs.len(),
+                        found: args.len(),
+                    });
                 }
 
                 for (arg, targ) in args.iter().zip(targs.iter()) {
@@ -282,15 +286,15 @@ impl<Ann: AnnT> TypeCheck<Ann> for Value<Ann> {
     }
 }
 
-impl<Ann: AnnT> TValue<Ann> {
-    fn internal(name: &str, ann: Ann) -> Self {
-        TValue::Var(TVar::new(format!("{}", name), Ann::internal("tyck")), ann)
+impl TValue<()> {
+    fn internal(name: &str, ann: ()) -> Self {
+        TValue::Var(TVar::new(format!("{}", name), ann), ann)
     }
 }
 
-impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
+impl TypeCheck for TValue<()> {
     type Type = ();
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
         match self {
             TValue::Var(x, ann) => ctx.tmap.get(x).map_or(
                 Err(TypeCheckError::NameResolve(
@@ -314,9 +318,9 @@ impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
     }
 }
 
-impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
+impl TypeCheck for TCompute<()> {
     type Type = ();
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
         match self {
             TCompute::Var(x, ann) => ctx.tmap.get(x).map_or(
                 Err(TypeCheckError::NameResolve(
@@ -342,7 +346,7 @@ impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
     }
 }
 
-impl<Ann> TValue<Ann> {
+impl TValue<()> {
     pub fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TValue::Thunk(a, _), TValue::Thunk(b, _)) => TCompute::eqv(a, b),
@@ -353,7 +357,7 @@ impl<Ann> TValue<Ann> {
     }
 }
 
-impl<Ann> TCompute<Ann> {
+impl TCompute<()> {
     pub fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TCompute::Ret(a, _), TCompute::Ret(b, _)) => TValue::eqv(a, b),
