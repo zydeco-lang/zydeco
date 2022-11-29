@@ -14,6 +14,8 @@
 * - custom/ holds tests that need custom I/O mocking to execute.
 */
 
+use zydeco_lang::{dynamics::env::Env, link::builtins};
+
 fn wrapper<T>(r: Result<T, String>) {
     match r {
         Ok(_) => {}
@@ -36,7 +38,11 @@ fn pure_test(f: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     match zydeco::parse_exp(&buf)? {
         ValOrComp::Comp(m) => match zydeco::typecheck_computation(&m)? {
-            TCompute::Ret(_, _) => zydeco::eval_returning_computation(m)?,
+            TCompute::Ret(_, _) => {
+                let mut env = Env::new();
+                builtins::link_builtin(&mut env);
+                zydeco::eval_returning_computation(m, env)?
+            }
             a => Err(format!("Wrong output type: {}", a))?,
         },
         _ => Err("Didn't parse".to_string())?,

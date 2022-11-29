@@ -1,4 +1,6 @@
+use zydeco_lang::dynamics::env::Env;
 use zydeco_lang::dynamics::syntax::ZValue;
+use zydeco_lang::link::builtins;
 use zydeco_lang::parse::syntax::{TCompute, ValOrComp};
 use zydeco_lang::zydeco;
 
@@ -28,13 +30,17 @@ pub fn launch() -> Result<(), String> {
                 match zydeco::typecheck_computation(&m) {
                     Err(e) => println!("Type Error: {}", e),
                     Ok(TCompute::OSType) => {
-                        if let Err(e) = zydeco::eval_os_computation(m) {
+                        let mut env = Env::new();
+                        builtins::link_builtin(&mut env);
+                        if let Err(e) = zydeco::eval_os_computation(m, env) {
                             println!("Runtime Error: {}", e)
                         }
                     }
 
                     Ok(TCompute::Ret(_, _))  => {
-                        match zydeco::eval_returning_computation(m) {
+                        let mut env = Env::new();
+                        builtins::link_builtin(&mut env);
+                        match zydeco::eval_returning_computation(m, env) {
                             Err(e) => println!("Runtime Error: {}", e),
                             Ok(v) => println!("{}", v)
                         }

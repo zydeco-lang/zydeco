@@ -59,9 +59,9 @@ pub struct Runtime<'rt> {
 
 impl<'rt> Runtime<'rt> {
     pub fn new(
-        input: &'rt mut (dyn BufRead), output: &'rt mut (dyn Write),
+        env: Env, input: &'rt mut (dyn BufRead), output: &'rt mut (dyn Write),
     ) -> Self {
-        Runtime { stack: Rc::new(Stack::new()), env: Env::new(), input, output }
+        Runtime { stack: Rc::new(Stack::new()), env, input, output }
     }
 
     fn get(&self, var: &str) -> Result<Rc<ZValue>, EvalErr> {

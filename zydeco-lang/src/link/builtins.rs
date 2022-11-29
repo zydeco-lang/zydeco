@@ -1,6 +1,6 @@
 use super::impls::*;
 use crate::dynamics::{
-    eval::Runtime,
+    env::Env,
     syntax::{PrimComp, ZCompute, ZValue},
 };
 use std::rc::Rc;
@@ -40,20 +40,18 @@ fn std_library() -> Vec<Builtin> {
     ]
 }
 
-pub fn builtin_runtime<'rt>(runtime: &'rt mut Runtime) {
+pub fn link_builtin(env: &mut Env) {
     for builtin in std_library() {
-        runtime
-            .insert(
-                builtin.name.to_string(),
-                Rc::new(ZValue::Thunk(
-                    Rc::new({
-                        let arity = builtin.arity;
-                        let body = *builtin.behavior;
-                        ZCompute::Prim { arity, body }
-                    }),
-                    None,
-                )),
-            )
-            .unwrap();
+        env.insert(
+            builtin.name.to_string(),
+            Rc::new(ZValue::Thunk(
+                Rc::new({
+                    let arity = builtin.arity;
+                    let body = *builtin.behavior;
+                    ZCompute::Prim { arity, body }
+                }),
+                Some(Env::new()),
+            )),
+        );
     }
 }

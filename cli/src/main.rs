@@ -1,7 +1,7 @@
 use clap::Parser;
 use cli::{Cli, Commands};
 use std::io::Read;
-use zydeco_lang::zydeco;
+use zydeco_lang::{zydeco, dynamics::env::Env, link::{linker, builtins}};
 
 fn main() -> Result<(), String> {
     match Cli::parse().command {
@@ -38,6 +38,9 @@ fn run(
     zydeco::typecheck_prog(&p)?;
     // elab
     announce_phase(verbose, title, "elab");
+    let mut env = Env::new();
+    builtins::link_builtin(&mut env);
+    linker::link(&p, &mut env);
     let sem_m = zydeco::elab_prog(p);
     if verbose {
         println!("{}", sem_m);
@@ -45,7 +48,7 @@ fn run(
     // eval
     if !dry_run {
         announce_phase(verbose, title, "eval");
-        zydeco::eval_os_sem_computation(sem_m)?;
+        zydeco::eval_os_sem_computation(sem_m, env)?;
     }
     Ok(())
 }
