@@ -5,7 +5,7 @@ use crate::{
         eval::{Exit, Runtime},
         syntax::{ZCompute, ZValue},
     },
-    lex::token::Tok,
+    lex::Lexer,
     library::{builtins, linker},
     parse::{
         syntax::{Compute, Program, TCompute, TValue, ValOrComp, Value},
@@ -14,20 +14,17 @@ use crate::{
     statics::{ctx::Ctx, tyck::TypeCheck},
     utils::never::Never,
 };
-use logos::Logos;
 
 pub fn parse_prog(input: &str) -> Result<Program, String> {
-    let lexer = Tok::lexer(&input)
-        .spanned()
-        .map(|(tok, range)| (range.start, tok, range.end));
-    ZydecoParser::new().parse(&input, lexer).map_err(|e| e.to_string())
+    ZydecoParser::new()
+        .parse(&input, Lexer::new(&input))
+        .map_err(|e| e.to_string())
 }
 
 pub fn parse_exp(input: &str) -> Result<ValOrComp, String> {
-    let lexer = Tok::lexer(&input)
-        .spanned()
-        .map(|(tok, range)| (range.start, tok, range.end));
-    ExpressionParser::new().parse(&input, lexer).map_err(|e| e.to_string())
+    ExpressionParser::new()
+        .parse(&input, Lexer::new(&input))
+        .map_err(|e| e.to_string())
 }
 
 pub fn typecheck_prog(p: &Program, ctx: &Ctx) -> Result<(), String> {
