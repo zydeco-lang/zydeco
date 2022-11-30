@@ -1,121 +1,112 @@
+use crate::utils::ann::Ann;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Program<Ann> {
-    pub decls: Vec<Declare<Ann>>,
-    pub comp: Box<Compute<Ann>>,
+pub struct Program {
+    pub decls: Vec<Declare>,
+    pub comp: Box<Compute>,
     pub ann: Ann,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ValOrComp<Ann> {
-    Val(Value<Ann>),
-    Comp(Compute<Ann>),
+pub enum ValOrComp {
+    Val(Value),
+    Comp(Compute),
 }
 
-pub type Binding<Ty, Def, Ann> = (VVar<Ann>, Option<Box<Ty>>, Box<Def>);
+pub type Binding<Ty, Def> = (VVar, Option<Box<Ty>>, Box<Def>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Declare<Ann> {
+pub enum Declare {
     Data {
-        name: TVar<Ann>,
-        ctors: Vec<(Ctor<Ann>, Vec<TValue<Ann>>)>,
+        name: TVar,
+        ctors: Vec<(Ctor, Vec<TValue>)>,
         ann: Ann,
     },
     Codata {
-        name: TVar<Ann>,
-        dtors: Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>,
+        name: TVar,
+        dtors: Vec<(Dtor, Vec<TValue>, TCompute)>,
         ann: Ann,
     },
     Define {
         public: bool,
-        binding: Binding<TValue<Ann>, Value<Ann>, Ann>,
+        name: VVar,
+        ty: Option<Box<TValue>>,
+        def: Option<Box<Value>>,
         ann: Ann,
     },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Value<Ann> {
-    Var(VVar<Ann>, Ann),
-    Thunk(Box<Compute<Ann>>, Ann),
-    Ctor(Ctor<Ann>, Vec<Value<Ann>>, Ann),
-    Bool(bool, Ann),
+pub enum Value {
+    Var(VVar, Ann),
+    Thunk(Box<Compute>, Ann),
+    Ctor(Ctor, Vec<Value>, Ann),
     Int(i64, Ann),
     String(String, Ann),
     Char(char, Ann),
-    Triv(Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Compute<Ann> {
+pub enum Compute {
     Let {
-        binding: Binding<TValue<Ann>, Value<Ann>, Ann>,
-        body: Box<Compute<Ann>>,
+        binding: Binding<TValue, Value>,
+        body: Box<Compute>,
         ann: Ann,
     },
     Do {
-        binding: Binding<TCompute<Ann>, Compute<Ann>, Ann>,
-        body: Box<Compute<Ann>>,
+        binding: Binding<TCompute, Compute>,
+        body: Box<Compute>,
         ann: Ann,
     },
-    Force(Box<Value<Ann>>, Ann),
-    Return(Box<Value<Ann>>, Ann),
+    Force(Box<Value>, Ann),
+    Return(Box<Value>, Ann),
     Lam {
-        arg: (VVar<Ann>, Option<Box<TValue<Ann>>>),
-        body: Box<Compute<Ann>>,
+        arg: (VVar, Option<Box<TValue>>),
+        body: Box<Compute>,
         ann: Ann,
     },
     Rec {
-        arg: (VVar<Ann>, Option<Box<TValue<Ann>>>),
-        body: Box<Compute<Ann>>,
+        arg: (VVar, Option<Box<TValue>>),
+        body: Box<Compute>,
         ann: Ann,
     },
-    App(Box<Compute<Ann>>, Box<Value<Ann>>, Ann),
-    If {
-        cond: Box<Value<Ann>>,
-        thn: Box<Compute<Ann>>,
-        els: Box<Compute<Ann>>,
-        ann: Ann,
-    },
+    App(Box<Compute>, Box<Value>, Ann),
     Match {
-        scrut: Box<Value<Ann>>,
-        cases: Vec<(Ctor<Ann>, Vec<VVar<Ann>>, Box<Compute<Ann>>)>,
+        scrut: Box<Value>,
+        cases: Vec<(Ctor, Vec<VVar>, Box<Compute>)>,
         ann: Ann,
     },
     CoMatch {
-        cases: Vec<(Dtor<Ann>, Vec<VVar<Ann>>, Box<Compute<Ann>>)>,
+        cases: Vec<(Dtor, Vec<VVar>, Box<Compute>)>,
         ann: Ann,
     },
     CoApp {
-        body: Box<Compute<Ann>>,
-        dtor: Dtor<Ann>,
-        args: Vec<Value<Ann>>,
+        body: Box<Compute>,
+        dtor: Dtor,
+        args: Vec<Value>,
         ann: Ann,
     },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TValue<Ann> {
-    Var(TVar<Ann>, Ann),
-    Comp(Box<TCompute<Ann>>, Ann),
-    Bool(Ann),
-    Int(Ann),
-    String(Ann),
-    Char(Ann),
-    Unit(Ann),
+pub enum TValue {
+    Var(TVar, Ann),
+    Thunk(Box<TCompute>, Ann),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TCompute<Ann> {
-    Var(TVar<Ann>, Ann),
-    Ret(Box<TValue<Ann>>, Ann),
-    Lam(Box<TValue<Ann>>, Box<TCompute<Ann>>, Ann),
-    Os,
+pub enum TCompute {
+    Var(TVar, Ann),
+    Ret(Box<TValue>, Ann),
+    Lam(Box<TValue>, Box<TCompute>, Ann),
+    OSType,
 }
 
 macro_rules! var {
     ( $Var:ident ) => {
         #[derive(Clone, Debug)]
-        pub struct $Var<Ann>(String, Ann);
-        impl<Ann> $Var<Ann> {
+        pub struct $Var(String, Ann);
+        impl $Var {
             pub fn new(s: String, ann: Ann) -> Self {
                 Self(s, ann)
             }
@@ -126,13 +117,13 @@ macro_rules! var {
                 &self.1
             }
         }
-        impl<Ann> std::cmp::PartialEq for $Var<Ann> {
+        impl std::cmp::PartialEq for $Var {
             fn eq(&self, other: &Self) -> bool {
                 self.0 == other.0
             }
         }
-        impl<Ann> std::cmp::Eq for $Var<Ann> {}
-        impl<Ann> std::hash::Hash for $Var<Ann> {
+        impl std::cmp::Eq for $Var {}
+        impl std::hash::Hash for $Var {
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
                 self.0.hash(state);
             }

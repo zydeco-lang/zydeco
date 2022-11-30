@@ -1,49 +1,46 @@
 use super::{err::TypeCheckError, resolve::*, tyck::TypeCheck};
-use crate::{parse::syntax::*, utils::ann::AnnT};
+use crate::parse::syntax::*;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
-enum Sort {
+pub enum Sort {
     TVal,
     TComp,
 }
 
 #[derive(Clone, Debug)]
-pub struct Ctx<Ann> {
-    vmap: HashMap<VVar<Ann>, TValue<Ann>>,
-    tmap: HashMap<TVar<Ann>, Sort>,
-    data: HashMap<TVar<Ann>, Vec<(Ctor<Ann>, Vec<TValue<Ann>>)>>,
-    pub ctors: HashMap<Ctor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>)>,
-    codata:
-        HashMap<TVar<Ann>, Vec<(Dtor<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>>,
-    pub dtors: HashMap<Dtor<Ann>, (TVar<Ann>, Vec<TValue<Ann>>, TCompute<Ann>)>,
+pub struct Ctx {
+    vmap: HashMap<VVar, TValue>,
+    pub tmap: HashMap<TVar, Sort>,
+    data: HashMap<TVar, Vec<(Ctor, Vec<TValue>)>>,
+    pub ctors: HashMap<Ctor, (TVar, Vec<TValue>)>,
+    coda: HashMap<TVar, Vec<(Dtor, Vec<TValue>, TCompute)>>,
+    pub dtors: HashMap<Dtor, (TVar, Vec<TValue>, TCompute)>,
+    pub defs: HashMap<VVar, (Option<TValue>, Value)>,
 }
 
-impl<Ann: AnnT> Ctx<Ann> {
+impl Ctx {
     pub fn new() -> Self {
         Self {
             vmap: HashMap::new(),
             tmap: HashMap::new(),
             data: HashMap::new(),
             ctors: HashMap::new(),
-            codata: HashMap::new(),
+            coda: HashMap::new(),
             dtors: HashMap::new(),
+            defs: HashMap::new(),
         }
     }
-    pub fn push(&mut self, x: VVar<Ann>, t: TValue<Ann>) {
+    pub fn push(&mut self, x: VVar, t: TValue) {
         self.vmap.insert(x, t);
     }
-    pub fn extend(
-        &mut self, other: impl IntoIterator<Item = (VVar<Ann>, TValue<Ann>)>,
-    ) {
+    pub fn extend(&mut self, other: impl IntoIterator<Item = (VVar, TValue)>) {
         self.vmap.extend(other);
     }
-    pub fn lookup(&self, x: &VVar<Ann>) -> Option<&TValue<Ann>> {
+    pub fn lookup(&self, x: &VVar) -> Option<&TValue> {
         self.vmap.get(x)
     }
-    pub fn decl(
-        &mut self, d: &Declare<Ann>,
-    ) -> Result<(), NameResolveError<Ann>> {
+    pub fn decl(&mut self, d: &Declare) -> Result<(), NameResolveError> {
         match d {
             Declare::Data { name, ctors, ann } => {
                 self.data.insert(name.clone(), ctors.clone()).map_or(
@@ -69,7 +66,7 @@ impl<Ann: AnnT> Ctx<Ann> {
                 Ok(())
             }
             Declare::Codata { name, dtors, ann } => {
-                self.codata.insert(name.clone(), dtors.clone()).map_or(
+                self.coda.insert(name.clone(), dtors.clone()).map_or(
                     Ok(()),
                     |_| {
                         Err(NameResolveError::DuplicateDeclaration {
@@ -94,10 +91,29 @@ impl<Ann: AnnT> Ctx<Ann> {
                 }
                 Ok(())
             }
-            Declare::Define { .. } => todo!(),
+            Declare::Define { name, ty: Some(ty), def: None, .. } => {
+                self.push(name.clone(), *ty.to_owned());
+                Ok(())
+            }
+            Declare::Define { name, ty, def: Some(def), .. } => {
+                if let Some(ty) = ty {
+                    self.push(name.clone(), *ty.to_owned());
+                }
+                self.defs.insert(
+                    name.clone(),
+                    (ty.clone().map(|t| *t), def.as_ref().clone()),
+                );
+                Ok(())
+            }
+            Declare::Define { name, ty: None, def: None, ann, .. } => {
+                Err(NameResolveError::EmptyDeclaration {
+                    name: name.name().to_owned(),
+                    ann: ann.clone(),
+                })
+            }
         }
     }
-    pub fn tyck(&self) -> Result<(), TypeCheckError<Ann>> {
+    pub fn tyck_pre(&self) -> Result<(), TypeCheckError> {
         for (_, ctors) in &self.data {
             for (_, args) in ctors {
                 for arg in args {
@@ -105,7 +121,7 @@ impl<Ann: AnnT> Ctx<Ann> {
                 }
             }
         }
-        for (_, dtors) in &self.codata {
+        for (_, dtors) in &self.coda {
             for (_, args, ret) in dtors {
                 for arg in args {
                     arg.tyck(self)?;
@@ -113,65 +129,35 @@ impl<Ann: AnnT> Ctx<Ann> {
                 ret.tyck(self)?;
             }
         }
-        Ok(())
-    }
-}
-
-impl<Ann: AnnT> TypeCheck<Ann> for TValue<Ann> {
-    type Type = ();
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
-        match self {
-            TValue::Var(x, ann) => ctx.tmap.get(x).map_or(
-                Err(TypeCheckError::NameResolve(
-                    NameResolveError::UnknownIdentifier {
-                        name: x.name().to_owned(),
-                        ann: ann.clone(),
-                    },
-                )),
-                |sort| {
-                    if let Sort::TVal = sort {
-                        Ok(())
-                    } else {
-                        Err(TypeCheckError::Explosion(format!(
-                            "expect value type, found computation type"
-                        )))
-                    }
-                },
-            ),
-            TValue::Comp(_, _)
-            | TValue::Bool(_)
-            | TValue::Int(_)
-            | TValue::String(_)
-            | TValue::Char(_)
-            | TValue::Unit(_) => Ok(()),
-        }
-    }
-}
-
-impl<Ann: AnnT> TypeCheck<Ann> for TCompute<Ann> {
-    type Type = ();
-    fn tyck(&self, ctx: &Ctx<Ann>) -> Result<Self::Type, TypeCheckError<Ann>> {
-        match self {
-            TCompute::Var(x, ann) => ctx.tmap.get(x).map_or(
-                Err(TypeCheckError::NameResolve(
-                    NameResolveError::UnknownIdentifier {
-                        name: x.name().to_owned(),
-                        ann: ann.clone(),
-                    },
-                )),
-                |sort| {
-                    if let Sort::TComp = sort {
-                        Ok(())
-                    } else {
-                        Err(TypeCheckError::Explosion(format!(
-                            "expect value type, found computation type"
-                        )))
-                    }
-                },
-            ),
-            TCompute::Ret(_, _) | TCompute::Lam(_, _, _) | TCompute::Os => {
-                Ok(())
+        for (_, (ty, def)) in &self.defs {
+            match ty {
+                Some(ty) => {
+                    def.tyck(self)?;
+                    let ty_ = def.tyck(self)?;
+                    ty.eqv(&ty_).ok_or_else(|| {
+                        TypeCheckError::TypeMismatch {
+                            expected: ty.clone().into(),
+                            found: ty_.clone().into(),
+                        }
+                    })?
+                }
+                None => {
+                    def.tyck(self)?;
+                }
             }
         }
+        Ok(())
+    }
+    pub fn tyck_post(&mut self) -> Result<(), TypeCheckError> {
+        for (name, (ty, def)) in self.defs.to_owned() {
+            match ty {
+                Some(_) => {}
+                None => {
+                    let ty = def.tyck(self).expect("checked in tyck_pre");
+                    self.push(name, ty)
+                }
+            }
+        }
+        Ok(())
     }
 }

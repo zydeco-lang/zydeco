@@ -11,11 +11,9 @@ impl FmtArgs for ZValue {
                     cargs.iter().map(|arg| arg.fmt_args(args)).collect();
                 format!("{}({})", ctor, cargs.join(", "))
             }
-            ZValue::Bool(b) => format!("{}", b),
             ZValue::Int(i) => format!("{}", i),
             ZValue::String(s) => format!("\"{}\"", s),
             ZValue::Char(c) => format!("\'{}\'", c),
-            ZValue::Triv() => format!("()"),
         }
     }
 }
@@ -47,12 +45,6 @@ impl FmtArgs for ZCompute {
             ZCompute::App(e, v) => {
                 format!("{} {}", e.fmt_args(args), v.fmt_args(args))
             }
-            ZCompute::If { cond, thn, els, .. } => format!(
-                "if {}: {} else: {}",
-                cond.fmt_args(args),
-                thn.fmt_args(args),
-                els.fmt_args(args)
-            ),
             ZCompute::Match { scrut, cases, .. } => format!(
                 "match {}{}",
                 scrut.fmt_args(args),

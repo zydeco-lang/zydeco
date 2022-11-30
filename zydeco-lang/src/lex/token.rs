@@ -4,9 +4,10 @@ use std::fmt::{Debug, Display};
 #[derive(Logos, Clone, Debug, PartialEq)]
 pub enum Tok<'input> {
     #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*")]
-    IdentBig(&'input str),
-    #[regex(r"(([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*)|((\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=)*)")]
-    IdentSmall(&'input str),
+    UpperIdent(&'input str),
+    #[regex(r"(([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*)")]
+    #[regex(r"((\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=)*)")]
+    LowerIdent(&'input str),
 
     #[token("data")]
     Data,
@@ -16,6 +17,8 @@ pub enum Tok<'input> {
     Where,
     #[token("pub")]
     Pub,
+    #[token("extern")]
+    Extern,
     #[token("define")]
     Define,
     #[token("let")]
@@ -32,15 +35,7 @@ pub enum Tok<'input> {
     Match,
     #[token("comatch")]
     Comatch,
-    #[token("if")]
-    If,
-    #[token("else")]
-    Else,
 
-    #[token("true")]
-    True,
-    #[token("false")]
-    False,
     #[regex(r"[\+-]?[0-9]+")]
     NumLit(&'input str),
     #[regex(r#""[^"\\]*(?:\\.[^"\\]*)*""#)]
@@ -54,16 +49,6 @@ pub enum Tok<'input> {
     CompType,
     #[token("OS")]
     OSType,
-    #[token("Bool")]
-    BoolType,
-    #[token("Int")]
-    IntType,
-    #[token("String")]
-    StringType,
-    #[token("Char")]
-    CharType,
-    #[token("Unit")]
-    UnitType,
 
     #[token("(")]
     ParenOpen,
@@ -105,50 +90,42 @@ pub enum Tok<'input> {
 impl<'input> Display for Tok<'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Tok::IdentBig(s) => write!(f, "IdentBig({})", s),
-            Tok::IdentSmall(s) => write!(f, "IdentSmall({})", s),
-            Tok::Data => write!(f, "Data"),
-            Tok::Codata => write!(f, "Codata"),
-            Tok::Where => write!(f, "Where"),
-            Tok::Pub => write!(f, "Pub"),
-            Tok::Define => write!(f, "Define"),
-            Tok::Let => write!(f, "Let"),
-            Tok::Do => write!(f, "Do"),
-            Tok::Ret => write!(f, "Ret"),
-            Tok::Fn => write!(f, "Fn"),
-            Tok::Rec => write!(f, "Rec"),
-            Tok::Match => write!(f, "Match"),
-            Tok::Comatch => write!(f, "Comatch"),
-            Tok::If => write!(f, "If"),
-            Tok::Else => write!(f, "Else"),
-            Tok::True => write!(f, "True"),
-            Tok::False => write!(f, "False"),
-            Tok::NumLit(s) => write!(f, "NumLit({})", s),
-            Tok::StrLit(s) => write!(f, "StrLit({})", s),
-            Tok::CharLit(s) => write!(f, "CharLit({})", s),
-            Tok::RetType => write!(f, "RetType"),
-            Tok::CompType => write!(f, "CompType"),
-            Tok::OSType => write!(f, "OSType"),
-            Tok::BoolType => write!(f, "BoolType"),
-            Tok::IntType => write!(f, "IntType"),
-            Tok::StringType => write!(f, "StringType"),
-            Tok::CharType => write!(f, "CharType"),
-            Tok::UnitType => write!(f, "UnitType"),
-            Tok::ParenOpen => write!(f, "ParenOpen"),
-            Tok::ParenClose => write!(f, "ParenClose"),
-            Tok::BraceOpen => write!(f, "BraceOpen"),
-            Tok::BraceClose => write!(f, "BraceClose"),
-            // Tok::BracketOpen => write!(f, "BracketOpen"),
-            // Tok::BracketClose => write!(f, "BracketClose"),
-            Tok::Comma => write!(f, "Comma"),
-            Tok::Colon => write!(f, "Colon"),
-            Tok::Equals => write!(f, "Equals"),
-            Tok::Semicolon => write!(f, "Semicolon"),
-            Tok::Force => write!(f, "Force"),
-            Tok::Branch => write!(f, "Branch"),
-            Tok::Dot => write!(f, "Dot"),
-            Tok::Arrow => write!(f, "Arrow"),
-            Tok::Assign => write!(f, "Assign"),
+            Tok::UpperIdent(s) => write!(f, "UpperIdentifier({})", s),
+            Tok::LowerIdent(s) => write!(f, "LowerIdentifier({})", s),
+            Tok::Data => write!(f, "data"),
+            Tok::Codata => write!(f, "codata"),
+            Tok::Where => write!(f, "where"),
+            Tok::Pub => write!(f, "pub"),
+            Tok::Extern => write!(f, "extern"),
+            Tok::Define => write!(f, "define"),
+            Tok::Let => write!(f, "let"),
+            Tok::Do => write!(f, "do"),
+            Tok::Ret => write!(f, "ret"),
+            Tok::Fn => write!(f, "fn"),
+            Tok::Rec => write!(f, "rec"),
+            Tok::Match => write!(f, "match"),
+            Tok::Comatch => write!(f, "comatch"),
+            Tok::NumLit(s) => write!(f, "NumLiteral({})", s),
+            Tok::StrLit(s) => write!(f, "StrLiteral({})", s),
+            Tok::CharLit(s) => write!(f, "CharLiteral({})", s),
+            Tok::RetType => write!(f, "F"),
+            Tok::CompType => write!(f, "U"),
+            Tok::OSType => write!(f, "OS"),
+            Tok::ParenOpen => write!(f, "("),
+            Tok::ParenClose => write!(f, ")"),
+            Tok::BraceOpen => write!(f, "{{"),
+            Tok::BraceClose => write!(f, "}}"),
+            // Tok::BracketOpen => write!(f, "["),
+            // Tok::BracketClose => write!(f, "]"),
+            Tok::Comma => write!(f, ","),
+            Tok::Colon => write!(f, ":"),
+            Tok::Equals => write!(f, "="),
+            Tok::Semicolon => write!(f, ";"),
+            Tok::Force => write!(f, "!"),
+            Tok::Branch => write!(f, "|"),
+            Tok::Dot => write!(f, "."),
+            Tok::Arrow => write!(f, "->"),
+            Tok::Assign => write!(f, "<-"),
 
             Tok::Error => write!(f, "Error"),
         }

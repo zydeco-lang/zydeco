@@ -14,6 +14,12 @@
 * - custom/ holds tests that need custom I/O mocking to execute.
 */
 
+use zydeco_lang::{
+    dynamics::env::Env,
+    library::{builtins, declarations, linker},
+    statics::ctx::Ctx,
+};
+
 fn wrapper<T>(r: Result<T, String>) {
     match r {
         Ok(_) => {}
@@ -21,6 +27,7 @@ fn wrapper<T>(r: Result<T, String>) {
     }
 }
 
+#[allow(unused)]
 fn pure_test(f: &str) -> Result<(), String> {
     use std::io::Read;
     use std::path::PathBuf;
@@ -34,10 +41,22 @@ fn pure_test(f: &str) -> Result<(), String> {
         .read_to_string(&mut buf)
         .map_err(|e| e.to_string())?;
     match zydeco::parse_exp(&buf)? {
-        ValOrComp::Comp(m) => match zydeco::typecheck_computation(&m)? {
-            TCompute::Ret(_, _) => zydeco::eval_returning_computation(m)?,
-            a => Err(format!("Wrong output type: {}", a))?,
-        },
+        ValOrComp::Comp(m) => {
+            let mut ctx = Ctx::new();
+            let std_decls =
+                declarations::std_decls().expect("std library failure");
+            declarations::inject_ctx(&mut ctx, &std_decls)
+                .expect("std library failure");
+            match zydeco::typecheck_computation(&m, &ctx)? {
+                TCompute::Ret(_, _) => {
+                    let mut env = Env::new();
+                    builtins::link_builtin(&mut env);
+                    linker::link(&mut env, &std_decls);
+                    zydeco::eval_returning_computation(m, env)?
+                }
+                a => Err(format!("Wrong output type: {}", a))?,
+            }
+        }
         _ => Err("Didn't parse".to_string())?,
     };
     Ok(())
@@ -55,7 +74,11 @@ fn batch_test(f: &str) -> Result<(), String> {
         .read_to_string(&mut buf)
         .map_err(|e| e.to_string())?;
     let p = zydeco::parse_prog(&buf)?;
-    zydeco::typecheck_prog(&p)?;
+    let mut ctx = Ctx::new();
+    let std_decls = declarations::std_decls().expect("std library failure");
+    declarations::inject_ctx(&mut ctx, &std_decls)
+        .expect("std library failure");
+    zydeco::typecheck_prog(&p, &ctx)?;
 
     let mut input = std::io::empty();
     let mut output = std::io::sink();
@@ -79,10 +102,15 @@ fn check_test(f: &str) -> Result<(), String> {
         .read_to_string(&mut buf)
         .map_err(|e| e.to_string())?;
     let p = zydeco::parse_prog(&buf)?;
-    zydeco::typecheck_prog(&p)?;
+    let mut ctx = Ctx::new();
+    let std_decls = declarations::std_decls().expect("std library failure");
+    declarations::inject_ctx(&mut ctx, &std_decls)
+        .expect("std library failure");
+    zydeco::typecheck_prog(&p, &ctx)?;
     Ok(())
 }
 
+#[allow(unused)]
 macro_rules! mk_pure_test {
     ($test_name:ident, $file_name : expr) => {
         #[test]
@@ -119,7 +147,6 @@ mod batch_tests {
     mk_batch_test!(btest5, "num.zy");
     mk_batch_test!(btest6, "even-odd-data.zy");
     mk_batch_test!(btest7, "even-old-rec.zy");
-    mk_batch_test!(btest8, "data.zy");
     mk_batch_test!(btest9, "even-odd-codata.zy");
     mk_batch_test!(btest10, "nat.zy");
     mk_batch_test!(btest11, "add.zy");
@@ -144,7 +171,7 @@ mod custom_tests {
     fn custom_test0() -> Result<(), String> {
         use std::io::Read;
         use std::path::PathBuf;
-        use zydeco_lang::zydeco;
+        use zydeco_lang::{library::declarations, statics::ctx::Ctx, zydeco};
         let mut buf = String::new();
         let path = PathBuf::from("tests/custom/echo_once.zydeco");
         std::fs::File::open(path)
@@ -152,7 +179,11 @@ mod custom_tests {
             .read_to_string(&mut buf)
             .map_err(|e| e.to_string())?;
         let p = zydeco::parse_prog(&buf)?;
-        zydeco::typecheck_prog(&p)?;
+        let mut ctx = Ctx::new();
+        let std_decls = declarations::std_decls().expect("std library failure");
+        declarations::inject_ctx(&mut ctx, &std_decls)
+            .expect("std library failure");
+        zydeco::typecheck_prog(&p, &ctx)?;
 
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();

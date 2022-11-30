@@ -1,9 +1,9 @@
-let not = { fn (x: Bool) -> if x: ret false else: ret true },
-    and = { fn (x: Bool, y: Bool) -> if x: ret y else: ret false },
-    or = { fn (x: Bool, y: Bool) -> if x: ret true else: ret y };
-do a <- !and false true,
-   b <- !or false true,
-   c <- !not a;
-let nor = { fn (x: Bool, y: Bool) -> if x: if y: ret true else: ret false else: ret false };
-do a <- !nor false false;
-!and c b
+do a <- ! and False() True(),
+   b <- ! or False() True(),
+   c <- ! not a;
+let nor = { fn (x: Bool, y: Bool) ->
+  do a <- ! or x y;
+  ! not a
+};
+do a <- ! nor False() False();
+! and c b

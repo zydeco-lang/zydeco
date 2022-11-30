@@ -14,15 +14,13 @@ pub enum ZValue {
     Var(String),
     Thunk(Rc<ZCompute>, Option<Env>),
     Ctor(String, Vec<Rc<ZValue>>),
-    Bool(bool),
     Int(i64),
     String(String),
     Char(char),
-    Triv(),
 }
 
-impl<Ann> From<Value<Ann>> for ZValue {
-    fn from(value: Value<Ann>) -> Self {
+impl From<Value> for ZValue {
+    fn from(value: Value) -> Self {
         match value {
             Value::Var(var, _) => ZValue::Var(var.name().to_string()),
             Value::Thunk(compute, _) => {
@@ -32,11 +30,9 @@ impl<Ann> From<Value<Ann>> for ZValue {
                 ctor.name().to_string(),
                 args.into_iter().map(Into::into).map(Rc::new).collect(),
             ),
-            Value::Bool(b, _) => ZValue::Bool(b),
             Value::Int(i, _) => ZValue::Int(i),
             Value::String(s, _) => ZValue::String(s),
             Value::Char(s, _) => ZValue::Char(s),
-            Value::Triv(_) => ZValue::Triv(),
         }
     }
 }
@@ -53,14 +49,13 @@ pub enum ZCompute {
     Prim { arity: u64, body: PrimComp },
     Rec { arg: String, body: Rc<ZCompute> },
     App(Rc<ZCompute>, Rc<ZValue>),
-    If { cond: Rc<ZValue>, thn: Rc<ZCompute>, els: Rc<ZCompute> },
     Match { scrut: Rc<ZValue>, cases: Vec<(String, Vec<String>, Rc<ZCompute>)> },
     CoMatch { cases: Vec<(String, Vec<String>, Rc<ZCompute>)> },
     CoApp { scrut: Rc<ZCompute>, dtor: String, args: Vec<Rc<ZValue>> },
 }
 
-impl<Ann> From<Compute<Ann>> for ZCompute {
-    fn from(compute: Compute<Ann>) -> Self {
+impl From<Compute> for ZCompute {
+    fn from(compute: Compute) -> Self {
         match compute {
             Compute::Let { binding: (name, _, def), body, .. } => {
                 ZCompute::Let {
@@ -89,11 +84,6 @@ impl<Ann> From<Compute<Ann>> for ZCompute {
             Compute::App(f, arg, _) => {
                 ZCompute::App(Rc::new((*f).into()), Rc::new((*arg).into()))
             }
-            Compute::If { cond, thn, els, .. } => ZCompute::If {
-                cond: Rc::new((*cond).into()),
-                thn: Rc::new((*thn).into()),
-                els: Rc::new((*els).into()),
-            },
             Compute::Match { scrut, cases, .. } => ZCompute::Match {
                 scrut: Rc::new((*scrut).into()),
                 cases: cases

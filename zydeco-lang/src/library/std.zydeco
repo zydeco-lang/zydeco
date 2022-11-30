@@ -1,0 +1,112 @@
+# zydeco std
+
+## 1 and 2 types
+
+data Unit where
+  | Unit()
+
+pub define unit_to_str : Thunk(Unit -> Ret(String)) = {
+  fn (_u : Unit) -> ret "()"
+};
+
+data Bool where
+  | True()
+  | False()
+
+pub define not : Thunk(Bool -> Ret(Bool)) = {
+  fn (x: Bool) ->
+    match x
+    | True() -> ret False()
+    | False() -> ret True()
+};
+
+pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn (x: Bool, y: Bool) ->
+    match x
+    | True() -> ret y
+    | False() -> ret False()
+};
+
+pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn (x: Bool, y: Bool) ->
+    match x
+    | True() -> ret True()
+    | False() -> ret y
+};
+
+# pub define nand = { fn (x: Bool, y: Bool) ->
+#   do a <- ! and x y;
+#   ! not a
+# };
+
+# pub define nor = { fn (x: Bool, y: Bool) ->
+#   do a <- ! or x y;
+#   ! not a
+# };
+
+pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn (b: Bool, b': Bool) ->
+    match b
+    | True() -> ret b'
+    | False() -> ! not b'
+};
+
+# pub define if : Thunk(Bool -> Thunk(a) -> Thunk(a) -> Ret(a)) = {
+#   fn (b : Bool, t : Thunk(a), f : Thunk(a)) ->
+#     match b
+#     | True() -> ! t
+#     | False() -> ! f
+# };
+### Waiting for polymorphism
+
+pub define bool_to_str : Thunk(Bool -> Ret(String)) = {
+  fn (b : Bool) ->
+    match b
+    | True() -> ret "True"
+    | False() -> ret "False"
+};
+### Moving the built-in function to internal
+
+## arithmetic operations
+
+extern data Int where
+### we support the constructors externally because
+### the parsers of their constructors are customized
+### so the type is registered as a data type but the constructors
+### are not implemented as internal constructors
+
+pub extern define add: Thunk(Int -> Int -> Ret(Int));
+pub extern define sub: Thunk(Int -> Int -> Ret(Int));
+pub extern define mul: Thunk(Int -> Int -> Ret(Int));
+pub extern define mod: Thunk(Int -> Int -> Ret(Int));
+
+pub extern define int_eq: Thunk(Int -> Int -> Ret(Bool));
+pub extern define int_lt: Thunk(Int -> Int -> Ret(Bool));
+pub extern define int_gt: Thunk(Int -> Int -> Ret(Bool));
+
+
+## string operations
+
+extern data Char where
+extern data String where
+### we support the constructors externally
+
+pub extern define str_length: Thunk(String -> Ret(Int));
+pub extern define str_append: Thunk(String -> String -> Ret(String));
+pub extern define str_eq: Thunk(String -> String -> Ret(Bool));
+pub extern define str_index: Thunk(String -> Int -> Ret(Char));
+
+
+## conversions
+
+pub extern define int_to_str: Thunk(Int -> Ret(String));
+pub extern define char_to_str: Thunk(Char -> Ret(String));
+pub extern define str_to_int: Thunk(String -> Ret(Int));
+
+
+## OS operations
+
+pub extern define write_line: Thunk(String -> Thunk(OS) -> OS);
+pub extern define read_line: Thunk(Thunk(String -> OS) -> OS);
+pub extern define exit: Thunk(Int -> OS);
+

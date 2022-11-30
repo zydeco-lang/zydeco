@@ -1,0 +1,5 @@
+# Unit defined in std.zydeco
+
+let v = Unit();
+do x <- !unit_to_str v;
+!write_line x {!exit 0}

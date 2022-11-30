@@ -5,6 +5,4 @@ pub mod fmt;
 pub mod syntax;
 mod ann;
 
-pub use parser::ExpressionParser;
-pub use parser::TValParser;
-pub use parser::ZydecoParser;
+pub use parser::{ExpressionParser, ZydecoParser};

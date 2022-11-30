@@ -1,23 +1,26 @@
+use crate::utils::ann::Ann;
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Clone, Debug)]
-pub enum NameResolveError<Ann> {
+pub enum NameResolveError {
     DuplicateDeclaration { name: String, ann: Ann },
+    EmptyDeclaration { name: String, ann: Ann },
     UnknownIdentifier { name: String, ann: Ann },
 }
-use std::fmt;
 use NameResolveError::*;
-impl<Ann> fmt::Display for NameResolveError<Ann>
-where
-    Ann: std::fmt::Debug,
-{
+
+impl fmt::Display for NameResolveError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             DuplicateDeclaration { name, ann } => {
                 write!(f, "{} declared multiple times ({:?})", name, ann)
             }
+            EmptyDeclaration { name, ann } => {
+                write!(f, "{} declared with neither type signature nor binding ({:?})", name, ann)
+            }
             UnknownIdentifier { name, ann } => {
-                write!(f, "Unknown identifier {} at {:?}", name, ann)
+                write!(f, "Unknown identifier {} ({:?})", name, ann)
             }
         }
     }

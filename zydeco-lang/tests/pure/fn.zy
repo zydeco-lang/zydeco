@@ -1,1 +1,1 @@
-ret { fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> !y x }
+ret { fn (x: Bool, y: Comp(Bool -> Ret(Bool))) -> ! y x }

@@ -1,13 +1,13 @@
 use super::resolve::*;
-use crate::parse::syntax::*;
+use crate::{parse::syntax::*, utils::ann::Ann};
 
 #[derive(Clone, Debug)]
-pub enum THetero<Ann> {
-    TVal(TValue<Ann>),
-    TComp(TCompute<Ann>),
+pub enum THetero {
+    TVal(TValue),
+    TComp(TCompute),
 }
 
-impl<Ann> std::fmt::Display for THetero<Ann> {
+impl std::fmt::Display for THetero {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             THetero::TComp(b) => write!(f, "{}", b),
@@ -16,34 +16,32 @@ impl<Ann> std::fmt::Display for THetero<Ann> {
     }
 }
 
-impl<Ann> From<TValue<Ann>> for THetero<Ann> {
-    fn from(x: TValue<Ann>) -> Self {
+impl From<TValue> for THetero {
+    fn from(x: TValue) -> Self {
         THetero::TVal(x)
     }
 }
-impl<Ann> From<TCompute<Ann>> for THetero<Ann> {
-    fn from(x: TCompute<Ann>) -> Self {
+impl From<TCompute> for THetero {
+    fn from(x: TCompute) -> Self {
         THetero::TComp(x)
     }
 }
 
 #[derive(Clone, Debug)]
-pub enum TypeCheckError<Ann> {
-    UnboundVar { var: VVar<Ann>, ann: Ann },
-    TypeMismatch { expected: THetero<Ann>, found: THetero<Ann> },
-    TypeExpected { expected: String, found: THetero<Ann> },
-    InconsistentBranches(Vec<TCompute<Ann>>),
-    NameResolve(NameResolveError<Ann>),
-    WrongMain { found: TCompute<Ann> },
-    Explosion(String),
+pub enum TypeCheckError {
+    UnboundVar { var: VVar, ann: Ann },
+    TypeMismatch { expected: THetero, found: THetero },
+    TypeExpected { expected: String, found: THetero },
+    ArityMismatch { context: String, expected: usize, found: usize },
+    InconsistentBranches(Vec<TCompute>),
+    NameResolve(NameResolveError),
+    WrongMain { found: TCompute },
+    ErrStr(String),
 }
 use TypeCheckError::*;
 
 use std::fmt;
-impl<Ann> fmt::Display for TypeCheckError<Ann>
-where
-    Ann: std::fmt::Debug,
-{
+impl fmt::Display for TypeCheckError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             UnboundVar { var, ann } => {
@@ -57,6 +55,11 @@ where
             TypeExpected { expected, found } => {
                 write!(f, "Type {} expected, but got {}", expected, found)
             }
+            ArityMismatch { context, expected, found } => write!(
+                f,
+                "In {}, expected {} arguments but got {}",
+                context, expected, found
+            ),
             InconsistentBranches(types) => {
                 write!(f, "Branches have mismatched types: {:?}", types)
             }
@@ -66,7 +69,7 @@ where
                 "The type of the main expression should be OS but got {}",
                 found
             ),
-            Explosion(s) => write!(f, "explosion, whatever that means: {}", s),
+            ErrStr(s) => write!(f, "{}", s),
         }
     }
 }

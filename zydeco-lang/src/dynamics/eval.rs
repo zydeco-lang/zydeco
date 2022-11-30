@@ -59,9 +59,9 @@ pub struct Runtime<'rt> {
 
 impl<'rt> Runtime<'rt> {
     pub fn new(
-        input: &'rt mut (dyn BufRead), output: &'rt mut (dyn Write),
+        env: Env, input: &'rt mut (dyn BufRead), output: &'rt mut (dyn Write),
     ) -> Self {
-        Runtime { stack: Rc::new(Stack::new()), env: Env::new(), input, output }
+        Runtime { stack: Rc::new(Stack::new()), env, input, output }
     }
 
     fn get(&self, var: &str) -> Result<Rc<ZValue>, EvalErr> {
@@ -194,14 +194,6 @@ impl<'rt> Runtime<'rt> {
             App(f, arg) => {
                 self.call(arg.clone())?;
                 Ok(f)
-            }
-            If { cond, thn, els } => {
-                let cond = self.resolve_value(cond)?;
-                if let Bool(cond) = cond.as_ref() {
-                    Ok(if *cond { thn } else { els })
-                } else {
-                    Err(Exit::Err(format!("If on non-bool value: {}", cond)))
-                }
             }
             Match { scrut, cases } => {
                 if let Ctor(ctor, args) =
