@@ -1,15 +1,15 @@
 use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
-use crate::parse::syntax::*;
+use crate::{parse::syntax::*, utils::ann::Ann};
 use TypeCheckError::*;
 
 pub trait TypeCheck {
     type Type;
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>>;
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError>;
 }
 
-impl TypeCheck for Program<()> {
+impl TypeCheck for Program {
     type Type = ();
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         let mut ctx = ctx.clone();
         for decl in &self.decls {
             ctx.decl(decl).map_err(|err| NameResolve(err))?;
@@ -24,9 +24,9 @@ impl TypeCheck for Program<()> {
     }
 }
 
-impl TypeCheck for Compute<()> {
-    type Type = TCompute<()>;
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
+impl TypeCheck for Compute {
+    type Type = TCompute;
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match self {
             Compute::Let { binding, body, .. } => {
                 let mut ctx = ctx.clone();
@@ -162,7 +162,7 @@ impl TypeCheck for Compute<()> {
                 ty.ok_or_else(|| ErrStr(format!("empty Match")))
             }
             Compute::CoMatch { cases, ann } => {
-                let mut ty: Option<TCompute<()>> = None;
+                let mut ty: Option<TCompute> = None;
                 // Hack: we need to know what type it is; now we just synthesize it
                 for (dtor, vars, comp) in cases {
                     let (codata, targs, tret) =
@@ -238,9 +238,9 @@ impl TypeCheck for Compute<()> {
     }
 }
 
-impl TypeCheck for Value<()> {
-    type Type = TValue<()>;
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
+impl TypeCheck for Value {
+    type Type = TValue;
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match self {
             Value::Var(x, ann) => ctx
                 .lookup(&x)
@@ -281,15 +281,15 @@ impl TypeCheck for Value<()> {
     }
 }
 
-impl TValue<()> {
-    fn internal(name: &str, ann: ()) -> Self {
-        TValue::Var(TVar::new(format!("{}", name), ann), ann)
+impl TValue {
+    fn internal(name: &str, ann: Ann) -> Self {
+        TValue::Var(TVar::new(format!("{}", name), ann.clone()), ann)
     }
 }
 
-impl TypeCheck for TValue<()> {
+impl TypeCheck for TValue {
     type Type = ();
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match self {
             TValue::Var(x, ann) => ctx.tmap.get(x).map_or(
                 Err(TypeCheckError::NameResolve(
@@ -313,9 +313,9 @@ impl TypeCheck for TValue<()> {
     }
 }
 
-impl TypeCheck for TCompute<()> {
+impl TypeCheck for TCompute {
     type Type = ();
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
+    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match self {
             TCompute::Var(x, ann) => ctx.tmap.get(x).map_or(
                 Err(TypeCheckError::NameResolve(
@@ -341,7 +341,7 @@ impl TypeCheck for TCompute<()> {
     }
 }
 
-impl TValue<()> {
+impl TValue {
     pub fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TValue::Thunk(a, _), TValue::Thunk(b, _)) => TCompute::eqv(a, b),
@@ -352,7 +352,7 @@ impl TValue<()> {
     }
 }
 
-impl TCompute<()> {
+impl TCompute {
     pub fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TCompute::Ret(a, _), TCompute::Ret(b, _)) => TValue::eqv(a, b),

@@ -1,5 +1,12 @@
 use std::fmt::Debug;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ann {}
+
+pub fn ann() -> Ann {
+    Ann {}
+}
+
 pub trait AnnT: Clone + Debug {
     type Span;
     fn internal(sort: &'static str) -> Self;
@@ -12,7 +19,7 @@ impl AnnT for () {
     fn span(&self) -> Self::Span {}
 }
 
-pub trait AnnHolder<Ann: AnnT> {
+pub trait AnnHolder {
     fn ann(&self) -> &Ann;
     fn set_ann(&mut self, ann: Ann);
 }

@@ -19,8 +19,8 @@ pub enum ZValue {
     Char(char),
 }
 
-impl<Ann> From<Value<Ann>> for ZValue {
-    fn from(value: Value<Ann>) -> Self {
+impl From<Value> for ZValue {
+    fn from(value: Value) -> Self {
         match value {
             Value::Var(var, _) => ZValue::Var(var.name().to_string()),
             Value::Thunk(compute, _) => {
@@ -54,8 +54,8 @@ pub enum ZCompute {
     CoApp { scrut: Rc<ZCompute>, dtor: String, args: Vec<Rc<ZValue>> },
 }
 
-impl<Ann> From<Compute<Ann>> for ZCompute {
-    fn from(compute: Compute<Ann>) -> Self {
+impl From<Compute> for ZCompute {
+    fn from(compute: Compute) -> Self {
         match compute {
             Compute::Let { binding: (name, _, def), body, .. } => {
                 ZCompute::Let {

@@ -10,13 +10,13 @@ pub enum Sort {
 
 #[derive(Clone, Debug)]
 pub struct Ctx {
-    vmap: HashMap<VVar<()>, TValue<()>>,
-    pub tmap: HashMap<TVar<()>, Sort>,
-    data: HashMap<TVar<()>, Vec<(Ctor<()>, Vec<TValue<()>>)>>,
-    pub ctors: HashMap<Ctor<()>, (TVar<()>, Vec<TValue<()>>)>,
-    coda: HashMap<TVar<()>, Vec<(Dtor<()>, Vec<TValue<()>>, TCompute<()>)>>,
-    pub dtors: HashMap<Dtor<()>, (TVar<()>, Vec<TValue<()>>, TCompute<()>)>,
-    pub defs: HashMap<VVar<()>, (Option<TValue<()>>, Value<()>)>,
+    vmap: HashMap<VVar, TValue>,
+    pub tmap: HashMap<TVar, Sort>,
+    data: HashMap<TVar, Vec<(Ctor, Vec<TValue>)>>,
+    pub ctors: HashMap<Ctor, (TVar, Vec<TValue>)>,
+    coda: HashMap<TVar, Vec<(Dtor, Vec<TValue>, TCompute)>>,
+    pub dtors: HashMap<Dtor, (TVar, Vec<TValue>, TCompute)>,
+    pub defs: HashMap<VVar, (Option<TValue>, Value)>,
 }
 
 impl Ctx {
@@ -31,20 +31,16 @@ impl Ctx {
             defs: HashMap::new(),
         }
     }
-    pub fn push(&mut self, x: VVar<()>, t: TValue<()>) {
+    pub fn push(&mut self, x: VVar, t: TValue) {
         self.vmap.insert(x, t);
     }
-    pub fn extend(
-        &mut self, other: impl IntoIterator<Item = (VVar<()>, TValue<()>)>,
-    ) {
+    pub fn extend(&mut self, other: impl IntoIterator<Item = (VVar, TValue)>) {
         self.vmap.extend(other);
     }
-    pub fn lookup(&self, x: &VVar<()>) -> Option<&TValue<()>> {
+    pub fn lookup(&self, x: &VVar) -> Option<&TValue> {
         self.vmap.get(x)
     }
-    pub fn decl(
-        &mut self, d: &Declare<()>,
-    ) -> Result<(), NameResolveError<()>> {
+    pub fn decl(&mut self, d: &Declare) -> Result<(), NameResolveError> {
         match d {
             Declare::Data { name, ctors, ann } => {
                 self.data.insert(name.clone(), ctors.clone()).map_or(
@@ -117,7 +113,7 @@ impl Ctx {
             }
         }
     }
-    pub fn tyck_pre(&self) -> Result<(), TypeCheckError<()>> {
+    pub fn tyck_pre(&self) -> Result<(), TypeCheckError> {
         for (_, ctors) in &self.data {
             for (_, args) in ctors {
                 for arg in args {
@@ -152,7 +148,7 @@ impl Ctx {
         }
         Ok(())
     }
-    pub fn tyck_post(&mut self) -> Result<(), TypeCheckError<()>> {
+    pub fn tyck_post(&mut self) -> Result<(), TypeCheckError> {
         for (name, (ty, def)) in self.defs.to_owned() {
             match ty {
                 Some(_) => {}

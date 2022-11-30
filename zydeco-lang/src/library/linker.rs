@@ -4,7 +4,7 @@ use crate::{
 };
 use std::rc::Rc;
 
-pub fn link(env: &mut Env, decls: &Vec<Declare<()>>) {
+pub fn link(env: &mut Env, decls: &Vec<Declare>) {
     for decl in decls {
         match decl {
             Declare::Define { name, def: Some(def), .. } => {
