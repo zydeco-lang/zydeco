@@ -1,11 +1,11 @@
 use crate::{
     dynamics::{env::Env, syntax::ZValue},
-    parse::syntax::{Declare, Program, Value::*},
+    parse::syntax::{Declare, Value::*},
 };
 use std::rc::Rc;
 
-pub fn link(prog: &Program<()>, env: &mut Env) {
-    for decl in &prog.decls {
+pub fn link(env: &mut Env, decls: &Vec<Declare<()>>) {
+    for decl in decls {
         match decl {
             Declare::Define { name, def: Some(def), .. } => {
                 match def.as_ref() {

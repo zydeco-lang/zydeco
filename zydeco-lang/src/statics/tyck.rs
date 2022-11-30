@@ -1,5 +1,5 @@
 use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
-use crate::{library::tyck::std_decls, parse::syntax::*};
+use crate::parse::syntax::*;
 use TypeCheckError::*;
 
 pub trait TypeCheck {
@@ -11,11 +11,6 @@ impl TypeCheck for Program<()> {
     type Type = ();
     fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError<()>> {
         let mut ctx = ctx.clone();
-        for decl in
-            &std_decls().map_err(|e| TypeCheckError::ErrStr(e.to_string()))?
-        {
-            ctx.decl(decl).map_err(|err| NameResolve(err))?;
-        }
         for decl in &self.decls {
             ctx.decl(decl).map_err(|err| NameResolve(err))?;
         }

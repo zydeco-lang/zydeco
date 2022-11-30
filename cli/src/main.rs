@@ -1,7 +1,12 @@
 use clap::Parser;
 use cli::{Cli, Commands};
 use std::io::Read;
-use zydeco_lang::{zydeco, dynamics::env::Env, library::{linker, builtins}};
+use zydeco_lang::{
+    dynamics::env::Env,
+    library::{builtins, declarations, linker},
+    statics::ctx::Ctx,
+    zydeco,
+};
 
 fn main() -> Result<(), String> {
     match Cli::parse().command {
@@ -35,12 +40,16 @@ fn run(
     }
     // type check
     announce_phase(verbose, title, "tyck");
-    zydeco::typecheck_prog(&p)?;
+    let mut ctx = Ctx::new();
+    let std_decls = declarations::std_decls().expect("std library failure");
+    declarations::inject_ctx(&mut ctx, &std_decls)
+        .expect("std library failure");
+    zydeco::typecheck_prog(&p, &ctx)?;
     // elab
     announce_phase(verbose, title, "elab");
     let mut env = Env::new();
     builtins::link_builtin(&mut env);
-    linker::link(&p, &mut env);
+    linker::link(&mut env, &p.decls);
     let sem_m = zydeco::elab_prog(p);
     if verbose {
         println!("{}", sem_m);

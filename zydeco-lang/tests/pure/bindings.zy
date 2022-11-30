@@ -1,5 +1,5 @@
-let x = true,
-    y = { ret false };
+let x = True(),
+    y = { ret False() };
 let f = { fn (b: Bool) -> ret b };
 do rx <- !f x,
    ry <- do y <- !y; !f x;

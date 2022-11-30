@@ -30,22 +30,24 @@ pub fn parse_exp(input: &str) -> Result<ValOrComp<()>, String> {
     ExpressionParser::new().parse(&input, lexer).map_err(|e| e.to_string())
 }
 
-pub fn typecheck_prog(p: &Program<()>) -> Result<(), String> {
-    p.tyck(&Ctx::new()).map_err(|e| e.to_string())
+pub fn typecheck_prog(p: &Program<()>, ctx: &Ctx) -> Result<(), String> {
+    p.tyck(ctx).map_err(|e| e.to_string())
 }
 
-pub fn typecheck_computation(m: &Compute<()>) -> Result<TCompute<()>, String> {
-    m.tyck(&Ctx::new()).map_err(|e| e.to_string())
+pub fn typecheck_computation(
+    m: &Compute<()>, ctx: &Ctx,
+) -> Result<TCompute<()>, String> {
+    m.tyck(ctx).map_err(|e| e.to_string())
 }
 
-pub fn typecheck_value(v: &Value<()>) -> Result<TValue<()>, String> {
-    v.tyck(&Ctx::new()).map_err(|e| e.to_string())
+pub fn typecheck_value(v: &Value<()>, ctx: &Ctx) -> Result<TValue<()>, String> {
+    v.tyck(ctx).map_err(|e| e.to_string())
 }
 
 pub fn eval_prog(p: Program<()>) -> Result<Never, String> {
     let mut env = Env::new();
     builtins::link_builtin(&mut env);
-    linker::link(&p, &mut env);
+    linker::link(&mut env, &p.decls);
     eval_os_computation(*p.comp, env)
 }
 
@@ -54,7 +56,7 @@ pub fn eval_virtual_prog(
 ) -> Result<i32, String> {
     let mut env = Env::new();
     builtins::link_builtin(&mut env);
-    linker::link(&p, &mut env);
+    linker::link(&mut env, &p.decls);
     eval_virtual_os_computation(*p.comp, env, r, w)
 }
 

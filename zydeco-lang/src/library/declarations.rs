@@ -1,6 +1,7 @@
 use crate::{
     lex::token::Tok,
     parse::{parser::DeclarationsParser, syntax::Declare},
+    statics::ctx::Ctx,
 };
 use logos::Logos;
 
@@ -12,4 +13,13 @@ pub fn std_decls() -> Result<Vec<Declare<()>>, String> {
         .spanned()
         .map(|(tok, range)| (range.start, tok, range.end));
     DeclarationsParser::new().parse(&std, lexer).map_err(|e| e.to_string())
+}
+
+pub fn inject_ctx(
+    ctx: &mut Ctx, decls: &Vec<Declare<()>>,
+) -> Result<(), String> {
+    for decl in decls {
+        ctx.decl(decl).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }

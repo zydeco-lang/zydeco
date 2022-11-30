@@ -3,7 +3,6 @@ use std::io::{BufRead, Write};
 use std::rc::Rc;
 
 // /* Function helpers */
-
 fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
     Ok(ZCompute::Return(Rc::new(value)))
 }

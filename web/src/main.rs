@@ -1,9 +1,12 @@
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
-use zydeco_lang::dynamics::env::Env;
-use zydeco_lang::library::{linker, builtins};
-use zydeco_lang::parse::syntax::TCompute;
-use zydeco_lang::zydeco;
+use zydeco_lang::{
+    dynamics::env::Env,
+    library::{builtins, declarations, linker},
+    parse::syntax::TCompute,
+    statics::ctx::Ctx,
+    zydeco,
+};
 
 const EXAMPLE: &str = "
 let f = {
@@ -51,14 +54,18 @@ fn ui() -> Html {
 
 fn run(input: &str) -> Result<String, String> {
     let p = zydeco::parse_prog(input)?;
-    let b = zydeco::typecheck_computation(&p.comp)?;
+    let mut ctx = Ctx::new();
+    let std_decls = declarations::std_decls().expect("std library failure");
+    declarations::inject_ctx(&mut ctx, &std_decls)
+        .expect("std library failure");
+    let b = zydeco::typecheck_computation(&p.comp, &ctx)?;
     let a = match b {
         TCompute::Ret(a, _) => a,
         _ => return Err(format!("Your computation had type {}, but the Web interpreter only support computations of type Ret(a)", b))
     };
     let mut env = Env::new();
     builtins::link_builtin(&mut env);
-    linker::link(&p, &mut env);
+    linker::link(&mut env, &p.decls);
     let v = zydeco::eval_returning_computation(*p.comp, env)?;
 
     Ok(format!("{} : {}", v, a))
