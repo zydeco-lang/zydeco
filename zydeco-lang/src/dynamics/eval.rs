@@ -248,9 +248,7 @@ impl<'rt> Runtime<'rt> {
 
     fn eval(&mut self, mut comp: ZCompute) -> Result<ZValue, Exit> {
         use ZCompute::*;
-        const MAX_STEPS: usize = 1000; // TODO: make this programmable too
-        let mut steps = 0;
-        while steps <= MAX_STEPS {
+        loop {
             match (comp, self.stack.as_ref()) {
                 (Return(val), Stack::Done) => {
                     return Ok(self.resolve_value(val)?.as_ref().clone());
@@ -267,12 +265,7 @@ impl<'rt> Runtime<'rt> {
                     // println!();
                 }
             }
-            steps += 1;
         }
-        Err(Exit::Err(format!(
-            "My name is megumi! Exceeded max steps: {}",
-            MAX_STEPS
-        )))
     }
 }
 
