@@ -1,0 +1,8 @@
+let rec print_all : StrList -> OS = (
+  fn (args: StrList) ->
+  match args
+  | SLNil() -> ! exit 0
+  | SLCons(arg, args) -> ! write_line arg { ! print_all args }
+);
+
+! arg_list print_all

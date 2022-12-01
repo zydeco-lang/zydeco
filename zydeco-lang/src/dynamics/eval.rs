@@ -55,13 +55,15 @@ pub struct Runtime<'rt> {
     env: Env,
     input: &'rt mut (dyn BufRead),
     output: &'rt mut (dyn Write),
+    args: &'rt [String],
 }
 
 impl<'rt> Runtime<'rt> {
     pub fn new(
         env: Env, input: &'rt mut (dyn BufRead), output: &'rt mut (dyn Write),
+        args: &'rt [String],
     ) -> Self {
-        Runtime { stack: Rc::new(Stack::new()), env, input, output }
+        Runtime { stack: Rc::new(Stack::new()), env, input, output, args }
     }
 
     fn get(&self, var: &str) -> Result<Rc<ZValue>, EvalErr> {
@@ -176,7 +178,7 @@ impl<'rt> Runtime<'rt> {
                         args.push((**arg).clone());
                     }
                 }
-                match body(args, self.input, self.output) {
+                match body(args, self.input, self.output, self.args) {
                     Ok(m) => Ok(Rc::new(m)),
                     Err(exit_code) => Err(Exit::ExitCode(exit_code)),
                 }

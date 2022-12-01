@@ -10,15 +10,19 @@ use zydeco_lang::{
 
 fn main() -> Result<(), String> {
     match Cli::parse().command {
-        Commands::Run { file, dry, verbose } => run_file(file, dry, verbose),
-        Commands::Check { file, verbose } => run_file(file, true, verbose),
+        Commands::Run { file, dry, verbose, args } => {
+            run_file(file, dry, verbose, args)
+        }
+        Commands::Check { file, verbose } => {
+            run_file(file, true, verbose, vec![])
+        }
         Commands::Repl { .. } => cli::repl::launch(),
         Commands::Test {} => acc_mode().map_err(|_| "".to_string()),
     }
 }
 
 fn run_file(
-    file: std::path::PathBuf, dry_run: bool, verbose: bool,
+    file: std::path::PathBuf, dry_run: bool, verbose: bool, args: Vec<String>,
 ) -> Result<(), String> {
     let mut buf = String::new();
     std::fs::File::open(file.clone())
@@ -26,11 +30,11 @@ fn run_file(
         .read_to_string(&mut buf)
         .map_err(|e| e.to_string())?;
     let title = format!("{}", file.display());
-    run(&buf, &title, dry_run, verbose)
+    run(&buf, &title, dry_run, verbose, args)
 }
 
 fn run(
-    input: &str, title: &str, dry_run: bool, verbose: bool,
+    input: &str, title: &str, dry_run: bool, verbose: bool, args: Vec<String>,
 ) -> Result<(), String> {
     // parse
     announce_phase(verbose, title, "parse");
@@ -57,7 +61,7 @@ fn run(
     // eval
     if !dry_run {
         announce_phase(verbose, title, "eval");
-        zydeco::eval_os_sem_computation(sem_m, env)?;
+        zydeco::eval_os_sem_computation(sem_m, env, &args)?;
     }
     Ok(())
 }
@@ -118,7 +122,7 @@ fn single_run(
     let title = line.trim_start_matches(MARKER).trim_end_matches(MARKER).trim();
     println!(">>> [{}]", title);
     println!("{}", buffer);
-    let res = run(buffer, title, false, false);
+    let res = run(buffer, title, false, false, Vec::new());
     if res.is_err() {
         err_names.push(title.to_owned());
     }

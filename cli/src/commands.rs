@@ -19,6 +19,8 @@ pub enum Commands {
         dry: bool,
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
+        #[arg(last = true)]
+        args: Vec<String>,
     },
     /// Check a zydeco program
     Check {

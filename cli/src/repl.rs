@@ -48,7 +48,7 @@ pub fn launch() -> Result<(), String> {
                         let mut env = Env::new();
                         builtins::link_builtin(&mut env);
                         linker::link(&mut env, &std_decls);
-                        if let Err(e) = zydeco::eval_os_computation(m, env) {
+                        if let Err(e) = zydeco::eval_os_computation(m, env, &[]) {
                             println!("Runtime Error: {}", e)
                         }
                     }

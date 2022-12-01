@@ -1,9 +1,9 @@
-data StrList where
+data StrList' where
   | Nil()
-  | Cons(String, StrList)
+  | Cons(String, StrList')
 
-let rec foldl : StrList -> Thunk(String -> Int -> Ret(Int)) -> Int -> Ret(Int) =
-  fn (l : StrList, step : Thunk(String -> Int -> Ret(Int)), s : Int) ->
+let rec foldl : StrList' -> Thunk(String -> Int -> Ret(Int)) -> Int -> Ret(Int) =
+  fn (l : StrList', step : Thunk(String -> Int -> Ret(Int)), s : Int) ->
     match l
     | Nil() -> ret s
     | Cons(x, xs) -> (

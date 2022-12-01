@@ -37,6 +37,7 @@ fn std_library() -> Vec<Builtin> {
         Builtin::new("write_line", 2, write_line),
         Builtin::new("read_line", 1, read_line),
         Builtin::new("exit", 1, exit),
+        Builtin::new("arg_list", 1, arg_list),
     ]
 }
 

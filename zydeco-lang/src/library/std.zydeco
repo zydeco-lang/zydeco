@@ -5,10 +5,6 @@
 data Unit where
   | Unit()
 
-pub define unit_to_str : Thunk(Unit -> Ret(String)) = {
-  fn (_u : Unit) -> ret "()"
-};
-
 data Bool where
   | True()
   | False()
@@ -51,6 +47,12 @@ pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
     | False() -> ! not b'
 };
 
+# pub define ifc : Thunk(Ret(Bool) -> Thunk(b) -> Thunk(b) -> b) = {
+#  fn (b, thn, els) ->
+#    match b
+#    | True()  -> ! thn
+#    | False() -> ! els
+# }
 # pub define if : Thunk(Bool -> Thunk(a) -> Thunk(a) -> Ret(a)) = {
 #   fn (b : Bool, t : Thunk(a), f : Thunk(a)) ->
 #     match b
@@ -59,12 +61,6 @@ pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
 # };
 ### Waiting for polymorphism
 
-pub define bool_to_str : Thunk(Bool -> Ret(String)) = {
-  fn (b : Bool) ->
-    match b
-    | True() -> ret "True"
-    | False() -> ret "False"
-};
 ### Moving the built-in function to internal
 
 ## arithmetic operations
@@ -99,14 +95,28 @@ pub extern define str_index: Thunk(String -> Int -> Ret(Char));
 
 ## conversions
 
+pub define unit_to_str : Thunk(Unit -> Ret(String)) = {
+  fn (_u : Unit) -> ret "()"
+};
+pub define bool_to_str : Thunk(Bool -> Ret(String)) = {
+  fn (b : Bool) ->
+    match b
+    | True() -> ret "True"
+    | False() -> ret "False"
+};
+
 pub extern define int_to_str: Thunk(Int -> Ret(String));
 pub extern define char_to_str: Thunk(Char -> Ret(String));
 pub extern define str_to_int: Thunk(String -> Ret(Int));
 
+
+data StrList where
+  | SLNil()
+  | SLCons(String, StrList)
 
 ## OS operations
 
 pub extern define write_line: Thunk(String -> Thunk(OS) -> OS);
 pub extern define read_line: Thunk(Thunk(String -> OS) -> OS);
 pub extern define exit: Thunk(Int -> OS);
-
+pub extern define arg_list: Thunk(Thunk(StrList -> OS) -> OS);

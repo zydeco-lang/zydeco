@@ -7,6 +7,7 @@ pub type PrimComp = fn(
     Vec<ZValue>,
     &mut (dyn BufRead),
     &mut (dyn Write),
+    &[String],
 ) -> Result<ZCompute, i32>;
 
 #[derive(Clone)]
