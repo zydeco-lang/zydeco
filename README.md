@@ -1,85 +1,64 @@
-# Zydeco
+# Zydeco 🪗
 
-A proof-of-concept language adopting call-by-push-value as its evaluation order.
+Zydeco is a proof-of-concept programming language based on Call-by-push-value.
+
+## Running Zydeco
+
+Create a file `hello-world.zydeco`:
+```plain
+! write_line "hello, world!" { ! exit 0 }
+```
+
+Then run
+```bash
+$ cargo run -- run hello-world.zydeco
+hello, world!
+```
+
+Alternatively, run
+```bash
+cargo build --release
+```
+To build the executable which will be stored at `target/release/zydeco`.
+Then run 
+```bash
+$ ./target/release/zydeco run hello-world.zydeco
+hello, world!
+```
+
+Run `zydeco --help` for further usage information.
+
+## Intro to Zydeco
+
+We will develop more introductory material on zydeco when we have
+implemented more features. For now, browse `zydeco-lang/tests/` for
+some example programs.
 
 ## Repository Structure
 
 ```plain
 .
-├── Cargo.lock
 ├── Cargo.toml
-├── zydeco
 ├── zydeco-lang
 │  ├── src
 │  └── tests
-└── README.md
+├── cli
+├── web
+└── ...
 ```
 
-`/zydeco/`: interesting test cases and standard libraries in zydeco.
+- `zydeco-lang/`: the library implementing the parser, typechecker and
+interpreter for the Zydeco language.
+- `zydeco-lang/tests/`: test cases and example code
+- `cli/` Command-line interface
+- `web/` Web interface
 
-`/zydeco-lang/`: an implementation for Zydeco language; uses lalrpop as its parser generator.
+## Related Literature
 
-- `src/`:
-  - `lib.rs`: the top-level module for all compiler utilities
-  - `main.rs`: a basic cli
-- `tests/`: test cases and example code
+Zydeco is based on the Call-by-push-value calculus introduced by Paul
+Blain Levy: https://dl.acm.org/doi/10.1145/3537668.3537670
 
-## Running Zydeco
+## Related Language Implementations
 
-```bash
-cargo run -- run zydeco/interpreter.zydeco
-```
-
-This runs an "interpreter" of zydeco, written in zydeco.
-
-## Running REPL
-
-```bash
-rlwrap cargo run -- repl
-```
-
-To conclude the program, type `@@@ <optional name><CR>`.
-
-## Testing
-
-An accumulative test file `zydeco-lang/tests/basics.zydeco` is kept for adding small, incremental while convenient test cases under heavy development. To add a test case,
-
-1. Type a complete Zydeco term
-2. Type `@@@` at the start of the line, followed by descriptions for the test
-
-To run in terminal,
-
-```bash
-cargo run -- test < zydeco-lang/tests/basics.zydeco
-```
-
-## Features
-
-1. Environment-based Evaluator
-2. Inductive and Co-inductive Types
-3. String and IO
-
-## Roadmap
-
-### Features
-
-1. Arithmetics
-2. Modules
-3. Continuation (w/ letcc?)
-4. Polymorphism (System F)
-5. Product and Sum (as builtin)
-
-### Syntax
-
-1. Formatter (for better debug experience)
-2. Encode currying and multiple binding in AST
-3. Automatic Insertion of `ret` & `Ret()`
-
-## Pointers to the Literature
-
-Call-by-push-value by Paul Blain Levy: https://dl.acm.org/doi/10.1145/3537668.3537670
-
-## Related Work
-
-- Fiddle: <https://github.com/maxsnew/modal-scheme>
+- Fiddle : <https://github.com/maxsnew/modal-scheme>
 - Riddle: <https://github.com/UMjoeypeng/riddle_compiler>
