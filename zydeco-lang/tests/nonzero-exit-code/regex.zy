@@ -1,0 +1,103 @@
+data Syn where
+  | Str(String)
+  | Concat(Syn, Syn)
+  | Kleene(Syn)
+  | Choose(Syn, Syn)
+
+data OptionStr where
+  | SomeStr(String)
+  | NoneStr()
+
+codata Regex where
+  .str(String, String): F(OptionStr)
+  .concat(String, Syn, Syn): F(OptionStr)
+  .kleene(String, Syn): F(OptionStr)
+  .choose(String, Syn, Syn): F(OptionStr)
+  .bind(String, Syn): F(OptionStr)
+
+let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String, i: Int) -> (
+  do l <- ! str_length s;
+  let rec str_collect : String -> Int -> String -> Ret(String) = fn (s: String, i: Int, r: String) -> (
+    do continue? <- ! int_lt i l;
+    match continue?
+    | False() -> ret r
+    | True() -> (
+      do tl <- ! str_index s i;
+      do tl <- ! char_to_str tl;
+      do r <- ! str_append r tl;
+      do i+1 <- ! add i 1;
+      ! str_collect s i+1 r)
+  );
+  ! str_collect s i ""
+)};
+
+let str_eq_at = { fn (a: String, b: String, i: Int) ->
+  do ai <- ! str_index a i;
+  do bi <- ! str_index b i;
+  do ais <- ! char_to_str ai;
+  do bis <- ! char_to_str bi;
+  ! str_eq ais bis
+};
+
+let str_match : U(String -> String -> F(OptionStr)) = {
+  let rec str_match : Int -> String -> String -> F(OptionStr) =
+    fn (i: Int, s: String, p: String) -> (
+      do s_len <- ! str_length s;
+      do p_len <- ! str_length p;
+      do i_lt_s <- ! int_lt i s_len;
+      do i_lt_p <- ! int_lt i p_len;
+      match i_lt_p
+      | False() -> (
+        do s' <- ! str_chop_hd s i;
+        ret SomeStr(s'))
+      | True() -> (
+        match i_lt_s
+        | False() -> ret NoneStr()
+        | True() -> (
+          do eq? <- ! str_eq_at s p i;
+          match eq?
+          | False() -> ret NoneStr()
+          | True() -> (
+            do i+1 <- ! add i 1;
+            ! str_match i+1 s p)))
+    );
+  ! str_match 0
+};
+
+let rec regex : Regex = (
+  comatch
+  | .str(s, p) -> ! str_match s p
+  | .concat(s, sy1, sy2) -> (
+    do s? <- ! regex .bind(s, sy1);
+    match s?
+    | NoneStr() -> ret NoneStr()
+    | SomeStr(s) -> (
+      ! regex .bind(s, sy2)))
+  | .kleene(s, sy) -> (
+    do s? <- ! regex .bind(s, sy);
+    match s?
+    | NoneStr() -> ret SomeStr(s)
+    | SomeStr(s) -> ! regex .kleene(s, sy))
+  | .choose(s, sy1, sy2) -> (
+    do s? <- ! regex .bind(s, sy1);
+    match s?
+    | SomeStr(s) -> ret SomeStr(s)
+    | NoneStr() -> ! regex .bind(s, sy2))
+  | .bind(s, sy) -> (
+    match sy
+    | Str(p) -> ! regex .str(s, p)
+    | Concat(p1, p2) -> ! regex .concat (s, p1, p2)
+    | Kleene(p) -> ! regex .kleene(s, p)
+    | Choose(p1, p2) -> ! regex .choose(s, p1, p2))
+);
+
+let demo = { fn (syn: Syn, str: String, kont: U(OS)) ->
+  do res <- ! regex .bind(str, syn);
+  match res
+  | SomeStr(s) -> (
+    ! write_line s kont)
+  | NoneStr() -> ! exit 1
+};
+
+! demo (Concat(Kleene(Str("p")), Concat(Kleene(Str("q")), Choose(Str("xos"), Str("sox"))))) "pppqqqsox\^o^/" {
+! exit 0 }
