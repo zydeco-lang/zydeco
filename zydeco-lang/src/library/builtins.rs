@@ -17,12 +17,13 @@ impl Builtin {
     }
 }
 
-// Only need to change here (and provide impl) to add new builtin function
+// Need to change here, provide impl and add to std.zydeco to add new builtin function
 fn std_library() -> Vec<Builtin> {
     vec![
         Builtin::new("add", 2, add),
         Builtin::new("sub", 2, sub),
         Builtin::new("mul", 2, mul),
+        Builtin::new("div", 2, div),
         Builtin::new("mod", 2, modulo),
         Builtin::new("int_eq", 2, int_eq),
         Builtin::new("int_lt", 2, int_lt),
@@ -33,6 +34,7 @@ fn std_library() -> Vec<Builtin> {
         Builtin::new("str_index", 2, str_index),
         Builtin::new("int_to_str", 1, int_to_str),
         Builtin::new("char_to_str", 1, char_to_str),
+        Builtin::new("char_to_int", 1, char_to_int),
         Builtin::new("str_to_int", 1, str_to_int),
         Builtin::new("write_line", 2, write_line),
         Builtin::new("read_line", 1, read_line),

@@ -33,6 +33,7 @@ macro_rules! arith {
 arith!(add, +);
 arith!(sub, -);
 arith!(mul, *);
+arith!(div, /);
 arith!(modulo, %);
 
 macro_rules! intcomp {
@@ -107,6 +108,15 @@ pub fn char_to_str(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [ZValue::Char(a)] => ret(ZValue::String(a.to_string())),
+        _ => unreachable!(""),
+    }
+}
+
+pub fn char_to_int(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        [ZValue::Char(a)] => ret(ZValue::Int((*a as u8) as i64)),
         _ => unreachable!(""),
     }
 }

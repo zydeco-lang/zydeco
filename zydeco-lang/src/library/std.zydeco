@@ -74,6 +74,7 @@ extern data Int where
 pub extern define add: Thunk(Int -> Int -> Ret(Int));
 pub extern define sub: Thunk(Int -> Int -> Ret(Int));
 pub extern define mul: Thunk(Int -> Int -> Ret(Int));
+pub extern define div: Thunk(Int -> Int -> Ret(Int));
 pub extern define mod: Thunk(Int -> Int -> Ret(Int));
 
 pub extern define int_eq: Thunk(Int -> Int -> Ret(Bool));
@@ -113,6 +114,7 @@ pub define bool_to_str : Thunk(Bool -> Ret(String)) = {
 
 pub extern define int_to_str: Thunk(Int -> Ret(String));
 pub extern define char_to_str: Thunk(Char -> Ret(String));
+pub extern define char_to_int : Thunk(Char -> Ret(Int));
 pub extern define str_to_int: Thunk(String -> Ret(Int));
 
 data StrList where
