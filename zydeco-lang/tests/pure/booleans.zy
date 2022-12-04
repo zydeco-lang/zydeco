@@ -1,9 +1,5 @@
 do a <- ! and False() True(),
    b <- ! or False() True(),
    c <- ! not a;
-let nor = { fn (x: Bool, y: Bool) ->
-  do a <- ! or x y;
-  ! not a
-};
 do a <- ! nor False() False();
 ! and c b

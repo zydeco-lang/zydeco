@@ -30,15 +30,17 @@ pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
     | False() -> ret y
 };
 
-# pub define nand = { fn (x: Bool, y: Bool) ->
-#   do a <- ! and x y;
-#   ! not a
-# };
+pub define nand : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn (x: Bool, y: Bool) ->
+    do a <- ! and x y;
+    ! not a
+};
 
-# pub define nor = { fn (x: Bool, y: Bool) ->
-#   do a <- ! or x y;
-#   ! not a
-# };
+pub define nor : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn (x: Bool, y: Bool) ->
+    do a <- ! or x y;
+    ! not a
+};
 
 pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
   fn (b: Bool, b': Bool) ->
@@ -93,7 +95,7 @@ pub extern define str_append: Thunk(String -> String -> Ret(String));
 pub extern define str_eq: Thunk(String -> String -> Ret(Bool));
 pub extern define str_index: Thunk(String -> Int -> Ret(Char));
 
-define char_eq: Thunk(Char -> Char -> Ret(Bool)) = {
+pub define char_eq: Thunk(Char -> Char -> Ret(Bool)) = {
   fn (c: Char, c': Char) ->
     do c <- ! char_to_str c;
     do c' <- ! char_to_str c';

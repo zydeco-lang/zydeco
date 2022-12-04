@@ -27,7 +27,6 @@ fn wrapper<T>(r: Result<T, String>) {
     }
 }
 
-#[allow(unused)]
 fn pure_test(f: &str) -> Result<(), String> {
     use std::io::Read;
     use std::path::PathBuf;
@@ -115,7 +114,6 @@ fn check_test(f: &str) -> Result<(), String> {
     Ok(())
 }
 
-#[allow(unused)]
 macro_rules! mk_pure_test {
     ($test_name:ident, $file_name : expr) => {
         #[test]
