@@ -37,9 +37,7 @@ let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String, i: Int) -> (
 let str_eq_at = { fn (a: String, b: String, i: Int) ->
   do ai <- ! str_index a i;
   do bi <- ! str_index b i;
-  do ais <- ! char_to_str ai;
-  do bis <- ! char_to_str bi;
-  ! str_eq ais bis
+  ! char_eq ai bi
 };
 
 let str_match : U(String -> String -> F(OptionStr)) = {

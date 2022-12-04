@@ -153,6 +153,7 @@ mod batch_tests {
     mk_batch_test!(btest9, "even-odd-codata.zy");
     mk_batch_test!(btest10, "nat.zy");
     mk_batch_test!(btest11, "add.zy");
+    mk_batch_test!(btest13, "regex.zy");
 }
 mod pure_tests {
     use super::*;

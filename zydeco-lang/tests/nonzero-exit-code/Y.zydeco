@@ -14,15 +14,6 @@ let y = {
     }
 };
 
-# `int_eq` implemented by `str_eq`;
-# should be replaced after `int_eq` is builtin
-let int_eq = {
-  fn (x: Int, y: Int) ->
-    do x <- ! int_to_str x;
-    do y <- ! int_to_str y;
-    ! str_eq x y
-};
-
 # good old factorial
 let fact = {
   fn (f: U(Int -> F(Int))) ->
@@ -41,7 +32,7 @@ let fact = {
 do fact <- ! y fact;
 
 # tests
-let main = { fn (input: Int, expected: Int, t: Thunk(OS)) ->
+let demo = { fn (input: Int, expected: Int, t: Thunk(OS)) ->
   do x <- ! fact input;
   do correct <- ! int_eq x expected;
   match correct
@@ -59,6 +50,6 @@ let main = { fn (input: Int, expected: Int, t: Thunk(OS)) ->
   )
 };
 
-! main 5 120 {
-! main 10 3628800 {
+! demo 5 120 {
+! demo 10 3628800 {
 ! exit 0 }}
