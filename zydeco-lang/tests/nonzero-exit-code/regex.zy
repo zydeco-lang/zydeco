@@ -9,11 +9,11 @@ data OptionStr where
   | NoneStr()
 
 codata Regex where
-  .str(String, String): F(OptionStr)
-  .concat(String, Syn, Syn): F(OptionStr)
-  .kleene(String, Syn): F(OptionStr)
-  .choose(String, Syn, Syn): F(OptionStr)
-  .bind(String, Syn): F(OptionStr)
+  .str(String): F(OptionStr)
+  .concat(Syn, Syn): F(OptionStr)
+  .kleene(Syn): F(OptionStr)
+  .choose(Syn, Syn): F(OptionStr)
+  .bind(Syn): F(OptionStr)
 
 let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String, i: Int) -> (
   do l <- ! str_length s;
@@ -64,35 +64,35 @@ let str_match : U(String -> String -> F(OptionStr)) = {
   ! str_match 0
 };
 
-let rec regex : Regex = (
+let rec regex : String -> Regex = ( fn (s: String) ->
   comatch
-  | .str(s, p) -> ! str_match s p
-  | .concat(s, sy1, sy2) -> (
-    do s? <- ! regex .bind(s, sy1);
+  | .str(p) -> ! str_match s p
+  | .concat(sy1, sy2) -> (
+    do s? <- ! regex s .bind(sy1);
     match s?
     | NoneStr() -> ret NoneStr()
     | SomeStr(s) -> (
-      ! regex .bind(s, sy2)))
-  | .kleene(s, sy) -> (
-    do s? <- ! regex .bind(s, sy);
+      ! regex s .bind(sy2)))
+  | .kleene(sy) -> (
+    do s? <- ! regex s .bind(sy);
     match s?
     | NoneStr() -> ret SomeStr(s)
-    | SomeStr(s) -> ! regex .kleene(s, sy))
-  | .choose(s, sy1, sy2) -> (
-    do s? <- ! regex .bind(s, sy1);
+    | SomeStr(s) -> ! regex s .kleene(sy))
+  | .choose(sy1, sy2) -> (
+    do s? <- ! regex s .bind(sy1);
     match s?
     | SomeStr(s) -> ret SomeStr(s)
-    | NoneStr() -> ! regex .bind(s, sy2))
-  | .bind(s, sy) -> (
+    | NoneStr() -> ! regex s .bind(sy2))
+  | .bind(sy) -> (
     match sy
-    | Str(p) -> ! regex .str(s, p)
-    | Concat(p1, p2) -> ! regex .concat (s, p1, p2)
-    | Kleene(p) -> ! regex .kleene(s, p)
-    | Choose(p1, p2) -> ! regex .choose(s, p1, p2))
+    | Str(p) -> ! regex s .str(p)
+    | Concat(sy1, sy2) -> ! regex s .concat(sy1, sy2)
+    | Kleene(sy) -> ! regex s .kleene(sy)
+    | Choose(sy1, sy2) -> ! regex s .choose(sy1, sy2))
 );
 
 let demo = { fn (syn: Syn, str: String, kont: U(OS)) ->
-  do res <- ! regex .bind(str, syn);
+  do res <- ! regex str .bind(syn);
   match res
   | SomeStr(s) -> (
     ! write_line s kont)
