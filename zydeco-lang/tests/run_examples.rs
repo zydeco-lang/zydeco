@@ -80,9 +80,14 @@ fn batch_test(f: &str) -> Result<(), String> {
         .expect("std library failure");
     zydeco::typecheck_prog(&p, &ctx)?;
 
+    let mut env = Env::new();
+    builtins::link_builtin(&mut env);
+    linker::link(&mut env, &std_decls);
+
     let mut input = std::io::empty();
     let mut output = std::io::sink();
-    let exit_code = zydeco::eval_virtual_prog(p, &mut input, &mut output, &[])?;
+    let exit_code =
+        zydeco::eval_virtual_prog(p, env, &mut input, &mut output, &[])?;
     if exit_code != 0 {
         Err(format!("Non-zero exit code: {}", exit_code))?
     }
@@ -167,6 +172,7 @@ mod tyck_tests {
 }
 
 mod custom_tests {
+    use super::*;
     #[test]
     fn custom_test0() -> Result<(), String> {
         use std::io::Read;
@@ -185,10 +191,14 @@ mod custom_tests {
             .expect("std library failure");
         zydeco::typecheck_prog(&p, &ctx)?;
 
+        let mut env = Env::new();
+        builtins::link_builtin(&mut env);
+        linker::link(&mut env, &std_decls);
+
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();
         let exit_code =
-            zydeco::eval_virtual_prog(p, &mut input, &mut output, &[])?;
+            zydeco::eval_virtual_prog(p, env, &mut input, &mut output, &[])?;
         if exit_code != 0 {
             Err(format!("Non-zero exit code: {}", exit_code))?
         }
@@ -216,10 +226,15 @@ mod custom_tests {
             .expect("std library failure");
         zydeco::typecheck_prog(&p, &ctx)?;
 
+        let mut env = Env::new();
+        builtins::link_builtin(&mut env);
+        linker::link(&mut env, &std_decls);
+
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();
         let exit_code = zydeco::eval_virtual_prog(
             p,
+            env,
             &mut input,
             &mut output,
             &["hello".to_string(), "world".to_string()],

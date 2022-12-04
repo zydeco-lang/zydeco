@@ -13,7 +13,7 @@ pub fn link(env: &mut Env, decls: &Vec<Declare>) {
                         name.name().to_owned(),
                         Rc::new(ZValue::Thunk(
                             Rc::new(def.as_ref().to_owned().into()),
-                            Some(Env::new()),
+                            Some(env.clone()),
                         )),
                     ),
                     _ => unreachable!(),

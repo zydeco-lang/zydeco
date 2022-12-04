@@ -53,6 +53,7 @@ fn run(
     announce_phase(verbose, title, "elab");
     let mut env = Env::new();
     builtins::link_builtin(&mut env);
+    linker::link(&mut env, &std_decls);
     linker::link(&mut env, &p.decls);
     let sem_m = zydeco::elab_prog(p);
     if verbose {

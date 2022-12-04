@@ -65,6 +65,7 @@ fn run(input: &str) -> Result<String, String> {
     };
     let mut env = Env::new();
     builtins::link_builtin(&mut env);
+    linker::link(&mut env, &std_decls);
     linker::link(&mut env, &p.decls);
     let v = zydeco::eval_returning_computation(*p.comp, env)?;
 
