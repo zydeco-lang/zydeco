@@ -8,12 +8,15 @@ data OptionStr where
   | SomeStr(String)
   | NoneStr()
 
-codata Regex where
+codata Matcher where
   .str(String): F(OptionStr)
   .concat(Syn, Syn): F(OptionStr)
   .kleene(Syn): F(OptionStr)
   .choose(Syn, Syn): F(OptionStr)
   .bind(Syn): F(OptionStr)
+
+codata Regex where
+  .run(String): Matcher
 
 let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String, i: Int) -> (
   do l <- ! str_length s;
@@ -64,35 +67,35 @@ let str_match : U(String -> String -> F(OptionStr)) = {
   ! str_match 0
 };
 
-let rec regex : String -> Regex = ( fn (s: String) ->
+let rec regex : Regex = ( comatch | .run(s) -> (
   comatch
   | .str(p) -> ! str_match s p
   | .concat(sy1, sy2) -> (
-    do s? <- ! regex s .bind(sy1);
+    do s? <- ! regex .run(s) .bind(sy1);
     match s?
     | NoneStr() -> ret NoneStr()
     | SomeStr(s) -> (
-      ! regex s .bind(sy2)))
+      ! regex .run(s) .bind(sy2)))
   | .kleene(sy) -> (
-    do s? <- ! regex s .bind(sy);
+    do s? <- ! regex .run(s) .bind(sy);
     match s?
     | NoneStr() -> ret SomeStr(s)
-    | SomeStr(s) -> ! regex s .kleene(sy))
+    | SomeStr(s) -> ! regex .run(s) .kleene(sy))
   | .choose(sy1, sy2) -> (
-    do s? <- ! regex s .bind(sy1);
+    do s? <- ! regex .run(s) .bind(sy1);
     match s?
     | SomeStr(s) -> ret SomeStr(s)
-    | NoneStr() -> ! regex s .bind(sy2))
+    | NoneStr() -> ! regex .run(s) .bind(sy2))
   | .bind(sy) -> (
     match sy
-    | Str(p) -> ! regex s .str(p)
-    | Concat(sy1, sy2) -> ! regex s .concat(sy1, sy2)
-    | Kleene(sy) -> ! regex s .kleene(sy)
-    | Choose(sy1, sy2) -> ! regex s .choose(sy1, sy2))
-);
+    | Str(p) -> ! regex .run(s) .str(p)
+    | Concat(sy1, sy2) -> ! regex .run(s) .concat(sy1, sy2)
+    | Kleene(sy) -> ! regex .run(s) .kleene(sy)
+    | Choose(sy1, sy2) -> ! regex .run(s) .choose(sy1, sy2))
+));
 
 let demo = { fn (syn: Syn, str: String, kont: U(OS)) ->
-  do res <- ! regex str .bind(syn);
+  do res <- ! regex .run(str) .bind(syn);
   match res
   | SomeStr(s) -> (
     ! write_line s kont)
