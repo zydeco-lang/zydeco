@@ -18,15 +18,13 @@ codata Summer where
 codata Summer' where
   .add(Int) : Ret(Int)
 
-
 let rec sumBad : NumList -> Ret(Int) =
   fn (xs : NumList) ->
     match xs
     | Empty() -> ret 0
-    | Cons(x, xs) -> ret 1
-      # (do n <- ! sumBad xs;
-      #     ! add n x);
-;
+    | Cons(x, xs) ->
+      (do n <- ! sumBad xs;
+          ! add n x);
 
 # This is a bad algorithm because it uses stack space linear in the
 # size of the input list. Why is that? each time we have a cons, we do
@@ -47,10 +45,10 @@ let rec sumBad : NumList -> Ret(Int) =
 let rec retSummer : Int -> Summer =
   fn (n : Int) -> comatch
       | .done()  -> ret n
-      | .addN(x) -> ! retSummer n
-      # (do n' <- ! add n x;
-      #     ! retSummer n');
-;
+      | .addN(x) ->
+      (do n' <- ! add n x;
+          ! retSummer n');
+
 let rec sumOk : NumList -> Summer =
   fn (xs : NumList) ->
     match xs
