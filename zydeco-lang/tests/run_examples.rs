@@ -155,6 +155,7 @@ mod batch_tests {
     mk_batch_test!(btest11, "add.zy");
     mk_batch_test!(btest13, "regex.zy");
     mk_batch_test!(btest14, "llists.zydeco");
+    mk_batch_test!(btest15, "fn_opt.zy");
 }
 mod pure_tests {
     use super::*;

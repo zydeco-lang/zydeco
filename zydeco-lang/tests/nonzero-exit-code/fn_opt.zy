@@ -1,0 +1,20 @@
+codata FnInt where
+  .int(Int): F(Int)
+
+codata FnOptInt where
+  .one(Int): F(Int)
+  .zero(): F(Int)
+
+let fn_int = {
+  comatch
+  | .int(i) -> ret i
+};
+
+let fn_opt_int = {
+  comatch
+  | .one(i) -> ! fn_int .int(i)
+  | .zero() -> ! fn_int .int(0)
+};
+
+do x <- ! fn_opt_int .zero();
+! exit x
