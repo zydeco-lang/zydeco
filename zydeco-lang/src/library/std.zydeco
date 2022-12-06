@@ -73,15 +73,15 @@ extern data Int where
 ### so the type is registered as a data type but the constructors
 ### are not implemented as internal constructors
 
-pub extern define add: Thunk(Int -> Int -> Ret(Int));
-pub extern define sub: Thunk(Int -> Int -> Ret(Int));
-pub extern define mul: Thunk(Int -> Int -> Ret(Int));
-pub extern define div: Thunk(Int -> Int -> Ret(Int));
-pub extern define mod: Thunk(Int -> Int -> Ret(Int));
+pub extern define add : Thunk(Int -> Int -> Ret(Int));
+pub extern define sub : Thunk(Int -> Int -> Ret(Int));
+pub extern define mul : Thunk(Int -> Int -> Ret(Int));
+pub extern define div : Thunk(Int -> Int -> Ret(Int));
+pub extern define mod : Thunk(Int -> Int -> Ret(Int));
 
-pub extern define int_eq: Thunk(Int -> Int -> Ret(Bool));
-pub extern define int_lt: Thunk(Int -> Int -> Ret(Bool));
-pub extern define int_gt: Thunk(Int -> Int -> Ret(Bool));
+pub extern define int_eq : Thunk(Int -> Int -> Ret(Bool));
+pub extern define int_lt : Thunk(Int -> Int -> Ret(Bool));
+pub extern define int_gt : Thunk(Int -> Int -> Ret(Bool));
 
 
 ## string operations
@@ -90,10 +90,10 @@ extern data Char where
 extern data String where
 ### we support the constructors externally
 
-pub extern define str_length: Thunk(String -> Ret(Int));
-pub extern define str_append: Thunk(String -> String -> Ret(String));
-pub extern define str_eq: Thunk(String -> String -> Ret(Bool));
-pub extern define str_index: Thunk(String -> Int -> Ret(Char));
+pub extern define str_length : Thunk(String -> Ret(Int));
+pub extern define str_append : Thunk(String -> String -> Ret(String));
+pub extern define str_eq : Thunk(String -> String -> Ret(Bool));
+pub extern define str_index : Thunk(String -> Int -> Ret(Char));
 
 pub define char_eq: Thunk(Char -> Char -> Ret(Bool)) = {
   fn (c: Char, c': Char) ->
@@ -114,10 +114,10 @@ pub define bool_to_str : Thunk(Bool -> Ret(String)) = {
     | False() -> ret "False"
 };
 
-pub extern define int_to_str: Thunk(Int -> Ret(String));
-pub extern define char_to_str: Thunk(Char -> Ret(String));
+pub extern define int_to_str : Thunk(Int -> Ret(String));
+pub extern define char_to_str : Thunk(Char -> Ret(String));
 pub extern define char_to_int : Thunk(Char -> Ret(Int));
-pub extern define str_to_int: Thunk(String -> Ret(Int));
+pub extern define str_to_int : Thunk(String -> Ret(Int));
 
 data StrList where
   | SLNil()
@@ -125,7 +125,32 @@ data StrList where
 
 ## OS operations
 
-pub extern define write_line: Thunk(String -> Thunk(OS) -> OS);
-pub extern define read_line: Thunk(Thunk(String -> OS) -> OS);
-pub extern define exit: Thunk(Int -> OS);
-pub extern define arg_list: Thunk(Thunk(StrList -> OS) -> OS);
+# pub extern define write_str : Thunk(String -> Thunk(OS) -> OS);
+pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
+pub extern define exit : Thunk(Int -> OS);
+pub extern define arg_list : Thunk(Thunk(StrList -> OS) -> OS);
+
+# pub define write_line : Thunk(String -> Thunk(OS) -> OS) = {
+#   fn (s: String, k: Thunk(OS)) ->
+#     do s <- ! str_append s "\n";
+#     ! write_str s k
+# };
+pub extern define write_line : Thunk(String -> Thunk(OS) -> OS);
+
+# pub define write_int : Thunk(Int -> Thunk(OS) -> OS) = {
+#   fn (i: Int, k: Thunk(OS)) ->
+#     do s <- ! int_to_str i;
+#     ! write_str s k
+# };
+
+pub define write_int_line : Thunk(Int -> Thunk(OS) -> OS) = {
+  fn (i: Int, k: Thunk(OS)) ->
+    do s <- ! int_to_str i;
+    ! write_line s k
+};
+
+pub define panic : Thunk(String -> OS) = {
+  fn (msg: String) ->
+    do msg <- ! str_append "Program panicked with message: " msg;
+    ! write_line msg { ! exit 1 }
+};

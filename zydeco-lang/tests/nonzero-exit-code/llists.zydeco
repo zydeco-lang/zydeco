@@ -1,0 +1,61 @@
+data LList where
+  | Nil()
+  | Cons(Int, U(F(LList)))
+
+codata IOS where
+  .i(Int): OS
+
+## LList is actually coinductive type
+
+# let rec loop : F(LList) = (
+#   ret Cons(0, loop)
+# );
+
+## foldr and an example of summing up the list and exiting with the sum
+
+# let rec foldr : U(F(LList)) -> U(Int -> U(IOS) -> IOS) -> U(IOS) -> IOS = (
+#   fn (ll: U(F(LList)), f: U(Int -> U(IOS) -> IOS), b: U(IOS)) ->
+#     do llv <- ! ll;
+#     match llv
+#     | Nil() -> ! b
+#     | Cons(a, ll) -> ! f a { ! foldr ll f b }
+# );
+
+# ! foldr
+# { ret Cons(1, { ret Cons(-1, { ret Nil() }) }) }
+# { fn (a: Int, b: U(IOS)) -> comatch | .i(x) -> (
+#   do x <- ! add a x;
+#   ! b .i(x))
+# }
+# { comatch | .i(x) -> ! exit x }
+# .i(0)
+
+## Since it's coinductive, can we write iota?
+
+let rec iota : Int -> F(LList) = (
+  fn (i: Int) ->
+    do i+1 <- ! add i 1;
+    ret Cons(i, { ! iota i+1 })
+);
+
+let rec foldr : U(F(LList)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
+  fn (ll: U(F(LList)), f: U(Int -> U(OS) -> OS), b: U(OS)) ->
+    do llv <- ! ll;
+    match llv
+    | Nil() -> ! b
+    | Cons(a, ll) -> ! f a { ! foldr ll f b }
+);
+
+let loopy = {
+  ! foldr
+  { ! iota 0 }
+  { fn (x: Int, b: U(OS)) ->
+    do next? <- ! int_lt x 10;
+    match next?
+    | True() -> ! write_int_line x b
+    | False() -> ! exit 0
+  }
+  { ! panic "unreachable" }
+};
+
+! loopy
