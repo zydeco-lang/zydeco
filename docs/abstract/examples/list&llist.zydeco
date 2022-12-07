@@ -1,0 +1,23 @@
+data List A where
+  | Nil()
+  | Cons(A, List A)
+
+def rec foldl : List A -> Thunk(A -> A' -> F(A')) -> A' -> F(A') =
+  fn (l, step, a') ->
+    match l
+    | Nil() -> ret a'
+    | Cons(x, xs) -> (
+      do a' <- ! step x a';
+      ! foldl xs step a'
+    )
+
+data LList A where
+  | Nil()
+  | Cons(A, U(F(LList A)))
+
+def rec foldr : U(F(LList A)) -> U(A -> U(B) -> B) -> U(B) -> B =
+  fn (ll, step, b) ->
+    do llv <- ! ll;
+    match llv
+    | Nil() -> ! b
+    | Cons(x, xs) -> ! step x { ! foldr xs step b };
