@@ -4,7 +4,8 @@ data List A where
 
 def rec foldl : U(
   U(A -> A' -> F(A')) ->
-  List A -> A' -> F(A') ) = {
+  List A -> A' -> F(A')
+) = {
   fn (step, l, a') ->
     match l
     | Nil( ) -> ret a'

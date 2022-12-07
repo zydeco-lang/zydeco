@@ -4,7 +4,8 @@ data LList A where
 
 def rec foldr : U(
   U(A -> U(B) -> B) -> 
-  U(F(LList A)) -> U(B) -> B ) = {
+  U(F(LList A)) -> U(B) -> B
+) = {
   fn (step, ll, b) ->
     do llv <- ! ll;
     match llv
