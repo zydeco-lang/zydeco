@@ -1,5 +1,5 @@
 data List A where
-  | Nil()
+  | Nil( )
   | Cons(A, List A)
 
 def rec foldl : U(
@@ -7,7 +7,7 @@ def rec foldl : U(
   List A -> A' -> F(A') ) = {
   fn (step, l, a') ->
     match l
-    | Nil() -> ret a'
+    | Nil( ) -> ret a'
     | Cons(hd, tl) -> (
       do a' <- ! step hd a';
       ! foldl tl step a' )

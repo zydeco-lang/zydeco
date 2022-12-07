@@ -2,10 +2,10 @@ def rec abort : U(Int -> Int *-> F(Int)) = {
   comatch
   | .arg(x) ->
     comatch
-    | .more(_) -> ! abort x
-    | .done() -> ret x
+    | .more(_) -> (! abort).arg(x)
+    | .done( ) -> ret x
 };
 
 (! abort).arg(0)
   .more(1).more(2).more(3)
-  .done()
+  .done( )

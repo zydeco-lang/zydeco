@@ -1,4 +1,4 @@
-# variadic function
+-- variadic function
 codata A *-> B where
   .more(A): A *-> B
-  .done(): B
+  .done( ): B

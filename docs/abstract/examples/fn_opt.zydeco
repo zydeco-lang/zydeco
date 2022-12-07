@@ -1,4 +1,4 @@
-# optional function
+-- optional function
 codata A ?-> B where
-  .one(A): B
-  .zero(): B
+  .some(A): B
+  .none( ): B
