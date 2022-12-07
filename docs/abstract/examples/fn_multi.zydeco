@@ -1,7 +1,3 @@
 codata A *-> B where
   .more(A): A *-> B
   .done(): B
-
-codata A ?-> B where
-  .one(A): A ?-> B
-  .zero(): B

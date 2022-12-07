@@ -2,7 +2,7 @@ codata Sum where
   .more(Int): Sum
   .done(): F(Int)
 
-def rec sum : Sum =
+def rec sum : U(Sum) = {
   comatch
   | .done() -> ret 0
   | .more(x) ->
@@ -10,6 +10,7 @@ def rec sum : Sum =
       | .done() -> ret x 
       | .more(y) ->
         ( do z <- x + y;
-          ! sum .more(z) ) );
+          ! sum .more(z) ) )
+};
 
 ! sum .more(1) .more(2) .done()

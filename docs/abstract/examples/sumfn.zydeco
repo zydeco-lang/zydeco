@@ -1,16 +1,10 @@
-data Sum where
-  | Done()
-  | More (Int, Sum)
-
-def rec sum : Sum -> F(Int) =
-  fn (xs: Sum) ->
+def rec sum : U(List Int -> F(Int)) = {
+  fn (xs: List Int) ->
     match xs
     | Done() -> ret 0
     | More (x, xs) ->
-      ( match xs
-        | Done() -> ret x
-        | More(y, xs) ->
-          ( do z <- x + y;
-            ! sum More(z, xs) ) );
+      ( do y <- ! sum xs;
+        ! add x y )
+};
 
 ! sum (More (1, More (2, Done())))
