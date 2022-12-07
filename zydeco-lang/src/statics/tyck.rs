@@ -28,16 +28,14 @@ impl TypeCheck for Compute {
     type Type = TCompute;
     fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match self {
-            Compute::Let { binding, body, .. } => {
+            Compute::Let { binding: (x, _, def), body, .. } => {
                 let mut ctx = ctx.clone();
-                let (x, _, def) = binding;
                 let t = def.tyck(&ctx)?;
                 ctx.push(x.clone(), t);
                 body.tyck(&ctx)
             }
-            Compute::Do { binding, body, .. } => {
+            Compute::Do { binding: (x, _, def), body, .. } => {
                 let mut ctx = ctx.clone();
-                let (x, _, def) = binding;
                 let te = def.tyck(&ctx)?;
                 match te {
                     TCompute::Ret(tv, ..) => {
@@ -64,15 +62,15 @@ impl TypeCheck for Compute {
                 let t = v.tyck(&ctx)?;
                 Ok(TCompute::Ret(Box::new(t), ann.clone()))
             }
-            Compute::Lam { arg, body, ann } => {
+            Compute::Lam { arg: (x, t), body, ann } => {
                 let mut ctx = ctx.clone();
-                let (x, t) = arg;
                 let t = t.as_ref().ok_or_else(|| {
                     ErrStr(format!(
                         "lambda parameter \"{}\" needs a type annotation",
-                        arg.0
+                        x
                     ))
                 })?;
+                t.tyck(&ctx)?;
                 ctx.push(x.clone(), *t.clone());
                 let tbody = body.tyck(&ctx)?;
                 Ok(TCompute::Lam(t.clone(), Box::new(tbody), ann.clone()))
@@ -86,6 +84,7 @@ impl TypeCheck for Compute {
                         arg.0
                     ))
                 })?;
+                t.tyck(&ctx)?;
                 let tbody = match t.as_ref() {
                     TValue::Thunk(tbody, _) => *tbody.clone(),
                     _ => Err(TypeExpected {
@@ -282,7 +281,7 @@ impl TypeCheck for Value {
 }
 
 impl TValue {
-    fn internal(name: &str, ann: Ann) -> Self {
+    fn internal(name: &'static str, ann: Ann) -> Self {
         TValue::Var(TVar::new(format!("{}", name), ann.clone()), ann)
     }
 }
@@ -308,7 +307,7 @@ impl TypeCheck for TValue {
                     }
                 },
             ),
-            TValue::Thunk(_, _) => Ok(()),
+            TValue::Thunk(t, _) => t.tyck(ctx),
         }
     }
 }
@@ -334,9 +333,11 @@ impl TypeCheck for TCompute {
                     }
                 },
             ),
-            TCompute::Ret(_, _) | TCompute::Lam(_, _, _) | TCompute::OSType => {
-                Ok(())
+            TCompute::Ret(t, _) => t.tyck(ctx),
+            TCompute::Lam(tv, tc, _) => {
+                tv.tyck(ctx).and_then(|()| tc.tyck(ctx))
             }
+            TCompute::OSType => Ok(()),
         }
     }
 }
