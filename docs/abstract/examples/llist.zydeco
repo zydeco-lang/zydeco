@@ -1,0 +1,14 @@
+data LList A where
+  | LNil()
+  | LCons(A, U(F(LList A)))
+
+def rec foldr : U(
+  U(A -> U(B) -> B) -> 
+  U(F(LList A)) -> U(B) -> B ) = {
+  fn (step, ll, b) ->
+    do llv <- ! ll;
+    match llv
+    | LNil() -> ! b
+    | LCons(hd, tl) ->
+      ! step hd { ! foldr step tl b }
+};

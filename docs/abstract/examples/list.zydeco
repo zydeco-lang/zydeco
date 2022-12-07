@@ -1,0 +1,14 @@
+data List A where
+  | Nil()
+  | Cons(A, List A)
+
+def rec foldl : U(
+  U(A -> A' -> F(A')) ->
+  List A -> A' -> F(A') ) = {
+  fn (step, l, a') ->
+    match l
+    | Nil() -> ret a'
+    | Cons(hd, tl) -> (
+      do a' <- ! step hd a';
+      ! foldl tl step a' )
+};
