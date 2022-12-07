@@ -1,0 +1,12 @@
+def fn_int : Int -> F(Int) = {
+  comatch
+  | .arg(i) -> ret i
+};
+
+def fn_opt_int : Int ?-> F(Int) = {
+  comatch
+  | .one(i) -> ! fn_int .arg(i)
+  | .zero() -> ! fn_int .arg(42)
+};
+
+(! fn_opt_int).zero()

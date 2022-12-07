@@ -1,3 +1,4 @@
+# optional function
 codata A ?-> B where
   .one(A): B
   .zero(): B
