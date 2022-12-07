@@ -1,2 +1,2 @@
-let loop = { rec (loop: Comp(OS)) -> !loop };
-!loop
+let loop = { rec (loop: Thunk(OS)) -> ! loop };
+! loop
