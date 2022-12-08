@@ -1,9 +1,9 @@
-def id_int : Int -> F(Int) = {
+def id_int : Int -> Ret(Int) = {
   comatch
   | .arg(i) -> ret i
 };
 
-def id_default_42 : Int ?-> F(Int) = {
+def id_default_42 : Int ?-> Ret(Int) = {
   comatch
   | .some(i) -> (! int_id).arg(i)
   | .none( ) -> (! int_id).arg(42)

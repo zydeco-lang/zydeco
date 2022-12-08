@@ -1,4 +1,6 @@
-def rec abort : U(Int -> Int *-> F(Int)) = {
+def rec abort : Thunk(
+  Int -> Int *-> Ret(Int)
+) = {
   comatch
   | .arg(x) ->
     comatch

@@ -2,9 +2,9 @@ data List A where
   | Nil( )
   | Cons(A, List A)
 
-def rec foldl : U(
-  U(A -> A' -> F(A')) ->
-  List A -> A' -> F(A')
+def rec foldl : Thunk(
+  Thunk(A -> A' -> Ret(A')) ->
+  List A -> A' -> Ret(A')
 ) = {
   fn (step, l, a') ->
     match l
