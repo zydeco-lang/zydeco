@@ -1,10 +1,10 @@
-data List A where
+data List(A) where
   | Nil( )
-  | Cons(A, List A)
+  | Cons(A, List(A))
 
 def rec foldl : Thunk(
   Thunk(A -> A' -> Ret(A')) ->
-  List A -> A' -> Ret(A')
+  List(A) -> A' -> Ret(A')
 ) = {
   fn (step, l, a') ->
     match l

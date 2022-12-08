@@ -1,10 +1,10 @@
-data LList A where
+data LList(A) where
   | LNil( )
-  | LCons(A, Thunk(Ret(LList A)))
+  | LCons(A, Thunk(Ret(LList(A))))
 
 def rec foldr : Thunk(
   Thunk(A -> Thunk(B) -> B) -> 
-  Thunk(Ret(LList A)) -> Thunk(B) -> B
+  Thunk(Ret(LList(A))) -> Thunk(B) -> B
 ) = {
   fn (step, ll, b) ->
     do llv <- ! ll;
