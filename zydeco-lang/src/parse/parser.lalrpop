@@ -8,7 +8,7 @@ grammar<'input>(input: &'input str);
 
 //* -------------------------------- TopLevel -------------------------------- */
 
-pub Zydeco: Program = <decls:Decl*> <comp:CompBox> => Program {
+pub Zydeco: Program = <decls:Decl*> <comp:Boxed<Comp>> => Program {
     decls,
     comp,
     ann: ann(),
@@ -17,8 +17,8 @@ pub Zydeco: Program = <decls:Decl*> <comp:CompBox> => Program {
 pub Declarations: Vec<Declare> = <Decl*>;
 
 pub Expression: ValOrComp = {
-    <val : ValBox>  => ValOrComp::Val(*val),
-    <comp: CompBox> => ValOrComp::Comp(*comp),
+    <val : Boxed<Val>>  => ValOrComp::Val(*val),
+    <comp: Boxed<Comp>> => ValOrComp::Comp(*comp),
 }
 
 
@@ -60,19 +60,14 @@ DtorBranch: (Dtor, Vec<Type>, Type) = {
 }
 
 //* ------------------------------- Expressions ------------------------------ */
-
-CompBox: Box<Compute> = {
-    <CompHeadBox>,
-    Boxed<Comp>,
-}
-
 Comp: Compute = {
-    "let" <bindings:Once<",", BindVal<"=">>> ";" <body:CompBox> => {
+    CompHead,
+    "let" <bindings:Once<",", BindVal<"=">>> ";" <body:Boxed<Comp>> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Let {
             binding, body, ann: ann()
         }))
     },
-    "let" "rec" <binding:BindComp<"=">> ";" <e:CompBox> => {
+    "let" "rec" <binding:BindComp<"=">> ";" <e:Boxed<Comp>> => {
         let (x, tcomp, body) = binding;
         let tval = tcomp.and_then(|tcomp| Some(Box::new(Type::Thunk(tcomp, ann()))));
         Compute::Let {
@@ -83,20 +78,20 @@ Comp: Compute = {
             ann: ann(),
         }
     },
-    "do" <bindings:Once<",", BindComp<"<-">>> ";" <body:CompBox> => {
+    "do" <bindings:Once<",", BindComp<"<-">>> ";" <body:Boxed<Comp>> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Do {
             binding, body, ann: ann()
         }))
     },
-    "fn" "(" <args:Once<",", FnArg>> ")" "->" <e:CompBox> =>
+    "fn" "(" <args:Once<",", FnArg>> ")" "->" <e:Boxed<Comp>> =>
         *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Lam{
             arg, body, ann: ann()
         })),
-    "rec" "(" <args:Once<",", FnArg>> ")" "->" <e:CompBox> =>
+    "rec" "(" <args:Once<",", FnArg>> ")" "->" <e:Boxed<Comp>> =>
         *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Rec{
             arg, body, ann: ann()
         })),
-    "match" <scrut:ValBox> <cases:MatchBranch*> => Compute::Match {
+    "match" <scrut:Boxed<Val>> <cases:MatchBranch*> => Compute::Match {
         scrut, cases, ann: ann()
     },
     "comatch" <cases:CoMatchBranch*> => Compute::CoMatch {
@@ -104,16 +99,30 @@ Comp: Compute = {
     },
 }
 
+CompHead: Compute = {
+    CompAtom,
+    <e:Boxed<CompHead>> <v:Boxed<Val>> => Compute::App(e, v, ann()),
+    <body:Boxed<CompHead>> "." <dtor:Dtor> "(" <args:Kleene<",", Val>> ")" => Compute::CoApp {
+        body, dtor, args, ann: ann()
+    },
+}
+
+CompAtom: Compute = {
+    "(" <Comp> ")" => <>,
+    "!" <v:Boxed<Val>> => Compute::Force(v, ann()),
+    "ret" <v:Boxed<Val>> => Compute::Return(v, ann()),
+}
+
 BindVal<Delim>: (VVar, Option<Box<Type>>, Box<Value>) = {
-    <Bind<Delim, TValBox, ValBox>>
+    <Bind<Delim, TValBox, Boxed<Val>>>
 }
 
 BindDefVal<Delim>: (VVar, Option<Box<Type>>, Option<Box<Value>>) = {
-    <x:VVar> <ty:(":" <TValBox>)?> <def:(Rhs<Delim, ValBox>)?> => (x, ty, def),
+    <x:VVar> <ty:(":" <TValBox>)?> <def:(Rhs<Delim, Boxed<Val>>)?> => (x, ty, def),
 }
 
 BindComp<Delim>: (VVar, Option<Box<Type>>, Box<Compute>) = {
-    <Bind<Delim, TCompBox, CompBox>>
+    <Bind<Delim, TBoxed<Comp>, Boxed<Comp>>>
 }
 
 Bind<Delim, Typ, Def>: (VVar, Option<Typ>, Def) = {
@@ -125,47 +134,20 @@ FnArg: (VVar, Option<Box<Type>>) = {
 }
 
 MatchBranch: (Ctor, Vec<VVar>, Box<Compute>) = {
-    "|" <c:Ctor> "(" <vs:Kleene<",", VVar>> ")" "->" <e:CompHeadBox> => (c, vs, e),
-    "|" <c:Ctor> "->" <e:CompHeadBox> => (c, vec!(), e),
+    "|" <c:Ctor> "(" <vs:Kleene<",", VVar>> ")" "->" <e:Boxed<CompHead>> => (c, vs, e),
+    "|" <c:Ctor> "->" <e:Boxed<CompHead>> => (c, vec!(), e),
 }
 
 CoMatchBranch: (Dtor, Vec<VVar>, Box<Compute>) = {
-    "|" "." <d:Dtor> "(" <vs:Kleene<",", VVar>> ")" "->" <e:CompHeadBox> => (d, vs, e),
-    "|" "." <d:Dtor> "->" <e:CompAtomBox> => (d, vec!(), e),
-}
-
-CompHeadBox: Box<Compute> = {
-    <CompAtomBox>,
-    Boxed<CompHead>,
-}
-
-CompHead: Compute = {
-    <body:CompHeadBox> "." <dtor:Dtor> "(" <args:Kleene<",", Val>> ")" => Compute::CoApp {
-        body, dtor, args, ann: ann()
-    },
-}
-
-CompAtomBox: Box<Compute> = {
-    Boxed<CompAtom>,
-    "(" <CompBox> ")" => <>,
-}
-
-CompAtom: Compute = {
-    "!" <v:ValBox> => Compute::Force(v, ann()),
-    "ret" <v:ValBox> => Compute::Return(v, ann()),
-    <e:CompAtomBox> <v:ValBox> => Compute::App(e, v, ann()),
+    "|" "." <d:Dtor> "(" <vs:Kleene<",", VVar>> ")" "->" <e:Boxed<CompHead>> => (d, vs, e),
+    "|" "." <d:Dtor> "->" <e:Boxed<CompAtom>> => (d, vec!(), e),
 }
 
 //* ---------------------------------- Value --------------------------------- */
-
-ValBox: Box<Value> = {
-    Boxed<Val>,
-    "(" <ValBox> ")" => <>,
-}
-
 Val: Value = {
+    "(" <Val> ")" => <>,
     <x:VVar> => Value::Var(x, ann()),
-    "{" <e:CompBox> "}" => Value::Thunk(e, ann()),
+    "{" <e:Boxed<Comp>> "}" => Value::Thunk(e, ann()),
     <ctor:Ctor> "(" <vs:Kleene<",", <Val>>> ")" => Value::Ctor(ctor, vs, ann()),
     <n:Int> => Value::Int(n, ann()),
     <s:Str> => Value::String(s, ann()),
@@ -175,15 +157,15 @@ Val: Value = {
 
 //* ---------------------------------- Types --------------------------------- */
 
-TCompBox: Box<Type> = {
+TBoxed<Comp>: Box<Type> = {
     Boxed<TComp>,
-    // "(" <TCompBox> ")" => <>,
+    // "(" <TBoxed<Comp>> ")" => <>,
 }
 
 TComp: Type = {
     <x:TVar> => Type::Var(x, ann()),
     "F" "(" <t:TValBox> ")" => Type::Ret(t, ann()),
-    <tv:TValBox> "->" <tc:TCompBox> => Type::Lam(tv, tc, ann()),
+    <tv:TValBox> "->" <tc:TBoxed<Comp>> => Type::Lam(tv, tc, ann()),
     "OS" => Type::OS,
 }
 
@@ -194,7 +176,7 @@ TValBox: Box<Type> = {
 
 TVal: Type = {
     <x:TVar> => Type::Var(x, ann()),
-    "U" "(" <t:TCompBox> ")" => Type::Thunk(t, ann()),
+    "U" "(" <t:TBoxed<Comp>> ")" => Type::Thunk(t, ann()),
 }
 
 
