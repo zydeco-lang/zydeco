@@ -131,24 +131,25 @@ impl FmtArgs for Compute {
     }
 }
 
-impl FmtArgs for TValue {
-    fn fmt_args(&self, args: Args) -> String {
+impl FmtArgs for Kind {
+    fn fmt_args(&self, _args: Args) -> String {
         match self {
-            TValue::Var(x, _) => format!("{}", x.fmt_args(args)),
-            TValue::Thunk(c, _) => format!("Thunk({})", c.fmt_args(args)),
+            Kind::CompType => "CompType".to_owned(),
+            Kind::ValType => "ValType".to_owned(),
         }
     }
 }
 
-impl FmtArgs for TCompute {
+impl FmtArgs for Type {
     fn fmt_args(&self, args: Args) -> String {
         match self {
-            TCompute::Var(x, _) => format!("{}", x.fmt_args(args)),
-            TCompute::Ret(v, _) => format!("Ret({})", v.fmt_args(args)),
-            TCompute::Lam(t, c, _) => {
+            Type::Var(x, _) => x.fmt_args(args),
+            Type::Thunk(c, _) => format!("Thunk({})", c.fmt_args(args)),
+            Type::Ret(v, _) => format!("Ret({})", v.fmt_args(args)),
+            Type::Lam(t, c, _) => {
                 format!("{} -> {}", t.fmt_args(args), c.fmt_args(args))
             }
-            TCompute::OSType => format!("OS"),
+            Type::OS => "OS".to_owned(),
         }
     }
 }
@@ -158,12 +159,12 @@ impl std::fmt::Display for Program {
         write!(f, "{}", self.fmt_args(Args::new(2)))
     }
 }
-impl std::fmt::Display for TValue {
+impl std::fmt::Display for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.fmt_args(Args::new(2)))
     }
 }
-impl std::fmt::Display for TCompute {
+impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.fmt_args(Args::new(2)))
     }

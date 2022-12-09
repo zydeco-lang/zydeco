@@ -8,7 +8,7 @@ use crate::{
     lex::Lexer,
     library::{builtins, linker},
     parse::{
-        syntax::{Compute, Program, TCompute, TValue, ValOrComp, Value},
+        syntax::{Compute, Program, Type, ValOrComp, Value},
         {ExpressionParser, ZydecoParser},
     },
     statics::{ctx::Ctx, tyck::TypeCheck},
@@ -31,13 +31,11 @@ pub fn typecheck_prog(p: &Program, ctx: &Ctx) -> Result<(), String> {
     p.tyck(ctx).map_err(|e| e.to_string())
 }
 
-pub fn typecheck_computation(
-    m: &Compute, ctx: &Ctx,
-) -> Result<TCompute, String> {
+pub fn typecheck_computation(m: &Compute, ctx: &Ctx) -> Result<Type, String> {
     m.tyck(ctx).map_err(|e| e.to_string())
 }
 
-pub fn typecheck_value(v: &Value, ctx: &Ctx) -> Result<TValue, String> {
+pub fn typecheck_value(v: &Value, ctx: &Ctx) -> Result<Type, String> {
     v.tyck(ctx).map_err(|e| e.to_string())
 }
 
@@ -49,8 +47,8 @@ pub fn eval_prog(p: Program, args: &[String]) -> Result<Never, String> {
 }
 
 pub fn eval_virtual_prog(
-    p: Program, mut env: Env, r: &mut dyn std::io::BufRead, w: &mut dyn std::io::Write,
-    args: &[String],
+    p: Program, mut env: Env, r: &mut dyn std::io::BufRead,
+    w: &mut dyn std::io::Write, args: &[String],
 ) -> Result<i32, String> {
     builtins::link_builtin(&mut env);
     linker::link(&mut env, &p.decls);

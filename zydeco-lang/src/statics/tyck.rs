@@ -18,14 +18,14 @@ impl TypeCheck for Program {
         ctx.tyck_post()?;
         let typ = self.comp.tyck(&ctx)?;
         match &typ {
-            TCompute::OSType => Ok(()),
+            Type::OS => Ok(()),
             _ => Err(WrongMain { found: typ.into() }),
         }
     }
 }
 
 impl TypeCheck for Compute {
-    type Type = TCompute;
+    type Type = Type;
     fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match self {
             Compute::Let { binding: (x, _, def), body, .. } => {
@@ -38,7 +38,7 @@ impl TypeCheck for Compute {
                 let mut ctx = ctx.clone();
                 let te = def.tyck(&ctx)?;
                 match te {
-                    TCompute::Ret(tv, ..) => {
+                    Type::Ret(tv, ..) => {
                         ctx.push(x.clone(), *tv);
                         body.tyck(&ctx)
                     }
@@ -51,7 +51,7 @@ impl TypeCheck for Compute {
             Compute::Force(comp, ..) => {
                 let t = comp.tyck(&ctx)?;
                 match t {
-                    TValue::Thunk(body, ..) => Ok(*body),
+                    Type::Thunk(body, ..) => Ok(*body),
                     _ => Err(TypeExpected {
                         expected: format!("Thunk(b?)"),
                         found: t.into(),
@@ -60,7 +60,7 @@ impl TypeCheck for Compute {
             }
             Compute::Return(v, ann) => {
                 let t = v.tyck(&ctx)?;
-                Ok(TCompute::Ret(Box::new(t), ann.clone()))
+                Ok(Type::Ret(Box::new(t), ann.clone()))
             }
             Compute::Lam { arg: (x, t), body, ann } => {
                 let mut ctx = ctx.clone();
@@ -73,7 +73,7 @@ impl TypeCheck for Compute {
                 t.tyck(&ctx)?;
                 ctx.push(x.clone(), *t.clone());
                 let tbody = body.tyck(&ctx)?;
-                Ok(TCompute::Lam(t.clone(), Box::new(tbody), ann.clone()))
+                Ok(Type::Lam(t.clone(), Box::new(tbody), ann.clone()))
             }
             Compute::Rec { arg, body, .. } => {
                 let mut ctx = ctx.clone();
@@ -86,7 +86,7 @@ impl TypeCheck for Compute {
                 })?;
                 t.tyck(&ctx)?;
                 let tbody = match t.as_ref() {
-                    TValue::Thunk(tbody, _) => *tbody.clone(),
+                    Type::Thunk(tbody, _) => *tbody.clone(),
                     _ => Err(TypeExpected {
                         expected: format!("Thunk(b?)"),
                         found: t.as_ref().to_owned().into(),
@@ -104,8 +104,8 @@ impl TypeCheck for Compute {
                 let tfn = e.tyck(&ctx)?;
                 let targ = v.tyck(&ctx)?;
                 match tfn {
-                    TCompute::Lam(tpara, tbody, ..) => {
-                        TValue::eqv(&targ, &tpara).ok_or_else(|| {
+                    Type::Lam(tpara, tbody, ..) => {
+                        Type::eqv(&targ, &tpara).ok_or_else(|| {
                             TypeMismatch {
                                 expected: tpara.as_ref().to_owned().into(),
                                 found: targ.into(),
@@ -127,9 +127,9 @@ impl TypeCheck for Compute {
                         ctx.ctors.get(&ctor).ok_or_else(|| {
                             ErrStr(format!("unknown ctor: {}", ctor))
                         })?;
-                    data.eqv(&TValue::Var(tvar.clone(), ann.clone()))
+                    data.eqv(&Type::Var(tvar.clone(), ann.clone()))
                         .ok_or_else(|| TypeMismatch {
-                            expected: TValue::Var(tvar.clone(), ann.clone())
+                            expected: Type::Var(tvar.clone(), ann.clone())
                                 .into(),
                             found: data.clone().into(),
                         })?;
@@ -145,14 +145,12 @@ impl TypeCheck for Compute {
                     let tbranch = body.tyck(&ctx)?;
                     ty = match ty {
                         Some(tret) => {
-                            TCompute::eqv(&tret, &tbranch).ok_or_else(
-                                || {
-                                    InconsistentBranches(vec![
-                                        tret.clone(),
-                                        tbranch,
-                                    ])
-                                },
-                            )?;
+                            Type::eqv(&tret, &tbranch).ok_or_else(|| {
+                                InconsistentBranches(vec![
+                                    tret.clone(),
+                                    tbranch,
+                                ])
+                            })?;
                             Some(tret)
                         }
                         None => Some(tbranch),
@@ -161,17 +159,17 @@ impl TypeCheck for Compute {
                 ty.ok_or_else(|| ErrStr(format!("empty Match")))
             }
             Compute::CoMatch { cases, ann } => {
-                let mut ty: Option<TCompute> = None;
+                let mut ty: Option<Type> = None;
                 // Hack: we need to know what type it is; now we just synthesize it
                 for (dtor, vars, comp) in cases {
                     let (codata, targs, tret) =
                         ctx.dtors.get(dtor).ok_or_else(|| {
                             ErrStr(format!("unknown dtor: {}", dtor))
                         })?;
-                    let t = TCompute::Var(codata.clone(), ann.clone());
+                    let t = Type::Var(codata.clone(), ann.clone());
                     ty = ty
                         .and_then(|t_| {
-                            TCompute::eqv(&t, &t_).and_then(|_| Some(t_))
+                            Type::eqv(&t, &t_).and_then(|_| Some(t_))
                         })
                         .or_else(|| Some(t));
                     let mut ctx = ctx.clone();
@@ -184,11 +182,9 @@ impl TypeCheck for Compute {
                     }
                     ctx.extend(vars.iter().cloned().zip(targs.iter().cloned()));
                     let tret_ = comp.tyck(&ctx)?;
-                    TCompute::eqv(&tret_, &tret).ok_or_else(|| {
-                        TypeMismatch {
-                            expected: tret.clone().into(),
-                            found: tret_.into(),
-                        }
+                    Type::eqv(&tret_, &tret).ok_or_else(|| TypeMismatch {
+                        expected: tret.clone().into(),
+                        found: tret_.into(),
                     })?;
                 }
                 ty.ok_or_else(|| ErrStr(format!("empty CoMatch")))
@@ -196,13 +192,13 @@ impl TypeCheck for Compute {
             Compute::CoApp { body, dtor, args, .. } => {
                 let tscrut = body.tyck(&ctx)?;
                 match tscrut.clone() {
-                    TCompute::Var(_, ann) => {
+                    Type::Var(_, ann) => {
                         let (codata, targs, tret) =
                             ctx.dtors.get(dtor).ok_or_else(|| {
                                 ErrStr(format!("unknown dtor: {}", dtor))
                             })?;
-                        let t_ = TCompute::Var(codata.clone(), ann);
-                        TCompute::eqv(&tscrut, &t_).ok_or_else(|| {
+                        let t_ = Type::Var(codata.clone(), ann);
+                        Type::eqv(&tscrut, &t_).ok_or_else(|| {
                             TypeMismatch {
                                 expected: t_.into(),
                                 found: tscrut.into(),
@@ -238,7 +234,7 @@ impl TypeCheck for Compute {
 }
 
 impl TypeCheck for Value {
-    type Type = TValue;
+    type Type = Type;
     fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match self {
             Value::Var(x, ann) => ctx
@@ -247,7 +243,7 @@ impl TypeCheck for Value {
                 .ok_or(UnboundVar { var: x.clone(), ann: ann.clone() }),
             Value::Thunk(e, ann) => {
                 let t = e.tyck(&ctx)?;
-                Ok(TValue::Thunk(Box::new(t), ann.clone()))
+                Ok(Type::Thunk(Box::new(t), ann.clone()))
             }
             Value::Ctor(ctor, args, ann) => {
                 let (data, targs) = ctx
@@ -269,106 +265,89 @@ impl TypeCheck for Value {
                         found: t.into(),
                     })?;
                 }
-                Ok(TValue::Var(data.clone(), ann.clone()))
+                Ok(Type::Var(data.clone(), ann.clone()))
             }
-            Value::Int(_, ann) => Ok(TValue::internal("Int", ann.clone())),
-            Value::String(_, ann) => {
-                Ok(TValue::internal("String", ann.clone()))
-            }
-            Value::Char(_, ann) => Ok(TValue::internal("Char", ann.clone())),
+            Value::Int(_, ann) => Ok(Type::internal("Int", ann.clone())),
+            Value::String(_, ann) => Ok(Type::internal("String", ann.clone())),
+            Value::Char(_, ann) => Ok(Type::internal("Char", ann.clone())),
         }
     }
 }
 
-impl TValue {
+impl Type {
     fn internal(name: &'static str, ann: Ann) -> Self {
-        TValue::Var(TVar::new(format!("{}", name), ann.clone()), ann)
+        Type::Var(TVar::new(name.to_owned(), ann.clone()), ann)
     }
 }
 
-impl TypeCheck for TValue {
-    type Type = ();
+impl TypeCheck for Type {
+    type Type = Kind;
     fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
+        fn expect_val(context: &str, k: Kind) -> Result<(), TypeCheckError> {
+            if k == Kind::CompType {
+                Err(TypeCheckError::KindMismatch {
+                    context: context.to_owned(),
+                    expected: Kind::ValType,
+                })
+            } else {
+                Ok(())
+            }
+        }
+        fn expect_comp(context: &str, k: Kind) -> Result<(), TypeCheckError> {
+            if k == Kind::ValType {
+                Err(TypeCheckError::KindMismatch {
+                    context: context.to_owned(),
+                    expected: Kind::CompType,
+                })
+            } else {
+                Ok(())
+            }
+        }
         match self {
-            TValue::Var(x, ann) => ctx.tmap.get(x).map_or(
+            Type::Var(x, ann) => ctx.tmap.get(x).map_or(
                 Err(TypeCheckError::NameResolve(
                     NameResolveError::UnknownIdentifier {
                         name: x.name().to_owned(),
                         ann: ann.clone(),
                     },
                 )),
-                |sort| {
-                    if let Sort::TVal = sort {
-                        Ok(())
-                    } else {
-                        Err(TypeCheckError::ErrStr(format!(
-                            "expect value type, found computation type"
-                        )))
-                    }
-                },
+                |kind| Ok(*kind),
             ),
-            TValue::Thunk(t, _) => t.tyck(ctx),
-        }
-    }
-}
-
-impl TypeCheck for TCompute {
-    type Type = ();
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
-        match self {
-            TCompute::Var(x, ann) => ctx.tmap.get(x).map_or(
-                Err(TypeCheckError::NameResolve(
-                    NameResolveError::UnknownIdentifier {
-                        name: x.name().to_owned(),
-                        ann: ann.clone(),
-                    },
-                )),
-                |sort| {
-                    if let Sort::TComp = sort {
-                        Ok(())
-                    } else {
-                        Err(TypeCheckError::ErrStr(format!(
-                            "expect value type, found computation type"
-                        )))
-                    }
-                },
-            ),
-            TCompute::Ret(t, _) => t.tyck(ctx),
-            TCompute::Lam(tv, tc, _) => {
-                tv.tyck(ctx).and_then(|()| tc.tyck(ctx))
+            Type::Thunk(t, _) => {
+                expect_comp("Thunk(_)", t.tyck(ctx)?)?;
+                Ok(Kind::ValType)
             }
-            TCompute::OSType => Ok(()),
+            Type::Ret(t, _) => {
+                expect_val("Ret(_)", t.tyck(ctx)?)?;
+                Ok(Kind::CompType)
+            }
+            Type::Lam(tv, tc, _) => {
+                expect_val("Domain of function type", tv.tyck(ctx)?)?;
+                expect_comp("Codomain of function type", tc.tyck(ctx)?)?;
+                Ok(Kind::CompType)
+            }
+            Type::OS => Ok(Kind::CompType),
         }
     }
 }
 
-impl TValue {
+impl Type {
     pub fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
-            (TValue::Thunk(a, _), TValue::Thunk(b, _)) => TCompute::eqv(a, b),
             // Note: being nominal here
-            (TValue::Var(a, _), TValue::Var(b, _)) => (a == b).then_some(()),
-            (TValue::Var(_, _), _) | (TValue::Thunk(_, _), _) => None,
-        }
-    }
-}
-
-impl TCompute {
-    pub fn eqv(&self, other: &Self) -> Option<()> {
-        match (self, other) {
-            (TCompute::Ret(a, _), TCompute::Ret(b, _)) => TValue::eqv(a, b),
-            (TCompute::Lam(a, b, _), TCompute::Lam(c, d, _)) => {
-                TValue::eqv(a, c).and_then(|()| TCompute::eqv(b, d))
+            (Type::Var(a, _), Type::Var(b, _)) => (a == b).then_some(()),
+            (Type::Thunk(a, _), Type::Thunk(b, _)) => Type::eqv(a, b),
+            (Type::Ret(a, _), Type::Ret(b, _)) => Type::eqv(a, b),
+            (Type::Lam(a, b, _), Type::Lam(ar, br, _)) => {
+                Type::eqv(a, ar)?;
+                Type::eqv(b, br)
             }
-            // Note: being nominal here
-            (TCompute::Var(a, _), TCompute::Var(b, _)) => {
-                (a == b).then_some(())
-            }
-            (TCompute::OSType, TCompute::OSType) => Some(()),
-            (TCompute::Ret(_, _), _)
-            | (TCompute::Lam(_, _, _), _)
-            | (TCompute::Var(_, _), _)
-            | (TCompute::OSType, _) => None,
+            (Type::OS, Type::OS) => Some(()),
+            (Type::Var(_, _), _)
+            | (Type::OS, _)
+            | (Type::Thunk(_, _), _)
+            | (Type::Lam(_, _, _), _)
+            | (Type::Ret(_, _), _) => None,
         }
     }
 }

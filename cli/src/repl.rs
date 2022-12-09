@@ -4,7 +4,7 @@ use zydeco_lang::{
     library::builtins,
     library::declarations,
     library::linker,
-    parse::syntax::{TCompute, ValOrComp},
+    parse::syntax::{Type, ValOrComp},
     statics::ctx::Ctx,
     zydeco,
 };
@@ -44,7 +44,7 @@ pub fn launch() -> Result<(), String> {
                     .expect("std library failure");
                 match zydeco::typecheck_computation(&m, &ctx) {
                     Err(e) => println!("Type Error: {}", e),
-                    Ok(TCompute::OSType) => {
+                    Ok(Type::OS) => {
                         let mut env = Env::new();
                         builtins::link_builtin(&mut env);
                         linker::link(&mut env, &std_decls);
@@ -53,7 +53,7 @@ pub fn launch() -> Result<(), String> {
                         }
                     }
 
-                    Ok(TCompute::Ret(_, _))  => {
+                    Ok(Type::Ret(_, _))  => {
                         let mut env = Env::new();
                         builtins::link_builtin(&mut env);
                         linker::link(&mut env, &std_decls);

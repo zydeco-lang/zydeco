@@ -19,18 +19,18 @@ pub type Binding<Ty, Def> = (VVar, Option<Box<Ty>>, Box<Def>);
 pub enum Declare {
     Data {
         name: TVar,
-        ctors: Vec<(Ctor, Vec<TValue>)>,
+        ctors: Vec<(Ctor, Vec<Type>)>,
         ann: Ann,
     },
     Codata {
         name: TVar,
-        dtors: Vec<(Dtor, Vec<TValue>, TCompute)>,
+        dtors: Vec<(Dtor, Vec<Type>, Type)>,
         ann: Ann,
     },
     Define {
         public: bool,
         name: VVar,
-        ty: Option<Box<TValue>>,
+        ty: Option<Box<Type>>,
         def: Option<Box<Value>>,
         ann: Ann,
     },
@@ -49,24 +49,24 @@ pub enum Value {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Compute {
     Let {
-        binding: Binding<TValue, Value>,
+        binding: Binding<Type, Value>,
         body: Box<Compute>,
         ann: Ann,
     },
     Do {
-        binding: Binding<TCompute, Compute>,
+        binding: Binding<Type, Compute>,
         body: Box<Compute>,
         ann: Ann,
     },
     Force(Box<Value>, Ann),
     Return(Box<Value>, Ann),
     Lam {
-        arg: (VVar, Option<Box<TValue>>),
+        arg: (VVar, Option<Box<Type>>),
         body: Box<Compute>,
         ann: Ann,
     },
     Rec {
-        arg: (VVar, Option<Box<TValue>>),
+        arg: (VVar, Option<Box<Type>>),
         body: Box<Compute>,
         ann: Ann,
     },
@@ -89,17 +89,18 @@ pub enum Compute {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TValue {
+pub enum Type {
     Var(TVar, Ann),
-    Thunk(Box<TCompute>, Ann),
+    Thunk(Box<Type>, Ann),
+    Ret(Box<Type>, Ann),
+    Lam(Box<Type>, Box<Type>, Ann),
+    OS,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TCompute {
-    Var(TVar, Ann),
-    Ret(Box<TValue>, Ann),
-    Lam(Box<TValue>, Box<TCompute>, Ann),
-    OSType,
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Kind {
+    ValType,
+    CompType,
 }
 
 macro_rules! var {

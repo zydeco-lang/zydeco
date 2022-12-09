@@ -2,40 +2,15 @@ use super::resolve::*;
 use crate::{parse::syntax::*, utils::ann::Ann};
 
 #[derive(Clone, Debug)]
-pub enum THetero {
-    TVal(TValue),
-    TComp(TCompute),
-}
-
-impl std::fmt::Display for THetero {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            THetero::TComp(b) => write!(f, "{}", b),
-            THetero::TVal(a) => write!(f, "{}", a),
-        }
-    }
-}
-
-impl From<TValue> for THetero {
-    fn from(x: TValue) -> Self {
-        THetero::TVal(x)
-    }
-}
-impl From<TCompute> for THetero {
-    fn from(x: TCompute) -> Self {
-        THetero::TComp(x)
-    }
-}
-
-#[derive(Clone, Debug)]
 pub enum TypeCheckError {
     UnboundVar { var: VVar, ann: Ann },
-    TypeMismatch { expected: THetero, found: THetero },
-    TypeExpected { expected: String, found: THetero },
+    KindMismatch { context: String, expected: Kind },
+    TypeMismatch { expected: Type, found: Type },
+    TypeExpected { expected: String, found: Type },
     ArityMismatch { context: String, expected: usize, found: usize },
-    InconsistentBranches(Vec<TCompute>),
+    InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
-    WrongMain { found: TCompute },
+    WrongMain { found: Type },
     ErrStr(String),
 }
 use TypeCheckError::*;
@@ -47,6 +22,16 @@ impl fmt::Display for TypeCheckError {
             UnboundVar { var, ann } => {
                 write!(f, "Unbound variable {} (Info: {:?})", var, ann)
             }
+            KindMismatch { context, expected } => write!(
+                f,
+                "Kind mismatch, In {}, expected {}, but got {}",
+                context,
+                expected,
+                match expected {
+                    Kind::CompType => Kind::ValType,
+                    Kind::ValType => Kind::CompType,
+                }
+            ),
             TypeMismatch { expected, found } => write!(
                 f,
                 "Type mismatch, expected {}, but got {}",

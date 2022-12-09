@@ -47,13 +47,13 @@ Decl: Declare = {
     },
 }
 
-CtorBranch: (Ctor, Vec<TValue>) = {
+CtorBranch: (Ctor, Vec<Type>) = {
     "|" <ctor:Ctor> "(" <args:Kleene<",", TVal>> ")" => {
         (ctor, args)
     }
 }
 
-DtorBranch: (Dtor, Vec<TValue>, TCompute) = {
+DtorBranch: (Dtor, Vec<Type>, Type) = {
     "." <dtor:Dtor> "(" <args:Kleene<",", TVal>> ")" ":" <res:TComp> => {
         (dtor, args, res)
     }
@@ -74,7 +74,7 @@ Comp: Compute = {
     },
     "let" "rec" <binding:BindComp<"=">> ";" <e:CompBox> => {
         let (x, tcomp, body) = binding;
-        let tval = tcomp.and_then(|tcomp| Some(Box::new(TValue::Thunk(tcomp, ann()))));
+        let tval = tcomp.and_then(|tcomp| Some(Box::new(Type::Thunk(tcomp, ann()))));
         Compute::Let {
             binding: (x.clone(), tval.clone(), Box::new(Value::Thunk(Box::new(Compute::Rec {
                 arg: (x, tval), body, ann: ann()
@@ -104,15 +104,15 @@ Comp: Compute = {
     },
 }
 
-BindVal<Delim>: (VVar, Option<Box<TValue>>, Box<Value>) = {
+BindVal<Delim>: (VVar, Option<Box<Type>>, Box<Value>) = {
     <Bind<Delim, TValBox, ValBox>>
 }
 
-BindDefVal<Delim>: (VVar, Option<Box<TValue>>, Option<Box<Value>>) = {
+BindDefVal<Delim>: (VVar, Option<Box<Type>>, Option<Box<Value>>) = {
     <x:VVar> <ty:(":" <TValBox>)?> <def:(Rhs<Delim, ValBox>)?> => (x, ty, def),
 }
 
-BindComp<Delim>: (VVar, Option<Box<TCompute>>, Box<Compute>) = {
+BindComp<Delim>: (VVar, Option<Box<Type>>, Box<Compute>) = {
     <Bind<Delim, TCompBox, CompBox>>
 }
 
@@ -120,7 +120,7 @@ Bind<Delim, Typ, Def>: (VVar, Option<Typ>, Def) = {
     <x:VVar> <ty:(":" <Typ>)?> <delim:Delim> <def:Def> => (x, ty, def),
 }
 
-FnArg: (VVar, Option<Box<TValue>>) = {
+FnArg: (VVar, Option<Box<Type>>) = {
     <x:VVar> <t:(":" <TValBox>)?> => (x, t),
 }
 
@@ -175,26 +175,26 @@ Val: Value = {
 
 //* ---------------------------------- Types --------------------------------- */
 
-TCompBox: Box<TCompute> = {
+TCompBox: Box<Type> = {
     Boxed<TComp>,
     // "(" <TCompBox> ")" => <>,
 }
 
-TComp: TCompute = {
-    <x:TVar> => TCompute::Var(x, ann()),
-    "F" "(" <t:TValBox> ")" => TCompute::Ret(t, ann()),
-    <tv:TValBox> "->" <tc:TCompBox> => TCompute::Lam(tv, tc, ann()),
-    "OS" => TCompute::OSType,
+TComp: Type = {
+    <x:TVar> => Type::Var(x, ann()),
+    "F" "(" <t:TValBox> ")" => Type::Ret(t, ann()),
+    <tv:TValBox> "->" <tc:TCompBox> => Type::Lam(tv, tc, ann()),
+    "OS" => Type::OS,
 }
 
-TValBox: Box<TValue> = {
+TValBox: Box<Type> = {
     Boxed<TVal>,
     // "(" <TValBox> ")" => <>,
 }
 
-TVal: TValue = {
-    <x:TVar> => TValue::Var(x, ann()),
-    "U" "(" <t:TCompBox> ")" => TValue::Thunk(t, ann()),
+TVal: Type = {
+    <x:TVar> => Type::Var(x, ann()),
+    "U" "(" <t:TCompBox> ")" => Type::Thunk(t, ann()),
 }
 
 

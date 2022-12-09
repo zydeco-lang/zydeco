@@ -3,7 +3,7 @@ use yew::prelude::*;
 use zydeco_lang::{
     dynamics::env::Env,
     library::{builtins, declarations, linker},
-    parse::syntax::TCompute,
+    parse::syntax::Type,
     statics::ctx::Ctx,
     zydeco,
 };
@@ -60,7 +60,7 @@ fn run(input: &str) -> Result<String, String> {
         .expect("std library failure");
     let b = zydeco::typecheck_computation(&p.comp, &ctx)?;
     let a = match b {
-        TCompute::Ret(a, _) => a,
+        Type::Ret(a, _) => a,
         _ => return Err(format!("Your computation had type {}, but the Web interpreter only support computations of type Ret(a)", b))
     };
     let mut env = Env::new();

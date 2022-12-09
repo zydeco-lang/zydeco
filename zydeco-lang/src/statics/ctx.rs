@@ -3,20 +3,14 @@ use crate::parse::syntax::*;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
-pub enum Sort {
-    TVal,
-    TComp,
-}
-
-#[derive(Clone, Debug)]
 pub struct Ctx {
-    vmap: HashMap<VVar, TValue>,
-    pub tmap: HashMap<TVar, Sort>,
-    data: HashMap<TVar, Vec<(Ctor, Vec<TValue>)>>,
-    pub ctors: HashMap<Ctor, (TVar, Vec<TValue>)>,
-    coda: HashMap<TVar, Vec<(Dtor, Vec<TValue>, TCompute)>>,
-    pub dtors: HashMap<Dtor, (TVar, Vec<TValue>, TCompute)>,
-    pub defs: HashMap<VVar, (Option<TValue>, Value)>,
+    vmap: HashMap<VVar, Type>,
+    pub tmap: HashMap<TVar, Kind>,
+    data: HashMap<TVar, Vec<(Ctor, Vec<Type>)>>,
+    pub ctors: HashMap<Ctor, (TVar, Vec<Type>)>,
+    coda: HashMap<TVar, Vec<(Dtor, Vec<Type>, Type)>>,
+    pub dtors: HashMap<Dtor, (TVar, Vec<Type>, Type)>,
+    pub defs: HashMap<VVar, (Option<Type>, Value)>,
 }
 
 impl Ctx {
@@ -31,13 +25,13 @@ impl Ctx {
             defs: HashMap::new(),
         }
     }
-    pub fn push(&mut self, x: VVar, t: TValue) {
+    pub fn push(&mut self, x: VVar, t: Type) {
         self.vmap.insert(x, t);
     }
-    pub fn extend(&mut self, other: impl IntoIterator<Item = (VVar, TValue)>) {
+    pub fn extend(&mut self, other: impl IntoIterator<Item = (VVar, Type)>) {
         self.vmap.extend(other);
     }
-    pub fn lookup(&self, x: &VVar) -> Option<&TValue> {
+    pub fn lookup(&self, x: &VVar) -> Option<&Type> {
         self.vmap.get(x)
     }
     pub fn decl(&mut self, d: &Declare) -> Result<(), NameResolveError> {
@@ -52,7 +46,7 @@ impl Ctx {
                         })
                     },
                 )?;
-                self.tmap.insert(name.clone(), Sort::TVal);
+                self.tmap.insert(name.clone(), Kind::ValType);
                 for (ctor, args) in ctors {
                     self.ctors
                         .insert(ctor.clone(), (name.clone(), args.clone()))
@@ -75,7 +69,7 @@ impl Ctx {
                         })
                     },
                 )?;
-                self.tmap.insert(name.clone(), Sort::TComp);
+                self.tmap.insert(name.clone(), Kind::CompType);
                 for (dtor, args, ret) in dtors {
                     self.dtors
                         .insert(
