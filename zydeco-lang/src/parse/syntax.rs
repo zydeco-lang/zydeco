@@ -89,12 +89,49 @@ pub enum Compute {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Type {
-    Var(TVar, Ann),
-    Thunk(Box<Type>, Ann),
-    Ret(Box<Type>, Ann),
-    Lam(Box<Type>, Box<Type>, Ann),
+pub enum SynType {
+    Basic(TCtor, Ann),
+    App(Box<SynType>, Box<SynType>, Ann), // Thunk(Box<Type>, Ann),
+    // Ret(Box<Type>, Ann),
+    Arr(Box<SynType>, Box<SynType>, Ann),
+    // OS,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TCtor {
+    Var(TVar),
+    Thunk,
+    Ret,
     OS,
+    Fun,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Type {
+    pub ctor: TCtor,
+    pub args: Vec<Type>,
+    pub ann: Ann,
+}
+
+impl SynType {
+    pub fn lower(self) -> Box<Type> {
+        match self {
+            SynType::Basic(ctor, a) => {
+                Box::new(Type { ctor, ann: a, args: vec![] })
+            }
+            SynType::Arr(dom, cod, ann) => Box::new(Type {
+                ctor: TCtor::Fun,
+                args: vec![*dom.lower(), *cod.lower()],
+                ann,
+            }),
+            SynType::App(f, a, ann) => {
+                let mut f = f.lower();
+                let a = a.lower();
+                f.args.push(*a);
+                f
+            }
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

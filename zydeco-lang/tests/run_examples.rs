@@ -30,7 +30,7 @@ fn wrapper<T>(r: Result<T, String>) {
 fn pure_test(f: &str) -> Result<(), String> {
     use std::io::Read;
     use std::path::PathBuf;
-    use zydeco_lang::parse::syntax::{Type, ValOrComp};
+    use zydeco_lang::parse::syntax::{TCtor, Type, ValOrComp};
     use zydeco_lang::zydeco;
     let mut path = PathBuf::from("tests/pure");
     path.push(f);
@@ -46,8 +46,8 @@ fn pure_test(f: &str) -> Result<(), String> {
                 declarations::std_decls().expect("std library failure");
             declarations::inject_ctx(&mut ctx, &std_decls)
                 .expect("std library failure");
-            match zydeco::typecheck_computation(&m, &ctx)? {
-                Type::Ret(_, _) => {
+            match zydeco::typecheck_computation(&m, &ctx)?.ctor {
+                TCtor::Ret => {
                     let mut env = Env::new();
                     builtins::link_builtin(&mut env);
                     linker::link(&mut env, &std_decls);

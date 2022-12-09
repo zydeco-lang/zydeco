@@ -3,7 +3,7 @@ use yew::prelude::*;
 use zydeco_lang::{
     dynamics::env::Env,
     library::{builtins, declarations, linker},
-    parse::syntax::Type,
+    parse::syntax::{TCtor, Type},
     statics::ctx::Ctx,
     zydeco,
 };
@@ -59,17 +59,16 @@ fn run(input: &str) -> Result<String, String> {
     declarations::inject_ctx(&mut ctx, &std_decls)
         .expect("std library failure");
     let b = zydeco::typecheck_computation(&p.comp, &ctx)?;
-    let a = match b {
-        Type::Ret(a, _) => a,
-        _ => return Err(format!("Your computation had type {}, but the Web interpreter only support computations of type Ret(a)", b))
-    };
+    if b.ctor != TCtor::Ret {
+        return Err(format!("Your computation had type {}, but the Web interpreter only support computations of type Ret(a)", b));
+    }
     let mut env = Env::new();
     builtins::link_builtin(&mut env);
     linker::link(&mut env, &std_decls);
     linker::link(&mut env, &p.decls);
     let v = zydeco::eval_returning_computation(*p.comp, env)?;
 
-    Ok(format!("{} : {}", v, a))
+    Ok(format!("{} : {}", v, b.args[0]))
 }
 
 fn main() {

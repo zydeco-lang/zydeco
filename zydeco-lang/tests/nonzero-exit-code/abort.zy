@@ -1,12 +1,14 @@
 codata Fn where
   .app(Int): Fn
   .return(): F(Int)
+end
 
 do x <- ( rec (abort: U(Int -> Fn)) ->
     fn (x: Int) ->
       comatch
       | .app(_) -> ! abort x
       | .return() -> ret x
+      end
   ) 0 .app(1) .app(2) .app(3) .return();
 ! exit x
 

@@ -1,20 +1,26 @@
-data Nat where | Z() | S(Nat)
+data Nat where | Z() | S(Nat) end
 codata OddEven where
   .even() : Nat -> Ret(Bool)
   .odd()  : Nat -> Ret(Bool)
+end
 
 let rec eo : OddEven = (
   comatch
     | .even() -> (fn (n : Nat) -> match n
       | Z()  -> ret True()
-      | S(n) -> ((! eo .odd()) n))
+      | S(n) -> ((! eo .odd()) n)
+      end)
     | .odd()  -> (fn(n : Nat) -> match n
       | Z()  -> ret False()
-      | S(n) -> (! eo.even()) n)
+      | S(n) -> (! eo.even()) n
+      end)
+    end
 );
 do b <- (! eo .even()) S(S(S(S(Z()))));
 match b
 | True() -> ! exit 0
 | False() -> ! exit 1
+end
+
 
 

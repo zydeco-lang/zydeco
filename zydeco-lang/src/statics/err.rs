@@ -5,8 +5,10 @@ use crate::{parse::syntax::*, utils::ann::Ann};
 pub enum TypeCheckError {
     UnboundVar { var: VVar, ann: Ann },
     KindMismatch { context: String, expected: Kind },
+    TypeMismatchCtx { context: String, expected: Type, found: Type },
     TypeMismatch { expected: Type, found: Type },
     TypeExpected { expected: String, found: Type },
+    TypeExpectedCtx { context: String, expected: String, found: Type },
     ArityMismatch { context: String, expected: usize, found: usize },
     InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
@@ -37,8 +39,20 @@ impl fmt::Display for TypeCheckError {
                 "Type mismatch, expected {}, but got {}",
                 expected, found
             ),
+            TypeMismatchCtx { context, expected, found } => write!(
+                f,
+                "Type mismatch. In {}, expected {}, but got {}",
+                context, expected, found
+            ),
             TypeExpected { expected, found } => {
                 write!(f, "Type {} expected, but got {}", expected, found)
+            }
+            TypeExpectedCtx { context, expected, found } => {
+                write!(
+                    f,
+                    "In {}, expected {}, but got {}",
+                    context, expected, found
+                )
             }
             ArityMismatch { context, expected, found } => write!(
                 f,

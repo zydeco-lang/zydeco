@@ -1,4 +1,4 @@
-data Nat where | Z() | S(Nat)
+data Nat where | Z() | S(Nat) end
 let zero = Z();
 let suc = {
   fn (x: Nat) -> ret S(x)
@@ -8,6 +8,7 @@ let ifz = {
     match x
     | Z() -> ret z
     | S(x) -> !pred x
+    end
   )
 };
 do one <- !suc zero,
@@ -28,11 +29,15 @@ do b <- (
       match zero'
       | False() -> ret True()
       | True() -> ret False()
+      end
     )
     | False() -> ret False()
+    end
   )
   | False() -> ret False()
+  end
 );
 match b
 | True() -> ! exit 0
 | False() -> ! exit 1
+end

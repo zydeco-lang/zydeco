@@ -1,6 +1,6 @@
 codata Y where
   .y(U(Y)): Int -> F(Int)
-
+end
 # \f. (\x. f (x x)) (\x. f (x x))
 # The famous Y combinator in call-by-name sense actually works
 # under call-by-push-value - thanks to thunks, we are able to
@@ -9,8 +9,8 @@ codata Y where
 let y = {
   fn (f: U(U(Int -> F(Int)) -> Int -> F(Int))) ->
     ret {
-      (comatch | .y(x) -> ! f { ! x .y(x) })
-      .y({ comatch | .y(x) -> ! f { ! x .y(x) } })
+      (comatch | .y(x) -> ! f { ! x .y(x) } end)
+      .y({ comatch | .y(x) -> ! f { ! x .y(x) } end })
     }
 };
 
@@ -27,6 +27,7 @@ let fact = {
           ! f n-1;
         ! mul n rest
       )
+      end
 };
 
 do fact <- ! y fact;
@@ -48,6 +49,7 @@ let demo = { fn (input: Int, expected: Int, t: Thunk(OS)) ->
     do msg <- ! str_append msg got;
     ! write_line msg { ! exit 1 }
   )
+  end
 };
 
 ! demo 5 120 {

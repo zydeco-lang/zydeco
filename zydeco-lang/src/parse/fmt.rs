@@ -140,17 +140,29 @@ impl FmtArgs for Kind {
     }
 }
 
-impl FmtArgs for Type {
+impl FmtArgs for TCtor {
     fn fmt_args(&self, args: Args) -> String {
         match self {
-            Type::Var(x, _) => x.fmt_args(args),
-            Type::Thunk(c, _) => format!("Thunk({})", c.fmt_args(args)),
-            Type::Ret(v, _) => format!("Ret({})", v.fmt_args(args)),
-            Type::Lam(t, c, _) => {
-                format!("{} -> {}", t.fmt_args(args), c.fmt_args(args))
-            }
-            Type::OS => "OS".to_owned(),
+            TCtor::Var(x) => x.fmt_args(args),
+            TCtor::Thunk => format!("Thunk"),
+            TCtor::Ret => format!("Ret"),
+            TCtor::OS => "OS".to_owned(),
+            TCtor::Fun => "Fun".to_owned(),
         }
+    }
+}
+
+impl FmtArgs for Type {
+    fn fmt_args(&self, args: Args) -> String {
+        let mut s = self.ctor.fmt_args(args);
+        for arg in &self.args {
+            if arg.args.len() != 0 {
+                s.push_str(&format!(" ({})", arg.fmt_args(args)))
+            } else {
+                s.push_str(&format!(" {}", arg.fmt_args(args)))
+            }
+        }
+        s
     }
 }
 
@@ -165,6 +177,11 @@ impl std::fmt::Display for Kind {
     }
 }
 impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fmt_args(Args::new(2)))
+    }
+}
+impl std::fmt::Display for TCtor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.fmt_args(Args::new(2)))
     }

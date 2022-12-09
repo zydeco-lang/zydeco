@@ -1,5 +1,3 @@
-# -*- mode: default-generic -*-
-
 # Don't defunctionalize the kontinuation, objectify the computation!
 
 # Let's consider a simple example of a recursive function, summing up
@@ -8,15 +6,18 @@
 data NumList where
   | Empty()
   | Cons(Int, NumList)
+end
 
 # Out of order for now :)
 codata Summer where
   .done()    : Ret(Int) # The equivalent of CALLERS_KONT
   .addN(Int) : Summer
+end
 
 # out of order again :)
 codata Summer' where
   .add(Int) : Ret(Int)
+end
 
 let rec sumBad : NumList -> Ret(Int) =
   fn (xs : NumList) ->
@@ -24,7 +25,8 @@ let rec sumBad : NumList -> Ret(Int) =
     | Empty() -> ret 0
     | Cons(x, xs) ->
       (do n <- ! sumBad xs;
-          ! add n x);
+          ! add n x)
+    end;
 
 # This is a bad algorithm because it uses stack space linear in the
 # size of the input list. Why is that? each time we have a cons, we do
@@ -47,13 +49,15 @@ let rec retSummer : Int -> Summer =
       | .done()  -> ret n
       | .addN(x) ->
       (do n' <- ! add n x;
-          ! retSummer n');
+          ! retSummer n')
+      end;
 
 let rec sumOk : NumList -> Summer =
   fn (xs : NumList) ->
     match xs
     | Empty()     -> ! retSummer 0
-    | Cons(x, xs) -> ! sumOk xs .addN(x);
+    | Cons(x, xs) -> ! sumOk xs .addN(x)
+    end;
 
 # Now instead of pushing a "real" continuation we add a "method"
 # .addN(n) with the captured variables of the continuation as
@@ -98,7 +102,9 @@ let rec sumBetter : NumList -> Summer =
         | .done() -> ! sumBetter xs .addN(x) .done()
         | .addN(y) -> (
           do xPlusy <- ! add x y;
-             ! sumBetter xs .addN(xPlusy)));
+             ! sumBetter xs .addN(xPlusy))
+        end)
+    end;
 
 # This is better in that it uses *constant* space to implement the
 # same algorithm, but we can make a couple of more improvements:
@@ -118,11 +124,14 @@ let rec sumBest : NumList -> Summer' =
   fn (xs : NumList) ->
     match xs
     | Empty() -> (comatch
-      | .add(n) -> ret n)
+      | .add(n) -> ret n
+      end)
     | Cons(x, xs) -> (comatch
       | .add(n) -> (
         do n' <- ! add x n;
-           ! sumBest xs .add(n')));
+           ! sumBest xs .add(n'))
+      end)
+    end;
 let sum = {
   fn (xs: NumList) ->
     ! sumBest xs .add(0)

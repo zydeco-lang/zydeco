@@ -4,7 +4,7 @@ use zydeco_lang::{
     library::builtins,
     library::declarations,
     library::linker,
-    parse::syntax::{Type, ValOrComp},
+    parse::syntax::{TCtor, Type, ValOrComp},
     statics::ctx::Ctx,
     zydeco,
 };
@@ -44,7 +44,7 @@ pub fn launch() -> Result<(), String> {
                     .expect("std library failure");
                 match zydeco::typecheck_computation(&m, &ctx) {
                     Err(e) => println!("Type Error: {}", e),
-                    Ok(Type::OS) => {
+                    Ok(Type { ctor: TCtor::OS, .. }) => {
                         let mut env = Env::new();
                         builtins::link_builtin(&mut env);
                         linker::link(&mut env, &std_decls);
@@ -53,7 +53,7 @@ pub fn launch() -> Result<(), String> {
                         }
                     }
 
-                    Ok(Type::Ret(_, _))  => {
+                    Ok(Type { ctor: TCtor::Ret, .. })  => {
                         let mut env = Env::new();
                         builtins::link_builtin(&mut env);
                         linker::link(&mut env, &std_decls);

@@ -3,4 +3,4 @@ let x = True(),
 let f = { fn (b: Bool) -> ret b };
 do rx <- !f x,
    ry <- do y <- !y; !f x;
-match x | True() -> ret rx | False() -> ret ry
+match x | True() -> ret rx | False() -> ret ry end

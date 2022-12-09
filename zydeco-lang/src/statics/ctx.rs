@@ -6,9 +6,9 @@ use std::collections::HashMap;
 pub struct Ctx {
     vmap: HashMap<VVar, Type>,
     pub tmap: HashMap<TVar, Kind>,
-    data: HashMap<TVar, Vec<(Ctor, Vec<Type>)>>,
+    pub data: HashMap<TVar, Vec<(Ctor, Vec<Type>)>>,
     pub ctors: HashMap<Ctor, (TVar, Vec<Type>)>,
-    coda: HashMap<TVar, Vec<(Dtor, Vec<Type>, Type)>>,
+    pub coda: HashMap<TVar, Vec<(Dtor, Vec<Type>, Type)>>,
     pub dtors: HashMap<Dtor, (TVar, Vec<Type>, Type)>,
     pub defs: HashMap<VVar, (Option<Type>, Value)>,
 }

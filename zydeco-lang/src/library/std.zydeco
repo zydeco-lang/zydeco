@@ -4,16 +4,19 @@
 
 data Unit where
   | Unit()
+end
 
 data Bool where
   | True()
   | False()
+end
 
 pub define not : Thunk(Bool -> Ret(Bool)) = {
   fn (x: Bool) ->
     match x
     | True() -> ret False()
     | False() -> ret True()
+    end
 };
 
 # lazy not
@@ -23,6 +26,7 @@ pub define not_ : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
     match x
     | True() -> ret False()
     | False() -> ret True()
+    end
 };
 
 pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
@@ -30,6 +34,7 @@ pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
     match x
     | True() -> ret y
     | False() -> ret False()
+    end
 };
 
 # Lazy, short-circuiting (left to right) and
@@ -40,6 +45,7 @@ pub define and_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
   match b1
   | True() -> ! b2_
   | False() -> ret False()
+  end
 };
 
 pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
@@ -47,6 +53,7 @@ pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
     match x
     | True() -> ret True()
     | False() -> ret y
+    end
 };
 
 # Lazy, short-circuiting (left to right) or
@@ -56,6 +63,7 @@ pub define or_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
   match b1
   | True() -> ret True()
   | False() -> ! b2_
+  end
 };
 
 pub define nand : Thunk(Bool -> Bool -> Ret(Bool)) = {
@@ -75,6 +83,7 @@ pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
     match b
     | True() -> ret b'
     | False() -> ! not b'
+    end
 };
 
 # pub define ifc : Thunk(Thunk(Ret(Bool)) -> Thunk(b) -> Thunk(b) -> b) = {
@@ -96,6 +105,7 @@ pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
 ## arithmetic operations
 
 extern data Int where
+end
 ### we support the constructors externally because
 ### the parsers of their constructors are customized
 ### so the type is registered as a data type but the constructors
@@ -115,7 +125,9 @@ pub extern define int_gt : Thunk(Int -> Int -> Ret(Bool));
 ## string operations
 
 extern data Char where
+end
 extern data String where
+end
 ### we support the constructors externally
 
 pub extern define str_length : Thunk(String -> Ret(Int));
@@ -140,6 +152,7 @@ pub define bool_to_str : Thunk(Bool -> Ret(String)) = {
     match b
     | True() -> ret "True"
     | False() -> ret "False"
+    end
 };
 
 pub extern define int_to_str : Thunk(Int -> Ret(String));
@@ -150,7 +163,7 @@ pub extern define str_to_int : Thunk(String -> Ret(Int));
 data StrList where
   | SLNil()
   | SLCons(String, StrList)
-
+end
 ## OS operations
 
 # pub extern define write_str : Thunk(String -> Thunk(OS) -> OS);

@@ -13,6 +13,8 @@ pub enum Tok<'input> {
     Data,
     #[token("codata")]
     Codata,
+    #[token("end")]
+    End,
     #[token("where")]
     Where,
     #[token("pub")]
@@ -90,6 +92,7 @@ pub enum Tok<'input> {
 impl<'input> Display for Tok<'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Tok::End => write!(f, "end"),
             Tok::UpperIdent(s) => write!(f, "UpperIdentifier({})", s),
             Tok::LowerIdent(s) => write!(f, "LowerIdentifier({})", s),
             Tok::Data => write!(f, "data"),
