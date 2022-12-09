@@ -16,6 +16,15 @@ pub define not : Thunk(Bool -> Ret(Bool)) = {
     | False() -> ret True()
 };
 
+# lazy not
+pub define not_ : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn (t: Thunk(Ret(Bool))) ->
+    do x <- ! t;
+    match x
+    | True() -> ret False()
+    | False() -> ret True()
+};
+
 pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
   fn (x: Bool, y: Bool) ->
     match x
@@ -23,11 +32,30 @@ pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
     | False() -> ret False()
 };
 
+# Lazy, short-circuiting (left to right) and
+# Can we come up with a better naming convention? Maybe and~ is more suggestive? (not accepted by parser currently)
+pub define and_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn (b1_: Thunk(Ret(Bool)), b2_: Thunk(Ret(Bool))) ->
+  do b1 <- ! b1_;
+  match b1
+  | True() -> ! b2_
+  | False() -> ret False()
+};
+
 pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
   fn (x: Bool, y: Bool) ->
     match x
     | True() -> ret True()
     | False() -> ret y
+};
+
+# Lazy, short-circuiting (left to right) or
+pub define or_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn (b1_: Thunk(Ret(Bool)), b2_: Thunk(Ret(Bool))) ->
+  do b1 <- ! b1_;
+  match b1
+  | True() -> ret True()
+  | False() -> ! b2_
 };
 
 pub define nand : Thunk(Bool -> Bool -> Ret(Bool)) = {
