@@ -28,15 +28,15 @@ pub fn parse_exp(input: &str) -> Result<ValOrComp, String> {
 }
 
 pub fn typecheck_prog(p: &Program, ctx: &Ctx) -> Result<(), String> {
-    p.tyck(ctx).map_err(|e| e.to_string())
+    p.syn(ctx).map_err(|e| e.to_string())
 }
 
 pub fn typecheck_computation(m: &Compute, ctx: &Ctx) -> Result<Type, String> {
-    m.tyck(ctx).map_err(|e| e.to_string())
+    m.syn(ctx).map_err(|e| e.to_string())
 }
 
 pub fn typecheck_value(v: &Value, ctx: &Ctx) -> Result<Type, String> {
-    v.tyck(ctx).map_err(|e| e.to_string())
+    v.syn(ctx).map_err(|e| e.to_string())
 }
 
 pub fn eval_prog(p: Program, args: &[String]) -> Result<Never, String> {

@@ -91,7 +91,8 @@ pub enum Compute {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SynType {
     Basic(TCtor, Ann),
-    App(Box<SynType>, Box<SynType>, Ann), // Thunk(Box<Type>, Ann),
+    App(Box<SynType>, Box<SynType>, Ann),
+    // Thunk(Box<Type>, Ann),
     // Ret(Box<Type>, Ann),
     Arr(Box<SynType>, Box<SynType>, Ann),
     // OS,

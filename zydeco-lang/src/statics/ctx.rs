@@ -111,23 +111,23 @@ impl Ctx {
         for (_, ctors) in &self.data {
             for (_, args) in ctors {
                 for arg in args {
-                    arg.tyck(self)?;
+                    arg.syn(self)?;
                 }
             }
         }
         for (_, dtors) in &self.coda {
             for (_, args, ret) in dtors {
                 for arg in args {
-                    arg.tyck(self)?;
+                    arg.syn(self)?;
                 }
-                ret.tyck(self)?;
+                ret.syn(self)?;
             }
         }
         for (_, (ty, def)) in &self.defs {
             match ty {
                 Some(ty) => {
-                    def.tyck(self)?;
-                    let ty_ = def.tyck(self)?;
+                    def.syn(self)?;
+                    let ty_ = def.syn(self)?;
                     ty.eqv(&ty_).ok_or_else(|| {
                         TypeCheckError::TypeMismatch {
                             expected: ty.clone().into(),
@@ -136,7 +136,7 @@ impl Ctx {
                     })?
                 }
                 None => {
-                    def.tyck(self)?;
+                    def.syn(self)?;
                 }
             }
         }
@@ -147,7 +147,7 @@ impl Ctx {
             match ty {
                 Some(_) => {}
                 None => {
-                    let ty = def.tyck(self).expect("checked in tyck_pre");
+                    let ty = def.syn(self).expect("checked in tyck_pre");
                     self.push(name, ty)
                 }
             }

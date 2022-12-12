@@ -4,23 +4,29 @@ use TypeCheckError::*;
 
 pub trait TypeCheck {
     type Type;
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError>;
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError>;
+    fn ana(&self, typ: Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError>;
 }
 
 impl TypeCheck for Program {
     type Type = ();
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
+
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         let mut ctx = ctx.clone();
         for decl in &self.decls {
             ctx.decl(decl).map_err(NameResolve)?;
         }
         ctx.tyck_pre()?;
         ctx.tyck_post()?;
-        let typ = self.comp.tyck(&ctx)?;
+        let typ = self.comp.syn(&ctx)?;
         match &typ.ctor {
             TCtor::OS => Ok(()),
             _ => Err(WrongMain { found: typ }),
         }
+    }
+
+    fn ana(&self, typ: Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
+        todo!()
     }
 }
 
@@ -47,22 +53,22 @@ fn expect_comptype(context: &str, k: Kind) -> Result<(), TypeCheckError> {
 
 impl TypeCheck for Compute {
     type Type = Type;
-    //
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
+
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match self {
             Compute::Let { binding: (x, _, def), body, .. } => {
                 let mut ctx = ctx.clone();
-                let t = def.tyck(&ctx)?;
+                let t = def.syn(&ctx)?;
                 ctx.push(x.clone(), t);
-                body.tyck(&ctx)
+                body.syn(&ctx)
             }
             Compute::Do { binding: (x, _, def), body, .. } => {
                 let mut ctx = ctx.clone();
-                let te = def.tyck(&ctx)?;
+                let te = def.syn(&ctx)?;
                 match te.ctor {
                     TCtor::Ret => {
                         ctx.push(x.clone(), te.args[0].clone());
-                        body.tyck(&ctx)
+                        body.syn(&ctx)
                     }
                     _ => Err(TypeExpected {
                         expected: format!("Ret(a?)"),
@@ -71,7 +77,7 @@ impl TypeCheck for Compute {
                 }
             }
             Compute::Force(comp, ..) => {
-                let t = comp.tyck(&ctx)?;
+                let t = comp.syn(&ctx)?;
                 match t.ctor {
                     TCtor::Thunk => Ok(t.args[0].clone()),
                     _ => Err(TypeExpected {
@@ -81,7 +87,7 @@ impl TypeCheck for Compute {
                 }
             }
             Compute::Return(v, ann) => {
-                let t = v.tyck(&ctx)?;
+                let t = v.syn(&ctx)?;
                 Ok(Type { ctor: TCtor::Ret, args: vec![t], ann: ann.clone() })
             }
             Compute::Lam { arg: (x, t), body, ann } => {
@@ -92,9 +98,9 @@ impl TypeCheck for Compute {
                         x
                     ))
                 })?;
-                expect_valtype("argument to a function", t.tyck(&ctx)?)?;
+                expect_valtype("argument to a function", t.syn(&ctx)?)?;
                 ctx.push(x.clone(), *t.clone());
-                let tbody = body.tyck(&ctx)?;
+                let tbody = body.syn(&ctx)?;
                 Ok(Type {
                     ctor: TCtor::Fun,
                     args: vec![*t.clone(), tbody],
@@ -110,7 +116,7 @@ impl TypeCheck for Compute {
                     ))
                 })?;
                 // don't need to check this is a value type bc we check it's a thunk next
-                ty.tyck(&ctx)?;
+                ty.syn(&ctx)?;
                 let ty_body = match ty.ctor {
                     TCtor::Thunk => ty.args[0].clone(),
                     _ => Err(TypeExpected {
@@ -119,7 +125,7 @@ impl TypeCheck for Compute {
                     })?,
                 };
                 ctx.push(x.clone(), *ty.clone());
-                let tbody_ = body.tyck(&ctx)?;
+                let tbody_ = body.syn(&ctx)?;
                 ty_body.eqv(&tbody_).ok_or_else(|| TypeMismatch {
                     expected: ty_body.clone().into(),
                     found: tbody_.into(),
@@ -127,8 +133,8 @@ impl TypeCheck for Compute {
                 Ok(ty_body)
             }
             Compute::App(e, v, _) => {
-                let tfn = e.tyck(&ctx)?;
-                let targ = v.tyck(&ctx)?;
+                let tfn = e.syn(&ctx)?;
+                let targ = v.syn(&ctx)?;
                 match tfn.ctor {
                     TCtor::Fun => {
                         let ty_dom = tfn.args[0].clone();
@@ -149,7 +155,7 @@ impl TypeCheck for Compute {
             }
             // TODO: Please refactor me :)
             Compute::Match { scrut, cases, ann } => {
-                let scrut_ty = scrut.tyck(&ctx)?;
+                let scrut_ty = scrut.syn(&ctx)?;
                 let mut ty = None;
                 for (ctor, vars, body) in cases {
                     let (data_ty_name, ctor_ty_args) =
@@ -180,7 +186,7 @@ impl TypeCheck for Compute {
                     ctx.extend(
                         vars.iter().cloned().zip(ctor_ty_args.iter().cloned()),
                     );
-                    let tbranch = body.tyck(&ctx)?;
+                    let tbranch = body.syn(&ctx)?;
                     // check if we have consistent type with prior branches
                     ty = match ty {
                         Some(tret) => {
@@ -227,7 +233,7 @@ impl TypeCheck for Compute {
                     ctx.extend(
                         vars.iter().cloned().zip(dtor_ty_args.iter().cloned()),
                     );
-                    let tret_ = comp.tyck(&ctx)?;
+                    let tret_ = comp.syn(&ctx)?;
                     Type::eqv(&tret_, &tret).ok_or_else(|| TypeMismatch {
                         expected: tret.clone().into(),
                         found: tret_.into(),
@@ -236,7 +242,7 @@ impl TypeCheck for Compute {
                 ty.ok_or_else(|| ErrStr(format!("empty CoMatch")))
             }
             Compute::CoApp { body, dtor, args, ann } => {
-                let tscrut = body.tyck(ctx)?;
+                let tscrut = body.syn(ctx)?;
                 let (dtor_ty_name, dtor_ty_args, tret) = ctx
                     .dtors
                     .get(dtor)
@@ -262,7 +268,7 @@ impl TypeCheck for Compute {
                     });
                 }
                 for (arg, expected) in args.iter().zip(dtor_ty_args.iter()) {
-                    let targ = arg.tyck(ctx)?;
+                    let targ = arg.syn(ctx)?;
                     targ.eqv(expected).ok_or_else(|| TypeMismatch {
                         expected: expected.clone(),
                         found: targ,
@@ -272,18 +278,22 @@ impl TypeCheck for Compute {
             }
         }
     }
+
+    fn ana(&self, typ: Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
+        todo!()
+    }
 }
 
 impl TypeCheck for Value {
     type Type = Type;
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match self {
             Value::Var(x, ann) => ctx
                 .lookup(x)
                 .cloned()
                 .ok_or(UnboundVar { var: x.clone(), ann: ann.clone() }),
             Value::Thunk(e, ann) => {
-                let t = e.tyck(&ctx)?;
+                let t = e.syn(&ctx)?;
                 Ok(Type { ctor: TCtor::Thunk, args: vec![t], ann: ann.clone() })
             }
             Value::Ctor(ctor, args, ann) => {
@@ -300,7 +310,7 @@ impl TypeCheck for Value {
                 }
 
                 for (arg, targ) in args.iter().zip(targs.iter()) {
-                    let t = arg.tyck(ctx)?;
+                    let t = arg.syn(ctx)?;
                     t.eqv(targ).ok_or_else(|| TypeMismatch {
                         expected: targ.clone(),
                         found: t,
@@ -323,6 +333,10 @@ impl TypeCheck for Value {
             }
         }
     }
+
+    fn ana(&self, typ: Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
+        todo!()
+    }
 }
 
 impl Type {
@@ -337,7 +351,8 @@ impl Type {
 
 impl TypeCheck for Type {
     type Type = Kind;
-    fn tyck(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
+
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
         match &self.ctor {
             TCtor::Var(x) => ctx.tmap.get(&x).map_or(
                 Err(TypeCheckError::NameResolve(
@@ -369,7 +384,7 @@ impl TypeCheck for Type {
                 } else {
                     expect_valtype(
                         "type argument to Ret",
-                        self.args[0].tyck(ctx)?,
+                        self.args[0].syn(ctx)?,
                     )?;
                     Ok(Kind::CompType)
                 }
@@ -384,7 +399,7 @@ impl TypeCheck for Type {
                 } else {
                     expect_comptype(
                         "type argument to Thunk",
-                        self.args[0].tyck(ctx)?,
+                        self.args[0].syn(ctx)?,
                     )?;
                     Ok(Kind::ValType)
                 }
@@ -399,16 +414,20 @@ impl TypeCheck for Type {
                 } else {
                     expect_valtype(
                         "domain of a function type",
-                        self.args[0].tyck(ctx)?,
+                        self.args[0].syn(ctx)?,
                     )?;
                     expect_comptype(
                         "codomain of a function type",
-                        self.args[1].tyck(ctx)?,
+                        self.args[1].syn(ctx)?,
                     )?;
                     Ok(Kind::CompType)
                 }
             }
         }
+    }
+
+    fn ana(&self, typ: Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
+        todo!()
     }
 }
 
