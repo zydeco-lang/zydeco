@@ -1,6 +1,6 @@
 use super::{err::TypeCheckError, resolve::*, tyck::TypeCheck};
 use crate::parse::syntax::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 #[derive(Clone, Debug)]
 pub struct Ctx {
@@ -154,5 +154,12 @@ impl Data {
 impl Codata {
     pub fn apply_args(&self, args: &[Type]) -> Vec<CodataBranch> {
         todo!()
+    }
+}
+
+impl Hash for Type {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.ctor.hash(state);
+        self.args.hash(state);
     }
 }
