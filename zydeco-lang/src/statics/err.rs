@@ -10,6 +10,7 @@ pub enum TypeCheckError {
     TypeExpected { expected: String, found: Type },
     TypeExpectedCtx { context: String, expected: String, found: Type },
     ArityMismatch { context: String, expected: usize, found: usize },
+    NeedAnnotation { content: String, },
     InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
     WrongMain { found: Type },
@@ -59,6 +60,9 @@ impl fmt::Display for TypeCheckError {
                 "In {}, expected {} arguments but got {}",
                 context, expected, found
             ),
+            NeedAnnotation { content } => {
+                write!(f, "Need annotation for {}", content)
+            }
             InconsistentBranches(types) => {
                 write!(f, "Branches have mismatched types: {:?}", types)
             }
