@@ -17,16 +17,8 @@ pub type Binding<Ty, Def> = (VVar, Option<Box<Ty>>, Box<Def>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declare {
-    Data {
-        name: TVar,
-        ctors: Vec<(Ctor, Vec<Type>)>,
-        ann: Ann,
-    },
-    Codata {
-        name: TVar,
-        dtors: Vec<(Dtor, Vec<Type>, Type)>,
-        ann: Ann,
-    },
+    Data(Data),
+    Codata(Codata),
     Define {
         public: bool,
         name: VVar,
@@ -35,6 +27,26 @@ pub enum Declare {
         ann: Ann,
     },
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Data {
+    pub name: TVar,
+    pub args: Vec<TVar>,
+    pub ctors: Vec<DataBranch>,
+    pub ann: Ann,
+}
+
+pub type DataBranch = (Ctor, Vec<Type>);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Codata {
+    pub name: TVar,
+    pub args: Vec<TVar>,
+    pub dtors: Vec<CodataBranch>,
+    pub ann: Ann,
+}
+
+pub type CodataBranch = (Dtor, Vec<Type>, Type);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
@@ -98,7 +110,7 @@ pub enum SynType {
     // OS,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TCtor {
     Var(TVar),
     Thunk,

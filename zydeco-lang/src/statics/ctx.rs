@@ -6,10 +6,10 @@ use std::collections::HashMap;
 pub struct Ctx {
     vmap: HashMap<VVar, Type>,
     pub tmap: HashMap<TVar, Kind>,
-    pub data: HashMap<TVar, Vec<(Ctor, Vec<Type>)>>,
-    pub ctors: HashMap<Ctor, (TVar, Vec<Type>)>,
-    pub coda: HashMap<TVar, Vec<(Dtor, Vec<Type>, Type)>>,
-    pub dtors: HashMap<Dtor, (TVar, Vec<Type>, Type)>,
+    pub data: HashMap<TVar, Data>,
+    pub ctors: HashMap<Ctor, Vec<TVar>>,
+    pub coda: HashMap<TVar, Codata>,
+    pub dtors: HashMap<Dtor, Vec<TVar>>,
     pub defs: HashMap<VVar, (Option<Type>, Value)>,
 }
 
@@ -36,8 +36,8 @@ impl Ctx {
     }
     pub fn decl(&mut self, d: &Declare) -> Result<(), NameResolveError> {
         match d {
-            Declare::Data { name, ctors, ann } => {
-                self.data.insert(name.clone(), ctors.clone()).map_or(
+            Declare::Data(data @ Data { name, args, ctors, ann }) => {
+                self.data.insert(name.clone(), data.clone()).map_or(
                     Ok(()),
                     |_| {
                         Err(NameResolveError::DuplicateDeclaration {
@@ -49,18 +49,14 @@ impl Ctx {
                 self.tmap.insert(name.clone(), Kind::ValType);
                 for (ctor, args) in ctors {
                     self.ctors
-                        .insert(ctor.clone(), (name.clone(), args.clone()))
-                        .map_or(Ok(()), |_| {
-                            Err(NameResolveError::DuplicateDeclaration {
-                                name: ctor.name().to_string(),
-                                ann: ann.clone(),
-                            })
-                        })?;
+                        .entry(ctor.clone())
+                        .or_default()
+                        .push(name.clone());
                 }
                 Ok(())
             }
-            Declare::Codata { name, dtors, ann } => {
-                self.coda.insert(name.clone(), dtors.clone()).map_or(
+            Declare::Codata(codata @ Codata { name, args, dtors, ann }) => {
+                self.coda.insert(name.clone(), codata.clone()).map_or(
                     Ok(()),
                     |_| {
                         Err(NameResolveError::DuplicateDeclaration {
@@ -72,16 +68,9 @@ impl Ctx {
                 self.tmap.insert(name.clone(), Kind::CompType);
                 for (dtor, args, ret) in dtors {
                     self.dtors
-                        .insert(
-                            dtor.clone(),
-                            (name.clone(), args.clone(), ret.clone()),
-                        )
-                        .map_or(Ok(()), |_| {
-                            Err(NameResolveError::DuplicateDeclaration {
-                                name: dtor.name().to_string(),
-                                ann: ann.clone(),
-                            })
-                        })?;
+                        .entry(dtor.clone())
+                        .or_default()
+                        .push(name.clone());
                 }
                 Ok(())
             }
@@ -108,15 +97,15 @@ impl Ctx {
         }
     }
     pub fn tyck_pre(&self) -> Result<(), TypeCheckError> {
-        for (_, ctors) in &self.data {
-            for (_, args) in ctors {
+        for (_, data) in &self.data {
+            for (_, args) in &data.ctors {
                 for arg in args {
                     arg.syn(self)?;
                 }
             }
         }
-        for (_, dtors) in &self.coda {
-            for (_, args, ret) in dtors {
+        for (_, codata) in &self.coda {
+            for (_, args, ret) in &codata.dtors {
                 for arg in args {
                     arg.syn(self)?;
                 }
@@ -153,5 +142,17 @@ impl Ctx {
             }
         }
         Ok(())
+    }
+}
+
+impl Data {
+    pub fn apply_args(&self, args: &[Type]) -> Vec<DataBranch> {
+        todo!()
+    }
+}
+
+impl Codata {
+    pub fn apply_args(&self, args: &[Type]) -> Vec<CodataBranch> {
+        todo!()
     }
 }

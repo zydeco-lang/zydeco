@@ -25,15 +25,21 @@ pub Expression: ValOrComp = {
 //* ------------------------------ Declarations ------------------------------ */
 
 Decl: Declare = {
-    <ext:"extern"?> "data" <name:TVar> "where" <ctors:CtorBranch*> "end" => Declare::Data {
-        name,
-        ctors,
-        ann: ann(),
+    <ext:"extern"?> "data" <name:TVar> <args:TVar*> "where" <ctors:CtorBranch*> "end" => {
+        Declare::Data(Data {
+            name,
+            args,
+            ctors,
+            ann: ann(),
+        })
     },
-    <ext:"extern"?> "codata" <name:TVar> "where" <dtors:DtorBranch*> "end"=> Declare::Codata {
-        name,
-        dtors,
-        ann: ann(),
+    <ext:"extern"?> "codata" <name:TVar> <args:TVar*> "where" <dtors:DtorBranch*> "end"=> {
+        Declare::Codata(Codata {
+            name,
+            args,
+            dtors,
+            ann: ann(),
+        })
     },
     <p:"pub"?> <ext:"extern"?> "define" <binding:BindDefVal<"=">> ";" => {
         let (name, ty, def) = binding;
