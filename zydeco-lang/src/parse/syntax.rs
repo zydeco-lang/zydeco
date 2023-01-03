@@ -38,7 +38,7 @@ pub struct Data {
 
 pub type DataBranch = (Ctor, Vec<Type>);
 
-impl Into<Type> for Data {
+impl Into<Type> for &Data {
     fn into(self) -> Type {
         Type {
             ctor: TCtor::Var(self.name),
@@ -66,7 +66,7 @@ pub struct Codata {
 
 pub type CodataBranch = (Dtor, Vec<Type>, Type);
 
-impl Into<Type> for Codata {
+impl Into<Type> for &Codata {
     fn into(self) -> Type {
         Type {
             ctor: TCtor::Var(self.name),
