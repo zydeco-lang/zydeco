@@ -41,17 +41,17 @@ pub type DataBranch = (Ctor, Vec<Type>);
 impl Into<Type> for &Data {
     fn into(self) -> Type {
         Type {
-            ctor: TCtor::Var(self.name),
+            ctor: TCtor::Var(self.name.clone()),
             args: self
                 .args
-                .into_iter()
+                .iter()
                 .map(|name| Type {
-                    ctor: TCtor::Var(name),
+                    ctor: TCtor::Var(name.clone()),
                     args: Vec::new(),
                     ann: self.ann.clone(),
                 })
                 .collect(),
-            ann: self.ann,
+            ann: self.ann.clone(),
         }
     }
 }
@@ -69,17 +69,17 @@ pub type CodataBranch = (Dtor, Vec<Type>, Type);
 impl Into<Type> for &Codata {
     fn into(self) -> Type {
         Type {
-            ctor: TCtor::Var(self.name),
+            ctor: TCtor::Var(self.name.clone()),
             args: self
                 .args
-                .into_iter()
+                .iter()
                 .map(|name| Type {
-                    ctor: TCtor::Var(name),
+                    ctor: TCtor::Var(name.clone()),
                     args: Vec::new(),
                     ann: self.ann.clone(),
                 })
                 .collect(),
-            ann: self.ann,
+            ann: self.ann.clone(),
         }
     }
 }
@@ -173,7 +173,7 @@ impl SynType {
                 args: vec![*dom.lower(), *cod.lower()],
                 ann,
             }),
-            SynType::App(f, a, ann) => {
+            SynType::App(f, a, _) => {
                 let mut f = f.lower();
                 let a = a.lower();
                 f.args.push(*a);

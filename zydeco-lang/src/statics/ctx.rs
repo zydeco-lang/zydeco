@@ -36,7 +36,7 @@ impl Ctx {
     }
     pub fn decl(&mut self, d: &Declare) -> Result<(), NameResolveError> {
         match d {
-            Declare::Data(data @ Data { name, args, ctors, ann }) => {
+            Declare::Data(data @ Data { name, ctors, ann, .. }) => {
                 self.data.insert(name.clone(), data.clone()).map_or(
                     Ok(()),
                     |_| {
@@ -47,7 +47,7 @@ impl Ctx {
                     },
                 )?;
                 self.tmap.insert(name.clone(), Kind::ValType);
-                for (ctor, args) in ctors {
+                for (ctor, _) in ctors {
                     self.ctors
                         .entry(ctor.clone())
                         .or_default()
@@ -55,7 +55,7 @@ impl Ctx {
                 }
                 Ok(())
             }
-            Declare::Codata(codata @ Codata { name, args, dtors, ann }) => {
+            Declare::Codata(codata @ Codata { name, dtors, ann, .. }) => {
                 self.coda.insert(name.clone(), codata.clone()).map_or(
                     Ok(()),
                     |_| {
@@ -66,7 +66,7 @@ impl Ctx {
                     },
                 )?;
                 self.tmap.insert(name.clone(), Kind::CompType);
-                for (dtor, args, ret) in dtors {
+                for (dtor, ..) in dtors {
                     self.dtors
                         .entry(dtor.clone())
                         .or_default()
