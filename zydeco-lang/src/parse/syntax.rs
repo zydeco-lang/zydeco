@@ -38,6 +38,24 @@ pub struct Data {
 
 pub type DataBranch = (Ctor, Vec<Type>);
 
+impl Into<Type> for Data {
+    fn into(self) -> Type {
+        Type {
+            ctor: TCtor::Var(self.name),
+            args: self
+                .args
+                .into_iter()
+                .map(|name| Type {
+                    ctor: TCtor::Var(name),
+                    args: Vec::new(),
+                    ann: self.ann.clone(),
+                })
+                .collect(),
+            ann: self.ann,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Codata {
     pub name: TVar,
@@ -47,6 +65,24 @@ pub struct Codata {
 }
 
 pub type CodataBranch = (Dtor, Vec<Type>, Type);
+
+impl Into<Type> for Codata {
+    fn into(self) -> Type {
+        Type {
+            ctor: TCtor::Var(self.name),
+            args: self
+                .args
+                .into_iter()
+                .map(|name| Type {
+                    ctor: TCtor::Var(name),
+                    args: Vec::new(),
+                    ann: self.ann.clone(),
+                })
+                .collect(),
+            ann: self.ann,
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
