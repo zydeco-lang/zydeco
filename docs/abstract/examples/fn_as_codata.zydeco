@@ -1,2 +1,0 @@
-codata A -> B where
-  .arg(A): B
