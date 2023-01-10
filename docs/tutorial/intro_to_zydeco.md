@@ -1,22 +1,94 @@
 # Intro to Zydeco
-## type (value and computation)
-some simple example
-## Thunk and Ret
-When we give some computation types `B` a `Thunk` (`Thunk(B)` or `U(B)`), it means that we suspend it and use it as a value type. 
-When we stop computing and want to return the result (in a value type `A`), we need to transform it into computation types using `Ret` (`Ret(A)` or `F(A)`).
-Here's an example of seperating a simple built-in `add` function into two parts:
+## Types
+Zydeco has two main types: value type (`A`) and computation type (`B`). 
+
+Value type can be: 
+- `X`: type variable defined using `data`.
+- `Int | String | Boolean | Unit`: basic primitive type with built-in functions.
+- `Thunk(B)`: suspend a computation type and consider it as a value type. 
+
+Computation type can be:
+- `X`: type variable defined using `codata`.
+- `Ret(A)`: one of computation types we can run, the other is `OS`.
+- `A -> B`: takes a value type as an argument and return a computation type.
+
+For `Thunk(B)` type, we can represent its value as `{ some_computation_value }`.
+
+For `Ret(A)` type, we can represent its value as `ret some_value_type`
+
+## Playing with REPL
+Using the REPL can help us get familiar with syntax and basic idea of zydeco fast. 
+
+Key points: `Force`, `Binding`, `Function`
 ```
-let add_in : U(Int -> Int -> F(Int)) = {
-    fn (x : Int) ->
-        fn (y : Int) ->
-            ! add x y
-};
-let add_out : U(Int -> F(Int)) = {! add_in 10};
-do res <- ! add_out 20;
-! write_int_line res {! exit 0}
+> 1
+1 : Int
+> "ann arbor"
+"ann arbor" : String
+> True()
+True() : Bool
+> Unit()
+Unit() : Unit
 ```
+Basic value types can be interpreted in the ways above.
+```
+> add
+add : Thunk(Int -> Int -> Ret(Int))
+```
+Now `add` has a value type of `Thunk(B)`, where `B` is a computation type which takes two `Int` and returns a computation type `Ret(Int)`.
+
+Notice that `add` is still suspended, so if we try to apply it into practice by `add 1 2` and get the result, there will be an error.
+```
+> add 1 2
+Parse Error: Unrecognized token `NumLiteral(1)` found at 4:5
+```
+In fact, we need to `force` the `Thunk` type first and then apply it. The syntax is like:
+```
+> ! add 1 2
+3
+```
+`3` is the returned `Int`.
+
+Another example is the `exit` function:
+```
+> exit
+exit : Thunk(Int -> OS)
+```
+`OS` is the other type of the computation result.
+```
+> ! exit 0
+```
+The REPL will exit directly without printing anything.
+
+We have some ways of binding a certain value to variables which can be used later. There're two main ways: `let` and `do`.
+
+We can bind something with `value` type to a variable using `let`. 
+```
+> let pre = "ann "; ! str_append pre "arbor"
+"ann arbor"
+```
+
+We can also define a function using `let`.
+```
+> mod
+mod : Thunk(Int -> Int -> Ret(Int))
+> let mod10 = {fn (n : Int) -> ! mod n 10}; ! mod10 54
+4
+```
+`mod` is a built-in function and we can define a function taking an `x : Int` and calculating `x mod 10`. The type of defined function `mod10` should also be `Thunk(B)`. Therefore, we add `{}` at each side of the definition part.
+
+For each `let` statement, a semicolon `;` is needed, indicating that it's not the main expression. We can add more `let` to bind more variables, but there must be a main expression at the end of the program.
+
+Binding the result of computation to a variable using `let` is not allowed. Instead, we use `do`.
+```
+> do x <- ! mod 10 4; ! add x 2    
+4
+```
+The process a `do` statement is executed is similar to the process that we call another function and a new stack frame is created. The return value of the function is binded to the variable after `do`.
+
+
 ## OS (Operating System)
-The main expression has the built-in type of `OS`, especially when we do some staff with `IO`. The idea of kontinuation requires programmers to specify what the `OS` looks like after the program reads or writes something. Here are some examples:
+Besides `Ret(A)`, main expression can also have the built-in type of `OS`, especially when we do some staff with `IO`. The idea of kontinuation requires programmers to specify what the `OS` looks like after the program reads or writes something. Here are some examples:
 ```
 pub extern define write_line : Thunk(String -> Thunk(OS) -> OS);
 pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
@@ -71,6 +143,7 @@ let printListInt = {
 
 ## codata (and comatch)
 If we consider functions as computations, we can use `codata` to simulate the process of calling functions. We take a value type `A` and return a computation type `B`. The `codata` type itself is a computation type.
+
 For example, when we try to calculate the sum of a list of number recursively, we can simulate the construction of stack model and execute the computation by destructing the stack. The existence of `codata` helps label different kind of stacks and indicate when the computation stops.
 ```
 # When adding a list of numbers, the process should be either finishing or keeping adding numbers
