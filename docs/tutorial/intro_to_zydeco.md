@@ -1,16 +1,18 @@
 # Intro to Zydeco
 ## Types
-Zydeco has two main types: value type (`A`) and computation type (`B`). 
+Zydeco has two kinds of types: value type (`A`) and computation type (`B`). 
+
+A value type classifies inert data and a computation type classifies programs that compute things.
 
 Value type can be: 
 - `X`: type variable defined using `data`.
 - `Int | String | Boolean | Unit`: basic primitive type with built-in functions.
-- `Thunk(B)`: suspend a computation type and consider it as a value type. 
+- `Thunk(Y)`: suspend a computation type and consider it as a value type. 
 
 Computation type can be:
-- `X`: type variable defined using `codata`.
-- `Ret(A)`: one of computation types we can run, the other is `OS`.
-- `A -> B`: takes a value type as an argument and return a computation type.
+- `Y`: type variable defined using `codata`.
+- `Ret(X)`: `Ret(X)` classifies computations that return X values.
+- `X -> Y`: takes a value type as an argument and return a computation type.
 
 For `Thunk(B)` type, we can represent its value as `{ some_computation_value }`.
 
@@ -88,7 +90,7 @@ The process a `do` statement is executed is similar to the process that we call 
 
 
 ## OS (Operating System)
-Besides `Ret(A)`, main expression can also have the built-in type of `OS`, especially when we do some staff with `IO`. The idea of kontinuation requires programmers to specify what the `OS` looks like after the program reads or writes something. Here are some examples:
+Besides `Ret(A)`, main expression can also have the built-in type of `OS` which classifies computations that can be run as a process that interacts with the `OS`. The idea of kontinuation requires programmers to specify what the `OS` looks like after the program reads or writes something. Here are some examples:
 ```
 pub extern define write_line : Thunk(String -> Thunk(OS) -> OS);
 pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
