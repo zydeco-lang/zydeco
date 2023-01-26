@@ -1,4 +1,8 @@
-use super::{err::TypeCheckError, resolve::*, tyck::TypeCheck};
+use super::{
+    err::TypeCheckError,
+    resolve::*,
+    tyck::{Eqv, TypeCheck},
+};
 use crate::parse::syntax::*;
 use std::{collections::HashMap, hash::Hash};
 
@@ -142,18 +146,6 @@ impl Ctx {
             }
         }
         Ok(())
-    }
-}
-
-impl Data {
-    pub fn apply_args(&self, args: &[Type]) -> Vec<DataBranch> {
-        todo!()
-    }
-}
-
-impl Codata {
-    pub fn apply_args(&self, args: &[Type]) -> Vec<CodataBranch> {
-        todo!()
     }
 }
 

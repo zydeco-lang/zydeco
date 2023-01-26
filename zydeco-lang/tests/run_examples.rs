@@ -30,7 +30,7 @@ fn wrapper<T>(r: Result<T, String>) {
 fn pure_test(f: &str) -> Result<(), String> {
     use std::io::Read;
     use std::path::PathBuf;
-    use zydeco_lang::parse::syntax::{TCtor, Type, ValOrComp};
+    use zydeco_lang::parse::syntax::{TCtor, ValOrComp};
     use zydeco_lang::zydeco;
     let mut path = PathBuf::from("tests/pure");
     path.push(f);

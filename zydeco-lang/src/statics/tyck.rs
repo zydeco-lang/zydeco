@@ -8,9 +8,12 @@ use crate::{
 use TypeCheckError::*;
 
 pub trait TypeCheck {
-    type Type;
+    type Type: Eqv;
     fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError>;
-    fn ana(&self, typ: &Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError>;
+    fn ana(&self, typ: &Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
+        let typ_syn = self.syn(ctx)?;
+        typ.eqv(&typ_syn).ok_or_else(|| ErrStr(format!("Subsumption failed")))
+    }
 }
 
 impl TypeCheck for Program {
@@ -28,10 +31,6 @@ impl TypeCheck for Program {
             TCtor::OS => Ok(()),
             _ => Err(WrongMain { found: typ }),
         }
-    }
-
-    fn ana(&self, typ: &Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
-        todo!()
     }
 }
 
@@ -744,14 +743,26 @@ impl TypeCheck for Type {
             }
         }
     }
+}
 
-    fn ana(&self, typ: &Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
-        todo!()
+pub trait Eqv {
+    fn eqv(&self, other: &Self) -> Option<()>;
+}
+
+impl Eqv for () {
+    fn eqv(&self, other: &Self) -> Option<()> {
+        (self == other).then_some(())
     }
 }
 
-impl TCtor {
-    pub fn eqv(&self, other: &Self) -> Option<()> {
+impl Eqv for Kind {
+    fn eqv(&self, other: &Self) -> Option<()> {
+        (self == other).then_some(())
+    }
+}
+
+impl Eqv for TCtor {
+    fn eqv(&self, other: &Self) -> Option<()> {
         match (self, other) {
             (TCtor::Var(x), TCtor::Var(y)) => (x == y).then_some(()),
             (TCtor::OS, TCtor::OS)
@@ -767,8 +778,8 @@ impl TCtor {
     }
 }
 
-impl Type {
-    pub fn eqv(&self, other: &Self) -> Option<()> {
+impl Eqv for Type {
+    fn eqv(&self, other: &Self) -> Option<()> {
         // Note: being nominal here
         // Note: assumes all type constructors are injective (true for now)
         TCtor::eqv(&self.ctor, &other.ctor)?;
