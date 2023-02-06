@@ -1,8 +1,30 @@
-use crate::statics::syntax::*;
-use enum_dispatch::enum_dispatch;
+use crate::utils::ann::Ann;
 use std::rc::Rc;
 
-/* Binders */
+/* ---------------------------------- Meta ---------------------------------- */
+
+pub trait VarT {}
+impl<T: VarT> VarT for Box<T> {}
+impl<T: VarT> VarT for Rc<T> {}
+impl<T: VarT> VarT for Ann<T> {}
+
+pub trait TypeT {}
+impl<T: TypeT> TypeT for Box<T> {}
+impl<T: TypeT> TypeT for Rc<T> {}
+impl<T: TypeT> TypeT for Ann<T> {}
+
+pub trait ValueT {}
+impl<T: ValueT> ValueT for Box<T> {}
+impl<T: ValueT> ValueT for Rc<T> {}
+impl<T: ValueT> ValueT for Ann<T> {}
+
+pub trait ComputationT {}
+impl<T: ComputationT> ComputationT for Box<T> {}
+impl<T: ComputationT> ComputationT for Rc<T> {}
+impl<T: ComputationT> ComputationT for Ann<T> {}
+
+/* --------------------------------- Binders -------------------------------- */
+
 pub mod binders {
     use crate::utils::ann::AnnInfo;
 
@@ -16,9 +38,6 @@ pub mod binders {
                 }
                 pub fn name(&self) -> &str {
                     &self.0
-                }
-                pub fn ann(&self) -> &AnnInfo {
-                    &self.1
                 }
             }
             impl std::cmp::PartialEq for $Var {
@@ -39,54 +58,111 @@ pub mod binders {
     var!(DtorV);
     var!(TypeV);
     var!(TermV);
+    impl super::VarT for TermV {}
 }
 pub use binders::*;
 
-#[enum_dispatch]
-pub trait Value {}
-impl<T: Value> Value for Box<T> {}
-impl<T: Value> Value for Rc<T> {}
+/* ---------------------------------- Types --------------------------------- */
 
-#[enum_dispatch]
-pub trait Computation {}
-impl<T: Computation> Computation for Box<T> {}
-impl<T: Computation> Computation for Rc<T> {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThunkT<T: TypeT>(T);
+impl<T: TypeT> TypeT for ThunkT<T> {}
 
-/* Values */
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RetT<T: TypeT>(T);
+impl<T: TypeT> TypeT for RetT<T> {}
 
-pub struct Thunk<B: Computation>(B);
-impl<B: Computation> Value for Thunk<B> {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TCtor<T: TypeT> {
+    pub name: TypeV,
+    pub args: Vec<T>,
+}
+impl<T: TypeT> TypeT for TCtor<T> {}
 
+/* ------------------------------ Common Terms ------------------------------ */
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Annotation<Term, Type>(Term, Type);
+impl<Term: ValueT, Type> ValueT for Annotation<Term, Type> {}
+impl<Term: ComputationT, Type> ComputationT for Annotation<Term, Type> {}
+
+/* --------------------------------- Values --------------------------------- */
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Thunk<B: ComputationT>(B);
+impl<B: ComputationT> ValueT for Thunk<B> {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
-    Float(f64),
     String(String),
     Char(char),
-    Bool(bool),
 }
-impl Value for Literal {}
+impl ValueT for Literal {}
 
-pub struct Ctor<A: Value>(CtorV, Vec<A>);
-impl<A: Value> Value for Ctor<A> {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ctor<C, A: ValueT>(C, Vec<A>);
+impl<C, A: ValueT> ValueT for Ctor<C, A> {}
 
-/* Computations */
+/* ------------------------------ Computations ------------------------------ */
 
-pub struct Return<A: Value>(A);
-impl<A: Value> Computation for Return<A> {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ret<A: ValueT>(A);
+impl<A: ValueT> ComputationT for Ret<A> {}
 
-pub struct Let<A: Value, B: Computation>(TermV, A, B);
-impl<A: Value, B: Computation> Computation for Let<A, B> {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Let<TeV: VarT, A: ValueT, B: ComputationT>(TeV, A, B);
+impl<TeV: VarT, A: ValueT, B: ComputationT> ComputationT for Let<TeV, A, B> {}
 
-pub struct Do<B: Computation>(TermV, B, B);
-impl<B: Computation> Computation for Do<B> {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Do<TeV: VarT, B: ComputationT>(TeV, B, B);
+impl<TeV: VarT, B: ComputationT> ComputationT for Do<TeV, B> {}
 
-pub struct Match<A: Value, B: Computation>(A, Vec<Matcher<B>>);
-pub struct Matcher<B: Computation>(CtorV, Vec<TermV>, B);
-impl<A: Value, B: Computation> Computation for Match<A, B> {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Match<TeV: VarT, A: ValueT, B: ComputationT>(
+    A,
+    Vec<Matcher<TeV, B>>,
+);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Matcher<TeV: VarT, B: ComputationT>(CtorV, Vec<TeV>, B);
+impl<TeV: VarT, A: ValueT, B: ComputationT> ComputationT for Match<TeV, A, B> {}
 
-pub struct CoMatch<B: Computation>(DtorV, Vec<CoMatcher<B>>);
-pub struct CoMatcher<B: Computation>(Vec<TermV>, B);
-impl<B: Computation> Computation for CoMatch<B> {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CoMatch<TeV: VarT, B: ComputationT>(DtorV, Vec<CoMatcher<TeV, B>>);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CoMatcher<TeV: VarT, B: ComputationT>(Vec<TeV>, B);
+impl<TeV: VarT, B: ComputationT> ComputationT for CoMatch<TeV, B> {}
 
-pub struct Dtor<B: Computation, A: Value>(DtorV, B, Vec<A>);
-impl<B: Computation, A: Value> Computation for Dtor<B, A> {}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Dtor<D, B: ComputationT, A: ValueT>(D, B, Vec<A>);
+impl<D, B: ComputationT, A: ValueT> ComputationT for Dtor<D, B, A> {}
+
+/* ------------------------------ Declarations ------------------------------ */
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Define<T: TypeT, A: ValueT> {
+    pub public: bool,
+    pub name: TermV,
+    pub ty: T,
+    pub def: Option<A>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Data<T: TypeT> {
+    pub name: TypeV,
+    pub args: Vec<TypeV>,
+    pub ctors: Vec<DataBr<T>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DataBr<T: TypeT>(CtorV, Vec<T>);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Codata<T: TypeT> {
+    pub name: TypeV,
+    pub args: Vec<TypeV>,
+    pub dtors: Vec<CodataBr<T>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodataBr<T: TypeT>(DtorV, Vec<T>, T);
