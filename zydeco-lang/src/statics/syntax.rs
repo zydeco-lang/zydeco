@@ -1,15 +1,23 @@
 use crate::{syntax::*, utils::ann::Ann};
 use enum_dispatch::enum_dispatch;
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
+
+/* ---------------------------------- Kind ---------------------------------- */
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Kind {
+    VType,
+    CType,
+}
+impl KindT for Kind {}
 
 /* ---------------------------------- Type ---------------------------------- */
 
 #[enum_dispatch(TypeT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
-    ThunkT(Ann<ThunkT<T>>),
-    RetT(Ann<RetT<T>>),
-    TCtor(Ann<TCtor<T>>),
+    TypeAnn(Ann<TypeAnn<T, Ann<Kind>>>),
+    TCtor(Ann<TypeApp<TCtor, T>>),
 }
 type T = Rc<Type>;
 impl TypeT for Type {}
@@ -19,7 +27,7 @@ impl TypeT for Type {}
 #[enum_dispatch(ValueT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TermValue {
-    Annotation(Ann<Annotation<TV, T>>),
+    TermAnn(Ann<TermAnn<TV, T>>),
     Var(Ann<TermV>),
     Thunk(Ann<Thunk<TC>>),
     Ctor(Ann<Ctor<Ann<CtorV>, TV>>),
@@ -30,10 +38,12 @@ impl ValueT for TermValue {}
 #[enum_dispatch(ComputationT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TermComputation {
-    Annotation(Ann<Annotation<TC, T>>),
-    Return(Ann<Ret<TV>>),
+    TermAnn(Ann<TermAnn<TC, T>>),
+    Ret(Ann<Ret<TV>>),
+    Force(Ann<Force<TV>>),
     Let(Ann<Let<Ann<TermV>, TV, TC>>),
     Do(Ann<Do<Ann<TermV>, TC>>),
+    Rec(Ann<Rec<Ann<TermV>, TC>>),
     Match(Ann<Match<Ann<TermV>, TV, TC>>),
     CoMatch(Ann<CoMatch<Ann<TermV>, TC>>),
     Dtor(Ann<Dtor<Ann<DtorV>, TC, TV>>),
@@ -47,16 +57,14 @@ pub enum Term {
     Comp(TermComputation),
 }
 
+/* --------------------------------- Module --------------------------------- */
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
     pub name: Option<String>,
-    pub decls: Vec<Declare>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Declare {
-    Data(Ann<Data<Type>>),
-    Codata(Ann<Codata<Type>>),
-    Define(Ann<Define<Type, TermValue>>),
-    Entry(Ann<TermComputation>),
+    pub type_ctx: HashMap<Ann<TypeV>, TypeArity<Kind>>,
+    pub data: Vec<Ann<Data<Ann<TermV>, Ann<CtorV>, T>>>,
+    pub codata: Vec<Ann<Codata<Ann<TermV>, Ann<DtorV>, T>>>,
+    pub define: Vec<Ann<Define<Ann<TermV>, T, TV>>>,
+    pub entry: Ann<TermComputation>,
 }

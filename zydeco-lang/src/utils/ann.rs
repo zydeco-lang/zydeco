@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, hash::Hash};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnInfo {}
@@ -13,7 +13,7 @@ pub fn ann() -> AnnInfo {
     AnnInfo {}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Ann<T> {
     inner: T,
     pub info: AnnInfo,
@@ -22,5 +22,19 @@ pub struct Ann<T> {
 impl<T> Ann<T> {
     pub fn inner(&self) -> &T {
         &self.inner
+    }
+}
+
+impl<T: PartialEq> PartialEq for Ann<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.eq(&other.inner)
+    }
+}
+
+impl<T: Eq> Eq for Ann<T> {}
+
+impl<T: Hash> Hash for Ann<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.hash(state);
     }
 }

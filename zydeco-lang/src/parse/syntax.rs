@@ -1,7 +1,4 @@
-use crate::{
-    syntax::binders::*,
-    utils::ann::AnnInfo,
-};
+use crate::{syntax::binders::*, utils::ann::AnnInfo};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
@@ -139,6 +136,8 @@ pub enum Compute {
     },
 }
 
+pub use crate::syntax::TCtor;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SynType {
     Basic(TCtor, AnnInfo),
@@ -147,15 +146,6 @@ pub enum SynType {
     // Ret(Box<Type>, Ann),
     Arr(Box<SynType>, Box<SynType>, AnnInfo),
     // OS,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TCtor {
-    Var(TypeV),
-    Thunk,
-    Ret,
-    OS,
-    Fun,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -190,4 +180,89 @@ impl SynType {
 pub enum Kind {
     ValType,
     CompType,
+}
+
+pub mod new_syntax {
+    use crate::{syntax::*, utils::ann::Ann};
+    use enum_dispatch::enum_dispatch;
+    use std::rc::Rc;
+
+    /* ---------------------------------- Kind ---------------------------------- */
+
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub enum Kind {
+        VType,
+        CType,
+    }
+
+    /* ---------------------------------- Type ---------------------------------- */
+
+    #[enum_dispatch(TypeT)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum Type {
+        TypeAnn(Ann<TypeAnn<T, Ann<Kind>>>),
+        TCtor(Ann<TypeApp<TCtor, T>>),
+    }
+    type T = Rc<Type>;
+    impl TypeT for Type {}
+
+    /* ---------------------------------- Term ---------------------------------- */
+
+    #[enum_dispatch(ValueT)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum TermValue {
+        TermAnn(Ann<TermAnn<TV, T>>),
+        Var(Ann<TermV>),
+        Thunk(Ann<Thunk<TC>>),
+        Ctor(Ann<Ctor<Ann<CtorV>, TV>>),
+        Literal(Ann<Literal>),
+    }
+    type TV = Rc<TermValue>;
+    impl ValueT for TermValue {}
+
+    #[enum_dispatch(ComputationT)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum TermComputation {
+        TermAnn(Ann<TermAnn<TC, T>>),
+        Ret(Ann<Ret<TV>>),
+        Force(Ann<Force<TV>>),
+        Let(Ann<Let<Ann<TermV>, TV, TC>>),
+        Do(Ann<Do<Ann<TermV>, TC>>),
+        Lam(Ann<Lam<Ann<TermV>, TC>>),
+        App(Ann<App<TC, TV>>),
+        Rec(Ann<Rec<Ann<TermV>, TC>>),
+        Match(Ann<Match<Ann<TermV>, TV, TC>>),
+        CoMatch(Ann<CoMatch<Ann<TermV>, TC>>),
+        Dtor(Ann<Dtor<Ann<DtorV>, TC, TV>>),
+    }
+    type TC = Rc<TermComputation>;
+    impl ComputationT for TermComputation {}
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum Term {
+        Val(TermValue),
+        Comp(TermComputation),
+    }
+
+    /* --------------------------------- Module --------------------------------- */
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Module {
+        pub name: Option<String>,
+        pub decls: Vec<Declaration>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Declaration {
+        pub public: bool,
+        pub decl: Declare,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum Declare {
+        Data(Ann<Data<Ann<TermV>, Ann<CtorV>, T>>),
+        Codata(Ann<Codata<Ann<TermV>, Ann<DtorV>, T>>),
+        Define(Ann<Define<Ann<TermV>, T, TV>>),
+        Entry(Ann<TermComputation>),
+    }
 }
