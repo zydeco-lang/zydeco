@@ -1,13 +1,26 @@
 use std::fmt::Debug;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Ann {}
+pub struct AnnInfo {}
 
-pub fn ann() -> Ann {
-    Ann {}
+impl AnnInfo {
+    pub fn make<T>(self, inner: T) -> Ann<T> {
+        Ann { inner, info: self }
+    }
 }
 
-pub trait AnnHolder {
-    fn ann(&self) -> &Ann;
-    fn set_ann(&mut self, ann: Ann);
+pub fn ann() -> AnnInfo {
+    AnnInfo {}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ann<T> {
+    inner: T,
+    pub info: AnnInfo,
+}
+
+impl<T> Ann<T> {
+    pub fn inner(&self) -> &T {
+        &self.inner
+    }
 }

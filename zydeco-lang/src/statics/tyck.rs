@@ -1,10 +1,6 @@
-use std::collections::HashMap;
-
 use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
-use crate::{
-    parse::syntax::*,
-    utils::ann::{Ann, AnnHolder},
-};
+use crate::{parse::syntax::*, utils::ann::AnnInfo};
+use std::collections::HashMap;
 use TypeCheckError::*;
 
 pub trait TypeCheck {
@@ -90,13 +86,9 @@ impl TypeCheck for Compute {
                     }),
                 }
             }
-            Compute::Return(v, ..) => {
+            Compute::Return(v, ann, ..) => {
                 let t = v.syn(&ctx)?;
-                Ok(Type {
-                    ctor: TCtor::Ret,
-                    args: vec![t],
-                    ann: v.ann().clone(),
-                })
+                Ok(Type { ctor: TCtor::Ret, args: vec![t], ann: ann.clone() })
             }
             Compute::Lam { arg: (x, t), body, ann } => {
                 let mut ctx = ctx.clone();
@@ -658,7 +650,7 @@ impl TypeCheck for Value {
 }
 
 impl Type {
-    fn internal(name: &'static str, args: Vec<Type>, ann: Ann) -> Self {
+    fn internal(name: &'static str, args: Vec<Type>, ann: AnnInfo) -> Self {
         Type {
             ctor: TCtor::Var(TypeV::new(name.to_owned(), ann.clone())),
             args,

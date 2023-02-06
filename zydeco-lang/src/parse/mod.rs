@@ -3,6 +3,5 @@ lalrpop_mod!(pub parser, "/parse/parser.rs");
 
 pub mod fmt;
 pub mod syntax;
-mod ann;
 
 pub use parser::{ExpressionParser, ZydecoParser};

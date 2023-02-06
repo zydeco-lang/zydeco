@@ -1,9 +1,9 @@
 use super::resolve::*;
-use crate::{parse::syntax::*, utils::ann::Ann};
+use crate::{parse::syntax::*, utils::ann::AnnInfo};
 
 #[derive(Clone, Debug)]
 pub enum TypeCheckError {
-    UnboundVar { var: TermV, ann: Ann },
+    UnboundVar { var: TermV, ann: AnnInfo },
     KindMismatch { context: String, expected: Kind },
     TypeMismatchCtx { context: String, expected: Type, found: Type },
     TypeMismatch { expected: Type, found: Type },

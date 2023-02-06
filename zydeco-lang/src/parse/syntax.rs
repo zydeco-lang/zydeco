@@ -1,10 +1,10 @@
-use crate::utils::ann::Ann;
+use crate::utils::ann::AnnInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
     pub decls: Vec<Declare>,
     pub comp: Box<Compute>,
-    pub ann: Ann,
+    pub ann: AnnInfo,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,7 +24,7 @@ pub enum Declare {
         name: TermV,
         ty: Option<Box<Type>>,
         def: Option<Box<Value>>,
-        ann: Ann,
+        ann: AnnInfo,
     },
 }
 
@@ -33,7 +33,7 @@ pub struct Data {
     pub name: TypeV,
     pub args: Vec<TypeV>,
     pub ctors: Vec<DataBranch>,
-    pub ann: Ann,
+    pub ann: AnnInfo,
 }
 
 pub type DataBranch = (CtorV, Vec<Type>);
@@ -61,7 +61,7 @@ pub struct Codata {
     pub name: TypeV,
     pub args: Vec<TypeV>,
     pub dtors: Vec<CodataBranch>,
-    pub ann: Ann,
+    pub ann: AnnInfo,
 }
 
 pub type CodataBranch = (DtorV, Vec<Type>, Type);
@@ -86,12 +86,12 @@ impl Into<Type> for &Codata {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
-    Var(TermV, Ann),
-    Thunk(Box<Compute>, Ann),
-    Ctor(CtorV, Vec<Value>, Ann),
-    Int(i64, Ann),
-    String(String, Ann),
-    Char(char, Ann),
+    Var(TermV, AnnInfo),
+    Thunk(Box<Compute>, AnnInfo),
+    Ctor(CtorV, Vec<Value>, AnnInfo),
+    Int(i64, AnnInfo),
+    String(String, AnnInfo),
+    Char(char, AnnInfo),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,50 +99,50 @@ pub enum Compute {
     Let {
         binding: Binding<Type, Value>,
         body: Box<Compute>,
-        ann: Ann,
+        ann: AnnInfo,
     },
     Do {
         binding: Binding<Type, Compute>,
         body: Box<Compute>,
-        ann: Ann,
+        ann: AnnInfo,
     },
-    Force(Box<Value>, Ann),
-    Return(Box<Value>, Ann),
+    Force(Box<Value>, AnnInfo),
+    Return(Box<Value>, AnnInfo),
     Lam {
         arg: (TermV, Option<Box<Type>>),
         body: Box<Compute>,
-        ann: Ann,
+        ann: AnnInfo,
     },
     Rec {
         arg: (TermV, Option<Box<Type>>),
         body: Box<Compute>,
-        ann: Ann,
+        ann: AnnInfo,
     },
-    App(Box<Compute>, Box<Value>, Ann),
+    App(Box<Compute>, Box<Value>, AnnInfo),
     Match {
         scrut: Box<Value>,
         cases: Vec<(CtorV, Vec<TermV>, Box<Compute>)>,
-        ann: Ann,
+        ann: AnnInfo,
     },
     CoMatch {
         cases: Vec<(DtorV, Vec<TermV>, Box<Compute>)>,
-        ann: Ann,
+        ann: AnnInfo,
     },
     CoApp {
         body: Box<Compute>,
         dtor: DtorV,
         args: Vec<Value>,
-        ann: Ann,
+        ann: AnnInfo,
     },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SynType {
-    Basic(TCtor, Ann),
-    App(Box<SynType>, Box<SynType>, Ann),
+    Basic(TCtor, AnnInfo),
+    App(Box<SynType>, Box<SynType>, AnnInfo),
     // Thunk(Box<Type>, Ann),
     // Ret(Box<Type>, Ann),
-    Arr(Box<SynType>, Box<SynType>, Ann),
+    Arr(Box<SynType>, Box<SynType>, AnnInfo),
     // OS,
 }
 
@@ -159,7 +159,7 @@ pub enum TCtor {
 pub struct Type {
     pub ctor: TCtor,
     pub args: Vec<Type>,
-    pub ann: Ann,
+    pub ann: AnnInfo,
 }
 
 impl SynType {
@@ -192,15 +192,15 @@ pub enum Kind {
 macro_rules! var {
     ( $Var:ident ) => {
         #[derive(Clone, Debug)]
-        pub struct $Var(String, Ann);
+        pub struct $Var(String, AnnInfo);
         impl $Var {
-            pub fn new(s: String, ann: Ann) -> Self {
+            pub fn new(s: String, ann: AnnInfo) -> Self {
                 Self(s, ann)
             }
             pub fn name(&self) -> &str {
                 &self.0
             }
-            pub fn ann(&self) -> &Ann {
+            pub fn ann(&self) -> &AnnInfo {
                 &self.1
             }
         }
