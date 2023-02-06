@@ -137,8 +137,8 @@ impl FmtArgs for Compute {
 impl FmtArgs for Kind {
     fn fmt_args(&self, _args: Args) -> String {
         match self {
-            Kind::CompType => "CompType".to_owned(),
-            Kind::ValType => "ValType".to_owned(),
+            Kind::CType => "CompType".to_owned(),
+            Kind::VType => "ValType".to_owned(),
         }
     }
 }

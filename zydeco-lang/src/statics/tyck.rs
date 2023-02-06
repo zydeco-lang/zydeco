@@ -35,20 +35,20 @@ impl TypeCheck for Program {
 }
 
 fn expect_valtype(context: &str, k: Kind) -> Result<(), TypeCheckError> {
-    if let Kind::CompType = k {
+    if let Kind::CType = k {
         Err(TypeCheckError::KindMismatch {
             context: context.to_owned(),
-            expected: Kind::ValType,
+            expected: Kind::VType,
         })
     } else {
         Ok(())
     }
 }
 fn expect_comptype(context: &str, k: Kind) -> Result<(), TypeCheckError> {
-    if let Kind::ValType = k {
+    if let Kind::VType = k {
         Err(TypeCheckError::KindMismatch {
             context: context.to_owned(),
-            expected: Kind::CompType,
+            expected: Kind::CType,
         })
     } else {
         Ok(())
@@ -685,7 +685,7 @@ impl TypeCheck for Type {
                         found: self.args.len(),
                     })
                 } else {
-                    Ok(Kind::CompType)
+                    Ok(Kind::CType)
                 }
             }
             TCtor::Ret => {
@@ -700,7 +700,7 @@ impl TypeCheck for Type {
                         "type argument to Ret",
                         self.args[0].syn(ctx)?,
                     )?;
-                    Ok(Kind::CompType)
+                    Ok(Kind::CType)
                 }
             }
             TCtor::Thunk => {
@@ -715,7 +715,7 @@ impl TypeCheck for Type {
                         "type argument to Thunk",
                         self.args[0].syn(ctx)?,
                     )?;
-                    Ok(Kind::ValType)
+                    Ok(Kind::VType)
                 }
             }
             TCtor::Fun => {
@@ -734,7 +734,7 @@ impl TypeCheck for Type {
                         "codomain of a function type",
                         self.args[1].syn(ctx)?,
                     )?;
-                    Ok(Kind::CompType)
+                    Ok(Kind::CType)
                 }
             }
         }

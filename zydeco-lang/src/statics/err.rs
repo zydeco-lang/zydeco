@@ -35,8 +35,8 @@ impl fmt::Display for TypeCheckError {
                 context,
                 expected,
                 match expected {
-                    Kind::CompType => Kind::ValType,
-                    Kind::ValType => Kind::CompType,
+                    Kind::CType => Kind::VType,
+                    Kind::VType => Kind::CType,
                 }
             ),
             TypeMismatch { expected, found } => write!(

@@ -176,11 +176,7 @@ impl SynType {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Kind {
-    ValType,
-    CompType,
-}
+pub use crate::syntax::Kind;
 
 pub mod new_syntax {
     use crate::{syntax::*, utils::ann::Ann};
@@ -189,11 +185,7 @@ pub mod new_syntax {
 
     /* ---------------------------------- Kind ---------------------------------- */
 
-    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-    pub enum Kind {
-        VType,
-        CType,
-    }
+    pub use crate::syntax::Kind;
 
     /* ---------------------------------- Type ---------------------------------- */
 
@@ -233,7 +225,7 @@ pub mod new_syntax {
         Rec(Ann<Rec<Ann<TermV>, TC>>),
         Match(Ann<Match<Ann<TermV>, TV, TC>>),
         CoMatch(Ann<CoMatch<Ann<TermV>, TC>>),
-        Dtor(Ann<Dtor<Ann<DtorV>, TC, TV>>),
+        Dtor(Ann<Dtor<TC, Ann<DtorV>, TV>>),
     }
     type TC = Rc<TermComputation>;
     impl ComputationT for TermComputation {}
@@ -255,6 +247,7 @@ pub mod new_syntax {
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct Declaration {
         pub public: bool,
+        pub external: bool,
         pub decl: Declare,
     }
 

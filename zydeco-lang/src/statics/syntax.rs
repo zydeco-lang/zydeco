@@ -4,12 +4,7 @@ use std::{collections::HashMap, rc::Rc};
 
 /* ---------------------------------- Kind ---------------------------------- */
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Kind {
-    VType,
-    CType,
-}
-impl KindT for Kind {}
+pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
 
@@ -46,7 +41,7 @@ pub enum TermComputation {
     Rec(Ann<Rec<Ann<TermV>, TC>>),
     Match(Ann<Match<Ann<TermV>, TV, TC>>),
     CoMatch(Ann<CoMatch<Ann<TermV>, TC>>),
-    Dtor(Ann<Dtor<Ann<DtorV>, TC, TV>>),
+    Dtor(Ann<Dtor<TC, Ann<DtorV>, TV>>),
 }
 type TC = Rc<TermComputation>;
 impl ComputationT for TermComputation {}

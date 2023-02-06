@@ -53,7 +53,7 @@ impl Ctx {
                         })
                     },
                 )?;
-                self.tmap.insert(name.clone(), Kind::ValType);
+                self.tmap.insert(name.clone(), Kind::VType);
                 for (ctor, _) in ctors {
                     self.ctors
                         .entry(ctor.clone())
@@ -72,7 +72,7 @@ impl Ctx {
                         })
                     },
                 )?;
-                self.tmap.insert(name.clone(), Kind::CompType);
+                self.tmap.insert(name.clone(), Kind::CType);
                 for (dtor, ..) in dtors {
                     self.dtors
                         .entry(dtor.clone())
