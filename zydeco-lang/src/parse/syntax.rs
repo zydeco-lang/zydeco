@@ -13,7 +13,7 @@ pub enum ValOrComp {
     Comp(Compute),
 }
 
-pub type Binding<Ty, Def> = (VVar, Option<Box<Ty>>, Box<Def>);
+pub type Binding<Ty, Def> = (TermV, Option<Box<Ty>>, Box<Def>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declare {
@@ -21,7 +21,7 @@ pub enum Declare {
     Codata(Codata),
     Define {
         public: bool,
-        name: VVar,
+        name: TermV,
         ty: Option<Box<Type>>,
         def: Option<Box<Value>>,
         ann: Ann,
@@ -30,13 +30,13 @@ pub enum Declare {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Data {
-    pub name: TVar,
-    pub args: Vec<TVar>,
+    pub name: TypeV,
+    pub args: Vec<TypeV>,
     pub ctors: Vec<DataBranch>,
     pub ann: Ann,
 }
 
-pub type DataBranch = (Ctor, Vec<Type>);
+pub type DataBranch = (CtorV, Vec<Type>);
 
 impl Into<Type> for &Data {
     fn into(self) -> Type {
@@ -58,13 +58,13 @@ impl Into<Type> for &Data {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Codata {
-    pub name: TVar,
-    pub args: Vec<TVar>,
+    pub name: TypeV,
+    pub args: Vec<TypeV>,
     pub dtors: Vec<CodataBranch>,
     pub ann: Ann,
 }
 
-pub type CodataBranch = (Dtor, Vec<Type>, Type);
+pub type CodataBranch = (DtorV, Vec<Type>, Type);
 
 impl Into<Type> for &Codata {
     fn into(self) -> Type {
@@ -86,9 +86,9 @@ impl Into<Type> for &Codata {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
-    Var(VVar, Ann),
+    Var(TermV, Ann),
     Thunk(Box<Compute>, Ann),
-    Ctor(Ctor, Vec<Value>, Ann),
+    Ctor(CtorV, Vec<Value>, Ann),
     Int(i64, Ann),
     String(String, Ann),
     Char(char, Ann),
@@ -109,28 +109,28 @@ pub enum Compute {
     Force(Box<Value>, Ann),
     Return(Box<Value>, Ann),
     Lam {
-        arg: (VVar, Option<Box<Type>>),
+        arg: (TermV, Option<Box<Type>>),
         body: Box<Compute>,
         ann: Ann,
     },
     Rec {
-        arg: (VVar, Option<Box<Type>>),
+        arg: (TermV, Option<Box<Type>>),
         body: Box<Compute>,
         ann: Ann,
     },
     App(Box<Compute>, Box<Value>, Ann),
     Match {
         scrut: Box<Value>,
-        cases: Vec<(Ctor, Vec<VVar>, Box<Compute>)>,
+        cases: Vec<(CtorV, Vec<TermV>, Box<Compute>)>,
         ann: Ann,
     },
     CoMatch {
-        cases: Vec<(Dtor, Vec<VVar>, Box<Compute>)>,
+        cases: Vec<(DtorV, Vec<TermV>, Box<Compute>)>,
         ann: Ann,
     },
     CoApp {
         body: Box<Compute>,
-        dtor: Dtor,
+        dtor: DtorV,
         args: Vec<Value>,
         ann: Ann,
     },
@@ -148,7 +148,7 @@ pub enum SynType {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TCtor {
-    Var(TVar),
+    Var(TypeV),
     Thunk,
     Ret,
     OS,
@@ -218,7 +218,7 @@ macro_rules! var {
     };
 }
 
-var!(Ctor);
-var!(Dtor);
-var!(TVar);
-var!(VVar);
+var!(CtorV);
+var!(DtorV);
+var!(TypeV);
+var!(TermV);

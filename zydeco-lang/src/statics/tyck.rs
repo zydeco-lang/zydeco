@@ -166,7 +166,7 @@ impl TypeCheck for Compute {
                                 data_ty_name
                             ))
                         })?;
-                    let mut ctors: HashMap<Ctor, Vec<Type>> =
+                    let mut ctors: HashMap<CtorV, Vec<Type>> =
                         HashMap::from_iter(data.ctors.iter().map(
                             |(ctor, ty_args)| (ctor.clone(), ty_args.clone()),
                         ));
@@ -236,7 +236,7 @@ impl TypeCheck for Compute {
                 let coda = ctx.coda.get(&tvar).ok_or_else(|| {
                     ErrStr(format!("unknown codata: {}", tvar))
                 })?;
-                let mut dtors: HashMap<Dtor, (Vec<Type>, Type)> =
+                let mut dtors: HashMap<DtorV, (Vec<Type>, Type)> =
                     HashMap::from_iter(coda.dtors.iter().map(
                         |(dtor, ty_args, tret)| {
                             (dtor.clone(), (ty_args.clone(), tret.clone()))
@@ -400,7 +400,7 @@ impl TypeCheck for Compute {
                                 data_ty_name
                             ))
                         })?;
-                    let mut ctors: HashMap<Ctor, Vec<Type>> =
+                    let mut ctors: HashMap<CtorV, Vec<Type>> =
                         HashMap::from_iter(data.ctors.iter().map(
                             |(ctor, ty_args)| (ctor.clone(), ty_args.clone()),
                         ));
@@ -443,7 +443,7 @@ impl TypeCheck for Compute {
                     let coda = ctx.coda.get(tvar).ok_or_else(|| {
                         ErrStr(format!("unknown coda: {}", tvar))
                     })?;
-                    let mut dtors: HashMap<Dtor, (Vec<Type>, Type)> =
+                    let mut dtors: HashMap<DtorV, (Vec<Type>, Type)> =
                         HashMap::from_iter(coda.dtors.iter().map(
                             |(dtor, ty_args, tret)| {
                                 (dtor.clone(), (ty_args.clone(), tret.clone()))
@@ -660,7 +660,7 @@ impl TypeCheck for Value {
 impl Type {
     fn internal(name: &'static str, args: Vec<Type>, ann: Ann) -> Self {
         Type {
-            ctor: TCtor::Var(TVar::new(name.to_owned(), ann.clone())),
+            ctor: TCtor::Var(TypeV::new(name.to_owned(), ann.clone())),
             args,
             ann,
         }

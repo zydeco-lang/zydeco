@@ -212,7 +212,7 @@ macro_rules! var_fmt {
     };
 }
 
-var_fmt!(TVar);
-var_fmt!(Ctor);
-var_fmt!(Dtor);
-var_fmt!(VVar);
+var_fmt!(TypeV);
+var_fmt!(CtorV);
+var_fmt!(DtorV);
+var_fmt!(TermV);

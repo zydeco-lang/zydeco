@@ -3,14 +3,14 @@ use crate::{parse::syntax::*, utils::ann::Ann};
 
 #[derive(Clone, Debug)]
 pub enum TypeCheckError {
-    UnboundVar { var: VVar, ann: Ann },
+    UnboundVar { var: TermV, ann: Ann },
     KindMismatch { context: String, expected: Kind },
     TypeMismatchCtx { context: String, expected: Type, found: Type },
     TypeMismatch { expected: Type, found: Type },
     TypeExpected { expected: String, found: Type },
     TypeExpectedCtx { context: String, expected: String, found: Type },
     ArityMismatch { context: String, expected: usize, found: usize },
-    NeedAnnotation { content: String, },
+    NeedAnnotation { content: String },
     InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
     WrongMain { found: Type },

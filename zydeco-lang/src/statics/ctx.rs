@@ -8,13 +8,13 @@ use std::{collections::HashMap, hash::Hash};
 
 #[derive(Clone, Debug)]
 pub struct Ctx {
-    vmap: HashMap<VVar, Type>,
-    pub tmap: HashMap<TVar, Kind>,
-    pub data: HashMap<TVar, Data>,
-    pub ctors: HashMap<Ctor, Vec<TVar>>,
-    pub coda: HashMap<TVar, Codata>,
-    pub dtors: HashMap<Dtor, Vec<TVar>>,
-    pub defs: HashMap<VVar, (Option<Type>, Value)>,
+    vmap: HashMap<TermV, Type>,
+    pub tmap: HashMap<TypeV, Kind>,
+    pub data: HashMap<TypeV, Data>,
+    pub ctors: HashMap<CtorV, Vec<TypeV>>,
+    pub coda: HashMap<TypeV, Codata>,
+    pub dtors: HashMap<DtorV, Vec<TypeV>>,
+    pub defs: HashMap<TermV, (Option<Type>, Value)>,
 }
 
 impl Ctx {
@@ -29,13 +29,13 @@ impl Ctx {
             defs: HashMap::new(),
         }
     }
-    pub fn push(&mut self, x: VVar, t: Type) {
+    pub fn push(&mut self, x: TermV, t: Type) {
         self.vmap.insert(x, t);
     }
-    pub fn extend(&mut self, other: impl IntoIterator<Item = (VVar, Type)>) {
+    pub fn extend(&mut self, other: impl IntoIterator<Item = (TermV, Type)>) {
         self.vmap.extend(other);
     }
-    pub fn lookup(&self, x: &VVar) -> Option<&Type> {
+    pub fn lookup(&self, x: &TermV) -> Option<&Type> {
         self.vmap.get(x)
     }
     pub fn decl(&mut self, d: &Declare) -> Result<(), NameResolveError> {
