@@ -12,7 +12,7 @@ pub use crate::syntax::Kind;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     TypeAnn(Ann<TypeAnn<T, Ann<Kind>>>),
-    TCtor(Ann<TypeApp<TCtor, T>>),
+    TypeApp(Ann<TypeApp<TCtor, T>>),
 }
 type T = Rc<Type>;
 impl TypeT for Type {}
