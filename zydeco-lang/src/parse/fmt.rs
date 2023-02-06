@@ -1,5 +1,8 @@
 use super::syntax::*;
-use crate::utils::fmt::{Args, FmtArgs};
+use crate::{
+    syntax::binders::*,
+    utils::fmt::{Args, FmtArgs},
+};
 
 impl FmtArgs for Program {
     fn fmt_args(&self, args: Args) -> String {

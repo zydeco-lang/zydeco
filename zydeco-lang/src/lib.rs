@@ -6,3 +6,4 @@ pub mod utils;
 pub mod library;
 
 pub mod zydeco;
+pub mod syntax;

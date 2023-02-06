@@ -1,5 +1,9 @@
 use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
-use crate::{parse::syntax::*, utils::ann::AnnInfo};
+use crate::{
+    parse::syntax::*,
+    syntax::binders::*,
+    utils::ann::AnnInfo,
+};
 use std::collections::HashMap;
 use TypeCheckError::*;
 

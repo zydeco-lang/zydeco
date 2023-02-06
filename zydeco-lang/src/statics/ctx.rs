@@ -3,7 +3,10 @@ use super::{
     resolve::*,
     tyck::{Eqv, TypeCheck},
 };
-use crate::parse::syntax::*;
+use crate::{
+    parse::syntax::*,
+    syntax::binders::*,
+};
 use std::{collections::HashMap, hash::Hash};
 
 #[derive(Clone, Debug)]

@@ -1,6 +1,7 @@
 use crate::{
     lex::token::*,
     parse::syntax::*,
+    syntax::binders::*,
     utils::ann::*,
 };
 grammar<'input>(input: &'input str);

@@ -1,4 +1,7 @@
-use crate::utils::ann::AnnInfo;
+use crate::{
+    syntax::binders::*,
+    utils::ann::AnnInfo,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
@@ -188,37 +191,3 @@ pub enum Kind {
     ValType,
     CompType,
 }
-
-macro_rules! var {
-    ( $Var:ident ) => {
-        #[derive(Clone, Debug)]
-        pub struct $Var(String, AnnInfo);
-        impl $Var {
-            pub fn new(s: String, ann: AnnInfo) -> Self {
-                Self(s, ann)
-            }
-            pub fn name(&self) -> &str {
-                &self.0
-            }
-            pub fn ann(&self) -> &AnnInfo {
-                &self.1
-            }
-        }
-        impl std::cmp::PartialEq for $Var {
-            fn eq(&self, other: &Self) -> bool {
-                self.0 == other.0
-            }
-        }
-        impl std::cmp::Eq for $Var {}
-        impl std::hash::Hash for $Var {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                self.0.hash(state);
-            }
-        }
-    };
-}
-
-var!(CtorV);
-var!(DtorV);
-var!(TypeV);
-var!(TermV);

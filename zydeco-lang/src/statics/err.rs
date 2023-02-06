@@ -1,5 +1,9 @@
 use super::resolve::*;
-use crate::{parse::syntax::*, utils::ann::AnnInfo};
+use crate::{
+    parse::syntax::*,
+    syntax::binders::*,
+    utils::ann::AnnInfo,
+};
 
 #[derive(Clone, Debug)]
 pub enum TypeCheckError {
