@@ -1017,6 +1017,7 @@ name = "zydeco-lang"
 version = "0.0.1"
 dependencies = [
  "enum_dispatch",
+ "indexmap",
  "lalrpop",
  "lalrpop-util",
  "logos",

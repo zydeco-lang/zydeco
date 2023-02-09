@@ -1,9 +1,6 @@
-use super::{
-    err::TypeCheckError,
-    resolve::*,
-    tyck::{Eqv, TypeCheck},
-};
+use super::{err::TypeCheckError, resolve::*, tyck::TypeCheck};
 use crate::{parse::syntax::*, syntax::binders::*};
+use indexmap::IndexMap;
 use std::{collections::HashMap, hash::Hash};
 
 #[derive(Clone, Debug)]
@@ -15,7 +12,7 @@ pub struct Ctx {
     pub tmap: HashMap<TypeV, Arity>,
     pub data: HashMap<TypeV, Data>,
     pub coda: HashMap<TypeV, Codata>,
-    pub defs: HashMap<TermV, (Option<Type>, Value)>,
+    defs: IndexMap<TermV, (Option<Type>, Value)>,
 }
 
 impl Ctx {
@@ -25,7 +22,7 @@ impl Ctx {
             tmap: HashMap::new(),
             data: HashMap::new(),
             coda: HashMap::new(),
-            defs: HashMap::new(),
+            defs: IndexMap::new(),
         }
     }
     pub fn push(&mut self, x: TermV, t: Type) {
@@ -58,9 +55,7 @@ impl Ctx {
                 );
                 Ok(())
             }
-            Declare::Codata(
-                codata @ Codata { name, params, ann, .. },
-            ) => {
+            Declare::Codata(codata @ Codata { name, params, ann, .. }) => {
                 self.coda.insert(name.clone(), codata.clone()).map_or(
                     Ok(()),
                     |_| {
@@ -101,7 +96,7 @@ impl Ctx {
             }
         }
     }
-    pub fn tyck_pre(&self) -> Result<(), TypeCheckError> {
+    pub fn type_validation(&self) -> Result<(), TypeCheckError> {
         for (_, data) in &self.data {
             for (_, args) in &data.ctors {
                 for arg in args {
@@ -117,34 +112,18 @@ impl Ctx {
                 ret.syn(self)?;
             }
         }
-        for (_, (ty, def)) in &self.defs {
-            match ty {
-                Some(ty) => {
-                    def.syn(self)?;
-                    let ty_ = def.syn(self)?;
-                    ty.eqv(&ty_).ok_or_else(|| {
-                        TypeCheckError::TypeMismatch {
-                            expected: ty.clone().into(),
-                            found: ty_.clone().into(),
-                        }
-                    })?
-                }
-                None => {
-                    def.syn(self)?;
-                }
-            }
-        }
         Ok(())
     }
-    pub fn tyck_post(&mut self) -> Result<(), TypeCheckError> {
-        for (name, (ty, def)) in self.defs.to_owned() {
-            match ty {
-                Some(_) => {}
-                None => {
-                    let ty = def.syn(self).expect("checked in tyck_pre");
-                    self.push(name, ty)
+    pub fn tyck_definitions(&mut self) -> Result<(), TypeCheckError> {
+        for (name, (ty, def)) in &self.defs {
+            let ty = match ty {
+                Some(ty) => {
+                    def.ana(ty, self)?;
+                    ty.clone()
                 }
-            }
+                None => def.syn(self)?,
+            };
+            self.vmap.insert(name.clone(), ty);
         }
         Ok(())
     }

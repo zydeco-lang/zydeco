@@ -11,6 +11,7 @@ regex = "1"
 logos = "0.12"
 lalrpop-util = { version = "0.19", features = ["lexer"] }
 enum_dispatch = "0.3"
+indexmap = "1.9"
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]

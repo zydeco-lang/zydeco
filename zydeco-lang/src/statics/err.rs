@@ -1,9 +1,5 @@
 use super::resolve::*;
-use crate::{
-    parse::syntax::*,
-    syntax::binders::*,
-    utils::ann::AnnInfo,
-};
+use crate::{parse::syntax::*, syntax::binders::*, utils::ann::AnnInfo};
 
 #[derive(Clone, Debug)]
 pub enum TypeCheckError {
@@ -32,9 +28,7 @@ impl fmt::Display for TypeCheckError {
             KindMismatch { context, expected, found } => write!(
                 f,
                 "Kind mismatch, In {}, expected {}, but got {}",
-                context,
-                expected,
-                found
+                context, expected, found
             ),
             TypeMismatch { expected, found } => write!(
                 f,

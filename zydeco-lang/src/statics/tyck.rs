@@ -20,8 +20,8 @@ impl TypeCheck for Program {
         for decl in &self.decls {
             ctx.decl(decl).map_err(NameResolve)?;
         }
-        ctx.tyck_pre()?;
-        ctx.tyck_post()?;
+        ctx.type_validation()?;
+        ctx.tyck_definitions()?;
         let typ = self.comp.syn(&ctx)?;
         match &typ.ctor {
             TCtor::OS => Ok(()),
