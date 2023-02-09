@@ -3,6 +3,8 @@ use crate::{
     parse::syntax::*,
     utils::ann::*,
 };
+use crate::parse::apply_string_escapes;
+use crate::parse::apply_char_escapes;
 grammar<'input>(input: &'input str);
 
 
@@ -211,9 +213,13 @@ LowerId: String = "LowerId" => String::from(<>);
 Int: i64 = <s:"NumLit"> => s.parse().unwrap();
 
 Str: String = <s:"StrLit"> => 
-    s[1..s.len()-1].to_string().replace("\\\"", "\"");
+    apply_string_escapes(&s[1..s.len()-1]); //todo
 
-Char: char = <s:"CharLit"> => s.chars().nth(1).unwrap();
+// Char: char = <s:"CharLit"> => s.chars().nth(1).unwrap(); //todo
+Char: char = {
+    <s:"CharLit"> => s.chars().nth(1).unwrap(),
+    <s:"Escape"> => apply_char_escapes(&s[1..s.len()-1]),
+};
 
 
 //* --------------------------------- Tokens --------------------------------- */
@@ -242,6 +248,7 @@ extern {
         "NumLit" => Tok::NumLit(<&'input str>),
         "StrLit" => Tok::StrLit(<&'input str>),
         "CharLit" => Tok::CharLit(<&'input str>),
+        "Escape" => Tok::Escape(<&'input str>),
 
         "F" => Tok::RetType,
         "U" => Tok::CompType,

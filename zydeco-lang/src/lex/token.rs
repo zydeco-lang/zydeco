@@ -42,6 +42,8 @@ pub enum Tok<'input> {
     StrLit(&'input str),
     #[regex(r#"'[ -~]'"#)]
     CharLit(&'input str),
+    #[regex(r#"'\\[nrt|(\\)]'"#)]
+    Escape(&'input str),
 
     #[regex("(F|Ret)")]
     RetType,
@@ -108,6 +110,7 @@ impl<'input> Display for Tok<'input> {
             Tok::NumLit(s) => write!(f, "NumLiteral({})", s),
             Tok::StrLit(s) => write!(f, "StrLiteral({})", s),
             Tok::CharLit(s) => write!(f, "CharLiteral({})", s),
+            Tok::Escape(s) => write!(f, "EscapeSequence({})",s),
             Tok::RetType => write!(f, "F"),
             Tok::CompType => write!(f, "U"),
             Tok::OSType => write!(f, "OS"),
