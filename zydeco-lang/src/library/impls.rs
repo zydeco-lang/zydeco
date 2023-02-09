@@ -131,13 +131,26 @@ pub fn str_to_int(
 }
 
 // /* IO */
-pub fn write_line(
+// pub fn write_line(
+    // args: Vec<ZValue>, _r: &mut (dyn BufRead), w: &mut (dyn Write),
+    // _: &[String],
+// ) -> Result<ZCompute, i32> {
+    // match args.as_slice() {
+        // [ZValue::String(s), e @ ZValue::Thunk(..)] => {
+            // writeln!(w, "{}", s).unwrap();
+            // Ok(ZCompute::Force(Rc::new(e.clone())))
+        // }
+        // _ => unreachable!(""),
+    // }
+// }
+
+pub fn write_str(
     args: Vec<ZValue>, _r: &mut (dyn BufRead), w: &mut (dyn Write),
     _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [ZValue::String(s), e @ ZValue::Thunk(..)] => {
-            writeln!(w, "{}", s).unwrap();
+            write!(w, "{}", s).unwrap();
             Ok(ZCompute::Force(Rc::new(e.clone())))
         }
         _ => unreachable!(""),

@@ -153,23 +153,23 @@ data StrList where
 
 ## OS operations
 
-# pub extern define write_str : Thunk(String -> Thunk(OS) -> OS);
+pub extern define write_str : Thunk(String -> Thunk(OS) -> OS);
 pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
 pub extern define exit : Thunk(Int -> OS);
 pub extern define arg_list : Thunk(Thunk(StrList -> OS) -> OS);
 
-# pub define write_line : Thunk(String -> Thunk(OS) -> OS) = {
-#   fn (s: String, k: Thunk(OS)) ->
-#     do s <- ! str_append s "\n";
-#     ! write_str s k
-# };
-pub extern define write_line : Thunk(String -> Thunk(OS) -> OS);
+pub define write_line : Thunk(String -> Thunk(OS) -> OS) = {
+  fn (s: String, k: Thunk(OS)) ->
+    do s <- ! str_append s "\n";
+    ! write_str s k
+};
+# pub extern define write_line : Thunk(String -> Thunk(OS) -> OS);
 
-# pub define write_int : Thunk(Int -> Thunk(OS) -> OS) = {
-#   fn (i: Int, k: Thunk(OS)) ->
-#     do s <- ! int_to_str i;
-#     ! write_str s k
-# };
+pub define write_int : Thunk(Int -> Thunk(OS) -> OS) = {
+  fn (i: Int, k: Thunk(OS)) ->
+    do s <- ! int_to_str i;
+    ! write_str s k
+};
 
 pub define write_int_line : Thunk(Int -> Thunk(OS) -> OS) = {
   fn (i: Int, k: Thunk(OS)) ->
