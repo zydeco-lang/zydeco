@@ -23,6 +23,7 @@ pub enum ZValue {
 impl From<Value> for ZValue {
     fn from(value: Value) -> Self {
         match value {
+            Value::TermAnn(body, ..) => (*body).into(),
             Value::Var(var, _) => ZValue::Var(var.name().to_string()),
             Value::Thunk(compute, _) => {
                 ZValue::Thunk(Rc::new((*compute).into()), None)
@@ -58,6 +59,7 @@ pub enum ZCompute {
 impl From<Compute> for ZCompute {
     fn from(compute: Compute) -> Self {
         match compute {
+            Compute::TermAnn(body, ..) => (*body).into(),
             Compute::Let { binding: (name, _, def), body, .. } => {
                 ZCompute::Let {
                     binding: (name.name().to_string(), Rc::new((*def).into())),

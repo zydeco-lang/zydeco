@@ -70,8 +70,22 @@ DtorBranch: (DtorV, Vec<Type>, Type) = {
     }
 }
 
-//* ------------------------------- Expressions ------------------------------ */
 
+//* ---------------------------------- Value --------------------------------- */
+
+Val: Value = {
+    "(" <Val> ")" => <>,
+    "(" <v:Val> "::" <t:TVal> ")" => Value::TermAnn(Box::new(v), t, ann()),
+    <x:TermV> => Value::Var(x, ann()),
+    "{" <e:Boxed<Comp>> "}" => Value::Thunk(e, ann()),
+    <ctor:CtorV> "(" <vs:SepByEnd<",", ")", <Val>>> => Value::Ctor(ctor, vs, ann()),
+    <n:Int> => Value::Int(n, ann()),
+    <s:Str> => Value::String(s, ann()),
+    <c:Char> => Value::Char(c, ann()),
+}
+
+
+//* ------------------------------- Expressions ------------------------------ */
 
 Comp: Compute = {
     CompHead,
@@ -122,6 +136,7 @@ CompHead: Compute = {
 
 CompAtom: Compute = {
     "(" <Comp> ")" => <>,
+    "(" <c:Comp> "::" <t:TComp> ")" => Compute::TermAnn(Box::new(c), t, ann()),
     "!" <v:Boxed<Val>> => Compute::Force(v, ann()),
     "ret" <v:Boxed<Val>> => Compute::Return(v, ann()),
 }
@@ -181,17 +196,6 @@ DtorPat: (DtorV, Vec<TermV>) = {
   "." <d: DtorV> "(" <vs: SepByEnd<",", ")", TermV>> => (d, vs)
 }
 
-//* ---------------------------------- Value --------------------------------- */
-Val: Value = {
-    "(" <Val> ")" => <>,
-    <x:TermV> => Value::Var(x, ann()),
-    "{" <e:Boxed<Comp>> "}" => Value::Thunk(e, ann()),
-    <ctor:CtorV> "(" <vs:SepByEnd<",", ")", <Val>>> => Value::Ctor(ctor, vs, ann()),
-    <n:Int> => Value::Int(n, ann()),
-    <s:Str> => Value::String(s, ann()),
-    <c:Char> => Value::Char(c, ann()),
-}
-
 
 //* ---------------------------------- Types --------------------------------- */
 
@@ -246,12 +250,14 @@ TVal: Type = Type;
 //     "(" <TVal> ")" => <>,
 // }
 
+
 //* ---------------------------------- Kinds --------------------------------- */
 
 Kind: Kind = {
     "VType" => Kind::VType,
     "CType" => Kind::CType,
 }
+
 
 //* -------------------------------- Terminals ------------------------------- */
 
@@ -312,6 +318,7 @@ extern {
         "}" => Tok::BraceClose,
         "," => Tok::Comma,
         ":" => Tok::Colon,
+        "::" => Tok::ColonColon,
         "=" => Tok::Equals,
         ";" => Tok::Semicolon,
         "!" => Tok::Force,
@@ -321,6 +328,7 @@ extern {
         "<-" => Tok::Assign,
     }
 }
+
 
 //* -------------------------------- Utilities ------------------------------- */
 

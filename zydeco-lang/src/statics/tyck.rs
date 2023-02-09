@@ -58,6 +58,10 @@ impl TypeCheck for Compute {
 
     fn syn(&self, ctx: &Ctx) -> Result<Self::Out, TypeCheckError> {
         match self {
+            Compute::TermAnn(body, ty, ..) => {
+                body.ana(ty, ctx)?;
+                Ok(ty.clone())
+            }
             Compute::Let { binding: (x, _, def), body, .. } => {
                 let mut ctx = ctx.clone();
                 let t = def.syn(&ctx)?;
@@ -468,6 +472,13 @@ impl TypeCheck for Compute {
                     })
                 }
             }
+            _ => {
+                let t = self.syn(ctx)?;
+                t.eqv(typ).ok_or_else(|| TypeMismatch {
+                    expected: typ.to_owned(),
+                    found: t,
+                })
+            }
         }
     }
 }
@@ -476,6 +487,10 @@ impl TypeCheck for Value {
     type Out = Type;
     fn syn(&self, ctx: &Ctx) -> Result<Self::Out, TypeCheckError> {
         match self {
+            Value::TermAnn(body, typ, ..) => {
+                body.ana(typ, ctx)?;
+                Ok(typ.clone())
+            }
             Value::Var(x, ann) => ctx
                 .lookup(x)
                 .cloned()

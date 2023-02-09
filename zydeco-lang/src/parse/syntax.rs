@@ -50,6 +50,7 @@ pub type CodataBranch = (DtorV, Vec<Type>, Type);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
+    TermAnn(Box<Value>, Type, AnnInfo),
     Var(TermV, AnnInfo),
     Thunk(Box<Compute>, AnnInfo),
     Ctor(CtorV, Vec<Value>, AnnInfo),
@@ -60,6 +61,7 @@ pub enum Value {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Compute {
+    TermAnn(Box<Compute>, Type, AnnInfo),
     Let {
         binding: Binding<Type, Value>,
         body: Box<Compute>,

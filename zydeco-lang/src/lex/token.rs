@@ -73,6 +73,8 @@ pub enum Tok<'input> {
     Comma,
     #[token(":")]
     Colon,
+    #[token("::")]
+    ColonColon,
     #[token("=")]
     Equals,
     #[token(";")]
@@ -129,6 +131,7 @@ impl<'input> Display for Tok<'input> {
             // Tok::BracketClose => write!(f, "]"),
             Tok::Comma => write!(f, ","),
             Tok::Colon => write!(f, ":"),
+            Tok::ColonColon => write!(f, "::"),
             Tok::Equals => write!(f, "="),
             Tok::Semicolon => write!(f, ";"),
             Tok::Force => write!(f, "!"),
