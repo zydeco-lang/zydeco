@@ -11,15 +11,15 @@ data OptionStr where
 end
 
 codata Matcher where
-  .str(String): F(OptionStr)
-  .concat(Syn, Syn): F(OptionStr)
-  .kleene(Syn): F(OptionStr)
-  .choose(Syn, Syn): F(OptionStr)
-  .bind(Syn): F(OptionStr)
+  | .str(String): F(OptionStr)
+  | .concat(Syn, Syn): F(OptionStr)
+  | .kleene(Syn): F(OptionStr)
+  | .choose(Syn, Syn): F(OptionStr)
+  | .bind(Syn): F(OptionStr)
 end
 
 codata Regex where
-  .run(String): Matcher
+  | .run(String): Matcher
 end
 
 let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String, i: Int) -> (

@@ -3,20 +3,18 @@ use super::{
     resolve::*,
     tyck::{Eqv, TypeCheck},
 };
-use crate::{
-    parse::syntax::*,
-    syntax::binders::*,
-};
+use crate::{parse::syntax::*, syntax::binders::*};
 use std::{collections::HashMap, hash::Hash};
+
+#[derive(Clone, Debug)]
+pub struct Arity(pub Vec<Kind>, pub Kind);
 
 #[derive(Clone, Debug)]
 pub struct Ctx {
     vmap: HashMap<TermV, Type>,
-    pub tmap: HashMap<TypeV, Kind>,
+    pub tmap: HashMap<TypeV, Arity>,
     pub data: HashMap<TypeV, Data>,
-    pub ctors: HashMap<CtorV, Vec<TypeV>>,
     pub coda: HashMap<TypeV, Codata>,
-    pub dtors: HashMap<DtorV, Vec<TypeV>>,
     pub defs: HashMap<TermV, (Option<Type>, Value)>,
 }
 
@@ -26,9 +24,7 @@ impl Ctx {
             vmap: HashMap::new(),
             tmap: HashMap::new(),
             data: HashMap::new(),
-            ctors: HashMap::new(),
             coda: HashMap::new(),
-            dtors: HashMap::new(),
             defs: HashMap::new(),
         }
     }
@@ -43,7 +39,7 @@ impl Ctx {
     }
     pub fn decl(&mut self, d: &Declare) -> Result<(), NameResolveError> {
         match d {
-            Declare::Data(data @ Data { name, ctors, ann, .. }) => {
+            Declare::Data(data @ Data { name, params, ann, .. }) => {
                 self.data.insert(name.clone(), data.clone()).map_or(
                     Ok(()),
                     |_| {
@@ -53,16 +49,18 @@ impl Ctx {
                         })
                     },
                 )?;
-                self.tmap.insert(name.clone(), Kind::VType);
-                for (ctor, _) in ctors {
-                    self.ctors
-                        .entry(ctor.clone())
-                        .or_default()
-                        .push(name.clone());
-                }
+                self.tmap.insert(
+                    name.clone(),
+                    Arity(
+                        params.into_iter().map(|(_, k)| *k).collect(),
+                        Kind::VType,
+                    ),
+                );
                 Ok(())
             }
-            Declare::Codata(codata @ Codata { name, dtors, ann, .. }) => {
+            Declare::Codata(
+                codata @ Codata { name, params, ann, .. },
+            ) => {
                 self.coda.insert(name.clone(), codata.clone()).map_or(
                     Ok(()),
                     |_| {
@@ -72,13 +70,13 @@ impl Ctx {
                         })
                     },
                 )?;
-                self.tmap.insert(name.clone(), Kind::CType);
-                for (dtor, ..) in dtors {
-                    self.dtors
-                        .entry(dtor.clone())
-                        .or_default()
-                        .push(name.clone());
-                }
+                self.tmap.insert(
+                    name.clone(),
+                    Arity(
+                        params.into_iter().map(|(_, k)| *k).collect(),
+                        Kind::CType,
+                    ),
+                );
                 Ok(())
             }
             Declare::Define { name, ty: Some(ty), def: None, .. } => {

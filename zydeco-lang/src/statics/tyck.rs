@@ -1,25 +1,21 @@
 use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
-use crate::{
-    parse::syntax::*,
-    syntax::binders::*,
-    utils::ann::AnnInfo,
-};
+use crate::{parse::syntax::*, syntax::binders::*, utils::ann::AnnInfo};
 use std::collections::HashMap;
 use TypeCheckError::*;
 
 pub trait TypeCheck {
-    type Type: Eqv;
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError>;
-    fn ana(&self, typ: &Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
+    type Out: Eqv;
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, TypeCheckError>;
+    fn ana(&self, typ: &Self::Out, ctx: &Ctx) -> Result<(), TypeCheckError> {
         let typ_syn = self.syn(ctx)?;
         typ.eqv(&typ_syn).ok_or_else(|| ErrStr(format!("Subsumption failed")))
     }
 }
 
 impl TypeCheck for Program {
-    type Type = ();
+    type Out = ();
 
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, TypeCheckError> {
         let mut ctx = ctx.clone();
         for decl in &self.decls {
             ctx.decl(decl).map_err(NameResolve)?;
@@ -39,6 +35,7 @@ fn expect_valtype(context: &str, k: Kind) -> Result<(), TypeCheckError> {
         Err(TypeCheckError::KindMismatch {
             context: context.to_owned(),
             expected: Kind::VType,
+            found: k,
         })
     } else {
         Ok(())
@@ -49,6 +46,7 @@ fn expect_comptype(context: &str, k: Kind) -> Result<(), TypeCheckError> {
         Err(TypeCheckError::KindMismatch {
             context: context.to_owned(),
             expected: Kind::CType,
+            found: k,
         })
     } else {
         Ok(())
@@ -56,9 +54,9 @@ fn expect_comptype(context: &str, k: Kind) -> Result<(), TypeCheckError> {
 }
 
 impl TypeCheck for Compute {
-    type Type = Type;
+    type Out = Type;
 
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, TypeCheckError> {
         match self {
             Compute::Let { binding: (x, _, def), body, .. } => {
                 let mut ctx = ctx.clone();
@@ -209,61 +207,6 @@ impl TypeCheck for Compute {
                     })
                 }
             }
-            Compute::CoMatch { cases, .. } => {
-                let dtor = &cases
-                    .get(0)
-                    .ok_or_else(|| {
-                        ErrStr(format!("empty CoMatch not yet supported"))
-                    })?
-                    .0;
-                let tvars = ctx
-                    .dtors
-                    .get(dtor)
-                    .ok_or_else(|| ErrStr(format!("unknown dtor: {}", dtor)))?;
-                if tvars.len() > 1 {
-                    return Err(ErrStr(format!(
-                        "ambiguous CoMatch on destructor {}",
-                        dtor
-                    )));
-                }
-                let tvar = tvars
-                    .get(0)
-                    .ok_or_else(|| ErrStr(format!("unknown dtor: {}", dtor)))?;
-                let coda = ctx.coda.get(&tvar).ok_or_else(|| {
-                    ErrStr(format!("unknown codata: {}", tvar))
-                })?;
-                let mut dtors: HashMap<DtorV, (Vec<Type>, Type)> =
-                    HashMap::from_iter(coda.dtors.iter().map(
-                        |(dtor, ty_args, tret)| {
-                            (dtor.clone(), (ty_args.clone(), tret.clone()))
-                        },
-                    ));
-                for (dtor, vars, comp) in cases {
-                    let (ty_args, tret) =
-                        dtors.remove(dtor).ok_or_else(|| {
-                            ErrStr(format!("unknown dtor: {}", dtor))
-                        })?;
-                    if vars.len() != ty_args.len() {
-                        return Err(ArityMismatch {
-                            context: format!("`comatch` arm for {}", dtor),
-                            expected: vars.len(),
-                            found: ty_args.len(),
-                        });
-                    }
-                    let mut ctx = ctx.clone();
-                    ctx.extend(
-                        vars.iter().cloned().zip(ty_args.iter().cloned()),
-                    );
-                    comp.ana(&tret, &ctx)?;
-                }
-                if !dtors.is_empty() {
-                    return Err(ErrStr(format!(
-                        "{} uncovered dtors",
-                        dtors.len()
-                    )));
-                }
-                Ok(coda.into())
-            }
             Compute::CoApp { body, dtor, args, .. } => {
                 let tscrut = body.syn(ctx)?;
                 if let TCtor::Var(tvar) = tscrut.ctor {
@@ -298,10 +241,13 @@ impl TypeCheck for Compute {
                     })
                 }
             }
+            Compute::CoMatch { .. } => {
+                Err(NeedAnnotation { content: format!("comatch") })
+            }
         }
     }
 
-    fn ana(&self, typ: &Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
+    fn ana(&self, typ: &Self::Out, ctx: &Ctx) -> Result<(), TypeCheckError> {
         match self {
             Compute::Let { binding: (x, _, def), body, .. } => {
                 let mut ctx = ctx.clone();
@@ -527,8 +473,8 @@ impl TypeCheck for Compute {
 }
 
 impl TypeCheck for Value {
-    type Type = Type;
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
+    type Out = Type;
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, TypeCheckError> {
         match self {
             Value::Var(x, ann) => ctx
                 .lookup(x)
@@ -538,44 +484,7 @@ impl TypeCheck for Value {
                 let t = e.syn(&ctx)?;
                 Ok(Type { ctor: TCtor::Thunk, args: vec![t], ann: ann.clone() })
             }
-            Value::Ctor(ctor, args, ..) => {
-                let tvars = ctx
-                    .ctors
-                    .get(ctor)
-                    .ok_or_else(|| ErrStr(format!("unknown ctor: {}", ctor)))?;
-                if tvars.len() > 1 {
-                    return Err(ErrStr(format!(
-                        "ambiguous constructor {}",
-                        ctor
-                    )));
-                }
-                let data = ctx
-                    .data
-                    .get(tvars.get(0).ok_or_else(|| {
-                        ErrStr(format!("unknown ctor: {}", tvars[0]))
-                    })?)
-                    .ok_or_else(|| {
-                        ErrStr(format!("unknown ctor: {}", tvars[0]))
-                    })?;
-                let targs = data
-                    .ctors
-                    .iter()
-                    .find(|(ctor_, _)| ctor == ctor_)
-                    .ok_or_else(|| ErrStr(format!("unknown ctor: {}", ctor)))?
-                    .clone()
-                    .1;
-                if args.len() != targs.len() {
-                    return Err(ArityMismatch {
-                        context: format!("application of constructor {}", ctor),
-                        expected: targs.len(),
-                        found: args.len(),
-                    });
-                }
-                for (arg, targ) in args.iter().zip(targs.iter()) {
-                    arg.ana(&targ, ctx)?;
-                }
-                Ok(data.into())
-            }
+            Value::Ctor(..) => Err(NeedAnnotation { content: format!("ctor") }),
             Value::Int(_, ann) => {
                 Ok(Type::internal("Int", vec![], ann.clone()))
             }
@@ -588,7 +497,7 @@ impl TypeCheck for Value {
         }
     }
 
-    fn ana(&self, typ: &Self::Type, ctx: &Ctx) -> Result<(), TypeCheckError> {
+    fn ana(&self, typ: &Self::Out, ctx: &Ctx) -> Result<(), TypeCheckError> {
         match self {
             Value::Thunk(e, ..) => {
                 if let TCtor::Thunk = typ.ctor {
@@ -664,9 +573,9 @@ impl Type {
 }
 
 impl TypeCheck for Type {
-    type Type = Kind;
+    type Out = Kind;
 
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Type, TypeCheckError> {
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, TypeCheckError> {
         match &self.ctor {
             TCtor::Var(x) => ctx.tmap.get(&x).map_or(
                 Err(TypeCheckError::NameResolve(
@@ -675,7 +584,25 @@ impl TypeCheck for Type {
                         ann: self.ann.clone(),
                     },
                 )),
-                |kind| Ok(*kind),
+                |Arity(params, out)| {
+                    if self.args.len() != params.len() {
+                        Err(ArityMismatch {
+                            context: format!("{}", self),
+                            expected: params.len(),
+                            found: self.args.len(),
+                        })
+                    } else {
+                        for (arg, param) in self.args.iter().zip(params) {
+                            let karg = arg.syn(ctx)?;
+                            param.eqv(&karg).ok_or_else(|| KindMismatch {
+                                context: format!("synthesizing kind of {}", x),
+                                expected: param.clone(),
+                                found: karg,
+                            })?
+                        }
+                        Ok(out.clone())
+                    }
+                },
             ),
             TCtor::OS => {
                 if self.args.len() != 0 {

@@ -14,8 +14,8 @@ data ParenCounterState where
 end
 
 codata ParenCounterStk where
-  .none() : Ret(Bool)
-  .some() : ParenCounterStk
+  | .none() : Ret(Bool)
+  | .some() : ParenCounterStk
 end
 
 let rec foldr : Thunk(Ret(LazyTokList)) -> Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk) -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk =

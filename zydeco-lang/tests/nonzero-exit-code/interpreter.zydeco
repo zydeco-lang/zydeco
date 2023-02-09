@@ -44,8 +44,8 @@ end
 # this codata type. There are two eliminators: application to a
 # variable and a bind.
 codata SemComp where
-  .app(SemVal) : SemComp
-  .bind()      : Ret(OptionSemVal)
+  | .app(SemVal) : SemComp
+  | .bind()      : Ret(OptionSemVal)
 end
 
 # The interpreters for values and computations are implemented
@@ -53,8 +53,8 @@ end
 # Currently zydeco doesn't directly support mutual recursion but
 # it can be easily simulated:
 codata Interpreter where
-  .valu(SynVal, Env)  : Ret(OptionSemVal)
-  .comp(SynComp, Env) : SemComp
+  | .valu(SynVal, Env)  : Ret(OptionSemVal)
+  | .comp(SynComp, Env) : SemComp
 end
 
 let sem_val_to_str = {

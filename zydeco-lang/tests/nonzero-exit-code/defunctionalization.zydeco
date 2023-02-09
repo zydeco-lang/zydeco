@@ -10,13 +10,13 @@ end
 
 # Out of order for now :)
 codata Summer where
-  .done()    : Ret(Int) # The equivalent of CALLERS_KONT
-  .addN(Int) : Summer
+  | .done()    : Ret(Int) # The equivalent of CALLERS_KONT
+  | .addN(Int) : Summer
 end
 
 # out of order again :)
 codata Summer' where
-  .add(Int) : Ret(Int)
+  | .add(Int) : Ret(Int)
 end
 
 let rec sumBad : NumList -> Ret(Int) =

@@ -26,18 +26,18 @@ pub Expression: ValOrComp = {
 //* ------------------------------ Declarations ------------------------------ */
 
 Decl: Declare = {
-    <ext:"extern"?> "data" <name:TypeV> <args:TypeV*> "where" <ctors:CtorBranch*> "end" => {
+    <ext:"extern"?> "data" <name:TypeV> <params:TParam*> "where" <ctors:CtorBranch*> "end" => {
         Declare::Data(Data {
             name,
-            args,
+            params,
             ctors,
             ann: ann(),
         })
     },
-    <ext:"extern"?> "codata" <name:TypeV> <args:TypeV*> "where" <dtors:DtorBranch*> "end"=> {
+    <ext:"extern"?> "codata" <name:TypeV> <params:TParam*> "where" <dtors:DtorBranch*> "end"=> {
         Declare::Codata(Codata {
             name,
-            args,
+            params,
             dtors,
             ann: ann(),
         })
@@ -52,6 +52,10 @@ Decl: Declare = {
             ann: ann(),
         }
     },
+}
+
+TParam: (TypeV, Kind) = {
+    <name:TypeV> ":" <kind:Kind> => (name, kind),
 }
 
 CtorBranch: (CtorV, Vec<Type>) = {
@@ -242,10 +246,14 @@ TVal: Type = Type;
 //     "(" <TVal> ")" => <>,
 // }
 
+//* ---------------------------------- Kinds --------------------------------- */
 
+Kind: Kind = {
+    "VType" => Kind::VType,
+    "CType" => Kind::CType,
+}
 
-
-//* ------------------------------- Terminals ------------------------------ */
+//* -------------------------------- Terminals ------------------------------- */
 
 CtorV: CtorV = <UpperId> => CtorV::new(<>, ann());
 DtorV: DtorV = <LowerId> => DtorV::new(<>, ann());
@@ -290,6 +298,9 @@ extern {
         "NumLit" => Tok::NumLit(<&'input str>),
         "StrLit" => Tok::StrLit(<&'input str>),
         "CharLit" => Tok::CharLit(<&'input str>),
+
+        "VType" => Tok::VType,
+        "CType" => Tok::CType,
 
         "F" => Tok::RetType,
         "U" => Tok::CompType,

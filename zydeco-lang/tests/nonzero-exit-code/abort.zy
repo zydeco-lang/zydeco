@@ -1,6 +1,6 @@
 codata Fn where
-  .app(Int): Fn
-  .return(): F(Int)
+  | .app(Int): Fn
+  | .return(): F(Int)
 end
 
 do x <- ( rec (abort: U(Int -> Fn)) ->

@@ -31,58 +31,22 @@ pub enum Declare {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Data {
     pub name: TypeV,
-    pub args: Vec<TypeV>,
+    pub params: Vec<(TypeV, Kind)>,
     pub ctors: Vec<DataBranch>,
     pub ann: AnnInfo,
 }
 
 pub type DataBranch = (CtorV, Vec<Type>);
 
-impl Into<Type> for &Data {
-    fn into(self) -> Type {
-        Type {
-            ctor: TCtor::Var(self.name.clone()),
-            args: self
-                .args
-                .iter()
-                .map(|name| Type {
-                    ctor: TCtor::Var(name.clone()),
-                    args: Vec::new(),
-                    ann: self.ann.clone(),
-                })
-                .collect(),
-            ann: self.ann.clone(),
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Codata {
     pub name: TypeV,
-    pub args: Vec<TypeV>,
+    pub params: Vec<(TypeV, Kind)>,
     pub dtors: Vec<CodataBranch>,
     pub ann: AnnInfo,
 }
 
 pub type CodataBranch = (DtorV, Vec<Type>, Type);
-
-impl Into<Type> for &Codata {
-    fn into(self) -> Type {
-        Type {
-            ctor: TCtor::Var(self.name.clone()),
-            args: self
-                .args
-                .iter()
-                .map(|name| Type {
-                    ctor: TCtor::Var(name.clone()),
-                    args: Vec::new(),
-                    ann: self.ann.clone(),
-                })
-                .collect(),
-            ann: self.ann.clone(),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {

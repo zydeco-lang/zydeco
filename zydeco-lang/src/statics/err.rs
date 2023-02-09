@@ -8,11 +8,11 @@ use crate::{
 #[derive(Clone, Debug)]
 pub enum TypeCheckError {
     UnboundVar { var: TermV, ann: AnnInfo },
-    KindMismatch { context: String, expected: Kind },
+    KindMismatch { context: String, expected: Kind, found: Kind },
     TypeMismatchCtx { context: String, expected: Type, found: Type },
     TypeMismatch { expected: Type, found: Type },
-    TypeExpected { expected: String, found: Type },
     TypeExpectedCtx { context: String, expected: String, found: Type },
+    TypeExpected { expected: String, found: Type },
     ArityMismatch { context: String, expected: usize, found: usize },
     NeedAnnotation { content: String },
     InconsistentBranches(Vec<Type>),
@@ -29,15 +29,12 @@ impl fmt::Display for TypeCheckError {
             UnboundVar { var, ann } => {
                 write!(f, "Unbound variable {} (Info: {:?})", var, ann)
             }
-            KindMismatch { context, expected } => write!(
+            KindMismatch { context, expected, found } => write!(
                 f,
                 "Kind mismatch, In {}, expected {}, but got {}",
                 context,
                 expected,
-                match expected {
-                    Kind::CType => Kind::VType,
-                    Kind::VType => Kind::CType,
-                }
+                found
             ),
             TypeMismatch { expected, found } => write!(
                 f,

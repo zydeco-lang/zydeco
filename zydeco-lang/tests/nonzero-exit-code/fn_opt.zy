@@ -1,10 +1,10 @@
 codata FnInt where
-  .int(Int): F(Int)
+  | .int(Int): F(Int)
 end
 
 codata FnOptInt where
-  .one(Int): F(Int)
-  .zero(): F(Int)
+  | .one(Int): F(Int)
+  | .zero(): F(Int)
 end
 
 let fn_int = {

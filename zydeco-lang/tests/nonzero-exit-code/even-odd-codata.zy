@@ -1,7 +1,7 @@
 data Nat where | Z() | S(Nat) end
 codata OddEven where
-  .even() : Nat -> Ret(Bool)
-  .odd()  : Nat -> Ret(Bool)
+  | .even() : Nat -> Ret(Bool)
+  | .odd()  : Nat -> Ret(Bool)
 end
 
 let rec eo : OddEven = (

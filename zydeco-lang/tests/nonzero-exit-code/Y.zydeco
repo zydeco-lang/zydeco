@@ -1,5 +1,5 @@
 codata Y where
-  .y(U(Y)): Int -> F(Int)
+  | .y(U(Y)): Int -> F(Int)
 end
 # \f. (\x. f (x x)) (\x. f (x x))
 # The famous Y combinator in call-by-name sense actually works
