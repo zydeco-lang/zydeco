@@ -53,6 +53,101 @@ fn expect_comptype(context: &str, k: Kind) -> Result<(), TypeCheckError> {
     }
 }
 
+
+impl TypeCheck for Value {
+    type Out = Type;
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, TypeCheckError> {
+        match self {
+            Value::TermAnn(body, typ, ..) => {
+                body.ana(typ, ctx)?;
+                Ok(typ.clone())
+            }
+            Value::Var(x, ann) => ctx
+                .lookup(x)
+                .cloned()
+                .ok_or(UnboundVar { var: x.clone(), ann: ann.clone() }),
+            Value::Thunk(e, ann) => {
+                let t = e.syn(&ctx)?;
+                Ok(Type { ctor: TCtor::Thunk, args: vec![t], ann: ann.clone() })
+            }
+            Value::Ctor(..) => Err(NeedAnnotation { content: format!("ctor") }),
+            Value::Int(_, ann) => {
+                Ok(Type::internal("Int", vec![], ann.clone()))
+            }
+            Value::String(_, ann) => {
+                Ok(Type::internal("String", vec![], ann.clone()))
+            }
+            Value::Char(_, ann) => {
+                Ok(Type::internal("Char", vec![], ann.clone()))
+            }
+        }
+    }
+
+    fn ana(&self, typ: &Self::Out, ctx: &Ctx) -> Result<(), TypeCheckError> {
+        match self {
+            Value::Thunk(e, ..) => {
+                if let TCtor::Thunk = typ.ctor {
+                    if typ.args.len() != 1 {
+                        return Err(ArityMismatch {
+                            context: format!("thunk"),
+                            expected: 1,
+                            found: typ.args.len(),
+                        });
+                    }
+                    e.ana(&typ.args[0], ctx)
+                } else {
+                    Err(TypeExpected {
+                        expected: format!("thunk"),
+                        found: typ.to_owned(),
+                    })
+                }
+            }
+            Value::Ctor(ctor, args, ..) => {
+                if let TCtor::Var(tvar) = &typ.ctor {
+                    let data = ctx.data.get(tvar).ok_or_else(|| {
+                        ErrStr(format!("unknown ctor: {}", tvar))
+                    })?;
+                    let targs = data
+                        .ctors
+                        .iter()
+                        .find(|(ctor_, _)| ctor == ctor_)
+                        .ok_or_else(|| {
+                            ErrStr(format!("unknown ctor: {}", ctor))
+                        })?
+                        .1
+                        .clone();
+                    if args.len() != targs.len() {
+                        return Err(ArityMismatch {
+                            context: format!(
+                                "application of constructor {}",
+                                ctor
+                            ),
+                            expected: targs.len(),
+                            found: args.len(),
+                        });
+                    }
+                    for (arg, targ) in args.iter().zip(targs.iter()) {
+                        arg.ana(&targ, ctx)?;
+                    }
+                    Ok(())
+                } else {
+                    Err(TypeExpected {
+                        expected: format!("constructor {}", ctor),
+                        found: typ.to_owned(),
+                    })
+                }
+            }
+            _ => {
+                let t = self.syn(ctx)?;
+                typ.eqv(&t).ok_or_else(|| TypeMismatch {
+                    expected: typ.clone(),
+                    found: t,
+                })
+            }
+        }
+    }
+}
+
 impl TypeCheck for Compute {
     type Out = Type;
 
@@ -476,100 +571,6 @@ impl TypeCheck for Compute {
                 let t = self.syn(ctx)?;
                 t.eqv(typ).ok_or_else(|| TypeMismatch {
                     expected: typ.to_owned(),
-                    found: t,
-                })
-            }
-        }
-    }
-}
-
-impl TypeCheck for Value {
-    type Out = Type;
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, TypeCheckError> {
-        match self {
-            Value::TermAnn(body, typ, ..) => {
-                body.ana(typ, ctx)?;
-                Ok(typ.clone())
-            }
-            Value::Var(x, ann) => ctx
-                .lookup(x)
-                .cloned()
-                .ok_or(UnboundVar { var: x.clone(), ann: ann.clone() }),
-            Value::Thunk(e, ann) => {
-                let t = e.syn(&ctx)?;
-                Ok(Type { ctor: TCtor::Thunk, args: vec![t], ann: ann.clone() })
-            }
-            Value::Ctor(..) => Err(NeedAnnotation { content: format!("ctor") }),
-            Value::Int(_, ann) => {
-                Ok(Type::internal("Int", vec![], ann.clone()))
-            }
-            Value::String(_, ann) => {
-                Ok(Type::internal("String", vec![], ann.clone()))
-            }
-            Value::Char(_, ann) => {
-                Ok(Type::internal("Char", vec![], ann.clone()))
-            }
-        }
-    }
-
-    fn ana(&self, typ: &Self::Out, ctx: &Ctx) -> Result<(), TypeCheckError> {
-        match self {
-            Value::Thunk(e, ..) => {
-                if let TCtor::Thunk = typ.ctor {
-                    if typ.args.len() != 1 {
-                        return Err(ArityMismatch {
-                            context: format!("thunk"),
-                            expected: 1,
-                            found: typ.args.len(),
-                        });
-                    }
-                    e.ana(&typ.args[0], ctx)
-                } else {
-                    Err(TypeExpected {
-                        expected: format!("thunk"),
-                        found: typ.to_owned(),
-                    })
-                }
-            }
-            Value::Ctor(ctor, args, ..) => {
-                if let TCtor::Var(tvar) = &typ.ctor {
-                    let data = ctx.data.get(tvar).ok_or_else(|| {
-                        ErrStr(format!("unknown ctor: {}", tvar))
-                    })?;
-                    let targs = data
-                        .ctors
-                        .iter()
-                        .find(|(ctor_, _)| ctor == ctor_)
-                        .ok_or_else(|| {
-                            ErrStr(format!("unknown ctor: {}", ctor))
-                        })?
-                        .1
-                        .clone();
-                    if args.len() != targs.len() {
-                        return Err(ArityMismatch {
-                            context: format!(
-                                "application of constructor {}",
-                                ctor
-                            ),
-                            expected: targs.len(),
-                            found: args.len(),
-                        });
-                    }
-                    for (arg, targ) in args.iter().zip(targs.iter()) {
-                        arg.ana(&targ, ctx)?;
-                    }
-                    Ok(())
-                } else {
-                    Err(TypeExpected {
-                        expected: format!("constructor {}", ctor),
-                        found: typ.to_owned(),
-                    })
-                }
-            }
-            _ => {
-                let t = self.syn(ctx)?;
-                typ.eqv(&t).ok_or_else(|| TypeMismatch {
-                    expected: typ.clone(),
                     found: t,
                 })
             }
