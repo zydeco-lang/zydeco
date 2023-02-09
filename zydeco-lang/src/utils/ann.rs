@@ -1,4 +1,7 @@
-use std::{fmt::Debug, hash::Hash};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnInfo {
@@ -7,13 +10,17 @@ pub struct AnnInfo {
 }
 
 impl AnnInfo {
-    pub fn make<T>(self, inner: T) -> Ann<T> {
-        Ann { inner, info: self }
+    pub fn make<T>(&self, inner: T) -> Ann<T> {
+        Ann { inner, info: self.clone() }
     }
 }
 
 pub fn ann(l: usize, r: usize) -> AnnInfo {
     AnnInfo { l, r }
+}
+
+pub trait AnnHolder {
+    fn ann(&self) -> &AnnInfo;
 }
 
 #[derive(Clone, Debug)]
@@ -45,5 +52,11 @@ impl<T: Eq> Eq for Ann<T> {}
 impl<T: Hash> Hash for Ann<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.inner.hash(state);
+    }
+}
+
+impl<T: Display> Display for Ann<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} (Info: {:?})", self.inner, self.info)
     }
 }

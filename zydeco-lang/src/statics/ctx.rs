@@ -1,5 +1,5 @@
 use super::{err::TypeCheckError, resolve::*, tyck::TypeCheck};
-use crate::{parse::syntax::*, syntax::binders::*};
+use crate::{parse::syntax::*, syntax::binders::*, utils::ann::Ann};
 use indexmap::IndexMap;
 use std::{collections::HashMap, hash::Hash};
 
@@ -96,7 +96,7 @@ impl Ctx {
             }
         }
     }
-    pub fn type_validation(&self) -> Result<(), TypeCheckError> {
+    pub fn type_validation(&self) -> Result<(), Ann<TypeCheckError>> {
         for (_, data) in &self.data {
             for (_, args) in &data.ctors {
                 for arg in args {
@@ -114,7 +114,7 @@ impl Ctx {
         }
         Ok(())
     }
-    pub fn tyck_definitions(&mut self) -> Result<(), TypeCheckError> {
+    pub fn tyck_definitions(&mut self) -> Result<(), Ann<TypeCheckError>> {
         for (name, (ty, def)) in &self.defs {
             let ty = match ty {
                 Some(ty) => {

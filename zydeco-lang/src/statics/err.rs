@@ -1,9 +1,9 @@
 use super::resolve::*;
-use crate::{parse::syntax::*, syntax::binders::*, utils::ann::AnnInfo};
+use crate::{parse::syntax::*, syntax::binders::*};
 
 #[derive(Clone, Debug)]
 pub enum TypeCheckError {
-    UnboundVar { var: TermV, ann: AnnInfo },
+    UnboundVar { var: TermV },
     KindMismatch { context: String, expected: Kind, found: Kind },
     TypeMismatchCtx { context: String, expected: Type, found: Type },
     TypeMismatch { expected: Type, found: Type },
@@ -22,8 +22,8 @@ use std::fmt;
 impl fmt::Display for TypeCheckError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            UnboundVar { var, ann } => {
-                write!(f, "Unbound variable {} (Info: {:?})", var, ann)
+            UnboundVar { var, .. } => {
+                write!(f, "Unbound variable {}", var)
             }
             KindMismatch { context, expected, found } => write!(
                 f,
