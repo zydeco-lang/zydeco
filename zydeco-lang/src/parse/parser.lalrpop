@@ -9,10 +9,10 @@ grammar<'input>(input: &'input str);
 
 //* -------------------------------- TopLevel -------------------------------- */
 
-pub Zydeco: Program = <decls:Decl*> <comp:Boxed<Comp>> => Program {
+pub Zydeco: Program = <l:@L> <decls:Decl*> <comp:Boxed<Comp>> <r:@R> => Program {
     decls,
     comp,
-    ann: ann(),
+    ann: ann(l,r),
 };
 
 pub Declarations: Vec<Declare> = <Decl*>;
@@ -26,30 +26,30 @@ pub Expression: ValOrComp = {
 //* ------------------------------ Declarations ------------------------------ */
 
 Decl: Declare = {
-    <ext:"extern"?> "data" <name:TypeV> <params:TParam*> "where" <ctors:CtorBranch*> "end" => {
+    <l:@L> <ext:"extern"?> "data" <name:TypeV> <params:TParam*> "where" <ctors:CtorBranch*> "end" <r:@R> => {
         Declare::Data(Data {
             name,
             params,
             ctors,
-            ann: ann(),
+            ann: ann(l,r),
         })
     },
-    <ext:"extern"?> "codata" <name:TypeV> <params:TParam*> "where" <dtors:DtorBranch*> "end"=> {
+    <l:@L> <ext:"extern"?> "codata" <name:TypeV> <params:TParam*> "where" <dtors:DtorBranch*> "end" <r:@R> => {
         Declare::Codata(Codata {
             name,
             params,
             dtors,
-            ann: ann(),
+            ann: ann(l,r),
         })
     },
-    <p:"pub"?> <ext:"extern"?> "define" <binding:BindDefVal<"=">> ";" => {
+    <l:@L> <p:"pub"?> <ext:"extern"?> "define" <binding:BindDefVal<"=">> ";" <r:@R> => {
         let (name, ty, def) = binding;
         Declare::Define {
             public: p.is_some(),
             name,
             ty,
             def,
-            ann: ann(),
+            ann: ann(l,r),
         }
     },
 }
@@ -75,13 +75,13 @@ DtorBranch: (DtorV, Vec<Type>, Type) = {
 
 Val: Value = {
     "(" <Val> ")" => <>,
-    "(" <v:Val> "::" <t:TVal> ")" => Value::TermAnn(Box::new(v), t, ann()),
-    <x:TermV> => Value::Var(x, ann()),
-    "{" <e:Boxed<Comp>> "}" => Value::Thunk(e, ann()),
-    <ctor:CtorV> "(" <vs:SepByEnd<",", ")", <Val>>> => Value::Ctor(ctor, vs, ann()),
-    <n:Int> => Value::Int(n, ann()),
-    <s:Str> => Value::String(s, ann()),
-    <c:Char> => Value::Char(c, ann()),
+    <l:@L> "(" <v:Val> "::" <t:TVal> ")"<r:@R>  => Value::TermAnn(Box::new(v), t, ann(l,r)),
+    <l:@L> <x:TermV> <r:@R> => Value::Var(x, ann(l,r)),
+    <l:@L> "{" <e:Boxed<Comp>> "}" <r:@R> => Value::Thunk(e, ann(l,r)),
+    <l:@L> <ctor:CtorV> "(" <vs:SepByEnd<",", ")", <Val>>> <r:@R> => Value::Ctor(ctor, vs, ann(l,r)),
+    <l:@L> <n:Int> <r:@R> => Value::Int(n, ann(l,r)),
+    <l:@L> <s:Str> <r:@R> => Value::String(s, ann(l,r)),
+    <l:@L> <c:Char> <r:@R> => Value::Char(c, ann(l,r)),
 }
 
 
@@ -89,56 +89,56 @@ Val: Value = {
 
 Comp: Compute = {
     CompHead,
-    "let" <bindings:SepByEnd<",",  ";" , BindVal<"=">>><body:Boxed<Comp>> => {
+    <l:@L> "let" <bindings:SepByEnd<",",  ";" , BindVal<"=">>><body:Boxed<Comp>> <r:@R> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Let {
-            binding, body, ann: ann()
+            binding, body, ann: ann(l,r)
         }))
     },
-    "let" "rec" <binding:BindComp<"=">> ";" <e:Boxed<Comp>> => {
+    <l:@L> "let" "rec" <binding:BindComp<"=">> ";" <e:Boxed<Comp>> <r:@R> => {
         let (x, tcomp, body) = binding;
-        let tval = tcomp.and_then(|tcomp| Some(Box::new(Type { ctor: TCtor::Thunk, args: vec![*tcomp], ann: ann() })));
+        let tval = tcomp.and_then(|tcomp| Some(Box::new(Type { ctor: TCtor::Thunk, args: vec![*tcomp], ann: ann(l,r) })));
         Compute::Let {
             binding: (x.clone(), tval.clone(), Box::new(Value::Thunk(Box::new(Compute::Rec {
-                arg: (x, tval), body, ann: ann()
-            }), ann()))),
+                arg: (x, tval), body, ann: ann(l,r)
+            }), ann(l,r)))),
             body: e,
-            ann: ann(),
+            ann: ann(l,r),
         }
     },
-    "do" <bindings:SepByEnd<",",  ";", BindComp<"<-">>> <body:Boxed<Comp>> => {
+    <l:@L> "do" <bindings:SepByEnd<",",  ";", BindComp<"<-">>> <body:Boxed<Comp>> <r:@R> => {
         *bindings.into_iter().rev().fold(body, |body, binding| Box::new(Compute::Do {
-            binding, body, ann: ann()
+            binding, body, ann: ann(l,r)
         }))
     },
-    "fn" "(" <args:SepByEnd<",", ")", FnArg>> "->" <e:Boxed<Comp>> =>
+    <l:@L> "fn" "(" <args:SepByEnd<",", ")", FnArg>> "->" <e:Boxed<Comp>> <r:@R> =>
         *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Lam{
-            arg, body, ann: ann()
+            arg, body, ann: ann(l,r)
         })),
-    "rec" "(" <args:SepByEnd<",", ")", FnArg>> "->" <e:Boxed<Comp>> =>
+    <l:@L> "rec" "(" <args:SepByEnd<",", ")", FnArg>> "->" <e:Boxed<Comp>> <r:@R> =>
         *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Rec{
-            arg, body, ann: ann()
+            arg, body, ann: ann(l,r)
         })),
-    "match" <scrut:Boxed<Val>> <cases:MatchBranches> => Compute::Match {
-        scrut, cases, ann: ann()
+    <l:@L> "match" <scrut:Boxed<Val>> <cases:MatchBranches> <r:@R> => Compute::Match {
+        scrut, cases, ann: ann(l,r)
     },
-    "comatch" <cases:CoMatchBranches> => Compute::CoMatch {
-        cases, ann: ann()
+    <l:@L> "comatch" <cases:CoMatchBranches> <r:@R> => Compute::CoMatch {
+        cases, ann: ann(l,r)
     },
 }
 
 CompHead: Compute = {
     CompAtom,
-    <e:Boxed<CompHead>> <v:Boxed<Val>> => Compute::App(e, v, ann()),
-    <body:Boxed<CompHead>> "." <dtor:DtorV> "(" <args:SepByEnd<",", ")", Val>> => Compute::CoApp {
-        body, dtor, args, ann: ann()
+    <l:@L> <e:Boxed<CompHead>> <v:Boxed<Val>> <r:@R> => Compute::App(e, v, ann(l,r)),
+    <l:@L> <body:Boxed<CompHead>> "." <dtor:DtorV> "(" <args:SepByEnd<",", ")", Val>> <r:@R> => Compute::CoApp {
+        body, dtor, args, ann: ann(l,r)
     },
 }
 
 CompAtom: Compute = {
     "(" <Comp> ")" => <>,
-    "(" <c:Comp> "::" <t:TComp> ")" => Compute::TermAnn(Box::new(c), t, ann()),
-    "!" <v:Boxed<Val>> => Compute::Force(v, ann()),
-    "ret" <v:Boxed<Val>> => Compute::Return(v, ann()),
+    <l:@L> "(" <c:Comp> "::" <t:TComp> ")" <r:@R> => Compute::TermAnn(Box::new(c), t, ann(l,r)),
+    <l:@L> "!" <v:Boxed<Val>> <r:@R> => Compute::Force(v, ann(l,r)),
+    <l:@L> "ret" <v:Boxed<Val>> <r:@R> => Compute::Return(v, ann(l,r)),
 }
 
 BindVal<Delim>: (TermV, Option<Box<Type>>, Box<Value>) = {
@@ -211,18 +211,18 @@ Type: Type = {
 }
 
 SynType: SynType = {
-  <tv: Boxed<AppType>> "->" <tc: Boxed<SynType>> => SynType::Arr(tv, tc, ann()),
+  <l:@L> <tv: Boxed<AppType>> "->" <tc: Boxed<SynType>> <r:@R> => SynType::Arr(tv, tc, ann(l,r)),
   AppType
 }
 
 
 AtomType: SynType = {
-  <ctor: TCtor> => SynType::Basic(ctor, ann()),
+  <l:@L> <ctor: TCtor> <r:@R> => SynType::Basic(ctor, ann(l,r)),
   "(" <SynType> ")" => <>,
 }
 
 AppType: SynType = {
-  <f: Boxed<AppType>> <a: Boxed<AtomType>> => SynType::App(f, a, ann()),
+  <l:@L> <f: Boxed<AppType>> <a: Boxed<AtomType>> <r:@R> => SynType::App(f, a, ann(l,r)),
   AtomType,
 }
 
@@ -261,10 +261,10 @@ Kind: Kind = {
 
 //* -------------------------------- Terminals ------------------------------- */
 
-CtorV: CtorV = <UpperId> => CtorV::new(<>, ann());
-DtorV: DtorV = <LowerId> => DtorV::new(<>, ann());
-TypeV: TypeV = <UpperId> => TypeV::new(<>, ann());
-TermV: TermV = <LowerId> => TermV::new(<>, ann());
+CtorV: CtorV = <l:@L> <v:UpperId> <r:@R> => CtorV::new(v, ann(l,r));
+DtorV: DtorV = <l:@L> <v:LowerId> <r:@R> => DtorV::new(v, ann(l,r));
+TypeV: TypeV = <l:@L> <v:UpperId> <r:@R> => TypeV::new(v, ann(l,r));
+TermV: TermV = <l:@L> <v:LowerId> <r:@R> => TermV::new(v, ann(l,r));
 
 UpperId: String = "UpperId" => String::from(<>);
 LowerId: String = "LowerId" => String::from(<>);

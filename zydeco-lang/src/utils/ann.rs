@@ -1,7 +1,10 @@
 use std::{fmt::Debug, hash::Hash};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AnnInfo {}
+pub struct AnnInfo {
+    pub l: usize,
+    pub r: usize,
+}
 
 impl AnnInfo {
     pub fn make<T>(self, inner: T) -> Ann<T> {
@@ -9,8 +12,8 @@ impl AnnInfo {
     }
 }
 
-pub fn ann() -> AnnInfo {
-    AnnInfo {}
+pub fn ann(l: usize, r: usize) -> AnnInfo {
+    AnnInfo { l, r }
 }
 
 #[derive(Clone, Debug)]
@@ -22,6 +25,12 @@ pub struct Ann<T> {
 impl<T> Ann<T> {
     pub fn inner(&self) -> &T {
         &self.inner
+    }
+    pub fn map<U, F>(&self, f: F) -> Ann<U>
+    where
+        F: FnOnce(&T) -> U,
+    {
+        self.info.to_owned().make(f(&self.inner))
     }
 }
 
