@@ -1,3 +1,0 @@
-data ListInt where
-  | Nil()
-  | Cons(Int, ListInt)
