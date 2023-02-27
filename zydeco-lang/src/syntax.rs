@@ -22,7 +22,7 @@ sort!(ComputationT);
 
 /* --------------------------------- Binders -------------------------------- */
 
-pub mod binders {
+pub mod binder {
     use super::VarT;
     use crate::syntax::AnnInfo;
 
@@ -49,6 +49,17 @@ pub mod binders {
                     self.0.hash(state);
                 }
             }
+            impl crate::syntax::ann::AnnHolder for $Var {
+                fn ann(&self) -> &AnnInfo {
+                    &self.1
+                }
+                fn ann_map_mut<F>(&mut self, f: F)
+                where
+                    F: Fn(&mut AnnInfo) + Clone,
+                {
+                    f(&mut self.1);
+                }
+            }
         };
     }
 
@@ -59,7 +70,7 @@ pub mod binders {
     var!(TermV);
     impl VarT for TermV {}
 }
-pub use binders::*;
+pub use binder::*;
 
 /* ---------------------------------- Kind ---------------------------------- */
 

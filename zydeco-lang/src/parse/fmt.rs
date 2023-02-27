@@ -1,6 +1,6 @@
 use super::syntax::*;
 use crate::{
-    syntax::binders::*,
+    syntax::binder::*,
     utils::fmt::{Args, FmtArgs},
 };
 

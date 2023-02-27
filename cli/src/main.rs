@@ -1,6 +1,5 @@
 use clap::Parser;
 use cli::{Cli, Commands};
-use std::io::Read;
 use zydeco_lang::{
     dynamics::env::Env,
     library::{builtins, declarations, linker},
@@ -17,52 +16,42 @@ fn main() -> Result<(), String> {
             run_file(file, true, verbose, vec![])
         }
         Commands::Repl { .. } => cli::repl::launch(),
-        Commands::Test {} => unimplemented!("test"),
     }
 }
 
 fn run_file(
     file: std::path::PathBuf, dry_run: bool, verbose: bool, args: Vec<String>,
 ) -> Result<(), String> {
-    let mut buf = String::new();
-    std::fs::File::open(file.clone())
-        .map_err(|e| e.to_string())?
-        .read_to_string(&mut buf)
-        .map_err(|e| e.to_string())?;
-    let title = format!("{}", file.display());
-    {
-        let input: &str = &buf;
-        let title: &str = &title;
-        // parse
-        announce_phase(verbose, title, "parse");
-        let p = zydeco::parse_prog(input)?;
-        if verbose {
-            println!("{}", p)
-        }
-        // type check
-        announce_phase(verbose, title, "tyck");
-        let mut ctx = Ctx::new();
-        let std_decls = declarations::std_decls().expect("std library failure");
-        declarations::inject_ctx(&mut ctx, &std_decls)
-            .expect("std library failure");
-        zydeco::typecheck_prog(&p, &ctx)?;
-        // elab
-        announce_phase(verbose, title, "elab");
-        let mut env = Env::new();
-        builtins::link_builtin(&mut env);
-        linker::link(&mut env, &std_decls);
-        linker::link(&mut env, &p.decls);
-        let sem_m = zydeco::elab_prog(p);
-        if verbose {
-            println!("{}", sem_m);
-        }
-        // eval
-        if !dry_run {
-            announce_phase(verbose, title, "eval");
-            zydeco::eval_os_sem_computation(sem_m, env, &args)?;
-        }
-        Ok(())
+    let title = &format!("{}", file.display());
+    // parse
+    announce_phase(verbose, title, "parse");
+    let p = zydeco::ZydecoFile { path: file }.parse()?;
+    if verbose {
+        println!("{}", p)
     }
+    // type check
+    announce_phase(verbose, title, "tyck");
+    let mut ctx = Ctx::new();
+    let std_decls = declarations::std_decls().expect("std library failure");
+    declarations::inject_ctx(&mut ctx, &std_decls)
+        .expect("std library failure");
+    zydeco::typecheck_prog(&p, &ctx)?;
+    // elab
+    announce_phase(verbose, title, "elab");
+    let mut env = Env::new();
+    builtins::link_builtin(&mut env);
+    linker::link(&mut env, &std_decls);
+    linker::link(&mut env, &p.decls);
+    let sem_m = zydeco::elab_prog(p);
+    if verbose {
+        println!("{}", sem_m);
+    }
+    // eval
+    if !dry_run {
+        announce_phase(verbose, title, "eval");
+        zydeco::eval_os_sem_computation(sem_m, env, &args)?;
+    }
+    Ok(())
 }
 
 fn announce_phase(verbose: bool, title: &str, phase: &str) {

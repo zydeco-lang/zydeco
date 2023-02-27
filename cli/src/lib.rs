@@ -17,10 +17,13 @@ pub enum Commands {
         /// Path to the file to run
         #[arg(value_name = "FILE")]
         file: PathBuf,
+        /// Dry run (don't execute)
         #[arg(long, default_value_t = false)]
         dry: bool,
+        /// Level of verbosity
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
+        /// Environmental arguments to pass to the program
         #[arg(last = true)]
         args: Vec<String>,
     },
@@ -29,14 +32,14 @@ pub enum Commands {
         /// Path to the file to check
         #[arg(value_name = "FILE")]
         file: PathBuf,
+        /// Level of verbosity
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
     },
     /// Start a REPL
     Repl {
+        /// Level of verbosity
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
     },
-    /// Run tests
-    Test {},
 }

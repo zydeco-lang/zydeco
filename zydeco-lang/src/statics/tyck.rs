@@ -2,7 +2,7 @@ use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
 use crate::{
     parse::syntax::*,
     syntax::ann::{ann, Ann, AnnHolder, AnnInfo},
-    syntax::binders::*,
+    syntax::binder::*,
 };
 use std::collections::HashMap;
 use TypeCheckError::*;

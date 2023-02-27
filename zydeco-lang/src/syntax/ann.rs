@@ -2,16 +2,19 @@ use once_cell::unsync::OnceCell;
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
+    path::PathBuf,
+    rc::Rc,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnnInfo {
     pub span1: (Cursor1, Cursor1),
     pub span2: OnceCell<(Cursor2, Cursor2)>,
+    pub path: OnceCell<Rc<PathBuf>>,
 }
 
 pub fn ann(l: usize, r: usize) -> AnnInfo {
-    AnnInfo { span1: (l, r), span2: OnceCell::new() }
+    AnnInfo { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
 }
 
 #[derive(Clone, Debug)]
@@ -21,8 +24,7 @@ pub struct FileInfo {
 impl FileInfo {
     pub fn new(s: &str) -> Self {
         FileInfo {
-            newlines: s
-                .char_indices()
+            newlines: (s.char_indices())
                 .filter(|(_i, c)| *c == '\n')
                 .map(|(i, _c)| i)
                 .collect(),
@@ -34,17 +36,21 @@ impl AnnInfo {
     pub fn make<T>(&self, inner: T) -> Ann<T> {
         Ann { inner, info: self.clone() }
     }
-    pub fn set_span2(&self, gen: &mut FileInfo) {
+    pub fn set_span2(&self, gen: &FileInfo) {
         let (start, end) = self.span1;
         self.span2
             .set((Self::trans_span2(gen, start), Self::trans_span2(gen, end)))
             .expect("span2 is already set");
     }
-    fn trans_span2(gen: &mut FileInfo, offset: usize) -> Cursor2 {
-        let mut win = gen.newlines.windows(2).enumerate();
-        while let Some((line, &[start, end])) = win.next() {
-            if start <= offset && offset < end {
-                return Cursor2 { line: line + 1, column: offset - start };
+    fn trans_span2(gen: &FileInfo, offset: usize) -> Cursor2 {
+        let mut line = 0;
+        let mut last_br = 0;
+        for &br in &gen.newlines {
+            if offset <= br {
+                return Cursor2 { line, column: offset - last_br };
+            } else {
+                line += 1;
+                last_br = br;
             }
         }
         panic!("AnnInfo: offset {} is not in {:?}", offset, gen);
@@ -61,6 +67,9 @@ pub struct Cursor2 {
 
 pub trait AnnHolder {
     fn ann(&self) -> &AnnInfo;
+    fn ann_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut AnnInfo) + Clone;
 }
 
 #[derive(Clone, Debug)]
@@ -101,8 +110,15 @@ impl<T: Display> Display for Ann<T> {
     }
 }
 
-impl<T> AnnHolder for Ann<T> {
+impl<T: AnnHolder> AnnHolder for Ann<T> {
     fn ann(&self) -> &AnnInfo {
         &self.info
+    }
+    fn ann_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut AnnInfo) + Clone,
+    {
+        f(&mut self.info);
+        self.inner.ann_map_mut(f);
     }
 }

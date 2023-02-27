@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::{
     dynamics::{
         self,
@@ -13,8 +11,10 @@ use crate::{
         Lexer, {ExpressionParser, ZydecoParser},
     },
     statics::{ctx::Ctx, tyck::TypeCheck},
+    syntax::ann::{AnnHolder, FileInfo},
     utils::never::Never,
 };
+use std::{path::PathBuf, rc::Rc};
 
 pub struct ZydecoFile {
     pub path: PathBuf,
@@ -23,9 +23,16 @@ pub struct ZydecoFile {
 impl ZydecoFile {
     pub fn parse(self) -> Result<Program, String> {
         let source = std::fs::read_to_string(&self.path).unwrap();
-        ZydecoParser::new()
+        let mut p = ZydecoParser::new()
             .parse(&source, Lexer::new(&source))
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        let path_rc = Rc::new(self.path);
+        let file_info = FileInfo::new(&source);
+        p.ann_map_mut(|ann| {
+            ann.set_span2(&file_info);
+            ann.path.set(path_rc.clone()).unwrap();
+        });
+        Ok(p)
     }
 }
 
