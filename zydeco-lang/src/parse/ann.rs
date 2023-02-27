@@ -206,7 +206,7 @@ impl AnnHolder for Compute {
                 }
                 body.ann_map_mut(f);
             }
-            Compute::Match { scrut, cases, ann } => {
+            Compute::Match { scrut, arms: cases, ann } => {
                 f(ann);
                 scrut.ann_map_mut(f.clone());
                 for (ctor, vs, c) in cases {
@@ -217,7 +217,7 @@ impl AnnHolder for Compute {
                     c.ann_map_mut(f.clone());
                 }
             }
-            Compute::CoMatch { cases, ann } => {
+            Compute::CoMatch { arms: cases, ann } => {
                 f(ann);
                 for (dtor, vs, c) in cases {
                     dtor.ann_map_mut(f.clone());

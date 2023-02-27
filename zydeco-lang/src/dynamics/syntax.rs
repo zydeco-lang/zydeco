@@ -87,7 +87,7 @@ impl From<Compute> for ZCompute {
             Compute::App(f, arg, _) => {
                 ZCompute::App(Rc::new((*f).into()), Rc::new((*arg).into()))
             }
-            Compute::Match { scrut, cases, .. } => ZCompute::Match {
+            Compute::Match { scrut, arms: cases, .. } => ZCompute::Match {
                 scrut: Rc::new((*scrut).into()),
                 cases: cases
                     .into_iter()
@@ -102,7 +102,7 @@ impl From<Compute> for ZCompute {
                     })
                     .collect(),
             },
-            Compute::CoMatch { cases, .. } => ZCompute::CoMatch {
+            Compute::CoMatch { arms: cases, .. } => ZCompute::CoMatch {
                 cases: cases
                     .into_iter()
                     .map(|(dtor, vars, body)| {

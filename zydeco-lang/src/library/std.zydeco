@@ -11,16 +11,19 @@ data Bool where
   | False()
 end
 
+pub define true : Bool = True();
+pub define false : Bool = False();
+
 pub define not : Thunk(Bool -> Ret(Bool)) = {
   fn (x: Bool) ->
     match x
-    | True() -> ret False()
-    | False() -> ret True()
+    | True() -> ret false
+    | False() -> ret true
     end
 };
 
 # lazy not
-pub define not_ : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
+pub define notM : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
   fn (t: Thunk(Ret(Bool))) ->
     do x <- ! t;
     match x

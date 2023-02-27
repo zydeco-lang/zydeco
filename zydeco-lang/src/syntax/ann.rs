@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct AnnInfo {
     pub span1: (Cursor1, Cursor1),
     pub span2: OnceCell<(Cursor2, Cursor2)>,
@@ -43,7 +43,7 @@ impl AnnInfo {
             .expect("span2 is already set");
     }
     fn trans_span2(gen: &FileInfo, offset: usize) -> Cursor2 {
-        let mut line = 0;
+        let mut line = 1;
         let mut last_br = 0;
         for &br in &gen.newlines {
             if offset <= br {
@@ -54,6 +54,30 @@ impl AnnInfo {
             }
         }
         panic!("AnnInfo: offset {} is not in {:?}", offset, gen);
+    }
+}
+
+impl Debug for AnnInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(path) = self.path.get() {
+            write!(f, "{}", path.display())?;
+            if let Some((
+                Cursor2 { line, column },
+                Cursor2 { line: end_line, column: end_column },
+            )) = self.span2.get()
+            {
+                write!(
+                    f,
+                    ":{}:{} - {}:{}",
+                    line, column, end_line, end_column
+                )?;
+            } else {
+                write!(f, ":{}-{}", self.span1.0, self.span1.1)?;
+            }
+        } else {
+            write!(f, "{}-{}", self.span1.0, self.span1.1)?;
+        }
+        Ok(())
     }
 }
 

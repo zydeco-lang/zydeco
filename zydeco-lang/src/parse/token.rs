@@ -121,7 +121,7 @@ impl<'input> Display for Tok<'input> {
             Tok::CharLit(s) => write!(f, "CharLiteral({})", s),
             Tok::VType => write!(f, "VType"),
             Tok::CType => write!(f, "CType"),
-            Tok::Escape(s) => write!(f, "EscapeSequence({})",s),
+            Tok::Escape(s) => write!(f, "EscapeSequence({})", s),
             Tok::RetType => write!(f, "F"),
             Tok::CompType => write!(f, "U"),
             Tok::OSType => write!(f, "OS"),

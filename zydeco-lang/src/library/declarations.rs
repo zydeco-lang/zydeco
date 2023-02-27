@@ -12,7 +12,7 @@ pub fn std_decls() -> Result<Vec<Declare>, String> {
     let mut ds = DeclarationsParser::new()
         .parse(&std, Lexer::new(&std))
         .map_err(|e| e.to_string())?;
-    let path_rc = Rc::new(PathBuf::from("std.zydeco"));
+    let path_rc = Rc::new(PathBuf::from("zydeco-lang/src/library/std.zydeco"));
     let file_info = FileInfo::new(&std);
     for d in &mut ds {
         d.ann_map_mut(|ann| {

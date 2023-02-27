@@ -273,13 +273,8 @@ mod custom_tests {
 
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();
-        let exit_code = zydeco::eval_virtual_prog(
-            p,
-            env,
-            &mut input,
-            &mut output,
-            &[],
-        )?;
+        let exit_code =
+            zydeco::eval_virtual_prog(p, env, &mut input, &mut output, &[])?;
         if exit_code != 0 {
             Err(format!("Non-zero exit code: {}", exit_code))?
         }

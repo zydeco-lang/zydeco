@@ -118,11 +118,11 @@ Comp: Compute = {
         *args.into_iter().rev().fold(e, |body, arg| Box::new(Compute::Rec{
             arg, body, ann: ann(l,r)
         })),
-    <l:@L> "match" <scrut:Boxed<Val>> <cases:MatchBranches> <r:@R> => Compute::Match {
-        scrut, cases, ann: ann(l,r)
+    <l:@L> "match" <scrut:Boxed<Val>> <arms:MatchBranches> <r:@R> => Compute::Match {
+        scrut, arms, ann: ann(l,r)
     },
-    <l:@L> "comatch" <cases:CoMatchBranches> <r:@R> => Compute::CoMatch {
-        cases, ann: ann(l,r)
+    <l:@L> "comatch" <arms:CoMatchBranches> <r:@R> => Compute::CoMatch {
+        arms, ann: ann(l,r)
     },
 }
 

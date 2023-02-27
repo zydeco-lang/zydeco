@@ -202,7 +202,10 @@ pub struct Matcher<C, TeV: VarT, B: ComputationT> {
     pub vars: Vec<TeV>,
     pub body: B,
 }
-impl<C, TeV: VarT, A: ValueT, B: ComputationT> ComputationT for Match<C, TeV, A, B> {}
+impl<C, TeV: VarT, A: ValueT, B: ComputationT> ComputationT
+    for Match<C, TeV, A, B>
+{
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CoMatch<D, TeV: VarT, B: ComputationT> {

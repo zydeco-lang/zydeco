@@ -83,7 +83,7 @@ impl FmtArgs for Compute {
             Compute::App(e, v, _) => {
                 format!("{} {}", e.fmt_args(fmta), v.fmt_args(fmta),)
             }
-            Compute::Match { scrut, cases, .. } => {
+            Compute::Match { scrut, arms: cases, .. } => {
                 format!("match {} {}", scrut.fmt_args(fmta), {
                     let args = fmta.indent();
                     cases
@@ -104,7 +104,7 @@ impl FmtArgs for Compute {
                         .join("")
                 })
             }
-            Compute::CoMatch { cases, .. } => {
+            Compute::CoMatch { arms: cases, .. } => {
                 format!("comatch {}", {
                     let args = fmta.indent();
                     cases

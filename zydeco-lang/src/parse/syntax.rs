@@ -87,11 +87,11 @@ pub enum Compute {
     App(Box<Compute>, Box<Value>, AnnInfo),
     Match {
         scrut: Box<Value>,
-        cases: Vec<(CtorV, Vec<TermV>, Box<Compute>)>,
+        arms: Vec<(CtorV, Vec<TermV>, Box<Compute>)>,
         ann: AnnInfo,
     },
     CoMatch {
-        cases: Vec<(DtorV, Vec<TermV>, Box<Compute>)>,
+        arms: Vec<(DtorV, Vec<TermV>, Box<Compute>)>,
         ann: AnnInfo,
     },
     CoApp {

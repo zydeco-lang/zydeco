@@ -271,63 +271,57 @@ impl TypeCheck for Compute {
                     })),
                 }
             }
-            // TODO: Please refactor me :)
-            Compute::Match { scrut, cases, ann, .. } => {
+            Compute::Match { scrut, arms, ann, .. } => {
                 let scrut_ty = scrut.syn(&ctx)?;
-                if let TCtor::Var(data_ty_name) = scrut_ty.ctor {
-                    let data =
-                        ctx.data.get(&data_ty_name).ok_or_else(|| {
-                            ann.make(ErrStr(format!(
-                                "unknown data type: {}",
-                                data_ty_name
-                            )))
-                        })?;
-                    let mut ctors: HashMap<CtorV, Vec<Type>> =
-                        HashMap::from_iter(data.ctors.iter().map(
-                            |(ctor, ty_args)| (ctor.clone(), ty_args.clone()),
-                        ));
-                    let mut ty = None;
-                    for (ctor, vars, body) in cases {
-                        let ty_args = ctors.remove(ctor).ok_or_else(|| {
-                            ann.make(ErrStr(format!("unknown ctor: {}", ctor)))
-                        })?;
-                        // check if the ctor has the right number of arguments
-                        if vars.len() != ty_args.len() {
-                            return Err(ann.make(ArityMismatch {
-                                context: format!("`match` arm for {}", ctor),
-                                expected: vars.len(),
-                                found: ty_args.len(),
-                            }));
-                        }
-                        // check the body of the branch
-                        let mut ctx = ctx.clone();
-                        ctx.extend(
-                            vars.iter().cloned().zip(ty_args.iter().cloned()),
-                        );
-                        if let Some(ty) = &ty {
-                            body.ana(ty, &ctx)?;
-                        } else {
-                            ty = Some(body.syn(&ctx)?);
-                        }
-                    }
-                    // check that all ctors were covered
-                    if !ctors.is_empty() {
-                        return Err(ann.make(ErrStr(format!(
-                            "{} uncovered ctors",
-                            ctors.len()
-                        ))));
-                    }
-                    ty.ok_or_else(|| {
-                        ann.make(ErrStr(format!(
-                            "empty Match not yet supported for type inference reasons"
-                        )))
-                    })
-                } else {
+                let TCtor::Var(data_ty_name) = scrut_ty.ctor else {
                     Err(ann.make(TypeExpected {
                         expected: format!("a?"),
                         found: scrut_ty.into(),
-                    }))
+                    }))?
+                };
+                let data = ctx.data.get(&data_ty_name).ok_or_else(|| {
+                    ann.make(ErrStr(format!(
+                        "unknown data type: {}",
+                        data_ty_name
+                    )))
+                })?;
+                let mut ctors: HashMap<CtorV, Vec<Type>> =
+                    HashMap::from_iter(data.ctors.clone());
+                let mut ty = None;
+                for (ctor, vars, body) in arms {
+                    let Some(ty_args) = ctors.remove(ctor) else {
+                        Err(ann.make(ErrStr(format!("unknown ctor: {}", ctor))))?
+                    };
+                    // check if the ctor has the right number of arguments
+                    if vars.len() != ty_args.len() {
+                        return Err(ann.make(ArityMismatch {
+                            context: format!("`match` arm for {}", ctor),
+                            expected: vars.len(),
+                            found: ty_args.len(),
+                        }));
+                    }
+                    // check the body of the branch
+                    let mut ctx = ctx.clone();
+                    ctx.extend(
+                        vars.iter().cloned().zip(ty_args.iter().cloned()),
+                    );
+                    if let Some(ty) = &ty {
+                        body.ana(ty, &ctx)?;
+                    } else {
+                        ty = Some(body.syn(&ctx)?);
+                    }
                 }
+                // check that all ctors were covered
+                if !ctors.is_empty() {
+                    return Err(ann.make(ErrStr(format!(
+                        "{} uncovered ctors",
+                        ctors.len()
+                    ))));
+                }
+                let Some(ty) = ty else {
+                    Err(ann.make(NeedAnnotation { content: format!("empty match") }))?
+                };
+                Ok(ty)
             }
             Compute::CoApp { body, dtor, args, ann, .. } => {
                 let tscrut = body.syn(ctx)?;
@@ -465,56 +459,51 @@ impl TypeCheck for Compute {
                     })),
                 }
             }
-            // TODO: Please refactor me :)
-            Compute::Match { scrut, cases, ann, .. } => {
+            Compute::Match { scrut, arms, ann, .. } => {
                 let scrut_ty = scrut.syn(&ctx)?;
-                if let TCtor::Var(data_ty_name) = scrut_ty.ctor {
-                    let data =
-                        ctx.data.get(&data_ty_name).ok_or_else(|| {
-                            ann.make(ErrStr(format!(
-                                "unknown data type: {}",
-                                data_ty_name
-                            )))
-                        })?;
-                    let mut ctors: HashMap<CtorV, Vec<Type>> =
-                        HashMap::from_iter(data.ctors.iter().map(
-                            |(ctor, ty_args)| (ctor.clone(), ty_args.clone()),
-                        ));
-                    for (ctor, vars, body) in cases {
-                        let ty_args = ctors.remove(ctor).ok_or_else(|| {
-                            ann.make(ErrStr(format!("unknown ctor: {}", ctor)))
-                        })?;
-                        // check if the ctor has the right number of arguments
-                        if vars.len() != ty_args.len() {
-                            return Err(ann.make(ArityMismatch {
-                                context: format!("`match` arm for {}", ctor),
-                                expected: vars.len(),
-                                found: ty_args.len(),
-                            }));
-                        }
-                        // check the body of the branch
-                        let mut ctx = ctx.clone();
-                        ctx.extend(
-                            vars.iter().cloned().zip(ty_args.iter().cloned()),
-                        );
-                        body.ana(typ, &ctx)?;
-                    }
-                    // check that all ctors were covered
-                    if !ctors.is_empty() {
-                        return Err(ann.make(ErrStr(format!(
-                            "{} uncovered ctors",
-                            ctors.len()
-                        ))));
-                    }
-                    Ok(())
-                } else {
+                let TCtor::Var(data_ty_name) = scrut_ty.ctor else {
                     Err(ann.make(TypeExpected {
                         expected: format!("a?"),
                         found: scrut_ty.into(),
-                    }))
+                    }))?
+                };
+                let data = ctx.data.get(&data_ty_name).ok_or_else(|| {
+                    ann.make(ErrStr(format!(
+                        "unknown data type: {}",
+                        data_ty_name
+                    )))
+                })?;
+                let mut ctors: HashMap<CtorV, Vec<Type>> =
+                    HashMap::from_iter(data.ctors.clone());
+                for (ctor, vars, body) in arms {
+                    let Some(ty_args) = ctors.remove(ctor) else {
+                        Err(ann.make(ErrStr(format!("unknown ctor: {}", ctor))))?
+                    };
+                    // check if the ctor has the right number of arguments
+                    if vars.len() != ty_args.len() {
+                        return Err(ann.make(ArityMismatch {
+                            context: format!("`match` arm for {}", ctor),
+                            expected: vars.len(),
+                            found: ty_args.len(),
+                        }));
+                    }
+                    // check the body of the branch
+                    let mut ctx = ctx.clone();
+                    ctx.extend(
+                        vars.iter().cloned().zip(ty_args.iter().cloned()),
+                    );
+                    body.ana(typ, &ctx)?;
                 }
+                // check that all ctors were covered
+                if !ctors.is_empty() {
+                    return Err(ann.make(ErrStr(format!(
+                        "{} uncovered ctors",
+                        ctors.len()
+                    ))));
+                }
+                Ok(())
             }
-            Compute::CoMatch { cases, ann, .. } => {
+            Compute::CoMatch { arms, ann, .. } => {
                 if let TCtor::Var(tvar) = &typ.ctor {
                     let coda = ctx.coda.get(tvar).ok_or_else(|| {
                         ann.make(ErrStr(format!("unknown coda: {}", tvar)))
@@ -525,7 +514,7 @@ impl TypeCheck for Compute {
                                 (dtor.clone(), (ty_args.clone(), tret.clone()))
                             },
                         ));
-                    for (dtor, vars, body) in cases {
+                    for (dtor, vars, body) in arms {
                         let (ty_args, tret) =
                             dtors.remove(dtor).ok_or_else(|| {
                                 ann.make(ErrStr(format!(

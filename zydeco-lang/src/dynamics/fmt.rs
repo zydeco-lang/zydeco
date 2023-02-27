@@ -1,6 +1,6 @@
 use super::syntax::*;
-use crate::utils::fmt::{Args, FmtArgs};
 use crate::dynamics::apply_string_escape_repl;
+use crate::utils::fmt::{Args, FmtArgs};
 
 impl FmtArgs for ZValue {
     fn fmt_args(&self, args: Args) -> String {
