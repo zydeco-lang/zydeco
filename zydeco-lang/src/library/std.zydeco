@@ -15,7 +15,7 @@ pub define true : Bool = True();
 pub define false : Bool = False();
 
 pub define not : Thunk(Bool -> Ret(Bool)) = {
-  fn (x: Bool) ->
+  fn (x) ->
     match x
     | True() -> ret false
     | False() -> ret true
@@ -24,30 +24,30 @@ pub define not : Thunk(Bool -> Ret(Bool)) = {
 
 # lazy not
 pub define notM : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
-  fn (t: Thunk(Ret(Bool))) ->
+  fn (t) ->
     do x <- ! t;
     match x
-    | True() -> ret False()
-    | False() -> ret True()
+    | True() -> ret (False()::Bool)
+    | False() -> ret (True()::Bool)
     end
 };
 
 pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (x: Bool, y: Bool) ->
+  fn (x, y) ->
     match x
     | True() -> ret y
-    | False() -> ret False()
+    | False() -> ret false
     end
 };
 
 # Lazy, short-circuiting (left to right) and
 # Can we come up with a better naming convention? Maybe and~ is more suggestive? (not accepted by parser currently)
 pub define and_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
-  fn (b1_: Thunk(Ret(Bool)), b2_: Thunk(Ret(Bool))) ->
+  fn (b1_, b2_) ->
   do b1 <- ! b1_;
   match b1
   | True() -> ! b2_
-  | False() -> ret False()
+  | False() -> ret false
   end
 };
 

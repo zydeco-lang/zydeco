@@ -1,7 +1,7 @@
 data Nat where | Z() | S(Nat) end
-let zero = Z();
+let zero: Nat = Z();
 let suc = {
-  fn (x: Nat) -> ret S(x)
+  fn (x: Nat) -> ret (S(x)::Nat)
 };
 let ifz = {
   fn (z: Bool, pred: Comp(Nat -> Ret(Bool)), x: Nat) -> (
@@ -15,7 +15,7 @@ do one <- !suc zero,
    two <- !suc one;
 let ifz = {
   fn (x: Nat) -> (
-    !ifz False() { fn (_: Nat) -> ret True() } x
+    !ifz false { fn (_: Nat) -> ret true } x
   )
 };
 do two' <- !ifz two;
@@ -27,14 +27,14 @@ do b <- (
     match one'
     | True() -> (
       match zero'
-      | False() -> ret True()
-      | True() -> ret False()
+      | False() -> ret true
+      | True() -> ret false
       end
     )
-    | False() -> ret False()
+    | False() -> ret false
     end
   )
-  | False() -> ret False()
+  | False() -> ret false
   end
 );
 match b

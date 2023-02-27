@@ -9,8 +9,8 @@ end
 let y = {
   fn (f: U(U(Int -> F(Int)) -> Int -> F(Int))) ->
     ret {
-      (comatch | .y(x) -> ! f { ! x .y(x) } end)
-      .y({ comatch | .y(x) -> ! f { ! x .y(x) } end })
+      (comatch | .y(x) -> ! f { ! x .y(x) } end :: Y)
+      .y({ (comatch | .y(x) -> ! f { ! x .y(x) } end :: Y) })
     }
 };
 

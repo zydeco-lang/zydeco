@@ -16,7 +16,10 @@ pub fn link(env: &mut Env, decls: &Vec<Declare>) {
                             Some(env.clone()),
                         )),
                     ),
-                    _ => unreachable!(),
+                    v => env.insert(
+                        name.name().to_owned(),
+                        Rc::new(v.to_owned().into()),
+                    ),
                 }
             }
             _ => (),

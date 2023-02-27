@@ -64,9 +64,9 @@ CtorBranch: (CtorV, Vec<Type>) = {
     }
 }
 
-DtorBranch: (DtorV, Vec<Type>, Type) = {
+DtorBranch: (DtorV, (Vec<Type>, Type)) = {
     "|" "." <dtor:DtorV> "(" <args:SepByEnd<",", ")", TVal>> ":" <res:TComp> => {
-        (dtor, args, res)
+        (dtor, (args, res))
     }
 }
 

@@ -62,17 +62,11 @@ fn pure_test(f: &str) -> Result<(), String> {
 }
 
 fn batch_test(f: &str) -> Result<(), String> {
-    use std::io::Read;
     use std::path::PathBuf;
     use zydeco_lang::zydeco;
-    let mut buf = String::new();
     let mut path = PathBuf::from("tests/nonzero-exit-code");
     path.push(f);
-    std::fs::File::open(path)
-        .map_err(|e| e.to_string())?
-        .read_to_string(&mut buf)
-        .map_err(|e| e.to_string())?;
-    let p = zydeco::parse_prog(&buf)?;
+    let p = zydeco::ZydecoFile { path }.parse()?;
     let mut ctx = Ctx::new();
     let std_decls = declarations::std_decls().expect("std library failure");
     declarations::inject_ctx(&mut ctx, &std_decls)
@@ -95,17 +89,11 @@ fn batch_test(f: &str) -> Result<(), String> {
 }
 
 fn check_test(f: &str) -> Result<(), String> {
-    use std::io::Read;
     use std::path::PathBuf;
     use zydeco_lang::zydeco;
-    let mut buf = String::new();
     let mut path = PathBuf::from("tests/check-only");
     path.push(f);
-    std::fs::File::open(path)
-        .map_err(|e| e.to_string())?
-        .read_to_string(&mut buf)
-        .map_err(|e| e.to_string())?;
-    let p = zydeco::parse_prog(&buf)?;
+    let p = zydeco::ZydecoFile { path }.parse()?;
     let mut ctx = Ctx::new();
     let std_decls = declarations::std_decls().expect("std library failure");
     declarations::inject_ctx(&mut ctx, &std_decls)

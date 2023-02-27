@@ -84,7 +84,10 @@ impl Ctx {
                 }
                 self.defs.insert(
                     name.clone(),
-                    (ty.clone().map(|t| *t), def.as_ref().clone()),
+                    (
+                        ty.as_ref().map(|t| t.as_ref().clone()),
+                        def.as_ref().clone(),
+                    ),
                 );
                 Ok(())
             }
@@ -105,7 +108,7 @@ impl Ctx {
             }
         }
         for (_, codata) in &self.coda {
-            for (_, args, ret) in &codata.dtors {
+            for (_, (args, ret)) in &codata.dtors {
                 for arg in args {
                     arg.syn(self)?;
                 }

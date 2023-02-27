@@ -101,8 +101,10 @@ let rec interp: Interpreter =
       match m
       | If(cond, mt, mf) -> (
         match cond
+        | Var(_) -> ! error
         | TrueSyn() -> ! interp .comp(mt, g)
         | FalseSyn() -> ! interp .comp(mf, g)
+        | ThunkV(_) -> ! error
         end
       )
       | Force(syn_val) -> (

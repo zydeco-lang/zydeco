@@ -52,7 +52,7 @@ impl Kind {
             Ok(())
         }
     }
-    fn expect_comptype(
+    fn ensure_ctype(
         &self, context: &str, ann: &AnnInfo,
     ) -> Result<(), Ann<TypeCheckError>> {
         if let Kind::VType = self {
@@ -70,6 +70,7 @@ impl Kind {
 impl TypeCheck for Value {
     type Out = Type;
     fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Ann<TypeCheckError>> {
+        println!("syn: {}", self);
         match self {
             Value::TermAnn(body, typ, ..) => {
                 body.ana(typ, ctx)?;
@@ -82,6 +83,7 @@ impl TypeCheck for Value {
             Value::Thunk(e, ann) => {
                 let t = e.syn(&ctx)?;
                 Ok(Type { ctor: TCtor::Thunk, args: vec![t], ann: ann.clone() })
+                // Err(ann.make(NeedAnnotation { content: format!("thunk") }))
             }
             Value::Ctor(_, _, ann) => {
                 Err(ann.make(NeedAnnotation { content: format!("ctor") }))
@@ -101,6 +103,7 @@ impl TypeCheck for Value {
     fn ana(
         &self, typ: &Self::Out, ctx: &Ctx,
     ) -> Result<(), Ann<TypeCheckError>> {
+        println!("ana: {} : {}", self, typ);
         match self {
             Value::Thunk(e, ann, ..) => {
                 if let TCtor::Thunk = typ.ctor {
@@ -169,42 +172,62 @@ impl TypeCheck for Compute {
     type Out = Type;
 
     fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Ann<TypeCheckError>> {
+        println!("syn: {}", self);
         match self {
             Compute::TermAnn(body, ty, ..) => {
                 body.ana(ty, ctx)?;
                 Ok(ty.clone())
             }
-            Compute::Let { binding: (x, _, def), body, .. } => {
+            Compute::Let { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();
-                let t = def.syn(&ctx)?;
+                let t: Type = if let Some(ty) = ty {
+                    ty.syn(&ctx)?.ensure_vtype("let", &ann)?;
+                    def.ana(ty, &ctx)?;
+                    ty.as_ref().clone()
+                } else {
+                    def.syn(&ctx)?
+                };
                 ctx.push(x.clone(), t);
                 body.syn(&ctx)
             }
-            Compute::Do { binding: (x, _, def), body, ann, .. } => {
+            Compute::Do { binding: (x, ty, def), body, ann, .. } => {
                 let mut ctx = ctx.clone();
-                let te = def.syn(&ctx)?;
-                match te.ctor {
-                    TCtor::Ret => {
-                        ctx.push(x.clone(), te.args[0].clone());
-                        body.syn(&ctx)
-                    }
-                    _ => Err(ann.make(TypeExpected {
-                        context: format!("do"),
-                        expected: format!("Ret(a?)"),
-                        found: te.into(),
-                    })),
-                }
+                let te = if let Some(ty) = ty {
+                    ty.syn(&ctx)?.ensure_vtype("do", ann)?;
+                    def.ana(
+                        &Type {
+                            ctor: TCtor::Ret,
+                            args: vec![ty.as_ref().clone()],
+                            ann: ann.clone(),
+                        },
+                        &ctx,
+                    )?;
+                    ty.as_ref().clone()
+                } else {
+                    let te = def.syn(&ctx)?;
+                    let TCtor::Ret = te.ctor else {
+                        Err(ann.make(TypeExpected {
+                            context: format!("do"),
+                            expected: format!("Ret(a?)"),
+                            found: te,
+                        }))?
+                    };
+                    te.args[0].clone()
+                };
+                ctx.push(x.clone(), te.clone());
+                body.syn(&ctx)
             }
-            Compute::Force(comp, ann, ..) => {
-                let t = comp.syn(&ctx)?;
-                match t.ctor {
-                    TCtor::Thunk => Ok(t.args[0].clone()),
-                    _ => Err(ann.make(TypeExpected {
+            Compute::Force(body, ann) => {
+                let t = body.syn(&ctx)?;
+                let TCtor::Thunk = t.ctor else {
+                    Err(ann.make(TypeExpected {
                         context: format!("force"),
                         expected: format!("Thunk(b?)"),
-                        found: t.into(),
-                    })),
-                }
+                        found: t,
+                    }))?
+                };
+                let typ = &t.args[0];
+                Ok(typ.clone())
             }
             Compute::Return(v, ann) => {
                 let t = v.syn(&ctx)?;
@@ -219,64 +242,48 @@ impl TypeCheck for Compute {
                     })
                 })?;
                 t.syn(&ctx)?.ensure_vtype("argument to a function", ann)?;
-                ctx.push(x.clone(), *t.clone());
+                ctx.push(x.clone(), t.as_ref().clone());
                 let tbody = body.syn(&ctx)?;
                 Ok(Type {
                     ctor: TCtor::Fun,
-                    args: vec![*t.clone(), tbody],
+                    args: vec![t.as_ref().clone(), tbody],
                     ann: ann.clone(),
                 })
             }
-            Compute::Rec { arg: (x, ty), body, ann, .. } => {
+            Compute::Rec { arg: (x, ty), body, ann } => {
                 let mut ctx = ctx.clone();
                 let ty = ty.as_ref().ok_or_else(|| {
                     ann.make(NeedAnnotation {
-                        content: format!("recursive computation \"{}\"", x),
+                        content: format!("recursion \"{}\"", x),
                     })
                 })?;
                 // don't need to check this is a value type bc we check it's a thunk next
                 ty.syn(&ctx)?;
-                let ty_body = match ty.ctor {
-                    TCtor::Thunk => ty.args[0].clone(),
-                    _ => Err(ann.make(TypeExpected {
+                let TCtor::Thunk = ty.ctor else {
+                    Err(ann.make(TypeExpected {
                         context: format!("recursion"),
                         expected: format!("Thunk(b?)"),
                         found: ty.as_ref().to_owned().into(),
-                    }))?,
+                    }))?
                 };
-                ctx.push(x.clone(), *ty.clone());
-                let tbody_ = body.syn(&ctx)?;
-                ty_body.eqv(&tbody_).ok_or_else(|| {
-                    ann.make(TypeMismatch {
-                        context: format!("recursion"),
-                        expected: ty_body.clone().into(),
-                        found: tbody_.into(),
-                    })
-                })?;
+                let ty_body = ty.args[0].clone();
+                ctx.push(x.clone(), ty.as_ref().clone());
+                body.ana(&ty_body, &ctx)?;
                 Ok(ty_body)
             }
             Compute::App(e, v, ann) => {
                 let tfn = e.syn(&ctx)?;
-                let targ = v.syn(&ctx)?;
-                match tfn.ctor {
-                    TCtor::Fun => {
-                        let ty_dom = tfn.args[0].clone();
-                        let ty_cod = tfn.args[1].clone();
-                        Type::eqv(&ty_dom, &targ).ok_or_else(|| {
-                            ann.make(TypeMismatch {
-                                context: format!("application"),
-                                expected: ty_dom.to_owned().into(),
-                                found: targ.into(),
-                            })
-                        })?;
-                        Ok(ty_cod)
-                    }
-                    _ => Err(ann.make(TypeExpected {
+                let TCtor::Fun = tfn.ctor else {
+                    Err(ann.make(TypeExpected {
                         context: format!("application"),
                         expected: format!("a? -> b?"),
                         found: tfn.into(),
-                    })),
-                }
+                    }))?
+                };
+                let ty_dom = &tfn.args[0];
+                let ty_cod = &tfn.args[1];
+                v.ana(ty_dom, &ctx)?;
+                Ok(ty_cod.clone())
             }
             Compute::Match { scrut, arms, ann, .. } => {
                 let scrut_ty = scrut.syn(&ctx)?;
@@ -337,10 +344,10 @@ impl TypeCheck for Compute {
                     let coda = ctx.coda.get(&tvar).ok_or_else(|| {
                         ann.make(ErrStr(format!("unknown codata: {}", tvar)))
                     })?;
-                    let (_, ty_args, tret) = coda
+                    let (_, (ty_args, tret)) = coda
                         .dtors
                         .iter()
-                        .find(|(dtor_, _, _)| dtor == dtor_)
+                        .find(|(dtor_, (_, _))| dtor == dtor_)
                         .ok_or_else(|| {
                             ann.make(ErrStr(format!("unknown dtor: {}", dtor)))
                         })?;
@@ -375,56 +382,103 @@ impl TypeCheck for Compute {
     fn ana(
         &self, typ: &Self::Out, ctx: &Ctx,
     ) -> Result<(), Ann<TypeCheckError>> {
+        println!("ana: {} : {}", self, typ);
         match self {
-            Compute::Let { binding: (x, _, def), body, .. } => {
+            Compute::Let { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();
-                let t = def.syn(&ctx)?;
+                let t = if let Some(ty) = ty {
+                    ty.syn(&ctx)?.ensure_vtype("let", ann)?;
+                    def.ana(ty, &ctx)?;
+                    ty.as_ref().clone()
+                } else {
+                    let ty = def.syn(&ctx)?;
+                    ty
+                };
                 ctx.push(x.clone(), t);
                 body.ana(typ, &ctx)
             }
-            Compute::Do { binding: (x, _, def), body, ann, .. } => {
+            Compute::Do { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();
-                let te = def.syn(&ctx)?;
-                match te.ctor {
-                    TCtor::Ret => {
-                        ctx.push(x.clone(), te.args[0].clone());
-                        body.ana(typ, &ctx)
-                    }
-                    _ => Err(ann.make(TypeExpected {
-                        context: format!("do"),
-                        expected: format!("Ret(a?)"),
-                        found: te.into(),
-                    })),
-                }
+                let te = if let Some(ty) = ty {
+                    ty.syn(&ctx)?.ensure_vtype("do", ann)?;
+                    def.ana(
+                        &Type {
+                            ctor: TCtor::Ret,
+                            args: vec![ty.as_ref().clone()],
+                            ann: ann.clone(),
+                        },
+                        &ctx,
+                    )?;
+                    ty.as_ref().clone()
+                } else {
+                    let te = def.syn(&ctx)?;
+                    let TCtor::Ret = te.ctor else {
+                        Err(ann.make(TypeExpected {
+                            context: format!("do"),
+                            expected: format!("Ret(a?)"),
+                            found: te,
+                        }))?
+                    };
+                    te.args[0].clone()
+                };
+                ctx.push(x.clone(), te.clone());
+                body.ana(typ, &ctx)
             }
-            Compute::Force(comp, ..) => comp.ana(typ, ctx),
-            Compute::Return(v, ann, ..) => {
-                let t = v.syn(&ctx)?;
-                typ.eqv(&t).ok_or_else(|| {
-                    ann.make(TypeMismatch {
+            Compute::Force(comp, ann) => comp.ana(
+                &Type {
+                    ctor: TCtor::Thunk,
+                    args: vec![typ.clone()],
+                    ann: ann.clone(),
+                },
+                ctx,
+            ),
+            Compute::Return(v, ann) => {
+                let Type { ctor: TCtor::Ret, args, .. } = typ else {
+                    Err(ann.make(TypeExpected {
                         context: format!("return"),
-                        expected: typ.to_owned(),
-                        found: t,
-                    })
-                })
+                        expected: format!("Ret(a?)"),
+                        found: typ.clone(),
+                    }))?
+                };
+                let &[ref typ] = args.as_slice() else {
+                    Err(ann.make(ArityMismatch {
+                        context: format!("return"),
+                        expected: 1,
+                        found: args.len(),
+                    }))?
+                };
+                v.ana(typ, &ctx)
             }
             Compute::Lam { arg: (x, t), body, ann, .. } => {
                 let mut ctx = ctx.clone();
-                let t = t.as_ref().ok_or_else(|| {
-                    ann.make(NeedAnnotation {
-                        content: format!("lambda parameter \"{}\"", x),
-                    })
-                })?;
-                t.syn(&ctx)?.ensure_vtype("argument to a function", ann)?;
-                ctx.push(x.clone(), *t.clone());
-                let tbody = body.syn(&ctx)?;
-                typ.eqv(&tbody).ok_or_else(|| {
-                    ann.make(TypeMismatch {
+                let Type { ctor: TCtor::Fun, args, .. } = typ else {
+                    Err(ann.make(TypeExpected {
                         context: format!("lambda"),
-                        expected: typ.to_owned(),
-                        found: tbody,
-                    })
-                })
+                        expected: format!("Arrow(a?, b?)"),
+                        found: typ.clone(),
+                    }))?
+                };
+                let &[ref t1, ref t2] = args.as_slice() else {
+                    Err(ann.make(ArityMismatch {
+                        context: format!("lambda"),
+                        expected: 2,
+                        found: args.len(),
+                    }))?
+                };
+                t1.syn(&ctx)?.ensure_vtype("argument to a function", ann)?;
+                if let Some(t) = t {
+                    t.syn(&ctx)?.ensure_vtype("argument to a function", ann)?;
+                    t1.eqv(t).ok_or_else(|| {
+                        ann.make(TypeMismatch {
+                            context: format!("argument to a function"),
+                            expected: t1.to_owned(),
+                            found: t.as_ref().clone(),
+                        })
+                    })?;
+                }
+                ctx.push(x.clone(), t1.clone());
+                t2.syn(&ctx)?.ensure_ctype("body of a function", ann)?;
+                body.ana(t2, &ctx)
             }
             Compute::Rec { arg: (x, ty), body, ann, .. } => {
                 let mut ctx = ctx.clone();
@@ -450,7 +504,7 @@ impl TypeCheck for Compute {
                         found: ty_body,
                     })
                 })?;
-                ctx.push(x.clone(), *ty.clone());
+                ctx.push(x.clone(), ty.as_ref().clone());
                 body.ana(typ, &ctx)
             }
             Compute::App(e, v, ann) => {
@@ -520,71 +574,16 @@ impl TypeCheck for Compute {
                 }
                 Ok(())
             }
-            Compute::CoMatch { arms, ann, .. } => {
-                if let TCtor::Var(tvar) = &typ.ctor {
-                    let coda = ctx.coda.get(tvar).ok_or_else(|| {
-                        ann.make(ErrStr(format!("unknown coda: {}", tvar)))
-                    })?;
-                    let mut dtors: HashMap<DtorV, (Vec<Type>, Type)> =
-                        HashMap::from_iter(coda.dtors.clone().into_iter().map(
-                            |(dtor, ty_args, tret)| (dtor, (ty_args, tret)),
-                        ));
-                    for (dtor, vars, body) in arms {
-                        let (ty_args, tret) =
-                            dtors.remove(dtor).ok_or_else(|| {
-                                ann.make(ErrStr(format!(
-                                    "unknown dtor: {}",
-                                    dtor
-                                )))
-                            })?;
-                        typ.eqv(&tret).ok_or_else(|| {
-                            ann.make(TypeMismatch {
-                                context: format!("`comatch` arm for {}", dtor),
-                                expected: typ.to_owned(),
-                                found: tret,
-                            })
-                        })?;
-                        // check if the dtor has the right number of arguments
-                        if vars.len() != ty_args.len() {
-                            Err(ann.make(ArityMismatch {
-                                context: format!("`comatch` arm for {}", dtor),
-                                expected: vars.len(),
-                                found: ty_args.len(),
-                            }))?;
-                        }
-                        // check the body of the branch
-                        let mut ctx = ctx.clone();
-                        ctx.extend(
-                            vars.iter().cloned().zip(ty_args.iter().cloned()),
-                        );
-                        body.ana(typ, &ctx)?;
-                    }
-                    // check that all dtors were covered
-                    if !dtors.is_empty() {
-                        Err(ann.make(ErrStr(format!(
-                            "{} uncovered dtors",
-                            dtors.len()
-                        ))))?;
-                    }
-                    Ok(())
-                } else {
-                    Err(ann.make(TypeExpected {
-                        context: format!("comatch"),
-                        expected: format!("a?"),
-                        found: typ.to_owned(),
-                    }))
-                }
-            }
             Compute::CoApp { body, dtor, args, ann, .. } => {
                 let tscrut = body.syn(ctx)?;
                 if let TCtor::Var(tvar) = tscrut.ctor {
                     let coda = ctx.coda.get(&tvar).ok_or_else(|| {
                         ann.make(ErrStr(format!("unknown codata: {}", tvar)))
                     })?;
-                    let (_, ty_args, tret) = coda
+                    let (_, (ty_args, tret)) = coda
                         .dtors
                         .iter()
-                        .find(|(dtor_, _, _)| dtor == dtor_)
+                        .find(|(dtor_, (_, _))| dtor == dtor_)
                         .ok_or_else(|| {
                             ann.make(ErrStr(format!("unknown dtor: {}", dtor)))
                         })?;
@@ -619,6 +618,48 @@ impl TypeCheck for Compute {
                         found: tscrut.into(),
                     }))
                 }
+            }
+            Compute::CoMatch { arms, ann, .. } => {
+                let TCtor::Var(tvar) = &typ.ctor else {
+                    Err(ann.make(TypeExpected {
+                        context: format!("comatch"),
+                        expected: format!("b?"),
+                        found: typ.to_owned(),
+                    }))?
+                };
+                let coda = ctx.coda.get(tvar).ok_or_else(|| {
+                    ann.make(ErrStr(format!("unknown codata type: {}", tvar)))
+                })?;
+                let mut dtors: HashMap<DtorV, (Vec<Type>, Type)> =
+                    HashMap::from_iter(coda.dtors.clone());
+                for (dtor, vars, body) in arms {
+                    let (ty_args, tret) =
+                        dtors.remove(dtor).ok_or_else(|| {
+                            ann.make(ErrStr(format!("unknown dtor: {}", dtor)))
+                        })?;
+                    // check if the dtor has the right number of arguments
+                    if vars.len() != ty_args.len() {
+                        Err(ann.make(ArityMismatch {
+                            context: format!("`comatch` arm for {}", dtor),
+                            expected: vars.len(),
+                            found: ty_args.len(),
+                        }))?;
+                    }
+                    // check the body of the branch
+                    let mut ctx = ctx.clone();
+                    ctx.extend(
+                        vars.iter().cloned().zip(ty_args.iter().cloned()),
+                    );
+                    body.ana(&tret, &ctx)?;
+                }
+                // check that all dtors were covered
+                if !dtors.is_empty() {
+                    Err(ann.make(ErrStr(format!(
+                        "{} uncovered dtors",
+                        dtors.len()
+                    ))))?;
+                }
+                Ok(())
             }
             c => {
                 let t = self.syn(ctx)?;
@@ -714,10 +755,9 @@ impl TypeCheck for Type {
                         found: self.args.len(),
                     }))
                 } else {
-                    self.args[0].syn(ctx)?.expect_comptype(
-                        "type argument to Thunk",
-                        &ann(0, 0),
-                    )?;
+                    self.args[0]
+                        .syn(ctx)?
+                        .ensure_ctype("type argument to Thunk", &ann(0, 0))?;
                     Ok(Kind::VType)
                 }
             }
@@ -733,7 +773,7 @@ impl TypeCheck for Type {
                         "domain of a function type",
                         &ann(0, 0),
                     )?;
-                    self.args[1].syn(ctx)?.expect_comptype(
+                    self.args[1].syn(ctx)?.ensure_ctype(
                         "codomain of a function type",
                         &ann(0, 0),
                     )?;

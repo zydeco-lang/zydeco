@@ -23,12 +23,14 @@ pub struct FileInfo {
 }
 impl FileInfo {
     pub fn new(s: &str) -> Self {
-        FileInfo {
-            newlines: (s.char_indices())
-                .filter(|(_i, c)| *c == '\n')
-                .map(|(i, _c)| i)
-                .collect(),
+        let mut newlines = vec![0];
+        for (i, c) in s.char_indices() {
+            if c == '\n' {
+                newlines.push(i);
+            }
         }
+        newlines.push(s.len());
+        FileInfo { newlines }
     }
 }
 
@@ -43,7 +45,7 @@ impl AnnInfo {
             .expect("span2 is already set");
     }
     fn trans_span2(gen: &FileInfo, offset: usize) -> Cursor2 {
-        let mut line = 1;
+        let mut line = 0;
         let mut last_br = 0;
         for &br in &gen.newlines {
             if offset <= br {

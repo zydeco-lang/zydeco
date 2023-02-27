@@ -48,7 +48,7 @@ impl AnnHolder for Declare {
                 for (v, _) in params {
                     v.ann_map_mut(f.clone());
                 }
-                for (_, args, ret) in dtors {
+                for (_, (args, ret)) in dtors {
                     for a in args {
                         a.ann_map_mut(f.clone());
                     }

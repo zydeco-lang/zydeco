@@ -7,13 +7,13 @@ codata FnOptInt where
   | .zero(): F(Int)
 end
 
-let fn_int = {
+let fn_int : Thunk(FnInt) = {
   comatch
   | .int(i) -> ret i
   end
 };
 
-let fn_opt_int = {
+let fn_opt_int : Thunk(FnOptInt) = {
   comatch
   | .one(i) -> ! fn_int .int(i)
   | .zero() -> ! fn_int .int(0)

@@ -46,7 +46,7 @@ pub struct Codata {
     pub ann: AnnInfo,
 }
 
-pub type CodataBranch = (DtorV, Vec<Type>, Type);
+pub type CodataBranch = (DtorV, (Vec<Type>, Type));
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
