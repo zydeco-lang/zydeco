@@ -1,6 +1,5 @@
 use crate::{
-    lex::Lexer,
-    parse::{parser::DeclarationsParser, syntax::Declare},
+    parse::{parser::DeclarationsParser, syntax::Declare, Lexer},
     statics::ctx::Ctx,
 };
 

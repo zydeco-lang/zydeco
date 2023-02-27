@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     dynamics::{
         self,
@@ -5,15 +7,39 @@ use crate::{
         eval::{Exit, Runtime},
         syntax::{ZCompute, ZValue},
     },
-    lex::Lexer,
     library::{builtins, linker},
     parse::{
         syntax::{Compute, Program, Type, ValOrComp, Value},
-        {ExpressionParser, ZydecoParser},
+        Lexer, {ExpressionParser, ZydecoParser},
     },
     statics::{ctx::Ctx, tyck::TypeCheck},
     utils::never::Never,
 };
+
+pub struct ZydecoFile {
+    pub path: PathBuf,
+}
+
+impl ZydecoFile {
+    pub fn parse(self) -> Result<Program, String> {
+        let source = std::fs::read_to_string(&self.path).unwrap();
+        ZydecoParser::new()
+            .parse(&source, Lexer::new(&source))
+            .map_err(|e| e.to_string())
+    }
+}
+
+pub struct ZydecoExpr {
+    pub source: String,
+}
+
+impl ZydecoExpr {
+    pub fn parse(self) -> Result<ValOrComp, String> {
+        ExpressionParser::new()
+            .parse(&self.source, Lexer::new(&self.source))
+            .map_err(|e| e.to_string())
+    }
+}
 
 pub fn parse_prog(input: &str) -> Result<Program, String> {
     ZydecoParser::new()
