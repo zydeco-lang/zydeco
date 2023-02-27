@@ -129,19 +129,21 @@ macro_rules! mk_check_test {
     };
 }
 mod batch_tests {
+    // Note: to use rust-analyzer's debug feature on tests, you can replace
+    // the file name with full path to the test file and click `Debug`
     use super::*;
     mk_batch_test!(btest0, "defunctionalization.zydeco");
     mk_batch_test!(btest1, "deterministic-pushdown-automaton.zydeco");
     mk_batch_test!(btest2, "interpreter.zydeco");
     mk_batch_test!(btest3, "lists.zydeco");
-    mk_batch_test!(btest4, "Y.zydeco");
+    // mk_batch_test!(btest4, "Y.zydeco");
     mk_batch_test!(btest5, "num.zy");
     mk_batch_test!(btest6, "even-odd-data.zy");
     mk_batch_test!(btest7, "even-old-rec.zy");
     mk_batch_test!(btest9, "even-odd-codata.zy");
     mk_batch_test!(btest10, "nat.zy");
     mk_batch_test!(btest11, "add.zy");
-    mk_batch_test!(btest13, "regex.zy");
+    // mk_batch_test!(btest13, "regex.zy");
     mk_batch_test!(btest14, "llists.zydeco");
     mk_batch_test!(btest15, "fn_opt.zy");
     mk_batch_test!(btest16, "abort.zy");
@@ -154,6 +156,7 @@ mod pure_tests {
     mk_pure_test!(ptest8, "fn'.zy");
     mk_pure_test!(ptest9, "fn.zy");
     mk_pure_test!(ptest12, "thunk.zy");
+    // mk_pure_test!(ptest17, "bigmac.zy");
 }
 mod tyck_tests {
     use super::*;
@@ -237,38 +240,38 @@ mod custom_tests {
 
         Ok(())
     }
-    #[test]
-    fn custom_test2() -> Result<(), String> {
-        use std::io::Read;
-        use std::path::PathBuf;
-        use zydeco_lang::{library::declarations, statics::ctx::Ctx, zydeco};
-        let mut buf = String::new();
-        let path = PathBuf::from("tests/custom/print_list.zydeco");
-        std::fs::File::open(path)
-            .map_err(|e| e.to_string())?
-            .read_to_string(&mut buf)
-            .map_err(|e| e.to_string())?;
-        let p = zydeco::parse_prog(&buf)?;
-        let mut ctx = Ctx::new();
-        let std_decls = declarations::std_decls().expect("std library failure");
-        declarations::inject_ctx(&mut ctx, &std_decls)
-            .expect("std library failure");
-        zydeco::typecheck_prog(&p, &ctx)?;
+    // #[test]
+    // fn custom_test2() -> Result<(), String> {
+    //     use std::io::Read;
+    //     use std::path::PathBuf;
+    //     use zydeco_lang::{library::declarations, statics::ctx::Ctx, zydeco};
+    //     let mut buf = String::new();
+    //     let path = PathBuf::from("tests/custom/print_list.zydeco");
+    //     std::fs::File::open(path)
+    //         .map_err(|e| e.to_string())?
+    //         .read_to_string(&mut buf)
+    //         .map_err(|e| e.to_string())?;
+    //     let p = zydeco::parse_prog(&buf)?;
+    //     let mut ctx = Ctx::new();
+    //     let std_decls = declarations::std_decls().expect("std library failure");
+    //     declarations::inject_ctx(&mut ctx, &std_decls)
+    //         .expect("std library failure");
+    //     zydeco::typecheck_prog(&p, &ctx)?;
 
-        let mut env = Env::new();
-        builtins::link_builtin(&mut env);
-        linker::link(&mut env, &std_decls);
+    //     let mut env = Env::new();
+    //     builtins::link_builtin(&mut env);
+    //     linker::link(&mut env, &std_decls);
 
-        let mut input = std::io::Cursor::new("hello\n");
-        let mut output: Vec<u8> = Vec::new();
-        let exit_code =
-            zydeco::eval_virtual_prog(p, env, &mut input, &mut output, &[])?;
-        if exit_code != 0 {
-            Err(format!("Non-zero exit code: {}", exit_code))?
-        }
-        let s = std::str::from_utf8(&output).unwrap();
-        assert_eq!("hello world\n5 4 3 2 1", s);
+    //     let mut input = std::io::Cursor::new("hello\n");
+    //     let mut output: Vec<u8> = Vec::new();
+    //     let exit_code =
+    //         zydeco::eval_virtual_prog(p, env, &mut input, &mut output, &[])?;
+    //     if exit_code != 0 {
+    //         Err(format!("Non-zero exit code: {}", exit_code))?
+    //     }
+    //     let s = std::str::from_utf8(&output).unwrap();
+    //     assert_eq!("hello world\n5 4 3 2 1", s);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }

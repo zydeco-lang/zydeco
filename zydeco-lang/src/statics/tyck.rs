@@ -70,7 +70,6 @@ impl Kind {
 impl TypeCheck for Value {
     type Out = Type;
     fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Ann<TypeCheckError>> {
-        println!("syn: {}", self);
         match self {
             Value::TermAnn(body, typ, ..) => {
                 body.ana(typ, ctx)?;
@@ -103,7 +102,6 @@ impl TypeCheck for Value {
     fn ana(
         &self, typ: &Self::Out, ctx: &Ctx,
     ) -> Result<(), Ann<TypeCheckError>> {
-        println!("ana: {} : {}", self, typ);
         match self {
             Value::Thunk(e, ann, ..) => {
                 if let TCtor::Thunk = typ.ctor {
@@ -172,7 +170,6 @@ impl TypeCheck for Compute {
     type Out = Type;
 
     fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Ann<TypeCheckError>> {
-        println!("syn: {}", self);
         match self {
             Compute::TermAnn(body, ty, ..) => {
                 body.ana(ty, ctx)?;
@@ -382,7 +379,6 @@ impl TypeCheck for Compute {
     fn ana(
         &self, typ: &Self::Out, ctx: &Ctx,
     ) -> Result<(), Ann<TypeCheckError>> {
-        println!("ana: {} : {}", self, typ);
         match self {
             Compute::Let { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();

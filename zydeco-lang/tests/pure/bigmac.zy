@@ -1,0 +1,23 @@
+let a = 1;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+do a <- ret a;
+ret a

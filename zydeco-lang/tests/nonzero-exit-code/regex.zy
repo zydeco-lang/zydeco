@@ -114,6 +114,6 @@ let demo = { fn (syn: Syn, str: String, kont: U(OS)) ->
   end
 };
 
-! demo (Concat(Kleene(Str("p")), Concat(Kleene(Str("q")), Choose(Str("xos"), Str("sox"))))) "pppqqqsox\^o^/" {
+! demo (Concat(Kleene(Str("p")), Concat(Kleene(Str("q")), Choose(Str("xos"), Str("sox"))))) "pppqqqsox\\^o^/" {
 ! exit 0
 }

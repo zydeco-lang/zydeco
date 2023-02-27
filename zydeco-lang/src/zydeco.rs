@@ -83,7 +83,6 @@ pub fn eval_virtual_prog(
     p: Program, mut env: Env, r: &mut dyn std::io::BufRead,
     w: &mut dyn std::io::Write, args: &[String],
 ) -> Result<i32, String> {
-    builtins::link_builtin(&mut env);
     linker::link(&mut env, &p.decls);
     eval_virtual_os_computation(*p.comp, env, r, w, args)
 }
