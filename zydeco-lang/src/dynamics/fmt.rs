@@ -1,5 +1,6 @@
 use super::syntax::*;
 use crate::utils::fmt::{Args, FmtArgs};
+use crate::dynamics::apply_string_escape_repl;
 
 impl FmtArgs for ZValue {
     fn fmt_args(&self, args: Args) -> String {
@@ -12,8 +13,8 @@ impl FmtArgs for ZValue {
                 format!("{}({})", ctor, cargs.join(", "))
             }
             ZValue::Int(i) => format!("{}", i),
-            ZValue::String(s) => format!("\"{}\"", s),
-            ZValue::Char(c) => format!("\'{}\'", c),
+            ZValue::String(s) => apply_string_escape_repl(s),
+            ZValue::Char(c) => format!("\'{}\'", c.escape_debug()), //escape character
         }
     }
 }
