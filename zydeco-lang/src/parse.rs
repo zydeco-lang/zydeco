@@ -6,3 +6,10 @@ pub mod syntax;
 pub mod new_syntax;
 
 pub use parser::{ExpressionParser, ZydecoParser};
+
+use std::path::PathBuf;
+
+pub struct ZydecoFile {
+    pub path: PathBuf,
+    pub content: String,
+}

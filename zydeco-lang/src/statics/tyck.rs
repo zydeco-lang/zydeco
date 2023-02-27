@@ -1,8 +1,8 @@
 use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
 use crate::{
     parse::syntax::*,
+    syntax::ann::{ann, Ann, AnnHolder, AnnInfo},
     syntax::binders::*,
-    utils::ann::{ann, Ann, AnnHolder, AnnInfo},
 };
 use std::collections::HashMap;
 use TypeCheckError::*;
@@ -654,11 +654,16 @@ impl TypeCheck for Type {
                     } else {
                         for (arg, param) in self.args.iter().zip(params) {
                             let karg = arg.syn(ctx)?;
-                            param.eqv(&karg).ok_or_else(|| self.ann.make(KindMismatch {
-                                context: format!("synthesizing kind of {}", x),
-                                expected: param.clone(),
-                                found: karg,
-                            }))?
+                            param.eqv(&karg).ok_or_else(|| {
+                                self.ann.make(KindMismatch {
+                                    context: format!(
+                                        "synthesizing kind of {}",
+                                        x
+                                    ),
+                                    expected: param.clone(),
+                                    found: karg,
+                                })
+                            })?
                         }
                         Ok(out.clone())
                     }

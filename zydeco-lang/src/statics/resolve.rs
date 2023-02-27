@@ -1,4 +1,4 @@
-use crate::utils::ann::AnnInfo;
+use crate::syntax::AnnInfo;
 use std::collections::HashMap;
 use std::fmt;
 

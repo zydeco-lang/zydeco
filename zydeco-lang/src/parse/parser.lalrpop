@@ -2,7 +2,7 @@ use crate::{
     lex::token::*,
     parse::syntax::*,
     syntax::{binders::*, TCtor},
-    utils::ann::*,
+    syntax::ann::*,
 };
 grammar<'input>(input: &'input str);
 
@@ -75,7 +75,7 @@ DtorBranch: (DtorV, Vec<Type>, Type) = {
 
 Val: Value = {
     "(" <Val> ")" => <>,
-    <l:@L> "(" <v:Val> "::" <t:TVal> ")"<r:@R>  => Value::TermAnn(Box::new(v), t, ann(l,r)),
+    <l:@L> "(" <v:Val> "::" <t:TVal> ")" <r:@R>  => Value::TermAnn(Box::new(v), t, ann(l,r)),
     <l:@L> <x:TermV> <r:@R> => Value::Var(x, ann(l,r)),
     <l:@L> "{" <e:Boxed<Comp>> "}" <r:@R> => Value::Thunk(e, ann(l,r)),
     <l:@L> <ctor:CtorV> "(" <vs:SepByEnd<",", ")", <Val>>> <r:@R> => Value::Ctor(ctor, vs, ann(l,r)),
@@ -162,13 +162,13 @@ FnArg: (TermV, Option<Box<Type>>) = {
 }
 
 MatchBranches: Vec<(CtorV, Vec<TermV>, Box<Compute>)> = {
-  <mut m: Branches<CtorPat>> => {
+  <m: Branches<CtorPat>> => {
     m.into_iter().map(|((c, xs), m)| (c, xs, m)).collect()
   }
 }
 
 CoMatchBranches: Vec<(DtorV, Vec<TermV>, Box<Compute>)> = {
-  <mut m: Branches<DtorPat>> => {
+  <m: Branches<DtorPat>> => {
     m.into_iter().map(|((d, xs), m)| (d, xs, m)).collect()
   }
 }

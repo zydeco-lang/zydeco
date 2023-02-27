@@ -1,4 +1,4 @@
-use crate::{syntax::*, utils::ann::Ann};
+use crate::{syntax::Ann, syntax::*};
 use enum_dispatch::enum_dispatch;
 use std::{collections::HashMap, rc::Rc};
 
@@ -39,8 +39,8 @@ pub enum TermComputation {
     Let(Ann<Let<Ann<TermV>, TV, TC>>),
     Do(Ann<Do<Ann<TermV>, TC>>),
     Rec(Ann<Rec<Ann<TermV>, TC>>),
-    Match(Ann<Match<Ann<TermV>, TV, TC>>),
-    CoMatch(Ann<CoMatch<Ann<TermV>, TC>>),
+    Match(Ann<Match<CtorV, Ann<TermV>, TV, TC>>),
+    CoMatch(Ann<CoMatch<DtorV, Ann<TermV>, TC>>),
     Dtor(Ann<Dtor<TC, Ann<DtorV>, TV>>),
 }
 type TC = Rc<TermComputation>;
@@ -58,8 +58,8 @@ pub enum Term {
 pub struct Module {
     pub name: Option<String>,
     pub type_ctx: HashMap<Ann<TypeV>, TypeArity<Kind>>,
-    pub data: Vec<Ann<Data<Ann<TermV>, Ann<CtorV>, T>>>,
-    pub codata: Vec<Ann<Codata<Ann<TermV>, Ann<DtorV>, T>>>,
+    pub data: Vec<Ann<Data<Ann<TypeV>, Ann<CtorV>, T>>>,
+    pub codata: Vec<Ann<Codata<Ann<TypeV>, Ann<DtorV>, T>>>,
     pub define: Vec<Ann<Define<Ann<TermV>, T, TV>>>,
     pub entry: Ann<TermComputation>,
 }

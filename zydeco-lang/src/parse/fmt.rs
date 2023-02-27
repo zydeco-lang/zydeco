@@ -13,7 +13,9 @@ impl FmtArgs for Program {
 impl FmtArgs for Value {
     fn fmt_args(&self, args: Args) -> String {
         match self {
-            Value::TermAnn(v, t, _) => format!("({}::{})", v.fmt_args(args), t.fmt_args(args)),
+            Value::TermAnn(v, t, _) => {
+                format!("({}::{})", v.fmt_args(args), t.fmt_args(args))
+            }
             Value::Var(x, _) => format!("{}", x.fmt_args(args)),
             Value::Thunk(e, _) => format!("{{ {} }}", e.fmt_args(args)),
             Value::Ctor(ctor, vs, _) => format!(
@@ -34,7 +36,9 @@ impl FmtArgs for Value {
 impl FmtArgs for Compute {
     fn fmt_args(&self, fmta: Args) -> String {
         match self {
-            Compute::TermAnn(v, t, _) => format!("({}::{})", v.fmt_args(fmta), t.fmt_args(fmta)),
+            Compute::TermAnn(v, t, _) => {
+                format!("({}::{})", v.fmt_args(fmta), t.fmt_args(fmta))
+            }
             Compute::Let { binding, body, .. } => {
                 let (x, _, v) = binding;
                 format!(

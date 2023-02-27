@@ -1,4 +1,4 @@
-use crate::{syntax::binders::*, utils::ann::AnnInfo};
+use crate::syntax::{binders::*, AnnInfo};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {

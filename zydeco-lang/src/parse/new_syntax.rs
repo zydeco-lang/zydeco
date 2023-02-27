@@ -1,4 +1,4 @@
-use crate::{syntax::*, utils::ann::Ann};
+use crate::{syntax::Ann, syntax::*};
 use enum_dispatch::enum_dispatch;
 use std::rc::Rc;
 
@@ -87,8 +87,8 @@ pub enum TermComputation {
     Lam(Ann<Lam<Ann<TermV>, TC>>),
     App(Ann<App<TC, TV>>),
     Rec(Ann<Rec<Ann<TermV>, TC>>),
-    Match(Ann<Match<Ann<TermV>, TV, TC>>),
-    CoMatch(Ann<CoMatch<Ann<TermV>, TC>>),
+    Match(Ann<Match<CtorV, Ann<TermV>, TV, TC>>),
+    CoMatch(Ann<CoMatch<DtorV, Ann<TermV>, TC>>),
     Dtor(Ann<Dtor<TC, Ann<DtorV>, TV>>),
 }
 type TC = Rc<TermComputation>;
@@ -137,12 +137,12 @@ mod inject_computation {
             Rc::new(TermComputation::Rec(self))
         }
     }
-    impl Into<TC> for Ann<Match<Ann<TermV>, TV, TC>> {
+    impl Into<TC> for Ann<Match<CtorV, Ann<TermV>, TV, TC>> {
         fn into(self) -> TC {
             Rc::new(TermComputation::Match(self))
         }
     }
-    impl Into<TC> for Ann<CoMatch<Ann<TermV>, TC>> {
+    impl Into<TC> for Ann<CoMatch<DtorV, Ann<TermV>, TC>> {
         fn into(self) -> TC {
             Rc::new(TermComputation::CoMatch(self))
         }

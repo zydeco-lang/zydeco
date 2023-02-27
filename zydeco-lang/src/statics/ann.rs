@@ -1,6 +1,6 @@
 use crate::{
     parse::syntax::{Compute, Program, Value},
-    utils::ann::{AnnHolder, AnnInfo},
+    syntax::ann::{AnnHolder, AnnInfo},
 };
 
 impl AnnHolder for Program {
