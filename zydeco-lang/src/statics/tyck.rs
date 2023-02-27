@@ -105,60 +105,60 @@ impl TypeCheck for Value {
             Value::Thunk(e, ann, ..) => {
                 if let TCtor::Thunk = typ.ctor {
                     if typ.args.len() != 1 {
-                        return Err(ann.make(ArityMismatch {
+                        Err(ann.make(ArityMismatch {
                             context: format!("thunk"),
                             expected: 1,
                             found: typ.args.len(),
-                        }));
+                        }))?;
                     }
                     e.ana(&typ.args[0], ctx)
                 } else {
                     Err(ann.make(TypeExpected {
+                        context: format!("thunk"),
                         expected: format!("thunk"),
                         found: typ.to_owned(),
                     }))
                 }
             }
             Value::Ctor(ctor, args, ann, ..) => {
-                if let TCtor::Var(tvar) = &typ.ctor {
-                    let data = ctx.data.get(tvar).ok_or_else(|| {
-                        ann.make(ErrStr(format!("unknown ctor: {}", tvar)))
-                    })?;
-                    let targs = data
-                        .ctors
-                        .iter()
-                        .find(|(ctor_, _)| ctor == ctor_)
-                        .ok_or_else(|| {
-                            ann.make(ErrStr(format!("unknown ctor: {}", ctor)))
-                        })?
-                        .1
-                        .clone();
-                    if args.len() != targs.len() {
-                        return Err(ann.make(ArityMismatch {
-                            context: format!(
-                                "application of constructor {}",
-                                ctor
-                            ),
-                            expected: targs.len(),
-                            found: args.len(),
-                        }));
-                    }
-                    for (arg, targ) in args.iter().zip(targs.iter()) {
-                        arg.ana(&targ, ctx)?;
-                    }
-                    Ok(())
-                } else {
+                let TCtor::Var(tvar) = &typ.ctor else {
                     Err(ann.make(TypeExpected {
-                        expected: format!("constructor {}", ctor),
+                        context: format!("constructor"),
+                        expected: format!("{}", ctor),
                         found: typ.to_owned(),
-                    }))
+                    }))?
+                };
+                let data = ctx.data.get(tvar).ok_or_else(|| {
+                    ann.make(ErrStr(format!("unknown data type: {}", tvar)))
+                })?;
+                let targs = &data
+                    .ctors
+                    .iter()
+                    .find(|(ctor_, _)| ctor == ctor_)
+                    .ok_or_else(|| {
+                        ann.make(ErrStr(format!("unknown ctor: {}", ctor)))
+                    })?
+                    .1;
+                if args.len() != targs.len() {
+                    Err(ann.make(ArityMismatch {
+                        context: format!("application of constructor {}", ctor),
+                        expected: targs.len(),
+                        found: args.len(),
+                    }))?;
                 }
+                for (arg, targ) in args.iter().zip(targs.iter()) {
+                    arg.ana(&targ, ctx)?;
+                }
+                Ok(())
             }
             v => {
                 let t = self.syn(ctx)?;
                 typ.eqv(&t).ok_or_else(|| {
-                    v.ann()
-                        .make(TypeMismatch { expected: typ.clone(), found: t })
+                    v.ann().make(TypeMismatch {
+                        context: format!("subsumption `{}`", v),
+                        expected: typ.clone(),
+                        found: t,
+                    })
                 })
             }
         }
@@ -189,6 +189,7 @@ impl TypeCheck for Compute {
                         body.syn(&ctx)
                     }
                     _ => Err(ann.make(TypeExpected {
+                        context: format!("do"),
                         expected: format!("Ret(a?)"),
                         found: te.into(),
                     })),
@@ -199,14 +200,16 @@ impl TypeCheck for Compute {
                 match t.ctor {
                     TCtor::Thunk => Ok(t.args[0].clone()),
                     _ => Err(ann.make(TypeExpected {
+                        context: format!("force"),
                         expected: format!("Thunk(b?)"),
                         found: t.into(),
                     })),
                 }
             }
-            Compute::Return(v, ann, ..) => {
+            Compute::Return(v, ann) => {
                 let t = v.syn(&ctx)?;
                 Ok(Type { ctor: TCtor::Ret, args: vec![t], ann: ann.clone() })
+                // Err(ann.make(NeedAnnotation { content: format!("return") }))
             }
             Compute::Lam { arg: (x, t), body, ann } => {
                 let mut ctx = ctx.clone();
@@ -236,6 +239,7 @@ impl TypeCheck for Compute {
                 let ty_body = match ty.ctor {
                     TCtor::Thunk => ty.args[0].clone(),
                     _ => Err(ann.make(TypeExpected {
+                        context: format!("recursion"),
                         expected: format!("Thunk(b?)"),
                         found: ty.as_ref().to_owned().into(),
                     }))?,
@@ -244,6 +248,7 @@ impl TypeCheck for Compute {
                 let tbody_ = body.syn(&ctx)?;
                 ty_body.eqv(&tbody_).ok_or_else(|| {
                     ann.make(TypeMismatch {
+                        context: format!("recursion"),
                         expected: ty_body.clone().into(),
                         found: tbody_.into(),
                     })
@@ -259,6 +264,7 @@ impl TypeCheck for Compute {
                         let ty_cod = tfn.args[1].clone();
                         Type::eqv(&ty_dom, &targ).ok_or_else(|| {
                             ann.make(TypeMismatch {
+                                context: format!("application"),
                                 expected: ty_dom.to_owned().into(),
                                 found: targ.into(),
                             })
@@ -266,6 +272,7 @@ impl TypeCheck for Compute {
                         Ok(ty_cod)
                     }
                     _ => Err(ann.make(TypeExpected {
+                        context: format!("application"),
                         expected: format!("a? -> b?"),
                         found: tfn.into(),
                     })),
@@ -275,6 +282,7 @@ impl TypeCheck for Compute {
                 let scrut_ty = scrut.syn(&ctx)?;
                 let TCtor::Var(data_ty_name) = scrut_ty.ctor else {
                     Err(ann.make(TypeExpected {
+                        context: format!("match"),
                         expected: format!("a?"),
                         found: scrut_ty.into(),
                     }))?
@@ -294,11 +302,11 @@ impl TypeCheck for Compute {
                     };
                     // check if the ctor has the right number of arguments
                     if vars.len() != ty_args.len() {
-                        return Err(ann.make(ArityMismatch {
+                        Err(ann.make(ArityMismatch {
                             context: format!("`match` arm for {}", ctor),
                             expected: vars.len(),
                             found: ty_args.len(),
-                        }));
+                        }))?;
                     }
                     // check the body of the branch
                     let mut ctx = ctx.clone();
@@ -313,10 +321,10 @@ impl TypeCheck for Compute {
                 }
                 // check that all ctors were covered
                 if !ctors.is_empty() {
-                    return Err(ann.make(ErrStr(format!(
+                    Err(ann.make(ErrStr(format!(
                         "{} uncovered ctors",
                         ctors.len()
-                    ))));
+                    ))))?;
                 }
                 let Some(ty) = ty else {
                     Err(ann.make(NeedAnnotation { content: format!("empty match") }))?
@@ -337,14 +345,14 @@ impl TypeCheck for Compute {
                             ann.make(ErrStr(format!("unknown dtor: {}", dtor)))
                         })?;
                     if args.len() != ty_args.len() {
-                        return Err(ann.make(ArityMismatch {
+                        Err(ann.make(ArityMismatch {
                             context: format!(
                                 "application of destructor {}",
                                 dtor
                             ),
                             expected: ty_args.len(),
                             found: args.len(),
-                        }));
+                        }))?;
                     }
                     for (arg, expected) in args.iter().zip(ty_args.iter()) {
                         arg.ana(expected, ctx)?;
@@ -352,6 +360,7 @@ impl TypeCheck for Compute {
                     Ok(tret.clone())
                 } else {
                     Err(ann.make(TypeExpected {
+                        context: format!("application of destructor {}", dtor),
                         expected: format!("a?"),
                         found: tscrut.into(),
                     }))
@@ -382,6 +391,7 @@ impl TypeCheck for Compute {
                         body.ana(typ, &ctx)
                     }
                     _ => Err(ann.make(TypeExpected {
+                        context: format!("do"),
                         expected: format!("Ret(a?)"),
                         found: te.into(),
                     })),
@@ -392,6 +402,7 @@ impl TypeCheck for Compute {
                 let t = v.syn(&ctx)?;
                 typ.eqv(&t).ok_or_else(|| {
                     ann.make(TypeMismatch {
+                        context: format!("return"),
                         expected: typ.to_owned(),
                         found: t,
                     })
@@ -409,6 +420,7 @@ impl TypeCheck for Compute {
                 let tbody = body.syn(&ctx)?;
                 typ.eqv(&tbody).ok_or_else(|| {
                     ann.make(TypeMismatch {
+                        context: format!("lambda"),
                         expected: typ.to_owned(),
                         found: tbody,
                     })
@@ -426,12 +438,14 @@ impl TypeCheck for Compute {
                 let ty_body = match ty.ctor {
                     TCtor::Thunk => ty.args[0].clone(),
                     _ => Err(ann.make(TypeExpected {
+                        context: format!("recursion"),
                         expected: format!("Thunk(b?)"),
                         found: ty.as_ref().to_owned().into(),
                     }))?,
                 };
                 Type::eqv(&ty_body, typ).ok_or_else(|| {
                     ann.make(TypeMismatch {
+                        context: format!("recursion"),
                         expected: typ.to_owned(),
                         found: ty_body,
                     })
@@ -446,6 +460,7 @@ impl TypeCheck for Compute {
                         let ty_cod = tfn.args[1].clone();
                         Type::eqv(&ty_cod, &typ).ok_or_else(|| {
                             ann.make(TypeMismatch {
+                                context: format!("application"),
                                 expected: typ.to_owned().into(),
                                 found: ty_cod.into(),
                             })
@@ -454,6 +469,7 @@ impl TypeCheck for Compute {
                         v.ana(&ty_dom, ctx)
                     }
                     _ => Err(ann.make(TypeExpected {
+                        context: format!("application"),
                         expected: format!("a? -> b?"),
                         found: tfn.into(),
                     })),
@@ -463,6 +479,7 @@ impl TypeCheck for Compute {
                 let scrut_ty = scrut.syn(&ctx)?;
                 let TCtor::Var(data_ty_name) = scrut_ty.ctor else {
                     Err(ann.make(TypeExpected {
+                        context: format!("match"),
                         expected: format!("a?"),
                         found: scrut_ty.into(),
                     }))?
@@ -481,11 +498,11 @@ impl TypeCheck for Compute {
                     };
                     // check if the ctor has the right number of arguments
                     if vars.len() != ty_args.len() {
-                        return Err(ann.make(ArityMismatch {
+                        Err(ann.make(ArityMismatch {
                             context: format!("`match` arm for {}", ctor),
                             expected: vars.len(),
                             found: ty_args.len(),
-                        }));
+                        }))?;
                     }
                     // check the body of the branch
                     let mut ctx = ctx.clone();
@@ -496,10 +513,10 @@ impl TypeCheck for Compute {
                 }
                 // check that all ctors were covered
                 if !ctors.is_empty() {
-                    return Err(ann.make(ErrStr(format!(
+                    Err(ann.make(ErrStr(format!(
                         "{} uncovered ctors",
                         ctors.len()
-                    ))));
+                    ))))?;
                 }
                 Ok(())
             }
@@ -509,10 +526,8 @@ impl TypeCheck for Compute {
                         ann.make(ErrStr(format!("unknown coda: {}", tvar)))
                     })?;
                     let mut dtors: HashMap<DtorV, (Vec<Type>, Type)> =
-                        HashMap::from_iter(coda.dtors.iter().map(
-                            |(dtor, ty_args, tret)| {
-                                (dtor.clone(), (ty_args.clone(), tret.clone()))
-                            },
+                        HashMap::from_iter(coda.dtors.clone().into_iter().map(
+                            |(dtor, ty_args, tret)| (dtor, (ty_args, tret)),
                         ));
                     for (dtor, vars, body) in arms {
                         let (ty_args, tret) =
@@ -524,17 +539,18 @@ impl TypeCheck for Compute {
                             })?;
                         typ.eqv(&tret).ok_or_else(|| {
                             ann.make(TypeMismatch {
+                                context: format!("`comatch` arm for {}", dtor),
                                 expected: typ.to_owned(),
                                 found: tret,
                             })
                         })?;
                         // check if the dtor has the right number of arguments
                         if vars.len() != ty_args.len() {
-                            return Err(ann.make(ArityMismatch {
+                            Err(ann.make(ArityMismatch {
                                 context: format!("`comatch` arm for {}", dtor),
                                 expected: vars.len(),
                                 found: ty_args.len(),
-                            }));
+                            }))?;
                         }
                         // check the body of the branch
                         let mut ctx = ctx.clone();
@@ -545,14 +561,15 @@ impl TypeCheck for Compute {
                     }
                     // check that all dtors were covered
                     if !dtors.is_empty() {
-                        return Err(ann.make(ErrStr(format!(
+                        Err(ann.make(ErrStr(format!(
                             "{} uncovered dtors",
                             dtors.len()
-                        ))));
+                        ))))?;
                     }
                     Ok(())
                 } else {
                     Err(ann.make(TypeExpected {
+                        context: format!("comatch"),
                         expected: format!("a?"),
                         found: typ.to_owned(),
                     }))
@@ -573,19 +590,23 @@ impl TypeCheck for Compute {
                         })?;
                     typ.eqv(&tret).ok_or_else(|| {
                         ann.make(TypeMismatch {
+                            context: format!(
+                                "application of destructor {}",
+                                dtor
+                            ),
                             expected: typ.to_owned(),
                             found: tret.to_owned(),
                         })
                     })?;
                     if args.len() != ty_args.len() {
-                        return Err(ann.make(ArityMismatch {
+                        Err(ann.make(ArityMismatch {
                             context: format!(
                                 "application of destructor {}",
                                 dtor
                             ),
                             expected: ty_args.len(),
                             found: args.len(),
-                        }));
+                        }))?;
                     }
                     for (arg, expected) in args.iter().zip(ty_args.iter()) {
                         arg.ana(expected, ctx)?;
@@ -593,6 +614,7 @@ impl TypeCheck for Compute {
                     Ok(())
                 } else {
                     Err(ann.make(TypeExpected {
+                        context: format!("application of destructor {}", dtor),
                         expected: format!("a?"),
                         found: tscrut.into(),
                     }))
@@ -602,6 +624,7 @@ impl TypeCheck for Compute {
                 let t = self.syn(ctx)?;
                 t.eqv(typ).ok_or_else(|| {
                     c.ann().make(TypeMismatch {
+                        context: format!("subsumption `{}`", c),
                         expected: typ.to_owned(),
                         found: t,
                     })

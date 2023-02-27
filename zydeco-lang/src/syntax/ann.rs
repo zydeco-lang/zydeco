@@ -130,7 +130,7 @@ impl<T: Hash> Hash for Ann<T> {
 
 impl<T: Display> Display for Ann<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} (Info: {:?})", self.inner, self.info)
+        write!(f, "{} ({:?})", self.inner, self.info)
     }
 }
 
