@@ -1,4 +1,5 @@
 pub mod ann;
+pub mod env;
 
 pub use ann::{Ann, AnnInfo};
 use std::rc::Rc;
@@ -89,6 +90,8 @@ pub struct TypeArity<K: KindT> {
 impl<K: KindT> KindT for TypeArity<K> {}
 
 /* ---------------------------------- Types --------------------------------- */
+
+impl TypeT for () {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeAnn<Type, Kind> {
@@ -194,7 +197,7 @@ impl<TeV: VarT, B: ComputationT> ComputationT for Rec<TeV, B> {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Match<C, TeV: VarT, A: ValueT, B: ComputationT> {
     pub scrut: A,
-    pub branches: Vec<Matcher<C, TeV, B>>,
+    pub arms: Vec<Matcher<C, TeV, B>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Matcher<C, TeV: VarT, B: ComputationT> {
@@ -209,7 +212,7 @@ impl<C, TeV: VarT, A: ValueT, B: ComputationT> ComputationT
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CoMatch<D, TeV: VarT, B: ComputationT> {
-    pub branches: Vec<CoMatcher<D, TeV, B>>,
+    pub arms: Vec<CoMatcher<D, TeV, B>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CoMatcher<D, TeV: VarT, B: ComputationT> {

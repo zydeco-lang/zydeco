@@ -1,4 +1,4 @@
-use crate::{syntax::Ann, syntax::*};
+pub use crate::{syntax::Ann, syntax::*};
 use enum_dispatch::enum_dispatch;
 use std::{collections::HashMap, rc::Rc};
 
@@ -22,28 +22,29 @@ impl TypeT for Type {}
 #[enum_dispatch(ValueT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TermValue {
-    TermAnn(Ann<TermAnn<TV, T>>),
-    Var(Ann<TermV>),
-    Thunk(Ann<Thunk<TC>>),
-    Ctor(Ann<Ctor<Ann<CtorV>, TV>>),
+    TermAnn(TermAnn<TV, T>),
+    Var(TermV),
+    Thunk(Thunk<TC>),
+    Ctor(Ctor<CtorV, TV>),
+    Literal(Literal),
 }
-type TV = Rc<TermValue>;
+type TV = Rc<Ann<TermValue>>;
 impl ValueT for TermValue {}
 
 #[enum_dispatch(ComputationT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TermComputation {
-    TermAnn(Ann<TermAnn<TC, T>>),
-    Ret(Ann<Ret<TV>>),
-    Force(Ann<Force<TV>>),
-    Let(Ann<Let<Ann<TermV>, TV, TC>>),
-    Do(Ann<Do<Ann<TermV>, TC>>),
-    Rec(Ann<Rec<Ann<TermV>, TC>>),
-    Match(Ann<Match<CtorV, Ann<TermV>, TV, TC>>),
-    CoMatch(Ann<CoMatch<DtorV, Ann<TermV>, TC>>),
-    Dtor(Ann<Dtor<TC, Ann<DtorV>, TV>>),
+    TermAnn(TermAnn<TC, T>),
+    Ret(Ret<TV>),
+    Force(Force<TV>),
+    Let(Let<TermV, TV, TC>),
+    Do(Do<TermV, TC>),
+    Rec(Rec<TermV, TC>),
+    Match(Match<CtorV, TermV, TV, TC>),
+    CoMatch(CoMatch<DtorV, TermV, TC>),
+    Dtor(Dtor<TC, DtorV, TV>),
 }
-type TC = Rc<TermComputation>;
+type TC = Rc<Ann<TermComputation>>;
 impl ComputationT for TermComputation {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,9 +58,9 @@ pub enum Term {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
     pub name: Option<String>,
-    pub type_ctx: HashMap<Ann<TypeV>, TypeArity<Kind>>,
-    pub data: Vec<Ann<Data<Ann<TypeV>, Ann<CtorV>, T>>>,
-    pub codata: Vec<Ann<Codata<Ann<TypeV>, Ann<DtorV>, T>>>,
-    pub define: Vec<Ann<Define<Ann<TermV>, T, TV>>>,
+    pub type_ctx: HashMap<TypeV, TypeArity<Kind>>,
+    pub data: Vec<Ann<Data<TypeV, CtorV, T>>>,
+    pub codata: Vec<Ann<Codata<TypeV, DtorV, T>>>,
+    pub define: Vec<Ann<Define<TermV, T, TV>>>,
     pub entry: Ann<TermComputation>,
 }

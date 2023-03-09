@@ -105,8 +105,11 @@ pub struct Ann<T> {
 }
 
 impl<T> Ann<T> {
-    pub fn inner(&self) -> &T {
+    pub fn inner_ref(&self) -> &T {
         &self.inner
+    }
+    pub fn inner(self) -> T {
+        self.inner
     }
     pub fn map<U, F>(&self, f: F) -> Ann<U>
     where

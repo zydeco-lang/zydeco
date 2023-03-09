@@ -187,7 +187,7 @@ impl TypeCheck for Compute {
                 ctx.push(x.clone(), t);
                 body.syn(&ctx)
             }
-            Compute::Do { binding: (x, ty, def), body, ann, .. } => {
+            Compute::Do { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();
                 let te = if let Some(ty) = ty {
                     ty.syn(&ctx)?.ensure_vtype("do", ann)?;
