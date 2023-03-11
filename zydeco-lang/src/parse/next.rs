@@ -1,3 +1,5 @@
+// use lalrpop_util::lalrpop_mod;
+// lalrpop_mod!(pub parser, "/parse/next/parser.rs");
 pub use crate::{syntax::Ann, syntax::*};
 use enum_dispatch::enum_dispatch;
 use std::{collections::HashMap, rc::Rc};
@@ -23,7 +25,6 @@ pub enum Type {
     App(TypePair),
     Arr(TypePair),
 }
-type T = Box<Ann<Type>>;
 impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -31,59 +32,57 @@ impl TypeT for Type {}
 #[enum_dispatch(ValueT)]
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermValue {
-    TermAnn(TermAnn<TV, T>),
+    TermAnn(TermAnn<Box<Ann<TermValue>>, Ann<Type>>),
     Var(TermV),
-    Thunk(Thunk<TC>),
-    Ctor(Ctor<CtorV, TV>),
+    Thunk(Thunk<Box<Ann<TermComputation>>>),
+    Ctor(Ctor<CtorV, Ann<TermValue>>),
     Literal(Literal),
 }
-type TV = Box<Ann<TermValue>>;
 impl ValueT for TermValue {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Function {
-    pub params : Vec<(TermV, Option<T>)>,
-    pub body : TC
+    pub params : Vec<(TermV, Option<Ann<Type>>)>,
+    pub body : Box<Ann<TermComputation>>
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Application {
-    pub expr_in : TC,
-    pub args : Vec<TV>
+    pub expr_in : Box<Ann<TermComputation>>,
+    pub args : Vec<Ann<TermValue>>
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Let {
     pub binder : TermV,
-    pub ty_ann : Option<T>,
-    pub def : TC,
-    pub body : TC
+    pub ty_ann : Option<Ann<Type>>,
+    pub def : Box<Ann<TermComputation>>,
+    pub body : Box<Ann<TermComputation>>
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Do {
     pub binder : TermV,
-    pub ty_ann : Option<T>,
-    pub task : TV,
-    pub body : TC
+    pub ty_ann : Option<Ann<Type>>,
+    pub task : Box<Ann<TermValue>>,
+    pub body : Box<Ann<TermComputation>>
 }
 
 #[enum_dispatch(ComputationT)]
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermComputation {
-    TermAnn(TermAnn<TC, T>),
-    Ret(Ret<TV>),
-    Force(Force<TV>),
+    TermAnn(TermAnn<Box<Ann<TermComputation>>, Ann<Type>>),
+    Ret(Ret<Box<Ann<TermValue>>>),
+    Force(Force<Box<Ann<TermValue>>>),
     Let(Let),
     Do(Do),
-    Rec(Rec<TermV, TC>),
-    Match(Match<CtorV, TermV, TV, TC>),
+    Rec(Rec<TermV, Box<Ann<TermComputation>>>),
+    Match(Match<CtorV, TermV, Box<Ann<TermValue>>, Ann<TermComputation>>),
     Function(Function),
     Application(Application),
-    CoMatch(CoMatch<DtorV, TermV, TC>),
-    Dtor(Dtor<TC, DtorV, TV>),
+    CoMatch(CoMatch<DtorV, TermV, Ann<TermComputation>>),
+    Dtor(Dtor<Box<Ann<TermComputation>>, DtorV, Ann<TermValue>>),
 }
-type TC = Box<Ann<TermComputation>>;
 impl ComputationT for TermComputation {}
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
@@ -96,9 +95,9 @@ pub enum Term {
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
-    Data(Data<TypeV, CtorV, T>),
-    Codata(Codata<TypeV, DtorV, T>),
-    Define(Define<TermV, T, TV>)
+    Data(Data<TypeV, CtorV, Ann<Type>>),
+    Codata(Codata<TypeV, DtorV, Ann<Type>>),
+    Define(Define<TermV, Ann<Type>, Box<Ann<TermValue>>>)
 }
 
 

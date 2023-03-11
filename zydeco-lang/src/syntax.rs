@@ -234,6 +234,7 @@ impl<B: ComputationT, D, A: ValueT> ComputationT for Dtor<B, D, A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Define<TeV: VarT, T: TypeT, A: ValueT> {
+    pub public: bool,
     pub name: TeV,
     pub ty: T,
     pub def: Option<A>,
@@ -242,7 +243,7 @@ pub struct Define<TeV: VarT, T: TypeT, A: ValueT> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Data<TyV: VarT, C, T: TypeT> {
     pub name: TyV,
-    pub args: Vec<TyV>,
+    pub params: Vec<(TyV, Kind)>,
     pub ctors: Vec<DataBr<C, T>>,
 }
 
@@ -252,7 +253,7 @@ pub struct DataBr<C, T: TypeT>(pub C, pub Vec<T>);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Codata<TyV: VarT, D, T: TypeT> {
     pub name: TyV,
-    pub args: Vec<TyV>,
+    pub params: Vec<(TyV, Kind)>,
     pub dtors: Vec<CodataBr<D, T>>,
 }
 
