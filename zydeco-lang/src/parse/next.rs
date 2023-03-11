@@ -1,0 +1,66 @@
+pub use crate::{syntax::Ann, syntax::*};
+use enum_dispatch::enum_dispatch;
+use std::{collections::HashMap, rc::Rc};
+
+/* ---------------------------------- Kind ---------------------------------- */
+
+pub use crate::syntax::Kind;
+
+/* ---------------------------------- Type ---------------------------------- */
+
+#[enum_dispatch(TypeT)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Type {
+    TypeAnn(Ann<TypeAnn<T, Ann<Kind>>>),
+    TypeApp(Ann<TypeApp<TCtor, T>>),
+}
+type T = Rc<Type>;
+impl TypeT for Type {}
+
+/* ---------------------------------- Term ---------------------------------- */
+
+#[enum_dispatch(ValueT)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TermValue {
+    TermAnn(TermAnn<TV, T>),
+    Var(TermV),
+    Thunk(Thunk<TC>),
+    Ctor(Ctor<CtorV, TV>),
+    Literal(Literal),
+}
+type TV = Rc<Ann<TermValue>>;
+impl ValueT for TermValue {}
+
+#[enum_dispatch(ComputationT)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TermComputation {
+    TermAnn(TermAnn<TC, T>),
+    Ret(Ret<TV>),
+    Force(Force<TV>),
+    Let(Let<TermV, TV, TC>),
+    Do(Do<TermV, TC>),
+    Rec(Rec<TermV, TC>),
+    Match(Match<CtorV, TermV, TV, TC>),
+    CoMatch(CoMatch<DtorV, TermV, TC>),
+    Dtor(Dtor<TC, DtorV, TV>),
+}
+type TC = Rc<Ann<TermComputation>>;
+impl ComputationT for TermComputation {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Term {
+    Val(TermValue),
+    Comp(TermComputation),
+}
+
+/* --------------------------------- Module --------------------------------- */
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Module {
+    pub name: Option<String>,
+    pub type_ctx: HashMap<TypeV, TypeArity<Kind>>,
+    pub data: Vec<Ann<Data<TypeV, CtorV, T>>>,
+    pub codata: Vec<Ann<Codata<TypeV, DtorV, T>>>,
+    pub define: Vec<Ann<Define<TermV, T, TV>>>,
+    pub entry: Ann<TermComputation>,
+}
