@@ -8,13 +8,21 @@ pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypePair (
+    pub Box<Type>,
+    pub Box<Type> 
+);
+
+
 #[enum_dispatch(TypeT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
-    TypeAnn(Ann<TypeAnn<T, Ann<Kind>>>),
-    TypeApp(Ann<TypeApp<TCtor, T>>),
+    Basic(TCtor),
+    App(TypePair),
+    Arr(TypePair),
 }
-type T = Rc<Type>;
+type T = Box<Ann<Type>>;
 impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -28,8 +36,36 @@ pub enum TermValue {
     Ctor(Ctor<CtorV, TV>),
     Literal(Literal),
 }
-type TV = Rc<Ann<TermValue>>;
+type TV = Box<Ann<TermValue>>;
 impl ValueT for TermValue {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Function {
+    pub params : Vec<(TermV, Option<T>)>,
+    pub body : TC
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Application {
+    pub expr_in : TC,
+    pub args : Vec<TV>
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Let {
+    pub binder : TermV,
+    pub ty_ann : Option<T>,
+    pub def : TC,
+    pub body : TC
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Do {
+    pub binder : TermV,
+    pub ty_ann : Option<T>,
+    pub task : TV,
+    pub body : TC
+}
 
 #[enum_dispatch(ComputationT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,14 +73,16 @@ pub enum TermComputation {
     TermAnn(TermAnn<TC, T>),
     Ret(Ret<TV>),
     Force(Force<TV>),
-    Let(Let<TermV, TV, TC>),
-    Do(Do<TermV, TC>),
+    Let(Let),
+    Do(Do),
     Rec(Rec<TermV, TC>),
     Match(Match<CtorV, TermV, TV, TC>),
+    Function(Function),
+    Application(Application),
     CoMatch(CoMatch<DtorV, TermV, TC>),
     Dtor(Dtor<TC, DtorV, TV>),
 }
-type TC = Rc<Ann<TermComputation>>;
+type TC = Box<Ann<TermComputation>>;
 impl ComputationT for TermComputation {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,11 +94,16 @@ pub enum Term {
 /* --------------------------------- Module --------------------------------- */
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Declaration {
+    Data(Data<TypeV, CtorV, T>),
+    Codata(Codata<TypeV, DtorV, T>),
+    Define(Define<TermV, T, TV>)
+}
+
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
     pub name: Option<String>,
-    pub type_ctx: HashMap<TypeV, TypeArity<Kind>>,
-    pub data: Vec<Ann<Data<TypeV, CtorV, T>>>,
-    pub codata: Vec<Ann<Codata<TypeV, DtorV, T>>>,
-    pub define: Vec<Ann<Define<TermV, T, TV>>>,
+    pub declarations : Vec<Declaration>,
     pub entry: Ann<TermComputation>,
 }
