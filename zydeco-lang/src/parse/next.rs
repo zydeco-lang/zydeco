@@ -1,6 +1,7 @@
 pub use crate::{syntax::Ann, syntax::*};
 use enum_dispatch::enum_dispatch;
 use std::{collections::HashMap, rc::Rc};
+use zydeco_derive::EnumGenerator;
 
 /* ---------------------------------- Kind ---------------------------------- */
 
@@ -28,7 +29,7 @@ impl TypeT for Type {}
 /* ---------------------------------- Term ---------------------------------- */
 
 #[enum_dispatch(ValueT)]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermValue {
     TermAnn(TermAnn<TV, T>),
     Var(TermV),
@@ -68,7 +69,7 @@ pub struct Do {
 }
 
 #[enum_dispatch(ComputationT)]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermComputation {
     TermAnn(TermAnn<TC, T>),
     Ret(Ret<TV>),
@@ -85,7 +86,7 @@ pub enum TermComputation {
 type TC = Box<Ann<TermComputation>>;
 impl ComputationT for TermComputation {}
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Term {
     Val(TermValue),
     Comp(TermComputation),
@@ -93,7 +94,7 @@ pub enum Term {
 
 /* --------------------------------- Module --------------------------------- */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
     Data(Data<TypeV, CtorV, T>),
     Codata(Codata<TypeV, DtorV, T>),
@@ -104,6 +105,6 @@ pub enum Declaration {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
     pub name: Option<String>,
-    pub declarations : Vec<Declaration>,
+    pub declarations: Vec<Declaration>,
     pub entry: Ann<TermComputation>,
 }

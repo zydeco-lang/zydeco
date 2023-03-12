@@ -1162,4 +1162,13 @@ dependencies = [
  "logos",
  "once_cell",
  "regex",
+ "zydeco_derive",
+]
+
+[[package]]
+name = "zydeco_derive"
+version = "0.0.1"
+dependencies = [
+ "quote",
+ "syn",
 ]
