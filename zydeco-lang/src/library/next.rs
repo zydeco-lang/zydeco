@@ -1,5 +1,5 @@
 mod syntax {
-    pub use crate::{statics::syntax as ss, syntax::*};
+    pub use crate::{statics::next as ss, syntax::*};
     use enum_dispatch::enum_dispatch;
     use im::Vector;
     use std::{

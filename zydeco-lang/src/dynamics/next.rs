@@ -1,6 +1,6 @@
 mod syntax {
     pub use crate::{
-        statics::syntax as ss,
+        statics::next::syntax as ss,
         syntax::{env::Env, *},
     };
     use enum_dispatch::enum_dispatch;
