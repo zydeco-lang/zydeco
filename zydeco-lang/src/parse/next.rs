@@ -1,8 +1,6 @@
 // use lalrpop_util::lalrpop_mod;
 // lalrpop_mod!(pub parser, "/parse/next/parser.rs");
 pub use crate::{syntax::Ann, syntax::*};
-use enum_dispatch::enum_dispatch;
-use std::{collections::HashMap, rc::Rc};
 use zydeco_derive::EnumGenerator;
 
 /* ---------------------------------- Kind ---------------------------------- */
@@ -11,25 +9,23 @@ pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypePair (
-    pub Box<Type>,
-    pub Box<Type> 
-);
 
-
-#[enum_dispatch(TypeT)]
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypeApp(pub Box<Type>, pub Box<Type>);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypeArrow(pub Box<Type>, pub Box<Type>);
+
+#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Basic(TCtor),
-    App(TypePair),
-    Arr(TypePair),
+    App(TypeApp),
+    Arrow(TypeArrow),
 }
 impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[enum_dispatch(ValueT)]
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermValue {
     TermAnn(TermAnn<Box<Ann<TermValue>>, Ann<Type>>),
@@ -42,33 +38,32 @@ impl ValueT for TermValue {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Function {
-    pub params : Vec<(TermV, Option<Ann<Type>>)>,
-    pub body : Box<Ann<TermComputation>>
+    pub params: Vec<(TermV, Option<Ann<Type>>)>,
+    pub body: Box<Ann<TermComputation>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Application {
-    pub expr_in : Box<Ann<TermComputation>>,
-    pub args : Vec<Ann<TermValue>>
+    pub expr_in: Box<Ann<TermComputation>>,
+    pub args: Vec<Ann<TermValue>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Let {
-    pub binder : TermV,
-    pub ty_ann : Option<Ann<Type>>,
-    pub def : Box<Ann<TermComputation>>,
-    pub body : Box<Ann<TermComputation>>
+    pub binder: TermV,
+    pub ty_ann: Option<Ann<Type>>,
+    pub def: Box<Ann<TermComputation>>,
+    pub body: Box<Ann<TermComputation>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Do {
-    pub binder : TermV,
-    pub ty_ann : Option<Ann<Type>>,
-    pub task : Box<Ann<TermValue>>,
-    pub body : Box<Ann<TermComputation>>
+    pub binder: TermV,
+    pub ty_ann: Option<Ann<Type>>,
+    pub task: Box<Ann<TermValue>>,
+    pub body: Box<Ann<TermComputation>>,
 }
 
-#[enum_dispatch(ComputationT)]
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermComputation {
     TermAnn(TermAnn<Box<Ann<TermComputation>>, Ann<Type>>),
@@ -97,9 +92,8 @@ pub enum Term {
 pub enum Declaration {
     Data(Data<TypeV, CtorV, Ann<Type>>),
     Codata(Codata<TypeV, DtorV, Ann<Type>>),
-    Define(Define<TermV, Ann<Type>, Box<Ann<TermValue>>>)
+    Define(Define<TermV, Ann<Type>, Box<Ann<TermValue>>>),
 }
-
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Module {
