@@ -1,6 +1,6 @@
-mod syntax {
+pub mod syntax {
     pub use crate::{
-        statics::syntax as ss,
+        library::next::syntax as ls,
         syntax::{env::Env, *},
     };
     use enum_dispatch::enum_dispatch;
@@ -10,66 +10,35 @@ mod syntax {
         io::{BufRead, Write},
         rc::Rc,
     };
-
-    pub type EnvValue = Env<TermV, TermValue>;
+    use zydeco_derive::EnumGenerator;
 
     #[derive(Clone)]
-    pub struct Thunk<B: ComputationT> {
-        pub body: B,
-        pub env: EnvValue,
+    pub struct Thunk {
+        pub body: Rc<ls::TermComputation>,
+        pub env: Env<TermV, TermValue>,
     }
 
     #[enum_dispatch(ValueT)]
-    #[derive(Clone)]
+    #[derive(EnumGenerator, Clone)]
     pub enum TermValue {
-        Thunk(Thunk<ss::TermComputation>),
+        Thunk(Thunk),
         Ctor(Ctor<CtorV, TV>),
         Literal(Literal),
     }
     type TV = Rc<TermValue>;
     impl ValueT for TermValue {}
 
-    // pub type PrimComp = fn(
-    //     Vec<ss::TermValue>,
-    //     &mut (dyn BufRead),
-    //     &mut (dyn Write),
-    //     &[String],
-    // ) -> Result<TermComputation, i32>;
-
-    // #[derive(Clone)]
-    // pub struct Prim {
-    //     pub arity: u64,
-    //     pub body: PrimComp,
-    // }
-
-    #[enum_dispatch(ComputationT)]
     #[derive(Clone)]
     pub enum TermComputation {
-        Ret(Ret<TV>),
-        Force(Force<TV>),
-        Do(Do<TermV, TC>),
-        Rec(Rec<TermV, TC>),
-        Match(Match<CtorV, TermV, TV, TC>),
-        CoMatch(CoMatch<DtorV, TermV, TC>),
-        Dtor(Dtor<TC, DtorV, TV>),
-        // Prim(Prim),
-    }
-    type TC = Rc<TermComputation>;
-    impl ComputationT for TermComputation {}
-
-    /* ---------------------------------- Stack --------------------------------- */
-
-    #[derive(Clone)]
-    pub enum Frame {
-        Kont(Rc<ss::TermComputation>, TermV),
+        Kont(Rc<ls::TermComputation>, TermV),
         Dtor(DtorV, Vec<Rc<TermValue>>),
     }
 
-    impl Debug for Frame {
+    impl Debug for TermComputation {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                Frame::Kont(_, var) => write!(f, "Kont({})", var),
-                Frame::Dtor(dtor, _) => write!(f, "Dtor({})", dtor),
+                TermComputation::Kont(_, var) => write!(f, "Kont({})", var),
+                TermComputation::Dtor(dtor, _) => write!(f, "Dtor({})", dtor),
             }
         }
     }
@@ -80,8 +49,8 @@ mod syntax {
         pub input: &'rt mut (dyn BufRead),
         pub output: &'rt mut (dyn Write),
         pub args: &'rt [String],
-        pub stack: Vector<Frame>,
-        pub env: EnvValue,
+        pub stack: Vector<TermComputation>,
+        pub env: Env<TermV, TermValue>,
     }
 
     /* --------------------------------- Module --------------------------------- */
@@ -95,12 +64,7 @@ mod syntax {
 
 mod eval {
     use super::syntax::*;
-    use im::Vector;
-    use std::{
-        io::{BufRead, Write},
-        mem::replace,
-        rc::Rc,
-    };
+    use std::rc::Rc;
 
     pub trait Eval<'rt>: Sized {
         type Out;
@@ -123,98 +87,145 @@ mod eval {
         Step(T),
     }
 
-    impl<'rt> Eval<'rt> for ss::TermValue {
+    impl<'rt> Eval<'rt> for ls::TermValue {
         type Out = TermValue;
 
         fn step<'e>(
             self, runtime: &'e mut Runtime<'rt>,
         ) -> Step<Self, Self::Out> {
             match self {
-                ss::TermValue::TermAnn(ss::TermAnn { body, .. }) => {
-                    Step::Step(body.inner_ref().clone())
-                }
-                ss::TermValue::Var(var) => Step::Done(
+                ls::TermValue::Var(var) => Step::Done(
                     runtime
                         .env
                         .lookup(&var)
                         .expect("variable does not exist")
                         .clone(),
                 ),
-                ss::TermValue::Thunk(ss::Thunk(body)) => {
-                    Step::Done(TermValue::Thunk(Thunk {
-                        body: body.inner_ref().clone(),
-                        env: runtime.env.clone(),
-                    }))
+                ls::TermValue::Thunk(ls::Thunk(body)) => {
+                    Step::Done(Thunk { body, env: runtime.env.clone() }.into())
                 }
-                ss::TermValue::Ctor(ss::Ctor { ctor, args }) => {
+                ls::TermValue::Ctor(ls::Ctor { ctor, args }) => {
                     let args = args
                         .iter()
-                        .map(|arg| {
-                            Rc::new(arg.inner_ref().clone().eval(runtime))
-                        })
+                        .map(|arg| Rc::new(arg.as_ref().clone().eval(runtime)))
                         .collect();
-                    Step::Done(TermValue::Ctor(Ctor { ctor, args }))
+                    Step::Done(Ctor { ctor, args }.into())
                 }
-                ss::TermValue::Literal(lit) => {
-                    Step::Done(TermValue::Literal(lit))
-                }
+                ls::TermValue::Literal(lit) => Step::Done(lit.into()),
             }
         }
     }
 
-    impl<'rt> Eval<'rt> for ss::TermComputation {
+    impl<'rt> Eval<'rt> for ls::TermComputation {
         type Out = TermComputation;
 
         fn step<'e>(
             self, runtime: &'e mut Runtime<'rt>,
         ) -> Step<Self, Self::Out> {
             match self {
-                ss::TermComputation::TermAnn(ss::TermAnn { body, .. }) => {
-                    Step::Step(body.inner_ref().clone())
-                }
-                ss::TermComputation::Ret(ss::Ret(v)) => {
-                    let v = v.inner_ref().clone().eval(runtime);
-                    let Some(Frame::Kont(comp, var)) = runtime.stack.pop_back() else {
+                ls::TermComputation::Ret(ls::Ret(v)) => {
+                    let v = v.as_ref().clone().eval(runtime);
+                    let Some(TermComputation::Kont(comp, var)) = runtime.stack.pop_back() else {
                         panic!("Kont not at stacktop")
                     };
                     let env = runtime.env.update(var, v);
                     runtime.env = env;
                     Step::Step(comp.as_ref().clone())
                 }
-                ss::TermComputation::Force(ss::Force(v)) => {
-                    let v = v.inner_ref().clone().eval(runtime);
+                ls::TermComputation::Force(ls::Force(v)) => {
+                    let v = v.as_ref().clone().eval(runtime);
                     let TermValue::Thunk(thunk) = v else {
                         panic!("Force on non-thunk")
                     };
                     runtime.env = thunk.env;
-                    Step::Step(thunk.body)
+                    Step::Step(thunk.body.as_ref().clone())
                 }
-                ss::TermComputation::Let(ss::Let { var, def, body }) => {
+                ls::TermComputation::Let(ls::Let { var, def, body }) => {
+                    let def = def.as_ref().clone().eval(runtime);
+                    let env = runtime.env.update(var, def);
+                    runtime.env = env;
+                    Step::Step(body.as_ref().clone())
+                }
+                ls::TermComputation::Do(ls::Do { var, comp, body }) => {
+                    runtime.stack.push_back(TermComputation::Kont(body, var));
+                    Step::Step(comp.as_ref().clone())
+                }
+                ls::TermComputation::Rec(ls::Rec { var, body }) => {
+                    let env = runtime.env.update(
+                        var,
+                        Thunk { body: body.clone(), env: runtime.env.clone() }
+                            .into(),
+                    );
+                    runtime.env = env;
+                    Step::Step(body.as_ref().clone())
+                }
+                ls::TermComputation::Match(ls::Match { scrut, arms }) => {
+                    let scrut = scrut.as_ref().clone().eval(runtime);
+                    let TermValue::Ctor(Ctor { ctor, args }) = scrut else {
+                        panic!("Match on non-ctor")
+                    };
+                    let Matcher { ctor: _, vars, body } = arms
+                        .into_iter()
+                        .find(|arm| arm.ctor == ctor)
+                        .expect("no matching arm");
+                    for (var, arg) in vars.into_iter().zip(args.into_iter()) {
+                        let env = runtime.env.update(var, arg.as_ref().clone());
+                        runtime.env = env;
+                    }
+                    Step::Step(body.as_ref().clone())
+                }
+                ls::TermComputation::CoMatch(ls::CoMatch { arms }) => {
+                    let Some(TermComputation::Dtor(dtor, args)) = runtime.stack.pop_back() else {
+                        panic!("CoMatch on non-Dtor")
+                    };
+                    let CoMatcher { dtor: _, vars, body } = arms
+                        .into_iter()
+                        .find(|arm| arm.dtor == dtor)
+                        .expect("no matching arm");
+                    for (var, arg) in vars.into_iter().zip(args.into_iter()) {
+                        let env = runtime.env.update(var, arg.as_ref().clone());
+                        runtime.env = env;
+                    }
+                    Step::Step(body.as_ref().clone())
+                }
+                ls::TermComputation::Dtor(ls::Dtor { body, dtor, args }) => {
+                    let args = args
+                        .iter()
+                        .map(|arg| Rc::new(arg.as_ref().clone().eval(runtime)))
+                        .collect();
+                    runtime.stack.push_back(TermComputation::Dtor(dtor, args));
+                    Step::Step(body.as_ref().clone())
+                }
+                ls::TermComputation::Prim(ls::Prim { arity, body }) => {
+                    let mut args = Vec::new();
+                    for _ in 0..arity {
+                        let Some(TermComputation::Dtor(_, arg)) = runtime.stack.pop_back() else {
+                            panic!("Prim on non-Dtor")
+                        };
+                        args.push(
+                            arg.first().expect("empty arg").as_ref().clone(),
+                        );
+                    }
+                    let _res =
+                        body(args, runtime.input, runtime.output, runtime.args);
+                    // match res {
+                    //     Ok(m) => Ok(Rc::new(m)),
+                    //     Err(exit_code) => Err(Exit::ExitCode(exit_code)),
+                    // }
                     todo!()
                 }
-                ss::TermComputation::Do(_) => todo!(),
-                ss::TermComputation::Rec(_) => todo!(),
-                ss::TermComputation::Match(_) => todo!(),
-                ss::TermComputation::CoMatch(_) => todo!(),
-                ss::TermComputation::Dtor(_) => todo!(),
             }
         }
     }
 
     impl Module {
-        pub fn new<'rt>(m: ss::Module, runtime: &'rt mut Runtime<'rt>) -> Self {
-            for e in m.define {
-                if let Some(def) = &e.inner_ref().def {
-                    let v = def.inner_ref();
-                    let v = v.clone().eval(runtime);
-                    let env = runtime.env.update(e.inner_ref().name.clone(), v);
-                    runtime.env = env;
-                }
+        pub fn new<'rt>(m: ls::Module, runtime: &'rt mut Runtime<'rt>) -> Self {
+            for (x, v) in m.define {
+                let v = v.clone().eval(runtime);
+                let env = runtime.env.update(x, v);
+                runtime.env = env;
             }
-            Module {
-                name: m.name.clone(),
-                entry: m.entry.inner_ref().clone().eval(runtime),
-            }
+            Module { name: m.name, entry: m.entry.eval(runtime) }
         }
     }
 }

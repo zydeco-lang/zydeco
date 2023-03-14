@@ -1,5 +1,7 @@
 pub mod syntax {
+    use crate::dynamics::next::syntax as ds;
     pub use crate::syntax::{env::Env, *};
+    use indexmap::IndexMap;
     use std::io::{BufRead, Write};
     use std::rc::Rc;
     use zydeco_derive::EnumGenerator;
@@ -17,7 +19,7 @@ pub mod syntax {
     impl ValueT for TermValue {}
 
     pub type PrimComp = fn(
-        Vec<TermValue>,
+        Vec<ds::TermValue>,
         &mut (dyn BufRead),
         &mut (dyn Write),
         &[String],
@@ -55,7 +57,7 @@ pub mod syntax {
     #[derive(Clone)]
     pub struct Module {
         pub name: Option<String>,
-        pub define: Env<TermV, TermValue>,
+        pub define: IndexMap<TermV, TermValue>,
         pub entry: TermComputation,
     }
 }
