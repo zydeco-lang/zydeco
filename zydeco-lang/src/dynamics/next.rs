@@ -30,26 +30,33 @@ pub mod syntax {
 
     #[derive(Clone)]
     pub enum TermComputation {
+        Ret(TermValue),
+        ExitCode(i32),
+    }
+    impl ComputationT for TermComputation {}
+
+    /* --------------------------------- Runtime -------------------------------- */
+
+    #[derive(Clone)]
+    pub enum Frame {
         Kont(Rc<ls::TermComputation>, TermV),
         Dtor(DtorV, Vec<Rc<TermValue>>),
     }
 
-    impl Debug for TermComputation {
+    impl Debug for Frame {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
-                TermComputation::Kont(_, var) => write!(f, "Kont({})", var),
-                TermComputation::Dtor(dtor, _) => write!(f, "Dtor({})", dtor),
+                Frame::Kont(_, var) => write!(f, "Kont({})", var),
+                Frame::Dtor(dtor, _) => write!(f, "Dtor({})", dtor),
             }
         }
     }
-
-    /* --------------------------------- Runtime -------------------------------- */
 
     pub struct Runtime<'rt> {
         pub input: &'rt mut (dyn BufRead),
         pub output: &'rt mut (dyn Write),
         pub args: &'rt [String],
-        pub stack: Vector<TermComputation>,
+        pub stack: Vector<Frame>,
         pub env: Env<TermV, TermValue>,
     }
 
@@ -125,12 +132,15 @@ mod eval {
             match self {
                 ls::TermComputation::Ret(ls::Ret(v)) => {
                     let v = v.as_ref().clone().eval(runtime);
-                    let Some(TermComputation::Kont(comp, var)) = runtime.stack.pop_back() else {
-                        panic!("Kont not at stacktop")
-                    };
-                    let env = runtime.env.update(var, v);
-                    runtime.env = env;
-                    Step::Step(comp.as_ref().clone())
+                    match runtime.stack.pop_back() {
+                        Some(Frame::Kont(comp, var)) => {
+                            let env = runtime.env.update(var, v);
+                            runtime.env = env;
+                            Step::Step(comp.as_ref().clone())
+                        }
+                        None => Step::Done(TermComputation::Ret(v)),
+                        _ => panic!("Kont not at stacktop"),
+                    }
                 }
                 ls::TermComputation::Force(ls::Force(v)) => {
                     let v = v.as_ref().clone().eval(runtime);
@@ -147,7 +157,7 @@ mod eval {
                     Step::Step(body.as_ref().clone())
                 }
                 ls::TermComputation::Do(ls::Do { var, comp, body }) => {
-                    runtime.stack.push_back(TermComputation::Kont(body, var));
+                    runtime.stack.push_back(Frame::Kont(body, var));
                     Step::Step(comp.as_ref().clone())
                 }
                 ls::TermComputation::Rec(ls::Rec { var, body }) => {
@@ -175,7 +185,7 @@ mod eval {
                     Step::Step(body.as_ref().clone())
                 }
                 ls::TermComputation::CoMatch(ls::CoMatch { arms }) => {
-                    let Some(TermComputation::Dtor(dtor, args)) = runtime.stack.pop_back() else {
+                    let Some(Frame::Dtor(dtor, args)) = runtime.stack.pop_back() else {
                         panic!("CoMatch on non-Dtor")
                     };
                     let CoMatcher { dtor: _, vars, body } = arms
@@ -193,26 +203,30 @@ mod eval {
                         .iter()
                         .map(|arg| Rc::new(arg.as_ref().clone().eval(runtime)))
                         .collect();
-                    runtime.stack.push_back(TermComputation::Dtor(dtor, args));
+                    runtime.stack.push_back(Frame::Dtor(dtor, args));
                     Step::Step(body.as_ref().clone())
                 }
                 ls::TermComputation::Prim(ls::Prim { arity, body }) => {
                     let mut args = Vec::new();
                     for _ in 0..arity {
-                        let Some(TermComputation::Dtor(_, arg)) = runtime.stack.pop_back() else {
+                        let Some(Frame::Dtor(_, arg)) = runtime.stack.pop_back() else {
                             panic!("Prim on non-Dtor")
                         };
                         args.push(
                             arg.first().expect("empty arg").as_ref().clone(),
                         );
                     }
-                    let _res =
-                        body(args, runtime.input, runtime.output, runtime.args);
-                    // match res {
-                    //     Ok(m) => Ok(Rc::new(m)),
-                    //     Err(exit_code) => Err(Exit::ExitCode(exit_code)),
-                    // }
-                    todo!()
+                    match body(
+                        args,
+                        runtime.input,
+                        runtime.output,
+                        runtime.args,
+                    ) {
+                        Ok(e) => Step::Step(e),
+                        Err(exit_code) => {
+                            Step::Done(TermComputation::ExitCode(exit_code))
+                        }
+                    }
                 }
             }
         }
