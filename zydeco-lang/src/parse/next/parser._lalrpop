@@ -6,19 +6,19 @@ use crate::parse::{apply_string_escapes, apply_char_escapes};
 
 grammar<'input>(input: &'input str);
 
-pub Zydeco: Module = "module" <name:String> "where" <declarations:Decls*> <entry:TermComputation> => Module {
+pub Zydeco: Module = "module" <name:String> "where" <declarations:Decls*> <entry:Ann<TermComputation>> => Module {
     name: Some(name),
     declarations,
     entry
 }
 
 pub Declaration: Declaration = {
-    <ext:"extern"?> "data" <name:TypeV> <params:TParameters> "where" <ctors:DataBr*> "end" => Data {
+    <ext:"extern"?> "data" <name:TypeV> <params:TParameter*> "where" <ctors:DataBr*> "end" => Data {
         name,
         params,
         ctors
     }
-    <ext:"extern"?> "codata" <name:TypeV> <params:TParameters> "where" <dtors:CodataBr*> "end" => Codata {
+    <ext:"extern"?> "codata" <name:TypeV> <params:TParameter*> "where" <dtors:CodataBr*> "end" => Codata {
         name,
         params,
         dtors
@@ -31,9 +31,27 @@ pub Declaration: Declaration = {
     }
 }
 
-pub DataBr: DataBr = "|" <ctor:CtorV> "(" <  "," ")">
+DataBr: DataBr = "|" <ctor:CtorV> "(" <args:SepByEnd<",", ")", Type>> => DataBr(ctor, args);
 
+DataBr: DataBr = "|" <ctor:CtorV> "(" <args:SepByEnd<",", ")", Type>> => (ctor, args).into();
 
+CodataBr: CodataBr = "|" "." <dtor:DtorV> "(" <args:SepByEnd<",", ")", Type>> ":" <ty:Type>=> CodataBr(dtor, args, ty);
+
+TParameter: (TypeV, Kind) = <name:TypeV> ":" <kind:Kind> => (name, kind)
+
+// TypeV: TypeV
+
+TermComputation: TermComputation = {
+    "(" <tc:BoxAnn<TermComputation>> "::" <ty:Ann<Type>> ")" => TermAnn{
+        body: tc,
+        ty
+    }.into(),
+    "!" <v:BoxAnn<TermValue>> => Ret(v).into(),
+}
+
+Ann<Rule>: Ann<T> = {
+    <l:@L> <content:Rule> <r:@R> => ann(l,r).make(content)
+}
 
 BoxAnn<Rule>: Box<Ann<T>> = {
     <l:@L> <content:Rule> <r:@R> => Box::new(ann(l,r).make(content))
@@ -43,10 +61,14 @@ BoxAnn<Rule>: Box<Ann<T>> = {
 //     <l:@L> <content:Rule> <r:@R> => Box::new(ann(l,r).make(content))
 // }
 
-SepByEnd<Sep, T, End>: Vec<T> = {
+SepByEnd<Sep, End, T>: Vec<T> = {
     <content:T> <s:Sep> <mut rest:SepByEnd<Sep, T, End>> => {
         rest.insert(0, content);
         rest
     }
-    <content:T> <e:End> => 
+    <content:T> <e:End> => {
+        let mut vec = Vec::new();
+        vec.push(content);
+        vec
+    }
 } 
