@@ -5,15 +5,48 @@ use crate::{
         eval::{Exit, Runtime},
         syntax::{ZCompute, ZValue},
     },
-    lex::Lexer,
     library::{builtins, linker},
     parse::{
-        syntax::{Compute, Program, TCompute, TValue, ValOrComp, Value},
-        {ExpressionParser, ZydecoParser},
+        syntax::{Compute, Program, Type, ValOrComp, Value},
+        Lexer, {ExpressionParser, ZydecoParser},
     },
     statics::{ctx::Ctx, tyck::TypeCheck},
+    syntax::ann::{AnnHolder, FileInfo},
     utils::never::Never,
 };
+use std::{path::PathBuf, rc::Rc};
+
+pub struct ZydecoFile {
+    pub path: PathBuf,
+}
+
+impl ZydecoFile {
+    pub fn parse(self) -> Result<Program, String> {
+        let source = std::fs::read_to_string(&self.path).unwrap();
+        let mut p = ZydecoParser::new()
+            .parse(&source, Lexer::new(&source))
+            .map_err(|e| e.to_string())?;
+        let path_rc = Rc::new(self.path);
+        let file_info = FileInfo::new(&source);
+        p.ann_map_mut(|ann| {
+            ann.set_span2(&file_info);
+            ann.path.set(path_rc.clone()).unwrap();
+        });
+        Ok(p)
+    }
+}
+
+pub struct ZydecoExpr {
+    pub source: String,
+}
+
+impl ZydecoExpr {
+    pub fn parse(self) -> Result<ValOrComp, String> {
+        ExpressionParser::new()
+            .parse(&self.source, Lexer::new(&self.source))
+            .map_err(|e| e.to_string())
+    }
+}
 
 pub fn parse_prog(input: &str) -> Result<Program, String> {
     ZydecoParser::new()
@@ -28,17 +61,15 @@ pub fn parse_exp(input: &str) -> Result<ValOrComp, String> {
 }
 
 pub fn typecheck_prog(p: &Program, ctx: &Ctx) -> Result<(), String> {
-    p.tyck(ctx).map_err(|e| e.to_string())
+    p.syn(ctx).map_err(|e| e.to_string())
 }
 
-pub fn typecheck_computation(
-    m: &Compute, ctx: &Ctx,
-) -> Result<TCompute, String> {
-    m.tyck(ctx).map_err(|e| e.to_string())
+pub fn typecheck_computation(m: &Compute, ctx: &Ctx) -> Result<Type, String> {
+    m.syn(ctx).map_err(|e| e.to_string())
 }
 
-pub fn typecheck_value(v: &Value, ctx: &Ctx) -> Result<TValue, String> {
-    v.tyck(ctx).map_err(|e| e.to_string())
+pub fn typecheck_value(v: &Value, ctx: &Ctx) -> Result<Type, String> {
+    v.syn(ctx).map_err(|e| e.to_string())
 }
 
 pub fn eval_prog(p: Program, args: &[String]) -> Result<Never, String> {
@@ -49,10 +80,9 @@ pub fn eval_prog(p: Program, args: &[String]) -> Result<Never, String> {
 }
 
 pub fn eval_virtual_prog(
-    p: Program, mut env: Env, r: &mut dyn std::io::BufRead, w: &mut dyn std::io::Write,
-    args: &[String],
+    p: Program, mut env: Env, r: &mut dyn std::io::BufRead,
+    w: &mut dyn std::io::Write, args: &[String],
 ) -> Result<i32, String> {
-    builtins::link_builtin(&mut env);
     linker::link(&mut env, &p.decls);
     eval_virtual_os_computation(*p.comp, env, r, w, args)
 }

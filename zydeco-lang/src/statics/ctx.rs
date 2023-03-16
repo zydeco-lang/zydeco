@@ -1,22 +1,18 @@
 use super::{err::TypeCheckError, resolve::*, tyck::TypeCheck};
-use crate::parse::syntax::*;
-use std::collections::HashMap;
+use crate::{parse::syntax::*, syntax::binder::*, syntax::Ann};
+use indexmap::IndexMap;
+use std::{collections::HashMap, hash::Hash};
 
 #[derive(Clone, Debug)]
-pub enum Sort {
-    TVal,
-    TComp,
-}
+pub struct Arity(pub Vec<Kind>, pub Kind);
 
 #[derive(Clone, Debug)]
 pub struct Ctx {
-    vmap: HashMap<VVar, TValue>,
-    pub tmap: HashMap<TVar, Sort>,
-    data: HashMap<TVar, Vec<(Ctor, Vec<TValue>)>>,
-    pub ctors: HashMap<Ctor, (TVar, Vec<TValue>)>,
-    coda: HashMap<TVar, Vec<(Dtor, Vec<TValue>, TCompute)>>,
-    pub dtors: HashMap<Dtor, (TVar, Vec<TValue>, TCompute)>,
-    pub defs: HashMap<VVar, (Option<TValue>, Value)>,
+    vmap: HashMap<TermV, Type>,
+    pub tmap: HashMap<TypeV, Arity>,
+    pub data: HashMap<TypeV, Data>,
+    pub coda: HashMap<TypeV, Codata>,
+    defs: IndexMap<TermV, (Option<Type>, Value)>,
 }
 
 impl Ctx {
@@ -25,25 +21,23 @@ impl Ctx {
             vmap: HashMap::new(),
             tmap: HashMap::new(),
             data: HashMap::new(),
-            ctors: HashMap::new(),
             coda: HashMap::new(),
-            dtors: HashMap::new(),
-            defs: HashMap::new(),
+            defs: IndexMap::new(),
         }
     }
-    pub fn push(&mut self, x: VVar, t: TValue) {
+    pub fn push(&mut self, x: TermV, t: Type) {
         self.vmap.insert(x, t);
     }
-    pub fn extend(&mut self, other: impl IntoIterator<Item = (VVar, TValue)>) {
+    pub fn extend(&mut self, other: impl IntoIterator<Item = (TermV, Type)>) {
         self.vmap.extend(other);
     }
-    pub fn lookup(&self, x: &VVar) -> Option<&TValue> {
+    pub fn lookup(&self, x: &TermV) -> Option<&Type> {
         self.vmap.get(x)
     }
     pub fn decl(&mut self, d: &Declare) -> Result<(), NameResolveError> {
         match d {
-            Declare::Data { name, ctors, ann } => {
-                self.data.insert(name.clone(), ctors.clone()).map_or(
+            Declare::Data(data @ Data { name, params, ann, .. }) => {
+                self.data.insert(name.clone(), data.clone()).map_or(
                     Ok(()),
                     |_| {
                         Err(NameResolveError::DuplicateDeclaration {
@@ -52,21 +46,17 @@ impl Ctx {
                         })
                     },
                 )?;
-                self.tmap.insert(name.clone(), Sort::TVal);
-                for (ctor, args) in ctors {
-                    self.ctors
-                        .insert(ctor.clone(), (name.clone(), args.clone()))
-                        .map_or(Ok(()), |_| {
-                            Err(NameResolveError::DuplicateDeclaration {
-                                name: ctor.name().to_string(),
-                                ann: ann.clone(),
-                            })
-                        })?;
-                }
+                self.tmap.insert(
+                    name.clone(),
+                    Arity(
+                        params.into_iter().map(|(_, k)| *k).collect(),
+                        Kind::VType,
+                    ),
+                );
                 Ok(())
             }
-            Declare::Codata { name, dtors, ann } => {
-                self.coda.insert(name.clone(), dtors.clone()).map_or(
+            Declare::Codata(codata @ Codata { name, params, ann, .. }) => {
+                self.coda.insert(name.clone(), codata.clone()).map_or(
                     Ok(()),
                     |_| {
                         Err(NameResolveError::DuplicateDeclaration {
@@ -75,20 +65,13 @@ impl Ctx {
                         })
                     },
                 )?;
-                self.tmap.insert(name.clone(), Sort::TComp);
-                for (dtor, args, ret) in dtors {
-                    self.dtors
-                        .insert(
-                            dtor.clone(),
-                            (name.clone(), args.clone(), ret.clone()),
-                        )
-                        .map_or(Ok(()), |_| {
-                            Err(NameResolveError::DuplicateDeclaration {
-                                name: dtor.name().to_string(),
-                                ann: ann.clone(),
-                            })
-                        })?;
-                }
+                self.tmap.insert(
+                    name.clone(),
+                    Arity(
+                        params.into_iter().map(|(_, k)| *k).collect(),
+                        Kind::CType,
+                    ),
+                );
                 Ok(())
             }
             Declare::Define { name, ty: Some(ty), def: None, .. } => {
@@ -101,7 +84,10 @@ impl Ctx {
                 }
                 self.defs.insert(
                     name.clone(),
-                    (ty.clone().map(|t| *t), def.as_ref().clone()),
+                    (
+                        ty.as_ref().map(|t| t.as_ref().clone()),
+                        def.as_ref().clone(),
+                    ),
                 );
                 Ok(())
             }
@@ -113,51 +99,42 @@ impl Ctx {
             }
         }
     }
-    pub fn tyck_pre(&self) -> Result<(), TypeCheckError> {
-        for (_, ctors) in &self.data {
-            for (_, args) in ctors {
+    pub fn type_validation(&self) -> Result<(), Ann<TypeCheckError>> {
+        for (_, data) in &self.data {
+            for (_, args) in &data.ctors {
                 for arg in args {
-                    arg.tyck(self)?;
+                    arg.syn(self)?;
                 }
             }
         }
-        for (_, dtors) in &self.coda {
-            for (_, args, ret) in dtors {
+        for (_, codata) in &self.coda {
+            for (_, (args, ret)) in &codata.dtors {
                 for arg in args {
-                    arg.tyck(self)?;
+                    arg.syn(self)?;
                 }
-                ret.tyck(self)?;
-            }
-        }
-        for (_, (ty, def)) in &self.defs {
-            match ty {
-                Some(ty) => {
-                    def.tyck(self)?;
-                    let ty_ = def.tyck(self)?;
-                    ty.eqv(&ty_).ok_or_else(|| {
-                        TypeCheckError::TypeMismatch {
-                            expected: ty.clone().into(),
-                            found: ty_.clone().into(),
-                        }
-                    })?
-                }
-                None => {
-                    def.tyck(self)?;
-                }
+                ret.syn(self)?;
             }
         }
         Ok(())
     }
-    pub fn tyck_post(&mut self) -> Result<(), TypeCheckError> {
-        for (name, (ty, def)) in self.defs.to_owned() {
-            match ty {
-                Some(_) => {}
-                None => {
-                    let ty = def.tyck(self).expect("checked in tyck_pre");
-                    self.push(name, ty)
+    pub fn tyck_definitions(&mut self) -> Result<(), Ann<TypeCheckError>> {
+        for (name, (ty, def)) in &self.defs {
+            let ty = match ty {
+                Some(ty) => {
+                    def.ana(ty, self)?;
+                    ty.clone()
                 }
-            }
+                None => def.syn(self)?,
+            };
+            self.vmap.insert(name.clone(), ty);
         }
         Ok(())
+    }
+}
+
+impl Hash for Type {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.ctor.hash(state);
+        self.args.hash(state);
     }
 }

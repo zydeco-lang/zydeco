@@ -1,41 +1,17 @@
 use super::resolve::*;
-use crate::{parse::syntax::*, utils::ann::Ann};
-
-#[derive(Clone, Debug)]
-pub enum THetero {
-    TVal(TValue),
-    TComp(TCompute),
-}
-
-impl std::fmt::Display for THetero {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            THetero::TComp(b) => write!(f, "{}", b),
-            THetero::TVal(a) => write!(f, "{}", a),
-        }
-    }
-}
-
-impl From<TValue> for THetero {
-    fn from(x: TValue) -> Self {
-        THetero::TVal(x)
-    }
-}
-impl From<TCompute> for THetero {
-    fn from(x: TCompute) -> Self {
-        THetero::TComp(x)
-    }
-}
+use crate::{parse::syntax::*, syntax::binder::*};
 
 #[derive(Clone, Debug)]
 pub enum TypeCheckError {
-    UnboundVar { var: VVar, ann: Ann },
-    TypeMismatch { expected: THetero, found: THetero },
-    TypeExpected { expected: String, found: THetero },
+    UnboundVar { var: TermV },
+    KindMismatch { context: String, expected: Kind, found: Kind },
+    TypeMismatch { context: String, expected: Type, found: Type },
+    TypeExpected { context: String, expected: String, found: Type },
     ArityMismatch { context: String, expected: usize, found: usize },
-    InconsistentBranches(Vec<TCompute>),
+    NeedAnnotation { content: String },
+    InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
-    WrongMain { found: TCompute },
+    WrongMain { found: Type },
     ErrStr(String),
 }
 use TypeCheckError::*;
@@ -44,22 +20,34 @@ use std::fmt;
 impl fmt::Display for TypeCheckError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            UnboundVar { var, ann } => {
-                write!(f, "Unbound variable {} (Info: {:?})", var, ann)
+            UnboundVar { var, .. } => {
+                write!(f, "Unbound variable {}", var)
             }
-            TypeMismatch { expected, found } => write!(
+            KindMismatch { context, expected, found } => write!(
                 f,
-                "Type mismatch, expected {}, but got {}",
-                expected, found
+                "Kind mismatch, In {}, expected {}, but got {}",
+                context, expected, found
             ),
-            TypeExpected { expected, found } => {
-                write!(f, "Type {} expected, but got {}", expected, found)
+            TypeMismatch { context, expected, found } => write!(
+                f,
+                "Type mismatch. In {}, expected {}, but got {}",
+                context, expected, found
+            ),
+            TypeExpected { context, expected, found } => {
+                write!(
+                    f,
+                    "In {}, expected {}, but got {}",
+                    context, expected, found
+                )
             }
             ArityMismatch { context, expected, found } => write!(
                 f,
                 "In {}, expected {} arguments but got {}",
                 context, expected, found
             ),
+            NeedAnnotation { content } => {
+                write!(f, "Need annotation for {}", content)
+            }
             InconsistentBranches(types) => {
                 write!(f, "Branches have mismatched types: {:?}", types)
             }

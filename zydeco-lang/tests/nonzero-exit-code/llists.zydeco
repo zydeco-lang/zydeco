@@ -1,9 +1,11 @@
 data LList where
   | Nil()
   | Cons(Int, U(F(LList)))
+end
 
 codata IOS where
-  .i(Int): OS
+  | .i(Int): OS
+end
 
 ## LList is actually coinductive type
 
@@ -44,6 +46,7 @@ let rec foldr : U(F(LList)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
     match llv
     | Nil() -> ! b
     | Cons(a, ll) -> ! f a { ! foldr ll f b }
+    end
 );
 
 let loopy = {
@@ -54,6 +57,7 @@ let loopy = {
     match next?
     | True() -> ! write_int_line x b
     | False() -> ! exit 0
+    end
   }
   { ! panic "unreachable" }
 };

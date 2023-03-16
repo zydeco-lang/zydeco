@@ -13,6 +13,8 @@ pub enum Tok<'input> {
     Data,
     #[token("codata")]
     Codata,
+    #[token("end")]
+    End,
     #[token("where")]
     Where,
     #[token("pub")]
@@ -44,6 +46,10 @@ pub enum Tok<'input> {
     CharLit(&'input str),
     #[regex(r#"'\\[nrt|(\\)]'"#)]
     Escape(&'input str),
+    #[regex("VType")]
+    VType,
+    #[regex("CType")]
+    CType,
 
     #[regex("(F|Ret)")]
     RetType,
@@ -68,6 +74,8 @@ pub enum Tok<'input> {
     Comma,
     #[token(":")]
     Colon,
+    #[token("::")]
+    ColonColon,
     #[token("=")]
     Equals,
     #[token(";")]
@@ -92,6 +100,7 @@ pub enum Tok<'input> {
 impl<'input> Display for Tok<'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Tok::End => write!(f, "end"),
             Tok::UpperIdent(s) => write!(f, "UpperIdentifier({})", s),
             Tok::LowerIdent(s) => write!(f, "LowerIdentifier({})", s),
             Tok::Data => write!(f, "data"),
@@ -110,7 +119,9 @@ impl<'input> Display for Tok<'input> {
             Tok::NumLit(s) => write!(f, "NumLiteral({})", s),
             Tok::StrLit(s) => write!(f, "StrLiteral({})", s),
             Tok::CharLit(s) => write!(f, "CharLiteral({})", s),
-            Tok::Escape(s) => write!(f, "EscapeSequence({})",s),
+            Tok::VType => write!(f, "VType"),
+            Tok::CType => write!(f, "CType"),
+            Tok::Escape(s) => write!(f, "EscapeSequence({})", s),
             Tok::RetType => write!(f, "F"),
             Tok::CompType => write!(f, "U"),
             Tok::OSType => write!(f, "OS"),
@@ -122,6 +133,7 @@ impl<'input> Display for Tok<'input> {
             // Tok::BracketClose => write!(f, "]"),
             Tok::Comma => write!(f, ","),
             Tok::Colon => write!(f, ":"),
+            Tok::ColonColon => write!(f, "::"),
             Tok::Equals => write!(f, "="),
             Tok::Semicolon => write!(f, ";"),
             Tok::Force => write!(f, "!"),

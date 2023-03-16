@@ -1,35 +1,42 @@
 data Tok where
   | LParen()
   | RParen()
+end
 
 data LazyTokList where
   | Nil()
   | Cons(Tok, Thunk(Ret(LazyTokList)))
+end
 
 data ParenCounterState where
   | Ok()
   | Reject()
+end
 
 codata ParenCounterStk where
-  .none() : Ret(Bool)
-  .some() : ParenCounterStk
+  | .none() : Ret(Bool)
+  | .some() : ParenCounterStk
+end
 
 let rec foldr : Thunk(Ret(LazyTokList)) -> Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk) -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk =
     fn (ll : Thunk(Ret(LazyTokList)), step : Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk), final : Thunk(ParenCounterState -> ParenCounterStk)) ->
     do l <- ! ll;
     match l
     | Nil()      -> ! final
-    | Cons(c, k) -> ! step c { ! foldr k step final };
+    | Cons(c, k) -> ! step c { ! foldr k step final }
+    end;
 
 let rec reject : ParenCounterStk =
   comatch
-  | .none() -> ret False()
-  | .some() -> ! reject;
-
-let try_accept = {
-  comatch
-  | .none() -> ret True()
+  | .none() -> ret false
   | .some() -> ! reject
+  end;
+  
+let try_accept : Thunk(ParenCounterStk) = {
+  comatch
+  | .none() -> ret true
+  | .some() -> ! reject
+  end
 };
 
 let accept_or_not = {
@@ -37,6 +44,7 @@ let accept_or_not = {
   match s
   | Ok()     -> ! try_accept
   | Reject() -> ! reject
+  end
 };
 
 let paren_counter_step = {
@@ -45,14 +53,16 @@ let paren_counter_step = {
     | LParen() -> ! k state .some()
     | RParen() ->
     (comatch
-    | .none() -> ! k Reject() .none() # Note: would be more efficient to just ! reject here
-    | .some() -> ! k state)
+    | .none() -> ! k (Reject()::ParenCounterState) .none() # Note: would be more efficient to just ! reject here
+    | .some() -> ! k state
+    end)
+    end
 };
 
 let demonstrate = {
   fn (s: String, expect: Bool, toks: Thunk(Ret(LazyTokList)), t : Thunk(OS)) ->
      do s' <- ! str_append "The following parens are balanced? "  s;
-     do b <- ! foldr toks paren_counter_step accept_or_not Ok() .none();
+     do b <- ! foldr toks paren_counter_step accept_or_not (Ok()::ParenCounterState) .none();
      do pass <- ! bool_eq expect b;
      match pass
      | True() -> (
@@ -60,14 +70,15 @@ let demonstrate = {
        ! write_line s' { ! write_line s t })
      | False() -> (
       ! write_line "WRONG ANSWER" { ! exit 1 })
+     end
 };
 
-! demonstrate "(())" True() {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
-! demonstrate "()()" True() {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
-! demonstrate ")(()" False() {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
-! demonstrate "()(" False() {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Nil()})})})} {
-! demonstrate "()" True() {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})} {
-! demonstrate "(" False() {ret Cons(LParen(), {ret Nil()})} {
-! demonstrate ")" False() {ret Cons(RParen(), {ret Nil()})} {
-! demonstrate ""  True() {ret Nil()} {
+! demonstrate "(())" true {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
+! demonstrate "()()" true {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
+! demonstrate ")(()" false {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
+! demonstrate "()(" false {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Nil()})})})} {
+! demonstrate "()" true {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})} {
+! demonstrate "(" false {ret Cons(LParen(), {ret Nil()})} {
+! demonstrate ")" false {ret Cons(RParen(), {ret Nil()})} {
+! demonstrate ""  true {ret Nil()} {
 ! exit 0 }}}}}}}}

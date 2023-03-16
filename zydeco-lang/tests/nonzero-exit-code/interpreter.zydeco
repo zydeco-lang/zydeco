@@ -7,6 +7,7 @@ data SynVal where
   | TrueSyn()
   | FalseSyn()
   | ThunkV(SynComp)
+end
 
 data SynComp where
   | If(SynVal, SynComp, SynComp)
@@ -15,11 +16,13 @@ data SynComp where
   | App(SynComp, SynVal)
   | Return(SynVal)
   | Bind(SynComp, String, SynComp)
+end
 
 # Environments are implemented as association lists.
 data Env where
   | Empty()
   | Cons(String, SemVal, Env)
+end
 
 # The interpreter works with semantic values, which do not include
 # variables. We use closures in the interpreter to implement semantic
@@ -28,27 +31,31 @@ data SemVal where
   | True'()
   | False'()
   | ThunkV'(Thunk(SemComp))
+end
 
 # The "final answer" of the interpreter is either the final value or
 # an error.
 data OptionSemVal where
   | Ok(SemVal)
   | Err()
+end
 
 # The semantics of computations are Zydeco computations which satisfy
 # this codata type. There are two eliminators: application to a
 # variable and a bind.
 codata SemComp where
-  .app(SemVal) : SemComp
-  .bind()      : Ret(OptionSemVal)
+  | .app(SemVal) : SemComp
+  | .bind()      : Ret(OptionSemVal)
+end
 
 # The interpreters for values and computations are implemented
 # mutually recursively.
 # Currently zydeco doesn't directly support mutual recursion but
 # it can be easily simulated:
 codata Interpreter where
-  .valu(SynVal, Env)  : Ret(OptionSemVal)
-  .comp(SynComp, Env) : SemComp
+  | .valu(SynVal, Env)  : Ret(OptionSemVal)
+  | .comp(SynComp, Env) : SemComp
+end
 
 let sem_val_to_str = {
     fn (s : SemVal)  ->
@@ -56,6 +63,7 @@ let sem_val_to_str = {
     | True'() -> ret "true"
     | False'() -> ret "false"
     | ThunkV'(_) -> ret "<thunk>"
+    end
 };
 
 let rec lookup: String -> Env -> Ret(OptionSemVal) =
@@ -67,12 +75,15 @@ let rec lookup: String -> Env -> Ret(OptionSemVal) =
       match b
       | True() -> ret Ok(v)
       | False() -> ! lookup x g
-    );
+      end
+    )
+    end;
 
 let rec error: SemComp = (
   comatch
     | .app(_) -> ! error
     | .bind() -> ret Err()
+  end
 );
 
 let rec interp: Interpreter =
@@ -84,13 +95,17 @@ let rec interp: Interpreter =
       | FalseSyn() -> ret Ok(False'())
       # Here we use the meta-language closures to capture the environment g 
       | ThunkV(m) -> ret Ok(ThunkV'({ ! interp .comp(m, g) }))
+      end
     )
     | .comp(m, g) -> (
       match m
       | If(cond, mt, mf) -> (
         match cond
+        | Var(_) -> ! error
         | TrueSyn() -> ! interp .comp(mt, g)
         | FalseSyn() -> ! interp .comp(mf, g)
+        | ThunkV(_) -> ! error
+        end
       )
       | Force(syn_val) -> (
         do v? <- ! interp .valu(syn_val, g);
@@ -100,33 +115,40 @@ let rec interp: Interpreter =
           | ThunkV'(t) -> ! t
           | True'() -> ! error
           | False'() -> ! error
+          end
         )
         | Err() -> ! error
+        end
       )
       | Return(syn_val) -> (
         do v <- ! interp .valu(syn_val, g);
         comatch
           | .bind() -> ret v
           | .app(_) -> ! error
+        end
       )
       | Bind(m, x, k) -> (
         do v? <- ! interp .comp(m, g) .bind();
         match v?
         | Ok(v) -> ! interp .comp(k, Cons(x, v, g))
         | Err() -> ! error
+        end
       )
       | Lam(x, m) -> (
         comatch
           | .app(v) -> (! interp .comp(m, Cons(x, v, g)))
           | .bind() -> ret Err()
+        end
       )
       | App(m, v) -> (
         do v? <- ! interp .valu(v, g);
         match v?
         | Ok(v) -> ! interp .comp(m, g) .app(v)
         | Err() -> ! error
+        end
       )
-    );
+      end)
+    end;
 
 # An example
 do x <- ! interp .comp(App(Lam("x", Return(Var("x"))), FalseSyn()), Empty()) .bind();
@@ -135,3 +157,4 @@ match x
 | Ok(sv) ->
   (do s <- ! sem_val_to_str sv;
       ! write_line s { ! exit 0 })
+end

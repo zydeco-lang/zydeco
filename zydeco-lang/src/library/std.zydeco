@@ -4,42 +4,51 @@
 
 data Unit where
   | Unit()
+end
 
 data Bool where
   | True()
   | False()
+end
+
+pub define true : Bool = True();
+pub define false : Bool = False();
 
 pub define not : Thunk(Bool -> Ret(Bool)) = {
-  fn (x: Bool) ->
+  fn (x) ->
     match x
-    | True() -> ret False()
-    | False() -> ret True()
+    | True() -> ret false
+    | False() -> ret true
+    end
 };
 
 # lazy not
-pub define not_ : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
-  fn (t: Thunk(Ret(Bool))) ->
+pub define notM : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn (t) ->
     do x <- ! t;
     match x
-    | True() -> ret False()
-    | False() -> ret True()
+    | True() -> ret (False()::Bool)
+    | False() -> ret (True()::Bool)
+    end
 };
 
 pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (x: Bool, y: Bool) ->
+  fn (x, y) ->
     match x
     | True() -> ret y
-    | False() -> ret False()
+    | False() -> ret false
+    end
 };
 
 # Lazy, short-circuiting (left to right) and
 # Can we come up with a better naming convention? Maybe and~ is more suggestive? (not accepted by parser currently)
 pub define and_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
-  fn (b1_: Thunk(Ret(Bool)), b2_: Thunk(Ret(Bool))) ->
+  fn (b1_, b2_) ->
   do b1 <- ! b1_;
   match b1
   | True() -> ! b2_
-  | False() -> ret False()
+  | False() -> ret false
+  end
 };
 
 pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
@@ -47,6 +56,7 @@ pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
     match x
     | True() -> ret True()
     | False() -> ret y
+    end
 };
 
 # Lazy, short-circuiting (left to right) or
@@ -56,6 +66,7 @@ pub define or_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
   match b1
   | True() -> ret True()
   | False() -> ! b2_
+  end
 };
 
 pub define nand : Thunk(Bool -> Bool -> Ret(Bool)) = {
@@ -75,6 +86,7 @@ pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
     match b
     | True() -> ret b'
     | False() -> ! not b'
+    end
 };
 
 # pub define ifc : Thunk(Thunk(Ret(Bool)) -> Thunk(b) -> Thunk(b) -> b) = {
@@ -96,6 +108,7 @@ pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
 ## arithmetic operations
 
 extern data Int where
+end
 ### we support the constructors externally because
 ### the parsers of their constructors are customized
 ### so the type is registered as a data type but the constructors
@@ -115,7 +128,9 @@ pub extern define int_gt : Thunk(Int -> Int -> Ret(Bool));
 ## string operations
 
 extern data Char where
+end
 extern data String where
+end
 ### we support the constructors externally
 
 pub extern define str_length : Thunk(String -> Ret(Int));
@@ -140,6 +155,7 @@ pub define bool_to_str : Thunk(Bool -> Ret(String)) = {
     match b
     | True() -> ret "True"
     | False() -> ret "False"
+    end
 };
 
 pub extern define int_to_str : Thunk(Int -> Ret(String));
@@ -150,7 +166,7 @@ pub extern define str_to_int : Thunk(String -> Ret(Int));
 data StrList where
   | SLNil()
   | SLCons(String, StrList)
-
+end
 ## OS operations
 
 pub extern define write_str : Thunk(String -> Thunk(OS) -> OS);

@@ -23,6 +23,7 @@ pub enum ZValue {
 impl From<Value> for ZValue {
     fn from(value: Value) -> Self {
         match value {
+            Value::TermAnn(body, ..) => (*body).into(),
             Value::Var(var, _) => ZValue::Var(var.name().to_string()),
             Value::Thunk(compute, _) => {
                 ZValue::Thunk(Rc::new((*compute).into()), None)
@@ -58,6 +59,7 @@ pub enum ZCompute {
 impl From<Compute> for ZCompute {
     fn from(compute: Compute) -> Self {
         match compute {
+            Compute::TermAnn(body, ..) => (*body).into(),
             Compute::Let { binding: (name, _, def), body, .. } => {
                 ZCompute::Let {
                     binding: (name.name().to_string(), Rc::new((*def).into())),
@@ -85,7 +87,7 @@ impl From<Compute> for ZCompute {
             Compute::App(f, arg, _) => {
                 ZCompute::App(Rc::new((*f).into()), Rc::new((*arg).into()))
             }
-            Compute::Match { scrut, cases, .. } => ZCompute::Match {
+            Compute::Match { scrut, arms: cases, .. } => ZCompute::Match {
                 scrut: Rc::new((*scrut).into()),
                 cases: cases
                     .into_iter()
@@ -100,7 +102,7 @@ impl From<Compute> for ZCompute {
                     })
                     .collect(),
             },
-            Compute::CoMatch { cases, .. } => ZCompute::CoMatch {
+            Compute::CoMatch { arms: cases, .. } => ZCompute::CoMatch {
                 cases: cases
                     .into_iter()
                     .map(|(dtor, vars, body)| {

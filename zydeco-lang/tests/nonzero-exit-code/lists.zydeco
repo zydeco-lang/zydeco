@@ -1,6 +1,7 @@
 data StrList' where
   | Nil()
   | Cons(String, StrList')
+end
 
 let rec foldl : StrList' -> Thunk(String -> Int -> Ret(Int)) -> Int -> Ret(Int) =
   fn (l : StrList', step : Thunk(String -> Int -> Ret(Int)), s : Int) ->
@@ -9,7 +10,9 @@ let rec foldl : StrList' -> Thunk(String -> Int -> Ret(Int)) -> Int -> Ret(Int) 
     | Cons(x, xs) -> (
       do s' <- ! step x s;
       ! foldl xs step s'
-    );
+    )
+    end
+    ;
 
 do l <- ! foldl (Cons("abc", Cons("", Cons("y", Nil()))))
                 { fn (s : String, i : Int) ->

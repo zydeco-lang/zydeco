@@ -1,22 +1,24 @@
-data Nat where | Z() | S(Nat)
+data Nat where | Z() | S(Nat) end
 let rec odd: Nat -> Ret(Bool) = (
   let even = {
     rec (even: Comp(Nat -> Ret(Bool))) -> (
       fn (x: Nat) -> (
         match x
-        | Z -> ret True()
+        | Z() -> ret True()
         | S(x) -> !odd x
+        end
       )
     )
   };
   fn (x: Nat) -> (
     match x
-    | Z -> ret False()
+    | Z() -> ret False()
     | S(x) -> !even x
+    end
   )
 );
 do b <- !odd S(S(S(Z())));
 match b
 | True() -> ! exit 0
 | False() -> ! exit 1
-
+end

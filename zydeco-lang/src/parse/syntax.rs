@@ -1,10 +1,10 @@
-use crate::utils::ann::Ann;
+use crate::syntax::{binder::*, AnnInfo};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
     pub decls: Vec<Declare>,
     pub comp: Box<Compute>,
-    pub ann: Ann,
+    pub ann: AnnInfo,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -13,125 +13,133 @@ pub enum ValOrComp {
     Comp(Compute),
 }
 
-pub type Binding<Ty, Def> = (VVar, Option<Box<Ty>>, Box<Def>);
+pub type Binding<Ty, Def> = (TermV, Option<Box<Ty>>, Box<Def>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Declare {
-    Data {
-        name: TVar,
-        ctors: Vec<(Ctor, Vec<TValue>)>,
-        ann: Ann,
-    },
-    Codata {
-        name: TVar,
-        dtors: Vec<(Dtor, Vec<TValue>, TCompute)>,
-        ann: Ann,
-    },
+    Data(Data),
+    Codata(Codata),
     Define {
         public: bool,
-        name: VVar,
-        ty: Option<Box<TValue>>,
+        name: TermV,
+        ty: Option<Box<Type>>,
         def: Option<Box<Value>>,
-        ann: Ann,
+        ann: AnnInfo,
     },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Data {
+    pub name: TypeV,
+    pub params: Vec<(TypeV, Kind)>,
+    pub ctors: Vec<DataBranch>,
+    pub ann: AnnInfo,
+}
+
+pub type DataBranch = (CtorV, Vec<Type>);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Codata {
+    pub name: TypeV,
+    pub params: Vec<(TypeV, Kind)>,
+    pub dtors: Vec<CodataBranch>,
+    pub ann: AnnInfo,
+}
+
+pub type CodataBranch = (DtorV, (Vec<Type>, Type));
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
-    Var(VVar, Ann),
-    Thunk(Box<Compute>, Ann),
-    Ctor(Ctor, Vec<Value>, Ann),
-    Int(i64, Ann),
-    String(String, Ann),
-    Char(char, Ann),
+    TermAnn(Box<Value>, Type, AnnInfo),
+    Var(TermV, AnnInfo),
+    Thunk(Box<Compute>, AnnInfo),
+    Ctor(CtorV, Vec<Value>, AnnInfo),
+    Int(i64, AnnInfo),
+    String(String, AnnInfo),
+    Char(char, AnnInfo),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Compute {
+    TermAnn(Box<Compute>, Type, AnnInfo),
     Let {
-        binding: Binding<TValue, Value>,
+        binding: Binding<Type, Value>,
         body: Box<Compute>,
-        ann: Ann,
+        ann: AnnInfo,
     },
     Do {
-        binding: Binding<TCompute, Compute>,
+        binding: Binding<Type, Compute>,
         body: Box<Compute>,
-        ann: Ann,
+        ann: AnnInfo,
     },
-    Force(Box<Value>, Ann),
-    Return(Box<Value>, Ann),
+    Force(Box<Value>, AnnInfo),
+    Return(Box<Value>, AnnInfo),
     Lam {
-        arg: (VVar, Option<Box<TValue>>),
+        arg: (TermV, Option<Box<Type>>),
         body: Box<Compute>,
-        ann: Ann,
+        ann: AnnInfo,
     },
     Rec {
-        arg: (VVar, Option<Box<TValue>>),
+        arg: (TermV, Option<Box<Type>>),
         body: Box<Compute>,
-        ann: Ann,
+        ann: AnnInfo,
     },
-    App(Box<Compute>, Box<Value>, Ann),
+    App(Box<Compute>, Box<Value>, AnnInfo),
     Match {
         scrut: Box<Value>,
-        cases: Vec<(Ctor, Vec<VVar>, Box<Compute>)>,
-        ann: Ann,
+        arms: Vec<(CtorV, Vec<TermV>, Box<Compute>)>,
+        ann: AnnInfo,
     },
     CoMatch {
-        cases: Vec<(Dtor, Vec<VVar>, Box<Compute>)>,
-        ann: Ann,
+        arms: Vec<(DtorV, Vec<TermV>, Box<Compute>)>,
+        ann: AnnInfo,
     },
     CoApp {
         body: Box<Compute>,
-        dtor: Dtor,
+        dtor: DtorV,
         args: Vec<Value>,
-        ann: Ann,
+        ann: AnnInfo,
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TValue {
-    Var(TVar, Ann),
-    Thunk(Box<TCompute>, Ann),
-}
+pub use crate::syntax::TCtor;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TCompute {
-    Var(TVar, Ann),
-    Ret(Box<TValue>, Ann),
-    Lam(Box<TValue>, Box<TCompute>, Ann),
-    OSType,
+pub enum SynType {
+    Basic(TCtor, AnnInfo),
+    App(Box<SynType>, Box<SynType>, AnnInfo),
+    // Thunk(Box<Type>, Ann),
+    // Ret(Box<Type>, Ann),
+    Arr(Box<SynType>, Box<SynType>, AnnInfo),
+    // OS,
 }
 
-macro_rules! var {
-    ( $Var:ident ) => {
-        #[derive(Clone, Debug)]
-        pub struct $Var(String, Ann);
-        impl $Var {
-            pub fn new(s: String, ann: Ann) -> Self {
-                Self(s, ann)
-            }
-            pub fn name(&self) -> &str {
-                &self.0
-            }
-            pub fn ann(&self) -> &Ann {
-                &self.1
-            }
-        }
-        impl std::cmp::PartialEq for $Var {
-            fn eq(&self, other: &Self) -> bool {
-                self.0 == other.0
-            }
-        }
-        impl std::cmp::Eq for $Var {}
-        impl std::hash::Hash for $Var {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                self.0.hash(state);
-            }
-        }
-    };
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Type {
+    pub ctor: TCtor,
+    pub args: Vec<Type>,
+    pub ann: AnnInfo,
 }
 
-var!(Ctor);
-var!(Dtor);
-var!(TVar);
-var!(VVar);
+impl SynType {
+    pub fn lower(self) -> Box<Type> {
+        match self {
+            SynType::Basic(ctor, a) => {
+                Box::new(Type { ctor, ann: a, args: vec![] })
+            }
+            SynType::Arr(dom, cod, ann) => Box::new(Type {
+                ctor: TCtor::Fun,
+                args: vec![*dom.lower(), *cod.lower()],
+                ann,
+            }),
+            SynType::App(f, a, _) => {
+                let mut f = f.lower();
+                let a = a.lower();
+                f.args.push(*a);
+                f
+            }
+        }
+    }
+}
+
+pub use crate::syntax::Kind;

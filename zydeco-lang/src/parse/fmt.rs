@@ -1,5 +1,8 @@
 use super::syntax::*;
-use crate::utils::fmt::{Args, FmtArgs};
+use crate::{
+    syntax::binder::*,
+    utils::fmt::{Args, FmtArgs},
+};
 
 impl FmtArgs for Program {
     fn fmt_args(&self, args: Args) -> String {
@@ -10,6 +13,9 @@ impl FmtArgs for Program {
 impl FmtArgs for Value {
     fn fmt_args(&self, args: Args) -> String {
         match self {
+            Value::TermAnn(v, t, _) => {
+                format!("({}::{})", v.fmt_args(args), t.fmt_args(args))
+            }
             Value::Var(x, _) => format!("{}", x.fmt_args(args)),
             Value::Thunk(e, _) => format!("{{ {} }}", e.fmt_args(args)),
             Value::Ctor(ctor, vs, _) => format!(
@@ -30,6 +36,9 @@ impl FmtArgs for Value {
 impl FmtArgs for Compute {
     fn fmt_args(&self, fmta: Args) -> String {
         match self {
+            Compute::TermAnn(v, t, _) => {
+                format!("({}::{})", v.fmt_args(fmta), t.fmt_args(fmta))
+            }
             Compute::Let { binding, body, .. } => {
                 let (x, _, v) = binding;
                 format!(
@@ -74,7 +83,7 @@ impl FmtArgs for Compute {
             Compute::App(e, v, _) => {
                 format!("{} {}", e.fmt_args(fmta), v.fmt_args(fmta),)
             }
-            Compute::Match { scrut, cases, .. } => {
+            Compute::Match { scrut, arms: cases, .. } => {
                 format!("match {} {}", scrut.fmt_args(fmta), {
                     let args = fmta.indent();
                     cases
@@ -95,7 +104,7 @@ impl FmtArgs for Compute {
                         .join("")
                 })
             }
-            Compute::CoMatch { cases, .. } => {
+            Compute::CoMatch { arms: cases, .. } => {
                 format!("comatch {}", {
                     let args = fmta.indent();
                     cases
@@ -131,25 +140,38 @@ impl FmtArgs for Compute {
     }
 }
 
-impl FmtArgs for TValue {
-    fn fmt_args(&self, args: Args) -> String {
+impl FmtArgs for Kind {
+    fn fmt_args(&self, _args: Args) -> String {
         match self {
-            TValue::Var(x, _) => format!("{}", x.fmt_args(args)),
-            TValue::Thunk(c, _) => format!("Thunk({})", c.fmt_args(args)),
+            Kind::CType => "CompType".to_owned(),
+            Kind::VType => "ValType".to_owned(),
         }
     }
 }
 
-impl FmtArgs for TCompute {
+impl FmtArgs for TCtor {
     fn fmt_args(&self, args: Args) -> String {
         match self {
-            TCompute::Var(x, _) => format!("{}", x.fmt_args(args)),
-            TCompute::Ret(v, _) => format!("Ret({})", v.fmt_args(args)),
-            TCompute::Lam(t, c, _) => {
-                format!("{} -> {}", t.fmt_args(args), c.fmt_args(args))
-            }
-            TCompute::OSType => format!("OS"),
+            TCtor::Var(x) => x.fmt_args(args),
+            TCtor::Thunk => format!("Thunk"),
+            TCtor::Ret => format!("Ret"),
+            TCtor::OS => "OS".to_owned(),
+            TCtor::Fun => "Fun".to_owned(),
         }
+    }
+}
+
+impl FmtArgs for Type {
+    fn fmt_args(&self, args: Args) -> String {
+        let mut s = self.ctor.fmt_args(args);
+        for arg in &self.args {
+            if arg.args.len() != 0 {
+                s.push_str(&format!(" ({})", arg.fmt_args(args)))
+            } else {
+                s.push_str(&format!(" {}", arg.fmt_args(args)))
+            }
+        }
+        s
     }
 }
 
@@ -158,12 +180,17 @@ impl std::fmt::Display for Program {
         write!(f, "{}", self.fmt_args(Args::new(2)))
     }
 }
-impl std::fmt::Display for TValue {
+impl std::fmt::Display for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.fmt_args(Args::new(2)))
     }
 }
-impl std::fmt::Display for TCompute {
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fmt_args(Args::new(2)))
+    }
+}
+impl std::fmt::Display for TCtor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.fmt_args(Args::new(2)))
     }
@@ -194,7 +221,7 @@ macro_rules! var_fmt {
     };
 }
 
-var_fmt!(TVar);
-var_fmt!(Ctor);
-var_fmt!(Dtor);
-var_fmt!(VVar);
+var_fmt!(TypeV);
+var_fmt!(CtorV);
+var_fmt!(DtorV);
+var_fmt!(TermV);

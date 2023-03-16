@@ -3,20 +3,24 @@ data Syn where
   | Concat(Syn, Syn)
   | Kleene(Syn)
   | Choose(Syn, Syn)
+end
 
 data OptionStr where
   | SomeStr(String)
   | NoneStr()
+end
 
 codata Matcher where
-  .str(String): F(OptionStr)
-  .concat(Syn, Syn): F(OptionStr)
-  .kleene(Syn): F(OptionStr)
-  .choose(Syn, Syn): F(OptionStr)
-  .bind(Syn): F(OptionStr)
+  | .str(String): F(OptionStr)
+  | .concat(Syn, Syn): F(OptionStr)
+  | .kleene(Syn): F(OptionStr)
+  | .choose(Syn, Syn): F(OptionStr)
+  | .bind(Syn): F(OptionStr)
+end
 
 codata Regex where
-  .run(String): Matcher
+  | .run(String): Matcher
+end
 
 let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String, i: Int) -> (
   do l <- ! str_length s;
@@ -30,6 +34,7 @@ let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String, i: Int) -> (
       do r <- ! str_append r tl;
       do i+1 <- ! add i 1;
       ! str_collect s i+1 r)
+    end
   );
   ! str_collect s i ""
 )};
@@ -60,7 +65,10 @@ let str_match : U(String -> String -> F(OptionStr)) = {
           | False() -> ret NoneStr()
           | True() -> (
             do i+1 <- ! add i 1;
-            ! str_match i+1 s p)))
+            ! str_match i+1 s p)
+          end)
+        end)
+      end
     );
   ! str_match 0
 };
@@ -73,24 +81,29 @@ let rec regex : Regex = ( comatch | .run(s) -> (
     match s?
     | NoneStr() -> ret NoneStr()
     | SomeStr(s) -> (
-      ! regex .run(s) .bind(sy2)))
+      ! regex .run(s) .bind(sy2))
+    end)
   | .kleene(sy) -> (
     do s? <- ! regex .run(s) .bind(sy);
     match s?
     | NoneStr() -> ret SomeStr(s)
-    | SomeStr(s) -> ! regex .run(s) .kleene(sy))
+    | SomeStr(s) -> ! regex .run(s) .kleene(sy)
+    end)
   | .choose(sy1, sy2) -> (
     do s? <- ! regex .run(s) .bind(sy1);
     match s?
     | SomeStr(s) -> ret SomeStr(s)
-    | NoneStr() -> ! regex .run(s) .bind(sy2))
+    | NoneStr() -> ! regex .run(s) .bind(sy2)
+    end)
   | .bind(sy) -> (
     match sy
     | Str(p) -> ! regex .run(s) .str(p)
     | Concat(sy1, sy2) -> ! regex .run(s) .concat(sy1, sy2)
     | Kleene(sy) -> ! regex .run(s) .kleene(sy)
-    | Choose(sy1, sy2) -> ! regex .run(s) .choose(sy1, sy2))
-));
+    | Choose(sy1, sy2) -> ! regex .run(s) .choose(sy1, sy2)
+    end)
+  end)
+end);
 
 let demo = { fn (syn: Syn, str: String, kont: U(OS)) ->
   do res <- ! regex .run(str) .bind(syn);
@@ -98,7 +111,9 @@ let demo = { fn (syn: Syn, str: String, kont: U(OS)) ->
   | SomeStr(s) -> (
     ! write_line s kont)
   | NoneStr() -> ! exit 1
+  end
 };
 
-! demo (Concat(Kleene(Str("p")), Concat(Kleene(Str("q")), Choose(Str("xos"), Str("sox"))))) "pppqqqsox\^o^/" {
-! exit 0 }
+! demo (Concat(Kleene(Str("p")), Concat(Kleene(Str("q")), Choose(Str("xos"), Str("sox"))))) "pppqqqsox\\^o^/" {
+! exit 0
+}

@@ -175,7 +175,7 @@ impl<'rt> Runtime<'rt> {
                     if let Stack::Frame(Frame::Call(arg), prev) = stack.as_ref()
                     {
                         self.stack = prev.clone();
-                        args.push((**arg).clone());
+                        args.push(arg.as_ref().clone());
                     }
                 }
                 match body(args, self.input, self.output, self.args) {
