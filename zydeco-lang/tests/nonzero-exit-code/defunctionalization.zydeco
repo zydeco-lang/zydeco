@@ -3,26 +3,24 @@
 # Let's consider a simple example of a recursive function, summing up
 # the numbers in a list.
 
-data NumList where
-  | Empty()
-  | Cons(Int, NumList)
+data List A : VType where
+  | Nil()
+  | Cons(A, List A)
 end
 
-# Out of order for now :)
 codata Summer where
   | .done()    : Ret(Int) # The equivalent of CALLERS_KONT
   | .addN(Int) : Summer
 end
 
-# out of order again :)
 codata Summer' where
   | .add(Int) : Ret(Int)
 end
 
-let rec sumBad : NumList -> Ret(Int) =
-  fn (xs : NumList) ->
+let rec sumBad : List Int -> Ret(Int) =
+  fn (xs : List Int) ->
     match xs
-    | Empty() -> ret 0
+    | Nil() -> ret 0
     | Cons(x, xs) ->
       (do n <- ! sumBad xs;
           ! add n x)
@@ -32,7 +30,7 @@ let rec sumBad : NumList -> Ret(Int) =
 # size of the input list. Why is that? each time we have a cons, we do
 # a *bind*, which pushes a kontinuation onto the stack. So if we have a list
 
-# Cons(5, Cons(13, Empty))
+# Cons(5, Cons(13, Nil))
 
 # when we get to the recursive call, the stack looks like:
 
@@ -52,10 +50,10 @@ let rec retSummer : Int -> Summer =
           ! retSummer n')
       end;
 
-let rec sumOk : NumList -> Summer =
-  fn (xs : NumList) ->
+let rec sumOk : List Int -> Summer =
+  fn (xs : List Int) ->
     match xs
-    | Empty()     -> ! retSummer 0
+    | Nil()     -> ! retSummer 0
     | Cons(x, xs) -> ! sumOk xs .addN(x)
     end;
 
@@ -93,10 +91,10 @@ let rec sumOk : NumList -> Summer =
 # it to `z` and not increased the size of the stack(!)
 
 
-let rec sumBetter : NumList -> Summer =
-  fn (xs : NumList) ->
+let rec sumBetter : List Int -> Summer =
+  fn (xs : List Int) ->
     match xs
-    | Empty()     -> ! retSummer 0
+    | Nil()     -> ! retSummer 0
     | Cons(x, xs) ->
       (comatch
         | .done() -> ! sumBetter xs .addN(x) .done()
@@ -120,10 +118,10 @@ let rec sumBetter : NumList -> Summer =
 # We can implement the .done() method from before by pushing .add(0)
 # (using that it is the additive unit).
 
-let rec sumBest : NumList -> Summer' =
-  fn (xs : NumList) ->
+let rec sumBest : List Int -> Summer' =
+  fn (xs : List Int) ->
     match xs
-    | Empty() -> (comatch
+    | Nil() -> (comatch
       | .add(n) -> ret n
       end)
     | Cons(x, xs) -> (comatch
@@ -133,10 +131,10 @@ let rec sumBest : NumList -> Summer' =
       end)
     end;
 let sum = {
-  fn (xs: NumList) ->
+  fn (xs: List Int) ->
     ! sumBest xs .add(0)
 };
 
-do x <- ! sum (Cons(5, Cons(13, Empty())));
+do x <- ! sum (Cons(5, Cons(13, Nil())));
 do s <- ! int_to_str x;
    ! write_line s { ! exit 0 }

@@ -3,9 +3,9 @@ data Tok where
   | RParen()
 end
 
-data LazyTokList where
+data LList A : VType where
   | Nil()
-  | Cons(Tok, Thunk(Ret(LazyTokList)))
+  | Cons(A, Thunk(Ret(LList A)))
 end
 
 data ParenCounterState where
@@ -18,8 +18,8 @@ codata ParenCounterStk where
   | .some() : ParenCounterStk
 end
 
-let rec foldr : Thunk(Ret(LazyTokList)) -> Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk) -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk =
-    fn (ll : Thunk(Ret(LazyTokList)), step : Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk), final : Thunk(ParenCounterState -> ParenCounterStk)) ->
+let rec foldr : Thunk(Ret(LList Tok)) -> Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk) -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk =
+    fn (ll : Thunk(Ret(LList Tok)), step : Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk), final : Thunk(ParenCounterState -> ParenCounterStk)) ->
     do l <- ! ll;
     match l
     | Nil()      -> ! final
@@ -60,7 +60,7 @@ let paren_counter_step = {
 };
 
 let demonstrate = {
-  fn (s: String, expect: Bool, toks: Thunk(Ret(LazyTokList)), t : Thunk(OS)) ->
+  fn (s: String, expect: Bool, toks: Thunk(Ret(LList Tok)), t : Thunk(OS)) ->
      do s' <- ! str_append "The following parens are balanced? "  s;
      do b <- ! foldr toks paren_counter_step accept_or_not (Ok()::ParenCounterState) .none();
      do pass <- ! bool_eq expect b;
