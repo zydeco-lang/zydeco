@@ -52,7 +52,7 @@ pub struct Application {
 pub struct Let {
     pub binder: TermV,
     pub ty_ann: Option<Ann<Type>>,
-    pub def: Box<Ann<TermComputation>>,
+    pub def: Box<Ann<TermValue>>,
     pub body: Box<Ann<TermComputation>>,
 }
 
@@ -60,7 +60,7 @@ pub struct Let {
 pub struct Do {
     pub binder: TermV,
     pub ty_ann: Option<Ann<Type>>,
-    pub task: Box<Ann<TermValue>>,
+    pub task: Box<Ann<TermComputation>>,
     pub body: Box<Ann<TermComputation>>,
 }
 

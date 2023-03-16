@@ -6,48 +6,111 @@ use crate::parse::{apply_string_escapes, apply_char_escapes};
 
 grammar<'input>(input: &'input str);
 
-pub Zydeco: Module = "module" <name:String> "where" <declarations:Decls*> <entry:Ann<TermComputation>> => Module {
+pub Zydeco: Module = "module" <name:String> "where" <declarations:Decl*> <entry:Ann<TermComputation>> => Module {
     name: Some(name),
     declarations,
-    entry
+    entry,
 }
 
-pub Declaration: Declaration = {
+pub Decl: Declaration = {
     <ext:"extern"?> "data" <name:TypeV> <params:TParameter*> "where" <ctors:DataBr*> "end" => Data {
         name,
         params,
-        ctors
+        ctors,
     }
     <ext:"extern"?> "codata" <name:TypeV> <params:TParameter*> "where" <dtors:CodataBr*> "end" => Codata {
         name,
         params,
-        dtors
+        dtors,
     }
     <p:"pub"?> <ext:"extern"?> "define" <name:TermV> ":" <ty:Type> <def:("=" Value)?> "end" => Define {
         public: p,
         name,
         ty,
-        def
+        def,
     }
 }
 
-DataBr: DataBr = "|" <ctor:CtorV> "(" <args:SepByEnd<",", ")", Type>> => DataBr(ctor, args);
-
-DataBr: DataBr = "|" <ctor:CtorV> "(" <args:SepByEnd<",", ")", Type>> => (ctor, args).into();
-
-CodataBr: CodataBr = "|" "." <dtor:DtorV> "(" <args:SepByEnd<",", ")", Type>> ":" <ty:Type>=> CodataBr(dtor, args, ty);
-
-TParameter: (TypeV, Kind) = <name:TypeV> ":" <kind:Kind> => (name, kind)
 
 // TypeV: TypeV
 
-TermComputation: TermComputation = {
-    "(" <tc:BoxAnn<TermComputation>> "::" <ty:Ann<Type>> ")" => TermAnn{
-        body: tc,
-        ty
+TermValue: TermValue = {
+    "(" <Ann<TermValue>> ")" => <>.into(),
+    "(" <tv:BoxAnn<TermValue>> "::" <ty:Ann<Type>> ")" => TermAnn {
+        body: tv,
+        ty,
     }.into(),
+    <TermV> => <>.into(),
+    "{" <tc:BoxAnn<TermComputation>> "}" => Thunk(tc).into(),
+    <ctor:DtorV> "(" <args:SepByEnd<",", ")", Ann<TermValue>>> => Dtor {
+        ctor,
+        args,
+    }.into(),
+    <Literal> => <>.into(),
+}
+
+TermComputation: TermComputation = {
+    TermComputationRight,
+    "let" <binder:TermV> <ty_ann:(":" Ann<Type>)?> "=" <def:BoxAnn<TermValue>> ";" <body:BoxAnn<TermComputation>> => Let {
+        binder,
+        ty_ann,
+        def,
+        body,
+    }.into(),
+    // How to deal with let rec
+    "do" <binder:TermV> <ty_ann:(":" Ann<Type>)?> "<-" <task:BoxAnn<TermComputation>> ";" <body:BoxAnn<TermComputation>> => Do {
+        binder,
+        ty_ann,
+        task,
+        body,
+    }.into(),
+    "rec" "(" <var:TermV> <ty_ann:(":" Ann<Type>)?> ")" "->" <body:BoxAnn<TermComputation>> => Rec {
+        var,
+        body,
+    }.into(),
+    "match" <scrut:BoxAnn<TermV>> <arms:MatchBr*> "end" => Match {
+        scrut,
+        arms,
+    }.into(),
+    "fn" "(" <params:SepByEnd<",", ")",FnArg>> <body:BoxAnn<TermComputation>> => Function {
+        params,
+        body,
+    }.into(),
+    "comatch" <arms:ComatchBr*> "end" => CoMatch {
+        arms,
+    }.into(),
+}
+
+TermComputationRight: TermComputation = {
+    TermComputationAtom,
+    <expr_in:BoxAnn<TermComputationRight>> <args:Ann<TermValue>*> => Application {
+        expr_in,
+        args,
+    }.into(),
+    <body:BoxAnn<TermComputationRight>> "." <dtor:DtorV> "(" <args:SepByEnd<",", ")", Ann<TermValue>>> => Dtor {
+        body,
+        dtor,
+        args,
+    }.into(),
+}
+
+TermComputationAtom: TermComputation = {
+    "(" <TermComputation> ")" => <>.into(),
+    "(" <tc:BoxAnn<TermComputationAtom>> "::" <ty:Ann<Type>> ")" => TermAnn {
+        body: tc,
+        ty,
+    }.into(),
+    "ret" <v:BoxAnn<TermValue>> => Force(v).into(),
     "!" <v:BoxAnn<TermValue>> => Ret(v).into(),
 }
+
+
+
+DataBr: DataBr = "|" <ctor:CtorV> "(" <args:SepByEnd<",", ")", Type>> => DataBr(ctor, args);
+
+CodataBr: CodataBr = "|" "." <dtor:DtorV> "(" <args:SepByEnd<",", ")", Type>> ":" <ty:Type>=> CodataBr(dtor, args, ty);
+
+TParameter: (TypeV, Kind) = <name:TypeV> ":" <kind:Kind> => (name, kind);
 
 Ann<Rule>: Ann<T> = {
     <l:@L> <content:Rule> <r:@R> => ann(l,r).make(content)
@@ -60,6 +123,10 @@ BoxAnn<Rule>: Box<Ann<T>> = {
 // BoxAnn<Rule>: Box<Ann<T>> = {
 //     <l:@L> <content:Rule> <r:@R> => Box::new(ann(l,r).make(content))
 // }
+
+FnArg: (TermV, Option<Ann<Type>>) = {
+    <x:TermV> <t:(":" <Ann<Type>>)?> => (x, t),
+}
 
 SepByEnd<Sep, End, T>: Vec<T> = {
     <content:T> <s:Sep> <mut rest:SepByEnd<Sep, T, End>> => {
