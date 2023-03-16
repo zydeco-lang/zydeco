@@ -136,7 +136,6 @@ mod batch_tests {
     mk_batch_test!(btest1, "deterministic-pushdown-automaton.zydeco");
     mk_batch_test!(btest2, "interpreter.zydeco");
     mk_batch_test!(btest3, "lists.zydeco");
-    // mk_batch_test!(btest3, "/home/archan/Arc/zydeco-lang/zydeco/zydeco-lang/tests/nonzero-exit-code/lists.zydeco");
     // mk_batch_test!(btest4, "Y.zydeco");
     mk_batch_test!(btest5, "num.zy");
     mk_batch_test!(btest6, "even-odd-data.zy");
