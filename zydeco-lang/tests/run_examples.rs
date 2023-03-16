@@ -162,6 +162,7 @@ mod tyck_tests {
     use super::*;
     mk_check_test!(chk_test0, "loop.zydeco");
     mk_check_test!(chk_test1, "explosion.zy");
+    mk_check_test!(chk_test2, "iota.zy");
 }
 
 mod custom_tests {
