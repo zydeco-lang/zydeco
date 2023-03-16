@@ -28,7 +28,7 @@ impl TypeCheck for Program {
         for decl in &self.decls {
             ctx.decl(decl).map_err(|e| self.ann.make(NameResolve(e)))?;
         }
-        ctx.type_validation()?;
+        ctx.tyck_types()?;
         ctx.tyck_definitions()?;
         let typ = self.comp.syn(&ctx)?;
         match &typ.ctor {
@@ -132,14 +132,14 @@ impl TypeCheck for Value {
                 let data = ctx.data.get(tvar).ok_or_else(|| {
                     ann.make(ErrStr(format!("unknown data type: {}", tvar)))
                 })?;
-                let targs = &data
+                let data = data.type_app(&typ.args);
+                let (_, targs) = &data
                     .ctors
                     .iter()
                     .find(|(ctor_, _)| ctor == ctor_)
                     .ok_or_else(|| {
                         ann.make(ErrStr(format!("unknown ctor: {}", ctor)))
-                    })?
-                    .1;
+                    })?;
                 if args.len() != targs.len() {
                     Err(ann.make(ArityMismatch {
                         context: format!("application of constructor {}", ctor),
@@ -284,6 +284,7 @@ impl TypeCheck for Compute {
             }
             Compute::Match { scrut, arms, ann, .. } => {
                 let scrut_ty = scrut.syn(&ctx)?;
+                scrut_ty.syn(&ctx)?;
                 let TCtor::Var(data_ty_name) = scrut_ty.ctor else {
                     Err(ann.make(TypeExpected {
                         context: format!("match"),
@@ -297,6 +298,7 @@ impl TypeCheck for Compute {
                         data_ty_name
                     )))
                 })?;
+                let data = data.type_app(&scrut_ty.args);
                 let mut ctors: HashMap<CtorV, Vec<Type>> =
                     HashMap::from_iter(data.ctors.clone());
                 let mut ty = None;
@@ -540,6 +542,7 @@ impl TypeCheck for Compute {
                         data_ty_name
                     )))
                 })?;
+                let data = data.type_app(&scrut_ty.args);
                 let mut ctors: HashMap<CtorV, Vec<Type>> =
                     HashMap::from_iter(data.ctors.clone());
                 for (ctor, vars, body) in arms {
@@ -823,5 +826,66 @@ impl Eqv for Type {
             Type::eqv(argl, &argr)?
         }
         Some(())
+    }
+}
+
+impl Data {
+    pub fn type_app(&self, substs: &[Type]) -> Self {
+        let mut data = self.clone();
+        if data.params.len() != substs.len() {
+            panic!(
+                "arity mismatch: expected {} but got {}",
+                data.params.len(),
+                substs.len()
+            );
+        }
+        let lookup = HashMap::from_iter(
+            data.params.iter().map(|(tv, _)| tv).zip(substs),
+        );
+        for (_, tys) in &mut data.ctors {
+            for ty in tys {
+                ty.subst(&lookup);
+            }
+        }
+        data
+    }
+}
+
+impl Codata {
+    pub fn type_app(&self, substs: &[Type]) -> Self {
+        let mut codata = self.clone();
+        if codata.params.len() != substs.len() {
+            panic!(
+                "arity mismatch: expected {} but got {}",
+                codata.params.len(),
+                substs.len()
+            );
+        }
+        let lookup = HashMap::from_iter(
+            codata.params.iter().map(|(tv, _)| tv).zip(substs),
+        );
+        for (_, (tys, ty)) in &mut codata.dtors {
+            for ty in tys {
+                ty.subst(&lookup);
+            }
+            ty.subst(&lookup);
+        }
+        codata
+    }
+}
+
+impl Type {
+    pub fn subst(&mut self, lookup: &HashMap<&TypeV, &Type>) {
+        match &mut self.ctor {
+            TCtor::Var(x) => {
+                if let Some(t) = lookup.get(x) {
+                    *self = t.clone().clone();
+                }
+            }
+            TCtor::OS | TCtor::Ret | TCtor::Thunk | TCtor::Fun => {}
+        }
+        for arg in &mut self.args {
+            arg.subst(lookup);
+        }
     }
 }
