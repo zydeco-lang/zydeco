@@ -79,6 +79,7 @@ mod link {
                         if let Some(def) = def {
                             (name, def.inner_ref().into())
                         } else {
+                            // Todo: use extern field
                             todo!()
                         }
                     })
