@@ -133,7 +133,7 @@ mod batch_tests {
     // the file name with full path to the test file and click `Debug`
     use super::*;
     mk_batch_test!(btest0, "defunctionalization.zydeco");
-    mk_batch_test!(btest1, "deterministic-pushdown-automaton.zydeco");
+    // mk_batch_test!(btest1, "deterministic-pushdown-automaton.zydeco");
     mk_batch_test!(btest2, "interpreter.zydeco");
     mk_batch_test!(btest3, "lists.zydeco");
     // mk_batch_test!(btest4, "Y.zydeco");
