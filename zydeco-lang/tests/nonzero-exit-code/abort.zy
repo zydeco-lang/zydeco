@@ -1,9 +1,9 @@
-codata Fn where
-  | .app(Int): Fn
-  | .return(): F(Int)
+codata Fn A : VType where
+  | .app(A): Fn A
+  | .return(): F(A)
 end
 
-do x <- ( rec (abort: U(Int -> Fn)) ->
+do x <- ( rec (abort: U(Int -> Fn Int)) ->
     fn (x: Int) ->
       comatch
       | .app(_) -> ! abort x
