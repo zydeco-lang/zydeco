@@ -99,20 +99,31 @@ impl Ctx {
             }
         }
     }
-    pub fn type_validation(&self) -> Result<(), Ann<TypeCheckError>> {
+    fn add_type_param(&mut self, x: TypeV, k: Kind) {
+        self.tmap.insert(x, Arity(vec![], k));
+    }
+    pub fn tyck_types(&self) -> Result<(), Ann<TypeCheckError>> {
         for (_, data) in &self.data {
+            let mut ctx = self.clone();
+            for (x, kind) in &data.params {
+                ctx.add_type_param(x.clone(), kind.clone());
+            }
             for (_, args) in &data.ctors {
                 for arg in args {
-                    arg.syn(self)?;
+                    arg.syn(&ctx)?;
                 }
             }
         }
-        for (_, codata) in &self.coda {
-            for (_, (args, ret)) in &codata.dtors {
+        for (_, coda) in &self.coda {
+            let mut ctx = self.clone();
+            for (x, kind) in &coda.params {
+                ctx.add_type_param(x.clone(), kind.clone());
+            }
+            for (_, (args, ret)) in &coda.dtors {
                 for arg in args {
-                    arg.syn(self)?;
+                    arg.syn(&ctx)?;
                 }
-                ret.syn(self)?;
+                ret.syn(&ctx)?;
             }
         }
         Ok(())

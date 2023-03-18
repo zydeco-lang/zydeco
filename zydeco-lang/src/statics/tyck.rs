@@ -28,7 +28,7 @@ impl TypeCheck for Program {
         for decl in &self.decls {
             ctx.decl(decl).map_err(|e| self.ann.make(NameResolve(e)))?;
         }
-        ctx.type_validation()?;
+        ctx.tyck_types()?;
         ctx.tyck_definitions()?;
         let typ = self.comp.syn(&ctx)?;
         match &typ.ctor {
@@ -132,14 +132,14 @@ impl TypeCheck for Value {
                 let data = ctx.data.get(tvar).ok_or_else(|| {
                     ann.make(ErrStr(format!("unknown data type: {}", tvar)))
                 })?;
-                let targs = &data
+                let data = data.type_app(&typ.args);
+                let (_, targs) = &data
                     .ctors
                     .iter()
                     .find(|(ctor_, _)| ctor == ctor_)
                     .ok_or_else(|| {
                         ann.make(ErrStr(format!("unknown ctor: {}", ctor)))
-                    })?
-                    .1;
+                    })?;
                 if args.len() != targs.len() {
                     Err(ann.make(ArityMismatch {
                         context: format!("application of constructor {}", ctor),
@@ -284,6 +284,7 @@ impl TypeCheck for Compute {
             }
             Compute::Match { scrut, arms, ann, .. } => {
                 let scrut_ty = scrut.syn(&ctx)?;
+                scrut_ty.syn(&ctx)?;
                 let TCtor::Var(data_ty_name) = scrut_ty.ctor else {
                     Err(ann.make(TypeExpected {
                         context: format!("match"),
@@ -297,6 +298,7 @@ impl TypeCheck for Compute {
                         data_ty_name
                     )))
                 })?;
+                let data = data.type_app(&scrut_ty.args);
                 let mut ctors: HashMap<CtorV, Vec<Type>> =
                     HashMap::from_iter(data.ctors.clone());
                 let mut ty = None;
@@ -337,38 +339,35 @@ impl TypeCheck for Compute {
             }
             Compute::CoApp { body, dtor, args, ann, .. } => {
                 let tscrut = body.syn(ctx)?;
-                if let TCtor::Var(tvar) = tscrut.ctor {
-                    let coda = ctx.coda.get(&tvar).ok_or_else(|| {
-                        ann.make(ErrStr(format!("unknown codata: {}", tvar)))
-                    })?;
-                    let (_, (ty_args, tret)) = coda
-                        .dtors
-                        .iter()
-                        .find(|(dtor_, (_, _))| dtor == dtor_)
-                        .ok_or_else(|| {
-                            ann.make(ErrStr(format!("unknown dtor: {}", dtor)))
-                        })?;
-                    if args.len() != ty_args.len() {
-                        Err(ann.make(ArityMismatch {
-                            context: format!(
-                                "application of destructor {}",
-                                dtor
-                            ),
-                            expected: ty_args.len(),
-                            found: args.len(),
-                        }))?;
-                    }
-                    for (arg, expected) in args.iter().zip(ty_args.iter()) {
-                        arg.ana(expected, ctx)?;
-                    }
-                    Ok(tret.clone())
-                } else {
+                let TCtor::Var(tvar) = tscrut.ctor else {
                     Err(ann.make(TypeExpected {
                         context: format!("application of destructor {}", dtor),
                         expected: format!("a?"),
                         found: tscrut.into(),
-                    }))
+                    }))?
+                };
+                let coda = ctx.coda.get(&tvar).ok_or_else(|| {
+                    ann.make(ErrStr(format!("unknown codata: {}", tvar)))
+                })?;
+                let coda = coda.type_app(&tscrut.args);
+                let (_, (ty_args, tret)) = coda
+                    .dtors
+                    .iter()
+                    .find(|(dtor_, (_, _))| dtor == dtor_)
+                    .ok_or_else(|| {
+                        ann.make(ErrStr(format!("unknown dtor: {}", dtor)))
+                    })?;
+                if args.len() != ty_args.len() {
+                    Err(ann.make(ArityMismatch {
+                        context: format!("application of destructor {}", dtor),
+                        expected: ty_args.len(),
+                        found: args.len(),
+                    }))?;
                 }
+                for (arg, expected) in args.iter().zip(ty_args.iter()) {
+                    arg.ana(expected, ctx)?;
+                }
+                Ok(tret.clone())
             }
             Compute::CoMatch { ann, .. } => {
                 Err(ann.make(NeedAnnotation { content: format!("comatch") }))
@@ -540,6 +539,7 @@ impl TypeCheck for Compute {
                         data_ty_name
                     )))
                 })?;
+                let data = data.type_app(&scrut_ty.args);
                 let mut ctors: HashMap<CtorV, Vec<Type>> =
                     HashMap::from_iter(data.ctors.clone());
                 for (ctor, vars, body) in arms {
@@ -572,48 +572,42 @@ impl TypeCheck for Compute {
             }
             Compute::CoApp { body, dtor, args, ann, .. } => {
                 let tscrut = body.syn(ctx)?;
-                if let TCtor::Var(tvar) = tscrut.ctor {
-                    let coda = ctx.coda.get(&tvar).ok_or_else(|| {
-                        ann.make(ErrStr(format!("unknown codata: {}", tvar)))
-                    })?;
-                    let (_, (ty_args, tret)) = coda
-                        .dtors
-                        .iter()
-                        .find(|(dtor_, (_, _))| dtor == dtor_)
-                        .ok_or_else(|| {
-                            ann.make(ErrStr(format!("unknown dtor: {}", dtor)))
-                        })?;
-                    typ.eqv(&tret).ok_or_else(|| {
-                        ann.make(TypeMismatch {
-                            context: format!(
-                                "application of destructor {}",
-                                dtor
-                            ),
-                            expected: typ.to_owned(),
-                            found: tret.to_owned(),
-                        })
-                    })?;
-                    if args.len() != ty_args.len() {
-                        Err(ann.make(ArityMismatch {
-                            context: format!(
-                                "application of destructor {}",
-                                dtor
-                            ),
-                            expected: ty_args.len(),
-                            found: args.len(),
-                        }))?;
-                    }
-                    for (arg, expected) in args.iter().zip(ty_args.iter()) {
-                        arg.ana(expected, ctx)?;
-                    }
-                    Ok(())
-                } else {
+                let TCtor::Var(tvar) = tscrut.ctor else {
                     Err(ann.make(TypeExpected {
                         context: format!("application of destructor {}", dtor),
                         expected: format!("a?"),
                         found: tscrut.into(),
-                    }))
+                    }))?
+                };
+                let coda = ctx.coda.get(&tvar).ok_or_else(|| {
+                    ann.make(ErrStr(format!("unknown codata: {}", tvar)))
+                })?;
+                let coda = coda.type_app(&tscrut.args);
+                let (_, (ty_args, tret)) = coda
+                    .dtors
+                    .iter()
+                    .find(|(dtor_, (_, _))| dtor == dtor_)
+                    .ok_or_else(|| {
+                        ann.make(ErrStr(format!("unknown dtor: {}", dtor)))
+                    })?;
+                typ.eqv(&tret).ok_or_else(|| {
+                    ann.make(TypeMismatch {
+                        context: format!("application of destructor {}", dtor),
+                        expected: typ.to_owned(),
+                        found: tret.to_owned(),
+                    })
+                })?;
+                if args.len() != ty_args.len() {
+                    Err(ann.make(ArityMismatch {
+                        context: format!("application of destructor {}", dtor),
+                        expected: ty_args.len(),
+                        found: args.len(),
+                    }))?;
                 }
+                for (arg, expected) in args.iter().zip(ty_args.iter()) {
+                    arg.ana(expected, ctx)?;
+                }
+                Ok(())
             }
             Compute::CoMatch { arms, ann, .. } => {
                 let TCtor::Var(tvar) = &typ.ctor else {
@@ -626,6 +620,7 @@ impl TypeCheck for Compute {
                 let coda = ctx.coda.get(tvar).ok_or_else(|| {
                     ann.make(ErrStr(format!("unknown codata type: {}", tvar)))
                 })?;
+                let coda = coda.type_app(&typ.args);
                 let mut dtors: HashMap<DtorV, (Vec<Type>, Type)> =
                     HashMap::from_iter(coda.dtors.clone());
                 for (dtor, vars, body) in arms {
@@ -823,5 +818,66 @@ impl Eqv for Type {
             Type::eqv(argl, &argr)?
         }
         Some(())
+    }
+}
+
+impl Data {
+    pub fn type_app(&self, substs: &[Type]) -> Self {
+        let mut data = self.clone();
+        if data.params.len() != substs.len() {
+            panic!(
+                "arity mismatch: expected {} but got {}",
+                data.params.len(),
+                substs.len()
+            );
+        }
+        let lookup = HashMap::from_iter(
+            data.params.iter().map(|(tv, _)| tv).zip(substs),
+        );
+        for (_, tys) in &mut data.ctors {
+            for ty in tys {
+                ty.subst(&lookup);
+            }
+        }
+        data
+    }
+}
+
+impl Codata {
+    pub fn type_app(&self, substs: &[Type]) -> Self {
+        let mut codata = self.clone();
+        if codata.params.len() != substs.len() {
+            panic!(
+                "arity mismatch: expected {} but got {}",
+                codata.params.len(),
+                substs.len()
+            );
+        }
+        let lookup = HashMap::from_iter(
+            codata.params.iter().map(|(tv, _)| tv).zip(substs),
+        );
+        for (_, (tys, ty)) in &mut codata.dtors {
+            for ty in tys {
+                ty.subst(&lookup);
+            }
+            ty.subst(&lookup);
+        }
+        codata
+    }
+}
+
+impl Type {
+    pub fn subst(&mut self, lookup: &HashMap<&TypeV, &Type>) {
+        match &mut self.ctor {
+            TCtor::Var(x) => {
+                if let Some(t) = lookup.get(x) {
+                    *self = t.clone().clone();
+                }
+            }
+            TCtor::OS | TCtor::Ret | TCtor::Thunk | TCtor::Fun => {}
+        }
+        for arg in &mut self.args {
+            arg.subst(lookup);
+        }
     }
 }

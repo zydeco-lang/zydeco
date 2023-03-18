@@ -30,3 +30,13 @@ where
         self.inner.get(key)
     }
 }
+
+impl<K, V> FromIterator<(K, V)> for Env<K, V>
+where
+    K: Eq + Hash + Clone,
+    V: Clone,
+{
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
+        Env { inner: iter.into_iter().collect() }
+    }
+}
