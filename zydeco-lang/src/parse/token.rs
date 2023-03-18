@@ -9,20 +9,22 @@ pub enum Tok<'input> {
     #[regex(r"((\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=)*)")]
     LowerIdent(&'input str),
 
-    #[token("data")]
-    Data,
-    #[token("codata")]
-    Codata,
-    #[token("end")]
-    End,
+    #[token("module")]
+    Module,
     #[token("where")]
     Where,
+    #[token("end")]
+    End,
     #[token("pub")]
     Pub,
     #[token("extern")]
     Extern,
     #[token("define")]
     Define,
+    #[token("data")]
+    Data,
+    #[token("codata")]
+    Codata,
     #[token("let")]
     Let,
     #[token("do")]
@@ -100,15 +102,16 @@ pub enum Tok<'input> {
 impl<'input> Display for Tok<'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Tok::End => write!(f, "end"),
             Tok::UpperIdent(s) => write!(f, "UpperIdentifier({})", s),
             Tok::LowerIdent(s) => write!(f, "LowerIdentifier({})", s),
-            Tok::Data => write!(f, "data"),
-            Tok::Codata => write!(f, "codata"),
+            Tok::Module => write!(f, "module"),
             Tok::Where => write!(f, "where"),
+            Tok::End => write!(f, "end"),
             Tok::Pub => write!(f, "pub"),
             Tok::Extern => write!(f, "extern"),
             Tok::Define => write!(f, "define"),
+            Tok::Data => write!(f, "data"),
+            Tok::Codata => write!(f, "codata"),
             Tok::Let => write!(f, "let"),
             Tok::Do => write!(f, "do"),
             Tok::Ret => write!(f, "ret"),
