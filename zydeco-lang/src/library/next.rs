@@ -1,15 +1,14 @@
-mod syntax {
-    pub use crate::{statics::syntax as ss, syntax::*};
-    use enum_dispatch::enum_dispatch;
-    use im::Vector;
-    use std::{
-        fmt::Debug,
-        io::{BufRead, Write},
-        rc::Rc,
-    };
+pub mod syntax {
+    use crate::dynamics::next::syntax as ds;
+    pub use crate::syntax::{env::Env, *};
+    use indexmap::IndexMap;
+    use std::io::{BufRead, Write};
+    use std::rc::Rc;
+    use zydeco_derive::EnumGenerator;
 
-    #[enum_dispatch(ValueT)]
-    #[derive(Clone)]
+    /* ---------------------------------- Term ---------------------------------- */
+
+    #[derive(EnumGenerator, Clone)]
     pub enum TermValue {
         Var(TermV),
         Thunk(Thunk<TC>),
@@ -20,7 +19,7 @@ mod syntax {
     impl ValueT for TermValue {}
 
     pub type PrimComp = fn(
-        Vec<TermValue>,
+        Vec<ds::TermValue>,
         &mut (dyn BufRead),
         &mut (dyn Write),
         &[String],
@@ -32,11 +31,11 @@ mod syntax {
         pub body: PrimComp,
     }
 
-    #[enum_dispatch(ComputationT)]
-    #[derive(Clone)]
+    #[derive(EnumGenerator, Clone)]
     pub enum TermComputation {
         Ret(Ret<TV>),
         Force(Force<TV>),
+        Let(Let<TermV, TV, TC>),
         Do(Do<TermV, TC>),
         Rec(Rec<TermV, TC>),
         Match(Match<CtorV, TermV, TV, TC>),
@@ -47,92 +46,135 @@ mod syntax {
     type TC = Rc<TermComputation>;
     impl ComputationT for TermComputation {}
 
+    #[derive(EnumGenerator, Clone)]
+    pub enum Term {
+        Val(TermValue),
+        Comp(TermComputation),
+    }
+
     /* --------------------------------- Module --------------------------------- */
 
     #[derive(Clone)]
     pub struct Module {
         pub name: Option<String>,
-        pub define: Vec<Ann<Define<TermV, (), TV>>>,
+        pub define: IndexMap<TermV, TermValue>,
         pub entry: TermComputation,
     }
 }
 
-// mod impls {
-//     use super::syntax::*;
-//     impl From<&ss::TermValue> for TermValue {
-//         fn from(v: &ss::TermValue) -> Self {
-//             match v {
-//                 ss::TermValue::Var(v) => TermValue::Var(v.clone()),
-//                 ss::TermValue::Thunk(ss::Thunk(e)) => {
-//                     TermValue::Thunk(Thunk(e.inner_ref().into()))
-//                 }
-//                 ss::TermValue::Ctor(v) => TermValue::Ctor(Ctor {
-//                     ctor: v.ctor,
-//                     args: v.args.into_iter().map(|v| v.into()).collect(),
-//                 }),
-//                 ss::TermValue::Literal(v) => TermValue::Literal(v),
-//             }
-//         }
-//     }
-//     impl From<&ss::TermComputation> for TermComputation {
-//         fn from(e: &ss::TermComputation) -> Self {
-//             match e {
-//                 ss::TermComputation::Ret(ss::Ret(e)) => {
-//                     TermComputation::Ret(Ret(e.inner_ref().into()))
-//                 }
-//                 ss::TermComputation::Force(e) => {
-//                     TermComputation::Force(Force {
-//                         value: e.value.clone().into(),
-//                     })
-//                 }
-//                 ss::TermComputation::Do(e) => TermComputation::Do(Do {
-//                     bindings: e
-//                         .bindings
-//                         .iter()
-//                         .map(|(v, e)| (v.clone(), e.clone().into()))
-//                         .collect(),
-//                     body: e.body.clone().into(),
-//                 }),
-//                 ss::TermComputation::Rec(e) => TermComputation::Rec(Rec {
-//                     bindings: e
-//                         .bindings
-//                         .iter()
-//                         .map(|(v, e)| (v.clone(), e.clone().into()))
-//                         .collect(),
-//                     body: e.body.clone().into(),
-//                 }),
-//                 ss::TermComputation::Match(e) => {
-//                     TermComputation::Match(Match {
-//                         value: e.value.clone().into(),
-//                         cases: e
-//                             .cases
-//                             .iter()
-//                             .map(|(c, v, e)| {
-//                                 (c.clone(), v.clone(), e.clone().into())
-//                             })
-//                             .collect(),
-//                     })
-//                 }
-//                 ss::TermComputation::CoMatch(e) => {
-//                     TermComputation::CoMatch(CoMatch {
-//                         value: e.value.clone().into(),
-//                         cases: e
-//                             .cases
-//                             .iter()
-//                             .map(|(c, v, e)| {
-//                                 (c.clone(), v.clone(), e.clone().into())
-//                             })
-//                             .collect(),
-//                     })
-//                 }
-//                 ss::TermComputation::Dtor(e) => TermComputation::Dtor(Dtor {
-//                     value: e.value.clone().into(),
-//                     dtor: e.dtor,
-//                 }),
-//                 ss::TermComputation::Prim(e) => {
-//                     TermComputation::Prim(Prim { arity: e.arity, body: e.body })
-//                 }
-//             }
-//         }
-//     }
-// }
+mod link {
+    use super::syntax::*;
+    use crate::rc;
+    use crate::statics::next::syntax as ss;
+
+    impl From<ss::Module> for Module {
+        fn from(m: ss::Module) -> Self {
+            Self {
+                name: m.name,
+                define: m
+                    .define
+                    .into_iter()
+                    .map(|def| {
+                        let ss::Define { name, ty: _, def } = def.inner();
+                        if let Some(def) = def {
+                            (name, def.inner_ref().into())
+                        } else {
+                            // Todo: use extern field
+                            todo!()
+                        }
+                    })
+                    .collect(),
+                entry: m.entry.inner_ref().into(),
+            }
+        }
+    }
+
+    impl From<&ss::TermValue> for TermValue {
+        fn from(v: &ss::TermValue) -> Self {
+            match v {
+                ss::TermValue::TermAnn(TermAnn { body, ty: _ }) => {
+                    body.inner_ref().into()
+                }
+                ss::TermValue::Var(x) => x.clone().into(),
+                ss::TermValue::Thunk(Thunk(e)) => {
+                    Thunk(rc!(e.inner_ref().into())).into()
+                }
+                ss::TermValue::Ctor(Ctor { ctor, args }) => {
+                    let args = args
+                        .iter()
+                        .map(|v| rc!(v.inner_ref().into()))
+                        .collect();
+                    Ctor { ctor: ctor.clone(), args }.into()
+                }
+                ss::TermValue::Literal(l) => l.clone().into(),
+            }
+        }
+    }
+
+    impl From<&ss::TermComputation> for TermComputation {
+        fn from(e: &ss::TermComputation) -> Self {
+            match e {
+                ss::TermComputation::TermAnn(TermAnn { body, ty: _ }) => {
+                    body.inner_ref().into()
+                }
+                ss::TermComputation::Ret(Ret(v)) => {
+                    Ret(rc!(v.inner_ref().into())).into()
+                }
+                ss::TermComputation::Force(Force(v)) => {
+                    Force(rc!(v.inner_ref().into())).into()
+                }
+                ss::TermComputation::Let(Let { var, def, body }) => {
+                    let (def, body) =
+                        rc!(def.inner_ref().into(), body.inner_ref().into());
+                    Let { var: var.clone(), def, body }.into()
+                }
+                ss::TermComputation::Do(Do { var, comp, body }) => {
+                    let (comp, body) =
+                        rc!(comp.inner_ref().into(), body.inner_ref().into());
+                    Do { var: var.clone(), comp, body }.into()
+                }
+                ss::TermComputation::Rec(Rec { var, body }) => {
+                    let body = rc!(body.inner_ref().into());
+                    Rec { var: var.clone(), body }.into()
+                }
+                ss::TermComputation::Match(Match { scrut, arms }) => {
+                    let scrut = rc!(scrut.inner_ref().into());
+                    let arms = arms
+                        .iter()
+                        .map(|Matcher { ctor, vars, body }| {
+                            let body = rc!(body.inner_ref().into());
+                            Matcher {
+                                ctor: ctor.clone(),
+                                vars: vars.clone(),
+                                body,
+                            }
+                        })
+                        .collect();
+                    Match { scrut, arms }.into()
+                }
+                ss::TermComputation::CoMatch(CoMatch { arms }) => {
+                    let arms = arms
+                        .iter()
+                        .map(|CoMatcher { dtor, vars, body }| {
+                            let body = rc!(body.inner_ref().into());
+                            CoMatcher {
+                                dtor: dtor.clone(),
+                                vars: vars.clone(),
+                                body,
+                            }
+                        })
+                        .collect();
+                    CoMatch { arms }.into()
+                }
+                ss::TermComputation::Dtor(Dtor { body, dtor, args }) => {
+                    let body = rc!(body.inner_ref().into());
+                    let args = args
+                        .iter()
+                        .map(|arg| rc!(arg.inner_ref().into()))
+                        .collect();
+                    Dtor { body, dtor: dtor.clone(), args }.into()
+                }
+            }
+        }
+    }
+}

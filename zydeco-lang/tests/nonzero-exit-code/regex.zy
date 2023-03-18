@@ -5,17 +5,17 @@ data Syn where
   | Choose(Syn, Syn)
 end
 
-data OptionStr where
-  | SomeStr(String)
-  | NoneStr()
+data Option A : VType where
+  | Some(A)
+  | None()
 end
 
 codata Matcher where
-  | .str(String): F(OptionStr)
-  | .concat(Syn, Syn): F(OptionStr)
-  | .kleene(Syn): F(OptionStr)
-  | .choose(Syn, Syn): F(OptionStr)
-  | .bind(Syn): F(OptionStr)
+  | .str(String): F(Option String)
+  | .concat(Syn, Syn): F(Option String)
+  | .kleene(Syn): F(Option String)
+  | .choose(Syn, Syn): F(Option String)
+  | .bind(Syn): F(Option String)
 end
 
 codata Regex where
@@ -45,8 +45,8 @@ let str_eq_at = { fn (a: String, b: String, i: Int) ->
   ! char_eq ai bi
 };
 
-let str_match : U(String -> String -> F(OptionStr)) = {
-  let rec str_match : Int -> String -> String -> F(OptionStr) =
+let str_match : U(String -> String -> F(Option String)) = {
+  let rec str_match : Int -> String -> String -> F(Option String) =
     fn (i: Int, s: String, p: String) -> (
       do s_len <- ! str_length s;
       do p_len <- ! str_length p;
@@ -55,14 +55,14 @@ let str_match : U(String -> String -> F(OptionStr)) = {
       match i_lt_p
       | False() -> (
         do s' <- ! str_chop_hd s i;
-        ret SomeStr(s'))
+        ret Some(s'))
       | True() -> (
         match i_lt_s
-        | False() -> ret NoneStr()
+        | False() -> ret None()
         | True() -> (
           do eq? <- ! str_eq_at s p i;
           match eq?
-          | False() -> ret NoneStr()
+          | False() -> ret None()
           | True() -> (
             do i+1 <- ! add i 1;
             ! str_match i+1 s p)
@@ -79,21 +79,21 @@ let rec regex : Regex = ( comatch | .run(s) -> (
   | .concat(sy1, sy2) -> (
     do s? <- ! regex .run(s) .bind(sy1);
     match s?
-    | NoneStr() -> ret NoneStr()
-    | SomeStr(s) -> (
+    | None() -> ret None()
+    | Some(s) -> (
       ! regex .run(s) .bind(sy2))
     end)
   | .kleene(sy) -> (
     do s? <- ! regex .run(s) .bind(sy);
     match s?
-    | NoneStr() -> ret SomeStr(s)
-    | SomeStr(s) -> ! regex .run(s) .kleene(sy)
+    | None() -> ret Some(s)
+    | Some(s) -> ! regex .run(s) .kleene(sy)
     end)
   | .choose(sy1, sy2) -> (
     do s? <- ! regex .run(s) .bind(sy1);
     match s?
-    | SomeStr(s) -> ret SomeStr(s)
-    | NoneStr() -> ! regex .run(s) .bind(sy2)
+    | Some(s) -> ret Some(s)
+    | None() -> ! regex .run(s) .bind(sy2)
     end)
   | .bind(sy) -> (
     match sy
@@ -108,9 +108,9 @@ end);
 let demo = { fn (syn: Syn, str: String, kont: U(OS)) ->
   do res <- ! regex .run(str) .bind(syn);
   match res
-  | SomeStr(s) -> (
+  | Some(s) -> (
     ! write_line s kont)
-  | NoneStr() -> ! exit 1
+  | None() -> ! exit 1
   end
 };
 
