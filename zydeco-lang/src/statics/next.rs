@@ -39,7 +39,7 @@ pub mod syntax {
         Ret(Ret<TV>),
         Force(Force<TV>),
         Let(Let<TermV, TV, TC>),
-        Do(Do<TermV, TC>),
+        Do(Do<TermV, TC, TC>),
         Rec(Rec<TermV, TC>),
         Match(Match<CtorV, TermV, TV, TC>),
         CoMatch(CoMatch<DtorV, TermV, TC>),

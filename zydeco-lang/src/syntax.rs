@@ -12,6 +12,8 @@ macro_rules! sort {
         impl<T: $Sort> $Sort for Box<T> {}
         impl<T: $Sort> $Sort for Rc<T> {}
         impl<T: $Sort> $Sort for Ann<T> {}
+        impl<T: $Sort> $Sort for Option<T> {}
+        impl $Sort for () {}
     };
 }
 
@@ -24,7 +26,7 @@ sort!(ComputationT);
 /* --------------------------------- Binders -------------------------------- */
 
 pub mod binder {
-    use super::VarT;
+    use super::{VarT, TypeT};
     use crate::syntax::AnnInfo;
 
     macro_rules! var {
@@ -70,6 +72,7 @@ pub mod binder {
     impl VarT for TypeV {}
     var!(TermV);
     impl VarT for TermV {}
+    impl<T: TypeT> VarT for (TermV, T) {}
 }
 pub use binder::*;
 
@@ -90,8 +93,6 @@ pub struct TypeArity<K: KindT> {
 impl<K: KindT> KindT for TypeArity<K> {}
 
 /* ---------------------------------- Types --------------------------------- */
-
-impl TypeT for () {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeAnn<Type, Kind> {
@@ -166,12 +167,12 @@ pub struct Let<TeV: VarT, A: ValueT, B: ComputationT> {
 impl<TeV: VarT, A: ValueT, B: ComputationT> ComputationT for Let<TeV, A, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Do<TeV: VarT, B: ComputationT> {
+pub struct Do<TeV: VarT, B1: ComputationT, B2: ComputationT> {
     pub var: TeV,
-    pub comp: B,
-    pub body: B,
+    pub comp: B1,
+    pub body: B2,
 }
-impl<TeV: VarT, B: ComputationT> ComputationT for Do<TeV, B> {}
+impl<TeV: VarT, B1: ComputationT, B2: ComputationT> ComputationT for Do<TeV, B1, B2> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Lam<TeV: VarT, B: ComputationT> {
@@ -233,8 +234,14 @@ impl<B: ComputationT, D, A: ValueT> ComputationT for Dtor<B, D, A> {}
 /* ------------------------------ Declarations ------------------------------ */
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Define<TeV: VarT, T: TypeT, A: ValueT> {
+pub struct DeclSymbol<T> {
     pub public: bool,
+    pub external: bool,
+    pub decl: T,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Define<TeV: VarT, T: TypeT, A: ValueT> {
     pub name: TeV,
     pub ty: T,
     pub def: Option<A>,
