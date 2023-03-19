@@ -26,7 +26,7 @@ sort!(ComputationT);
 /* --------------------------------- Binders -------------------------------- */
 
 pub mod binder {
-    use super::{VarT, TypeT};
+    use super::{TypeT, VarT};
     use crate::syntax::AnnInfo;
 
     macro_rules! var {
@@ -172,21 +172,10 @@ pub struct Do<TeV: VarT, B1: ComputationT, B2: ComputationT> {
     pub comp: B1,
     pub body: B2,
 }
-impl<TeV: VarT, B1: ComputationT, B2: ComputationT> ComputationT for Do<TeV, B1, B2> {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Lam<TeV: VarT, B: ComputationT> {
-    pub var: TeV,
-    pub body: B,
+impl<TeV: VarT, B1: ComputationT, B2: ComputationT> ComputationT
+    for Do<TeV, B1, B2>
+{
 }
-impl<TeV: VarT, B: ComputationT> ComputationT for Lam<TeV, B> {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct App<B: ComputationT, A: ValueT> {
-    pub body: B,
-    pub arg: A,
-}
-impl<B: ComputationT, A: ValueT> ComputationT for App<B, A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rec<TeV: VarT, B: ComputationT> {
@@ -237,14 +226,7 @@ impl<B: ComputationT, D, A: ValueT> ComputationT for Dtor<B, D, A> {}
 pub struct DeclSymbol<T> {
     pub public: bool,
     pub external: bool,
-    pub decl: T,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Define<TeV: VarT, T: TypeT, A: ValueT> {
-    pub name: TeV,
-    pub ty: T,
-    pub def: Option<A>,
+    pub inner: T,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -266,3 +248,10 @@ pub struct Codata<TyV: VarT, D, T: TypeT> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CodataBr<D, T: TypeT>(pub D, pub Vec<T>, pub T);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Define<TeV: VarT, T: TypeT, A: ValueT> {
+    pub name: TeV,
+    pub ty: T,
+    pub def: Option<A>,
+}

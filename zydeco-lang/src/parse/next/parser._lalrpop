@@ -10,7 +10,7 @@ grammar<'input>(input: &'input str);
 //* --------------------------------- Module --------------------------------- */
 
 pub Zydeco: Module = {
-    "module" <name:String> "where" <decls:DeclSymbol*> <entry:Ann<TermComputation>> => Module {
+    "module" <name:String> "where" <decls:DeclSymbol<Declaration>*> <entry:Ann<TermComputation>> => Module {
         name: Some(name),
         declarations: decls,
         entry,
@@ -20,12 +20,12 @@ pub Zydeco: Module = {
 
 //* ------------------------------ Declarations ------------------------------ */
 
-DeclSymbol: DeclSymbol = {
-    <public:"pub"?> <external:"extern"?> <decl:Declaration> => {
+DeclSymbol<T>: DeclSymbol<T> = {
+    <public:"pub"?> <external:"extern"?> <inner:T> => {
         DeclSymbol {
             public: public.is_some(),
             external: external.is_some(),
-            decl,
+            inner,
         }
     }
 }
@@ -256,16 +256,6 @@ extern {
 
 //* -------------------------------- Utilities ------------------------------- */
 
-// SepBy<Sym, T>: Vec<T> = {
-//     <mut v: (<T> Sym)*> <last: T?> => {
-//         match last {
-//             None => { },
-//             Some(t) => { v.push(t); }
-//         };
-//         v
-//     }
-// }
-
 SepByEnd<Sep, T, End>: Vec<T> = {
     <mut v: (<T> Sep)*> <last: T?> End => {
         match last {
@@ -279,25 +269,6 @@ SepByEnd<Sep, T, End>: Vec<T> = {
 SepByDelim<Start, Sep, T, End>: Vec<T> = {
     <_:Start> <v:SepByEnd<Sep, T, End>> => v,
 }
-
-// Kleene<Sym, T>: Vec<T> = {
-//     Sym? => vec![],
-//     Once<Sym, T>,
-// }
-
-// Once<Sym, T>: Vec<T> = {
-//     <e:T> <mut v:Rhs<Sym, T>*> <s:(<Sym>)?> => {
-//         v.insert(0, e);
-//         v
-//     }
-// }
-
-// Lhs<L, R>: L = {
-//     <l:L> <r:R> => l,
-// }
-// Rhs<L, R>: R = {
-//     <l:L> <r:R> => r,
-// }
 
 Ann<Rule>: Ann<T> = {
     <l:@L> <content:Rule> <r:@R> => ann(l,r).make(content)

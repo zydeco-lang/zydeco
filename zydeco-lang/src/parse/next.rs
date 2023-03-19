@@ -51,17 +51,32 @@ pub struct Application {
     pub args: Vec<Ann<TermValue>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GenLet {
+    pub rec: bool,
+    pub fun: bool,
+    pub name: TermPattern,
+    pub params: Vec<TermPattern>,
+    pub def: TValue,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Let {
+    pub gen: GenLet,
+    pub body: TComp,
+}
+
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermComputation {
     TermAnn(TermAnn<TComp, Ann<Type>>),
     Ret(Ret<TValue>),
     Force(Force<TValue>),
-    Let(Let<TermPattern, TValue, TComp>),
+    Let(Let),
     Do(Do<TermPattern, TComp, TComp>),
     Rec(Rec<TermPattern, TComp>),
     Match(Match<CtorV, TermV, TValue, Ann<TermComputation>>),
-    Function(Abstraction),
-    Application(Application),
+    Abs(Abstraction),
+    App(Application),
     CoMatch(CoMatch<DtorV, TermV, Ann<TermComputation>>),
     Dtor(Dtor<TComp, DtorV, Ann<TermValue>>),
 }
@@ -70,17 +85,19 @@ impl ComputationT for TermComputation {}
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Term {
-    Val(TermValue),
-    Comp(TermComputation),
+    Value(TermValue),
+    Computation(TermComputation),
 }
 
 /* --------------------------------- Module --------------------------------- */
+
+type Define = GenLet;
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
     Data(Data<TypeV, CtorV, Ann<Type>>),
     Codata(Codata<TypeV, DtorV, Ann<Type>>),
-    Define(Define<TermV, Option<Ann<Type>>, TValue>),
+    Define(Define),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
