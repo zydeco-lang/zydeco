@@ -7,14 +7,14 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct AnnInfo {
+pub struct SpanInfo {
     pub span1: (Cursor1, Cursor1),
     pub span2: OnceCell<(Cursor2, Cursor2)>,
     pub path: OnceCell<Rc<PathBuf>>,
 }
 
-pub fn ann(l: usize, r: usize) -> AnnInfo {
-    AnnInfo { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
+pub fn ann(l: usize, r: usize) -> SpanInfo {
+    SpanInfo { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
 }
 
 #[derive(Clone, Debug)]
@@ -54,14 +54,14 @@ impl FileInfo {
                     - self.newlines[if idx > 0 { idx - 1 } else { idx }],
             }
         } else {
-            panic!("AnnInfo: offset {} is not in {:?}", offset, self)
+            panic!("SpanInfo: offset {} is not in {:?}", offset, self)
         }
     }
 }
 
-impl AnnInfo {
-    pub fn make<T>(&self, inner: T) -> Ann<T> {
-        Ann { inner, info: self.clone() }
+impl SpanInfo {
+    pub fn make<T>(&self, inner: T) -> Span<T> {
+        Span { inner, info: self.clone() }
     }
     pub fn set_span2(&self, gen: &FileInfo) {
         let (start, end) = self.span1;
@@ -71,7 +71,7 @@ impl AnnInfo {
     }
 }
 
-impl Debug for AnnInfo {
+impl Debug for SpanInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (l, r) = self.span1;
         if let Some(path) = self.path.get() {
@@ -102,27 +102,27 @@ impl Debug for Cursor2 {
     }
 }
 
-pub trait AnnHolder {
-    fn ann(&self) -> &AnnInfo;
-    fn ann_map_mut<F>(&mut self, f: F)
+pub trait SpanHolder {
+    fn span(&self) -> &SpanInfo;
+    fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut AnnInfo) + Clone;
+        F: Fn(&mut SpanInfo) + Clone;
 }
 
 #[derive(Clone, Debug)]
-pub struct Ann<T> {
+pub struct Span<T> {
     pub inner: T,
-    pub info: AnnInfo,
+    pub info: SpanInfo,
 }
 
-impl<T> Ann<T> {
+impl<T> Span<T> {
     pub fn inner_ref(&self) -> &T {
         &self.inner
     }
     pub fn inner(self) -> T {
         self.inner
     }
-    pub fn map<U, F>(&self, f: F) -> Ann<U>
+    pub fn map<U, F>(&self, f: F) -> Span<U>
     where
         F: FnOnce(&T) -> U,
     {
@@ -130,35 +130,35 @@ impl<T> Ann<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for Ann<T> {
+impl<T: PartialEq> PartialEq for Span<T> {
     fn eq(&self, other: &Self) -> bool {
         self.inner.eq(&other.inner)
     }
 }
 
-impl<T: Eq> Eq for Ann<T> {}
+impl<T: Eq> Eq for Span<T> {}
 
-impl<T: Hash> Hash for Ann<T> {
+impl<T: Hash> Hash for Span<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.inner.hash(state);
     }
 }
 
-impl<T: Display> Display for Ann<T> {
+impl<T: Display> Display for Span<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} ({:?})", self.inner, self.info)
     }
 }
 
-impl<T: AnnHolder> AnnHolder for Ann<T> {
-    fn ann(&self) -> &AnnInfo {
+impl<T: SpanHolder> SpanHolder for Span<T> {
+    fn span(&self) -> &SpanInfo {
         &self.info
     }
-    fn ann_map_mut<F>(&mut self, f: F)
+    fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut AnnInfo) + Clone,
+        F: Fn(&mut SpanInfo) + Clone,
     {
         f(&mut self.info);
-        self.inner.ann_map_mut(f);
+        self.inner.span_map_mut(f);
     }
 }

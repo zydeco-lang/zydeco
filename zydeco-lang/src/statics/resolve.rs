@@ -1,12 +1,12 @@
-use crate::syntax::AnnInfo;
+use crate::syntax::SpanInfo;
 use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Clone, Debug)]
 pub enum NameResolveError {
-    DuplicateDeclaration { name: String, ann: AnnInfo },
-    EmptyDeclaration { name: String, ann: AnnInfo },
-    UnknownIdentifier { name: String, ann: AnnInfo },
+    DuplicateDeclaration { name: String, ann: SpanInfo },
+    EmptyDeclaration { name: String, ann: SpanInfo },
+    UnknownIdentifier { name: String, ann: SpanInfo },
 }
 use NameResolveError::*;
 

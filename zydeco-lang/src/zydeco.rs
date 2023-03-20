@@ -12,7 +12,7 @@ use crate::{
         Lexer, {ExpressionParser, ZydecoParser},
     },
     statics::{Ctx, TypeCheck},
-    syntax::span::{AnnHolder, FileInfo},
+    syntax::span::{SpanHolder, FileInfo},
     utils::never::Never,
 };
 use std::{path::PathBuf, rc::Rc};
@@ -29,7 +29,7 @@ impl ZydecoFile {
             .parse(&source, Lexer::new(&source))
             .map_err(|e| format!("{}", ParseError(e, &file_info)))?;
         let path_rc = Rc::new(self.path);
-        p.ann_map_mut(|ann| {
+        p.span_map_mut(|ann| {
             ann.set_span2(&file_info);
             ann.path.set(path_rc.clone()).unwrap();
         });

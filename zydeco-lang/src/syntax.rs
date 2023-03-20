@@ -1,7 +1,7 @@
 pub mod span;
 pub mod env;
 
-pub use span::{Ann, AnnInfo};
+pub use span::{Span, SpanInfo};
 use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
 
@@ -12,7 +12,7 @@ macro_rules! sort {
         pub trait $Sort {}
         impl<T: $Sort> $Sort for Box<T> {}
         impl<T: $Sort> $Sort for Rc<T> {}
-        impl<T: $Sort> $Sort for Ann<T> {}
+        impl<T: $Sort> $Sort for Span<T> {}
         impl<T: $Sort> $Sort for Option<T> {}
         impl $Sort for () {}
     };
@@ -27,23 +27,23 @@ sort!(ComputationT);
 /* --------------------------------- Binders -------------------------------- */
 
 pub mod binder {
-    use super::{Ann, TypeT, VarT};
-    use crate::syntax::AnnInfo;
+    use super::{Span, TypeT, VarT};
+    use crate::syntax::SpanInfo;
 
     macro_rules! var {
         ( $Var:ident ) => {
             #[derive(Clone, Debug)]
-            pub struct $Var(String, AnnInfo);
+            pub struct $Var(String, SpanInfo);
             impl $Var {
-                pub fn new(s: String, ann: AnnInfo) -> Self {
+                pub fn new(s: String, ann: SpanInfo) -> Self {
                     Self(s, ann)
                 }
                 pub fn name(&self) -> &str {
                     &self.0
                 }
             }
-            impl From<Ann<String>> for $Var {
-                fn from(ann: Ann<String>) -> Self {
+            impl From<Span<String>> for $Var {
+                fn from(ann: Span<String>) -> Self {
                     Self(ann.inner, ann.info)
                 }
             }
@@ -58,13 +58,13 @@ pub mod binder {
                     self.0.hash(state);
                 }
             }
-            impl crate::syntax::span::AnnHolder for $Var {
-                fn ann(&self) -> &AnnInfo {
+            impl crate::syntax::span::SpanHolder for $Var {
+                fn span(&self) -> &SpanInfo {
                     &self.1
                 }
-                fn ann_map_mut<F>(&mut self, f: F)
+                fn span_map_mut<F>(&mut self, f: F)
                 where
-                    F: Fn(&mut AnnInfo) + Clone,
+                    F: Fn(&mut SpanInfo) + Clone,
                 {
                     f(&mut self.1);
                 }

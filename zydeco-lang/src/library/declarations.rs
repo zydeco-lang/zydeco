@@ -4,7 +4,7 @@ use crate::{
         Lexer,
     },
     statics::Ctx,
-    syntax::span::{AnnHolder, FileInfo},
+    syntax::span::{SpanHolder, FileInfo},
 };
 use std::{path::PathBuf, rc::Rc};
 
@@ -18,7 +18,7 @@ pub fn std_decls() -> Result<Vec<Declare>, String> {
     let path_rc = Rc::new(PathBuf::from("zydeco-lang/src/library/std.zydeco"));
     let file_info = FileInfo::new(&std);
     for d in &mut ds {
-        d.ann_map_mut(|ann| {
+        d.span_map_mut(|ann| {
             ann.set_span2(&file_info);
             ann.path.set(path_rc.clone()).unwrap();
         });

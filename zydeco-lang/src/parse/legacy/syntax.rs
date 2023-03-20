@@ -1,10 +1,10 @@
-use crate::syntax::{binder::*, AnnInfo};
+use crate::syntax::{binder::*, SpanInfo};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Program {
     pub decls: Vec<Declare>,
     pub comp: Box<Compute>,
-    pub ann: AnnInfo,
+    pub ann: SpanInfo,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,7 +24,7 @@ pub enum Declare {
         name: TermV,
         ty: Option<Box<Type>>,
         def: Option<Box<Value>>,
-        ann: AnnInfo,
+        ann: SpanInfo,
     },
 }
 
@@ -33,7 +33,7 @@ pub struct Data {
     pub name: TypeV,
     pub params: Vec<(TypeV, Kind)>,
     pub ctors: Vec<DataBranch>,
-    pub ann: AnnInfo,
+    pub ann: SpanInfo,
 }
 
 pub type DataBranch = (CtorV, Vec<Type>);
@@ -43,62 +43,62 @@ pub struct Codata {
     pub name: TypeV,
     pub params: Vec<(TypeV, Kind)>,
     pub dtors: Vec<CodataBranch>,
-    pub ann: AnnInfo,
+    pub ann: SpanInfo,
 }
 
 pub type CodataBranch = (DtorV, (Vec<Type>, Type));
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
-    TermAnn(Box<Value>, Type, AnnInfo),
-    Var(TermV, AnnInfo),
-    Thunk(Box<Compute>, AnnInfo),
-    Ctor(CtorV, Vec<Value>, AnnInfo),
-    Int(i64, AnnInfo),
-    String(String, AnnInfo),
-    Char(char, AnnInfo),
+    TermAnn(Box<Value>, Type, SpanInfo),
+    Var(TermV, SpanInfo),
+    Thunk(Box<Compute>, SpanInfo),
+    Ctor(CtorV, Vec<Value>, SpanInfo),
+    Int(i64, SpanInfo),
+    String(String, SpanInfo),
+    Char(char, SpanInfo),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Compute {
-    TermAnn(Box<Compute>, Type, AnnInfo),
+    TermAnn(Box<Compute>, Type, SpanInfo),
     Let {
         binding: Binding<Type, Value>,
         body: Box<Compute>,
-        ann: AnnInfo,
+        ann: SpanInfo,
     },
     Do {
         binding: Binding<Type, Compute>,
         body: Box<Compute>,
-        ann: AnnInfo,
+        ann: SpanInfo,
     },
-    Force(Box<Value>, AnnInfo),
-    Return(Box<Value>, AnnInfo),
+    Force(Box<Value>, SpanInfo),
+    Return(Box<Value>, SpanInfo),
     Lam {
         arg: (TermV, Option<Box<Type>>),
         body: Box<Compute>,
-        ann: AnnInfo,
+        ann: SpanInfo,
     },
     Rec {
         arg: (TermV, Option<Box<Type>>),
         body: Box<Compute>,
-        ann: AnnInfo,
+        ann: SpanInfo,
     },
-    App(Box<Compute>, Box<Value>, AnnInfo),
+    App(Box<Compute>, Box<Value>, SpanInfo),
     Match {
         scrut: Box<Value>,
         arms: Vec<(CtorV, Vec<TermV>, Box<Compute>)>,
-        ann: AnnInfo,
+        ann: SpanInfo,
     },
     CoMatch {
         arms: Vec<(DtorV, Vec<TermV>, Box<Compute>)>,
-        ann: AnnInfo,
+        ann: SpanInfo,
     },
     CoApp {
         body: Box<Compute>,
         dtor: DtorV,
         args: Vec<Value>,
-        ann: AnnInfo,
+        ann: SpanInfo,
     },
 }
 
@@ -106,11 +106,11 @@ pub use crate::syntax::TCtor;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SynType {
-    Basic(TCtor, AnnInfo),
-    App(Box<SynType>, Box<SynType>, AnnInfo),
-    // Thunk(Box<Type>, Ann),
-    // Ret(Box<Type>, Ann),
-    Arr(Box<SynType>, Box<SynType>, AnnInfo),
+    Basic(TCtor, SpanInfo),
+    App(Box<SynType>, Box<SynType>, SpanInfo),
+    // Thunk(Box<Type>, Span),
+    // Ret(Box<Type>, Span),
+    Arr(Box<SynType>, Box<SynType>, SpanInfo),
     // OS,
 }
 
@@ -118,7 +118,7 @@ pub enum SynType {
 pub struct Type {
     pub ctor: TCtor,
     pub args: Vec<Type>,
-    pub ann: AnnInfo,
+    pub ann: SpanInfo,
 }
 
 impl SynType {

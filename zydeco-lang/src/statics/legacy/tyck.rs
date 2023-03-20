@@ -3,7 +3,7 @@ use crate::{
     statics::{
         legacy::ctx::*, err::TypeCheckError, resolve::NameResolveError, Eqv, TypeCheck,
     },
-    syntax::span::{ann, Ann, AnnHolder, AnnInfo},
+    syntax::span::{ann, Span, SpanHolder, SpanInfo},
     syntax::binder::*,
 };
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ use TypeCheckError::*;
 impl TypeCheck for Program {
     type Out = ();
 
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Ann<TypeCheckError>> {
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
         let mut ctx = ctx.clone();
         for decl in &self.decls {
             ctx.decl(decl).map_err(|e| self.ann.make(NameResolve(e)))?;
@@ -29,8 +29,8 @@ impl TypeCheck for Program {
 
 impl Kind {
     fn ensure_vtype(
-        &self, context: &str, ann: &AnnInfo,
-    ) -> Result<(), Ann<TypeCheckError>> {
+        &self, context: &str, ann: &SpanInfo,
+    ) -> Result<(), Span<TypeCheckError>> {
         if let Kind::CType = self {
             Err(ann.make(TypeCheckError::KindMismatch {
                 context: context.to_owned(),
@@ -42,8 +42,8 @@ impl Kind {
         }
     }
     fn ensure_ctype(
-        &self, context: &str, ann: &AnnInfo,
-    ) -> Result<(), Ann<TypeCheckError>> {
+        &self, context: &str, ann: &SpanInfo,
+    ) -> Result<(), Span<TypeCheckError>> {
         if let Kind::VType = self {
             Err(ann.make(TypeCheckError::KindMismatch {
                 context: context.to_owned(),
@@ -58,7 +58,7 @@ impl Kind {
 
 impl TypeCheck for Value {
     type Out = Type;
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Ann<TypeCheckError>> {
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
         match self {
             Value::TermAnn(body, typ, ..) => {
                 body.ana(typ, ctx)?;
@@ -90,7 +90,7 @@ impl TypeCheck for Value {
 
     fn ana(
         &self, typ: &Self::Out, ctx: &Ctx,
-    ) -> Result<(), Ann<TypeCheckError>> {
+    ) -> Result<(), Span<TypeCheckError>> {
         match self {
             Value::Thunk(e, ann, ..) => {
                 if let TCtor::Thunk = typ.ctor {
@@ -144,7 +144,7 @@ impl TypeCheck for Value {
             v => {
                 let t = self.syn(ctx)?;
                 typ.eqv(&t).ok_or_else(|| {
-                    v.ann().make(TypeMismatch {
+                    v.span().make(TypeMismatch {
                         context: format!("subsumption `{}`", v),
                         expected: typ.clone(),
                         found: t,
@@ -158,7 +158,7 @@ impl TypeCheck for Value {
 impl TypeCheck for Compute {
     type Out = Type;
 
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Ann<TypeCheckError>> {
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
         match self {
             Compute::TermAnn(body, ty, ..) => {
                 body.ana(ty, ctx)?;
@@ -366,7 +366,7 @@ impl TypeCheck for Compute {
 
     fn ana(
         &self, typ: &Self::Out, ctx: &Ctx,
-    ) -> Result<(), Ann<TypeCheckError>> {
+    ) -> Result<(), Span<TypeCheckError>> {
         match self {
             Compute::Let { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();
@@ -644,7 +644,7 @@ impl TypeCheck for Compute {
             c => {
                 let t = self.syn(ctx)?;
                 t.eqv(typ).ok_or_else(|| {
-                    c.ann().make(TypeMismatch {
+                    c.span().make(TypeMismatch {
                         context: format!("subsumption `{}`", c),
                         expected: typ.to_owned(),
                         found: t,
@@ -656,7 +656,7 @@ impl TypeCheck for Compute {
 }
 
 impl Type {
-    fn internal(name: &'static str, args: Vec<Type>, ann: AnnInfo) -> Self {
+    fn internal(name: &'static str, args: Vec<Type>, ann: SpanInfo) -> Self {
         Type {
             ctor: TCtor::Var(TypeV::new(name.to_owned(), ann.clone())),
             args,
@@ -668,7 +668,7 @@ impl Type {
 impl TypeCheck for Type {
     type Out = Kind;
 
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Ann<TypeCheckError>> {
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
         match &self.ctor {
             TCtor::Var(x) => ctx.tmap.get(&x).map_or(
                 Err(self.ann.make(TypeCheckError::NameResolve(

@@ -2,7 +2,7 @@
 
 use im::HashMap as ImHashMap;
 
-use super::syntax::{Ann, Kind, TermV, TypeArity, TypeV, T};
+use super::syntax::{Span, Kind, TermV, TypeArity, TypeV, T};
 
 use super::{err::TypeCheckError, Eqv, TypeCheck};
 

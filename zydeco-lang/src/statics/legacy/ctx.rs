@@ -1,7 +1,7 @@
 use crate::{
     parse::legacy::syntax::*,
     statics::{err::TypeCheckError, resolve::*, TypeCheck},
-    syntax::{binder::*, Ann},
+    syntax::{binder::*, Span},
 };
 use indexmap::IndexMap;
 use std::{collections::HashMap, hash::Hash};
@@ -105,7 +105,7 @@ impl Ctx {
     fn add_type_param(&mut self, x: TypeV, k: Kind) {
         self.tmap.insert(x, Arity(vec![], k));
     }
-    pub fn tyck_types(&self) -> Result<(), Ann<TypeCheckError>> {
+    pub fn tyck_types(&self) -> Result<(), Span<TypeCheckError>> {
         for (_, data) in &self.data {
             let mut ctx = self.clone();
             for (x, kind) in &data.params {
@@ -131,7 +131,7 @@ impl Ctx {
         }
         Ok(())
     }
-    pub fn tyck_definitions(&mut self) -> Result<(), Ann<TypeCheckError>> {
+    pub fn tyck_definitions(&mut self) -> Result<(), Span<TypeCheckError>> {
         for (name, (ty, def)) in &self.defs {
             let ty = match ty {
                 Some(ty) => {

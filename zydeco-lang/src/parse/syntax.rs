@@ -1,4 +1,4 @@
-pub use crate::{syntax::Ann, syntax::*};
+pub use crate::{syntax::Span, syntax::*};
 use zydeco_derive::EnumGenerator;
 
 /* ---------------------------------- Kind ---------------------------------- */
@@ -19,23 +19,23 @@ pub enum Type {
     App(TypeApp),
     Abs(TypeAbs),
 }
-type TT = Box<Ann<Type>>;
+type TT = Box<Span<Type>>;
 impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermValue {
-    TermAnn(TermAnn<BoxValue, Ann<Type>>),
+    TermAnn(TermAnn<BoxValue, Span<Type>>),
     Var(TermV),
     Thunk(Thunk<BoxComp>),
-    Ctor(Ctor<CtorV, Ann<TermValue>>),
+    Ctor(Ctor<CtorV, Span<TermValue>>),
     Literal(Literal),
 }
-type BoxValue = Box<Ann<TermValue>>;
+type BoxValue = Box<Span<TermValue>>;
 impl ValueT for TermValue {}
 
-pub type TermPattern = (TermV, Option<Ann<Type>>);
+pub type TermPattern = (TermV, Option<Span<Type>>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Abstraction {
@@ -66,19 +66,19 @@ pub struct Let {
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermComputation {
-    TermAnn(TermAnn<BoxComp, Ann<Type>>),
+    TermAnn(TermAnn<BoxComp, Span<Type>>),
     Ret(Ret<BoxValue>),
     Force(Force<BoxValue>),
     Let(Let),
     Do(Do<TermPattern, BoxComp, BoxComp>),
     Rec(Rec<TermPattern, BoxComp>),
-    Match(Match<CtorV, TermV, BoxValue, Ann<TermComputation>>),
+    Match(Match<CtorV, TermV, BoxValue, Span<TermComputation>>),
     Abs(Abstraction),
     App(Application),
-    CoMatch(CoMatch<DtorV, TermV, Ann<TermComputation>>),
-    Dtor(Dtor<BoxComp, DtorV, Ann<TermValue>>),
+    CoMatch(CoMatch<DtorV, TermV, Span<TermComputation>>),
+    Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
 }
-type BoxComp = Box<Ann<TermComputation>>;
+type BoxComp = Box<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
@@ -93,8 +93,8 @@ type Define = GenLet;
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {
-    Data(Data<TypeV, CtorV, Ann<Type>>),
-    Codata(Codata<TypeV, DtorV, Ann<Type>>),
+    Data(Data<TypeV, CtorV, Span<Type>>),
+    Codata(Codata<TypeV, DtorV, Span<Type>>),
     Define(Define),
 }
 
@@ -102,5 +102,5 @@ pub enum Declaration {
 pub struct Module {
     pub name: Option<String>,
     pub declarations: Vec<DeclSymbol<Declaration>>,
-    pub entry: Ann<TermComputation>,
+    pub entry: Span<TermComputation>,
 }

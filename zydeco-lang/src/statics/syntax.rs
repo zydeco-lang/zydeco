@@ -1,7 +1,7 @@
 use zydeco_derive::EnumGenerator;
 use std::{collections::HashMap, rc::Rc};
 
-pub use crate::{syntax::Ann, syntax::*};
+pub use crate::{syntax::Span, syntax::*};
 
 /* ---------------------------------- Kind ---------------------------------- */
 
@@ -11,10 +11,10 @@ pub use crate::syntax::Kind;
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Type {
-    TypeAnn(TypeAnn<T, Ann<Kind>>),
+    TypeAnn(TypeAnn<T, Span<Kind>>),
     TypeApp(TypeApp<TCtor, T>),
 }
-pub(crate) type T = Rc<Ann<Type>>;
+pub(crate) type T = Rc<Span<Type>>;
 impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -27,7 +27,7 @@ pub enum TermValue {
     Ctor(Ctor<CtorV, TV>),
     Literal(Literal),
 }
-type TV = Rc<Ann<TermValue>>;
+type TV = Rc<Span<TermValue>>;
 impl ValueT for TermValue {}
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
@@ -42,7 +42,7 @@ pub enum TermComputation {
     CoMatch(CoMatch<DtorV, TermV, TC>),
     Dtor(Dtor<TC, DtorV, TV>),
 }
-type TC = Rc<Ann<TermComputation>>;
+type TC = Rc<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
@@ -58,8 +58,8 @@ pub struct Module {
     pub name: Option<String>,
     pub type_ctx: HashMap<TypeV, TypeArity<Kind>>,
     pub term_ctx: HashMap<TermV, T>,
-    pub data: Vec<Ann<Data<TypeV, CtorV, T>>>,
-    pub codata: Vec<Ann<Codata<TypeV, DtorV, T>>>,
-    pub define: Vec<Ann<Define<TermV, T, TV>>>,
-    pub entry: Ann<TermComputation>,
+    pub data: Vec<Span<Data<TypeV, CtorV, T>>>,
+    pub codata: Vec<Span<Codata<TypeV, DtorV, T>>>,
+    pub define: Vec<Span<Define<TermV, T, TV>>>,
+    pub entry: Span<TermComputation>,
 }
