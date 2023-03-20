@@ -1,7 +1,4 @@
-use lalrpop_util::lalrpop_mod;
-lalrpop_mod!(pub parser, "/parse/next/parser.rs");
 pub use crate::{syntax::Ann, syntax::*};
-pub use parser::ZydecoParser;
 use zydeco_derive::EnumGenerator;
 
 /* ---------------------------------- Kind ---------------------------------- */

@@ -1,7 +1,7 @@
-
-
+use lalrpop_util::lalrpop_mod;
+lalrpop_mod!(pub parser, "/parse/parser.rs");
 pub mod token;
-mod next;
+pub mod syntax;
 pub mod err;
 pub mod legacy;
 
