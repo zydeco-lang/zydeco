@@ -3,6 +3,7 @@ pub mod env;
 
 pub use ann::{Ann, AnnInfo};
 use std::rc::Rc;
+use zydeco_derive::EnumGenerator;
 
 /* ---------------------------------- Meta ---------------------------------- */
 
@@ -26,7 +27,7 @@ sort!(ComputationT);
 /* --------------------------------- Binders -------------------------------- */
 
 pub mod binder {
-    use super::{TypeT, VarT};
+    use super::{Ann, TypeT, VarT};
     use crate::syntax::AnnInfo;
 
     macro_rules! var {
@@ -39,6 +40,11 @@ pub mod binder {
                 }
                 pub fn name(&self) -> &str {
                     &self.0
+                }
+            }
+            impl From<Ann<String>> for $Var {
+                fn from(ann: Ann<String>) -> Self {
+                    Self(ann.inner, ann.info)
                 }
             }
             impl std::cmp::PartialEq for $Var {
@@ -133,7 +139,7 @@ impl<Term: ComputationT, Type> ComputationT for TermAnn<Term, Type> {}
 pub struct Thunk<B: ComputationT>(pub B);
 impl<B: ComputationT> ValueT for Thunk<B> {}
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
     String(String),

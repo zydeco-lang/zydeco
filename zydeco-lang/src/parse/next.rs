@@ -1,6 +1,7 @@
 use lalrpop_util::lalrpop_mod;
 lalrpop_mod!(pub parser, "/parse/next/parser.rs");
 pub use crate::{syntax::Ann, syntax::*};
+pub use parser::ZydecoParser;
 use zydeco_derive::EnumGenerator;
 
 /* ---------------------------------- Kind ---------------------------------- */
@@ -13,13 +14,13 @@ pub use crate::syntax::Kind;
 pub struct TypeApp(pub TT, pub TT);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeArrow(pub TT, pub TT);
+pub struct TypeAbs(pub TT, pub TT);
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Basic(TCtor),
     App(TypeApp),
-    Arrow(TypeArrow),
+    Abs(TypeAbs),
 }
 type TT = Box<Ann<Type>>;
 impl TypeT for Type {}
@@ -28,13 +29,13 @@ impl TypeT for Type {}
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermValue {
-    TermAnn(TermAnn<TValue, Ann<Type>>),
+    TermAnn(TermAnn<BoxValue, Ann<Type>>),
     Var(TermV),
-    Thunk(Thunk<TComp>),
+    Thunk(Thunk<BoxComp>),
     Ctor(Ctor<CtorV, Ann<TermValue>>),
     Literal(Literal),
 }
-type TValue = Box<Ann<TermValue>>;
+type BoxValue = Box<Ann<TermValue>>;
 impl ValueT for TermValue {}
 
 pub type TermPattern = (TermV, Option<Ann<Type>>);
@@ -42,13 +43,13 @@ pub type TermPattern = (TermV, Option<Ann<Type>>);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Abstraction {
     pub params: Vec<TermPattern>,
-    pub body: TComp,
+    pub body: BoxComp,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Application {
-    pub expr_in: TComp,
-    pub args: Vec<Ann<TermValue>>,
+    pub body: BoxComp,
+    pub arg: BoxValue,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,30 +58,30 @@ pub struct GenLet {
     pub fun: bool,
     pub name: TermPattern,
     pub params: Vec<TermPattern>,
-    pub def: TValue,
+    pub def: BoxValue,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Let {
     pub gen: GenLet,
-    pub body: TComp,
+    pub body: BoxComp,
 }
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermComputation {
-    TermAnn(TermAnn<TComp, Ann<Type>>),
-    Ret(Ret<TValue>),
-    Force(Force<TValue>),
+    TermAnn(TermAnn<BoxComp, Ann<Type>>),
+    Ret(Ret<BoxValue>),
+    Force(Force<BoxValue>),
     Let(Let),
-    Do(Do<TermPattern, TComp, TComp>),
-    Rec(Rec<TermPattern, TComp>),
-    Match(Match<CtorV, TermV, TValue, Ann<TermComputation>>),
+    Do(Do<TermPattern, BoxComp, BoxComp>),
+    Rec(Rec<TermPattern, BoxComp>),
+    Match(Match<CtorV, TermV, BoxValue, Ann<TermComputation>>),
     Abs(Abstraction),
     App(Application),
     CoMatch(CoMatch<DtorV, TermV, Ann<TermComputation>>),
-    Dtor(Dtor<TComp, DtorV, Ann<TermValue>>),
+    Dtor(Dtor<BoxComp, DtorV, Ann<TermValue>>),
 }
-type TComp = Box<Ann<TermComputation>>;
+type BoxComp = Box<Ann<TermComputation>>;
 impl ComputationT for TermComputation {}
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]

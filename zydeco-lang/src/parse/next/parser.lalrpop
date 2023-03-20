@@ -1,6 +1,6 @@
 use crate::{
     parse::{next::*, token::*},
-    syntax::{ann::*, binder::*, TCtor, DeclSymbol},
+    syntax::{ann::*, TCtor, DeclSymbol},
 };
 use crate::parse::{apply_string_escapes, apply_char_escapes};
 
@@ -19,7 +19,7 @@ pub Zydeco: Module = {
 };
 
 DeclSymbol<T>: DeclSymbol<T> = {
-    <public:"pub"?> <external:"extern"?> <inner:T> => {
+    <public:"pub"?> <external:"extern"?> <inner:T> => DeclSymbol {
         public: public.is_some(),
         external: external.is_some(),
         inner,
@@ -28,28 +28,30 @@ DeclSymbol<T>: DeclSymbol<T> = {
 
 Declaration: Declaration = {
     "data" <name:TypeV> <params:TypePattern*> "where"
-    <ctors:DataBr*>"end" => Data {
+        <ctors:DataBr*>
+    "end" => Data {
         name,
         params,
         ctors,
     }.into(),
     "codata" <name:TypeV> <params:TypePattern*> "where"
-    <dtors:CodataBr*> "end" => Codata {
+        <dtors:CodataBr*>
+    "end" => Codata {
         name,
         params,
         dtors,
     }.into(),
-    "define" <gen:GenLet> "end" => gen.into(),
+    "let" <gen:GenLet> "end" => gen.into(),
 };
 
-DataBr: DataBr<CtorV, Box<Ann<Type>>> = {
-    "|" <ctor:CtorV> <args:SepByDelim<"(", ",", <Boxed<Ann<Type>>>, ")">> => {
+DataBr: DataBr<CtorV, Ann<Type>> = {
+    "|" <ctor:CtorV> <args:SepByDelim<"(", ",", <Ann<Type>>, ")">> => {
         DataBr(ctor, args)
     }
 };
 
-CodataBr: CodataBr<DtorV, Box<Ann<Type>>> = {
-    "|" "." <dtor:DtorV> <args:SepByDelim<"(", ",", <Boxed<Ann<Type>>>, ")">> ":"
+CodataBr: CodataBr<DtorV, Ann<Type>> = {
+    "|" "." <dtor:DtorV> <args:SepByDelim<"(", ",", <Ann<Type>>, ")">> ":"
     <ty:Ann<Type>> => {
         CodataBr(dtor, args, ty)
     }
@@ -66,15 +68,15 @@ Kind: Kind = {
 //* ---------------------------------- Type ---------------------------------- */
 
 Type: Type = {
-    <tarrow:Boxed<Ann<Type>>> "->" <ty:Boxed<Ann<TypeApp>>> => {
-        TypeArrow(tarrow, ty).into()
+    <t:Box<Ann<Type>>> "->" <ty:Box<Ann<TypeApp>>> => {
+        TypeAbs(t, ty).into()
     },
     TypeApp,
 };
 
 TypeApp: Type = {
-    <tf:Boxed<Ann<TypeApp>>> <ty:Boxed<Ann<TypeAtom>>> => {
-        TypeApp(tf, ty).into()
+    <t:Box<Ann<TypeApp>>> <ty:Box<Ann<TypeAtom>>> => {
+        TypeApp(t, ty).into()
     },
     TypeAtom,
 };
@@ -85,7 +87,7 @@ TypeAtom: Type = {
 };
 
 TCtor: TCtor = {
-    <x:TypeV> => x.into(),
+    <TypeV> => TCtor::Var(<>),
     "U" => TCtor::Thunk,
     "F" => TCtor::Ret,
     "OS" => TCtor::OS,
@@ -97,13 +99,13 @@ TypePattern: (TypeV, Kind) = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind
 //* ---------------------------------- Term ---------------------------------- */
 
 TermValue: TermValue = {
-    "(" <Ann<TermValue>> ")" => <>.into(),
-    "(" <tv:Boxed<Ann<TermValue>>> "::" <ty:Ann<Type>> ")" => TermAnn {
+    "(" <TermValue> ")" => <>.into(),
+    "(" <tv:Box<Ann<TermValue>>> "::" <ty:Ann<Type>> ")" => TermAnn {
         body: tv,
         ty,
     }.into(),
     <TermV> => <>.into(),
-    "{" <tc:Boxed<Ann<TermComputation>>> "}" => Thunk(tc).into(),
+    "{" <tc:Box<Ann<TermComputation>>> "}" => Thunk(tc).into(),
     <ctor:CtorV> <args:SepByDelim<"(", ",", Ann<TermValue>, ")">> => Ctor {
         ctor,
         args,
@@ -113,25 +115,26 @@ TermValue: TermValue = {
 
 TermComputation: TermComputation = {
     TermComputationRight,
-    "let" <gen:GenLet> "in" <body:Boxed<Ann<TermComputation>>> => Let {
+    "let" <gen:GenLet> "in" <body:Box<Ann<TermComputation>>> => Let {
         gen,
         body,
     }.into(),
-    "do" <binder:TermV> <ty_ann:(":" Ann<Type>)?> "<-" <task:Boxed<Ann<TermComputation>>> ";" <body:Boxed<Ann<TermComputation>>> => Do {
-        binder,
-        ty_ann,
-        task,
+    "do" <var:TermPattern> "<-"
+        <comp:Box<Ann<TermComputation>>> ";"
+    <body:Box<Ann<TermComputation>>> => Do {
+        var,
+        comp,
         body,
     }.into(),
-    "rec" "(" <var:TermV> <ty_ann:(":" Ann<Type>)?> ")" "->" <body:Boxed<Ann<TermComputation>>> => Rec {
+    "rec" <var:TermPattern> "->" <body:Box<Ann<TermComputation>>> => Rec {
         var,
         body,
     }.into(),
-    "match" <scrut:Boxed<Ann<TermV>>> <arms:MatchBr*> "end" => Match {
+    "match" <scrut:Box<Ann<TermValue>>> <arms:MatchBr*> "end" => Match {
         scrut,
         arms,
     }.into(),
-    "fn" <params:SepByDelim<"(", ",", FnArg, ")">> <body:Boxed<Ann<TermComputation>>> => Function {
+    "fn" <params:TermPattern*> <body:Box<Ann<TermComputation>>> => Abstraction {
         params,
         body,
     }.into(),
@@ -142,11 +145,12 @@ TermComputation: TermComputation = {
 
 TermComputationRight: TermComputation = {
     TermComputationAtom,
-    <expr_in:Boxed<Ann<TermComputationRight>>> <args:Ann<TermValue>> => Application {
-        expr_in,
-        args:vec![args],
+    <body:Box<Ann<TermComputationRight>>> <arg:Box<Ann<TermValue>>> => Application {
+        body,
+        arg,
     }.into(),
-    <body:Boxed<Ann<TermComputationRight>>> "." <dtor:DtorV> <args:SepByDelim<"(", ",", Ann<TermValue>, ")">> => Dtor {
+    <body:Box<Ann<TermComputationRight>>> "." <dtor:DtorV>
+    <args:SepByDelim<"(", ",", Ann<TermValue>, ")">> => Dtor {
         body,
         dtor,
         args,
@@ -155,16 +159,17 @@ TermComputationRight: TermComputation = {
 
 TermComputationAtom: TermComputation = {
     "(" <tc:TermComputation> ")" => tc.into(),
-    "(" <tc:Boxed<Ann<TermComputation>>> "::" <ty:Ann<Type>> ")" => TermAnn {
+    "(" <tc:Box<Ann<TermComputation>>> "::" <ty:Ann<Type>> ")" => TermAnn {
         body: tc,
         ty,
     }.into(),
-    "ret" <v:Boxed<Ann<TermValue>>> => Force(v).into(),
-    "!" <v:Boxed<Ann<TermValue>>> => Ret(v).into(),
+    "ret" <v:Box<Ann<TermValue>>> => Force(v).into(),
+    "!" <v:Box<Ann<TermValue>>> => Ret(v).into(),
 };
 
 GenLet: GenLet = {
-    <rec:"rec"?> <fun:"fn"?> <var:TermV> <params:TermPattern*> <ty:(":" <Ann<Type>>)?> "=" <def:Boxed<Ann<TermValue>>> => {
+    <rec:"rec"?> <fun:"fn"?> <var:TermV> <params:TermPattern*> <ty:(":" <Ann<Type>>)?> "="
+    <def:Box<Ann<TermValue>>> => GenLet {
         rec: rec.is_some(),
         fun: fun.is_some(),
         name: (var, ty),
@@ -173,16 +178,22 @@ GenLet: GenLet = {
     }
 };
 
-MatchBr: Matcher<CtorV, TermV, Ann<TermComputation>> = "|" <ctor:CtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->" <body:Ann<TermComputation>> => Matcher{
-    ctor, vars, body
+MatchBr: Matcher<CtorV, TermV, Ann<TermComputation>> = {
+    "|" <ctor:CtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->"
+    <body:Ann<TermComputation>> => Matcher {
+        ctor, vars, body
+    }
 };
 
-ComatchBr: CoMatcher<DtorV, TermV, Ann<TermComputation>> =  "|" "." <dtor:DtorV> "(" <vars:SepByEnd<",", TermV, ")">> ":" <body:Ann<TermComputation>> => CoMatcher{
-    dtor, vars, body
+ComatchBr: CoMatcher<DtorV, TermV, Ann<TermComputation>> = {
+    "|" "." <dtor:DtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->"
+    <body:Ann<TermComputation>> => CoMatcher {
+        dtor, vars, body
+    }
 };
 
 TermPattern: TermPattern = {
-    "(" <v:TermV> <ty:(":" Ann<Type>)?> ")" => (v, ty)
+    "(" <v:TermV> <ty:(":" <Ann<Type>>)?> ")" => (v, ty)
 };
 
 Literal: Literal = {
@@ -193,13 +204,13 @@ Literal: Literal = {
 
 //* -------------------------------- Terminals ------------------------------- */
 
-CtorV: CtorV = <v:Ann<UpperId>> => CtorV::new(v);
-DtorV: DtorV = <v:Ann<LowerId>> => DtorV::new(v);
-TypeV: TypeV = <v:Ann<UpperId>> => TypeV::new(v);
-TermV: TermV = <v:Ann<LowerId>> => TermV::new(v);
+CtorV: CtorV = <Ann<UpperId>> => <>.into();
+DtorV: DtorV = <Ann<LowerId>> => <>.into();
+TypeV: TypeV = <Ann<UpperId>> => <>.into();
+TermV: TermV = <Ann<LowerId>> => <>.into();
 
-UpperId: String = "UpperId" => String::from(<>);
-LowerId: String = "LowerId" => String::from(<>);
+UpperId: String = "UpperId" => <>.into();
+LowerId: String = "LowerId" => <>.into();
 
 
 String: String = <s:"StrLit"> => apply_string_escapes(&s[1..s.len()-1]);
@@ -216,16 +227,12 @@ Ann<T>: Ann<T> = {
     <l:@L> <inner:T> <r:@R> => ann(l,r).make(inner)
 };
 
-Boxed<T>: Ann<T> = {
+Box<T>: Box<T> = {
     <inner:T> => Box::new(inner)
 };
 
-FnArg: (TermV, Option<Ann<Type>>) = {
-    <x:TermV> <t:(":" <Ann<Type>>)?> => (x, t),
-};
-
 SepByEnd<Sep, T, End>: Vec<T> = {
-    <mut v: (<T> <Sep>)*> <last: T?> End => {
+    <mut v: (<T> Sep)*> <last: T?> End => {
         match last {
             None => { },
             Some(t) => { v.push(t); }

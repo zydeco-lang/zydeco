@@ -100,7 +100,7 @@ pub trait AnnHolder {
 
 #[derive(Clone, Debug)]
 pub struct Ann<T> {
-    inner: T,
+    pub inner: T,
     pub info: AnnInfo,
 }
 
