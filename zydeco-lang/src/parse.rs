@@ -1,14 +1,11 @@
-use lalrpop_util::lalrpop_mod;
-lalrpop_mod!(pub parser, "/parse/parser.rs");
 
-pub mod fmt;
-pub mod syntax;
+
 pub mod token;
-mod ann;
 mod next;
 pub mod err;
+pub mod legacy;
 
-pub use parser::{ExpressionParser, ZydecoParser};
+pub use legacy::parser::{ExpressionParser, ZydecoParser};
 
 use logos::{Logos, SpannedIter};
 use token::Tok;

@@ -1,5 +1,8 @@
 use crate::{
-    parse::{parser::DeclarationsParser, syntax::Declare, Lexer},
+    parse::{
+        legacy::{parser::DeclarationsParser, syntax::Declare},
+        Lexer,
+    },
     statics::ctx::Ctx,
     syntax::ann::{AnnHolder, FileInfo},
 };

@@ -1,5 +1,5 @@
 use super::env::Env;
-use crate::parse::syntax::{Compute, Value};
+use crate::parse::legacy::syntax::{Compute, Value};
 use std::io::{BufRead, Write};
 use std::rc::Rc;
 

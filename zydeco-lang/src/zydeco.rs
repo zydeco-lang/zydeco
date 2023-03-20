@@ -8,7 +8,7 @@ use crate::{
     library::{builtins, linker},
     parse::{
         err::ParseError,
-        syntax::{Compute, Program, Type, ValOrComp, Value},
+        legacy::syntax::{Compute, Program, Type, ValOrComp, Value},
         Lexer, {ExpressionParser, ZydecoParser},
     },
     statics::{ctx::Ctx, tyck::TypeCheck},

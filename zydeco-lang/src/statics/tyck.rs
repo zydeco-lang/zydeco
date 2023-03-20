@@ -1,6 +1,6 @@
 use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
 use crate::{
-    parse::syntax::*,
+    parse::legacy::syntax::*,
     syntax::ann::{ann, Ann, AnnHolder, AnnInfo},
     syntax::binder::*,
 };

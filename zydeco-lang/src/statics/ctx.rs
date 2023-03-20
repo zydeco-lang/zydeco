@@ -1,5 +1,5 @@
 use super::{err::TypeCheckError, resolve::*, tyck::TypeCheck};
-use crate::{parse::syntax::*, syntax::binder::*, syntax::Ann};
+use crate::{parse::legacy::syntax::*, syntax::binder::*, syntax::Ann};
 use indexmap::IndexMap;
 use std::{collections::HashMap, hash::Hash};
 

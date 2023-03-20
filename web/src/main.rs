@@ -3,7 +3,7 @@ use yew::prelude::*;
 use zydeco_lang::{
     dynamics::env::Env,
     library::{builtins, declarations, linker},
-    parse::syntax::TCtor,
+    parse::legacy::syntax::TCtor,
     statics::ctx::Ctx,
     zydeco,
 };
