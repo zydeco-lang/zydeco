@@ -65,7 +65,7 @@ pub mod syntax {
 mod link {
     use super::syntax::*;
     use crate::rc;
-    use crate::statics::next::syntax as ss;
+    use crate::statics::syntax as ss;
 
     impl From<ss::Module> for Module {
         fn from(m: ss::Module) -> Self {

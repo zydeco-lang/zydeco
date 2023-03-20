@@ -11,7 +11,7 @@ use crate::{
         legacy::syntax::{Compute, Program, Type, ValOrComp, Value},
         Lexer, {ExpressionParser, ZydecoParser},
     },
-    statics::{ctx::Ctx, tyck::TypeCheck},
+    statics::{Ctx, TypeCheck},
     syntax::ann::{AnnHolder, FileInfo},
     utils::never::Never,
 };

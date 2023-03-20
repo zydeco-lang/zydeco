@@ -3,7 +3,7 @@ use cli::{Cli, Commands};
 use zydeco_lang::{
     dynamics::env::Env,
     library::{builtins, declarations, linker},
-    statics::ctx::Ctx,
+    statics::Ctx,
     zydeco,
 };
 

@@ -3,7 +3,7 @@ use crate::{
         legacy::{parser::DeclarationsParser, syntax::Declare},
         Lexer,
     },
-    statics::ctx::Ctx,
+    statics::Ctx,
     syntax::ann::{AnnHolder, FileInfo},
 };
 use std::{path::PathBuf, rc::Rc};

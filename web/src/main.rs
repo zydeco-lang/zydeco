@@ -4,7 +4,7 @@ use zydeco_lang::{
     dynamics::env::Env,
     library::{builtins, declarations, linker},
     parse::legacy::syntax::TCtor,
-    statics::ctx::Ctx,
+    statics::Ctx,
     zydeco,
 };
 

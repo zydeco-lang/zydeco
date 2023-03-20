@@ -9,6 +9,7 @@ let rec print_a_number : Int -> OS = (
       do minus1 <- ! sub num 1;
       ! write_str prt {! print_a_number minus1}
     )
+    end
 );
 
 ! read_line { fn (input: String) ->
@@ -16,6 +17,6 @@ let rec print_a_number : Int -> OS = (
     ! write_line " world" {
       ! print_a_number 5
     }
-}
+  }
 }
 

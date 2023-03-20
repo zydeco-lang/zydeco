@@ -5,7 +5,7 @@ use zydeco_lang::{
     library::declarations,
     library::linker,
     parse::legacy::syntax::{TCtor, Type, ValOrComp},
-    statics::ctx::Ctx,
+    statics::Ctx,
     zydeco,
 };
 

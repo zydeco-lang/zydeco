@@ -1,24 +1,13 @@
-use super::{ctx::*, err::TypeCheckError, resolve::NameResolveError};
 use crate::{
     parse::legacy::syntax::*,
+    statics::{
+        legacy::ctx::*, err::TypeCheckError, resolve::NameResolveError, Eqv, TypeCheck,
+    },
     syntax::ann::{ann, Ann, AnnHolder, AnnInfo},
     syntax::binder::*,
 };
 use std::collections::HashMap;
 use TypeCheckError::*;
-
-pub trait TypeCheck {
-    type Out: Eqv;
-    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Ann<TypeCheckError>>;
-    fn ana(
-        &self, typ: &Self::Out, ctx: &Ctx,
-    ) -> Result<(), Ann<TypeCheckError>> {
-        let typ_syn = self.syn(ctx)?;
-        typ.eqv(&typ_syn).ok_or_else(|| {
-            ann(0, 0).make(ErrStr(format!("Subsumption failed")))
-        })
-    }
-}
 
 impl TypeCheck for Program {
     type Out = ();
@@ -773,10 +762,6 @@ impl TypeCheck for Type {
             }
         }
     }
-}
-
-pub trait Eqv {
-    fn eqv(&self, other: &Self) -> Option<()>;
 }
 
 impl Eqv for () {
