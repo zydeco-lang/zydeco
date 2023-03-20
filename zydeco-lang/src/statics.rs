@@ -1,10 +1,10 @@
-pub mod resolve;
-mod err;
-mod next;
-mod legacy;
-pub mod eqv;
 pub mod syntax;
+mod resolve;
+mod err;
+mod legacy;
+mod eqv;
 mod elab;
+mod tyck;
 
 use self::err::TypeCheckError::*;
 use crate::syntax::span::{span, Span};

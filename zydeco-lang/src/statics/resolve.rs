@@ -1,5 +1,4 @@
 use crate::syntax::SpanInfo;
-use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Clone, Debug)]
@@ -28,16 +27,4 @@ impl fmt::Display for NameResolveError {
             }
         }
     }
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum NamespaceSort {
-    Type,
-    Value,
-    Ctor,
-    Dtor,
-}
-
-pub struct NamespaceResolver {
-    pub namespaces: HashMap<(NamespaceSort, String), usize>,
 }
