@@ -4,7 +4,7 @@ use crate::{
         Lexer,
     },
     statics::Ctx,
-    syntax::span::{SpanHolder, FileInfo},
+    syntax::span::{FileInfo, SpanHolder},
 };
 use std::{path::PathBuf, rc::Rc};
 

@@ -1,5 +1,4 @@
-use super::syntax::*;
-use crate::dynamics::apply_string_escape_repl;
+use super::{apply_string_escape_repl, syntax::*};
 use crate::utils::fmt::{Args, FmtArgs};
 
 impl FmtArgs for ZValue {

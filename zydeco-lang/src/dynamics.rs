@@ -1,13 +1,8 @@
-pub mod eval;
-pub mod env;
-pub mod syntax;
-mod fmt;
 pub mod next;
+mod legacy;
 
-pub fn apply_string_escape_repl(var: &String) -> String {
-    let mut res = String::new();
-    for c in var.chars().into_iter().map(|ch| ch.escape_debug()) {
-        res.push_str(&c.to_string());
-    }
-    format!("\"{}\"", res)
-}
+pub use legacy::{
+    env::Env,
+    eval,
+    syntax::{PrimComp, ZCompute, ZValue},
+};

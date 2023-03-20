@@ -1,4 +1,4 @@
-use crate::dynamics::syntax::{ZCompute, ZValue};
+use crate::dynamics::{ZCompute, ZValue};
 use std::io::{BufRead, Write};
 use std::rc::Rc;
 

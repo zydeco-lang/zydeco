@@ -1,5 +1,5 @@
-use zydeco_derive::EnumGenerator;
 use std::{collections::HashMap, rc::Rc};
+use zydeco_derive::EnumGenerator;
 
 pub use crate::{syntax::Span, syntax::*};
 

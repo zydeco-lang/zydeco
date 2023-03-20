@@ -1,5 +1,5 @@
-use crate::syntax::span::{SpanHolder, SpanInfo};
 use super::syntax::{Codata, Compute, Data, Declare, Program, Type, Value};
+use crate::syntax::span::{SpanHolder, SpanInfo};
 
 impl SpanHolder for Program {
     fn span(&self) -> &SpanInfo {

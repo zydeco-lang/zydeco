@@ -1,5 +1,5 @@
 use crate::{
-    dynamics::{env::Env, syntax::ZValue},
+    dynamics::{Env, ZValue},
     parse::legacy::syntax::{Declare, Value::*},
 };
 use std::rc::Rc;

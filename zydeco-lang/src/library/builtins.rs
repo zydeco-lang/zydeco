@@ -1,8 +1,5 @@
 use super::impls::*;
-use crate::dynamics::{
-    env::Env,
-    syntax::{PrimComp, ZCompute, ZValue},
-};
+use crate::dynamics::{Env, PrimComp, ZCompute, ZValue};
 use std::rc::Rc;
 
 struct Builtin {

@@ -1,9 +1,8 @@
 use crate::{
     dynamics::{
         self,
-        env::Env,
         eval::{Exit, Runtime},
-        syntax::{ZCompute, ZValue},
+        Env, ZCompute, ZValue,
     },
     library::{builtins, linker},
     parse::{

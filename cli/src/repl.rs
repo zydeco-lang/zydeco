@@ -1,9 +1,6 @@
 use zydeco_lang::{
-    dynamics::env::Env,
-    dynamics::syntax::ZValue,
-    library::builtins,
-    library::declarations,
-    library::linker,
+    dynamics::{Env, ZValue},
+    library::{builtins, declarations, linker},
     parse::legacy::syntax::{TCtor, Type, ValOrComp},
     statics::Ctx,
     zydeco,

@@ -1,10 +1,11 @@
 use crate::{
     parse::legacy::syntax::*,
     statics::{
-        legacy::ctx::*, err::TypeCheckError, resolve::NameResolveError, Eqv, TypeCheck,
+        err::TypeCheckError, legacy::ctx::*, resolve::NameResolveError, Eqv,
+        TypeCheck,
     },
-    syntax::span::{ann, Span, SpanHolder, SpanInfo},
     syntax::binder::*,
+    syntax::span::{ann, Span, SpanHolder, SpanInfo},
 };
 use std::collections::HashMap;
 use TypeCheckError::*;
