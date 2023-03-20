@@ -6,6 +6,7 @@ pub mod syntax;
 pub mod token;
 mod ann;
 mod next;
+pub mod err;
 
 pub use parser::{ExpressionParser, ZydecoParser};
 

@@ -7,6 +7,7 @@ use crate::{
     },
     library::{builtins, linker},
     parse::{
+        err::ParseError,
         syntax::{Compute, Program, Type, ValOrComp, Value},
         Lexer, {ExpressionParser, ZydecoParser},
     },
@@ -23,11 +24,11 @@ pub struct ZydecoFile {
 impl ZydecoFile {
     pub fn parse(self) -> Result<Program, String> {
         let source = std::fs::read_to_string(&self.path).unwrap();
+        let file_info = FileInfo::new(&source);
         let mut p = ZydecoParser::new()
             .parse(&source, Lexer::new(&source))
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("{}", ParseError(e, &file_info)))?;
         let path_rc = Rc::new(self.path);
-        let file_info = FileInfo::new(&source);
         p.ann_map_mut(|ann| {
             ann.set_span2(&file_info);
             ann.path.set(path_rc.clone()).unwrap();

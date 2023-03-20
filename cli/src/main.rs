@@ -7,8 +7,8 @@ use zydeco_lang::{
     zydeco,
 };
 
-fn main() -> Result<(), String> {
-    match Cli::parse().command {
+fn main() {
+    let res = match Cli::parse().command {
         Commands::Run { file, dry, verbose, args } => {
             run_file(file, dry, verbose, args)
         }
@@ -16,6 +16,12 @@ fn main() -> Result<(), String> {
             run_file(file, true, verbose, vec![])
         }
         Commands::Repl { .. } => cli::repl::launch(),
+    };
+    match res {
+        Ok(()) => {}
+        Err(e) => {
+            eprintln!("Error: {}", e);
+        }
     }
 }
 

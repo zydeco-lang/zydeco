@@ -32,6 +32,31 @@ impl FileInfo {
         newlines.push(s.len());
         FileInfo { newlines }
     }
+    pub fn trans_span2(&self, offset: usize) -> Cursor2 {
+        // [x0, x1, (offset <= x2), x3]
+        let idx = {
+            let mut l = 0;
+            let mut r = self.newlines.len();
+            while l < r {
+                let mid = l + (r - l) / 2;
+                if offset <= self.newlines[mid] {
+                    r = mid;
+                } else {
+                    l = mid + 1;
+                }
+            }
+            l
+        };
+        if idx < self.newlines.len() {
+            Cursor2 {
+                line: idx,
+                column: offset
+                    - self.newlines[if idx > 0 { idx - 1 } else { idx }],
+            }
+        } else {
+            panic!("AnnInfo: offset {} is not in {:?}", offset, self)
+        }
+    }
 }
 
 impl AnnInfo {
@@ -41,54 +66,40 @@ impl AnnInfo {
     pub fn set_span2(&self, gen: &FileInfo) {
         let (start, end) = self.span1;
         self.span2
-            .set((Self::trans_span2(gen, start), Self::trans_span2(gen, end)))
+            .set((gen.trans_span2(start), gen.trans_span2(end)))
             .expect("span2 is already set");
-    }
-    fn trans_span2(gen: &FileInfo, offset: usize) -> Cursor2 {
-        let mut line = 0;
-        let mut last_br = 0;
-        for &br in &gen.newlines {
-            if offset <= br {
-                return Cursor2 { line, column: offset - last_br };
-            } else {
-                line += 1;
-                last_br = br;
-            }
-        }
-        panic!("AnnInfo: offset {} is not in {:?}", offset, gen);
     }
 }
 
 impl Debug for AnnInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (l, r) = self.span1;
         if let Some(path) = self.path.get() {
             write!(f, "{}", path.display())?;
-            if let Some((
-                Cursor2 { line, column },
-                Cursor2 { line: end_line, column: end_column },
-            )) = self.span2.get()
-            {
-                write!(
-                    f,
-                    ":{}:{} - {}:{}",
-                    line, column, end_line, end_column
-                )?;
+            if let Some((l2, r2)) = self.span2.get() {
+                write!(f, ":{l2:?} - {r2:?}",)?;
             } else {
-                write!(f, ":{}-{}", self.span1.0, self.span1.1)?;
+                write!(f, ":{l}-{r}",)?;
             }
         } else {
-            write!(f, "{}-{}", self.span1.0, self.span1.1)?;
+            write!(f, "{l}-{r}")?;
         }
         Ok(())
     }
 }
 
-type Cursor1 = usize;
+pub type Cursor1 = usize;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Cursor2 {
     pub line: usize,
     pub column: usize,
+}
+impl Debug for Cursor2 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Cursor2 { line, column } = self;
+        write!(f, "{line}:{column}",)
+    }
 }
 
 pub trait AnnHolder {
