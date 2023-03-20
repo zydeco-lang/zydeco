@@ -11,10 +11,10 @@ pub use crate::syntax::Kind;
 
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeApp(pub Box<Type>, pub Box<Type>);
+pub struct TypeApp(pub TT, pub TT);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeArrow(pub Box<Type>, pub Box<Type>);
+pub struct TypeArrow(pub TT, pub TT);
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Type {
@@ -22,6 +22,7 @@ pub enum Type {
     App(TypeApp),
     Arrow(TypeArrow),
 }
+type TT = Box<Ann<Type>>;
 impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -37,7 +38,7 @@ pub enum TermValue {
 type TValue = Box<Ann<TermValue>>;
 impl ValueT for TermValue {}
 
-type TermPattern = (TermV, Option<Ann<Type>>);
+pub type TermPattern = (TermV, Option<Ann<Type>>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Abstraction {

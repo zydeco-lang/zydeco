@@ -1,0 +1,265 @@
+use crate::{
+    parse::{next::*, token::*},
+    syntax::{ann::*, binder::*, TCtor, DeclSymbol},
+};
+use crate::parse::{apply_string_escapes, apply_char_escapes};
+
+grammar<'input>(input: &'input str);
+
+pub Zydeco: Module = "module" <name:String> "where" <symbol_declarations:DeclSymbol<Decl>*> <entry:Ann<TermComputation>> => Module {
+    name: Some(name),
+    symbol_declarations,
+    entry,
+};
+
+DeclSymbol<T>: DeclSymbol<T> = {
+    <public:"pub"?> <external:"extern"?> <inner:T> => {
+        public: public.is_some(),
+        external: external.is_some(),
+        inner,
+    }
+};
+
+Decl: Declaration = {
+    "data" <name:TypeV> <params:TParameter*> "where" <ctors:DataBr*> "end" => Data {
+        name,
+        params,
+        ctors,
+    }
+    "codata" <name:TypeV> <params:TParameter*> "where" <dtors:CodataBr*> "end" => Codata {
+        name,
+        params,
+        dtors,
+    }
+    "define" <name:TermV> ":" <ty:Type> <def:("=" Value)?> "end" => Define {
+        public: p,
+        name,
+        ty,
+        def,
+    }
+};
+
+TParameter: (TypeV, Kind) = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind);
+
+
+Kind: Kind = {
+    "VType" => Kind::VType,
+    "CType" => Kind::CType,
+};
+
+TermValue: TermValue = {
+    "(" <Ann<TermValue>> ")" => <>.into(),
+    "(" <tv:Boxed<Ann<TermValue>>> "::" <ty:Ann<Type>> ")" => TermAnn {
+        body: tv,
+        ty,
+    }.into(),
+    <TermV> => <>.into(),
+    "{" <tc:Boxed<Ann<TermComputation>>> "}" => Thunk(tc).into(),
+    <ctor:CtorV> "(" <args:SepByEnd<",", Ann<TermValue>, ")">> => Ctor {
+        ctor,
+        args,
+    }.into(),
+    <Literal> => <>.into(),
+};
+
+TermComputation: TermComputation = {
+    TermComputationRight,
+    "let" <gen:GenLet> "in" <body:Boxed<Ann<TermComputation>>> => Let {
+        gen,
+        body,
+    }.into(),
+    "do" <binder:TermV> <ty_ann:(":" Ann<Type>)?> "<-" <task:Boxed<Ann<TermComputation>>> ";" <body:Boxed<Ann<TermComputation>>> => Do {
+        binder,
+        ty_ann,
+        task,
+        body,
+    }.into(),
+    "rec" "(" <var:TermV> <ty_ann:(":" Ann<Type>)?> ")" "->" <body:Boxed<Ann<TermComputation>>> => Rec {
+        var,
+        body,
+    }.into(),
+    "match" <scrut:Boxed<Ann<TermV>>> <arms:MatchBr*> "end" => Match {
+        scrut,
+        arms,
+    }.into(),
+    "fn" "(" <params:SepByEnd<",", FnArg, ")">> <body:Boxed<Ann<TermComputation>>> => Function {
+        params,
+        body,
+    }.into(),
+    "comatch" <arms:ComatchBr*> "end" => CoMatch {
+        arms,
+    }.into(),
+};
+
+TermComputationRight: TermComputation = {
+    TermComputationAtom,
+    <expr_in:Boxed<Ann<TermComputationRight>>> <args:Ann<TermValue>> => Application {
+        expr_in,
+        args:vec![args],
+    }.into(),
+    <body:Boxed<Ann<TermComputationRight>>> "." <dtor:DtorV> "(" <args:SepByEnd<",", Ann<TermValue>, ")">> => Dtor {
+        body,
+        dtor,
+        args,
+    }.into(),
+};
+
+TermComputationAtom: TermComputation = {
+    "(" <tc:TermComputation> ")" => tc.into(),
+    "(" <tc:Boxed<Ann<TermComputation>>> "::" <ty:Ann<Type>> ")" => TermAnn {
+        body: tc,
+        ty,
+    }.into(),
+    "ret" <v:Boxed<Ann<TermValue>>> => Force(v).into(),
+    "!" <v:Boxed<Ann<TermValue>>> => Ret(v).into(),
+};
+
+GenLet: GenLet = {
+    <rec:"rec"?> <fun:"fn"?> <var:TermV> <params:TermPattern*> <ty:(":" Ann<Type>)?> "=" <def:Boxed<Ann<TermValue>>> => {
+        rec: rec.is_some(),
+        fun: fun.is_some(),
+        name: (var, ty),
+        params,
+        def,
+    }
+};
+
+
+TermPattern: TermPattern = {
+    "(" <v:TermV> <ty:(":" Ann<Type>)?> ")" => (v, ty)
+};
+
+MatchBr: Matcher = "|" <ctor:CtorV> "(" <vars:SepByEnd<",", TermV, ")">> "->" <body:Ann<TermComputation>> => Matcher(ctor, vars, body);
+
+ComatchBr: CoMatcher =  "|" "." <dtor:DtorV> "(" <vars:SepByEnd<",", TermV, ")">> ":" <body:Ann<TermComputation>> => CoMatcher(dtor, vars, body);
+
+
+Type: Type = {
+    <tarrow:Boxed<Ann<Type>>> "->" <ty:Boxed<Ann<TypeApp>>> => TypeArrow(tarrow, ty).into(),
+    TypeApp,
+};
+
+TypeApp: Type = {
+    <tf:Boxed<Ann<TypeApp>>> <ty:Boxed<Ann<TypeAtom>>> => TypeApp(tf, ty).into(),
+    TypeAtom,
+};
+
+TypeAtom: Type = {
+    <tc:TCtor> => tc.into(),
+    "(" <Type> ")" => <>,
+};
+
+Literal: Literal = {
+    <n:Int> => n.into(),
+    <s:String> => s.into(),
+    <c:Char> => c.into(),
+};
+
+DataBr: DataBr = "|" <ctor:CtorV> "(" <args:SepByEnd<",", Type, ")">> => DataBr(ctor, args);
+
+CodataBr: CodataBr = "|" "." <dtor:DtorV> "(" <args:SepByEnd<",", Type, ")">> ":" <ty:Type> => CodataBr(dtor, args, ty);
+
+TCtor: TCtor = {
+    <x:TypeV> => x.into(),
+    "U" => TCtor::Thunk,
+    "F" => TCtor::Ret,
+    "OS" => TCtor::OS,
+    // Fun ?
+};
+
+// | .add(Int) : Ret(Int)
+
+CtorV: CtorV = <v:Ann<UpperId>> => CtorV::new(v);
+DtorV: DtorV = <v:Ann<LowerId>> => DtorV::new(v);
+TypeV: TypeV = <v:Ann<UpperId>> => TypeV::new(v);
+TermV: TermV = <v:Ann<LowerId>> => TermV::new(v);
+
+UpperId: String = "UpperId" => String::from(<>);
+LowerId: String = "LowerId" => String::from(<>);
+
+
+String: String = <s:"StrLit"> => apply_string_escapes(&s[1..s.len()-1]);
+
+Int: i64 = <s:"NumLit"> => s.parse().unwrap();
+Char: char = {
+    <s:"CharLit"> => s.chars().nth(1).unwrap(),
+    <s:"Escape"> => apply_char_escapes(&s[1..s.len()-1]),
+};
+
+Ann<Rule>: Ann<T> = {
+    <l:@L> <content:Rule> <r:@R> => ann(l,r).make(content)
+};
+
+Boxed<Rule>: Ann<T> = {
+    <content:Rule> => Box::new(content)
+};
+
+FnArg: (TermV, Option<Ann<Type>>) = {
+    <x:TermV> <t:(":" <Ann<Type>>)?> => (x, t),
+};
+
+SepByEnd<Sep, T, End>: Vec<T> = {
+    <mut v: (<T> Sep)*> <last: T?> End => {
+        match last {
+            None => { },
+            Some(t) => { v.push(t); }
+        };
+        v
+    }
+};
+
+//* --------------------------------- Tokens --------------------------------- */
+
+extern {
+    type Location = usize;
+    
+    enum Tok<'input> {
+        "UpperId" => Tok::UpperIdent(<&'input str>),
+        "LowerId" => Tok::LowerIdent(<&'input str>),
+
+        "module" => Tok::Module,
+        "data" => Tok::Data,
+        "codata" => Tok::Codata,
+        "end" => Tok::End,
+        "where" => Tok::Where,
+        "pub" => Tok::Pub,
+        "extern" => Tok::Extern,
+        "define" => Tok::Define,
+        "let" => Tok::Let,
+        "in" => Tok::In,
+        "do" => Tok::Do,
+        "ret" => Tok::Ret,
+        "fn" => Tok::Fn,
+        "rec" => Tok::Rec,
+        "match" => Tok::Match,
+        "comatch" => Tok::Comatch,
+
+        "NumLit" => Tok::NumLit(<&'input str>),
+        "StrLit" => Tok::StrLit(<&'input str>),
+        "CharLit" => Tok::CharLit(<&'input str>),
+        "Escape" => Tok::Escape(<&'input str>),
+
+        "VType" => Tok::VType,
+        "CType" => Tok::CType,
+
+        "F" => Tok::RetType,
+        "U" => Tok::CompType,
+        "OS" => Tok::OSType,
+
+        "(" => Tok::ParenOpen,
+        ")" => Tok::ParenClose,
+        "{" => Tok::BraceOpen,
+        "}" => Tok::BraceClose,
+        "," => Tok::Comma,
+        ":" => Tok::Colon,
+        "::" => Tok::ColonColon,
+        "=" => Tok::Equals,
+        ";" => Tok::Semicolon,
+        "!" => Tok::Force,
+        "|" => Tok::Branch,
+        "." => Tok::Dot,
+        "->" => Tok::Arrow,
+        "<-" => Tok::Assign,
+    }
+}
+

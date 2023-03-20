@@ -27,6 +27,8 @@ pub enum Tok<'input> {
     Codata,
     #[token("let")]
     Let,
+    #[token("in")]
+    In,
     #[token("do")]
     Do,
     #[token("ret")]
@@ -113,6 +115,7 @@ impl<'input> Display for Tok<'input> {
             Tok::Data => write!(f, "data"),
             Tok::Codata => write!(f, "codata"),
             Tok::Let => write!(f, "let"),
+            Tok::In => write!(f, "in"),
             Tok::Do => write!(f, "do"),
             Tok::Ret => write!(f, "ret"),
             Tok::Fn => write!(f, "fn"),
