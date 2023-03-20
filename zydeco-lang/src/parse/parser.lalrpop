@@ -2,7 +2,7 @@ use crate::{
     parse::{syntax::*, token::*},
     syntax::{ann::*, binder::*, TCtor},
 };
-use crate::parse::{apply_string_escapes, apply_char_escapes};
+use crate::parse::{apply_string_escapes};
 
 grammar<'input>(input: &'input str);
 
@@ -20,7 +20,7 @@ pub Declarations: Vec<Declare> = <Decl*>;
 pub Expression: ValOrComp = {
     <val : Boxed<Val>>  => ValOrComp::Val(*val),
     <comp: Boxed<Comp>> => ValOrComp::Comp(*comp),
-}
+};
 
 
 //* ------------------------------ Declarations ------------------------------ */
@@ -52,23 +52,23 @@ Decl: Declare = {
             ann: ann(l,r),
         }
     },
-}
+};
 
 TParam: (TypeV, Kind) = {
     <name:TypeV> ":" <kind:Kind> => (name, kind),
-}
+};
 
 CtorBranch: (CtorV, Vec<Type>) = {
     "|" <ctor:CtorV> "(" <args:SepByEnd<",", ")", TVal>> => {
         (ctor, args)
     }
-}
+};
 
 DtorBranch: (DtorV, (Vec<Type>, Type)) = {
     "|" "." <dtor:DtorV> "(" <args:SepByEnd<",", ")", TVal>> ":" <res:TComp> => {
         (dtor, (args, res))
     }
-}
+};
 
 
 //* ---------------------------------- Value --------------------------------- */
@@ -82,7 +82,7 @@ Val: Value = {
     <l:@L> <n:Int> <r:@R> => Value::Int(n, ann(l,r)),
     <l:@L> <s:Str> <r:@R> => Value::String(s, ann(l,r)),
     <l:@L> <c:Char> <r:@R> => Value::Char(c, ann(l,r)),
-}
+};
 
 
 //* ------------------------------- Expressions ------------------------------ */
@@ -124,7 +124,7 @@ Comp: Compute = {
     <l:@L> "comatch" <arms:CoMatchBranches> <r:@R> => Compute::CoMatch {
         arms, ann: ann(l,r)
     },
-}
+};
 
 CompHead: Compute = {
     CompAtom,
@@ -132,53 +132,53 @@ CompHead: Compute = {
     <l:@L> <body:Boxed<CompHead>> "." <dtor:DtorV> "(" <args:SepByEnd<",", ")", Val>> <r:@R> => Compute::CoApp {
         body, dtor, args, ann: ann(l,r)
     },
-}
+};
 
 CompAtom: Compute = {
     "(" <Comp> ")" => <>,
     <l:@L> "(" <c:Comp> "::" <t:TComp> ")" <r:@R> => Compute::TermAnn(Box::new(c), t, ann(l,r)),
     <l:@L> "!" <v:Boxed<Val>> <r:@R> => Compute::Force(v, ann(l,r)),
     <l:@L> "ret" <v:Boxed<Val>> <r:@R> => Compute::Return(v, ann(l,r)),
-}
+};
 
 BindVal<Delim>: (TermV, Option<Box<Type>>, Box<Value>) = {
     <Bind<Delim, Boxed<TVal>, Boxed<Val>>>
-}
+};
 
 BindDefVal<Delim>: (TermV, Option<Box<Type>>, Option<Box<Value>>) = {
     <x:TermV> <ty:(":" <Boxed<TVal>>)?> <def:(Rhs<Delim, Boxed<Val>>)?> => (x, ty, def),
-}
+};
 
 BindComp<Delim>: (TermV, Option<Box<Type>>, Box<Compute>) = {
     <Bind<Delim, Boxed<TComp>, Boxed<Comp>>>
-}
+};
 
 Bind<Delim, Typ, Def>: (TermV, Option<Typ>, Def) = {
     <x:TermV> <ty:(":" <Typ>)?> <delim:Delim> <def:Def> => (x, ty, def),
-}
+};
 
 FnArg: (TermV, Option<Box<Type>>) = {
     <x:TermV> <t:(":" <Boxed<TVal>>)?> => (x, t),
-}
+};
 
 MatchBranches: Vec<(CtorV, Vec<TermV>, Box<Compute>)> = {
   <m: Branches<CtorPat>> => {
     m.into_iter().map(|((c, xs), m)| (c, xs, m)).collect()
   }
-}
+};
 
 CoMatchBranches: Vec<(DtorV, Vec<TermV>, Box<Compute>)> = {
   <m: Branches<DtorPat>> => {
     m.into_iter().map(|((d, xs), m)| (d, xs, m)).collect()
   }
-}
+};
 
 Branches<Pat>: Vec<(Pat, Box<Compute>)> = {
   <mut v: RevBranches<Pat>> => {
     v.reverse();
     v
   }
-}
+};
 
 RevBranches<Pat>: Vec<(Pat, Box<Compute>)> = {
   "|" <p: Pat> "->" <e: Boxed<CompHead>> <mut m: RevBranches<Pat>> => {
@@ -186,15 +186,15 @@ RevBranches<Pat>: Vec<(Pat, Box<Compute>)> = {
     m
   },
   "end" => Vec::new()
-}
+};
 
 CtorPat: (CtorV, Vec<TermV>) = {
   <c: CtorV> "(" <vs: SepByEnd<",", ")", TermV>> => (c, vs)
-}
+};
 
 DtorPat: (DtorV, Vec<TermV>) = {
   "." <d: DtorV> "(" <vs: SepByEnd<",", ")", TermV>> => (d, vs)
-}
+};
 
 
 //* ---------------------------------- Types --------------------------------- */
@@ -208,30 +208,30 @@ DtorPat: (DtorV, Vec<TermV>) = {
 
 Type: Type = {
   <s: SynType> => *s.lower()
-}
+};
 
 SynType: SynType = {
   <l:@L> <tv: Boxed<AppType>> "->" <tc: Boxed<SynType>> <r:@R> => SynType::Arr(tv, tc, ann(l,r)),
   AppType
-}
+};
 
 
 AtomType: SynType = {
   <l:@L> <ctor: TCtor> <r:@R> => SynType::Basic(ctor, ann(l,r)),
   "(" <SynType> ")" => <>,
-}
+};
 
 AppType: SynType = {
   <l:@L> <f: Boxed<AppType>> <a: Boxed<AtomType>> <r:@R> => SynType::App(f, a, ann(l,r)),
   AtomType,
-}
+};
 
 TCtor: TCtor = {
   <x: TypeV> => TCtor::Var(x),
   "OS" => TCtor::OS,
   "F" => TCtor::Ret,
   "U" => TCtor::Thunk,
-}
+};
 
 TComp: Type = Type;
 TVal: Type = Type;
@@ -256,7 +256,7 @@ TVal: Type = Type;
 Kind: Kind = {
     "VType" => Kind::VType,
     "CType" => Kind::CType,
-}
+};
 
 
 //* -------------------------------- Terminals ------------------------------- */
@@ -271,13 +271,27 @@ LowerId: String = "LowerId" => String::from(<>);
 
 Int: i64 = <s:"NumLit"> => s.parse().unwrap();
 
-Str: String = <s:"StrLit"> => 
-    apply_string_escapes(&s[1..s.len()-1]); //todo
+Str: String = <s:"StrLit"> => {
+    apply_string_escapes(&s[1..s.len()-1])
+};
 
-// Char: char = <s:"CharLit"> => s.chars().nth(1).unwrap(); //todo
 Char: char = {
-    <s:"CharLit"> => s.chars().nth(1).unwrap(),
-    <s:"Escape"> => apply_char_escapes(&s[1..s.len()-1]),
+    <s:"CharLit"> => {
+        let mut iter = s.chars();
+        // remove the quotes
+        iter.next();
+        iter.next_back();
+        match iter.next().unwrap() {
+            '\\' => match iter.next() {
+                Some('n') => '\n',
+                Some('r') => '\r',
+                Some('t') => '\t',
+                Some('\'') => '\'',
+                _ => '\\', //Error?
+            }
+            c => c,
+        }
+    }
 };
 
 
@@ -309,7 +323,6 @@ extern {
         "NumLit" => Tok::NumLit(<&'input str>),
         "StrLit" => Tok::StrLit(<&'input str>),
         "CharLit" => Tok::CharLit(<&'input str>),
-        "Escape" => Tok::Escape(<&'input str>),
 
         "VType" => Tok::VType,
         "CType" => Tok::CType,

@@ -60,14 +60,3 @@ pub fn apply_string_escapes(code: &str) -> String {
         text.into()
     }
 }
-
-pub fn apply_char_escapes(s: &str) -> char {
-    //lib function:Logos
-    let ch = s.chars().nth(1).unwrap();
-    match ch {
-        'n' => '\n',
-        'r' => '\r',
-        't' => '\t',
-        _ => '\\', //Error?
-    }
-}

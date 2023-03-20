@@ -2,7 +2,7 @@ use crate::{
     parse::{next::*, token::*},
     syntax::{ann::*, TCtor, DeclSymbol},
 };
-use crate::parse::{apply_string_escapes, apply_char_escapes};
+use crate::parse::{apply_string_escapes};
 
 grammar<'input>(input: &'input str);
 
@@ -212,13 +212,23 @@ TermV: TermV = <Ann<LowerId>> => <>.into();
 UpperId: String = "UpperId" => <>.into();
 LowerId: String = "LowerId" => <>.into();
 
-
 String: String = <s:"StrLit"> => apply_string_escapes(&s[1..s.len()-1]);
-
 Int: i64 = <s:"NumLit"> => s.parse().unwrap();
-Char: char = {
-    <s:"CharLit"> => s.chars().nth(1).unwrap(),
-    <s:"Escape"> => apply_char_escapes(&s[1..s.len()-1]),
+Char: char = <s:"CharLit"> => {
+    let mut iter = s.chars();
+    // remove the quotes
+    iter.next();
+    iter.next_back();
+    match iter.next().unwrap() {
+        '\\' => match iter.next() {
+            Some('n') => '\n',
+            Some('r') => '\r',
+            Some('t') => '\t',
+            Some('\'') => '\'',
+            _ => '\\', //Error?
+        }
+        c => c,
+    }
 };
 
 //* -------------------------------- Utilities ------------------------------- */
@@ -231,8 +241,8 @@ Box<T>: Box<T> = {
     <inner:T> => Box::new(inner)
 };
 
-SepByEnd<Sep, T, End>: Vec<T> = {
-    <mut v: (<T> Sep)*> <last: T?> End => {
+SepByDelim<Start, Sep, T, End>: Vec<T> = {
+    Start <mut v: (<T> Sep)*> <last: T?> End => {
         match last {
             None => { },
             Some(t) => { v.push(t); }
@@ -240,8 +250,6 @@ SepByEnd<Sep, T, End>: Vec<T> = {
         v
     }
 };
-
-SepByDelim<Start, Sep, T, End>: Vec<T> = Start <SepByEnd<Sep, T, End>>;
 
 //* --------------------------------- Tokens --------------------------------- */
 
@@ -253,12 +261,12 @@ extern {
         "LowerId" => Tok::LowerIdent(<&'input str>),
 
         "module" => Tok::Module,
-        "data" => Tok::Data,
-        "codata" => Tok::Codata,
-        "end" => Tok::End,
         "where" => Tok::Where,
+        "end" => Tok::End,
         "pub" => Tok::Pub,
         "extern" => Tok::Extern,
+        "data" => Tok::Data,
+        "codata" => Tok::Codata,
         "define" => Tok::Define,
         "let" => Tok::Let,
         "in" => Tok::In,
@@ -272,7 +280,6 @@ extern {
         "NumLit" => Tok::NumLit(<&'input str>),
         "StrLit" => Tok::StrLit(<&'input str>),
         "CharLit" => Tok::CharLit(<&'input str>),
-        "Escape" => Tok::Escape(<&'input str>),
 
         "VType" => Tok::VType,
         "CType" => Tok::CType,
