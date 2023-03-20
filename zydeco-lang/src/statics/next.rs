@@ -2,13 +2,13 @@
 
 use im::HashMap as ImHashMap;
 
-use super::syntax::{Kind, Span, TermV, TypeArity, TypeV, T};
+use super::syntax::{Kind, Span, TermV, TypeArity, TypeV, RcType};
 
 use super::{err::TypeCheckError, Eqv, TypeCheck};
 
 pub struct Ctx {
     pub type_ctx: ImHashMap<TypeV, TypeArity<Kind>>,
-    pub term_ctx: ImHashMap<TermV, T>,
+    pub term_ctx: ImHashMap<TermV, RcType>,
 }
 
 impl Ctx {
@@ -20,7 +20,7 @@ impl Ctx {
         self.type_ctx.insert(name, kind);
     }
 
-    pub fn extend_term(&mut self, name: TermV, typ: T) {
+    pub fn extend_term(&mut self, name: TermV, typ: RcType) {
         self.term_ctx.insert(name, typ);
     }
 
@@ -28,7 +28,7 @@ impl Ctx {
         self.type_ctx.get(name)
     }
 
-    pub fn lookup_term(&self, name: &TermV) -> Option<&T> {
+    pub fn lookup_term(&self, name: &TermV) -> Option<&RcType> {
         self.term_ctx.get(name)
     }
 }

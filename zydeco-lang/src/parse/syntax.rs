@@ -8,10 +8,10 @@ pub use crate::syntax::Kind;
 /* ---------------------------------- Type ---------------------------------- */
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeApp(pub TT, pub TT);
+pub struct TypeApp(pub BoxType, pub BoxType);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeAbs(pub TT, pub TT);
+pub struct TypeAbs(pub BoxType, pub BoxType);
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Type {
@@ -19,7 +19,7 @@ pub enum Type {
     App(TypeApp),
     Abs(TypeAbs),
 }
-type TT = Box<Span<Type>>;
+pub type BoxType = Box<Span<Type>>;
 impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -32,7 +32,7 @@ pub enum TermValue {
     Ctor(Ctor<CtorV, Span<TermValue>>),
     Literal(Literal),
 }
-type BoxValue = Box<Span<TermValue>>;
+pub type BoxValue = Box<Span<TermValue>>;
 impl ValueT for TermValue {}
 
 pub type TermPattern = (TermV, Option<Span<Type>>);
@@ -55,7 +55,7 @@ pub struct GenLet {
     pub fun: bool,
     pub name: TermPattern,
     pub params: Vec<TermPattern>,
-    pub def: BoxValue,
+    pub def: Box<Span<Term>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,7 +78,7 @@ pub enum TermComputation {
     CoMatch(CoMatch<DtorV, TermV, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
 }
-type BoxComp = Box<Span<TermComputation>>;
+pub type BoxComp = Box<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
@@ -89,7 +89,7 @@ pub enum Term {
 
 /* --------------------------------- Module --------------------------------- */
 
-type Define = GenLet;
+pub type Define = GenLet;
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Declaration {

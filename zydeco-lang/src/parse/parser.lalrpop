@@ -98,6 +98,11 @@ TypePattern: (TypeV, Kind) = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind
 
 //* ---------------------------------- Term ---------------------------------- */
 
+pub Term: Term = {
+    <TermComputation> => <>.into(),
+    <TermValue> => <>.into(),
+};
+
 TermValue: TermValue = {
     "(" <TermValue> ")" => <>.into(),
     "(" <tv:Box<Span<TermValue>>> "::" <ty:Span<Type>> ")" => TermAnn {
@@ -169,7 +174,7 @@ TermComputationAtom: TermComputation = {
 
 GenLet: GenLet = {
     <rec:"rec"?> <fun:"fn"?> <var:TermV> <params:TermPattern*> <ty:(":" <Span<Type>>)?> "="
-    <def:Box<Span<TermValue>>> => GenLet {
+    <def:Box<Span<Term>>> => GenLet {
         rec: rec.is_some(),
         fun: fun.is_some(),
         name: (var, ty),

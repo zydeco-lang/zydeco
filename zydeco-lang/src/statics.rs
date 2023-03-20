@@ -4,6 +4,7 @@ mod next;
 mod legacy;
 pub mod eqv;
 pub mod syntax;
+mod elab;
 
 use self::err::TypeCheckError::*;
 use crate::syntax::span::{ann, Span};

@@ -10,13 +10,10 @@ impl From<ss::Module> for Module {
                 .define
                 .into_iter()
                 .map(|def| {
-                    let ss::Define { name, ty: _, def } = def.inner();
-                    if let Some(def) = def {
-                        (name, def.inner_ref().into())
-                    } else {
-                        // Todo: use extern field
-                        todo!()
-                    }
+                    let ss::Define { name, def } = def;
+                    (name, def.inner_ref().into())
+                    // Todo: use extern field
+                    // todo!()
                 })
                 .collect(),
             entry: m.entry.inner_ref().into(),

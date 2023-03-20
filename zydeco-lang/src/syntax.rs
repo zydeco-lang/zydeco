@@ -256,8 +256,7 @@ pub struct Codata<TyV: VarT, D, T: TypeT> {
 pub struct CodataBr<D, T: TypeT>(pub D, pub Vec<T>, pub T);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Define<TeV: VarT, T: TypeT, A: ValueT> {
+pub struct Define<TeV: VarT, A: ValueT> {
     pub name: TeV,
-    pub ty: T,
-    pub def: Option<A>,
+    pub def: A,
 }
