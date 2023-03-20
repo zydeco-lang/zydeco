@@ -184,8 +184,8 @@ impl TryFrom<ps::Type> for Type {
                 let t2 = t2.try_map(TryInto::try_into)?;
                 t1.app(rc!(t2))
             }
-            ps::Type::Abs(t) => {
-                let ps::TypeAbs(t1, t2) = t;
+            ps::Type::Arrow(t) => {
+                let ps::Arrow(t1, t2) = t;
                 let t1 = t1.try_map(TryInto::try_into)?;
                 let t2 = t2.try_map(TryInto::try_into)?;
                 Type::internal("Fn", vec![rc!(t1), rc!(t2)])

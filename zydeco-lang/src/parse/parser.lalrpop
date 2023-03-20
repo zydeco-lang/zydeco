@@ -69,7 +69,7 @@ Kind: Kind = {
 
 Type: Type = {
     <t:Box<Span<Type>>> "->" <ty:Box<Span<TypeApp>>> => {
-        TypeAbs(t, ty).into()
+        Arrow(t, ty).into()
     },
     TypeApp,
 };

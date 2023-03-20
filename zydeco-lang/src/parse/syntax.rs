@@ -11,13 +11,13 @@ pub use crate::syntax::Kind;
 pub struct TypeApp(pub BoxType, pub BoxType);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeAbs(pub BoxType, pub BoxType);
+pub struct Arrow(pub BoxType, pub BoxType);
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Basic(TCtor),
     App(TypeApp),
-    Abs(TypeAbs),
+    Arrow(Arrow),
 }
 pub type BoxType = Box<Span<Type>>;
 impl TypeT for Type {}
