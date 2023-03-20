@@ -1,13 +1,13 @@
-codata Fn A : VType where
-  | .arg(A): F(A)
+codata FnRet A : VType where
+  | .arg(A): Ret(A)
 end
 
 codata FnOpt A : VType where
-  | .one(A): F(A)
-  | .zero(): F(A)
+  | .one(A): Ret(A)
+  | .zero(): Ret(A)
 end
 
-let fn_int : Thunk(Fn Int) = {
+let fn_int : Thunk(FnRet Int) = {
   comatch
   | .arg(i) -> ret i
   end
