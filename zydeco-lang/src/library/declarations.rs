@@ -16,11 +16,10 @@ pub fn std_decls() -> Result<Vec<Declare>, String> {
         .parse(&std, Lexer::new(&std))
         .map_err(|e| e.to_string())?;
     let path_rc = Rc::new(PathBuf::from("zydeco-lang/src/library/std.zydeco"));
-    let file_info = FileInfo::new(&std);
+    let file_info = FileInfo::new(&std, path_rc.clone());
     for d in &mut ds {
         d.span_map_mut(|ann| {
-            ann.set_span2(&file_info);
-            ann.path.set(path_rc.clone()).unwrap();
+            ann.set_info(&file_info);
         });
     }
     Ok(ds)

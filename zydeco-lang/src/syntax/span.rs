@@ -20,9 +20,10 @@ pub fn ann(l: usize, r: usize) -> SpanInfo {
 #[derive(Clone, Debug)]
 pub struct FileInfo {
     newlines: Vec<usize>,
+    pub path: Rc<PathBuf>,
 }
 impl FileInfo {
-    pub fn new(s: &str) -> Self {
+    pub fn new(s: &str, path: Rc<PathBuf>) -> Self {
         let mut newlines = vec![0];
         for (i, c) in s.char_indices() {
             if c == '\n' {
@@ -30,7 +31,7 @@ impl FileInfo {
             }
         }
         newlines.push(s.len());
-        FileInfo { newlines }
+        FileInfo { newlines, path }
     }
     pub fn trans_span2(&self, offset: usize) -> Cursor2 {
         // [x0, x1, (offset <= x2), x3]
@@ -63,11 +64,12 @@ impl SpanInfo {
     pub fn make<T>(&self, inner: T) -> Span<T> {
         Span { inner, info: self.clone() }
     }
-    pub fn set_span2(&self, gen: &FileInfo) {
+    pub fn set_info(&self, gen: &FileInfo) {
         let (start, end) = self.span1;
         self.span2
             .set((gen.trans_span2(start), gen.trans_span2(end)))
             .expect("span2 is already set");
+        self.path.set(gen.path.clone()).expect("path is already set");
     }
 }
 
@@ -107,6 +109,15 @@ pub trait SpanHolder {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone;
+    fn span_map<F>(self, f: F) -> Self
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+        Self: Sized,
+    {
+        let mut s = self;
+        s.span_map_mut(f);
+        s
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -12,7 +12,7 @@ use crate::{
         Lexer, {ExpressionParser, ZydecoParser},
     },
     statics::{Ctx, TypeCheck},
-    syntax::span::{SpanHolder, FileInfo},
+    syntax::span::{FileInfo, SpanHolder},
     utils::never::Never,
 };
 use std::{path::PathBuf, rc::Rc};
@@ -24,15 +24,13 @@ pub struct ZydecoFile {
 impl ZydecoFile {
     pub fn parse(self) -> Result<Program, String> {
         let source = std::fs::read_to_string(&self.path).unwrap();
-        let file_info = FileInfo::new(&source);
-        let mut p = ZydecoParser::new()
+        let file_info = FileInfo::new(&source, Rc::new(self.path));
+        let p = ZydecoParser::new()
             .parse(&source, Lexer::new(&source))
-            .map_err(|e| format!("{}", ParseError(e, &file_info)))?;
-        let path_rc = Rc::new(self.path);
-        p.span_map_mut(|ann| {
-            ann.set_span2(&file_info);
-            ann.path.set(path_rc.clone()).unwrap();
-        });
+            .map_err(|e| format!("{}", ParseError(e, &file_info)))?
+            .span_map(|ann| {
+                ann.set_info(&file_info);
+            });
         Ok(p)
     }
 }
