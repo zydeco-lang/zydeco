@@ -5,7 +5,7 @@ use crate::{
         TypeCheck,
     },
     syntax::binder::*,
-    syntax::span::{ann, Span, SpanHolder, SpanInfo},
+    syntax::span::{span, Span, SpanHolder, SpanInfo},
 };
 use std::collections::HashMap;
 use TypeCheckError::*;
@@ -724,7 +724,7 @@ impl TypeCheck for Type {
                 } else {
                     self.args[0]
                         .syn(ctx)?
-                        .ensure_vtype("type argument to Ret", &ann(0, 0))?;
+                        .ensure_vtype("type argument to Ret", &span(0, 0))?;
                     Ok(Kind::CType)
                 }
             }
@@ -738,7 +738,7 @@ impl TypeCheck for Type {
                 } else {
                     self.args[0]
                         .syn(ctx)?
-                        .ensure_ctype("type argument to Thunk", &ann(0, 0))?;
+                        .ensure_ctype("type argument to Thunk", &span(0, 0))?;
                     Ok(Kind::VType)
                 }
             }
@@ -752,11 +752,11 @@ impl TypeCheck for Type {
                 } else {
                     self.args[0].syn(ctx)?.ensure_vtype(
                         "domain of a function type",
-                        &ann(0, 0),
+                        &span(0, 0),
                     )?;
                     self.args[1].syn(ctx)?.ensure_ctype(
                         "codomain of a function type",
-                        &ann(0, 0),
+                        &span(0, 0),
                     )?;
                     Ok(Kind::CType)
                 }

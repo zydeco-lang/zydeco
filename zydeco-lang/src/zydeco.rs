@@ -27,8 +27,8 @@ impl ZydecoFile {
         let p = ZydecoParser::new()
             .parse(&source, Lexer::new(&source))
             .map_err(|e| format!("{}", ParseError(e, &file_info)))?
-            .span_map(|ann| {
-                ann.set_info(&file_info);
+            .span_map(|span| {
+                span.set_info(&file_info);
             });
         Ok(p)
     }

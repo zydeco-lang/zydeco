@@ -56,7 +56,7 @@ pub struct SpanInfo {
     pub path: OnceCell<Rc<PathBuf>>,
 }
 
-pub fn ann(l: usize, r: usize) -> SpanInfo {
+pub fn span(l: usize, r: usize) -> SpanInfo {
     SpanInfo { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
 }
 

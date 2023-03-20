@@ -239,7 +239,7 @@ Char: char = <s:"CharLit"> => {
 //* -------------------------------- Utilities ------------------------------- */
 
 Span<T>: Span<T> = {
-    <l:@L> <inner:T> <r:@R> => ann(l,r).make(inner)
+    <l:@L> <inner:T> <r:@R> => span(l,r).make(inner)
 };
 
 Box<T>: Box<T> = {

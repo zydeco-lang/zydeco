@@ -2,7 +2,7 @@ use super::{syntax::*, TypeCheckError};
 use crate::{
     parse::syntax as ps,
     rc,
-    syntax::{span::ann, Span},
+    syntax::{span::span, Span},
 };
 
 impl TryFrom<ps::Module> for Module {
@@ -157,7 +157,7 @@ fn desugar_fn(
     ) -> Result<TermComputation, TypeCheckError> {
         Ok(CoMatch {
             arms: vec![ps::CoMatcher {
-                dtor: DtorV::new(format!("arg"), ann(0, 0)),
+                dtor: DtorV::new(format!("arg"), span(0, 0)),
                 vars: vec![var],
                 body,
             }],
@@ -325,7 +325,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let arg = arg.try_map(TryInto::try_into)?;
                 Dtor {
                     body: fun,
-                    dtor: DtorV::new(format!("arg"), ann(0, 0)),
+                    dtor: DtorV::new(format!("arg"), span(0, 0)),
                     args: vec![rc!(arg)],
                 }
                 .into()

@@ -1,4 +1,4 @@
-use crate::syntax::span::ann;
+use crate::syntax::span::span;
 use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
 
@@ -20,7 +20,7 @@ impl TypeT for Type {}
 
 impl Type {
     pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
-        TypeApp { tctor: TCtor::Var(TypeV::new(name.into(), ann(0, 0))), args }
+        TypeApp { tctor: TCtor::Var(TypeV::new(name.into(), span(0, 0))), args }
             .into()
     }
 }

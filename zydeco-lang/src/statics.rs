@@ -7,7 +7,7 @@ pub mod syntax;
 mod elab;
 
 use self::err::TypeCheckError::*;
-use crate::syntax::span::{ann, Span};
+use crate::syntax::span::{span, Span};
 
 pub use self::{err::TypeCheckError, legacy::ctx::Ctx};
 
@@ -19,7 +19,7 @@ pub trait TypeCheck {
     ) -> Result<(), Span<TypeCheckError>> {
         let typ_syn = self.syn(ctx)?;
         typ.eqv(&typ_syn).ok_or_else(|| {
-            ann(0, 0).make(ErrStr(format!("Subsumption failed")))
+            span(0, 0).make(ErrStr(format!("Subsumption failed")))
         })
     }
 }
