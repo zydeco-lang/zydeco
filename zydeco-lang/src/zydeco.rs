@@ -12,7 +12,7 @@ use crate::{
         Lexer, {ExpressionParser, ZydecoParser},
     },
     statics::{Ctx, TypeCheck},
-    syntax::ann::{AnnHolder, FileInfo},
+    syntax::span::{AnnHolder, FileInfo},
     utils::never::Never,
 };
 use std::{path::PathBuf, rc::Rc};

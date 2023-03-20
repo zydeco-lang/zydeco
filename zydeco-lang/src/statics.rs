@@ -6,7 +6,7 @@ pub mod eqv;
 pub mod syntax;
 
 use self::err::TypeCheckError::*;
-use crate::syntax::ann::{ann, Ann};
+use crate::syntax::span::{ann, Ann};
 
 pub use self::{err::TypeCheckError, legacy::ctx::Ctx};
 

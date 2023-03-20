@@ -3,7 +3,7 @@ use crate::{
     statics::{
         legacy::ctx::*, err::TypeCheckError, resolve::NameResolveError, Eqv, TypeCheck,
     },
-    syntax::ann::{ann, Ann, AnnHolder, AnnInfo},
+    syntax::span::{ann, Ann, AnnHolder, AnnInfo},
     syntax::binder::*,
 };
 use std::collections::HashMap;

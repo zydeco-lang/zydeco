@@ -1,7 +1,7 @@
-pub mod ann;
+pub mod span;
 pub mod env;
 
-pub use ann::{Ann, AnnInfo};
+pub use span::{Ann, AnnInfo};
 use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
 
@@ -58,7 +58,7 @@ pub mod binder {
                     self.0.hash(state);
                 }
             }
-            impl crate::syntax::ann::AnnHolder for $Var {
+            impl crate::syntax::span::AnnHolder for $Var {
                 fn ann(&self) -> &AnnInfo {
                     &self.1
                 }

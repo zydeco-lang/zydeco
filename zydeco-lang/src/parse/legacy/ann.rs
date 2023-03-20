@@ -1,4 +1,4 @@
-use crate::syntax::ann::{AnnHolder, AnnInfo};
+use crate::syntax::span::{AnnHolder, AnnInfo};
 use super::syntax::{Codata, Compute, Data, Declare, Program, Type, Value};
 
 impl AnnHolder for Program {
