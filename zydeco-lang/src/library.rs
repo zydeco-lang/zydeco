@@ -1,5 +1,5 @@
-pub mod builtins;
-mod impls;
-pub mod linker;
-pub mod declarations;
-pub mod next;
+mod legacy;
+pub mod syntax;
+mod link;
+
+pub use legacy::{builtins, declarations, linker};
