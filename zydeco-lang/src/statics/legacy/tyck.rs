@@ -1,14 +1,24 @@
 use crate::{
     parse::legacy::syntax::*,
-    statics::{
-        err::TypeCheckError, legacy::ctx::*, resolve::NameResolveError, Eqv,
-        TypeCheck,
-    },
+    statics::{err::TypeCheckError, legacy::ctx::*, resolve::NameResolveError},
     syntax::binder::*,
     syntax::span::{span, Span, SpanHolder, SpanInfo},
 };
 use std::collections::HashMap;
 use TypeCheckError::*;
+
+pub trait TypeCheck {
+    type Out: Eqv;
+    fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Span<TypeCheckError>>;
+    fn ana(
+        &self, typ: &Self::Out, ctx: &Ctx,
+    ) -> Result<(), Span<TypeCheckError>> {
+        let typ_syn = self.syn(ctx)?;
+        typ.eqv(&typ_syn).ok_or_else(|| {
+            span(0, 0).make(ErrStr(format!("Subsumption failed")))
+        })
+    }
+}
 
 impl TypeCheck for Program {
     type Out = ();
@@ -16,7 +26,7 @@ impl TypeCheck for Program {
     fn syn(&self, ctx: &Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
         let mut ctx = ctx.clone();
         for decl in &self.decls {
-            ctx.decl(decl).map_err(|e| self.ann.make(NameResolve(e)))?;
+            ctx.decl(decl).map_err(|e| e.map(NameResolve))?;
         }
         ctx.tyck_types()?;
         ctx.tyck_definitions()?;
@@ -675,7 +685,6 @@ impl TypeCheck for Type {
                 Err(self.ann.make(TypeCheckError::NameResolve(
                     NameResolveError::UnknownIdentifier {
                         name: x.name().to_owned(),
-                        ann: self.ann.clone(),
                     },
                 ))),
                 |Arity(params, out)| {
@@ -763,6 +772,10 @@ impl TypeCheck for Type {
             }
         }
     }
+}
+
+pub trait Eqv {
+    fn eqv(&self, other: &Self) -> Option<()>;
 }
 
 impl Eqv for () {

@@ -1,29 +1,28 @@
-use crate::syntax::SpanInfo;
 use std::fmt;
 
 #[derive(Clone, Debug)]
 pub enum NameResolveError {
-    DuplicateDeclaration { name: String, ann: SpanInfo },
-    EmptyDeclaration { name: String, ann: SpanInfo },
-    UnknownIdentifier { name: String, ann: SpanInfo },
+    DuplicateDeclaration { name: String },
+    EmptyDeclaration { name: String },
+    UnknownIdentifier { name: String },
 }
 use NameResolveError::*;
 
 impl fmt::Display for NameResolveError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DuplicateDeclaration { name, ann } => {
-                write!(f, "{} declared multiple times ({})", name, ann)
+            DuplicateDeclaration { name } => {
+                write!(f, "{} declared multiple times", name)
             }
-            EmptyDeclaration { name, ann } => {
+            EmptyDeclaration { name } => {
                 write!(
                     f,
-                    "{} declared with neither type signature nor binding ({})",
-                    name, ann
+                    "{} declared with neither type signature nor binding",
+                    name
                 )
             }
-            UnknownIdentifier { name, ann } => {
-                write!(f, "Unknown identifier {} ({})", name, ann)
+            UnknownIdentifier { name } => {
+                write!(f, "Unknown identifier {}", name)
             }
         }
     }

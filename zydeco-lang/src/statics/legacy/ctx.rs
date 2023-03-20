@@ -1,6 +1,7 @@
+use super::tyck::TypeCheck;
 use crate::{
     parse::legacy::syntax::*,
-    statics::{err::TypeCheckError, resolve::*, TypeCheck},
+    statics::{err::TypeCheckError, resolve::*},
     syntax::{binder::*, Span},
 };
 use indexmap::IndexMap;
@@ -37,16 +38,15 @@ impl Ctx {
     pub fn lookup(&self, x: &TermV) -> Option<&Type> {
         self.vmap.get(x)
     }
-    pub fn decl(&mut self, d: &Declare) -> Result<(), NameResolveError> {
+    pub fn decl(&mut self, d: &Declare) -> Result<(), Span<NameResolveError>> {
         match d {
             Declare::Data(data @ Data { name, params, ann, .. }) => {
                 self.data.insert(name.clone(), data.clone()).map_or(
                     Ok(()),
                     |_| {
-                        Err(NameResolveError::DuplicateDeclaration {
+                        Err(ann.make(NameResolveError::DuplicateDeclaration {
                             name: name.name().to_string(),
-                            ann: ann.clone(),
-                        })
+                        }))
                     },
                 )?;
                 self.tmap.insert(
@@ -62,10 +62,9 @@ impl Ctx {
                 self.coda.insert(name.clone(), codata.clone()).map_or(
                     Ok(()),
                     |_| {
-                        Err(NameResolveError::DuplicateDeclaration {
+                        Err(ann.make(NameResolveError::DuplicateDeclaration {
                             name: name.name().to_string(),
-                            ann: ann.clone(),
-                        })
+                        }))
                     },
                 )?;
                 self.tmap.insert(
@@ -94,12 +93,10 @@ impl Ctx {
                 );
                 Ok(())
             }
-            Declare::Define { name, ty: None, def: None, ann, .. } => {
-                Err(NameResolveError::EmptyDeclaration {
+            Declare::Define { name, ty: None, def: None, ann, .. } => Err(ann
+                .make(NameResolveError::EmptyDeclaration {
                     name: name.name().to_owned(),
-                    ann: ann.clone(),
-                })
-            }
+                })),
         }
     }
     fn add_type_param(&mut self, x: TypeV, k: Kind) {

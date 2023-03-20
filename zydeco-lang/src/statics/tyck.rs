@@ -1,43 +1,23 @@
-#![allow(unused)]
+use super::{
+    err::TypeCheckError,
+    syntax::{Kind, RcType, Span, TermV, TypeArity, TypeV, span::SpanHolder},
+};
+use TypeCheckError::*;
 
-use im::HashMap as ImHashMap;
-
-use super::syntax::{Kind, Span, TermV, TypeArity, TypeV, RcType};
-
-use super::{err::TypeCheckError, Eqv, TypeCheck};
-
-pub struct Ctx {
-    pub type_ctx: ImHashMap<TypeV, TypeArity<Kind>>,
-    pub term_ctx: ImHashMap<TermV, RcType>,
-}
-
-impl Ctx {
-    pub fn new() -> Self {
-        Self { type_ctx: ImHashMap::new(), term_ctx: ImHashMap::new() }
-    }
-
-    pub fn extend_type(&mut self, name: TypeV, kind: TypeArity<Kind>) {
-        self.type_ctx.insert(name, kind);
-    }
-
-    pub fn extend_term(&mut self, name: TermV, typ: RcType) {
-        self.term_ctx.insert(name, typ);
-    }
-
-    pub fn lookup_type(&self, name: &TypeV) -> Option<&TypeArity<Kind>> {
-        self.type_ctx.get(name)
-    }
-
-    pub fn lookup_term(&self, name: &TermV) -> Option<&RcType> {
-        self.term_ctx.get(name)
+pub trait TypeCheck: SpanHolder {
+    type Ctx;
+    type Out: Eqv;
+    fn syn(&self, ctx: &Self::Ctx) -> Result<Self::Out, Span<TypeCheckError>>;
+    fn ana(
+        &self, typ: &Self::Out, ctx: &Self::Ctx,
+    ) -> Result<(), Span<TypeCheckError>> {
+        let typ_syn = self.syn(ctx)?;
+        typ.eqv(&typ_syn).ok_or_else(|| {
+            self.span().make(ErrStr(format!("Subsumption failed")))
+        })
     }
 }
 
-impl Clone for Ctx {
-    fn clone(&self) -> Self {
-        Self {
-            type_ctx: self.type_ctx.clone(),
-            term_ctx: self.term_ctx.clone(),
-        }
-    }
+pub trait Eqv {
+    fn eqv(&self, other: &Self) -> Option<()>;
 }
