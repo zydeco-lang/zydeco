@@ -73,16 +73,11 @@ impl Debug for Env {
                 EnvStack::Entry(map, prev) => {
                     v.extend(
                         map.into_iter().map(|(k, _v)| format!("[{}: ...]", k)),
-                        // .map(|(k, v)| format!("[{}: {:?}]", k.name(), v)),
                     );
                     ptr = prev.as_ref();
                 }
             }
         }
-        if f.alternate() {
-            write!(f, "{:#?}", v)
-        } else {
-            write!(f, "{:?}", v)
-        }
+        v.fmt(f)
     }
 }

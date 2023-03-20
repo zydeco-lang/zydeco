@@ -205,7 +205,7 @@ impl<'rt> Runtime<'rt> {
                         .into_iter()
                         .find(|(pat, ..)| pat == ctor)
                         .ok_or_else(|| {
-                            Exit::Err(format!("Ctor {:?} mismatch", ctor))
+                            Exit::Err(format!("Ctor {} mismatch", ctor))
                         })?;
                     for (var, arg) in vars.iter().zip(args.iter()) {
                         self.insert(var.clone(), arg.clone())?;
@@ -261,7 +261,7 @@ impl<'rt> Runtime<'rt> {
                     // println!();
                     // println!(":: {:#?}", self.stack);
                     // println!();
-                    // println!("|> {:?}", comp);
+                    // println!("|> {:#?}", comp);
                     // println!();
                     // println!();
                     // println!();

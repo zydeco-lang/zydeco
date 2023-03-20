@@ -6,17 +6,6 @@ use std::{
     rc::Rc,
 };
 
-#[derive(Clone, PartialEq, Eq)]
-pub struct SpanInfo {
-    pub span1: (Cursor1, Cursor1),
-    pub span2: OnceCell<(Cursor2, Cursor2)>,
-    pub path: OnceCell<Rc<PathBuf>>,
-}
-
-pub fn ann(l: usize, r: usize) -> SpanInfo {
-    SpanInfo { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
-}
-
 #[derive(Clone, Debug)]
 pub struct FileInfo {
     newlines: Vec<usize>,
@@ -60,6 +49,17 @@ impl FileInfo {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpanInfo {
+    pub span1: (Cursor1, Cursor1),
+    pub span2: OnceCell<(Cursor2, Cursor2)>,
+    pub path: OnceCell<Rc<PathBuf>>,
+}
+
+pub fn ann(l: usize, r: usize) -> SpanInfo {
+    SpanInfo { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
+}
+
 impl SpanInfo {
     pub fn make<T>(&self, inner: T) -> Span<T> {
         Span { inner, info: self.clone() }
@@ -73,13 +73,13 @@ impl SpanInfo {
     }
 }
 
-impl Debug for SpanInfo {
+impl Display for SpanInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (l, r) = self.span1;
         if let Some(path) = self.path.get() {
             write!(f, "{}", path.display())?;
             if let Some((l2, r2)) = self.span2.get() {
-                write!(f, ":{l2:?} - {r2:?}",)?;
+                write!(f, ":{l2} - {r2}",)?;
             } else {
                 write!(f, ":{l}-{r}",)?;
             }
@@ -92,12 +92,12 @@ impl Debug for SpanInfo {
 
 pub type Cursor1 = usize;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cursor2 {
     pub line: usize,
     pub column: usize,
 }
-impl Debug for Cursor2 {
+impl Display for Cursor2 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Cursor2 { line, column } = self;
         write!(f, "{line}:{column}",)
@@ -157,7 +157,7 @@ impl<T: Hash> Hash for Span<T> {
 
 impl<T: Display> Display for Span<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({:?})", self.inner, self.info)
+        write!(f, "{} ({})", self.inner, self.info)
     }
 }
 

@@ -49,7 +49,11 @@ impl fmt::Display for TypeCheckError {
                 write!(f, "Need annotation for {}", content)
             }
             InconsistentBranches(types) => {
-                write!(f, "Branches have mismatched types: {:?}", types)
+                writeln!(f, "Branches have mismatched types:")?;
+                for t in types {
+                    writeln!(f, "\t- {}, ", t)?;
+                }
+                Ok(())
             }
             NameResolve(nr) => write!(f, "{}", nr),
             WrongMain { found } => write!(
