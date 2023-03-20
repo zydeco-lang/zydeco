@@ -1,5 +1,5 @@
-// use lalrpop_util::lalrpop_mod;
-// lalrpop_mod!(pub parser, "/parse/next/parser.rs");
+use lalrpop_util::lalrpop_mod;
+lalrpop_mod!(pub parser, "/parse/next/parser.rs");
 pub use crate::{syntax::Ann, syntax::*};
 use zydeco_derive::EnumGenerator;
 
@@ -8,7 +8,6 @@ use zydeco_derive::EnumGenerator;
 pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
-
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeApp(pub TT, pub TT);
