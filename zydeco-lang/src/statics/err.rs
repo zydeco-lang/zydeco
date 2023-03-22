@@ -9,6 +9,7 @@ pub enum TypeCheckError {
     TypeExpected { context: String, expected: String, found: Type },
     ArityMismatch { context: String, expected: usize, found: usize },
     NeedAnnotation { content: String },
+    Subsumption,
     InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
     WrongMain { found: Type },
@@ -48,6 +49,10 @@ impl fmt::Display for TypeCheckError {
             NeedAnnotation { content } => {
                 write!(f, "Need annotation for {}", content)
             }
+            Subsumption => write!(
+                f,
+                "Subsumption failed.",
+            ),
             InconsistentBranches(types) => {
                 writeln!(f, "Branches have mismatched types:")?;
                 for t in types {

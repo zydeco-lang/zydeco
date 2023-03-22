@@ -14,9 +14,7 @@ pub trait TypeCheck {
         &self, typ: &Self::Out, ctx: &Ctx,
     ) -> Result<(), Span<TypeCheckError>> {
         let typ_syn = self.syn(ctx)?;
-        typ.eqv(&typ_syn).ok_or_else(|| {
-            span(0, 0).make(ErrStr(format!("Subsumption failed")))
-        })
+        typ.eqv(&typ_syn).ok_or_else(|| span(0, 0).make(Subsumption))
     }
 }
 
