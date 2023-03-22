@@ -1,0 +1,56 @@
+data Tree A : VType where
+  | Fork(Tree A, Tree A)
+  | Final(A)
+end
+
+data Choice B : CType where
+  | L(U B)
+  | R(U B)
+end
+
+data Path A : VType where
+  | Nil()
+  | Cons(A, Path A)
+end
+
+let beep : Choice (U OS -> OS) = L({ fn (k) ->
+  ! write_line "0" k
+});
+let boop : Choice (U OS -> OS) = R({ fn (k) ->
+  ! write_line "1" k
+});
+
+let tree : Tree String = Fork(Fork(Final("x"), Final("o")), Final("x"));
+let path : Path (Choice (U OS -> OS)) = Cons(beep, Cons(boop, Nil()));
+
+let rec walk : Tree String -> Path (Choice (U OS -> OS)) -> OS = fn (t, p) -> (
+  match t
+  | Final(res) -> (
+    match p
+    | Nil() -> (
+      ! write_line res {
+        do correct <- ! str_eq res "o";
+        match correct
+        | True() -> ! exit 0
+        | False() -> ! exit 1
+        end
+      }
+    )
+    | Cons(_, _) -> ! exit 2
+    end
+  )
+  | Fork(tl, tr) -> (
+    match p
+    | Nil() -> ! exit 3
+    | Cons(c, p') -> (
+      match c
+      | L(k) -> ! k { ! walk tl p' }
+      | R(k) -> ! k { ! walk tr p' }
+      end
+    )
+    end
+  )
+  end
+);
+
+! walk tree path

@@ -147,6 +147,7 @@ mod batch_tests {
     mk_batch_test!(btest14, "llists.zydeco");
     mk_batch_test!(btest15, "fn-opt.zy");
     mk_batch_test!(btest16, "abort.zy");
+    mk_batch_test!(btest18, "choice.zy");
 }
 mod pure_tests {
     use super::*;
