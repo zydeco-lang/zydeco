@@ -4,7 +4,6 @@ mod err;
 mod legacy;
 mod elab;
 mod tyck;
-mod ctx;
 
 pub use self::{
     err::TypeCheckError,

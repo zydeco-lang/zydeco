@@ -35,16 +35,16 @@ pub mod binder {
             #[derive(Clone, Debug)]
             pub struct $Var(String, SpanInfo);
             impl $Var {
-                pub fn new(s: String, ann: SpanInfo) -> Self {
-                    Self(s, ann)
+                pub fn new(s: String, span: SpanInfo) -> Self {
+                    Self(s, span)
                 }
                 pub fn name(&self) -> &str {
                     &self.0
                 }
             }
             impl From<Span<String>> for $Var {
-                fn from(ann: Span<String>) -> Self {
-                    Self(ann.inner, ann.info)
+                fn from(span: Span<String>) -> Self {
+                    Self(span.inner, span.info)
                 }
             }
             impl std::cmp::PartialEq for $Var {

@@ -107,6 +107,11 @@ impl Display for Cursor2 {
 pub trait SpanView {
     fn span(&self) -> &SpanInfo;
 }
+impl<T: SpanView> SpanView for Rc<T> {
+    fn span(&self) -> &SpanInfo {
+        self.as_ref().span()
+    }
+}
 
 pub trait SpanHolder {
     fn span_map_mut<F>(&mut self, f: F)

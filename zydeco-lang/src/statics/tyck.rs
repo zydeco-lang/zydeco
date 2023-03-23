@@ -1,28 +1,35 @@
 #![allow(unused)]
 
 use super::{
-    ctx::Ctx,
     err::TypeCheckError,
     syntax::{span::SpanView, *},
 };
+use im::HashMap as ImHashMap;
+use std::rc::Rc;
 use TypeCheckError::*;
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Ctx {
+    pub type_ctx: ImHashMap<TypeV, TypeArity<Kind>>,
+    pub term_ctx: ImHashMap<TermV, TypeApp<TCtor, RcType>>,
+}
 
 pub trait TypeCheck: SpanView + Sized {
     type Ctx: Default;
     type Out: Eqv;
     fn syn_step(
-        self, ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, Self), Self::Out>, Span<TypeCheckError>>;
+        &self, ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>>;
     fn ana_step(
-        self, typ: Self::Out, ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, Self), Self::Out>, Span<TypeCheckError>> {
+        &self, typ: Self::Out, ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         let span = self.span().clone();
         let typ_syn = self.syn(ctx)?;
         typ_syn.eqv(&typ, || span.make(Subsumption))?;
         Ok(Step::Done(typ))
     }
     fn tyck(
-        mut step: Step<(Self::Ctx, Self), Self::Out>,
+        mut step: Step<(Self::Ctx, &Self), Self::Out>,
     ) -> Result<Self::Out, Span<TypeCheckError>> {
         loop {
             match step {
@@ -38,11 +45,11 @@ pub trait TypeCheck: SpanView + Sized {
             }
         }
     }
-    fn syn(self, ctx: Self::Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
+    fn syn(&self, ctx: Self::Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
         Self::tyck(self.syn_step(ctx)?)
     }
     fn ana(
-        self, typ: Self::Out, ctx: Self::Ctx,
+        &self, typ: Self::Out, ctx: Self::Ctx,
     ) -> Result<(), Span<TypeCheckError>> {
         Self::tyck(self.ana_step(typ, ctx)?).map(|_| ())
     }
@@ -54,14 +61,45 @@ pub enum Step<In, Out> {
     Done(Out),
 }
 
-impl TypeCheck for Span<Module> {
+impl TypeCheck for Rc<Span<Module>> {
     type Ctx = Ctx;
-
     type Out = ();
 
     fn syn_step(
-        self, ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, Self), Self::Out>, Span<TypeCheckError>> {
+        &self, mut ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        let Module { name, data, codata, define, entry } = self.inner_ref();
+        for Define { name, def } in define {
+            let def = def.syn(ctx.clone())?;
+            ctx.term_ctx.insert(name.clone(), def);
+        }
+        let ty = entry.syn(ctx)?;
+        match ty.tctor {
+            TCtor::OS => Ok(()),
+            _ => Err(self.span().make(WrongMain { found: todo!() })),
+        }?;
+        Ok(Step::Done(()))
+    }
+}
+
+impl TypeCheck for Span<TermValue> {
+    type Ctx = Ctx;
+    type Out = TypeApp<TCtor, RcType>;
+
+    fn syn_step(
+        &self, ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        todo!()
+    }
+}
+
+impl TypeCheck for Span<TermComputation> {
+    type Ctx = Ctx;
+    type Out = TypeApp<TCtor, RcType>;
+
+    fn syn_step(
+        &self, ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         todo!()
     }
 }
@@ -117,7 +155,9 @@ impl Eqv for Type {
     fn eqv(
         &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
-        self.type_app_form().eqv(other.type_app_form(), f)
+        self.type_app_form().eqv(other.type_app_form(), f.clone())?;
+        bool_test(self.kind_form() == other.kind_form(), f)?;
+        Ok(())
     }
 }
 
@@ -155,6 +195,12 @@ impl Type {
                 ty.inner_ref().type_app_form()
             }
             Type::TypeApp(tapp) => tapp,
+        }
+    }
+    fn kind_form(&self) -> Option<&Kind> {
+        match self {
+            Type::TypeAnn(TypeAnn { ty: _, kd }) => Some(kd),
+            Type::TypeApp(_) => None,
         }
     }
 }
