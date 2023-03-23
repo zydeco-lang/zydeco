@@ -2,7 +2,7 @@
 
 use super::{
     err::TypeCheckError,
-    syntax::{span::SpanView, *},
+    syntax::{span::SpanView, *}, ctx::Ctx,
 };
 use TypeCheckError::*;
 
@@ -51,6 +51,18 @@ pub enum Step<In, Out> {
     SynMode(In),
     AnaMode(In, Out),
     Done(Out),
+}
+
+impl TypeCheck for Span<Module> {
+    type Ctx = Ctx;
+
+    type Out = ();
+
+    fn syn_step(
+        self, ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, Self), Self::Out>, Span<TypeCheckError>> {
+        todo!()
+    }
 }
 
 pub trait Eqv {

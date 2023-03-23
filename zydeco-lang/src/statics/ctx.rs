@@ -6,7 +6,7 @@ use super::{
 };
 use im::HashMap as ImHashMap;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Ctx {
     pub type_ctx: ImHashMap<TypeV, TypeArity<Kind>>,
     pub term_ctx: ImHashMap<TermV, RcType>,
