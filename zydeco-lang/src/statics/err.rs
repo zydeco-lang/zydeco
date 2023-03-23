@@ -49,10 +49,7 @@ impl fmt::Display for TypeCheckError {
             NeedAnnotation { content } => {
                 write!(f, "Need annotation for {}", content)
             }
-            Subsumption => write!(
-                f,
-                "Subsumption failed.",
-            ),
+            Subsumption => write!(f, "Subsumption failed.",),
             InconsistentBranches(types) => {
                 writeln!(f, "Branches have mismatched types:")?;
                 for t in types {

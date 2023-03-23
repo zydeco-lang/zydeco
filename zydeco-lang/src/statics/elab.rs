@@ -200,7 +200,7 @@ impl Type {
             Type::TypeApp(t) => {
                 let TypeApp { tctor, mut args } = t;
                 args.push(t2);
-                TypeApp{ tctor, args }.into()
+                TypeApp { tctor, args }.into()
             }
             Type::TypeAnn(t) => {
                 let TypeAnn { ty, kd } = t;

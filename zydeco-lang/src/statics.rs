@@ -6,4 +6,7 @@ mod elab;
 mod tyck;
 mod ctx;
 
-pub use self::{err::TypeCheckError, legacy::{ctx::Ctx, tyck::TypeCheck}};
+pub use self::{
+    err::TypeCheckError,
+    legacy::{ctx::Ctx, tyck::TypeCheck},
+};

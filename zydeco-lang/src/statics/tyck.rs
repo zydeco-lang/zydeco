@@ -1,8 +1,9 @@
 #![allow(unused)]
 
 use super::{
+    ctx::Ctx,
     err::TypeCheckError,
-    syntax::{span::SpanView, *}, ctx::Ctx,
+    syntax::{span::SpanView, *},
 };
 use TypeCheckError::*;
 
@@ -150,9 +151,10 @@ impl Kind {
 impl Type {
     fn type_app_form(&self) -> &TypeApp<TCtor, RcType> {
         match self {
-            Type::TypeAnn(TypeAnn { ty, kd: _ }) => ty.inner_ref().type_app_form(),
+            Type::TypeAnn(TypeAnn { ty, kd: _ }) => {
+                ty.inner_ref().type_app_form()
+            }
             Type::TypeApp(tapp) => tapp,
         }
     }
 }
-
