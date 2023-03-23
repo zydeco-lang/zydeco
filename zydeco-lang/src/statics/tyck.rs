@@ -96,6 +96,14 @@ impl TypeCheck for Span<&TypeApp<TCtor, RcType>> {
                         },
                     )))?
                 };
+                bool_test(self.inner_ref().args.len() == params.len(), || {
+                    self.span().make(ArityMismatch {
+                        context: format!("type"),
+                        // context: format!("{}", self),
+                        expected: params.len(),
+                        found: self.inner_ref().args.len(),
+                    })
+                })?;
                 todo!()
             }
             TCtor::Thunk => todo!(),
