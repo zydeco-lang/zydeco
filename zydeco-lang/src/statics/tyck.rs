@@ -1,12 +1,10 @@
 use super::{
     err::TypeCheckError,
-    syntax::{
-        span::SpanHolder, Kind, RcType, Span, TermV, Type, TypeArity, TypeV,
-    },
+    syntax::{span::SpanView, Span},
 };
 use TypeCheckError::*;
 
-pub trait TypeCheck: SpanHolder + Sized {
+pub trait TypeCheck: SpanView + Sized {
     type Ctx: Default;
     type Out: Eqv;
     fn syn_step(
@@ -37,9 +35,7 @@ pub trait TypeCheck: SpanHolder + Sized {
             }
         }
     }
-    fn syn(
-        self, ctx: Self::Ctx,
-    ) -> Result<Self::Out, Span<TypeCheckError>> {
+    fn syn(self, ctx: Self::Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
         Self::tyck(self.syn_step(ctx)?)
     }
     fn ana(

@@ -2,7 +2,7 @@ use crate::{
     parse::legacy::syntax::*,
     statics::{err::TypeCheckError, legacy::ctx::*, resolve::NameResolveError},
     syntax::binder::*,
-    syntax::span::{span, Span, SpanHolder, SpanInfo},
+    syntax::span::{span, Span, SpanView, SpanInfo},
 };
 use std::collections::HashMap;
 use TypeCheckError::*;

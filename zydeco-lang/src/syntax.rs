@@ -58,10 +58,12 @@ pub mod binder {
                     self.0.hash(state);
                 }
             }
-            impl crate::syntax::span::SpanHolder for $Var {
+            impl crate::syntax::span::SpanView for $Var {
                 fn span(&self) -> &SpanInfo {
                     &self.1
                 }
+            }
+            impl crate::syntax::span::SpanHolder for $Var {
                 fn span_map_mut<F>(&mut self, f: F)
                 where
                     F: Fn(&mut SpanInfo) + Clone,

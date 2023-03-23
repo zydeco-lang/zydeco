@@ -1,10 +1,16 @@
 use super::syntax::{Codata, Compute, Data, Declare, Program, Type, Value};
-use crate::syntax::span::{SpanHolder, SpanInfo};
+use crate::{
+    library::syntax::span::SpanView,
+    syntax::span::{SpanHolder, SpanInfo},
+};
 
-impl SpanHolder for Program {
+impl SpanView for Program {
     fn span(&self) -> &SpanInfo {
         &self.ann
     }
+}
+
+impl SpanHolder for Program {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
@@ -17,7 +23,7 @@ impl SpanHolder for Program {
     }
 }
 
-impl SpanHolder for Declare {
+impl SpanView for Declare {
     fn span(&self) -> &SpanInfo {
         match self {
             Declare::Data(Data { ann, .. }) => ann,
@@ -25,6 +31,9 @@ impl SpanHolder for Declare {
             Declare::Define { ann, .. } => ann,
         }
     }
+}
+
+impl SpanHolder for Declare {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
@@ -66,10 +75,12 @@ impl SpanHolder for Declare {
     }
 }
 
-impl SpanHolder for Type {
+impl SpanView for Type {
     fn span(&self) -> &SpanInfo {
         &self.ann
     }
+}
+impl SpanHolder for Type {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
@@ -81,7 +92,7 @@ impl SpanHolder for Type {
     }
 }
 
-impl SpanHolder for Value {
+impl SpanView for Value {
     fn span(&self) -> &SpanInfo {
         match self {
             Value::TermAnn(_, _, a) => a,
@@ -93,6 +104,9 @@ impl SpanHolder for Value {
             Value::Char(_, a) => a,
         }
     }
+}
+
+impl SpanHolder for Value {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
@@ -131,7 +145,7 @@ impl SpanHolder for Value {
     }
 }
 
-impl SpanHolder for Compute {
+impl SpanView for Compute {
     fn span(&self) -> &SpanInfo {
         match self {
             Compute::TermAnn(_, _, a) => a,
@@ -147,6 +161,9 @@ impl SpanHolder for Compute {
             Compute::CoApp { ann, .. } => ann,
         }
     }
+}
+
+impl SpanHolder for Compute {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,

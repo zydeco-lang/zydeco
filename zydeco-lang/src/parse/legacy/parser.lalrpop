@@ -287,7 +287,6 @@ extern {
         "UpperId" => Tok::UpperIdent(<&'input str>),
         "LowerId" => Tok::LowerIdent(<&'input str>),
 
-        "module" => Tok::Module,
         "where" => Tok::Where,
         "end" => Tok::End,
         "pub" => Tok::Pub,

@@ -104,8 +104,11 @@ impl Display for Cursor2 {
     }
 }
 
-pub trait SpanHolder {
+pub trait SpanView {
     fn span(&self) -> &SpanInfo;
+}
+
+pub trait SpanHolder {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone;
@@ -167,10 +170,13 @@ impl<T: Display> Display for Span<T> {
     }
 }
 
-impl<T: SpanHolder> SpanHolder for Span<T> {
+impl<T> SpanView for Span<T> {
     fn span(&self) -> &SpanInfo {
         &self.info
     }
+}
+
+impl<T: SpanHolder> SpanHolder for Span<T> {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
