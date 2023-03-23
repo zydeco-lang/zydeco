@@ -95,7 +95,7 @@ impl KindT for Kind {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeArity<K: KindT> {
-    pub args: Vec<K>,
+    pub params: Vec<K>,
     pub kd: K,
 }
 impl<K: KindT> KindT for TypeArity<K> {}

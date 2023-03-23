@@ -1,7 +1,7 @@
 use super::tyck::TypeCheck;
 use crate::{
     parse::legacy::syntax::*,
-    statics::{err::TypeCheckError, resolve::*},
+    statics::{legacy::err::TypeCheckError, resolve::*},
     syntax::{binder::*, Span},
 };
 use indexmap::IndexMap;

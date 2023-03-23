@@ -1,6 +1,9 @@
 use crate::{
     parse::legacy::syntax::*,
-    statics::{err::TypeCheckError, legacy::ctx::*, resolve::NameResolveError},
+    statics::{
+        legacy::{ctx::*, err::TypeCheckError},
+        resolve::NameResolveError,
+    },
     syntax::binder::*,
     syntax::span::{span, Span, SpanInfo, SpanView},
 };
@@ -147,7 +150,7 @@ impl TypeCheck for Compute {
             Compute::Let { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();
                 let t: Type = if let Some(ty) = ty {
-                    ty.syn(&ctx)?.ensure(Kind::VType, "let", &ann)?;
+                    ty.syn(&ctx)?.ensure_kind(Kind::VType, "let", &ann)?;
                     def.ana(ty, &ctx)?;
                     ty.as_ref().clone()
                 } else {
@@ -159,7 +162,7 @@ impl TypeCheck for Compute {
             Compute::Do { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();
                 let te = if let Some(ty) = ty {
-                    ty.syn(&ctx)?.ensure(Kind::VType, "do", ann)?;
+                    ty.syn(&ctx)?.ensure_kind(Kind::VType, "do", ann)?;
                     def.ana(
                         &Type {
                             ctor: TCtor::Ret,
@@ -207,7 +210,7 @@ impl TypeCheck for Compute {
                         content: format!("lambda parameter \"{}\"", x),
                     })
                 })?;
-                t.syn(&ctx)?.ensure(
+                t.syn(&ctx)?.ensure_kind(
                     Kind::VType,
                     "argument to a function",
                     ann,
@@ -355,7 +358,7 @@ impl TypeCheck for Compute {
             Compute::Let { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();
                 let t = if let Some(ty) = ty {
-                    ty.syn(&ctx)?.ensure(Kind::VType, "let", ann)?;
+                    ty.syn(&ctx)?.ensure_kind(Kind::VType, "let", ann)?;
                     def.ana(ty, &ctx)?;
                     ty.as_ref().clone()
                 } else {
@@ -368,7 +371,7 @@ impl TypeCheck for Compute {
             Compute::Do { binding: (x, ty, def), body, ann } => {
                 let mut ctx = ctx.clone();
                 let te = if let Some(ty) = ty {
-                    ty.syn(&ctx)?.ensure(Kind::VType, "do", ann)?;
+                    ty.syn(&ctx)?.ensure_kind(Kind::VType, "do", ann)?;
                     def.ana(
                         &Type {
                             ctor: TCtor::Ret,
@@ -433,13 +436,13 @@ impl TypeCheck for Compute {
                         found: args.len(),
                     }))?
                 };
-                t1.syn(&ctx)?.ensure(
+                t1.syn(&ctx)?.ensure_kind(
                     Kind::VType,
                     "argument to a function",
                     ann,
                 )?;
                 if let Some(t) = t {
-                    t.syn(&ctx)?.ensure(
+                    t.syn(&ctx)?.ensure_kind(
                         Kind::VType,
                         "argument to a function",
                         ann,
@@ -453,7 +456,11 @@ impl TypeCheck for Compute {
                     })?;
                 }
                 ctx.push(x.clone(), t1.clone());
-                t2.syn(&ctx)?.ensure(Kind::CType, "body of a function", ann)?;
+                t2.syn(&ctx)?.ensure_kind(
+                    Kind::CType,
+                    "body of a function",
+                    ann,
+                )?;
                 body.ana(t2, &ctx)
             }
             Compute::Rec { arg: (x, ty), body, ann, .. } => {
@@ -707,7 +714,7 @@ impl TypeCheck for Type {
                         found: self.args.len(),
                     })
                 })?;
-                self.args[0].syn(ctx)?.ensure(
+                self.args[0].syn(ctx)?.ensure_kind(
                     Kind::VType,
                     "type argument to Ret",
                     &span(0, 0),
@@ -722,7 +729,7 @@ impl TypeCheck for Type {
                         found: self.args.len(),
                     })
                 })?;
-                self.args[0].syn(ctx)?.ensure(
+                self.args[0].syn(ctx)?.ensure_kind(
                     Kind::CType,
                     "type argument to Thunk",
                     &span(0, 0),
@@ -737,12 +744,12 @@ impl TypeCheck for Type {
                         found: self.args.len(),
                     }))
                 } else {
-                    self.args[0].syn(ctx)?.ensure(
+                    self.args[0].syn(ctx)?.ensure_kind(
                         Kind::VType,
                         "domain of a function type",
                         &span(0, 0),
                     )?;
-                    self.args[1].syn(ctx)?.ensure(
+                    self.args[1].syn(ctx)?.ensure_kind(
                         Kind::CType,
                         "codomain of a function type",
                         &span(0, 0),
@@ -816,19 +823,19 @@ impl Eqv for Type {
     }
 }
 
-// impl Kind {
-//     fn ensure(
-//         &self, kind: Kind, context: &str, ann: &SpanInfo,
-//     ) -> Result<(), Span<TypeCheckError>> {
-//         self.eqv(&kind, || {
-//             ann.make(TypeCheckError::KindMismatch {
-//                 context: context.to_owned(),
-//                 expected: kind,
-//                 found: *self,
-//             })
-//         })
-//     }
-// }
+impl Kind {
+    fn ensure_kind(
+        &self, kind: Kind, context: &str, ann: &SpanInfo,
+    ) -> Result<(), Span<TypeCheckError>> {
+        self.eqv(&kind, || {
+            ann.make(TypeCheckError::KindMismatch {
+                context: context.to_owned(),
+                expected: kind,
+                found: *self,
+            })
+        })
+    }
+}
 
 impl Data {
     pub fn type_app(

@@ -20,8 +20,12 @@ impl TypeT for Type {}
 
 impl Type {
     pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
+        TypeApp::internal(name, args).into()
+    }
+}
+impl TypeApp<TCtor, RcType> {
+    pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
         TypeApp { tctor: TCtor::Var(TypeV::new(name.into(), span(0, 0))), args }
-            .into()
     }
 }
 
