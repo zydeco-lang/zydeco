@@ -1,9 +1,5 @@
 use crate::{
-    dynamics::{
-        self,
-        eval::{Exit, Runtime},
-        Env, ZCompute, ZValue,
-    },
+    dynamics::{self, Env, Exit, Runtime, ZCompute, ZValue},
     library::{builtins, linker},
     parse::{
         err::ParseError,
@@ -95,7 +91,7 @@ pub fn eval_os_sem_computation(
     let mut input = std::io::BufReader::new(std::io::stdin());
     let mut output = std::io::stdout();
     let mut runtime = Runtime::new(env, &mut input, &mut output, &args);
-    match dynamics::eval::eval(sem_comp, &mut runtime) {
+    match dynamics::eval(sem_comp, &mut runtime) {
         Err(Exit::ExitCode(exit_code)) => std::process::exit(exit_code),
         Err(Exit::Err(s)) => Err(s),
         Ok(_) => unreachable!(),
@@ -113,7 +109,7 @@ pub fn eval_virtual_os_computation(
     w: &mut dyn std::io::Write, args: &[String],
 ) -> Result<i32, String> {
     let mut runtime = Runtime::new(env, r, w, args);
-    match dynamics::eval::eval(m.into(), &mut runtime) {
+    match dynamics::eval(m.into(), &mut runtime) {
         Err(Exit::Err(s)) => Err(s),
         Err(Exit::ExitCode(exit_code)) => Ok(exit_code),
         Ok(_) => unreachable!(),
@@ -127,7 +123,7 @@ pub fn eval_returning_computation(
     let mut input = std::io::empty();
     let mut output = std::io::sink();
     let mut runtime = Runtime::new(env, &mut input, &mut output, &[]);
-    dynamics::eval::eval(sem_comp, &mut runtime).map_err(|e| match e {
+    dynamics::eval(sem_comp, &mut runtime).map_err(|e| match e {
         Exit::Err(s) => s,
         Exit::ExitCode(_) => unreachable!(),
     })

@@ -1,8 +1,5 @@
-pub use crate::{
-    library::syntax as ls,
-    syntax::{env::Env, *},
-};
-use enum_dispatch::enum_dispatch;
+use crate::syntax::*;
+pub use crate::{library::syntax as ls, syntax::env::Env};
 use im::Vector;
 use std::{
     fmt::Debug,
@@ -17,7 +14,6 @@ pub struct Thunk {
     pub env: Env<TermV, TermValue>,
 }
 
-#[enum_dispatch(ValueT)]
 #[derive(EnumGenerator, Clone)]
 pub enum TermValue {
     Thunk(Thunk),
