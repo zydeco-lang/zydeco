@@ -13,6 +13,7 @@ use TypeCheckError::*;
 pub struct Ctx {
     pub type_ctx: im::HashMap<TypeV, TypeArity<Kind>>,
     pub term_ctx: im::HashMap<TermV, TypeApp<TCtor, RcType>>,
+    pub type_env: im::HashMap<TypeV, TypeApp<TCtor, RcType>>,
     pub data_ctx: im::HashMap<TypeV, Data<TypeV, CtorV, RcType>>,
     pub coda_ctx: im::HashMap<TypeV, Codata<TypeV, DtorV, RcType>>,
 }
@@ -171,7 +172,53 @@ impl TypeCheck for Span<TermValue> {
     fn ana_step(
         &self, typ: Self::Out, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
-        todo!()
+        match self.inner_ref() {
+            TermValue::Thunk(Thunk(c)) => {
+                bool_test(typ.tctor == TCtor::Thunk, || {
+                    self.span().make(TypeExpected {
+                        context: format!("thunk"),
+                        expected: format!("{{a}}"),
+                        found: typ.to_owned(),
+                    })
+                })?;
+                bool_test(typ.args.len() == 1, || {
+                    self.span().make(ArityMismatch {
+                        context: format!("thunk"),
+                        expected: 1,
+                        found: typ.args.len(),
+                    })
+                })?;
+                let typ_comp =
+                    typ.args[0].inner_ref().type_app_form().to_owned();
+                c.ana(typ_comp, ctx)?;
+                Ok(Step::Done(typ))
+            }
+            TermValue::Ctor(Ctor { ctor, args }) => {
+                let TCtor::Var(tvar) = &typ.tctor else {
+                    Err(self.span().make(TypeExpected {
+                        context: format!("ctor"),
+                        expected: format!("{{a}}"),
+                        found: typ.to_owned(),
+                    }))?
+                };
+                let Data { name, params, ctors } = ctx.data_ctx.get(tvar).cloned().ok_or(self.span().make(NameResolve(
+                    NameResolveError::UnknownIdentifier {
+                        name: tvar.name().to_owned(),
+                    },
+                )))?;
+                let DataBr (ctorv, tys) = ctors
+                    .into_iter()
+                    .find(|DataBr (ctorv, tys)| ctorv == ctor)
+                    .ok_or(self.span().make(NameResolve(
+                        NameResolveError::UnknownIdentifier {
+                            name: ctor.name().to_owned(),
+                        },
+                    )))?;
+                
+                todo!()
+            },
+            v => todo!(),
+        }
     }
 }
 

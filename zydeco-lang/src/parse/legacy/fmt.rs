@@ -1,6 +1,5 @@
 use super::syntax::*;
 use crate::{
-    syntax::binder::*,
     utils::fmt::{Args, FmtArgs},
 };
 
@@ -140,27 +139,6 @@ impl FmtArgs for Compute {
     }
 }
 
-impl FmtArgs for Kind {
-    fn fmt_args(&self, _args: Args) -> String {
-        match self {
-            Kind::CType => "CompType".to_owned(),
-            Kind::VType => "ValType".to_owned(),
-        }
-    }
-}
-
-impl FmtArgs for TCtor {
-    fn fmt_args(&self, args: Args) -> String {
-        match self {
-            TCtor::Var(x) => x.fmt_args(args),
-            TCtor::Thunk => format!("Thunk"),
-            TCtor::Ret => format!("Ret"),
-            TCtor::OS => "OS".to_owned(),
-            TCtor::Fun => "Fun".to_owned(),
-        }
-    }
-}
-
 impl FmtArgs for Type {
     fn fmt_args(&self, args: Args) -> String {
         let mut s = self.ctor.fmt_args(args);
@@ -205,23 +183,3 @@ impl std::fmt::Display for Compute {
         write!(f, "{}", self.fmt_args(Args::new(2)))
     }
 }
-
-macro_rules! var_fmt {
-    ($Var:ident) => {
-        impl FmtArgs for $Var {
-            fn fmt_args(&self, _args: Args) -> String {
-                format!("{}", self.name())
-            }
-        }
-        impl std::fmt::Display for $Var {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}", self.fmt_args(Args::new(2)))
-            }
-        }
-    };
-}
-
-var_fmt!(TypeV);
-var_fmt!(CtorV);
-var_fmt!(DtorV);
-var_fmt!(TermV);

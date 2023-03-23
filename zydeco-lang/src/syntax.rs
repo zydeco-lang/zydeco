@@ -1,5 +1,6 @@
 pub mod span;
 pub mod env;
+mod fmt;
 
 pub use span::{Span, SpanInfo};
 use std::rc::Rc;
@@ -107,7 +108,7 @@ pub struct TypeAnn<Type, Kind> {
     pub ty: Type,
     pub kd: Kind,
 }
-impl<Type: TypeT, Kind> TypeT for TypeAnn<Type, Kind> {}
+impl<Type: TypeT, Kind: KindT> TypeT for TypeAnn<Type, Kind> {}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TCtor {

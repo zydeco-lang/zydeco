@@ -188,7 +188,8 @@ impl TryFrom<ps::Type> for Type {
                 let ps::Arrow(t1, t2) = t;
                 let t1 = t1.try_map(TryInto::try_into)?;
                 let t2 = t2.try_map(TryInto::try_into)?;
-                Type::internal("Fn", vec![rc!(t1), rc!(t2)])
+                TypeApp { tctor: TCtor::Fun, args: vec![rc!(t1), rc!(t2)] }
+                    .into()
             }
         })
     }

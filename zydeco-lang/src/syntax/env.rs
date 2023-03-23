@@ -1,4 +1,7 @@
-use std::hash::Hash;
+use std::{
+    hash::Hash,
+    ops::{Deref, DerefMut},
+};
 
 #[derive(Clone, Debug)]
 pub struct Env<K, V>
@@ -6,6 +9,26 @@ where
     K: Hash + Eq,
 {
     inner: im::HashMap<K, V>,
+}
+
+impl<K, V> Deref for Env<K, V>
+where
+    K: Hash + Eq,
+{
+    type Target = im::HashMap<K, V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<K, V> DerefMut for Env<K, V>
+where
+    K: Hash + Eq,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 impl<K, V> Env<K, V>
