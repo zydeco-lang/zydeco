@@ -41,7 +41,7 @@ Declaration: Declaration = {
         params,
         dtors,
     }.into(),
-    "let" <gen:GenLet> "end" => gen.into(),
+    "define" <gen:GenLet> "end" => gen.into(),
 };
 
 DataBr: DataBr<CtorV, Span<Type>> = {
@@ -70,6 +70,12 @@ Kind: Kind = {
 Type: Type = {
     <t:Box<Span<Type>>> "->" <ty:Box<Span<TypeApp>>> => {
         Arrow(t, ty).into()
+    },
+    "Forall" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
+        Forall(params, ty).into()
+    },
+    "Exists" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
+        Exists(params, ty).into()
     },
     TypeApp,
 };
@@ -116,6 +122,7 @@ TermValue: TermValue = {
         args,
     }.into(),
     <Literal> => <>.into(),
+    <ExistsVal> => <>.into(),
 };
 
 TermComputation: TermComputation = {
@@ -139,18 +146,35 @@ TermComputation: TermComputation = {
         scrut,
         arms,
     }.into(),
-    "fn" <params:TermPattern*> <body:Box<Span<TermComputation>>> => Abstraction {
+    "comatch" <arms:ComatchBr*> "end" => CoMatch {
+        arms,
+    }.into(),
+    "fn" <params:TypePattern+> "->" <body:Box<Span<TermComputation>>> => TypFun {
         params,
         body,
     }.into(),
-    "comatch" <arms:ComatchBr*> "end" => CoMatch {
-        arms,
+    "fn" <params:TermPattern+> "->" <body:Box<Span<TermComputation>>> => Abstraction {
+        params,
+        body,
+    }.into(),
+    "match" <scrut:Box<Span<TermValue>>> 
+    "|"? "exists" "(" <ty:TypeV> "," <tv:TermV> ")" "->"
+        <tc:Box<Span<TermComputation>>> 
+    "end" => MatchExists {
+        scrut,
+        ty,
+        tv,
+        tc,
     }.into(),
 };
 
 TermComputationRight: TermComputation = {
     TermComputationAtom,
     <body:Box<Span<TermComputationRight>>> <arg:Box<Span<TermValue>>> => Application {
+        body,
+        arg,
+    }.into(),
+    <body:Box<Span<TermComputationRight>>> "@" "(" <arg:Box<Span<Type>>> ")" => TypApp {
         body,
         arg,
     }.into(),
@@ -205,6 +229,13 @@ Literal: Literal = {
     <n:Int> => n.into(),
     <s:String> => s.into(),
     <c:Char> => c.into(),
+};
+
+ExistsVal: ExistsVal = {
+    "exists" "(" <ty:Type> "," <body:Box<Span<TermValue>>> ")" => ExistsVal (
+        ty,
+        body,
+    ).into(),
 };
 
 //* -------------------------------- Terminals ------------------------------- */
@@ -281,6 +312,10 @@ extern {
         "rec" => Tok::Rec,
         "match" => Tok::Match,
         "comatch" => Tok::Comatch,
+        "Forall" => Tok::Forall,
+        "Exists" => Tok::Exists,
+        "@" => Tok::At,
+        "exists" => Tok::ExistsExpr,
 
         "NumLit" => Tok::NumLit(<&'input str>),
         "StrLit" => Tok::StrLit(<&'input str>),
