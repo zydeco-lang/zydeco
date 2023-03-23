@@ -191,6 +191,8 @@ impl TryFrom<ps::Type> for Type {
                 TypeApp { tctor: TCtor::Fun, args: vec![rc!(t1), rc!(t2)] }
                     .into()
             }
+            ps::Type::Forall(_) => todo!(),
+            ps::Type::Exists(_) => todo!(),
         })
     }
 }
@@ -244,6 +246,7 @@ impl TryFrom<ps::TermValue> for TermValue {
                 .into()
             }
             ps::TermValue::Literal(t) => t.into(),
+            ps::TermValue::ExistsVal(_) => todo!(),
         })
     }
 }
@@ -355,6 +358,9 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     .collect();
                 Dtor { body, dtor, args }.into()
             }
+            ps::TermComputation::TypFun(_) => todo!(),
+            ps::TermComputation::TypApp(_) => todo!(),
+            ps::TermComputation::MatchExists(_) => todo!(),
         })
     }
 }
