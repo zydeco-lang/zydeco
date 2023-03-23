@@ -816,19 +816,19 @@ impl Eqv for Type {
     }
 }
 
-impl Kind {
-    fn ensure(
-        &self, kind: Kind, context: &str, ann: &SpanInfo,
-    ) -> Result<(), Span<TypeCheckError>> {
-        self.eqv(&kind, || {
-            ann.make(TypeCheckError::KindMismatch {
-                context: context.to_owned(),
-                expected: kind,
-                found: *self,
-            })
-        })
-    }
-}
+// impl Kind {
+//     fn ensure(
+//         &self, kind: Kind, context: &str, ann: &SpanInfo,
+//     ) -> Result<(), Span<TypeCheckError>> {
+//         self.eqv(&kind, || {
+//             ann.make(TypeCheckError::KindMismatch {
+//                 context: context.to_owned(),
+//                 expected: kind,
+//                 found: *self,
+//             })
+//         })
+//     }
+// }
 
 impl Data {
     pub fn type_app(

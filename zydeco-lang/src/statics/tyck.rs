@@ -1,6 +1,8 @@
+#![allow(unused)]
+
 use super::{
     err::TypeCheckError,
-    syntax::{span::SpanView, Span},
+    syntax::{span::SpanView, *},
 };
 use TypeCheckError::*;
 
@@ -53,6 +55,92 @@ pub enum Step<In, Out> {
 
 pub trait Eqv {
     fn eqv(
-        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError>,
+        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>>;
 }
+
+fn bool_test(
+    b: bool, f: impl FnOnce() -> Span<TypeCheckError>,
+) -> Result<(), Span<TypeCheckError>> {
+    b.then_some(()).ok_or_else(f)
+}
+
+impl Eqv for () {
+    fn eqv(
+        &self, _other: &Self, _f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        Ok(())
+    }
+}
+
+impl Eqv for Kind {
+    fn eqv(
+        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        bool_test(self == other, f)
+    }
+}
+
+impl Eqv for TCtor {
+    fn eqv(
+        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        match (self, other) {
+            (TCtor::Var(x), TCtor::Var(y)) => bool_test(x == y, f.clone()),
+            (TCtor::OS, TCtor::OS)
+            | (TCtor::Ret, TCtor::Ret)
+            | (TCtor::Thunk, TCtor::Thunk)
+            | (TCtor::Fun, TCtor::Fun) => Ok(()),
+            (TCtor::Var(..), _)
+            | (TCtor::OS, _)
+            | (TCtor::Ret, _)
+            | (TCtor::Thunk, _)
+            | (TCtor::Fun, _) => Err(f()),
+        }
+    }
+}
+
+impl Eqv for Type {
+    fn eqv(
+        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        self.type_app_form().eqv(other.type_app_form(), f)
+    }
+}
+
+impl Eqv for TypeApp<TCtor, RcType> {
+    fn eqv(
+        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        TCtor::eqv(&self.tctor, &other.tctor, f.clone())?;
+        bool_test(self.args.len() == other.args.len(), f.clone())?;
+        for (argl, argr) in self.args.iter().zip(&other.args) {
+            Type::eqv(argl.inner_ref(), argr.inner_ref(), f.clone())?
+        }
+        Ok(())
+    }
+}
+
+impl Kind {
+    pub(crate) fn ensure(
+        &self, kind: Kind, context: &str, ann: &SpanInfo,
+    ) -> Result<(), Span<TypeCheckError>> {
+        self.eqv(&kind, || {
+            ann.make(TypeCheckError::KindMismatch {
+                context: context.to_owned(),
+                expected: kind,
+                found: *self,
+            })
+        })
+    }
+}
+
+impl Type {
+    fn type_app_form(&self) -> &TypeApp<TCtor, RcType> {
+        match self {
+            Type::TypeAnn(TypeAnn { ty, kd: _ }) => ty.inner_ref().type_app_form(),
+            Type::TypeApp(tapp) => tapp,
+        }
+    }
+}
+

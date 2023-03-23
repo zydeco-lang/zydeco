@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use super::{
     err::TypeCheckError,
     syntax::{Kind, RcType, Span, TermV, TypeArity, TypeV},
