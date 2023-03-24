@@ -93,6 +93,38 @@ where
     }
 }
 
+impl<TyV, Ty> FmtArgs for Forall<TyV, Ty>
+where
+    TyV: FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, args: Args) -> String {
+        let Forall { param, kd, ty } = self;
+        format!(
+            "forall {} : {} . {}",
+            param.fmt_args(args),
+            kd.fmt_args(args),
+            ty.fmt_args(args)
+        )
+    }
+}
+
+impl<TyV, Ty> FmtArgs for Exists<TyV, Ty>
+where
+    TyV: FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, args: Args) -> String {
+        let Exists { param, kd, ty } = self;
+        format!(
+            "exists {} : {} . {}",
+            param.fmt_args(args),
+            kd.fmt_args(args),
+            ty.fmt_args(args)
+        )
+    }
+}
+
 impl<Term, Type> FmtArgs for TermAnn<Term, Type>
 where
     Term: FmtArgs,
@@ -141,6 +173,17 @@ where
             .join(", ");
         s += ")";
         s
+    }
+}
+
+impl<Ty, A> FmtArgs for ExistsVal<Ty, A>
+where
+    Ty: TypeT + FmtArgs,
+    A: ValueT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let ExistsVal { ty, body } = self;
+        format!("exists ({}, {})", ty.fmt_args(fargs), body.fmt_args(fargs))
     }
 }
 
@@ -289,5 +332,51 @@ where
             .join(", ");
         s += ")";
         s
+    }
+}
+
+impl<TyV, B> FmtArgs for TypAbs<TyV, B>
+where
+    TyV: FmtArgs,
+    B: ComputationT + FmtArgs,
+{
+    fn fmt_args(&self, args: Args) -> String {
+        let TypAbs { tvar, kd, body } = self;
+        format!(
+            "fn typ {} : {} -> {}",
+            tvar.fmt_args(args),
+            kd.fmt_args(args),
+            body.fmt_args(args)
+        )
+    }
+}
+
+impl<B, Ty> FmtArgs for TypApp<B, Ty>
+where
+    B: ComputationT + FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let TypApp { body, arg } = self;
+        format!("{} [{}]", body.fmt_args(fargs), arg.fmt_args(fargs))
+    }
+}
+
+impl<A, TyV, TeV, B> FmtArgs for MatchExists<A, TyV, TeV, B>
+where
+    A: ValueT + FmtArgs,
+    TyV: FmtArgs,
+    TeV: VarT + FmtArgs,
+    B: ComputationT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let MatchExists { scrut, tvar, var, body } = self;
+        format!(
+            "match {} exists {} : {} -> {}",
+            scrut.fmt_args(fargs),
+            tvar.fmt_args(fargs),
+            var.fmt_args(fargs),
+            body.fmt_args(fargs)
+        )
     }
 }

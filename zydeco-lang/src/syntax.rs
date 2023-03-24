@@ -126,6 +126,22 @@ pub struct TypeApp<TyV, T: TypeT> {
 }
 impl<TyV, T: TypeT> TypeT for TypeApp<TyV, T> {}
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Forall<TyV, Ty: TypeT> {
+    pub param: TyV,
+    pub kd: Kind,
+    pub ty: Ty,
+}
+impl<TyV, Ty: TypeT> TypeT for Forall<TyV, Ty> {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Exists<TyV, Ty: TypeT> {
+    pub param: TyV,
+    pub kd: Kind,
+    pub ty: Ty,
+}
+impl<TyV, Ty: TypeT> TypeT for Exists<TyV, Ty> {}
+
 /* ---------------------------------- Terms --------------------------------- */
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -156,6 +172,13 @@ pub struct Ctor<C, A: ValueT> {
     pub args: Vec<A>,
 }
 impl<C, A: ValueT> ValueT for Ctor<C, A> {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExistsVal<Ty: TypeT, A: ValueT> {
+    pub ty: Ty,
+    pub body: A,
+}
+impl<Ty: TypeT, A: ValueT> ValueT for ExistsVal<Ty, A> {}
 
 /* ------------------------------ Computations ------------------------------ */
 
@@ -228,6 +251,33 @@ pub struct Dtor<B: ComputationT, D, A: ValueT> {
     pub args: Vec<A>,
 }
 impl<B: ComputationT, D, A: ValueT> ComputationT for Dtor<B, D, A> {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypAbs<TyV, B: ComputationT> {
+    pub tvar: TyV,
+    pub kd: Kind,
+    pub body: B,
+}
+impl<TyV, B: ComputationT> ComputationT for TypAbs<TyV, B> {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypApp<B: ComputationT, Ty: TypeT> {
+    pub body: B,
+    pub arg: Ty,
+}
+impl<B: ComputationT, Ty: TypeT> ComputationT for TypApp<B, Ty> {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MatchExists<A: ValueT, TyV, TeV: VarT, B: ComputationT> {
+    pub scrut: A,
+    pub tvar: TyV,
+    pub var: TeV,
+    pub body: B,
+}
+impl<A: ValueT, TyV, TeV: VarT, B: ComputationT> ComputationT
+    for MatchExists<A, TyV, TeV, B>
+{
+}
 
 /* ------------------------------ Declarations ------------------------------ */
 

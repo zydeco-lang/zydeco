@@ -34,9 +34,6 @@ impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExistsVal(pub Type, pub BoxValue);
-
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
 pub enum TermValue {
     TermAnn(TermAnn<BoxValue, Span<Type>>),
@@ -44,7 +41,7 @@ pub enum TermValue {
     Thunk(Thunk<BoxComp>),
     Ctor(Ctor<CtorV, Span<TermValue>>),
     Literal(Literal),
-    ExistsVal(ExistsVal),
+    ExistsVal(ExistsVal<BoxType, BoxValue>),
 }
 pub type BoxValue = Box<Span<TermValue>>;
 impl ValueT for TermValue {}
@@ -79,7 +76,7 @@ pub struct Let {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypFun {
+pub struct TypAbs {
     pub params: Vec<(TypeV, Kind)>,
     pub body: BoxComp,
 }
@@ -93,9 +90,9 @@ pub struct TypApp {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatchExists {
     pub scrut: BoxValue,
-    pub ty: TypeV,
-    pub tv: TermV,
-    pub tc: BoxComp,
+    pub tvar: TypeV,
+    pub var: TermV,
+    pub body: BoxComp,
 }
 
 #[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
@@ -111,7 +108,7 @@ pub enum TermComputation {
     App(Application),
     CoMatch(CoMatch<DtorV, TermV, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
-    TypFun(TypFun),
+    TypFun(TypAbs),
     TypApp(TypApp),
     MatchExists(MatchExists),
 }

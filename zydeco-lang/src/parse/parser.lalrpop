@@ -11,7 +11,7 @@ grammar<'input>(input: &'input str);
 
 pub Zydeco: Module = {
     <name:("module" <UpperId> "where")?>
-    <declarations:DeclSymbol<Declaration>*>
+        <declarations:DeclSymbol<Declaration>*>
     <entry:Span<TermComputation>> => Module {
         name, declarations, entry,
     }
@@ -116,7 +116,9 @@ TermValue: TermValue = {
         ctor, args,
     }.into(),
     <Literal> => <>.into(),
-    <ExistsVal> => <>.into(),
+    "pack" "(" <ty:Box<Span<Type>>> "," <body:Box<Span<TermValue>>> ")" => ExistsVal {
+        ty, body,
+    }.into(),
 };
 
 TermComputation: TermComputation = {
@@ -138,17 +140,17 @@ TermComputation: TermComputation = {
     "comatch" <arms:ComatchBr*> "end" => CoMatch {
         arms,
     }.into(),
-    "fn" <params:TypePattern+> "->" <body:Box<Span<TermComputation>>> => TypFun {
+    "fn" <params:TypePattern+> "->" <body:Box<Span<TermComputation>>> => TypAbs {
         params, body,
     }.into(),
     "fn" <params:TermPattern+> "->" <body:Box<Span<TermComputation>>> => Abstraction {
         params, body,
     }.into(),
     "match" <scrut:Box<Span<TermValue>>> 
-    "|"? "exists" "(" <ty:TypeV> "," <tv:TermV> ")" "->"
-        <tc:Box<Span<TermComputation>>> 
+    "|"? "pack" "(" <tvar:TypeV> "," <var:TermV> ")" "->"
+        <body:Box<Span<TermComputation>>> 
     "end" => MatchExists {
-        scrut, ty, tv, tc,
+        scrut, tvar, var, body,
     }.into(),
 };
 
@@ -208,12 +210,6 @@ Literal: Literal = {
     <n:Int> => n.into(),
     <s:String> => s.into(),
     <c:Char> => c.into(),
-};
-
-ExistsVal: ExistsVal = {
-    "exists" "(" <ty:Type> "," <body:Box<Span<TermValue>>> ")" => ExistsVal (
-        ty, body,
-    ).into(),
 };
 
 //* -------------------------------- Terminals ------------------------------- */
@@ -293,7 +289,7 @@ extern {
         "Forall" => Tok::Forall,
         "Exists" => Tok::Exists,
         "@" => Tok::At,
-        "exists" => Tok::ExistsExpr,
+        "pack" => Tok::Pack,
 
         "NumLit" => Tok::NumLit(<&'input str>),
         "StrLit" => Tok::StrLit(<&'input str>),

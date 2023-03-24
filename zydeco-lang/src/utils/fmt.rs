@@ -19,7 +19,7 @@ impl Args {
 }
 
 pub trait FmtArgs {
-    fn fmt_args(&self, args: Args) -> String;
+    fn fmt_args(&self, fargs: Args) -> String;
     fn fmt(&self) -> String {
         self.fmt_args(Args::new(2))
     }

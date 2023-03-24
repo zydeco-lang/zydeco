@@ -47,8 +47,8 @@ pub enum Tok<'input> {
     Exists,
     #[token("@")]
     At,
-    #[token("exists")]
-    ExistsExpr,
+    #[token("pack")]
+    Pack,
 
     #[regex(r"[\+-]?[0-9]+")]
     NumLit(&'input str),
@@ -131,7 +131,7 @@ impl<'input> Display for Tok<'input> {
             Tok::Forall => write!(f, "Forall"),
             Tok::Exists => write!(f, "Exists"),
             Tok::At => write!(f, "@"),
-            Tok::ExistsExpr => write!(f, "exists"),
+            Tok::Pack => write!(f, "exists"),
             Tok::NumLit(s) => write!(f, "NumLiteral({})", s),
             Tok::StrLit(s) => write!(f, "StrLiteral({})", s),
             Tok::CharLit(s) => write!(f, "CharLiteral({})", s),
