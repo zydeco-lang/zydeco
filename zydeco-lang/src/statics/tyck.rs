@@ -215,7 +215,11 @@ impl TypeCheck for Span<TermValue> {
 
                 todo!()
             }
-            v => todo!(),
+            v => {
+                let typ_syn = self.syn(ctx)?;
+                typ.eqv(&typ_syn, || self.span().make(Subsumption))?;
+                Ok(Step::Done(typ))
+            }
         }
     }
 }
