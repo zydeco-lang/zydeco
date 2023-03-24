@@ -3,38 +3,16 @@ use crate::utils::fmt::FmtArgs;
 
 #[derive(Clone, Debug)]
 pub enum TypeCheckError {
-    UnboundVar {
-        var: TermV,
-    },
-    KindMismatch {
-        context: String,
-        expected: Kind,
-        found: Kind,
-    },
-    TypeMismatch {
-        context: String,
-        expected: TypeApp<TCtor, RcType>,
-        found: TypeApp<TCtor, RcType>,
-    },
-    TypeExpected {
-        context: String,
-        expected: String,
-        found: TypeApp<TCtor, RcType>,
-    },
-    ArityMismatch {
-        context: String,
-        expected: usize,
-        found: usize,
-    },
-    NeedAnnotation {
-        content: String,
-    },
+    UnboundVar { var: TermV },
+    KindMismatch { context: String, expected: Kind, found: Kind },
+    TypeMismatch { context: String, expected: Type, found: Type },
+    TypeExpected { context: String, expected: String, found: Type },
+    ArityMismatch { context: String, expected: usize, found: usize },
+    NeedAnnotation { content: String },
     Subsumption,
-    InconsistentBranches(Vec<TypeApp<TCtor, RcType>>),
+    InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
-    WrongMain {
-        found: TypeApp<TCtor, RcType>,
-    },
+    WrongMain { found: Type },
     ErrStr(String),
 }
 

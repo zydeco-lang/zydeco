@@ -2,10 +2,12 @@ use super::syntax::*;
 use crate::utils::fmt::*;
 
 impl FmtArgs for Type {
-    fn fmt_args(&self, args: Args) -> String {
-        match self {
-            Type::TypeAnn(t) => t.fmt_args(args),
-            Type::TypeApp(t) => t.fmt_args(args),
+    fn fmt_args(&self, fargs: Args) -> String {
+        let app = self.app.fmt_args(fargs);
+        if let Some(kd) = &self.kd {
+            format!("({} :: {})", app, kd.fmt_args(fargs))
+        } else {
+            app
         }
     }
 }

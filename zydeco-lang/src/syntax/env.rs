@@ -31,6 +31,15 @@ where
     }
 }
 
+impl<K, V> Default for Env<K, V>
+where
+    K: Hash + Eq,
+{
+    fn default() -> Self {
+        Self { inner: im::HashMap::new() }
+    }
+}
+
 impl<K, V> Env<K, V>
 where
     K: Eq + Hash + Clone,

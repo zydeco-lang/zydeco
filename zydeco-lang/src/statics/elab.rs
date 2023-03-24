@@ -182,9 +182,10 @@ impl TryFrom<ps::Type> for Type {
             }
             ps::Type::App(t) => {
                 let ps::TypeApp(t1, t2) = t;
-                let t1: Type = TryInto::try_into(t1.inner())?;
+                let mut t1: Type = TryInto::try_into(t1.inner())?;
                 let t2 = t2.try_map(TryInto::try_into)?;
-                t1.app(rc!(t2))
+                t1.app.args.push(rc!(t2));
+                t1
             }
             ps::Type::Arrow(t) => {
                 let ps::Arrow(t1, t2) = t;
@@ -196,23 +197,6 @@ impl TryFrom<ps::Type> for Type {
             ps::Type::Forall(_) => todo!(),
             ps::Type::Exists(_) => todo!(),
         })
-    }
-}
-
-impl Type {
-    fn app(self, t2: RcType) -> Type {
-        match self {
-            Type::TypeApp(t) => {
-                let TypeApp { tctor, mut args } = t;
-                args.push(t2);
-                TypeApp { tctor, args }.into()
-            }
-            Type::TypeAnn(t) => {
-                let TypeAnn { ty, kd } = t;
-                let ty = ty.as_ref().clone();
-                TypeAnn { ty: rc!(ty.map(|ty| ty.app(t2))), kd }.into()
-            }
-        }
     }
 }
 

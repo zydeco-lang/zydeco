@@ -1,3 +1,4 @@
+use crate::syntax::env::Env;
 use crate::utils::span::{span, Span};
 use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
@@ -10,10 +11,11 @@ pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
 
-#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
-pub enum Type {
-    TypeAnn(TypeAnn<RcType, Kind>),
-    TypeApp(TypeApp<TCtor, RcType>),
+#[derive(Clone, Debug)]
+pub struct Type {
+    pub app: TypeApp<TCtor, RcType>,
+    pub kd: Option<Kind>,
+    pub env: Env<TypeV, RcType>,
 }
 pub type RcType = Rc<Span<Type>>;
 impl TypeT for Type {}
@@ -28,10 +30,15 @@ impl TypeApp<TCtor, RcType> {
         TypeApp { tctor: TCtor::Var(TypeV::new(name.into(), span(0, 0))), args }
     }
 }
+impl From<TypeApp<TCtor, RcType>> for Type {
+    fn from(app: TypeApp<TCtor, RcType>) -> Self {
+        Self { app, kd: None, env: Env::new() }
+    }
+}
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, Clone, Debug)]
 pub enum TermValue {
     TermAnn(TermAnn<RcValue, RcType>),
     Var(TermV),
@@ -42,7 +49,7 @@ pub enum TermValue {
 pub type RcValue = Rc<Span<TermValue>>;
 impl ValueT for TermValue {}
 
-#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, Clone, Debug)]
 pub enum TermComputation {
     TermAnn(TermAnn<RcComp, RcType>),
     Ret(Ret<RcValue>),
@@ -57,7 +64,7 @@ pub enum TermComputation {
 pub type RcComp = Rc<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
 
-#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, Clone, Debug)]
 pub enum Term {
     Val(TermValue),
     Comp(TermComputation),
@@ -65,7 +72,7 @@ pub enum Term {
 
 /* --------------------------------- Module --------------------------------- */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Module {
     pub name: Option<String>,
     pub data: Vec<Data<TypeV, CtorV, RcType>>,

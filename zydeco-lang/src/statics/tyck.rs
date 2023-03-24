@@ -1,17 +1,20 @@
 #![allow(unused)]
 
-use crate::{rc, statics::resolve::NameResolveError, utils::fmt::FmtArgs};
+use crate::{
+    rc, statics::resolve::NameResolveError, syntax::env::Env,
+    utils::fmt::FmtArgs,
+};
 
 use super::{err::TypeCheckError, syntax::*};
 use crate::utils::span::{Span, SpanView};
 use std::rc::Rc;
 use TypeCheckError::*;
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Default)]
 pub struct Ctx {
     pub type_ctx: im::HashMap<TypeV, TypeArity<Kind>>,
-    pub term_ctx: im::HashMap<TermV, TypeApp<TCtor, RcType>>,
-    pub type_env: im::HashMap<TypeV, TypeApp<TCtor, RcType>>,
+    pub term_ctx: im::HashMap<TermV, Type>,
+    pub type_env: Env<TypeV, RcType>,
     pub data_ctx: im::HashMap<TypeV, Data<TypeV, CtorV, RcType>>,
     pub coda_ctx: im::HashMap<TypeV, Codata<TypeV, DtorV, RcType>>,
 }
@@ -66,27 +69,11 @@ pub enum Step<In, Out> {
 impl TypeCheck for Span<Type> {
     type Ctx = Ctx;
     type Out = Kind;
-
     fn syn_step(
         &self, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
-        Ok(match self.inner_ref() {
-            Type::TypeAnn(TypeAnn { ty, kd }) => {
-                Step::AnaMode((ctx, ty), kd.clone())
-            }
-            Type::TypeApp(tapp) => Step::Done(self.span().make(tapp).syn(ctx)?),
-        })
-    }
-}
-
-impl TypeCheck for Span<&TypeApp<TCtor, RcType>> {
-    type Ctx = Ctx;
-    type Out = Kind;
-
-    fn syn_step(
-        &self, ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
-        Ok(match &self.inner_ref().tctor {
+        let Type { app, kd, env } = self.inner_ref();
+        Ok(match &app.tctor {
             TCtor::Var(x) => {
                 let Some(TypeArity { params, kd }) = ctx.type_ctx.get(&x) else {
                     Err(self.span().make(TypeCheckError::NameResolve(
@@ -95,11 +82,11 @@ impl TypeCheck for Span<&TypeApp<TCtor, RcType>> {
                         },
                     )))?
                 };
-                bool_test(self.inner_ref().args.len() == params.len(), || {
+                bool_test(app.args.len() == params.len(), || {
                     self.span().make(ArityMismatch {
                         context: format!("{}", self.inner_ref().fmt()),
                         expected: params.len(),
-                        found: self.inner_ref().args.len(),
+                        found: app.args.len(),
                     })
                 })?;
                 todo!()
@@ -114,23 +101,21 @@ impl TypeCheck for Span<&TypeApp<TCtor, RcType>> {
 
 impl TypeCheck for Span<&Literal> {
     type Ctx = ();
-    type Out = TypeApp<TCtor, RcType>;
-
+    type Out = Type;
     fn syn_step(
         &self, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         Ok(Step::Done(match self.inner_ref() {
-            Literal::Int(_) => TypeApp::internal("Int", vec![]),
-            Literal::String(_) => TypeApp::internal("String", vec![]),
-            Literal::Char(_) => TypeApp::internal("Char", vec![]),
+            Literal::Int(_) => Type::internal("Int", vec![]),
+            Literal::String(_) => Type::internal("String", vec![]),
+            Literal::Char(_) => Type::internal("Char", vec![]),
         }))
     }
 }
 
 impl TypeCheck for Span<TermValue> {
     type Ctx = Ctx;
-    type Out = TypeApp<TCtor, RcType>;
-
+    type Out = Type;
     fn syn_step(
         &self, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
@@ -139,10 +124,7 @@ impl TypeCheck for Span<TermValue> {
                 ty.span()
                     .make(ty.syn(ctx.clone())?)
                     .ensure(Kind::VType, "value term annotation")?;
-                Step::AnaMode(
-                    (ctx, body),
-                    ty.inner_ref().type_app_form().clone(),
-                )
+                Step::AnaMode((ctx, body), ty.inner_ref().clone())
             }
             TermValue::Var(x) => Step::Done(
                 ctx.term_ctx
@@ -152,10 +134,13 @@ impl TypeCheck for Span<TermValue> {
             ),
             TermValue::Thunk(Thunk(c)) => {
                 let c = c.syn(ctx)?;
-                Step::Done(TypeApp {
-                    tctor: TCtor::Thunk,
-                    args: vec![rc!(self.span().make(c.into()))],
-                })
+                Step::Done(
+                    TypeApp {
+                        tctor: TCtor::Thunk,
+                        args: vec![rc!(self.span().make(c.into()))],
+                    }
+                    .into(),
+                )
                 // Err(self
                 //     .span()
                 //     .make(NeedAnnotation { content: format!("thunk") }))?
@@ -171,27 +156,26 @@ impl TypeCheck for Span<TermValue> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         match self.inner_ref() {
             TermValue::Thunk(Thunk(c)) => {
-                bool_test(typ.tctor == TCtor::Thunk, || {
+                bool_test(typ.app.tctor == TCtor::Thunk, || {
                     self.span().make(TypeExpected {
                         context: format!("thunk"),
                         expected: format!("{{a}}"),
                         found: typ.to_owned(),
                     })
                 })?;
-                bool_test(typ.args.len() == 1, || {
+                bool_test(typ.app.args.len() == 1, || {
                     self.span().make(ArityMismatch {
                         context: format!("thunk"),
                         expected: 1,
-                        found: typ.args.len(),
+                        found: typ.app.args.len(),
                     })
                 })?;
-                let typ_comp =
-                    typ.args[0].inner_ref().type_app_form().to_owned();
+                let typ_comp = typ.app.args[0].inner_ref().to_owned();
                 c.ana(typ_comp, ctx)?;
                 Ok(Step::Done(typ))
             }
             TermValue::Ctor(Ctor { ctor, args }) => {
-                let TCtor::Var(tvar) = &typ.tctor else {
+                let TCtor::Var(tvar) = &typ.app.tctor else {
                     Err(self.span().make(TypeExpected {
                         context: format!("ctor"),
                         expected: format!("{{a}}"),
@@ -226,8 +210,7 @@ impl TypeCheck for Span<TermValue> {
 
 impl TypeCheck for Span<TermComputation> {
     type Ctx = Ctx;
-    type Out = TypeApp<TCtor, RcType>;
-
+    type Out = Type;
     fn syn_step(
         &self, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
@@ -243,7 +226,6 @@ impl TypeCheck for Span<TermComputation> {
 impl TypeCheck for Span<Module> {
     type Ctx = Ctx;
     type Out = ();
-
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
@@ -259,7 +241,7 @@ impl TypeCheck for Span<Module> {
             ctx.term_ctx.insert(name.clone(), def);
         }
         let ty = entry.syn(ctx)?;
-        match ty.tctor {
+        match ty.app.tctor {
             TCtor::OS => Ok(()),
             _ => Err(self.span().make(WrongMain { found: todo!() })),
         }?;
@@ -318,24 +300,22 @@ impl Eqv for Type {
     fn eqv(
         &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
-        self.type_app_form().eqv(other.type_app_form(), f.clone())?;
-        bool_test(self.kind_form() == other.kind_form(), f)?;
         Ok(())
     }
 }
 
-impl Eqv for TypeApp<TCtor, RcType> {
-    fn eqv(
-        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
-    ) -> Result<(), Span<TypeCheckError>> {
-        TCtor::eqv(&self.tctor, &other.tctor, f.clone())?;
-        bool_test(self.args.len() == other.args.len(), f.clone())?;
-        for (argl, argr) in self.args.iter().zip(&other.args) {
-            Type::eqv(argl.inner_ref(), argr.inner_ref(), f.clone())?
-        }
-        Ok(())
-    }
-}
+// impl Eqv for TypeApp<TCtor, RcType> {
+//     fn eqv(
+//         &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+//     ) -> Result<(), Span<TypeCheckError>> {
+//         TCtor::eqv(&self.tctor, &other.tctor, f.clone())?;
+//         bool_test(self.args.len() == other.args.len(), f.clone())?;
+//         for (argl, argr) in self.args.iter().zip(&other.args) {
+//             Type::eqv(argl.inner_ref(), argr.inner_ref(), f.clone())?
+//         }
+//         Ok(())
+//     }
+// }
 
 impl Span<Kind> {
     fn ensure(
@@ -348,22 +328,5 @@ impl Span<Kind> {
                 found: self.inner_ref().clone(),
             })
         })
-    }
-}
-
-impl Type {
-    fn type_app_form(&self) -> &TypeApp<TCtor, RcType> {
-        match self {
-            Type::TypeAnn(TypeAnn { ty, kd: _ }) => {
-                ty.inner_ref().type_app_form()
-            }
-            Type::TypeApp(tapp) => tapp,
-        }
-    }
-    fn kind_form(&self) -> Option<&Kind> {
-        match self {
-            Type::TypeAnn(TypeAnn { ty: _, kd }) => Some(kd),
-            Type::TypeApp(_) => None,
-        }
     }
 }
