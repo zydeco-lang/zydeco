@@ -41,9 +41,9 @@ pub enum Tok<'input> {
     Match,
     #[token("comatch")]
     Comatch,
-    #[token("Forall")]
+    #[token("forall")]
     Forall,
-    #[token("Exists")]
+    #[token("exists")]
     Exists,
     #[token("@")]
     At,

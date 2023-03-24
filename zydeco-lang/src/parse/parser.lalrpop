@@ -66,10 +66,10 @@ Type: Type = {
     <t:Box<Span<Type>>> "->" <ty:Box<Span<TypeApp>>> => {
         Arrow(t, ty).into()
     },
-    "Forall" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
+    "forall" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
         Forall(params, ty).into()
     },
-    "Exists" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
+    "exists" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
         Exists(params, ty).into()
     },
     TypeApp,
@@ -286,8 +286,8 @@ extern {
         "rec" => Tok::Rec,
         "match" => Tok::Match,
         "comatch" => Tok::Comatch,
-        "Forall" => Tok::Forall,
-        "Exists" => Tok::Exists,
+        "forall" => Tok::Forall,
+        "exists" => Tok::Exists,
         "@" => Tok::At,
         "pack" => Tok::Pack,
 
