@@ -38,8 +38,8 @@ pub enum TypeCheckError {
     ErrStr(String),
 }
 
-use TypeCheckError::*;
 use std::fmt;
+use TypeCheckError::*;
 impl fmt::Display for TypeCheckError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -54,13 +54,17 @@ impl fmt::Display for TypeCheckError {
             TypeMismatch { context, expected, found } => write!(
                 f,
                 "Type mismatch. In {}, expected {}, but got {}",
-                context, expected.fmt(), found.fmt()
+                context,
+                expected.fmt(),
+                found.fmt()
             ),
             TypeExpected { context, expected, found } => {
                 write!(
                     f,
                     "In {}, expected {}, but got {}",
-                    context, expected, found.fmt()
+                    context,
+                    expected,
+                    found.fmt()
                 )
             }
             ArityMismatch { context, expected, found } => write!(

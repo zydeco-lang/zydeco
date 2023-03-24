@@ -3,8 +3,8 @@
 use crate::{rc, statics::resolve::NameResolveError, utils::fmt::FmtArgs};
 
 use super::{err::TypeCheckError, syntax::*};
+use crate::utils::span::{Span, SpanView};
 use std::rc::Rc;
-use crate::utils::span::SpanView;
 use TypeCheckError::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]

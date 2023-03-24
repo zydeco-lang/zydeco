@@ -1,7 +1,6 @@
 pub mod env;
 mod fmt;
 
-pub use crate::utils::span::{Span, SpanInfo};
 use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
 
@@ -12,7 +11,7 @@ macro_rules! sort {
         pub trait $Sort {}
         impl<T: $Sort> $Sort for Box<T> {}
         impl<T: $Sort> $Sort for Rc<T> {}
-        impl<T: $Sort> $Sort for Span<T> {}
+        impl<T: $Sort> $Sort for crate::utils::span::Span<T> {}
         impl<T: $Sort> $Sort for Option<T> {}
         impl $Sort for () {}
     };
@@ -27,8 +26,8 @@ sort!(ComputationT);
 /* --------------------------------- Binders -------------------------------- */
 
 pub mod binder {
-    use super::{Span, TypeT, VarT};
-    use crate::syntax::SpanInfo;
+    use super::{TypeT, VarT};
+    use crate::utils::span::{Span, SpanInfo};
 
     macro_rules! var {
         ( $Var:ident ) => {

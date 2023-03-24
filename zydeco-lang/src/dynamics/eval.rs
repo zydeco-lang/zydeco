@@ -1,5 +1,5 @@
-use super::syntax::*;
 use super::syntax::Thunk as SemThunk;
+use super::syntax::*;
 use std::rc::Rc;
 
 pub trait Eval<'rt>: Sized {
@@ -33,9 +33,9 @@ impl<'rt> Eval<'rt> for ls::TermValue {
                     .expect("variable does not exist")
                     .clone(),
             ),
-            ls::TermValue::Thunk(ls::Thunk(body)) => {
-                Step::Done(super::syntax::Thunk { body, env: runtime.env.clone() }.into())
-            }
+            ls::TermValue::Thunk(ls::Thunk(body)) => Step::Done(
+                super::syntax::Thunk { body, env: runtime.env.clone() }.into(),
+            ),
             ls::TermValue::Ctor(ls::Ctor { ctor, args }) => {
                 let args = args
                     .iter()

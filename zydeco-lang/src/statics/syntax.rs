@@ -1,4 +1,4 @@
-use crate::utils::span::span;
+use crate::utils::span::{span, Span};
 use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
 

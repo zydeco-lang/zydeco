@@ -2,7 +2,8 @@ use super::tyck::TypeCheck;
 use crate::{
     parse::legacy::syntax::*,
     statics::{legacy::err::TypeCheckError, resolve::*},
-    syntax::{binder::*, Span},
+    syntax::binder::*,
+    utils::span::Span,
 };
 use indexmap::IndexMap;
 use std::{collections::HashMap, hash::Hash};

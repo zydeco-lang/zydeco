@@ -1,5 +1,7 @@
-pub use crate::{syntax::Span, syntax::*};
+use crate::utils::span::Span;
 use zydeco_derive::EnumGenerator;
+
+pub use crate::syntax::*;
 
 /* ---------------------------------- Kind ---------------------------------- */
 

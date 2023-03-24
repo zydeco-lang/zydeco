@@ -7,6 +7,7 @@ pub mod parse {
     pub mod syntax;
     pub mod err;
     pub mod legacy;
+    mod span;
 
     pub use legacy::parser::{ExpressionParser, ZydecoParser};
 
