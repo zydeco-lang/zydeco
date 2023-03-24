@@ -118,6 +118,7 @@ pub enum TCtor {
     OS,
     Fun,
 }
+impl VarT for TCtor {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeApp<TyV, T: TypeT> {
