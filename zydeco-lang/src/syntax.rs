@@ -1,5 +1,6 @@
 pub mod env;
 mod fmt;
+mod span;
 
 use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
@@ -129,7 +130,7 @@ impl<TyV, T: TypeT> TypeT for TypeApp<TyV, T> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TermAnn<Term, Type> {
-    pub body: Term,
+    pub term: Term,
     pub ty: Type,
 }
 impl<Term: ValueT, Type> ValueT for TermAnn<Term, Type> {}

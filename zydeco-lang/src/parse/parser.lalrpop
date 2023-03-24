@@ -10,12 +10,10 @@ grammar<'input>(input: &'input str);
 //* --------------------------------- Module --------------------------------- */
 
 pub Zydeco: Module = {
-    "module" <name:String> "where"
+    <name:("module" <UpperId> "where")?>
     <declarations:DeclSymbol<Declaration>*>
     <entry:Span<TermComputation>> => Module {
-        name: Some(name),
-        declarations,
-        entry,
+        name, declarations, entry,
     }
 };
 
@@ -31,16 +29,12 @@ Declaration: Declaration = {
     "data" <name:TypeV> <params:TypePattern*> "where"
         <ctors:DataBr*>
     "end" => Data {
-        name,
-        params,
-        ctors,
+        name, params, ctors,
     }.into(),
     "codata" <name:TypeV> <params:TypePattern*> "where"
         <dtors:CodataBr*>
     "end" => Codata {
-        name,
-        params,
-        dtors,
+        name, params, dtors,
     }.into(),
     "define" <gen:GenLet> "end" => gen.into(),
 };
@@ -113,14 +107,13 @@ pub Term: Term = {
 TermValue: TermValue = {
     "(" <TermValue> ")" => <>.into(),
     "(" <tv:Box<Span<TermValue>>> "::" <ty:Span<Type>> ")" => TermAnn {
-        body: tv,
+        term: tv,
         ty,
     }.into(),
     <TermV> => <>.into(),
     "{" <tc:Box<Span<TermComputation>>> "}" => Thunk(tc).into(),
     <ctor:CtorV> <args:SepByDelim<"(", ",", Span<TermValue>, ")">> => Ctor {
-        ctor,
-        args,
+        ctor, args,
     }.into(),
     <Literal> => <>.into(),
     <ExistsVal> => <>.into(),
@@ -129,69 +122,54 @@ TermValue: TermValue = {
 TermComputation: TermComputation = {
     TermComputationRight,
     "let" <gen:GenLet> "in" <body:Box<Span<TermComputation>>> => Let {
-        gen,
-        body,
+        gen, body,
     }.into(),
     "do" <var:TermPattern> "<-"
         <comp:Box<Span<TermComputation>>> ";"
     <body:Box<Span<TermComputation>>> => Do {
-        var,
-        comp,
-        body,
+        var, comp, body,
     }.into(),
     "rec" <var:TermPattern> "->" <body:Box<Span<TermComputation>>> => Rec {
-        var,
-        body,
+        var, body,
     }.into(),
     "match" <scrut:Box<Span<TermValue>>> <arms:MatchBr*> "end" => Match {
-        scrut,
-        arms,
+        scrut, arms,
     }.into(),
     "comatch" <arms:ComatchBr*> "end" => CoMatch {
         arms,
     }.into(),
     "fn" <params:TypePattern+> "->" <body:Box<Span<TermComputation>>> => TypFun {
-        params,
-        body,
+        params, body,
     }.into(),
     "fn" <params:TermPattern+> "->" <body:Box<Span<TermComputation>>> => Abstraction {
-        params,
-        body,
+        params, body,
     }.into(),
     "match" <scrut:Box<Span<TermValue>>> 
     "|"? "exists" "(" <ty:TypeV> "," <tv:TermV> ")" "->"
         <tc:Box<Span<TermComputation>>> 
     "end" => MatchExists {
-        scrut,
-        ty,
-        tv,
-        tc,
+        scrut, ty, tv, tc,
     }.into(),
 };
 
 TermComputationRight: TermComputation = {
     TermComputationAtom,
     <body:Box<Span<TermComputationRight>>> <arg:Box<Span<TermValue>>> => Application {
-        body,
-        arg,
+        body, arg,
     }.into(),
     <body:Box<Span<TermComputationRight>>> "@" "(" <arg:Box<Span<Type>>> ")" => TypApp {
-        body,
-        arg,
+        body, arg,
     }.into(),
     <body:Box<Span<TermComputationRight>>> "." <dtor:DtorV>
     <args:SepByDelim<"(", ",", Span<TermValue>, ")">> => Dtor {
-        body,
-        dtor,
-        args,
+        body, dtor, args,
     }.into(),
 };
 
 TermComputationAtom: TermComputation = {
     "(" <tc:TermComputation> ")" => tc.into(),
     "(" <tc:Box<Span<TermComputation>>> "::" <ty:Span<Type>> ")" => TermAnn {
-        body: tc,
-        ty,
+        term: tc, ty,
     }.into(),
     "ret" <v:Box<Span<TermValue>>> => Force(v).into(),
     "!" <v:Box<Span<TermValue>>> => Ret(v).into(),
@@ -234,8 +212,7 @@ Literal: Literal = {
 
 ExistsVal: ExistsVal = {
     "exists" "(" <ty:Type> "," <body:Box<Span<TermValue>>> ")" => ExistsVal (
-        ty,
-        body,
+        ty, body,
     ).into(),
 };
 

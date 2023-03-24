@@ -99,7 +99,7 @@ where
     Type: FmtArgs,
 {
     fn fmt_args(&self, args: Args) -> String {
-        let TermAnn { body, ty } = self;
+        let TermAnn { term: body, ty } = self;
         format!("({} :: {})", body.fmt_args(args), ty.fmt_args(args))
     }
 }

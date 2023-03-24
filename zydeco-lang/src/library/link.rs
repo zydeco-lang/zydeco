@@ -24,7 +24,7 @@ impl From<ss::Module> for Module {
 impl From<&ss::TermValue> for TermValue {
     fn from(v: &ss::TermValue) -> Self {
         match v {
-            ss::TermValue::TermAnn(TermAnn { body, ty: _ }) => {
+            ss::TermValue::TermAnn(TermAnn { term: body, ty: _ }) => {
                 body.inner_ref().into()
             }
             ss::TermValue::Var(x) => x.clone().into(),
@@ -44,7 +44,7 @@ impl From<&ss::TermValue> for TermValue {
 impl From<&ss::TermComputation> for TermComputation {
     fn from(e: &ss::TermComputation) -> Self {
         match e {
-            ss::TermComputation::TermAnn(TermAnn { body, ty: _ }) => {
+            ss::TermComputation::TermAnn(TermAnn { term: body, ty: _ }) => {
                 body.inner_ref().into()
             }
             ss::TermComputation::Ret(Ret(v)) => {

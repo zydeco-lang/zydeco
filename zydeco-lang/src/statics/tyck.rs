@@ -135,7 +135,7 @@ impl TypeCheck for Span<TermValue> {
         &self, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         Ok(match self.inner_ref() {
-            TermValue::TermAnn(TermAnn { body, ty }) => {
+            TermValue::TermAnn(TermAnn { term: body, ty }) => {
                 ty.span()
                     .make(ty.syn(ctx.clone())?)
                     .ensure(Kind::VType, "value term annotation")?;

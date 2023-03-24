@@ -127,7 +127,9 @@ fn desugar_gen_let(
         (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
             if let Some(ty) = ty {
-                body = Box::new(def.info.make(ps::TermAnn { body, ty }.into()));
+                body = Box::new(
+                    def.info.make(ps::TermAnn { term: body, ty }.into()),
+                );
             }
             if fun {
                 body = Box::new(
@@ -219,9 +221,9 @@ impl TryFrom<ps::TermValue> for TermValue {
     fn try_from(value: ps::TermValue) -> Result<Self, TypeCheckError> {
         Ok(match value {
             ps::TermValue::TermAnn(t) => {
-                let TermAnn { body, ty } = t;
+                let TermAnn { term: body, ty } = t;
                 TermAnn {
-                    body: rc!(body.try_map(TryInto::try_into)?),
+                    term: rc!(body.try_map(TryInto::try_into)?),
                     ty: rc!(ty.try_map(TryInto::try_into)?),
                 }
                 .into()
@@ -256,9 +258,9 @@ impl TryFrom<ps::TermComputation> for TermComputation {
     fn try_from(comp: ps::TermComputation) -> Result<Self, TypeCheckError> {
         Ok(match comp {
             ps::TermComputation::TermAnn(t) => {
-                let TermAnn { body, ty } = t;
+                let TermAnn { term: body, ty } = t;
                 TermAnn {
-                    body: rc!(body.try_map(TryInto::try_into)?),
+                    term: rc!(body.try_map(TryInto::try_into)?),
                     ty: rc!(ty.try_map(TryInto::try_into)?),
                 }
                 .into()
@@ -286,7 +288,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 if let Some(ty) = ty {
                     comp = rc!(comp.info.clone().make(
                         TermAnn {
-                            body: comp,
+                            term: comp,
                             ty: rc!(ty.try_map(TryInto::try_into)?),
                         }
                         .into(),
@@ -301,7 +303,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 if let Some(ty) = ty {
                     body = rc!(body.info.clone().make(
                         TermAnn {
-                            body,
+                            term: body,
                             ty: rc!(ty.try_map(TryInto::try_into)?),
                         }
                         .into(),
