@@ -1,5 +1,5 @@
 use super::token::Tok;
-use crate::syntax::span::{Cursor1, FileInfo};
+use crate::utils::span::{Cursor1, FileInfo};
 use std::fmt::Display;
 
 pub struct ParseError<'input>(

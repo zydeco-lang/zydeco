@@ -1,6 +1,7 @@
 use crate::{
     parse::{syntax::*, token::*},
-    syntax::{span::*, TCtor, DeclSymbol},
+    syntax::{TCtor, DeclSymbol},
+    utils::span::*,
 };
 use crate::parse::{apply_string_escapes};
 

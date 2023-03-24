@@ -39,6 +39,6 @@ impl<T: FmtArgs> FmtArgs for Rc<T> {
 
 impl<T: FmtArgs> FmtArgs for Span<T> {
     fn fmt_args(&self, args: Args) -> String {
-        self.inner.fmt_args(args)
+        self.inner_ref().fmt_args(args)
     }
 }

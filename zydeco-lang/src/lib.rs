@@ -96,6 +96,7 @@ pub mod dynamics {
 
 pub mod utils {
     pub mod fmt;
+    pub mod span;
     pub mod never;
     pub mod wrappers;
 }

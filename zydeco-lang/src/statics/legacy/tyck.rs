@@ -5,7 +5,7 @@ use crate::{
         resolve::NameResolveError,
     },
     syntax::binder::*,
-    syntax::span::{span, Span, SpanInfo, SpanView},
+    utils::span::{span, Span, SpanInfo, SpanView},
 };
 use std::collections::HashMap;
 use TypeCheckError::*;

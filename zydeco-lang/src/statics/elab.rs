@@ -2,7 +2,7 @@ use super::{syntax::*, TypeCheckError};
 use crate::{
     parse::syntax as ps,
     rc,
-    syntax::{span::span, Span},
+    utils::span::{span, Span},
 };
 
 impl TryFrom<ps::Module> for Module {

@@ -1,12 +1,10 @@
 #![allow(unused)]
 
-use crate::{rc, statics::resolve::NameResolveError};
+use crate::{rc, statics::resolve::NameResolveError, utils::fmt::FmtArgs};
 
-use super::{
-    err::TypeCheckError,
-    syntax::{span::SpanView, *},
-};
+use super::{err::TypeCheckError, syntax::*};
 use std::rc::Rc;
+use crate::utils::span::SpanView;
 use TypeCheckError::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -99,8 +97,7 @@ impl TypeCheck for Span<&TypeApp<TCtor, RcType>> {
                 };
                 bool_test(self.inner_ref().args.len() == params.len(), || {
                     self.span().make(ArityMismatch {
-                        context: format!("type"),
-                        // context: format!("{}", self),
+                        context: format!("{}", self.inner_ref().fmt()),
                         expected: params.len(),
                         found: self.inner_ref().args.len(),
                     })
@@ -201,22 +198,23 @@ impl TypeCheck for Span<TermValue> {
                         found: typ.to_owned(),
                     }))?
                 };
-                let Data { name, params, ctors } = ctx.data_ctx.get(tvar).cloned().ok_or(self.span().make(NameResolve(
-                    NameResolveError::UnknownIdentifier {
-                        name: tvar.name().to_owned(),
-                    },
-                )))?;
-                let DataBr (ctorv, tys) = ctors
+                let Data { name, params, ctors } =
+                    ctx.data_ctx.get(tvar).cloned().ok_or(self.span().make(
+                        NameResolve(NameResolveError::UnknownIdentifier {
+                            name: tvar.name().to_owned(),
+                        }),
+                    ))?;
+                let DataBr(ctorv, tys) = ctors
                     .into_iter()
-                    .find(|DataBr (ctorv, tys)| ctorv == ctor)
+                    .find(|DataBr(ctorv, tys)| ctorv == ctor)
                     .ok_or(self.span().make(NameResolve(
                         NameResolveError::UnknownIdentifier {
                             name: ctor.name().to_owned(),
                         },
                     )))?;
-                
+
                 todo!()
-            },
+            }
             v => todo!(),
         }
     }

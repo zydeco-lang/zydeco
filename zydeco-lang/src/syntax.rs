@@ -1,8 +1,7 @@
-pub mod span;
 pub mod env;
 mod fmt;
 
-pub use span::{Span, SpanInfo};
+pub use crate::utils::span::{Span, SpanInfo};
 use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
 
@@ -59,12 +58,12 @@ pub mod binder {
                     self.0.hash(state);
                 }
             }
-            impl crate::syntax::span::SpanView for $Var {
+            impl crate::utils::span::SpanView for $Var {
                 fn span(&self) -> &SpanInfo {
                     &self.1
                 }
             }
-            impl crate::syntax::span::SpanHolder for $Var {
+            impl crate::utils::span::SpanHolder for $Var {
                 fn span_map_mut<F>(&mut self, f: F)
                 where
                     F: Fn(&mut SpanInfo) + Clone,
