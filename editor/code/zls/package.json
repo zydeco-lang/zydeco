@@ -1,0 +1,25 @@
+{
+  "name": "zls",
+  "displayName": "zls",
+  "description": "A zydeco language support.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.76.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "zydeco",
+      "aliases": ["Zydeco", "zydeco"],
+      "extensions": [".zy",".zydeco"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "zydeco",
+      "scopeName": "source.zydeco",
+      "path": "./syntaxes/zydeco.tmLanguage.json"
+    }]
+  }
+}
