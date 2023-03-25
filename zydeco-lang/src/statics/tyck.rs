@@ -51,9 +51,11 @@ pub trait TypeCheck: SpanView + Sized {
             }
         }
     }
+    #[must_use]
     fn syn(&self, ctx: Self::Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
         Self::tyck(self.syn_step(ctx)?)
     }
+    #[must_use]
     fn ana(
         &self, typ: Self::Out, ctx: Self::Ctx,
     ) -> Result<(), Span<TypeCheckError>> {
@@ -76,12 +78,13 @@ impl TypeCheck for Span<Type> {
         let Type { app, kd, env } = self.inner_ref();
         Ok(match &app.tctor {
             TCtor::Var(x) => {
+                // type constructor
                 let Some(TypeArity { params, kd }) = ctx.type_ctx.get(&x) else {
-                    Err(self.span().make(TypeCheckError::NameResolve(
-                        NameResolveError::UnknownIdentifier {
+                    Err(self.span().make(
+                        NameResolveError::UnboundTypeVariable {
                             name: x.name().to_owned(),
-                        },
-                    )))?
+                        }.into()
+                    ))?
                 };
                 bool_test(app.args.len() == params.len(), || {
                     self.span().make(ArityMismatch {
@@ -90,12 +93,63 @@ impl TypeCheck for Span<Type> {
                         found: app.args.len(),
                     })
                 })?;
-                todo!()
+                for (arg, kd) in app.args.iter().zip(params.iter()) {
+                    self.span()
+                        .make(arg.syn(ctx.clone())?)
+                        .ensure(kd, "type argument")?;
+                }
+                Step::Done(kd.clone())
             }
-            TCtor::Thunk => todo!(),
-            TCtor::Ret => todo!(),
-            TCtor::OS => todo!(),
-            TCtor::Fun => todo!(),
+            TCtor::Thunk => match &app.args.as_slice() {
+                &[arg] => {
+                    self.span()
+                        .make(arg.syn(ctx.clone())?)
+                        .ensure(&Kind::VType, "thunk argument")?;
+                    Step::Done(Kind::VType)
+                }
+                _ => Err(self.span().make(ArityMismatch {
+                    context: format!("{}", self.inner_ref().fmt()),
+                    expected: 1,
+                    found: app.args.len(),
+                }))?,
+            },
+            TCtor::Ret => match &app.args.as_slice() {
+                &[arg] => {
+                    self.span()
+                        .make(arg.syn(ctx.clone())?)
+                        .ensure(&Kind::VType, "return argument")?;
+                    Step::Done(Kind::VType)
+                }
+                _ => Err(self.span().make(ArityMismatch {
+                    context: format!("{}", self.inner_ref().fmt()),
+                    expected: 1,
+                    found: app.args.len(),
+                }))?,
+            },
+            TCtor::OS => match &app.args.as_slice() {
+                &[] => Step::Done(Kind::CType),
+                _ => Err(self.span().make(ArityMismatch {
+                    context: format!("{}", self.inner_ref().fmt()),
+                    expected: 0,
+                    found: app.args.len(),
+                }))?,
+            },
+            TCtor::Fun => match &app.args.as_slice() {
+                &[arg1, arg2] => {
+                    self.span()
+                        .make(arg1.syn(ctx.clone())?)
+                        .ensure(&Kind::VType, "function argument")?;
+                    self.span()
+                        .make(arg2.syn(ctx.clone())?)
+                        .ensure(&Kind::CType, "function argument")?;
+                    Step::Done(Kind::CType)
+                }
+                _ => Err(self.span().make(ArityMismatch {
+                    context: format!("{}", self.inner_ref().fmt()),
+                    expected: 2,
+                    found: app.args.len(),
+                }))?,
+            },
         })
     }
 }
@@ -124,7 +178,7 @@ impl TypeCheck for Span<TermValue> {
             TermValue::TermAnn(TermAnn { term: body, ty }) => {
                 ty.span()
                     .make(ty.syn(ctx.clone())?)
-                    .ensure(Kind::VType, "value term annotation")?;
+                    .ensure(&Kind::VType, "value term annotation")?;
                 Step::AnaMode((ctx, body), ty.inner_ref().clone())
             }
             TermValue::Var(x) => Step::Done(
@@ -185,7 +239,7 @@ impl TypeCheck for Span<TermValue> {
                 };
                 let Data { name, params, ctors } =
                     ctx.data_ctx.get(tvar).cloned().ok_or(self.span().make(
-                        NameResolve(NameResolveError::UnknownIdentifier {
+                        NameResolve(NameResolveError::UnboundTypeVariable {
                             name: tvar.name().to_owned(),
                         }),
                     ))?;
@@ -193,12 +247,21 @@ impl TypeCheck for Span<TermValue> {
                     .into_iter()
                     .find(|DataBr(ctorv, tys)| ctorv == ctor)
                     .ok_or(self.span().make(NameResolve(
-                        NameResolveError::UnknownIdentifier {
+                        NameResolveError::UnknownConstructor {
                             name: ctor.name().to_owned(),
                         },
                     )))?;
-
-                todo!()
+                bool_test(args.len() == tys.len(), || {
+                    self.span().make(ArityMismatch {
+                        context: format!("ctor"),
+                        expected: tys.len(),
+                        found: args.len(),
+                    })
+                })?;
+                for (arg, ty) in args.iter().zip(tys.iter()) {
+                    arg.ana(ty.inner_ref().to_owned(), ctx.clone())?;
+                }
+                Ok(Step::Done(typ))
             }
             v => {
                 let typ_syn = self.syn(ctx)?;
@@ -304,8 +367,9 @@ impl Eqv for Type {
         let rhs = other.head_reduction()?;
         // both stuck type variable and type constructor
         lhs.tctor.eqv(&rhs.tctor, f.clone())?;
-        // argument length must be the same
+        // argument length must be equal
         bool_test(lhs.args.len() == rhs.args.len(), f.clone())?;
+        // arguments must be equivalent
         for (ty1, ty2) in lhs.args.iter().zip(rhs.args.iter()) {
             ty1.inner_ref().eqv(ty2.inner_ref(), f.clone())?;
         }
@@ -367,12 +431,12 @@ impl Type {
 
 impl Span<Kind> {
     fn ensure(
-        &self, kind: Kind, context: &str,
+        &self, kind: &Kind, context: &str,
     ) -> Result<(), Span<TypeCheckError>> {
-        self.inner_ref().eqv(&kind, || {
+        self.inner_ref().eqv(kind, || {
             self.span().make(KindMismatch {
                 context: context.to_owned(),
-                expected: kind,
+                expected: kind.clone(),
                 found: self.inner_ref().clone(),
             })
         })
