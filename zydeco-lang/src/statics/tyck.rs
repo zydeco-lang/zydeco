@@ -256,9 +256,7 @@ pub trait Eqv {
     ) -> Result<(), Span<TypeCheckError>>;
 }
 
-fn bool_test(
-    b: bool, f: impl FnOnce() -> Span<TypeCheckError>,
-) -> Result<(), Span<TypeCheckError>> {
+fn bool_test<E>(b: bool, f: impl FnOnce() -> E) -> Result<(), E> {
     b.then_some(()).ok_or_else(f)
 }
 
@@ -279,6 +277,7 @@ impl Eqv for Kind {
 }
 
 impl Eqv for TCtor {
+    /// syntactic equality of type constructors
     fn eqv(
         &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
@@ -301,38 +300,50 @@ impl Eqv for Type {
     fn eqv(
         &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
+        let lhs = self.head_reduction()?;
+        let rhs = other.head_reduction()?;
+        // both stuck type variable and type constructor
+        lhs.tctor.eqv(&rhs.tctor, f.clone())?;
+        // argument length must be the same
+        bool_test(lhs.args.len() == rhs.args.len(), f.clone())?;
+        for (ty1, ty2) in lhs.args.iter().zip(rhs.args.iter()) {
+            ty1.inner_ref().eqv(ty2.inner_ref(), f.clone())?;
+        }
         Ok(())
     }
 }
 
-// impl Eqv for TypeApp<TCtor, RcType> {
-//     fn eqv(
-//         &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
-//     ) -> Result<(), Span<TypeCheckError>> {
-//         TCtor::eqv(&self.tctor, &other.tctor, f.clone())?;
-//         bool_test(self.args.len() == other.args.len(), f.clone())?;
-//         for (argl, argr) in self.args.iter().zip(&other.args) {
-//             Type::eqv(argl.inner_ref(), argr.inner_ref(), f.clone())?
-//         }
-//         Ok(())
-//     }
-// }
+impl Type {
+    fn head_reduction(
+        &self,
+    ) -> Result<&TypeApp<TCtor, RcType>, Span<TypeCheckError>> {
+        // Note: the type is either a type constructor applied with types or a type variable
+        if self.app.args.is_empty() {
+            // type variable or data type with no parameters
+            let mut tctor = self.app.tctor.clone();
+            if let TCtor::Var(tvar) = &mut tctor {
+                if let Some(ty) = self.env.get(tvar) {
+                    return ty.head_reduction();
+                }
+            }
+            // base case: stuck
+        } else {
+            // base case: type constructor
+        }
+        Ok(&self.app)
+    }
+}
 
 impl Monoid for Env<TypeV, Type> {
     fn empty() -> Self {
         Self::new()
     }
 
-    /// `append` on Env is actually composing lazy substitutions, effectively
-    ///
-    ///       M [\gamma] [\delta] = M [\delta . \gamma]
-    ///
-    /// where we refer to gamma as original substitution and delta as "diff" substitution
-    ///
-    /// then to use `append`
-    ///
-    ///      new = append(diff, original)
     fn append(self, ori: Self) -> Self {
+        // append on Env is actually composing lazy substitutions, effectively
+        //       M [\gamma] [\delta] = M [\delta . \gamma]
+        // where we refer to gamma as "original" and delta as "diff" then
+        //      new = append(diff, original)
         let mut new = Self::new();
         for (x, ty) in self.clone() {
             if !ori.contains_key(&x) {
@@ -359,7 +370,7 @@ impl Span<Kind> {
         &self, kind: Kind, context: &str,
     ) -> Result<(), Span<TypeCheckError>> {
         self.inner_ref().eqv(&kind, || {
-            self.span().make(TypeCheckError::KindMismatch {
+            self.span().make(KindMismatch {
                 context: context.to_owned(),
                 expected: kind,
                 found: self.inner_ref().clone(),
