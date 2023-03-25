@@ -1,8 +1,10 @@
 #![allow(unused)]
 
 use crate::{
-    rc, statics::resolve::NameResolveError, syntax::env::Env,
-    utils::fmt::FmtArgs,
+    rc,
+    statics::resolve::NameResolveError,
+    syntax::env::Env,
+    utils::{fmt::FmtArgs, monoid::Monoid},
 };
 
 use super::{err::TypeCheckError, syntax::*};
@@ -14,7 +16,6 @@ use TypeCheckError::*;
 pub struct Ctx {
     pub type_ctx: im::HashMap<TypeV, TypeArity<Kind>>,
     pub term_ctx: im::HashMap<TermV, Type>,
-    pub type_env: Env<TypeV, RcType>,
     pub data_ctx: im::HashMap<TypeV, Data<TypeV, CtorV, RcType>>,
     pub coda_ctx: im::HashMap<TypeV, Codata<TypeV, DtorV, RcType>>,
 }
@@ -243,7 +244,7 @@ impl TypeCheck for Span<Module> {
         let ty = entry.syn(ctx)?;
         match ty.app.tctor {
             TCtor::OS => Ok(()),
-            _ => Err(self.span().make(WrongMain { found: todo!() })),
+            _ => Err(self.span().make(WrongMain { found: ty })),
         }?;
         Ok(Step::Done(()))
     }
@@ -316,6 +317,42 @@ impl Eqv for Type {
 //         Ok(())
 //     }
 // }
+
+impl Monoid for Env<TypeV, Type> {
+    fn empty() -> Self {
+        Self::new()
+    }
+
+    /// `append` on Env is actually composing lazy substitutions, effectively
+    ///
+    ///       M [\gamma] [\delta] = M [\delta . \gamma]
+    ///
+    /// where we refer to gamma as original substitution and delta as "diff" substitution
+    ///
+    /// then to use `append`
+    ///
+    ///      new = append(diff, original)
+    fn append(self, ori: Self) -> Self {
+        let mut new = Self::new();
+        for (x, ty) in self.clone() {
+            if !ori.contains_key(&x) {
+                new.insert(x, ty);
+            }
+        }
+        for (x, ty) in ori {
+            new.insert(x, ty.subst(self.clone()));
+        }
+        new
+    }
+}
+
+impl Type {
+    fn subst(self, diff: Env<TypeV, Type>) -> Self {
+        let Type { app, kd, env } = self;
+        let env = diff.append(env);
+        Type { app, kd, env }
+    }
+}
 
 impl Span<Kind> {
     fn ensure(

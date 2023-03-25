@@ -72,3 +72,42 @@ where
         Env { inner: iter.into_iter().collect() }
     }
 }
+
+impl<'a, K, V> IntoIterator for &'a Env<K, V>
+where
+    K: Eq + Hash + Clone,
+    V: Clone,
+{
+    type Item = (&'a K, &'a V);
+    type IntoIter = im::hashmap::Iter<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.iter()
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a mut Env<K, V>
+where
+    K: Eq + Hash + Clone,
+    V: Clone,
+{
+    type Item = (&'a K, &'a mut V);
+    type IntoIter = im::hashmap::IterMut<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.iter_mut()
+    }
+}
+
+impl<K, V> IntoIterator for Env<K, V>
+where
+    K: Eq + Hash + Clone,
+    V: Clone,
+{
+    type Item = (K, V);
+    type IntoIter = im::hashmap::ConsumingIter<(K, V)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}

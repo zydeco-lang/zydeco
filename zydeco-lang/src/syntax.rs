@@ -80,7 +80,7 @@ pub mod binder {
     impl VarT for TypeV {}
     var!(TermV);
     impl VarT for TermV {}
-    impl<T: TypeT> VarT for (TermV, T) {}
+    impl<Ty: TypeT> VarT for (TermV, Ty) {}
 }
 pub use binder::*;
 
@@ -120,11 +120,11 @@ pub enum TCtor {
 impl VarT for TCtor {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeApp<TyV, T: TypeT> {
+pub struct TypeApp<TyV, Ty: TypeT> {
     pub tctor: TyV,
-    pub args: Vec<T>,
+    pub args: Vec<Ty>,
 }
-impl<TyV, T: TypeT> TypeT for TypeApp<TyV, T> {}
+impl<TyV, Ty: TypeT> TypeT for TypeApp<TyV, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Forall<TyV, Ty: TypeT> {
@@ -289,24 +289,24 @@ pub struct DeclSymbol<T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Data<TyV: VarT, C, T: TypeT> {
+pub struct Data<TyV: VarT, C, Ty: TypeT> {
     pub name: TyV,
     pub params: Vec<(TyV, Kind)>,
-    pub ctors: Vec<DataBr<C, T>>,
+    pub ctors: Vec<DataBr<C, Ty>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DataBr<C, T: TypeT>(pub C, pub Vec<T>);
+pub struct DataBr<C, Ty: TypeT>(pub C, pub Vec<Ty>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Codata<TyV: VarT, D, T: TypeT> {
+pub struct Codata<TyV: VarT, D, Ty: TypeT> {
     pub name: TyV,
     pub params: Vec<(TyV, Kind)>,
-    pub dtors: Vec<CodataBr<D, T>>,
+    pub dtors: Vec<CodataBr<D, Ty>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CodataBr<D, T: TypeT>(pub D, pub Vec<T>, pub T);
+pub struct CodataBr<D, Ty: TypeT>(pub D, pub Vec<Ty>, pub Ty);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Define<TeV: VarT, A: ValueT> {

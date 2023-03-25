@@ -100,6 +100,7 @@ pub mod utils {
     pub mod span;
     pub mod never;
     pub mod wrappers;
+    pub mod monoid;
 }
 
 pub mod zydeco;

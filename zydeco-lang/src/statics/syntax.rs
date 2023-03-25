@@ -15,7 +15,7 @@ pub use crate::syntax::Kind;
 pub struct Type {
     pub app: TypeApp<TCtor, RcType>,
     pub kd: Option<Kind>,
-    pub env: Env<TypeV, RcType>,
+    pub env: Env<TypeV, Type>,
 }
 pub type RcType = Rc<Span<Type>>;
 impl TypeT for Type {}
