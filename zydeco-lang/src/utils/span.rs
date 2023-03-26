@@ -128,6 +128,47 @@ pub trait SpanHolder {
     }
 }
 
+impl<T: SpanHolder> SpanHolder for Box<T> {
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        self.as_mut().span_map_mut(f)
+    }
+}
+
+impl<T: SpanHolder> SpanHolder for Option<T> {
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        if let Some(s) = self {
+            s.span_map_mut(f)
+        }
+    }
+}
+
+impl<T: SpanHolder> SpanHolder for Vec<T> {
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        for s in self {
+            s.span_map_mut(f.clone())
+        }
+    }
+}
+
+impl<S: SpanHolder, T: SpanHolder> SpanHolder for (S, T) {
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        self.0.span_map_mut(f.clone());
+        self.1.span_map_mut(f);
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Span<T> {
     pub inner: T,

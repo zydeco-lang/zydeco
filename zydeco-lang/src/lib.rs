@@ -69,7 +69,7 @@ pub mod statics {
     mod err;
     mod legacy;
     mod elab;
-    mod tyck;
+    pub mod tyck;
     mod fmt;
 
     pub use self::legacy::{ctx::Ctx, err::TypeCheckError, tyck::TypeCheck};

@@ -39,3 +39,9 @@ impl FmtArgs for TermComputation {
         }
     }
 }
+
+// impl FmtArgs for Module {
+//     fn fmt_args(&self, args: Args) -> String {
+//         let mut s = String::new();
+
+// }
