@@ -180,8 +180,8 @@ TermComputationAtom: TermComputation = {
 };
 
 GenLet: GenLet = {
-    <rec:"rec"?> <fun:"fn"?> <var:TermV> <params:TermPattern*> <ty:(":" <Span<Type>>)?> "="
-    <def:Box<Span<Term>>> => GenLet {
+    <rec:"rec"?> <fun:"fn"?> <var:TermV> <params:TermPattern*>
+    <ty:(":" <Span<Type>>)?> <def: ("=" <Box<Span<Term>>>)?> => GenLet {
         rec: rec.is_some(),
         fun: fun.is_some(),
         name: (var, ty),

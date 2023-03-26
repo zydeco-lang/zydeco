@@ -1,4 +1,4 @@
-use super::{syntax::*, TypeCheckError};
+use super::{err::TypeCheckError, resolve::NameResolveError, syntax::*};
 use crate::{
     parse::syntax as ps,
     rc,
@@ -15,9 +15,21 @@ impl TryFrom<ps::Module> for Module {
         let mut define = Vec::new();
         for declaration in declarations {
             match declaration.inner {
-                ps::Declaration::Data(d) => data.push(d.try_into()?),
-                ps::Declaration::Codata(d) => codata.push(d.try_into()?),
-                ps::Declaration::Define(d) => define.push(d.try_into()?),
+                ps::Declaration::Data(d) => data.push(DeclSymbol {
+                    public: declaration.public,
+                    external: declaration.external,
+                    inner: d.try_into()?,
+                }),
+                ps::Declaration::Codata(d) => codata.push(DeclSymbol {
+                    public: declaration.public,
+                    external: declaration.external,
+                    inner: d.try_into()?,
+                }),
+                ps::Declaration::Define(d) => define.push(DeclSymbol {
+                    public: declaration.public,
+                    external: declaration.external,
+                    inner: d.try_into()?,
+                }),
             }
         }
         let entry = entry.try_map(TryInto::try_into)?;
@@ -105,9 +117,13 @@ impl TryFrom<ps::Define> for Define<TermV, RcValue> {
 
 fn desugar_gen_let(
     rec: bool, fun: bool, (var, ty): (TermV, Option<Span<ps::Type>>),
-    params: Vec<(TermV, Option<Span<ps::Type>>)>, def: Box<Span<ps::Term>>,
+    params: Vec<(TermV, Option<Span<ps::Type>>)>,
+    def: Option<Box<Span<ps::Term>>>,
 ) -> Result<(TermV, RcValue), TypeCheckError> {
     let name = var.clone();
+    let Some(def) = def else {
+        Err(TypeCheckError::from(NameResolveError::EmptyDeclaration { name: name.name().to_string() }))?
+    };
     match (rec, fun, def.inner) {
         (false, false, ps::Term::Value(value)) => {
             Ok((name, rc!(def.info.make(value.try_into()?))))
@@ -305,7 +321,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                         let body = rc!((body).try_map(TryInto::try_into)?);
                         Ok(Matcher { ctor, vars, body })
                     })
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<Result<Vec<_>, TypeCheckError>>()?;
                 Match { scrut, arms }.into()
             }
             ps::TermComputation::Abs(t) => desugar_fn(t)?,
@@ -329,7 +345,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                         let body = rc!((body).try_map(TryInto::try_into)?);
                         Ok(CoMatcher { dtor, vars, body })
                     })
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<Result<Vec<_>, TypeCheckError>>()?;
                 CoMatch { arms }.into()
             }
             ps::TermComputation::Dtor(t) => {

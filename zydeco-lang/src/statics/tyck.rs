@@ -551,7 +551,7 @@ impl TypeCheck for Span<Module> {
         let Module { name: _, data, codata: coda, define, entry } =
             self.inner_ref();
         // register data and codata type declarations in the type context
-        for data in data {
+        for DeclSymbol { inner: data, .. } in data {
             let res = ctx.type_ctx.insert(data.name.clone(), data.type_arity());
             if let Some(_) = res {
                 Err(data.name.span().make(
@@ -562,7 +562,7 @@ impl TypeCheck for Span<Module> {
                 ))?;
             }
         }
-        for coda in coda {
+        for DeclSymbol { inner: coda, .. } in coda {
             let res = ctx.type_ctx.insert(coda.name.clone(), coda.type_arity());
             if let Some(_) = res {
                 Err(coda.name.span().make(
@@ -574,15 +574,15 @@ impl TypeCheck for Span<Module> {
             }
         }
         // type check data and codata type declarations
-        for data in data {
+        for DeclSymbol { inner: data, .. } in data {
             data.name.span().make(data).syn(ctx.clone())?;
             ctx.data_ctx.insert(data.name.clone(), data.clone());
         }
-        for coda in coda {
+        for DeclSymbol { inner: coda, .. } in coda {
             coda.name.span().make(coda).syn(ctx.clone())?;
             ctx.coda_ctx.insert(coda.name.clone(), coda.clone());
         }
-        for Define { name, def } in define {
+        for DeclSymbol { inner: Define { name, def }, .. } in define {
             let ty_def = def.syn(ctx.clone())?;
             let span = name.span();
             let kd = span.make(ty_def.clone()).syn(ctx.clone())?;

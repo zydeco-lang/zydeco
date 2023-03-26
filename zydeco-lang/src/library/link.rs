@@ -10,7 +10,11 @@ impl From<ss::Module> for Module {
                 .define
                 .into_iter()
                 .map(|def| {
-                    let ss::Define { name, def } = def;
+                    let DeclSymbol {
+                        inner: ss::Define { name, def },
+                        external,
+                        public: _,
+                    } = def;
                     (name, def.inner_ref().into())
                     // Todo: use extern field
                     // todo!()

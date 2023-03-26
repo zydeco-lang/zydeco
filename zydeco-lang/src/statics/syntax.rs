@@ -75,8 +75,8 @@ pub enum Term {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub name: Option<String>,
-    pub data: Vec<Data<TypeV, CtorV, RcType>>,
-    pub codata: Vec<Codata<TypeV, DtorV, RcType>>,
-    pub define: Vec<Define<TermV, RcValue>>,
+    pub data: Vec<DeclSymbol<Data<TypeV, CtorV, RcType>>>,
+    pub codata: Vec<DeclSymbol<Codata<TypeV, DtorV, RcType>>>,
+    pub define: Vec<DeclSymbol<Define<TermV, RcValue>>>,
     pub entry: Span<TermComputation>,
 }
