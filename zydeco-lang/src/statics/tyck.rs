@@ -66,6 +66,10 @@ pub enum Step<In, Out> {
     Done(Out),
 }
 
+fn bool_test<E>(b: bool, f: impl FnOnce() -> E) -> Result<(), E> {
+    b.then_some(()).ok_or_else(f)
+}
+
 impl TypeCheck for Span<Type> {
     type Ctx = Ctx;
     type Out = Kind;
@@ -450,22 +454,140 @@ impl TypeCheck for Span<TermComputation> {
     }
 }
 
+impl Data<TypeV, CtorV, RcType> {
+    fn type_arity(&self) -> TypeArity<Kind> {
+        TypeArity {
+            params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
+            kd: Kind::VType,
+        }
+    }
+}
+
+impl Codata<TypeV, DtorV, RcType> {
+    fn type_arity(&self) -> TypeArity<Kind> {
+        TypeArity {
+            params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
+            kd: Kind::CType,
+        }
+    }
+}
+
+impl From<Kind> for TypeArity<Kind> {
+    fn from(kd: Kind) -> Self {
+        TypeArity { params: vec![], kd }
+    }
+}
+
+impl TypeCheck for Span<&Data<TypeV, CtorV, RcType>> {
+    type Ctx = Ctx;
+    type Out = ();
+
+    fn syn_step(
+        &self, mut ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        let data = self.inner_ref();
+        for (tvar, kd) in data.params.iter() {
+            ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
+        }
+        let mut ctorvs = std::collections::HashSet::new();
+        for DataBr(ctorv, tys) in data.ctors.iter() {
+            let span = ctorv.span();
+            if ctorvs.contains(ctorv) {
+                Err(span.make(
+                    NameResolveError::DuplicateCtorDeclaration {
+                        name: ctorv.clone(),
+                    }
+                    .into(),
+                ))?;
+            }
+            ctorvs.insert(ctorv.clone());
+            for ty in tys {
+                span.make(ty.syn(ctx.clone())?).ensure(&Kind::VType, "data")?;
+            }
+        }
+        Ok(Step::Done(()))
+    }
+}
+
+impl TypeCheck for Span<&Codata<TypeV, DtorV, RcType>> {
+    type Ctx = Ctx;
+    type Out = ();
+
+    fn syn_step(
+        &self, mut ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        let data = self.inner_ref();
+        for (tvar, kd) in data.params.iter() {
+            ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
+        }
+        let mut dtorvs = std::collections::HashSet::new();
+        for CodataBr(dtorv, tys, ty) in data.dtors.iter() {
+            let span = dtorv.span();
+            if dtorvs.contains(dtorv) {
+                Err(span.make(
+                    NameResolveError::DuplicateDtorDeclaration {
+                        name: dtorv.clone(),
+                    }
+                    .into(),
+                ))?;
+            }
+            dtorvs.insert(dtorv.clone());
+            for ty in tys {
+                span.make(ty.syn(ctx.clone())?)
+                    .ensure(&Kind::VType, "codata")?;
+            }
+            span.make(ty.syn(ctx.clone())?).ensure(&Kind::CType, "codata")?;
+        }
+        Ok(Step::Done(()))
+    }
+}
+
 impl TypeCheck for Span<Module> {
     type Ctx = Ctx;
     type Out = ();
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
-        let Module { name: _, data, codata, define, entry } = self.inner_ref();
-        ctx.data_ctx.extend(
-            data.into_iter().map(|data| (data.name.clone(), data.clone())),
-        );
-        ctx.coda_ctx.extend(
-            codata.into_iter().map(|coda| (coda.name.clone(), coda.clone())),
-        );
+        let Module { name: _, data, codata: coda, define, entry } =
+            self.inner_ref();
+        // register data and codata type declarations in the type context
+        for data in data {
+            let res = ctx.type_ctx.insert(data.name.clone(), data.type_arity());
+            if let Some(_) = res {
+                Err(data.name.span().make(
+                    NameResolveError::DuplicateTypeDeclaration {
+                        name: data.name.clone(),
+                    }
+                    .into(),
+                ))?;
+            }
+        }
+        for coda in coda {
+            let res = ctx.type_ctx.insert(coda.name.clone(), coda.type_arity());
+            if let Some(_) = res {
+                Err(coda.name.span().make(
+                    NameResolveError::DuplicateTypeDeclaration {
+                        name: coda.name.clone(),
+                    }
+                    .into(),
+                ))?;
+            }
+        }
+        // type check data and codata type declarations
+        for data in data {
+            data.name.span().make(data).syn(ctx.clone())?;
+            ctx.data_ctx.insert(data.name.clone(), data.clone());
+        }
+        for coda in coda {
+            coda.name.span().make(coda).syn(ctx.clone())?;
+            ctx.coda_ctx.insert(coda.name.clone(), coda.clone());
+        }
         for Define { name, def } in define {
-            let def = def.syn(ctx.clone())?;
-            ctx.term_ctx.insert(name.clone(), def);
+            let ty_def = def.syn(ctx.clone())?;
+            let span = name.span();
+            let kd = span.make(ty_def.clone()).syn(ctx.clone())?;
+            span.make(kd).ensure(&Kind::VType, "define")?;
+            ctx.term_ctx.insert(name.clone(), ty_def);
         }
         let ty = entry.syn(ctx)?;
         match ty.app.tctor {
@@ -480,10 +602,6 @@ pub trait Eqv {
     fn eqv(
         &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>>;
-}
-
-fn bool_test<E>(b: bool, f: impl FnOnce() -> E) -> Result<(), E> {
-    b.then_some(()).ok_or_else(f)
 }
 
 impl Eqv for () {

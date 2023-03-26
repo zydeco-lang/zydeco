@@ -45,8 +45,8 @@ impl Ctx {
                 self.data.insert(name.clone(), data.clone()).map_or(
                     Ok(()),
                     |_| {
-                        Err(ann.make(NameResolveError::DuplicateDeclaration {
-                            name: name.name().to_string(),
+                        Err(ann.make(NameResolveError::DuplicateTypeDeclaration {
+                            name: name.clone(),
                         }))
                     },
                 )?;
@@ -63,8 +63,8 @@ impl Ctx {
                 self.coda.insert(name.clone(), codata.clone()).map_or(
                     Ok(()),
                     |_| {
-                        Err(ann.make(NameResolveError::DuplicateDeclaration {
-                            name: name.name().to_string(),
+                        Err(ann.make(NameResolveError::DuplicateTypeDeclaration {
+                            name: name.clone(),
                         }))
                     },
                 )?;

@@ -13,7 +13,6 @@ pub enum TypeCheckError {
     InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
     WrongMain { found: Type },
-    ErrStr(String),
 }
 
 use std::fmt;
@@ -67,7 +66,6 @@ impl fmt::Display for TypeCheckError {
                 "The type of the main expression should be OS but got {}",
                 found.fmt()
             ),
-            ErrStr(s) => write!(f, "{}", s),
         }
     }
 }

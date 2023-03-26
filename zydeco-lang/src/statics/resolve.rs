@@ -4,7 +4,9 @@ use std::fmt;
 
 #[derive(Clone, Debug)]
 pub enum NameResolveError {
-    DuplicateDeclaration { name: String },
+    DuplicateTypeDeclaration { name: TypeV },
+    DuplicateCtorDeclaration { name: CtorV },
+    DuplicateDtorDeclaration { name: DtorV },
     EmptyDeclaration { name: String },
     UnknownIdentifier { name: String },
     UnboundTypeVariable { tvar: TypeV },
@@ -17,7 +19,13 @@ use NameResolveError::*;
 impl fmt::Display for NameResolveError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DuplicateDeclaration { name } => {
+            DuplicateTypeDeclaration { name } => {
+                write!(f, "{} declared multiple times", name)
+            }
+            DuplicateCtorDeclaration { name } => {
+                write!(f, "{} declared multiple times", name)
+            }
+            DuplicateDtorDeclaration { name } => {
                 write!(f, "{} declared multiple times", name)
             }
             EmptyDeclaration { name } => {
