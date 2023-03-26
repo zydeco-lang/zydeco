@@ -367,13 +367,13 @@ impl TypeCheck for Span<TermComputation> {
         })
     }
     fn ana_step(
-        &self, typ: Self::Out, ctx: Self::Ctx,
+        &self, typ: Self::Out, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         Ok(match self.inner_ref() {
             TermComputation::Ret(Ret(v)) => {
                 let app = typ.head_reduction()?;
                 let kd = self.span().make(typ.clone()).syn(ctx.clone())?;
-                self.span().make(kd).ensure(&Kind::VType, "ret")?;
+                self.span().make(kd).ensure(&Kind::CType, "ret")?;
                 bool_test(app.tctor == TCtor::Ret, || {
                     self.span().make(TypeExpected {
                         context: format!("ret"),
@@ -388,13 +388,56 @@ impl TypeCheck for Span<TermComputation> {
                         found: app.args.len(),
                     })
                 })?;
-                v.ana(app.args[1].inner_ref().to_owned(), ctx)?;
+                v.ana(app.args[0].inner_ref().to_owned(), ctx)?;
                 Step::Done(typ)
             }
-            TermComputation::Force(_) => todo!(),
-            TermComputation::Let(_) => todo!(),
-            TermComputation::Do(_) => todo!(),
-            TermComputation::Rec(_) => todo!(),
+            TermComputation::Force(Force(v)) => {
+                let kd = self.span().make(typ.clone()).syn(ctx.clone())?;
+                self.span().make(kd).ensure(&Kind::CType, "force")?;
+                v.ana(
+                    TypeApp {
+                        tctor: TCtor::Thunk,
+                        args: vec![rc!(self.span().make(typ.clone()))],
+                    }
+                    .into(),
+                    ctx,
+                )?;
+                Step::Done(typ)
+            }
+            TermComputation::Let(Let { var, def, body }) => {
+                let ty_def = def.syn(ctx.clone())?;
+                let kd = self.span().make(ty_def.clone()).syn(ctx.clone())?;
+                self.span().make(kd).ensure(&Kind::VType, "let")?;
+                ctx.term_ctx.insert(var.to_owned(), ty_def.clone());
+                Step::AnaMode((ctx, body), typ)
+            }
+            TermComputation::Do(Do { var, comp, body }) => {
+                let ty_comp = comp.syn(ctx.clone())?;
+                let kd = self.span().make(ty_comp.clone()).syn(ctx.clone())?;
+                self.span().make(kd).ensure(&Kind::CType, "do")?;
+                let ty_app = ty_comp.head_reduction()?;
+                bool_test(ty_app.tctor == TCtor::Ret, || {
+                    self.span().make(TypeExpected {
+                        context: format!("do"),
+                        expected: format!("{{a}}"),
+                        found: ty_comp.clone(),
+                    })
+                })?;
+                let ty_val = ty_app.args[0].inner_ref().to_owned();
+                ctx.term_ctx.insert(var.to_owned(), ty_val);
+                Step::AnaMode((ctx, body), typ)
+            }
+            TermComputation::Rec(Rec { var, body }) => {
+                ctx.term_ctx.insert(
+                    var.to_owned(),
+                    TypeApp {
+                        tctor: TCtor::Thunk,
+                        args: vec![rc!(self.span().make(typ.clone()))],
+                    }
+                    .into(),
+                );
+                Step::AnaMode((ctx, body), typ)
+            }
             TermComputation::Match(_) => todo!(),
             TermComputation::CoMatch(_) => todo!(),
             TermComputation::Dtor(_) => todo!(),
