@@ -188,7 +188,7 @@ impl TypeCheck for Span<TermValue> {
                     .ok_or(self.span().make(UnboundVar { var: x.clone() }))?,
             ),
             TermValue::Thunk(Thunk(c)) => {
-                let c = c.syn(ctx)?.head_reduction()?.to_owned();
+                let c = c.syn(ctx)?.head_reduction()?;
                 Step::Done(
                     TypeApp {
                         tctor: TCtor::Thunk,
@@ -211,7 +211,7 @@ impl TypeCheck for Span<TermValue> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         match self.inner_ref() {
             TermValue::Thunk(Thunk(c)) => {
-                let app = typ.head_reduction()?.to_owned();
+                let app = typ.head_reduction()?;
                 bool_test(app.tctor == TCtor::Thunk, || {
                     self.span().make(TypeExpected {
                         context: format!("thunk"),
@@ -231,7 +231,7 @@ impl TypeCheck for Span<TermValue> {
                 Ok(Step::Done(typ))
             }
             TermValue::Ctor(Ctor { ctor, args }) => {
-                let ty_app = typ.head_reduction()?.to_owned();
+                let ty_app = typ.head_reduction()?;
                 let TCtor::Var(tvar) = &ty_app.tctor else {
                     Err(self.span().make(TypeExpected {
                         context: format!("ctor"),
@@ -302,14 +302,14 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::TermAnn(TermAnn { term, ty }) => {
                 ty.span()
                     .make(ty.syn(ctx.clone())?)
-                    .ensure(&Kind::CType, "value term annotation")?;
+                    .ensure(&Kind::CType, "computation term annotation")?;
                 Step::AnaMode((ctx, term), ty.inner_ref().clone())
             }
             TermComputation::Ret(Ret(v)) => {
                 // Err(self
                 // .span()
                 // .make(NeedAnnotation { content: format!("ret") }))?
-                let app_body = v.syn(ctx.clone())?.head_reduction()?.to_owned();
+                let app_body = v.syn(ctx.clone())?.head_reduction()?;
                 let ty_body: Type = app_body.into();
                 let kd = self.span().make(ty_body.clone()).syn(ctx)?;
                 self.span().make(kd).ensure(&Kind::VType, "force")?;
@@ -322,7 +322,7 @@ impl TypeCheck for Span<TermComputation> {
                 )
             }
             TermComputation::Force(Force(v)) => {
-                let app_body = v.syn(ctx.clone())?.head_reduction()?.to_owned();
+                let app_body = v.syn(ctx.clone())?.head_reduction()?;
                 bool_test(app_body.tctor == TCtor::Thunk, || {
                     self.span().make(TypeExpected {
                         context: format!("force"),
@@ -369,7 +369,41 @@ impl TypeCheck for Span<TermComputation> {
     fn ana_step(
         &self, typ: Self::Out, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
-        todo!()
+        Ok(match self.inner_ref() {
+            TermComputation::Ret(Ret(v)) => {
+                let app = typ.head_reduction()?;
+                let kd = self.span().make(typ.clone()).syn(ctx.clone())?;
+                self.span().make(kd).ensure(&Kind::VType, "ret")?;
+                bool_test(app.tctor == TCtor::Ret, || {
+                    self.span().make(TypeExpected {
+                        context: format!("ret"),
+                        expected: format!("{{a}}"),
+                        found: typ.clone(),
+                    })
+                })?;
+                bool_test(app.args.len() == 1, || {
+                    self.span().make(ArityMismatch {
+                        context: format!("ret"),
+                        expected: 1,
+                        found: app.args.len(),
+                    })
+                })?;
+                v.ana(app.args[1].inner_ref().to_owned(), ctx)?;
+                Step::Done(typ)
+            }
+            TermComputation::Force(_) => todo!(),
+            TermComputation::Let(_) => todo!(),
+            TermComputation::Do(_) => todo!(),
+            TermComputation::Rec(_) => todo!(),
+            TermComputation::Match(_) => todo!(),
+            TermComputation::CoMatch(_) => todo!(),
+            TermComputation::Dtor(_) => todo!(),
+            _ => {
+                let typ_syn = self.syn(ctx)?;
+                typ.eqv(&typ_syn, || self.span().make(Subsumption))?;
+                Step::Done(typ)
+            }
+        })
     }
 }
 
@@ -467,21 +501,30 @@ impl Type {
     #[must_use]
     fn head_reduction(
         &self,
-    ) -> Result<&TypeApp<TCtor, RcType>, Span<TypeCheckError>> {
+    ) -> Result<TypeApp<TCtor, RcType>, Span<TypeCheckError>> {
+        let Type { app, kd: _, env } = self;
         // Note: the type is either a type constructor applied with types or a type variable
-        if self.app.args.is_empty() {
+        if app.args.is_empty() {
             // type variable or data type with no parameters
-            let mut tctor = self.app.tctor.clone();
+            let mut tctor = app.tctor.clone();
             if let TCtor::Var(tvar) = &mut tctor {
-                if let Some(ty) = self.env.get(tvar) {
+                if let Some(ty) = env.get(tvar) {
                     return ty.head_reduction();
                 }
             }
             // base case: stuck
+            Ok(app.clone())
         } else {
             // base case: type constructor
+            let args: Vec<_> = (app.args.iter())
+                .map(|ty| {
+                    let ty_subst = ty.inner_ref().clone().subst(env.clone());
+                    rc!(ty.span().make(ty_subst))
+                })
+                .collect();
+            let app = TypeApp { tctor: app.tctor.clone(), args };
+            Ok(app)
         }
-        Ok(&self.app)
     }
 }
 
