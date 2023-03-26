@@ -1,4 +1,5 @@
 use super::err::TypeCheckError;
+use crate::syntax::binder::{CtorV, DtorV, TermV, TypeV};
 use std::fmt;
 
 #[derive(Clone, Debug)]
@@ -6,10 +7,10 @@ pub enum NameResolveError {
     DuplicateDeclaration { name: String },
     EmptyDeclaration { name: String },
     UnknownIdentifier { name: String },
-    UnboundTypeVariable { name: String },
-    UnboundTermVariable { name: String },
-    UnknownConstructor { name: String },
-    UnknownDestructor { name: String },
+    UnboundTypeVariable { tvar: TypeV },
+    UnboundTermVariable { var: TermV },
+    UnknownConstructor { ctor: CtorV },
+    UnknownDestructor { dtor: DtorV },
 }
 use NameResolveError::*;
 
@@ -29,16 +30,16 @@ impl fmt::Display for NameResolveError {
             UnknownIdentifier { name } => {
                 write!(f, "Unknown identifier {}", name)
             }
-            UnboundTypeVariable { name } => {
+            UnboundTypeVariable { tvar: name } => {
                 write!(f, "Unbound type variable {}", name)
             }
-            UnboundTermVariable { name } => {
+            UnboundTermVariable { var: name } => {
                 write!(f, "Unbound term variable {}", name)
             }
-            UnknownConstructor { name } => {
-                write!(f, "Unknown constructor {}", name)
+            UnknownConstructor { ctor } => {
+                write!(f, "Unknown constructor {}", ctor)
             }
-            UnknownDestructor { name } => {
+            UnknownDestructor { dtor: name } => {
                 write!(f, "Unknown destructor {}", name)
             }
         }
