@@ -108,8 +108,8 @@ impl TypeCheck for Span<Type> {
                 &[arg] => {
                     self.span()
                         .make(arg.syn(ctx.clone())?)
-                        .ensure(&Kind::VType, "thunk argument")?;
-                    Step::Done(Kind::VType)
+                        .ensure(&Kind::CType, "thunk argument")?;
+                    Step::Done(Kind::CType)
                 }
                 _ => Err(self.span().make(ArityMismatch {
                     context: format!("{}", self.inner_ref().fmt()),
@@ -548,7 +548,7 @@ impl TypeCheck for Span<Module> {
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
-        let Module { name: _, data, codata: coda, define, entry } =
+        let Module { name: _, data, codata: coda, define, define_ext, entry } =
             self.inner_ref();
         // register data and codata type declarations in the type context
         for DeclSymbol { inner: data, .. } in data {
@@ -582,7 +582,21 @@ impl TypeCheck for Span<Module> {
             coda.name.span().make(coda).syn(ctx.clone())?;
             ctx.coda_ctx.insert(coda.name.clone(), coda.clone());
         }
-        for DeclSymbol { inner: Define { name, def }, .. } in define {
+        for DeclSymbol { inner: Define { name: (var, ty), def: () }, .. } in
+            define_ext
+        {
+            ctx.term_ctx.insert(var.clone(), ty.inner_ref().clone());
+        }
+        // register term declarations in the term context
+        for DeclSymbol { inner: Define { name, def }, external, .. } in define {
+            bool_test(!external, || {
+                name.span().make(
+                    NameResolveError::ExternalDeclaration {
+                        name: name.name().to_string(),
+                    }
+                    .into(),
+                )
+            })?;
             let ty_def = def.syn(ctx.clone())?;
             let span = name.span();
             let kd = span.make(ty_def.clone()).syn(ctx.clone())?;

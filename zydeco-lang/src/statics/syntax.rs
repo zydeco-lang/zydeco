@@ -78,5 +78,6 @@ pub struct Module {
     pub data: Vec<DeclSymbol<Data<TypeV, CtorV, RcType>>>,
     pub codata: Vec<DeclSymbol<Codata<TypeV, DtorV, RcType>>>,
     pub define: Vec<DeclSymbol<Define<TermV, RcValue>>>,
+    pub define_ext: Vec<DeclSymbol<Define<(TermV, RcType), ()>>>,
     pub entry: Span<TermComputation>,
 }

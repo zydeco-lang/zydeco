@@ -65,14 +65,18 @@ Kind: Kind = {
 //* ---------------------------------- Type ---------------------------------- */
 
 Type: Type = {
-    <t:Box<Span<Type>>> "->" <ty:Box<Span<TypeApp>>> => {
-        Arrow(t, ty).into()
-    },
     "forall" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
         Forall(params, ty).into()
     },
     "exists" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
         Exists(params, ty).into()
+    },
+    TypeArrow,
+};
+
+TypeArrow: Type = {
+    <t:Box<Span<TypeApp>>> "->" <ty:Box<Span<Type>>> => {
+        Arrow(t, ty).into()
     },
     TypeApp,
 };

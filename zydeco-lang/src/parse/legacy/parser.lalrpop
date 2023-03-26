@@ -216,15 +216,14 @@ SynType: SynType = {
   AppType
 };
 
+AppType: SynType = {
+  <l:@L> <f: Boxed<AppType>> <a: Boxed<AtomType>> <r:@R> => SynType::App(f, a, span(l,r)),
+  AtomType,
+};
 
 AtomType: SynType = {
   <l:@L> <ctor: TCtor> <r:@R> => SynType::Basic(ctor, span(l,r)),
   "(" <SynType> ")" => <>,
-};
-
-AppType: SynType = {
-  <l:@L> <f: Boxed<AppType>> <a: Boxed<AtomType>> <r:@R> => SynType::App(f, a, span(l,r)),
-  AtomType,
 };
 
 TCtor: TCtor = {

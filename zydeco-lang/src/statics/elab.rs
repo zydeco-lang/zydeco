@@ -2,7 +2,7 @@ use super::{err::TypeCheckError, resolve::NameResolveError, syntax::*};
 use crate::{
     parse::syntax as ps,
     rc,
-    utils::span::{span, Span},
+    utils::span::{span, Span, SpanView},
 };
 
 impl TryFrom<ps::Module> for Module {
@@ -13,27 +13,59 @@ impl TryFrom<ps::Module> for Module {
         let mut data = Vec::new();
         let mut codata = Vec::new();
         let mut define = Vec::new();
+        let mut define_ext = Vec::new();
         for declaration in declarations {
-            match declaration.inner {
+            let DeclSymbol { public, external, inner } = declaration;
+            match inner {
                 ps::Declaration::Data(d) => data.push(DeclSymbol {
-                    public: declaration.public,
-                    external: declaration.external,
+                    public,
+                    external,
                     inner: d.try_into()?,
                 }),
                 ps::Declaration::Codata(d) => codata.push(DeclSymbol {
-                    public: declaration.public,
-                    external: declaration.external,
+                    public,
+                    external,
                     inner: d.try_into()?,
                 }),
-                ps::Declaration::Define(d) => define.push(DeclSymbol {
-                    public: declaration.public,
-                    external: declaration.external,
-                    inner: d.try_into()?,
-                }),
+                ps::Declaration::Define(d) => {
+                    let ps::GenLet { rec, fun, name, params, def } = d;
+                    let (name, ty, te) =
+                        desugar_gen_let(rec, fun, name, params, def)?;
+                    if external {
+                        let Some(ty) = ty else {
+                            return Err(NameResolveError::EmptyDeclaration {
+                                name: name.name().to_string(),
+                            }.into())
+                        };
+                        define_ext.push(DeclSymbol {
+                            public,
+                            external,
+                            inner: Define { name: (name, ty), def: () },
+                        })
+                    } else {
+                        let term = te.ok_or_else(|| {
+                            NameResolveError::EmptyDeclaration {
+                                name: name.name().to_string(),
+                            }
+                        })?;
+                        let span = term.span().clone();
+                        let def = match ty {
+                            Some(ty) => {
+                                rc!(span.make(TermAnn { term, ty }.into()))
+                            }
+                            None => term,
+                        };
+                        define.push(DeclSymbol {
+                            public,
+                            external,
+                            inner: Define { name, def },
+                        })
+                    }
+                }
             }
         }
         let entry = entry.try_map(TryInto::try_into)?;
-        Ok(Self { name, data, codata, define, entry })
+        Ok(Self { name, data, codata, define, define_ext, entry })
     }
 }
 
@@ -105,28 +137,28 @@ impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
     }
 }
 
-impl TryFrom<ps::Define> for Define<TermV, RcValue> {
-    type Error = TypeCheckError;
-    fn try_from(
-        ps::Define { rec, fun, name, params, def }: ps::Define,
-    ) -> Result<Self, TypeCheckError> {
-        let (name, def) = desugar_gen_let(rec, fun, name, params, def)?;
-        Ok(Self { name, def })
-    }
-}
-
 fn desugar_gen_let(
     rec: bool, fun: bool, (var, ty): (TermV, Option<Span<ps::Type>>),
     params: Vec<(TermV, Option<Span<ps::Type>>)>,
     def: Option<Box<Span<ps::Term>>>,
-) -> Result<(TermV, RcValue), TypeCheckError> {
+) -> Result<(TermV, Option<RcType>, Option<RcValue>), TypeCheckError> {
     let name = var.clone();
+    let ty_rc = {
+        if let Some(ty) = ty.clone() {
+            Some(rc!(ty.try_map(TryInto::try_into)?))
+        } else {
+            None
+        }
+    };
+    if def.is_none() {
+        return Ok((name, ty_rc, None));
+    }
     let Some(def) = def else {
         Err(TypeCheckError::from(NameResolveError::EmptyDeclaration { name: name.name().to_string() }))?
     };
     match (rec, fun, def.inner) {
         (false, false, ps::Term::Value(value)) => {
-            Ok((name, rc!(def.info.make(value.try_into()?))))
+            Ok((name, ty_rc, Some(rc!(def.info.make(value.try_into()?)))))
         }
         (_, _, ps::Term::Value(_)) => Err(TypeCheckError::KindMismatch {
             context: format!("desugaring let"),
@@ -142,7 +174,7 @@ fn desugar_gen_let(
         }
         (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
-            if let Some(ty) = ty {
+            if let Some(ty) = ty.clone() {
                 body = Box::new(
                     def.info.make(ps::TermAnn { term: body, ty }.into()),
                 );
@@ -157,11 +189,16 @@ fn desugar_gen_let(
                     def.info.make(Rec { var: (var, None), body }.into()),
                 );
             }
+            let ty = match ty {
+                Some(ty) => Some(rc!(ty.try_map(TryInto::try_into)?)),
+                None => None,
+            };
             Ok((
                 name,
-                rc!(def.info.make(
+                ty,
+                Some(rc!(def.info.make(
                     Thunk(rc!((*body).try_map(TryInto::try_into)?)).into()
-                )),
+                ))),
             ))
         }
     }
@@ -278,7 +315,11 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     gen: ps::GenLet { rec, fun, name, params, def },
                     body,
                 } = t;
-                let (var, def) = desugar_gen_let(rec, fun, name, params, def)?;
+                let (var, _ty, def) =
+                    desugar_gen_let(rec, fun, name, params, def)?;
+                let Some(def) = def else {
+                    Err(NameResolveError::EmptyDeclaration { name: var.name().to_string() })?
+                };
                 Let { var, def, body: rc!((body).try_map(TryInto::try_into)?) }
                     .into()
             }

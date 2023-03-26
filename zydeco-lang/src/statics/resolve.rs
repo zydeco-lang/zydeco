@@ -8,6 +8,7 @@ pub enum NameResolveError {
     DuplicateCtorDeclaration { name: CtorV },
     DuplicateDtorDeclaration { name: DtorV },
     EmptyDeclaration { name: String },
+    ExternalDeclaration { name: String },
     UnknownIdentifier { name: String },
     UnboundTypeVariable { tvar: TypeV },
     UnboundTermVariable { var: TermV },
@@ -32,6 +33,13 @@ impl fmt::Display for NameResolveError {
                 write!(
                     f,
                     "{} declared with neither type signature nor binding",
+                    name
+                )
+            }
+            ExternalDeclaration { name } => {
+                write!(
+                    f,
+                    "{} declared as external but has implementation",
                     name
                 )
             }
