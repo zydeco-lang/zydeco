@@ -85,10 +85,12 @@ where
         let TypeApp { tctor, args } = self;
         let mut s = String::new();
         s += &tctor.fmt_args(fargs);
+        s += "(";
         for arg in args {
             s += " ";
             s += &arg.fmt_args(fargs);
         }
+        s += ")";
         s
     }
 }
@@ -378,5 +380,134 @@ where
             var.fmt_args(fargs),
             body.fmt_args(fargs)
         )
+    }
+}
+
+impl<T> FmtArgs for DeclSymbol<T>
+where
+    T: FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let DeclSymbol { public, external, inner } = self;
+        let mut s = String::new();
+        if *public {
+            s += "pub ";
+        }
+        if *external {
+            s += "extern ";
+        }
+        s += &inner.fmt_args(fargs);
+        s
+    }
+}
+
+impl<TyV, C, Ty> FmtArgs for Data<TyV, C, Ty>
+where
+    TyV: VarT + FmtArgs,
+    C: FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let Data { name, params, ctors } = self;
+        let mut s = String::new();
+        s += "data ";
+        s += &name.fmt_args(fargs);
+        for (tyvar, kd) in params {
+            s += &format!(" ({} : {})", tyvar.fmt_args(fargs), kd.fmt_args(fargs));
+        }
+        s += " where ";
+        s += &fargs.force_space();
+        for DataBr(ctorv, tys) in ctors {
+            s += "| ";
+            s += &ctorv.fmt_args(fargs);
+            s += "(";
+            s += &tys
+                .into_iter()
+                .map(|ty| ty.fmt_args(fargs))
+                .collect::<Vec<_>>()
+                .join(", ");
+            s += ")";
+            s += &fargs.force_space();
+        }
+        s += "end";
+        s
+    }
+}
+
+impl<C, Ty> FmtArgs for DataBr<C, Ty>
+where
+    C: FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let DataBr(ctorv, tys) = self;
+        let mut s = String::new();
+        s += &ctorv.fmt_args(fargs);
+        s += "(";
+        s += &tys
+            .into_iter()
+            .map(|ty| format!("{}", ty.fmt_args(fargs)))
+            .collect::<Vec<_>>()
+            .join(" ");
+        s += ")";
+        s
+    }
+}
+
+impl<TyV, D, Ty> FmtArgs for Codata<TyV, D, Ty>
+where
+    TyV: VarT + FmtArgs,
+    D: FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let Codata { name, params, dtors } = self;
+        let mut s = String::new();
+        s += "codata ";
+        s += &name.fmt_args(fargs);
+        for (tyvar, kd) in params {
+            s += &format!(" ({} : {})", tyvar.fmt_args(fargs), kd.fmt_args(fargs));
+        }
+        s += " where ";
+        s += &dtors
+            .into_iter()
+            .map(|codatabr| codatabr.fmt_args(fargs))
+            .collect::<Vec<_>>()
+            .join(" | ");
+        s += "end";
+        s
+    }
+}
+
+impl<D, Ty> FmtArgs for CodataBr<D, Ty>
+where
+    D: FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let CodataBr(dtorv, tys, ty) = self;
+        let mut s = String::new();
+        s += &dtorv.fmt_args(fargs);
+        s += "(";
+        s += &tys
+            .into_iter()
+            .map(|ty| format!("{}", ty.fmt_args(fargs)))
+            .collect::<Vec<_>>()
+            .join(" ");
+        s += ")";
+        s += " : ";
+        s += &ty.fmt_args(fargs);
+        s
+    }
+}
+
+impl<TeV, A> FmtArgs for Define<TeV, A>
+where
+    TeV: VarT + FmtArgs,
+    A: ValueT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let Define { name, def } = self;
+        format!("def {} = {} end", name.fmt_args(fargs), def.fmt_args(fargs))
     }
 }
