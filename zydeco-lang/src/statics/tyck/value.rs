@@ -93,21 +93,13 @@ impl TypeCheck for Span<TermValue> {
                             },
                         ))
                     })?;
-                bool_test(params.len() == ty_app.args.len(), || {
+                let diff = Env::init(&params, &ty_app.args, || {
                     self.span().make(ArityMismatch {
                         context: format!("data type `{}` instiantiation", name),
                         expected: params.len(),
                         found: ty_app.args.len(),
                     })
                 })?;
-                let diff = Env::from_iter(
-                    params.iter().map(|(tvar, _kd)| tvar.to_owned()).zip(
-                        ty_app
-                            .args
-                            .iter()
-                            .map(|arg| arg.inner_ref().to_owned()),
-                    ),
-                );
                 let DataBr(_, tys) = ctors
                     .into_iter()
                     .find(|DataBr(ctorv, _)| ctorv == ctor)

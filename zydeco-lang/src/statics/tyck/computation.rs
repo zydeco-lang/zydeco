@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use super::*;
 
 impl TypeCheck for Span<TermComputation> {
@@ -70,7 +72,9 @@ impl TypeCheck for Span<TermComputation> {
                 .span()
                 .make(NeedAnnotation { content: format!("rec") }))?,
             TermComputation::Match(_) => todo!(),
-            TermComputation::CoMatch(_) => todo!(),
+            TermComputation::CoMatch(_) => Err(self
+                .span()
+                .make(NeedAnnotation { content: format!("comatch") }))?,
             TermComputation::Dtor(Dtor { body, dtor, args }) => {
                 let ty_app = body.syn(ctx.clone())?.head_reduction()?;
                 let TCtor::Var(tvar) = ty_app.tctor else {
@@ -87,7 +91,8 @@ impl TypeCheck for Span<TermComputation> {
                                 .into(),
                         )
                     })?;
-                bool_test(params.len() == ty_app.args.len(), || {
+                // arity check on codata type
+                let diff = Env::init(&params, &ty_app.args, || {
                     self.span().make(ArityMismatch {
                         context: format!(
                             "codata type `{}` instiantiation",
@@ -97,14 +102,6 @@ impl TypeCheck for Span<TermComputation> {
                         found: ty_app.args.len(),
                     })
                 })?;
-                let diff = Env::from_iter(
-                    params.iter().map(|(tvar, _kd)| tvar.to_owned()).zip(
-                        ty_app
-                            .args
-                            .iter()
-                            .map(|arg| arg.inner_ref().to_owned()),
-                    ),
-                );
                 let CodataBr(_, tys, ty) = dtors
                     .into_iter()
                     .find(|CodataBr(dtorv, _, _)| dtorv == dtor)
@@ -136,26 +133,27 @@ impl TypeCheck for Span<TermComputation> {
     fn ana_step(
         &self, typ: Self::Out, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        let span = self.span();
+        span.make(span.make(typ.clone()).syn(ctx.clone())?)
+            .ensure(&Kind::CType, "ana computation")?;
         Ok(match self.inner_ref() {
             TermComputation::Ret(Ret(v)) => {
-                let app = typ.head_reduction()?;
-                let kd = self.span().make(typ.clone()).syn(ctx.clone())?;
-                self.span().make(kd).ensure(&Kind::CType, "ret")?;
-                bool_test(app.tctor == TCtor::Ret, || {
+                let ty_app = typ.head_reduction()?;
+                bool_test(ty_app.tctor == TCtor::Ret, || {
                     self.span().make(TypeExpected {
                         context: format!("ret"),
                         expected: format!("{{a}}"),
                         found: typ.clone(),
                     })
                 })?;
-                bool_test(app.args.len() == 1, || {
+                bool_test(ty_app.args.len() == 1, || {
                     self.span().make(ArityMismatch {
                         context: format!("ret"),
                         expected: 1,
-                        found: app.args.len(),
+                        found: ty_app.args.len(),
                     })
                 })?;
-                v.ana(app.args[0].inner_ref().to_owned(), ctx)?;
+                v.ana(ty_app.args[0].inner_ref().to_owned(), ctx)?;
                 Step::Done(typ)
             }
             TermComputation::Force(Force(v)) => {
@@ -205,14 +203,72 @@ impl TypeCheck for Span<TermComputation> {
                 );
                 Step::AnaMode((ctx, body), typ)
             }
-            // TermComputation::Dtor(Dtor { body, dtor, args }) => {
-            //     let ty_body = body.syn(ctx.clone())?;
-
-            //     todo!()
-            // }
-            TermComputation::Match(_) => todo!(),
-            TermComputation::CoMatch(_) => todo!(),
-            TermComputation::TermAnn(_) | TermComputation::Dtor(_) => {
+            TermComputation::CoMatch(CoMatch { arms }) => {
+                let ty_app = typ.head_reduction()?;
+                let TCtor::Var(tvar) = ty_app.tctor else {
+                    Err(self.span().make(TypeExpected {
+                        context: format!("comatch"),
+                        expected: format!("codata type"),
+                        found: typ.clone(),
+                    }))?
+                };
+                let Codata { name, params, dtors } =
+                    ctx.coda_ctx.get(&tvar).cloned().ok_or_else(|| {
+                        self.span().make(
+                            NameResolveError::UnboundTypeVariable { tvar }
+                                .into(),
+                        )
+                    })?;
+                // arity check on codata type
+                let diff = Env::init(&params, &ty_app.args, || {
+                    self.span().make(ArityMismatch {
+                        context: format!(
+                            "codata type `{}` instantiation",
+                            name
+                        ),
+                        expected: params.len(),
+                        found: ty_app.args.len(),
+                    })
+                })?;
+                let dtors: HashMap<_, _> = dtors
+                    .into_iter()
+                    .map(|CodataBr(dtor, tys, ty)| (dtor, (tys, ty)))
+                    .collect();
+                let mut unexpected = Vec::new();
+                let mut dtorv_set_arm: HashSet<DtorV> = HashSet::new();
+                for CoMatcher { dtor, vars, body } in arms {
+                    let Some((tys, ty)) = dtors.get(dtor).cloned() else {
+                        unexpected.push(dtor.to_owned());
+                        continue;
+                    };
+                    dtorv_set_arm.insert(dtor.to_owned());
+                    let tys = tys.into_iter().map(|ty| {
+                        ty.inner_ref().to_owned().subst(diff.clone())
+                    });
+                    let ty = ty.inner_ref().to_owned().subst(diff.clone());
+                    let mut ctx = ctx.clone();
+                    for (var, ty) in vars.iter().zip(tys) {
+                        ctx.term_ctx.insert(var.to_owned(), ty);
+                    }
+                    body.ana(ty, ctx)?;
+                }
+                let dtorv_set_coda: HashSet<DtorV> = dtors
+                    .iter()
+                    .map(|(dtor, (_, _))| dtor.to_owned())
+                    .collect();
+                let missing: Vec<_> = dtorv_set_coda
+                    .difference(&dtorv_set_arm)
+                    .cloned()
+                    .collect();
+                bool_test(unexpected.is_empty() && missing.is_empty(), || {
+                    self.span()
+                        .make(InconsistentCoMatchers { unexpected, missing })
+                })?;
+                Step::Done(typ)
+            }
+            TermComputation::TermAnn(_)
+            | TermComputation::Match(_)
+            | TermComputation::Dtor(_) => {
                 let typ_syn = self.syn(ctx)?;
                 typ.eqv(&typ_syn, || self.span().make(Subsumption))?;
                 Step::Done(typ)

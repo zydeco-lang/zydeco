@@ -10,6 +10,8 @@ pub enum TypeCheckError {
     ArityMismatch { context: String, expected: usize, found: usize },
     NeedAnnotation { content: String },
     Subsumption,
+    InconsistentMatchers { unexpected: Vec<CtorV>, missing: Vec<CtorV> },
+    InconsistentCoMatchers { unexpected: Vec<DtorV>, missing: Vec<DtorV> },
     InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
     WrongMain { found: Type },
@@ -53,6 +55,38 @@ impl fmt::Display for TypeCheckError {
                 write!(f, "Need annotation for {}", content)
             }
             Subsumption => write!(f, "Subsumption failed.",),
+            InconsistentMatchers { unexpected, missing } => {
+                writeln!(f, "Inconsistent matchers:")?;
+                if !unexpected.is_empty() {
+                    writeln!(f, "Unexpected:")?;
+                    for c in unexpected {
+                        writeln!(f, "\t- {}", c)?;
+                    }
+                }
+                if !missing.is_empty() {
+                    writeln!(f, "Missing:")?;
+                    for c in missing {
+                        writeln!(f, "\t- {}", c)?;
+                    }
+                }
+                Ok(())
+            }
+            InconsistentCoMatchers { unexpected, missing } => {
+                writeln!(f, "Inconsistent matchers:")?;
+                if !unexpected.is_empty() {
+                    writeln!(f, "Unexpected:")?;
+                    for c in unexpected {
+                        writeln!(f, "\t- {}", c)?;
+                    }
+                }
+                if !missing.is_empty() {
+                    writeln!(f, "Missing:")?;
+                    for c in missing {
+                        writeln!(f, "\t- {}", c)?;
+                    }
+                }
+                Ok(())
+            }
             InconsistentBranches(types) => {
                 writeln!(f, "Branches have mismatched types:")?;
                 for t in types {

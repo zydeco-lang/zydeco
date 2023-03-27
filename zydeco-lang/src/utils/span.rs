@@ -64,6 +64,9 @@ impl SpanInfo {
     pub fn make<T>(&self, inner: T) -> Span<T> {
         Span { inner, info: self.clone() }
     }
+    pub fn make_ref<'a, T>(&self, inner: &'a T) -> Span<&'a T> {
+        Span { inner, info: self.clone() }
+    }
     pub fn set_info(&self, gen: &FileInfo) {
         let (start, end) = self.span1;
         self.span2

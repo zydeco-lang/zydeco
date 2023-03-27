@@ -76,3 +76,18 @@ impl Monoid for Env<TypeV, Type> {
         new
     }
 }
+
+impl Env<TypeV, Type> {
+    pub(super) fn init(
+        params: &[(TypeV, Kind)], ty_app_args: &[RcType],
+        arity_err: impl FnOnce() -> Span<TypeCheckError>,
+    ) -> Result<Self, Span<TypeCheckError>> {
+        bool_test(params.len() == ty_app_args.len(), arity_err)?;
+        Ok(Env::from_iter(
+            params
+                .iter()
+                .map(|(tvar, _)| tvar.to_owned())
+                .zip(ty_app_args.iter().map(|arg| arg.inner_ref().to_owned())),
+        ))
+    }
+}
