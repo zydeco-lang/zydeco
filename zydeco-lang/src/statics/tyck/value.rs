@@ -55,7 +55,10 @@ impl TypeCheck for Span<TermValue> {
     fn ana_step(
         &self, typ: Self::Out, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
-        match self.inner_ref() {
+        let span = self.span();
+        span.make(span.make(typ.clone()).syn(ctx.clone())?)
+            .ensure(&Kind::VType, "ana value")?;
+        Ok(match self.inner_ref() {
             TermValue::Thunk(Thunk(c)) => {
                 let app = typ.head_reduction()?;
                 bool_test(app.tctor == TCtor::Thunk, || {
@@ -74,7 +77,7 @@ impl TypeCheck for Span<TermValue> {
                 })?;
                 let typ_comp = app.args[0].inner_ref().to_owned();
                 c.ana(typ_comp, ctx)?;
-                Ok(Step::Done(typ))
+                Step::Done(typ)
             }
             TermValue::Ctor(Ctor { ctor, args }) => {
                 let ty_app = typ.head_reduction()?;
@@ -123,15 +126,15 @@ impl TypeCheck for Span<TermValue> {
                         ctx.clone(),
                     )?;
                 }
-                Ok(Step::Done(typ))
+                Step::Done(typ)
             }
             TermValue::TermAnn(_)
             | TermValue::Var(_)
             | TermValue::Literal(_) => {
                 let typ_syn = self.syn(ctx)?;
                 typ.eqv(&typ_syn, || self.span().make(Subsumption))?;
-                Ok(Step::Done(typ))
+                Step::Done(typ)
             }
-        }
+        })
     }
 }
