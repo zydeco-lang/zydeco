@@ -58,20 +58,20 @@ where
     Type: FmtArgs,
     Kind: FmtArgs,
 {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         let TypeAnn { ty, kd } = self;
-        format!("{} : {}", ty.fmt_args(args), kd.fmt_args(args))
+        format!("{} : {}", ty.fmt_args(fargs), kd.fmt_args(fargs))
     }
 }
 
 impl FmtArgs for TCtor {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         match self {
-            TCtor::Var(x) => x.fmt_args(args),
-            TCtor::Thunk => format!("Thunk"),
-            TCtor::Ret => format!("Ret"),
+            TCtor::Var(x) => x.fmt_args(fargs),
+            TCtor::Thunk => "Thunk".to_owned(),
+            TCtor::Ret => "Ret".to_owned(),
             TCtor::OS => "OS".to_owned(),
-            TCtor::Fun => "Fun".to_owned(),
+            TCtor::Fun => "Fn".to_owned(),
         }
     }
 }
@@ -86,10 +86,11 @@ where
         let mut s = String::new();
         s += &tctor.fmt_args(fargs);
         s += "(";
-        for arg in args {
-            s += " ";
-            s += &arg.fmt_args(fargs);
-        }
+        s += &args
+            .into_iter()
+            .map(|arg| arg.fmt_args(fargs))
+            .collect::<Vec<_>>()
+            .join(", ");
         s += ")";
         s
     }
@@ -413,20 +414,16 @@ where
         s += "data ";
         s += &name.fmt_args(fargs);
         for (tyvar, kd) in params {
-            s += &format!(" ({} : {})", tyvar.fmt_args(fargs), kd.fmt_args(fargs));
+            s += &format!(
+                " ({} : {})",
+                tyvar.fmt_args(fargs),
+                kd.fmt_args(fargs)
+            );
         }
         s += " where ";
         s += &fargs.force_space();
-        for DataBr(ctorv, tys) in ctors {
-            s += "| ";
-            s += &ctorv.fmt_args(fargs);
-            s += "(";
-            s += &tys
-                .into_iter()
-                .map(|ty| ty.fmt_args(fargs))
-                .collect::<Vec<_>>()
-                .join(", ");
-            s += ")";
+        for databr in ctors {
+            s += &databr.fmt_args(fargs);
             s += &fargs.force_space();
         }
         s += "end";
@@ -442,13 +439,14 @@ where
     fn fmt_args(&self, fargs: Args) -> String {
         let DataBr(ctorv, tys) = self;
         let mut s = String::new();
+        s += "| ";
         s += &ctorv.fmt_args(fargs);
         s += "(";
         s += &tys
             .into_iter()
-            .map(|ty| format!("{}", ty.fmt_args(fargs)))
+            .map(|ty| ty.fmt_args(fargs))
             .collect::<Vec<_>>()
-            .join(" ");
+            .join(", ");
         s += ")";
         s
     }
@@ -466,14 +464,18 @@ where
         s += "codata ";
         s += &name.fmt_args(fargs);
         for (tyvar, kd) in params {
-            s += &format!(" ({} : {})", tyvar.fmt_args(fargs), kd.fmt_args(fargs));
+            s += &format!(
+                " ({} : {})",
+                tyvar.fmt_args(fargs),
+                kd.fmt_args(fargs)
+            );
         }
         s += " where ";
-        s += &dtors
-            .into_iter()
-            .map(|codatabr| codatabr.fmt_args(fargs))
-            .collect::<Vec<_>>()
-            .join(" | ");
+        s += &fargs.force_space();
+        for codatabr in dtors {
+            s += &codatabr.fmt_args(fargs);
+            s += &fargs.force_space();
+        }
         s += "end";
         s
     }
@@ -487,15 +489,16 @@ where
     fn fmt_args(&self, fargs: Args) -> String {
         let CodataBr(dtorv, tys, ty) = self;
         let mut s = String::new();
+        s += "| .";
         s += &dtorv.fmt_args(fargs);
         s += "(";
         s += &tys
             .into_iter()
             .map(|ty| format!("{}", ty.fmt_args(fargs)))
             .collect::<Vec<_>>()
-            .join(" ");
+            .join(", ");
         s += ")";
-        s += " : ";
+        s += ": ";
         s += &ty.fmt_args(fargs);
         s
     }

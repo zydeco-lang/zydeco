@@ -86,11 +86,13 @@ impl TypeCheck for Span<TermValue> {
                     }))?
                 };
                 let Data { name, params, ctors } =
-                    ctx.data_ctx.get(tvar).cloned().ok_or(self.span().make(
-                        NameResolve(NameResolveError::UnboundTypeVariable {
-                            tvar: tvar.to_owned(),
-                        }),
-                    ))?;
+                    ctx.data_ctx.get(tvar).cloned().ok_or_else(|| {
+                        self.span().make(NameResolve(
+                            NameResolveError::UnboundTypeVariable {
+                                tvar: tvar.to_owned(),
+                            },
+                        ))
+                    })?;
                 bool_test(params.len() == ty_app.args.len(), || {
                     self.span().make(ArityMismatch {
                         context: format!("data type `{}` instiantiation", name),
@@ -106,14 +108,16 @@ impl TypeCheck for Span<TermValue> {
                             .map(|arg| arg.inner_ref().to_owned()),
                     ),
                 );
-                let DataBr(_ctorv, tys) = ctors
+                let DataBr(_, tys) = ctors
                     .into_iter()
-                    .find(|DataBr(ctorv, _tys)| ctorv == ctor)
-                    .ok_or(self.span().make(NameResolve(
-                        NameResolveError::UnknownConstructor {
-                            ctor: ctor.to_owned(),
-                        },
-                    )))?;
+                    .find(|DataBr(ctorv, _)| ctorv == ctor)
+                    .ok_or_else(|| {
+                        self.span().make(NameResolve(
+                            NameResolveError::UnknownConstructor {
+                                ctor: ctor.to_owned(),
+                            },
+                        ))
+                    })?;
                 bool_test(args.len() == tys.len(), || {
                     self.span().make(ArityMismatch {
                         context: format!("ctor"),
@@ -129,7 +133,9 @@ impl TypeCheck for Span<TermValue> {
                 }
                 Ok(Step::Done(typ))
             }
-            _ => {
+            TermValue::TermAnn(_)
+            | TermValue::Var(_)
+            | TermValue::Literal(_) => {
                 let typ_syn = self.syn(ctx)?;
                 typ.eqv(&typ_syn, || self.span().make(Subsumption))?;
                 Ok(Step::Done(typ))

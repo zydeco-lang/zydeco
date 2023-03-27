@@ -224,10 +224,10 @@ impl TypeCheck for Span<Module> {
             span.make(kd).ensure(&Kind::VType, "define")?;
             ctx.term_ctx.insert(name.clone(), ty_def);
         }
-        let ty = entry.syn(ctx)?;
-        match ty.app.tctor {
+        let ty_app = entry.syn(ctx)?.head_reduction()?;
+        match ty_app.tctor {
             TCtor::OS => Ok(()),
-            _ => Err(self.span().make(WrongMain { found: ty })),
+            _ => Err(self.span().make(WrongMain { found: ty_app.into() })),
         }?;
         Ok(Step::Done(()))
     }
@@ -238,7 +238,6 @@ pub trait Eqv {
         &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>>;
 }
-
 
 impl Span<Kind> {
     fn ensure(
