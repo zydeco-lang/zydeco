@@ -1,12 +1,15 @@
 use crate::{
     dynamics::{self, Env, Exit, Runtime, ZCompute, ZValue},
-    library::{builtins, linker},
+    library::{legacy::builtins, linker},
     parse::{
         err::ParseError,
         legacy::syntax::{Compute, Program, Type, ValOrComp, Value},
+        parser::DeclarationVecParser,
+        syntax::Declaration,
         Lexer, {ExpressionParser, ZydecoParser},
     },
     statics::{Ctx, TypeCheck},
+    syntax::DeclSymbol,
     utils::never::Never,
     utils::span::{FileInfo, SpanHolder},
 };
@@ -17,6 +20,18 @@ pub struct ZydecoFile {
 }
 
 impl ZydecoFile {
+    pub fn std() -> Result<Vec<DeclSymbol<Declaration>>, String> {
+        let std_path: PathBuf = "zydeco-lang/src/library/std.zydeco".into();
+        let source = std::fs::read_to_string(&std_path).unwrap();
+        let file_info = FileInfo::new(&source, Rc::new(std_path));
+        let ds = DeclarationVecParser::new()
+            .parse(&source, Lexer::new(&source))
+            .map_err(|e| format!("{}", ParseError(e, &file_info)))?
+            .span_map(|span| {
+                span.set_info(&file_info);
+            });
+        Ok(ds)
+    }
     pub fn parse(self) -> Result<Program, String> {
         let source = std::fs::read_to_string(&self.path).unwrap();
         let file_info = FileInfo::new(&source, Rc::new(self.path));

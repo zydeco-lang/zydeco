@@ -16,7 +16,7 @@
 
 use zydeco_lang::{
     dynamics::Env,
-    library::{builtins, declarations, linker},
+    library::{legacy::builtins, declarations, linker},
     statics::Ctx,
 };
 

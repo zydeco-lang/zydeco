@@ -17,9 +17,9 @@ pub enum Tok<'input> {
     End,
     #[token("pub")]
     Pub,
-    #[token("extern")]
+    #[regex(r"(ext|extern)")]
     Extern,
-    #[token("define")]
+    #[regex(r"(def|define)")]
     Define,
     #[token("data")]
     Data,
@@ -56,9 +56,9 @@ pub enum Tok<'input> {
     StrLit(&'input str),
     #[regex(r#"'([ -~]|\\[nrt'|(\\)])'"#)]
     CharLit(&'input str),
-    #[regex("VType")]
+    #[token("VType")]
     VType,
-    #[regex("CType")]
+    #[token("CType")]
     CType,
 
     #[regex("(F|Ret)")]

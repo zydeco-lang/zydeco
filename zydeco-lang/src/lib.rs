@@ -66,7 +66,7 @@ pub mod parse {
 pub mod statics {
     pub mod syntax;
     mod resolve;
-    mod err;
+    pub mod err;
     mod legacy;
     mod elab;
     pub mod tyck;
@@ -77,10 +77,11 @@ pub mod statics {
 
 pub mod library {
     pub mod syntax;
-    mod legacy;
+    pub mod legacy;
     mod link;
+    pub mod builtins;
 
-    pub use legacy::{builtins, declarations, linker};
+    pub use legacy::{declarations, linker};
 }
 
 pub mod dynamics {

@@ -2,7 +2,7 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use zydeco_lang::{
     dynamics::Env,
-    library::{builtins, declarations, linker},
+    library::{legacy::builtins, declarations, linker},
     statics::Ctx,
     zydeco,
 };

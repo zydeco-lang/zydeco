@@ -23,7 +23,7 @@ pub define not : Thunk(Bool -> Ret(Bool)) = {
 };
 
 # function
-codata Fn A: VType B: CType where
+codata Fn (A: VType) (B: CType) where
   | .arg(A) : B
 end
 
@@ -38,7 +38,7 @@ pub define notM : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
 };
 
 pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (x, y) ->
+  fn x y ->
     match x
     | True() -> ret y
     | False() -> ret false
@@ -48,7 +48,7 @@ pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
 # Lazy, short-circuiting (left to right) and
 # Can we come up with a better naming convention? Maybe and~ is more suggestive? (not accepted by parser currently)
 pub define and_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
-  fn (b1_, b2_) ->
+  fn b1_ b2_ ->
   do b1 <- ! b1_;
   match b1
   | True() -> ! b2_
@@ -57,7 +57,7 @@ pub define and_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
 };
 
 pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (x: Bool, y: Bool) ->
+  fn (x: Bool) (y: Bool) ->
     match x
     | True() -> ret True()
     | False() -> ret y
@@ -66,7 +66,7 @@ pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
 
 # Lazy, short-circuiting (left to right) or
 pub define or_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
-  fn (b1_: Thunk(Ret(Bool)), b2_: Thunk(Ret(Bool))) ->
+  fn (b1_: Thunk(Ret Bool)) (b2_: Thunk(Ret Bool)) ->
   do b1 <- ! b1_;
   match b1
   | True() -> ret True()
@@ -75,19 +75,19 @@ pub define or_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
 };
 
 pub define nand : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (x: Bool, y: Bool) ->
+  fn (x: Bool) (y: Bool) ->
     do a <- ! and x y;
     ! not a
 };
 
 pub define nor : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (x: Bool, y: Bool) ->
+  fn (x: Bool) (y: Bool) ->
     do a <- ! or x y;
     ! not a
 };
 
 pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (b: Bool, b': Bool) ->
+  fn (b: Bool) (b': Bool) ->
     match b
     | True() -> ret b'
     | False() -> ! not b'
@@ -95,7 +95,7 @@ pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
 };
 
 # pub define ifc : Thunk(Thunk(Ret(Bool)) -> Thunk(b) -> Thunk(b) -> b) = {
-#  fn (b, thn, els) ->
+#  fn b thn els ->
 #    match b
 #    | True()  -> ! thn
 #    | False() -> ! els
@@ -119,15 +119,15 @@ end
 ### so the type is registered as a data type but the constructors
 ### are not implemented as internal constructors
 
-pub extern define add : Thunk(Int -> Int -> Ret(Int));
-pub extern define sub : Thunk(Int -> Int -> Ret(Int));
-pub extern define mul : Thunk(Int -> Int -> Ret(Int));
-pub extern define div : Thunk(Int -> Int -> Ret(Int));
-pub extern define mod : Thunk(Int -> Int -> Ret(Int));
+pub extern define add : Thunk(Int -> Int -> Ret Int);
+pub extern define sub : Thunk(Int -> Int -> Ret Int);
+pub extern define mul : Thunk(Int -> Int -> Ret Int);
+pub extern define div : Thunk(Int -> Int -> Ret Int);
+pub extern define mod : Thunk(Int -> Int -> Ret Int);
 
-pub extern define int_eq : Thunk(Int -> Int -> Ret(Bool));
-pub extern define int_lt : Thunk(Int -> Int -> Ret(Bool));
-pub extern define int_gt : Thunk(Int -> Int -> Ret(Bool));
+pub extern define int_eq : Thunk(Int -> Int -> Ret Bool);
+pub extern define int_lt : Thunk(Int -> Int -> Ret Bool);
+pub extern define int_gt : Thunk(Int -> Int -> Ret Bool);
 
 
 ## string operations
@@ -138,13 +138,13 @@ extern data String where
 end
 ### we support the constructors externally
 
-pub extern define str_length : Thunk(String -> Ret(Int));
-pub extern define str_append : Thunk(String -> String -> Ret(String));
-pub extern define str_eq : Thunk(String -> String -> Ret(Bool));
-pub extern define str_index : Thunk(String -> Int -> Ret(Char));
+pub extern define str_length : Thunk(String -> Ret Int);
+pub extern define str_append : Thunk(String -> String -> Ret String);
+pub extern define str_eq : Thunk(String -> String -> Ret Bool);
+pub extern define str_index : Thunk(String -> Int -> Ret Char);
 
-pub define char_eq: Thunk(Char -> Char -> Ret(Bool)) = {
-  fn (c: Char, c': Char) ->
+pub define char_eq: Thunk(Char -> Char -> Ret Bool) = {
+  fn (c: Char) (c': Char) ->
     do c <- ! char_to_str c;
     do c' <- ! char_to_str c';
     ! str_eq c c'
@@ -152,10 +152,10 @@ pub define char_eq: Thunk(Char -> Char -> Ret(Bool)) = {
 
 ## conversions
 
-pub define unit_to_str : Thunk(Unit -> Ret(String)) = {
+pub define unit_to_str : Thunk(Unit -> Ret String) = {
   fn (_u : Unit) -> ret "()"
 };
-pub define bool_to_str : Thunk(Bool -> Ret(String)) = {
+pub define bool_to_str : Thunk(Bool -> Ret String) = {
   fn (b : Bool) ->
     match b
     | True() -> ret "True"
@@ -180,20 +180,20 @@ pub extern define exit : Thunk(Int -> OS);
 pub extern define arg_list : Thunk(Thunk(StrList -> OS) -> OS);
 
 pub define write_line : Thunk(String -> Thunk(OS) -> OS) = {
-  fn (s: String, k: Thunk(OS)) ->
+  fn (s: String) (k: Thunk(OS)) ->
     do s <- ! str_append s "\n";
     ! write_str s k
 };
 # pub extern define write_line : Thunk(String -> Thunk(OS) -> OS);
 
 pub define write_int : Thunk(Int -> Thunk(OS) -> OS) = {
-  fn (i: Int, k: Thunk(OS)) ->
+  fn (i: Int) (k: Thunk(OS)) ->
     do s <- ! int_to_str i;
     ! write_str s k
 };
 
 pub define write_int_line : Thunk(Int -> Thunk(OS) -> OS) = {
-  fn (i: Int, k: Thunk(OS)) ->
+  fn (i: Int) (k: Thunk(OS)) ->
     do s <- ! int_to_str i;
     ! write_line s k
 };

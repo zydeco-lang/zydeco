@@ -5,138 +5,6 @@ use crate::{
     utils::span::{span, Span, SpanView},
 };
 
-impl TryFrom<ps::Module> for Module {
-    type Error = TypeCheckError;
-    fn try_from(
-        ps::Module { name, declarations, entry }: ps::Module,
-    ) -> Result<Self, TypeCheckError> {
-        let mut data = Vec::new();
-        let mut codata = Vec::new();
-        let mut define = Vec::new();
-        let mut define_ext = Vec::new();
-        for declaration in declarations {
-            let DeclSymbol { public, external, inner } = declaration;
-            match inner {
-                ps::Declaration::Data(d) => data.push(DeclSymbol {
-                    public,
-                    external,
-                    inner: d.try_into()?,
-                }),
-                ps::Declaration::Codata(d) => codata.push(DeclSymbol {
-                    public,
-                    external,
-                    inner: d.try_into()?,
-                }),
-                ps::Declaration::Define(d) => {
-                    let ps::GenLet { rec, fun, name, params, def } = d;
-                    let (name, ty, te) =
-                        desugar_gen_let(rec, fun, name, params, def)?;
-                    if external {
-                        let Some(ty) = ty else {
-                            return Err(NameResolveError::EmptyDeclaration {
-                                name: name.name().to_string(),
-                            }.into())
-                        };
-                        define_ext.push(DeclSymbol {
-                            public,
-                            external,
-                            inner: Define { name: (name, ty), def: () },
-                        })
-                    } else {
-                        let term = te.ok_or_else(|| {
-                            NameResolveError::EmptyDeclaration {
-                                name: name.name().to_string(),
-                            }
-                        })?;
-                        let span = term.span().clone();
-                        let def = match ty {
-                            Some(ty) => {
-                                rc!(span.make(TermAnn { term, ty }.into()))
-                            }
-                            None => term,
-                        };
-                        define.push(DeclSymbol {
-                            public,
-                            external,
-                            inner: Define { name, def },
-                        })
-                    }
-                }
-            }
-        }
-        let entry = entry.try_map(TryInto::try_into)?;
-        Ok(Self { name, data, codata, define, define_ext, entry })
-    }
-}
-
-impl TryFrom<ps::Data<TypeV, CtorV, Span<ps::Type>>>
-    for Data<TypeV, CtorV, RcType>
-{
-    type Error = TypeCheckError;
-    fn try_from(
-        Data { name, params, ctors }: ps::Data<TypeV, CtorV, Span<ps::Type>>,
-    ) -> Result<Self, TypeCheckError> {
-        Ok(Self {
-            name,
-            params,
-            ctors: ctors
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
-        })
-    }
-}
-
-impl TryFrom<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
-    type Error = TypeCheckError;
-    fn try_from(
-        DataBr(ctor, params): ps::DataBr<CtorV, Span<ps::Type>>,
-    ) -> Result<Self, TypeCheckError> {
-        let params = params
-            .into_iter()
-            .map(|param| param.try_map(TryInto::try_into))
-            .map(|param| param.map(|ty| rc!(ty)))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self(ctor, params))
-    }
-}
-
-impl TryFrom<ps::Codata<TypeV, DtorV, Span<ps::Type>>>
-    for Codata<TypeV, DtorV, RcType>
-{
-    type Error = TypeCheckError;
-    fn try_from(
-        Codata { name, params, dtors }: ps::Codata<
-            TypeV,
-            DtorV,
-            Span<ps::Type>,
-        >,
-    ) -> Result<Self, TypeCheckError> {
-        Ok(Self {
-            name,
-            params,
-            dtors: dtors
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
-        })
-    }
-}
-
-impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
-    type Error = TypeCheckError;
-    fn try_from(
-        CodataBr(dtor, params, ty): ps::CodataBr<DtorV, Span<ps::Type>>,
-    ) -> Result<Self, TypeCheckError> {
-        let params = params
-            .into_iter()
-            .map(|param| param.try_map(TryInto::try_into))
-            .map(|param| param.map(|ty| rc!(ty)))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self(dtor, params, rc!(ty.try_map(TryInto::try_into)?)))
-    }
-}
-
 fn desugar_gen_let(
     rec: bool, fun: bool, (var, ty): (TermV, Option<Span<ps::Type>>),
     params: Vec<(TermV, Option<Span<ps::Type>>)>,
@@ -404,5 +272,137 @@ impl TryFrom<ps::TermComputation> for TermComputation {
             ps::TermComputation::TypApp(_) => todo!(),
             ps::TermComputation::MatchExists(_) => todo!(),
         })
+    }
+}
+
+impl TryFrom<ps::Data<TypeV, CtorV, Span<ps::Type>>>
+    for Data<TypeV, CtorV, RcType>
+{
+    type Error = TypeCheckError;
+    fn try_from(
+        Data { name, params, ctors }: ps::Data<TypeV, CtorV, Span<ps::Type>>,
+    ) -> Result<Self, TypeCheckError> {
+        Ok(Self {
+            name,
+            params,
+            ctors: ctors
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
+    type Error = TypeCheckError;
+    fn try_from(
+        DataBr(ctor, params): ps::DataBr<CtorV, Span<ps::Type>>,
+    ) -> Result<Self, TypeCheckError> {
+        let params = params
+            .into_iter()
+            .map(|param| param.try_map(TryInto::try_into))
+            .map(|param| param.map(|ty| rc!(ty)))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self(ctor, params))
+    }
+}
+
+impl TryFrom<ps::Codata<TypeV, DtorV, Span<ps::Type>>>
+    for Codata<TypeV, DtorV, RcType>
+{
+    type Error = TypeCheckError;
+    fn try_from(
+        Codata { name, params, dtors }: ps::Codata<
+            TypeV,
+            DtorV,
+            Span<ps::Type>,
+        >,
+    ) -> Result<Self, TypeCheckError> {
+        Ok(Self {
+            name,
+            params,
+            dtors: dtors
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
+
+impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
+    type Error = TypeCheckError;
+    fn try_from(
+        CodataBr(dtor, params, ty): ps::CodataBr<DtorV, Span<ps::Type>>,
+    ) -> Result<Self, TypeCheckError> {
+        let params = params
+            .into_iter()
+            .map(|param| param.try_map(TryInto::try_into))
+            .map(|param| param.map(|ty| rc!(ty)))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self(dtor, params, rc!(ty.try_map(TryInto::try_into)?)))
+    }
+}
+
+impl TryFrom<ps::Module> for Module {
+    type Error = TypeCheckError;
+    fn try_from(
+        ps::Module { name, declarations, entry }: ps::Module,
+    ) -> Result<Self, TypeCheckError> {
+        let mut data = Vec::new();
+        let mut codata = Vec::new();
+        let mut define = Vec::new();
+        let mut define_ext = Vec::new();
+        for declaration in declarations {
+            let DeclSymbol { public, external, inner } = declaration;
+            match inner {
+                ps::Declaration::Data(d) => data.push(DeclSymbol {
+                    public,
+                    external,
+                    inner: d.try_into()?,
+                }),
+                ps::Declaration::Codata(d) => codata.push(DeclSymbol {
+                    public,
+                    external,
+                    inner: d.try_into()?,
+                }),
+                ps::Declaration::Define(d) => {
+                    let ps::GenLet { rec, fun, name, params, def } = d;
+                    let (name, ty, te) =
+                        desugar_gen_let(rec, fun, name, params, def)?;
+                    if external {
+                        let Some(ty) = ty else {
+                            return Err(NameResolveError::EmptyDeclaration {
+                                name: name.name().to_string(),
+                            }.into())
+                        };
+                        define_ext.push(DeclSymbol {
+                            public,
+                            external,
+                            inner: Define { name: (name, ty), def: () },
+                        })
+                    } else {
+                        let term = te.ok_or_else(|| {
+                            NameResolveError::EmptyDeclaration {
+                                name: name.name().to_string(),
+                            }
+                        })?;
+                        let span = term.span().clone();
+                        let def = match ty {
+                            Some(ty) => {
+                                rc!(span.make(TermAnn { term, ty }.into()))
+                            }
+                            None => term,
+                        };
+                        define.push(DeclSymbol {
+                            public,
+                            external,
+                            inner: Define { name, def },
+                        })
+                    }
+                }
+            }
+        }
+        let entry = entry.try_map(TryInto::try_into)?;
+        Ok(Self { name, data, codata, define, define_ext, entry })
     }
 }

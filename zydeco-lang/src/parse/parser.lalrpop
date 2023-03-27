@@ -10,13 +10,19 @@ grammar<'input>(input: &'input str);
 //* --------------------------------- Module --------------------------------- */
 
 pub Zydeco: Span<Module> = Span<Module>;
+pub DeclarationVec: Vec<DeclSymbol<Declaration>> = <DeclSymbol<Declaration>*>;
 
 Module: Module = {
-    <name:("module" <UpperId> "where")?>
+    "module" <name:UpperId> "where"
         <declarations:DeclSymbol<Declaration>*>
+        <entry:Span<TermComputation>>
+    "end" => Module {
+        name: Some(name), declarations, entry,
+    },
+    <declarations:DeclSymbol<Declaration>*>
     <entry:Span<TermComputation>> => Module {
-        name, declarations, entry,
-    }
+        name: None, declarations, entry,
+    },
 };
 
 DeclSymbol<T>: DeclSymbol<T> = {
@@ -38,7 +44,12 @@ Declaration: Declaration = {
     "end" => Codata {
         name, params, dtors,
     }.into(),
-    "define" <gen:GenLet> "end" => gen.into(),
+    "define" <gen:GenLet> DefineEnd => gen.into(),
+};
+
+DefineEnd: () = {
+    "end" => (),
+    ";" => (),
 };
 
 DataBr: DataBr<CtorV, Span<Type>> = {
@@ -209,7 +220,8 @@ ComatchBr: CoMatcher<DtorV, TermV, Span<TermComputation>> = {
 };
 
 TermPattern: TermPattern = {
-    "(" <v:TermV> <ty:(":" <Span<Type>>)?> ")" => (v, ty)
+    "(" <v:TermV> <ty:(":" <Span<Type>>)?> ")" => (v, ty),
+    TermV => (<>, None),
 };
 
 Literal: Literal = {

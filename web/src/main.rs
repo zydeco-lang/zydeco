@@ -2,7 +2,7 @@ use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
 use zydeco_lang::{
     dynamics::Env,
-    library::{builtins, declarations, linker},
+    library::{legacy::builtins, declarations, linker},
     parse::legacy::syntax::TCtor,
     statics::Ctx,
     zydeco,
