@@ -324,7 +324,7 @@ where
         let Dtor { body, dtor, args } = self;
         let mut s = String::new();
         s += &body.fmt_args(fargs);
-        s += " ";
+        s += " .";
         s += &dtor.fmt_args(fargs);
         s += "(";
         s += &args

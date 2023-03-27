@@ -38,7 +38,7 @@ impl TypeCheck for Span<TermComputation> {
                         found: app_body.clone().into(),
                     })
                 })?;
-                let ty_body: Type = app_body.into();
+                let ty_body = app_body.args[0].inner_ref().to_owned();
                 let kd = self.span().make(ty_body.to_owned()).syn(ctx)?;
                 self.span().make(kd).ensure(&Kind::CType, "force")?;
                 Step::Done(ty_body)

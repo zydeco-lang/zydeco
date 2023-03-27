@@ -39,7 +39,7 @@ impl TypeCheck for Span<Type> {
                     self.span()
                         .make(arg.syn(ctx.clone())?)
                         .ensure(&Kind::CType, "thunk argument")?;
-                    Step::Done(Kind::CType)
+                    Step::Done(Kind::VType)
                 }
                 _ => Err(self.span().make(ArityMismatch {
                     context: format!("{}", self.inner_ref().fmt()),
