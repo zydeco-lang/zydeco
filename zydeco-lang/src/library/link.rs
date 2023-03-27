@@ -1,27 +1,29 @@
 use super::syntax::*;
 use crate::rc;
 use crate::statics::syntax as ss;
+use indexmap::IndexMap;
 
 impl From<ss::Module> for Module {
     fn from(m: ss::Module) -> Self {
-        Self {
-            name: m.name,
-            define: m
-                .define
-                .into_iter()
-                .map(|def| {
-                    let DeclSymbol {
-                        inner: ss::Define { name, def },
-                        external,
-                        public: _,
-                    } = def;
-                    (name, def.inner_ref().into())
-                    // Todo: use extern field
-                    // todo!()
-                })
-                .collect(),
-            entry: m.entry.inner_ref().into(),
+        let mut define = IndexMap::new();
+        for DeclSymbol {
+            public: _,
+            external: _,
+            inner: ss::Define { name: (sym, _ty), def: () },
+        } in m.define_ext
+        {
+            #[allow(unreachable_code)]
+            define.insert(sym, todo!("external define"));
         }
+        for DeclSymbol {
+            public: _,
+            external: _,
+            inner: ss::Define { name, def },
+        } in m.define
+        {
+            define.insert(name, def.inner_ref().into());
+        }
+        Self { name: m.name, define, entry: m.entry.inner_ref().into() }
     }
 }
 

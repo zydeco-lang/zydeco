@@ -1,0 +1,78 @@
+use super::*;
+
+impl Eqv for () {
+    fn eqv(
+        &self, _other: &Self, _f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        Ok(())
+    }
+}
+
+impl Eqv for Kind {
+    fn eqv(
+        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        bool_test(self == other, f)
+    }
+}
+
+impl Eqv for TCtor {
+    /// syntactic equality of type constructors
+    fn eqv(
+        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        match (self, other) {
+            (TCtor::Var(x), TCtor::Var(y)) => bool_test(x == y, f.clone()),
+            (TCtor::OS, TCtor::OS)
+            | (TCtor::Ret, TCtor::Ret)
+            | (TCtor::Thunk, TCtor::Thunk)
+            | (TCtor::Fun, TCtor::Fun) => Ok(()),
+            (TCtor::Var(_), _)
+            | (TCtor::OS, _)
+            | (TCtor::Ret, _)
+            | (TCtor::Thunk, _)
+            | (TCtor::Fun, _) => Err(f()),
+        }
+    }
+}
+
+impl Eqv for Type {
+    fn eqv(
+        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        let lhs = self.head_reduction()?;
+        let rhs = other.head_reduction()?;
+        // both stuck type variable and type constructor
+        lhs.tctor.eqv(&rhs.tctor, f.clone())?;
+        // argument length must be equal
+        bool_test(lhs.args.len() == rhs.args.len(), f.clone())?;
+        // arguments must be equivalent
+        for (ty1, ty2) in lhs.args.iter().zip(rhs.args.iter()) {
+            ty1.inner_ref().eqv(ty2.inner_ref(), f.clone())?;
+        }
+        Ok(())
+    }
+}
+
+impl Monoid for Env<TypeV, Type> {
+    fn empty() -> Self {
+        Self::new()
+    }
+
+    fn append(self, ori: Self) -> Self {
+        // append on Env is actually composing lazy substitutions, effectively
+        //       M [\gamma] [\delta] = M [\delta . \gamma]
+        // where we refer to gamma as "original" and delta as "diff" then
+        //      new = append(diff, original)
+        let mut new = Self::new();
+        for (x, ty) in self.clone() {
+            if !ori.contains_key(&x) {
+                new.insert(x, ty);
+            }
+        }
+        for (x, ty) in ori {
+            new.insert(x, ty.subst(self.clone()));
+        }
+        new
+    }
+}
