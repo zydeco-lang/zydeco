@@ -1,4 +1,4 @@
-use super::syntax::*;
+use super::{builtins, syntax::*};
 use crate::rc;
 use crate::statics::syntax as ss;
 use indexmap::IndexMap;
@@ -6,14 +6,15 @@ use indexmap::IndexMap;
 impl From<ss::Module> for Module {
     fn from(m: ss::Module) -> Self {
         let mut define = IndexMap::new();
+        let std_library = builtins::std_library();
         for DeclSymbol {
             public: _,
             external: _,
             inner: ss::Define { name: (sym, _ty), def: () },
         } in m.define_ext
         {
-            #[allow(unreachable_code)]
-            define.insert(sym, todo!("external define"));
+            let def = std_library[&sym].clone();
+            define.insert(sym, def);
         }
         for DeclSymbol {
             public: _,

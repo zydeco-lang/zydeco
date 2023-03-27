@@ -44,6 +44,7 @@ impl<'rt> Eval<'rt> for ls::TermValue {
                 Step::Done(ls::Ctor { ctor, args }.into())
             }
             ls::TermValue::Literal(lit) => Step::Done(lit.into()),
+            ls::TermValue::SemValue(sem) => Step::Done(sem),
         }
     }
 }

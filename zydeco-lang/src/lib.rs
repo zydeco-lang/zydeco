@@ -80,6 +80,7 @@ pub mod library {
     pub mod legacy;
     mod link;
     pub mod builtins;
+    mod impls;
 
     pub use legacy::{declarations, linker};
 }

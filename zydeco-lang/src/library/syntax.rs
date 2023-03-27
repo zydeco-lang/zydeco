@@ -10,11 +10,12 @@ use zydeco_derive::EnumGenerator;
 #[derive(EnumGenerator, Clone)]
 pub enum TermValue {
     Var(TermV),
-    Thunk(Thunk<TC>),
-    Ctor(Ctor<CtorV, TV>),
+    Thunk(Thunk<RcComp>),
+    Ctor(Ctor<CtorV, RcValue>),
     Literal(Literal),
+    SemValue(ds::TermValue)
 }
-type TV = Rc<TermValue>;
+type RcValue = Rc<TermValue>;
 impl ValueT for TermValue {}
 
 pub type PrimComp = fn(
@@ -32,17 +33,17 @@ pub struct Prim {
 
 #[derive(EnumGenerator, Clone)]
 pub enum TermComputation {
-    Ret(Ret<TV>),
-    Force(Force<TV>),
-    Let(Let<TermV, TV, TC>),
-    Do(Do<TermV, TC, TC>),
-    Rec(Rec<TermV, TC>),
-    Match(Match<CtorV, TermV, TV, TC>),
-    CoMatch(CoMatch<DtorV, TermV, TC>),
-    Dtor(Dtor<TC, DtorV, TV>),
+    Ret(Ret<RcValue>),
+    Force(Force<RcValue>),
+    Let(Let<TermV, RcValue, RcComp>),
+    Do(Do<TermV, RcComp, RcComp>),
+    Rec(Rec<TermV, RcComp>),
+    Match(Match<CtorV, TermV, RcValue, RcComp>),
+    CoMatch(CoMatch<DtorV, TermV, RcComp>),
+    Dtor(Dtor<RcComp, DtorV, RcValue>),
     Prim(Prim),
 }
-type TC = Rc<TermComputation>;
+type RcComp = Rc<TermComputation>;
 impl ComputationT for TermComputation {}
 
 #[derive(EnumGenerator, Clone)]
