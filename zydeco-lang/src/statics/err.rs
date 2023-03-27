@@ -27,7 +27,7 @@ impl fmt::Display for TypeCheckError {
             }
             KindMismatch { context, expected, found } => write!(
                 f,
-                "Kind mismatch, In {}, expected {}, but got {}",
+                "Kind mismatch. In {}, expected {}, but got {}",
                 context, expected, found
             ),
             TypeMismatch { context, expected, found } => write!(

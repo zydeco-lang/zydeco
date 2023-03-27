@@ -42,12 +42,8 @@ fn desugar_gen_let(
         }
         (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
-            if let Some(ty) = ty.clone() {
-                body = Box::new(
-                    def.info.make(ps::TermAnn { term: body, ty }.into()),
-                );
-            }
             if fun {
+                let params = params.clone();
                 body = Box::new(
                     def.info.make(ps::Abstraction { params, body }.into()),
                 );
@@ -57,17 +53,27 @@ fn desugar_gen_let(
                     def.info.make(Rec { var: (var, None), body }.into()),
                 );
             }
-            let ty = match ty {
+            let mut body = rc!((*body).try_map(TryInto::try_into)?);
+            let mut ty = match ty {
                 Some(ty) => Some(rc!(ty.try_map(TryInto::try_into)?)),
                 None => None,
             };
-            Ok((
-                name,
-                ty,
-                Some(rc!(def.info.make(
-                    Thunk(rc!((*body).try_map(TryInto::try_into)?)).into()
-                ))),
-            ))
+            for (var, ty_param) in params.iter().rev() {
+                if let (Some(ty_dom), Some(ty_cod)) = (ty_param, ty) {
+                    let ty_dom =
+                        rc!(ty_dom.to_owned().try_map(TryInto::try_into)?);
+                    ty = Some(rc!(var
+                        .span()
+                        .make(Type::internal("Fn", vec![ty_dom, ty_cod]))))
+                } else {
+                    ty = None;
+                }
+            }
+            if let Some(ty) = ty.clone() {
+                body =
+                    rc!(def.info.make(ps::TermAnn { term: body, ty }.into()));
+            }
+            Ok((name, ty, Some(rc!(def.info.make(Thunk(body).into())))))
         }
     }
 }

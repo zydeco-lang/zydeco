@@ -1,5 +1,5 @@
-do a <- ! and False() True(),
-   b <- ! or False() True(),
-   c <- ! not a;
+do a <- ! and False() True();
+do b <- ! or False() True();
+do c <- ! not a;
 do a <- ! nor False() False();
 ! and c b

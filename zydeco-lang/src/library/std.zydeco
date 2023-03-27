@@ -59,7 +59,7 @@ pub define and_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
 pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
   fn (x: Bool) (y: Bool) ->
     match x
-    | True() -> ret True()
+    | True() -> ret true
     | False() -> ret y
     end
 };
@@ -69,7 +69,7 @@ pub define or_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
   fn (b1_: Thunk(Ret Bool)) (b2_: Thunk(Ret Bool)) ->
   do b1 <- ! b1_;
   match b1
-  | True() -> ret True()
+  | True() -> ret true
   | False() -> ! b2_
   end
 };

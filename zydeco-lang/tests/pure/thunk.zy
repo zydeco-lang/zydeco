@@ -1,5 +1,5 @@
-let tt = (True()::Bool),
-    ff : Bool = False();
+let tt = (True()::Bool);
+let ff : Bool = False();
 let not_ = {
     let not__ = { fn (x: Bool) -> match x | True() -> ret ff | False() -> ret tt end };
     fn (x: Bool) -> ! not__ x

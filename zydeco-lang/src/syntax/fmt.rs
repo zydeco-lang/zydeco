@@ -218,12 +218,15 @@ where
 {
     fn fmt_args(&self, fargs: Args) -> String {
         let Let { var, def, body } = self;
-        format!(
-            "let {} = {} in {}",
+        let mut s = String::new();
+        s += &format!(
+            "let {} = {} in",
             var.fmt_args(fargs),
             def.fmt_args(fargs),
-            body.fmt_args(fargs)
-        )
+        );
+        s += &fargs.force_space();
+        s += &body.fmt_args(fargs);
+        s
     }
 }
 
@@ -235,12 +238,15 @@ where
 {
     fn fmt_args(&self, fargs: Args) -> String {
         let Do { var, comp, body } = self;
-        format!(
-            "do {} <- {} ; {}",
+        let mut s = String::new();
+        s += &format!(
+            "do {} <- {} ;",
             var.fmt_args(fargs),
             comp.fmt_args(fargs),
-            body.fmt_args(fargs)
-        )
+        );
+        s += &fargs.force_space();
+        s += &body.fmt_args(fargs);
+        s
     }
 }
 
@@ -249,13 +255,19 @@ where
     TeV: VarT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         let Rec { var, body } = self;
         let mut s = String::new();
         s += "rec ";
-        s += &var.fmt_args(args);
-        s += " -> ";
-        s += &body.fmt_args(args);
+        s += &var.fmt_args(fargs);
+        s += " -> (";
+        {
+            let fargs = fargs.indent();
+            s += &fargs.force_space();
+            s += &body.fmt_args(fargs);
+        }
+        s += &fargs.force_space();
+        s += ")";
         s
     }
 }
@@ -267,24 +279,30 @@ where
     A: ValueT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         let Match { scrut, arms } = self;
         let mut s = String::new();
         s += "match ";
-        s += &scrut.fmt_args(args);
-        s += " ";
+        s += &scrut.fmt_args(fargs);
         for Matcher { ctor, vars, body } in arms {
+            s += &fargs.force_space();
             s += "| ";
-            s += &ctor.fmt_args(args);
+            s += &ctor.fmt_args(fargs);
             s += "(";
             s += &vars
                 .into_iter()
-                .map(|var| var.fmt_args(args))
+                .map(|var| var.fmt_args(fargs))
                 .collect::<Vec<_>>()
                 .join(", ");
             s += ") -> ";
-            s += &body.fmt_args(args);
+            {
+                let fargs = fargs.indent();
+                s += &fargs.force_space();
+                s += &body.fmt_args(fargs);
+            }
         }
+        s += &fargs.force_space();
+        s += "end";
         s
     }
 }
@@ -295,22 +313,29 @@ where
     TeV: VarT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         let CoMatch { arms } = self;
         let mut s = String::new();
         s += "comatch ";
         for CoMatcher { dtor, vars, body } in arms {
-            s += "| ";
-            s += &dtor.fmt_args(args);
+            s += &fargs.force_space();
+            s += "| .";
+            s += &dtor.fmt_args(fargs);
             s += "(";
             s += &vars
                 .into_iter()
-                .map(|var| var.fmt_args(args))
+                .map(|var| var.fmt_args(fargs))
                 .collect::<Vec<_>>()
                 .join(", ");
             s += ") -> ";
-            s += &body.fmt_args(args);
+            {
+                let fargs = fargs.indent();
+                s += &fargs.force_space();
+                s += &body.fmt_args(fargs);
+            }
         }
+        s += &fargs.force_space();
+        s += "end";
         s
     }
 }
