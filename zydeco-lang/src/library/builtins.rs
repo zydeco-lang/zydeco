@@ -32,7 +32,7 @@ pub (super) fn std_library() -> HashMap<TermV, TermValue> {
         Builtin::new("int_eq", 2, int_eq),
         Builtin::new("int_lt", 2, int_lt),
         Builtin::new("int_gt", 2, int_gt),
-        Builtin::new("str_length", 2, str_length),
+        Builtin::new("str_length", 1, str_length),
         Builtin::new("str_append", 2, str_append),
         Builtin::new("str_eq", 2, str_eq),
         Builtin::new("str_index", 2, str_index),

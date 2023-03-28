@@ -1,7 +1,7 @@
 data Nat where | Z() | S(Nat) end
-let add = {
+let add: Comp(Nat -> Nat -> Ret(Nat)) = {
   rec (add: Comp(Nat -> Nat -> Ret(Nat))) -> (
-    fn (x: Nat, y: Nat) -> (
+    fn (x: Nat) (y: Nat) -> (
       match x
       | Z() -> ret y
       | S(x) -> !add x S(y)
@@ -9,14 +9,12 @@ let add = {
     )
   )
 };
-let rec add' : Nat -> Nat -> Ret(Nat) = (
-  fn (x: Nat, y: Nat) -> (
-    match x
-    | Z() -> ret y
-    | S(x) -> !add x S(y)
-    end
-  )
-);
+let rec fn add' (x: Nat) (y: Nat): Ret(Nat) =
+  match x
+  | Z() -> ret y
+  | S(x) -> !add x S(y)
+  end
+in
 do x <- ! add S(S(Z())) S(Z());
 do y <- ! add' x S(S(S(Z())));
 ! exit 0

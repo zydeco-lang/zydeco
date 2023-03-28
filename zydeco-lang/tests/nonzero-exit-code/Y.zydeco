@@ -6,34 +6,31 @@ end
 # under call-by-push-value - thanks to thunks, we are able to
 # preserve the intention of lazy evaluation in `x` above.
 
-let y = {
-  fn (f: U(U(Int -> F(Int)) -> Int -> F(Int))) ->
-    ret {
-      (comatch | .y(x) -> ! f { ! x .y(x) } end :: Y)
-      .y({ (comatch | .y(x) -> ! f { ! x .y(x) } end :: Y) })
-    }
-};
+let fn y (f: U(U(Int -> F(Int)) -> Int -> F(Int))): F(U(Int -> F(Int))) =
+  ret {
+    (comatch | .y(x) -> ! f { ! x .y(x) } end :: Y)
+    .y({ (comatch | .y(x) -> ! f { ! x .y(x) } end :: Y) })
+  }
+in
 
 # good old factorial
-let fact = {
-  fn (f: U(Int -> F(Int))) ->
-    fn (n: Int) ->
-      do is_zero <- ! int_eq n 0;
-      match is_zero
-      | True() -> ret 1
-      | False() -> (
-        do rest <-
-          do n-1 <- !sub n 1;
-          ! f n-1;
-        ! mul n rest
-      )
-      end
-};
+let fn fact (f: U(Int -> F Int)) (n: Int): F Int =
+  do is_zero <- ! int_eq n 0;
+  match is_zero
+  | True() -> ret 1
+  | False() -> (
+    do rest <-
+      do n-1 <- !sub n 1;
+      ! f n-1;
+    ! mul n rest
+  )
+  end
+in
 
 do fact <- ! y fact;
 
 # tests
-let demo = { fn (input: Int, expected: Int, t: Thunk(OS)) ->
+let fn demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
   do x <- ! fact input;
   do correct <- ! int_eq x expected;
   match correct
@@ -50,7 +47,7 @@ let demo = { fn (input: Int, expected: Int, t: Thunk(OS)) ->
     ! write_line msg { ! exit 1 }
   )
   end
-};
+in
 
 ! demo 5 120 {
 ! demo 10 3628800 {

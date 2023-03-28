@@ -1,8 +1,8 @@
-codata FnRet A : VType where
+codata FnRet (A : VType) where
   | .arg(A): Ret(A)
 end
 
-codata FnOpt A : VType where
+codata FnOpt (A : VType) where
   | .one(A): Ret(A)
   | .zero(): Ret(A)
 end

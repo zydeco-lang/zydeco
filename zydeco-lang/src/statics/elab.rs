@@ -222,13 +222,19 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let Rec { var: (var, ty), body } = t;
                 let mut body = rc!((body).try_map(TryInto::try_into)?);
                 if let Some(ty) = ty {
-                    body = rc!(body.info.clone().make(
-                        TermAnn {
-                            term: body,
-                            ty: rc!(ty.try_map(TryInto::try_into)?),
-                        }
-                        .into(),
-                    ));
+                    let ty: Span<Type> = ty.try_map(TryInto::try_into)?;
+                    let TCtor::Thunk = ty.inner.app.tctor else {
+                        Err(TypeCheckError::TypeExpected {
+                            context: format!("elaborating recursion"),
+                            expected: format!("{{a}}"),
+                            found: ty.inner
+                        })?
+                    };
+                    let ty = ty.inner.app.args[0].clone();
+                    body = rc!(body
+                        .info
+                        .clone()
+                        .make(TermAnn { term: body, ty }.into(),));
                 }
                 Rec { var, body }.into()
             }

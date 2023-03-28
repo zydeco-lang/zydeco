@@ -1,14 +1,15 @@
-codata Stack A : VType where
+codata Stack (A : VType) where
   | .app(A): Stack A
   | .return(): F(A)
 end
 
-do x <- ( rec (abort: U(Int -> Stack Int)) ->
-    fn (x: Int) ->
-      comatch
-      | .app(_) -> ! abort x
-      | .return() -> ret x
-      end
-  ) 0 .app(1) .app(2) .app(3) .return();
+let rec fn abort (x: Int): Stack Int =
+  comatch
+  | .app(_) -> ! abort x
+  | .return() -> ret x
+  end
+in
+
+do x <- ! abort 0 .app(1) .app(2) .app(3) .return();
 ! exit x
 

@@ -45,6 +45,7 @@ fn ui() -> Html {
     }
 }
 
+#[allow(unused)]
 fn run(input: &str) -> Result<String, String> {
     // let p = zydeco::parse_prog(input)?;
     // let mut ctx = Ctx::new();

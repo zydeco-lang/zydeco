@@ -5,7 +5,7 @@ data Syn where
   | Choose(Syn, Syn)
 end
 
-data Option A : VType where
+data Option (A : VType) where
   | Some(A)
   | None()
 end
@@ -22,9 +22,9 @@ codata Regex where
   | .run(String): Matcher
 end
 
-let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String, i: Int) -> (
+let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String) (i: Int) -> (
   do l <- ! str_length s;
-  let rec str_collect : String -> Int -> String -> Ret(String) = fn (s: String, i: Int, r: String) -> (
+  let rec str_collect : String -> Int -> String -> Ret(String) = fn (s: String) (i: Int) (r: String) -> (
     do continue? <- ! int_lt i l;
     match continue?
     | False() -> ret r
@@ -39,15 +39,15 @@ let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String, i: Int) -> (
   ! str_collect s i ""
 )};
 
-let str_eq_at = { fn (a: String, b: String, i: Int) ->
+let fn str_eq_at (a: String) (b: String) (i: Int): F Bool =
   do ai <- ! str_index a i;
   do bi <- ! str_index b i;
   ! char_eq ai bi
-};
+in
 
 let str_match : U(String -> String -> F(Option String)) = {
   let rec str_match : Int -> String -> String -> F(Option String) =
-    fn (i: Int, s: String, p: String) -> (
+    fn (i: Int) (s: String) (p: String) -> (
       do s_len <- ! str_length s;
       do p_len <- ! str_length p;
       do i_lt_s <- ! int_lt i s_len;
@@ -105,14 +105,14 @@ let rec regex : Regex = ( comatch | .run(s) -> (
   end)
 end);
 
-let demo = { fn (syn: Syn, str: String, kont: U(OS)) ->
+let fn demo (syn: Syn) (str: String) (kont: U(OS)) =
   do res <- ! regex .run(str) .bind(syn);
   match res
   | Some(s) -> (
     ! write_line s kont)
   | None() -> ! exit 1
   end
-};
+in
 
 ! demo (Concat(Kleene(Str("p")), Concat(Kleene(Str("q")), Choose(Str("xos"), Str("sox"))))) "pppqqqsox\\^o^/" {
 ! exit 0

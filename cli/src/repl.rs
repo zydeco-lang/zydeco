@@ -1,9 +1,5 @@
-use zydeco_lang::{
-    parse::syntax::Term,
-    statics::syntax as ss,
-    utils::span::Span,
-    zydeco::{self, ZydecoExpr},
-};
+#![allow(unused)]
+use zydeco_lang::{statics::syntax as ss, zydeco::ZydecoExpr};
 
 pub fn launch() -> Result<(), String> {
     println!("Zydeco v0.0.1");

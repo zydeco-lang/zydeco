@@ -1,10 +1,10 @@
-data List A : VType where
+data List (A : VType) where
   | Nil()
   | Cons(A, List A)
 end
 
 let rec foldl : List String -> Thunk(String -> Int -> Ret(Int)) -> Int -> Ret(Int) =
-  fn (l, step, s) ->
+  fn l step s ->
     match l
     | Nil() -> ret s
     | Cons(x, xs) -> (
@@ -12,10 +12,10 @@ let rec foldl : List String -> Thunk(String -> Int -> Ret(Int)) -> Int -> Ret(In
       ! foldl xs step s'
     )
     end
-    ;
+in
 
 do l <- ! foldl (Cons("abc", Cons("", Cons("y", Nil()))))
-                { fn (s : String, i : Int) ->
+                { fn (s : String) (i : Int) ->
                   do i' <- ! str_length s;
                   ! add i i'
                 }

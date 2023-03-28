@@ -1,14 +1,14 @@
-data Tree A : VType where
+data Tree (A : VType) where
   | Fork(Tree A, Tree A)
   | Final(A)
 end
 
-data Choice B : CType where
+data Choice (B : CType) where
   | L(U B)
   | R(U B)
 end
 
-data Path A : VType where
+data Path (A : VType) where
   | Nil()
   | Cons(A, Path A)
 end
@@ -23,7 +23,7 @@ let boop : Choice (U OS -> OS) = R({ fn (k) ->
 let tree : Tree String = Fork(Fork(Final("x"), Final("o")), Final("x"));
 let path : Path (Choice (U OS -> OS)) = Cons(beep, Cons(boop, Nil()));
 
-let rec walk : Tree String -> Path (Choice (U OS -> OS)) -> OS = fn (t, p) -> (
+let rec walk : Tree String -> Path (Choice (U OS -> OS)) -> OS = fn t p -> (
   match t
   | Final(res) -> (
     match p

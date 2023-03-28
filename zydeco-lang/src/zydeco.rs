@@ -13,10 +13,7 @@ use crate::{
         tyck::{Ctx, TypeCheck},
     },
     syntax::{env::Env, DeclSymbol},
-    utils::{
-        fmt::FmtArgs,
-        span::{FileInfo, Span, SpanHolder},
-    },
+    utils::span::{FileInfo, Span, SpanHolder},
 };
 use std::{path::PathBuf, rc::Rc};
 
@@ -95,9 +92,9 @@ pub struct ZydecoExpr {
 
 impl ZydecoExpr {
     pub fn new() -> Self {
-        let std = Zydeco::std().unwrap();
-        let mut ctx = Ctx::default();
-        let mut env = Env::new();
+        // let std = Zydeco::std().unwrap();
+        let ctx = Ctx::default();
+        let env = Env::new();
         Self { ctx, env }
     }
     pub fn parse(source: &str) -> Result<Span<ps::Term>, String> {

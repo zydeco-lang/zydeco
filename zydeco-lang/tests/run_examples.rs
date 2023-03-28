@@ -127,22 +127,22 @@ mod batch_tests {
     // Note: to use rust-analyzer's debug feature on tests, you can replace
     // the file name with full path to the test file and click `Debug`
     use super::*;
-    mk_batch_test!(btest0, "defunctionalization.zydeco");
-    // mk_batch_test!(btest1, "deterministic-pushdown-automaton.zydeco");
-    mk_batch_test!(btest2, "interpreter.zydeco");
-    mk_batch_test!(btest3, "lists.zydeco");
-    // mk_batch_test!(btest4, "Y.zydeco");
-    mk_batch_test!(btest5, "num.zy");
-    mk_batch_test!(btest6, "even-odd-data.zy");
-    mk_batch_test!(btest7, "even-old-rec.zy");
-    mk_batch_test!(btest9, "even-odd-codata.zy");
-    mk_batch_test!(btest10, "nat.zy");
-    mk_batch_test!(btest11, "add.zy");
-    // mk_batch_test!(btest13, "regex.zy");
-    mk_batch_test!(btest14, "llists.zydeco");
-    mk_batch_test!(btest15, "fn-opt.zy");
-    mk_batch_test!(btest16, "abort.zy");
-    mk_batch_test!(btest18, "choice.zy");
+    mk_batch_test!(defunctionalization, "defunctionalization.zydeco");
+    mk_batch_test!(dpa, "deterministic-pushdown-automaton.zydeco");
+    mk_batch_test!(interpreter, "interpreter.zydeco");
+    mk_batch_test!(lists, "lists.zydeco");
+    mk_batch_test!(y, "Y.zydeco");
+    mk_batch_test!(num, "num.zy");
+    mk_batch_test!(eo_data, "even-odd-data.zy");
+    mk_batch_test!(eo_rec, "even-old-rec.zy");
+    mk_batch_test!(eo_coda, "even-odd-codata.zy");
+    mk_batch_test!(nat, "nat.zy");
+    mk_batch_test!(add, "add.zy");
+    mk_batch_test!(regex, "regex.zy");
+    mk_batch_test!(llists, "llists.zydeco");
+    mk_batch_test!(fn_opt, "fn-opt.zy");
+    mk_batch_test!(abort, "abort.zy");
+    mk_batch_test!(choice, "choice.zy");
 }
 mod pure_tests {
     use super::*;
@@ -152,7 +152,7 @@ mod pure_tests {
     mk_pure_test!(ptest8, "fn'.zy");
     mk_pure_test!(ptest9, "fn.zy");
     mk_pure_test!(ptest12, "thunk.zy");
-    // mk_pure_test!(ptest17, "bigmac.zy");
+    mk_pure_test!(ptest17, "bigmac.zy");
 }
 mod tyck_tests {
     use super::*;

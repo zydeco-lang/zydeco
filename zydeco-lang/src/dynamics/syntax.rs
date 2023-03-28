@@ -1,5 +1,5 @@
 use crate::syntax::*;
-pub use crate::{library::syntax as ls, syntax::env::Env};
+pub use crate::{library::syntax as ls, syntax::env::Env, utils::fmt::FmtArgs};
 use im::Vector;
 use std::{
     fmt::Debug,
@@ -41,8 +41,18 @@ pub enum Frame {
 impl Debug for Frame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Frame::Kont(_, _, var) => write!(f, "Kont({})", var),
-            Frame::Dtor(dtor, _) => write!(f, "Dtor({})", dtor),
+            Frame::Kont(comp, _, var) => {
+                write!(f, "Kont({} -> {})", comp.as_ref().fmt(), var)
+            }
+            Frame::Dtor(dtor, args) => write!(
+                f,
+                "Dtor(.{}({}))",
+                dtor,
+                args.into_iter()
+                    .map(|arg| arg.fmt())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         }
     }
 }
