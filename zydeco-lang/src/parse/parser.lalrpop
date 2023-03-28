@@ -76,10 +76,10 @@ Kind: Kind = {
 //* ---------------------------------- Type ---------------------------------- */
 
 Type: Type = {
-    "forall" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
+    "forall" <params:TypePattern+> "." <ty:Box<Span<TypeArrow>>> => {
         Forall(params, ty).into()
     },
-    "exists" <params:SepByDelim<"(",",",<TypePattern>, ")">>  "." <ty:Box<Span<TypeApp>>> => {
+    "exists" <params:TypePattern+> "." <ty:Box<Span<TypeArrow>>> => {
         Exists(params, ty).into()
     },
     TypeArrow,
@@ -108,7 +108,6 @@ TCtor: TCtor = {
     <TypeV> => TCtor::Var(<>),
     "U" => TCtor::Thunk,
     "F" => TCtor::Ret,
-    "OS" => TCtor::OS,
     // Fun ?
 };
 
@@ -227,9 +226,9 @@ TermPattern: TermPattern = {
 };
 
 Literal: Literal = {
-    <n:Int> => n.into(),
-    <s:String> => s.into(),
-    <c:Char> => c.into(),
+    <Int> => <>.into(),
+    <String> => <>.into(),
+    <Char> => <>.into(),
 };
 
 LetSep: () = {
@@ -325,7 +324,6 @@ extern {
 
         "F" => Tok::RetType,
         "U" => Tok::CompType,
-        "OS" => Tok::OSType,
 
         "(" => Tok::ParenOpen,
         ")" => Tok::ParenClose,

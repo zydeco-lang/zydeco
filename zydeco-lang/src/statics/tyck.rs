@@ -239,7 +239,7 @@ impl TypeCheck for Span<Module> {
         }
         let ty_app = entry.syn(ctx.to_owned())?.head_reduction()?;
         match ty_app.tctor {
-            TCtor::OS => Ok(()),
+            TCtor::Var(x) if x.name().eq("OS") => Ok(()),
             _ => Err(self.span().make(WrongMain { found: ty_app.into() })),
         }?;
         Ok(Step::Done(Seal(ctx)))

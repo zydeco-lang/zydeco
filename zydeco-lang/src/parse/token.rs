@@ -3,10 +3,10 @@ use std::fmt::{Debug, Display};
 
 #[derive(Logos, Clone, Debug, PartialEq)]
 pub enum Tok<'input> {
-    #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*")]
+    #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
     UpperIdent(&'input str),
-    #[regex(r"(([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=)*)")]
-    #[regex(r"((\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=)*)")]
+    #[regex(r"(([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*)")]
+    #[regex(r"((\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=|~)*)")]
     LowerIdent(&'input str),
 
     #[token("module")]
@@ -65,8 +65,6 @@ pub enum Tok<'input> {
     RetType,
     #[regex("(U|Comp|Thunk)")]
     CompType,
-    #[token("OS")]
-    OSType,
 
     #[token("(")]
     ParenOpen,
@@ -139,7 +137,6 @@ impl<'input> Display for Tok<'input> {
             Tok::CType => write!(f, "CType"),
             Tok::RetType => write!(f, "F"),
             Tok::CompType => write!(f, "U"),
-            Tok::OSType => write!(f, "OS"),
             Tok::ParenOpen => write!(f, "("),
             Tok::ParenClose => write!(f, ")"),
             Tok::BraceOpen => write!(f, "{{"),

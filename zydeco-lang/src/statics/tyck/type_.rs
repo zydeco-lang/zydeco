@@ -60,14 +60,6 @@ impl TypeCheck for Span<Type> {
                     found: app.args.len(),
                 }))?,
             },
-            TCtor::OS => match &app.args.as_slice() {
-                &[] => Step::Done(Kind::CType),
-                _ => Err(self.span().make(ArityMismatch {
-                    context: format!("{}", self.inner_ref().fmt()),
-                    expected: 0,
-                    found: app.args.len(),
-                }))?,
-            },
             TCtor::Fun => match &app.args.as_slice() {
                 &[arg1, arg2] => {
                     self.span()

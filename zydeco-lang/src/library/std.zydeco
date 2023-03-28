@@ -2,11 +2,11 @@
 
 ## 1 and 2 types
 
-data Unit where
+pub data Unit where
   | Unit()
 end
 
-data Bool where
+pub data Bool where
   | True()
   | False()
 end
@@ -23,17 +23,17 @@ pub define not : Thunk(Bool -> Ret(Bool)) = {
 };
 
 # function
-codata Fn (A: VType) (B: CType) where
+pub codata Fn (A: VType) (B: CType) where
   | .arg(A) : B
 end
 
 # lazy not
-pub define notM : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
-  fn (t) ->
-    do x <- ! t;
+pub define not~ : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn t~ ->
+    do x <- ! t~;
     match x
-    | True() -> ret (False()::Bool)
-    | False() -> ret (True()::Bool)
+    | True() -> ret false
+    | False() -> ret true
     end
 };
 
@@ -46,18 +46,19 @@ pub define and : Thunk(Bool -> Bool -> Ret(Bool)) = {
 };
 
 # Lazy, short-circuiting (left to right) and
-# Can we come up with a better naming convention? Maybe and~ is more suggestive? (not accepted by parser currently)
-pub define and_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
-  fn b1_ b2_ ->
-  do b1 <- ! b1_;
+# Can we come up with a better naming convention? Maybe and~ is more suggestive?
+# ~~(not accepted by parser currently)~~ accepted now
+pub define and~ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn b1~ b2~ ->
+  do b1 <- ! b1~;
   match b1
-  | True() -> ! b2_
+  | True() -> ! b2~
   | False() -> ret false
   end
 };
 
 pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (x: Bool) (y: Bool) ->
+  fn x y ->
     match x
     | True() -> ret true
     | False() -> ret y
@@ -65,29 +66,29 @@ pub define or : Thunk(Bool -> Bool -> Ret(Bool)) = {
 };
 
 # Lazy, short-circuiting (left to right) or
-pub define or_ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
-  fn (b1_: Thunk(Ret Bool)) (b2_: Thunk(Ret Bool)) ->
-  do b1 <- ! b1_;
+pub define or~ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn b1~ b2~ ->
+  do b1 <- ! b1~;
   match b1
   | True() -> ret true
-  | False() -> ! b2_
+  | False() -> ! b2~
   end
 };
 
 pub define nand : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (x: Bool) (y: Bool) ->
+  fn x y ->
     do a <- ! and x y;
     ! not a
 };
 
 pub define nor : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (x: Bool) (y: Bool) ->
+  fn x y ->
     do a <- ! or x y;
     ! not a
 };
 
 pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
-  fn (b: Bool) (b': Bool) ->
+  fn b b' ->
     match b
     | True() -> ret b'
     | False() -> ! not b'
@@ -110,9 +111,10 @@ pub define bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
 
 ### Moving the built-in function to internal
 
+
 ## arithmetic operations
 
-extern data Int where
+pub extern data Int where
 end
 ### we support the constructors externally because
 ### the parsers of their constructors are customized
@@ -132,9 +134,9 @@ pub extern define int_gt : Thunk(Int -> Int -> Ret Bool);
 
 ## string operations
 
-extern data Char where
+pub extern data Char where
 end
-extern data String where
+pub extern data String where
 end
 ### we support the constructors externally
 
@@ -149,6 +151,7 @@ pub define char_eq: Thunk(Char -> Char -> Ret Bool) = {
     do c' <- ! char_to_str c';
     ! str_eq c c'
 };
+
 
 ## conversions
 
@@ -168,12 +171,16 @@ pub extern define char_to_str : Thunk(Char -> Ret(String));
 pub extern define char_to_int : Thunk(Char -> Ret(Int));
 pub extern define str_to_int : Thunk(String -> Ret(Int));
 
-data StrList where
+pub data StrList where
   | SLNil()
   | SLCons(String, StrList)
 end
+
+
 ## OS operations
 
+pub extern codata OS where
+end
 pub extern define write_str : Thunk(String -> Thunk(OS) -> OS);
 pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
 pub extern define exit : Thunk(Int -> OS);
@@ -184,7 +191,6 @@ pub define write_line : Thunk(String -> Thunk(OS) -> OS) = {
     do s <- ! str_append s "\n";
     ! write_str s k
 };
-# pub extern define write_line : Thunk(String -> Thunk(OS) -> OS);
 
 pub define write_int : Thunk(Int -> Thunk(OS) -> OS) = {
   fn (i: Int) (k: Thunk(OS)) ->

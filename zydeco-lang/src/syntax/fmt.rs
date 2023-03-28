@@ -70,7 +70,6 @@ impl FmtArgs for TCtor {
             TCtor::Var(x) => x.fmt_args(fargs),
             TCtor::Thunk => "Thunk".to_owned(),
             TCtor::Ret => "Ret".to_owned(),
-            TCtor::OS => "OS".to_owned(),
             TCtor::Fun => "Fn".to_owned(),
         }
     }

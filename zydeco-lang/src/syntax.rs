@@ -129,7 +129,6 @@ pub enum TCtor {
     Var(TypeV),
     Thunk,
     Ret,
-    OS,
     Fun,
 }
 impl TyVarT for TCtor {}
