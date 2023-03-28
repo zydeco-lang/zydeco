@@ -96,9 +96,10 @@ where
     }
 }
 
-impl<TyV, Ty> FmtArgs for Forall<TyV, Ty>
+impl<TyV, Kd, Ty> FmtArgs for Forall<TyV, Kd, Ty>
 where
     TyV: FmtArgs,
+    Kd: KindT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, args: Args) -> String {
@@ -112,9 +113,10 @@ where
     }
 }
 
-impl<TyV, Ty> FmtArgs for Exists<TyV, Ty>
+impl<TyV, Kd, Ty> FmtArgs for Exists<TyV, Kd, Ty>
 where
     TyV: FmtArgs,
+    Kd: KindT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, args: Args) -> String {
@@ -161,7 +163,7 @@ impl FmtArgs for Literal {
 
 impl<C, A> FmtArgs for Ctor<C, A>
 where
-    C: FmtArgs,
+    C: CtorT + FmtArgs,
     A: ValueT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
@@ -274,7 +276,7 @@ where
 
 impl<C, TeV, A, B> FmtArgs for Match<C, TeV, A, B>
 where
-    C: FmtArgs,
+    C: CtorT + FmtArgs,
     TeV: VarT + FmtArgs,
     A: ValueT + FmtArgs,
     B: ComputationT + FmtArgs,
@@ -309,7 +311,7 @@ where
 
 impl<D, TeV, B> FmtArgs for CoMatch<D, TeV, B>
 where
-    D: FmtArgs,
+    D: DtorT + FmtArgs,
     TeV: VarT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
@@ -343,7 +345,7 @@ where
 impl<B, D, A> FmtArgs for Dtor<B, D, A>
 where
     B: ComputationT + FmtArgs,
-    D: FmtArgs,
+    D: DtorT + FmtArgs,
     A: ValueT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
@@ -363,9 +365,10 @@ where
     }
 }
 
-impl<TyV, B> FmtArgs for TypAbs<TyV, B>
+impl<TyV, Kd, B> FmtArgs for TypAbs<TyV, Kd, B>
 where
     TyV: FmtArgs,
+    Kd: KindT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
     fn fmt_args(&self, args: Args) -> String {
@@ -430,7 +433,7 @@ where
 impl<TyV, C, Ty> FmtArgs for Data<TyV, C, Ty>
 where
     TyV: VarT + FmtArgs,
-    C: FmtArgs,
+    C: CtorT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
@@ -458,7 +461,7 @@ where
 
 impl<C, Ty> FmtArgs for DataBr<C, Ty>
 where
-    C: FmtArgs,
+    C: CtorT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
@@ -480,7 +483,7 @@ where
 impl<TyV, D, Ty> FmtArgs for Codata<TyV, D, Ty>
 where
     TyV: VarT + FmtArgs,
-    D: FmtArgs,
+    D: DtorT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
@@ -508,7 +511,7 @@ where
 
 impl<D, Ty> FmtArgs for CodataBr<D, Ty>
 where
-    D: FmtArgs,
+    D: DtorT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {

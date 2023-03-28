@@ -22,7 +22,7 @@ impl Builtin {
 }
 
 // To add new builtin functions, provide impl and add declaration to std.zydeco
-pub (super) fn std_library() -> HashMap<TermV, TermValue> {
+pub(super) fn std_library() -> HashMap<TermV, TermValue> {
     [
         Builtin::new("add", 2, add),
         Builtin::new("sub", 2, sub),

@@ -13,7 +13,7 @@ pub enum TermValue {
     Thunk(Thunk<RcComp>),
     Ctor(Ctor<CtorV, RcValue>),
     Literal(Literal),
-    SemValue(ds::TermValue)
+    SemValue(ds::TermValue),
 }
 type RcValue = Rc<TermValue>;
 impl ValueT for TermValue {}

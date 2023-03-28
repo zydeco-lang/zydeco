@@ -69,9 +69,10 @@ where
     }
 }
 
-impl<TyV, Ty> SpanHolder for Forall<TyV, Ty>
+impl<TyV, Kd, Ty> SpanHolder for Forall<TyV, Kd, Ty>
 where
     TyV: SpanHolder,
+    Kd: KindT + SpanHolder,
     Ty: TypeT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
@@ -85,9 +86,10 @@ where
     }
 }
 
-impl<TyV, Ty> SpanHolder for Exists<TyV, Ty>
+impl<TyV, Kd, Ty> SpanHolder for Exists<TyV, Kd, Ty>
 where
     TyV: SpanHolder,
+    Kd: KindT + SpanHolder,
     Ty: TypeT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
@@ -139,7 +141,7 @@ impl SpanHolder for Literal {
 
 impl<C, A> SpanHolder for Ctor<C, A>
 where
-    C: SpanHolder,
+    C: CtorT + SpanHolder,
     A: ValueT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
@@ -246,7 +248,7 @@ where
 
 impl<C, TeV, A, B> SpanHolder for Match<C, TeV, A, B>
 where
-    C: SpanHolder,
+    C: CtorT + SpanHolder,
     TeV: VarT + SpanHolder,
     A: ValueT + SpanHolder,
     B: ComputationT + SpanHolder,
@@ -269,7 +271,7 @@ where
 
 impl<D, TeV, B> SpanHolder for CoMatch<D, TeV, B>
 where
-    D: SpanHolder,
+    D: DtorT + SpanHolder,
     TeV: VarT + SpanHolder,
     B: ComputationT + SpanHolder,
 {
@@ -291,7 +293,7 @@ where
 impl<B, D, A> SpanHolder for Dtor<B, D, A>
 where
     B: ComputationT + SpanHolder,
-    D: SpanHolder,
+    D: DtorT + SpanHolder,
     A: ValueT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
@@ -307,9 +309,10 @@ where
     }
 }
 
-impl<TyV, B> SpanHolder for TypAbs<TyV, B>
+impl<TyV, Kd, B> SpanHolder for TypAbs<TyV, Kd, B>
 where
     TyV: SpanHolder,
+    Kd: KindT + SpanHolder,
     B: ComputationT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
@@ -369,7 +372,7 @@ impl<T: SpanHolder> SpanHolder for DeclSymbol<T> {
 impl<TyV, C, T> SpanHolder for Data<TyV, C, T>
 where
     TyV: VarT + SpanHolder,
-    C: SpanHolder,
+    C: CtorT + SpanHolder,
     T: TypeT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
@@ -394,7 +397,7 @@ where
 impl<TyV, D, T> SpanHolder for Codata<TyV, D, T>
 where
     TyV: VarT + SpanHolder,
-    D: SpanHolder,
+    D: DtorT + SpanHolder,
     T: TypeT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)

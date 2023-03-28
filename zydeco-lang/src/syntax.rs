@@ -2,33 +2,44 @@ pub mod env;
 mod fmt;
 mod span;
 
-use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
 
 /* ---------------------------------- Meta ---------------------------------- */
 
-macro_rules! sort {
-    ( $Sort:ident ) => {
-        pub trait $Sort {}
-        impl<T: $Sort> $Sort for Box<T> {}
-        impl<T: $Sort> $Sort for Rc<T> {}
-        impl<T: $Sort> $Sort for crate::utils::span::Span<T> {}
-        impl<T: $Sort> $Sort for Option<T> {}
-        impl $Sort for () {}
-    };
-}
+pub mod sort {
+    use crate::utils::span::Span;
+    use std::rc::Rc;
 
-sort!(VarT);
-sort!(KindT);
-sort!(TypeT);
-sort!(ValueT);
-sort!(ComputationT);
+    macro_rules! sort {
+        ( $Sort:ident ) => {
+            pub trait $Sort {}
+            impl<T: $Sort> $Sort for Box<T> {}
+            impl<T: $Sort> $Sort for Rc<T> {}
+            impl<T: $Sort> $Sort for Span<T> {}
+            impl<T: $Sort> $Sort for Option<T> {}
+            impl $Sort for () {}
+        };
+    }
+
+    sort!(VarT);
+    sort!(CtorT);
+    sort!(DtorT);
+    sort!(KindT);
+    sort!(TypeT);
+    sort!(ValueT);
+    sort!(ComputationT);
+}
+pub use sort::*;
 
 /* --------------------------------- Binders -------------------------------- */
 
 pub mod binder {
-    use super::{TypeT, VarT};
-    use crate::utils::span::{Span, SpanInfo};
+    use super::sort::*;
+    use crate::utils::span::{Span, SpanHolder, SpanInfo, SpanView};
+    use std::{
+        cmp::{Eq, PartialEq},
+        hash::{Hash, Hasher},
+    };
 
     macro_rules! var {
         ( $Var:ident ) => {
@@ -47,23 +58,23 @@ pub mod binder {
                     Self(span.inner, span.info)
                 }
             }
-            impl std::cmp::PartialEq for $Var {
+            impl PartialEq for $Var {
                 fn eq(&self, other: &Self) -> bool {
                     self.0.eq(&other.0)
                 }
             }
-            impl std::cmp::Eq for $Var {}
-            impl std::hash::Hash for $Var {
-                fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+            impl Eq for $Var {}
+            impl Hash for $Var {
+                fn hash<H: Hasher>(&self, state: &mut H) {
                     self.0.hash(state);
                 }
             }
-            impl crate::utils::span::SpanView for $Var {
+            impl SpanView for $Var {
                 fn span(&self) -> &SpanInfo {
                     &self.1
                 }
             }
-            impl crate::utils::span::SpanHolder for $Var {
+            impl SpanHolder for $Var {
                 fn span_map_mut<F>(&mut self, f: F)
                 where
                     F: Fn(&mut SpanInfo) + Clone,
@@ -75,7 +86,9 @@ pub mod binder {
     }
 
     var!(CtorV);
+    impl CtorT for CtorV {}
     var!(DtorV);
+    impl DtorT for DtorV {}
     var!(TypeV);
     impl VarT for TypeV {}
     var!(TermV);
@@ -93,6 +106,7 @@ pub enum Kind {
 }
 impl KindT for Kind {}
 
+/// A kind that represents the arity, a.k.a. parameters of a type constructor.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeArity<K: KindT> {
     pub params: Vec<K>,
@@ -127,20 +141,20 @@ pub struct TypeApp<TyV, Ty: TypeT> {
 impl<TyV, Ty: TypeT> TypeT for TypeApp<TyV, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Forall<TyV, Ty: TypeT> {
+pub struct Forall<TyV, Kd: KindT, Ty: TypeT> {
     pub param: TyV,
-    pub kd: Kind,
+    pub kd: Kd,
     pub ty: Ty,
 }
-impl<TyV, Ty: TypeT> TypeT for Forall<TyV, Ty> {}
+impl<TyV, Kd: KindT, Ty: TypeT> TypeT for Forall<TyV, Kd, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Exists<TyV, Ty: TypeT> {
+pub struct Exists<TyV, Kd: KindT, Ty: TypeT> {
     pub param: TyV,
-    pub kd: Kind,
+    pub kd: Kd,
     pub ty: Ty,
 }
-impl<TyV, Ty: TypeT> TypeT for Exists<TyV, Ty> {}
+impl<TyV, Kd: KindT, Ty: TypeT> TypeT for Exists<TyV, Kd, Ty> {}
 
 /* ---------------------------------- Terms --------------------------------- */
 
@@ -167,11 +181,11 @@ pub enum Literal {
 impl ValueT for Literal {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Ctor<C, A: ValueT> {
+pub struct Ctor<C: CtorT, A: ValueT> {
     pub ctor: C,
     pub args: Vec<A>,
 }
-impl<C, A: ValueT> ValueT for Ctor<C, A> {}
+impl<C: CtorT, A: ValueT> ValueT for Ctor<C, A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExistsVal<Ty: TypeT, A: ValueT> {
@@ -217,48 +231,48 @@ pub struct Rec<TeV: VarT, B: ComputationT> {
 impl<TeV: VarT, B: ComputationT> ComputationT for Rec<TeV, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Match<C, TeV: VarT, A: ValueT, B: ComputationT> {
+pub struct Match<C: CtorT, TeV: VarT, A: ValueT, B: ComputationT> {
     pub scrut: A,
     pub arms: Vec<Matcher<C, TeV, B>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Matcher<C, TeV: VarT, B: ComputationT> {
+pub struct Matcher<C: CtorT, TeV: VarT, B: ComputationT> {
     pub ctor: C,
     pub vars: Vec<TeV>,
     pub body: B,
 }
-impl<C, TeV: VarT, A: ValueT, B: ComputationT> ComputationT
+impl<C: CtorT, TeV: VarT, A: ValueT, B: ComputationT> ComputationT
     for Match<C, TeV, A, B>
 {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CoMatch<D, TeV: VarT, B: ComputationT> {
+pub struct CoMatch<D: DtorT, TeV: VarT, B: ComputationT> {
     pub arms: Vec<CoMatcher<D, TeV, B>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CoMatcher<D, TeV: VarT, B: ComputationT> {
+pub struct CoMatcher<D: DtorT, TeV: VarT, B: ComputationT> {
     pub dtor: D,
     pub vars: Vec<TeV>,
     pub body: B,
 }
-impl<D, TeV: VarT, B: ComputationT> ComputationT for CoMatch<D, TeV, B> {}
+impl<D: DtorT, TeV: VarT, B: ComputationT> ComputationT for CoMatch<D, TeV, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Dtor<B: ComputationT, D, A: ValueT> {
+pub struct Dtor<B: ComputationT, D: DtorT, A: ValueT> {
     pub body: B,
     pub dtor: D,
     pub args: Vec<A>,
 }
-impl<B: ComputationT, D, A: ValueT> ComputationT for Dtor<B, D, A> {}
+impl<B: ComputationT, D: DtorT, A: ValueT> ComputationT for Dtor<B, D, A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypAbs<TyV, B: ComputationT> {
+pub struct TypAbs<TyV, Kd: KindT, B: ComputationT> {
     pub tvar: TyV,
-    pub kd: Kind,
+    pub kd: Kd,
     pub body: B,
 }
-impl<TyV, B: ComputationT> ComputationT for TypAbs<TyV, B> {}
+impl<TyV, Kd: KindT, B: ComputationT> ComputationT for TypAbs<TyV, Kd, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypApp<B: ComputationT, Ty: TypeT> {
@@ -289,24 +303,24 @@ pub struct DeclSymbol<T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Data<TyV: VarT, C, Ty: TypeT> {
+pub struct Data<TyV: VarT, C: CtorT, Ty: TypeT> {
     pub name: TyV,
     pub params: Vec<(TyV, Kind)>,
     pub ctors: Vec<DataBr<C, Ty>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DataBr<C, Ty: TypeT>(pub C, pub Vec<Ty>);
+pub struct DataBr<C: CtorT, Ty: TypeT>(pub C, pub Vec<Ty>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Codata<TyV: VarT, D, Ty: TypeT> {
+pub struct Codata<TyV: VarT, D: DtorT, Ty: TypeT> {
     pub name: TyV,
     pub params: Vec<(TyV, Kind)>,
     pub dtors: Vec<CodataBr<D, Ty>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CodataBr<D, Ty: TypeT>(pub D, pub Vec<Ty>, pub Ty);
+pub struct CodataBr<D: DtorT, Ty: TypeT>(pub D, pub Vec<Ty>, pub Ty);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Define<TeV: VarT, A: ValueT> {
