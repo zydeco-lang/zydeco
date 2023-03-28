@@ -22,6 +22,7 @@ pub mod sort {
     }
 
     sort!(VarT);
+    sort!(TyVarT);
     sort!(CtorT);
     sort!(DtorT);
     sort!(KindT);
@@ -90,7 +91,7 @@ pub mod binder {
     var!(DtorV);
     impl DtorT for DtorV {}
     var!(TypeV);
-    impl VarT for TypeV {}
+    impl TyVarT for TypeV {}
     var!(TermV);
     impl VarT for TermV {}
     impl<Ty: TypeT> VarT for (TermV, Ty) {}
@@ -131,30 +132,30 @@ pub enum TCtor {
     OS,
     Fun,
 }
-impl VarT for TCtor {}
+impl TyVarT for TCtor {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeApp<TyV, Ty: TypeT> {
+pub struct TypeApp<TyV: TyVarT, Ty: TypeT> {
     pub tctor: TyV,
     pub args: Vec<Ty>,
 }
-impl<TyV, Ty: TypeT> TypeT for TypeApp<TyV, Ty> {}
+impl<TyV: TyVarT, Ty: TypeT> TypeT for TypeApp<TyV, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Forall<TyV, Kd: KindT, Ty: TypeT> {
+pub struct Forall<TyV: TyVarT, Kd: KindT, Ty: TypeT> {
     pub param: TyV,
     pub kd: Kd,
     pub ty: Ty,
 }
-impl<TyV, Kd: KindT, Ty: TypeT> TypeT for Forall<TyV, Kd, Ty> {}
+impl<TyV: TyVarT, Kd: KindT, Ty: TypeT> TypeT for Forall<TyV, Kd, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Exists<TyV, Kd: KindT, Ty: TypeT> {
+pub struct Exists<TyV: TyVarT, Kd: KindT, Ty: TypeT> {
     pub param: TyV,
     pub kd: Kd,
     pub ty: Ty,
 }
-impl<TyV, Kd: KindT, Ty: TypeT> TypeT for Exists<TyV, Kd, Ty> {}
+impl<TyV: TyVarT, Kd: KindT, Ty: TypeT> TypeT for Exists<TyV, Kd, Ty> {}
 
 /* ---------------------------------- Terms --------------------------------- */
 
@@ -267,12 +268,15 @@ pub struct Dtor<B: ComputationT, D: DtorT, A: ValueT> {
 impl<B: ComputationT, D: DtorT, A: ValueT> ComputationT for Dtor<B, D, A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypAbs<TyV, Kd: KindT, B: ComputationT> {
+pub struct TypAbs<TyV: TyVarT, Kd: KindT, B: ComputationT> {
     pub tvar: TyV,
     pub kd: Kd,
     pub body: B,
 }
-impl<TyV, Kd: KindT, B: ComputationT> ComputationT for TypAbs<TyV, Kd, B> {}
+impl<TyV: TyVarT, Kd: KindT, B: ComputationT> ComputationT
+    for TypAbs<TyV, Kd, B>
+{
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypApp<B: ComputationT, Ty: TypeT> {
@@ -282,13 +286,13 @@ pub struct TypApp<B: ComputationT, Ty: TypeT> {
 impl<B: ComputationT, Ty: TypeT> ComputationT for TypApp<B, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MatchExists<A: ValueT, TyV, TeV: VarT, B: ComputationT> {
+pub struct MatchExists<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> {
     pub scrut: A,
     pub tvar: TyV,
     pub var: TeV,
     pub body: B,
 }
-impl<A: ValueT, TyV, TeV: VarT, B: ComputationT> ComputationT
+impl<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> ComputationT
     for MatchExists<A, TyV, TeV, B>
 {
 }
@@ -303,7 +307,7 @@ pub struct DeclSymbol<T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Data<TyV: VarT, C: CtorT, Ty: TypeT> {
+pub struct Data<TyV: TyVarT, C: CtorT, Ty: TypeT> {
     pub name: TyV,
     pub params: Vec<(TyV, Kind)>,
     pub ctors: Vec<DataBr<C, Ty>>,
@@ -313,7 +317,7 @@ pub struct Data<TyV: VarT, C: CtorT, Ty: TypeT> {
 pub struct DataBr<C: CtorT, Ty: TypeT>(pub C, pub Vec<Ty>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Codata<TyV: VarT, D: DtorT, Ty: TypeT> {
+pub struct Codata<TyV: TyVarT, D: DtorT, Ty: TypeT> {
     pub name: TyV,
     pub params: Vec<(TyV, Kind)>,
     pub dtors: Vec<CodataBr<D, Ty>>,

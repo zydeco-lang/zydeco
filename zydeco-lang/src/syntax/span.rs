@@ -54,7 +54,7 @@ impl SpanHolder for TCtor {
 
 impl<TyV, T> SpanHolder for TypeApp<TyV, T>
 where
-    TyV: SpanHolder,
+    TyV: TyVarT + SpanHolder,
     T: TypeT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
@@ -71,7 +71,7 @@ where
 
 impl<TyV, Kd, Ty> SpanHolder for Forall<TyV, Kd, Ty>
 where
-    TyV: SpanHolder,
+    TyV: TyVarT + SpanHolder,
     Kd: KindT + SpanHolder,
     Ty: TypeT + SpanHolder,
 {
@@ -88,7 +88,7 @@ where
 
 impl<TyV, Kd, Ty> SpanHolder for Exists<TyV, Kd, Ty>
 where
-    TyV: SpanHolder,
+    TyV: TyVarT + SpanHolder,
     Kd: KindT + SpanHolder,
     Ty: TypeT + SpanHolder,
 {
@@ -311,7 +311,7 @@ where
 
 impl<TyV, Kd, B> SpanHolder for TypAbs<TyV, Kd, B>
 where
-    TyV: SpanHolder,
+    TyV: TyVarT + SpanHolder,
     Kd: KindT + SpanHolder,
     B: ComputationT + SpanHolder,
 {
@@ -344,7 +344,7 @@ where
 impl<A, TyV, TeV, B> SpanHolder for MatchExists<A, TyV, TeV, B>
 where
     A: ValueT + SpanHolder,
-    TyV: SpanHolder,
+    TyV: TyVarT + SpanHolder,
     TeV: VarT + SpanHolder,
     B: ComputationT + SpanHolder,
 {
@@ -371,7 +371,7 @@ impl<T: SpanHolder> SpanHolder for DeclSymbol<T> {
 
 impl<TyV, C, T> SpanHolder for Data<TyV, C, T>
 where
-    TyV: VarT + SpanHolder,
+    TyV: TyVarT + SpanHolder,
     C: CtorT + SpanHolder,
     T: TypeT + SpanHolder,
 {
@@ -396,7 +396,7 @@ where
 
 impl<TyV, D, T> SpanHolder for Codata<TyV, D, T>
 where
-    TyV: VarT + SpanHolder,
+    TyV: TyVarT + SpanHolder,
     D: DtorT + SpanHolder,
     T: TypeT + SpanHolder,
 {

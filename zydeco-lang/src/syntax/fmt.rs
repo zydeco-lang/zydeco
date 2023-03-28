@@ -78,7 +78,7 @@ impl FmtArgs for TCtor {
 
 impl<TyV, T> FmtArgs for TypeApp<TyV, T>
 where
-    TyV: FmtArgs,
+    TyV: TyVarT + FmtArgs,
     T: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
@@ -98,7 +98,7 @@ where
 
 impl<TyV, Kd, Ty> FmtArgs for Forall<TyV, Kd, Ty>
 where
-    TyV: FmtArgs,
+    TyV: TyVarT + FmtArgs,
     Kd: KindT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
@@ -115,7 +115,7 @@ where
 
 impl<TyV, Kd, Ty> FmtArgs for Exists<TyV, Kd, Ty>
 where
-    TyV: FmtArgs,
+    TyV: TyVarT + FmtArgs,
     Kd: KindT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
@@ -367,7 +367,7 @@ where
 
 impl<TyV, Kd, B> FmtArgs for TypAbs<TyV, Kd, B>
 where
-    TyV: FmtArgs,
+    TyV: TyVarT + FmtArgs,
     Kd: KindT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
@@ -396,7 +396,7 @@ where
 impl<A, TyV, TeV, B> FmtArgs for MatchExists<A, TyV, TeV, B>
 where
     A: ValueT + FmtArgs,
-    TyV: FmtArgs,
+    TyV: TyVarT + FmtArgs,
     TeV: VarT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
@@ -432,7 +432,7 @@ where
 
 impl<TyV, C, Ty> FmtArgs for Data<TyV, C, Ty>
 where
-    TyV: VarT + FmtArgs,
+    TyV: TyVarT + FmtArgs,
     C: CtorT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
@@ -482,7 +482,7 @@ where
 
 impl<TyV, D, Ty> FmtArgs for Codata<TyV, D, Ty>
 where
-    TyV: VarT + FmtArgs,
+    TyV: TyVarT + FmtArgs,
     D: DtorT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
