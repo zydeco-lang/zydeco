@@ -167,9 +167,18 @@ impl TypeCheck for Span<&Codata<TypeV, DtorV, RcType>> {
     }
 }
 
+pub struct Seal<T>(pub T);
+impl<T> Eqv for Seal<T> {
+    fn eqv(
+        &self, _other: &Self, _f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<(), Span<TypeCheckError>> {
+        Ok(())
+    }
+}
+
 impl TypeCheck for Span<Module> {
     type Ctx = Ctx;
-    type Out = ();
+    type Out = Seal<Ctx>;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
@@ -228,12 +237,12 @@ impl TypeCheck for Span<Module> {
             span.make(kd).ensure(&Kind::VType, "define")?;
             ctx.term_ctx.insert(name.clone(), ty_def);
         }
-        let ty_app = entry.syn(ctx)?.head_reduction()?;
+        let ty_app = entry.syn(ctx.to_owned())?.head_reduction()?;
         match ty_app.tctor {
             TCtor::OS => Ok(()),
             _ => Err(self.span().make(WrongMain { found: ty_app.into() })),
         }?;
-        Ok(Step::Done(()))
+        Ok(Step::Done(Seal(ctx)))
     }
 }
 
