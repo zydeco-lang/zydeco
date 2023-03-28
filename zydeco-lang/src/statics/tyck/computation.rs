@@ -283,6 +283,66 @@ impl TypeCheck for Span<TermComputation> {
                 );
                 Step::AnaMode((ctx, body), typ)
             }
+            TermComputation::Match(Match { scrut, arms }) => {
+                let ty_scrut = scrut.syn(ctx.clone())?;
+                let kd = self.span().make(ty_scrut.clone()).syn(ctx.clone())?;
+                self.span().make(kd).ensure(&Kind::VType, "match")?;
+                let ty_app = ty_scrut.head_reduction()?;
+                let TCtor::Var(tvar) = ty_app.tctor else {
+                    Err(self.span().make(TypeExpected {
+                        context: format!("match"),
+                        expected: format!("codata type"),
+                        found: ty_app.clone().into(),
+                    }))?
+                };
+                let Data { name, params, ctors } =
+                    ctx.data_ctx.get(&tvar).cloned().ok_or_else(|| {
+                        self.span().make(
+                            NameResolveError::UnboundTypeVariable { tvar }
+                                .into(),
+                        )
+                    })?;
+                // arity check on data type
+                let diff = Env::init(&params, &ty_app.args, || {
+                    self.span().make(ArityMismatch {
+                        context: format!("data type `{}` instiantiation", name),
+                        expected: params.len(),
+                        found: ty_app.args.len(),
+                    })
+                })?;
+                let ctors: HashMap<_, _> = ctors
+                    .into_iter()
+                    .map(|DataBr(ctor, tys)| (ctor, tys))
+                    .collect();
+                let mut unexpected = Vec::new();
+                let mut ctorv_set_arm: HashSet<CtorV> = HashSet::new();
+                for Matcher { ctor, vars, body } in arms {
+                    let Some(tys) = ctors.get(ctor) else {
+                        unexpected.push(ctor.to_owned());
+                        continue;
+                    };
+                    ctorv_set_arm.insert(ctor.to_owned());
+                    let tys = tys.into_iter().map(|ty| {
+                        ty.inner_ref().to_owned().subst(diff.clone())
+                    });
+                    let mut ctx = ctx.clone();
+                    for (var, ty) in vars.iter().zip(tys) {
+                        ctx.term_ctx.insert(var.to_owned(), ty);
+                    }
+                    body.ana(typ.clone(), ctx.clone())?;
+                }
+                let ctorv_set_data: HashSet<CtorV> =
+                    ctors.keys().cloned().collect();
+                let missing: Vec<_> = ctorv_set_data
+                    .difference(&ctorv_set_arm)
+                    .cloned()
+                    .collect();
+                bool_test(unexpected.is_empty() && missing.is_empty(), || {
+                    self.span()
+                        .make(InconsistentMatchers { unexpected, missing })
+                })?;
+                Step::Done(typ)
+            }
             TermComputation::CoMatch(CoMatch { arms }) => {
                 let ty_app = typ.head_reduction()?;
                 let TCtor::Var(tvar) = ty_app.tctor else {
@@ -344,9 +404,7 @@ impl TypeCheck for Span<TermComputation> {
                 })?;
                 Step::Done(typ)
             }
-            TermComputation::TermAnn(_)
-            | TermComputation::Match(_)
-            | TermComputation::Dtor(_) => {
+            TermComputation::TermAnn(_) | TermComputation::Dtor(_) => {
                 let typ_syn = self.syn(ctx)?;
                 typ.eqv(&typ_syn, || self.span().make(Subsumption))?;
                 Step::Done(typ)
