@@ -6,10 +6,7 @@ pub mod parse {
     pub mod token;
     pub mod syntax;
     pub mod err;
-    pub mod legacy;
     mod span;
-
-    pub use legacy::parser::{ExpressionParser, ZydecoParser};
 
     use logos::{Logos, SpannedIter};
     use token::Tok;
@@ -67,36 +64,25 @@ pub mod statics {
     pub mod syntax;
     mod resolve;
     pub mod err;
-    mod legacy;
     mod elab;
     pub mod tyck;
     mod fmt;
 
-    pub use self::legacy::{ctx::Ctx, err::TypeCheckError, tyck::TypeCheck};
+    pub use tyck::{Ctx, TypeCheck};
 }
 
 pub mod library {
     pub mod syntax;
-    pub mod legacy;
     mod link;
     pub mod builtins;
     mod impls;
     mod fmt;
-
-    pub use legacy::{declarations, linker};
 }
 
 pub mod dynamics {
     pub mod syntax;
-    mod legacy;
     pub mod eval;
     mod fmt;
-
-    pub use legacy::{
-        env::Env,
-        eval::*,
-        syntax::{PrimComp, ZCompute, ZValue},
-    };
 }
 
 pub mod utils {

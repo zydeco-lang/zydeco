@@ -288,6 +288,16 @@ impl TryFrom<ps::TermComputation> for TermComputation {
     }
 }
 
+impl TryFrom<ps::Term> for Term {
+    type Error = TypeCheckError;
+    fn try_from(term: ps::Term) -> Result<Self, TypeCheckError> {
+        Ok(match term {
+            ps::Term::Value(t) => Term::Value(t.try_into()?),
+            ps::Term::Computation(t) => Term::Computation(t.try_into()?),
+        })
+    }
+}
+
 impl TryFrom<ps::Data<TypeV, CtorV, Span<ps::Type>>>
     for Data<TypeV, CtorV, RcType>
 {

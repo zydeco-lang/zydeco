@@ -1,6 +1,10 @@
 use super::syntax::{Thunk as SemThunk, *};
 use crate::{rc, utils::fmt::FmtArgs};
-use std::rc::Rc;
+use im::Vector;
+use std::{
+    io::{BufRead, Write},
+    rc::Rc,
+};
 
 pub trait Eval<'rt>: Sized + FmtArgs {
     type Out;
@@ -156,6 +160,15 @@ impl<'rt> Eval<'rt> for ls::TermComputation {
                 }
             }
         }
+    }
+}
+
+impl<'rt> Runtime<'rt> {
+    pub fn new(
+        input: &'rt mut dyn BufRead, output: &'rt mut dyn Write,
+        args: &'rt [String],
+    ) -> Self {
+        Runtime { input, output, args, stack: Vector::new(), env: Env::new() }
     }
 }
 

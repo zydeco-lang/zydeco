@@ -3,15 +3,19 @@ mod value;
 mod computation;
 mod eqv;
 
+use std::collections::HashSet;
+
+use super::{err::TypeCheckError, syntax::*};
 use crate::{
     rc,
     statics::resolve::NameResolveError,
     syntax::env::Env,
-    utils::{fmt::FmtArgs, monoid::Monoid},
+    utils::{
+        fmt::FmtArgs,
+        monoid::Monoid,
+        span::{Span, SpanView},
+    },
 };
-
-use super::{err::TypeCheckError, syntax::*};
-use crate::utils::span::{Span, SpanView};
 use TypeCheckError::*;
 
 #[derive(Clone, Default)]
@@ -110,7 +114,7 @@ impl TypeCheck for Span<&Data<TypeV, CtorV, RcType>> {
         for (tvar, kd) in data.params.iter() {
             ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
         }
-        let mut ctorvs = std::collections::HashSet::new();
+        let mut ctorvs = HashSet::new();
         for DataBr(ctorv, tys) in data.ctors.iter() {
             let span = ctorv.span();
             if ctorvs.contains(ctorv) {
@@ -141,7 +145,7 @@ impl TypeCheck for Span<&Codata<TypeV, DtorV, RcType>> {
         for (tvar, kd) in data.params.iter() {
             ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
         }
-        let mut dtorvs = std::collections::HashSet::new();
+        let mut dtorvs = HashSet::new();
         for CodataBr(dtorv, tys, ty) in data.dtors.iter() {
             let span = dtorv.span();
             if dtorvs.contains(dtorv) {

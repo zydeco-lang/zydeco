@@ -35,7 +35,7 @@ end
 
 # The "final answer" of the interpreter is either the final value or
 # an error.
-data Option A : VType where
+data Option (A : VType) where
   | Ok(A)
   | Err()
 end
@@ -57,27 +57,25 @@ codata Interpreter where
   | .comp(SynComp, Env) : SemComp
 end
 
-let sem_val_to_str = {
-    fn (s : SemVal)  ->
-    match s
-    | True'() -> ret "true"
-    | False'() -> ret "false"
-    | ThunkV'(_) -> ret "<thunk>"
-    end
-};
+let fn sem_val_to_str (s : SemVal) : F String =
+  match s
+  | True'() -> ret "true"
+  | False'() -> ret "false"
+  | ThunkV'(_) -> ret "<thunk>"
+  end
+in
 
-let rec lookup: String -> Env -> Ret(Option SemVal) =
-  fn (x : String, g : Env) ->
-    match g
-    | Empty() -> ret Err()
-    | Cons(y,v,g) -> (
-      do b <- ! str_eq x y;
-      match b
-      | True() -> ret Ok(v)
-      | False() -> ! lookup x g
-      end
-    )
-    end;
+let rec fn lookup (x : String) (g : Env) : Ret(Option SemVal) =
+  match g
+  | Empty() -> ret Err()
+  | Cons(y,v,g) ->
+    do b <- ! str_eq x y;
+    match b
+    | True() -> ret Ok(v)
+    | False() -> ! lookup x g
+    end
+  end
+in
 
 let rec error: SemComp = (
   comatch

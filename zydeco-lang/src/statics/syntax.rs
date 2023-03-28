@@ -66,8 +66,8 @@ impl ComputationT for TermComputation {}
 
 #[derive(EnumGenerator, Clone, Debug)]
 pub enum Term {
-    Val(TermValue),
-    Comp(TermComputation),
+    Value(TermValue),
+    Computation(TermComputation),
 }
 
 /* --------------------------------- Module --------------------------------- */

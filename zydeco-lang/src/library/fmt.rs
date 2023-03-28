@@ -28,3 +28,25 @@ impl FmtArgs for ls::TermComputation {
         }
     }
 }
+
+impl FmtArgs for ls::Module {
+    fn fmt_args(&self, fargs: Args) -> String {
+        let mut s = String::new();
+        if let Some(name) = &self.name {
+            s += &format!("module {} where", name);
+            s += &fargs.force_space();
+        }
+        for (var, def) in &self.define {
+            s += &format!("def {} = {}", var, def.fmt_args(fargs));
+            s += &fargs.force_space();
+        }
+        s += &fargs.force_space();
+        s += &self.entry.fmt_args(fargs);
+        s += &fargs.force_space();
+        if let Some(_) = &self.name {
+            s += "end";
+            s += &fargs.force_space();
+        }
+        s
+    }
+}

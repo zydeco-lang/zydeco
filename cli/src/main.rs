@@ -1,11 +1,6 @@
 use clap::Parser;
 use cli::{Cli, Commands};
-use zydeco_lang::{
-    dynamics::Env,
-    library::{legacy::builtins, declarations, linker},
-    statics::Ctx,
-    zydeco,
-};
+use zydeco_lang::{utils::fmt::FmtArgs, zydeco::ZydecoFile};
 
 fn main() {
     let res = match Cli::parse().command {
@@ -31,31 +26,24 @@ fn run_file(
     let title = &format!("{}", file.display());
     // parse
     announce_phase(verbose, title, "parse");
-    let p = zydeco::ZydecoFile { path: file }.parse()?;
+    let m = ZydecoFile::parse(file)?;
+    let m = ZydecoFile::elab(m)?;
     if verbose {
-        println!("{}", p)
+        println!("{}", m.fmt())
     }
     // type check
     announce_phase(verbose, title, "tyck");
-    let mut ctx = Ctx::new();
-    let std_decls = declarations::std_decls().expect("std library failure");
-    declarations::inject_ctx(&mut ctx, &std_decls)
-        .expect("std library failure");
-    zydeco::typecheck_prog(&p, &ctx)?;
-    // elab
+    ZydecoFile::tyck(m.clone())?;
+    // link
     announce_phase(verbose, title, "elab");
-    let mut env = Env::new();
-    builtins::link_builtin(&mut env);
-    linker::link(&mut env, &std_decls);
-    linker::link(&mut env, &p.decls);
-    let sem_m = zydeco::elab_prog(p);
+    let sem_m = ZydecoFile::link(m.inner())?;
     if verbose {
-        println!("{}", sem_m);
+        println!("{}", sem_m.fmt());
     }
     // eval
     if !dry_run {
         announce_phase(verbose, title, "eval");
-        zydeco::eval_os_sem_computation(sem_m, env, &args)?;
+        ZydecoFile::eval_os(sem_m, &args)?;
     }
     Ok(())
 }

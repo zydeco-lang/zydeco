@@ -1,4 +1,4 @@
-data LList A : VType where
+data LList (A : VType) where
   | Nil()
   | Cons(A, U(F(LList A)))
 end
@@ -10,7 +10,7 @@ let rec iota : Int -> F(LList Int) = (
 );
 
 let rec foldr : U(F(LList Int)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
-  fn (ll, f, b) ->
+  fn ll f b ->
     do llv <- ! ll;
     match llv
     | Nil() -> ! b
@@ -21,7 +21,7 @@ let rec foldr : U(F(LList Int)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
 let loopy = {
   ! foldr
   { ! iota 0 }
-  { fn (x: Int, b: U(OS)) ->
+  { fn (x: Int) (b: U(OS)) ->
     do next? <- ! int_lt x 10;
     ! write_int_line x b
   }

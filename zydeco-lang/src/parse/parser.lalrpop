@@ -116,7 +116,9 @@ TypePattern: (TypeV, Kind) = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind
 
 //* ---------------------------------- Term ---------------------------------- */
 
-pub Term: Term = {
+pub TermSpan: Span<Term> = Span<Term>;
+
+Term: Term = {
     <TermComputation> => <>.into(),
     <TermValue> => <>.into(),
 };
@@ -140,7 +142,7 @@ TermValue: TermValue = {
 
 TermComputation: TermComputation = {
     TermComputationRight,
-    "let" <gen:GenLet> "in" <body:Box<Span<TermComputation>>> => Let {
+    "let" <gen:GenLet> LetSep <body:Box<Span<TermComputation>>> => Let {
         gen, body,
     }.into(),
     "do" <var:TermPattern> "<-"
@@ -228,6 +230,11 @@ Literal: Literal = {
     <n:Int> => n.into(),
     <s:String> => s.into(),
     <c:Char> => c.into(),
+};
+
+LetSep: () = {
+    ";" => (),
+    "in" => (),
 };
 
 //* -------------------------------- Terminals ------------------------------- */

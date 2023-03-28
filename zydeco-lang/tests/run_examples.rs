@@ -3,7 +3,6 @@
 * - non-zero-exit-code/ holds tests that are OS programs don't read
 *   anything from stdin, stdout is ignored and the exit code must be
 *   0 to succeed
-
 *
 * - check-only/ holds tests that should typecheck as OS programs but
 *   are not executed
@@ -14,10 +13,12 @@
 * - custom/ holds tests that need custom I/O mocking to execute.
 */
 
+use std::{io::Read, path::PathBuf};
 use zydeco_lang::{
-    dynamics::Env,
-    library::{legacy::builtins, declarations, linker},
-    statics::Ctx,
+    dynamics::syntax as ds,
+    statics::syntax as ss,
+    utils::fmt::FmtArgs,
+    zydeco::{ZydecoExpr, ZydecoFile},
 };
 
 fn wrapper<T>(r: Result<T, String>) {
@@ -28,10 +29,6 @@ fn wrapper<T>(r: Result<T, String>) {
 }
 
 fn pure_test(f: &str) -> Result<(), String> {
-    use std::io::Read;
-    use std::path::PathBuf;
-    use zydeco_lang::parse::legacy::syntax::{TCtor, ValOrComp};
-    use zydeco_lang::zydeco;
     let mut path = PathBuf::from("tests/pure");
     path.push(f);
     let mut buf = String::new();
@@ -39,48 +36,50 @@ fn pure_test(f: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .read_to_string(&mut buf)
         .map_err(|e| e.to_string())?;
-    match zydeco::parse_exp(&buf)? {
-        ValOrComp::Comp(m) => {
-            let mut ctx = Ctx::new();
-            let std_decls =
-                declarations::std_decls().expect("std library failure");
-            declarations::inject_ctx(&mut ctx, &std_decls)
-                .expect("std library failure");
-            match zydeco::typecheck_computation(&m, &ctx)?.ctor {
-                TCtor::Ret => {
-                    let mut env = Env::new();
-                    builtins::link_builtin(&mut env);
-                    linker::link(&mut env, &std_decls);
-                    zydeco::eval_returning_computation(m, env)?
+    let mut zydeco_expr = ZydecoExpr::new();
+    match ZydecoExpr::parse(&buf) {
+        Err(_) => Err("Didn't parse".to_string())?,
+        Ok(term) => match ZydecoExpr::elab(term) {
+            Err(_) => Err("Didn't elaborate".to_string())?,
+            Ok(term) => match term.inner {
+                ss::Term::Value(_) => {
+                    Err("Expecting a computation, found a value".to_string())?
                 }
-                a => Err(format!("Wrong output type: {}", a))?,
-            }
-        }
-        _ => Err("Didn't parse".to_string())?,
+                ss::Term::Computation(comp) => {
+                    let comp = term.info.make(comp);
+                    zydeco_expr.tyck_computation(comp.clone())?;
+                    let comp =
+                        zydeco_expr.link_computation(comp.inner_ref())?;
+                    let comp = zydeco_expr.eval_ret_computation(comp)?;
+                    match comp {
+                        ds::TermComputation::Ret(value) => {
+                            println!("{}", value.fmt());
+                        }
+                        ds::TermComputation::ExitCode(i) => {
+                            Err(format!("exited with code {}", i))?
+                        }
+                    }
+                }
+            },
+        },
     };
     Ok(())
 }
 
 fn batch_test(f: &str) -> Result<(), String> {
-    use std::path::PathBuf;
-    use zydeco_lang::zydeco;
     let mut path = PathBuf::from("tests/nonzero-exit-code");
     path.push(f);
-    let p = zydeco::ZydecoFile { path }.parse()?;
-    let mut ctx = Ctx::new();
-    let std_decls = declarations::std_decls().expect("std library failure");
-    declarations::inject_ctx(&mut ctx, &std_decls)
-        .expect("std library failure");
-    zydeco::typecheck_prog(&p, &ctx)?;
-
-    let mut env = Env::new();
-    builtins::link_builtin(&mut env);
-    linker::link(&mut env, &std_decls);
+    let m = ZydecoFile::parse(path)?;
+    let m = ZydecoFile::elab(m)?;
+    ZydecoFile::tyck(m.clone())?;
+    let m = ZydecoFile::link(m.inner)?;
 
     let mut input = std::io::empty();
     let mut output = std::io::sink();
-    let exit_code =
-        zydeco::eval_virtual_prog(p, env, &mut input, &mut output, &[])?;
+    let ds::TermComputation::ExitCode(exit_code) =
+        ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[])?.entry else {
+            Err("Expected ExitCode".to_string())?
+        };
     if exit_code != 0 {
         Err(format!("Non-zero exit code: {}", exit_code))?
     }
@@ -89,16 +88,12 @@ fn batch_test(f: &str) -> Result<(), String> {
 }
 
 fn check_test(f: &str) -> Result<(), String> {
-    use std::path::PathBuf;
-    use zydeco_lang::zydeco;
     let mut path = PathBuf::from("tests/check-only");
     path.push(f);
-    let p = zydeco::ZydecoFile { path }.parse()?;
-    let mut ctx = Ctx::new();
-    let std_decls = declarations::std_decls().expect("std library failure");
-    declarations::inject_ctx(&mut ctx, &std_decls)
-        .expect("std library failure");
-    zydeco::typecheck_prog(&p, &ctx)?;
+    let m = ZydecoFile::parse(path)?;
+    let m = ZydecoFile::elab(m)?;
+    ZydecoFile::tyck(m.clone())?;
+
     Ok(())
 }
 
@@ -170,33 +165,24 @@ mod custom_tests {
     use super::*;
     #[test]
     fn custom_test0() -> Result<(), String> {
-        use std::io::Read;
-        use std::path::PathBuf;
-        use zydeco_lang::{library::declarations, statics::Ctx, zydeco};
-        let mut buf = String::new();
         let path = PathBuf::from("tests/custom/echo_once.zydeco");
-        std::fs::File::open(path)
-            .map_err(|e| e.to_string())?
-            .read_to_string(&mut buf)
-            .map_err(|e| e.to_string())?;
-        let p = zydeco::parse_prog(&buf)?;
-        let mut ctx = Ctx::new();
-        let std_decls = declarations::std_decls().expect("std library failure");
-        declarations::inject_ctx(&mut ctx, &std_decls)
-            .expect("std library failure");
-        zydeco::typecheck_prog(&p, &ctx)?;
 
-        let mut env = Env::new();
-        builtins::link_builtin(&mut env);
-        linker::link(&mut env, &std_decls);
+        let m = ZydecoFile::parse(path)?;
+        let m = ZydecoFile::elab(m)?;
+        ZydecoFile::tyck(m.clone())?;
+        let m = ZydecoFile::link(m.inner)?;
 
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();
-        let exit_code =
-            zydeco::eval_virtual_prog(p, env, &mut input, &mut output, &[])?;
+
+        let ds::TermComputation::ExitCode(exit_code) =
+            ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[])?.entry else {
+                Err("Expected ExitCode".to_string())?
+            };
         if exit_code != 0 {
             Err(format!("Non-zero exit code: {}", exit_code))?
         }
+
         let s = std::str::from_utf8(&output).unwrap();
         assert_eq!("hello\n", s);
 
@@ -205,35 +191,24 @@ mod custom_tests {
 
     #[test]
     fn custom_test1() -> Result<(), String> {
-        use std::io::Read;
-        use std::path::PathBuf;
-        use zydeco_lang::{library::declarations, statics::Ctx, zydeco};
-        let mut buf = String::new();
         let path = PathBuf::from("tests/custom/print_args.zydeco");
-        std::fs::File::open(path)
-            .map_err(|e| e.to_string())?
-            .read_to_string(&mut buf)
-            .map_err(|e| e.to_string())?;
-        let p = zydeco::parse_prog(&buf)?;
-        let mut ctx = Ctx::new();
-        let std_decls = declarations::std_decls().expect("std library failure");
-        declarations::inject_ctx(&mut ctx, &std_decls)
-            .expect("std library failure");
-        zydeco::typecheck_prog(&p, &ctx)?;
 
-        let mut env = Env::new();
-        builtins::link_builtin(&mut env);
-        linker::link(&mut env, &std_decls);
+        let m = ZydecoFile::parse(path)?;
+        let m = ZydecoFile::elab(m)?;
+        ZydecoFile::tyck(m.clone())?;
+        let m = ZydecoFile::link(m.inner)?;
 
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();
-        let exit_code = zydeco::eval_virtual_prog(
-            p,
-            env,
-            &mut input,
-            &mut output,
-            &["hello".to_string(), "world".to_string()],
-        )?;
+        let ds::TermComputation::ExitCode(exit_code) =
+            ZydecoFile::eval_virtual_os(
+                m,
+                &mut input,
+                &mut output,
+                &["hello".to_string(), "world".to_string()],
+            )?.entry else {
+                Err("Expected ExitCode".to_string())?
+            };
         if exit_code != 0 {
             Err(format!("Non-zero exit code: {}", exit_code))?
         }
@@ -244,30 +219,24 @@ mod custom_tests {
     }
     #[test]
     fn custom_test2() -> Result<(), String> {
-        use std::io::Read;
-        use std::path::PathBuf;
-        use zydeco_lang::{library::declarations, statics::Ctx, zydeco};
-        let mut buf = String::new();
         let path = PathBuf::from("tests/custom/print_list.zydeco");
-        std::fs::File::open(path)
-            .map_err(|e| e.to_string())?
-            .read_to_string(&mut buf)
-            .map_err(|e| e.to_string())?;
-        let p = zydeco::parse_prog(&buf)?;
-        let mut ctx = Ctx::new();
-        let std_decls = declarations::std_decls().expect("std library failure");
-        declarations::inject_ctx(&mut ctx, &std_decls)
-            .expect("std library failure");
-        zydeco::typecheck_prog(&p, &ctx)?;
 
-        let mut env = Env::new();
-        builtins::link_builtin(&mut env);
-        linker::link(&mut env, &std_decls);
+        let m = ZydecoFile::parse(path)?;
+        let m = ZydecoFile::elab(m)?;
+        ZydecoFile::tyck(m.clone())?;
+        let m = ZydecoFile::link(m.inner)?;
 
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();
-        let exit_code =
-            zydeco::eval_virtual_prog(p, env, &mut input, &mut output, &[])?;
+        let ds::TermComputation::ExitCode(exit_code) =
+            ZydecoFile::eval_virtual_os(
+                m,
+                &mut input,
+                &mut output,
+                &["hello".to_string(), "world".to_string()],
+            )?.entry else {
+                Err("Expected ExitCode".to_string())?
+            };
         if exit_code != 0 {
             Err(format!("Non-zero exit code: {}", exit_code))?
         }
