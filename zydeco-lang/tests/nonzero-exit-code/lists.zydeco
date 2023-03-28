@@ -1,8 +1,3 @@
-data List (A : VType) where
-  | Nil()
-  | Cons(A, List A)
-end
-
 let rec foldl : List String -> Thunk(String -> Int -> Ret(Int)) -> Int -> Ret(Int) =
   fn l step s ->
     match l

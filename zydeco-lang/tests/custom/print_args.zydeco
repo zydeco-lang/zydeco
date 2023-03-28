@@ -1,9 +1,8 @@
-let rec print_all : StrList -> OS = (
-  fn (args: StrList) ->
+let rec fn print_all (args: List String): OS =
   match args
-  | SLNil() -> ! exit 0
-  | SLCons(arg, args) -> ! write_line arg { ! print_all args }
+  | Nil() -> ! exit 0
+  | Cons(arg, args) -> ! write_line arg { ! print_all args }
   end
-);
+in
 
 ! arg_list print_all

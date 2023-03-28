@@ -204,10 +204,10 @@ pub fn arg_list(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [k] => {
-            let mut z_arg_list = ctor("SLNil", vec![]);
+            let mut z_arg_list = ctor("Nil", vec![]);
             for arg in argv.iter().rev() {
                 z_arg_list = ctor(
-                    "SLCons",
+                    "Cons",
                     vec![
                         rc!(Literal::String(arg.clone()).into()),
                         rc!(z_arg_list),

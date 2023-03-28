@@ -3,11 +3,6 @@
 # Let's consider a simple example of a recursive function, summing up
 # the numbers in a list.
 
-data List (A : VType) where
-  | Nil()
-  | Cons(A, List A)
-end
-
 codata Summer where
   | .done()    : Ret(Int) # The equivalent of CALLERS_KONT
   | .addN(Int) : Summer
