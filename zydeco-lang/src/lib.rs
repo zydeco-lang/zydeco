@@ -81,6 +81,7 @@ pub mod library {
     mod link;
     pub mod builtins;
     mod impls;
+    mod fmt;
 
     pub use legacy::{declarations, linker};
 }
@@ -88,7 +89,8 @@ pub mod library {
 pub mod dynamics {
     pub mod syntax;
     mod legacy;
-    mod eval;
+    pub mod eval;
+    mod fmt;
 
     pub use legacy::{
         env::Env,

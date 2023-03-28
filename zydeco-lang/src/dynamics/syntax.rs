@@ -34,14 +34,14 @@ impl ComputationT for TermComputation {}
 
 #[derive(Clone)]
 pub enum Frame {
-    Kont(Rc<ls::TermComputation>, TermV),
+    Kont(Rc<ls::TermComputation>, Env<TermV, TermValue>, TermV),
     Dtor(DtorV, Vec<Rc<TermValue>>),
 }
 
 impl Debug for Frame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Frame::Kont(_, var) => write!(f, "Kont({})", var),
+            Frame::Kont(_, _, var) => write!(f, "Kont({})", var),
             Frame::Dtor(dtor, _) => write!(f, "Dtor({})", dtor),
         }
     }

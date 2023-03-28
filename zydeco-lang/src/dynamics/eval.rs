@@ -1,13 +1,14 @@
-use super::syntax::Thunk as SemThunk;
-use super::syntax::*;
+use super::syntax::{Thunk as SemThunk, *};
+use crate::{rc, utils::fmt::FmtArgs};
 use std::rc::Rc;
 
-pub trait Eval<'rt>: Sized {
+pub trait Eval<'rt>: Sized + FmtArgs {
     type Out;
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out>;
     fn eval<'e>(self, runtime: &'e mut Runtime<'rt>) -> Self::Out {
         let mut res = self;
         loop {
+            // println!("===>>>\n{}", res.fmt());
             match res.step(runtime) {
                 Step::Done(out) => break out,
                 Step::Step(next) => res = next,
@@ -26,20 +27,22 @@ impl<'rt> Eval<'rt> for ls::TermValue {
 
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         match self {
-            ls::TermValue::Var(var) => Step::Done(
+            ls::TermValue::Var(var) => Step::Done({
+                // println!("{}", runtime.env.fmt());
+                // println!(">> {}", var);
                 runtime
                     .env
                     .lookup(&var)
                     .expect("variable does not exist")
-                    .clone(),
-            ),
+                    .clone()
+            }),
             ls::TermValue::Thunk(ls::Thunk(body)) => Step::Done(
                 super::syntax::Thunk { body, env: runtime.env.clone() }.into(),
             ),
             ls::TermValue::Ctor(ls::Ctor { ctor, args }) => {
                 let args = args
                     .iter()
-                    .map(|arg| Rc::new(arg.as_ref().clone().eval(runtime)))
+                    .map(|arg| rc!(arg.as_ref().clone().eval(runtime)))
                     .collect();
                 Step::Done(ls::Ctor { ctor, args }.into())
             }
@@ -57,8 +60,9 @@ impl<'rt> Eval<'rt> for ls::TermComputation {
             ls::TermComputation::Ret(ls::Ret(v)) => {
                 let v = v.as_ref().clone().eval(runtime);
                 match runtime.stack.pop_back() {
-                    Some(Frame::Kont(comp, var)) => {
-                        let env = runtime.env.update(var, v);
+                    Some(Frame::Kont(comp, env, var)) => {
+                        // println!("<< {} = {} [ret]", var, v.fmt());
+                        let env = env.update(var, v);
                         runtime.env = env;
                         Step::Step(comp.as_ref().clone())
                     }
@@ -81,13 +85,18 @@ impl<'rt> Eval<'rt> for ls::TermComputation {
                 Step::Step(body.as_ref().clone())
             }
             ls::TermComputation::Do(ls::Do { var, comp, body }) => {
-                runtime.stack.push_back(Frame::Kont(body, var));
+                runtime.stack.push_back(Frame::Kont(
+                    body,
+                    runtime.env.clone(),
+                    var,
+                ));
                 Step::Step(comp.as_ref().clone())
             }
-            ls::TermComputation::Rec(ls::Rec { var, body }) => {
+            ls::TermComputation::Rec(e) => {
+                let ls::Rec { var, body } = e.clone();
                 let env = runtime.env.update(
                     var,
-                    SemThunk { body: body.clone(), env: runtime.env.clone() }
+                    SemThunk { body: rc!(e.into()), env: runtime.env.clone() }
                         .into(),
                 );
                 runtime.env = env;
@@ -117,6 +126,7 @@ impl<'rt> Eval<'rt> for ls::TermComputation {
                     .find(|arm| arm.dtor == dtor)
                     .expect("no matching arm");
                 for (var, arg) in vars.into_iter().zip(args.into_iter()) {
+                    // println!("<< {} = {} [comatch]", var, arg.fmt());
                     let env = runtime.env.update(var, arg.as_ref().clone());
                     runtime.env = env;
                 }

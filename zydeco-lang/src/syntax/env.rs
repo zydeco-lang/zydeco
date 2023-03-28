@@ -3,6 +3,8 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use crate::utils::fmt::FmtArgs;
+
 #[derive(Clone, Debug)]
 pub struct Env<K, V>
 where
@@ -109,5 +111,23 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()
+    }
+}
+
+impl<K, V> FmtArgs for Env<K, V>
+where
+    K: Eq + Hash + FmtArgs,
+    V: FmtArgs,
+{
+    fn fmt_args(&self, fargs: crate::utils::fmt::Args) -> String {
+        let mut s = String::new();
+        s += &"=".repeat(20);
+        s += &fargs.force_space();
+        for (k, v) in self.inner.iter() {
+            s += &format!("[{} := {}]", k.fmt_args(fargs), v.fmt_args(fargs));
+            s += &fargs.force_space();
+        }
+        s += &"=".repeat(20);
+        s
     }
 }

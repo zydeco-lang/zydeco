@@ -2,6 +2,7 @@ use super::{err::TypeCheckError, resolve::NameResolveError, syntax::*};
 use crate::{
     parse::syntax as ps,
     rc,
+    syntax::env::Env,
     utils::span::{span, Span, SpanView},
 };
 
@@ -21,9 +22,7 @@ fn desugar_gen_let(
     if def.is_none() {
         return Ok((name, ty_rc, None));
     }
-    let Some(def) = def else {
-        Err(TypeCheckError::from(NameResolveError::EmptyDeclaration { name: name.name().to_string() }))?
-    };
+    let Some(def) = def else { unreachable!() };
     match (rec, fun, def.inner) {
         (false, false, ps::Term::Value(value)) => {
             Ok((name, ty_rc, Some(rc!(def.info.make(value.try_into()?)))))
@@ -53,7 +52,6 @@ fn desugar_gen_let(
                     def.info.make(Rec { var: (var, None), body }.into()),
                 );
             }
-            let mut body = rc!((*body).try_map(TryInto::try_into)?);
             let mut ty = match ty {
                 Some(ty) => Some(rc!(ty.try_map(TryInto::try_into)?)),
                 None => None,
@@ -69,10 +67,14 @@ fn desugar_gen_let(
                     ty = None;
                 }
             }
-            if let Some(ty) = ty.clone() {
-                body =
-                    rc!(def.info.make(ps::TermAnn { term: body, ty }.into()));
-            }
+            let body = rc!((*body).try_map(TryInto::try_into)?);
+            ty = ty.map(|ty| {
+                rc!(def.info.make(Type {
+                    app: TypeApp { tctor: TCtor::Thunk, args: vec![ty] },
+                    kd: None,
+                    env: Env::new()
+                }))
+            });
             Ok((name, ty, Some(rc!(def.info.make(Thunk(body).into())))))
         }
     }
@@ -188,13 +190,18 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     gen: ps::GenLet { rec, fun, name, params, def },
                     body,
                 } = t;
-                let (var, _ty, def) =
+                let (var, ty, def) =
                     desugar_gen_let(rec, fun, name, params, def)?;
                 let Some(def) = def else {
                     Err(NameResolveError::EmptyDeclaration { name: var.name().to_string() })?
                 };
-                Let { var, def, body: rc!((body).try_map(TryInto::try_into)?) }
-                    .into()
+                let mut def = def;
+                let span = def.span().clone();
+                if let Some(ty) = ty {
+                    def = rc!(span.make(ps::TermAnn { term: def, ty }.into()));
+                }
+                let body = rc!((body).try_map(TryInto::try_into)?);
+                Let { var, def, body }.into()
             }
             ps::TermComputation::Do(t) => {
                 let ps::Do { var: (var, ty), comp, body } = t;
