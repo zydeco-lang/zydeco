@@ -3,7 +3,7 @@
 # Let's consider a simple example of a recursive function, summing up
 # the numbers in a list.
 
-data List A : VType where
+data List (A : VType) where
   | Nil()
   | Cons(A, List A)
 end
@@ -17,14 +17,14 @@ codata Summer' where
   | .add(Int) : Ret(Int)
 end
 
-let rec sumBad : List Int -> Ret(Int) =
-  fn (xs : List Int) ->
-    match xs
-    | Nil() -> ret 0
-    | Cons(x, xs) ->
-      (do n <- ! sumBad xs;
-          ! add n x)
-    end;
+let rec fn sumBad (xs : List Int) : Ret(Int) =
+  match xs
+  | Nil() -> ret 0
+  | Cons(x, xs) ->
+    (do n <- ! sumBad xs;
+        ! add n x)
+  end
+in
 
 # This is a bad algorithm because it uses stack space linear in the
 # size of the input list. Why is that? each time we have a cons, we do
@@ -42,20 +42,21 @@ let rec sumBad : List Int -> Ret(Int) =
 
 # and changing the implementation as follows:
 
-let rec retSummer : Int -> Summer =
-  fn (n : Int) -> comatch
-      | .done()  -> ret n
-      | .addN(x) ->
-      (do n' <- ! add n x;
-          ! retSummer n')
-      end;
+let rec fn retSummer (n : Int) : Summer =
+  comatch
+  | .done()  -> ret n
+  | .addN(x) ->
+  (do n' <- ! add n x;
+      ! retSummer n')
+  end
+in
 
-let rec sumOk : List Int -> Summer =
-  fn (xs : List Int) ->
-    match xs
-    | Nil()     -> ! retSummer 0
-    | Cons(x, xs) -> ! sumOk xs .addN(x)
-    end;
+let rec fn sumOk (xs : List Int) : Summer =
+  match xs
+  | Nil()       -> ! retSummer 0
+  | Cons(x, xs) -> ! sumOk xs .addN(x)
+  end
+in
 
 # Now instead of pushing a "real" continuation we add a "method"
 # .addN(n) with the captured variables of the continuation as
@@ -91,18 +92,18 @@ let rec sumOk : List Int -> Summer =
 # it to `z` and not increased the size of the stack(!)
 
 
-let rec sumBetter : List Int -> Summer =
-  fn (xs : List Int) ->
-    match xs
-    | Nil()     -> ! retSummer 0
-    | Cons(x, xs) ->
-      (comatch
-        | .done() -> ! sumBetter xs .addN(x) .done()
-        | .addN(y) -> (
-          do xPlusy <- ! add x y;
-             ! sumBetter xs .addN(xPlusy))
-        end)
-    end;
+let rec fn sumBetter (xs : List Int) : Summer =
+  match xs
+  | Nil()     -> ! retSummer 0
+  | Cons(x, xs) ->
+    (comatch
+      | .done() -> ! sumBetter xs .addN(x) .done()
+      | .addN(y) -> (
+        do xPlusy <- ! add x y;
+            ! sumBetter xs .addN(xPlusy))
+      end)
+  end
+in
 
 # This is better in that it uses *constant* space to implement the
 # same algorithm, but we can make a couple of more improvements:
@@ -118,22 +119,21 @@ let rec sumBetter : List Int -> Summer =
 # We can implement the .done() method from before by pushing .add(0)
 # (using that it is the additive unit).
 
-let rec sumBest : List Int -> Summer' =
-  fn (xs : List Int) ->
-    match xs
-    | Nil() -> (comatch
-      | .add(n) -> ret n
-      end)
-    | Cons(x, xs) -> (comatch
-      | .add(n) -> (
-        do n' <- ! add x n;
-           ! sumBest xs .add(n'))
-      end)
-    end;
-let sum = {
-  fn (xs: List Int) ->
-    ! sumBest xs .add(0)
-};
+let rec fn sumBest (xs : List Int) : Summer' =
+  match xs
+  | Nil() -> (comatch
+    | .add(n) -> ret n
+    end)
+  | Cons(x, xs) -> (comatch
+    | .add(n) -> (
+      do n' <- ! add x n;
+          ! sumBest xs .add(n'))
+    end)
+  end
+in
+let fn sum (xs : List Int) : Ret Int =
+  ! sumBest xs .add(0)
+in
 
 do x <- ! sum (Cons(5, Cons(13, Nil())));
 do s <- ! int_to_str x;

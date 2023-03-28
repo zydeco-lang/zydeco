@@ -3,7 +3,7 @@ data Tok where
   | RParen()
 end
 
-data LList A : VType where
+data LList (A : VType) where
   | Nil()
   | Cons(A, Thunk(Ret(LList A)))
 end
@@ -18,13 +18,17 @@ codata ParenCounterStk where
   | .some() : ParenCounterStk
 end
 
-let rec foldr : Thunk(Ret(LList Tok)) -> Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk) -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk =
-    fn (ll : Thunk(Ret(LList Tok)), step : Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk), final : Thunk(ParenCounterState -> ParenCounterStk)) ->
-    do l <- ! ll;
-    match l
-    | Nil()      -> ! final
-    | Cons(c, k) -> ! step c { ! foldr k step final }
-    end;
+let rec fn foldr
+  (ll : Thunk(Ret(LList Tok)))
+  (step : Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk))
+  (final : Thunk(ParenCounterState -> ParenCounterStk))
+  : ParenCounterState -> ParenCounterStk =
+  do l <- ! ll;
+  match l
+  | Nil()      -> ! final
+  | Cons(c, k) -> ! step c { ! foldr k step final }
+  end
+in
 
 let rec reject : ParenCounterStk =
   comatch
@@ -39,39 +43,36 @@ let try_accept : Thunk(ParenCounterStk) = {
   end
 };
 
-let accept_or_not = {
-  fn (s : ParenCounterState) ->
+let fn accept_or_not (s : ParenCounterState) : ParenCounterStk =
   match s
   | Ok()     -> ! try_accept
   | Reject() -> ! reject
   end
-};
+in
 
-let paren_counter_step = {
-    fn (c : Tok, k : Thunk(ParenCounterState -> ParenCounterStk), state : ParenCounterState) ->
-    match c
-    | LParen() -> ! k state .some()
-    | RParen() ->
-    (comatch
-    | .none() -> ! k (Reject()::ParenCounterState) .none() # Note: would be more efficient to just ! reject here
-    | .some() -> ! k state
-    end)
-    end
-};
+let fn paren_counter_step (c : Tok) (k : Thunk(ParenCounterState -> ParenCounterStk)) (state : ParenCounterState) : ParenCounterStk =
+  match c
+  | LParen() -> ! k state .some()
+  | RParen() ->
+  (comatch
+  | .none() -> ! k (Reject()::ParenCounterState) .none() # Note: would be more efficient to just ! reject here
+  | .some() -> ! k state
+  end)
+  end
+in
 
-let demonstrate = {
-  fn (s: String, expect: Bool, toks: Thunk(Ret(LList Tok)), t : Thunk(OS)) ->
-     do s' <- ! str_append "The following parens are balanced? "  s;
-     do b <- ! foldr toks paren_counter_step accept_or_not (Ok()::ParenCounterState) .none();
-     do pass <- ! bool_eq expect b;
-     match pass
-     | True() -> (
-       do s <- ! bool_to_str b;
-       ! write_line s' { ! write_line s t })
-     | False() -> (
-      ! write_line "WRONG ANSWER" { ! exit 1 })
-     end
-};
+let fn demonstrate (s: String) (expect: Bool) (toks: Thunk(Ret(LList Tok))) (t : Thunk(OS)) : OS =
+  do s' <- ! str_append "The following parens are balanced? "  s;
+  do b <- ! foldr toks paren_counter_step accept_or_not (Ok()::ParenCounterState) .none();
+  do pass <- ! bool_eq expect b;
+  match pass
+  | True() -> (
+    do s <- ! bool_to_str b;
+    ! write_line s' { ! write_line s t })
+  | False() -> (
+  ! write_line "WRONG ANSWER" { ! exit 1 })
+  end
+in
 
 ! demonstrate "(())" true {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
 ! demonstrate "()()" true {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {

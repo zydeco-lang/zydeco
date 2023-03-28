@@ -1,23 +1,19 @@
 data Nat where | Z() | S(Nat) end
 let zero: Nat = Z();
-let suc = {
-  fn (x: Nat) -> ret (S(x)::Nat)
-};
-let ifz = {
-  fn (z: Bool, pred: Comp(Nat -> Ret(Bool)), x: Nat) -> (
-    match x
-    | Z() -> ret z
-    | S(x) -> !pred x
-    end
-  )
-};
-do one <- !suc zero,
-   two <- !suc one;
-let ifz = {
-  fn (x: Nat) -> (
-    !ifz false { fn (_: Nat) -> ret true } x
-  )
-};
+let fn suc (x: Nat): F Nat =
+  ret (S(x)::Nat)
+in
+let fn ifz (z: Bool) (pred: Comp(Nat -> Ret Bool)) (x: Nat): Ret Bool =
+  match x
+  | Z() -> ret z
+  | S(x) -> !pred x
+  end
+in
+do one <- !suc zero;
+do two <- !suc one;
+let fn ifz (x: Nat): F Bool =
+  !ifz false { fn (_: Nat) -> ret true } x
+in
 do two' <- !ifz two;
 do one' <- !ifz one;
 do zero' <- !ifz zero;

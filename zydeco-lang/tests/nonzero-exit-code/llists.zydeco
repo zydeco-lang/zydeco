@@ -1,4 +1,4 @@
-data LList A : VType where
+data LList (A : VType) where
   | Nil()
   | Cons(A, U(F(LList A)))
 end
@@ -34,25 +34,23 @@ end
 
 ## Since it's coinductive, can we write iota?
 
-let rec iota : Int -> F(LList Int) = (
-  fn (i: Int) ->
-    do i+1 <- ! add i 1;
-    ret Cons(i, { ! iota i+1 })
+let rec fn iota (i : Int) : F(LList Int) = (
+  do i+1 <- ! add i 1;
+  ret Cons(i, { ! iota i+1 })
 );
 
-let rec foldr : U(F(LList Int)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
-  fn (ll: U(F(LList Int)), f: U(Int -> U(OS) -> OS), b: U(OS)) ->
-    do llv <- ! ll;
-    match llv
-    | Nil() -> ! b
-    | Cons(a, ll) -> ! f a { ! foldr ll f b }
-    end
-);
+let rec fn foldr (ll : U(F(LList Int))) (f : U(Int -> U(OS) -> OS)) (b : U(OS)) : OS =
+  do llv <- ! ll;
+  match llv
+  | Nil() -> ! b
+  | Cons(a, ll) -> ! f a { ! foldr ll f b }
+  end
+in
 
 let loopy = {
   ! foldr
   { ! iota 0 }
-  { fn (x: Int, b: U(OS)) ->
+  { fn (x: Int) (b: U(OS)) ->
     do next? <- ! int_lt x 10;
     match next?
     | True() -> ! write_int_line x b
