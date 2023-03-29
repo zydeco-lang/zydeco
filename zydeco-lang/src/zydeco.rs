@@ -45,9 +45,14 @@ pub struct ZydecoFile;
 impl ZydecoFile {
     pub fn parse(path: PathBuf) -> Result<Span<ps::Program>, String> {
         let source = std::fs::read_to_string(&path).unwrap();
-        let file_info = FileInfo::new(&source, Rc::new(path));
+        Self::parse_src(&source, path)
+    }
+    pub fn parse_src(
+        source: &str, path: PathBuf,
+    ) -> Result<Span<ps::Program>, String> {
+        let file_info = FileInfo::new(source, Rc::new(path));
         let mut p = ZydecoParser::new()
-            .parse(&source, Lexer::new(&source))
+            .parse(source, Lexer::new(source))
             .map_err(|e| format!("{}", ParseError(e, &file_info)))?
             .span_map(|span| {
                 span.set_info(&file_info);
@@ -72,16 +77,14 @@ impl ZydecoFile {
     ) -> Result<ds::Program, String> {
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
-        let mut runtime = ds::Runtime::new(&mut input, &mut output, args);
-        let p = ds::Program::run(p, &mut runtime);
-        Ok(p)
+        Self::eval_virtual_os(p, &mut input, &mut output, args)
     }
     pub fn eval_virtual_os(
-        m: ls::Program, r: &mut dyn std::io::BufRead,
+        p: ls::Program, r: &mut dyn std::io::BufRead,
         w: &mut dyn std::io::Write, args: &[String],
     ) -> Result<ds::Program, String> {
         let mut runtime = ds::Runtime::new(r, w, args);
-        let m = ds::Program::run(m, &mut runtime);
+        let m = ds::Program::run(p, &mut runtime);
         Ok(m)
     }
 }

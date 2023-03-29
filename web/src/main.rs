@@ -1,5 +1,9 @@
+use std::path::PathBuf;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
+use zydeco_lang::{
+    dynamics::syntax as ds, utils::fmt::FmtArgs, zydeco::ZydecoFile,
+};
 
 const EXAMPLE: &str = "
 let f = {
@@ -45,27 +49,17 @@ fn ui() -> Html {
     }
 }
 
-#[allow(unused)]
 fn run(input: &str) -> Result<String, String> {
-    // let p = zydeco::parse_prog(input)?;
-    // let mut ctx = Ctx::new();
-    // let std_decls = declarations::std_decls().expect("std library failure");
-    // declarations::inject_ctx(&mut ctx, &std_decls)
-    //     .expect("std library failure");
-    // let b = zydeco::typecheck_computation(&p.comp, &ctx)?;
-    // if b.ctor != TCtor::Ret {
-    //     return Err(format!("Your computation had type {}, but the Web interpreter only support computations of type Ret(a)", b));
-    // }
-    // let mut env = Env::new();
-    // builtins::link_builtin(&mut env);
-    // linker::link(&mut env, &std_decls);
-    // linker::link(&mut env, &p.decls);
-    // let v = zydeco::eval_returning_computation(*p.comp, env)?;
-
-    // Ok(format!("{} : {}", v, b.args[0]))
-    todo!();
-    #[allow(unreachable_code)]
-    Ok(String::from(input))
+    let p = ZydecoFile::parse_src(input, PathBuf::new())?;
+    let p = ZydecoFile::elab(p)?;
+    ZydecoFile::tyck(p.clone())?;
+    let p = ZydecoFile::link(p.inner)?;
+    let p = ZydecoFile::eval_os(p, &[])?;
+    let s = match p.entry {
+        ds::ProgKont::Ret(v) => format!("{}", v.fmt()),
+        ds::ProgKont::ExitCode(i) => format!("exit code: {}", i),
+    };
+    Ok(String::from(s))
 }
 
 fn main() {
