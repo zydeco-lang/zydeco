@@ -5,8 +5,8 @@ use crate::utils::span::span;
 use std::io::{BufRead, Write};
 use std::rc::Rc;
 
-type ZValue = ds::TermValue;
-type ZCompute = TermComputation;
+type ZValue = ds::SemVal;
+type ZCompute = ZComp;
 
 // /* Function helpers */
 fn ret<E>(value: ZValue) -> Result<ZCompute, E> {

@@ -28,7 +28,7 @@ impl From<ss::Module> for Module {
     }
 }
 
-impl From<&ss::TermValue> for TermValue {
+impl From<&ss::TermValue> for ZVal {
     fn from(v: &ss::TermValue) -> Self {
         match v {
             ss::TermValue::TermAnn(TermAnn { term: body, ty: _ }) => {
@@ -48,7 +48,7 @@ impl From<&ss::TermValue> for TermValue {
     }
 }
 
-impl From<&ss::TermComputation> for TermComputation {
+impl From<&ss::TermComputation> for ZComp {
     fn from(e: &ss::TermComputation) -> Self {
         match e {
             ss::TermComputation::TermAnn(TermAnn { term: body, ty: _ }) => {

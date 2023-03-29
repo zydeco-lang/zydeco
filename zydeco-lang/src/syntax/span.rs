@@ -25,21 +25,6 @@ where
     }
 }
 
-impl<Type, Kind> SpanHolder for TypeAnn<Type, Kind>
-where
-    Type: SpanHolder,
-    Kind: SpanHolder,
-{
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        let TypeAnn { ty, kd } = self;
-        ty.span_map_mut(f.clone());
-        kd.span_map_mut(f);
-    }
-}
-
 impl SpanHolder for TCtor {
     fn span_map_mut<F>(&mut self, f: F)
     where

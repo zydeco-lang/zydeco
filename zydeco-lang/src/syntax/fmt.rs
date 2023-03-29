@@ -53,24 +53,12 @@ where
     }
 }
 
-impl<Type, Kind> FmtArgs for TypeAnn<Type, Kind>
-where
-    Type: FmtArgs,
-    Kind: FmtArgs,
-{
-    fn fmt_args(&self, fargs: Args) -> String {
-        let TypeAnn { ty, kd } = self;
-        format!("{} : {}", ty.fmt_args(fargs), kd.fmt_args(fargs))
-    }
-}
-
 impl FmtArgs for TCtor {
     fn fmt_args(&self, fargs: Args) -> String {
         match self {
             TCtor::Var(x) => x.fmt_args(fargs),
             TCtor::Thunk => "Thunk".to_owned(),
             TCtor::Ret => "Ret".to_owned(),
-            TCtor::Fun => "Fn".to_owned(),
         }
     }
 }

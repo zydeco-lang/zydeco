@@ -106,9 +106,6 @@ impl TryFrom<ps::Type> for Type {
             ps::Type::Basic(TCtor::Var(v)) => {
                 TypeApp { tvar: v, args: vec![] }.into()
             }
-            ps::Type::Basic(_tctor) => {
-                unreachable!()
-            }
             ps::Type::App(t) => {
                 let ps::TypeApp(t1, t2) = t;
                 let mut t1: Type = TryInto::try_into(t1.inner())?;

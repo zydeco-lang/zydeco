@@ -10,41 +10,41 @@ use zydeco_derive::EnumGenerator;
 
 #[derive(Clone)]
 pub struct Thunk {
-    pub body: Rc<ls::TermComputation>,
-    pub env: Env<TermV, TermValue>,
+    pub body: Rc<ls::ZComp>,
+    pub env: Env<TermV, SemVal>,
 }
 
 #[derive(EnumGenerator, Clone)]
-pub enum TermValue {
+pub enum SemVal {
     Thunk(Thunk),
     Ctor(Ctor<CtorV, TV>),
     Literal(Literal),
 }
-type TV = Rc<TermValue>;
-impl ValueT for TermValue {}
+type TV = Rc<SemVal>;
+impl ValueT for SemVal {}
 
 #[derive(Clone)]
-pub enum TermComputation {
-    Ret(TermValue),
+pub enum ProgKont {
+    Ret(SemVal),
     ExitCode(i32),
 }
-impl ComputationT for TermComputation {}
+impl ComputationT for ProgKont {}
 
 /* --------------------------------- Runtime -------------------------------- */
 
 #[derive(Clone)]
-pub enum Frame {
-    Kont(Rc<ls::TermComputation>, Env<TermV, TermValue>, TermV),
-    Dtor(DtorV, Vec<Rc<TermValue>>),
+pub enum SemComp {
+    Kont(Rc<ls::ZComp>, Env<TermV, SemVal>, TermV),
+    Dtor(DtorV, Vec<Rc<SemVal>>),
 }
 
-impl Debug for Frame {
+impl Debug for SemComp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Frame::Kont(comp, _, var) => {
+            SemComp::Kont(comp, _, var) => {
                 write!(f, "Kont({} -> {})", comp.as_ref().fmt(), var)
             }
-            Frame::Dtor(dtor, args) => write!(
+            SemComp::Dtor(dtor, args) => write!(
                 f,
                 "Dtor(.{}({}))",
                 dtor,
@@ -61,8 +61,8 @@ pub struct Runtime<'rt> {
     pub input: &'rt mut (dyn BufRead),
     pub output: &'rt mut (dyn Write),
     pub args: &'rt [String],
-    pub stack: Vector<Frame>,
-    pub env: Env<TermV, TermValue>,
+    pub stack: Vector<SemComp>,
+    pub env: Env<TermV, SemVal>,
 }
 
 /* --------------------------------- Module --------------------------------- */
@@ -70,5 +70,5 @@ pub struct Runtime<'rt> {
 #[derive(Clone)]
 pub struct Module {
     pub name: Option<String>,
-    pub entry: TermComputation,
+    pub entry: ProgKont,
 }

@@ -52,10 +52,10 @@ fn pure_test(f: &str) -> Result<(), String> {
                         zydeco_expr.link_computation(comp.inner_ref())?;
                     let comp = zydeco_expr.eval_ret_computation(comp)?;
                     match comp {
-                        ds::TermComputation::Ret(value) => {
+                        ds::ProgKont::Ret(value) => {
                             println!("{}", value.fmt());
                         }
-                        ds::TermComputation::ExitCode(i) => {
+                        ds::ProgKont::ExitCode(i) => {
                             Err(format!("exited with code {}", i))?
                         }
                     }
@@ -76,7 +76,7 @@ fn batch_test(f: &str) -> Result<(), String> {
 
     let mut input = std::io::empty();
     let mut output = std::io::sink();
-    let ds::TermComputation::ExitCode(exit_code) =
+    let ds::ProgKont::ExitCode(exit_code) =
         ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[])?.entry else {
             Err("Expected ExitCode".to_string())?
         };
@@ -175,7 +175,7 @@ mod custom_tests {
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();
 
-        let ds::TermComputation::ExitCode(exit_code) =
+        let ds::ProgKont::ExitCode(exit_code) =
             ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[])?.entry else {
                 Err("Expected ExitCode".to_string())?
             };
@@ -200,7 +200,7 @@ mod custom_tests {
 
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();
-        let ds::TermComputation::ExitCode(exit_code) =
+        let ds::ProgKont::ExitCode(exit_code) =
             ZydecoFile::eval_virtual_os(
                 m,
                 &mut input,
@@ -228,7 +228,7 @@ mod custom_tests {
 
         let mut input = std::io::Cursor::new("hello\n");
         let mut output: Vec<u8> = Vec::new();
-        let ds::TermComputation::ExitCode(exit_code) =
+        let ds::ProgKont::ExitCode(exit_code) =
             ZydecoFile::eval_virtual_os(
                 m,
                 &mut input,

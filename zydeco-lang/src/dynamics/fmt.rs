@@ -7,21 +7,21 @@ impl FmtArgs for ds::Thunk {
     }
 }
 
-impl FmtArgs for TermValue {
+impl FmtArgs for SemVal {
     fn fmt_args(&self, fargs: Args) -> String {
         match self {
-            TermValue::Thunk(v) => v.fmt_args(fargs),
-            TermValue::Ctor(v) => v.fmt_args(fargs),
-            TermValue::Literal(v) => v.fmt_args(fargs),
+            SemVal::Thunk(v) => v.fmt_args(fargs),
+            SemVal::Ctor(v) => v.fmt_args(fargs),
+            SemVal::Literal(v) => v.fmt_args(fargs),
         }
     }
 }
 
-impl FmtArgs for TermComputation {
+impl FmtArgs for ProgKont {
     fn fmt_args(&self, fargs: Args) -> String {
         match self {
-            TermComputation::Ret(v) => v.fmt_args(fargs),
-            TermComputation::ExitCode(c) => format!("exit({})", c),
+            ProgKont::Ret(v) => v.fmt_args(fargs),
+            ProgKont::ExitCode(c) => format!("exit({})", c),
         }
     }
 }

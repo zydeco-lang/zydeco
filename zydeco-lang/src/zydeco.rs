@@ -88,7 +88,7 @@ impl ZydecoFile {
 
 pub struct ZydecoExpr {
     ctx: Ctx,
-    env: Env<ls::TermV, ds::TermValue>,
+    env: Env<ls::TermV, ds::SemVal>,
 }
 
 impl ZydecoExpr {
@@ -119,13 +119,13 @@ impl ZydecoExpr {
     }
     pub fn link_computation(
         &self, comp: &ss::TermComputation,
-    ) -> Result<ls::TermComputation, String> {
-        let comp: ls::TermComputation = comp.into();
+    ) -> Result<ls::ZComp, String> {
+        let comp: ls::ZComp = comp.into();
         Ok(comp)
     }
     pub fn eval_ret_computation(
-        &mut self, comp: ls::TermComputation,
-    ) -> Result<ds::TermComputation, String> {
+        &mut self, comp: ls::ZComp,
+    ) -> Result<ds::ProgKont, String> {
         let mut input = std::io::empty();
         let mut output = std::io::sink();
         let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);

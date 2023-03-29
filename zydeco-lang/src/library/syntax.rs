@@ -8,22 +8,22 @@ use zydeco_derive::EnumGenerator;
 /* ---------------------------------- Term ---------------------------------- */
 
 #[derive(EnumGenerator, Clone)]
-pub enum TermValue {
+pub enum ZVal {
     Var(TermV),
     Thunk(Thunk<RcComp>),
     Ctor(Ctor<CtorV, RcValue>),
     Literal(Literal),
-    SemValue(ds::TermValue),
+    SemValue(ds::SemVal),
 }
-type RcValue = Rc<TermValue>;
-impl ValueT for TermValue {}
+type RcValue = Rc<ZVal>;
+impl ValueT for ZVal {}
 
 pub type PrimComp = fn(
-    Vec<ds::TermValue>,
+    Vec<ds::SemVal>,
     &mut (dyn BufRead),
     &mut (dyn Write),
     &[String],
-) -> Result<TermComputation, i32>;
+) -> Result<ZComp, i32>;
 
 #[derive(Clone)]
 pub struct Prim {
@@ -32,7 +32,7 @@ pub struct Prim {
 }
 
 #[derive(EnumGenerator, Clone)]
-pub enum TermComputation {
+pub enum ZComp {
     Ret(Ret<RcValue>),
     Force(Force<RcValue>),
     Let(Let<TermV, RcValue, RcComp>),
@@ -43,13 +43,13 @@ pub enum TermComputation {
     Dtor(Dtor<RcComp, DtorV, RcValue>),
     Prim(Prim),
 }
-type RcComp = Rc<TermComputation>;
-impl ComputationT for TermComputation {}
+type RcComp = Rc<ZComp>;
+impl ComputationT for ZComp {}
 
 #[derive(EnumGenerator, Clone)]
 pub enum Term {
-    Val(TermValue),
-    Comp(TermComputation),
+    Val(ZVal),
+    Comp(ZComp),
 }
 
 /* --------------------------------- Module --------------------------------- */
@@ -57,6 +57,6 @@ pub enum Term {
 #[derive(Clone)]
 pub struct Module {
     pub name: Option<String>,
-    pub define: IndexMap<TermV, TermValue>,
-    pub entry: TermComputation,
+    pub define: IndexMap<TermV, ZVal>,
+    pub entry: ZComp,
 }

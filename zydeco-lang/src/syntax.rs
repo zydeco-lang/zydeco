@@ -117,19 +117,11 @@ impl<K: KindT> KindT for TypeArity<K> {}
 
 /* ---------------------------------- Types --------------------------------- */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeAnn<Type, Kind> {
-    pub ty: Type,
-    pub kd: Kind,
-}
-impl<Type: TypeT, Kind: KindT> TypeT for TypeAnn<Type, Kind> {}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TCtor {
     Var(TypeV),
     Thunk,
     Ret,
-    Fun,
 }
 impl TyVarT for TCtor {}
 
