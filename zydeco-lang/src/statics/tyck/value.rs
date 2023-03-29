@@ -111,8 +111,8 @@ impl TypeCheck for Span<TermValue> {
             TermValue::TermAnn(_)
             | TermValue::Var(_)
             | TermValue::Literal(_) => {
-                let typ_syn = self.syn(ctx)?;
-                typ.eqv(&typ_syn, || self.span().make(Subsumption))?;
+                let typ_syn = self.syn(ctx.clone())?;
+                typ.eqv(&typ_syn, ctx, || self.span().make(Subsumption))?;
                 Step::Done(typ)
             }
         })

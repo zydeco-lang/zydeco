@@ -3,8 +3,6 @@ mod value;
 mod computation;
 mod eqv;
 
-use std::collections::HashSet;
-
 use super::{err::TypeCheckError, syntax::*};
 use crate::{
     rc,
@@ -16,10 +14,12 @@ use crate::{
         span::{Span, SpanView},
     },
 };
+use std::collections::HashSet;
 use TypeCheckError::*;
 
 #[derive(Clone, Default)]
 pub struct Ctx {
+    pub abst_ctx: im::Vector<Kind>,
     pub type_ctx: im::HashMap<TypeV, TypeArity<Kind>>,
     pub term_ctx: im::HashMap<TermV, Type>,
     pub data_ctx: im::HashMap<TypeV, Data<TypeV, CtorV, RcType>>,
@@ -37,7 +37,7 @@ pub trait TypeCheck: SpanView + Sized {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         let span = self.span().clone();
         let typ_syn = self.syn(ctx)?;
-        typ_syn.eqv(&typ, || span.make(Subsumption))?;
+        typ_syn.eqv(&typ, Default::default(), || span.make(Subsumption))?;
         Ok(Step::Done(typ))
     }
     fn tyck(
@@ -169,8 +169,10 @@ impl TypeCheck for Span<&Codata<TypeV, DtorV, RcType>> {
 
 pub struct Seal<T>(pub T);
 impl<T> Eqv for Seal<T> {
+    type Ctx = ();
     fn eqv(
-        &self, _other: &Self, _f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+        &self, _other: &Self, _ctx: (),
+        _f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
         Ok(())
     }
@@ -259,8 +261,10 @@ impl TypeCheck for Span<Program> {
 }
 
 pub trait Eqv {
+    type Ctx: Default;
     fn eqv(
-        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+        &self, other: &Self, ctx: Self::Ctx,
+        f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>>;
 }
 
@@ -268,7 +272,7 @@ impl Span<Kind> {
     fn ensure(
         &self, kind: &Kind, context: &str,
     ) -> Result<(), Span<TypeCheckError>> {
-        self.inner_ref().eqv(kind, || {
+        self.inner_ref().eqv(kind, (), || {
             self.span().make(KindMismatch {
                 context: context.to_owned(),
                 expected: kind.clone(),

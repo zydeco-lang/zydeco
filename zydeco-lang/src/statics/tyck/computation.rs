@@ -124,7 +124,7 @@ impl TypeCheck for Span<TermComputation> {
                 let mut ty_opt: Option<Type> = None;
                 for ty in &ty_arms {
                     if let Some(ty_opt) = &ty_opt {
-                        ty_opt.eqv(ty, || {
+                        ty_opt.eqv(ty, ctx.clone(), || {
                             self.span()
                                 .make(InconsistentBranches(ty_arms.clone()))
                         })?;
@@ -357,8 +357,8 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::TermAnn(_) | TermComputation::Dtor(_) => {
-                let typ_syn = self.syn(ctx)?;
-                typ.eqv(&typ_syn, || self.span().make(Subsumption))?;
+                let typ_syn = self.syn(ctx.clone())?;
+                typ.eqv(&typ_syn, ctx, || self.span().make(Subsumption))?;
                 Step::Done(typ)
             }
         })

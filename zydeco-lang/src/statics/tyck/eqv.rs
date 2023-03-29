@@ -1,24 +1,30 @@
 use super::*;
 
 impl Eqv for () {
+    type Ctx = ();
     fn eqv(
-        &self, _other: &Self, _f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+        &self, _other: &Self, _ctx: (),
+        _f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
         Ok(())
     }
 }
 
 impl Eqv for Kind {
+    type Ctx = ();
     fn eqv(
-        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+        &self, other: &Self, _ctx: (),
+        f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
         bool_test(self == other, f)
     }
 }
 
 impl Eqv for Type {
+    type Ctx = Ctx;
     fn eqv(
-        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+        &self, other: &Self, ctx: Ctx,
+        f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
         let lhs = self.head_reduction()?;
         let rhs = other.head_reduction()?;
@@ -28,7 +34,7 @@ impl Eqv for Type {
         bool_test(lhs.args.len() == rhs.args.len(), f.clone())?;
         // arguments must be equivalent
         for (ty1, ty2) in lhs.args.iter().zip(rhs.args.iter()) {
-            ty1.inner_ref().eqv(ty2.inner_ref(), f.clone())?;
+            ty1.inner_ref().eqv(ty2.inner_ref(), ctx.clone(), f.clone())?;
         }
         Ok(())
     }
