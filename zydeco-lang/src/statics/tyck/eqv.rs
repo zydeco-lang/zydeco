@@ -23,9 +23,6 @@ impl Eqv for TCtor {
     ) -> Result<(), Span<TypeCheckError>> {
         match (self, other) {
             (TCtor::Var(x), TCtor::Var(y)) => bool_test(x == y, f.clone()),
-            (TCtor::Ret, TCtor::Ret)
-            | (TCtor::Thunk, TCtor::Thunk)
-            | (TCtor::Fun, TCtor::Fun) => Ok(()),
             (TCtor::Var(_), _)
             | (TCtor::Ret, _)
             | (TCtor::Thunk, _)

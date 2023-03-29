@@ -24,10 +24,32 @@ impl Type {
     pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
         TypeApp::internal(name, args).into()
     }
+    pub fn make_thunk(arg: RcType) -> Self {
+        TypeApp::internal("Thunk_U", vec![arg]).into()
+    }
+    pub fn make_ret(arg: RcType) -> Self {
+        TypeApp::internal("Ret_F", vec![arg]).into()
+    }
 }
 impl TypeApp<TCtor, RcType> {
     pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
         TypeApp { tctor: TCtor::Var(TypeV::new(name.into(), span(0, 0))), args }
+    }
+    pub fn elim_thunk(&self) -> Option<Type> {
+        match &self.tctor {
+            TCtor::Var(tvar) if tvar.name() == "Thunk_U" => {
+                Some(self.args.first().unwrap().inner_ref().clone())
+            }
+            _ => None,
+        }
+    }
+    pub fn elim_ret(&self) -> Option<Type> {
+        match &self.tctor {
+            TCtor::Var(tvar) if tvar.name() == "Ret_F" => {
+                Some(self.args.first().unwrap().inner_ref().clone())
+            }
+            _ => None,
+        }
     }
 }
 impl From<TypeApp<TCtor, RcType>> for Type {

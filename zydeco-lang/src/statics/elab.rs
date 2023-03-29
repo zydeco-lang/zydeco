@@ -2,7 +2,6 @@ use super::{err::TypeCheckError, resolve::NameResolveError, syntax::*};
 use crate::{
     parse::syntax as ps,
     rc,
-    syntax::env::Env,
     utils::span::{span, Span, SpanView},
 };
 
@@ -68,13 +67,7 @@ fn desugar_gen_let(
                 }
             }
             let body = rc!((*body).try_map(TryInto::try_into)?);
-            ty = ty.map(|ty| {
-                rc!(def.info.make(Type {
-                    app: TypeApp { tctor: TCtor::Thunk, args: vec![ty] },
-                    kd: None,
-                    env: Env::new()
-                }))
-            });
+            ty = ty.map(|ty| rc!(def.info.make(Type::make_thunk(ty))));
             Ok((name, ty, Some(rc!(def.info.make(Thunk(body).into())))))
         }
     }
@@ -106,6 +99,10 @@ impl TryFrom<ps::Type> for Type {
     type Error = TypeCheckError;
     fn try_from(ty: ps::Type) -> Result<Self, TypeCheckError> {
         Ok(match ty {
+            ps::Type::Basic(TCtor::Thunk) => {
+                Type::internal("Thunk_U", Vec::new())
+            }
+            ps::Type::Basic(TCtor::Ret) => Type::internal("Ret_F", Vec::new()),
             ps::Type::Basic(tctor) => {
                 TypeApp { tctor, args: Vec::new() }.into()
             }
@@ -225,15 +222,18 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let mut body: TermComputation = Rec { var, body }.into();
                 if let Some(ty) = ty {
                     let ty: Span<Type> = ty.try_map(TryInto::try_into)?;
-                    let TCtor::Thunk = ty.inner.app.tctor else {
+                    let Some(ty) = ty.inner.app.elim_thunk() else {
                         Err(TypeCheckError::TypeExpected {
                             context: format!("elaborating recursion"),
                             expected: format!("{{a}}"),
                             found: ty.inner
                         })?
                     };
-                    let ty = ty.inner.app.args[0].clone();
-                    body = TermAnn { term: rc!(span.make(body)), ty }.into();
+                    body = TermAnn {
+                        term: rc!(span.make(body)),
+                        ty: rc!(span.make(ty)),
+                    }
+                    .into();
                 }
                 body
             }

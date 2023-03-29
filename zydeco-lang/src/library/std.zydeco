@@ -1,5 +1,13 @@
 # zydeco std
 
+
+## Thunk and Ret types
+pub extern data Thunk_U (B : CType) where
+end
+pub extern codata Ret_F (A : VType) where
+end
+
+
 ## 1 and 2 types
 
 pub data Unit where

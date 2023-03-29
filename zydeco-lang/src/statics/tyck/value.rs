@@ -35,13 +35,7 @@ impl TypeCheck for Span<TermValue> {
             ),
             TermValue::Thunk(Thunk(c)) => {
                 let c = c.syn(ctx)?.head_reduction()?;
-                Step::Done(
-                    TypeApp {
-                        tctor: TCtor::Thunk,
-                        args: vec![rc!(self.span().make(c.into()))],
-                    }
-                    .into(),
-                )
+                Step::Done(Type::make_thunk(rc!(self.span().make(c.into()))))
                 // Err(self
                 //     .span()
                 //     .make(NeedAnnotation { content: format!("thunk") }))?
@@ -61,21 +55,13 @@ impl TypeCheck for Span<TermValue> {
         Ok(match self.inner_ref() {
             TermValue::Thunk(Thunk(c)) => {
                 let app = typ.head_reduction()?;
-                bool_test(app.tctor == TCtor::Thunk, || {
+                let typ_comp = app.elim_thunk().ok_or_else(|| {
                     self.span().make(TypeExpected {
                         context: format!("thunk"),
                         expected: format!("{{a}}"),
                         found: typ.to_owned(),
                     })
                 })?;
-                bool_test(app.args.len() == 1, || {
-                    self.span().make(ArityMismatch {
-                        context: format!("thunk"),
-                        expected: 1,
-                        found: typ.app.args.len(),
-                    })
-                })?;
-                let typ_comp = app.args[0].inner_ref().to_owned();
                 c.ana(typ_comp, ctx)?;
                 Step::Done(typ)
             }

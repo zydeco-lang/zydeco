@@ -34,48 +34,9 @@ impl TypeCheck for Span<Type> {
                 }
                 Step::Done(kd.clone())
             }
-            TCtor::Thunk => match &app.args.as_slice() {
-                &[arg] => {
-                    self.span()
-                        .make(arg.syn(ctx.clone())?)
-                        .ensure(&Kind::CType, "thunk argument")?;
-                    Step::Done(Kind::VType)
-                }
-                _ => Err(self.span().make(ArityMismatch {
-                    context: format!("{}", self.inner_ref().fmt()),
-                    expected: 1,
-                    found: app.args.len(),
-                }))?,
-            },
-            TCtor::Ret => match &app.args.as_slice() {
-                &[arg] => {
-                    self.span()
-                        .make(arg.syn(ctx.clone())?)
-                        .ensure(&Kind::VType, "return argument")?;
-                    Step::Done(Kind::CType)
-                }
-                _ => Err(self.span().make(ArityMismatch {
-                    context: format!("{}", self.inner_ref().fmt()),
-                    expected: 1,
-                    found: app.args.len(),
-                }))?,
-            },
-            TCtor::Fun => match &app.args.as_slice() {
-                &[arg1, arg2] => {
-                    self.span()
-                        .make(arg1.syn(ctx.clone())?)
-                        .ensure(&Kind::VType, "function argument")?;
-                    self.span()
-                        .make(arg2.syn(ctx.clone())?)
-                        .ensure(&Kind::CType, "function argument")?;
-                    Step::Done(Kind::CType)
-                }
-                _ => Err(self.span().make(ArityMismatch {
-                    context: format!("{}", self.inner_ref().fmt()),
-                    expected: 2,
-                    found: app.args.len(),
-                }))?,
-            },
+            TCtor::Thunk => unreachable!(),
+            TCtor::Ret => unreachable!(),
+            TCtor::Fun => unreachable!(),
         })
     }
 }
