@@ -1,15 +1,15 @@
-data LList (A : VType) where
+data LList' (A : VType) where
   | Nil()
-  | Cons(A, U(F(LList A)))
+  | Cons(A, U(F(LList' A)))
 end
 
-let rec iota : Int -> F(LList Int) = (
+let rec iota : Int -> F(LList' Int) = (
   fn (i: Int) ->
     do i+1 <- ! add i 1;
     ret Cons(i, { ! iota i+1 })
 );
 
-let rec foldr : U(F(LList Int)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
+let rec foldr : U(F(LList' Int)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
   fn ll f b ->
     do llv <- ! ll;
     match llv

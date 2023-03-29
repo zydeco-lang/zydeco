@@ -179,9 +179,13 @@ pub data List (A : VType) where
 | Cons(A, List A)
 end
 
-pub data LListV (A : VType) where
+pub data LListV (A : VType) (B : CType) where
   | Nil()
-  | Cons(A, U(F(LListV A)))
+  | Cons(A, Thunk(B))
+end
+
+pub codata LList (A : VType) where
+  | .run(): Ret (LListV A (LList A))
 end
 
 
