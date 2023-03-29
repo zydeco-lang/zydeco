@@ -13,7 +13,7 @@ pub use crate::syntax::Kind;
 
 #[derive(Clone, Debug)]
 pub struct Type {
-    pub app: TypeApp<TCtor, RcType>,
+    pub app: TypeApp<TypeV, RcType>,
     pub kd: Option<Kind>,
     pub env: Env<TypeV, Type>,
 }
@@ -31,29 +31,27 @@ impl Type {
         TypeApp::internal("Ret_F", vec![arg]).into()
     }
 }
-impl TypeApp<TCtor, RcType> {
+impl TypeApp<TypeV, RcType> {
     pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
-        TypeApp { tctor: TCtor::Var(TypeV::new(name.into(), span(0, 0))), args }
+        TypeApp { tvar: TypeV::new(name.into(), span(0, 0)), args }
     }
     pub fn elim_thunk(&self) -> Option<Type> {
-        match &self.tctor {
-            TCtor::Var(tvar) if tvar.name() == "Thunk_U" => {
-                Some(self.args.first().unwrap().inner_ref().clone())
-            }
-            _ => None,
+        if self.tvar.name() == "Thunk_U" {
+            Some(self.args.first().unwrap().inner_ref().clone())
+        } else {
+            None
         }
     }
     pub fn elim_ret(&self) -> Option<Type> {
-        match &self.tctor {
-            TCtor::Var(tvar) if tvar.name() == "Ret_F" => {
-                Some(self.args.first().unwrap().inner_ref().clone())
-            }
-            _ => None,
+        if self.tvar.name() == "Ret_F" {
+            Some(self.args.first().unwrap().inner_ref().clone())
+        } else {
+            None
         }
     }
 }
-impl From<TypeApp<TCtor, RcType>> for Type {
-    fn from(app: TypeApp<TCtor, RcType>) -> Self {
+impl From<TypeApp<TypeV, RcType>> for Type {
+    fn from(app: TypeApp<TypeV, RcType>) -> Self {
         Self { app, kd: None, env: Env::new() }
     }
 }

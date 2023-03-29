@@ -135,7 +135,7 @@ impl TyVarT for TCtor {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeApp<TyV: TyVarT, Ty: TypeT> {
-    pub tctor: TyV,
+    pub tvar: TyV,
     pub args: Vec<Ty>,
 }
 impl<TyV: TyVarT, Ty: TypeT> TypeT for TypeApp<TyV, Ty> {}

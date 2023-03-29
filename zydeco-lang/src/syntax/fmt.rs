@@ -81,7 +81,7 @@ where
     T: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let TypeApp { tctor, args } = self;
+        let TypeApp { tvar: tctor, args } = self;
         let mut s = String::new();
         s += &tctor.fmt_args(fargs);
         s += "(";

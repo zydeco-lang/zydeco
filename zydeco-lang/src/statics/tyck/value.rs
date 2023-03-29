@@ -67,13 +67,7 @@ impl TypeCheck for Span<TermValue> {
             }
             TermValue::Ctor(Ctor { ctor, args }) => {
                 let ty_app = typ.head_reduction()?;
-                let TCtor::Var(tvar) = &ty_app.tctor else {
-                    Err(self.span().make(TypeExpected {
-                        context: format!("ctor"),
-                        expected: format!("{{a}}"),
-                        found: typ.to_owned(),
-                    }))?
-                };
+                let tvar = &ty_app.tvar;
                 let Data { name, params, ctors } =
                     ctx.data_ctx.get(tvar).cloned().ok_or_else(|| {
                         self.span().make(NameResolve(

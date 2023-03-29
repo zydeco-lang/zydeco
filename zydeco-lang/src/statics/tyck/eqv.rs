@@ -16,21 +16,6 @@ impl Eqv for Kind {
     }
 }
 
-impl Eqv for TCtor {
-    /// syntactic equality of type constructors
-    fn eqv(
-        &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
-    ) -> Result<(), Span<TypeCheckError>> {
-        match (self, other) {
-            (TCtor::Var(x), TCtor::Var(y)) => bool_test(x == y, f.clone()),
-            (TCtor::Var(_), _)
-            | (TCtor::Ret, _)
-            | (TCtor::Thunk, _)
-            | (TCtor::Fun, _) => Err(f()),
-        }
-    }
-}
-
 impl Eqv for Type {
     fn eqv(
         &self, other: &Self, f: impl FnOnce() -> Span<TypeCheckError> + Clone,
@@ -38,7 +23,7 @@ impl Eqv for Type {
         let lhs = self.head_reduction()?;
         let rhs = other.head_reduction()?;
         // both stuck type variable and type constructor
-        lhs.tctor.eqv(&rhs.tctor, f.clone())?;
+        bool_test(lhs.tvar == rhs.tvar, f.clone())?;
         // argument length must be equal
         bool_test(lhs.args.len() == rhs.args.len(), f.clone())?;
         // arguments must be equivalent

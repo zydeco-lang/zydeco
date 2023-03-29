@@ -68,13 +68,7 @@ impl TypeCheck for Span<TermComputation> {
                 let kd = self.span().make(ty_scrut.clone()).syn(ctx.clone())?;
                 self.span().make(kd).ensure(&Kind::VType, "match")?;
                 let ty_app = ty_scrut.head_reduction()?;
-                let TCtor::Var(tvar) = ty_app.tctor else {
-                    Err(self.span().make(TypeExpected {
-                        context: format!("match"),
-                        expected: format!("codata type"),
-                        found: ty_app.clone().into(),
-                    }))?
-                };
+                let tvar = ty_app.tvar;
                 let Data { name, params, ctors } =
                     ctx.data_ctx.get(&tvar).cloned().ok_or_else(|| {
                         self.span().make(
@@ -149,13 +143,7 @@ impl TypeCheck for Span<TermComputation> {
                 .make(NeedAnnotation { content: format!("comatch") }))?,
             TermComputation::Dtor(Dtor { body, dtor, args }) => {
                 let ty_app = body.syn(ctx.clone())?.head_reduction()?;
-                let TCtor::Var(tvar) = ty_app.tctor else {
-                    Err(self.span().make(TypeExpected {
-                        context: format!("dtor"),
-                        expected: format!("codata type"),
-                        found: ty_app.clone().into(),
-                    }))?
-                };
+                let tvar = ty_app.tvar;
                 let Codata { name, params, dtors } =
                     ctx.coda_ctx.get(&tvar).cloned().ok_or_else(|| {
                         self.span().make(
@@ -264,13 +252,7 @@ impl TypeCheck for Span<TermComputation> {
                 let kd = self.span().make(ty_scrut.clone()).syn(ctx.clone())?;
                 self.span().make(kd).ensure(&Kind::VType, "match")?;
                 let ty_app = ty_scrut.head_reduction()?;
-                let TCtor::Var(tvar) = ty_app.tctor else {
-                    Err(self.span().make(TypeExpected {
-                        context: format!("match"),
-                        expected: format!("codata type"),
-                        found: ty_app.clone().into(),
-                    }))?
-                };
+                let tvar = ty_app.tvar;
                 let Data { name, params, ctors } =
                     ctx.data_ctx.get(&tvar).cloned().ok_or_else(|| {
                         self.span().make(
@@ -321,13 +303,7 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::CoMatch(CoMatch { arms }) => {
                 let ty_app = typ.head_reduction()?;
-                let TCtor::Var(tvar) = ty_app.tctor else {
-                    Err(self.span().make(TypeExpected {
-                        context: format!("comatch"),
-                        expected: format!("codata type"),
-                        found: typ.clone(),
-                    }))?
-                };
+                let tvar = ty_app.tvar;
                 let Codata { name, params, dtors } =
                     ctx.coda_ctx.get(&tvar).cloned().ok_or_else(|| {
                         self.span().make(

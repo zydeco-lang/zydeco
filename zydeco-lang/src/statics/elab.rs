@@ -103,8 +103,11 @@ impl TryFrom<ps::Type> for Type {
                 Type::internal("Thunk_U", Vec::new())
             }
             ps::Type::Basic(TCtor::Ret) => Type::internal("Ret_F", Vec::new()),
-            ps::Type::Basic(tctor) => {
-                TypeApp { tctor, args: Vec::new() }.into()
+            ps::Type::Basic(TCtor::Var(v)) => {
+                TypeApp { tvar: v, args: vec![] }.into()
+            }
+            ps::Type::Basic(_tctor) => {
+                unreachable!()
             }
             ps::Type::App(t) => {
                 let ps::TypeApp(t1, t2) = t;

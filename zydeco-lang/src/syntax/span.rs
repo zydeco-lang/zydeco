@@ -61,7 +61,7 @@ where
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let TypeApp { tctor, args } = self;
+        let TypeApp { tvar: tctor, args } = self;
         tctor.span_map_mut(f.clone());
         for arg in args {
             arg.span_map_mut(f.clone());
