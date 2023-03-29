@@ -9,19 +9,23 @@ grammar<'input>(input: &'input str);
 
 //* --------------------------------- Module --------------------------------- */
 
-pub Zydeco: Span<Module> = Span<Module>;
-pub DeclarationVec: Vec<DeclSymbol<Declaration>> = <DeclSymbol<Declaration>*>;
+pub Zydeco: Span<Program> = Span<Program>;
+pub ZydecoModule: Span<Module> = Span<Module>;
+
+Program: Program = {
+    <module:Span<Module>> <entry:Span<TermComputation>> => Program {
+        module, entry,
+    },
+}
 
 Module: Module = {
     "module" <name:UpperId> "where"
         <declarations:DeclSymbol<Declaration>*>
-        <entry:Span<TermComputation>>
     "end" => Module {
-        name: Some(name), declarations, entry,
+        name: Some(name), declarations
     },
-    <declarations:DeclSymbol<Declaration>*>
-    <entry:Span<TermComputation>> => Module {
-        name: None, declarations, entry,
+    <declarations:DeclSymbol<Declaration>*> => Module {
+        name: None, declarations
     },
 };
 

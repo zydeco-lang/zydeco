@@ -41,12 +41,21 @@ impl FmtArgs for ls::Module {
             s += &fargs.force_space();
         }
         s += &fargs.force_space();
-        s += &self.entry.fmt_args(fargs);
-        s += &fargs.force_space();
         if let Some(_) = &self.name {
             s += "end";
             s += &fargs.force_space();
         }
+        s
+    }
+}
+
+impl FmtArgs for ls::Program {
+    fn fmt_args(&self, fargs: Args) -> String {
+        let mut s = String::new();
+        let ls::Program { module, entry } = self;
+        s += &module.fmt_args(fargs);
+        s += &fargs.force_space();
+        s += &entry.fmt_args(fargs);
         s
     }
 }

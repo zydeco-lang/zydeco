@@ -146,19 +146,19 @@ mod batch_tests {
 }
 mod pure_tests {
     use super::*;
-    // mk_pure_test!(ptest1, "bindings.zy");
-    // mk_pure_test!(ptest2, "booleans.zy");
-    // mk_pure_test!(ptest3, "comments.zy");
-    // mk_pure_test!(ptest8, "fn'.zy");
-    // mk_pure_test!(ptest9, "fn.zy");
-    // mk_pure_test!(ptest12, "thunk.zy");
-    // mk_pure_test!(ptest17, "bigmac.zy");
+    mk_pure_test!(pure_bindings, "bindings.zy");
+    mk_pure_test!(pure_booleans, "booleans.zy");
+    mk_pure_test!(pure_comments, "comments.zy");
+    mk_pure_test!(pure_fn, "fn.zy");
+    mk_pure_test!(pure_fn2, "fn'.zy");
+    mk_pure_test!(pure_thunk, "thunk.zy");
+    mk_pure_test!(pure_bigmac, "bigmac.zy");
 }
 mod tyck_tests {
     use super::*;
-    mk_check_test!(chk_test0, "loop.zydeco");
-    mk_check_test!(chk_test1, "explosion.zy");
-    mk_check_test!(chk_test2, "iota.zy");
+    mk_check_test!(chk_loop, "loop.zydeco");
+    mk_check_test!(chk_explosion, "explosion.zy");
+    mk_check_test!(chk_iota, "iota.zy");
 }
 
 mod custom_tests {

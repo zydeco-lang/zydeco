@@ -99,5 +99,10 @@ pub struct Module {
     pub codata: Vec<DeclSymbol<Codata<TypeV, DtorV, RcType>>>,
     pub define: Vec<DeclSymbol<Define<TermV, RcValue>>>,
     pub define_ext: Vec<DeclSymbol<Define<(TermV, RcType), ()>>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Program {
+    pub module: Span<Module>,
     pub entry: Span<TermComputation>,
 }

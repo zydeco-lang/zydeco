@@ -1,3 +1,4 @@
+use crate::utils::monoid::Monoid;
 use crate::utils::span::Span;
 use zydeco_derive::EnumGenerator;
 
@@ -136,5 +137,26 @@ pub enum Declaration {
 pub struct Module {
     pub name: Option<String>,
     pub declarations: Vec<DeclSymbol<Declaration>>,
+}
+
+impl Monoid for Module {
+    fn empty() -> Self {
+        Self { name: None, declarations: Vec::new() }
+    }
+    fn append(self, other: Self) -> Self {
+        Self {
+            name: other.name.or(self.name),
+            declarations: self
+                .declarations
+                .into_iter()
+                .chain(other.declarations)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Program {
+    pub module: Span<Module>,
     pub entry: Span<TermComputation>,
 }

@@ -43,7 +43,7 @@ impl FmtArgs for TermComputation {
 impl FmtArgs for Module {
     fn fmt_args(&self, args: Args) -> String {
         let mut s = String::new();
-        let Module { name, data, codata, define, define_ext, entry } = self;
+        let Module { name, data, codata, define, define_ext } = self;
         if let Some(name) = name {
             s += &format!("module {} where", name);
             s += &args.force_space();
@@ -76,7 +76,17 @@ impl FmtArgs for Module {
             s += &d.fmt_args(args);
             s += &args.force_space();
         }
-        s += &format!("{}", entry.fmt_args(args));
+        s
+    }
+}
+
+impl FmtArgs for Program {
+    fn fmt_args(&self, args: Args) -> String {
+        let Program { module, entry } = self;
+        let mut s = String::new();
+        s += &module.fmt_args(args);
+        s += &args.force_space();
+        s += &entry.fmt_args(args);
         s
     }
 }

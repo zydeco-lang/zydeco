@@ -26,6 +26,15 @@ pub enum Step<T, Out> {
     Step(T),
 }
 
+impl<'rt> Runtime<'rt> {
+    pub fn new(
+        input: &'rt mut dyn BufRead, output: &'rt mut dyn Write,
+        args: &'rt [String],
+    ) -> Self {
+        Runtime { input, output, args, stack: Vector::new(), env: Env::new() }
+    }
+}
+
 impl<'rt> Eval<'rt> for ls::ZVal {
     type Out = SemVal;
 
@@ -154,31 +163,41 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 }
                 match body(args, runtime.input, runtime.output, runtime.args) {
                     Ok(e) => Step::Step(e),
-                    Err(exit_code) => {
-                        Step::Done(ProgKont::ExitCode(exit_code))
-                    }
+                    Err(exit_code) => Step::Done(ProgKont::ExitCode(exit_code)),
                 }
             }
         }
     }
 }
 
-impl<'rt> Runtime<'rt> {
-    pub fn new(
-        input: &'rt mut dyn BufRead, output: &'rt mut dyn Write,
-        args: &'rt [String],
-    ) -> Self {
-        Runtime { input, output, args, stack: Vector::new(), env: Env::new() }
-    }
-}
+impl<'rt> Eval<'rt> for ls::Module {
+    type Out = ();
 
-impl Module {
-    pub fn new<'rt>(m: ls::Module, runtime: &'rt mut Runtime<'rt>) -> Self {
-        for (x, v) in m.define {
+    fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
+        for (x, v) in self.define {
             let v = v.clone().eval(runtime);
             let env = runtime.env.update(x, v);
             runtime.env = env;
         }
-        Module { name: m.name, entry: m.entry.eval(runtime) }
+        Step::Done(())
+    }
+}
+
+impl<'rt> Eval<'rt> for ls::Program {
+    type Out = ProgKont;
+
+    fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
+        self.module.eval(runtime);
+        let prog_kont = self.entry.eval(runtime);
+        Step::Done(prog_kont)
+    }
+}
+
+impl Program {
+    pub fn run<'rt>(p: ls::Program, runtime: &mut Runtime<'rt>) -> Self {
+        Program {
+            module: Module { name: p.module.name.clone() },
+            entry: p.eval(runtime),
+        }
     }
 }

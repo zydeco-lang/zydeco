@@ -182,7 +182,7 @@ impl TypeCheck for Span<Module> {
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
-        let Module { name: _, data, codata: coda, define, define_ext, entry } =
+        let Module { name: _, data, codata: coda, define, define_ext } =
             self.inner_ref();
         // register data and codata type declarations in the type context
         for DeclSymbol { inner: data, .. } in data {
@@ -237,11 +237,24 @@ impl TypeCheck for Span<Module> {
             span.make(kd).ensure(&Kind::VType, "define")?;
             ctx.term_ctx.insert(name.clone(), ty_def);
         }
-        let ty_app = entry.syn(ctx.to_owned())?.head_reduction()?;
-        if !ty_app.tvar.name().eq("OS") {
-            Err(self.span().make(WrongMain { found: ty_app.into() }))?
-        };
         Ok(Step::Done(Seal(ctx)))
+    }
+}
+
+impl TypeCheck for Span<Program> {
+    type Ctx = Ctx;
+    type Out = Seal<(Ctx, Type)>;
+
+    fn syn_step(
+        &self, ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        let Program { module, entry } = self.inner_ref();
+        let Seal(ctx) = module.syn(ctx)?;
+        let ty_app = entry.syn(ctx.to_owned())?.head_reduction()?;
+        if !(ty_app.tvar.name() == "OS") {
+            Err(self.span().make(WrongMain { found: ty_app.clone().into() }))?
+        };
+        Ok(Step::Done(Seal((ctx, ty_app.into()))))
     }
 }
 

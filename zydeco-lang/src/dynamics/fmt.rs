@@ -27,7 +27,17 @@ impl FmtArgs for ProgKont {
 }
 
 impl FmtArgs for Module {
+    fn fmt_args(&self, _fargs: Args) -> String {
+        String::new()
+    }
+}
+
+impl FmtArgs for Program {
     fn fmt_args(&self, fargs: Args) -> String {
-        self.entry.fmt_args(fargs)
+        let Program { module, entry } = self;
+        let mut s = String::new();
+        s += &module.fmt_args(fargs);
+        s += &entry.fmt_args(fargs);
+        s
     }
 }

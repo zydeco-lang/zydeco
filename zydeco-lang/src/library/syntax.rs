@@ -58,5 +58,10 @@ pub enum Term {
 pub struct Module {
     pub name: Option<String>,
     pub define: IndexMap<TermV, ZVal>,
+}
+
+#[derive(Clone)]
+pub struct Program {
+    pub module: Module,
     pub entry: ZComp,
 }

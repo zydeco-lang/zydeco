@@ -374,7 +374,7 @@ impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
 impl TryFrom<ps::Module> for Module {
     type Error = TypeCheckError;
     fn try_from(
-        ps::Module { name, declarations, entry }: ps::Module,
+        ps::Module { name, declarations }: ps::Module,
     ) -> Result<Self, TypeCheckError> {
         let mut data = Vec::new();
         let mut codata = Vec::new();
@@ -430,7 +430,17 @@ impl TryFrom<ps::Module> for Module {
                 }
             }
         }
+        Ok(Self { name, data, codata, define, define_ext })
+    }
+}
+
+impl TryFrom<ps::Program> for Program {
+    type Error = TypeCheckError;
+
+    fn try_from(value: ps::Program) -> Result<Self, Self::Error> {
+        let ps::Program { module, entry } = value;
+        let module = module.try_map(TryInto::try_into)?;
         let entry = entry.try_map(TryInto::try_into)?;
-        Ok(Self { name, data, codata, define, define_ext, entry })
+        Ok(Self { module, entry })
     }
 }

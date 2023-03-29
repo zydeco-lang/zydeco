@@ -1,33 +1,36 @@
 use indexmap::IndexMap;
 
 use crate::{
-    dynamics::syntax as ds,
+    dynamics::{eval::Eval, syntax as ds},
     library::syntax as ls,
     parse::{
         err::ParseError,
-        parser::{DeclarationVecParser, TermSpanParser, ZydecoParser},
+        parser::{TermSpanParser, ZydecoModuleParser, ZydecoParser},
         syntax as ps, Lexer,
     },
     statics::{
         syntax as ss,
-        tyck::{Ctx, TypeCheck},
+        tyck::{Ctx, Seal, TypeCheck},
     },
-    syntax::{env::Env, DeclSymbol},
-    utils::span::{FileInfo, Span, SpanHolder},
+    syntax::env::Env,
+    utils::{
+        monoid::Monoid,
+        span::{FileInfo, Span, SpanHolder},
+    },
 };
 use std::{path::PathBuf, rc::Rc};
 
 pub struct Zydeco;
 
 impl Zydeco {
-    pub fn std() -> Result<Vec<DeclSymbol<ps::Declaration>>, String> {
+    pub fn std() -> Result<Span<ps::Module>, String> {
         // let std_path: PathBuf = "src/library/std.zydeco".into();
         // println!("{}", std::env::current_dir().unwrap().display());
         // let source = std::fs::read_to_string(&std_path).unwrap();
         let source = include_str!("library/std.zydeco");
         let std_path: PathBuf = "zydeco-lang/src/library/std.zydeco".into();
         let file_info = FileInfo::new(&source, Rc::new(std_path));
-        let ds = DeclarationVecParser::new()
+        let ds = ZydecoModuleParser::new()
             .parse(&source, Lexer::new(&source))
             .map_err(|e| format!("{}", ParseError(e, &file_info)))?
             .span_map(|span| {
@@ -40,48 +43,45 @@ impl Zydeco {
 pub struct ZydecoFile;
 
 impl ZydecoFile {
-    pub fn parse(path: PathBuf) -> Result<Span<ps::Module>, String> {
+    pub fn parse(path: PathBuf) -> Result<Span<ps::Program>, String> {
         let source = std::fs::read_to_string(&path).unwrap();
         let file_info = FileInfo::new(&source, Rc::new(path));
-        let mut m = ZydecoParser::new()
+        let mut p = ZydecoParser::new()
             .parse(&source, Lexer::new(&source))
             .map_err(|e| format!("{}", ParseError(e, &file_info)))?
             .span_map(|span| {
                 span.set_info(&file_info);
             });
-        m.inner.declarations = (Zydeco::std()?.into_iter())
-            .chain(m.inner.declarations.into_iter())
-            .collect();
-        Ok(m)
+        p.inner.module = Zydeco::std()?.append(p.inner.module);
+        Ok(p)
     }
-    pub fn elab(m: Span<ps::Module>) -> Result<Span<ss::Module>, String> {
-        let mo: ss::Module = m.inner.try_into().unwrap();
-        // println!("{}", mo.fmt());
-        Ok(m.info.make(mo))
+    pub fn elab(p: Span<ps::Program>) -> Result<Span<ss::Program>, String> {
+        let pr: ss::Program = p.inner.try_into().unwrap();
+        Ok(p.info.make(pr))
     }
-    pub fn tyck(m: Span<ss::Module>) -> Result<(), String> {
+    pub fn tyck(m: Span<ss::Program>) -> Result<(), String> {
         m.syn(Ctx::default()).map_err(|e| format!("{}", e))?;
         Ok(())
     }
-    pub fn link(m: ss::Module) -> Result<ls::Module, String> {
-        let m: ls::Module = m.into();
+    pub fn link(m: ss::Program) -> Result<ls::Program, String> {
+        let m: ls::Program = m.into();
         Ok(m)
     }
     pub fn eval_os(
-        m: ls::Module, args: &[String],
-    ) -> Result<ds::Module, String> {
+        p: ls::Program, args: &[String],
+    ) -> Result<ds::Program, String> {
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
         let mut runtime = ds::Runtime::new(&mut input, &mut output, args);
-        let m = ds::Module::new(m, &mut runtime);
-        Ok(m)
+        let p = ds::Program::run(p, &mut runtime);
+        Ok(p)
     }
     pub fn eval_virtual_os(
-        m: ls::Module, r: &mut dyn std::io::BufRead,
+        m: ls::Program, r: &mut dyn std::io::BufRead,
         w: &mut dyn std::io::Write, args: &[String],
-    ) -> Result<ds::Module, String> {
+    ) -> Result<ds::Program, String> {
         let mut runtime = ds::Runtime::new(r, w, args);
-        let m = ds::Module::new(m, &mut runtime);
+        let m = ds::Program::run(m, &mut runtime);
         Ok(m)
     }
 }
@@ -93,10 +93,16 @@ pub struct ZydecoExpr {
 
 impl ZydecoExpr {
     pub fn new() -> Self {
-        // let std = Zydeco::std().unwrap();
-        let ctx = Ctx::default();
-        let env = Env::new();
-        Self { ctx, env }
+        let std = Zydeco::std().unwrap();
+        let std: Span<ss::Module> =
+            std.info.make(std.inner.try_into().unwrap());
+        let Seal(ctx) = std.syn(Ctx::default()).unwrap();
+        let std: ls::Module = std.inner.into();
+        let mut input = std::io::empty();
+        let mut output = std::io::sink();
+        let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);
+        std.eval(&mut runtime);
+        Self { ctx, env: runtime.env }
     }
     pub fn parse(source: &str) -> Result<Span<ps::Term>, String> {
         TermSpanParser::new()
@@ -130,73 +136,13 @@ impl ZydecoExpr {
         let mut output = std::io::sink();
         let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);
         runtime.env = self.env.clone();
-        let m = ds::Module::new(
-            ls::Module { name: None, define: IndexMap::new(), entry: comp },
+        let m = ds::Program::run(
+            ls::Program {
+                module: ls::Module { name: None, define: IndexMap::new() },
+                entry: comp,
+            },
             &mut runtime,
         );
         Ok(m.entry)
     }
 }
-
-// pub fn eval_prog(p: Program, args: &[String]) -> Result<Never, String> {
-//     let mut env = Env::new();
-//     builtins::link_builtin(&mut env);
-//     linker::link(&mut env, &p.decls);
-//     eval_os_computation(*p.comp, env, args)
-// }
-
-// pub fn eval_virtual_prog(
-//     p: Program, mut env: Env, r: &mut dyn std::io::BufRead,
-//     w: &mut dyn std::io::Write, args: &[String],
-// ) -> Result<i32, String> {
-//     linker::link(&mut env, &p.decls);
-//     eval_virtual_os_computation(*p.comp, env, r, w, args)
-// }
-
-// pub fn elab_prog(p: Program) -> ZCompute {
-//     (*p.comp).into()
-// }
-
-// pub fn eval_os_sem_computation(
-//     sem_comp: ZCompute, env: Env, args: &[String],
-// ) -> Result<Never, String> {
-//     let mut input = std::io::BufReader::new(std::io::stdin());
-//     let mut output = std::io::stdout();
-//     let mut runtime = Runtime::new(env, &mut input, &mut output, &args);
-//     match dynamics::eval(sem_comp, &mut runtime) {
-//         Err(Exit::ExitCode(exit_code)) => std::process::exit(exit_code),
-//         Err(Exit::Err(s)) => Err(s),
-//         Ok(_) => unreachable!(),
-//     }
-// }
-
-// pub fn eval_os_computation(
-//     m: Compute, env: Env, args: &[String],
-// ) -> Result<Never, String> {
-//     eval_os_sem_computation(m.into(), env, args)
-// }
-
-// pub fn eval_virtual_os_computation(
-//     m: Compute, env: Env, r: &mut dyn std::io::BufRead,
-//     w: &mut dyn std::io::Write, args: &[String],
-// ) -> Result<i32, String> {
-//     let mut runtime = Runtime::new(env, r, w, args);
-//     match dynamics::eval(m.into(), &mut runtime) {
-//         Err(Exit::Err(s)) => Err(s),
-//         Err(Exit::ExitCode(exit_code)) => Ok(exit_code),
-//         Ok(_) => unreachable!(),
-//     }
-// }
-
-// pub fn eval_returning_computation(
-//     m: Compute, env: Env,
-// ) -> Result<ZValue, String> {
-//     let sem_comp: ZCompute = m.into();
-//     let mut input = std::io::empty();
-//     let mut output = std::io::sink();
-//     let mut runtime = Runtime::new(env, &mut input, &mut output, &[]);
-//     dynamics::eval(sem_comp, &mut runtime).map_err(|e| match e {
-//         Exit::Err(s) => s,
-//         Exit::ExitCode(_) => unreachable!(),
-//     })
-// }

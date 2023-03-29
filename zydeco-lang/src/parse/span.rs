@@ -229,8 +229,18 @@ impl SpanHolder for syn::Module {
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let syn::Module { name: _, declarations, entry } = self;
+        let syn::Module { name: _, declarations } = self;
         declarations.span_map_mut(f.clone());
+    }
+}
+
+impl SpanHolder for syn::Program {
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        let syn::Program { module, entry } = self;
+        module.span_map_mut(f.clone());
         entry.span_map_mut(f);
     }
 }

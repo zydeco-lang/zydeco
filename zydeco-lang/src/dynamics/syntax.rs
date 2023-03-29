@@ -70,5 +70,10 @@ pub struct Runtime<'rt> {
 #[derive(Clone)]
 pub struct Module {
     pub name: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct Program {
+    pub module: Module,
     pub entry: ProgKont,
 }

@@ -3,6 +3,15 @@ use crate::rc;
 use crate::statics::syntax as ss;
 use indexmap::IndexMap;
 
+impl From<ss::Program> for Program {
+    fn from(p: ss::Program) -> Self {
+        let ss::Program { module, entry } = p;
+        let module = module.inner().into();
+        let entry = entry.inner_ref().into();
+        Self { module, entry }
+    }
+}
+
 impl From<ss::Module> for Module {
     fn from(m: ss::Module) -> Self {
         let mut define = IndexMap::new();
@@ -24,7 +33,7 @@ impl From<ss::Module> for Module {
         {
             define.insert(name, def.inner_ref().into());
         }
-        Self { name: m.name, define, entry: m.entry.inner_ref().into() }
+        Self { name: m.name, define }
     }
 }
 
