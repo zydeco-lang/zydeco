@@ -48,9 +48,8 @@ fn pure_test(f: &str) -> Result<(), String> {
                 ss::Term::Computation(comp) => {
                     let comp = term.info.make(comp);
                     zydeco_expr.tyck_computation(comp.clone())?;
-                    let comp =
-                        zydeco_expr.link_computation(comp.inner_ref())?;
-                    let comp = zydeco_expr.eval_ret_computation(comp)?;
+                    let comp = ZydecoExpr::link_computation(comp.inner_ref());
+                    let comp = zydeco_expr.eval_ret_computation(comp);
                     match comp {
                         ds::ProgKont::Ret(value) => {
                             println!("{}", value.fmt());

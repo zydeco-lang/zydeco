@@ -1,5 +1,10 @@
 #![allow(unused)]
-use zydeco_lang::{statics::syntax as ss, zydeco::ZydecoExpr};
+use zydeco_lang::{
+    dynamics::syntax as ds,
+    statics::syntax as ss,
+    utils::{fmt::FmtArgs, span::SpanView},
+    zydeco::ZydecoExpr,
+};
 
 pub fn launch() -> Result<(), String> {
     println!("Zydeco v0.0.1");
@@ -11,7 +16,11 @@ pub fn launch() -> Result<(), String> {
             print!("> ");
             std::io::stdout().flush().unwrap();
             let stdin = std::io::stdin();
-            stdin.read_line(&mut line).map_err(|e| e.to_string())?;
+            let n = stdin.read_line(&mut line).map_err(|e| e.to_string())?;
+            // Ctrl-D to exit
+            if n == 0 {
+                break Ok(());
+            }
         }
         let term = match ZydecoExpr::parse(&line) {
             Err(e) => {
@@ -27,18 +36,35 @@ pub fn launch() -> Result<(), String> {
             },
         };
         match term.inner_ref() {
-            ss::Term::Value(v) => todo!(),
-            ss::Term::Computation(_) => todo!(),
+            ss::Term::Value(v) => {
+                match zydeco_expr.tyck_value(term.span().make(v.clone())) {
+                    Err(e) => println!("Type Error: {}", e),
+                    Ok(ty) => {
+                        let v = ZydecoExpr::link_value(v);
+                        let v = zydeco_expr.eval_value(v);
+                        println!("{} :: {}", v.fmt(), ty.fmt())
+                    }
+                }
+            }
+            ss::Term::Computation(c) => {
+                match zydeco_expr.tyck_computation(term.span().make(c.clone()))
+                {
+                    Err(e) => println!("Type Error: {}", e),
+                    Ok(ty) => {
+                        let c = ZydecoExpr::link_computation(c);
+                        let c = zydeco_expr.eval_ret_computation(c);
+                        match c {
+                            ds::ProgKont::Ret(value) => {
+                                println!("{} :: {}", value.fmt(), ty.fmt())
+                            }
+                            ds::ProgKont::ExitCode(i) => {
+                                println!("exited with code {}", i)
+                            }
+                        }
+                    }
+                }
+            }
         }
-        // Ok(Span { inner: Term::Value(v), info }) => {
-        //     match zydeco::typecheck_value(&v, &ctx) {
-        //         Err(e) => println!("Type Error: {}", e),
-        //         Ok(a) => {
-        //             let sem_v: ZValue = v.into();
-        //             println!("{} : {}", sem_v, a)
-        //         }
-        //     }
-        // }
         // Ok(Span { inner: Term::Computation(m), info }) => {
         //     match zydeco::typecheck_computation(&m, &ctx) {
         //         Err(e) => println!("Type Error: {}", e),

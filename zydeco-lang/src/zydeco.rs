@@ -113,25 +113,30 @@ impl ZydecoExpr {
         let v: ss::Term = val.inner.try_into().unwrap();
         Ok(val.info.make(v))
     }
-    pub fn tyck_value(&self, val: Span<ss::TermValue>) -> Result<(), String> {
-        val.syn(self.ctx.clone()).map_err(|e| format!("{}", e))?;
-        Ok(())
+    pub fn tyck_value(
+        &self, val: Span<ss::TermValue>,
+    ) -> Result<ss::Type, String> {
+        val.syn(self.ctx.clone()).map_err(|e| format!("{}", e))
     }
     pub fn tyck_computation(
         &self, comp: Span<ss::TermComputation>,
-    ) -> Result<(), String> {
-        comp.syn(self.ctx.clone()).map_err(|e| format!("{}", e))?;
-        Ok(())
+    ) -> Result<ss::Type, String> {
+        comp.syn(self.ctx.clone()).map_err(|e| format!("{}", e))
     }
-    pub fn link_computation(
-        &self, comp: &ss::TermComputation,
-    ) -> Result<ls::ZComp, String> {
-        let comp: ls::ZComp = comp.into();
-        Ok(comp)
+    pub fn link_value(val: &ss::TermValue) -> ls::ZVal {
+        val.into()
     }
-    pub fn eval_ret_computation(
-        &mut self, comp: ls::ZComp,
-    ) -> Result<ds::ProgKont, String> {
+    pub fn link_computation(comp: &ss::TermComputation) -> ls::ZComp {
+        comp.into()
+    }
+    pub fn eval_value(&mut self, val: ls::ZVal) -> ds::SemVal {
+        let mut input = std::io::empty();
+        let mut output = std::io::sink();
+        let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);
+        runtime.env = self.env.clone();
+        val.eval(&mut runtime)
+    }
+    pub fn eval_ret_computation(&mut self, comp: ls::ZComp) -> ds::ProgKont {
         let mut input = std::io::empty();
         let mut output = std::io::sink();
         let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);
@@ -143,6 +148,6 @@ impl ZydecoExpr {
             },
             &mut runtime,
         );
-        Ok(m.entry)
+        m.entry
     }
 }
