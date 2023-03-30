@@ -3,12 +3,8 @@ use crate::utils::fmt::*;
 
 impl FmtArgs for Type {
     fn fmt_args(&self, fargs: Args) -> String {
-        let app = self.app.fmt_args(fargs);
-        if let Some(kd) = &self.kd {
-            format!("({} :: {})", app, kd.fmt_args(fargs))
-        } else {
-            app
-        }
+        let app = self.synty.fmt_args(fargs);
+        app
     }
 }
 

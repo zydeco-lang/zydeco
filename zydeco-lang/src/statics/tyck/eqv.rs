@@ -26,8 +26,8 @@ impl Eqv for Type {
         &self, other: &Self, ctx: Ctx,
         f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
-        let lhs = self.head_reduction()?;
-        let rhs = other.head_reduction()?;
+        let lhs = &self.synty;
+        let rhs = &other.synty;
         // both stuck type variable and type constructor
         bool_test(lhs.tvar == rhs.tvar, f.clone())?;
         // argument length must be equal
@@ -57,7 +57,7 @@ impl Monoid for Env<TypeV, Type> {
             }
         }
         for (x, ty) in ori {
-            new.insert(x, ty.subst(self.clone()));
+            new.insert(x, ty.subst(self.clone()).unwrap());
         }
         new
     }

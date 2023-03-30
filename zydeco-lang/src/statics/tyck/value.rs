@@ -34,7 +34,7 @@ impl TypeCheck for Span<TermValue> {
                     .ok_or(self.span().make(UnboundVar { var: x.clone() }))?,
             ),
             TermValue::Thunk(Thunk(c)) => {
-                let c = c.syn(ctx)?.head_reduction()?;
+                let c = c.syn(ctx)?;
                 Step::Done(Type::make_thunk(rc!(self.span().make(c.into()))))
                 // Err(self
                 //     .span()
@@ -54,7 +54,7 @@ impl TypeCheck for Span<TermValue> {
             .ensure(&Kind::VType, "ana value")?;
         Ok(match self.inner_ref() {
             TermValue::Thunk(Thunk(c)) => {
-                let app = typ.head_reduction()?;
+                let app = &typ.synty;
                 let typ_comp = app.elim_thunk().ok_or_else(|| {
                     self.span().make(TypeExpected {
                         context: format!("thunk"),
@@ -66,7 +66,7 @@ impl TypeCheck for Span<TermValue> {
                 Step::Done(typ)
             }
             TermValue::Ctor(Ctor { ctor, args }) => {
-                let ty_app = typ.head_reduction()?;
+                let ty_app = &typ.synty;
                 let tvar = &ty_app.tvar;
                 let Data { name, params, ctors } =
                     ctx.data_ctx.get(tvar).cloned().ok_or_else(|| {
@@ -102,7 +102,7 @@ impl TypeCheck for Span<TermValue> {
                 })?;
                 for (arg, ty) in args.iter().zip(tys.iter()) {
                     arg.ana(
-                        ty.inner_ref().to_owned().subst(diff.clone()),
+                        ty.inner_ref().to_owned().subst(diff.clone())?,
                         ctx.clone(),
                     )?;
                 }

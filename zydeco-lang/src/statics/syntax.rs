@@ -1,4 +1,3 @@
-use crate::syntax::env::Env;
 use crate::utils::span::{span, Span};
 use std::rc::Rc;
 use zydeco_derive::EnumGenerator;
@@ -13,9 +12,7 @@ pub use crate::syntax::Kind;
 
 #[derive(Clone, Debug)]
 pub struct Type {
-    pub app: TypeApp<TypeV, RcType>,
-    pub kd: Option<Kind>,
-    pub env: Env<TypeV, Type>,
+    pub synty: TypeApp<TypeV, RcType>,
 }
 pub type RcType = Rc<Span<Type>>;
 impl TypeT for Type {}
@@ -52,7 +49,7 @@ impl TypeApp<TypeV, RcType> {
 }
 impl From<TypeApp<TypeV, RcType>> for Type {
     fn from(app: TypeApp<TypeV, RcType>) -> Self {
-        Self { app, kd: None, env: Env::new() }
+        Self { synty: app }
     }
 }
 

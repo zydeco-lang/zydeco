@@ -110,7 +110,7 @@ impl TryFrom<ps::Type> for Type {
                 let ps::TypeApp(t1, t2) = t;
                 let mut t1: Type = TryInto::try_into(t1.inner())?;
                 let t2 = t2.try_map(TryInto::try_into)?;
-                t1.app.args.push(rc!(t2));
+                t1.synty.args.push(rc!(t2));
                 t1
             }
             ps::Type::Arrow(t) => {
@@ -222,7 +222,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let mut body: TermComputation = Rec { var, body }.into();
                 if let Some(ty) = ty {
                     let ty: Span<Type> = ty.try_map(TryInto::try_into)?;
-                    let Some(ty) = ty.inner.app.elim_thunk() else {
+                    let Some(ty) = ty.inner.synty.elim_thunk() else {
                         Err(TypeCheckError::TypeExpected {
                             context: format!("elaborating recursion"),
                             expected: format!("{{a}}"),

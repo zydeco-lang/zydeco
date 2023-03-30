@@ -19,14 +19,14 @@ impl TypeCheck for Span<TermComputation> {
                 // Err(self
                 // .span()
                 // .make(NeedAnnotation { content: format!("ret") }))?
-                let app_body = v.syn(ctx.clone())?.head_reduction()?;
+                let app_body = v.syn(ctx.clone())?;
                 let ty_body: Type = app_body.into();
                 let kd = self.span().make(ty_body.clone()).syn(ctx)?;
                 self.span().make(kd).ensure(&Kind::VType, "force")?;
                 Step::Done(Type::make_ret(rc!(self.span().make(ty_body))))
             }
             TermComputation::Force(Force(v)) => {
-                let app_body = v.syn(ctx.clone())?.head_reduction()?;
+                let app_body = v.syn(ctx.clone())?.synty;
                 let ty_body = app_body.elim_thunk().ok_or_else(|| {
                     self.span().make(TypeExpected {
                         context: format!("force"),
@@ -49,7 +49,7 @@ impl TypeCheck for Span<TermComputation> {
                 let ty_comp = comp.syn(ctx.clone())?;
                 let kd = self.span().make(ty_comp.clone()).syn(ctx.clone())?;
                 self.span().make(kd).ensure(&Kind::CType, "do")?;
-                let ty_app = ty_comp.head_reduction()?;
+                let ty_app = &ty_comp.synty;
                 let ty_val = ty_app.elim_ret().ok_or_else(|| {
                     self.span().make(TypeExpected {
                         context: format!("do"),
@@ -67,7 +67,7 @@ impl TypeCheck for Span<TermComputation> {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 let kd = self.span().make(ty_scrut.clone()).syn(ctx.clone())?;
                 self.span().make(kd).ensure(&Kind::VType, "match")?;
-                let ty_app = ty_scrut.head_reduction()?;
+                let ty_app = ty_scrut.synty;
                 let tvar = ty_app.tvar;
                 let Data { name, params, ctors } =
                     ctx.data_ctx.get(&tvar).cloned().ok_or_else(|| {
@@ -102,7 +102,7 @@ impl TypeCheck for Span<TermComputation> {
                     });
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
-                        ctx.term_ctx.insert(var.to_owned(), ty);
+                        ctx.term_ctx.insert(var.to_owned(), ty?);
                     }
                     let ty = body.syn(ctx.clone())?;
                     let span = body.span();
@@ -142,7 +142,7 @@ impl TypeCheck for Span<TermComputation> {
                 .span()
                 .make(NeedAnnotation { content: format!("comatch") }))?,
             TermComputation::Dtor(Dtor { body, dtor, args }) => {
-                let ty_app = body.syn(ctx.clone())?.head_reduction()?;
+                let ty_app = body.syn(ctx.clone())?.synty;
                 let tvar = ty_app.tvar;
                 let Codata { name, params, dtors } =
                     ctx.coda_ctx.get(&tvar).cloned().ok_or_else(|| {
@@ -182,11 +182,11 @@ impl TypeCheck for Span<TermComputation> {
                 })?;
                 for (arg, ty) in args.iter().zip(tys.iter()) {
                     arg.ana(
-                        ty.inner_ref().to_owned().subst(diff.clone()),
+                        ty.inner_ref().to_owned().subst(diff.clone())?,
                         ctx.clone(),
                     )?;
                 }
-                Step::Done(ty.inner_ref().to_owned().subst(diff))
+                Step::Done(ty.inner_ref().to_owned().subst(diff)?)
             }
         })
     }
@@ -198,7 +198,7 @@ impl TypeCheck for Span<TermComputation> {
             .ensure(&Kind::CType, "ana computation")?;
         Ok(match self.inner_ref() {
             TermComputation::Ret(Ret(v)) => {
-                let ty_app = typ.head_reduction()?;
+                let ty_app = &typ.synty;
                 let ty_body = ty_app.elim_ret().ok_or_else(|| {
                     self.span().make(TypeExpected {
                         context: format!("ret"),
@@ -229,7 +229,7 @@ impl TypeCheck for Span<TermComputation> {
                 let ty_comp = comp.syn(ctx.clone())?;
                 let kd = self.span().make(ty_comp.clone()).syn(ctx.clone())?;
                 self.span().make(kd).ensure(&Kind::CType, "do")?;
-                let ty_app = ty_comp.head_reduction()?;
+                let ty_app = &ty_comp.synty;
                 let ty_val = ty_app.elim_ret().ok_or_else(|| {
                     self.span().make(TypeExpected {
                         context: format!("do"),
@@ -251,7 +251,7 @@ impl TypeCheck for Span<TermComputation> {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 let kd = self.span().make(ty_scrut.clone()).syn(ctx.clone())?;
                 self.span().make(kd).ensure(&Kind::VType, "match")?;
-                let ty_app = ty_scrut.head_reduction()?;
+                let ty_app = ty_scrut.synty;
                 let tvar = ty_app.tvar;
                 let Data { name, params, ctors } =
                     ctx.data_ctx.get(&tvar).cloned().ok_or_else(|| {
@@ -285,7 +285,7 @@ impl TypeCheck for Span<TermComputation> {
                     });
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
-                        ctx.term_ctx.insert(var.to_owned(), ty);
+                        ctx.term_ctx.insert(var.to_owned(), ty?);
                     }
                     body.ana(typ.clone(), ctx.clone())?;
                 }
@@ -302,13 +302,15 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::CoMatch(CoMatch { arms }) => {
-                let ty_app = typ.head_reduction()?;
-                let tvar = ty_app.tvar;
+                let ty_app = &typ.synty;
+                let tvar = &ty_app.tvar;
                 let Codata { name, params, dtors } =
                     ctx.coda_ctx.get(&tvar).cloned().ok_or_else(|| {
                         self.span().make(
-                            NameResolveError::UnboundTypeVariable { tvar }
-                                .into(),
+                            NameResolveError::UnboundTypeVariable {
+                                tvar: tvar.clone(),
+                            }
+                            .into(),
                         )
                     })?;
                 // arity check on codata type
@@ -340,9 +342,9 @@ impl TypeCheck for Span<TermComputation> {
                     let ty = ty.inner_ref().to_owned().subst(diff.clone());
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
-                        ctx.term_ctx.insert(var.to_owned(), ty);
+                        ctx.term_ctx.insert(var.to_owned(), ty?);
                     }
-                    body.ana(ty, ctx)?;
+                    body.ana(ty?, ctx)?;
                 }
                 let dtorv_set_coda: HashSet<DtorV> =
                     dtors.keys().cloned().collect();
