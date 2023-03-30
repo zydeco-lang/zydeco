@@ -6,7 +6,7 @@ use zydeco_lang::{
     zydeco::ZydecoExpr,
 };
 
-pub fn launch() -> Result<(), String> {
+pub fn launch() -> Result<i32, String> {
     println!("Zydeco v0.0.1");
     let mut zydeco_expr = ZydecoExpr::new();
     loop {
@@ -19,7 +19,7 @@ pub fn launch() -> Result<(), String> {
             let n = stdin.read_line(&mut line).map_err(|e| e.to_string())?;
             // Ctrl-D to exit
             if n == 0 {
-                break Ok(());
+                break Ok(0);
             }
         }
         let term = match ZydecoExpr::parse(&line) {

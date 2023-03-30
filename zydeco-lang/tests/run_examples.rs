@@ -142,6 +142,7 @@ mod batch_tests {
     mk_batch_test!(fn_opt, "fn-opt.zy");
     mk_batch_test!(abort, "abort.zy");
     mk_batch_test!(choice, "choice.zy");
+    mk_batch_test!(forall, "forall.zy");
 }
 mod pure_tests {
     use super::*;

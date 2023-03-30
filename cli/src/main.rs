@@ -1,8 +1,10 @@
 use clap::Parser;
 use cli::{Cli, Commands};
-use zydeco_lang::{utils::fmt::FmtArgs, zydeco::ZydecoFile};
+use zydeco_lang::{
+    dynamics::syntax::ProgKont, utils::fmt::FmtArgs, zydeco::ZydecoFile,
+};
 
-fn main() {
+fn main() -> Result<(), ()> {
     let res = match Cli::parse().command {
         Commands::Run { file, dry, verbose, args } => {
             run_file(file, dry, verbose, args)
@@ -13,16 +15,19 @@ fn main() {
         Commands::Repl { .. } => cli::repl::launch(),
     };
     match res {
-        Ok(()) => {}
+        Ok(x) => {
+            std::process::exit(x);
+        }
         Err(e) => {
             eprintln!("Error: {}", e);
+            Err(())
         }
     }
 }
 
 fn run_file(
     file: std::path::PathBuf, dry_run: bool, verbose: bool, args: Vec<String>,
-) -> Result<(), String> {
+) -> Result<i32, String> {
     let title = &format!("{}", file.display());
     // parse
     announce_phase(verbose, title, "parse");
@@ -43,9 +48,13 @@ fn run_file(
     // eval
     if !dry_run {
         announce_phase(verbose, title, "eval");
-        ZydecoFile::eval_os(sem_m, &args)?;
+        let res = ZydecoFile::eval_os(sem_m, &args)?;
+        let ProgKont::ExitCode(x) = res.entry else {
+            Err("Program did not exit".to_string())?
+        };
+        return Ok(x);
     }
-    Ok(())
+    Ok(0)
 }
 
 fn announce_phase(verbose: bool, title: &str, phase: &str) {

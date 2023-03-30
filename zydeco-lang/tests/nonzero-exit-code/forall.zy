@@ -4,4 +4,5 @@ def id : Thunk(forall (A : VType) . A -> Ret A) = {
   )
 } end
 
-! id @(Int) 1
+do x <- ! id @(Int) 0;
+! exit x
