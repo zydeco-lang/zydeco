@@ -127,7 +127,16 @@ impl TryFrom<ps::Type> for Type {
                 let t2 = t2.try_map(TryInto::try_into)?;
                 Type::internal("Fn", vec![rc!(t1), rc!(t2)])
             }
-            ps::Type::Forall(_) => todo!(),
+            ps::Type::Forall(ps::Forall(params, t)) => {
+                let mut t = t.try_map(TryInto::try_into)?;
+                for (param, kd) in params.into_iter().rev() {
+                    t = t
+                        .span()
+                        .clone()
+                        .make(Forall { param, kd, ty: rc!(t) }.into())
+                }
+                t.inner
+            }
             ps::Type::Exists(_) => todo!(),
         })
     }

@@ -17,6 +17,9 @@ pub struct Type {
 #[derive(EnumGenerator, Clone, Debug)]
 pub enum SynType {
     TypeApp(TypeApp<TypeV, RcType>),
+    Forall(Forall<TypeV, Kind, RcType>),
+    Exists(Exists<TypeV, Kind, RcType>),
+    Abstract(usize),
 }
 pub type RcType = Rc<Span<Type>>;
 impl TypeT for Type {}
@@ -61,6 +64,9 @@ macro_rules! impl_from {
     };
 }
 impl_from!(TypeApp<TypeV, RcType>);
+impl_from!(Forall<TypeV, Kind, RcType>);
+impl_from!(Exists<TypeV, Kind, RcType>);
+impl_from!(usize);
 
 /* ---------------------------------- Term ---------------------------------- */
 

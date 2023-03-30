@@ -28,7 +28,7 @@ impl Eqv for Type {
     ) -> Result<(), Span<TypeCheckError>> {
         match (&self.synty, &other.synty) {
             (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
-                // both stuck type variable and type constructor
+                // both type variable or type constructor
                 bool_test(lhs.tvar == rhs.tvar, f.clone())?;
                 // argument length must be equal
                 bool_test(lhs.args.len() == rhs.args.len(), f.clone())?;
@@ -42,6 +42,42 @@ impl Eqv for Type {
                 }
                 Ok(())
             }
+            (SynType::Forall(lhs), SynType::Forall(rhs)) => {
+                // both forall
+                bool_test(lhs.kd == rhs.kd, f.clone())?;
+                let mut ctx = ctx.clone();
+                let abst_var = ctx.abst_ctx.len();
+                ctx.abst_ctx.insert(abst_var, lhs.kd.clone());
+                let lhs_ty = lhs.ty.inner_ref().clone().subst(
+                    Env::from_iter([(lhs.param.clone(), abst_var.into())]),
+                )?;
+                let rhs_ty = rhs.ty.inner_ref().clone().subst(
+                    Env::from_iter([(rhs.param.clone(), abst_var.into())]),
+                )?;
+                lhs_ty.eqv(&rhs_ty, ctx, f)
+            }
+            (SynType::Exists(lhs), SynType::Exists(rhs)) => {
+                // both exists
+                bool_test(lhs.kd == rhs.kd, f.clone())?;
+                let mut ctx = ctx.clone();
+                let abst_var = ctx.abst_ctx.len();
+                ctx.abst_ctx.insert(abst_var, lhs.kd.clone());
+                let lhs_ty = lhs.ty.inner_ref().clone().subst(
+                    Env::from_iter([(lhs.param.clone(), abst_var.into())]),
+                )?;
+                let rhs_ty = rhs.ty.inner_ref().clone().subst(
+                    Env::from_iter([(rhs.param.clone(), abst_var.into())]),
+                )?;
+                lhs_ty.eqv(&rhs_ty, ctx, f)
+            }
+            (SynType::Abstract(lhs), SynType::Abstract(rhs)) => {
+                // both abstract
+                bool_test(lhs == rhs, f)
+            }
+            (SynType::TypeApp(_), _)
+            | (SynType::Forall(_), _)
+            | (SynType::Exists(_), _)
+            | (SynType::Abstract(_), _) => Err(f()),
         }
     }
 }

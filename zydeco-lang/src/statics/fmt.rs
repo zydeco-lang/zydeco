@@ -11,6 +11,9 @@ impl FmtArgs for SynType {
     fn fmt_args(&self, fargs: Args) -> String {
         match self {
             SynType::TypeApp(t) => t.fmt_args(fargs),
+            SynType::Forall(t) => t.fmt_args(fargs),
+            SynType::Exists(t) => t.fmt_args(fargs),
+            SynType::Abstract(t) => format!("${}", t),
         }
     }
 }

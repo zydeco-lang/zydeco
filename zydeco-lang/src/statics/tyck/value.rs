@@ -65,6 +65,13 @@ impl TypeCheck for Span<TermValue> {
                     c.ana(typ_comp, ctx)?;
                     Step::Done(typ)
                 }
+                SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                    Err(self.span().make(TypeExpected {
+                        context: format!("thunk"),
+                        expected: format!("{{a}}"),
+                        found: typ.to_owned(),
+                    }))?
+                }
             },
             TermValue::Ctor(Ctor { ctor, args }) => match &typ.synty {
                 SynType::TypeApp(ty_app) => {
@@ -111,6 +118,13 @@ impl TypeCheck for Span<TermValue> {
                         )?;
                     }
                     Step::Done(typ)
+                }
+                SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                    Err(self.span().make(TypeExpected {
+                        context: format!("ctor"),
+                        expected: format!("{{a}}"),
+                        found: typ.to_owned(),
+                    }))?
                 }
             },
             TermValue::TermAnn(_)
