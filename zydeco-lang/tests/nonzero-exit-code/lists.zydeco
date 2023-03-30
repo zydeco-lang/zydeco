@@ -1,19 +1,19 @@
-let rec foldl : List String -> Thunk(String -> Int -> Ret(Int)) -> Int -> Ret(Int) =
-  fn l step s ->
+let rec foldl : forall (A : VType) (R : VType) . List A -> Thunk(A -> R -> Ret(R)) -> R -> Ret(R) =
+  fn (A : VType) (R : VType) -> fn l step s ->
     match l
     | Nil() -> ret s
     | Cons(x, xs) -> (
       do s' <- ! step x s;
-      ! foldl xs step s'
+      ! foldl @(A) @(R) xs step s'
     )
     end
 in
 
-do l <- ! foldl (Cons("abc", Cons("", Cons("y", Nil()))))
-                { fn (s : String) (i : Int) ->
-                  do i' <- ! str_length s;
-                  ! add i i'
-                }
-                0;
+do l <- ! foldl @(String) @(Int) (Cons("abc", Cons("", Cons("y", Nil()))))
+                                 { fn s i ->
+                                   do i' <- ! str_length s;
+                                   ! add i i'
+                                 }
+                                 0;
 do s <- ! int_to_str l;
 ! write_line s { ! exit 0 }
