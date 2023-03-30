@@ -108,10 +108,18 @@ impl TryFrom<ps::Type> for Type {
             }
             ps::Type::App(t) => {
                 let ps::TypeApp(t1, t2) = t;
-                let mut t1: Type = TryInto::try_into(t1.inner())?;
+                let t1: Type = TryInto::try_into(t1.inner())?;
                 let t2 = t2.try_map(TryInto::try_into)?;
-                t1.synty.args.push(rc!(t2));
-                t1
+                #[allow(irrefutable_let_patterns)]
+                let SynType::TypeApp(mut t1) = t1.synty else {
+                     Err(TypeCheckError::KindMismatch {
+                        context: format!("desugaring type application"),
+                        expected: Kind::CType,
+                        found: Kind::VType,
+                    })?
+                };
+                t1.args.push(rc!(t2));
+                t1.into()
             }
             ps::Type::Arrow(t) => {
                 let ps::Arrow(t1, t2) = t;
@@ -222,11 +230,20 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let mut body: TermComputation = Rec { var, body }.into();
                 if let Some(ty) = ty {
                     let ty: Span<Type> = ty.try_map(TryInto::try_into)?;
-                    let Some(ty) = ty.inner.synty.elim_thunk() else {
+                    let ty_ = ty.inner.clone();
+                    #[allow(irrefutable_let_patterns)]
+                    let SynType::TypeApp(ty_app) = ty.inner.synty else {
                         Err(TypeCheckError::TypeExpected {
                             context: format!("elaborating recursion"),
                             expected: format!("{{a}}"),
-                            found: ty.inner
+                            found: ty_.clone()
+                        })?
+                    };
+                    let Some(ty) = ty_app.elim_thunk() else {
+                        Err(TypeCheckError::TypeExpected {
+                            context: format!("elaborating recursion"),
+                            expected: format!("{{a}}"),
+                            found: ty_
                         })?
                     };
                     body = TermAnn {

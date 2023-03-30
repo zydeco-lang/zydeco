@@ -3,8 +3,15 @@ use crate::utils::fmt::*;
 
 impl FmtArgs for Type {
     fn fmt_args(&self, fargs: Args) -> String {
-        let app = self.synty.fmt_args(fargs);
-        app
+        self.synty.fmt_args(fargs)
+    }
+}
+
+impl FmtArgs for SynType {
+    fn fmt_args(&self, fargs: Args) -> String {
+        match self {
+            SynType::TypeApp(t) => t.fmt_args(fargs),
+        }
     }
 }
 

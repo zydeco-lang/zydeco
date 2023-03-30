@@ -252,11 +252,16 @@ impl TypeCheck for Span<Program> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         let Program { module, entry } = self.inner_ref();
         let Seal(ctx) = module.syn(ctx)?;
-        let ty_app = entry.syn(ctx.to_owned())?.synty;
-        if !(ty_app.tvar.name() == "OS") {
-            Err(self.span().make(WrongMain { found: ty_app.clone().into() }))?
-        };
-        Ok(Step::Done(Seal((ctx, ty_app.into()))))
+        match entry.syn(ctx.to_owned())?.synty {
+            SynType::TypeApp(ty_app) => {
+                if !(ty_app.tvar.name() == "OS") {
+                    Err(self
+                        .span()
+                        .make(WrongMain { found: ty_app.clone().into() }))?
+                };
+                Ok(Step::Done(Seal((ctx, ty_app.into()))))
+            }
+        }
     }
 }
 

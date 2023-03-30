@@ -53,61 +53,66 @@ impl TypeCheck for Span<TermValue> {
         span.make(span.make(typ.clone()).syn(ctx.clone())?)
             .ensure(&Kind::VType, "ana value")?;
         Ok(match self.inner_ref() {
-            TermValue::Thunk(Thunk(c)) => {
-                let app = &typ.synty;
-                let typ_comp = app.elim_thunk().ok_or_else(|| {
-                    self.span().make(TypeExpected {
-                        context: format!("thunk"),
-                        expected: format!("{{a}}"),
-                        found: typ.to_owned(),
-                    })
-                })?;
-                c.ana(typ_comp, ctx)?;
-                Step::Done(typ)
-            }
-            TermValue::Ctor(Ctor { ctor, args }) => {
-                let ty_app = &typ.synty;
-                let tvar = &ty_app.tvar;
-                let Data { name, params, ctors } =
-                    ctx.data_ctx.get(tvar).cloned().ok_or_else(|| {
-                        self.span().make(NameResolve(
-                            NameResolveError::UnboundTypeVariable {
-                                tvar: tvar.to_owned(),
-                            },
-                        ))
+            TermValue::Thunk(Thunk(c)) => match &typ.synty {
+                SynType::TypeApp(ty_app) => {
+                    let typ_comp = ty_app.elim_thunk().ok_or_else(|| {
+                        self.span().make(TypeExpected {
+                            context: format!("thunk"),
+                            expected: format!("{{a}}"),
+                            found: typ.to_owned(),
+                        })
                     })?;
-                let diff = Env::init(&params, &ty_app.args, || {
-                    self.span().make(ArityMismatch {
-                        context: format!("data type `{}` instiantiation", name),
-                        expected: params.len(),
-                        found: ty_app.args.len(),
-                    })
-                })?;
-                let DataBr(_, tys) = ctors
-                    .into_iter()
-                    .find(|DataBr(ctorv, _)| ctorv == ctor)
-                    .ok_or_else(|| {
-                        self.span().make(NameResolve(
-                            NameResolveError::UnknownConstructor {
-                                ctor: ctor.to_owned(),
-                            },
-                        ))
-                    })?;
-                bool_test(args.len() == tys.len(), || {
-                    self.span().make(ArityMismatch {
-                        context: format!("ctor"),
-                        expected: tys.len(),
-                        found: args.len(),
-                    })
-                })?;
-                for (arg, ty) in args.iter().zip(tys.iter()) {
-                    arg.ana(
-                        ty.inner_ref().to_owned().subst(diff.clone())?,
-                        ctx.clone(),
-                    )?;
+                    c.ana(typ_comp, ctx)?;
+                    Step::Done(typ)
                 }
-                Step::Done(typ)
-            }
+            },
+            TermValue::Ctor(Ctor { ctor, args }) => match &typ.synty {
+                SynType::TypeApp(ty_app) => {
+                    let tvar = &ty_app.tvar;
+                    let Data { name, params, ctors } =
+                        ctx.data_ctx.get(tvar).cloned().ok_or_else(|| {
+                            self.span().make(NameResolve(
+                                NameResolveError::UnboundTypeVariable {
+                                    tvar: tvar.to_owned(),
+                                },
+                            ))
+                        })?;
+                    let diff = Env::init(&params, &ty_app.args, || {
+                        self.span().make(ArityMismatch {
+                            context: format!(
+                                "data type `{}` instiantiation",
+                                name
+                            ),
+                            expected: params.len(),
+                            found: ty_app.args.len(),
+                        })
+                    })?;
+                    let DataBr(_, tys) = ctors
+                        .into_iter()
+                        .find(|DataBr(ctorv, _)| ctorv == ctor)
+                        .ok_or_else(|| {
+                            self.span().make(NameResolve(
+                                NameResolveError::UnknownConstructor {
+                                    ctor: ctor.to_owned(),
+                                },
+                            ))
+                        })?;
+                    bool_test(args.len() == tys.len(), || {
+                        self.span().make(ArityMismatch {
+                            context: format!("ctor"),
+                            expected: tys.len(),
+                            found: args.len(),
+                        })
+                    })?;
+                    for (arg, ty) in args.iter().zip(tys.iter()) {
+                        arg.ana(
+                            ty.inner_ref().to_owned().subst(diff.clone())?,
+                            ctx.clone(),
+                        )?;
+                    }
+                    Step::Done(typ)
+                }
+            },
             TermValue::TermAnn(_)
             | TermValue::Var(_)
             | TermValue::Literal(_) => {

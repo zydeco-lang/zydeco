@@ -12,7 +12,11 @@ pub use crate::syntax::Kind;
 
 #[derive(Clone, Debug)]
 pub struct Type {
-    pub synty: TypeApp<TypeV, RcType>,
+    pub synty: SynType,
+}
+#[derive(EnumGenerator, Clone, Debug)]
+pub enum SynType {
+    TypeApp(TypeApp<TypeV, RcType>),
 }
 pub type RcType = Rc<Span<Type>>;
 impl TypeT for Type {}
@@ -47,11 +51,16 @@ impl TypeApp<TypeV, RcType> {
         }
     }
 }
-impl From<TypeApp<TypeV, RcType>> for Type {
-    fn from(app: TypeApp<TypeV, RcType>) -> Self {
-        Self { synty: app }
-    }
+macro_rules! impl_from {
+    ($T:ty) => {
+        impl From<$T> for Type {
+            fn from(app: $T) -> Self {
+                Self { synty: app.into() }
+            }
+        }
+    };
 }
+impl_from!(TypeApp<TypeV, RcType>);
 
 /* ---------------------------------- Term ---------------------------------- */
 

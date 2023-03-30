@@ -26,17 +26,23 @@ impl Eqv for Type {
         &self, other: &Self, ctx: Ctx,
         f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
-        let lhs = &self.synty;
-        let rhs = &other.synty;
-        // both stuck type variable and type constructor
-        bool_test(lhs.tvar == rhs.tvar, f.clone())?;
-        // argument length must be equal
-        bool_test(lhs.args.len() == rhs.args.len(), f.clone())?;
-        // arguments must be equivalent
-        for (ty1, ty2) in lhs.args.iter().zip(rhs.args.iter()) {
-            ty1.inner_ref().eqv(ty2.inner_ref(), ctx.clone(), f.clone())?;
+        match (&self.synty, &other.synty) {
+            (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
+                // both stuck type variable and type constructor
+                bool_test(lhs.tvar == rhs.tvar, f.clone())?;
+                // argument length must be equal
+                bool_test(lhs.args.len() == rhs.args.len(), f.clone())?;
+                // arguments must be equivalent
+                for (ty1, ty2) in lhs.args.iter().zip(rhs.args.iter()) {
+                    ty1.inner_ref().eqv(
+                        ty2.inner_ref(),
+                        ctx.clone(),
+                        f.clone(),
+                    )?;
+                }
+                Ok(())
+            }
         }
-        Ok(())
     }
 }
 
