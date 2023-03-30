@@ -98,6 +98,8 @@ pub enum Tok<'input> {
     Arrow,
     #[token("<-")]
     Assign,
+    #[token("_?")]
+    Underscore,
 
     #[error]
     #[regex(r"#.*\n", logos::skip, priority = 2)]
@@ -153,6 +155,7 @@ impl<'input> Display for Tok<'input> {
             Tok::Dot => write!(f, "."),
             Tok::Arrow => write!(f, "->"),
             Tok::Assign => write!(f, "<-"),
+            Tok::Underscore => write!(f, "_?"),
 
             Tok::Error => write!(f, "Error"),
         }

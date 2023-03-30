@@ -26,6 +26,12 @@ pub struct Ctx {
     pub data_ctx: im::HashMap<TypeV, Data<TypeV, CtorV, RcType>>,
     pub coda_ctx: im::HashMap<TypeV, Codata<TypeV, DtorV, RcType>>,
 }
+impl Ctx {
+    fn fresh(&mut self, kd: Kind) -> Abstract {
+        self.abst_ctx.push_back(kd);
+        Abstract(self.abst_ctx.len() - 1)
+    }
+}
 
 pub trait TypeCheck: SpanView + Sized {
     type Ctx: Default;

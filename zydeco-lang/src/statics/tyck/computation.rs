@@ -564,9 +564,9 @@ impl TypeCheck for Span<TermComputation> {
                                 found: kd.clone(),
                             })
                         })?;
-                        let abst_var = ctx.abst_ctx.len();
-                        ctx.abst_ctx.insert(abst_var, kd.clone());
-                        ctx.type_env.insert(tvar.clone(), abst_var.into());
+                        let abst_var = ctx.fresh(kd.clone());
+                        ctx.type_env
+                            .insert(tvar.clone(), abst_var.clone().into());
                         ty.inner_ref().clone().subst(Env::from_iter([(
                             param.clone(),
                             abst_var.into(),

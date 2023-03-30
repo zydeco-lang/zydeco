@@ -52,7 +52,9 @@ impl TypeCheck for Span<Type> {
                     .ensure(&Kind::VType, "type body")?;
                 Ok(Step::Done(Kind::VType))
             }
-            SynType::Abstract(abs) => Ok(Step::Done(ctx.abst_ctx[*abs])),
+            SynType::Abstract(Abstract(abs)) => {
+                Ok(Step::Done(ctx.abst_ctx[*abs]))
+            }
         }
     }
 }

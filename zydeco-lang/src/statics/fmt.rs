@@ -1,9 +1,9 @@
 use super::syntax::*;
 use crate::utils::fmt::*;
 
-impl FmtArgs for Type {
-    fn fmt_args(&self, fargs: Args) -> String {
-        self.synty.fmt_args(fargs)
+impl FmtArgs for Abstract {
+    fn fmt_args(&self, _fargs: Args) -> String {
+        format!("${}", self.0)
     }
 }
 
@@ -13,8 +13,14 @@ impl FmtArgs for SynType {
             SynType::TypeApp(t) => t.fmt_args(fargs),
             SynType::Forall(t) => t.fmt_args(fargs),
             SynType::Exists(t) => t.fmt_args(fargs),
-            SynType::Abstract(t) => format!("${}", t),
+            SynType::Abstract(t) => t.fmt_args(fargs),
         }
+    }
+}
+
+impl FmtArgs for Type {
+    fn fmt_args(&self, fargs: Args) -> String {
+        self.synty.fmt_args(fargs)
     }
 }
 

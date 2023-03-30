@@ -46,11 +46,12 @@ impl Eqv for Type {
                 // both forall
                 bool_test(lhs.kd == rhs.kd, f.clone())?;
                 let mut ctx = ctx.clone();
-                let abst_var = ctx.abst_ctx.len();
-                ctx.abst_ctx.insert(abst_var, lhs.kd.clone());
-                let lhs_ty = lhs.ty.inner_ref().clone().subst(
-                    Env::from_iter([(lhs.param.clone(), abst_var.into())]),
-                )?;
+                let abst_var = ctx.fresh(lhs.kd.clone());
+                let lhs_ty =
+                    lhs.ty.inner_ref().clone().subst(Env::from_iter([(
+                        lhs.param.clone(),
+                        abst_var.clone().into(),
+                    )]))?;
                 let rhs_ty = rhs.ty.inner_ref().clone().subst(
                     Env::from_iter([(rhs.param.clone(), abst_var.into())]),
                 )?;
@@ -60,11 +61,12 @@ impl Eqv for Type {
                 // both exists
                 bool_test(lhs.kd == rhs.kd, f.clone())?;
                 let mut ctx = ctx.clone();
-                let abst_var = ctx.abst_ctx.len();
-                ctx.abst_ctx.insert(abst_var, lhs.kd.clone());
-                let lhs_ty = lhs.ty.inner_ref().clone().subst(
-                    Env::from_iter([(lhs.param.clone(), abst_var.into())]),
-                )?;
+                let abst_var = ctx.fresh(lhs.kd.clone());
+                let lhs_ty =
+                    lhs.ty.inner_ref().clone().subst(Env::from_iter([(
+                        lhs.param.clone(),
+                        abst_var.clone().into(),
+                    )]))?;
                 let rhs_ty = rhs.ty.inner_ref().clone().subst(
                     Env::from_iter([(rhs.param.clone(), abst_var.into())]),
                 )?;
