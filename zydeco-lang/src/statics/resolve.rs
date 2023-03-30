@@ -12,7 +12,7 @@ pub enum NameResolveError {
     UnknownIdentifier { name: String },
     UnboundTypeVariable { tvar: TypeV },
     UnboundTermVariable { var: TermV },
-    UnknownConstructor { ctor: CtorV },
+    UnknownConstructor { context: String, ctor: CtorV },
     UnknownDestructor { dtor: DtorV },
 }
 use NameResolveError::*;
@@ -52,8 +52,13 @@ impl fmt::Display for NameResolveError {
             UnboundTermVariable { var: name } => {
                 write!(f, "Unbound term variable {}", name)
             }
-            UnknownConstructor { ctor } => {
-                write!(f, "Unknown constructor {}", ctor)
+            UnknownConstructor { context, ctor } => {
+                write!(
+                    f,
+                    "Unknown constructor. In {}, no constructor named {} is found.",
+                    context,
+                    ctor
+                )
             }
             UnknownDestructor { dtor: name } => {
                 write!(f, "Unknown destructor {}", name)

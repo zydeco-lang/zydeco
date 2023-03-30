@@ -295,15 +295,16 @@ impl TypeCheck for Span<TermComputation> {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 match &ty_scrut.synty {
                     SynType::Exists(Exists { param, kd, ty }) => {
-                        ctx.type_ctx.insert(param.clone(), kd.clone().into());
-                        let diff = Env::from_iter([(
-                            param.clone(),
-                            tvar.clone().into(),
-                        )]);
-                        let ty = ty.inner_ref().clone().subst(diff)?;
+                        ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
+                        let ty =
+                            ty.inner_ref().clone().subst(Env::from_iter([
+                                (param.clone(), tvar.clone().into()),
+                            ]))?;
                         ctx.term_ctx.insert(var.clone(), ty);
                         let ty_body = body.syn(ctx.clone())?;
-                        self.span().make(ty_body.clone()).ana(Kind::CType, ctx)?;
+                        self.span()
+                            .make(ty_body.clone())
+                            .ana(Kind::CType, ctx)?;
                         Step::Done(ty_body)
                     }
                     SynType::TypeApp(_)

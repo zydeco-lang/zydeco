@@ -105,6 +105,10 @@ impl TypeCheck for Span<TermValue> {
                         .ok_or_else(|| {
                             self.span().make(NameResolve(
                                 NameResolveError::UnknownConstructor {
+                                    context: format!(
+                                        "data type `{}` instiantiation",
+                                        name
+                                    ),
                                     ctor: ctor.to_owned(),
                                 },
                             ))
@@ -145,10 +149,9 @@ impl TypeCheck for Span<TermValue> {
                 SynType::Exists(Exists { param, kd, ty: ty_body }) => {
                     ty.ana(kd.clone(), ctx.clone())?;
                     let ty_body =
-                        ty.inner_ref().clone().subst(Env::from_iter([(
-                            param.clone(),
-                            ty_body.inner_ref().clone(),
-                        )]))?;
+                        ty_body.inner_ref().clone().subst(Env::from_iter([
+                            (param.clone(), ty.inner_ref().clone()),
+                        ]))?;
                     body.ana(ty_body, ctx)?;
                     Step::Done(typ)
                 }
