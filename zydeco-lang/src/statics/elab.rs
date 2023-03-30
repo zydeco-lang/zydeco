@@ -183,7 +183,7 @@ impl TryFrom<ps::TermValue> for TermValue {
                 .into()
             }
             ps::TermValue::Literal(t) => t.into(),
-            ps::TermValue::ExistsVal(_) => todo!(),
+            ps::TermValue::Pack(_) => todo!(),
         })
     }
 }
@@ -321,7 +321,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     .collect();
                 Dtor { body, dtor, args }.into()
             }
-            ps::TermComputation::TypFun(ps::TypAbs { params, body }) => {
+            ps::TermComputation::TypAbs(ps::TypAbs { params, body }) => {
                 let body = (body).try_map(TryInto::try_into)?;
                 let mut body = body;
                 for (tvar, kd) in params.into_iter().rev() {
@@ -337,7 +337,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let arg = rc!(arg.try_map(TryInto::try_into)?);
                 TypApp { body, arg }.into()
             }
-            ps::TermComputation::MatchExists(_) => todo!(),
+            ps::TermComputation::MatchPack(_) => todo!(),
         })
     }
 }

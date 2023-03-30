@@ -26,6 +26,7 @@ impl FmtArgs for TermValue {
             TermValue::Thunk(t) => t.fmt_args(args),
             TermValue::Ctor(t) => t.fmt_args(args),
             TermValue::Literal(t) => t.fmt_args(args),
+            TermValue::Pack(t) => t.fmt_args(args),
         }
     }
 }
@@ -44,6 +45,7 @@ impl FmtArgs for TermComputation {
             TermComputation::Dtor(t) => t.fmt_args(args),
             TermComputation::TypAbs(t) => t.fmt_args(args),
             TermComputation::TypApp(t) => t.fmt_args(args),
+            TermComputation::MatchPack(t) => t.fmt_args(args),
         }
     }
 }

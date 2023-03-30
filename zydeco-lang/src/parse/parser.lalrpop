@@ -138,7 +138,7 @@ TermValue: TermValue = {
         ctor, args,
     }.into(),
     <Literal> => <>.into(),
-    "pack" "(" <ty:Box<Span<Type>>> "," <body:Box<Span<TermValue>>> ")" => ExistsVal {
+    "pack" "(" <ty:Box<Span<Type>>> "," <body:Box<Span<TermValue>>> ")" => Pack {
         ty, body,
     }.into(),
 };
@@ -171,7 +171,7 @@ TermComputation: TermComputation = {
     "match" <scrut:Box<Span<TermValue>>> 
     "|"? "pack" "(" <tvar:TypeV> "," <var:TermV> ")" "->"
         <body:Box<Span<TermComputation>>> 
-    "end" => MatchExists {
+    "end" => MatchPack {
         scrut, tvar, var, body,
     }.into(),
 };

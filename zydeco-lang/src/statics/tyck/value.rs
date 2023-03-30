@@ -44,6 +44,9 @@ impl TypeCheck for Span<TermValue> {
                 .span()
                 .make(NeedAnnotation { content: format!("ctor") }))?,
             TermValue::Literal(l) => Step::Done(self.span().make(l).syn(())?),
+            TermValue::Pack(_) => Err(self
+                .span()
+                .make(NeedAnnotation { content: format!("pack") }))?,
         })
     }
     fn ana_step(
@@ -65,7 +68,9 @@ impl TypeCheck for Span<TermValue> {
                     c.ana(typ_comp, ctx)?;
                     Step::Done(typ)
                 }
-                SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                SynType::Forall(_)
+                | SynType::Exists(_)
+                | SynType::Abstract(_) => {
                     Err(self.span().make(TypeExpected {
                         context: format!("thunk"),
                         expected: format!("{{a}}"),
@@ -119,7 +124,9 @@ impl TypeCheck for Span<TermValue> {
                     }
                     Step::Done(typ)
                 }
-                SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                SynType::Forall(_)
+                | SynType::Exists(_)
+                | SynType::Abstract(_) => {
                     Err(self.span().make(TypeExpected {
                         context: format!("ctor"),
                         expected: format!("{{a}}"),
@@ -134,6 +141,27 @@ impl TypeCheck for Span<TermValue> {
                 typ.eqv(&typ_syn, ctx, || self.span().make(Subsumption))?;
                 Step::Done(typ)
             }
+            TermValue::Pack(Pack { ty, body }) => match &typ.synty {
+                SynType::Exists(Exists { param, kd, ty: ty_body }) => {
+                    ty.ana(kd.clone(), ctx.clone())?;
+                    let ty_body =
+                        ty.inner_ref().clone().subst(Env::from_iter([(
+                            param.clone(),
+                            ty_body.inner_ref().clone(),
+                        )]))?;
+                    body.ana(ty_body, ctx)?;
+                    Step::Done(typ)
+                }
+                SynType::TypeApp(_)
+                | SynType::Forall(_)
+                | SynType::Abstract(_) => {
+                    Err(self.span().make(TypeExpected {
+                        context: format!("pack"),
+                        expected: format!("{{a}}"),
+                        found: typ.to_owned(),
+                    }))?
+                }
+            },
         })
     }
 }

@@ -180,11 +180,11 @@ pub struct Ctor<C: CtorT, A: ValueT> {
 impl<C: CtorT, A: ValueT> ValueT for Ctor<C, A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExistsVal<Ty: TypeT, A: ValueT> {
+pub struct Pack<Ty: TypeT, A: ValueT> {
     pub ty: Ty,
     pub body: A,
 }
-impl<Ty: TypeT, A: ValueT> ValueT for ExistsVal<Ty, A> {}
+impl<Ty: TypeT, A: ValueT> ValueT for Pack<Ty, A> {}
 
 /* ------------------------------ Computations ------------------------------ */
 
@@ -277,14 +277,14 @@ pub struct TypApp<B: ComputationT, Ty: TypeT> {
 impl<B: ComputationT, Ty: TypeT> ComputationT for TypApp<B, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MatchExists<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> {
+pub struct MatchPack<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> {
     pub scrut: A,
     pub tvar: TyV,
     pub var: TeV,
     pub body: B,
 }
 impl<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> ComputationT
-    for MatchExists<A, TyV, TeV, B>
+    for MatchPack<A, TyV, TeV, B>
 {
 }
 

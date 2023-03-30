@@ -53,6 +53,9 @@ impl From<&ss::TermValue> for ZVal {
                 Ctor { ctor: ctor.clone(), args }.into()
             }
             ss::TermValue::Literal(l) => l.clone().into(),
+            ss::TermValue::Pack(Pack { ty: _, body }) => {
+                body.inner_ref().into()
+            }
         }
     }
 }
@@ -121,6 +124,16 @@ impl From<&ss::TermComputation> for ZComp {
             }
             ss::TermComputation::TypApp(TypApp { body, arg: _ }) => {
                 body.inner_ref().into()
+            }
+            ss::TermComputation::MatchPack(MatchPack {
+                scrut,
+                tvar: _,
+                var,
+                body,
+            }) => {
+                let scrut = rc!(scrut.inner_ref().into());
+                let body = rc!(body.inner_ref().into());
+                Let { var: var.clone(), def: scrut, body }.into()
             }
         }
     }

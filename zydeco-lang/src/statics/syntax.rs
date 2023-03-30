@@ -57,8 +57,8 @@ impl TypeApp<TypeV, RcType> {
 macro_rules! impl_from {
     ($T:ty) => {
         impl From<$T> for Type {
-            fn from(app: $T) -> Self {
-                Self { synty: app.into() }
+            fn from(synty: $T) -> Self {
+                Self { synty: synty.into() }
             }
         }
     };
@@ -67,6 +67,11 @@ impl_from!(TypeApp<TypeV, RcType>);
 impl_from!(Forall<TypeV, Kind, RcType>);
 impl_from!(Exists<TypeV, Kind, RcType>);
 impl_from!(usize);
+impl From<TypeV> for Type {
+    fn from(tvar: TypeV) -> Self {
+        TypeApp { tvar, args: vec![] }.into()
+    }
+}
 
 /* ---------------------------------- Term ---------------------------------- */
 
@@ -77,6 +82,7 @@ pub enum TermValue {
     Thunk(Thunk<RcComp>),
     Ctor(Ctor<CtorV, RcValue>),
     Literal(Literal),
+    Pack(Pack<RcType, RcValue>),
 }
 pub type RcValue = Rc<Span<TermValue>>;
 impl ValueT for TermValue {}
@@ -94,6 +100,7 @@ pub enum TermComputation {
     Dtor(Dtor<RcComp, DtorV, RcValue>),
     TypAbs(TypAbs<TypeV, Kind, RcComp>),
     TypApp(TypApp<RcComp, RcType>),
+    MatchPack(MatchPack<RcValue, TypeV, TermV, RcComp>),
 }
 pub type RcComp = Rc<Span<TermComputation>>;
 impl ComputationT for TermComputation {}

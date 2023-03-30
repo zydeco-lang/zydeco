@@ -168,13 +168,13 @@ where
     }
 }
 
-impl<Ty, A> FmtArgs for ExistsVal<Ty, A>
+impl<Ty, A> FmtArgs for Pack<Ty, A>
 where
     Ty: TypeT + FmtArgs,
     A: ValueT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let ExistsVal { ty, body } = self;
+        let Pack { ty, body } = self;
         format!("exists ({}, {})", ty.fmt_args(fargs), body.fmt_args(fargs))
     }
 }
@@ -380,7 +380,7 @@ where
     }
 }
 
-impl<A, TyV, TeV, B> FmtArgs for MatchExists<A, TyV, TeV, B>
+impl<A, TyV, TeV, B> FmtArgs for MatchPack<A, TyV, TeV, B>
 where
     A: ValueT + FmtArgs,
     TyV: TyVarT + FmtArgs,
@@ -388,7 +388,7 @@ where
     B: ComputationT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let MatchExists { scrut, tvar, var, body } = self;
+        let MatchPack { scrut, tvar, var, body } = self;
         format!(
             "match {} exists {} : {} -> {}",
             scrut.fmt_args(fargs),

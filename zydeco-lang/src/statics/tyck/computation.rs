@@ -264,6 +264,7 @@ impl TypeCheck for Span<TermComputation> {
                 let ty_body = body.syn(ctx.clone())?;
                 match ty_body.synty {
                     SynType::Forall(Forall { param, kd, ty }) => {
+                        arg.ana(kd.clone(), ctx.clone())?;
                         let diff =
                             Env::init(&[(param, kd)], &[arg.clone()], || {
                                 self.span().make(ArityMismatch {
@@ -281,6 +282,37 @@ impl TypeCheck for Span<TermComputation> {
                             context: format!("term-typ-application"),
                             expected: format!("forall,"),
                             found: ty_body,
+                        }))?
+                    }
+                }
+            }
+            TermComputation::MatchPack(MatchPack {
+                scrut,
+                tvar,
+                var,
+                body,
+            }) => {
+                let ty_scrut = scrut.syn(ctx.clone())?;
+                match &ty_scrut.synty {
+                    SynType::Exists(Exists { param, kd, ty }) => {
+                        ctx.type_ctx.insert(param.clone(), kd.clone().into());
+                        let diff = Env::from_iter([(
+                            param.clone(),
+                            tvar.clone().into(),
+                        )]);
+                        let ty = ty.inner_ref().clone().subst(diff)?;
+                        ctx.term_ctx.insert(var.clone(), ty);
+                        let ty_body = body.syn(ctx.clone())?;
+                        self.span().make(ty_body.clone()).ana(Kind::CType, ctx)?;
+                        Step::Done(ty_body)
+                    }
+                    SynType::TypeApp(_)
+                    | SynType::Forall(_)
+                    | SynType::Abstract(_) => {
+                        Err(self.span().make(TypeExpected {
+                            context: format!("match-pack"),
+                            expected: format!("exists"),
+                            found: ty_scrut,
                         }))?
                     }
                 }
@@ -554,7 +586,8 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::TermAnn(_)
             | TermComputation::Dtor(_)
-            | TermComputation::TypApp(_) => {
+            | TermComputation::TypApp(_)
+            | TermComputation::MatchPack(_) => {
                 let typ_syn = self.syn(ctx.clone())?;
                 typ.eqv(&typ_syn, ctx, || self.span().make(Subsumption))?;
                 Step::Done(typ)

@@ -141,7 +141,7 @@ where
     }
 }
 
-impl<Ty, A> SpanHolder for ExistsVal<Ty, A>
+impl<Ty, A> SpanHolder for Pack<Ty, A>
 where
     Ty: TypeT + SpanHolder,
     A: ValueT + SpanHolder,
@@ -150,7 +150,7 @@ where
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let ExistsVal { ty, body: val } = self;
+        let Pack { ty, body: val } = self;
         ty.span_map_mut(f.clone());
         val.span_map_mut(f);
     }
@@ -326,7 +326,7 @@ where
     }
 }
 
-impl<A, TyV, TeV, B> SpanHolder for MatchExists<A, TyV, TeV, B>
+impl<A, TyV, TeV, B> SpanHolder for MatchPack<A, TyV, TeV, B>
 where
     A: ValueT + SpanHolder,
     TyV: TyVarT + SpanHolder,
@@ -337,7 +337,7 @@ where
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let MatchExists { scrut, tvar, var, body } = self;
+        let MatchPack { scrut, tvar, var, body } = self;
         scrut.span_map_mut(f.clone());
         tvar.span_map_mut(f.clone());
         var.span_map_mut(f.clone());

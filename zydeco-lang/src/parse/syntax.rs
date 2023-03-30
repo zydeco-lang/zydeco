@@ -42,7 +42,7 @@ pub enum TermValue {
     Thunk(Thunk<BoxComp>),
     Ctor(Ctor<CtorV, Span<TermValue>>),
     Literal(Literal),
-    ExistsVal(ExistsVal<BoxType, BoxValue>),
+    Pack(Pack<BoxType, BoxValue>),
 }
 pub type BoxValue = Box<Span<TermValue>>;
 impl ValueT for TermValue {}
@@ -89,7 +89,7 @@ pub struct TypApp {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MatchExists {
+pub struct MatchPack {
     pub scrut: BoxValue,
     pub tvar: TypeV,
     pub var: TermV,
@@ -109,9 +109,9 @@ pub enum TermComputation {
     App(Application),
     CoMatch(CoMatch<DtorV, TermV, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
-    TypFun(TypAbs),
+    TypAbs(TypAbs),
     TypApp(TypApp),
-    MatchExists(MatchExists),
+    MatchPack(MatchPack),
 }
 pub type BoxComp = Box<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
