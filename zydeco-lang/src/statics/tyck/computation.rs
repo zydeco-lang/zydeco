@@ -40,7 +40,9 @@ impl TypeCheck for Span<TermComputation> {
                         self.span().make(kd).ensure(&Kind::CType, "force")?;
                         Step::Done(ty_body)
                     }
-                    SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                    SynType::Forall(_)
+                    | SynType::Exists(_)
+                    | SynType::Abstract(_) => {
                         Err(self.span().make(TypeExpected {
                             context: format!("force"),
                             expected: format!("{{b}}"),
@@ -72,7 +74,9 @@ impl TypeCheck for Span<TermComputation> {
                         ctx.term_ctx.insert(var.to_owned(), ty_val);
                         Step::SynMode((ctx, body))
                     }
-                    SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                    SynType::Forall(_)
+                    | SynType::Exists(_)
+                    | SynType::Abstract(_) => {
                         Err(self.span().make(TypeExpected {
                             context: format!("do"),
                             expected: format!("ret a"),
@@ -173,7 +177,9 @@ impl TypeCheck for Span<TermComputation> {
                         };
                         Step::Done(ty)
                     }
-                    SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                    SynType::Forall(_)
+                    | SynType::Exists(_)
+                    | SynType::Abstract(_) => {
                         Err(self.span().make(TypeExpected {
                             context: format!("match"),
                             expected: format!("data type"),
@@ -240,10 +246,40 @@ impl TypeCheck for Span<TermComputation> {
                         }
                         Step::Done(ty.inner_ref().to_owned().subst(diff)?)
                     }
-                    SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                    SynType::Forall(_)
+                    | SynType::Exists(_)
+                    | SynType::Abstract(_) => {
                         Err(self.span().make(TypeExpected {
                             context: format!("dtor"),
                             expected: format!("codata type"),
+                            found: ty_body,
+                        }))?
+                    }
+                }
+            }
+            TermComputation::TypAbs(_) => Err(self
+                .span()
+                .make(NeedAnnotation { content: format!("typabs") }))?,
+            TermComputation::TypApp(TypApp { body, arg }) => {
+                let ty_body = body.syn(ctx.clone())?;
+                match ty_body.synty {
+                    SynType::Forall(Forall { param, kd, ty }) => {
+                        let diff =
+                            Env::init(&[(param, kd)], &[arg.clone()], || {
+                                self.span().make(ArityMismatch {
+                                    context: format!("typapp"),
+                                    expected: 1,
+                                    found: 1,
+                                })
+                            })?;
+                        Step::Done(ty.inner_ref().clone().subst(diff)?)
+                    }
+                    SynType::TypeApp(_)
+                    | SynType::Exists(_)
+                    | SynType::Abstract(_) => {
+                        Err(self.span().make(TypeExpected {
+                            context: format!("term-typ-application"),
+                            expected: format!("forall,"),
                             found: ty_body,
                         }))?
                     }
@@ -270,7 +306,9 @@ impl TypeCheck for Span<TermComputation> {
                     v.ana(ty_body, ctx)?;
                     Step::Done(typ)
                 }
-                SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                SynType::Forall(_)
+                | SynType::Exists(_)
+                | SynType::Abstract(_) => {
                     Err(self.span().make(TypeExpected {
                         context: format!("ret"),
                         expected: format!("ret a"),
@@ -310,7 +348,9 @@ impl TypeCheck for Span<TermComputation> {
                         ctx.term_ctx.insert(var.to_owned(), ty_val);
                         Step::AnaMode((ctx, body), typ)
                     }
-                    SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                    SynType::Forall(_)
+                    | SynType::Exists(_)
+                    | SynType::Abstract(_) => {
                         Err(self.span().make(TypeExpected {
                             context: format!("do"),
                             expected: format!("ret a"),
@@ -393,7 +433,9 @@ impl TypeCheck for Span<TermComputation> {
                         )?;
                         Step::Done(typ)
                     }
-                    SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                    SynType::Forall(_)
+                    | SynType::Exists(_)
+                    | SynType::Abstract(_) => {
                         Err(self.span().make(TypeExpected {
                             context: format!("match"),
                             expected: format!("data type"),
@@ -468,7 +510,9 @@ impl TypeCheck for Span<TermComputation> {
                         )?;
                         Step::Done(typ)
                     }
-                    SynType::Forall(_) | SynType::Exists(_) | SynType::Abstract(_) => {
+                    SynType::Forall(_)
+                    | SynType::Exists(_)
+                    | SynType::Abstract(_) => {
                         Err(self.span().make(TypeExpected {
                             context: format!("comatch"),
                             expected: format!("codata type"),
@@ -477,7 +521,40 @@ impl TypeCheck for Span<TermComputation> {
                     }
                 }
             }
-            TermComputation::TermAnn(_) | TermComputation::Dtor(_) => {
+            TermComputation::TypAbs(TypAbs { tvar, kd, body }) => {
+                match &typ.synty {
+                    SynType::Forall(Forall { param, kd: kd_, ty }) => {
+                        bool_test(kd == kd_, || {
+                            self.span().make(KindMismatch {
+                                context: format!("typabs"),
+                                expected: kd_.clone(),
+                                found: kd.clone(),
+                            })
+                        })?;
+                        let abst_var = ctx.abst_ctx.len();
+                        ctx.abst_ctx.insert(abst_var, kd.clone());
+                        ctx.type_env.insert(tvar.clone(), abst_var.into());
+                        ty.inner_ref().clone().subst(Env::from_iter([(
+                            param.clone(),
+                            abst_var.into(),
+                        )]))?;
+                        body.ana(ty.inner_ref().clone(), ctx)?;
+                        Step::Done(typ)
+                    }
+                    SynType::TypeApp(_)
+                    | SynType::Exists(_)
+                    | SynType::Abstract(_) => {
+                        Err(self.span().make(TypeExpected {
+                            context: format!("typabs"),
+                            expected: format!("forall"),
+                            found: typ.clone(),
+                        }))?
+                    }
+                }
+            }
+            TermComputation::TermAnn(_)
+            | TermComputation::Dtor(_)
+            | TermComputation::TypApp(_) => {
                 let typ_syn = self.syn(ctx.clone())?;
                 typ.eqv(&typ_syn, ctx, || self.span().make(Subsumption))?;
                 Step::Done(typ)

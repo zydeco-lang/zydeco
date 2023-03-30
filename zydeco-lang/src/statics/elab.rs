@@ -137,7 +137,16 @@ impl TryFrom<ps::Type> for Type {
                 }
                 t.inner
             }
-            ps::Type::Exists(_) => todo!(),
+            ps::Type::Exists(ps::Exists(params, t)) => {
+                let mut t = t.try_map(TryInto::try_into)?;
+                for (param, kd) in params.into_iter().rev() {
+                    t = t
+                        .span()
+                        .clone()
+                        .make(Exists { param, kd, ty: rc!(t) }.into())
+                }
+                t.inner
+            }
         })
     }
 }
@@ -312,8 +321,22 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     .collect();
                 Dtor { body, dtor, args }.into()
             }
-            ps::TermComputation::TypFun(_) => todo!(),
-            ps::TermComputation::TypApp(_) => todo!(),
+            ps::TermComputation::TypFun(ps::TypAbs { params, body }) => {
+                let body = (body).try_map(TryInto::try_into)?;
+                let mut body = body;
+                for (tvar, kd) in params.into_iter().rev() {
+                    body = body
+                        .info
+                        .clone()
+                        .make(TypAbs { tvar, kd, body: rc!(body) }.into());
+                }
+                body.inner
+            }
+            ps::TermComputation::TypApp(ps::TypApp { body, arg }) => {
+                let body = rc!((body).try_map(TryInto::try_into)?);
+                let arg = rc!(arg.try_map(TryInto::try_into)?);
+                TypApp { body, arg }.into()
+            }
             ps::TermComputation::MatchExists(_) => todo!(),
         })
     }

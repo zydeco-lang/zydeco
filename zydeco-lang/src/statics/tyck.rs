@@ -20,6 +20,7 @@ use TypeCheckError::*;
 #[derive(Clone, Default)]
 pub struct Ctx {
     pub abst_ctx: im::Vector<Kind>,
+    pub type_env: Env<TypeV, Type>,
     pub type_ctx: im::HashMap<TypeV, TypeArity<Kind>>,
     pub term_ctx: im::HashMap<TermV, Type>,
     pub data_ctx: im::HashMap<TypeV, Data<TypeV, CtorV, RcType>>,

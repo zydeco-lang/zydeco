@@ -42,6 +42,8 @@ impl FmtArgs for TermComputation {
             TermComputation::Match(t) => t.fmt_args(args),
             TermComputation::CoMatch(t) => t.fmt_args(args),
             TermComputation::Dtor(t) => t.fmt_args(args),
+            TermComputation::TypAbs(t) => t.fmt_args(args),
+            TermComputation::TypApp(t) => t.fmt_args(args),
         }
     }
 }

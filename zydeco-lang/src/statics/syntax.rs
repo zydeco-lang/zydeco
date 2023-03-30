@@ -92,6 +92,8 @@ pub enum TermComputation {
     Match(Match<CtorV, TermV, RcValue, RcComp>),
     CoMatch(CoMatch<DtorV, TermV, RcComp>),
     Dtor(Dtor<RcComp, DtorV, RcValue>),
+    TypAbs(TypAbs<TypeV, Kind, RcComp>),
+    TypApp(TypApp<RcComp, RcType>),
 }
 pub type RcComp = Rc<Span<TermComputation>>;
 impl ComputationT for TermComputation {}

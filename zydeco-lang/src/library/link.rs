@@ -116,6 +116,12 @@ impl From<&ss::TermComputation> for ZComp {
                     .collect();
                 Dtor { body, dtor: dtor.clone(), args }.into()
             }
+            ss::TermComputation::TypAbs(TypAbs { tvar: _, kd: _, body }) => {
+                body.inner_ref().into()
+            }
+            ss::TermComputation::TypApp(TypApp { body, arg: _ }) => {
+                body.inner_ref().into()
+            }
         }
     }
 }
