@@ -69,15 +69,15 @@ impl FmtArgs for Module {
         let Module { name, data, codata, define, define_ext } = self;
         if let Some(name) = name {
             s += &format!("module {} where", name);
-            s += &args.force_space();
+            s += &args.br_indent();
         }
         for d in data {
             s += &d.fmt_args(args);
-            s += &args.force_space();
+            s += &args.br_indent();
         }
         for d in codata {
             s += &d.fmt_args(args);
-            s += &args.force_space();
+            s += &args.br_indent();
         }
         for DeclSymbol {
             public,
@@ -93,11 +93,11 @@ impl FmtArgs for Module {
                 var.fmt_args(args),
                 ty.fmt_args(args)
             );
-            s += &args.force_space();
+            s += &args.br_indent();
         }
         for d in define {
             s += &d.fmt_args(args);
-            s += &args.force_space();
+            s += &args.br_indent();
         }
         s
     }
@@ -108,7 +108,7 @@ impl FmtArgs for Program {
         let Program { module, entry } = self;
         let mut s = String::new();
         s += &module.fmt_args(args);
-        s += &args.force_space();
+        s += &args.br_indent();
         s += &entry.fmt_args(args);
         s
     }

@@ -122,10 +122,14 @@ where
     fn fmt_args(&self, fargs: crate::utils::fmt::Args) -> String {
         let mut s = String::new();
         s += &"=".repeat(20);
-        s += &fargs.force_space();
+        s += &fargs.br_indent();
         for (k, v) in self.inner.iter() {
-            s += &format!("[{} := {}]", k.fmt_args(fargs), v.fmt_args(fargs));
-            s += &fargs.force_space();
+            s += &format!(
+                "[{} := {}]",
+                k.fmt_args(fargs),
+                v.fmt_args(fargs.set_allow_br(false))
+            );
+            s += &fargs.br_indent();
         }
         s += &"=".repeat(20);
         s

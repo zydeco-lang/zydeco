@@ -13,7 +13,7 @@ mod binder {
             }
             impl std::fmt::Display for $Var {
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "{}", self.fmt_args(Args::new(2)))
+                    write!(f, "{}", <Self as FmtArgs>::fmt(self))
                 }
             }
         };
@@ -213,7 +213,7 @@ where
             var.fmt_args(fargs),
             def.fmt_args(fargs),
         );
-        s += &fargs.force_space();
+        s += &fargs.br_indent();
         s += &body.fmt_args(fargs);
         s
     }
@@ -233,7 +233,7 @@ where
             var.fmt_args(fargs),
             comp.fmt_args(fargs),
         );
-        s += &fargs.force_space();
+        s += &fargs.br_indent();
         s += &body.fmt_args(fargs);
         s
     }
@@ -252,10 +252,10 @@ where
         s += " -> (";
         {
             let fargs = fargs.indent();
-            s += &fargs.force_space();
+            s += &fargs.br_indent();
             s += &body.fmt_args(fargs);
         }
-        s += &fargs.force_space();
+        s += &fargs.br_indent();
         s += ")";
         s
     }
@@ -274,7 +274,7 @@ where
         s += "match ";
         s += &scrut.fmt_args(fargs);
         for Matcher { ctor, vars, body } in arms {
-            s += &fargs.force_space();
+            s += &fargs.br_indent();
             s += "| ";
             s += &ctor.fmt_args(fargs);
             s += "(";
@@ -286,11 +286,11 @@ where
             s += ") -> ";
             {
                 let fargs = fargs.indent();
-                s += &fargs.force_space();
+                s += &fargs.br_indent();
                 s += &body.fmt_args(fargs);
             }
         }
-        s += &fargs.force_space();
+        s += &fargs.br_indent();
         s += "end";
         s
     }
@@ -307,7 +307,7 @@ where
         let mut s = String::new();
         s += "comatch ";
         for CoMatcher { dtor, vars, body } in arms {
-            s += &fargs.force_space();
+            s += &fargs.br_indent();
             s += "| .";
             s += &dtor.fmt_args(fargs);
             s += "(";
@@ -319,11 +319,11 @@ where
             s += ") -> ";
             {
                 let fargs = fargs.indent();
-                s += &fargs.force_space();
+                s += &fargs.br_indent();
                 s += &body.fmt_args(fargs);
             }
         }
-        s += &fargs.force_space();
+        s += &fargs.br_indent();
         s += "end";
         s
     }
@@ -436,10 +436,10 @@ where
             );
         }
         s += " where ";
-        s += &fargs.force_space();
+        s += &fargs.br_indent();
         for databr in ctors {
             s += &databr.fmt_args(fargs);
-            s += &fargs.force_space();
+            s += &fargs.br_indent();
         }
         s += "end";
         s
@@ -486,10 +486,10 @@ where
             );
         }
         s += " where ";
-        s += &fargs.force_space();
+        s += &fargs.br_indent();
         for codatabr in dtors {
             s += &codatabr.fmt_args(fargs);
-            s += &fargs.force_space();
+            s += &fargs.br_indent();
         }
         s += "end";
         s
