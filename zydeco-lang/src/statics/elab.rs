@@ -9,19 +9,18 @@ fn desugar_gen_let(
     rec: bool, fun: bool, (var, ty): (TermV, Option<Span<ps::Type>>),
     params: Vec<(TermV, Option<Span<ps::Type>>)>,
     def: Option<Box<Span<ps::Term>>>,
-) -> Result<(TermV, Option<RcType>, Option<RcValue>), TypeCheckError> {
+) -> Result<(TermV, RcType, Option<RcValue>), TypeCheckError> {
     let name = var.clone();
     let ty_rc = {
         if let Some(ty) = ty.clone() {
-            Some(rc!(ty.try_map(TryInto::try_into)?))
+            rc!(ty.try_map(TryInto::try_into)?)
         } else {
-            None
+            rc!(var.span().make(Hole.into()))
         }
     };
-    if def.is_none() {
+    let Some(def) = def else {
         return Ok((name, ty_rc, None));
-    }
-    let Some(def) = def else { unreachable!() };
+    };
     match (rec, fun, def.inner) {
         (false, false, ps::Term::Value(value)) => {
             Ok((name, ty_rc, Some(rc!(def.info.make(value.try_into()?)))))
@@ -51,23 +50,22 @@ fn desugar_gen_let(
                     def.info.make(Rec { var: (var, None), body }.into()),
                 );
             }
-            let mut ty = match ty {
-                Some(ty) => Some(rc!(ty.try_map(TryInto::try_into)?)),
-                None => None,
+            let mut ty: RcType = if let Some(ty) = ty {
+                rc!(ty.try_map(TryInto::try_into)?)
+            } else {
+                rc!(def.info.make(Hole.into()))
             };
             for (var, ty_param) in params.iter().rev() {
-                if let (Some(ty_dom), Some(ty_cod)) = (ty_param, ty) {
-                    let ty_dom =
-                        rc!(ty_dom.to_owned().try_map(TryInto::try_into)?);
-                    ty = Some(rc!(var
-                        .span()
-                        .make(Type::internal("Fn", vec![ty_dom, ty_cod]))))
+                let ty_dom = if let Some(ty_dom) = ty_param {
+                    rc!(ty_dom.to_owned().try_map(TryInto::try_into)?)
                 } else {
-                    ty = None;
-                }
+                    rc!(def.info.make(Hole.into()))
+                };
+                ty =
+                    rc!(var.span().make(Type::internal("Fn", vec![ty_dom, ty])))
             }
             let body = rc!((*body).try_map(TryInto::try_into)?);
-            ty = ty.map(|ty| rc!(def.info.make(Type::make_thunk(ty))));
+            ty = rc!(def.info.make(Type::make_thunk(ty)));
             Ok((name, ty, Some(rc!(def.info.make(Thunk(body).into())))))
         }
     }
@@ -120,7 +118,6 @@ impl TryFrom<ps::Type> for Type {
                 let ps::TypeApp(t1, t2) = t;
                 let t1: Type = TryInto::try_into(t1.inner())?;
                 let t2 = t2.try_map(TryInto::try_into)?;
-                #[allow(irrefutable_let_patterns)]
                 let SynType::TypeApp(mut t1) = t1.synty else {
                      Err(TypeCheckError::KindMismatch {
                         context: format!("desugaring type application"),
@@ -166,33 +163,26 @@ impl TryFrom<ps::TermValue> for TermValue {
     type Error = TypeCheckError;
     fn try_from(value: ps::TermValue) -> Result<Self, TypeCheckError> {
         Ok(match value {
-            ps::TermValue::TermAnn(t) => {
-                let TermAnn { term: body, ty } = t;
-                TermAnn {
-                    term: rc!(body.try_map(TryInto::try_into)?),
-                    ty: rc!(ty.try_map(TryInto::try_into)?),
-                }
-                .into()
+            ps::TermValue::TermAnn(TermAnn { term: body, ty }) => TermAnn {
+                term: rc!(body.try_map(TryInto::try_into)?),
+                ty: rc!(ty.try_map(TryInto::try_into)?),
             }
+            .into(),
             ps::TermValue::Var(x) => x.into(),
-            ps::TermValue::Thunk(t) => {
-                let Thunk(body) = t;
+            ps::TermValue::Thunk(Thunk(body)) => {
                 Thunk(rc!((body).try_map(TryInto::try_into)?)).into()
             }
-            ps::TermValue::Ctor(t) => {
-                let Ctor { ctor, args } = t;
-                Ctor {
-                    ctor,
-                    args: args
-                        .into_iter()
-                        .map(|arg| arg.try_map(TryInto::try_into))
-                        .collect::<Result<Vec<_>, _>>()?
-                        .into_iter()
-                        .map(|arg| rc!(arg))
-                        .collect(),
-                }
-                .into()
+            ps::TermValue::Ctor(Ctor { ctor, args }) => Ctor {
+                ctor,
+                args: args
+                    .into_iter()
+                    .map(|arg| arg.try_map(TryInto::try_into))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .map(|arg| rc!(arg))
+                    .collect(),
             }
+            .into(),
             ps::TermValue::Literal(t) => t.into(),
             ps::TermValue::Pack(ps::Pack { ty, body }) => {
                 let ty = ty.try_map(TryInto::try_into)?;
@@ -207,27 +197,25 @@ impl TryFrom<ps::TermComputation> for TermComputation {
     type Error = TypeCheckError;
     fn try_from(comp: ps::TermComputation) -> Result<Self, TypeCheckError> {
         Ok(match comp {
-            ps::TermComputation::TermAnn(t) => {
-                let TermAnn { term: body, ty } = t;
+            ps::TermComputation::TermAnn(TermAnn { term: body, ty }) => {
                 TermAnn {
                     term: rc!(body.try_map(TryInto::try_into)?),
                     ty: rc!(ty.try_map(TryInto::try_into)?),
                 }
                 .into()
             }
-            ps::TermComputation::Ret(t) => {
-                let Ret(body) = t;
-                Ret(rc!((body).try_map(TryInto::try_into)?)).into()
+            ps::TermComputation::Ret(Ret(body)) => {
+                let body: TermComputation =
+                    Ret(rc!((body).try_map(TryInto::try_into)?)).into();
+                body
             }
-            ps::TermComputation::Force(t) => {
-                let Force(body) = t;
+            ps::TermComputation::Force(Force(body)) => {
                 Force(rc!((body).try_map(TryInto::try_into)?)).into()
             }
-            ps::TermComputation::Let(t) => {
-                let ps::Let {
-                    gen: ps::GenLet { rec, fun, name, params, def },
-                    body,
-                } = t;
+            ps::TermComputation::Let(ps::Let {
+                gen: ps::GenLet { rec, fun, name, params, def },
+                body,
+            }) => {
                 let (var, ty, def) =
                     desugar_gen_let(rec, fun, name, params, def)?;
                 let Some(def) = def else {
@@ -235,14 +223,11 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 };
                 let mut def = def;
                 let span = def.span().clone();
-                if let Some(ty) = ty {
-                    def = rc!(span.make(ps::TermAnn { term: def, ty }.into()));
-                }
+                def = rc!(span.make(ps::TermAnn { term: def, ty }.into()));
                 let body = rc!((body).try_map(TryInto::try_into)?);
                 Let { var, def, body }.into()
             }
-            ps::TermComputation::Do(t) => {
-                let ps::Do { var: (var, ty), comp, body } = t;
+            ps::TermComputation::Do(ps::Do { var: (var, ty), comp, body }) => {
                 let mut comp = rc!((comp).try_map(TryInto::try_into)?);
                 if let Some(ty) = ty {
                     comp = rc!(comp.info.clone().make(
@@ -256,15 +241,13 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let body = rc!((body).try_map(TryInto::try_into)?);
                 Do { var, comp, body }.into()
             }
-            ps::TermComputation::Rec(t) => {
-                let Rec { var: (var, ty), body } = t;
+            ps::TermComputation::Rec(Rec { var: (var, ty), body }) => {
                 let body = rc!((body).try_map(TryInto::try_into)?);
                 let span = body.span().clone();
                 let mut body: TermComputation = Rec { var, body }.into();
                 if let Some(ty) = ty {
                     let ty: Span<Type> = ty.try_map(TryInto::try_into)?;
                     let ty_ = ty.inner.clone();
-                    #[allow(irrefutable_let_patterns)]
                     let SynType::TypeApp(ty_app) = ty.inner.synty else {
                         Err(TypeCheckError::TypeExpected {
                             context: format!("elaborating recursion"),
@@ -287,8 +270,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 }
                 body
             }
-            ps::TermComputation::Match(t) => {
-                let ps::Match { scrut, arms } = t;
+            ps::TermComputation::Match(ps::Match { scrut, arms }) => {
                 let scrut = rc!((scrut).try_map(TryInto::try_into)?);
                 let arms = arms
                     .into_iter()
@@ -297,12 +279,11 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                         let body = rc!((body).try_map(TryInto::try_into)?);
                         Ok(Matcher { ctor, vars, body })
                     })
-                    .collect::<Result<Vec<_>, TypeCheckError>>()?;
+                    .collect::<Result<_, TypeCheckError>>()?;
                 Match { scrut, arms }.into()
             }
             ps::TermComputation::Abs(t) => desugar_fn(t)?,
-            ps::TermComputation::App(t) => {
-                let ps::Application { body, arg } = t;
+            ps::TermComputation::App(ps::Application { body, arg }) => {
                 let fun = rc!((body).try_map(TryInto::try_into)?);
                 let arg = arg.try_map(TryInto::try_into)?;
                 Dtor {
@@ -312,8 +293,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 }
                 .into()
             }
-            ps::TermComputation::CoMatch(t) => {
-                let ps::CoMatch { arms } = t;
+            ps::TermComputation::CoMatch(ps::CoMatch { arms }) => {
                 let arms = arms
                     .into_iter()
                     .map(|arm| {
@@ -324,8 +304,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     .collect::<Result<Vec<_>, TypeCheckError>>()?;
                 CoMatch { arms }.into()
             }
-            ps::TermComputation::Dtor(t) => {
-                let ps::Dtor { body, dtor, args } = t;
+            ps::TermComputation::Dtor(ps::Dtor { body, dtor, args }) => {
                 let body = rc!((body).try_map(TryInto::try_into)?);
                 let args = args
                     .into_iter()
@@ -471,11 +450,6 @@ impl TryFrom<ps::Module> for Module {
                     let (name, ty, te) =
                         desugar_gen_let(rec, fun, name, params, def)?;
                     if external {
-                        let Some(ty) = ty else {
-                            return Err(NameResolveError::EmptyDeclaration {
-                                name: name.name().to_string(),
-                            }.into())
-                        };
                         define_ext.push(DeclSymbol {
                             public,
                             external,
@@ -488,12 +462,7 @@ impl TryFrom<ps::Module> for Module {
                             }
                         })?;
                         let span = term.span().clone();
-                        let def = match ty {
-                            Some(ty) => {
-                                rc!(span.make(TermAnn { term, ty }.into()))
-                            }
-                            None => term,
-                        };
+                        let def = rc!(span.make(TermAnn { term, ty }.into()));
                         define.push(DeclSymbol {
                             public,
                             external,
