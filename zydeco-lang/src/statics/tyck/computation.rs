@@ -81,7 +81,7 @@ impl TypeCheck for Span<TermComputation> {
                 };
                 let tvar = ty_app.tvar;
                 let Data { name, params, ctors } =
-                    ctx.data_ctx.get(&tvar).cloned().ok_or_else(|| {
+                    ctx.data_env.get(&tvar).cloned().ok_or_else(|| {
                         span.make(
                             NameResolveError::UnboundTypeVariable { tvar }
                                 .into(),
@@ -160,7 +160,7 @@ impl TypeCheck for Span<TermComputation> {
                 };
                 let tvar = ty_app.tvar;
                 let Codata { name, params, dtors } =
-                    ctx.coda_ctx.get(&tvar).cloned().ok_or_else(|| {
+                    ctx.coda_env.get(&tvar).cloned().ok_or_else(|| {
                         span.make(
                             NameResolveError::UnboundTypeVariable { tvar }
                                 .into(),
@@ -183,6 +183,7 @@ impl TypeCheck for Span<TermComputation> {
                     .ok_or_else(|| {
                         body.span().make(
                             NameResolveError::UnknownDestructor {
+                                context: format!("codata type `{}`", name),
                                 dtor: dtor.clone(),
                             }
                             .into(),
@@ -347,7 +348,7 @@ impl TypeCheck for Span<TermComputation> {
                 };
                 let tvar = ty_app.tvar;
                 let Data { name, params, ctors } =
-                    ctx.data_ctx.get(&tvar).cloned().ok_or_else(|| {
+                    ctx.data_env.get(&tvar).cloned().ok_or_else(|| {
                         span.make(
                             NameResolveError::UnboundTypeVariable { tvar }
                                 .into(),
@@ -403,7 +404,7 @@ impl TypeCheck for Span<TermComputation> {
                 };
                 let tvar = &ty_app.tvar;
                 let Codata { name, params, dtors } =
-                    ctx.coda_ctx.get(&tvar).cloned().ok_or_else(|| {
+                    ctx.coda_env.get(&tvar).cloned().ok_or_else(|| {
                         span.make(
                             NameResolveError::UnboundTypeVariable {
                                 tvar: tvar.clone(),

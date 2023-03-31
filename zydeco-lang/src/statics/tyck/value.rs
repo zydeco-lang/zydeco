@@ -103,7 +103,7 @@ impl TypeCheck for Span<TermValue> {
                 };
                 let tvar = &ty_app.tvar;
                 let Data { name, params, ctors } =
-                    ctx.data_ctx.get(tvar).cloned().ok_or_else(|| {
+                    ctx.data_env.get(tvar).cloned().ok_or_else(|| {
                         span.make(NameResolve(
                             NameResolveError::UnboundTypeVariable {
                                 tvar: tvar.to_owned(),
@@ -123,10 +123,7 @@ impl TypeCheck for Span<TermValue> {
                     .ok_or_else(|| {
                         span.make(NameResolve(
                             NameResolveError::UnknownConstructor {
-                                context: format!(
-                                    "data type `{}` instiantiation",
-                                    name
-                                ),
+                                context: format!("data type `{}`", name),
                                 ctor: ctor.to_owned(),
                             },
                         ))
