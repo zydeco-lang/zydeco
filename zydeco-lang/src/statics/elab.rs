@@ -170,7 +170,17 @@ impl TryFrom<ps::TermValue> for TermValue {
             .into(),
             ps::TermValue::Var(x) => x.into(),
             ps::TermValue::Thunk(Thunk(body)) => {
-                Thunk(rc!((body).try_map(TryInto::try_into)?)).into()
+                let span = body.span().clone();
+                let body =
+                    Thunk(rc!((body).try_map(TryInto::try_into)?)).into();
+                TermAnn {
+                    term: rc!(span.make(body)),
+                    ty: rc!(span.make(Type::internal(
+                        "Thunk_U",
+                        vec![rc!(span.make(Hole.into())),]
+                    ))),
+                }
+                .into()
             }
             ps::TermValue::Ctor(Ctor { ctor, args }) => Ctor {
                 ctor,

@@ -32,11 +32,11 @@ impl TypeCheck for Span<TermValue> {
                     .cloned()
                     .ok_or(span.make(UnboundVar { var: x.clone() }))?,
             ),
-            TermValue::Thunk(Thunk(c)) => {
-                let c = c.syn(ctx)?;
-                Step::Done(Type::make_thunk(rc!(span.make(c.into()))))
-                // Err(span
-                //     .make(NeedAnnotation { content: format!("thunk") }))?
+            TermValue::Thunk(_) => {
+                // let c = c.syn(ctx)?;
+                // Step::Done(Type::make_thunk(rc!(span.make(c.into()))))
+                Err(span
+                    .make(NeedAnnotation { content: format!("thunk") }))?
             }
             TermValue::Ctor(_) => {
                 Err(span.make(NeedAnnotation { content: format!("ctor") }))?
@@ -161,6 +161,7 @@ impl TypeCheck for Span<TermValue> {
             TermValue::Var(_) | TermValue::Literal(_) => {
                 // subsumption
                 let typ_syn = self.syn(ctx.clone())?;
+                // println!("{} /\\ {}", typ.fmt(), typ_syn.fmt());
                 let typ_lub = Type::lub(typ, typ_syn, ctx, || {
                     span.make(Subsumption {
                         sort: "value",

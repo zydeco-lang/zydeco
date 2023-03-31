@@ -14,12 +14,12 @@ impl TypeCheck for Span<TermComputation> {
                 ty.ana(Kind::CType, ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_ref().clone())
             }
-            TermComputation::Ret(Ret(v)) => {
-                // Err(span
-                // .make(NeedAnnotation { content: format!("ret") }))?
-                let ty_body: Type = v.syn(ctx.clone())?;
-                span.make(ty_body.clone()).ana(Kind::VType, ctx)?;
-                Step::Done(Type::make_ret(rc!(span.make(ty_body))))
+            TermComputation::Ret(_) => {
+                Err(span
+                .make(NeedAnnotation { content: format!("ret") }))?
+                // let ty_body: Type = v.syn(ctx.clone())?;
+                // span.make(ty_body.clone()).ana(Kind::VType, ctx)?;
+                // Step::Done(Type::make_ret(rc!(span.make(ty_body))))
             }
             TermComputation::Force(Force(v)) => {
                 let ty_val = v.syn(ctx.clone())?;
@@ -299,7 +299,6 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::Force(Force(v)) => {
-                span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
                 v.ana(Type::make_thunk(rc!(span.make(typ.clone()))), ctx)?;
                 Step::Done(typ)
             }
@@ -485,6 +484,7 @@ impl TypeCheck for Span<TermComputation> {
             | TermComputation::MatchPack(_) => {
                 // subsumption
                 let typ_syn = self.syn(ctx.clone())?;
+                // println!("{} /\\ {}", typ.fmt(), typ_syn.fmt());
                 let typ_lub = Type::lub(typ, typ_syn, ctx, || {
                     span.make(Subsumption {
                         sort: "computation",
