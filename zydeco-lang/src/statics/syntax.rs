@@ -1,6 +1,6 @@
 use crate::utils::span::{span, Span};
 use std::rc::Rc;
-use zydeco_derive::EnumGenerator;
+use zydeco_derive::{EnumGenerator, FmtArgs};
 
 pub use crate::syntax::*;
 
@@ -11,13 +11,13 @@ pub use crate::syntax::Kind;
 /* ---------------------------------- Type ---------------------------------- */
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Abstract(pub usize);
-#[derive(EnumGenerator, Clone, Debug)]
+pub struct AbstVar(pub usize);
+#[derive(EnumGenerator, FmtArgs, Clone, Debug)]
 pub enum SynType {
     TypeApp(TypeApp<TypeV, RcType>),
     Forall(Forall<TypeV, Kind, RcType>),
     Exists(Exists<TypeV, Kind, RcType>),
-    Abstract(Abstract),
+    AbstVar(AbstVar),
     Hole(Hole),
 }
 
@@ -80,7 +80,7 @@ macro_rules! impl_from {
 impl_from!(TypeApp<TypeV, RcType>);
 impl_from!(Forall<TypeV, Kind, RcType>);
 impl_from!(Exists<TypeV, Kind, RcType>);
-impl_from!(Abstract);
+impl_from!(AbstVar);
 impl_from!(Hole);
 impl From<TypeV> for Type {
     fn from(tvar: TypeV) -> Self {
@@ -90,7 +90,7 @@ impl From<TypeV> for Type {
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(EnumGenerator, Clone, Debug)]
+#[derive(EnumGenerator, FmtArgs, Clone, Debug)]
 pub enum TermValue {
     TermAnn(TermAnn<RcValue, RcType>),
     Var(TermV),
@@ -102,7 +102,7 @@ pub enum TermValue {
 pub type RcValue = Rc<Span<TermValue>>;
 impl ValueT for TermValue {}
 
-#[derive(EnumGenerator, Clone, Debug)]
+#[derive(EnumGenerator, FmtArgs, Clone, Debug)]
 pub enum TermComputation {
     TermAnn(TermAnn<RcComp, RcType>),
     Ret(Ret<RcValue>),

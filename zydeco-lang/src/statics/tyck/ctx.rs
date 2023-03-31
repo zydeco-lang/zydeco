@@ -11,9 +11,9 @@ pub struct Ctx {
     pub trace: Trace,
 }
 impl Ctx {
-    pub(super) fn fresh(&mut self, kd: Kind) -> Abstract {
+    pub(super) fn fresh(&mut self, kd: Kind) -> AbstVar {
         self.abst_ctx.push_back(kd);
-        Abstract(self.abst_ctx.len() - 1)
+        AbstVar(self.abst_ctx.len() - 1)
     }
 }
 

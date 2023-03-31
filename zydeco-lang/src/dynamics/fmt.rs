@@ -7,16 +7,6 @@ impl FmtArgs for ds::Thunk {
     }
 }
 
-impl FmtArgs for SemVal {
-    fn fmt_args(&self, fargs: Args) -> String {
-        match self {
-            SemVal::Thunk(v) => v.fmt_args(fargs),
-            SemVal::Ctor(v) => v.fmt_args(fargs),
-            SemVal::Literal(v) => v.fmt_args(fargs),
-        }
-    }
-}
-
 impl FmtArgs for ProgKont {
     fn fmt_args(&self, fargs: Args) -> String {
         match self {

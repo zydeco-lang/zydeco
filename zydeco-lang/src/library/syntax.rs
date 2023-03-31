@@ -3,11 +3,11 @@ pub use crate::syntax::{env::Env, *};
 use indexmap::IndexMap;
 use std::io::{BufRead, Write};
 use std::rc::Rc;
-use zydeco_derive::EnumGenerator;
+use zydeco_derive::{EnumGenerator, FmtArgs};
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(EnumGenerator, Clone)]
+#[derive(EnumGenerator, FmtArgs, Clone)]
 pub enum ZVal {
     Var(TermV),
     Thunk(Thunk<RcComp>),
@@ -31,7 +31,7 @@ pub struct Prim {
     pub body: PrimComp,
 }
 
-#[derive(EnumGenerator, Clone)]
+#[derive(EnumGenerator, FmtArgs, Clone)]
 pub enum ZComp {
     Ret(Ret<RcValue>),
     Force(Force<RcValue>),
@@ -46,7 +46,7 @@ pub enum ZComp {
 type RcComp = Rc<ZComp>;
 impl ComputationT for ZComp {}
 
-#[derive(EnumGenerator, Clone)]
+#[derive(EnumGenerator, FmtArgs, Clone)]
 pub enum Term {
     Val(ZVal),
     Comp(ZComp),

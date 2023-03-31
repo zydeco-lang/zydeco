@@ -86,7 +86,7 @@ impl Eqv for Type {
                 )?;
                 lhs_ty.eqv(&rhs_ty, ctx, f)
             }
-            (SynType::Abstract(lhs), SynType::Abstract(rhs)) => {
+            (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
                 // both abstract
                 bool_test(lhs == rhs, f)
             }
@@ -94,7 +94,7 @@ impl Eqv for Type {
             (SynType::TypeApp(_), _)
             | (SynType::Forall(_), _)
             | (SynType::Exists(_), _)
-            | (SynType::Abstract(_), _) => Err(f()),
+            | (SynType::AbstVar(_), _) => Err(f()),
         }
     }
 }

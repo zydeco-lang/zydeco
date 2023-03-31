@@ -53,7 +53,7 @@ impl TypeCheck for Span<Type> {
                 ty.ana(Kind::VType, ctx)?;
                 Ok(Step::Done(Kind::VType))
             }
-            SynType::Abstract(Abstract(abs)) => {
+            SynType::AbstVar(AbstVar(abs)) => {
                 Ok(Step::Done(ctx.abst_ctx[*abs]))
             }
             SynType::Hole(_) => {
@@ -77,7 +77,7 @@ impl TypeCheck for Span<Type> {
             SynType::TypeApp(_)
             | SynType::Forall(_)
             | SynType::Exists(_)
-            | SynType::Abstract(_) => {
+            | SynType::AbstVar(_) => {
                 let kd_syn = self.syn(ctx)?;
                 kd_syn.eqv(&kd, Default::default(), || {
                     span.make(Subsumption { sort: "type" })
@@ -141,7 +141,7 @@ impl Type {
                     .into(),
                 })
             }
-            SynType::Abstract(_) | SynType::Hole(_) => Ok(self),
+            SynType::AbstVar(_) | SynType::Hole(_) => Ok(self),
         }
     }
     pub(super) fn lub(
@@ -199,14 +199,14 @@ impl Type {
                 }
                 .into())
             }
-            (SynType::Abstract(lhs), SynType::Abstract(rhs)) => {
+            (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
                 bool_test(lhs == rhs, f.clone())?;
                 Ok(lhs.clone().into())
             }
             (SynType::TypeApp(_), _)
             | (SynType::Forall(_), _)
             | (SynType::Exists(_), _)
-            | (SynType::Abstract(_), _) => Err(f()),
+            | (SynType::AbstVar(_), _) => Err(f()),
         }
     }
 }

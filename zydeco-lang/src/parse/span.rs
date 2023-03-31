@@ -51,38 +51,6 @@ impl SpanHolder for syn::Exists {
     }
 }
 
-impl SpanHolder for syn::Type {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        match self {
-            syn::Type::Basic(ty) => ty.span_map_mut(f),
-            syn::Type::App(ty) => ty.span_map_mut(f),
-            syn::Type::Arrow(ty) => ty.span_map_mut(f),
-            syn::Type::Forall(ty) => ty.span_map_mut(f),
-            syn::Type::Exists(ty) => ty.span_map_mut(f),
-            syn::Type::Hole(ty) => ty.span_map_mut(f),
-        }
-    }
-}
-
-impl SpanHolder for syn::TermValue {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        match self {
-            syn::TermValue::TermAnn(te) => te.span_map_mut(f),
-            syn::TermValue::Var(te) => te.span_map_mut(f),
-            syn::TermValue::Thunk(te) => te.span_map_mut(f),
-            syn::TermValue::Ctor(te) => te.span_map_mut(f),
-            syn::TermValue::Literal(te) => te.span_map_mut(f),
-            syn::TermValue::Pack(te) => te.span_map_mut(f),
-        }
-    }
-}
-
 impl SpanHolder for syn::Abstraction {
     fn span_map_mut<F>(&mut self, f: F)
     where
@@ -173,55 +141,6 @@ impl SpanHolder for syn::MatchPack {
         tvar.span_map_mut(f.clone());
         var.span_map_mut(f.clone());
         body.span_map_mut(f);
-    }
-}
-
-impl SpanHolder for syn::TermComputation {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        match self {
-            syn::TermComputation::TermAnn(te) => te.span_map_mut(f),
-            syn::TermComputation::Ret(te) => te.span_map_mut(f),
-            syn::TermComputation::Force(te) => te.span_map_mut(f),
-            syn::TermComputation::Let(te) => te.span_map_mut(f),
-            syn::TermComputation::Do(te) => te.span_map_mut(f),
-            syn::TermComputation::Rec(te) => te.span_map_mut(f),
-            syn::TermComputation::Match(te) => te.span_map_mut(f),
-            syn::TermComputation::Abs(te) => te.span_map_mut(f),
-            syn::TermComputation::App(te) => te.span_map_mut(f),
-            syn::TermComputation::CoMatch(te) => te.span_map_mut(f),
-            syn::TermComputation::Dtor(te) => te.span_map_mut(f),
-            syn::TermComputation::TypAbs(te) => te.span_map_mut(f),
-            syn::TermComputation::TypApp(te) => te.span_map_mut(f),
-            syn::TermComputation::MatchPack(te) => te.span_map_mut(f),
-        }
-    }
-}
-
-impl SpanHolder for syn::Term {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        match self {
-            syn::Term::Value(te) => te.span_map_mut(f),
-            syn::Term::Computation(te) => te.span_map_mut(f),
-        }
-    }
-}
-
-impl SpanHolder for syn::Declaration {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        match self {
-            syn::Declaration::Data(decl) => decl.span_map_mut(f),
-            syn::Declaration::Codata(decl) => decl.span_map_mut(f),
-            syn::Declaration::Define(decl) => decl.span_map_mut(f),
-        }
     }
 }
 
