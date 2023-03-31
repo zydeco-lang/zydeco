@@ -39,8 +39,6 @@ impl TypeCheck for Span<TermValue> {
                     .ok_or(span.make(UnboundVar { var: x.clone() }))?,
             ),
             TermValue::Thunk(_) => {
-                // let c = c.syn(ctx)?;
-                // Step::Done(Type::make_thunk(rc!(span.make(c.into()))))
                 Err(span.make(NeedAnnotation { content: format!("thunk") }))?
             }
             TermValue::Ctor(_) => {
@@ -72,17 +70,7 @@ impl TypeCheck for Span<TermValue> {
                     ty.inner_ref().clone(),
                     typ.clone(),
                     ctx.clone(),
-                    || {
-                        span.make(Subsumption {
-                            sort: "value annotation",
-                            tycker_src: format!(
-                                "{}:{}:{}",
-                                file!(),
-                                line!(),
-                                column!()
-                            ),
-                        })
-                    },
+                    || span.make(Subsumption { sort: "value annotation" }),
                 )?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
@@ -105,15 +93,7 @@ impl TypeCheck for Span<TermValue> {
                     span.make(c.ana(typ_comp, ctx.clone())?)
                 ));
                 let typ_lub = Type::lub(ty, typ, ctx, || {
-                    span.make(Subsumption {
-                        sort: "thunk",
-                        tycker_src: format!(
-                            "{}:{}:{}",
-                            file!(),
-                            line!(),
-                            column!()
-                        ),
-                    })
+                    span.make(Subsumption { sort: "thunk" })
                 })?;
                 Step::Done(typ_lub)
             }
@@ -187,15 +167,7 @@ impl TypeCheck for Span<TermValue> {
                 let typ_syn = self.syn(ctx.clone())?;
                 // println!("{} /\\ {}", typ.fmt(), typ_syn.fmt());
                 let typ_lub = Type::lub(typ, typ_syn, ctx, || {
-                    span.make(Subsumption {
-                        sort: "value",
-                        tycker_src: format!(
-                            "{}:{}:{}",
-                            file!(),
-                            line!(),
-                            column!()
-                        ),
-                    })
+                    span.make(Subsumption { sort: "value" })
                 })?;
                 Step::Done(typ_lub)
             }

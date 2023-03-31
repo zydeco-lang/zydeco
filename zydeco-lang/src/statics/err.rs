@@ -9,7 +9,7 @@ pub enum TypeCheckError {
     TypeExpected { context: String, expected: String, found: Type },
     ArityMismatch { context: String, expected: usize, found: usize },
     NeedAnnotation { content: String },
-    Subsumption { sort: &'static str, tycker_src: String },
+    Subsumption { sort: &'static str },
     InconsistentMatchers { unexpected: Vec<CtorV>, missing: Vec<CtorV> },
     InconsistentCoMatchers { unexpected: Vec<DtorV>, missing: Vec<DtorV> },
     InconsistentBranches(Vec<Type>),
@@ -56,12 +56,8 @@ impl fmt::Display for TypeCheckError {
             NeedAnnotation { content } => {
                 write!(f, "Need annotation for {}", content)
             }
-            Subsumption { sort, tycker_src } => {
-                write!(
-                    f,
-                    "Subsumption of sort {} failed ({}).",
-                    sort, tycker_src
-                )
+            Subsumption { sort } => {
+                write!(f, "Subsumption of sort {} failed", sort)
             }
             InconsistentMatchers { unexpected, missing } => {
                 writeln!(f, "Inconsistent matchers:")?;

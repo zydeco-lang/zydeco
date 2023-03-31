@@ -24,9 +24,6 @@ pub struct Zydeco;
 
 impl Zydeco {
     pub fn std() -> Result<Span<ps::Module>, String> {
-        // let std_path: PathBuf = "src/library/std.zydeco".into();
-        // println!("{}", std::env::current_dir().unwrap().display());
-        // let source = std::fs::read_to_string(&std_path).unwrap();
         let source = include_str!("library/std.zydeco");
         let std_path: PathBuf = "zydeco-lang/src/library/std.zydeco".into();
         let file_info = FileInfo::new(&source, Rc::new(std_path));

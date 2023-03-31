@@ -113,7 +113,6 @@ TCtor: TCtor = {
     <TypeV> => TCtor::Var(<>),
     "U" => TCtor::Thunk,
     "F" => TCtor::Ret,
-    // Fun ?
 };
 
 TypePattern: (TypeV, Kind) = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind);

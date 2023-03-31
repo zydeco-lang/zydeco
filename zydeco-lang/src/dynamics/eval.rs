@@ -12,7 +12,6 @@ pub trait Eval<'rt>: Sized + FmtArgs {
     fn eval<'e>(self, runtime: &'e mut Runtime<'rt>) -> Self::Out {
         let mut res = self;
         loop {
-            // println!("===>>>\n{}", res.fmt());
             match res.step(runtime) {
                 Step::Done(out) => break out,
                 Step::Step(next) => res = next,
@@ -41,8 +40,6 @@ impl<'rt> Eval<'rt> for ls::ZVal {
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         match self {
             ls::ZVal::Var(var) => Step::Done({
-                // println!("{}", runtime.env.fmt());
-                // println!(">> {}", var);
                 runtime
                     .env
                     .lookup(&var)
@@ -74,7 +71,6 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 let v = v.as_ref().clone().eval(runtime);
                 match runtime.stack.pop_back() {
                     Some(SemComp::Kont(comp, env, var)) => {
-                        // println!("<< {} = {} [ret]", var, v.fmt());
                         let env = env.update(var, v);
                         runtime.env = env;
                         Step::Step(comp.as_ref().clone())
@@ -139,7 +135,6 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                     .find(|arm| arm.dtor == dtor)
                     .expect("no matching arm");
                 for (var, arg) in vars.into_iter().zip(args.into_iter()) {
-                    // println!("<< {} = {} [comatch]", var, arg.fmt());
                     let env = runtime.env.update(var, arg.as_ref().clone());
                     runtime.env = env;
                 }

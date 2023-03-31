@@ -80,15 +80,7 @@ impl TypeCheck for Span<Type> {
             | SynType::Abstract(_) => {
                 let kd_syn = self.syn(ctx)?;
                 kd_syn.eqv(&kd, Default::default(), || {
-                    span.make(Subsumption {
-                        sort: "type",
-                        tycker_src: format!(
-                            "{}:{}:{}",
-                            file!(),
-                            line!(),
-                            column!()
-                        ),
-                    })
+                    span.make(Subsumption { sort: "type" })
                 })?;
                 Ok(Step::Done(kd))
             }

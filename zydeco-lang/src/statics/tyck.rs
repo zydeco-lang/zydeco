@@ -32,10 +32,7 @@ pub trait TypeCheck: SpanView + Sized {
         let span = self.span().clone();
         let typ_syn = self.syn(ctx)?;
         typ_syn.eqv(&typ, Default::default(), || {
-            span.make(Subsumption {
-                sort: "type",
-                tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
-            })
+            span.make(Subsumption { sort: "type" })
         })?;
         Ok(Step::Done(typ))
     }
