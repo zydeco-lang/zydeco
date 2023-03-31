@@ -1,0 +1,7 @@
+data Kont (A : VType) (B : CType) where
+| Running(Thunk B)
+| Done(A)
+end
+
+let k : Kont Int _? = Done(1) in
+! exit 0
