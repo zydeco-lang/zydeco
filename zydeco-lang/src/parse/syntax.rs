@@ -10,19 +10,19 @@ pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Arrow(pub BoxType, pub BoxType);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Forall(pub Vec<(TypeV, Kind)>, pub BoxType);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Exists(pub Vec<(TypeV, Kind)>, pub BoxType);
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum Type {
     Basic(TCtor),
     App(TypeApp),
@@ -36,7 +36,7 @@ impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum TermValue {
     TermAnn(TermAnn<BoxValue, Span<Type>>),
     Var(TermV),
@@ -50,19 +50,19 @@ impl ValueT for TermValue {}
 
 pub type TermPattern = (TermV, Option<Span<Type>>);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Abstraction {
     pub params: Vec<TermPattern>,
     pub body: BoxComp,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Application {
     pub body: BoxComp,
     pub arg: BoxValue,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct GenLet {
     pub rec: bool,
     pub fun: bool,
@@ -71,25 +71,25 @@ pub struct GenLet {
     pub def: Option<Box<Span<Term>>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Let {
     pub gen: GenLet,
     pub body: BoxComp,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct TypAbs {
     pub params: Vec<(TypeV, Kind)>,
     pub body: BoxComp,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct TypApp {
     pub body: BoxComp,
     pub arg: Box<Span<Type>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct MatchPack {
     pub scrut: BoxValue,
     pub tvar: TypeV,
@@ -97,7 +97,7 @@ pub struct MatchPack {
     pub body: BoxComp,
 }
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum TermComputation {
     TermAnn(TermAnn<BoxComp, Span<Type>>),
     Ret(Ret<BoxValue>),
@@ -117,7 +117,7 @@ pub enum TermComputation {
 pub type BoxComp = Box<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum Term {
     Value(TermValue),
     Computation(TermComputation),
@@ -127,14 +127,14 @@ pub enum Term {
 
 pub type Define = GenLet;
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug, PartialEq, Eq)]
+#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum Declaration {
     Data(Data<TypeV, CtorV, Span<Type>>),
     Codata(Codata<TypeV, DtorV, Span<Type>>),
     Define(Define),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Module {
     pub name: Option<String>,
     pub declarations: Vec<DeclSymbol<Declaration>>,
@@ -156,7 +156,7 @@ impl Monoid for Module {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Program {
     pub module: Span<Module>,
     pub entry: Span<TermComputation>,

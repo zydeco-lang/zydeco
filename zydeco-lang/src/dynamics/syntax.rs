@@ -2,7 +2,6 @@ use crate::syntax::*;
 pub use crate::{library::syntax as ls, syntax::env::Env, utils::fmt::FmtArgs};
 use im::Vector;
 use std::{
-    fmt::Debug,
     io::{BufRead, Write},
     rc::Rc,
 };
@@ -38,8 +37,9 @@ pub enum SemComp {
     Dtor(DtorV, Vec<Rc<SemVal>>),
 }
 
-impl Debug for SemComp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+use std::fmt;
+impl fmt::Debug for SemComp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SemComp::Kont(comp, _, var) => {
                 write!(f, "Kont({} -> {})", comp.as_ref().fmt(), var)
