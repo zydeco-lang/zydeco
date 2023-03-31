@@ -18,8 +18,14 @@ impl TypeCheck for Span<TermValue> {
     type Ctx = Ctx;
     type Out = Type;
     fn syn_step(
-        &self, ctx: Self::Ctx,
+        &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        ctx.trace.push(Frame {
+            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
+            sort: "syn value".to_string(),
+            term: format!("{}", self.inner_ref().fmt()),
+            info: self.span().clone(),
+        });
         let span = self.span();
         Ok(match self.inner_ref() {
             TermValue::TermAnn(TermAnn { term, ty }) => {
@@ -35,8 +41,7 @@ impl TypeCheck for Span<TermValue> {
             TermValue::Thunk(_) => {
                 // let c = c.syn(ctx)?;
                 // Step::Done(Type::make_thunk(rc!(span.make(c.into()))))
-                Err(span
-                    .make(NeedAnnotation { content: format!("thunk") }))?
+                Err(span.make(NeedAnnotation { content: format!("thunk") }))?
             }
             TermValue::Ctor(_) => {
                 Err(span.make(NeedAnnotation { content: format!("ctor") }))?
@@ -48,8 +53,14 @@ impl TypeCheck for Span<TermValue> {
         })
     }
     fn ana_step(
-        &self, typ: Self::Out, ctx: Self::Ctx,
+        &self, typ: Self::Out, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        ctx.trace.push(Frame {
+            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
+            sort: format!("ana value with type {}", typ.fmt()),
+            term: format!("{}", self.inner_ref().fmt()),
+            info: self.span().clone(),
+        });
         if let SynType::Hole(_) = typ.synty {
             return Ok(Step::SynMode((ctx, self)));
         }

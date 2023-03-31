@@ -3,7 +3,9 @@ mod value;
 mod computation;
 mod module;
 mod eqv;
+mod ctx;
 
+pub use self::ctx::*;
 use super::{err::TypeCheckError, syntax::*};
 use crate::{
     rc,
@@ -12,27 +14,11 @@ use crate::{
     utils::{
         fmt::FmtArgs,
         monoid::Monoid,
-        span::{Span, SpanView},
+        span::{Span, SpanInfo, SpanView},
     },
 };
 use std::collections::HashSet;
 use TypeCheckError::*;
-
-#[derive(Clone, Default)]
-pub struct Ctx {
-    pub abst_ctx: im::Vector<Kind>,
-    pub type_ctx: im::HashMap<TypeV, TypeArity<Kind>>,
-    pub term_ctx: im::HashMap<TermV, Type>,
-    pub type_env: Env<TypeV, Type>,
-    pub data_env: im::HashMap<TypeV, Data<TypeV, CtorV, RcType>>,
-    pub coda_env: im::HashMap<TypeV, Codata<TypeV, DtorV, RcType>>,
-}
-impl Ctx {
-    fn fresh(&mut self, kd: Kind) -> Abstract {
-        self.abst_ctx.push_back(kd);
-        Abstract(self.abst_ctx.len() - 1)
-    }
-}
 
 pub trait TypeCheck: SpanView + Sized {
     type Ctx: Default;

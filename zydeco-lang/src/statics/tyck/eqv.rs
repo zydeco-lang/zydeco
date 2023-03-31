@@ -27,12 +27,16 @@ impl Eqv for Type {
         f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
         match (&self.synty, &other.synty) {
-            (SynType::TypeApp(lhs), _) if ctx.type_env.contains_key(&lhs.tvar) => {
+            (SynType::TypeApp(lhs), _)
+                if ctx.type_env.contains_key(&lhs.tvar) =>
+            {
                 // lhs is a type variable
                 let ty = &ctx.clone().type_env[&lhs.tvar];
                 ty.eqv(other, ctx, f)
             }
-            (_, SynType::TypeApp(rhs)) if ctx.type_env.contains_key(&rhs.tvar) => {
+            (_, SynType::TypeApp(rhs))
+                if ctx.type_env.contains_key(&rhs.tvar) =>
+            {
                 // rhs is a type variable
                 let ty = &ctx.clone().type_env[&rhs.tvar];
                 self.eqv(ty, ctx, f)

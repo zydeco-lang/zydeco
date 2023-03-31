@@ -6,6 +6,12 @@ impl TypeCheck for Span<Type> {
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        ctx.trace.push(Frame {
+            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
+            sort: "syn type".to_owned(),
+            term: format!("{}", self.inner_ref().fmt()),
+            info: self.span().clone(),
+        });
         let span = self.span();
         let ty = self.inner_ref().clone().subst(ctx.type_env.clone())?;
         match &ty.synty {
@@ -56,8 +62,15 @@ impl TypeCheck for Span<Type> {
         }
     }
     fn ana_step(
-        &self, kd: Self::Out, ctx: Self::Ctx,
+        &self, kd: Self::Out, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        ctx.trace.push(Frame {
+            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
+            sort: format!("ana type with kind {}", kd.fmt()),
+            term: format!("{}", self.inner_ref().fmt()),
+            info: self.span().clone(),
+        });
+        let span = self.span();
         let ty = self.inner_ref().clone().subst(ctx.type_env.clone())?;
         match ty.synty {
             SynType::Hole(_) => Ok(Step::Done(kd)),
@@ -65,7 +78,6 @@ impl TypeCheck for Span<Type> {
             | SynType::Forall(_)
             | SynType::Exists(_)
             | SynType::Abstract(_) => {
-                let span = self.span().clone();
                 let kd_syn = self.syn(ctx)?;
                 kd_syn.eqv(&kd, Default::default(), || {
                     span.make(Subsumption {

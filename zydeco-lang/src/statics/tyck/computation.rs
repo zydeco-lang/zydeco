@@ -8,6 +8,12 @@ impl TypeCheck for Span<TermComputation> {
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        ctx.trace.push(Frame {
+            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
+            sort: format!("syn computation"),
+            term: format!("{}", self.inner_ref().fmt()),
+            info: self.span().clone(),
+        });
         let span = self.span();
         Ok(match self.inner_ref() {
             TermComputation::TermAnn(TermAnn { term, ty }) => {
@@ -15,8 +21,7 @@ impl TypeCheck for Span<TermComputation> {
                 Step::AnaMode((ctx, term), ty.inner_ref().clone())
             }
             TermComputation::Ret(_) => {
-                Err(span
-                .make(NeedAnnotation { content: format!("ret") }))?
+                Err(span.make(NeedAnnotation { content: format!("ret") }))?
                 // let ty_body: Type = v.syn(ctx.clone())?;
                 // span.make(ty_body.clone()).ana(Kind::VType, ctx)?;
                 // Step::Done(Type::make_ret(rc!(span.make(ty_body))))
@@ -255,6 +260,12 @@ impl TypeCheck for Span<TermComputation> {
     fn ana_step(
         &self, typ: Self::Out, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        ctx.trace.push(Frame {
+            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
+            sort: format!("ana computation with type {}", typ.fmt()),
+            term: format!("{}", self.fmt()),
+            info: self.span().clone(),
+        });
         if let SynType::Hole(_) = typ.synty {
             return Ok(Step::SynMode((ctx, self)));
         }
