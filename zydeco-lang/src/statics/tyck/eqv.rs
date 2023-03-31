@@ -79,7 +79,8 @@ impl Eqv for Type {
             (SynType::TypeApp(_), _)
             | (SynType::Forall(_), _)
             | (SynType::Exists(_), _)
-            | (SynType::Abstract(_), _) => Err(f()),
+            | (SynType::Abstract(_), _)
+            | (SynType::Hole(_), _) => Err(f()),
         }
     }
 }

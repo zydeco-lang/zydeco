@@ -7,6 +7,12 @@ impl FmtArgs for Abstract {
     }
 }
 
+impl FmtArgs for Hole {
+    fn fmt_args(&self, _fargs: Args) -> String {
+        "_?".into()
+    }
+}
+
 impl FmtArgs for SynType {
     fn fmt_args(&self, fargs: Args) -> String {
         match self {
@@ -14,6 +20,7 @@ impl FmtArgs for SynType {
             SynType::Forall(t) => t.fmt_args(fargs),
             SynType::Exists(t) => t.fmt_args(fargs),
             SynType::Abstract(t) => t.fmt_args(fargs),
+            SynType::Hole(t) => t.fmt_args(fargs),
         }
     }
 }

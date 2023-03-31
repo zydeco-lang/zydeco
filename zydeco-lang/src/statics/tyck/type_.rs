@@ -55,6 +55,9 @@ impl TypeCheck for Span<Type> {
             SynType::Abstract(Abstract(abs)) => {
                 Ok(Step::Done(ctx.abst_ctx[*abs]))
             }
+            SynType::Hole(_) => Err(self
+                .span()
+                .make(NeedAnnotation { content: format!("hole") }))?,
         }
     }
 }
@@ -112,7 +115,7 @@ impl Type {
                     .into(),
                 })
             }
-            SynType::Abstract(_) => Ok(self),
+            SynType::Abstract(_) | SynType::Hole(_) => Ok(self),
         }
     }
 }

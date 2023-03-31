@@ -20,6 +20,7 @@ pub enum SynType {
     Forall(Forall<TypeV, Kind, RcType>),
     Exists(Exists<TypeV, Kind, RcType>),
     Abstract(Abstract),
+    Hole(Hole),
 }
 
 #[derive(Clone, Debug)]
