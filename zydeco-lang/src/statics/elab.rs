@@ -205,9 +205,17 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 .into()
             }
             ps::TermComputation::Ret(Ret(body)) => {
+                let span = body.span().clone();
                 let body: TermComputation =
                     Ret(rc!((body).try_map(TryInto::try_into)?)).into();
-                body
+                TermAnn {
+                    term: rc!(span.make(body)),
+                    ty: rc!(span.make(Type::internal(
+                        "Ret_F",
+                        vec![rc!(span.make(Hole.into()))]
+                    ))),
+                }
+                .into()
             }
             ps::TermComputation::Force(Force(body)) => {
                 Force(rc!((body).try_map(TryInto::try_into)?)).into()
