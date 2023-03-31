@@ -76,11 +76,11 @@ impl Eqv for Type {
                 // both abstract
                 bool_test(lhs == rhs, f)
             }
+            (SynType::Hole(_), _) | (_, SynType::Hole(_)) => Ok(()),
             (SynType::TypeApp(_), _)
             | (SynType::Forall(_), _)
             | (SynType::Exists(_), _)
-            | (SynType::Abstract(_), _)
-            | (SynType::Hole(_), _) => Err(f()),
+            | (SynType::Abstract(_), _) => Err(f()),
         }
     }
 }

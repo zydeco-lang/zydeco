@@ -66,8 +66,17 @@ impl TypeCheck for Span<Type> {
             | SynType::Abstract(_) => {
                 let span = self.span().clone();
                 let kd_syn = self.syn(ctx)?;
-                kd_syn
-                    .eqv(&kd, Default::default(), || span.make(Subsumption))?;
+                kd_syn.eqv(&kd, Default::default(), || {
+                    span.make(Subsumption {
+                        sort: "type",
+                        tycker_src: format!(
+                            "{}:{}:{}",
+                            file!(),
+                            line!(),
+                            column!()
+                        ),
+                    })
+                })?;
                 Ok(Step::Done(kd))
             }
         }
@@ -128,6 +137,71 @@ impl Type {
                 })
             }
             SynType::Abstract(_) | SynType::Hole(_) => Ok(self),
+        }
+    }
+    pub(super) fn lub(
+        lhs: Self, rhs: Self, ctx: Ctx,
+        f: impl FnOnce() -> Span<TypeCheckError> + Clone,
+    ) -> Result<Self, Span<TypeCheckError>> {
+        let lhs = lhs.subst(ctx.type_env.clone()).unwrap();
+        let rhs = rhs.subst(ctx.type_env.clone()).unwrap();
+        match (&lhs.synty, &rhs.synty) {
+            (SynType::Hole(_), _) => Ok(rhs),
+            (_, SynType::Hole(_)) => Ok(lhs),
+            (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
+                bool_test(lhs.tvar == rhs.tvar, f.clone())?;
+                let mut args = vec![];
+                for (lhs, rhs) in (lhs.args.iter()).zip(rhs.args.iter()) {
+                    let arg = Self::lub(
+                        lhs.inner_ref().clone(),
+                        rhs.inner_ref().clone(),
+                        ctx.clone(),
+                        f.clone(),
+                    )?;
+                    args.push(rc!(lhs.span().make(arg)));
+                }
+                Ok(TypeApp { tvar: lhs.tvar.clone(), args }.into())
+            }
+            (SynType::Forall(lhs), SynType::Forall(rhs)) => {
+                bool_test(lhs.param == rhs.param, f.clone())?;
+                bool_test(lhs.kd == rhs.kd, f.clone())?;
+                let ty = Self::lub(
+                    lhs.ty.inner_ref().clone(),
+                    rhs.ty.inner_ref().clone(),
+                    ctx.clone(),
+                    f.clone(),
+                )?;
+                Ok(Forall {
+                    param: lhs.param.clone(),
+                    kd: lhs.kd.clone(),
+                    ty: rc!(lhs.ty.span().make(ty)),
+                }
+                .into())
+            }
+            (SynType::Exists(lhs), SynType::Exists(rhs)) => {
+                bool_test(lhs.param == rhs.param, f.clone())?;
+                bool_test(lhs.kd == rhs.kd, f.clone())?;
+                let ty = Self::lub(
+                    lhs.ty.inner_ref().clone(),
+                    rhs.ty.inner_ref().clone(),
+                    ctx.clone(),
+                    f.clone(),
+                )?;
+                Ok(Exists {
+                    param: lhs.param.clone(),
+                    kd: lhs.kd.clone(),
+                    ty: rc!(lhs.ty.span().make(ty)),
+                }
+                .into())
+            }
+            (SynType::Abstract(lhs), SynType::Abstract(rhs)) => {
+                bool_test(lhs == rhs, f.clone())?;
+                Ok(lhs.clone().into())
+            }
+            (SynType::TypeApp(_), _)
+            | (SynType::Forall(_), _)
+            | (SynType::Exists(_), _)
+            | (SynType::Abstract(_), _) => Err(f()),
         }
     }
 }

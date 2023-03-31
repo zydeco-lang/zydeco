@@ -56,6 +56,36 @@ impl TypeCheck for Span<TermValue> {
         let span = self.span();
         span.make(typ.clone()).ana(Kind::VType, ctx.clone())?;
         Ok(match self.inner_ref() {
+            TermValue::TermAnn(TermAnn { term, ty }) => {
+                // ty.inner_ref().eqv(&typ, ctx.clone(), || {
+                //     span.make(Subsumption {
+                //         sort: "value annotation",
+                //         tycker_src: format!(
+                //             "{}:{}:{}",
+                //             file!(),
+                //             line!(),
+                //             column!()
+                //         ),
+                //     })
+                // })?;
+                let ty_lub = Type::lub(
+                    ty.inner_ref().clone(),
+                    typ.clone(),
+                    ctx.clone(),
+                    || {
+                        span.make(Subsumption {
+                            sort: "value annotation",
+                            tycker_src: format!(
+                                "{}:{}:{}",
+                                file!(),
+                                line!(),
+                                column!()
+                            ),
+                        })
+                    },
+                )?;
+                Step::AnaMode((ctx, term), ty_lub)
+            }
             TermValue::Thunk(Thunk(c)) => {
                 let SynType::TypeApp(ty_app) = &typ.synty else {
                     Err(self.span().make(TypeExpected {
@@ -142,11 +172,19 @@ impl TypeCheck for Span<TermValue> {
                 body.ana(ty_body, ctx)?;
                 Step::Done(typ)
             }
-            TermValue::TermAnn(_)
-            | TermValue::Var(_)
-            | TermValue::Literal(_) => {
+            TermValue::Var(_) | TermValue::Literal(_) => {
                 let typ_syn = self.syn(ctx.clone())?;
-                typ.eqv(&typ_syn, ctx, || self.span().make(Subsumption))?;
+                typ.eqv(&typ_syn, ctx, || {
+                    self.span().make(Subsumption {
+                        sort: "value",
+                        tycker_src: format!(
+                            "{}:{}:{}",
+                            file!(),
+                            line!(),
+                            column!()
+                        ),
+                    })
+                })?;
                 Step::Done(typ)
             }
         })

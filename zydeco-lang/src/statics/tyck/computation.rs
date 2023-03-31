@@ -268,6 +268,36 @@ impl TypeCheck for Span<TermComputation> {
         let span = self.span();
         span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
         Ok(match self.inner_ref() {
+            TermComputation::TermAnn(TermAnn { term, ty }) => {
+                // ty.inner_ref().eqv(&typ, ctx.clone(), || {
+                //     span.make(Subsumption {
+                //         sort: "computation annotation",
+                //         tycker_src: format!(
+                //             "{}:{}:{}",
+                //             file!(),
+                //             line!(),
+                //             column!()
+                //         ),
+                //     })
+                // })?;
+                let ty_lub = Type::lub(
+                    ty.inner_ref().clone(),
+                    typ.clone(),
+                    ctx.clone(),
+                    || {
+                        span.make(Subsumption {
+                            sort: "computation annotation",
+                            tycker_src: format!(
+                                "{}:{}:{}",
+                                file!(),
+                                line!(),
+                                column!()
+                            ),
+                        })
+                    },
+                )?;
+                Step::AnaMode((ctx, term), ty_lub)
+            }
             TermComputation::Ret(Ret(v)) => {
                 let SynType::TypeApp(ty_app) = &typ.synty else {
                     Err(self.span().make(TypeExpected {
@@ -479,12 +509,21 @@ impl TypeCheck for Span<TermComputation> {
                 body.ana(ty.inner_ref().clone(), ctx)?;
                 Step::Done(typ)
             }
-            TermComputation::TermAnn(_)
-            | TermComputation::Dtor(_)
+            TermComputation::Dtor(_)
             | TermComputation::TypApp(_)
             | TermComputation::MatchPack(_) => {
                 let typ_syn = self.syn(ctx.clone())?;
-                typ.eqv(&typ_syn, ctx, || self.span().make(Subsumption))?;
+                typ.eqv(&typ_syn, ctx, || {
+                    self.span().make(Subsumption {
+                        sort: "computation",
+                        tycker_src: format!(
+                            "{}:{}:{}",
+                            file!(),
+                            line!(),
+                            column!()
+                        ),
+                    })
+                })?;
                 Step::Done(typ)
             }
         })
