@@ -92,7 +92,8 @@ fn desugar_fn(
                 "Fn",
                 vec![rc!(ty), rc!(span.make(Hole.into()))],
             ));
-            body = TermAnn { term: rc!(span.make(body)), ty: rc!(ty) }.into();
+            body =
+                Annotation { term: rc!(span.make(body)), ty: rc!(ty) }.into();
         }
         Ok(body)
     }
@@ -136,21 +137,21 @@ impl TryFrom<ps::Type> for Type {
             }
             ps::Type::Forall(ps::Forall(params, t)) => {
                 let mut t = t.try_map(TryInto::try_into)?;
-                for (param, kd) in params.into_iter().rev() {
+                for param in params.into_iter().rev() {
                     t = t
                         .span()
                         .clone()
-                        .make(Forall { param, kd, ty: rc!(t) }.into())
+                        .make(Forall { param, ty: rc!(t) }.into())
                 }
                 t.inner
             }
             ps::Type::Exists(ps::Exists(params, t)) => {
                 let mut t = t.try_map(TryInto::try_into)?;
-                for (param, kd) in params.into_iter().rev() {
+                for param in params.into_iter().rev() {
                     t = t
                         .span()
                         .clone()
-                        .make(Exists { param, kd, ty: rc!(t) }.into())
+                        .make(Exists { param, ty: rc!(t) }.into())
                 }
                 t.inner
             }
@@ -163,17 +164,19 @@ impl TryFrom<ps::TermValue> for TermValue {
     type Error = TypeCheckError;
     fn try_from(value: ps::TermValue) -> Result<Self, TypeCheckError> {
         Ok(match value {
-            ps::TermValue::TermAnn(TermAnn { term: body, ty }) => TermAnn {
-                term: rc!(body.try_map(TryInto::try_into)?),
-                ty: rc!(ty.try_map(TryInto::try_into)?),
+            ps::TermValue::TermAnn(Annotation { term: body, ty }) => {
+                Annotation {
+                    term: rc!(body.try_map(TryInto::try_into)?),
+                    ty: rc!(ty.try_map(TryInto::try_into)?),
+                }
+                .into()
             }
-            .into(),
             ps::TermValue::Var(x) => x.into(),
             ps::TermValue::Thunk(Thunk(body)) => {
                 let span = body.span().clone();
                 let body =
                     Thunk(rc!((body).try_map(TryInto::try_into)?)).into();
-                TermAnn {
+                Annotation {
                     term: rc!(span.make(body)),
                     ty: rc!(span.make(Type::internal(
                         "Thunk_U",
@@ -207,8 +210,8 @@ impl TryFrom<ps::TermComputation> for TermComputation {
     type Error = TypeCheckError;
     fn try_from(comp: ps::TermComputation) -> Result<Self, TypeCheckError> {
         Ok(match comp {
-            ps::TermComputation::TermAnn(TermAnn { term: body, ty }) => {
-                TermAnn {
+            ps::TermComputation::TermAnn(Annotation { term: body, ty }) => {
+                Annotation {
                     term: rc!(body.try_map(TryInto::try_into)?),
                     ty: rc!(ty.try_map(TryInto::try_into)?),
                 }
@@ -218,7 +221,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let span = body.span().clone();
                 let body: TermComputation =
                     Ret(rc!((body).try_map(TryInto::try_into)?)).into();
-                TermAnn {
+                Annotation {
                     term: rc!(span.make(body)),
                     ty: rc!(span.make(Type::internal(
                         "Ret_F",
@@ -241,7 +244,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 };
                 let mut def = def;
                 let span = def.span().clone();
-                def = rc!(span.make(ps::TermAnn { term: def, ty }.into()));
+                def = rc!(span.make(ps::Annotation { term: def, ty }.into()));
                 let body = rc!((body).try_map(TryInto::try_into)?);
                 Let { var, def, body }.into()
             }
@@ -249,7 +252,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let mut comp = rc!((comp).try_map(TryInto::try_into)?);
                 if let Some(ty) = ty {
                     comp = rc!(comp.info.clone().make(
-                        TermAnn {
+                        Annotation {
                             term: comp,
                             ty: rc!(ty.try_map(TryInto::try_into)?),
                         }
@@ -280,7 +283,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                             found: ty_
                         })?
                     };
-                    body = TermAnn {
+                    body = Annotation {
                         term: rc!(span.make(body)),
                         ty: rc!(span.make(ty)),
                     }
@@ -480,7 +483,8 @@ impl TryFrom<ps::Module> for Module {
                             }
                         })?;
                         let span = term.span().clone();
-                        let def = rc!(span.make(TermAnn { term, ty }.into()));
+                        let def =
+                            rc!(span.make(Annotation { term, ty }.into()));
                         define.push(DeclSymbol {
                             public,
                             external,

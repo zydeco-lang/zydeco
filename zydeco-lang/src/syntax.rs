@@ -92,6 +92,7 @@ pub mod binder {
     impl DtorT for DtorV {}
     var!(TypeV);
     impl TyVarT for TypeV {}
+    impl<Kd: KindT> TyVarT for (TypeV, Kd) {}
     var!(TermV);
     impl VarT for TermV {}
     impl<Ty: TypeT> VarT for (TermV, Ty) {}
@@ -99,6 +100,15 @@ pub mod binder {
 pub use binder::*;
 
 /* ------------------------------ Bi-Diretional ----------------------------- */
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Annotation<Term, Type> {
+    pub term: Term,
+    pub ty: Type,
+}
+impl<Term: ValueT, Type> ValueT for Annotation<Term, Type> {}
+impl<Term: ComputationT, Type> ComputationT for Annotation<Term, Type> {}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Hole;
 impl TypeT for Hole {}
@@ -138,30 +148,18 @@ pub struct TypeApp<TyV: TyVarT, Ty: TypeT> {
 impl<TyV: TyVarT, Ty: TypeT> TypeT for TypeApp<TyV, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Forall<TyV: TyVarT, Kd: KindT, Ty: TypeT> {
+pub struct Forall<TyV: TyVarT, Ty: TypeT> {
     pub param: TyV,
-    pub kd: Kd,
     pub ty: Ty,
 }
-impl<TyV: TyVarT, Kd: KindT, Ty: TypeT> TypeT for Forall<TyV, Kd, Ty> {}
+impl<TyV: TyVarT, Ty: TypeT> TypeT for Forall<TyV, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Exists<TyV: TyVarT, Kd: KindT, Ty: TypeT> {
+pub struct Exists<TyV: TyVarT, Ty: TypeT> {
     pub param: TyV,
-    pub kd: Kd,
     pub ty: Ty,
 }
-impl<TyV: TyVarT, Kd: KindT, Ty: TypeT> TypeT for Exists<TyV, Kd, Ty> {}
-
-/* ---------------------------------- Terms --------------------------------- */
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TermAnn<Term, Type> {
-    pub term: Term,
-    pub ty: Type,
-}
-impl<Term: ValueT, Type> ValueT for TermAnn<Term, Type> {}
-impl<Term: ComputationT, Type> ComputationT for TermAnn<Term, Type> {}
+impl<TyV: TyVarT, Ty: TypeT> TypeT for Exists<TyV, Ty> {}
 
 /* --------------------------------- Values --------------------------------- */
 

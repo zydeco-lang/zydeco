@@ -58,31 +58,31 @@ impl Eqv for Type {
             }
             (SynType::Forall(lhs), SynType::Forall(rhs)) => {
                 // both forall
-                bool_test(lhs.kd == rhs.kd, f.clone())?;
+                bool_test(lhs.param.1 == rhs.param.1, f.clone())?;
                 let mut ctx = ctx.clone();
-                let abst_var = ctx.fresh(lhs.kd.clone());
+                let abst_var = ctx.fresh(lhs.param.1.clone());
                 let lhs_ty =
                     lhs.ty.inner_ref().clone().subst(Env::from_iter([(
-                        lhs.param.clone(),
+                        lhs.param.0.clone(),
                         abst_var.clone().into(),
                     )]))?;
                 let rhs_ty = rhs.ty.inner_ref().clone().subst(
-                    Env::from_iter([(rhs.param.clone(), abst_var.into())]),
+                    Env::from_iter([(rhs.param.0.clone(), abst_var.into())]),
                 )?;
                 lhs_ty.eqv(&rhs_ty, ctx, f)
             }
             (SynType::Exists(lhs), SynType::Exists(rhs)) => {
                 // both exists
-                bool_test(lhs.kd == rhs.kd, f.clone())?;
+                bool_test(lhs.param.1 == rhs.param.1, f.clone())?;
                 let mut ctx = ctx.clone();
-                let abst_var = ctx.fresh(lhs.kd.clone());
+                let abst_var = ctx.fresh(lhs.param.1.clone());
                 let lhs_ty =
                     lhs.ty.inner_ref().clone().subst(Env::from_iter([(
-                        lhs.param.clone(),
+                        lhs.param.0.clone(),
                         abst_var.clone().into(),
                     )]))?;
                 let rhs_ty = rhs.ty.inner_ref().clone().subst(
-                    Env::from_iter([(rhs.param.clone(), abst_var.into())]),
+                    Env::from_iter([(rhs.param.0.clone(), abst_var.into())]),
                 )?;
                 lhs_ty.eqv(&rhs_ty, ctx, f)
             }

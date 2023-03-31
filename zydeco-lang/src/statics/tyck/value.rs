@@ -28,7 +28,7 @@ impl TypeCheck for Span<TermValue> {
         });
         let span = self.span();
         Ok(match self.inner_ref() {
-            TermValue::TermAnn(TermAnn { term, ty }) => {
+            TermValue::Annotation(Annotation { term, ty }) => {
                 ty.ana(Kind::VType, ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_ref().clone())
             }
@@ -65,7 +65,7 @@ impl TypeCheck for Span<TermValue> {
         let span = self.span();
         span.make(typ.clone()).ana(Kind::VType, ctx.clone())?;
         Ok(match self.inner_ref() {
-            TermValue::TermAnn(TermAnn { term, ty }) => {
+            TermValue::Annotation(Annotation { term, ty }) => {
                 let ty_lub = Type::lub(
                     ty.inner_ref().clone(),
                     typ.clone(),
@@ -148,7 +148,9 @@ impl TypeCheck for Span<TermValue> {
                 Step::Done(typ)
             }
             TermValue::Pack(Pack { ty, body }) => {
-                let SynType::Exists(Exists { param, kd, ty: ty_body }) = &typ.synty else {
+                let SynType::Exists(
+                    Exists { param: (param, kd), ty: ty_body }
+                ) = &typ.synty else {
                     Err(span.make(TypeExpected {
                         context: format!("pack"),
                         expected: format!("{{a}}"),

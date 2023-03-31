@@ -15,8 +15,8 @@ pub struct AbstVar(pub usize);
 #[derive(EnumGenerator, FmtArgs, Clone, Debug)]
 pub enum SynType {
     TypeApp(TypeApp<TypeV, RcType>),
-    Forall(Forall<TypeV, Kind, RcType>),
-    Exists(Exists<TypeV, Kind, RcType>),
+    Forall(Forall<(TypeV, Kind), RcType>),
+    Exists(Exists<(TypeV, Kind), RcType>),
     AbstVar(AbstVar),
     Hole(Hole),
 }
@@ -78,8 +78,8 @@ macro_rules! impl_from {
     };
 }
 impl_from!(TypeApp<TypeV, RcType>);
-impl_from!(Forall<TypeV, Kind, RcType>);
-impl_from!(Exists<TypeV, Kind, RcType>);
+impl_from!(Forall<(TypeV, Kind), RcType>);
+impl_from!(Exists<(TypeV, Kind), RcType>);
 impl_from!(AbstVar);
 impl_from!(Hole);
 impl From<TypeV> for Type {
@@ -92,7 +92,7 @@ impl From<TypeV> for Type {
 
 #[derive(EnumGenerator, FmtArgs, Clone, Debug)]
 pub enum TermValue {
-    TermAnn(TermAnn<RcValue, RcType>),
+    Annotation(Annotation<RcValue, RcType>),
     Var(TermV),
     Thunk(Thunk<RcComp>),
     Ctor(Ctor<CtorV, RcValue>),
@@ -104,7 +104,7 @@ impl ValueT for TermValue {}
 
 #[derive(EnumGenerator, FmtArgs, Clone, Debug)]
 pub enum TermComputation {
-    TermAnn(TermAnn<RcComp, RcType>),
+    Annotation(Annotation<RcComp, RcType>),
     Ret(Ret<RcValue>),
     Force(Force<RcValue>),
     Let(Let<TermV, RcValue, RcComp>),

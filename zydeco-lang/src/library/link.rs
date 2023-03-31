@@ -40,7 +40,7 @@ impl From<ss::Module> for Module {
 impl From<&ss::TermValue> for ZVal {
     fn from(v: &ss::TermValue) -> Self {
         match v {
-            ss::TermValue::TermAnn(TermAnn { term: body, ty: _ }) => {
+            ss::TermValue::Annotation(Annotation { term: body, ty: _ }) => {
                 body.inner_ref().into()
             }
             ss::TermValue::Var(x) => x.clone().into(),
@@ -63,9 +63,10 @@ impl From<&ss::TermValue> for ZVal {
 impl From<&ss::TermComputation> for ZComp {
     fn from(e: &ss::TermComputation) -> Self {
         match e {
-            ss::TermComputation::TermAnn(TermAnn { term: body, ty: _ }) => {
-                body.inner_ref().into()
-            }
+            ss::TermComputation::Annotation(Annotation {
+                term: body,
+                ty: _,
+            }) => body.inner_ref().into(),
             ss::TermComputation::Ret(Ret(v)) => {
                 Ret(rc!(v.inner_ref().into())).into()
             }

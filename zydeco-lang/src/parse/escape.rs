@@ -40,7 +40,7 @@ pub fn apply_char_escapes(code: &str) -> char {
             Some('t') => '\t',
             Some('\'') => '\'',
             _ => '\\', //Error?
-        }
+        },
         c => c,
     }
 }

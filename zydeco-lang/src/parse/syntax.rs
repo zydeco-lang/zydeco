@@ -38,7 +38,7 @@ impl TypeT for Type {}
 
 #[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum TermValue {
-    TermAnn(TermAnn<BoxValue, Span<Type>>),
+    TermAnn(Annotation<BoxValue, Span<Type>>),
     Var(TermV),
     Thunk(Thunk<BoxComp>),
     Ctor(Ctor<CtorV, Span<TermValue>>),
@@ -99,7 +99,7 @@ pub struct MatchPack {
 
 #[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum TermComputation {
-    TermAnn(TermAnn<BoxComp, Span<Type>>),
+    TermAnn(Annotation<BoxComp, Span<Type>>),
     Ret(Ret<BoxValue>),
     Force(Force<BoxValue>),
     Let(Let),

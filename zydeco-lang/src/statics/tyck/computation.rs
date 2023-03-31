@@ -16,7 +16,7 @@ impl TypeCheck for Span<TermComputation> {
         });
         let span = self.span();
         Ok(match self.inner_ref() {
-            TermComputation::TermAnn(TermAnn { term, ty }) => {
+            TermComputation::Annotation(Annotation { term, ty }) => {
                 ty.ana(Kind::CType, ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_ref().clone())
             }
@@ -211,7 +211,7 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::TypApp(TypApp { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
-                let SynType::Forall(Forall { param, kd, ty }) = ty_body.synty else {
+                let SynType::Forall(Forall { param: (param, kd), ty }) = ty_body.synty else {
                     Err(span.make(TypeExpected {
                         context: format!("term-typ-application"),
                         expected: format!("forall,"),
@@ -235,7 +235,7 @@ impl TypeCheck for Span<TermComputation> {
                 body,
             }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
-                let SynType::Exists(Exists { param, kd, ty }) = &ty_scrut.synty else {
+                let SynType::Exists(Exists { param: (param, kd), ty }) = &ty_scrut.synty else {
                         Err(span.make(TypeExpected {
                             context: format!("match-pack"),
                             expected: format!("exists"),
@@ -269,7 +269,7 @@ impl TypeCheck for Span<TermComputation> {
         let span = self.span();
         span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
         Ok(match self.inner_ref() {
-            TermComputation::TermAnn(TermAnn { term, ty }) => {
+            TermComputation::Annotation(Annotation { term, ty }) => {
                 let ty_lub = Type::lub(
                     ty.inner_ref().clone(),
                     typ.clone(),
@@ -463,7 +463,7 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::TypAbs(TypAbs { tvar, kd, body }) => {
-                let SynType::Forall(Forall { param, kd: kd_, ty }) = &typ.synty else {
+                let SynType::Forall(Forall { param: (param, kd_), ty }) = &typ.synty else {
                     Err(span.make(TypeExpected {
                         context: format!("typabs"),
                         expected: format!("forall"),

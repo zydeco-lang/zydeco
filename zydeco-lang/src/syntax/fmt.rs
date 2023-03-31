@@ -25,6 +25,13 @@ mod binder {
     var_fmt!(TermV);
 }
 
+impl FmtArgs for (TypeV, Kind) {
+    fn fmt_args(&self, fargs: Args) -> String {
+        let (tvar, kd) = self;
+        format!("({} : {})", tvar.fmt_args(fargs), kd.fmt_args(fargs))
+    }
+}
+
 impl FmtArgs for Kind {
     fn fmt_args(&self, _args: Args) -> String {
         match self {
@@ -83,47 +90,35 @@ where
     }
 }
 
-impl<TyV, Kd, Ty> FmtArgs for Forall<TyV, Kd, Ty>
+impl<TyV, Ty> FmtArgs for Forall<TyV, Ty>
 where
     TyV: TyVarT + FmtArgs,
-    Kd: KindT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, args: Args) -> String {
-        let Forall { param, kd, ty } = self;
-        format!(
-            "forall {} : {} . {}",
-            param.fmt_args(args),
-            kd.fmt_args(args),
-            ty.fmt_args(args)
-        )
+        let Forall { param, ty } = self;
+        format!("forall {} . {}", param.fmt_args(args), ty.fmt_args(args))
     }
 }
 
-impl<TyV, Kd, Ty> FmtArgs for Exists<TyV, Kd, Ty>
+impl<TyV, Ty> FmtArgs for Exists<TyV, Ty>
 where
     TyV: TyVarT + FmtArgs,
-    Kd: KindT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, args: Args) -> String {
-        let Exists { param, kd, ty } = self;
-        format!(
-            "exists {} : {} . {}",
-            param.fmt_args(args),
-            kd.fmt_args(args),
-            ty.fmt_args(args)
-        )
+        let Exists { param, ty } = self;
+        format!("exists {} . {}", param.fmt_args(args), ty.fmt_args(args))
     }
 }
 
-impl<Term, Type> FmtArgs for TermAnn<Term, Type>
+impl<Term, Type> FmtArgs for Annotation<Term, Type>
 where
     Term: FmtArgs,
     Type: FmtArgs,
 {
     fn fmt_args(&self, args: Args) -> String {
-        let TermAnn { term: body, ty } = self;
+        let Annotation { term: body, ty } = self;
         format!("({} :: {})", body.fmt_args(args), ty.fmt_args(args))
     }
 }

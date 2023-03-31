@@ -37,7 +37,7 @@ impl TypeCheck for Span<Type> {
                 }
                 Ok(Step::Done(kd.clone()))
             }
-            SynType::Forall(Forall { param, kd, ty }) => {
+            SynType::Forall(Forall { param: (param, kd), ty }) => {
                 ctx.type_ctx.insert(
                     param.clone(),
                     TypeArity { params: vec![], kd: kd.clone() },
@@ -45,7 +45,7 @@ impl TypeCheck for Span<Type> {
                 ty.ana(Kind::CType, ctx)?;
                 Ok(Step::Done(Kind::CType))
             }
-            SynType::Exists(Exists { param, kd, ty }) => {
+            SynType::Exists(Exists { param: (param, kd), ty }) => {
                 ctx.type_ctx.insert(
                     param.clone(),
                     TypeArity { params: vec![], kd: kd.clone() },
@@ -113,12 +113,11 @@ impl Type {
                     Ok(Type { synty: TypeApp { tvar, args }.into() })
                 }
             }
-            SynType::Forall(Forall { param, kd, ty }) => {
-                diff.remove(&param);
+            SynType::Forall(Forall { param, ty }) => {
+                diff.remove(&param.0);
                 Ok(Type {
                     synty: Forall {
                         param,
-                        kd,
                         ty: rc!(ty
                             .as_ref()
                             .clone()
@@ -127,12 +126,11 @@ impl Type {
                     .into(),
                 })
             }
-            SynType::Exists(Exists { param, kd, ty }) => {
-                diff.remove(&param);
+            SynType::Exists(Exists { param, ty }) => {
+                diff.remove(&param.0);
                 Ok(Type {
                     synty: Exists {
                         param,
-                        kd,
                         ty: rc!(ty
                             .as_ref()
                             .clone()
@@ -169,7 +167,6 @@ impl Type {
             }
             (SynType::Forall(lhs), SynType::Forall(rhs)) => {
                 bool_test(lhs.param == rhs.param, f.clone())?;
-                bool_test(lhs.kd == rhs.kd, f.clone())?;
                 let ty = Self::lub(
                     lhs.ty.inner_ref().clone(),
                     rhs.ty.inner_ref().clone(),
@@ -178,14 +175,12 @@ impl Type {
                 )?;
                 Ok(Forall {
                     param: lhs.param.clone(),
-                    kd: lhs.kd.clone(),
                     ty: rc!(lhs.ty.span().make(ty)),
                 }
                 .into())
             }
             (SynType::Exists(lhs), SynType::Exists(rhs)) => {
                 bool_test(lhs.param == rhs.param, f.clone())?;
-                bool_test(lhs.kd == rhs.kd, f.clone())?;
                 let ty = Self::lub(
                     lhs.ty.inner_ref().clone(),
                     rhs.ty.inner_ref().clone(),
@@ -194,7 +189,6 @@ impl Type {
                 )?;
                 Ok(Exists {
                     param: lhs.param.clone(),
-                    kd: lhs.kd.clone(),
                     ty: rc!(lhs.ty.span().make(ty)),
                 }
                 .into())

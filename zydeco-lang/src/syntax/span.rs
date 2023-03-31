@@ -62,41 +62,37 @@ where
     }
 }
 
-impl<TyV, Kd, Ty> SpanHolder for Forall<TyV, Kd, Ty>
+impl<TyV, Ty> SpanHolder for Forall<TyV, Ty>
 where
     TyV: TyVarT + SpanHolder,
-    Kd: KindT + SpanHolder,
     Ty: TypeT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let Forall { param, kd, ty } = self;
+        let Forall { param, ty } = self;
         param.span_map_mut(f.clone());
-        kd.span_map_mut(f.clone());
         ty.span_map_mut(f);
     }
 }
 
-impl<TyV, Kd, Ty> SpanHolder for Exists<TyV, Kd, Ty>
+impl<TyV, Ty> SpanHolder for Exists<TyV, Ty>
 where
     TyV: TyVarT + SpanHolder,
-    Kd: KindT + SpanHolder,
     Ty: TypeT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let Exists { param, kd, ty } = self;
+        let Exists { param, ty } = self;
         param.span_map_mut(f.clone());
-        kd.span_map_mut(f.clone());
         ty.span_map_mut(f);
     }
 }
 
-impl<Term, Type> SpanHolder for TermAnn<Term, Type>
+impl<Term, Type> SpanHolder for Annotation<Term, Type>
 where
     Term: SpanHolder,
     Type: SpanHolder,
@@ -105,7 +101,7 @@ where
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let TermAnn { term, ty } = self;
+        let Annotation { term, ty } = self;
         term.span_map_mut(f.clone());
         ty.span_map_mut(f);
     }
