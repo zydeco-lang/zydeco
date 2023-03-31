@@ -33,7 +33,7 @@ impl TypeCheck for Span<Type> {
                     })
                 })?;
                 for (arg, kd) in app.args.iter().zip(params.iter()) {
-                    arg.ana(kd.clone(), ctx.clone())?
+                    arg.ana(kd.clone(), ctx.clone())?;
                 }
                 Ok(Step::Done(kd.clone()))
             }

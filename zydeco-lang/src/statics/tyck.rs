@@ -63,8 +63,8 @@ pub trait TypeCheck: SpanView + Sized {
     #[must_use]
     fn ana(
         &self, typ: Self::Out, ctx: Self::Ctx,
-    ) -> Result<(), Span<TypeCheckError>> {
-        Self::tyck(self.ana_step(typ, ctx)?).map(|_| ())
+    ) -> Result<Self::Out, Span<TypeCheckError>> {
+        Self::tyck(self.ana_step(typ, ctx)?)
     }
 }
 

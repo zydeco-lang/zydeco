@@ -306,8 +306,21 @@ impl TypeCheck for Span<TermComputation> {
                         found: typ.clone(),
                     })
                 })?;
-                v.ana(ty_body, ctx)?;
-                Step::Done(typ)
+                let ty = Type::make_ret(rc!(
+                    span.make(v.ana(ty_body, ctx.clone())?)
+                ));
+                let typ_lub = Type::lub(ty, typ, ctx, || {
+                    span.make(Subsumption {
+                        sort: "ret",
+                        tycker_src: format!(
+                            "{}:{}:{}",
+                            file!(),
+                            line!(),
+                            column!()
+                        ),
+                    })
+                })?;
+                Step::Done(typ_lub)
             }
             TermComputation::Force(Force(v)) => {
                 v.ana(Type::make_thunk(rc!(span.make(typ.clone()))), ctx)?;

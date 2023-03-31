@@ -101,8 +101,21 @@ impl TypeCheck for Span<TermValue> {
                         found: typ.to_owned(),
                     })
                 })?;
-                c.ana(typ_comp, ctx)?;
-                Step::Done(typ)
+                let ty = Type::make_thunk(rc!(
+                    span.make(c.ana(typ_comp, ctx.clone())?)
+                ));
+                let typ_lub = Type::lub(ty, typ, ctx, || {
+                    span.make(Subsumption {
+                        sort: "thunk",
+                        tycker_src: format!(
+                            "{}:{}:{}",
+                            file!(),
+                            line!(),
+                            column!()
+                        ),
+                    })
+                })?;
+                Step::Done(typ_lub)
             }
             TermValue::Ctor(Ctor { ctor, args }) => {
                 let SynType::TypeApp(ty_app) = &typ.synty else {
