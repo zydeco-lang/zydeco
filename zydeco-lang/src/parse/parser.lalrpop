@@ -3,7 +3,6 @@ use crate::{
     syntax::{TCtor, DeclSymbol},
     utils::span::*,
 };
-use crate::parse::{apply_string_escapes};
 
 grammar<'input>(input: &'input str);
 
@@ -176,6 +175,11 @@ TermComputation: TermComputation = {
     }.into(),
 };
 
+LetSep: () = {
+    ";" => (),
+    "in" => (),
+};
+
 TermComputationRight: TermComputation = {
     TermComputationAtom,
     <body:Box<Span<TermComputationRight>>> <arg:Box<Span<TermValue>>> => Application {
@@ -235,11 +239,6 @@ Literal: Literal = {
     <Char> => <>.into(),
 };
 
-LetSep: () = {
-    ";" => (),
-    "in" => (),
-};
-
 //* -------------------------------- Terminals ------------------------------- */
 
 CtorV: CtorV = <Span<UpperId>> => <>.into();
@@ -250,24 +249,9 @@ TermV: TermV = <Span<LowerId>> => <>.into();
 UpperId: String = "UpperId" => <>.into();
 LowerId: String = "LowerId" => <>.into();
 
-String: String = <s:"StrLit"> => apply_string_escapes(&s[1..s.len()-1]);
 Int: i64 = <s:"NumLit"> => s.parse().unwrap();
-Char: char = <s:"CharLit"> => {
-    let mut iter = s.chars();
-    // remove the quotes
-    iter.next();
-    iter.next_back();
-    match iter.next().unwrap() {
-        '\\' => match iter.next() {
-            Some('n') => '\n',
-            Some('r') => '\r',
-            Some('t') => '\t',
-            Some('\'') => '\'',
-            _ => '\\', //Error?
-        }
-        c => c,
-    }
-};
+String: String = <s:"StrLit"> => super::escape::apply_string_escapes(&s[1..s.len()-1]);
+Char: char = <s:"CharLit"> => super::escape::apply_char_escapes(s);
 
 //* -------------------------------- Utilities ------------------------------- */
 
