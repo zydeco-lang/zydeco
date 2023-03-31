@@ -483,8 +483,9 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::Dtor(_)
             | TermComputation::TypApp(_)
             | TermComputation::MatchPack(_) => {
+                // subsumption
                 let typ_syn = self.syn(ctx.clone())?;
-                typ.eqv(&typ_syn, ctx, || {
+                let typ_lub = Type::lub(typ, typ_syn, ctx, || {
                     span.make(Subsumption {
                         sort: "computation",
                         tycker_src: format!(
@@ -495,7 +496,7 @@ impl TypeCheck for Span<TermComputation> {
                         ),
                     })
                 })?;
-                Step::Done(typ)
+                Step::Done(typ_lub)
             }
         })
     }

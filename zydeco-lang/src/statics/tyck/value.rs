@@ -159,8 +159,9 @@ impl TypeCheck for Span<TermValue> {
                 Step::Done(typ)
             }
             TermValue::Var(_) | TermValue::Literal(_) => {
+                // subsumption
                 let typ_syn = self.syn(ctx.clone())?;
-                typ.eqv(&typ_syn, ctx, || {
+                let typ_lub = Type::lub(typ, typ_syn, ctx, || {
                     span.make(Subsumption {
                         sort: "value",
                         tycker_src: format!(
@@ -171,7 +172,7 @@ impl TypeCheck for Span<TermValue> {
                         ),
                     })
                 })?;
-                Step::Done(typ)
+                Step::Done(typ_lub)
             }
         })
     }
