@@ -62,6 +62,7 @@ impl SpanHolder for syn::Type {
             syn::Type::Arrow(ty) => ty.span_map_mut(f),
             syn::Type::Forall(ty) => ty.span_map_mut(f),
             syn::Type::Exists(ty) => ty.span_map_mut(f),
+            syn::Type::Hole(ty) => ty.span_map_mut(f),
         }
     }
 }

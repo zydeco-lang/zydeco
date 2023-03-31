@@ -12,8 +12,6 @@ pub use crate::syntax::Kind;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Abstract(pub usize);
-#[derive(Clone, Debug)]
-pub struct Hole;
 #[derive(EnumGenerator, Clone, Debug)]
 pub enum SynType {
     TypeApp(TypeApp<TypeV, RcType>),

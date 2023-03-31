@@ -157,6 +157,7 @@ impl TryFrom<ps::Type> for Type {
                 }
                 t.inner
             }
+            ps::Type::Hole(ps::Hole) => Hole.into(),
         })
     }
 }

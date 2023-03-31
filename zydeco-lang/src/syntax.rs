@@ -98,6 +98,11 @@ pub mod binder {
 }
 pub use binder::*;
 
+/* ------------------------------ Bi-Diretional ----------------------------- */
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Hole;
+impl TypeT for Hole {}
+
 /* ---------------------------------- Kind ---------------------------------- */
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

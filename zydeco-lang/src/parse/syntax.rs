@@ -29,6 +29,7 @@ pub enum Type {
     Arrow(Arrow),
     Forall(Forall),
     Exists(Exists),
+    Hole(Hole),
 }
 pub type BoxType = Box<Span<Type>>;
 impl TypeT for Type {}

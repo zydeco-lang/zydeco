@@ -104,8 +104,9 @@ TypeApp: Type = {
 };
 
 TypeAtom: Type = {
-    <tc:TCtor> => tc.into(),
     "(" <Type> ")" => <>,
+    <tc:TCtor> => tc.into(),
+    "_?" => Hole.into(),
 };
 
 TCtor: TCtor = {
@@ -343,6 +344,7 @@ extern {
         "." => Tok::Dot,
         "->" => Tok::Arrow,
         "<-" => Tok::Assign,
+        "_?" => Tok::Hole,
     }
 }
 

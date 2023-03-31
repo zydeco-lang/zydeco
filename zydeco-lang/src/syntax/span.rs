@@ -1,6 +1,14 @@
 use super::*;
 use crate::utils::span::*;
 
+impl SpanHolder for Hole {
+    fn span_map_mut<F>(&mut self, _f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+    }
+}
+
 impl SpanHolder for Kind {
     fn span_map_mut<F>(&mut self, _f: F)
     where
