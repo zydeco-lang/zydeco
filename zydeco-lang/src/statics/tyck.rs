@@ -44,10 +44,12 @@ pub trait TypeCheck: SpanView + Sized {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         let span = self.span().clone();
         let typ_syn = self.syn(ctx)?;
-        typ_syn.eqv(&typ, Default::default(), || span.make(Subsumption {
-            sort: "type",
-            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
-        }))?;
+        typ_syn.eqv(&typ, Default::default(), || {
+            span.make(Subsumption {
+                sort: "type",
+                tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
+            })
+        })?;
         Ok(Step::Done(typ))
     }
     fn tyck(
@@ -258,14 +260,15 @@ impl TypeCheck for Span<Program> {
     fn syn_step(
         &self, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        let span = self.span();
         let Program { module, entry } = self.inner_ref();
         let Seal(ctx) = module.syn(ctx)?;
         let ty = entry.syn(ctx.to_owned())?;
         let SynType::TypeApp(ty_app) = &ty.synty else {
-            Err(self.span().make(WrongMain { found: ty.clone() }))?
+            Err(span.make(WrongMain { found: ty.clone() }))?
         };
         if !(ty_app.tvar.name() == "OS") {
-            Err(self.span().make(WrongMain { found: ty_app.clone().into() }))?
+            Err(span.make(WrongMain { found: ty_app.clone().into() }))?
         };
         Ok(Step::Done(Seal((ctx, ty_app.clone().into()))))
     }

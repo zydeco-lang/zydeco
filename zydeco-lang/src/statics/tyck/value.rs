@@ -20,6 +20,7 @@ impl TypeCheck for Span<TermValue> {
     fn syn_step(
         &self, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        let span = self.span();
         Ok(match self.inner_ref() {
             TermValue::TermAnn(TermAnn { term, ty }) => {
                 ty.ana(Kind::VType, ctx.clone())?;
@@ -29,22 +30,21 @@ impl TypeCheck for Span<TermValue> {
                 ctx.term_ctx
                     .get(x)
                     .cloned()
-                    .ok_or(self.span().make(UnboundVar { var: x.clone() }))?,
+                    .ok_or(span.make(UnboundVar { var: x.clone() }))?,
             ),
             TermValue::Thunk(Thunk(c)) => {
                 let c = c.syn(ctx)?;
-                Step::Done(Type::make_thunk(rc!(self.span().make(c.into()))))
-                // Err(self
-                //     .span()
+                Step::Done(Type::make_thunk(rc!(span.make(c.into()))))
+                // Err(span
                 //     .make(NeedAnnotation { content: format!("thunk") }))?
             }
-            TermValue::Ctor(_) => Err(self
-                .span()
-                .make(NeedAnnotation { content: format!("ctor") }))?,
-            TermValue::Literal(l) => Step::Done(self.span().make(l).syn(())?),
-            TermValue::Pack(_) => Err(self
-                .span()
-                .make(NeedAnnotation { content: format!("pack") }))?,
+            TermValue::Ctor(_) => {
+                Err(span.make(NeedAnnotation { content: format!("ctor") }))?
+            }
+            TermValue::Literal(l) => Step::Done(span.make(l).syn(())?),
+            TermValue::Pack(_) => {
+                Err(span.make(NeedAnnotation { content: format!("pack") }))?
+            }
         })
     }
     fn ana_step(
@@ -57,17 +57,6 @@ impl TypeCheck for Span<TermValue> {
         span.make(typ.clone()).ana(Kind::VType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermValue::TermAnn(TermAnn { term, ty }) => {
-                // ty.inner_ref().eqv(&typ, ctx.clone(), || {
-                //     span.make(Subsumption {
-                //         sort: "value annotation",
-                //         tycker_src: format!(
-                //             "{}:{}:{}",
-                //             file!(),
-                //             line!(),
-                //             column!()
-                //         ),
-                //     })
-                // })?;
                 let ty_lub = Type::lub(
                     ty.inner_ref().clone(),
                     typ.clone(),
@@ -88,14 +77,14 @@ impl TypeCheck for Span<TermValue> {
             }
             TermValue::Thunk(Thunk(c)) => {
                 let SynType::TypeApp(ty_app) = &typ.synty else {
-                    Err(self.span().make(TypeExpected {
+                    Err(span.make(TypeExpected {
                         context: format!("thunk"),
                         expected: format!("{{a}}"),
                         found: typ.to_owned(),
                     }))?
                 };
                 let typ_comp = ty_app.elim_thunk().ok_or_else(|| {
-                    self.span().make(TypeExpected {
+                    span.make(TypeExpected {
                         context: format!("thunk"),
                         expected: format!("{{a}}"),
                         found: typ.to_owned(),
@@ -106,7 +95,7 @@ impl TypeCheck for Span<TermValue> {
             }
             TermValue::Ctor(Ctor { ctor, args }) => {
                 let SynType::TypeApp(ty_app) = &typ.synty else {
-                    Err(self.span().make(TypeExpected {
+                    Err(span.make(TypeExpected {
                         context: format!("ctor"),
                         expected: format!("{{a}}"),
                         found: typ.to_owned(),
@@ -115,14 +104,14 @@ impl TypeCheck for Span<TermValue> {
                 let tvar = &ty_app.tvar;
                 let Data { name, params, ctors } =
                     ctx.data_ctx.get(tvar).cloned().ok_or_else(|| {
-                        self.span().make(NameResolve(
+                        span.make(NameResolve(
                             NameResolveError::UnboundTypeVariable {
                                 tvar: tvar.to_owned(),
                             },
                         ))
                     })?;
                 let diff = Env::init(&params, &ty_app.args, || {
-                    self.span().make(ArityMismatch {
+                    span.make(ArityMismatch {
                         context: format!("data type `{}` instiantiation", name),
                         expected: params.len(),
                         found: ty_app.args.len(),
@@ -132,7 +121,7 @@ impl TypeCheck for Span<TermValue> {
                     .into_iter()
                     .find(|DataBr(ctorv, _)| ctorv == ctor)
                     .ok_or_else(|| {
-                        self.span().make(NameResolve(
+                        span.make(NameResolve(
                             NameResolveError::UnknownConstructor {
                                 context: format!(
                                     "data type `{}` instiantiation",
@@ -143,7 +132,7 @@ impl TypeCheck for Span<TermValue> {
                         ))
                     })?;
                 bool_test(args.len() == tys.len(), || {
-                    self.span().make(ArityMismatch {
+                    span.make(ArityMismatch {
                         context: format!("ctor"),
                         expected: tys.len(),
                         found: args.len(),
@@ -159,7 +148,7 @@ impl TypeCheck for Span<TermValue> {
             }
             TermValue::Pack(Pack { ty, body }) => {
                 let SynType::Exists(Exists { param, kd, ty: ty_body }) = &typ.synty else {
-                    Err(self.span().make(TypeExpected {
+                    Err(span.make(TypeExpected {
                         context: format!("pack"),
                         expected: format!("{{a}}"),
                         found: typ.to_owned(),
@@ -175,7 +164,7 @@ impl TypeCheck for Span<TermValue> {
             TermValue::Var(_) | TermValue::Literal(_) => {
                 let typ_syn = self.syn(ctx.clone())?;
                 typ.eqv(&typ_syn, ctx, || {
-                    self.span().make(Subsumption {
+                    span.make(Subsumption {
                         sort: "value",
                         tycker_src: format!(
                             "{}:{}:{}",

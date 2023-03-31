@@ -6,20 +6,21 @@ impl TypeCheck for Span<Type> {
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        let span = self.span();
         let ty = self.inner_ref().clone().subst(ctx.type_env.clone())?;
         match &ty.synty {
             SynType::TypeApp(app) => {
                 let tvar = &app.tvar;
                 // type constructor
                 let Some(TypeArity { params, kd }) = ctx.type_ctx.get(&tvar) else {
-                        Err(self.span().make(
+                        Err(span.make(
                             NameResolveError::UnboundTypeVariable {
                                 tvar: tvar.to_owned(),
                             }.into()
                         ))?
                     };
                 bool_test(app.args.len() == params.len(), || {
-                    self.span().make(ArityMismatch {
+                    span.make(ArityMismatch {
                         context: format!("{}", self.inner_ref().fmt()),
                         expected: params.len(),
                         found: app.args.len(),
@@ -49,9 +50,9 @@ impl TypeCheck for Span<Type> {
             SynType::Abstract(Abstract(abs)) => {
                 Ok(Step::Done(ctx.abst_ctx[*abs]))
             }
-            SynType::Hole(_) => Err(self
-                .span()
-                .make(NeedAnnotation { content: format!("hole") }))?,
+            SynType::Hole(_) => {
+                Err(span.make(NeedAnnotation { content: format!("hole") }))?
+            }
         }
     }
     fn ana_step(
