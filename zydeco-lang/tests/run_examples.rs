@@ -76,7 +76,7 @@ fn batch_test(f: &str) -> Result<(), String> {
     let mut input = std::io::empty();
     let mut output = std::io::sink();
     let ds::ProgKont::ExitCode(exit_code) =
-        ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[])?.entry else {
+        ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[]).entry else {
             Err("Expected ExitCode".to_string())?
         };
     if exit_code != 0 {
@@ -178,7 +178,7 @@ mod custom_tests {
         let mut output: Vec<u8> = Vec::new();
 
         let ds::ProgKont::ExitCode(exit_code) =
-            ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[])?.entry else {
+            ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[]).entry else {
                 Err("Expected ExitCode".to_string())?
             };
         if exit_code != 0 {
@@ -208,7 +208,7 @@ mod custom_tests {
                 &mut input,
                 &mut output,
                 &["hello".to_string(), "world".to_string()],
-            )?.entry else {
+            ).entry else {
                 Err("Expected ExitCode".to_string())?
             };
         if exit_code != 0 {
@@ -236,7 +236,7 @@ mod custom_tests {
                 &mut input,
                 &mut output,
                 &["hello".to_string(), "world".to_string()],
-            )?.entry else {
+            ).entry else {
                 Err("Expected ExitCode".to_string())?
             };
         if exit_code != 0 {

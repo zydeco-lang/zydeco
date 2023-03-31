@@ -48,7 +48,7 @@ fn run_file(
     // eval
     if !dry_run {
         announce_phase(verbose, title, "eval");
-        let res = ZydecoFile::eval_os(sem_m, &args)?;
+        let res = ZydecoFile::eval_os(sem_m, &args);
         let ProgKont::ExitCode(x) = res.entry else {
             Err("Program did not exit".to_string())?
         };

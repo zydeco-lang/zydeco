@@ -124,7 +124,7 @@ impl TypeCheck for Span<Program> {
         let SynType::TypeApp(ty_app) = &ty.synty else {
             Err(span.make(WrongMain { found: ty.clone() }))?
         };
-        if !(ty_app.tvar.name() == "OS") {
+        if !(ty_app.elim_os().is_some()) {
             Err(span.make(WrongMain { found: ty_app.clone().into() }))?
         };
         Ok(Step::Done(Seal((ctx, ty_app.clone().into()))))

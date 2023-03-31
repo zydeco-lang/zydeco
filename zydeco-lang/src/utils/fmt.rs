@@ -5,6 +5,7 @@ use std::rc::Rc;
 pub struct Args {
     indent_unit: usize,
     pub indent: usize,
+    
 }
 impl Args {
     pub fn new(indent_unit: usize) -> Self {

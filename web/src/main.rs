@@ -54,7 +54,7 @@ fn run(input: &str) -> Result<String, String> {
     let p = ZydecoFile::elab(p)?;
     ZydecoFile::tyck(p.clone())?;
     let p = ZydecoFile::link(p.inner)?;
-    let p = ZydecoFile::eval_os(p, &[])?;
+    let p = ZydecoFile::eval_os(p, &[]);
     let s = match p.entry {
         ds::ProgKont::Ret(v) => format!("{}", v.fmt()),
         ds::ProgKont::ExitCode(i) => format!("exit code: {}", i),

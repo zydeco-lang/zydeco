@@ -38,6 +38,9 @@ impl Type {
     pub fn make_ret(arg: RcType) -> Self {
         TypeApp::internal("Ret_F", vec![arg]).into()
     }
+    pub fn make_os() -> Self {
+        TypeApp::internal("OS", vec![]).into()
+    }
 }
 impl TypeApp<TypeV, RcType> {
     pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
@@ -53,6 +56,13 @@ impl TypeApp<TypeV, RcType> {
     pub fn elim_ret(&self) -> Option<Type> {
         if self.tvar.name() == "Ret_F" {
             Some(self.args.first().unwrap().inner_ref().clone())
+        } else {
+            None
+        }
+    }
+    pub fn elim_os(&self) -> Option<()> {
+        if self.tvar.name() == "OS" {
+            Some(())
         } else {
             None
         }

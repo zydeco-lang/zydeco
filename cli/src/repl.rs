@@ -1,7 +1,7 @@
 #![allow(unused)]
 use zydeco_lang::{
     dynamics::syntax as ds,
-    statics::syntax as ss,
+    statics::syntax::{self as ss, SynType},
     utils::{fmt::FmtArgs, span::SpanView},
     zydeco::ZydecoExpr,
 };
@@ -51,14 +51,31 @@ pub fn launch() -> Result<i32, String> {
                 {
                     Err(e) => println!("Type Error: {}", e),
                     Ok(ty) => {
-                        let c = ZydecoExpr::link_computation(c);
-                        let c = zydeco_expr.eval_ret_computation(c);
-                        match c {
-                            ds::ProgKont::Ret(value) => {
-                                println!("{} :: {}", value.fmt(), ty.fmt())
+                        let SynType::TypeApp(ty_app) = &ty.synty else {
+                            println!("Expected a type application, found {}", ty.fmt());
+                            continue;
+                        };
+                        if let Some(()) = ty_app.elim_os() {
+                            let c = ZydecoExpr::link_computation(c);
+                            let c = zydeco_expr.eval_os(c, &[]);
+                            match c.entry {
+                                ds::ProgKont::Ret(value) => {
+                                    unreachable!()
+                                }
+                                ds::ProgKont::ExitCode(i) => {
+                                    println!("exited with code {}", i)
+                                }
                             }
-                            ds::ProgKont::ExitCode(i) => {
-                                println!("exited with code {}", i)
+                        } else if let Some(ty) = ty_app.elim_ret() {
+                            let c = ZydecoExpr::link_computation(c);
+                            let c = zydeco_expr.eval_ret_computation(c);
+                            match c {
+                                ds::ProgKont::Ret(value) => {
+                                    println!("{} :: {}", value.fmt(), ty.fmt())
+                                }
+                                ds::ProgKont::ExitCode(i) => {
+                                    unreachable!()
+                                }
                             }
                         }
                     }

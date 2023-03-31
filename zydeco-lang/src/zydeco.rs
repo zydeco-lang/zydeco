@@ -1,5 +1,3 @@
-use indexmap::IndexMap;
-
 use crate::{
     dynamics::{eval::Eval, syntax as ds},
     library::syntax as ls,
@@ -18,6 +16,7 @@ use crate::{
         span::{FileInfo, Span, SpanHolder},
     },
 };
+use indexmap::IndexMap;
 use std::{path::PathBuf, rc::Rc};
 
 pub struct Zydeco;
@@ -69,9 +68,7 @@ impl ZydecoFile {
         let m: ls::Program = m.into();
         Ok(m)
     }
-    pub fn eval_os(
-        p: ls::Program, args: &[String],
-    ) -> Result<ds::Program, String> {
+    pub fn eval_os(p: ls::Program, args: &[String]) -> ds::Program {
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
         Self::eval_virtual_os(p, &mut input, &mut output, args)
@@ -79,10 +76,10 @@ impl ZydecoFile {
     pub fn eval_virtual_os(
         p: ls::Program, r: &mut dyn std::io::BufRead,
         w: &mut dyn std::io::Write, args: &[String],
-    ) -> Result<ds::Program, String> {
+    ) -> ds::Program {
         let mut runtime = ds::Runtime::new(r, w, args);
         let m = ds::Program::run(p, &mut runtime);
-        Ok(m)
+        m
     }
 }
 
@@ -148,6 +145,22 @@ impl ZydecoExpr {
             },
             &mut runtime,
         );
+        self.env = runtime.env;
         m.entry
+    }
+    pub fn eval_os(&mut self, comp: ls::ZComp, args: &[String]) -> ds::Program {
+        let mut input = std::io::stdin().lock();
+        let mut output = std::io::stdout();
+        let p = ls::Program {
+            module: ls::Module { name: None, define: IndexMap::new() },
+            entry: comp,
+        };
+        let r: &mut dyn std::io::BufRead = &mut input;
+        let w: &mut dyn std::io::Write = &mut output;
+        let mut runtime = ds::Runtime::new(r, w, args);
+        runtime.env = self.env.clone();
+        let m = ds::Program::run(p, &mut runtime);
+        self.env = runtime.env;
+        m
     }
 }
