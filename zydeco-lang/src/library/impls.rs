@@ -29,7 +29,7 @@ fn bool(b: bool) -> ZValue {
         true => "True",
         false => "False",
     };
-    ctor(b, vec![]).into()
+    ctor(b, vec![])
 }
 
 // /* Arithmetic */
@@ -191,8 +191,7 @@ pub fn read_line(
                 rc!(Force(rc!(e.clone().into())).into()),
                 "arg",
                 vec![Literal::String(line).into()],
-            )
-            .into())
+            ))
         }
         _ => unreachable!(""),
     }

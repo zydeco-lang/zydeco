@@ -1,3 +1,5 @@
+#![allow(clippy::style)]
+
 pub mod syntax;
 
 pub mod parse {

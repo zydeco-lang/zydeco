@@ -354,7 +354,7 @@ impl<T: SpanHolder> SpanHolder for DeclSymbol<T> {
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        self.inner.span_map_mut(f.clone());
+        self.inner.span_map_mut(f);
     }
 }
 

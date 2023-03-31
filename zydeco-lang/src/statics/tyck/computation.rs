@@ -45,7 +45,7 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::Let(Let { var, def, body }) => {
                 let ty_def = def.syn(ctx.clone())?;
                 span.make(ty_def.clone()).ana(Kind::VType, ctx.clone())?;
-                ctx.term_ctx.insert(var.to_owned(), ty_def.clone());
+                ctx.term_ctx.insert(var.to_owned(), ty_def);
                 Step::SynMode((ctx, body))
             }
             TermComputation::Do(Do { var, comp, body }) => {
@@ -272,7 +272,7 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::Annotation(Annotation { term, ty }) => {
                 let ty_lub = Type::lub(
                     ty.inner_ref().clone(),
-                    typ.clone(),
+                    typ,
                     ctx.clone(),
                     || {
                         span.make(Subsumption {
@@ -312,7 +312,7 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::Let(Let { var, def, body }) => {
                 let ty_def = def.syn(ctx.clone())?;
                 span.make(ty_def.clone()).ana(Kind::VType, ctx.clone())?;
-                ctx.term_ctx.insert(var.to_owned(), ty_def.clone());
+                ctx.term_ctx.insert(var.to_owned(), ty_def);
                 Step::AnaMode((ctx, body), typ)
             }
             TermComputation::Do(Do { var, comp, body }) => {
@@ -467,7 +467,7 @@ impl TypeCheck for Span<TermComputation> {
                     Err(span.make(TypeExpected {
                         context: format!("typabs"),
                         expected: format!("forall"),
-                        found: typ.clone(),
+                        found: typ,
                     }))?
                 };
                 bool_test(kd == kd_, || {

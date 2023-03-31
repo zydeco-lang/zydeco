@@ -170,8 +170,8 @@ impl Type {
                 let ty = Self::lub(
                     lhs.ty.inner_ref().clone(),
                     rhs.ty.inner_ref().clone(),
-                    ctx.clone(),
-                    f.clone(),
+                    ctx,
+                    f,
                 )?;
                 Ok(Forall {
                     param: lhs.param.clone(),
@@ -184,8 +184,8 @@ impl Type {
                 let ty = Self::lub(
                     lhs.ty.inner_ref().clone(),
                     rhs.ty.inner_ref().clone(),
-                    ctx.clone(),
-                    f.clone(),
+                    ctx,
+                    f,
                 )?;
                 Ok(Exists {
                     param: lhs.param.clone(),
@@ -194,7 +194,7 @@ impl Type {
                 .into())
             }
             (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
-                bool_test(lhs == rhs, f.clone())?;
+                bool_test(lhs == rhs, f)?;
                 Ok(lhs.clone().into())
             }
             (SynType::TypeApp(_), _)

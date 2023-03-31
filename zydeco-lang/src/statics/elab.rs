@@ -273,7 +273,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                         Err(TypeCheckError::TypeExpected {
                             context: format!("elaborating recursion"),
                             expected: format!("{{a}}"),
-                            found: ty_.clone()
+                            found: ty_
                         })?
                     };
                     let Some(ty) = ty_app.elim_thunk() else {

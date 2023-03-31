@@ -68,7 +68,7 @@ impl TypeCheck for Span<TermValue> {
             TermValue::Annotation(Annotation { term, ty }) => {
                 let ty_lub = Type::lub(
                     ty.inner_ref().clone(),
-                    typ.clone(),
+                    typ,
                     ctx.clone(),
                     || span.make(Subsumption { sort: "value annotation" }),
                 )?;
@@ -79,7 +79,7 @@ impl TypeCheck for Span<TermValue> {
                     Err(span.make(TypeExpected {
                         context: format!("thunk"),
                         expected: format!("{{a}}"),
-                        found: typ.to_owned(),
+                        found: typ,
                     }))?
                 };
                 let typ_comp = ty_app.elim_thunk().ok_or_else(|| {
@@ -102,7 +102,7 @@ impl TypeCheck for Span<TermValue> {
                     Err(span.make(TypeExpected {
                         context: format!("ctor"),
                         expected: format!("{{a}}"),
-                        found: typ.to_owned(),
+                        found: typ,
                     }))?
                 };
                 let tvar = &ty_app.tvar;
@@ -154,7 +154,7 @@ impl TypeCheck for Span<TermValue> {
                     Err(span.make(TypeExpected {
                         context: format!("pack"),
                         expected: format!("{{a}}"),
-                        found: typ.to_owned(),
+                        found: typ,
                     }))?
                 };
                 ty.ana(kd.clone(), ctx.clone())?;

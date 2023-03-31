@@ -24,7 +24,7 @@ pub fn apply_string_escapes(code: &str) -> String {
             }
             text.push(ch);
         }
-        text.into()
+        text
     }
 }
 

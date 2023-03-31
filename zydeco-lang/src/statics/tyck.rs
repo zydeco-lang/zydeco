@@ -122,9 +122,9 @@ impl TypeCheck for Span<Program> {
         let Seal(ctx) = module.syn(ctx)?;
         let ty = entry.syn(ctx.to_owned())?;
         let SynType::TypeApp(ty_app) = &ty.synty else {
-            Err(span.make(WrongMain { found: ty.clone() }))?
+            Err(span.make(WrongMain { found: ty }))?
         };
-        if !(ty_app.elim_os().is_some()) {
+        if ty_app.elim_os().is_none() {
             Err(span.make(WrongMain { found: ty_app.clone().into() }))?
         };
         Ok(Step::Done(Seal((ctx, ty_app.clone().into()))))

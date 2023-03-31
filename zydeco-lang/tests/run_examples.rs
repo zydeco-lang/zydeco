@@ -91,7 +91,7 @@ fn check_test(f: &str) -> Result<(), String> {
     path.push(f);
     let m = ZydecoFile::parse(path)?;
     let m = ZydecoFile::elab(m)?;
-    ZydecoFile::tyck(m.clone())?;
+    ZydecoFile::tyck(m)?;
 
     Ok(())
 }

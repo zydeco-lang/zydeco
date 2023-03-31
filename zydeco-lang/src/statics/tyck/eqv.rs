@@ -23,7 +23,7 @@ impl Eqv for Kind {
 impl Eqv for Type {
     type Ctx = Ctx;
     fn eqv(
-        &self, other: &Self, ctx: Ctx,
+        &self, other: &Self, mut ctx: Ctx,
         f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>> {
         match (&self.synty, &other.synty) {
@@ -59,7 +59,6 @@ impl Eqv for Type {
             (SynType::Forall(lhs), SynType::Forall(rhs)) => {
                 // both forall
                 bool_test(lhs.param.1 == rhs.param.1, f.clone())?;
-                let mut ctx = ctx.clone();
                 let abst_var = ctx.fresh(lhs.param.1.clone());
                 let lhs_ty =
                     lhs.ty.inner_ref().clone().subst(Env::from_iter([(
@@ -74,7 +73,7 @@ impl Eqv for Type {
             (SynType::Exists(lhs), SynType::Exists(rhs)) => {
                 // both exists
                 bool_test(lhs.param.1 == rhs.param.1, f.clone())?;
-                let mut ctx = ctx.clone();
+                let mut ctx = ctx;
                 let abst_var = ctx.fresh(lhs.param.1.clone());
                 let lhs_ty =
                     lhs.ty.inner_ref().clone().subst(Env::from_iter([(

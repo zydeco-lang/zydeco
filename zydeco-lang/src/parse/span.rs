@@ -91,7 +91,7 @@ impl SpanHolder for syn::GenLet {
                 ty.span_map_mut(f.clone());
             }
         }
-        def.span_map_mut(f.clone());
+        def.span_map_mut(f);
     }
 }
 
@@ -150,7 +150,7 @@ impl SpanHolder for syn::Module {
         F: Fn(&mut SpanInfo) + Clone,
     {
         let syn::Module { name: _, declarations } = self;
-        declarations.span_map_mut(f.clone());
+        declarations.span_map_mut(f);
     }
 }
 
