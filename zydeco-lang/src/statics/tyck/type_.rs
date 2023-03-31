@@ -26,9 +26,7 @@ impl TypeCheck for Span<Type> {
                     })
                 })?;
                 for (arg, kd) in app.args.iter().zip(params.iter()) {
-                    self.span()
-                        .make(arg.syn(ctx.clone())?)
-                        .ensure(kd, "type argument")?;
+                    arg.ana(kd.clone(), ctx.clone())?
                 }
                 Ok(Step::Done(kd.clone()))
             }
@@ -37,9 +35,7 @@ impl TypeCheck for Span<Type> {
                     param.clone(),
                     TypeArity { params: vec![], kd: kd.clone() },
                 );
-                self.span()
-                    .make(ty.syn(ctx)?)
-                    .ensure(&Kind::CType, "type body")?;
+                ty.ana(Kind::CType, ctx)?;
                 Ok(Step::Done(Kind::CType))
             }
             SynType::Exists(Exists { param, kd, ty }) => {
@@ -47,9 +43,7 @@ impl TypeCheck for Span<Type> {
                     param.clone(),
                     TypeArity { params: vec![], kd: kd.clone() },
                 );
-                self.span()
-                    .make(ty.syn(ctx)?)
-                    .ensure(&Kind::VType, "type body")?;
+                ty.ana(Kind::VType, ctx)?;
                 Ok(Step::Done(Kind::VType))
             }
             SynType::Abstract(Abstract(abs)) => {
@@ -58,6 +52,24 @@ impl TypeCheck for Span<Type> {
             SynType::Hole(_) => Err(self
                 .span()
                 .make(NeedAnnotation { content: format!("hole") }))?,
+        }
+    }
+    fn ana_step(
+        &self, kd: Self::Out, ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+        let ty = self.inner_ref().clone().subst(ctx.type_env.clone())?;
+        match ty.synty {
+            SynType::Hole(_) => Ok(Step::Done(kd)),
+            SynType::TypeApp(_)
+            | SynType::Forall(_)
+            | SynType::Exists(_)
+            | SynType::Abstract(_) => {
+                let span = self.span().clone();
+                let kd_syn = self.syn(ctx)?;
+                kd_syn
+                    .eqv(&kd, Default::default(), || span.make(Subsumption))?;
+                Ok(Step::Done(kd))
+            }
         }
     }
 }

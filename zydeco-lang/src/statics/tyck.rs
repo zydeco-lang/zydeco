@@ -134,7 +134,7 @@ impl TypeCheck for Span<&Data<TypeV, CtorV, RcType>> {
             }
             ctorvs.insert(ctorv.clone());
             for ty in tys {
-                span.make(ty.syn(ctx.clone())?).ensure(&Kind::VType, "data")?;
+                ty.ana(Kind::VType, ctx.clone())?;
             }
         }
         Ok(Step::Done(()))
@@ -165,10 +165,9 @@ impl TypeCheck for Span<&Codata<TypeV, DtorV, RcType>> {
             }
             dtorvs.insert(dtorv.clone());
             for ty in tys {
-                span.make(ty.syn(ctx.clone())?)
-                    .ensure(&Kind::VType, "codata")?;
+                ty.ana(Kind::VType, ctx.clone())?;
             }
-            span.make(ty.syn(ctx.clone())?).ensure(&Kind::CType, "codata")?;
+            ty.ana(Kind::CType, ctx.clone())?;
         }
         Ok(Step::Done(()))
     }
@@ -242,8 +241,7 @@ impl TypeCheck for Span<Module> {
             })?;
             let ty_def = def.syn(ctx.clone())?;
             let span = name.span();
-            let kd = span.make(ty_def.clone()).syn(ctx.clone())?;
-            span.make(kd).ensure(&Kind::VType, "define")?;
+            span.make(ty_def.clone()).ana(Kind::VType, ctx.clone())?;
             ctx.term_ctx.insert(name.clone(), ty_def);
         }
         Ok(Step::Done(Seal(ctx)))
@@ -276,18 +274,4 @@ pub trait Eqv {
         &self, other: &Self, ctx: Self::Ctx,
         f: impl FnOnce() -> Span<TypeCheckError> + Clone,
     ) -> Result<(), Span<TypeCheckError>>;
-}
-
-impl Span<Kind> {
-    fn ensure(
-        &self, kind: &Kind, context: &str,
-    ) -> Result<(), Span<TypeCheckError>> {
-        self.inner_ref().eqv(kind, (), || {
-            self.span().make(KindMismatch {
-                context: context.to_owned(),
-                expected: kind.clone(),
-                found: self.inner_ref().clone(),
-            })
-        })
-    }
 }

@@ -73,6 +73,7 @@ impl_from!(TypeApp<TypeV, RcType>);
 impl_from!(Forall<TypeV, Kind, RcType>);
 impl_from!(Exists<TypeV, Kind, RcType>);
 impl_from!(Abstract);
+impl_from!(Hole);
 impl From<TypeV> for Type {
     fn from(tvar: TypeV) -> Self {
         TypeApp { tvar, args: vec![] }.into()

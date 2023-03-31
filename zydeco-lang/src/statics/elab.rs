@@ -77,16 +77,26 @@ fn desugar_fn(
     ps::Abstraction { params, body }: ps::Abstraction,
 ) -> Result<TermComputation, TypeCheckError> {
     fn desugar_fn_one(
-        (var, _ty): (TermV, Option<Span<ps::Type>>), body: RcComp,
+        (var, ty): (TermV, Option<Span<ps::Type>>), body: RcComp,
     ) -> Result<TermComputation, TypeCheckError> {
-        Ok(CoMatch {
+        let mut body = CoMatch {
             arms: vec![ps::CoMatcher {
                 dtor: DtorV::new(format!("arg"), span(0, 0)),
                 vars: vec![var],
                 body,
             }],
         }
-        .into())
+        .into();
+        if let Some(ty) = ty {
+            let mut ty = ty.try_map(TryInto::try_into)?;
+            let span = ty.span().clone();
+            ty = span.make(Type::internal(
+                "Fn",
+                vec![rc!(ty), rc!(span.make(Hole.into()))],
+            ));
+            body = TermAnn { term: rc!(span.make(body)), ty: rc!(ty) }.into();
+        }
+        Ok(body)
     }
     let mut func = TryInto::try_into(body.inner)?;
     for param in params.into_iter().rev() {

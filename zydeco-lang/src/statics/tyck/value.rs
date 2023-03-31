@@ -22,9 +22,7 @@ impl TypeCheck for Span<TermValue> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         Ok(match self.inner_ref() {
             TermValue::TermAnn(TermAnn { term, ty }) => {
-                ty.span()
-                    .make(ty.syn(ctx.clone())?)
-                    .ensure(&Kind::VType, "value term annotation")?;
+                ty.ana(Kind::VType, ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_ref().clone())
             }
             TermValue::Var(x) => Step::Done(
@@ -56,8 +54,7 @@ impl TypeCheck for Span<TermValue> {
             return Ok(Step::SynMode((ctx, self)));
         }
         let span = self.span();
-        span.make(span.make(typ.clone()).syn(ctx.clone())?)
-            .ensure(&Kind::VType, "ana value")?;
+        span.make(typ.clone()).ana(Kind::VType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermValue::Thunk(Thunk(c)) => {
                 let SynType::TypeApp(ty_app) = &typ.synty else {

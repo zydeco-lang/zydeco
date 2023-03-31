@@ -99,7 +99,7 @@ impl ZydecoExpr {
         let std = Zydeco::std().unwrap();
         let std: Span<ss::Module> =
             std.info.make(std.inner.try_into().unwrap());
-        let Seal(ctx) = std.syn(Ctx::default()).unwrap();
+        let Seal(ctx) = std.syn(Ctx::default()).expect("std import failed");
         let std: ls::Module = std.inner.into();
         let mut input = std::io::empty();
         let mut output = std::io::sink();

@@ -10,9 +10,7 @@ impl TypeCheck for Span<TermComputation> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
         Ok(match self.inner_ref() {
             TermComputation::TermAnn(TermAnn { term, ty }) => {
-                ty.span()
-                    .make(ty.syn(ctx.clone())?)
-                    .ensure(&Kind::CType, "computation term annotation")?;
+                ty.ana(Kind::CType, ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_ref().clone())
             }
             TermComputation::Ret(Ret(v)) => {
@@ -20,8 +18,7 @@ impl TypeCheck for Span<TermComputation> {
                 // .span()
                 // .make(NeedAnnotation { content: format!("ret") }))?
                 let ty_body: Type = v.syn(ctx.clone())?;
-                let kd = self.span().make(ty_body.clone()).syn(ctx)?;
-                self.span().make(kd).ensure(&Kind::VType, "force")?;
+                self.span().make(ty_body.clone()).ana(Kind::VType, ctx)?;
                 Step::Done(Type::make_ret(rc!(self.span().make(ty_body))))
             }
             TermComputation::Force(Force(v)) => {
@@ -40,21 +37,22 @@ impl TypeCheck for Span<TermComputation> {
                         found: ty_app.clone().into(),
                     })
                 })?;
-                let kd = self.span().make(ty_body.to_owned()).syn(ctx)?;
-                self.span().make(kd).ensure(&Kind::CType, "force")?;
+                self.span().make(ty_body.to_owned()).ana(Kind::CType, ctx)?;
                 Step::Done(ty_body)
             }
             TermComputation::Let(Let { var, def, body }) => {
                 let ty_def = def.syn(ctx.clone())?;
-                let kd = self.span().make(ty_def.clone()).syn(ctx.clone())?;
-                self.span().make(kd).ensure(&Kind::VType, "let")?;
+                self.span()
+                    .make(ty_def.clone())
+                    .ana(Kind::VType, ctx.clone())?;
                 ctx.term_ctx.insert(var.to_owned(), ty_def.clone());
                 Step::SynMode((ctx, body))
             }
             TermComputation::Do(Do { var, comp, body }) => {
                 let ty_comp = comp.syn(ctx.clone())?;
-                let kd = self.span().make(ty_comp.clone()).syn(ctx.clone())?;
-                self.span().make(kd).ensure(&Kind::CType, "do")?;
+                self.span()
+                    .make(ty_comp.clone())
+                    .ana(Kind::CType, ctx.clone())?;
                 let SynType::TypeApp(ty_app) = &ty_comp.synty else {
                     Err(self.span().make(TypeExpected {
                         context: format!("do"),
@@ -77,8 +75,9 @@ impl TypeCheck for Span<TermComputation> {
                 .make(NeedAnnotation { content: format!("rec") }))?,
             TermComputation::Match(Match { scrut, arms }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
-                let kd = self.span().make(ty_scrut.clone()).syn(ctx.clone())?;
-                self.span().make(kd).ensure(&Kind::VType, "match")?;
+                self.span()
+                    .make(ty_scrut.clone())
+                    .ana(Kind::VType, ctx.clone())?;
                 let SynType::TypeApp(ty_app) = ty_scrut.synty else {
                     Err(self.span().make(TypeExpected {
                         context: format!("match"),
@@ -124,8 +123,7 @@ impl TypeCheck for Span<TermComputation> {
                     }
                     let ty = body.syn(ctx.clone())?;
                     let span = body.span();
-                    let kd = span.make(ty.clone()).syn(ctx)?;
-                    span.make(kd).ensure(&Kind::CType, "match arm")?;
+                    span.make(ty.clone()).ana(Kind::CType, ctx)?;
                     ty_arms.push(ty);
                 }
                 let ctorv_set_data: HashSet<CtorV> =
@@ -268,8 +266,7 @@ impl TypeCheck for Span<TermComputation> {
             return Ok(Step::SynMode((ctx, self)));
         }
         let span = self.span();
-        span.make(span.make(typ.clone()).syn(ctx.clone())?)
-            .ensure(&Kind::CType, "ana computation")?;
+        span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermComputation::Ret(Ret(v)) => {
                 let SynType::TypeApp(ty_app) = &typ.synty else {
@@ -290,8 +287,7 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::Force(Force(v)) => {
-                let kd = self.span().make(typ.clone()).syn(ctx.clone())?;
-                self.span().make(kd).ensure(&Kind::CType, "force")?;
+                self.span().make(typ.clone()).ana(Kind::CType, ctx.clone())?;
                 v.ana(
                     Type::make_thunk(rc!(self.span().make(typ.clone()))),
                     ctx,
@@ -300,15 +296,17 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::Let(Let { var, def, body }) => {
                 let ty_def = def.syn(ctx.clone())?;
-                let kd = self.span().make(ty_def.clone()).syn(ctx.clone())?;
-                self.span().make(kd).ensure(&Kind::VType, "let")?;
+                self.span()
+                    .make(ty_def.clone())
+                    .ana(Kind::VType, ctx.clone())?;
                 ctx.term_ctx.insert(var.to_owned(), ty_def.clone());
                 Step::AnaMode((ctx, body), typ)
             }
             TermComputation::Do(Do { var, comp, body }) => {
                 let ty_comp = comp.syn(ctx.clone())?;
-                let kd = self.span().make(ty_comp.clone()).syn(ctx.clone())?;
-                self.span().make(kd).ensure(&Kind::CType, "do")?;
+                self.span()
+                    .make(ty_comp.clone())
+                    .ana(Kind::CType, ctx.clone())?;
                 let SynType::TypeApp(ty_app) = &ty_comp.synty else {
                     Err(self.span().make(TypeExpected {
                         context: format!("do"),
@@ -335,8 +333,9 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::Match(Match { scrut, arms }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
-                let kd = self.span().make(ty_scrut.clone()).syn(ctx.clone())?;
-                self.span().make(kd).ensure(&Kind::VType, "match")?;
+                self.span()
+                    .make(ty_scrut.clone())
+                    .ana(Kind::VType, ctx.clone())?;
                 let SynType::TypeApp(ty_app) = ty_scrut.synty else {
                     Err(self.span().make(TypeExpected {
                         context: format!("match"),
