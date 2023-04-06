@@ -60,19 +60,11 @@ impl fmt::Display for TyckErrorItem {
                 found.fmt()
             ),
             TypeExpected { context, expected, found } => {
-                write!(
-                    f,
-                    "In {}, expected {}, but got {}",
-                    context,
-                    expected,
-                    found.fmt()
-                )
+                write!(f, "In {}, expected {}, but got {}", context, expected, found.fmt())
             }
-            ArityMismatch { context, expected, found } => write!(
-                f,
-                "In {}, expected {} arguments but got {}",
-                context, expected, found
-            ),
+            ArityMismatch { context, expected, found } => {
+                write!(f, "In {}, expected {} arguments but got {}", context, expected, found)
+            }
             NeedAnnotation { content } => {
                 write!(f, "Need annotation for {}", content)
             }
@@ -119,11 +111,9 @@ impl fmt::Display for TyckErrorItem {
                 Ok(())
             }
             NameResolve(nr) => write!(f, "{}", nr),
-            WrongMain { found } => write!(
-                f,
-                "The type of the main expression should be OS but got {}",
-                found.fmt()
-            ),
+            WrongMain { found } => {
+                write!(f, "The type of the main expression should be OS but got {}", found.fmt())
+            }
         }
     }
 }

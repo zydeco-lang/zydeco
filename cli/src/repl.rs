@@ -63,8 +63,7 @@ pub fn launch() -> Result<i32, String> {
                 }
             }
             ss::Term::Computation(c) => {
-                match zydeco_expr.tyck_computation(term.span().make(c.clone()))
-                {
+                match zydeco_expr.tyck_computation(term.span().make(c.clone())) {
                     Err(e) => println!("Type Error: {}", e),
                     Ok(ty) => {
                         let SynType::TypeApp(ty_app) = &ty.synty else {
@@ -99,10 +98,7 @@ pub fn launch() -> Result<i32, String> {
                                 }
                             }
                         } else {
-                            println!(
-                                "Can't run computation of type {}",
-                                ty_app.fmt()
-                            );
+                            println!("Can't run computation of type {}", ty_app.fmt());
                             println!("Can only run computations of type OS or Ret(a)")
                         }
                     }

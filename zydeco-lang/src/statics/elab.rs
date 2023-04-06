@@ -7,8 +7,7 @@ use crate::{
 
 fn desugar_gen_let(
     rec: bool, fun: bool, (var, ty): (TermV, Option<Span<ps::Type>>),
-    params: Vec<(TermV, Option<Span<ps::Type>>)>,
-    def: Option<Box<Span<ps::Term>>>,
+    params: Vec<(TermV, Option<Span<ps::Type>>)>, def: Option<Box<Span<ps::Term>>>,
 ) -> Result<(TermV, RcType, Option<RcValue>), TyckErrorItem> {
     let name = var.clone();
     let ty_rc = {
@@ -30,25 +29,19 @@ fn desugar_gen_let(
             expected: Kind::CType,
             found: Kind::VType,
         }),
-        (false, false, ps::Term::Computation(_)) => {
-            Err(TyckErrorItem::KindMismatch {
-                context: format!("desugaring let"),
-                expected: Kind::VType,
-                found: Kind::CType,
-            })
-        }
+        (false, false, ps::Term::Computation(_)) => Err(TyckErrorItem::KindMismatch {
+            context: format!("desugaring let"),
+            expected: Kind::VType,
+            found: Kind::CType,
+        }),
         (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
             if fun {
                 let params = params.clone();
-                body = Box::new(
-                    def.info.make(ps::Abstraction { params, body }.into()),
-                );
+                body = Box::new(def.info.make(ps::Abstraction { params, body }.into()));
             }
             if rec {
-                body = Box::new(
-                    def.info.make(Rec { var: (var, None), body }.into()),
-                );
+                body = Box::new(def.info.make(Rec { var: (var, None), body }.into()));
             }
             let mut ty: RcType = if let Some(ty) = ty {
                 rc!(ty.try_map(TryInto::try_into)?)
@@ -61,8 +54,7 @@ fn desugar_gen_let(
                 } else {
                     rc!(def.info.make(Hole.into()))
                 };
-                ty =
-                    rc!(var.span().make(Type::internal("Fn", vec![ty_dom, ty])))
+                ty = rc!(var.span().make(Type::internal("Fn", vec![ty_dom, ty])))
             }
             let body = rc!((*body).try_map(TryInto::try_into)?);
             ty = rc!(def.info.make(Type::make_thunk(ty)));
@@ -88,12 +80,8 @@ fn desugar_fn(
         if let Some(ty) = ty {
             let mut ty = ty.try_map(TryInto::try_into)?;
             let span = ty.span().clone();
-            ty = span.make(Type::internal(
-                "Fn",
-                vec![rc!(ty), rc!(span.make(Hole.into()))],
-            ));
-            body =
-                Annotation { term: rc!(span.make(body)), ty: rc!(ty) }.into();
+            ty = span.make(Type::internal("Fn", vec![rc!(ty), rc!(span.make(Hole.into()))]));
+            body = Annotation { term: rc!(span.make(body)), ty: rc!(ty) }.into();
         }
         Ok(body)
     }
@@ -108,15 +96,9 @@ impl TryFrom<ps::Type> for Type {
     type Error = TyckErrorItem;
     fn try_from(ty: ps::Type) -> Result<Self, TyckErrorItem> {
         Ok(match ty {
-            ps::Type::Basic(ps::TCtor::Thunk) => {
-                Type::internal("Thunk", Vec::new())
-            }
-            ps::Type::Basic(ps::TCtor::Ret) => {
-                Type::internal("Ret", Vec::new())
-            }
-            ps::Type::Basic(ps::TCtor::Var(v)) => {
-                TypeApp { tvar: v, args: vec![] }.into()
-            }
+            ps::Type::Basic(ps::TCtor::Thunk) => Type::internal("Thunk", Vec::new()),
+            ps::Type::Basic(ps::TCtor::Ret) => Type::internal("Ret", Vec::new()),
+            ps::Type::Basic(ps::TCtor::Var(v)) => TypeApp { tvar: v, args: vec![] }.into(),
             ps::Type::App(t) => {
                 let ps::TypeApp(t1, t2) = t;
                 let t1: Type = TryInto::try_into(t1.inner())?;
@@ -140,20 +122,14 @@ impl TryFrom<ps::Type> for Type {
             ps::Type::Forall(ps::Forall(params, t)) => {
                 let mut t = t.try_map(TryInto::try_into)?;
                 for param in params.into_iter().rev() {
-                    t = t
-                        .span()
-                        .clone()
-                        .make(Forall { param, ty: rc!(t) }.into())
+                    t = t.span().clone().make(Forall { param, ty: rc!(t) }.into())
                 }
                 t.inner
             }
             ps::Type::Exists(ps::Exists(params, t)) => {
                 let mut t = t.try_map(TryInto::try_into)?;
                 for param in params.into_iter().rev() {
-                    t = t
-                        .span()
-                        .clone()
-                        .make(Exists { param, ty: rc!(t) }.into())
+                    t = t.span().clone().make(Exists { param, ty: rc!(t) }.into())
                 }
                 t.inner
             }
@@ -166,22 +142,18 @@ impl TryFrom<ps::TermValue> for TermValue {
     type Error = TyckErrorItem;
     fn try_from(value: ps::TermValue) -> Result<Self, TyckErrorItem> {
         Ok(match value {
-            ps::TermValue::TermAnn(Annotation { term: body, ty }) => {
-                Annotation {
-                    term: rc!(body.try_map(TryInto::try_into)?),
-                    ty: rc!(ty.try_map(TryInto::try_into)?),
-                }
-                .into()
+            ps::TermValue::TermAnn(Annotation { term: body, ty }) => Annotation {
+                term: rc!(body.try_map(TryInto::try_into)?),
+                ty: rc!(ty.try_map(TryInto::try_into)?),
             }
+            .into(),
             ps::TermValue::Var(x) => x.into(),
             ps::TermValue::Thunk(Thunk(body)) => {
                 let span = body.span().clone();
-                let body =
-                    Thunk(rc!((body).try_map(TryInto::try_into)?)).into();
+                let body = Thunk(rc!((body).try_map(TryInto::try_into)?)).into();
                 Annotation {
                     term: rc!(span.make(body)),
-                    ty: rc!(span
-                        .make(Type::make_thunk(rc!(span.make(Hole.into()))))),
+                    ty: rc!(span.make(Type::make_thunk(rc!(span.make(Hole.into()))))),
                 }
                 .into()
             }
@@ -210,22 +182,17 @@ impl TryFrom<ps::TermComputation> for TermComputation {
     type Error = TyckErrorItem;
     fn try_from(comp: ps::TermComputation) -> Result<Self, TyckErrorItem> {
         Ok(match comp {
-            ps::TermComputation::TermAnn(Annotation { term: body, ty }) => {
-                Annotation {
-                    term: rc!(body.try_map(TryInto::try_into)?),
-                    ty: rc!(ty.try_map(TryInto::try_into)?),
-                }
-                .into()
+            ps::TermComputation::TermAnn(Annotation { term: body, ty }) => Annotation {
+                term: rc!(body.try_map(TryInto::try_into)?),
+                ty: rc!(ty.try_map(TryInto::try_into)?),
             }
+            .into(),
             ps::TermComputation::Ret(Ret(body)) => {
                 let span = body.span().clone();
-                let body: TermComputation =
-                    Ret(rc!((body).try_map(TryInto::try_into)?)).into();
+                let body: TermComputation = Ret(rc!((body).try_map(TryInto::try_into)?)).into();
                 Annotation {
                     term: rc!(span.make(body)),
-                    ty: rc!(
-                        span.make(Type::make_ret(rc!(span.make(Hole.into()))))
-                    ),
+                    ty: rc!(span.make(Type::make_ret(rc!(span.make(Hole.into()))))),
                 }
                 .into()
             }
@@ -236,8 +203,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 gen: ps::GenLet { rec, fun, name, params, def },
                 body,
             }) => {
-                let (var, ty, def) =
-                    desugar_gen_let(rec, fun, name, params, def)?;
+                let (var, ty, def) = desugar_gen_let(rec, fun, name, params, def)?;
                 let Some(def) = def else {
                     Err(NameResolveError::EmptyDeclaration { name: var.name().to_string() })?
                 };
@@ -251,11 +217,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let mut comp = rc!((comp).try_map(TryInto::try_into)?);
                 if let Some(ty) = ty {
                     comp = rc!(comp.info.clone().make(
-                        Annotation {
-                            term: comp,
-                            ty: rc!(ty.try_map(TryInto::try_into)?),
-                        }
-                        .into(),
+                        Annotation { term: comp, ty: rc!(ty.try_map(TryInto::try_into)?) }.into(),
                     ));
                 }
                 let body = rc!((body).try_map(TryInto::try_into)?);
@@ -282,11 +244,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                             found: ty_
                         })?
                     };
-                    body = Annotation {
-                        term: rc!(span.make(body)),
-                        ty: rc!(span.make(ty)),
-                    }
-                    .into();
+                    body = Annotation { term: rc!(span.make(body)), ty: rc!(span.make(ty)) }.into();
                 }
                 body
             }
@@ -339,10 +297,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let body = (body).try_map(TryInto::try_into)?;
                 let mut body = body;
                 for (tvar, kd) in params.into_iter().rev() {
-                    body = body
-                        .info
-                        .clone()
-                        .make(TypAbs { tvar, kd, body: rc!(body) }.into());
+                    body = body.info.clone().make(TypAbs { tvar, kd, body: rc!(body) }.into());
                 }
                 body.inner
             }
@@ -351,12 +306,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let arg = rc!(arg.try_map(TryInto::try_into)?);
                 TypApp { body, arg }.into()
             }
-            ps::TermComputation::MatchPack(ps::MatchPack {
-                scrut,
-                tvar,
-                var,
-                body,
-            }) => {
+            ps::TermComputation::MatchPack(ps::MatchPack { scrut, tvar, var, body }) => {
                 let scrut = rc!((scrut).try_map(TryInto::try_into)?);
                 let body = rc!((body).try_map(TryInto::try_into)?);
                 MatchPack { scrut, tvar, var, body }.into()
@@ -375,25 +325,15 @@ impl TryFrom<ps::Term> for Term {
     }
 }
 
-impl TryFrom<ps::Data<TypeV, Kind, CtorV, Span<ps::Type>>>
-    for Data<TypeV, Kind, CtorV, RcType>
-{
+impl TryFrom<ps::Data<TypeV, Kind, CtorV, Span<ps::Type>>> for Data<TypeV, Kind, CtorV, RcType> {
     type Error = TyckErrorItem;
     fn try_from(
-        Data { name, params, ctors }: ps::Data<
-            TypeV,
-            Kind,
-            CtorV,
-            Span<ps::Type>,
-        >,
+        Data { name, params, ctors }: ps::Data<TypeV, Kind, CtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
         Ok(Self {
             name,
             params,
-            ctors: ctors
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
+            ctors: ctors.into_iter().map(TryInto::try_into).collect::<Result<_, _>>()?,
         })
     }
 }
@@ -417,20 +357,12 @@ impl TryFrom<ps::Codata<TypeV, Kind, DtorV, Span<ps::Type>>>
 {
     type Error = TyckErrorItem;
     fn try_from(
-        Codata { name, params, dtors }: ps::Codata<
-            TypeV,
-            Kind,
-            DtorV,
-            Span<ps::Type>,
-        >,
+        Codata { name, params, dtors }: ps::Codata<TypeV, Kind, DtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
         Ok(Self {
             name,
             params,
-            dtors: dtors
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
+            dtors: dtors.into_iter().map(TryInto::try_into).collect::<Result<_, _>>()?,
         })
     }
 }
@@ -451,9 +383,7 @@ impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
 
 impl TryFrom<ps::Module> for Module {
     type Error = TyckErrorItem;
-    fn try_from(
-        ps::Module { name, declarations }: ps::Module,
-    ) -> Result<Self, TyckErrorItem> {
+    fn try_from(ps::Module { name, declarations }: ps::Module) -> Result<Self, TyckErrorItem> {
         let mut data = Vec::new();
         let mut codata = Vec::new();
         let mut define = Vec::new();
@@ -461,23 +391,18 @@ impl TryFrom<ps::Module> for Module {
         for declaration in declarations {
             let DeclSymbol { public, external, inner } = declaration;
             match inner {
-                ps::Declaration::Data(d) => data.push(DeclSymbol {
-                    public,
-                    external,
-                    inner: d.try_into()?,
-                }),
-                ps::Declaration::Codata(d) => codata.push(DeclSymbol {
-                    public,
-                    external,
-                    inner: d.try_into()?,
-                }),
+                ps::Declaration::Data(d) => {
+                    data.push(DeclSymbol { public, external, inner: d.try_into()? })
+                }
+                ps::Declaration::Codata(d) => {
+                    codata.push(DeclSymbol { public, external, inner: d.try_into()? })
+                }
                 ps::Declaration::Alias(_d) => {
                     todo!()
                 }
                 ps::Declaration::Define(d) => {
                     let ps::GenLet { rec, fun, name, params, def } = d;
-                    let (name, ty, te) =
-                        desugar_gen_let(rec, fun, name, params, def)?;
+                    let (name, ty, te) = desugar_gen_let(rec, fun, name, params, def)?;
                     if external {
                         define_ext.push(DeclSymbol {
                             public,
@@ -485,19 +410,12 @@ impl TryFrom<ps::Module> for Module {
                             inner: Define { name: (name, ty), def: () },
                         })
                     } else {
-                        let term = te.ok_or_else(|| {
-                            NameResolveError::EmptyDeclaration {
-                                name: name.name().to_string(),
-                            }
+                        let term = te.ok_or_else(|| NameResolveError::EmptyDeclaration {
+                            name: name.name().to_string(),
                         })?;
                         let span = term.span().clone();
-                        let def =
-                            rc!(span.make(Annotation { term, ty }.into()));
-                        define.push(DeclSymbol {
-                            public,
-                            external,
-                            inner: Define { name, def },
-                        })
+                        let def = rc!(span.make(Annotation { term, ty }.into()));
+                        define.push(DeclSymbol { public, external, inner: Define { name, def } })
                     }
                 }
             }

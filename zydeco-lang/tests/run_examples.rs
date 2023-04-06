@@ -42,9 +42,7 @@ fn pure_test(f: &str) -> Result<(), String> {
         Ok(term) => match ZydecoExpr::elab(term) {
             Err(_) => Err("Didn't elaborate".to_string())?,
             Ok(term) => match term.inner {
-                ss::Term::Value(_) => {
-                    Err("Expecting a computation, found a value".to_string())?
-                }
+                ss::Term::Value(_) => Err("Expecting a computation, found a value".to_string())?,
                 ss::Term::Computation(comp) => {
                     let comp = term.info.make(comp);
                     zydeco_expr.tyck_computation(comp.clone())?;
@@ -54,9 +52,7 @@ fn pure_test(f: &str) -> Result<(), String> {
                         ds::ProgKont::Ret(value) => {
                             println!("{}", value.fmt());
                         }
-                        ds::ProgKont::ExitCode(i) => {
-                            Err(format!("exited with code {}", i))?
-                        }
+                        ds::ProgKont::ExitCode(i) => Err(format!("exited with code {}", i))?,
                     }
                 }
             },

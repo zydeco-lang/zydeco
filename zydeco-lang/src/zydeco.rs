@@ -43,9 +43,7 @@ impl ZydecoFile {
         let source = std::fs::read_to_string(&path).unwrap();
         Self::parse_src(&source, path)
     }
-    pub fn parse_src(
-        source: &str, path: PathBuf,
-    ) -> Result<Span<ps::Program>, String> {
+    pub fn parse_src(source: &str, path: PathBuf) -> Result<Span<ps::Program>, String> {
         let file_info = FileInfo::new(source, Rc::new(path));
         let mut p = ZydecoParser::new()
             .parse(source, Lexer::new(source))
@@ -74,8 +72,7 @@ impl ZydecoFile {
         Self::eval_virtual_os(p, &mut input, &mut output, args)
     }
     pub fn eval_virtual_os(
-        p: ls::Program, r: &mut dyn std::io::BufRead,
-        w: &mut dyn std::io::Write, args: &[String],
+        p: ls::Program, r: &mut dyn std::io::BufRead, w: &mut dyn std::io::Write, args: &[String],
     ) -> ds::Program {
         let mut runtime = ds::Runtime::new(r, w, args);
         let m = ls::Program::eval(p, &mut runtime);
@@ -92,8 +89,7 @@ pub struct ZydecoExpr {
 impl ZydecoExpr {
     pub fn new() -> Self {
         let std = Zydeco::std().unwrap();
-        let std: Span<ss::Module> =
-            std.info.make(std.inner.try_into().unwrap());
+        let std: Span<ss::Module> = std.info.make(std.inner.try_into().unwrap());
         let Seal(ctx) = std.syn(Ctx::default()).expect("std import failed");
         let std: ls::Module = std.inner.into();
         let mut input = std::io::empty();
@@ -103,22 +99,16 @@ impl ZydecoExpr {
         Self { ctx, env: runtime.env }
     }
     pub fn parse(source: &str) -> Result<Span<ps::Term>, String> {
-        TermSpanParser::new()
-            .parse(source, Lexer::new(source))
-            .map_err(|e| e.to_string())
+        TermSpanParser::new().parse(source, Lexer::new(source)).map_err(|e| e.to_string())
     }
     pub fn elab(val: Span<ps::Term>) -> Result<Span<ss::Term>, String> {
         let v: ss::Term = val.inner.try_into().unwrap();
         Ok(val.info.make(v))
     }
-    pub fn tyck_value(
-        &self, val: Span<ss::TermValue>,
-    ) -> Result<ss::Type, String> {
+    pub fn tyck_value(&self, val: Span<ss::TermValue>) -> Result<ss::Type, String> {
         val.syn(self.ctx.clone()).map_err(|e| format!("{}", e))
     }
-    pub fn tyck_computation(
-        &self, comp: Span<ss::TermComputation>,
-    ) -> Result<ss::Type, String> {
+    pub fn tyck_computation(&self, comp: Span<ss::TermComputation>) -> Result<ss::Type, String> {
         comp.syn(self.ctx.clone()).map_err(|e| format!("{}", e))
     }
     pub fn link_value(val: &ss::TermValue) -> ls::ZVal {
@@ -140,10 +130,7 @@ impl ZydecoExpr {
         let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);
         runtime.env = self.env.clone();
         let m = ls::Program::eval(
-            ls::Program {
-                module: ls::Module { name: None, define: IndexMap::new() },
-                entry: comp,
-            },
+            ls::Program { module: ls::Module { name: None, define: IndexMap::new() }, entry: comp },
             &mut runtime,
         );
         self.env = runtime.env;
@@ -152,10 +139,8 @@ impl ZydecoExpr {
     pub fn eval_os(&mut self, comp: ls::ZComp, args: &[String]) -> ds::Program {
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
-        let p = ls::Program {
-            module: ls::Module { name: None, define: IndexMap::new() },
-            entry: comp,
-        };
+        let p =
+            ls::Program { module: ls::Module { name: None, define: IndexMap::new() }, entry: comp };
         let r: &mut dyn std::io::BufRead = &mut input;
         let w: &mut dyn std::io::Write = &mut output;
         let mut runtime = ds::Runtime::new(r, w, args);

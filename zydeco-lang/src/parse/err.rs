@@ -14,12 +14,7 @@ impl Display for ParseError<'_> {
         match e {
             User { ref error } => write!(f, "{error}"),
             InvalidToken { ref location } => {
-                write!(
-                    f,
-                    "Invalid token at {}:{}",
-                    gen.path.display(),
-                    gen.trans_span2(*location)
-                )
+                write!(f, "Invalid token at {}:{}", gen.path.display(), gen.trans_span2(*location))
             }
             UnrecognizedEOF { ref location, ref expected } => {
                 write!(
@@ -30,10 +25,7 @@ impl Display for ParseError<'_> {
                     fmt_expected(expected)
                 )
             }
-            UnrecognizedToken {
-                token: (ref start, ref token, ref end),
-                ref expected,
-            } => {
+            UnrecognizedToken { token: (ref start, ref token, ref end), ref expected } => {
                 write!(
                     f,
                     "Unrecognized token `{token}` found at {}:{} - {}{}",

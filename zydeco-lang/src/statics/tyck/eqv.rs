@@ -3,8 +3,7 @@ use super::*;
 impl Eqv for () {
     type Ctx = ();
     fn eqv(
-        &self, _other: &Self, _ctx: (),
-        _f: impl FnOnce() -> Span<TyckError> + Clone,
+        &self, _other: &Self, _ctx: (), _f: impl FnOnce() -> Span<TyckError> + Clone,
     ) -> Result<(), Span<TyckError>> {
         Ok(())
     }
@@ -13,8 +12,7 @@ impl Eqv for () {
 impl Eqv for Kind {
     type Ctx = ();
     fn eqv(
-        &self, other: &Self, _ctx: (),
-        f: impl FnOnce() -> Span<TyckError> + Clone,
+        &self, other: &Self, _ctx: (), f: impl FnOnce() -> Span<TyckError> + Clone,
     ) -> Result<(), Span<TyckError>> {
         bool_test(self == other, f)
     }
@@ -23,20 +21,15 @@ impl Eqv for Kind {
 impl Eqv for Type {
     type Ctx = Ctx;
     fn eqv(
-        &self, other: &Self, mut ctx: Ctx,
-        f: impl FnOnce() -> Span<TyckError> + Clone,
+        &self, other: &Self, mut ctx: Ctx, f: impl FnOnce() -> Span<TyckError> + Clone,
     ) -> Result<(), Span<TyckError>> {
         match (&self.synty, &other.synty) {
-            (SynType::TypeApp(lhs), _)
-                if ctx.type_env.contains_key(&lhs.tvar) =>
-            {
+            (SynType::TypeApp(lhs), _) if ctx.type_env.contains_key(&lhs.tvar) => {
                 // lhs is a type variable
                 let ty = &ctx.clone().type_env[&lhs.tvar];
                 ty.eqv(other, ctx, f)
             }
-            (_, SynType::TypeApp(rhs))
-                if ctx.type_env.contains_key(&rhs.tvar) =>
-            {
+            (_, SynType::TypeApp(rhs)) if ctx.type_env.contains_key(&rhs.tvar) => {
                 // rhs is a type variable
                 let ty = &ctx.clone().type_env[&rhs.tvar];
                 self.eqv(ty, ctx, f)
@@ -48,11 +41,7 @@ impl Eqv for Type {
                 bool_test(lhs.args.len() == rhs.args.len(), f.clone())?;
                 // arguments must be equivalent
                 for (ty1, ty2) in lhs.args.iter().zip(rhs.args.iter()) {
-                    ty1.inner_ref().eqv(
-                        ty2.inner_ref(),
-                        ctx.clone(),
-                        f.clone(),
-                    )?;
+                    ty1.inner_ref().eqv(ty2.inner_ref(), ctx.clone(), f.clone())?;
                 }
                 Ok(())
             }
@@ -64,19 +53,13 @@ impl Eqv for Type {
                     .ty
                     .inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(
-                        lhs.param.0.clone(),
-                        abst_var.clone().into(),
-                    )]))
+                    .subst(Env::from_iter([(lhs.param.0.clone(), abst_var.clone().into())]))
                     .map_err(|e| e.traced(ctx.trace.clone()))?;
                 let rhs_ty = rhs
                     .ty
                     .inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(
-                        rhs.param.0.clone(),
-                        abst_var.into(),
-                    )]))
+                    .subst(Env::from_iter([(rhs.param.0.clone(), abst_var.into())]))
                     .map_err(|e| e.traced(ctx.trace.clone()))?;
                 lhs_ty.eqv(&rhs_ty, ctx, f)
             }
@@ -89,19 +72,13 @@ impl Eqv for Type {
                     .ty
                     .inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(
-                        lhs.param.0.clone(),
-                        abst_var.clone().into(),
-                    )]))
+                    .subst(Env::from_iter([(lhs.param.0.clone(), abst_var.clone().into())]))
                     .map_err(|e| e.traced(ctx.trace.clone()))?;
                 let rhs_ty = rhs
                     .ty
                     .inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(
-                        rhs.param.0.clone(),
-                        abst_var.into(),
-                    )]))
+                    .subst(Env::from_iter([(rhs.param.0.clone(), abst_var.into())]))
                     .map_err(|e| e.traced(ctx.trace.clone()))?;
                 lhs_ty.eqv(&rhs_ty, ctx, f)
             }

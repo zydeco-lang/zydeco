@@ -33,21 +33,14 @@ impl TypeCheck for Span<TermValue> {
                 Step::AnaMode((ctx, term), ty.inner_ref().clone())
             }
             TermValue::Var(x) => Step::Done(
-                ctx.term_ctx
-                    .get(x)
-                    .cloned()
-                    .ok_or(ctx.err(span, UnboundVar { var: x.clone() }))?,
+                ctx.term_ctx.get(x).cloned().ok_or(ctx.err(span, UnboundVar { var: x.clone() }))?,
             ),
             TermValue::Thunk(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("thunk") }))?
             }
-            TermValue::Ctor(_) => {
-                Err(ctx.err(span, NeedAnnotation { content: format!("ctor") }))?
-            }
+            TermValue::Ctor(_) => Err(ctx.err(span, NeedAnnotation { content: format!("ctor") }))?,
             TermValue::Literal(l) => Step::Done(span.make(l).syn(())?),
-            TermValue::Pack(_) => {
-                Err(ctx.err(span, NeedAnnotation { content: format!("pack") }))?
-            }
+            TermValue::Pack(_) => Err(ctx.err(span, NeedAnnotation { content: format!("pack") }))?,
         })
     }
     fn ana_step(
@@ -66,12 +59,9 @@ impl TypeCheck for Span<TermValue> {
         span.make(typ.clone()).ana(Kind::VType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermValue::Annotation(Annotation { term, ty }) => {
-                let ty_lub = Type::lub(
-                    ty.inner_ref().clone(),
-                    typ,
-                    ctx.clone(),
-                    || ctx.err(span, Subsumption { sort: "value annotation" }),
-                )?;
+                let ty_lub = Type::lub(ty.inner_ref().clone(), typ, ctx.clone(), || {
+                    ctx.err(span, Subsumption { sort: "value annotation" })
+                })?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
             TermValue::Thunk(Thunk(c)) => {
@@ -92,9 +82,7 @@ impl TypeCheck for Span<TermValue> {
                         },
                     )
                 })?;
-                let ty = Type::make_thunk(rc!(
-                    span.make(c.ana(typ_comp, ctx.clone())?)
-                ));
+                let ty = Type::make_thunk(rc!(span.make(c.ana(typ_comp, ctx.clone())?)));
                 let typ_lub = Type::lub(ty, typ, ctx.clone(), || {
                     ctx.err(span, Subsumption { sort: "thunk" })
                 })?;
@@ -113,11 +101,9 @@ impl TypeCheck for Span<TermValue> {
                     ctx.data_env.get(tvar).cloned().ok_or_else(|| {
                         ctx.err(
                             span,
-                            NameResolve(
-                                NameResolveError::UnboundTypeVariable {
-                                    tvar: tvar.to_owned(),
-                                },
-                            ),
+                            NameResolve(NameResolveError::UnboundTypeVariable {
+                                tvar: tvar.to_owned(),
+                            }),
                         )
                     })?;
                 let diff = Env::init(&params, &ty_app.args, || {
@@ -128,10 +114,8 @@ impl TypeCheck for Span<TermValue> {
                     })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;
-                let DataBr(_, tys) = ctors
-                    .into_iter()
-                    .find(|DataBr(ctorv, _)| ctorv == ctor)
-                    .ok_or_else(|| {
+                let DataBr(_, tys) =
+                    ctors.into_iter().find(|DataBr(ctorv, _)| ctorv == ctor).ok_or_else(|| {
                         ctx.err(
                             span,
                             NameResolve(NameResolveError::UnknownConstructor {
@@ -175,10 +159,7 @@ impl TypeCheck for Span<TermValue> {
                 let ty_body = ty_body
                     .inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(
-                        param.clone(),
-                        ty.inner_ref().clone(),
-                    )]))
+                    .subst(Env::from_iter([(param.clone(), ty.inner_ref().clone())]))
                     .map_err(|e| e.traced(ctx.trace.clone()))?;
                 body.ana(ty_body, ctx)?;
                 Step::Done(typ)

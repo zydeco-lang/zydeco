@@ -49,11 +49,7 @@ where
         let TypeArity { params, kd } = self;
         let mut s = String::new();
         s += "(";
-        s += &params
-            .into_iter()
-            .map(|kd| kd.fmt_args(fargs))
-            .collect::<Vec<_>>()
-            .join(", ");
+        s += &params.into_iter().map(|kd| kd.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
         s += ") -> ";
         s += &kd.fmt_args(fargs);
         s
@@ -71,22 +67,15 @@ where
         // HACK: pretty printing special types syntactically
         let tvar_name = tvar.fmt_args(fargs);
         if tvar_name == "Fn" {
-            s += &args
-                .into_iter()
-                .map(|arg| arg.fmt_args(fargs))
-                .collect::<Vec<_>>()
-                .join(" -> ");
+            s += &args.into_iter().map(|arg| arg.fmt_args(fargs)).collect::<Vec<_>>().join(" -> ");
         } else {
             // normal type application
             s += &tvar_name;
             // omit parentheses for empty type application
             if !args.is_empty() {
                 s += "(";
-                s += &args
-                    .into_iter()
-                    .map(|arg| arg.fmt_args(fargs))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                s +=
+                    &args.into_iter().map(|arg| arg.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
                 s += ")";
             }
         }
@@ -162,11 +151,7 @@ where
         let mut s = String::new();
         s += &ctor.fmt_args(fargs);
         s += "(";
-        s += &args
-            .into_iter()
-            .map(|arg| arg.fmt_args(fargs))
-            .collect::<Vec<_>>()
-            .join(", ");
+        s += &args.into_iter().map(|arg| arg.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
         s += ")";
         s
     }
@@ -212,11 +197,7 @@ where
     fn fmt_args(&self, fargs: Args) -> String {
         let Let { var, def, body } = self;
         let mut s = String::new();
-        s += &format!(
-            "let {} = {} in",
-            var.fmt_args(fargs),
-            def.fmt_args(fargs),
-        );
+        s += &format!("let {} = {} in", var.fmt_args(fargs), def.fmt_args(fargs),);
         s += &fargs.br_indent();
         s += &body.fmt_args(fargs);
         s
@@ -232,11 +213,7 @@ where
     fn fmt_args(&self, fargs: Args) -> String {
         let Do { var, comp, body } = self;
         let mut s = String::new();
-        s += &format!(
-            "do {} <- {} ;",
-            var.fmt_args(fargs),
-            comp.fmt_args(fargs),
-        );
+        s += &format!("do {} <- {} ;", var.fmt_args(fargs), comp.fmt_args(fargs),);
         s += &fargs.br_indent();
         s += &body.fmt_args(fargs);
         s
@@ -282,11 +259,7 @@ where
             s += "| ";
             s += &ctor.fmt_args(fargs);
             s += "(";
-            s += &vars
-                .into_iter()
-                .map(|var| var.fmt_args(fargs))
-                .collect::<Vec<_>>()
-                .join(", ");
+            s += &vars.into_iter().map(|var| var.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
             s += ") -> ";
             {
                 let fargs = fargs.indent();
@@ -315,11 +288,7 @@ where
             s += "| .";
             s += &dtor.fmt_args(fargs);
             s += "(";
-            s += &vars
-                .into_iter()
-                .map(|var| var.fmt_args(fargs))
-                .collect::<Vec<_>>()
-                .join(", ");
+            s += &vars.into_iter().map(|var| var.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
             s += ") -> ";
             {
                 let fargs = fargs.indent();
@@ -346,11 +315,7 @@ where
         s += " .";
         s += &dtor.fmt_args(fargs);
         s += "(";
-        s += &args
-            .into_iter()
-            .map(|arg| arg.fmt_args(fargs))
-            .collect::<Vec<_>>()
-            .join(", ");
+        s += &args.into_iter().map(|arg| arg.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
         s += ")";
         s
     }
@@ -364,12 +329,7 @@ where
 {
     fn fmt_args(&self, args: Args) -> String {
         let TypAbs { tvar, kd, body } = self;
-        format!(
-            "fn typ {} : {} -> {}",
-            tvar.fmt_args(args),
-            kd.fmt_args(args),
-            body.fmt_args(args)
-        )
+        format!("fn typ {} : {} -> {}", tvar.fmt_args(args), kd.fmt_args(args), body.fmt_args(args))
     }
 }
 
@@ -434,11 +394,7 @@ where
         s += "data ";
         s += &name.fmt_args(fargs);
         for (tyvar, kd) in params {
-            s += &format!(
-                " ({} : {})",
-                tyvar.fmt_args(fargs),
-                kd.fmt_args(fargs)
-            );
+            s += &format!(" ({} : {})", tyvar.fmt_args(fargs), kd.fmt_args(fargs));
         }
         s += " where ";
         {
@@ -465,11 +421,7 @@ where
         s += "| ";
         s += &ctorv.fmt_args(fargs);
         s += "(";
-        s += &tys
-            .into_iter()
-            .map(|ty| ty.fmt_args(fargs))
-            .collect::<Vec<_>>()
-            .join(", ");
+        s += &tys.into_iter().map(|ty| ty.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
         s += ")";
         s
     }
@@ -488,11 +440,7 @@ where
         s += "codata ";
         s += &name.fmt_args(fargs);
         for (tyvar, kd) in params {
-            s += &format!(
-                " ({} : {})",
-                tyvar.fmt_args(fargs),
-                kd.fmt_args(fargs)
-            );
+            s += &format!(" ({} : {})", tyvar.fmt_args(fargs), kd.fmt_args(fargs));
         }
         s += " where ";
         {
@@ -543,11 +491,7 @@ where
         s += "alias ";
         s += &name.fmt_args(fargs);
         for (tyvar, kd) in params {
-            s += &format!(
-                " ({} : {})",
-                tyvar.fmt_args(fargs),
-                kd.fmt_args(fargs)
-            );
+            s += &format!(" ({} : {})", tyvar.fmt_args(fargs), kd.fmt_args(fargs));
         }
         s += " = ";
         {

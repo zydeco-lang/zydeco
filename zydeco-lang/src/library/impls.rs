@@ -19,8 +19,7 @@ fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
 }
 fn dtor(body: Rc<ZCompute>, dtor: &str, args: Vec<ZValue>) -> ZCompute {
     let args = args.into_iter().map(|a| rc!(a.into())).collect();
-    Dtor { body, dtor: DtorV::new(format!("{}", dtor), span(0, 0)), args }
-        .into()
+    Dtor { body, dtor: DtorV::new(format!("{}", dtor), span(0, 0)), args }.into()
 }
 
 // /* Bool */
@@ -80,9 +79,7 @@ pub fn str_length(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        [ZValue::Literal(Literal::String(a))] => {
-            ret(Literal::Int(a.len() as i64).into())
-        }
+        [ZValue::Literal(Literal::String(a))] => ret(Literal::Int(a.len() as i64).into()),
         _ => unreachable!(""),
     }
 }
@@ -124,9 +121,7 @@ pub fn int_to_str(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        [ZValue::Literal(Literal::Int(a))] => {
-            ret(Literal::String(a.to_string()).into())
-        }
+        [ZValue::Literal(Literal::Int(a))] => ret(Literal::String(a.to_string()).into()),
         _ => unreachable!(""),
     }
 }
@@ -135,9 +130,7 @@ pub fn char_to_str(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        [ZValue::Literal(Literal::Char(a))] => {
-            ret(Literal::String(a.to_string()).into())
-        }
+        [ZValue::Literal(Literal::Char(a))] => ret(Literal::String(a.to_string()).into()),
         _ => unreachable!(""),
     }
 }
@@ -146,9 +139,7 @@ pub fn char_to_int(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        [ZValue::Literal(Literal::Char(a))] => {
-            ret(Literal::Int((*a as u8) as i64).into())
-        }
+        [ZValue::Literal(Literal::Char(a))] => ret(Literal::Int((*a as u8) as i64).into()),
         _ => unreachable!(""),
     }
 }
@@ -157,17 +148,14 @@ pub fn str_to_int(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        [ZValue::Literal(Literal::String(s))] => {
-            ret(Literal::Int(s.parse().unwrap()).into())
-        }
+        [ZValue::Literal(Literal::String(s))] => ret(Literal::Int(s.parse().unwrap()).into()),
         _ => unreachable!(""),
     }
 }
 
 // /* IO */
 pub fn write_str(
-    args: Vec<ZValue>, _r: &mut (dyn BufRead), w: &mut (dyn Write),
-    _: &[String],
+    args: Vec<ZValue>, _r: &mut (dyn BufRead), w: &mut (dyn Write), _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [ZValue::Literal(Literal::String(s)), e @ ZValue::Thunk(..)] => {
@@ -179,8 +167,7 @@ pub fn write_str(
 }
 
 pub fn read_line(
-    args: Vec<ZValue>, r: &mut (dyn BufRead), _w: &mut (dyn Write),
-    _: &[String],
+    args: Vec<ZValue>, r: &mut (dyn BufRead), _w: &mut (dyn Write), _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [e @ ZValue::Thunk(_)] => {
@@ -198,34 +185,23 @@ pub fn read_line(
 }
 
 pub fn arg_list(
-    args: Vec<ZValue>, _r: &mut (dyn BufRead), _w: &mut (dyn Write),
-    argv: &[String],
+    args: Vec<ZValue>, _r: &mut (dyn BufRead), _w: &mut (dyn Write), argv: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [k] => {
             let mut z_arg_list = ctor("Nil", vec![]);
             for arg in argv.iter().rev() {
-                z_arg_list = ctor(
-                    "Cons",
-                    vec![
-                        rc!(Literal::String(arg.clone()).into()),
-                        rc!(z_arg_list),
-                    ],
-                );
+                z_arg_list =
+                    ctor("Cons", vec![rc!(Literal::String(arg.clone()).into()), rc!(z_arg_list)]);
             }
-            Ok(dtor(
-                rc!(Force(rc!(k.clone().into())).into()),
-                "arg",
-                vec![z_arg_list],
-            ))
+            Ok(dtor(rc!(Force(rc!(k.clone().into())).into()), "arg", vec![z_arg_list]))
         }
         _ => unreachable!(""),
     }
 }
 
 pub fn exit(
-    args: Vec<ZValue>, _r: &mut (dyn BufRead), _w: &mut (dyn Write),
-    _: &[String],
+    args: Vec<ZValue>, _r: &mut (dyn BufRead), _w: &mut (dyn Write), _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [ZValue::Literal(Literal::Int(a))] => Err(*a as i32),

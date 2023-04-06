@@ -156,11 +156,7 @@ impl Monoid for Module {
     fn append(self, other: Self) -> Self {
         Self {
             name: other.name.or(self.name),
-            declarations: self
-                .declarations
-                .into_iter()
-                .chain(other.declarations)
-                .collect(),
+            declarations: self.declarations.into_iter().chain(other.declarations).collect(),
         }
     }
 }

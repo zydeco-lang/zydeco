@@ -90,11 +90,7 @@ impl TypeCheck for Span<TermComputation> {
                 let tvar = ty_app.tvar;
                 let Data { name, params, ctors } =
                     ctx.data_env.get(&tvar).cloned().ok_or_else(|| {
-                        ctx.err(
-                            span,
-                            NameResolveError::UnboundTypeVariable { tvar }
-                                .into(),
-                        )
+                        ctx.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
                     })?;
                 // arity check on data type
                 let diff = Env::init(&params, &ty_app.args, || {
@@ -105,10 +101,8 @@ impl TypeCheck for Span<TermComputation> {
                     })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;
-                let ctors: HashMap<_, _> = ctors
-                    .into_iter()
-                    .map(|DataBr(ctor, tys)| (ctor, tys))
-                    .collect();
+                let ctors: HashMap<_, _> =
+                    ctors.into_iter().map(|DataBr(ctor, tys)| (ctor, tys)).collect();
                 let mut unexpected = Vec::new();
                 let mut ctorv_set_arm: HashSet<CtorV> = HashSet::new();
                 let mut ty_arms = Vec::new();
@@ -133,12 +127,8 @@ impl TypeCheck for Span<TermComputation> {
                     span.make(ty.clone()).ana(Kind::CType, ctx)?;
                     ty_arms.push(ty);
                 }
-                let ctorv_set_data: HashSet<CtorV> =
-                    ctors.keys().cloned().collect();
-                let missing: Vec<_> = ctorv_set_data
-                    .difference(&ctorv_set_arm)
-                    .cloned()
-                    .collect();
+                let ctorv_set_data: HashSet<CtorV> = ctors.keys().cloned().collect();
+                let missing: Vec<_> = ctorv_set_data.difference(&ctorv_set_arm).cloned().collect();
                 bool_test(unexpected.is_empty() && missing.is_empty(), || {
                     ctx.err(span, InconsistentMatchers { unexpected, missing })
                 })?;
@@ -160,8 +150,7 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(ty)
             }
             TermComputation::Comatch(_) => {
-                Err(ctx
-                    .err(span, NeedAnnotation { content: format!("comatch") }))?
+                Err(ctx.err(span, NeedAnnotation { content: format!("comatch") }))?
             }
             TermComputation::Dtor(Dtor { body, dtor, args }) => {
                 let ty_body = body.syn(ctx.clone())?;
@@ -175,19 +164,12 @@ impl TypeCheck for Span<TermComputation> {
                 let tvar = ty_app.tvar;
                 let Codata { name, params, dtors } =
                     ctx.coda_env.get(&tvar).cloned().ok_or_else(|| {
-                        ctx.err(
-                            span,
-                            NameResolveError::UnboundTypeVariable { tvar }
-                                .into(),
-                        )
+                        ctx.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
                     })?;
                 // arity check on codata type
                 let diff = Env::init(&params, &ty_app.args, || {
                     span.make(ArityMismatch {
-                        context: format!(
-                            "codata type `{}` instiantiation",
-                            name
-                        ),
+                        context: format!("codata type `{}` instiantiation", name),
                         expected: params.len(),
                         found: ty_app.args.len(),
                     })
@@ -233,8 +215,7 @@ impl TypeCheck for Span<TermComputation> {
                 )
             }
             TermComputation::TypAbs(_) => {
-                Err(ctx
-                    .err(span, NeedAnnotation { content: format!("typabs") }))?
+                Err(ctx.err(span, NeedAnnotation { content: format!("typabs") }))?
             }
             TermComputation::TypApp(TypApp { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
@@ -247,26 +228,14 @@ impl TypeCheck for Span<TermComputation> {
                 };
                 arg.ana(kd.clone(), ctx.clone())?;
                 let diff = Env::init(&[(param, kd)], &[arg.clone()], || {
-                    span.make(ArityMismatch {
-                        context: format!("typapp"),
-                        expected: 1,
-                        found: 1,
-                    })
+                    span.make(ArityMismatch { context: format!("typapp"), expected: 1, found: 1 })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;
                 Step::Done(
-                    ty.inner_ref()
-                        .clone()
-                        .subst(diff)
-                        .map_err(|e| e.traced(ctx.trace.clone()))?,
+                    ty.inner_ref().clone().subst(diff).map_err(|e| e.traced(ctx.trace.clone()))?,
                 )
             }
-            TermComputation::MatchPack(MatchPack {
-                scrut,
-                tvar,
-                var,
-                body,
-            }) => {
+            TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 let SynType::Exists(Exists { param: (param, kd), ty }) = &ty_scrut.synty else {
                         Err(ctx.err(span, TypeExpected {
@@ -279,10 +248,7 @@ impl TypeCheck for Span<TermComputation> {
                 let ty = ty
                     .inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(
-                        param.clone(),
-                        tvar.clone().into(),
-                    )]))
+                    .subst(Env::from_iter([(param.clone(), tvar.clone().into())]))
                     .map_err(|e| e.traced(ctx.trace.clone()))?;
                 ctx.term_ctx.insert(var.clone(), ty);
                 let ty_body = body.syn(ctx.clone())?;
@@ -307,17 +273,9 @@ impl TypeCheck for Span<TermComputation> {
         span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermComputation::Annotation(Annotation { term, ty }) => {
-                let ty_lub = Type::lub(
-                    ty.inner_ref().clone(),
-                    typ,
-                    ctx.clone(),
-                    || {
-                        ctx.err(
-                            span,
-                            Subsumption { sort: "computation annotation" },
-                        )
-                    },
-                )?;
+                let ty_lub = Type::lub(ty.inner_ref().clone(), typ, ctx.clone(), || {
+                    ctx.err(span, Subsumption { sort: "computation annotation" })
+                })?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
             TermComputation::Ret(Ret(v)) => {
@@ -338,12 +296,9 @@ impl TypeCheck for Span<TermComputation> {
                         },
                     )
                 })?;
-                let ty = Type::make_ret(rc!(
-                    span.make(v.ana(ty_body, ctx.clone())?)
-                ));
-                let typ_lub = Type::lub(ty, typ, ctx.clone(), || {
-                    ctx.err(span, Subsumption { sort: "ret" })
-                })?;
+                let ty = Type::make_ret(rc!(span.make(v.ana(ty_body, ctx.clone())?)));
+                let typ_lub =
+                    Type::lub(ty, typ, ctx.clone(), || ctx.err(span, Subsumption { sort: "ret" }))?;
                 Step::Done(typ_lub)
             }
             TermComputation::Force(Force(v)) => {
@@ -380,10 +335,7 @@ impl TypeCheck for Span<TermComputation> {
                 Step::AnaMode((ctx, body), typ)
             }
             TermComputation::Rec(Rec { var, body }) => {
-                ctx.term_ctx.insert(
-                    var.to_owned(),
-                    Type::make_thunk(rc!(span.make(typ.clone()))),
-                );
+                ctx.term_ctx.insert(var.to_owned(), Type::make_thunk(rc!(span.make(typ.clone()))));
                 Step::AnaMode((ctx, body), typ)
             }
             TermComputation::Match(Match { scrut, arms }) => {
@@ -399,11 +351,7 @@ impl TypeCheck for Span<TermComputation> {
                 let tvar = ty_app.tvar;
                 let Data { name, params, ctors } =
                     ctx.data_env.get(&tvar).cloned().ok_or_else(|| {
-                        ctx.err(
-                            span,
-                            NameResolveError::UnboundTypeVariable { tvar }
-                                .into(),
-                        )
+                        ctx.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
                     })?;
                 // arity check on data type
                 let diff = Env::init(&params, &ty_app.args, || {
@@ -414,10 +362,8 @@ impl TypeCheck for Span<TermComputation> {
                     })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;
-                let ctors: HashMap<_, _> = ctors
-                    .into_iter()
-                    .map(|DataBr(ctor, tys)| (ctor, tys))
-                    .collect();
+                let ctors: HashMap<_, _> =
+                    ctors.into_iter().map(|DataBr(ctor, tys)| (ctor, tys)).collect();
                 let mut unexpected = Vec::new();
                 let mut ctorv_set_arm: HashSet<CtorV> = HashSet::new();
                 for Matcher { ctor, vars, body } in arms {
@@ -438,12 +384,8 @@ impl TypeCheck for Span<TermComputation> {
                     }
                     body.ana(typ.clone(), ctx.clone())?;
                 }
-                let ctorv_set_data: HashSet<CtorV> =
-                    ctors.keys().cloned().collect();
-                let missing: Vec<_> = ctorv_set_data
-                    .difference(&ctorv_set_arm)
-                    .cloned()
-                    .collect();
+                let ctorv_set_data: HashSet<CtorV> = ctors.keys().cloned().collect();
+                let missing: Vec<_> = ctorv_set_data.difference(&ctorv_set_arm).cloned().collect();
                 bool_test(unexpected.is_empty() && missing.is_empty(), || {
                     ctx.err(span, InconsistentMatchers { unexpected, missing })
                 })?;
@@ -462,28 +404,20 @@ impl TypeCheck for Span<TermComputation> {
                     ctx.coda_env.get(&tvar).cloned().ok_or_else(|| {
                         ctx.err(
                             span,
-                            NameResolveError::UnboundTypeVariable {
-                                tvar: tvar.clone(),
-                            }
-                            .into(),
+                            NameResolveError::UnboundTypeVariable { tvar: tvar.clone() }.into(),
                         )
                     })?;
                 // arity check on codata type
                 let diff = Env::init(&params, &ty_app.args, || {
                     span.make(ArityMismatch {
-                        context: format!(
-                            "codata type `{}` instantiation",
-                            name
-                        ),
+                        context: format!("codata type `{}` instantiation", name),
                         expected: params.len(),
                         found: ty_app.args.len(),
                     })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;
-                let dtors: HashMap<_, _> = dtors
-                    .into_iter()
-                    .map(|CodataBr(dtor, tys, ty)| (dtor, (tys, ty)))
-                    .collect();
+                let dtors: HashMap<_, _> =
+                    dtors.into_iter().map(|CodataBr(dtor, tys, ty)| (dtor, (tys, ty))).collect();
                 let mut unexpected = Vec::new();
                 let mut dtorv_set_arm: HashSet<DtorV> = HashSet::new();
                 for Comatcher { dtor, vars, body } in arms {
@@ -509,17 +443,10 @@ impl TypeCheck for Span<TermComputation> {
                     }
                     body.ana(ty?, ctx)?;
                 }
-                let dtorv_set_coda: HashSet<DtorV> =
-                    dtors.keys().cloned().collect();
-                let missing: Vec<_> = dtorv_set_coda
-                    .difference(&dtorv_set_arm)
-                    .cloned()
-                    .collect();
+                let dtorv_set_coda: HashSet<DtorV> = dtors.keys().cloned().collect();
+                let missing: Vec<_> = dtorv_set_coda.difference(&dtorv_set_arm).cloned().collect();
                 bool_test(unexpected.is_empty() && missing.is_empty(), || {
-                    ctx.err(
-                        span,
-                        InconsistentComatchers { unexpected, missing },
-                    )
+                    ctx.err(span, InconsistentComatchers { unexpected, missing })
                 })?;
                 Step::Done(typ)
             }

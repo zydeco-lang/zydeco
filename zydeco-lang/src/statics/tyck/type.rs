@@ -45,27 +45,17 @@ impl TypeCheck for Span<Type> {
                 Ok(Step::Done(kd.clone()))
             }
             SynType::Forall(Forall { param: (param, kd), ty }) => {
-                ctx.type_ctx.insert(
-                    param.clone(),
-                    TypeArity { params: vec![], kd: kd.clone() },
-                );
+                ctx.type_ctx.insert(param.clone(), TypeArity { params: vec![], kd: kd.clone() });
                 ty.ana(Kind::CType, ctx)?;
                 Ok(Step::Done(Kind::CType))
             }
             SynType::Exists(Exists { param: (param, kd), ty }) => {
-                ctx.type_ctx.insert(
-                    param.clone(),
-                    TypeArity { params: vec![], kd: kd.clone() },
-                );
+                ctx.type_ctx.insert(param.clone(), TypeArity { params: vec![], kd: kd.clone() });
                 ty.ana(Kind::VType, ctx)?;
                 Ok(Step::Done(Kind::VType))
             }
-            SynType::AbstVar(AbstVar(abs)) => {
-                Ok(Step::Done(ctx.abst_ctx[*abs]))
-            }
-            SynType::Hole(_) => {
-                Err(ctx.err(span, NeedAnnotation { content: format!("hole") }))?
-            }
+            SynType::AbstVar(AbstVar(abs)) => Ok(Step::Done(ctx.abst_ctx[*abs])),
+            SynType::Hole(_) => Err(ctx.err(span, NeedAnnotation { content: format!("hole") }))?,
         }
     }
     fn ana_step(
@@ -85,14 +75,10 @@ impl TypeCheck for Span<Type> {
             .map_err(|e| e.traced(ctx.trace.clone()))?;
         match ty.synty {
             SynType::Hole(_) => Ok(Step::Done(kd)),
-            SynType::TypeApp(_)
-            | SynType::Forall(_)
-            | SynType::Exists(_)
-            | SynType::AbstVar(_) => {
+            SynType::TypeApp(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::AbstVar(_) => {
                 let kd_syn = self.syn(ctx.clone())?;
-                kd_syn.eqv(&kd, Default::default(), || {
-                    ctx.err(span, Subsumption { sort: "type" })
-                })?;
+                kd_syn
+                    .eqv(&kd, Default::default(), || ctx.err(span, Subsumption { sort: "type" }))?;
                 Ok(Step::Done(kd))
             }
         }
@@ -100,9 +86,7 @@ impl TypeCheck for Span<Type> {
 }
 
 impl Type {
-    pub(super) fn subst(
-        self, mut diff: Env<TypeV, Type>,
-    ) -> Result<Self, Span<TyckErrorItem>> {
+    pub(super) fn subst(self, mut diff: Env<TypeV, Type>) -> Result<Self, Span<TyckErrorItem>> {
         match self.synty {
             SynType::TypeApp(TypeApp { tvar, mut args }) => {
                 if let Some(ty) = diff.get(&tvar) {
@@ -116,10 +100,7 @@ impl Type {
                     Ok(ty.clone())
                 } else {
                     for arg in args.iter_mut() {
-                        *arg = rc!(arg
-                            .as_ref()
-                            .clone()
-                            .try_map(|ty| ty.subst(diff.clone()))?);
+                        *arg = rc!(arg.as_ref().clone().try_map(|ty| ty.subst(diff.clone()))?);
                     }
                     Ok(Type { synty: TypeApp { tvar, args }.into() })
                 }
@@ -129,10 +110,7 @@ impl Type {
                 Ok(Type {
                     synty: Forall {
                         param,
-                        ty: rc!(ty
-                            .as_ref()
-                            .clone()
-                            .try_map(|ty| ty.subst(diff.clone()))?),
+                        ty: rc!(ty.as_ref().clone().try_map(|ty| ty.subst(diff.clone()))?),
                     }
                     .into(),
                 })
@@ -142,10 +120,7 @@ impl Type {
                 Ok(Type {
                     synty: Exists {
                         param,
-                        ty: rc!(ty
-                            .as_ref()
-                            .clone()
-                            .try_map(|ty| ty.subst(diff.clone()))?),
+                        ty: rc!(ty.as_ref().clone().try_map(|ty| ty.subst(diff.clone()))?),
                     }
                     .into(),
                 })
@@ -154,8 +129,7 @@ impl Type {
         }
     }
     pub(super) fn lub(
-        lhs: Self, rhs: Self, ctx: Ctx,
-        f: impl FnOnce() -> Span<TyckError> + Clone,
+        lhs: Self, rhs: Self, ctx: Ctx, f: impl FnOnce() -> Span<TyckError> + Clone,
     ) -> Result<Self, Span<TyckError>> {
         let lhs = lhs.subst(ctx.type_env.clone()).unwrap();
         let rhs = rhs.subst(ctx.type_env.clone()).unwrap();
@@ -178,31 +152,13 @@ impl Type {
             }
             (SynType::Forall(lhs), SynType::Forall(rhs)) => {
                 bool_test(lhs.param == rhs.param, f.clone())?;
-                let ty = Self::lub(
-                    lhs.ty.inner_ref().clone(),
-                    rhs.ty.inner_ref().clone(),
-                    ctx,
-                    f,
-                )?;
-                Ok(Forall {
-                    param: lhs.param.clone(),
-                    ty: rc!(lhs.ty.span().make(ty)),
-                }
-                .into())
+                let ty = Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, f)?;
+                Ok(Forall { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
             }
             (SynType::Exists(lhs), SynType::Exists(rhs)) => {
                 bool_test(lhs.param == rhs.param, f.clone())?;
-                let ty = Self::lub(
-                    lhs.ty.inner_ref().clone(),
-                    rhs.ty.inner_ref().clone(),
-                    ctx,
-                    f,
-                )?;
-                Ok(Exists {
-                    param: lhs.param.clone(),
-                    ty: rc!(lhs.ty.span().make(ty)),
-                }
-                .into())
+                let ty = Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, f)?;
+                Ok(Exists { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
             }
             (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
                 bool_test(lhs == rhs, f)?;

@@ -27,8 +27,7 @@ pub enum Step<T, Out> {
 
 impl<'rt> Runtime<'rt> {
     pub fn new(
-        input: &'rt mut dyn BufRead, output: &'rt mut dyn Write,
-        args: &'rt [String],
+        input: &'rt mut dyn BufRead, output: &'rt mut dyn Write, args: &'rt [String],
     ) -> Self {
         Runtime { input, output, args, stack: Vector::new(), env: Env::new() }
     }
@@ -39,21 +38,14 @@ impl<'rt> Eval<'rt> for ls::ZVal {
 
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         match self {
-            ls::ZVal::Var(var) => Step::Done({
-                runtime
-                    .env
-                    .lookup(&var)
-                    .expect("variable does not exist")
-                    .clone()
-            }),
-            ls::ZVal::Thunk(ls::Thunk(body)) => Step::Done(
-                super::syntax::Thunk { body, env: runtime.env.clone() }.into(),
-            ),
+            ls::ZVal::Var(var) => {
+                Step::Done(runtime.env.lookup(&var).expect("variable does not exist").clone())
+            }
+            ls::ZVal::Thunk(ls::Thunk(body)) => {
+                Step::Done(super::syntax::Thunk { body, env: runtime.env.clone() }.into())
+            }
             ls::ZVal::Ctor(ls::Ctor { ctor, args }) => {
-                let args = args
-                    .iter()
-                    .map(|arg| rc!(arg.as_ref().clone().eval(runtime)))
-                    .collect();
+                let args = args.iter().map(|arg| rc!(arg.as_ref().clone().eval(runtime))).collect();
                 Step::Done(ls::Ctor { ctor, args }.into())
             }
             ls::ZVal::Literal(lit) => Step::Done(lit.into()),
@@ -94,20 +86,14 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 Step::Step(body.as_ref().clone())
             }
             ls::ZComp::Do(ls::Do { var, comp, body }) => {
-                runtime.stack.push_back(SemComp::Kont(
-                    body,
-                    runtime.env.clone(),
-                    var,
-                ));
+                runtime.stack.push_back(SemComp::Kont(body, runtime.env.clone(), var));
                 Step::Step(comp.as_ref().clone())
             }
             ls::ZComp::Rec(e) => {
                 let ls::Rec { var, body } = e.clone();
-                let env = runtime.env.update(
-                    var,
-                    SemThunk { body: rc!(e.into()), env: runtime.env.clone() }
-                        .into(),
-                );
+                let env = runtime
+                    .env
+                    .update(var, SemThunk { body: rc!(e.into()), env: runtime.env.clone() }.into());
                 runtime.env = env;
                 Step::Step(body.as_ref().clone())
             }
@@ -116,10 +102,8 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 let SemVal::Ctor(ls::Ctor { ctor, args }) = scrut else {
                     panic!("Match on non-ctor")
                 };
-                let ls::Matcher { ctor: _, vars, body } = arms
-                    .into_iter()
-                    .find(|arm| arm.ctor == ctor)
-                    .expect("no matching arm");
+                let ls::Matcher { ctor: _, vars, body } =
+                    arms.into_iter().find(|arm| arm.ctor == ctor).expect("no matching arm");
                 for (var, arg) in vars.into_iter().zip(args.into_iter()) {
                     let env = runtime.env.update(var, arg.as_ref().clone());
                     runtime.env = env;
@@ -130,10 +114,8 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 let Some(SemComp::Dtor(dtor, args)) = runtime.stack.pop_back() else {
                     panic!("Comatch on non-Dtor")
                 };
-                let ls::Comatcher { dtor: _, vars, body } = arms
-                    .into_iter()
-                    .find(|arm| arm.dtor == dtor)
-                    .expect("no matching arm");
+                let ls::Comatcher { dtor: _, vars, body } =
+                    arms.into_iter().find(|arm| arm.dtor == dtor).expect("no matching arm");
                 for (var, arg) in vars.into_iter().zip(args.into_iter()) {
                     let env = runtime.env.update(var, arg.as_ref().clone());
                     runtime.env = env;
@@ -141,10 +123,8 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 Step::Step(body.as_ref().clone())
             }
             ls::ZComp::Dtor(ls::Dtor { body, dtor, args }) => {
-                let args = args
-                    .iter()
-                    .map(|arg| Rc::new(arg.as_ref().clone().eval(runtime)))
-                    .collect();
+                let args =
+                    args.iter().map(|arg| Rc::new(arg.as_ref().clone().eval(runtime))).collect();
                 runtime.stack.push_back(SemComp::Dtor(dtor, args));
                 Step::Step(body.as_ref().clone())
             }

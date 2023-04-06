@@ -30,18 +30,10 @@ impl fmt::Display for NameResolveError {
                 write!(f, "{} declared multiple times", name)
             }
             EmptyDeclaration { name } => {
-                write!(
-                    f,
-                    "{} declared with neither type signature nor binding",
-                    name
-                )
+                write!(f, "{} declared with neither type signature nor binding", name)
             }
             ExternalDeclaration { name } => {
-                write!(
-                    f,
-                    "{} declared as external but has implementation",
-                    name
-                )
+                write!(f, "{} declared as external but has implementation", name)
             }
             UnknownIdentifier { name } => {
                 write!(f, "Unknown identifier {}", name)
@@ -56,16 +48,14 @@ impl fmt::Display for NameResolveError {
                 write!(
                     f,
                     "Unknown constructor. In {}, no constructor named {} is found.",
-                    context,
-                    ctor
+                    context, ctor
                 )
             }
             UnknownDestructor { context, dtor } => {
                 write!(
                     f,
                     "Unknown destructor. In {}, no destructor named {} is found.",
-                    context,
-                    dtor
+                    context, dtor
                 )
             }
         }

@@ -24,12 +24,8 @@ pub fn enum_generator_derive(input: TokenStream) -> TokenStream {
                             };
                             res.extend(TokenStream::from(gen));
                         } else {
-                            let dom: Vec<_> = (&field.unnamed)
-                                .into_iter()
-                                .map(|f| &f.ty)
-                                .collect();
-                            let idx: Vec<_> =
-                                (0..dom.len()).map(syn::Index::from).collect();
+                            let dom: Vec<_> = (&field.unnamed).into_iter().map(|f| &f.ty).collect();
+                            let idx: Vec<_> = (0..dom.len()).map(syn::Index::from).collect();
                             let gen = quote! {
                                 impl From<(#(#dom),*)> for #cod {
                                     fn from(item: (#(#dom),*)) -> Self {
@@ -55,16 +51,10 @@ pub fn enum_generator_derive(input: TokenStream) -> TokenStream {
                             };
                             res.extend(TokenStream::from(gen));
                         } else {
-                            let dom: Vec<_> = (&field.named)
-                                .into_iter()
-                                .map(|f| &f.ty)
-                                .collect();
-                            let idx: Vec<_> =
-                                (0..dom.len()).map(syn::Index::from).collect();
-                            let field_idents: Vec<_> = (&field.named)
-                                .into_iter()
-                                .map(|f| &f.ident)
-                                .collect();
+                            let dom: Vec<_> = (&field.named).into_iter().map(|f| &f.ty).collect();
+                            let idx: Vec<_> = (0..dom.len()).map(syn::Index::from).collect();
+                            let field_idents: Vec<_> =
+                                (&field.named).into_iter().map(|f| &f.ident).collect();
                             let gen = quote! {
                                 impl From<(#(#dom),*)> for #cod {
                                     fn from(item: (#(#dom),*)) -> Self {

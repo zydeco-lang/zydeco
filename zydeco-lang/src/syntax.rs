@@ -205,10 +205,7 @@ pub struct Do<TeV: VarT, B1: ComputationT, B2: ComputationT> {
     pub comp: B1,
     pub body: B2,
 }
-impl<TeV: VarT, B1: ComputationT, B2: ComputationT> ComputationT
-    for Do<TeV, B1, B2>
-{
-}
+impl<TeV: VarT, B1: ComputationT, B2: ComputationT> ComputationT for Do<TeV, B1, B2> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rec<TeV: VarT, B: ComputationT> {
@@ -228,10 +225,7 @@ pub struct Matcher<C: CtorT, TeV: VarT, B: ComputationT> {
     pub vars: Vec<TeV>,
     pub body: B,
 }
-impl<C: CtorT, TeV: VarT, A: ValueT, B: ComputationT> ComputationT
-    for Match<C, TeV, A, B>
-{
-}
+impl<C: CtorT, TeV: VarT, A: ValueT, B: ComputationT> ComputationT for Match<C, TeV, A, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Comatch<D: DtorT, TeV: VarT, B: ComputationT> {
@@ -259,10 +253,7 @@ pub struct TypAbs<TyV: TyVarT, Kd: KindT, B: ComputationT> {
     pub kd: Kd,
     pub body: B,
 }
-impl<TyV: TyVarT, Kd: KindT, B: ComputationT> ComputationT
-    for TypAbs<TyV, Kd, B>
-{
-}
+impl<TyV: TyVarT, Kd: KindT, B: ComputationT> ComputationT for TypAbs<TyV, Kd, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypApp<B: ComputationT, Ty: TypeT> {

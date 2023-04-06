@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
-use zydeco_lang::{
-    dynamics::syntax as ds, utils::fmt::FmtArgs, zydeco::ZydecoFile,
-};
+use zydeco_lang::{dynamics::syntax as ds, utils::fmt::FmtArgs, zydeco::ZydecoFile};
 
 const EXAMPLE: &str = "
 let f = {
@@ -20,9 +18,7 @@ fn ui() -> Html {
         let cur_buf_hdl = cur_buf.clone();
         let display_hdl = display_text.clone();
         Callback::from(move |evt: InputEvent| {
-            if let Some(text_area) =
-                evt.target_dyn_into::<HtmlTextAreaElement>()
-            {
+            if let Some(text_area) = evt.target_dyn_into::<HtmlTextAreaElement>() {
                 cur_buf_hdl.set(text_area.value());
                 display_hdl.set(String::from(""))
             }

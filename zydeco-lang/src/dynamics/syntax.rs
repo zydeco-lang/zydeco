@@ -48,10 +48,7 @@ impl fmt::Debug for SemComp {
                 f,
                 "Dtor(.{}({}))",
                 dtor,
-                args.into_iter()
-                    .map(|arg| arg.fmt())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                args.into_iter().map(|arg| arg.fmt()).collect::<Vec<_>>().join(", ")
             ),
         }
     }

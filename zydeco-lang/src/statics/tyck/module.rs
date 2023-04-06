@@ -17,10 +17,7 @@ impl TypeCheck for Span<&Data<TypeV, Kind, CtorV, RcType>> {
             if ctorvs.contains(ctorv) {
                 Err(ctx.err(
                     span,
-                    NameResolveError::DuplicateCtorDeclaration {
-                        name: ctorv.clone(),
-                    }
-                    .into(),
+                    NameResolveError::DuplicateCtorDeclaration { name: ctorv.clone() }.into(),
                 ))?;
             }
             ctorvs.insert(ctorv.clone());
@@ -49,10 +46,7 @@ impl TypeCheck for Span<&Codata<TypeV, Kind, DtorV, RcType>> {
             if dtorvs.contains(dtorv) {
                 Err(ctx.err(
                     span,
-                    NameResolveError::DuplicateDtorDeclaration {
-                        name: dtorv.clone(),
-                    }
-                    .into(),
+                    NameResolveError::DuplicateDtorDeclaration { name: dtorv.clone() }.into(),
                 ))?;
             }
             dtorvs.insert(dtorv.clone());
@@ -71,18 +65,14 @@ impl TypeCheck for Span<Module> {
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
-        let Module { name: _, data, codata: coda, define, define_ext } =
-            self.inner_ref();
+        let Module { name: _, data, codata: coda, define, define_ext } = self.inner_ref();
         // register data and codata type declarations in the type context
         for DeclSymbol { inner: data, .. } in data {
             let res = ctx.type_ctx.insert(data.name.clone(), data.type_arity());
             if let Some(_) = res {
                 Err(ctx.err(
                     data.name.span(),
-                    NameResolveError::DuplicateTypeDeclaration {
-                        name: data.name.clone(),
-                    }
-                    .into(),
+                    NameResolveError::DuplicateTypeDeclaration { name: data.name.clone() }.into(),
                 ))?;
             }
         }
@@ -91,10 +81,7 @@ impl TypeCheck for Span<Module> {
             if let Some(_) = res {
                 Err(ctx.err(
                     coda.name.span(),
-                    NameResolveError::DuplicateTypeDeclaration {
-                        name: coda.name.clone(),
-                    }
-                    .into(),
+                    NameResolveError::DuplicateTypeDeclaration { name: coda.name.clone() }.into(),
                 ))?;
             }
         }
@@ -107,9 +94,7 @@ impl TypeCheck for Span<Module> {
             coda.name.span().make(coda).syn(ctx.clone())?;
             ctx.coda_env.insert(coda.name.clone(), coda.clone());
         }
-        for DeclSymbol { inner: Define { name: (var, ty), def: () }, .. } in
-            define_ext
-        {
+        for DeclSymbol { inner: Define { name: (var, ty), def: () }, .. } in define_ext {
             ctx.term_ctx.insert(var.clone(), ty.inner_ref().clone());
         }
         // register term declarations in the term context
@@ -117,10 +102,7 @@ impl TypeCheck for Span<Module> {
             bool_test(!external, || {
                 ctx.err(
                     name.span(),
-                    NameResolveError::ExternalDeclaration {
-                        name: name.name().to_string(),
-                    }
-                    .into(),
+                    NameResolveError::ExternalDeclaration { name: name.name().to_string() }.into(),
                 )
             })?;
             let ty_def = def.syn(ctx.clone())?;

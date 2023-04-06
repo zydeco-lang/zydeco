@@ -40,8 +40,7 @@ impl FileInfo {
         if idx < self.newlines.len() {
             Cursor2 {
                 line: idx,
-                column: offset
-                    - self.newlines[if idx > 0 { idx - 1 } else { idx }],
+                column: offset - self.newlines[if idx > 0 { idx - 1 } else { idx }],
             }
         } else {
             panic!("SpanInfo: offset {} is not in {:?}", offset, self)

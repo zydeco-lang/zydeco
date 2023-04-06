@@ -18,12 +18,8 @@ pub enum ZVal {
 type RcValue = Rc<ZVal>;
 impl ValueT for ZVal {}
 
-pub type PrimComp = fn(
-    Vec<ds::SemVal>,
-    &mut (dyn BufRead),
-    &mut (dyn Write),
-    &[String],
-) -> Result<ZComp, i32>;
+pub type PrimComp =
+    fn(Vec<ds::SemVal>, &mut (dyn BufRead), &mut (dyn Write), &[String]) -> Result<ZComp, i32>;
 
 #[derive(Clone)]
 pub struct Prim {

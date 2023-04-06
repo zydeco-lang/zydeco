@@ -35,20 +35,13 @@ impl FmtArgs for Module {
             s += &d.fmt_args(args);
             s += &args.br_indent();
         }
-        for DeclSymbol {
-            public,
-            external: _,
-            inner: Define { name: (var, ty), def: () },
-        } in define_ext
+        for DeclSymbol { public, external: _, inner: Define { name: (var, ty), def: () } } in
+            define_ext
         {
             if *public {
                 s += &format!("pub ");
             }
-            s += &format!(
-                "extern {} : {} end",
-                var.fmt_args(args),
-                ty.fmt_args(args)
-            );
+            s += &format!("extern {} : {} end", var.fmt_args(args), ty.fmt_args(args));
             s += &args.br_indent();
         }
         for d in define {

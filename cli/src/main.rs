@@ -1,17 +1,11 @@
 use clap::Parser;
 use cli::{Cli, Commands};
-use zydeco_lang::{
-    dynamics::syntax::ProgKont, utils::fmt::FmtArgs, zydeco::ZydecoFile,
-};
+use zydeco_lang::{dynamics::syntax::ProgKont, utils::fmt::FmtArgs, zydeco::ZydecoFile};
 
 fn main() -> Result<(), ()> {
     let res = match Cli::parse().command {
-        Commands::Run { file, dry, verbose, args } => {
-            run_file(file, dry, verbose, args)
-        }
-        Commands::Check { file, verbose } => {
-            run_file(file, true, verbose, vec![])
-        }
+        Commands::Run { file, dry, verbose, args } => run_file(file, dry, verbose, args),
+        Commands::Check { file, verbose } => run_file(file, true, verbose, vec![]),
         Commands::Repl { .. } => cli::repl::launch(),
     };
     match res {
