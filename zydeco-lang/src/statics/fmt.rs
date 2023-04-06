@@ -22,7 +22,7 @@ impl FmtArgs for Type {
 impl FmtArgs for Module {
     fn fmt_args(&self, args: Args) -> String {
         let mut s = String::new();
-        let Module { name, data, codata, define, define_ext } = self;
+        let Module { name, data, codata, alias, define, define_ext } = self;
         if let Some(name) = name {
             s += &format!("module {} where", name);
             s += &args.br_indent();
@@ -32,6 +32,10 @@ impl FmtArgs for Module {
             s += &args.br_indent();
         }
         for d in codata {
+            s += &d.fmt_args(args);
+            s += &args.br_indent();
+        }
+        for d in alias {
             s += &d.fmt_args(args);
             s += &args.br_indent();
         }

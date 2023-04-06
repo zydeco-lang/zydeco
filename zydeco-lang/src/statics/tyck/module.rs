@@ -89,8 +89,8 @@ impl TypeCheck for Span<Module> {
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
-        let Module { name: _, data, codata: coda, define, define_ext } = self.inner_ref();
-        // register data and codata type declarations in the type context
+        let Module { name: _, data, codata: coda, alias: _, define, define_ext } = self.inner_ref();
+        // register data type, codata type and type alias declarations in the type context
         for DeclSymbol { inner: data, .. } in data {
             let res = ctx.type_ctx.insert(data.name.clone(), data.type_arity());
             if let Some(_) = res {
@@ -109,6 +109,7 @@ impl TypeCheck for Span<Module> {
                 ))?;
             }
         }
+        // TODO: register type aliases in the type context
         // type check data and codata type declarations
         for DeclSymbol { inner: data, .. } in data {
             data.name.span().make(data).syn(ctx.clone())?;

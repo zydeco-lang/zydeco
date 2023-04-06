@@ -381,11 +381,25 @@ impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
     }
 }
 
+impl TryFrom<ps::Alias<TypeV, Kind, ps::BoxType>> for Alias<TypeV, Kind, RcType> {
+    type Error = TyckErrorItem;
+    fn try_from(
+        Alias { name, params, ty }: ps::Alias<TypeV, Kind, ps::BoxType>,
+    ) -> Result<Self, TyckErrorItem> {
+        Ok(Self {
+            name,
+            params,
+            ty: rc!(ty.try_map(TryInto::try_into)?),
+        })
+    }
+}
+
 impl TryFrom<ps::Module> for Module {
     type Error = TyckErrorItem;
     fn try_from(ps::Module { name, declarations }: ps::Module) -> Result<Self, TyckErrorItem> {
         let mut data = Vec::new();
         let mut codata = Vec::new();
+        let mut alias = Vec::new();
         let mut define = Vec::new();
         let mut define_ext = Vec::new();
         for declaration in declarations {
@@ -397,8 +411,8 @@ impl TryFrom<ps::Module> for Module {
                 ps::Declaration::Codata(d) => {
                     codata.push(DeclSymbol { public, external, inner: d.try_into()? })
                 }
-                ps::Declaration::Alias(_d) => {
-                    todo!()
+                ps::Declaration::Alias(d) => {
+                    alias.push(DeclSymbol { public, external, inner: d.try_into()? })
                 }
                 ps::Declaration::Define(d) => {
                     let ps::GenLet { rec, fun, name, params, def } = d;
@@ -420,7 +434,7 @@ impl TryFrom<ps::Module> for Module {
                 }
             }
         }
-        Ok(Self { name, data, codata, define, define_ext })
+        Ok(Self { name, data, codata, alias, define, define_ext })
     }
 }
 
