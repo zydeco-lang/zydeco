@@ -164,7 +164,7 @@ TermComputation: TermComputation = {
     "comatch" <arms:ComatchBr*> "end" => Comatch {
         arms,
     }.into(),
-    "fn" <params:TypePattern+> "->" <body:Box<Span<TermComputation>>> => TypAbs {
+    "fn" <params:TypePattern+> "->" <body:Box<Span<TermComputation>>> => TyAbsTerm {
         params, body,
     }.into(),
     "fn" <params:TermPattern+> "->" <body:Box<Span<TermComputation>>> => Abstraction {
@@ -188,7 +188,7 @@ TermComputationRight: TermComputation = {
     <body:Box<Span<TermComputationRight>>> <arg:Box<Span<TermValue>>> => Application {
         body, arg,
     }.into(),
-    <body:Box<Span<TermComputationRight>>> "@" "(" <arg:Box<Span<Type>>> ")" => TypApp {
+    <body:Box<Span<TermComputationRight>>> "@" "(" <arg:Box<Span<Type>>> ")" => TyAppTerm {
         body, arg,
     }.into(),
     <body:Box<Span<TermComputationRight>>> "." <dtor:DtorV>

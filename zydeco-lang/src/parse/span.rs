@@ -118,12 +118,12 @@ impl SpanHolder for syn::Let {
     }
 }
 
-impl SpanHolder for syn::TypAbs {
+impl SpanHolder for syn::TyAbsTerm {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let syn::TypAbs { params, body } = self;
+        let syn::TyAbsTerm { params, body } = self;
         for (var, kd) in params {
             var.span_map_mut(f.clone());
             kd.span_map_mut(f.clone());
@@ -132,12 +132,12 @@ impl SpanHolder for syn::TypAbs {
     }
 }
 
-impl SpanHolder for syn::TypApp {
+impl SpanHolder for syn::TyAppTerm {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let syn::TypApp { body, arg } = self;
+        let syn::TyAppTerm { body, arg } = self;
         body.span_map_mut(f.clone());
         arg.span_map_mut(f);
     }

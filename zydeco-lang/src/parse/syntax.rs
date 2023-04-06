@@ -86,13 +86,13 @@ pub struct Let {
 }
 
 #[derive(Clone, Debug)]
-pub struct TypAbs {
+pub struct TyAbsTerm {
     pub params: Vec<(TypeV, Kind)>,
     pub body: BoxComp,
 }
 
 #[derive(Clone, Debug)]
-pub struct TypApp {
+pub struct TyAppTerm {
     pub body: BoxComp,
     pub arg: Box<Span<Type>>,
 }
@@ -118,8 +118,8 @@ pub enum TermComputation {
     App(Application),
     Comatch(Comatch<DtorV, TermV, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
-    TypAbs(TypAbs),
-    TypApp(TypApp),
+    TyAbsTerm(TyAbsTerm),
+    TyAppTerm(TyAppTerm),
     MatchPack(MatchPack),
 }
 pub type BoxComp = Box<Span<TermComputation>>;

@@ -293,18 +293,18 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     .collect();
                 Dtor { body, dtor, args }.into()
             }
-            ps::TermComputation::TypAbs(ps::TypAbs { params, body }) => {
+            ps::TermComputation::TyAbsTerm(ps::TyAbsTerm { params, body }) => {
                 let body = (body).try_map(TryInto::try_into)?;
                 let mut body = body;
                 for (tvar, kd) in params.into_iter().rev() {
-                    body = body.info.clone().make(TypAbs { tvar, kd, body: rc!(body) }.into());
+                    body = body.info.clone().make(TyAbsTerm { tvar, kd, body: rc!(body) }.into());
                 }
                 body.inner
             }
-            ps::TermComputation::TypApp(ps::TypApp { body, arg }) => {
+            ps::TermComputation::TyAppTerm(ps::TyAppTerm { body, arg }) => {
                 let body = rc!((body).try_map(TryInto::try_into)?);
                 let arg = rc!(arg.try_map(TryInto::try_into)?);
-                TypApp { body, arg }.into()
+                TyAppTerm { body, arg }.into()
             }
             ps::TermComputation::MatchPack(ps::MatchPack { scrut, tvar, var, body }) => {
                 let scrut = rc!((scrut).try_map(TryInto::try_into)?);

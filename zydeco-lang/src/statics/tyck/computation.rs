@@ -214,10 +214,10 @@ impl TypeCheck for Span<TermComputation> {
                         .map_err(|e| e.traced(ctx.trace.clone()))?,
                 )
             }
-            TermComputation::TypAbs(_) => {
+            TermComputation::TyAbsTerm(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("typabs") }))?
             }
-            TermComputation::TypApp(TypApp { body, arg }) => {
+            TermComputation::TyAppTerm(TyAppTerm { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
                 let SynType::Forall(Forall { param: (param, kd), ty }) = ty_body.synty else {
                     Err(ctx.err(span, TypeExpected {
@@ -450,7 +450,7 @@ impl TypeCheck for Span<TermComputation> {
                 })?;
                 Step::Done(typ)
             }
-            TermComputation::TypAbs(TypAbs { tvar, kd, body }) => {
+            TermComputation::TyAbsTerm(TyAbsTerm { tvar, kd, body }) => {
                 let SynType::Forall(Forall { param: (param, kd_), ty }) = &typ.synty else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("typabs"),
@@ -478,7 +478,7 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::Dtor(_)
-            | TermComputation::TypApp(_)
+            | TermComputation::TyAppTerm(_)
             | TermComputation::MatchPack(_) => {
                 // subsumption
                 let typ_syn = self.syn(ctx.clone())?;

@@ -321,25 +321,25 @@ where
     }
 }
 
-impl<TyV, Kd, B> FmtArgs for TypAbs<TyV, Kd, B>
+impl<TyV, Kd, B> FmtArgs for TyAbsTerm<TyV, Kd, B>
 where
     TyV: TyVarT + FmtArgs,
     Kd: KindT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
     fn fmt_args(&self, args: Args) -> String {
-        let TypAbs { tvar, kd, body } = self;
+        let TyAbsTerm { tvar, kd, body } = self;
         format!("fn typ {} : {} -> {}", tvar.fmt_args(args), kd.fmt_args(args), body.fmt_args(args))
     }
 }
 
-impl<B, Ty> FmtArgs for TypApp<B, Ty>
+impl<B, Ty> FmtArgs for TyAppTerm<B, Ty>
 where
     B: ComputationT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let TypApp { body, arg } = self;
+        let TyAppTerm { body, arg } = self;
         format!("{} [{}]", body.fmt_args(fargs), arg.fmt_args(fargs))
     }
 }

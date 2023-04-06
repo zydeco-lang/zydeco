@@ -286,7 +286,7 @@ where
     }
 }
 
-impl<TyV, Kd, B> SpanHolder for TypAbs<TyV, Kd, B>
+impl<TyV, Kd, B> SpanHolder for TyAbsTerm<TyV, Kd, B>
 where
     TyV: TyVarT + SpanHolder,
     Kd: KindT + SpanHolder,
@@ -296,14 +296,14 @@ where
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let TypAbs { tvar, kd, body } = self;
+        let TyAbsTerm { tvar, kd, body } = self;
         tvar.span_map_mut(f.clone());
         kd.span_map_mut(f.clone());
         body.span_map_mut(f);
     }
 }
 
-impl<B, Ty> SpanHolder for TypApp<B, Ty>
+impl<B, Ty> SpanHolder for TyAppTerm<B, Ty>
 where
     B: ComputationT + SpanHolder,
     Ty: TypeT + SpanHolder,
@@ -312,7 +312,7 @@ where
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let TypApp { body, arg } = self;
+        let TyAppTerm { body, arg } = self;
         body.span_map_mut(f.clone());
         arg.span_map_mut(f);
     }
