@@ -94,7 +94,9 @@ impl From<&ss::TermComputation> for ZComp {
                 let args = args.iter().map(|arg| rc!(arg.inner_ref().into())).collect();
                 Dtor { body, dtor: dtor.clone(), args }.into()
             }
-            ss::TermComputation::TyAbsTerm(TyAbsTerm { tvar: _, kd: _, body }) => body.inner_ref().into(),
+            ss::TermComputation::TyAbsTerm(TyAbsTerm { tvar: _, kd: _, body }) => {
+                body.inner_ref().into()
+            }
             ss::TermComputation::TyAppTerm(TyAppTerm { body, arg: _ }) => body.inner_ref().into(),
             ss::TermComputation::MatchPack(MatchPack { scrut, tvar: _, var, body }) => {
                 let scrut = rc!(scrut.inner_ref().into());

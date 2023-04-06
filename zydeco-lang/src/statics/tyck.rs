@@ -2,7 +2,7 @@ mod r#type;
 mod value;
 mod computation;
 mod module;
-mod eqv;
+mod lub;
 
 use super::{
     err::{Frame, Trace, TyckError, TyckErrorItem},
@@ -59,14 +59,14 @@ mod ctx {
 
 pub trait TypeCheck: SpanView + Sized {
     type Ctx: Default + Clone + CtxT;
-    type Out: Eqv;
+    type Out: Lub<Out = Self::Out>;
     fn syn_step(&self, ctx: Self::Ctx) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError>;
     fn ana_step(
         &self, typ: Self::Out, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
-        let span = self.span().clone();
+        let span = self.span();
         let typ_syn = self.syn(ctx.clone())?;
-        typ_syn.eqv(&typ, Default::default(), || ctx.err(&span, Subsumption { sort: "type" }))?;
+        let typ = typ_syn.lub(typ, Default::default(), span)?;
         Ok(Step::Done(typ))
     }
     fn tyck(mut step: Step<(Self::Ctx, &Self), Self::Out>) -> Result<Self::Out, TyckError> {
@@ -105,14 +105,6 @@ fn bool_test<E>(b: bool, f: impl FnOnce() -> E) -> Result<(), E> {
 }
 
 pub struct Seal<T>(pub T);
-impl<T> Eqv for Seal<T> {
-    type Ctx = ();
-    fn eqv(
-        &self, _other: &Self, _ctx: (), _f: impl FnOnce() -> TyckError + Clone,
-    ) -> Result<(), TyckError> {
-        Ok(())
-    }
-}
 
 impl TypeCheck for Span<Program> {
     type Ctx = Ctx;
@@ -133,9 +125,8 @@ impl TypeCheck for Span<Program> {
     }
 }
 
-pub trait Eqv {
+pub trait Lub<Rhs = Self> {
     type Ctx: Default;
-    fn eqv(
-        &self, other: &Self, ctx: Self::Ctx, f: impl FnOnce() -> TyckError + Clone,
-    ) -> Result<(), TyckError>;
+    type Out;
+    fn lub(self, other: Rhs, ctx: Self::Ctx, span: &SpanInfo) -> Result<Self::Out, TyckError>;
 }

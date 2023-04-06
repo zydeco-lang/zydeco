@@ -386,11 +386,7 @@ impl TryFrom<ps::Alias<TypeV, Kind, ps::BoxType>> for Alias<TypeV, Kind, RcType>
     fn try_from(
         Alias { name, params, ty }: ps::Alias<TypeV, Kind, ps::BoxType>,
     ) -> Result<Self, TyckErrorItem> {
-        Ok(Self {
-            name,
-            params,
-            ty: rc!(ty.try_map(TryInto::try_into)?),
-        })
+        Ok(Self { name, params, ty: rc!(ty.try_map(TryInto::try_into)?) })
     }
 }
 

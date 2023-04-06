@@ -125,8 +125,8 @@ impl TypeCheck for Span<TermComputation> {
                 let mut ty_opt: Option<Type> = None;
                 for ty in &ty_arms {
                     if let Some(ty_opt) = &ty_opt {
-                        ty_opt.eqv(ty, ctx.clone(), || {
-                            ctx.err(span, InconsistentBranches(ty_arms.clone()))
+                        ty_opt.clone().lub(ty.clone(), ctx.clone(), span).map_err(|_| {
+                            ctx.err(span, InconsistentBranches { tys: ty_arms.clone() })
                         })?;
                     } else {
                         ty_opt = Some(ty.clone());
@@ -134,7 +134,7 @@ impl TypeCheck for Span<TermComputation> {
                 }
                 // empty match
                 let Some(ty) = ty_opt else {
-                    Err(ctx.err(span,InconsistentBranches(vec![])))?
+                    Err(ctx.err(span, InconsistentBranches{tys:vec![]}))?
                 };
                 Step::Done(ty)
             }
@@ -143,7 +143,6 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::Dtor(Dtor { body, dtor, args }) => {
                 let ty_body = body.syn(ctx.clone())?;
-
                 let (Codata { name, params, dtors }, ty_args) =
                     ctx.resolve_codata(ty_body, span)?;
                 // arity check on codata type
@@ -218,12 +217,12 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 let SynType::Exists(Exists { param: (param, kd), ty }) = &ty_scrut.synty else {
-                        Err(ctx.err(span, TypeExpected {
-                            context: format!("match-pack"),
-                            expected: format!("exists"),
-                            found: ty_scrut,
-                        }))?
-                    };
+                    Err(ctx.err(span, TypeExpected {
+                        context: format!("match-pack"),
+                        expected: format!("exists"),
+                        found: ty_scrut,
+                    }))?
+                };
                 ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
                 let ty = ty
                     .inner_ref()
@@ -253,9 +252,7 @@ impl TypeCheck for Span<TermComputation> {
         span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermComputation::Annotation(Annotation { term, ty }) => {
-                let ty_lub = Type::lub(ty.inner_ref().clone(), typ, ctx.clone(), || {
-                    ctx.err(span, Subsumption { sort: "computation annotation" })
-                })?;
+                let ty_lub = Type::lub(ty.inner_ref().clone(), typ, ctx.clone(), span)?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
             TermComputation::Ret(Ret(v)) => {
@@ -277,8 +274,7 @@ impl TypeCheck for Span<TermComputation> {
                     )
                 })?;
                 let ty = Type::make_ret(rc!(span.make(v.ana(ty_body, ctx.clone())?)));
-                let typ_lub =
-                    Type::lub(ty, typ, ctx.clone(), || ctx.err(span, Subsumption { sort: "ret" }))?;
+                let typ_lub = Type::lub(ty, typ, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
             TermComputation::Force(Force(v)) => {
@@ -337,9 +333,9 @@ impl TypeCheck for Span<TermComputation> {
                 let mut ctorv_set_arm: HashSet<CtorV> = HashSet::new();
                 for Matcher { ctor, vars, body } in arms {
                     let Some(tys) = ctors.get(ctor) else {
-                unexpected.push(ctor.to_owned());
-                continue;
-            };
+                        unexpected.push(ctor.to_owned());
+                        continue;
+                    };
                     ctorv_set_arm.insert(ctor.to_owned());
                     let tys = tys.into_iter().map(|ty| {
                         ty.inner_ref()
@@ -439,9 +435,7 @@ impl TypeCheck for Span<TermComputation> {
                 // subsumption
                 let typ_syn = self.syn(ctx.clone())?;
                 // println!("{} /\\ {}", typ.fmt(), typ_syn.fmt());
-                let typ_lub = Type::lub(typ, typ_syn, ctx.clone(), || {
-                    ctx.err(span, Subsumption { sort: "computation" })
-                })?;
+                let typ_lub = Type::lub(typ, typ_syn, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
         })

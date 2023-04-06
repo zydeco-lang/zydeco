@@ -57,9 +57,7 @@ impl TypeCheck for Span<TermValue> {
         span.make(typ.clone()).ana(Kind::VType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermValue::Annotation(Annotation { term, ty }) => {
-                let ty_lub = Type::lub(ty.inner_ref().clone(), typ, ctx.clone(), || {
-                    ctx.err(span, Subsumption { sort: "value annotation" })
-                })?;
+                let ty_lub = Type::lub(ty.inner_ref().clone(), typ, ctx.clone(), span)?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
             TermValue::Thunk(Thunk(c)) => {
@@ -81,9 +79,7 @@ impl TypeCheck for Span<TermValue> {
                     )
                 })?;
                 let ty = Type::make_thunk(rc!(span.make(c.ana(typ_comp, ctx.clone())?)));
-                let typ_lub = Type::lub(ty, typ, ctx.clone(), || {
-                    ctx.err(span, Subsumption { sort: "thunk" })
-                })?;
+                let typ_lub = Type::lub(ty, typ, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
             TermValue::Ctor(Ctor { ctor, args }) => {
@@ -151,9 +147,7 @@ impl TypeCheck for Span<TermValue> {
                 // subsumption
                 let typ_syn = self.syn(ctx.clone())?;
                 // println!("{} /\\ {}", typ.fmt(), typ_syn.fmt());
-                let typ_lub = Type::lub(typ, typ_syn, ctx.clone(), || {
-                    ctx.err(span, Subsumption { sort: "value" })
-                })?;
+                let typ_lub = Type::lub(typ, typ_syn, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
         })

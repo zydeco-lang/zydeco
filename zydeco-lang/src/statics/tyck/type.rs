@@ -112,8 +112,7 @@ impl TypeCheck for Span<Type> {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeApp(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::AbstVar(_) => {
                 let kd_syn = self.syn(ctx.clone())?;
-                kd_syn
-                    .eqv(&kd, Default::default(), || ctx.err(span, Subsumption { sort: "type" }))?;
+                kd_syn.lub(kd, Default::default(), span)?;
                 Ok(Step::Done(kd))
             }
         }
@@ -163,46 +162,84 @@ impl Type {
             SynType::AbstVar(_) | SynType::Hole(_) => Ok(self),
         }
     }
-    pub(super) fn lub(
-        lhs: Self, rhs: Self, ctx: Ctx, f: impl FnOnce() -> TyckError + Clone,
-    ) -> Result<Self, TyckError> {
-        let lhs = lhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
-        let rhs = rhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
-        match (&lhs.synty, &rhs.synty) {
-            (SynType::Hole(_), _) => Ok(rhs),
-            (_, SynType::Hole(_)) => Ok(lhs),
-            (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
-                bool_test(lhs.tvar == rhs.tvar, f.clone())?;
-                let mut args = vec![];
-                for (lhs, rhs) in (lhs.args.iter()).zip(rhs.args.iter()) {
-                    let arg = Self::lub(
-                        lhs.inner_ref().clone(),
-                        rhs.inner_ref().clone(),
-                        ctx.clone(),
-                        f.clone(),
-                    )?;
-                    args.push(rc!(lhs.span().make(arg)));
-                }
-                Ok(TypeApp { tvar: lhs.tvar.clone(), args }.into())
+    // pub(super) fn lub(
+    //     lhs: Self, rhs: Self, ctx: Ctx, f: impl FnOnce() -> TyckError + Clone,
+    // ) -> Result<Self, TyckError> {
+    //     let lhs = lhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
+    //     let rhs = rhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
+    //     match (&lhs.synty, &rhs.synty) {
+    //         (SynType::Hole(_), _) => Ok(rhs),
+    //         (_, SynType::Hole(_)) => Ok(lhs),
+    //         (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
+    //             bool_test(lhs.tvar == rhs.tvar, f.clone())?;
+    //             let mut args = vec![];
+    //             for (lhs, rhs) in (lhs.args.iter()).zip(rhs.args.iter()) {
+    //                 let arg = Self::lub(
+    //                     lhs.inner_ref().clone(),
+    //                     rhs.inner_ref().clone(),
+    //                     ctx.clone(),
+    //                     f.clone(),
+    //                 )?;
+    //                 args.push(rc!(lhs.span().make(arg)));
+    //             }
+    //             Ok(TypeApp { tvar: lhs.tvar.clone(), args }.into())
+    //         }
+    //         (SynType::Forall(lhs), SynType::Forall(rhs)) => {
+    //             bool_test(lhs.param == rhs.param, f.clone())?;
+    //             let ty = Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, f)?;
+    //             Ok(Forall { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
+    //         }
+    //         (SynType::Exists(lhs), SynType::Exists(rhs)) => {
+    //             bool_test(lhs.param == rhs.param, f.clone())?;
+    //             let ty = Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, f)?;
+    //             Ok(Exists { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
+    //         }
+    //         (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
+    //             bool_test(lhs == rhs, f)?;
+    //             Ok(lhs.clone().into())
+    //         }
+    //         (SynType::TypeApp(_), _)
+    //         | (SynType::Forall(_), _)
+    //         | (SynType::Exists(_), _)
+    //         | (SynType::AbstVar(_), _) => Err(f()),
+    //     }
+    // }
+}
+
+impl Monoid for Env<TypeV, Type> {
+    fn empty() -> Self {
+        Self::new()
+    }
+
+    fn append(self, ori: Self) -> Self {
+        // append on Env is actually composing lazy substitutions, effectively
+        //       M [\gamma] [\delta] = M [\delta . \gamma]
+        // where we refer to gamma as "original" and delta as "diff" then
+        //      new = append(diff, original)
+        let mut new = Self::new();
+        for (x, ty) in self.clone() {
+            if !ori.contains_key(&x) {
+                new.insert(x, ty);
             }
-            (SynType::Forall(lhs), SynType::Forall(rhs)) => {
-                bool_test(lhs.param == rhs.param, f.clone())?;
-                let ty = Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, f)?;
-                Ok(Forall { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
-            }
-            (SynType::Exists(lhs), SynType::Exists(rhs)) => {
-                bool_test(lhs.param == rhs.param, f.clone())?;
-                let ty = Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, f)?;
-                Ok(Exists { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
-            }
-            (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
-                bool_test(lhs == rhs, f)?;
-                Ok(lhs.clone().into())
-            }
-            (SynType::TypeApp(_), _)
-            | (SynType::Forall(_), _)
-            | (SynType::Exists(_), _)
-            | (SynType::AbstVar(_), _) => Err(f()),
         }
+        for (x, ty) in ori {
+            new.insert(x, ty.subst(self.clone()).unwrap());
+        }
+        new
+    }
+}
+
+impl Env<TypeV, Type> {
+    pub(super) fn init(
+        params: &[(TypeV, Kind)], ty_app_args: &[RcType],
+        arity_err: impl FnOnce() -> Span<TyckErrorItem>,
+    ) -> Result<Self, Span<TyckErrorItem>> {
+        bool_test(params.len() == ty_app_args.len(), arity_err)?;
+        Ok(Env::from_iter(
+            params
+                .iter()
+                .map(|(tvar, _)| tvar.to_owned())
+                .zip(ty_app_args.iter().map(|arg| arg.inner_ref().to_owned())),
+        ))
     }
 }

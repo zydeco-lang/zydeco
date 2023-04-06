@@ -35,7 +35,7 @@ pub enum TyckErrorItem {
     Subsumption { sort: &'static str },
     InconsistentMatchers { unexpected: Vec<CtorV>, missing: Vec<CtorV> },
     InconsistentComatchers { unexpected: Vec<DtorV>, missing: Vec<DtorV> },
-    InconsistentBranches(Vec<Type>),
+    InconsistentBranches { tys: Vec<Type> },
     NameResolve(NameResolveError),
     WrongMain { found: Type },
 }
@@ -105,9 +105,9 @@ impl fmt::Display for TyckErrorItem {
                 }
                 Ok(())
             }
-            InconsistentBranches(types) => {
+            InconsistentBranches { tys } => {
                 writeln!(f, "Branches have mismatched types:")?;
-                for t in types {
+                for t in tys {
                     writeln!(f, "\t- {}, ", t.fmt())?;
                 }
                 Ok(())
