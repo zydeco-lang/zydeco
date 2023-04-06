@@ -131,8 +131,8 @@ impl Type {
     pub(super) fn lub(
         lhs: Self, rhs: Self, ctx: Ctx, f: impl FnOnce() -> TyckError + Clone,
     ) -> Result<Self, TyckError> {
-        let lhs = lhs.subst(ctx.type_env.clone()).unwrap();
-        let rhs = rhs.subst(ctx.type_env.clone()).unwrap();
+        let lhs = lhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
+        let rhs = rhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
         match (&lhs.synty, &rhs.synty) {
             (SynType::Hole(_), _) => Ok(rhs),
             (_, SynType::Hole(_)) => Ok(lhs),

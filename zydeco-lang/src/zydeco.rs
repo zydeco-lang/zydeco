@@ -40,7 +40,7 @@ pub struct ZydecoFile;
 
 impl ZydecoFile {
     pub fn parse(path: PathBuf) -> Result<Span<ps::Program>, String> {
-        let source = std::fs::read_to_string(&path).unwrap();
+        let source = std::fs::read_to_string(&path).map_err(|e| format!("{}", e))?;
         Self::parse_src(&source, path)
     }
     pub fn parse_src(source: &str, path: PathBuf) -> Result<Span<ps::Program>, String> {
@@ -55,7 +55,7 @@ impl ZydecoFile {
         Ok(p)
     }
     pub fn elab(p: Span<ps::Program>) -> Result<Span<ss::Program>, String> {
-        let pr: ss::Program = p.inner.try_into().unwrap();
+        let pr: ss::Program = p.inner.try_into().map_err(|e| format!("{}", e))?;
         Ok(p.info.make(pr))
     }
     pub fn tyck(m: Span<ss::Program>) -> Result<(), String> {
@@ -102,7 +102,7 @@ impl ZydecoExpr {
         TermSpanParser::new().parse(source, Lexer::new(source)).map_err(|e| e.to_string())
     }
     pub fn elab(val: Span<ps::Term>) -> Result<Span<ss::Term>, String> {
-        let v: ss::Term = val.inner.try_into().unwrap();
+        let v: ss::Term = val.inner.try_into().map_err(|e| format!("{}", e))?;
         Ok(val.info.make(v))
     }
     pub fn tyck_value(&self, val: Span<ss::TermValue>) -> Result<ss::Type, String> {
