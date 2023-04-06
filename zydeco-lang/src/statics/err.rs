@@ -1,8 +1,24 @@
-use super::{resolve::*, syntax::*};
+use super::{resolve::*, syntax::*, tyck::Trace};
 use crate::utils::fmt::FmtArgs;
+use std::fmt;
+
+#[derive(Clone)]
+pub struct TyckError {
+    pub item: TyckErrorItem,
+    pub trace: Trace,
+}
+
+impl fmt::Display for TyckError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "{}", self.item)?;
+        writeln!(f, "Trace:")?;
+        writeln!(f, "{}", self.trace)?;
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug)]
-pub enum TypeCheckError {
+pub enum TyckErrorItem {
     UnboundVar { var: TermV },
     KindMismatch { context: String, expected: Kind, found: Kind },
     TypeMismatch { context: String, expected: Type, found: Type },
@@ -17,9 +33,8 @@ pub enum TypeCheckError {
     WrongMain { found: Type },
 }
 
-use std::fmt;
-use TypeCheckError::*;
-impl fmt::Display for TypeCheckError {
+use TyckErrorItem::*;
+impl fmt::Display for TyckErrorItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             UnboundVar { var } => {

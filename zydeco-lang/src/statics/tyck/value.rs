@@ -5,7 +5,7 @@ impl TypeCheck for Span<&Literal> {
     type Out = Type;
     fn syn_step(
         &self, _ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
         Ok(Step::Done(match self.inner_ref() {
             Literal::Int(_) => Type::internal("Int", vec![]),
             Literal::String(_) => Type::internal("String", vec![]),
@@ -19,7 +19,7 @@ impl TypeCheck for Span<TermValue> {
     type Out = Type;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: "syn value".to_string(),
@@ -52,7 +52,7 @@ impl TypeCheck for Span<TermValue> {
     }
     fn ana_step(
         &self, typ: Self::Out, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: format!("ana value with type {}", typ.fmt()),

@@ -6,7 +6,7 @@ mod eqv;
 mod ctx;
 
 pub use self::ctx::*;
-use super::{err::TypeCheckError, syntax::*};
+use super::{err::TyckErrorItem, syntax::*};
 use crate::{
     rc,
     statics::resolve::NameResolveError,
@@ -18,17 +18,17 @@ use crate::{
     },
 };
 use std::collections::HashSet;
-use TypeCheckError::*;
+use TyckErrorItem::*;
 
 pub trait TypeCheck: SpanView + Sized {
     type Ctx: Default;
     type Out: Eqv;
     fn syn_step(
         &self, ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>>;
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>>;
     fn ana_step(
         &self, typ: Self::Out, ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
         let span = self.span().clone();
         let typ_syn = self.syn(ctx)?;
         typ_syn.eqv(&typ, Default::default(), || {
@@ -38,7 +38,7 @@ pub trait TypeCheck: SpanView + Sized {
     }
     fn tyck(
         mut step: Step<(Self::Ctx, &Self), Self::Out>,
-    ) -> Result<Self::Out, Span<TypeCheckError>> {
+    ) -> Result<Self::Out, Span<TyckErrorItem>> {
         loop {
             match step {
                 Step::SynMode((ctx, term)) => {
@@ -54,13 +54,13 @@ pub trait TypeCheck: SpanView + Sized {
         }
     }
     #[must_use]
-    fn syn(&self, ctx: Self::Ctx) -> Result<Self::Out, Span<TypeCheckError>> {
+    fn syn(&self, ctx: Self::Ctx) -> Result<Self::Out, Span<TyckErrorItem>> {
         Self::tyck(self.syn_step(ctx)?)
     }
     #[must_use]
     fn ana(
         &self, typ: Self::Out, ctx: Self::Ctx,
-    ) -> Result<Self::Out, Span<TypeCheckError>> {
+    ) -> Result<Self::Out, Span<TyckErrorItem>> {
         Self::tyck(self.ana_step(typ, ctx)?)
     }
 }
@@ -104,8 +104,8 @@ impl<T> Eqv for Seal<T> {
     type Ctx = ();
     fn eqv(
         &self, _other: &Self, _ctx: (),
-        _f: impl FnOnce() -> Span<TypeCheckError> + Clone,
-    ) -> Result<(), Span<TypeCheckError>> {
+        _f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
+    ) -> Result<(), Span<TyckErrorItem>> {
         Ok(())
     }
 }
@@ -116,7 +116,7 @@ impl TypeCheck for Span<Program> {
 
     fn syn_step(
         &self, ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
         let span = self.span();
         let Program { module, entry } = self.inner_ref();
         let Seal(ctx) = module.syn(ctx)?;
@@ -135,6 +135,6 @@ pub trait Eqv {
     type Ctx: Default;
     fn eqv(
         &self, other: &Self, ctx: Self::Ctx,
-        f: impl FnOnce() -> Span<TypeCheckError> + Clone,
-    ) -> Result<(), Span<TypeCheckError>>;
+        f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
+    ) -> Result<(), Span<TyckErrorItem>>;
 }

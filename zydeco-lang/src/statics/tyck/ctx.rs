@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt;
 
 #[derive(Clone, Default)]
 pub struct Ctx {
@@ -20,6 +21,21 @@ impl Ctx {
 #[derive(Clone, Default)]
 pub struct Trace(pub im::Vector<Frame>);
 
+impl Trace {
+    pub fn push(&mut self, frame: Frame) {
+        self.0.push_back(frame);
+    }
+}
+
+impl fmt::Display for Trace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, frame) in self.0.iter().enumerate().rev() {
+            writeln!(f, "{}. {}", i, frame)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 pub struct Frame {
     pub tycker_src: String,
@@ -28,8 +44,11 @@ pub struct Frame {
     pub info: SpanInfo,
 }
 
-impl Trace {
-    pub fn push(&mut self, frame: Frame) {
-        self.0.push_back(frame);
+impl fmt::Display for Frame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "In {} checking ({}):", self.sort, self.tycker_src)?;
+        writeln!(f, "{}", self.term)?;
+        writeln!(f, "{}", self.info)?;
+        Ok(())
     }
 }

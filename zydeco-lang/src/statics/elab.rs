@@ -1,4 +1,4 @@
-use super::{err::TypeCheckError, resolve::NameResolveError, syntax::*};
+use super::{err::TyckErrorItem, resolve::NameResolveError, syntax::*};
 use crate::{
     parse::syntax as ps,
     rc,
@@ -9,7 +9,7 @@ fn desugar_gen_let(
     rec: bool, fun: bool, (var, ty): (TermV, Option<Span<ps::Type>>),
     params: Vec<(TermV, Option<Span<ps::Type>>)>,
     def: Option<Box<Span<ps::Term>>>,
-) -> Result<(TermV, RcType, Option<RcValue>), TypeCheckError> {
+) -> Result<(TermV, RcType, Option<RcValue>), TyckErrorItem> {
     let name = var.clone();
     let ty_rc = {
         if let Some(ty) = ty.clone() {
@@ -25,13 +25,13 @@ fn desugar_gen_let(
         (false, false, ps::Term::Value(value)) => {
             Ok((name, ty_rc, Some(rc!(def.info.make(value.try_into()?)))))
         }
-        (_, _, ps::Term::Value(_)) => Err(TypeCheckError::KindMismatch {
+        (_, _, ps::Term::Value(_)) => Err(TyckErrorItem::KindMismatch {
             context: format!("desugaring let"),
             expected: Kind::CType,
             found: Kind::VType,
         }),
         (false, false, ps::Term::Computation(_)) => {
-            Err(TypeCheckError::KindMismatch {
+            Err(TyckErrorItem::KindMismatch {
                 context: format!("desugaring let"),
                 expected: Kind::VType,
                 found: Kind::CType,
@@ -73,10 +73,10 @@ fn desugar_gen_let(
 
 fn desugar_fn(
     ps::Abstraction { params, body }: ps::Abstraction,
-) -> Result<TermComputation, TypeCheckError> {
+) -> Result<TermComputation, TyckErrorItem> {
     fn desugar_fn_one(
         (var, ty): (TermV, Option<Span<ps::Type>>), body: RcComp,
-    ) -> Result<TermComputation, TypeCheckError> {
+    ) -> Result<TermComputation, TyckErrorItem> {
         let mut body = Comatch {
             arms: vec![ps::Comatcher {
                 dtor: DtorV::new(format!("arg"), span(0, 0)),
@@ -105,8 +105,8 @@ fn desugar_fn(
 }
 
 impl TryFrom<ps::Type> for Type {
-    type Error = TypeCheckError;
-    fn try_from(ty: ps::Type) -> Result<Self, TypeCheckError> {
+    type Error = TyckErrorItem;
+    fn try_from(ty: ps::Type) -> Result<Self, TyckErrorItem> {
         Ok(match ty {
             ps::Type::Basic(ps::TCtor::Thunk) => {
                 Type::internal("Thunk", Vec::new())
@@ -122,7 +122,7 @@ impl TryFrom<ps::Type> for Type {
                 let t1: Type = TryInto::try_into(t1.inner())?;
                 let t2 = t2.try_map(TryInto::try_into)?;
                 let SynType::TypeApp(mut t1) = t1.synty else {
-                     Err(TypeCheckError::KindMismatch {
+                     Err(TyckErrorItem::KindMismatch {
                         context: format!("desugaring type application"),
                         expected: Kind::CType,
                         found: Kind::VType,
@@ -163,8 +163,8 @@ impl TryFrom<ps::Type> for Type {
 }
 
 impl TryFrom<ps::TermValue> for TermValue {
-    type Error = TypeCheckError;
-    fn try_from(value: ps::TermValue) -> Result<Self, TypeCheckError> {
+    type Error = TyckErrorItem;
+    fn try_from(value: ps::TermValue) -> Result<Self, TyckErrorItem> {
         Ok(match value {
             ps::TermValue::TermAnn(Annotation { term: body, ty }) => {
                 Annotation {
@@ -207,8 +207,8 @@ impl TryFrom<ps::TermValue> for TermValue {
 }
 
 impl TryFrom<ps::TermComputation> for TermComputation {
-    type Error = TypeCheckError;
-    fn try_from(comp: ps::TermComputation) -> Result<Self, TypeCheckError> {
+    type Error = TyckErrorItem;
+    fn try_from(comp: ps::TermComputation) -> Result<Self, TyckErrorItem> {
         Ok(match comp {
             ps::TermComputation::TermAnn(Annotation { term: body, ty }) => {
                 Annotation {
@@ -269,14 +269,14 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     let ty: Span<Type> = ty.try_map(TryInto::try_into)?;
                     let ty_ = ty.inner.clone();
                     let SynType::TypeApp(ty_app) = ty.inner.synty else {
-                        Err(TypeCheckError::TypeExpected {
+                        Err(TyckErrorItem::TypeExpected {
                             context: format!("elaborating recursion"),
                             expected: format!("{{a}}"),
                             found: ty_
                         })?
                     };
                     let Some(ty) = ty_app.elim_thunk() else {
-                        Err(TypeCheckError::TypeExpected {
+                        Err(TyckErrorItem::TypeExpected {
                             context: format!("elaborating recursion"),
                             expected: format!("{{a}}"),
                             found: ty_
@@ -299,7 +299,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                         let body = rc!((body).try_map(TryInto::try_into)?);
                         Ok(Matcher { ctor, vars, body })
                     })
-                    .collect::<Result<_, TypeCheckError>>()?;
+                    .collect::<Result<_, TyckErrorItem>>()?;
                 Match { scrut, arms }.into()
             }
             ps::TermComputation::Abs(t) => desugar_fn(t)?,
@@ -321,7 +321,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                         let body = rc!((body).try_map(TryInto::try_into)?);
                         Ok(Comatcher { dtor, vars, body })
                     })
-                    .collect::<Result<Vec<_>, TypeCheckError>>()?;
+                    .collect::<Result<Vec<_>, TyckErrorItem>>()?;
                 Comatch { arms }.into()
             }
             ps::TermComputation::Dtor(ps::Dtor { body, dtor, args }) => {
@@ -366,8 +366,8 @@ impl TryFrom<ps::TermComputation> for TermComputation {
 }
 
 impl TryFrom<ps::Term> for Term {
-    type Error = TypeCheckError;
-    fn try_from(term: ps::Term) -> Result<Self, TypeCheckError> {
+    type Error = TyckErrorItem;
+    fn try_from(term: ps::Term) -> Result<Self, TyckErrorItem> {
         Ok(match term {
             ps::Term::Value(t) => Term::Value(t.try_into()?),
             ps::Term::Computation(t) => Term::Computation(t.try_into()?),
@@ -378,7 +378,7 @@ impl TryFrom<ps::Term> for Term {
 impl TryFrom<ps::Data<TypeV, Kind, CtorV, Span<ps::Type>>>
     for Data<TypeV, Kind, CtorV, RcType>
 {
-    type Error = TypeCheckError;
+    type Error = TyckErrorItem;
     fn try_from(
         Data { name, params, ctors }: ps::Data<
             TypeV,
@@ -386,7 +386,7 @@ impl TryFrom<ps::Data<TypeV, Kind, CtorV, Span<ps::Type>>>
             CtorV,
             Span<ps::Type>,
         >,
-    ) -> Result<Self, TypeCheckError> {
+    ) -> Result<Self, TyckErrorItem> {
         Ok(Self {
             name,
             params,
@@ -399,10 +399,10 @@ impl TryFrom<ps::Data<TypeV, Kind, CtorV, Span<ps::Type>>>
 }
 
 impl TryFrom<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
-    type Error = TypeCheckError;
+    type Error = TyckErrorItem;
     fn try_from(
         DataBr(ctor, params): ps::DataBr<CtorV, Span<ps::Type>>,
-    ) -> Result<Self, TypeCheckError> {
+    ) -> Result<Self, TyckErrorItem> {
         let params = params
             .into_iter()
             .map(|param| param.try_map(TryInto::try_into))
@@ -415,7 +415,7 @@ impl TryFrom<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
 impl TryFrom<ps::Codata<TypeV, Kind, DtorV, Span<ps::Type>>>
     for Codata<TypeV, Kind, DtorV, RcType>
 {
-    type Error = TypeCheckError;
+    type Error = TyckErrorItem;
     fn try_from(
         Codata { name, params, dtors }: ps::Codata<
             TypeV,
@@ -423,7 +423,7 @@ impl TryFrom<ps::Codata<TypeV, Kind, DtorV, Span<ps::Type>>>
             DtorV,
             Span<ps::Type>,
         >,
-    ) -> Result<Self, TypeCheckError> {
+    ) -> Result<Self, TyckErrorItem> {
         Ok(Self {
             name,
             params,
@@ -436,10 +436,10 @@ impl TryFrom<ps::Codata<TypeV, Kind, DtorV, Span<ps::Type>>>
 }
 
 impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
-    type Error = TypeCheckError;
+    type Error = TyckErrorItem;
     fn try_from(
         CodataBr(dtor, params, ty): ps::CodataBr<DtorV, Span<ps::Type>>,
-    ) -> Result<Self, TypeCheckError> {
+    ) -> Result<Self, TyckErrorItem> {
         let params = params
             .into_iter()
             .map(|param| param.try_map(TryInto::try_into))
@@ -450,10 +450,10 @@ impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
 }
 
 impl TryFrom<ps::Module> for Module {
-    type Error = TypeCheckError;
+    type Error = TyckErrorItem;
     fn try_from(
         ps::Module { name, declarations }: ps::Module,
-    ) -> Result<Self, TypeCheckError> {
+    ) -> Result<Self, TyckErrorItem> {
         let mut data = Vec::new();
         let mut codata = Vec::new();
         let mut define = Vec::new();
@@ -507,7 +507,7 @@ impl TryFrom<ps::Module> for Module {
 }
 
 impl TryFrom<ps::Program> for Program {
-    type Error = TypeCheckError;
+    type Error = TyckErrorItem;
 
     fn try_from(value: ps::Program) -> Result<Self, Self::Error> {
         let ps::Program { module, entry } = value;

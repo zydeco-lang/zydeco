@@ -7,7 +7,7 @@ impl TypeCheck for Span<TermComputation> {
     type Out = Type;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: format!("syn computation"),
@@ -256,7 +256,7 @@ impl TypeCheck for Span<TermComputation> {
     }
     fn ana_step(
         &self, typ: Self::Out, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: format!("ana computation with type {}", typ.fmt()),

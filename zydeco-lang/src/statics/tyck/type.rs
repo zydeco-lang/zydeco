@@ -5,7 +5,7 @@ impl TypeCheck for Span<Type> {
     type Out = Kind;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: "syn type".to_owned(),
@@ -63,7 +63,7 @@ impl TypeCheck for Span<Type> {
     }
     fn ana_step(
         &self, kd: Self::Out, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TypeCheckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: format!("ana type with kind {}", kd.fmt()),
@@ -91,7 +91,7 @@ impl TypeCheck for Span<Type> {
 impl Type {
     pub(super) fn subst(
         self, mut diff: Env<TypeV, Type>,
-    ) -> Result<Self, Span<TypeCheckError>> {
+    ) -> Result<Self, Span<TyckErrorItem>> {
         match self.synty {
             SynType::TypeApp(TypeApp { tvar, mut args }) => {
                 if let Some(ty) = diff.get(&tvar) {
@@ -144,8 +144,8 @@ impl Type {
     }
     pub(super) fn lub(
         lhs: Self, rhs: Self, ctx: Ctx,
-        f: impl FnOnce() -> Span<TypeCheckError> + Clone,
-    ) -> Result<Self, Span<TypeCheckError>> {
+        f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
+    ) -> Result<Self, Span<TyckErrorItem>> {
         let lhs = lhs.subst(ctx.type_env.clone()).unwrap();
         let rhs = rhs.subst(ctx.type_env.clone()).unwrap();
         match (&lhs.synty, &rhs.synty) {

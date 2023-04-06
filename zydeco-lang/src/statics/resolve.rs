@@ -1,4 +1,4 @@
-use super::err::TypeCheckError;
+use super::err::TyckErrorItem;
 use crate::syntax::binder::{CtorV, DtorV, TermV, TypeV};
 use std::fmt;
 
@@ -72,8 +72,8 @@ impl fmt::Display for NameResolveError {
     }
 }
 
-impl From<NameResolveError> for TypeCheckError {
+impl From<NameResolveError> for TyckErrorItem {
     fn from(err: NameResolveError) -> Self {
-        TypeCheckError::NameResolve(err)
+        TyckErrorItem::NameResolve(err)
     }
 }

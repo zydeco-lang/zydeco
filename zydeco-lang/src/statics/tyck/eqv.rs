@@ -4,8 +4,8 @@ impl Eqv for () {
     type Ctx = ();
     fn eqv(
         &self, _other: &Self, _ctx: (),
-        _f: impl FnOnce() -> Span<TypeCheckError> + Clone,
-    ) -> Result<(), Span<TypeCheckError>> {
+        _f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
+    ) -> Result<(), Span<TyckErrorItem>> {
         Ok(())
     }
 }
@@ -14,8 +14,8 @@ impl Eqv for Kind {
     type Ctx = ();
     fn eqv(
         &self, other: &Self, _ctx: (),
-        f: impl FnOnce() -> Span<TypeCheckError> + Clone,
-    ) -> Result<(), Span<TypeCheckError>> {
+        f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
+    ) -> Result<(), Span<TyckErrorItem>> {
         bool_test(self == other, f)
     }
 }
@@ -24,8 +24,8 @@ impl Eqv for Type {
     type Ctx = Ctx;
     fn eqv(
         &self, other: &Self, mut ctx: Ctx,
-        f: impl FnOnce() -> Span<TypeCheckError> + Clone,
-    ) -> Result<(), Span<TypeCheckError>> {
+        f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
+    ) -> Result<(), Span<TyckErrorItem>> {
         match (&self.synty, &other.synty) {
             (SynType::TypeApp(lhs), _)
                 if ctx.type_env.contains_key(&lhs.tvar) =>
@@ -124,8 +124,8 @@ impl Monoid for Env<TypeV, Type> {
 impl Env<TypeV, Type> {
     pub(super) fn init(
         params: &[(TypeV, Kind)], ty_app_args: &[RcType],
-        arity_err: impl FnOnce() -> Span<TypeCheckError>,
-    ) -> Result<Self, Span<TypeCheckError>> {
+        arity_err: impl FnOnce() -> Span<TyckErrorItem>,
+    ) -> Result<Self, Span<TyckErrorItem>> {
         bool_test(params.len() == ty_app_args.len(), arity_err)?;
         Ok(Env::from_iter(
             params
