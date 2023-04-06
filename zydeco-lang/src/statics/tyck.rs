@@ -1,4 +1,4 @@
-mod type_;
+mod r#type;
 mod value;
 mod computation;
 mod module;
