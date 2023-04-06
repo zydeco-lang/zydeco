@@ -3,7 +3,13 @@ use crate::utils::fmt::{Args, FmtArgs};
 
 impl FmtArgs for ds::Thunk {
     fn fmt_args(&self, fargs: Args) -> String {
-        format!("{{ {} }}", self.body.fmt_args(fargs))
+        let ds::Thunk { body, env: _ } = self;
+        let mut s = String::new();
+        s += "{ ";
+        let fargs = fargs.indent();
+        s += &body.fmt_args(fargs);
+        s += " }";
+        s
     }
 }
 

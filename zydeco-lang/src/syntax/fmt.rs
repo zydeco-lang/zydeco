@@ -7,7 +7,7 @@ mod binder {
     macro_rules! var_fmt {
         ($Var:ident) => {
             impl FmtArgs for $Var {
-                fn fmt_args(&self, _args: Args) -> String {
+                fn fmt_args(&self, _fargs: Args) -> String {
                     format!("{}", self.name())
                 }
             }
@@ -33,7 +33,7 @@ impl FmtArgs for (TypeV, Kind) {
 }
 
 impl FmtArgs for Kind {
-    fn fmt_args(&self, _args: Args) -> String {
+    fn fmt_args(&self, _fargs: Args) -> String {
         match self {
             Kind::VType => "VType".to_owned(),
             Kind::CType => "CType".to_owned(),
@@ -45,17 +45,17 @@ impl<K> FmtArgs for TypeArity<K>
 where
     K: KindT + FmtArgs,
 {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         let TypeArity { params, kd } = self;
         let mut s = String::new();
         s += "(";
         s += &params
             .into_iter()
-            .map(|kd| kd.fmt_args(args))
+            .map(|kd| kd.fmt_args(fargs))
             .collect::<Vec<_>>()
             .join(", ");
         s += ") -> ";
-        s += &kd.fmt_args(args);
+        s += &kd.fmt_args(fargs);
         s
     }
 }
@@ -85,9 +85,9 @@ where
     TyV: TyVarT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         let Forall { param, ty } = self;
-        format!("forall {} . {}", param.fmt_args(args), ty.fmt_args(args))
+        format!("forall {} . {}", param.fmt_args(fargs), ty.fmt_args(fargs))
     }
 }
 
@@ -96,9 +96,9 @@ where
     TyV: TyVarT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         let Exists { param, ty } = self;
-        format!("exists {} . {}", param.fmt_args(args), ty.fmt_args(args))
+        format!("exists {} . {}", param.fmt_args(fargs), ty.fmt_args(fargs))
     }
 }
 
@@ -107,9 +107,9 @@ where
     Term: FmtArgs,
     Type: FmtArgs,
 {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         let Annotation { term: body, ty } = self;
-        format!("({} :: {})", body.fmt_args(args), ty.fmt_args(args))
+        format!("({} :: {})", body.fmt_args(fargs), ty.fmt_args(fargs))
     }
 }
 
@@ -117,18 +117,23 @@ impl<B> FmtArgs for Thunk<B>
 where
     B: ComputationT + FmtArgs,
 {
-    fn fmt_args(&self, args: Args) -> String {
+    fn fmt_args(&self, fargs: Args) -> String {
         let Thunk(b) = self;
-        format!("{{ {} }}", b.fmt_args(args))
+        let mut s = String::new();
+        s += "{ ";
+        let fargs = fargs.indent();
+        s += &b.fmt_args(fargs);
+        s += " }";
+        s
     }
 }
 
 impl FmtArgs for Literal {
-    fn fmt_args(&self, _args: Args) -> String {
+    fn fmt_args(&self, _fargs: Args) -> String {
         match self {
             Literal::Int(i) => format!("{}", i),
-            Literal::String(s) => format!("\"{}\"", s),
-            Literal::Char(c) => format!("'{}'", c),
+            Literal::String(s) => format!("\"{}\"", s.escape_debug()),
+            Literal::Char(c) => format!("'{}'", c.escape_debug()),
         }
     }
 }
