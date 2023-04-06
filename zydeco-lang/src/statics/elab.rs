@@ -375,12 +375,17 @@ impl TryFrom<ps::Term> for Term {
     }
 }
 
-impl TryFrom<ps::Data<TypeV, CtorV, Span<ps::Type>>>
-    for Data<TypeV, CtorV, RcType>
+impl TryFrom<ps::Data<TypeV, Kind, CtorV, Span<ps::Type>>>
+    for Data<TypeV, Kind, CtorV, RcType>
 {
     type Error = TypeCheckError;
     fn try_from(
-        Data { name, params, ctors }: ps::Data<TypeV, CtorV, Span<ps::Type>>,
+        Data { name, params, ctors }: ps::Data<
+            TypeV,
+            Kind,
+            CtorV,
+            Span<ps::Type>,
+        >,
     ) -> Result<Self, TypeCheckError> {
         Ok(Self {
             name,
@@ -407,13 +412,14 @@ impl TryFrom<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
     }
 }
 
-impl TryFrom<ps::Codata<TypeV, DtorV, Span<ps::Type>>>
-    for Codata<TypeV, DtorV, RcType>
+impl TryFrom<ps::Codata<TypeV, Kind, DtorV, Span<ps::Type>>>
+    for Codata<TypeV, Kind, DtorV, RcType>
 {
     type Error = TypeCheckError;
     fn try_from(
         Codata { name, params, dtors }: ps::Codata<
             TypeV,
+            Kind,
             DtorV,
             Span<ps::Type>,
         >,
@@ -465,6 +471,9 @@ impl TryFrom<ps::Module> for Module {
                     external,
                     inner: d.try_into()?,
                 }),
+                ps::Declaration::Alias(_d) => {
+                    todo!()
+                }
                 ps::Declaration::Define(d) => {
                     let ps::GenLet { rec, fun, name, params, def } = d;
                     let (name, ty, te) =

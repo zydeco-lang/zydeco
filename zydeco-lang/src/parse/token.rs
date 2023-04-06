@@ -27,6 +27,8 @@ pub enum Tok<'input> {
     Data,
     #[token("codata")]
     Codata,
+    #[token("alias")]
+    Alias,
     #[token("let")]
     Let,
     #[token("in")]
@@ -73,14 +75,14 @@ pub enum Tok<'input> {
     ParenOpen,
     #[token(")")]
     ParenClose,
+    #[token("[")]
+    BracketOpen,
+    #[token("]")]
+    BracketClose,
     #[token("{")]
     BraceOpen,
     #[token("}")]
     BraceClose,
-    // #[token("[")]
-    // BracketOpen,
-    // #[token("]")]
-    // BracketClose,
     #[token(",")]
     Comma,
     #[token(":")]
@@ -123,6 +125,7 @@ impl<'input> Display for Tok<'input> {
             Tok::Define => write!(f, "define"),
             Tok::Data => write!(f, "data"),
             Tok::Codata => write!(f, "codata"),
+            Tok::Alias => write!(f, "alias"),
             Tok::Let => write!(f, "let"),
             Tok::In => write!(f, "in"),
             Tok::Do => write!(f, "do"),
@@ -144,10 +147,10 @@ impl<'input> Display for Tok<'input> {
             Tok::ThunkType => write!(f, "U"),
             Tok::ParenOpen => write!(f, "("),
             Tok::ParenClose => write!(f, ")"),
+            Tok::BracketOpen => write!(f, "["),
+            Tok::BracketClose => write!(f, "]"),
             Tok::BraceOpen => write!(f, "{{"),
             Tok::BraceClose => write!(f, "}}"),
-            // Tok::BracketOpen => write!(f, "["),
-            // Tok::BracketClose => write!(f, "]"),
             Tok::Comma => write!(f, ","),
             Tok::Colon => write!(f, ":"),
             Tok::ColonColon => write!(f, "::"),

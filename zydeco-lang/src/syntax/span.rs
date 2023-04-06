@@ -346,9 +346,10 @@ impl<T: SpanHolder> SpanHolder for DeclSymbol<T> {
     }
 }
 
-impl<TyV, C, T> SpanHolder for Data<TyV, C, T>
+impl<TyV, Kd, C, T> SpanHolder for Data<TyV, Kd, C, T>
 where
     TyV: TyVarT + SpanHolder,
+    Kd: KindT + SpanHolder,
     C: CtorT + SpanHolder,
     T: TypeT + SpanHolder,
 {
@@ -371,9 +372,10 @@ where
     }
 }
 
-impl<TyV, D, T> SpanHolder for Codata<TyV, D, T>
+impl<TyV, Kd, D, T> SpanHolder for Codata<TyV, Kd, D, T>
 where
     TyV: TyVarT + SpanHolder,
+    Kd: KindT + SpanHolder,
     D: DtorT + SpanHolder,
     T: TypeT + SpanHolder,
 {
@@ -394,6 +396,26 @@ where
             }
             ty.span_map_mut(f.clone());
         }
+    }
+}
+
+impl<TyV, Kd, Ty> SpanHolder for Alias<TyV, Kd, Ty>
+where
+    TyV: TyVarT + SpanHolder,
+    Kd: KindT + SpanHolder,
+    Ty: TypeT + SpanHolder,
+{
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        let Alias { name, params, ty } = self;
+        name.span_map_mut(f.clone());
+        for (ty, kd) in params {
+            ty.span_map_mut(f.clone());
+            kd.span_map_mut(f.clone());
+        }
+        ty.span_map_mut(f);
     }
 }
 

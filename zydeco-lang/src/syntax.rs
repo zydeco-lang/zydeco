@@ -293,9 +293,9 @@ pub struct DeclSymbol<T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Data<TyV: TyVarT, C: CtorT, Ty: TypeT> {
+pub struct Data<TyV: TyVarT, Kd: KindT, C: CtorT, Ty: TypeT> {
     pub name: TyV,
-    pub params: Vec<(TyV, Kind)>,
+    pub params: Vec<(TyV, Kd)>,
     pub ctors: Vec<DataBr<C, Ty>>,
 }
 
@@ -303,14 +303,21 @@ pub struct Data<TyV: TyVarT, C: CtorT, Ty: TypeT> {
 pub struct DataBr<C: CtorT, Ty: TypeT>(pub C, pub Vec<Ty>);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Codata<TyV: TyVarT, D: DtorT, Ty: TypeT> {
+pub struct Codata<TyV: TyVarT, Kd: KindT, D: DtorT, Ty: TypeT> {
     pub name: TyV,
-    pub params: Vec<(TyV, Kind)>,
+    pub params: Vec<(TyV, Kd)>,
     pub dtors: Vec<CodataBr<D, Ty>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CodataBr<D: DtorT, Ty: TypeT>(pub D, pub Vec<Ty>, pub Ty);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Alias<TyV: TyVarT, Kd: KindT, Ty: TypeT> {
+    pub name: TyV,
+    pub params: Vec<(TyV, Kd)>,
+    pub ty: Ty,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Define<TeV: VarT, A: ValueT> {

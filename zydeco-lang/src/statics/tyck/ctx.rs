@@ -6,8 +6,8 @@ pub struct Ctx {
     pub type_ctx: im::HashMap<TypeV, TypeArity<Kind>>,
     pub term_ctx: im::HashMap<TermV, Type>,
     pub type_env: Env<TypeV, Type>,
-    pub data_env: im::HashMap<TypeV, Data<TypeV, CtorV, RcType>>,
-    pub coda_env: im::HashMap<TypeV, Codata<TypeV, DtorV, RcType>>,
+    pub data_env: im::HashMap<TypeV, Data<TypeV, Kind, CtorV, RcType>>,
+    pub coda_env: im::HashMap<TypeV, Codata<TypeV, Kind, DtorV, RcType>>,
     pub trace: Trace,
 }
 impl Ctx {

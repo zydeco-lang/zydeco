@@ -75,7 +75,7 @@ fn bool_test<E>(b: bool, f: impl FnOnce() -> E) -> Result<(), E> {
     b.then_some(()).ok_or_else(f)
 }
 
-impl Data<TypeV, CtorV, RcType> {
+impl Data<TypeV, Kind, CtorV, RcType> {
     fn type_arity(&self) -> TypeArity<Kind> {
         TypeArity {
             params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
@@ -84,7 +84,7 @@ impl Data<TypeV, CtorV, RcType> {
     }
 }
 
-impl Codata<TypeV, DtorV, RcType> {
+impl Codata<TypeV, Kind, DtorV, RcType> {
     fn type_arity(&self) -> TypeArity<Kind> {
         TypeArity {
             params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),

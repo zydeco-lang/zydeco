@@ -47,6 +47,9 @@ Declaration: Declaration = {
     "end" => Codata {
         name, params, dtors: dtors.unwrap_or_default(),
     }.into(),
+    "alias" <name:TypeV> <params:TypePattern*> "=" <ty:Box<Span<Type>>> "end" => Alias {
+        name, params, ty,
+    }.into(),
     "define" <gen:GenLet> DefineEnd => gen.into(),
 };
 
@@ -289,6 +292,7 @@ extern {
         "extern" => Tok::Extern,
         "data" => Tok::Data,
         "codata" => Tok::Codata,
+        "alias" => Tok::Alias,
         "define" => Tok::Define,
         "let" => Tok::Let,
         "in" => Tok::In,
@@ -315,6 +319,8 @@ extern {
 
         "(" => Tok::ParenOpen,
         ")" => Tok::ParenClose,
+        "[" => Tok::BracketOpen,
+        "]" => Tok::BracketClose,
         "{" => Tok::BraceOpen,
         "}" => Tok::BraceClose,
         "," => Tok::Comma,

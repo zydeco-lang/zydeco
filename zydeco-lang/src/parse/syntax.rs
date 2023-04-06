@@ -137,8 +137,9 @@ pub type Define = GenLet;
 
 #[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum Declaration {
-    Data(Data<TypeV, CtorV, Span<Type>>),
-    Codata(Codata<TypeV, DtorV, Span<Type>>),
+    Data(Data<TypeV, Kind, CtorV, Span<Type>>),
+    Codata(Codata<TypeV, Kind, DtorV, Span<Type>>),
+    Alias(Alias<TypeV, Kind, BoxType>),
     Define(Define),
 }
 

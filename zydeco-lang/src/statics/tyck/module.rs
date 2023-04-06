@@ -1,6 +1,6 @@
 use super::*;
 
-impl TypeCheck for Span<&Data<TypeV, CtorV, RcType>> {
+impl TypeCheck for Span<&Data<TypeV, Kind, CtorV, RcType>> {
     type Ctx = Ctx;
     type Out = ();
 
@@ -31,7 +31,7 @@ impl TypeCheck for Span<&Data<TypeV, CtorV, RcType>> {
     }
 }
 
-impl TypeCheck for Span<&Codata<TypeV, DtorV, RcType>> {
+impl TypeCheck for Span<&Codata<TypeV, Kind, DtorV, RcType>> {
     type Ctx = Ctx;
     type Out = ();
 

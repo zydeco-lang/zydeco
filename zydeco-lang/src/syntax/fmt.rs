@@ -421,9 +421,10 @@ where
     }
 }
 
-impl<TyV, C, Ty> FmtArgs for Data<TyV, C, Ty>
+impl<TyV, Kd, C, Ty> FmtArgs for Data<TyV, Kd, C, Ty>
 where
     TyV: TyVarT + FmtArgs,
+    Kd: KindT + FmtArgs,
     C: CtorT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
@@ -440,11 +441,14 @@ where
             );
         }
         s += " where ";
-        s += &fargs.br_indent();
-        for databr in ctors {
-            s += &databr.fmt_args(fargs);
-            s += &fargs.br_indent();
+        {
+            let fargs = fargs.indent();
+            for databr in ctors {
+                s += &fargs.br_indent();
+                s += &databr.fmt_args(fargs);
+            }
         }
+        s += &fargs.br_indent();
         s += "end";
         s
     }
@@ -471,9 +475,10 @@ where
     }
 }
 
-impl<TyV, D, Ty> FmtArgs for Codata<TyV, D, Ty>
+impl<TyV, Kd, D, Ty> FmtArgs for Codata<TyV, Kd, D, Ty>
 where
     TyV: TyVarT + FmtArgs,
+    Kd: KindT + FmtArgs,
     D: DtorT + FmtArgs,
     Ty: TypeT + FmtArgs,
 {
@@ -490,11 +495,14 @@ where
             );
         }
         s += " where ";
-        s += &fargs.br_indent();
-        for codatabr in dtors {
-            s += &codatabr.fmt_args(fargs);
-            s += &fargs.br_indent();
+        {
+            let fargs = fargs.indent();
+            for codatabr in dtors {
+                s += &fargs.br_indent();
+                s += &codatabr.fmt_args(fargs);
+            }
         }
+        s += &fargs.br_indent();
         s += "end";
         s
     }
@@ -519,6 +527,36 @@ where
         s += ")";
         s += ": ";
         s += &ty.fmt_args(fargs);
+        s
+    }
+}
+
+impl<TyV, Kd, Ty> FmtArgs for Alias<TyV, Kd, Ty>
+where
+    TyV: TyVarT + FmtArgs,
+    Kd: KindT + FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let Alias { name, params, ty } = self;
+        let mut s = String::new();
+        s += "alias ";
+        s += &name.fmt_args(fargs);
+        for (tyvar, kd) in params {
+            s += &format!(
+                " ({} : {})",
+                tyvar.fmt_args(fargs),
+                kd.fmt_args(fargs)
+            );
+        }
+        s += " = ";
+        {
+            let fargs = fargs.indent();
+            s += &fargs.br_indent();
+            s += &ty.fmt_args(fargs);
+        }
+        s += &fargs.br_indent();
+        s += "end";
         s
     }
 }
