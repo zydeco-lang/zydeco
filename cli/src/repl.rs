@@ -54,8 +54,10 @@ pub fn launch() -> Result<i32, String> {
                 match zydeco_expr.tyck_value(term.span().make(v.clone())) {
                     Err(e) => println!("Type Error: {}", e),
                     Ok(ty) => {
-                        let v = ZydecoExpr::link_value(v);
-                        let v = zydeco_expr.eval_value(v);
+                        // NOTE: not evaluating the value, just printing its type
+                        // let v = ZydecoExpr::link_value(v);
+                        // let v = zydeco_expr.eval_value(v);
+                        // println!("{} :: {}", v.fmt(), ty.fmt())
                         println!("{} :: {}", v.fmt(), ty.fmt())
                     }
                 }
