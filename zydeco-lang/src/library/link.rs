@@ -98,19 +98,19 @@ impl From<&ss::TermComputation> for ZComp {
                     .collect();
                 Match { scrut, arms }.into()
             }
-            ss::TermComputation::CoMatch(CoMatch { arms }) => {
+            ss::TermComputation::Comatch(Comatch { arms }) => {
                 let arms = arms
                     .iter()
-                    .map(|CoMatcher { dtor, vars, body }| {
+                    .map(|Comatcher { dtor, vars, body }| {
                         let body = rc!(body.inner_ref().into());
-                        CoMatcher {
+                        Comatcher {
                             dtor: dtor.clone(),
                             vars: vars.clone(),
                             body,
                         }
                     })
                     .collect();
-                CoMatch { arms }.into()
+                Comatch { arms }.into()
             }
             ss::TermComputation::Dtor(Dtor { body, dtor, args }) => {
                 let body = rc!(body.inner_ref().into());

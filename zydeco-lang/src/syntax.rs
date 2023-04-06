@@ -234,16 +234,16 @@ impl<C: CtorT, TeV: VarT, A: ValueT, B: ComputationT> ComputationT
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CoMatch<D: DtorT, TeV: VarT, B: ComputationT> {
-    pub arms: Vec<CoMatcher<D, TeV, B>>,
+pub struct Comatch<D: DtorT, TeV: VarT, B: ComputationT> {
+    pub arms: Vec<Comatcher<D, TeV, B>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CoMatcher<D: DtorT, TeV: VarT, B: ComputationT> {
+pub struct Comatcher<D: DtorT, TeV: VarT, B: ComputationT> {
     pub dtor: D,
     pub vars: Vec<TeV>,
     pub body: B,
 }
-impl<D: DtorT, TeV: VarT, B: ComputationT> ComputationT for CoMatch<D, TeV, B> {}
+impl<D: DtorT, TeV: VarT, B: ComputationT> ComputationT for Comatch<D, TeV, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dtor<B: ComputationT, D: DtorT, A: ValueT> {

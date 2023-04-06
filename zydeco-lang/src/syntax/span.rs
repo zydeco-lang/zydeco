@@ -246,7 +246,7 @@ where
     }
 }
 
-impl<D, TeV, B> SpanHolder for CoMatch<D, TeV, B>
+impl<D, TeV, B> SpanHolder for Comatch<D, TeV, B>
 where
     D: DtorT + SpanHolder,
     TeV: VarT + SpanHolder,
@@ -256,8 +256,8 @@ where
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let CoMatch { arms } = self;
-        for CoMatcher { dtor, vars, body } in arms {
+        let Comatch { arms } = self;
+        for Comatcher { dtor, vars, body } in arms {
             dtor.span_map_mut(f.clone());
             for var in vars {
                 var.span_map_mut(f.clone());

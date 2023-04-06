@@ -126,11 +126,11 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 }
                 Step::Step(body.as_ref().clone())
             }
-            ls::ZComp::CoMatch(ls::CoMatch { arms }) => {
+            ls::ZComp::Comatch(ls::Comatch { arms }) => {
                 let Some(SemComp::Dtor(dtor, args)) = runtime.stack.pop_back() else {
-                    panic!("CoMatch on non-Dtor")
+                    panic!("Comatch on non-Dtor")
                 };
-                let ls::CoMatcher { dtor: _, vars, body } = arms
+                let ls::Comatcher { dtor: _, vars, body } = arms
                     .into_iter()
                     .find(|arm| arm.dtor == dtor)
                     .expect("no matching arm");

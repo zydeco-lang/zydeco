@@ -39,7 +39,7 @@ pub enum ZComp {
     Do(Do<TermV, RcComp, RcComp>),
     Rec(Rec<TermV, RcComp>),
     Match(Match<CtorV, TermV, RcValue, RcComp>),
-    CoMatch(CoMatch<DtorV, TermV, RcComp>),
+    Comatch(Comatch<DtorV, TermV, RcComp>),
     Dtor(Dtor<RcComp, DtorV, RcValue>),
     Prim(Prim),
 }

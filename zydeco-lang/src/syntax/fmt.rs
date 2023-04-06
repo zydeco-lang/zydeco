@@ -286,17 +286,17 @@ where
     }
 }
 
-impl<D, TeV, B> FmtArgs for CoMatch<D, TeV, B>
+impl<D, TeV, B> FmtArgs for Comatch<D, TeV, B>
 where
     D: DtorT + FmtArgs,
     TeV: VarT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let CoMatch { arms } = self;
+        let Comatch { arms } = self;
         let mut s = String::new();
         s += "comatch ";
-        for CoMatcher { dtor, vars, body } in arms {
+        for Comatcher { dtor, vars, body } in arms {
             s += &fargs.br_indent();
             s += "| .";
             s += &dtor.fmt_args(fargs);

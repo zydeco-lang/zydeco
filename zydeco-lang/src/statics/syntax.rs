@@ -111,7 +111,7 @@ pub enum TermComputation {
     Do(Do<TermV, RcComp, RcComp>),
     Rec(Rec<TermV, RcComp>),
     Match(Match<CtorV, TermV, RcValue, RcComp>),
-    CoMatch(CoMatch<DtorV, TermV, RcComp>),
+    Comatch(Comatch<DtorV, TermV, RcComp>),
     Dtor(Dtor<RcComp, DtorV, RcValue>),
     TypAbs(TypAbs<TypeV, Kind, RcComp>),
     TypApp(TypApp<RcComp, RcType>),

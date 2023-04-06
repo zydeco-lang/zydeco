@@ -158,7 +158,7 @@ TermComputation: TermComputation = {
     "match" <scrut:Box<Span<TermValue>>> <arms:MatchBr*> "end" => Match {
         scrut, arms,
     }.into(),
-    "comatch" <arms:ComatchBr*> "end" => CoMatch {
+    "comatch" <arms:ComatchBr*> "end" => Comatch {
         arms,
     }.into(),
     "fn" <params:TypePattern+> "->" <body:Box<Span<TermComputation>>> => TypAbs {
@@ -221,9 +221,9 @@ MatchBr: Matcher<CtorV, TermV, Span<TermComputation>> = {
     }
 };
 
-ComatchBr: CoMatcher<DtorV, TermV, Span<TermComputation>> = {
+ComatchBr: Comatcher<DtorV, TermV, Span<TermComputation>> = {
     "|" "." <dtor:DtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->"
-    <body:Span<TermComputation>> => CoMatcher {
+    <body:Span<TermComputation>> => Comatcher {
         dtor, vars, body
     }
 };

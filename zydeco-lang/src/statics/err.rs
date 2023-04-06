@@ -11,7 +11,7 @@ pub enum TypeCheckError {
     NeedAnnotation { content: String },
     Subsumption { sort: &'static str },
     InconsistentMatchers { unexpected: Vec<CtorV>, missing: Vec<CtorV> },
-    InconsistentCoMatchers { unexpected: Vec<DtorV>, missing: Vec<DtorV> },
+    InconsistentComatchers { unexpected: Vec<DtorV>, missing: Vec<DtorV> },
     InconsistentBranches(Vec<Type>),
     NameResolve(NameResolveError),
     WrongMain { found: Type },
@@ -75,7 +75,7 @@ impl fmt::Display for TypeCheckError {
                 }
                 Ok(())
             }
-            InconsistentCoMatchers { unexpected, missing } => {
+            InconsistentComatchers { unexpected, missing } => {
                 writeln!(f, "Inconsistent matchers:")?;
                 if !unexpected.is_empty() {
                     writeln!(f, "Unexpected:")?;

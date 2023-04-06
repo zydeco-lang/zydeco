@@ -77,8 +77,8 @@ fn desugar_fn(
     fn desugar_fn_one(
         (var, ty): (TermV, Option<Span<ps::Type>>), body: RcComp,
     ) -> Result<TermComputation, TypeCheckError> {
-        let mut body = CoMatch {
-            arms: vec![ps::CoMatcher {
+        let mut body = Comatch {
+            arms: vec![ps::Comatcher {
                 dtor: DtorV::new(format!("arg"), span(0, 0)),
                 vars: vec![var],
                 body,
@@ -313,16 +313,16 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 }
                 .into()
             }
-            ps::TermComputation::CoMatch(ps::CoMatch { arms }) => {
+            ps::TermComputation::Comatch(ps::Comatch { arms }) => {
                 let arms = arms
                     .into_iter()
                     .map(|arm| {
-                        let ps::CoMatcher { dtor, vars, body } = arm;
+                        let ps::Comatcher { dtor, vars, body } = arm;
                         let body = rc!((body).try_map(TryInto::try_into)?);
-                        Ok(CoMatcher { dtor, vars, body })
+                        Ok(Comatcher { dtor, vars, body })
                     })
                     .collect::<Result<Vec<_>, TypeCheckError>>()?;
-                CoMatch { arms }.into()
+                Comatch { arms }.into()
             }
             ps::TermComputation::Dtor(ps::Dtor { body, dtor, args }) => {
                 let body = rc!((body).try_map(TryInto::try_into)?);

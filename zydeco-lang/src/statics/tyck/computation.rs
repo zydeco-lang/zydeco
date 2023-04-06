@@ -148,7 +148,7 @@ impl TypeCheck for Span<TermComputation> {
                         };
                 Step::Done(ty)
             }
-            TermComputation::CoMatch(_) => {
+            TermComputation::Comatch(_) => {
                 Err(span.make(NeedAnnotation { content: format!("comatch") }))?
             }
             TermComputation::Dtor(Dtor { body, dtor, args }) => {
@@ -400,7 +400,7 @@ impl TypeCheck for Span<TermComputation> {
                 })?;
                 Step::Done(typ)
             }
-            TermComputation::CoMatch(CoMatch { arms }) => {
+            TermComputation::Comatch(Comatch { arms }) => {
                 let SynType::TypeApp(ty_app) = &typ.synty else {
                     Err(span.make(TypeExpected {
                         context: format!("comatch"),
@@ -435,7 +435,7 @@ impl TypeCheck for Span<TermComputation> {
                     .collect();
                 let mut unexpected = Vec::new();
                 let mut dtorv_set_arm: HashSet<DtorV> = HashSet::new();
-                for CoMatcher { dtor, vars, body } in arms {
+                for Comatcher { dtor, vars, body } in arms {
                     let Some((tys, ty)) = dtors.get(dtor).cloned() else {
                         unexpected.push(dtor.to_owned());
                         continue;
@@ -458,7 +458,7 @@ impl TypeCheck for Span<TermComputation> {
                     .cloned()
                     .collect();
                 bool_test(unexpected.is_empty() && missing.is_empty(), || {
-                    span.make(InconsistentCoMatchers { unexpected, missing })
+                    span.make(InconsistentComatchers { unexpected, missing })
                 })?;
                 Step::Done(typ)
             }

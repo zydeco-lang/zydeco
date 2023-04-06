@@ -116,7 +116,7 @@ pub enum TermComputation {
     Match(Match<CtorV, TermV, BoxValue, Span<TermComputation>>),
     Abs(Abstraction),
     App(Application),
-    CoMatch(CoMatch<DtorV, TermV, Span<TermComputation>>),
+    Comatch(Comatch<DtorV, TermV, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
     TypAbs(TypAbs),
     TypApp(TypApp),
