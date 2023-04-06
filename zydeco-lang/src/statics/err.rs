@@ -1,23 +1,25 @@
-use super::{resolve::*, syntax::*, tyck::Trace};
-use crate::utils::{fmt::FmtArgs, Span};
+use super::{resolve::*, syntax::*};
+use crate::utils::{fmt::FmtArgs, Span, SpanInfo, SpanView};
 use std::fmt;
 
 #[derive(Clone, Debug)]
 pub struct TyckError {
-    pub item: TyckErrorItem,
+    pub item: Span<TyckErrorItem>,
     pub trace: Trace,
 }
 impl Span<TyckErrorItem> {
-    pub fn traced(self, trace: Trace) -> Span<TyckError> {
-        self.map(|item| TyckError { item, trace })
+    pub fn traced(self, trace: Trace) -> TyckError {
+        TyckError { item: self, trace }
     }
 }
 
 impl fmt::Display for TyckError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "{}", self.item)?;
+        writeln!(f, "{}", self.item.inner_ref())?;
+        writeln!(f, "\t({})", self.item.span())?;
+        writeln!(f)?;
         writeln!(f, "Trace:")?;
-        writeln!(f, "{}", self.trace)?;
+        write!(f, "{}", self.trace)?;
         Ok(())
     }
 }
@@ -115,5 +117,41 @@ impl fmt::Display for TyckErrorItem {
                 write!(f, "The type of the main expression should be OS but got {}", found.fmt())
             }
         }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Trace(pub im::Vector<Frame>);
+
+impl Trace {
+    pub fn push(&mut self, frame: Frame) {
+        self.0.push_back(frame);
+    }
+}
+
+impl fmt::Display for Trace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (_i, frame) in self.0.iter().enumerate().rev() {
+            write!(f, "- {}", frame)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Frame {
+    pub tycker_src: String,
+    pub sort: String,
+    pub term: String,
+    pub info: SpanInfo,
+}
+
+impl fmt::Display for Frame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "When {}:", self.sort)?;
+        writeln!(f, "\t{}", self.term)?;
+        writeln!(f, "\t({})", self.info)?;
+        // self.tycker_src
+        Ok(())
     }
 }

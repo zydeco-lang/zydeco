@@ -1,12 +1,36 @@
 use super::*;
 
+impl Data<TypeV, Kind, CtorV, RcType> {
+    fn type_arity(&self) -> TypeArity<Kind> {
+        TypeArity {
+            params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
+            kd: Kind::VType,
+        }
+    }
+}
+
+impl Codata<TypeV, Kind, DtorV, RcType> {
+    fn type_arity(&self) -> TypeArity<Kind> {
+        TypeArity {
+            params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
+            kd: Kind::CType,
+        }
+    }
+}
+
+impl From<Kind> for TypeArity<Kind> {
+    fn from(kd: Kind) -> Self {
+        TypeArity { params: vec![], kd }
+    }
+}
+
 impl TypeCheck for Span<&Data<TypeV, Kind, CtorV, RcType>> {
     type Ctx = Ctx;
     type Out = ();
 
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
             ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
@@ -35,7 +59,7 @@ impl TypeCheck for Span<&Codata<TypeV, Kind, DtorV, RcType>> {
 
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
             ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
@@ -64,7 +88,7 @@ impl TypeCheck for Span<Module> {
     type Out = Seal<Ctx>;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let Module { name: _, data, codata: coda, define, define_ext } = self.inner_ref();
         // register data and codata type declarations in the type context
         for DeclSymbol { inner: data, .. } in data {

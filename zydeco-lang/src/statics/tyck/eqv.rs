@@ -3,8 +3,8 @@ use super::*;
 impl Eqv for () {
     type Ctx = ();
     fn eqv(
-        &self, _other: &Self, _ctx: (), _f: impl FnOnce() -> Span<TyckError> + Clone,
-    ) -> Result<(), Span<TyckError>> {
+        &self, _other: &Self, _ctx: (), _f: impl FnOnce() -> TyckError + Clone,
+    ) -> Result<(), TyckError> {
         Ok(())
     }
 }
@@ -12,8 +12,8 @@ impl Eqv for () {
 impl Eqv for Kind {
     type Ctx = ();
     fn eqv(
-        &self, other: &Self, _ctx: (), f: impl FnOnce() -> Span<TyckError> + Clone,
-    ) -> Result<(), Span<TyckError>> {
+        &self, other: &Self, _ctx: (), f: impl FnOnce() -> TyckError + Clone,
+    ) -> Result<(), TyckError> {
         bool_test(self == other, f)
     }
 }
@@ -21,8 +21,8 @@ impl Eqv for Kind {
 impl Eqv for Type {
     type Ctx = Ctx;
     fn eqv(
-        &self, other: &Self, mut ctx: Ctx, f: impl FnOnce() -> Span<TyckError> + Clone,
-    ) -> Result<(), Span<TyckError>> {
+        &self, other: &Self, mut ctx: Ctx, f: impl FnOnce() -> TyckError + Clone,
+    ) -> Result<(), TyckError> {
         match (&self.synty, &other.synty) {
             (SynType::TypeApp(lhs), _) if ctx.type_env.contains_key(&lhs.tvar) => {
                 // lhs is a type variable

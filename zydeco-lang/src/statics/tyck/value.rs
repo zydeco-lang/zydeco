@@ -3,9 +3,7 @@ use super::*;
 impl TypeCheck for Span<&Literal> {
     type Ctx = ();
     type Out = Type;
-    fn syn_step(
-        &self, _ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
+    fn syn_step(&self, _ctx: Self::Ctx) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         Ok(Step::Done(match self.inner_ref() {
             Literal::Int(_) => Type::internal("Int", vec![]),
             Literal::String(_) => Type::internal("String", vec![]),
@@ -19,11 +17,11 @@ impl TypeCheck for Span<TermValue> {
     type Out = Type;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
-            sort: "syn value".to_string(),
-            term: format!("{}", self.inner_ref().fmt()),
+            sort: "synthezing value".to_string(),
+            term: format!("{}", self.inner_ref().fmt_truncate(40)),
             info: self.span().clone(),
         });
         let span = self.span();
@@ -45,11 +43,11 @@ impl TypeCheck for Span<TermValue> {
     }
     fn ana_step(
         &self, typ: Self::Out, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
-            sort: format!("ana value with type {}", typ.fmt()),
-            term: format!("{}", self.inner_ref().fmt()),
+            sort: format!("analyzing value against type {}", typ.fmt()),
+            term: format!("{}", self.inner_ref().fmt_truncate(40)),
             info: self.span().clone(),
         });
         if let SynType::Hole(_) = typ.synty {

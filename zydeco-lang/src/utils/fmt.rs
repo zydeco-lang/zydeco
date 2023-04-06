@@ -31,6 +31,14 @@ pub trait FmtArgs {
     fn fmt_no_br(&self) -> String {
         self.fmt_args(Args { indent_unit: 2, allow_br: false, indent: 0 })
     }
+    fn fmt_truncate(&self, n: usize) -> String {
+        let s = self.fmt_no_br();
+        if s.len() > n {
+            format!("{}...", &s[..n])
+        } else {
+            s
+        }
+    }
 }
 
 impl<T: FmtArgs> FmtArgs for Box<T> {

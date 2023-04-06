@@ -7,11 +7,11 @@ impl TypeCheck for Span<TermComputation> {
     type Out = Type;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
-            sort: format!("syn computation"),
-            term: format!("{}", self.inner_ref().fmt()),
+            sort: format!("synthezing computation"),
+            term: format!("{}", self.inner_ref().fmt_truncate(40)),
             info: self.span().clone(),
         });
         let span = self.span();
@@ -259,11 +259,11 @@ impl TypeCheck for Span<TermComputation> {
     }
     fn ana_step(
         &self, typ: Self::Out, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
-            sort: format!("ana computation with type {}", typ.fmt()),
-            term: format!("{}", self.fmt()),
+            sort: format!("analyzing computation against type {}", typ.fmt()),
+            term: format!("{}", self.fmt_truncate(40)),
             info: self.span().clone(),
         });
         if let SynType::Hole(_) = typ.synty {
