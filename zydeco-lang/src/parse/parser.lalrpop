@@ -37,15 +37,15 @@ DeclSymbol<T>: DeclSymbol<T> = {
 };
 
 Declaration: Declaration = {
-    "data" <name:TypeV> <params:TypePattern*> "where"
-        <ctors:DataBr*>
+    "data" <name:TypeV> <params:TypePattern*>
+        <ctors:("where" <DataBr*>)?>
     "end" => Data {
-        name, params, ctors,
+        name, params, ctors: ctors.unwrap_or_default(),
     }.into(),
-    "codata" <name:TypeV> <params:TypePattern*> "where"
-        <dtors:CodataBr*>
+    "codata" <name:TypeV> <params:TypePattern*>
+        <dtors:("where" <CodataBr*>)?>
     "end" => Codata {
-        name, params, dtors,
+        name, params, dtors: dtors.unwrap_or_default(),
     }.into(),
     "define" <gen:GenLet> DefineEnd => gen.into(),
 };
