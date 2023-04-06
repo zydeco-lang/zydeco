@@ -1,11 +1,16 @@
 use super::{resolve::*, syntax::*, tyck::Trace};
-use crate::utils::fmt::FmtArgs;
+use crate::utils::{fmt::FmtArgs, Span};
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TyckError {
     pub item: TyckErrorItem,
     pub trace: Trace,
+}
+impl Span<TyckErrorItem> {
+    pub fn traced(self, trace: Trace) -> Span<TyckError> {
+        self.map(|item| TyckError { item, trace })
+    }
 }
 
 impl fmt::Display for TyckError {

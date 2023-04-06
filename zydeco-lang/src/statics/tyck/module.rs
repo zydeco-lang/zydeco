@@ -6,7 +6,7 @@ impl TypeCheck for Span<&Data<TypeV, Kind, CtorV, RcType>> {
 
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
             ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
@@ -15,7 +15,8 @@ impl TypeCheck for Span<&Data<TypeV, Kind, CtorV, RcType>> {
         for DataBr(ctorv, tys) in data.ctors.iter() {
             let span = ctorv.span();
             if ctorvs.contains(ctorv) {
-                Err(span.make(
+                Err(ctx.err(
+                    span,
                     NameResolveError::DuplicateCtorDeclaration {
                         name: ctorv.clone(),
                     }
@@ -37,7 +38,7 @@ impl TypeCheck for Span<&Codata<TypeV, Kind, DtorV, RcType>> {
 
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
             ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
@@ -46,7 +47,8 @@ impl TypeCheck for Span<&Codata<TypeV, Kind, DtorV, RcType>> {
         for CodataBr(dtorv, tys, ty) in data.dtors.iter() {
             let span = dtorv.span();
             if dtorvs.contains(dtorv) {
-                Err(span.make(
+                Err(ctx.err(
+                    span,
                     NameResolveError::DuplicateDtorDeclaration {
                         name: dtorv.clone(),
                     }
@@ -68,14 +70,15 @@ impl TypeCheck for Span<Module> {
     type Out = Seal<Ctx>;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
         let Module { name: _, data, codata: coda, define, define_ext } =
             self.inner_ref();
         // register data and codata type declarations in the type context
         for DeclSymbol { inner: data, .. } in data {
             let res = ctx.type_ctx.insert(data.name.clone(), data.type_arity());
             if let Some(_) = res {
-                Err(data.name.span().make(
+                Err(ctx.err(
+                    data.name.span(),
                     NameResolveError::DuplicateTypeDeclaration {
                         name: data.name.clone(),
                     }
@@ -86,7 +89,8 @@ impl TypeCheck for Span<Module> {
         for DeclSymbol { inner: coda, .. } in coda {
             let res = ctx.type_ctx.insert(coda.name.clone(), coda.type_arity());
             if let Some(_) = res {
-                Err(coda.name.span().make(
+                Err(ctx.err(
+                    coda.name.span(),
                     NameResolveError::DuplicateTypeDeclaration {
                         name: coda.name.clone(),
                     }
@@ -111,7 +115,8 @@ impl TypeCheck for Span<Module> {
         // register term declarations in the term context
         for DeclSymbol { inner: Define { name, def }, external, .. } in define {
             bool_test(!external, || {
-                name.span().make(
+                ctx.err(
+                    name.span(),
                     NameResolveError::ExternalDeclaration {
                         name: name.name().to_string(),
                     }

@@ -1,6 +1,15 @@
 use super::*;
 use std::fmt;
 
+pub trait CtxT {
+    fn err(&self, span: &SpanInfo, item: TyckErrorItem) -> Span<TyckError>;
+}
+impl CtxT for () {
+    fn err(&self, span: &SpanInfo, item: TyckErrorItem) -> Span<TyckError> {
+        span.make(TyckError { item, trace: Default::default() })
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct Ctx {
     pub abst_ctx: im::Vector<Kind>,
@@ -17,8 +26,13 @@ impl Ctx {
         AbstVar(self.abst_ctx.len() - 1)
     }
 }
+impl CtxT for Ctx {
+    fn err(&self, span: &SpanInfo, item: TyckErrorItem) -> Span<TyckError> {
+        span.make(TyckError { item, trace: self.trace.clone() })
+    }
+}
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Trace(pub im::Vector<Frame>);
 
 impl Trace {
@@ -36,7 +50,7 @@ impl fmt::Display for Trace {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Frame {
     pub tycker_src: String,
     pub sort: String,

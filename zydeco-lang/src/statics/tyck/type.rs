@@ -5,7 +5,7 @@ impl TypeCheck for Span<Type> {
     type Out = Kind;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: "syn type".to_owned(),
@@ -13,24 +13,31 @@ impl TypeCheck for Span<Type> {
             info: self.span().clone(),
         });
         let span = self.span();
-        let ty = self.inner_ref().clone().subst(ctx.type_env.clone())?;
+        let ty = self
+            .inner_ref()
+            .clone()
+            .subst(ctx.type_env.clone())
+            .map_err(|e| e.traced(ctx.trace.clone()))?;
         match &ty.synty {
             SynType::TypeApp(app) => {
                 let tvar = &app.tvar;
                 // type constructor
                 let Some(TypeArity { params, kd }) = ctx.type_ctx.get(&tvar) else {
-                        Err(span.make(
-                            NameResolveError::UnboundTypeVariable {
-                                tvar: tvar.to_owned(),
-                            }.into()
-                        ))?
-                    };
+                    Err(ctx.err(span,
+                        NameResolveError::UnboundTypeVariable {
+                            tvar: tvar.to_owned(),
+                        }.into()
+                    ))?
+                };
                 bool_test(app.args.len() == params.len(), || {
-                    span.make(ArityMismatch {
-                        context: format!("{}", self.inner_ref().fmt()),
-                        expected: params.len(),
-                        found: app.args.len(),
-                    })
+                    ctx.err(
+                        span,
+                        ArityMismatch {
+                            context: format!("{}", self.inner_ref().fmt()),
+                            expected: params.len(),
+                            found: app.args.len(),
+                        },
+                    )
                 })?;
                 for (arg, kd) in app.args.iter().zip(params.iter()) {
                     arg.ana(kd.clone(), ctx.clone())?;
@@ -57,13 +64,13 @@ impl TypeCheck for Span<Type> {
                 Ok(Step::Done(ctx.abst_ctx[*abs]))
             }
             SynType::Hole(_) => {
-                Err(span.make(NeedAnnotation { content: format!("hole") }))?
+                Err(ctx.err(span, NeedAnnotation { content: format!("hole") }))?
             }
         }
     }
     fn ana_step(
         &self, kd: Self::Out, mut ctx: Self::Ctx,
-    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckErrorItem>> {
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, Span<TyckError>> {
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: format!("ana type with kind {}", kd.fmt()),
@@ -71,16 +78,20 @@ impl TypeCheck for Span<Type> {
             info: self.span().clone(),
         });
         let span = self.span();
-        let ty = self.inner_ref().clone().subst(ctx.type_env.clone())?;
+        let ty = self
+            .inner_ref()
+            .clone()
+            .subst(ctx.type_env.clone())
+            .map_err(|e| e.traced(ctx.trace.clone()))?;
         match ty.synty {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeApp(_)
             | SynType::Forall(_)
             | SynType::Exists(_)
             | SynType::AbstVar(_) => {
-                let kd_syn = self.syn(ctx)?;
+                let kd_syn = self.syn(ctx.clone())?;
                 kd_syn.eqv(&kd, Default::default(), || {
-                    span.make(Subsumption { sort: "type" })
+                    ctx.err(span, Subsumption { sort: "type" })
                 })?;
                 Ok(Step::Done(kd))
             }
@@ -144,8 +155,8 @@ impl Type {
     }
     pub(super) fn lub(
         lhs: Self, rhs: Self, ctx: Ctx,
-        f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
-    ) -> Result<Self, Span<TyckErrorItem>> {
+        f: impl FnOnce() -> Span<TyckError> + Clone,
+    ) -> Result<Self, Span<TyckError>> {
         let lhs = lhs.subst(ctx.type_env.clone()).unwrap();
         let rhs = rhs.subst(ctx.type_env.clone()).unwrap();
         match (&lhs.synty, &rhs.synty) {

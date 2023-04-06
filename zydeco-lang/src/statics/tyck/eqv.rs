@@ -4,8 +4,8 @@ impl Eqv for () {
     type Ctx = ();
     fn eqv(
         &self, _other: &Self, _ctx: (),
-        _f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
-    ) -> Result<(), Span<TyckErrorItem>> {
+        _f: impl FnOnce() -> Span<TyckError> + Clone,
+    ) -> Result<(), Span<TyckError>> {
         Ok(())
     }
 }
@@ -14,8 +14,8 @@ impl Eqv for Kind {
     type Ctx = ();
     fn eqv(
         &self, other: &Self, _ctx: (),
-        f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
-    ) -> Result<(), Span<TyckErrorItem>> {
+        f: impl FnOnce() -> Span<TyckError> + Clone,
+    ) -> Result<(), Span<TyckError>> {
         bool_test(self == other, f)
     }
 }
@@ -24,8 +24,8 @@ impl Eqv for Type {
     type Ctx = Ctx;
     fn eqv(
         &self, other: &Self, mut ctx: Ctx,
-        f: impl FnOnce() -> Span<TyckErrorItem> + Clone,
-    ) -> Result<(), Span<TyckErrorItem>> {
+        f: impl FnOnce() -> Span<TyckError> + Clone,
+    ) -> Result<(), Span<TyckError>> {
         match (&self.synty, &other.synty) {
             (SynType::TypeApp(lhs), _)
                 if ctx.type_env.contains_key(&lhs.tvar) =>
@@ -60,14 +60,24 @@ impl Eqv for Type {
                 // both forall
                 bool_test(lhs.param.1 == rhs.param.1, f.clone())?;
                 let abst_var = ctx.fresh(lhs.param.1.clone());
-                let lhs_ty =
-                    lhs.ty.inner_ref().clone().subst(Env::from_iter([(
+                let lhs_ty = lhs
+                    .ty
+                    .inner_ref()
+                    .clone()
+                    .subst(Env::from_iter([(
                         lhs.param.0.clone(),
                         abst_var.clone().into(),
-                    )]))?;
-                let rhs_ty = rhs.ty.inner_ref().clone().subst(
-                    Env::from_iter([(rhs.param.0.clone(), abst_var.into())]),
-                )?;
+                    )]))
+                    .map_err(|e| e.traced(ctx.trace.clone()))?;
+                let rhs_ty = rhs
+                    .ty
+                    .inner_ref()
+                    .clone()
+                    .subst(Env::from_iter([(
+                        rhs.param.0.clone(),
+                        abst_var.into(),
+                    )]))
+                    .map_err(|e| e.traced(ctx.trace.clone()))?;
                 lhs_ty.eqv(&rhs_ty, ctx, f)
             }
             (SynType::Exists(lhs), SynType::Exists(rhs)) => {
@@ -75,14 +85,24 @@ impl Eqv for Type {
                 bool_test(lhs.param.1 == rhs.param.1, f.clone())?;
                 let mut ctx = ctx;
                 let abst_var = ctx.fresh(lhs.param.1.clone());
-                let lhs_ty =
-                    lhs.ty.inner_ref().clone().subst(Env::from_iter([(
+                let lhs_ty = lhs
+                    .ty
+                    .inner_ref()
+                    .clone()
+                    .subst(Env::from_iter([(
                         lhs.param.0.clone(),
                         abst_var.clone().into(),
-                    )]))?;
-                let rhs_ty = rhs.ty.inner_ref().clone().subst(
-                    Env::from_iter([(rhs.param.0.clone(), abst_var.into())]),
-                )?;
+                    )]))
+                    .map_err(|e| e.traced(ctx.trace.clone()))?;
+                let rhs_ty = rhs
+                    .ty
+                    .inner_ref()
+                    .clone()
+                    .subst(Env::from_iter([(
+                        rhs.param.0.clone(),
+                        abst_var.into(),
+                    )]))
+                    .map_err(|e| e.traced(ctx.trace.clone()))?;
                 lhs_ty.eqv(&rhs_ty, ctx, f)
             }
             (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
