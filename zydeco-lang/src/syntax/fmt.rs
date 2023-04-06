@@ -66,16 +66,30 @@ where
     T: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let TypeApp { tvar: tctor, args } = self;
+        let TypeApp { tvar, args } = self;
         let mut s = String::new();
-        s += &tctor.fmt_args(fargs);
-        s += "(";
-        s += &args
-            .into_iter()
-            .map(|arg| arg.fmt_args(fargs))
-            .collect::<Vec<_>>()
-            .join(", ");
-        s += ")";
+        // HACK: pretty printing special types syntactically
+        let tvar_name = tvar.fmt_args(fargs);
+        if tvar_name == "Fn" {
+            s += &args
+                .into_iter()
+                .map(|arg| arg.fmt_args(fargs))
+                .collect::<Vec<_>>()
+                .join(" -> ");
+        } else {
+            // normal type application
+            s += &tvar_name;
+            // omit parentheses for empty type application
+            if !args.is_empty() {
+                s += "(";
+                s += &args
+                    .into_iter()
+                    .map(|arg| arg.fmt_args(fargs))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                s += ")";
+            }
+        }
         s
     }
 }
