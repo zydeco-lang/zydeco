@@ -187,9 +187,3 @@ impl<'rt> Eval<'rt> for ls::Program {
         Step::Done(Program { module, entry: prog_kont })
     }
 }
-
-impl Program {
-    pub fn run<'rt>(p: ls::Program, runtime: &mut Runtime<'rt>) -> Self {
-        p.eval(runtime)
-    }
-}

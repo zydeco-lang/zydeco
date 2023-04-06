@@ -78,7 +78,7 @@ impl ZydecoFile {
         w: &mut dyn std::io::Write, args: &[String],
     ) -> ds::Program {
         let mut runtime = ds::Runtime::new(r, w, args);
-        let m = ds::Program::run(p, &mut runtime);
+        let m = ls::Program::eval(p, &mut runtime);
         m
     }
 }
@@ -139,7 +139,7 @@ impl ZydecoExpr {
         let mut output = std::io::sink();
         let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);
         runtime.env = self.env.clone();
-        let m = ds::Program::run(
+        let m = ls::Program::eval(
             ls::Program {
                 module: ls::Module { name: None, define: IndexMap::new() },
                 entry: comp,
@@ -160,7 +160,7 @@ impl ZydecoExpr {
         let w: &mut dyn std::io::Write = &mut output;
         let mut runtime = ds::Runtime::new(r, w, args);
         runtime.env = self.env.clone();
-        let m = ds::Program::run(p, &mut runtime);
+        let m = ls::Program::eval(p, &mut runtime);
         self.env = runtime.env;
         m
     }
