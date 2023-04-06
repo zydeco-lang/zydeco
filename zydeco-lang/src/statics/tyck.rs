@@ -37,7 +37,8 @@ pub struct Ctx {
     pub term_ctx: im::HashMap<TermV, Type>,
     pub type_env: Env<TypeV, Type>,
     pub data_env: im::HashMap<TypeV, Data<TypeV, Kind, CtorV, RcType>>,
-    pub coda_env: im::HashMap<TypeV, Codata<TypeV, Kind, DtorV, RcType>>,
+    pub codata_env: im::HashMap<TypeV, Codata<TypeV, Kind, DtorV, RcType>>,
+    pub alias_env: im::HashMap<TypeV, Alias<TypeV, Kind, RcType>>,
     pub trace: Trace,
 }
 

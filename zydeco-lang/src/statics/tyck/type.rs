@@ -1,5 +1,40 @@
 use super::*;
 
+impl Ctx {
+    pub(super) fn resolve_data(
+        &self, ty: Type, span: &SpanInfo,
+    ) -> Result<(Data<TypeV, Kind, CtorV, RcType>, Vec<RcType>), TyckError> {
+        let SynType::TypeApp(TypeApp { tvar, args }) = ty.synty else {
+            Err(self.err(span, TypeExpected {
+                context: format!("resolve data"),
+                expected: format!("type application"),
+                found: ty,
+            }))?
+        };
+        let data =
+            self.data_env.get(&tvar).cloned().ok_or_else(|| {
+                self.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
+            })?;
+        Ok((data, args))
+    }
+    pub(super) fn resolve_codata(
+        &self, ty: Type, span: &SpanInfo,
+    ) -> Result<(Codata<TypeV, Kind, DtorV, RcType>, Vec<RcType>), TyckError> {
+        let SynType::TypeApp(TypeApp { tvar, args }) = ty.synty else {
+            Err(self.err(span, TypeExpected {
+                context: format!("resolve codata"),
+                expected: format!("type application"),
+                found: ty,
+            }))?
+        };
+        let codata =
+            self.codata_env.get(&tvar).cloned().ok_or_else(|| {
+                self.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
+            })?;
+        Ok((codata, args))
+    }
+}
+
 impl TypeCheck for Span<Type> {
     type Ctx = Ctx;
     type Out = Kind;

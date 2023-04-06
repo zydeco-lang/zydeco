@@ -18,6 +18,12 @@ impl Codata<TypeV, Kind, DtorV, RcType> {
     }
 }
 
+impl Alias<TypeV, Kind, RcType> {
+    fn type_arity(&self, kd: Kind) -> TypeArity<Kind> {
+        TypeArity { params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(), kd }
+    }
+}
+
 impl From<Kind> for TypeArity<Kind> {
     fn from(kd: Kind) -> Self {
         TypeArity { params: vec![], kd }
@@ -83,13 +89,29 @@ impl TypeCheck for Span<&Codata<TypeV, Kind, DtorV, RcType>> {
     }
 }
 
+impl TypeCheck for Span<&Alias<TypeV, Kind, RcType>> {
+    type Ctx = Ctx;
+    type Out = Kind;
+
+    fn syn_step(
+        &self, mut ctx: Self::Ctx,
+    ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
+        let data = self.inner_ref();
+        for (tvar, kd) in data.params.iter() {
+            ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
+        }
+        let kd = data.ty.syn(ctx.clone())?;
+        Ok(Step::Done(kd))
+    }
+}
+
 impl TypeCheck for Span<Module> {
     type Ctx = Ctx;
     type Out = Seal<Ctx>;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
-        let Module { name: _, data, codata: coda, alias: _, define, define_ext } = self.inner_ref();
+        let Module { name: _, data, codata, alias, define, define_ext } = self.inner_ref();
         // register data type, codata type and type alias declarations in the type context
         for DeclSymbol { inner: data, .. } in data {
             let res = ctx.type_ctx.insert(data.name.clone(), data.type_arity());
@@ -100,7 +122,7 @@ impl TypeCheck for Span<Module> {
                 ))?;
             }
         }
-        for DeclSymbol { inner: coda, .. } in coda {
+        for DeclSymbol { inner: coda, .. } in codata {
             let res = ctx.type_ctx.insert(coda.name.clone(), coda.type_arity());
             if let Some(_) = res {
                 Err(ctx.err(
@@ -109,15 +131,27 @@ impl TypeCheck for Span<Module> {
                 ))?;
             }
         }
-        // TODO: register type aliases in the type context
+        for DeclSymbol { inner: alias, .. } in alias {
+            // type check alias declarations right away
+            let kd = alias.name.span().make(alias).syn(ctx.clone())?;
+            // register alias declarations in the type context
+            let res = ctx.type_ctx.insert(alias.name.clone(), alias.type_arity(kd));
+            if let Some(_) = res {
+                Err(ctx.err(
+                    alias.name.span(),
+                    NameResolveError::DuplicateTypeDeclaration { name: alias.name.clone() }.into(),
+                ))?;
+            }
+            ctx.alias_env.insert(alias.name.clone(), alias.clone());
+        }
         // type check data and codata type declarations
         for DeclSymbol { inner: data, .. } in data {
             data.name.span().make(data).syn(ctx.clone())?;
             ctx.data_env.insert(data.name.clone(), data.clone());
         }
-        for DeclSymbol { inner: coda, .. } in coda {
+        for DeclSymbol { inner: coda, .. } in codata {
             coda.name.span().make(coda).syn(ctx.clone())?;
-            ctx.coda_env.insert(coda.name.clone(), coda.clone());
+            ctx.codata_env.insert(coda.name.clone(), coda.clone());
         }
         for DeclSymbol { inner: Define { name: (var, ty), def: () }, .. } in define_ext {
             ctx.term_ctx.insert(var.clone(), ty.inner_ref().clone());

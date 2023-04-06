@@ -80,24 +80,13 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::Match(Match { scrut, arms }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 span.make(ty_scrut.clone()).ana(Kind::VType, ctx.clone())?;
-                let SynType::TypeApp(ty_app) = ty_scrut.synty else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("match"),
-                        expected: format!("data type"),
-                        found: ty_scrut,
-                    }))?
-                };
-                let tvar = ty_app.tvar;
-                let Data { name, params, ctors } =
-                    ctx.data_env.get(&tvar).cloned().ok_or_else(|| {
-                        ctx.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
-                    })?;
+                let (Data { name, params, ctors }, args) = ctx.resolve_data(ty_scrut, span)?;
                 // arity check on data type
-                let diff = Env::init(&params, &ty_app.args, || {
+                let diff = Env::init(&params, &args, || {
                     span.make(ArityMismatch {
                         context: format!("data type `{}` instiantiation", name),
                         expected: params.len(),
-                        found: ty_app.args.len(),
+                        found: args.len(),
                     })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;
@@ -154,24 +143,15 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::Dtor(Dtor { body, dtor, args }) => {
                 let ty_body = body.syn(ctx.clone())?;
-                let SynType::TypeApp(ty_app) = ty_body.synty else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("dtor"),
-                        expected: format!("codata type"),
-                        found: ty_body,
-                    }))?
-                };
-                let tvar = ty_app.tvar;
-                let Codata { name, params, dtors } =
-                    ctx.coda_env.get(&tvar).cloned().ok_or_else(|| {
-                        ctx.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
-                    })?;
+
+                let (Codata { name, params, dtors }, ty_args) =
+                    ctx.resolve_codata(ty_body, span)?;
                 // arity check on codata type
-                let diff = Env::init(&params, &ty_app.args, || {
+                let diff = Env::init(&params, &ty_args, || {
                     span.make(ArityMismatch {
                         context: format!("codata type `{}` instiantiation", name),
                         expected: params.len(),
-                        found: ty_app.args.len(),
+                        found: ty_args.len(),
                     })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;
@@ -341,24 +321,13 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::Match(Match { scrut, arms }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 span.make(ty_scrut.clone()).ana(Kind::VType, ctx.clone())?;
-                let SynType::TypeApp(ty_app) = ty_scrut.synty else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("match"),
-                        expected: format!("data type"),
-                        found: ty_scrut,
-                    }))?
-                };
-                let tvar = ty_app.tvar;
-                let Data { name, params, ctors } =
-                    ctx.data_env.get(&tvar).cloned().ok_or_else(|| {
-                        ctx.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
-                    })?;
+                let (Data { name, params, ctors }, args) = ctx.resolve_data(ty_scrut, span)?;
                 // arity check on data type
-                let diff = Env::init(&params, &ty_app.args, || {
+                let diff = Env::init(&params, &args, || {
                     span.make(ArityMismatch {
                         context: format!("data type `{}` instiantiation", name),
                         expected: params.len(),
-                        found: ty_app.args.len(),
+                        found: args.len(),
                     })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;
@@ -392,27 +361,14 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::Comatch(Comatch { arms }) => {
-                let SynType::TypeApp(ty_app) = &typ.synty else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("comatch"),
-                        expected: format!("codata type"),
-                        found: typ,
-                    }))?
-                };
-                let tvar = &ty_app.tvar;
-                let Codata { name, params, dtors } =
-                    ctx.coda_env.get(&tvar).cloned().ok_or_else(|| {
-                        ctx.err(
-                            span,
-                            NameResolveError::UnboundTypeVariable { tvar: tvar.clone() }.into(),
-                        )
-                    })?;
+                let (Codata { name, params, dtors }, ty_args) =
+                    ctx.resolve_codata(typ.clone(), span)?;
                 // arity check on codata type
-                let diff = Env::init(&params, &ty_app.args, || {
+                let diff = Env::init(&params, &ty_args, || {
                     span.make(ArityMismatch {
                         context: format!("codata type `{}` instantiation", name),
                         expected: params.len(),
-                        found: ty_app.args.len(),
+                        found: ty_args.len(),
                     })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;

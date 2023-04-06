@@ -15,7 +15,7 @@ Program: Program = {
     <module:Span<Module>> <entry:Span<TermComputation>> => Program {
         module, entry,
     },
-}
+};
 
 Module: Module = {
     "module" <name:UpperId> "where"

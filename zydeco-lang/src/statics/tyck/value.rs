@@ -87,28 +87,13 @@ impl TypeCheck for Span<TermValue> {
                 Step::Done(typ_lub)
             }
             TermValue::Ctor(Ctor { ctor, args }) => {
-                let SynType::TypeApp(ty_app) = &typ.synty else {
-                    Err(ctx.err(span,TypeExpected {
-                        context: format!("ctor"),
-                        expected: format!("{{a}}"),
-                        found: typ,
-                    }))?
-                };
-                let tvar = &ty_app.tvar;
-                let Data { name, params, ctors } =
-                    ctx.data_env.get(tvar).cloned().ok_or_else(|| {
-                        ctx.err(
-                            span,
-                            NameResolve(NameResolveError::UnboundTypeVariable {
-                                tvar: tvar.to_owned(),
-                            }),
-                        )
-                    })?;
-                let diff = Env::init(&params, &ty_app.args, || {
+                let (Data { name, params, ctors }, ty_args) =
+                    ctx.resolve_data(typ.clone(), span)?;
+                let diff = Env::init(&params, &ty_args, || {
                     span.make(ArityMismatch {
                         context: format!("data type `{}` instiantiation", name),
                         expected: params.len(),
-                        found: ty_app.args.len(),
+                        found: ty_args.len(),
                     })
                 })
                 .map_err(|e| e.traced(ctx.trace.clone()))?;
