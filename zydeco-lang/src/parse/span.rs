@@ -1,6 +1,18 @@
 use super::syntax as syn;
 use crate::utils::span::*;
 
+impl SpanHolder for syn::TCtor {
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        match self {
+            syn::TCtor::Var(var) => var.span_map_mut(f),
+            _ => (),
+        }
+    }
+}
+
 impl SpanHolder for syn::TypeApp {
     fn span_map_mut<F>(&mut self, f: F)
     where

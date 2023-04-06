@@ -166,7 +166,7 @@ impl<'rt> Eval<'rt> for ls::ZComp {
 }
 
 impl<'rt> Eval<'rt> for ls::Module {
-    type Out = ();
+    type Out = Module;
 
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         for (x, v) in self.define {
@@ -174,25 +174,22 @@ impl<'rt> Eval<'rt> for ls::Module {
             let env = runtime.env.update(x, v);
             runtime.env = env;
         }
-        Step::Done(())
+        Step::Done(Module { name: self.name })
     }
 }
 
 impl<'rt> Eval<'rt> for ls::Program {
-    type Out = ProgKont;
+    type Out = Program;
 
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
-        self.module.eval(runtime);
+        let module = self.module.eval(runtime);
         let prog_kont = self.entry.eval(runtime);
-        Step::Done(prog_kont)
+        Step::Done(Program { module, entry: prog_kont })
     }
 }
 
 impl Program {
     pub fn run<'rt>(p: ls::Program, runtime: &mut Runtime<'rt>) -> Self {
-        Program {
-            module: Module { name: p.module.name.clone() },
-            entry: p.eval(runtime),
-        }
+        p.eval(runtime)
     }
 }

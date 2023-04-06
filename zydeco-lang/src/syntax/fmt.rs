@@ -60,16 +60,6 @@ where
     }
 }
 
-impl FmtArgs for TCtor {
-    fn fmt_args(&self, fargs: Args) -> String {
-        match self {
-            TCtor::Var(x) => x.fmt_args(fargs),
-            TCtor::Thunk => "Thunk".to_owned(),
-            TCtor::Ret => "Ret".to_owned(),
-        }
-    }
-}
-
 impl<TyV, T> FmtArgs for TypeApp<TyV, T>
 where
     TyV: TyVarT + FmtArgs,

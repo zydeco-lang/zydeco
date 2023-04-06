@@ -2,9 +2,9 @@
 
 
 ## Thunk and Ret types
-pub extern data Thunk_U (B : CType) where
+pub extern data Thunk (B : CType) where
 end
-pub extern codata Ret_F (A : VType) where
+pub extern codata Ret (A : VType) where
 end
 
 
@@ -183,8 +183,8 @@ pub extern define str_to_int : Thunk(String -> Ret(Int));
 ## List and LList
 
 pub data List (A : VType) where
-| Nil()
-| Cons(A, List A)
+  | Nil()
+  | Cons(A, List A)
 end
 
 pub data LListV (A : VType) (B : CType) where

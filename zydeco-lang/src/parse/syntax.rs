@@ -10,6 +10,14 @@ pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TCtor {
+    Var(TypeV),
+    Thunk,
+    Ret,
+}
+impl TyVarT for TCtor {}
+
 #[derive(Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
 

@@ -33,18 +33,6 @@ where
     }
 }
 
-impl SpanHolder for TCtor {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        match self {
-            TCtor::Var(var) => var.span_map_mut(f),
-            _ => (),
-        }
-    }
-}
-
 impl<TyV, T> SpanHolder for TypeApp<TyV, T>
 where
     TyV: TyVarT + SpanHolder,

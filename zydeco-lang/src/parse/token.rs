@@ -5,8 +5,8 @@ use std::fmt::{Debug, Display};
 pub enum Tok<'input> {
     #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
     UpperIdent(&'input str),
-    #[regex(r"(([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*)")]
-    #[regex(r"((\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=|~)*)")]
+    #[regex(r"([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
+    #[regex(r"(\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=|~)*")]
     LowerIdent(&'input str),
 
     #[token("module")]
@@ -17,9 +17,11 @@ pub enum Tok<'input> {
     End,
     #[token("pub")]
     Pub,
-    #[regex(r"(ext|extern)")]
+    #[token("ext")]
+    #[token("extern")]
     Extern,
-    #[regex(r"(def|define)")]
+    #[token("def")]
+    #[token("define")]
     Define,
     #[token("data")]
     Data,
@@ -61,10 +63,11 @@ pub enum Tok<'input> {
     #[token("CType")]
     CType,
 
-    #[regex("(F|Ret)")]
+    #[token("F")]
     RetType,
-    #[regex("(U|Comp|Thunk)")]
-    CompType,
+    #[token("U")]
+    #[token("Comp")]
+    ThunkType,
 
     #[token("(")]
     ParenOpen,
@@ -138,7 +141,7 @@ impl<'input> Display for Tok<'input> {
             Tok::VType => write!(f, "VType"),
             Tok::CType => write!(f, "CType"),
             Tok::RetType => write!(f, "F"),
-            Tok::CompType => write!(f, "U"),
+            Tok::ThunkType => write!(f, "U"),
             Tok::ParenOpen => write!(f, "("),
             Tok::ParenClose => write!(f, ")"),
             Tok::BraceOpen => write!(f, "{{"),

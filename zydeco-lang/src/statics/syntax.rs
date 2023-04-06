@@ -33,10 +33,10 @@ impl Type {
         TypeApp::internal(name, args).into()
     }
     pub fn make_thunk(arg: RcType) -> Self {
-        TypeApp::internal("Thunk_U", vec![arg]).into()
+        TypeApp::internal("Thunk", vec![arg]).into()
     }
     pub fn make_ret(arg: RcType) -> Self {
-        TypeApp::internal("Ret_F", vec![arg]).into()
+        TypeApp::internal("Ret", vec![arg]).into()
     }
     pub fn make_os() -> Self {
         TypeApp::internal("OS", vec![]).into()
@@ -47,14 +47,14 @@ impl TypeApp<TypeV, RcType> {
         TypeApp { tvar: TypeV::new(name.into(), span(0, 0)), args }
     }
     pub fn elim_thunk(&self) -> Option<Type> {
-        if self.tvar.name() == "Thunk_U" {
+        if self.tvar.name() == "Thunk" {
             Some(self.args.first().unwrap().inner_ref().clone())
         } else {
             None
         }
     }
     pub fn elim_ret(&self) -> Option<Type> {
-        if self.tvar.name() == "Ret_F" {
+        if self.tvar.name() == "Ret" {
             Some(self.args.first().unwrap().inner_ref().clone())
         } else {
             None

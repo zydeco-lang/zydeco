@@ -108,11 +108,13 @@ impl TryFrom<ps::Type> for Type {
     type Error = TypeCheckError;
     fn try_from(ty: ps::Type) -> Result<Self, TypeCheckError> {
         Ok(match ty {
-            ps::Type::Basic(TCtor::Thunk) => {
-                Type::internal("Thunk_U", Vec::new())
+            ps::Type::Basic(ps::TCtor::Thunk) => {
+                Type::internal("Thunk", Vec::new())
             }
-            ps::Type::Basic(TCtor::Ret) => Type::internal("Ret_F", Vec::new()),
-            ps::Type::Basic(TCtor::Var(v)) => {
+            ps::Type::Basic(ps::TCtor::Ret) => {
+                Type::internal("Ret", Vec::new())
+            }
+            ps::Type::Basic(ps::TCtor::Var(v)) => {
                 TypeApp { tvar: v, args: vec![] }.into()
             }
             ps::Type::App(t) => {
@@ -178,10 +180,8 @@ impl TryFrom<ps::TermValue> for TermValue {
                     Thunk(rc!((body).try_map(TryInto::try_into)?)).into();
                 Annotation {
                     term: rc!(span.make(body)),
-                    ty: rc!(span.make(Type::internal(
-                        "Thunk_U",
-                        vec![rc!(span.make(Hole.into())),]
-                    ))),
+                    ty: rc!(span
+                        .make(Type::make_thunk(rc!(span.make(Hole.into()))))),
                 }
                 .into()
             }
@@ -223,10 +223,9 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     Ret(rc!((body).try_map(TryInto::try_into)?)).into();
                 Annotation {
                     term: rc!(span.make(body)),
-                    ty: rc!(span.make(Type::internal(
-                        "Ret_F",
-                        vec![rc!(span.make(Hole.into()))]
-                    ))),
+                    ty: rc!(
+                        span.make(Type::make_ret(rc!(span.make(Hole.into()))))
+                    ),
                 }
                 .into()
             }

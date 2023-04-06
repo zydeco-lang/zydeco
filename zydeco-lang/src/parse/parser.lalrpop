@@ -1,6 +1,6 @@
 use crate::{
     parse::{syntax::*, token::*},
-    syntax::{TCtor, DeclSymbol},
+    syntax::DeclSymbol,
     utils::span::*,
 };
 
@@ -311,7 +311,7 @@ extern {
         "CType" => Tok::CType,
 
         "F" => Tok::RetType,
-        "U" => Tok::CompType,
+        "U" => Tok::ThunkType,
 
         "(" => Tok::ParenOpen,
         ")" => Tok::ParenClose,

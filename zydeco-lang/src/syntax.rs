@@ -132,14 +132,6 @@ impl<K: KindT> KindT for TypeArity<K> {}
 
 /* ---------------------------------- Types --------------------------------- */
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TCtor {
-    Var(TypeV),
-    Thunk,
-    Ret,
-}
-impl TyVarT for TCtor {}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeApp<TyV: TyVarT, Ty: TypeT> {
     pub tvar: TyV,
