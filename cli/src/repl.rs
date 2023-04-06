@@ -22,6 +22,19 @@ pub fn launch() -> Result<i32, String> {
                 break Ok(0);
             }
         }
+        // check for commands
+        if line.trim_start().starts_with("#") {
+            // currently, the only command is #env
+            if line.starts_with("#env") {
+                for (var, val) in zydeco_expr.env.iter() {
+                    println!("{} = {}", var.fmt(), val.fmt())
+                }
+            } else {
+                println!("Unknown command {}", line.trim());
+            }
+            continue;
+        }
+        // parse and elaborate
         let term = match ZydecoExpr::parse(&line) {
             Err(e) => {
                 println!("Parse Error: {}", e);
@@ -35,6 +48,7 @@ pub fn launch() -> Result<i32, String> {
                 Ok(term) => term,
             },
         };
+        // typecheck and evaluate
         match term.inner_ref() {
             ss::Term::Value(v) => {
                 match zydeco_expr.tyck_value(term.span().make(v.clone())) {
@@ -56,6 +70,9 @@ pub fn launch() -> Result<i32, String> {
                             continue;
                         };
                         if let Some(()) = ty_app.elim_os() {
+                            // HACK: The final call to OS will destroy the environment,
+                            // so we need to save a snapshot of it before we run.
+                            let snapshot = zydeco_expr.clone();
                             let c = ZydecoExpr::link_computation(c);
                             let c = zydeco_expr.eval_os(c, &[]);
                             match c.entry {
@@ -66,6 +83,8 @@ pub fn launch() -> Result<i32, String> {
                                     println!("exited with code {}", i)
                                 }
                             }
+                            // HACK: Restore the environment
+                            zydeco_expr = snapshot;
                         } else if let Some(ty) = ty_app.elim_ret() {
                             let c = ZydecoExpr::link_computation(c);
                             let c = zydeco_expr.eval_ret_computation(c);
@@ -77,35 +96,16 @@ pub fn launch() -> Result<i32, String> {
                                     unreachable!()
                                 }
                             }
+                        } else {
+                            println!(
+                                "Can't run computation of type {}",
+                                ty_app.fmt()
+                            );
+                            println!("Can only run computations of type OS or Ret(a)")
                         }
                     }
                 }
             }
         }
-        // Ok(Span { inner: Term::Computation(m), info }) => {
-        //     match zydeco::typecheck_computation(&m, &ctx) {
-        //         Err(e) => println!("Type Error: {}", e),
-        //         Ok(Type { ctor: TCtor::OS, .. }) => {
-        //             let mut env = Env::new();
-        //             builtins::link_builtin(&mut env);
-        //             linker::link(&mut env, &std_decls);
-        //             if let Err(e) = zydeco::eval_os_computation(m, env, &[]) {
-        //                 println!("Runtime Error: {}", e)
-        //             }
-        //         }
-
-        //         Ok(Type { ctor: TCtor::Ret, .. })  => {
-        //             let mut env = Env::new();
-        //             builtins::link_builtin(&mut env);
-        //             linker::link(&mut env, &std_decls);
-        //             match zydeco::eval_returning_computation(m, env) {
-        //                 Err(e) => println!("Runtime Error: {}", e),
-        //                 Ok(v) => println!("{}", v)
-        //             }
-        //         }
-        //         Ok(b) => println!("Can't run computation of type {}\nCan only run computations of type OS or Ret(a)", b)
-
-        //     }
-        // }
     }
 }

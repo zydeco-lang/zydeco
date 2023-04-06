@@ -83,9 +83,10 @@ impl ZydecoFile {
     }
 }
 
+#[derive(Clone)]
 pub struct ZydecoExpr {
-    ctx: Ctx,
-    env: Env<ls::TermV, ds::SemVal>,
+    pub ctx: Ctx,
+    pub env: Env<ls::TermV, ds::SemVal>,
 }
 
 impl ZydecoExpr {
