@@ -37,8 +37,8 @@ impl Lub for Type {
             let found = rhs.clone();
             || ctx.err(span, TypeMismatch { context: format!("lub"), expected, found })
         };
-        // let lhs = self.subst(ctx.type_env.clone(), ctx.clone())?;
-        // let rhs = rhs.subst(ctx.type_env.clone(), ctx.clone())?;
+        let lhs = ctx.resolve_alias(lhs, span)?;
+        let rhs = ctx.resolve_alias(rhs, span)?;
         match (&lhs.synty, &rhs.synty) {
             // (SynType::Hole(_), SynType::Hole(_)) => Err(err())?,
             (SynType::Hole(_), _) => Ok(rhs),
@@ -51,38 +51,6 @@ impl Lub for Type {
             (_, SynType::TypeApp(rhs)) if ctx.type_env.contains_key(&rhs.tvar) => {
                 // rhs is a type variable
                 let ty = ctx.clone().type_env[&rhs.tvar].clone();
-                lhs.lub(ty, ctx, span)
-            }
-            (SynType::TypeApp(lhs), _) if ctx.alias_env.contains_key(&lhs.tvar) => {
-                // lhs is a type variable
-                let Alias { name, params, ty } = ctx.clone().alias_env[&lhs.tvar].clone();
-                let diff = Env::init(&params, &lhs.args, || {
-                    ctx.err(
-                        span,
-                        ArityMismatch {
-                            context: format!("data type `{}` instiantiation", name),
-                            expected: params.len(),
-                            found: lhs.args.len(),
-                        },
-                    )
-                })?;
-                let ty = ty.inner_ref().clone().subst(diff, ctx.clone())?;
-                ty.lub(rhs, ctx, span)
-            }
-            (_, SynType::TypeApp(rhs)) if ctx.alias_env.contains_key(&rhs.tvar) => {
-                // lhs is a type variable
-                let Alias { name, params, ty } = ctx.clone().alias_env[&rhs.tvar].clone();
-                let diff = Env::init(&params, &rhs.args, || {
-                    ctx.err(
-                        span,
-                        ArityMismatch {
-                            context: format!("data type `{}` instiantiation", name),
-                            expected: params.len(),
-                            found: rhs.args.len(),
-                        },
-                    )
-                })?;
-                let ty = ty.inner_ref().clone().subst(diff, ctx.clone())?;
                 lhs.lub(ty, ctx, span)
             }
             (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {

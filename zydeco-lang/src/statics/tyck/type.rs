@@ -60,6 +60,7 @@ impl Ctx {
     pub(super) fn resolve_data(
         &self, ty: Type, span: &SpanInfo,
     ) -> Result<(Data<TypeV, Kind, CtorV, RcType>, Vec<RcType>), TyckError> {
+        let ty = self.resolve_alias(ty, span)?;
         let SynType::TypeApp(TypeApp { tvar, args }) = ty.synty else {
             Err(self.err(span, TypeExpected {
                 context: format!("resolve data"),
@@ -67,29 +68,16 @@ impl Ctx {
                 found: ty,
             }))?
         };
-        if let Some(Alias { name, params, ty }) = self.alias_env.get(&tvar) {
-            let ty = ty.inner_ref().clone();
-            let diff = Env::init(&params, &args, || {
-                self.err(
-                    span,
-                    ArityMismatch {
-                        context: format!("data type `{}` instiantiation", name),
-                        expected: params.len(),
-                        found: args.len(),
-                    },
-                )
-            })?;
-            self.resolve_data(ty.subst(diff, self.clone())?, span)
-        } else {
-            let data = self.data_env.get(&tvar).cloned().ok_or_else(|| {
+        let data =
+            self.data_env.get(&tvar).cloned().ok_or_else(|| {
                 self.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
             })?;
-            Ok((data, args))
-        }
+        Ok((data, args))
     }
     pub(super) fn resolve_codata(
         &self, ty: Type, span: &SpanInfo,
     ) -> Result<(Codata<TypeV, Kind, DtorV, RcType>, Vec<RcType>), TyckError> {
+        let ty = self.resolve_alias(ty, span)?;
         let SynType::TypeApp(TypeApp { tvar, args }) = ty.synty else {
             Err(self.err(span, TypeExpected {
                 context: format!("resolve codata"),
@@ -97,25 +85,32 @@ impl Ctx {
                 found: ty,
             }))?
         };
-        if let Some(Alias { name, params, ty }) = self.alias_env.get(&tvar) {
-            let ty = ty.inner_ref().clone();
-            let diff = Env::init(&params, &args, || {
-                self.err(
-                    span,
-                    ArityMismatch {
-                        context: format!("data type `{}` instiantiation", name),
-                        expected: params.len(),
-                        found: args.len(),
-                    },
-                )
-            })?;
-            self.resolve_codata(ty.subst(diff, self.clone())?, span)
-        } else {
-            let codata = self.codata_env.get(&tvar).cloned().ok_or_else(|| {
+        let codata =
+            self.codata_env.get(&tvar).cloned().ok_or_else(|| {
                 self.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
             })?;
-            Ok((codata, args))
+        Ok((codata, args))
+    }
+    pub(super) fn resolve_alias(&self, mut typ: Type, span: &SpanInfo) -> Result<Type, TyckError> {
+        while let SynType::TypeApp(TypeApp { tvar, args }) = &typ.synty {
+            if let Some(Alias { name, params, ty }) = self.alias_env.get(tvar) {
+                let ty = ty.inner_ref().clone();
+                let diff = Env::init(params, args, || {
+                    self.err(
+                        span,
+                        ArityMismatch {
+                            context: format!("alias `{}` instiantiation", name),
+                            expected: params.len(),
+                            found: args.len(),
+                        },
+                    )
+                })?;
+                typ = ty.subst(diff, self.clone())?;
+            } else {
+                break;
+            }
         }
+        Ok(typ)
     }
 }
 

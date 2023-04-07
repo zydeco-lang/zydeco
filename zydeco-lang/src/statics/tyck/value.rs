@@ -44,16 +44,17 @@ impl TypeCheck for Span<TermValue> {
     fn ana_step(
         &self, typ: Self::Out, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
+        let span = self.span();
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: format!("analyzing value against type {}", typ.fmt()),
             term: format!("{}", self.inner_ref().fmt_truncate(40)),
             info: self.span().clone(),
         });
+        let typ = ctx.resolve_alias(typ, span)?;
         if let SynType::Hole(_) = typ.synty {
             return Ok(Step::SynMode((ctx, self)));
         }
-        let span = self.span();
         span.make(typ.clone()).ana(Kind::VType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermValue::Annotation(Annotation { term, ty }) => {

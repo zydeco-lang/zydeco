@@ -1,5 +1,5 @@
 use crate::{
-    parse::{syntax::*, token::*},
+    parse::{syntax::*, token::*, escape},
     syntax::DeclSymbol,
     utils::span::*,
 };
@@ -251,8 +251,8 @@ UpperId: String = "UpperId" => <>.into();
 LowerId: String = "LowerId" => <>.into();
 
 Int: i64 = <s:"NumLit"> => s.parse().unwrap();
-String: String = <s:"StrLit"> => super::escape::apply_string_escapes(&s[1..s.len()-1]);
-Char: char = <s:"CharLit"> => super::escape::apply_char_escapes(s);
+String: String = <s:"StrLit"> => escape::apply_string_escapes(&s[1..s.len()-1]);
+Char: char = <s:"CharLit"> => escape::apply_char_escapes(s);
 
 //* -------------------------------- Utilities ------------------------------- */
 

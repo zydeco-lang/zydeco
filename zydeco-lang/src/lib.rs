@@ -3,8 +3,13 @@
 pub mod syntax;
 
 pub mod parse {
-    use lalrpop_util::lalrpop_mod;
-    lalrpop_mod!(pub parser, "/parse/parser.rs");
+    #[allow(clippy::all)]
+    pub mod parser {
+        use lalrpop_util::lalrpop_mod;
+        lalrpop_mod!(parser_impl, "/parse/parser.rs");
+        pub use parser_impl::*;
+    }
+
     pub mod token;
     pub mod syntax;
     pub mod err;

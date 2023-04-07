@@ -177,6 +177,7 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::TyAppTerm(TyAppTerm { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
+                let ty_body = ctx.resolve_alias(ty_body, span)?;
                 let SynType::Forall(Forall { param: (param, kd), ty }) = ty_body.synty else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("term-typ-application"),
@@ -195,6 +196,7 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
+                let ty_scrut = ctx.resolve_alias(ty_scrut, span)?;
                 let SynType::Exists(Exists { param: (param, kd), ty }) = &ty_scrut.synty else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("match-pack"),
@@ -217,16 +219,17 @@ impl TypeCheck for Span<TermComputation> {
     fn ana_step(
         &self, typ: Self::Out, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
+        let span = self.span();
         ctx.trace.push(Frame {
             tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
             sort: format!("analyzing computation against type {}", typ.fmt()),
             term: format!("{}", self.fmt_truncate(40)),
             info: self.span().clone(),
         });
+        let typ = ctx.resolve_alias(typ, span)?;
         if let SynType::Hole(_) = typ.synty {
             return Ok(Step::SynMode((ctx, self)));
         }
-        let span = self.span();
         span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermComputation::Annotation(Annotation { term, ty }) => {
