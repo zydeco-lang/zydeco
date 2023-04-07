@@ -122,16 +122,18 @@ data Weather where
   | Sunny()
   | Rainy()
   | Windy()
+end
 
 # Recursive
 data ListInt where
   | NoInt()
   | Cons(Int, ListInt)
+end
 
 # Here's a function print every element in the ListInt seperated by a ' '
 # Notice that for each possible branch, the type after "->" must be the same
 let printListInt = {
-  rec (printReal : U(ListInt -> OS)) ->
+  rec (printReal : Thunk(ListInt -> OS)) ->
     fn (myList : ListInt) ->
       match myList
       | NoInt() -> ! exit 0
@@ -140,6 +142,7 @@ let printListInt = {
         do wx <- ! str_append wx_ ' ';
         ! write_str wx {! printReal xs}
       )
+      end
 };
 ```
 
@@ -150,21 +153,25 @@ For example, when we try to calculate the sum of a list of number recursively, w
 ```
 # When adding a list of numbers, the process should be either finishing or keeping adding numbers
 codata Summer where
-  .done()    : Ret(Int) 
-  .addN(Int) : Summer
+  | .done()    : Ret(Int) 
+  | .addN(Int) : Summer
+end
 
 # Since Summer includes the return type Ret(Int), it can be used directly instead of using the original return type.
 let rec retSummer : Int -> Summer =
-  fn (n : Int) -> comatch
-      | .done()  -> ret n
-      | .addN(x) ->
-      (do n' <- ! add n x;
-          ! retSummer n');
+  fn (n : Int) ->
+    comatch
+    | .done()  -> ret n
+    | .addN(x) ->
+    (do n' <- ! add n x;
+        ! retSummer n')
+    end;
 
 let rec sumOk : NumList -> Summer =
   fn (xs : NumList) ->
     match xs
     | Empty()     -> ! retSummer 0 # When none of the elements remains, add a zero(.done()) at the end of stack
     | Cons(x, xs) -> ! sumOk xs .addN(x); # As we call sumOk recursively, the label of .addN(x) is appended at the end of stack until xs is empty
+    end
 ```
 
