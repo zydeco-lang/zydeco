@@ -246,29 +246,6 @@ impl Type {
     }
 }
 
-impl Monoid for Env<TypeV, Type> {
-    fn empty() -> Self {
-        Self::new()
-    }
-
-    fn append(self, ori: Self) -> Self {
-        // append on Env is actually composing lazy substitutions, effectively
-        //       M [\gamma] [\delta] = M [\delta . \gamma]
-        // where we refer to gamma as "original" and delta as "diff" then
-        //      new = append(diff, original)
-        let mut new = Self::new();
-        for (x, ty) in self.clone() {
-            if !ori.contains_key(&x) {
-                new.insert(x, ty);
-            }
-        }
-        for (x, ty) in ori {
-            new.insert(x, ty.subst(self.clone(), Default::default()).unwrap());
-        }
-        new
-    }
-}
-
 impl Env<TypeV, Type> {
     pub(super) fn init(
         params: &[(TypeV, Kind)], ty_app_args: &[RcType], arity_err: impl FnOnce() -> TyckError,

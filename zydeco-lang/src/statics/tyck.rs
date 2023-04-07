@@ -14,7 +14,6 @@ use crate::{
     syntax::env::Env,
     utils::{
         fmt::FmtArgs,
-        monoid::Monoid,
         span::{Span, SpanInfo, SpanView},
     },
 };

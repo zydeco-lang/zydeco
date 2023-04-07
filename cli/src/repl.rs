@@ -1,8 +1,11 @@
 #![allow(unused)]
 use zydeco_lang::{
     dynamics::syntax as ds,
-    statics::syntax::{self as ss, SynType},
-    utils::{fmt::FmtArgs, span::SpanView},
+    statics::syntax as ss,
+    utils::{
+        fmt::FmtArgs,
+        span::{span, SpanView},
+    },
     zydeco::ZydecoExpr,
 };
 
@@ -66,11 +69,7 @@ pub fn launch() -> Result<i32, String> {
                 match zydeco_expr.tyck_computation(term.span().make(c.clone())) {
                     Err(e) => println!("Type Error: {}", e),
                     Ok(ty) => {
-                        let SynType::TypeApp(ty_app) = &ty.synty else {
-                            println!("Expected a type application, found {}", ty.fmt());
-                            continue;
-                        };
-                        if let Some(()) = ty_app.elim_os_syntax() {
+                        if let Some(()) = ty.clone().elim_os(zydeco_expr.ctx.clone(), &span(0, 0)) {
                             // HACK: The final call to OS will destroy the environment,
                             // so we need to save a snapshot of it before we run.
                             let snapshot = zydeco_expr.clone();
@@ -86,7 +85,9 @@ pub fn launch() -> Result<i32, String> {
                             }
                             // HACK: Restore the environment
                             zydeco_expr = snapshot;
-                        } else if let Some(ty) = ty_app.elim_ret_syntax() {
+                        } else if let Some(ty) =
+                            ty.clone().elim_ret(zydeco_expr.ctx.clone(), &span(0, 0))
+                        {
                             let c = ZydecoExpr::link_computation(c);
                             let c = zydeco_expr.eval_ret_computation(c);
                             match c {
@@ -98,7 +99,7 @@ pub fn launch() -> Result<i32, String> {
                                 }
                             }
                         } else {
-                            println!("Can't run computation of type {}", ty_app.fmt());
+                            println!("Can't run computation of type {}", ty.fmt());
                             println!("Can only run computations of type OS or Ret(a)")
                         }
                     }
