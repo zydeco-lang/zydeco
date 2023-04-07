@@ -248,12 +248,11 @@ pub struct Dtor<B: ComputationT, D: DtorT, A: ValueT> {
 impl<B: ComputationT, D: DtorT, A: ValueT> ComputationT for Dtor<B, D, A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TyAbsTerm<TyV: TyVarT, Kd: KindT, B: ComputationT> {
-    pub tvar: TyV,
-    pub kd: Kd,
+pub struct TyAbsTerm<TyV: TyVarT, B: ComputationT> {
+    pub param: TyV,
     pub body: B,
 }
-impl<TyV: TyVarT, Kd: KindT, B: ComputationT> ComputationT for TyAbsTerm<TyV, Kd, B> {}
+impl<TyV: TyVarT, B: ComputationT> ComputationT for TyAbsTerm<TyV, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TyAppTerm<B: ComputationT, Ty: TypeT> {

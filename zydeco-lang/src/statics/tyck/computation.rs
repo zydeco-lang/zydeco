@@ -374,8 +374,8 @@ impl TypeCheck for Span<TermComputation> {
                 })?;
                 Step::Done(typ)
             }
-            TermComputation::TyAbsTerm(TyAbsTerm { tvar, kd: kd_, body }) => {
-                let SynType::Forall(Forall { param: (param, kd), ty }) = &typ.synty else {
+            TermComputation::TyAbsTerm(TyAbsTerm { param: (tvar_, kd_), body }) => {
+                let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ.synty else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("type abstraction"),
                         expected: format!("forall"),
@@ -395,10 +395,10 @@ impl TypeCheck for Span<TermComputation> {
                     })?;
                 }
                 let abst_var = ctx.fresh(kd.clone());
-                ctx.type_env.insert(tvar.clone(), abst_var.clone().into());
+                ctx.type_env.insert(tvar_.clone(), abst_var.clone().into());
                 ty.inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(param.clone(), abst_var.into())]))
+                    .subst(Env::from_iter([(tvar.clone(), abst_var.into())]))
                     .map_err(|e| e.traced(ctx.trace.clone()))?;
                 body.ana(ty.inner_ref().clone(), ctx)?;
                 Step::Done(typ)

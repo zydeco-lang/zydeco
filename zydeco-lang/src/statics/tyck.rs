@@ -65,7 +65,7 @@ pub trait TypeCheck: SpanView + Sized {
         &self, typ: Self::Out, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let span = self.span();
-        let typ_syn = self.syn(ctx.clone())?;
+        let typ_syn = self.syn(ctx)?;
         let typ = typ_syn.lub(typ, Default::default(), span)?;
         Ok(Step::Done(typ))
     }

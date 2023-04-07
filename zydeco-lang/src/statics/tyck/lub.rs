@@ -33,8 +33,8 @@ impl Lub for Type {
     fn lub(self, rhs: Type, mut ctx: Ctx, span: &SpanInfo) -> Result<Type, TyckError> {
         let lhs = self;
         let err = {
-            let expected = lhs.clone().into();
-            let found = rhs.clone().into();
+            let expected = lhs.clone();
+            let found = rhs.clone();
             || ctx.err(span, TypeMismatch { context: format!("lub"), expected, found })
         };
         // let lhs = self.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;

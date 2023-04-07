@@ -286,19 +286,17 @@ where
     }
 }
 
-impl<TyV, Kd, B> SpanHolder for TyAbsTerm<TyV, Kd, B>
+impl<TyV, B> SpanHolder for TyAbsTerm<TyV, B>
 where
     TyV: TyVarT + SpanHolder,
-    Kd: KindT + SpanHolder,
     B: ComputationT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let TyAbsTerm { tvar, kd, body } = self;
+        let TyAbsTerm { param: tvar, body } = self;
         tvar.span_map_mut(f.clone());
-        kd.span_map_mut(f.clone());
         body.span_map_mut(f);
     }
 }

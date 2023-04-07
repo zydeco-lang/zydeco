@@ -31,21 +31,21 @@ impl FmtArgs for (TypeV, Kind) {
         format!("({} : {})", tvar.fmt_args(fargs), kd.fmt_args(fargs))
     }
 }
+impl FmtArgs for (TypeV, Option<Kind>) {
+    fn fmt_args(&self, fargs: Args) -> String {
+        let (tvar, kd) = self;
+        match kd {
+            Some(kd) => format!("({} : {})", tvar.fmt_args(fargs), kd.fmt_args(fargs)),
+            None => format!("{}", tvar.fmt_args(fargs)),
+        }
+    }
+}
 
 impl FmtArgs for Kind {
     fn fmt_args(&self, _fargs: Args) -> String {
         match self {
             Kind::VType => "VType".to_owned(),
             Kind::CType => "CType".to_owned(),
-        }
-    }
-}
-
-impl FmtArgs for Option<Kind> {
-    fn fmt_args(&self, fargs: Args) -> String {
-        match self {
-            Some(kd) => kd.fmt_args(fargs),
-            None => "_?".to_owned(),
         }
     }
 }
@@ -330,15 +330,14 @@ where
     }
 }
 
-impl<TyV, Kd, B> FmtArgs for TyAbsTerm<TyV, Kd, B>
+impl<TyV, B> FmtArgs for TyAbsTerm<TyV, B>
 where
     TyV: TyVarT + FmtArgs,
-    Kd: KindT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
     fn fmt_args(&self, args: Args) -> String {
-        let TyAbsTerm { tvar, kd, body } = self;
-        format!("fn {} : {} -> {}", tvar.fmt_args(args), kd.fmt_args(args), body.fmt_args(args))
+        let TyAbsTerm { param: tvar, body } = self;
+        format!("fn {} -> {}", tvar.fmt_args(args), body.fmt_args(args))
     }
 }
 

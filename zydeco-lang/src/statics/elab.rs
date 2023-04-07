@@ -294,8 +294,8 @@ impl TryFrom<ps::TermComputation> for TermComputation {
             ps::TermComputation::TyAbsTerm(ps::TyAbsTerm { params, body }) => {
                 let body = (body).try_map(TryInto::try_into)?;
                 let mut body = body;
-                for (tvar, kd) in params.into_iter().rev() {
-                    body = body.info.clone().make(TyAbsTerm { tvar, kd, body: rc!(body) }.into());
+                for param in params.into_iter().rev() {
+                    body = body.info.clone().make(TyAbsTerm { param, body: rc!(body) }.into());
                 }
                 body.inner
             }
