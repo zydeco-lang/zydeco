@@ -25,20 +25,13 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::Force(Force(v)) => {
                 let ty_val = v.syn(ctx.clone())?;
-                let SynType::TypeApp(ty_app) = &ty_val.synty else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("force"),
-                        expected: format!("{{b}}"),
-                        found: ty_val,
-                    }))?
-                };
-                let ty_body = ty_app.elim_thunk().ok_or_else(|| {
+                let ty_body = ty_val.clone().elim_thunk(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
                         span,
                         TypeExpected {
                             context: format!("force"),
                             expected: format!("{{a}}"),
-                            found: ty_app.clone().into(),
+                            found: ty_val,
                         },
                     )
                 })?;
@@ -54,19 +47,12 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::Do(Do { var, comp, body }) => {
                 let ty_comp = comp.syn(ctx.clone())?;
                 span.make(ty_comp.clone()).ana(Kind::CType, ctx.clone())?;
-                let SynType::TypeApp(ty_app) = &ty_comp.synty else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("do"),
-                        expected: format!("ret a"),
-                        found: ty_comp,
-                    }))?
-                };
-                let ty_val = ty_app.elim_ret().ok_or_else(|| {
+                let ty_val = ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
                         span,
                         TypeExpected {
                             context: format!("do"),
-                            expected: format!("ret a"),
+                            expected: format!("Ret a"),
                             found: ty_comp.clone(),
                         },
                     )
@@ -201,7 +187,7 @@ impl TypeCheck for Span<TermComputation> {
                 let SynType::Forall(Forall { param: (param, kd), ty }) = ty_body.synty else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("term-typ-application"),
-                        expected: format!("forall,"),
+                        expected: format!("forall"),
                         found: ty_body,
                     }))?
                 };
@@ -256,19 +242,12 @@ impl TypeCheck for Span<TermComputation> {
                 Step::AnaMode((ctx, term), ty_lub)
             }
             TermComputation::Ret(Ret(v)) => {
-                let SynType::TypeApp(ty_app) = &typ.synty else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("ret"),
-                        expected: format!("ret a"),
-                        found: typ,
-                    }))?
-                };
-                let ty_body = ty_app.elim_ret().ok_or_else(|| {
+                let ty_body = typ.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
                         span,
                         TypeExpected {
                             context: format!("ret"),
-                            expected: format!("ret a"),
+                            expected: format!("Ret a"),
                             found: typ.clone(),
                         },
                     )
@@ -290,19 +269,12 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::Do(Do { var, comp, body }) => {
                 let ty_comp = comp.syn(ctx.clone())?;
                 span.make(ty_comp.clone()).ana(Kind::CType, ctx.clone())?;
-                let SynType::TypeApp(ty_app) = &ty_comp.synty else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("do"),
-                        expected: format!("ret a"),
-                        found: ty_comp,
-                    }))?
-                };
-                let ty_val = ty_app.elim_ret().ok_or_else(|| {
+                let ty_val = ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
                         span,
                         TypeExpected {
                             context: format!("do"),
-                            expected: format!("ret a"),
+                            expected: format!("Ret a"),
                             found: ty_comp.clone(),
                         },
                     )
@@ -405,7 +377,7 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::TyAbsTerm(TyAbsTerm { tvar, kd, body }) => {
                 let SynType::Forall(Forall { param: (param, kd_), ty }) = &typ.synty else {
                     Err(ctx.err(span, TypeExpected {
-                        context: format!("typabs"),
+                        context: format!("type abstraction"),
                         expected: format!("forall"),
                         found: typ,
                     }))?
@@ -414,7 +386,7 @@ impl TypeCheck for Span<TermComputation> {
                     ctx.err(
                         span,
                         KindMismatch {
-                            context: format!("typabs"),
+                            context: format!("type application"),
                             expected: kd_.clone(),
                             found: kd.clone(),
                         },

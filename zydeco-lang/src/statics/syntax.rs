@@ -1,4 +1,4 @@
-use crate::utils::span::{span, Span};
+use crate::utils::span::Span;
 use std::rc::Rc;
 use zydeco_derive::{EnumGenerator, FmtArgs};
 
@@ -28,46 +28,6 @@ pub struct Type {
 pub type RcType = Rc<Span<Type>>;
 impl TypeT for Type {}
 
-impl Type {
-    pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
-        TypeApp::internal(name, args).into()
-    }
-    pub fn make_thunk(arg: RcType) -> Self {
-        TypeApp::internal("Thunk", vec![arg]).into()
-    }
-    pub fn make_ret(arg: RcType) -> Self {
-        TypeApp::internal("Ret", vec![arg]).into()
-    }
-    pub fn make_os() -> Self {
-        TypeApp::internal("OS", vec![]).into()
-    }
-}
-impl TypeApp<TypeV, RcType> {
-    pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
-        TypeApp { tvar: TypeV::new(name.into(), span(0, 0)), args }
-    }
-    pub fn elim_thunk(&self) -> Option<Type> {
-        if self.tvar.name() == "Thunk" {
-            Some(self.args.first().unwrap().inner_ref().clone())
-        } else {
-            None
-        }
-    }
-    pub fn elim_ret(&self) -> Option<Type> {
-        if self.tvar.name() == "Ret" {
-            Some(self.args.first().unwrap().inner_ref().clone())
-        } else {
-            None
-        }
-    }
-    pub fn elim_os(&self) -> Option<()> {
-        if self.tvar.name() == "OS" {
-            Some(())
-        } else {
-            None
-        }
-    }
-}
 macro_rules! impl_from {
     ($T:ty) => {
         impl From<$T> for Type {

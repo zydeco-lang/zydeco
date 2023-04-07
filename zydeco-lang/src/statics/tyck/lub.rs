@@ -30,17 +30,34 @@ impl Lub for Kind {
 impl Lub for Type {
     type Ctx = Ctx;
     type Out = Type;
-    fn lub(self, rhs: Type, ctx: Ctx, span: &SpanInfo) -> Result<Type, TyckError> {
+    fn lub(self, rhs: Type, mut ctx: Ctx, span: &SpanInfo) -> Result<Type, TyckError> {
+        let lhs = self;
         let err = {
-            let expected = self.clone().into();
+            let expected = lhs.clone().into();
             let found = rhs.clone().into();
             || ctx.err(span, TypeMismatch { context: format!("lub"), expected, found })
         };
-        let lhs = self.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
-        let rhs = rhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
+        // let lhs = self.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
+        // let rhs = rhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
         match (&lhs.synty, &rhs.synty) {
+            // (SynType::Hole(_), SynType::Hole(_)) => Err(err())?,
             (SynType::Hole(_), _) => Ok(rhs),
             (_, SynType::Hole(_)) => Ok(lhs),
+            (SynType::TypeApp(lhs), _) if ctx.type_env.contains_key(&lhs.tvar) => {
+                // lhs is a type variable
+                let ty = ctx.clone().type_env[&lhs.tvar].clone();
+                ty.lub(rhs, ctx, span)
+            }
+            (_, SynType::TypeApp(rhs)) if ctx.type_env.contains_key(&rhs.tvar) => {
+                // rhs is a type variable
+                let ty = ctx.clone().type_env[&rhs.tvar].clone();
+                lhs.lub(ty, ctx, span)
+            }
+            // (SynType::TypeApp(lhs), _) if ctx.alias_env.contains_key(&lhs.tvar) => {
+            //     // lhs is a type variable
+            //     let ty = ctx.clone().alias_env[&lhs.tvar].clone();
+            //     ty.lub(rhs, ctx, span)
+            // }
             (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
                 bool_test(lhs.tvar == rhs.tvar, err)?;
                 let mut args = vec![];
@@ -56,16 +73,45 @@ impl Lub for Type {
                 Ok(TypeApp { tvar: lhs.tvar.clone(), args }.into())
             }
             (SynType::Forall(lhs), SynType::Forall(rhs)) => {
-                bool_test(lhs.param == rhs.param, err)?;
-                let ty =
-                    Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, span)?;
-                Ok(Forall { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
+                bool_test(lhs.param.1 == rhs.param.1, err)?;
+                let abst_var = ctx.fresh(lhs.param.1.clone());
+                let lhs_ty = lhs
+                    .ty
+                    .inner_ref()
+                    .clone()
+                    .subst(Env::from_iter([(lhs.param.0.clone(), abst_var.clone().into())]))
+                    .map_err(|e| e.traced(ctx.trace.clone()))?;
+                let rhs_ty = rhs
+                    .ty
+                    .inner_ref()
+                    .clone()
+                    .subst(Env::from_iter([(rhs.param.0.clone(), abst_var.into())]))
+                    .map_err(|e| e.traced(ctx.trace.clone()))?;
+                let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
+                // HACK: needs revertable type subst
+                // Ok(Forall { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
+                Ok(lhs.clone().into())
             }
             (SynType::Exists(lhs), SynType::Exists(rhs)) => {
-                bool_test(lhs.param == rhs.param, err)?;
-                let ty =
-                    Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, span)?;
-                Ok(Exists { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
+                bool_test(lhs.param.1 == rhs.param.1, err)?;
+                let mut ctx = ctx;
+                let abst_var = ctx.fresh(lhs.param.1.clone());
+                let lhs_ty = lhs
+                    .ty
+                    .inner_ref()
+                    .clone()
+                    .subst(Env::from_iter([(lhs.param.0.clone(), abst_var.clone().into())]))
+                    .map_err(|e| e.traced(ctx.trace.clone()))?;
+                let rhs_ty = rhs
+                    .ty
+                    .inner_ref()
+                    .clone()
+                    .subst(Env::from_iter([(rhs.param.0.clone(), abst_var.into())]))
+                    .map_err(|e| e.traced(ctx.trace.clone()))?;
+                let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
+                // HACK: needs revertable type subst
+                // Ok(Exists { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
+                Ok(lhs.clone().into())
             }
             (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
                 bool_test(lhs == rhs, err)?;

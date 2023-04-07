@@ -115,16 +115,15 @@ impl TypeCheck for Span<Program> {
         let Program { module, entry } = self.inner_ref();
         let Seal(ctx) = module.syn(ctx)?;
         let ty = entry.syn(ctx.to_owned())?;
-        let SynType::TypeApp(ty_app) = &ty.synty else {
-            Err(ctx.err(span, WrongMain { found: ty }))?
+        if ty.clone().elim_os(ctx.clone(), span).is_none() {
+            Err(ctx.err(span, WrongMain { found: ty.clone() }))?
         };
-        if ty_app.elim_os().is_none() {
-            Err(ctx.err(span, WrongMain { found: ty_app.clone().into() }))?
-        };
-        Ok(Step::Done(Seal((ctx, ty_app.clone().into()))))
+        Ok(Step::Done(Seal((ctx, ty))))
     }
 }
 
+/// A type that can be joined with another type, a.k.a the least upper bound.
+/// T \/ T? ~~> T'
 pub trait Lub<Rhs = Self> {
     type Ctx: Default;
     type Out;

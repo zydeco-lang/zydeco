@@ -1,4 +1,60 @@
 use super::*;
+use crate::utils::span::span;
+
+impl Type {
+    pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
+        TypeApp { tvar: TypeV::new(name.into(), span(0, 0)), args }.into()
+    }
+    pub fn make_thunk(arg: RcType) -> Self {
+        Type::internal("Thunk", vec![arg])
+    }
+    pub fn elim_thunk(self, ctx: Ctx, span: &SpanInfo) -> Option<Type> {
+        let ty = self.lub(Type::make_thunk(rc!(span.make(Hole.into()))), ctx, span).ok()?;
+        let SynType::TypeApp(ty_app) = ty.synty else {
+            None?
+        };
+        ty_app.elim_thunk()
+    }
+    pub fn make_ret(arg: RcType) -> Self {
+        Type::internal("Ret", vec![arg])
+    }
+    pub fn elim_ret(self, ctx: Ctx, span: &SpanInfo) -> Option<Type> {
+        let ty = self.lub(Type::make_ret(rc!(span.make(Hole.into()))), ctx, span).ok()?;
+        let SynType::TypeApp(ty_app) = ty.synty else {
+            None?
+        };
+        ty_app.elim_ret()
+    }
+    pub fn make_os() -> Self {
+        Type::internal("OS", vec![])
+    }
+    pub fn elim_os(self, ctx: Ctx, span: &SpanInfo) -> Option<()> {
+        self.lub(Type::make_os(), ctx, span).map(|_| ()).ok()
+    }
+}
+impl TypeApp<TypeV, RcType> {
+    pub fn elim_thunk(&self) -> Option<Type> {
+        if self.tvar.name() == "Thunk" {
+            Some(self.args.first().unwrap().inner_ref().clone())
+        } else {
+            None
+        }
+    }
+    pub fn elim_ret(&self) -> Option<Type> {
+        if self.tvar.name() == "Ret" {
+            Some(self.args.first().unwrap().inner_ref().clone())
+        } else {
+            None
+        }
+    }
+    pub fn elim_os(&self) -> Option<()> {
+        if self.tvar.name() == "OS" {
+            Some(())
+        } else {
+            None
+        }
+    }
+}
 
 impl Ctx {
     pub(super) fn resolve_data(

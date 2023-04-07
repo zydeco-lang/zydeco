@@ -61,19 +61,12 @@ impl TypeCheck for Span<TermValue> {
                 Step::AnaMode((ctx, term), ty_lub)
             }
             TermValue::Thunk(Thunk(c)) => {
-                let SynType::TypeApp(ty_app) = &typ.synty else {
-                    Err(ctx.err(span,TypeExpected {
-                        context: format!("thunk"),
-                        expected: format!("{{a}}"),
-                        found: typ,
-                    }))?
-                };
-                let typ_comp = ty_app.elim_thunk().ok_or_else(|| {
+                let typ_comp = typ.clone().elim_thunk(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
                         span,
                         TypeExpected {
                             context: format!("thunk"),
-                            expected: format!("{{a}}"),
+                            expected: format!("Thunk a"),
                             found: typ.to_owned(),
                         },
                     )
@@ -130,7 +123,7 @@ impl TypeCheck for Span<TermValue> {
                 ) = &typ.synty else {
                     Err(ctx.err(span,TypeExpected {
                         context: format!("pack"),
-                        expected: format!("{{a}}"),
+                        expected: format!("exists"),
                         found: typ,
                     }))?
                 };
