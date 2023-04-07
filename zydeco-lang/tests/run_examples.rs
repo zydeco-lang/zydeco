@@ -140,7 +140,7 @@ mod batch_tests {
     mk_batch_test!(choice, "choice.zy");
     mk_batch_test!(forall, "forall.zy");
     mk_batch_test!(exists, "exists.zy");
-    mk_batch_test!(type_hole, "type-hole.zy");
+    mk_batch_test!(partial_ann, "partial-annotation.zy");
 }
 mod pure_tests {
     use super::*;
@@ -157,6 +157,7 @@ mod tyck_tests {
     mk_check_test!(chk_loop, "loop.zydeco");
     mk_check_test!(chk_explosion, "explosion.zy");
     mk_check_test!(chk_iota, "iota.zy");
+    mk_check_test!(alias, "alias.zy");
 }
 
 mod custom_tests {
