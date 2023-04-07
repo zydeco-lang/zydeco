@@ -112,6 +112,10 @@ TypeAtom: Type = {
 };
 
 TypePattern: (TypeV, Kind) = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind);
+TypeOptPattern: (TypeV, Option<Kind>) = {
+    "(" <name:TypeV> ":" <kind:Kind?> ")" => (name, kind),
+    <name:TypeV> => (name, None),
+};
 
 //* ---------------------------------- Term ---------------------------------- */
 
@@ -158,7 +162,7 @@ TermComputation: TermComputation = {
     "comatch" <arms:ComatchBr*> "end" => Comatch {
         arms,
     }.into(),
-    "fn" <params:TypePattern+> "->" <body:Box<Span<TermComputation>>> => TyAbsTerm {
+    "fn" <params:TypeOptPattern+> "->" <body:Box<Span<TermComputation>>> => TyAbsTerm {
         params, body,
     }.into(),
     "fn" <params:TermPattern+> "->" <body:Box<Span<TermComputation>>> => Abstraction {

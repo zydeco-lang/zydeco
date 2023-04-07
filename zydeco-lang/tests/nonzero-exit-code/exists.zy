@@ -3,7 +3,7 @@ data Seal (X : VType) (A : VType) where
 end
 
 def id : Thunk(forall (A : VType) . A -> Ret A) = {
-    fn (A : VType) -> fn x -> ret x
+    fn A -> fn x -> ret x
 } end
 
 def nat : exists (X : VType) . Seal X Int = pack(

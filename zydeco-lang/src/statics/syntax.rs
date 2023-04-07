@@ -73,7 +73,7 @@ pub enum TermComputation {
     Match(Match<CtorV, TermV, RcValue, RcComp>),
     Comatch(Comatch<DtorV, TermV, RcComp>),
     Dtor(Dtor<RcComp, DtorV, RcValue>),
-    TyAbsTerm(TyAbsTerm<TypeV, Kind, RcComp>),
+    TyAbsTerm(TyAbsTerm<TypeV, Option<Kind>, RcComp>),
     TyAppTerm(TyAppTerm<RcComp, RcType>),
     MatchPack(MatchPack<RcValue, TypeV, TermV, RcComp>),
 }

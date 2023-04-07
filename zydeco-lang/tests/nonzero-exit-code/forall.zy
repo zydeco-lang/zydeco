@@ -1,5 +1,5 @@
 def id : Thunk(forall (A : VType) . A -> Ret A) = {
-  fn (A : VType) -> fn x -> (
+  fn A -> fn x -> (
     ret x
   )
 } end

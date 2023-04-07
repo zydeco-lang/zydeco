@@ -374,24 +374,26 @@ impl TypeCheck for Span<TermComputation> {
                 })?;
                 Step::Done(typ)
             }
-            TermComputation::TyAbsTerm(TyAbsTerm { tvar, kd, body }) => {
-                let SynType::Forall(Forall { param: (param, kd_), ty }) = &typ.synty else {
+            TermComputation::TyAbsTerm(TyAbsTerm { tvar, kd: kd_, body }) => {
+                let SynType::Forall(Forall { param: (param, kd), ty }) = &typ.synty else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("type abstraction"),
                         expected: format!("forall"),
                         found: typ,
                     }))?
                 };
-                bool_test(kd == kd_, || {
-                    ctx.err(
-                        span,
-                        KindMismatch {
-                            context: format!("type application"),
-                            expected: kd_.clone(),
-                            found: kd.clone(),
-                        },
-                    )
-                })?;
+                if let Some(kd_) = kd_ {
+                    bool_test(kd == kd_, || {
+                        ctx.err(
+                            span,
+                            KindMismatch {
+                                context: format!("type application"),
+                                expected: kd.clone(),
+                                found: kd_.clone(),
+                            },
+                        )
+                    })?;
+                }
                 let abst_var = ctx.fresh(kd.clone());
                 ctx.type_env.insert(tvar.clone(), abst_var.clone().into());
                 ty.inner_ref()

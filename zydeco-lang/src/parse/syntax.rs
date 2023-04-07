@@ -79,7 +79,7 @@ pub struct Let {
 
 #[derive(Clone, Debug)]
 pub struct TyAbsTerm {
-    pub params: Vec<(TypeV, Kind)>,
+    pub params: Vec<(TypeV, Option<Kind>)>,
     pub body: BoxComp,
 }
 

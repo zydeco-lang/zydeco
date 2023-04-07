@@ -41,6 +41,15 @@ impl FmtArgs for Kind {
     }
 }
 
+impl FmtArgs for Option<Kind> {
+    fn fmt_args(&self, fargs: Args) -> String {
+        match self {
+            Some(kd) => kd.fmt_args(fargs),
+            None => "_?".to_owned(),
+        }
+    }
+}
+
 impl<K> FmtArgs for TypeArity<K>
 where
     K: KindT + FmtArgs,
@@ -329,7 +338,7 @@ where
 {
     fn fmt_args(&self, args: Args) -> String {
         let TyAbsTerm { tvar, kd, body } = self;
-        format!("fn typ {} : {} -> {}", tvar.fmt_args(args), kd.fmt_args(args), body.fmt_args(args))
+        format!("fn {} : {} -> {}", tvar.fmt_args(args), kd.fmt_args(args), body.fmt_args(args))
     }
 }
 
