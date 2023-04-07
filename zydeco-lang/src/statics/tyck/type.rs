@@ -70,14 +70,16 @@ impl Ctx {
         if let Some(Alias { name, params, ty }) = self.alias_env.get(&tvar) {
             let ty = ty.inner_ref().clone();
             let diff = Env::init(&params, &args, || {
-                span.make(ArityMismatch {
-                    context: format!("data type `{}` instiantiation", name),
-                    expected: params.len(),
-                    found: args.len(),
-                })
-            })
-            .map_err(|e| e.traced(self.trace.clone()))?;
-            self.resolve_data(ty.subst(diff).map_err(|e| e.traced(self.trace.clone()))?, span)
+                self.err(
+                    span,
+                    ArityMismatch {
+                        context: format!("data type `{}` instiantiation", name),
+                        expected: params.len(),
+                        found: args.len(),
+                    },
+                )
+            })?;
+            self.resolve_data(ty.subst(diff, self.clone())?, span)
         } else {
             let data = self.data_env.get(&tvar).cloned().ok_or_else(|| {
                 self.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
@@ -98,14 +100,16 @@ impl Ctx {
         if let Some(Alias { name, params, ty }) = self.alias_env.get(&tvar) {
             let ty = ty.inner_ref().clone();
             let diff = Env::init(&params, &args, || {
-                span.make(ArityMismatch {
-                    context: format!("data type `{}` instiantiation", name),
-                    expected: params.len(),
-                    found: args.len(),
-                })
-            })
-            .map_err(|e| e.traced(self.trace.clone()))?;
-            self.resolve_codata(ty.subst(diff).map_err(|e| e.traced(self.trace.clone()))?, span)
+                self.err(
+                    span,
+                    ArityMismatch {
+                        context: format!("data type `{}` instiantiation", name),
+                        expected: params.len(),
+                        found: args.len(),
+                    },
+                )
+            })?;
+            self.resolve_codata(ty.subst(diff, self.clone())?, span)
         } else {
             let codata = self.codata_env.get(&tvar).cloned().ok_or_else(|| {
                 self.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
@@ -128,11 +132,7 @@ impl TypeCheck for Span<Type> {
             info: self.span().clone(),
         });
         let span = self.span();
-        let ty = self
-            .inner_ref()
-            .clone()
-            .subst(ctx.type_env.clone())
-            .map_err(|e| e.traced(ctx.trace.clone()))?;
+        let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), ctx.clone())?;
         match &ty.synty {
             SynType::TypeApp(app) => {
                 let tvar = &app.tvar;
@@ -183,11 +183,7 @@ impl TypeCheck for Span<Type> {
             info: self.span().clone(),
         });
         let span = self.span();
-        let ty = self
-            .inner_ref()
-            .clone()
-            .subst(ctx.type_env.clone())
-            .map_err(|e| e.traced(ctx.trace.clone()))?;
+        let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), ctx.clone())?;
         match ty.synty {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeApp(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::AbstVar(_) => {
@@ -200,21 +196,25 @@ impl TypeCheck for Span<Type> {
 }
 
 impl Type {
-    pub(super) fn subst(self, mut diff: Env<TypeV, Type>) -> Result<Self, Span<TyckErrorItem>> {
+    pub(super) fn subst(self, mut diff: Env<TypeV, Type>, ctx: Ctx) -> Result<Self, TyckError> {
         match self.synty {
             SynType::TypeApp(TypeApp { tvar, mut args }) => {
                 if let Some(ty) = diff.get(&tvar) {
                     bool_test(args.is_empty(), || {
-                        tvar.span().make(ArityMismatch {
-                            context: format!("type variable `{}`", tvar),
-                            expected: 0,
-                            found: args.len(),
-                        })
+                        ctx.err(
+                            tvar.span(),
+                            ArityMismatch {
+                                context: format!("type variable `{}`", tvar),
+                                expected: 0,
+                                found: args.len(),
+                            },
+                        )
                     })?;
                     Ok(ty.clone())
                 } else {
                     for arg in args.iter_mut() {
-                        *arg = rc!(arg.as_ref().clone().try_map(|ty| ty.subst(diff.clone()))?);
+                        *arg = rc!((arg.as_ref().clone())
+                            .try_map(|ty| ty.subst(diff.clone(), ctx.clone()))?);
                     }
                     Ok(Type { synty: TypeApp { tvar, args }.into() })
                 }
@@ -224,7 +224,8 @@ impl Type {
                 Ok(Type {
                     synty: Forall {
                         param,
-                        ty: rc!(ty.as_ref().clone().try_map(|ty| ty.subst(diff.clone()))?),
+                        ty: rc!((ty.as_ref().clone())
+                            .try_map(|ty| ty.subst(diff.clone(), ctx.clone()))?),
                     }
                     .into(),
                 })
@@ -234,7 +235,8 @@ impl Type {
                 Ok(Type {
                     synty: Exists {
                         param,
-                        ty: rc!(ty.as_ref().clone().try_map(|ty| ty.subst(diff.clone()))?),
+                        ty: rc!((ty.as_ref().clone())
+                            .try_map(|ty| ty.subst(diff.clone(), ctx.clone()))?),
                     }
                     .into(),
                 })
@@ -242,48 +244,6 @@ impl Type {
             SynType::AbstVar(_) | SynType::Hole(_) => Ok(self),
         }
     }
-    // pub(super) fn lub(
-    //     lhs: Self, rhs: Self, ctx: Ctx, f: impl FnOnce() -> TyckError + Clone,
-    // ) -> Result<Self, TyckError> {
-    //     let lhs = lhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
-    //     let rhs = rhs.subst(ctx.type_env.clone()).map_err(|e| e.traced(ctx.trace.clone()))?;
-    //     match (&lhs.synty, &rhs.synty) {
-    //         (SynType::Hole(_), _) => Ok(rhs),
-    //         (_, SynType::Hole(_)) => Ok(lhs),
-    //         (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
-    //             bool_test(lhs.tvar == rhs.tvar, f.clone())?;
-    //             let mut args = vec![];
-    //             for (lhs, rhs) in (lhs.args.iter()).zip(rhs.args.iter()) {
-    //                 let arg = Self::lub(
-    //                     lhs.inner_ref().clone(),
-    //                     rhs.inner_ref().clone(),
-    //                     ctx.clone(),
-    //                     f.clone(),
-    //                 )?;
-    //                 args.push(rc!(lhs.span().make(arg)));
-    //             }
-    //             Ok(TypeApp { tvar: lhs.tvar.clone(), args }.into())
-    //         }
-    //         (SynType::Forall(lhs), SynType::Forall(rhs)) => {
-    //             bool_test(lhs.param == rhs.param, f.clone())?;
-    //             let ty = Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, f)?;
-    //             Ok(Forall { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
-    //         }
-    //         (SynType::Exists(lhs), SynType::Exists(rhs)) => {
-    //             bool_test(lhs.param == rhs.param, f.clone())?;
-    //             let ty = Self::lub(lhs.ty.inner_ref().clone(), rhs.ty.inner_ref().clone(), ctx, f)?;
-    //             Ok(Exists { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
-    //         }
-    //         (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
-    //             bool_test(lhs == rhs, f)?;
-    //             Ok(lhs.clone().into())
-    //         }
-    //         (SynType::TypeApp(_), _)
-    //         | (SynType::Forall(_), _)
-    //         | (SynType::Exists(_), _)
-    //         | (SynType::AbstVar(_), _) => Err(f()),
-    //     }
-    // }
 }
 
 impl Monoid for Env<TypeV, Type> {
@@ -303,7 +263,7 @@ impl Monoid for Env<TypeV, Type> {
             }
         }
         for (x, ty) in ori {
-            new.insert(x, ty.subst(self.clone()).unwrap());
+            new.insert(x, ty.subst(self.clone(), Default::default()).unwrap());
         }
         new
     }
@@ -311,9 +271,8 @@ impl Monoid for Env<TypeV, Type> {
 
 impl Env<TypeV, Type> {
     pub(super) fn init(
-        params: &[(TypeV, Kind)], ty_app_args: &[RcType],
-        arity_err: impl FnOnce() -> Span<TyckErrorItem>,
-    ) -> Result<Self, Span<TyckErrorItem>> {
+        params: &[(TypeV, Kind)], ty_app_args: &[RcType], arity_err: impl FnOnce() -> TyckError,
+    ) -> Result<Self, TyckError> {
         bool_test(params.len() == ty_app_args.len(), arity_err)?;
         Ok(Env::from_iter(
             params

@@ -79,13 +79,15 @@ impl TypeCheck for Span<TermValue> {
                 let (Data { name, params, ctors }, ty_args) =
                     ctx.resolve_data(typ.clone(), span)?;
                 let diff = Env::init(&params, &ty_args, || {
-                    span.make(ArityMismatch {
-                        context: format!("data type `{}` instiantiation", name),
-                        expected: params.len(),
-                        found: ty_args.len(),
-                    })
-                })
-                .map_err(|e| e.traced(ctx.trace.clone()))?;
+                    ctx.err(
+                        span,
+                        ArityMismatch {
+                            context: format!("data type `{}` instiantiation", name),
+                            expected: params.len(),
+                            found: ty_args.len(),
+                        },
+                    )
+                })?;
                 let DataBr(_, tys) =
                     ctors.into_iter().find(|DataBr(ctorv, _)| ctorv == ctor).ok_or_else(|| {
                         ctx.err(
@@ -108,10 +110,7 @@ impl TypeCheck for Span<TermValue> {
                 })?;
                 for (arg, ty) in args.iter().zip(tys.iter()) {
                     arg.ana(
-                        ty.inner_ref()
-                            .to_owned()
-                            .subst(diff.clone())
-                            .map_err(|e| e.traced(ctx.trace.clone()))?,
+                        ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone())?,
                         ctx.clone(),
                     )?;
                 }
@@ -128,11 +127,10 @@ impl TypeCheck for Span<TermValue> {
                     }))?
                 };
                 ty.ana(kd.clone(), ctx.clone())?;
-                let ty_body = ty_body
-                    .inner_ref()
-                    .clone()
-                    .subst(Env::from_iter([(param.clone(), ty.inner_ref().clone())]))
-                    .map_err(|e| e.traced(ctx.trace.clone()))?;
+                let ty_body = ty_body.inner_ref().clone().subst(
+                    Env::from_iter([(param.clone(), ty.inner_ref().clone())]),
+                    ctx.clone(),
+                )?;
                 body.ana(ty_body, ctx)?;
                 Step::Done(typ)
             }

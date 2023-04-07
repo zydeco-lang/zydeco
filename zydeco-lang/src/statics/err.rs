@@ -7,11 +7,6 @@ pub struct TyckError {
     pub item: Span<TyckErrorItem>,
     pub trace: Trace,
 }
-impl Span<TyckErrorItem> {
-    pub fn traced(self, trace: Trace) -> TyckError {
-        TyckError { item: self, trace }
-    }
-}
 
 impl fmt::Display for TyckError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

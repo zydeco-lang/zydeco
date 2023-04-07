@@ -69,13 +69,15 @@ impl TypeCheck for Span<TermComputation> {
                 let (Data { name, params, ctors }, args) = ctx.resolve_data(ty_scrut, span)?;
                 // arity check on data type
                 let diff = Env::init(&params, &args, || {
-                    span.make(ArityMismatch {
-                        context: format!("data type `{}` instiantiation", name),
-                        expected: params.len(),
-                        found: args.len(),
-                    })
-                })
-                .map_err(|e| e.traced(ctx.trace.clone()))?;
+                    ctx.err(
+                        span,
+                        ArityMismatch {
+                            context: format!("data type `{}` instiantiation", name),
+                            expected: params.len(),
+                            found: args.len(),
+                        },
+                    )
+                })?;
                 let ctors: HashMap<_, _> =
                     ctors.into_iter().map(|DataBr(ctor, tys)| (ctor, tys)).collect();
                 let mut unexpected = Vec::new();
@@ -87,12 +89,9 @@ impl TypeCheck for Span<TermComputation> {
                         continue;
                     };
                     ctorv_set_arm.insert(ctor.to_owned());
-                    let tys = tys.into_iter().map(|ty| {
-                        ty.inner_ref()
-                            .to_owned()
-                            .subst(diff.clone())
-                            .map_err(|e| e.traced(ctx.trace.clone()))
-                    });
+                    let tys = tys
+                        .into_iter()
+                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone()));
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
                         ctx.term_ctx.insert(var.to_owned(), ty?);
@@ -133,13 +132,15 @@ impl TypeCheck for Span<TermComputation> {
                     ctx.resolve_codata(ty_body, span)?;
                 // arity check on codata type
                 let diff = Env::init(&params, &ty_args, || {
-                    span.make(ArityMismatch {
-                        context: format!("codata type `{}` instiantiation", name),
-                        expected: params.len(),
-                        found: ty_args.len(),
-                    })
-                })
-                .map_err(|e| e.traced(ctx.trace.clone()))?;
+                    ctx.err(
+                        span,
+                        ArityMismatch {
+                            context: format!("codata type `{}` instiantiation", name),
+                            expected: params.len(),
+                            found: ty_args.len(),
+                        },
+                    )
+                })?;
                 let CodataBr(_, tys, ty) = dtors
                     .into_iter()
                     .find(|CodataBr(dtorv, _, _)| dtorv == dtor)
@@ -165,19 +166,11 @@ impl TypeCheck for Span<TermComputation> {
                 })?;
                 for (arg, ty) in args.iter().zip(tys.iter()) {
                     arg.ana(
-                        ty.inner_ref()
-                            .to_owned()
-                            .subst(diff.clone())
-                            .map_err(|e| e.traced(ctx.trace.clone()))?,
+                        ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone())?,
                         ctx.clone(),
                     )?;
                 }
-                Step::Done(
-                    ty.inner_ref()
-                        .to_owned()
-                        .subst(diff)
-                        .map_err(|e| e.traced(ctx.trace.clone()))?,
-                )
+                Step::Done(ty.inner_ref().to_owned().subst(diff, ctx.clone())?)
             }
             TermComputation::TyAbsTerm(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("typabs") }))?
@@ -193,12 +186,12 @@ impl TypeCheck for Span<TermComputation> {
                 };
                 arg.ana(kd.clone(), ctx.clone())?;
                 let diff = Env::init(&[(param, kd)], &[arg.clone()], || {
-                    span.make(ArityMismatch { context: format!("typapp"), expected: 1, found: 1 })
-                })
-                .map_err(|e| e.traced(ctx.trace.clone()))?;
-                Step::Done(
-                    ty.inner_ref().clone().subst(diff).map_err(|e| e.traced(ctx.trace.clone()))?,
-                )
+                    ctx.err(
+                        span,
+                        ArityMismatch { context: format!("typapp"), expected: 1, found: 1 },
+                    )
+                })?;
+                Step::Done(ty.inner_ref().clone().subst(diff, ctx)?)
             }
             TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
@@ -213,8 +206,7 @@ impl TypeCheck for Span<TermComputation> {
                 let ty = ty
                     .inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(param.clone(), tvar.clone().into())]))
-                    .map_err(|e| e.traced(ctx.trace.clone()))?;
+                    .subst(Env::from_iter([(param.clone(), tvar.clone().into())]), ctx.clone())?;
                 ctx.term_ctx.insert(var.clone(), ty);
                 let ty_body = body.syn(ctx.clone())?;
                 span.make(ty_body.clone()).ana(Kind::CType, ctx)?;
@@ -292,13 +284,15 @@ impl TypeCheck for Span<TermComputation> {
                 let (Data { name, params, ctors }, args) = ctx.resolve_data(ty_scrut, span)?;
                 // arity check on data type
                 let diff = Env::init(&params, &args, || {
-                    span.make(ArityMismatch {
-                        context: format!("data type `{}` instiantiation", name),
-                        expected: params.len(),
-                        found: args.len(),
-                    })
-                })
-                .map_err(|e| e.traced(ctx.trace.clone()))?;
+                    ctx.err(
+                        span,
+                        ArityMismatch {
+                            context: format!("data type `{}` instiantiation", name),
+                            expected: params.len(),
+                            found: args.len(),
+                        },
+                    )
+                })?;
                 let ctors: HashMap<_, _> =
                     ctors.into_iter().map(|DataBr(ctor, tys)| (ctor, tys)).collect();
                 let mut unexpected = Vec::new();
@@ -309,12 +303,9 @@ impl TypeCheck for Span<TermComputation> {
                         continue;
                     };
                     ctorv_set_arm.insert(ctor.to_owned());
-                    let tys = tys.into_iter().map(|ty| {
-                        ty.inner_ref()
-                            .to_owned()
-                            .subst(diff.clone())
-                            .map_err(|e| e.traced(ctx.trace.clone()))
-                    });
+                    let tys = tys
+                        .into_iter()
+                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone()));
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
                         ctx.term_ctx.insert(var.to_owned(), ty?);
@@ -333,13 +324,15 @@ impl TypeCheck for Span<TermComputation> {
                     ctx.resolve_codata(typ.clone(), span)?;
                 // arity check on codata type
                 let diff = Env::init(&params, &ty_args, || {
-                    span.make(ArityMismatch {
-                        context: format!("codata type `{}` instantiation", name),
-                        expected: params.len(),
-                        found: ty_args.len(),
-                    })
-                })
-                .map_err(|e| e.traced(ctx.trace.clone()))?;
+                    ctx.err(
+                        span,
+                        ArityMismatch {
+                            context: format!("codata type `{}` instantiation", name),
+                            expected: params.len(),
+                            found: ty_args.len(),
+                        },
+                    )
+                })?;
                 let dtors: HashMap<_, _> =
                     dtors.into_iter().map(|CodataBr(dtor, tys, ty)| (dtor, (tys, ty))).collect();
                 let mut unexpected = Vec::new();
@@ -350,22 +343,15 @@ impl TypeCheck for Span<TermComputation> {
                         continue;
                     };
                     dtorv_set_arm.insert(dtor.to_owned());
-                    let tys = tys.into_iter().map(|ty| {
-                        ty.inner_ref()
-                            .to_owned()
-                            .subst(diff.clone())
-                            .map_err(|e| e.traced(ctx.trace.clone()))
-                    });
-                    let ty = ty
-                        .inner_ref()
-                        .to_owned()
-                        .subst(diff.clone())
-                        .map_err(|e| e.traced(ctx.trace.clone()));
+                    let tys = tys
+                        .into_iter()
+                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone()));
+                    let ty = ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone())?;
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
                         ctx.term_ctx.insert(var.to_owned(), ty?);
                     }
-                    body.ana(ty?, ctx)?;
+                    body.ana(ty, ctx)?;
                 }
                 let dtorv_set_coda: HashSet<DtorV> = dtors.keys().cloned().collect();
                 let missing: Vec<_> = dtorv_set_coda.difference(&dtorv_set_arm).cloned().collect();
@@ -398,8 +384,7 @@ impl TypeCheck for Span<TermComputation> {
                 ctx.type_env.insert(tvar_.clone(), abst_var.clone().into());
                 ty.inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(tvar.clone(), abst_var.into())]))
-                    .map_err(|e| e.traced(ctx.trace.clone()))?;
+                    .subst(Env::from_iter([(tvar.clone(), abst_var.into())]), ctx.clone())?;
                 body.ana(ty.inner_ref().clone(), ctx)?;
                 Step::Done(typ)
             }
