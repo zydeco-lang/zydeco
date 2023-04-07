@@ -67,11 +67,23 @@ impl Ctx {
                 found: ty,
             }))?
         };
-        let data =
-            self.data_env.get(&tvar).cloned().ok_or_else(|| {
+        if let Some(Alias { name, params, ty }) = self.alias_env.get(&tvar) {
+            let ty = ty.inner_ref().clone();
+            let diff = Env::init(&params, &args, || {
+                span.make(ArityMismatch {
+                    context: format!("data type `{}` instiantiation", name),
+                    expected: params.len(),
+                    found: args.len(),
+                })
+            })
+            .map_err(|e| e.traced(self.trace.clone()))?;
+            self.resolve_data(ty.subst(diff).map_err(|e| e.traced(self.trace.clone()))?, span)
+        } else {
+            let data = self.data_env.get(&tvar).cloned().ok_or_else(|| {
                 self.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
             })?;
-        Ok((data, args))
+            Ok((data, args))
+        }
     }
     pub(super) fn resolve_codata(
         &self, ty: Type, span: &SpanInfo,
@@ -83,11 +95,23 @@ impl Ctx {
                 found: ty,
             }))?
         };
-        let codata =
-            self.codata_env.get(&tvar).cloned().ok_or_else(|| {
+        if let Some(Alias { name, params, ty }) = self.alias_env.get(&tvar) {
+            let ty = ty.inner_ref().clone();
+            let diff = Env::init(&params, &args, || {
+                span.make(ArityMismatch {
+                    context: format!("data type `{}` instiantiation", name),
+                    expected: params.len(),
+                    found: args.len(),
+                })
+            })
+            .map_err(|e| e.traced(self.trace.clone()))?;
+            self.resolve_codata(ty.subst(diff).map_err(|e| e.traced(self.trace.clone()))?, span)
+        } else {
+            let codata = self.codata_env.get(&tvar).cloned().ok_or_else(|| {
                 self.err(span, NameResolveError::UnboundTypeVariable { tvar }.into())
             })?;
-        Ok((codata, args))
+            Ok((codata, args))
+        }
     }
 }
 

@@ -151,7 +151,7 @@ impl fmt::Display for Frame {
         writeln!(f, "When {}:", self.sort)?;
         writeln!(f, "\t{}", self.term)?;
         writeln!(f, "\t({})", self.info)?;
-        // self.tycker_src
+        // writeln!(f, "\t@({})", self.tycker_src)?;
         Ok(())
     }
 }
