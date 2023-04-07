@@ -1131,7 +1131,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-lang"
-version = "0.0.1"
+version = "0.2.0"
 dependencies = [
  "im",
  "indexmap",
@@ -1145,8 +1145,8 @@ dependencies = [
 
 [[package]]
 name = "zydeco_derive"
-version = "0.0.1"
+version = "0.2.0"
 dependencies = [
  "quote",
- "syn 1.0.109",
+ "syn 2.0.10",
 ]

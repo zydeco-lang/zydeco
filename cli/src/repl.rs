@@ -10,7 +10,7 @@ use zydeco_lang::{
 };
 
 pub fn launch() -> Result<i32, String> {
-    println!("Zydeco v0.0.1");
+    println!("Zydeco v0.2.0");
     let mut zydeco_expr = ZydecoExpr::new();
     loop {
         let mut line = String::new();
