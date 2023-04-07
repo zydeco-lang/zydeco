@@ -53,11 +53,36 @@ impl Lub for Type {
                 let ty = ctx.clone().type_env[&rhs.tvar].clone();
                 lhs.lub(ty, ctx, span)
             }
-            // (SynType::TypeApp(lhs), _) if ctx.alias_env.contains_key(&lhs.tvar) => {
-            //     // lhs is a type variable
-            //     let ty = ctx.clone().alias_env[&lhs.tvar].clone();
-            //     ty.lub(rhs, ctx, span)
-            // }
+            (SynType::TypeApp(lhs), _) if ctx.alias_env.contains_key(&lhs.tvar) => {
+                // lhs is a type variable
+                let Alias { name, params, ty } = ctx.clone().alias_env[&lhs.tvar].clone();
+                let diff = Env::init(&params, &lhs.args, || {
+                    span.make(ArityMismatch {
+                        context: format!("data type `{}` instiantiation", name),
+                        expected: params.len(),
+                        found: lhs.args.len(),
+                    })
+                })
+                .map_err(|e| e.traced(ctx.trace.clone()))?;
+                let ty =
+                    ty.inner_ref().clone().subst(diff).map_err(|e| e.traced(ctx.trace.clone()))?;
+                ty.lub(rhs, ctx, span)
+            }
+            (_, SynType::TypeApp(rhs)) if ctx.alias_env.contains_key(&rhs.tvar) => {
+                // lhs is a type variable
+                let Alias { name, params, ty } = ctx.clone().alias_env[&rhs.tvar].clone();
+                let diff = Env::init(&params, &rhs.args, || {
+                    span.make(ArityMismatch {
+                        context: format!("data type `{}` instiantiation", name),
+                        expected: params.len(),
+                        found: rhs.args.len(),
+                    })
+                })
+                .map_err(|e| e.traced(ctx.trace.clone()))?;
+                let ty =
+                    ty.inner_ref().clone().subst(diff).map_err(|e| e.traced(ctx.trace.clone()))?;
+                lhs.lub(ty, ctx, span)
+            }
             (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
                 bool_test(lhs.tvar == rhs.tvar, err)?;
                 let mut args = vec![];

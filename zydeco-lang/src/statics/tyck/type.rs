@@ -13,7 +13,7 @@ impl Type {
         let SynType::TypeApp(ty_app) = ty.synty else {
             None?
         };
-        ty_app.elim_thunk()
+        ty_app.elim_thunk_syntax()
     }
     pub fn make_ret(arg: RcType) -> Self {
         Type::internal("Ret", vec![arg])
@@ -23,7 +23,7 @@ impl Type {
         let SynType::TypeApp(ty_app) = ty.synty else {
             None?
         };
-        ty_app.elim_ret()
+        ty_app.elim_ret_syntax()
     }
     pub fn make_os() -> Self {
         Type::internal("OS", vec![])
@@ -33,21 +33,21 @@ impl Type {
     }
 }
 impl TypeApp<TypeV, RcType> {
-    pub fn elim_thunk(&self) -> Option<Type> {
+    pub fn elim_thunk_syntax(&self) -> Option<Type> {
         if self.tvar.name() == "Thunk" {
             Some(self.args.first().unwrap().inner_ref().clone())
         } else {
             None
         }
     }
-    pub fn elim_ret(&self) -> Option<Type> {
+    pub fn elim_ret_syntax(&self) -> Option<Type> {
         if self.tvar.name() == "Ret" {
             Some(self.args.first().unwrap().inner_ref().clone())
         } else {
             None
         }
     }
-    pub fn elim_os(&self) -> Option<()> {
+    pub fn elim_os_syntax(&self) -> Option<()> {
         if self.tvar.name() == "OS" {
             Some(())
         } else {

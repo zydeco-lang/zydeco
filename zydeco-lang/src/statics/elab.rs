@@ -237,7 +237,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                             found: ty_
                         })?
                     };
-                    let Some(ty) = ty_app.elim_thunk() else {
+                    let Some(ty) = ty_app.elim_thunk_syntax() else {
                         Err(TyckErrorItem::TypeExpected {
                             context: format!("elaborating recursion"),
                             expected: format!("{{a}}"),

@@ -70,7 +70,7 @@ pub fn launch() -> Result<i32, String> {
                             println!("Expected a type application, found {}", ty.fmt());
                             continue;
                         };
-                        if let Some(()) = ty_app.elim_os() {
+                        if let Some(()) = ty_app.elim_os_syntax() {
                             // HACK: The final call to OS will destroy the environment,
                             // so we need to save a snapshot of it before we run.
                             let snapshot = zydeco_expr.clone();
@@ -86,7 +86,7 @@ pub fn launch() -> Result<i32, String> {
                             }
                             // HACK: Restore the environment
                             zydeco_expr = snapshot;
-                        } else if let Some(ty) = ty_app.elim_ret() {
+                        } else if let Some(ty) = ty_app.elim_ret_syntax() {
                             let c = ZydecoExpr::link_computation(c);
                             let c = zydeco_expr.eval_ret_computation(c);
                             match c {
