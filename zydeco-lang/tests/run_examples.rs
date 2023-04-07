@@ -127,6 +127,7 @@ mod batch_tests {
     mk_batch_test!(interpreter, "interpreter.zydeco");
     mk_batch_test!(lists, "lists.zydeco");
     mk_batch_test!(y, "Y.zydeco");
+    mk_batch_test!(unit, "unit.zy");
     mk_batch_test!(num, "num.zy");
     mk_batch_test!(eo_data, "even-odd-data.zy");
     mk_batch_test!(eo_rec, "even-old-rec.zy");
@@ -141,6 +142,7 @@ mod batch_tests {
     mk_batch_test!(forall, "forall.zy");
     mk_batch_test!(exists, "exists.zy");
     mk_batch_test!(partial_ann, "partial-annotation.zy");
+    mk_batch_test!(oo, "oo.zydeco");
 }
 mod pure_tests {
     use super::*;
