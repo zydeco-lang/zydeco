@@ -96,9 +96,7 @@ impl TryFrom<ps::Type> for Type {
     type Error = TyckErrorItem;
     fn try_from(ty: ps::Type) -> Result<Self, TyckErrorItem> {
         Ok(match ty {
-            ps::Type::Basic(ps::TCtor::Thunk) => Type::internal("Thunk", Vec::new()),
-            ps::Type::Basic(ps::TCtor::Ret) => Type::internal("Ret", Vec::new()),
-            ps::Type::Basic(ps::TCtor::Var(v)) => TypeApp { tvar: v, args: vec![] }.into(),
+            ps::Type::Basic(tvar) => TypeApp { tvar, args: vec![] }.into(),
             ps::Type::App(t) => {
                 let ps::TypeApp(t1, t2) = t;
                 let t1: Type = TryInto::try_into(t1.inner())?;

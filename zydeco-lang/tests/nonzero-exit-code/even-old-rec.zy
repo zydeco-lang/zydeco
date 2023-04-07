@@ -1,7 +1,7 @@
 data Nat where | Z() | S(Nat) end
 let rec odd: Nat -> Ret(Bool) = (
   let even = {
-    rec (even: Comp(Nat -> Ret(Bool))) -> (
+    rec (even: Thunk(Nat -> Ret(Bool))) -> (
       fn (x: Nat) -> (
         match x
         | Z() -> ret True()

@@ -5,6 +5,9 @@
 
 pub extern data Thunk (B : CType) end
 pub extern codata Ret (A : VType) end
+pub alias Comp (B : CType) = Thunk B end
+pub alias U (B : CType) = Thunk B end
+pub alias F (A : VType) = Ret A end
 
 
 ## the Fn type

@@ -10,14 +10,6 @@ pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TCtor {
-    Var(TypeV),
-    Thunk,
-    Ret,
-}
-impl TyVarT for TCtor {}
-
 #[derive(Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
 
@@ -32,7 +24,7 @@ pub struct Exists(pub Vec<(TypeV, Kind)>, pub BoxType);
 
 #[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum Type {
-    Basic(TCtor),
+    Basic(TypeV),
     App(TypeApp),
     Arrow(Arrow),
     Forall(Forall),

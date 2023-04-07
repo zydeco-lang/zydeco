@@ -1,6 +1,6 @@
 data Nat where | Z() | S(Nat) end
 let add = {
-  rec (add: Comp(Nat -> Nat -> Ret(Nat))) -> (
+  rec (add: Thunk(Nat -> Nat -> Ret(Nat))) -> (
     fn (x: Nat) (y: Nat) -> (
       match x
       | Z() -> ret y

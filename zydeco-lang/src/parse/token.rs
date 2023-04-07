@@ -65,12 +65,6 @@ pub enum Tok<'input> {
     #[token("CType")]
     CType,
 
-    #[token("F")]
-    RetType,
-    #[token("U")]
-    #[token("Comp")]
-    ThunkType,
-
     #[token("(")]
     ParenOpen,
     #[token(")")]
@@ -143,8 +137,6 @@ impl<'input> Display for Tok<'input> {
             Tok::CharLit(s) => write!(f, "CharLiteral({})", s),
             Tok::VType => write!(f, "VType"),
             Tok::CType => write!(f, "CType"),
-            Tok::RetType => write!(f, "F"),
-            Tok::ThunkType => write!(f, "U"),
             Tok::ParenOpen => write!(f, "("),
             Tok::ParenClose => write!(f, ")"),
             Tok::BracketOpen => write!(f, "["),

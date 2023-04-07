@@ -107,14 +107,8 @@ TypeApp: Type = {
 
 TypeAtom: Type = {
     "(" <Type> ")" => <>,
-    <tc:TCtor> => tc.into(),
+    <TypeV> => <>.into(),
     "_?" => Hole.into(),
-};
-
-TCtor: TCtor = {
-    <TypeV> => TCtor::Var(<>),
-    "U" => TCtor::Thunk,
-    "F" => TCtor::Ret,
 };
 
 TypePattern: (TypeV, Kind) = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind);
@@ -313,9 +307,6 @@ extern {
 
         "VType" => Tok::VType,
         "CType" => Tok::CType,
-
-        "F" => Tok::RetType,
-        "U" => Tok::ThunkType,
 
         "(" => Tok::ParenOpen,
         ")" => Tok::ParenClose,
