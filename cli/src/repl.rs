@@ -61,12 +61,12 @@ pub fn launch() -> Result<i32, String> {
                 match zydeco_expr.tyck_computation(term.span().make(c.clone())) {
                     Err(e) => println!("Type Error: {}", e),
                     Ok(ty) => {
+                        // HACK: The final call to OS will destroy the environment,
+                        // so we need to save a snapshot of it before we run.
+                        let snapshot = zydeco_expr.clone();
                         if let Some(()) =
                             ty.clone().elim_os(zydeco_expr.ctx.clone(), &SpanInfo::new(0, 0))
                         {
-                            // HACK: The final call to OS will destroy the environment,
-                            // so we need to save a snapshot of it before we run.
-                            let snapshot = zydeco_expr.clone();
                             let c = ZydecoExpr::link_computation(c);
                             let c = zydeco_expr.eval_os(c, &[]);
                             match c.entry {
@@ -77,8 +77,6 @@ pub fn launch() -> Result<i32, String> {
                                     println!("exited with code {}", i)
                                 }
                             }
-                            // HACK: Restore the environment
-                            zydeco_expr = snapshot;
                         } else if let Some(ty) =
                             ty.clone().elim_ret(zydeco_expr.ctx.clone(), &SpanInfo::new(0, 0))
                         {
@@ -96,6 +94,8 @@ pub fn launch() -> Result<i32, String> {
                             println!("Can't run computation of type {}", ty.fmt());
                             println!("Can only run computations of type OS or Ret(a)")
                         }
+                        // HACK: Restore the environment
+                        zydeco_expr = snapshot;
                     }
                 }
             }
