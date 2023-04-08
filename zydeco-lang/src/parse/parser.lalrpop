@@ -37,17 +37,17 @@ DeclSymbol<T>: DeclSymbol<T> = {
 };
 
 Declaration: Declaration = {
-    "data" <name:TypeV> <params:TypePattern*>
+    "data" <name:TypeV> <params:TypeKindPattern*>
         <ctors:("where" <DataBr*>)?>
     "end" => Data {
         name, params, ctors: ctors.unwrap_or_default(),
     }.into(),
-    "codata" <name:TypeV> <params:TypePattern*>
+    "codata" <name:TypeV> <params:TypeKindPattern*>
         <dtors:("where" <CodataBr*>)?>
     "end" => Codata {
         name, params, dtors: dtors.unwrap_or_default(),
     }.into(),
-    "alias" <name:TypeV> <params:TypePattern*> "=" <ty:Box<Span<Type>>> "end" => Alias {
+    "alias" <name:TypeV> <params:TypeKindPattern*> "=" <ty:Box<Span<Type>>> "end" => Alias {
         name, params, ty,
     }.into(),
     "define" <gen:GenLet> DefineEnd => gen.into(),
@@ -82,10 +82,10 @@ Kind: Kind = {
 //* ---------------------------------- Type ---------------------------------- */
 
 Type: Type = {
-    "forall" <params:TypePattern+> "." <ty:Box<Span<TypeArrow>>> => {
+    "forall" <params:TypeKindPattern+> "." <ty:Box<Span<TypeArrow>>> => {
         Forall(params, ty).into()
     },
-    "exists" <params:TypePattern+> "." <ty:Box<Span<TypeArrow>>> => {
+    "exists" <params:TypeKindPattern+> "." <ty:Box<Span<TypeArrow>>> => {
         Exists(params, ty).into()
     },
     TypeArrow,
@@ -111,10 +111,23 @@ TypeAtom: Type = {
     "_?" => Hole.into(),
 };
 
-TypePattern: (TypeV, Kind) = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind);
-TypeOptPattern: (TypeV, Option<Kind>) = {
+//* --------------------------------- Pattern -------------------------------- */
+
+TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind);
+
+TypePattern: TypePattern = {
     "(" <name:TypeV> ":" <kind:Kind?> ")" => (name, kind),
     <name:TypeV> => (name, None),
+};
+
+TermPattern: TermPattern = {
+    "(" <v:TermV> <ty:(":" <Span<Type>>)?> ")" => (v, ty),
+    TermV => (<>, None),
+};
+
+Pattern: Pattern = {
+    <TypePattern> => <>.into(),
+    <TermPattern> => <>.into(),
 };
 
 //* ---------------------------------- Term ---------------------------------- */
@@ -162,10 +175,7 @@ TermComputation: TermComputation = {
     "comatch" <arms:ComatchBr*> "end" => Comatch {
         arms,
     }.into(),
-    "fn" <params:TypeOptPattern+> "->" <body:Box<Span<TermComputation>>> => TyAbsTerm {
-        params, body,
-    }.into(),
-    "fn" <params:TermPattern+> "->" <body:Box<Span<TermComputation>>> => Abstraction {
+    "fn" <params:Pattern+> "->" <body:Box<Span<TermComputation>>> => Abstraction {
         params, body,
     }.into(),
     "match" <scrut:Box<Span<TermValue>>> 
@@ -227,11 +237,6 @@ ComatchBr: Comatcher<DtorV, TermV, Span<TermComputation>> = {
     <body:Span<TermComputation>> => Comatcher {
         dtor, vars, body
     }
-};
-
-TermPattern: TermPattern = {
-    "(" <v:TermV> <ty:(":" <Span<Type>>)?> ")" => (v, ty),
-    TermV => (<>, None),
 };
 
 Literal: Literal = {

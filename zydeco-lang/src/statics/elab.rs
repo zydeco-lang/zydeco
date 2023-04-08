@@ -37,7 +37,7 @@ fn desugar_gen_let(
         (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
             if fun {
-                let params = params.clone();
+                let params = params.clone().into_iter().map(|p| p.into()).collect();
                 body = Box::new(def.info.make(ps::Abstraction { params, body }.into()));
             }
             if rec {
@@ -87,7 +87,14 @@ fn desugar_fn(
     }
     let mut func = TryInto::try_into(body.inner)?;
     for param in params.into_iter().rev() {
-        func = desugar_fn_one(param, rc!(body.info.clone().make(func)))?;
+        match param {
+            ps::Pattern::TypePattern(param) => {
+                func = TyAbsTerm { param, body: rc!(body.info.make(func)) }.into()
+            }
+            ps::Pattern::TermPattern(param) => {
+                func = desugar_fn_one(param, rc!(body.info.make(func)))?;
+            }
+        }
     }
     Ok(func)
 }
@@ -290,14 +297,6 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                     .map(|arg| rc!(arg))
                     .collect();
                 Dtor { body, dtor, args }.into()
-            }
-            ps::TermComputation::TyAbsTerm(ps::TyAbsTerm { params, body }) => {
-                let body = (body).try_map(TryInto::try_into)?;
-                let mut body = body;
-                for param in params.into_iter().rev() {
-                    body = body.info.clone().make(TyAbsTerm { param, body: rc!(body) }.into());
-                }
-                body.inner
             }
             ps::TermComputation::TyAppTerm(ps::TyAppTerm { body, arg }) => {
                 let body = rc!((body).try_map(TryInto::try_into)?);

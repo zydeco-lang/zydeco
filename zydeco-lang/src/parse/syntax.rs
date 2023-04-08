@@ -9,6 +9,9 @@ pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
 
+pub type TypePattern = (TypeV, Option<Kind>);
+pub type TypeKindPattern = (TypeV, Kind);
+
 #[derive(Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
 
@@ -16,10 +19,10 @@ pub struct TypeApp(pub BoxType, pub BoxType);
 pub struct Arrow(pub BoxType, pub BoxType);
 
 #[derive(Clone, Debug)]
-pub struct Forall(pub Vec<(TypeV, Kind)>, pub BoxType);
+pub struct Forall(pub Vec<TypeKindPattern>, pub BoxType);
 
 #[derive(Clone, Debug)]
-pub struct Exists(pub Vec<(TypeV, Kind)>, pub BoxType);
+pub struct Exists(pub Vec<TypeKindPattern>, pub BoxType);
 
 #[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum Type {
@@ -35,6 +38,8 @@ impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
 
+pub type TermPattern = (TermV, Option<Span<Type>>);
+
 #[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum TermValue {
     TermAnn(Annotation<BoxValue, Span<Type>>),
@@ -47,11 +52,15 @@ pub enum TermValue {
 pub type BoxValue = Box<Span<TermValue>>;
 impl ValueT for TermValue {}
 
-pub type TermPattern = (TermV, Option<Span<Type>>);
+#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
+pub enum Pattern {
+    TypePattern(TypePattern),
+    TermPattern(TermPattern),
+}
 
 #[derive(Clone, Debug)]
 pub struct Abstraction {
-    pub params: Vec<TermPattern>,
+    pub params: Vec<Pattern>,
     pub body: BoxComp,
 }
 
@@ -73,12 +82,6 @@ pub struct GenLet {
 #[derive(Clone, Debug)]
 pub struct Let {
     pub gen: GenLet,
-    pub body: BoxComp,
-}
-
-#[derive(Clone, Debug)]
-pub struct TyAbsTerm {
-    pub params: Vec<(TypeV, Option<Kind>)>,
     pub body: BoxComp,
 }
 
@@ -109,7 +112,6 @@ pub enum TermComputation {
     App(Application),
     Comatch(Comatch<DtorV, TermV, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
-    TyAbsTerm(TyAbsTerm),
     TyAppTerm(TyAppTerm),
     MatchPack(MatchPack),
 }

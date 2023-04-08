@@ -57,11 +57,8 @@ impl SpanHolder for syn::Abstraction {
         F: Fn(&mut SpanInfo) + Clone,
     {
         let syn::Abstraction { params, body } = self;
-        for (var, ty) in params {
-            var.span_map_mut(f.clone());
-            if let Some(ty) = ty {
-                ty.span_map_mut(f.clone());
-            }
+        for param in params {
+            param.span_map_mut(f.clone());
         }
         body.span_map_mut(f);
     }
@@ -102,20 +99,6 @@ impl SpanHolder for syn::Let {
     {
         let syn::Let { gen, body } = self;
         gen.span_map_mut(f.clone());
-        body.span_map_mut(f);
-    }
-}
-
-impl SpanHolder for syn::TyAbsTerm {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        let syn::TyAbsTerm { params, body } = self;
-        for (var, kd) in params {
-            var.span_map_mut(f.clone());
-            kd.span_map_mut(f.clone());
-        }
         body.span_map_mut(f);
     }
 }
