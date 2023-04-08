@@ -1,6 +1,6 @@
 use super::*;
 
-impl Data<TypeV, Kind, CtorV, RcType> {
+impl prelude::Data {
     fn type_arity(&self) -> TypeArity<Kind> {
         TypeArity {
             params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
@@ -9,7 +9,7 @@ impl Data<TypeV, Kind, CtorV, RcType> {
     }
 }
 
-impl Codata<TypeV, Kind, DtorV, RcType> {
+impl prelude::Codata {
     fn type_arity(&self) -> TypeArity<Kind> {
         TypeArity {
             params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
@@ -18,7 +18,7 @@ impl Codata<TypeV, Kind, DtorV, RcType> {
     }
 }
 
-impl Alias<TypeV, Kind, RcType> {
+impl prelude::Alias {
     fn type_arity(&self, kd: Kind) -> TypeArity<Kind> {
         TypeArity { params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(), kd }
     }
@@ -30,7 +30,7 @@ impl From<Kind> for TypeArity<Kind> {
     }
 }
 
-impl TypeCheck for Span<&Data<TypeV, Kind, CtorV, RcType>> {
+impl TypeCheck for Span<&prelude::Data> {
     type Ctx = Ctx;
     type Out = ();
 
@@ -59,7 +59,7 @@ impl TypeCheck for Span<&Data<TypeV, Kind, CtorV, RcType>> {
     }
 }
 
-impl TypeCheck for Span<&Codata<TypeV, Kind, DtorV, RcType>> {
+impl TypeCheck for Span<&prelude::Codata> {
     type Ctx = Ctx;
     type Out = ();
 
@@ -89,7 +89,7 @@ impl TypeCheck for Span<&Codata<TypeV, Kind, DtorV, RcType>> {
     }
 }
 
-impl TypeCheck for Span<&Alias<TypeV, Kind, RcType>> {
+impl TypeCheck for Span<&prelude::Alias> {
     type Ctx = Ctx;
     type Out = Kind;
 

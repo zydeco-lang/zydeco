@@ -35,9 +35,9 @@ pub struct Ctx {
     pub type_ctx: im::HashMap<TypeV, TypeArity<Kind>>,
     pub term_ctx: im::HashMap<TermV, Type>,
     pub type_env: Env<TypeV, Type>,
-    pub data_env: im::HashMap<TypeV, Data<TypeV, Kind, CtorV, RcType>>,
-    pub codata_env: im::HashMap<TypeV, Codata<TypeV, Kind, DtorV, RcType>>,
-    pub alias_env: im::HashMap<TypeV, Alias<TypeV, Kind, RcType>>,
+    pub data_env: im::HashMap<TypeV, prelude::Data>,
+    pub codata_env: im::HashMap<TypeV, prelude::Codata>,
+    pub alias_env: im::HashMap<TypeV, prelude::Alias>,
     pub trace: Trace,
 }
 

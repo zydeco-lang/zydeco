@@ -91,9 +91,9 @@ pub enum Term {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub name: Option<String>,
-    pub data: Vec<DeclSymbol<Data<TypeV, Kind, CtorV, RcType>>>,
-    pub codata: Vec<DeclSymbol<Codata<TypeV, Kind, DtorV, RcType>>>,
-    pub alias: Vec<DeclSymbol<Alias<TypeV, Kind, RcType>>>,
+    pub data: Vec<DeclSymbol<prelude::Data>>,
+    pub codata: Vec<DeclSymbol<prelude::Codata>>,
+    pub alias: Vec<DeclSymbol<prelude::Alias>>,
     pub define: Vec<DeclSymbol<Define<TermV, RcValue>>>,
     pub define_ext: Vec<DeclSymbol<Define<(TermV, RcType), ()>>>,
 }
@@ -102,4 +102,11 @@ pub struct Module {
 pub struct Program {
     pub module: Span<Module>,
     pub entry: Span<TermComputation>,
+}
+
+pub mod prelude {
+    use super::*;
+    pub type Data = super::Data<TypeV, Kind, CtorV, RcType>;
+    pub type Codata = super::Codata<TypeV, Kind, DtorV, RcType>;
+    pub type Alias = super::Alias<TypeV, Kind, RcType>;
 }

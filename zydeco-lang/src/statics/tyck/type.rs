@@ -59,7 +59,7 @@ impl TypeApp<TypeV, RcType> {
 impl Ctx {
     pub(super) fn resolve_data(
         &self, ty: Type, span: &SpanInfo,
-    ) -> Result<(Data<TypeV, Kind, CtorV, RcType>, Vec<RcType>), TyckError> {
+    ) -> Result<(prelude::Data, Vec<RcType>), TyckError> {
         let ty = self.resolve_alias(ty, span)?;
         let SynType::TypeApp(TypeApp { tvar, args }) = ty.synty else {
             Err(self.err(span, TypeExpected {
@@ -76,7 +76,7 @@ impl Ctx {
     }
     pub(super) fn resolve_codata(
         &self, ty: Type, span: &SpanInfo,
-    ) -> Result<(Codata<TypeV, Kind, DtorV, RcType>, Vec<RcType>), TyckError> {
+    ) -> Result<(prelude::Codata, Vec<RcType>), TyckError> {
         let ty = self.resolve_alias(ty, span)?;
         let SynType::TypeApp(TypeApp { tvar, args }) = ty.synty else {
             Err(self.err(span, TypeExpected {

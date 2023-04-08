@@ -44,6 +44,7 @@ pub mod binder {
 
     macro_rules! var {
         ( $Var:ident ) => {
+            #[allow(clippy::mutable_key_type)]
             #[derive(Clone, Debug)]
             pub struct $Var(String, SpanInfo);
             impl $Var {
