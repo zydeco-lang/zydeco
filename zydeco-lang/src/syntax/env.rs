@@ -2,7 +2,6 @@ use std::{
     hash::Hash,
     ops::{Deref, DerefMut},
 };
-
 use crate::utils::fmt::FmtArgs;
 
 #[derive(Clone, Debug)]

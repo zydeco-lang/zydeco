@@ -1,9 +1,9 @@
 use super::syntax::*;
-use crate::dynamics::syntax as ds;
-use crate::rc;
-use crate::utils::span::span;
-use std::io::{BufRead, Write};
-use std::rc::Rc;
+use crate::{dynamics::syntax as ds, rc, utils::span::span};
+use std::{
+    io::{BufRead, Write},
+    rc::Rc,
+};
 
 type ZValue = ds::SemVal;
 type ZCompute = ZComp;

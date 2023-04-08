@@ -1,8 +1,10 @@
 use crate::dynamics::syntax as ds;
 pub use crate::syntax::{env::Env, *};
 use indexmap::IndexMap;
-use std::io::{BufRead, Write};
-use std::rc::Rc;
+use std::{
+    io::{BufRead, Write},
+    rc::Rc,
+};
 use zydeco_derive::{EnumGenerator, FmtArgs};
 
 /* ---------------------------------- Term ---------------------------------- */

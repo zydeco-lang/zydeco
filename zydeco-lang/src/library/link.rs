@@ -1,6 +1,5 @@
 use super::{builtins, syntax::*};
-use crate::rc;
-use crate::statics::syntax as ss;
+use crate::{rc, statics::syntax as ss};
 use indexmap::IndexMap;
 
 impl From<ss::Program> for Program {
@@ -102,5 +101,11 @@ impl From<&ss::TermComputation> for ZComp {
                 Let { var: var.clone(), def: scrut, body }.into()
             }
         }
+    }
+}
+
+impl Module {
+    pub fn pure(name: Option<String>) -> Self {
+        Self { name, define: IndexMap::new() }
     }
 }

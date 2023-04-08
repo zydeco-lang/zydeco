@@ -16,7 +16,6 @@ use crate::{
         span::{FileInfo, Span, SpanHolder},
     },
 };
-use indexmap::IndexMap;
 use std::{path::PathBuf, rc::Rc};
 
 pub struct Zydeco;
@@ -130,7 +129,7 @@ impl ZydecoExpr {
         let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);
         runtime.env = self.env.clone();
         let m = ls::Program::eval(
-            ls::Program { module: ls::Module { name: None, define: IndexMap::new() }, entry: comp },
+            ls::Program { module: ls::Module::pure(None), entry: comp },
             &mut runtime,
         );
         self.env = runtime.env;
@@ -139,11 +138,8 @@ impl ZydecoExpr {
     pub fn eval_os(&mut self, comp: ls::ZComp, args: &[String]) -> ds::Program {
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
-        let p =
-            ls::Program { module: ls::Module { name: None, define: IndexMap::new() }, entry: comp };
-        let r: &mut dyn std::io::BufRead = &mut input;
-        let w: &mut dyn std::io::Write = &mut output;
-        let mut runtime = ds::Runtime::new(r, w, args);
+        let p = ls::Program { module: ls::Module::pure(None), entry: comp };
+        let mut runtime = ds::Runtime::new(&mut input, &mut output, args);
         runtime.env = self.env.clone();
         let m = ls::Program::eval(p, &mut runtime);
         self.env = runtime.env;

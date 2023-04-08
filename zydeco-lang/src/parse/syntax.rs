@@ -1,5 +1,4 @@
-use crate::utils::monoid::Monoid;
-use crate::utils::span::Span;
+use crate::utils::{monoid::Monoid, span::Span};
 use zydeco_derive::{EnumGenerator, SpanHolder};
 
 pub use crate::syntax::*;
