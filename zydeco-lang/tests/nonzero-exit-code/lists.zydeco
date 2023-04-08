@@ -1,5 +1,5 @@
 let rec foldl : forall (A : VType) (R : VType) . List A -> Thunk(A -> R -> Ret(R)) -> R -> Ret(R) =
-  fn A R -> fn l step s ->
+  fn A R l step s ->
     match l
     | Nil() -> ret s
     | Cons(x, xs) -> (

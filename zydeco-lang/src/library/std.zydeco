@@ -21,11 +21,11 @@ end
 ## identities
 
 def id : Thunk(forall (A : VType) . A -> Ret A) = {
-    fn A -> fn x -> ret x
+    fn A x -> ret x
 } end
 
 def id~ : Thunk(forall (B : CType) . Thunk B -> B) = {
-    fn B -> fn x -> ! x
+    fn B x -> ! x
 } end
 
 
@@ -118,14 +118,14 @@ pub def bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
 };
 
 pub def if : Thunk(forall (B : CType) . Bool -> Thunk B -> Thunk B -> B) = {
-  fn B -> fn b thn els ->
+  fn B b thn els ->
     match b
     | True()  -> ! thn
     | False() -> ! els
     end
 };
 pub def ifc : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -> B) = {
-  fn B -> fn b thn els ->
+  fn B b thn els ->
     do b <- ! b;
     ! if @(B) b thn els
 };

@@ -1,4 +1,7 @@
-data Nat where | Z() | S(Nat) end
+data Nat where
+| Z()
+| S(Nat)
+end
 let zero: Nat = Z();
 let fn suc (x: Nat): F Nat =
   ret (S(x)::Nat)
