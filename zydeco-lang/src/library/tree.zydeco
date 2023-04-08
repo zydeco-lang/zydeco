@@ -210,6 +210,31 @@ pub define rec search : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) 
     )
   end;
 
+pub define rec change : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> U(A -> A -> F(Bool)) -> F(AVL A) =
+  fn (A : VType) -> fn x tree cmp_eq cmp_lt ->
+    match tree
+    | Leaf() -> ret tree
+    | Node(l, n, h, r) -> (
+      do b <- ! cmp_eq x n;
+      match b
+      | True() -> (
+        ret Node(l, x, h, r)
+      )
+      | False() -> (
+        do b <- ! cmp_lt x n;
+        match b
+        | True() ->
+          do l' <- ! change @(A) x l cmp_eq cmp_lt;
+          ret Node(l', n, h, r)
+        | False() ->
+          do r' <- ! change @(A) x r cmp_eq cmp_lt;
+          ret Node(l, n, h, r')
+        end
+      )
+      end
+    )
+  end;
+
 pub define rec delete : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> U(A -> A -> F(Bool)) -> F(AVL A) =
   fn (A : VType) -> fn x tree cmp_eq cmp_lt ->
     match tree
@@ -251,28 +276,6 @@ pub define rec delete : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) 
           do n_tree <- ! fix_height @(A) Node(l, n, h, r');
           ! balance @(A) n_tree
         )
-        end
-      )
-      end
-    )
-  end;
-
-# some problems
-pub define rec change : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> U(A -> A -> F(Bool)) -> F(AVL A) =
-  fn (A : VType) -> fn x tree cmp_eq cmp_lt ->
-    match tree
-    | Leaf() -> ret tree
-    | Node(l, n, h, r) -> (
-      do b <- ! cmp_eq x n;
-      match b
-      | True() -> (
-        ret Node(l, x, h, r)
-      )
-      | False() -> (
-        do b <- ! cmp_lt x n;
-        match b
-        | True() -> ! change @(A) x l cmp_eq cmp_lt
-        | False() -> ! change @(A) x r cmp_eq cmp_lt
         end
       )
       end
@@ -365,7 +368,6 @@ pub define hash_delete : U(forall (K : VType) (V : VType) . K -> V -> Hash K V -
       end
 };
 
-# WIP: Some problems
 pub define hash_change : U(forall (K : VType) (V : VType) . K -> V -> Hash K V -> F(Hash K V)) = {
   fn (K : VType) (V : VType) ->
     fn k v hash ->
@@ -402,15 +404,18 @@ match h
 | Hash(body, s_cmp, i_cmp) -> ! pre_traversal @(Pair Int String) body pair_fmt {
   ! write_line "insert ok"
   {
-    do h <- ! hash_delete @(Int) @(String) 100 "default" h;
+    do h <- ! hash_delete @(Int) @(String) 5 "default" h;
     match h
     | Hash(body, s_cmp, i_cmp) -> ! pre_traversal @(Pair Int String) body pair_fmt {
+      ! write_line "change: 1 -> one changed"
+      {
       do h <- ! hash_change @(Int) @(String) 1 "one changed" h;
       match h
       | Hash(body, s_cmp, i_cmp) -> ! pre_traversal @(Pair Int String) body pair_fmt {
         ! exit 0
       }
       end
+      }
     }
     end
   }
