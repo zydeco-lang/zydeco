@@ -1,10 +1,10 @@
 use crate::dynamics::syntax as ds;
 pub use crate::syntax::{env::Env, *};
-use indexmap::IndexMap;
 use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
+use im::Vector;
 use zydeco_derive::{EnumGenerator, FmtArgs};
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -55,7 +55,7 @@ pub enum Term {
 #[derive(Clone)]
 pub struct Module {
     pub name: Option<String>,
-    pub define: IndexMap<TermV, ZVal>,
+    pub define: Vector<(TermV, ZVal)>,
 }
 
 #[derive(Clone)]

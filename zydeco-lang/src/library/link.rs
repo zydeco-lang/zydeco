@@ -1,6 +1,6 @@
 use super::{builtins::Builtin, syntax::*};
 use crate::{rc, statics::syntax as ss};
-use indexmap::IndexMap;
+use im::Vector;
 
 impl From<ss::Program> for Program {
     fn from(p: ss::Program) -> Self {
@@ -13,7 +13,7 @@ impl From<ss::Program> for Program {
 
 impl From<ss::Module> for Module {
     fn from(m: ss::Module) -> Self {
-        let mut define = IndexMap::new();
+        let mut define = Vector::new();
         let std_library = Builtin::std_library();
         for DeclSymbol {
             public: _,
@@ -22,10 +22,10 @@ impl From<ss::Module> for Module {
         } in m.define_ext
         {
             let def = std_library[&sym].clone();
-            define.insert(sym, def);
+            define.push_back((sym, def));
         }
         for DeclSymbol { public: _, external: _, inner: ss::Define { name, def } } in m.define {
-            define.insert(name, def.inner_ref().into());
+            define.push_back((name, def.inner_ref().into()));
         }
         Self { name: m.name, define }
     }
@@ -106,6 +106,6 @@ impl From<&ss::TermComputation> for ZComp {
 
 impl Module {
     pub fn pure(name: Option<String>) -> Self {
-        Self { name, define: IndexMap::new() }
+        Self { name, define: Vector::new() }
     }
 }

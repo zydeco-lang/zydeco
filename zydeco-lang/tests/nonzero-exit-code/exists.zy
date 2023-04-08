@@ -2,10 +2,6 @@ data Seal (X : VType) (A : VType) where
 | Seal(Thunk(A -> Ret X), Thunk(X -> Ret A))
 end
 
-def id : Thunk(forall (A : VType) . A -> Ret A) = {
-    fn A -> fn x -> ret x
-} end
-
 def nat : exists (X : VType) . Seal X Int = pack(
   Int, Seal(
     { ! id @(Int) },
@@ -13,7 +9,8 @@ def nat : exists (X : VType) . Seal X Int = pack(
   )
 ) end
 
-match nat | pack(Nat, seal) ->
+match nat
+| pack(Nat, seal) ->
   match seal
   | Seal(of, to) ->
     do n <- ! of 0;

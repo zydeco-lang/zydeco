@@ -173,7 +173,7 @@ where
 {
     fn fmt_args(&self, fargs: Args) -> String {
         let Pack { ty, body } = self;
-        format!("exists ({}, {})", ty.fmt_args(fargs), body.fmt_args(fargs))
+        format!("pack ({}, {})", ty.fmt_args(fargs), body.fmt_args(fargs))
     }
 }
 
@@ -291,7 +291,7 @@ where
     fn fmt_args(&self, fargs: Args) -> String {
         let Comatch { arms } = self;
         let mut s = String::new();
-        s += "comatch ";
+        s += "comatch";
         for Comatcher { dtor, vars, body } in arms {
             s += &fargs.br_indent();
             s += "| .";

@@ -1,15 +1,15 @@
 # An example that uses forall and type aliases to prove that
-# `Return A` and the `Ret A` primitive are isomorphic to each other.
+# `Ret' A` and the `Ret A` primitive are isomorphic to each other.
 
-alias Return (A : VType) = forall (R : CType) . Thunk(A -> R) -> R end
+alias Ret' (A : VType) = forall (R : CType) . Thunk(A -> R) -> R end
 
-def f : Thunk(forall (A : VType) . Thunk(Return A) -> Ret A) = {
+def f : Thunk(forall (A : VType) . Thunk(Ret' A) -> Ret A) = {
   fn A -> fn rr -> (
     ! rr @(Ret A) { fn a -> ret a }
   )
 } end
 
-def g : Thunk(forall (A : VType) . Thunk(Ret A) -> Return A) = {
+def g : Thunk(forall (A : VType) . Thunk(Ret A) -> Ret' A) = {
   fn A -> fn r -> (
     fn R -> fn ar -> (
       do a <- ! r;
@@ -24,7 +24,7 @@ def id : Thunk(forall (A : VType) . Thunk(Ret A) -> Ret A) = {
   )
 } end
 
-def id' : Thunk(forall (A : VType) . Thunk(Return A) -> Return A) = {
+def id' : Thunk(forall (A : VType) . Thunk(Ret' A) -> Ret' A) = {
   fn A -> fn rr -> (
     ! g @(A) { ! f @(A) rr }
   )
