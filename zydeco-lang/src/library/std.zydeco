@@ -195,6 +195,17 @@ pub data List (A : VType) where
   | Cons(A, List A)
 end
 
+pub def rec foldl : forall (A : VType) (R : VType) . List A -> Thunk(A -> R -> Ret(R)) -> R -> Ret(R) =
+  fn A R l step s ->
+    match l
+    | Nil() -> ret s
+    | Cons(x, xs) -> (
+      do s' <- ! step x s;
+      ! foldl @(A) @(R) xs step s'
+    )
+    end
+end
+
 pub data LListV (A : VType) (B : CType) where
   | Nil()
   | Cons(A, Thunk(B))
