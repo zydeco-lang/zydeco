@@ -1,0 +1,418 @@
+data Pair (K : VType) (V : VType) where
+| Pair(K, V)
+end
+
+data AVL (A : VType) where
+| Leaf()
+| Node(AVL A, A, Int, AVL A)
+end
+
+data Option (A : VType) where
+  | Some(A)
+  | None()
+end
+
+pub define fn max_int : Int -> Int -> F(Int) =
+  fn x y ->
+    do b <- ! int_gt x y;
+    match b
+    | True() -> ret x
+    | False() -> ret y
+    end
+;
+
+pub define leaf : U(forall (A : VType) . F(AVL A)) = {
+  fn (A : VType) -> ret Leaf()
+};
+
+pub define singleton : U(forall (A : VType) . A -> F(AVL A)) = {
+  fn (A : VType) -> fn (x : A) ->
+    do lf <- ! leaf @(A);
+    ret Node(Leaf(), x, 1, Leaf())
+};
+
+pub define height : U(forall (A : VType) . AVL A -> F(Int)) = {
+  fn (A : VType) -> fn tree ->
+    match tree
+    | Leaf() -> ret 0
+    | Node(l, n, h, r) -> ret h
+    end
+};
+
+pub define fix_height : U(forall (A : VType) . AVL A -> F(AVL A)) = {
+  fn (A : VType) -> fn tree ->
+    match tree
+    | Leaf() -> ret Leaf()
+    | Node(l, n, h, r) -> (
+      do hl <- ! height @(A) l;
+      do hr <- ! height @(A) r;
+      do h' <- ! max_int hl hr;
+      do h' <- ! add h' 1;
+      ret Node(l, n, h', r)
+    )
+    end
+};
+
+pub define balance_factor : U(forall (A : VType) . AVL A -> F(Int)) = {
+  fn (A : VType) -> fn tree ->
+    match tree
+    | Leaf() -> ret 0
+    | Node(l, n, h, r) -> (
+      do hl <- ! height @(A) l;
+      do hr <- ! height @(A) r;
+      ! sub hl hr
+    )
+  end
+};
+
+pub define left : U(forall (A : VType) . AVL A -> F(AVL A)) = {
+  fn (A : VType) -> fn tree ->
+    match tree
+    | Leaf() -> ret Leaf()
+    | Node(l, n, h, r) -> ret l
+    end
+};
+
+pub define right : U(forall (A : VType) . AVL A -> F(AVL A)) = {
+  fn (A : VType) -> fn tree ->
+    match tree
+    | Leaf() -> ret Leaf()
+    | Node(l, n, h, r) -> ret r
+    end
+};
+
+pub define rec min : forall (A : VType) . AVL A -> U(A -> A -> F(Bool)) -> F(Option A) =
+  fn (A : VType) -> fn tree cmp ->
+    match tree
+    | Leaf() -> ret None()
+    | Node(l, n, h, r) -> (
+      do l' <- ! min @(A) l cmp;
+      match l'
+      | Some(x) -> ret Some(x)
+      | None() -> ret Some(n)
+      end
+    )
+    end
+;
+
+pub define rotate_right : U(forall (A : VType) . AVL A -> F(AVL A)) = {
+  fn (A : VType) -> fn tree ->
+    match tree
+    | Leaf() -> ret Leaf()
+    | Node(l, n, h, r) -> (
+      match l
+      | Leaf() -> ret Leaf()
+      | Node(ll, ln, lh, lr) -> (
+        do n_tree <- ! fix_height @(A) Node(lr, n, h, r);
+        ! fix_height @(A) Node(ll, ln, lh, n_tree)
+      )
+      end
+    )
+    end
+};
+
+pub define rotate_left : U(forall (A : VType) . AVL A -> F(AVL A)) = {
+  fn (A : VType) -> fn tree ->
+    match tree
+    | Leaf() -> ret Leaf()
+    | Node(l, n, h, r) -> (
+      match r
+      | Leaf() -> ret Leaf()
+      | Node(rl, rn, rh, rr) -> (
+        do n_tree <- ! fix_height @(A) Node(l, n, h, rl);
+        ! fix_height @(A) Node(n_tree, rn, rh, rr)
+      )
+      end
+    )
+    end
+};
+
+define balance : U(forall (A : VType) . AVL A -> F(AVL A)) = {
+  fn (A : VType) -> fn tree ->
+    match tree
+    | Leaf() -> ret Leaf()
+    | Node(l, n, h, r) -> (
+    do bf <- ! balance_factor @(A) tree;
+    do g_1 <- ! int_gt bf 1;
+    match g_1
+    | True() -> (
+      do l_bf <- ! balance_factor @(A) l;
+      do l_0 <- ! int_lt l_bf 0;
+      match l_0
+      | True() -> 
+        do l_tree' <- ! rotate_left @(A) l;
+        do n_h <- ! height @(A) tree;
+        ! rotate_right @(A) Node(l_tree', n, n_h, r)
+      | False() ->
+        ! rotate_right @(A) tree
+      end
+    )
+    | False() -> (
+      do l_m1 <- ! int_lt bf -1;
+      match l_m1
+      | True() -> (
+        do r_bf <- ! balance_factor @(A) r;
+        do g_0 <- ! int_gt r_bf 0;
+        match g_0
+        | True() -> 
+          do r_tree' <- ! rotate_right @(A) r;
+          do n_h <- ! height @(A) tree;
+          ! rotate_left @(A) Node(l, n, n_h, r_tree')
+        | False() ->
+          ! rotate_left @(A) tree
+        end
+      )
+      | False() -> ret tree
+      end
+    )
+    end
+    )
+    end
+};
+
+pub define rec insert : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> F(AVL A) =
+  fn (A : VType) -> fn x tree cmp ->
+    match tree
+    | Leaf() -> ! singleton @(A) x
+    | Node(l, n, h, r) -> (
+      do b <- ! cmp x n;
+      match b
+      | True() -> (
+        do l' <- ! insert @(A) x l cmp;
+        do n_tree <- ! fix_height @(A) Node(l', n, h, r);
+        ! balance @(A) n_tree
+      )
+      | False() -> (
+        do r' <- ! insert @(A) x r cmp;
+        do n_tree <- ! fix_height @(A) Node(l, n, h, r');
+        ! balance @(A) n_tree
+      )
+      end
+    )
+  end;
+
+pub define rec search : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> U(A -> A -> F(Bool)) -> F(Option A) =
+  fn (A : VType) -> fn x tree cmp_eq cmp_lt ->
+    match tree
+    | Leaf() -> ret None()
+    | Node(l, n, h, r) -> (
+      do b <- ! cmp_eq x n;
+      match b
+      | True() -> ret Some(n)
+      | False() -> (
+        do b <- ! cmp_lt x n;
+        match b
+        | True() -> ! search @(A) x l cmp_eq cmp_lt
+        | False() -> ! search @(A) x r cmp_eq cmp_lt
+        end
+      )
+      end
+    )
+  end;
+
+pub define rec delete : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> U(A -> A -> F(Bool)) -> F(AVL A) =
+  fn (A : VType) -> fn x tree cmp_eq cmp_lt ->
+    match tree
+    | Leaf() -> ret tree
+    | Node(l, n, h, r) -> (
+      do b <- ! cmp_eq x n;
+      match b
+      | True() -> (
+        match l
+        | Leaf() -> ret r
+        | Node(ll, ln, lh, lr) -> (
+          match r
+          | Leaf() -> ret l
+          | Node(rl, rn, rh, rr) -> (
+            do right_min <- ! min @(A) r cmp_lt;
+            match right_min
+            | None() -> ret l
+            | Some(m) -> (
+              do r' <- ! delete @(A) m r cmp_eq cmp_lt;
+              do n_tree <- ! fix_height @(A) Node(l, m, h, r');
+              ! balance @(A) n_tree
+            )
+            end
+          )
+          end
+        )
+        end
+      )
+      | False() -> (
+        do bl <- ! cmp_lt x n;
+        match bl
+        | True() -> (
+          do l' <- ! delete @(A) x l cmp_eq cmp_lt;
+          do n_tree <- ! fix_height @(A) Node(l', n, h, r);
+          ! balance @(A) n_tree
+        )
+        | False() -> (
+          do r' <- ! delete @(A) x r cmp_eq cmp_lt;
+          do n_tree <- ! fix_height @(A) Node(l, n, h, r');
+          ! balance @(A) n_tree
+        )
+        end
+      )
+      end
+    )
+  end;
+
+# some problems
+pub define rec change : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> U(A -> A -> F(Bool)) -> F(AVL A) =
+  fn (A : VType) -> fn x tree cmp_eq cmp_lt ->
+    match tree
+    | Leaf() -> ret tree
+    | Node(l, n, h, r) -> (
+      do b <- ! cmp_eq x n;
+      match b
+      | True() -> (
+        ret Node(l, x, h, r)
+      )
+      | False() -> (
+        do b <- ! cmp_lt x n;
+        match b
+        | True() -> ! change @(A) x l cmp_eq cmp_lt
+        | False() -> ! change @(A) x r cmp_eq cmp_lt
+        end
+      )
+      end
+    )
+  end;
+
+pub define rec pre_traversal : forall (A : VType) . AVL A -> U(A -> F(String)) -> U(OS) -> OS =
+  fn (A : VType) -> fn tree fmt next ->
+    match tree
+    | Leaf() -> ! next
+    | Node(left, v, h, right) -> (
+      do r1 <- ! fmt v;
+      do r2 <- ! str_append r1 " h:";
+      do r3 <- ! int_to_str h;
+      do res <- ! str_append r2 r3;
+      ! write_line res {
+        ! pre_traversal @(A) left fmt {
+          ! pre_traversal @(A) right fmt {! next}}}
+      )
+    end
+;
+
+data Hash (K : VType) (V : VType) where
+| Hash(AVL (Pair K V), U(Pair K V -> Pair K V -> F(Bool)), U(Pair K V -> Pair K V -> F(Bool)))
+end
+
+pub define hash_new : U(forall (K : VType) (V : VType) . U(K -> K -> F(Bool)) -> U(K -> K -> F(Bool)) -> F(Hash K V)) = {
+  fn (K : VType) (V : VType) ->
+    fn insert_key_cmp search_key_cmp ->
+      do body <- ! leaf @(Pair K V);
+      ret Hash(body, {
+        fn p1 p2 ->
+          match p1
+          | Pair(k1, v1) -> (
+            match p2
+            | Pair(k2, v2) -> ! insert_key_cmp k1 k2
+            end
+          )
+          end
+      }, {
+        fn p1 p2 -> 
+          match p1
+          | Pair(k1, v1) -> (
+            match p2
+            | Pair(k2, v2) -> ! search_key_cmp k1 k2
+            end
+          )
+          end
+      })
+};
+
+pub define hash_insert : U(forall (K : VType) (V : VType) . K -> V -> Hash K V -> F(Hash K V)) = {
+  fn (K : VType) (V : VType) ->
+    fn k v tree ->
+      match tree
+      | Hash(body, insert_cmp, search_cmp) -> (
+        do body' <- ! insert @(Pair K V) Pair(k,v) body insert_cmp;
+        ret Hash(body', insert_cmp, search_cmp)
+      )
+      end
+};
+
+# in search, a default value for v is needed, because the type of v is not known, bad ;(
+pub define hash_search : U(forall (K : VType) (V : VType) . K -> V -> Hash K V -> F(Option V)) = {
+  fn (K : VType) (V : VType) ->
+    fn k default tree ->
+      match tree
+      | Hash(body, insert_cmp, search_cmp) -> (
+        do res <- ! search @(Pair K V) Pair(k, default) body search_cmp insert_cmp;
+        match res
+        | None() -> ret None()
+        | Some(p) -> (
+          match p
+          | Pair(k, v) -> ret Some(v)
+          end
+        )
+        end
+      )
+      end
+};
+
+pub define hash_delete : U(forall (K : VType) (V : VType) . K -> V -> Hash K V -> F(Hash K V)) = {
+  fn (K : VType) (V : VType) ->
+    fn k default tree ->
+      match tree
+      | Hash(body, insert_cmp, search_cmp) -> (
+        do body' <- ! delete @(Pair K V) Pair(k, default) body search_cmp insert_cmp;
+        ret Hash(body', insert_cmp, search_cmp)
+      )
+      end
+};
+
+# WIP: Some problems
+pub define hash_change : U(forall (K : VType) (V : VType) . K -> V -> Hash K V -> F(Hash K V)) = {
+  fn (K : VType) (V : VType) ->
+    fn k v hash ->
+      match hash
+      | Hash(body, insert_cmp, search_cmp) -> (
+        do body' <- ! change @(Pair K V) Pair(k, v) body search_cmp insert_cmp;
+        ret Hash(body', insert_cmp, search_cmp)
+      )
+      end
+};
+
+define pair_fmt : U((Pair Int String) -> F(String)) = {
+  fn p ->
+    match p
+    | Pair(k, v) -> (
+      do k_str <- ! int_to_str k;
+      do v_str <- ! str_append " " v;
+      ! str_append k_str v_str
+    )
+    end
+};
+
+
+do h <- ! hash_new @(Int) @(String) int_lt int_eq;
+do h <- ! hash_insert @(Int) @(String) 1 "one" h;
+do h <- ! hash_insert @(Int) @(String) 2 "two" h;
+do h <- ! hash_insert @(Int) @(String) 3 "three" h;
+do h <- ! hash_insert @(Int) @(String) 4 "four" h;
+do h <- ! hash_insert @(Int) @(String) 5 "five" h;
+do h <- ! hash_insert @(Int) @(String) 6 "six" h;
+do h <- ! hash_insert @(Int) @(String) 7 "seven" h;
+
+match h
+| Hash(body, s_cmp, i_cmp) -> ! pre_traversal @(Pair Int String) body pair_fmt {
+  ! write_line "insert ok"
+  {
+    do h <- ! hash_delete @(Int) @(String) 100 "default" h;
+    match h
+    | Hash(body, s_cmp, i_cmp) -> ! pre_traversal @(Pair Int String) body pair_fmt {
+      do h <- ! hash_change @(Int) @(String) 1 "one changed" h;
+      match h
+      | Hash(body, s_cmp, i_cmp) -> ! pre_traversal @(Pair Int String) body pair_fmt {
+        ! exit 0
+      }
+      end
+    }
+    end
+  }
+}
+end
