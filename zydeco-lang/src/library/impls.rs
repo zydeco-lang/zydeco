@@ -1,5 +1,5 @@
 use super::syntax::*;
-use crate::{dynamics::syntax as ds, rc, utils::span::span};
+use crate::{dynamics::syntax as ds, rc, utils::span::SpanInfo};
 use std::{
     io::{BufRead, Write},
     rc::Rc,
@@ -15,11 +15,11 @@ fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
 
 // /* Constructors and Destructors */
 fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
-    Ctor { ctor: CtorV::new(format!("{}", ctor), span(0, 0)), args }.into()
+    Ctor { ctor: CtorV::new(format!("{}", ctor), SpanInfo::new(0, 0)), args }.into()
 }
 fn dtor(body: Rc<ZCompute>, dtor: &str, args: Vec<ZValue>) -> ZCompute {
     let args = args.into_iter().map(|a| rc!(a.into())).collect();
-    Dtor { body, dtor: DtorV::new(format!("{}", dtor), span(0, 0)), args }.into()
+    Dtor { body, dtor: DtorV::new(format!("{}", dtor), SpanInfo::new(0, 0)), args }.into()
 }
 
 // /* Bool */

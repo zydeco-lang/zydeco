@@ -1,4 +1,4 @@
-use crate::utils::span::Span;
+use crate::prelude::*;
 use std::rc::Rc;
 
 #[derive(Clone, Copy)]

@@ -1,4 +1,4 @@
-use super::span::{span, Span};
+use super::span::{Span, SpanInfo};
 
 pub trait Monoid: Sized {
     fn empty() -> Self;
@@ -13,7 +13,7 @@ pub trait Monoid: Sized {
 
 impl<T: Monoid> Monoid for Span<T> {
     fn empty() -> Self {
-        span(0, 0).make(T::empty())
+        SpanInfo::new(0, 0).make(T::empty())
     }
     fn append(self, other: Self) -> Self {
         other.info.make(self.inner.append(other.inner))

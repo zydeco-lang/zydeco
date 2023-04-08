@@ -42,13 +42,13 @@ pub mod parse {
 
 pub mod statics {
     pub mod syntax;
-    mod resolve;
-    pub mod err;
     mod elab;
+    mod resolve;
     pub mod tyck;
+    pub mod err;
     mod fmt;
 
-    pub use tyck::{Ctx, TypeCheck};
+    pub use tyck::TypeCheck;
 }
 
 pub mod library {
@@ -73,9 +73,13 @@ pub mod utils {
     pub mod never;
     pub mod wrappers;
     pub mod monoid;
+}
 
-    pub use fmt::FmtArgs;
-    pub use span::{Span, SpanHolder, SpanInfo, SpanView};
+pub mod prelude {
+    pub use crate::utils::{
+        fmt::FmtArgs,
+        span::{Span, SpanHolder, SpanInfo, SpanView},
+    };
 }
 
 pub mod zydeco;

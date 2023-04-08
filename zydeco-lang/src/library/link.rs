@@ -1,4 +1,4 @@
-use super::{builtins, syntax::*};
+use super::{builtins::Builtin, syntax::*};
 use crate::{rc, statics::syntax as ss};
 use indexmap::IndexMap;
 
@@ -14,7 +14,7 @@ impl From<ss::Program> for Program {
 impl From<ss::Module> for Module {
     fn from(m: ss::Module) -> Self {
         let mut define = IndexMap::new();
-        let std_library = builtins::std_library();
+        let std_library = Builtin::std_library();
         for DeclSymbol {
             public: _,
             external: _,

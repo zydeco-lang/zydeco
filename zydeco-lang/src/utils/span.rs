@@ -55,11 +55,10 @@ pub struct SpanInfo {
     pub path: OnceCell<Rc<PathBuf>>,
 }
 
-pub fn span(l: usize, r: usize) -> SpanInfo {
-    SpanInfo { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
-}
-
 impl SpanInfo {
+    pub fn new(l: usize, r: usize) -> SpanInfo {
+        SpanInfo { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
+    }
     pub fn make<T>(&self, inner: T) -> Span<T> {
         Span { inner, info: self.clone() }
     }

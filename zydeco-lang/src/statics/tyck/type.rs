@@ -1,9 +1,8 @@
 use super::*;
-use crate::utils::span::span;
 
 impl Type {
     pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
-        TypeApp { tvar: TypeV::new(name.into(), span(0, 0)), args }.into()
+        TypeApp { tvar: TypeV::new(name.into(), SpanInfo::new(0, 0)), args }.into()
     }
     pub fn make_thunk(arg: RcType) -> Self {
         Type::internal("Thunk", vec![arg])

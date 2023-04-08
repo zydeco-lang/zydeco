@@ -2,7 +2,7 @@ use super::{err::TyckErrorItem, resolve::NameResolveError, syntax::*};
 use crate::{
     parse::syntax as ps,
     rc,
-    utils::span::{span, Span, SpanView},
+    utils::span::{Span, SpanInfo, SpanView},
 };
 
 fn desugar_gen_let(
@@ -71,7 +71,7 @@ fn desugar_fn(
     ) -> Result<TermComputation, TyckErrorItem> {
         let mut body = Comatch {
             arms: vec![ps::Comatcher {
-                dtor: DtorV::new(format!("arg"), span(0, 0)),
+                dtor: DtorV::new(format!("arg"), SpanInfo::new(0, 0)),
                 vars: vec![var],
                 body,
             }],
@@ -264,7 +264,7 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 let arg = arg.try_map(TryInto::try_into)?;
                 Dtor {
                     body: fun,
-                    dtor: DtorV::new(format!("arg"), span(0, 0)),
+                    dtor: DtorV::new(format!("arg"), SpanInfo::new(0, 0)),
                     args: vec![rc!(arg)],
                 }
                 .into()

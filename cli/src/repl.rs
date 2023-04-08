@@ -1,13 +1,5 @@
 #![allow(unused)]
-use zydeco_lang::{
-    dynamics::syntax as ds,
-    statics::syntax as ss,
-    utils::{
-        fmt::FmtArgs,
-        span::{span, SpanView},
-    },
-    zydeco::ZydecoExpr,
-};
+use zydeco_lang::{dynamics::syntax as ds, prelude::*, statics::syntax as ss, zydeco::ZydecoExpr};
 
 pub fn launch() -> Result<i32, String> {
     println!("Zydeco v0.2.0");
@@ -69,7 +61,9 @@ pub fn launch() -> Result<i32, String> {
                 match zydeco_expr.tyck_computation(term.span().make(c.clone())) {
                     Err(e) => println!("Type Error: {}", e),
                     Ok(ty) => {
-                        if let Some(()) = ty.clone().elim_os(zydeco_expr.ctx.clone(), &span(0, 0)) {
+                        if let Some(()) =
+                            ty.clone().elim_os(zydeco_expr.ctx.clone(), &SpanInfo::new(0, 0))
+                        {
                             // HACK: The final call to OS will destroy the environment,
                             // so we need to save a snapshot of it before we run.
                             let snapshot = zydeco_expr.clone();
@@ -86,7 +80,7 @@ pub fn launch() -> Result<i32, String> {
                             // HACK: Restore the environment
                             zydeco_expr = snapshot;
                         } else if let Some(ty) =
-                            ty.clone().elim_ret(zydeco_expr.ctx.clone(), &span(0, 0))
+                            ty.clone().elim_ret(zydeco_expr.ctx.clone(), &SpanInfo::new(0, 0))
                         {
                             let c = ZydecoExpr::link_computation(c);
                             let c = zydeco_expr.eval_ret_computation(c);
