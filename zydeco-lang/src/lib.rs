@@ -1,4 +1,6 @@
 #![allow(clippy::style)]
+#![allow(clippy::useless_format)]
+#![allow(clippy::clone_on_copy)]
 
 pub mod syntax;
 
