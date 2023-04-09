@@ -183,17 +183,31 @@ impl<T> Span<T> {
     pub fn inner(self) -> T {
         self.inner
     }
+
+    pub fn map_rc<F, U>(&self, f: F) -> Rc<Span<U>>
+    where
+        F: FnOnce(&T) -> U,
+    {
+        Rc::new(self.info.make(f(&self.inner)))
+    }
     pub fn map<F, U>(self, f: F) -> Span<U>
     where
         F: FnOnce(T) -> U,
     {
         self.info.to_owned().make(f(self.inner))
     }
+
+    pub fn try_map_rc<F, U, E>(&self, f: F) -> Result<Rc<Span<U>>, E>
+    where
+        F: FnOnce(&T) -> Result<U, E>,
+    {
+        Ok(Rc::new(self.info.make(f(&self.inner)?)))
+    }
     pub fn try_map<F, U, E>(self, f: F) -> Result<Span<U>, E>
     where
         F: FnOnce(T) -> Result<U, E>,
     {
-        Ok(self.info.to_owned().make(f(self.inner)?))
+        Ok(self.info.make(f(self.inner)?))
     }
 }
 
