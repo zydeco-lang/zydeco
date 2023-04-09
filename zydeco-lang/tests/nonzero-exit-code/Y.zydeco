@@ -1,17 +1,16 @@
-codata Y where
-  | .y(U(Y)): Int -> F(Int)
+codata Y (A : VType) (B : CType) where
+  | .y(U(Y A B)): A -> B
 end
+
 # \f. (\x. f (x x)) (\x. f (x x))
 # The famous Y combinator in call-by-name sense actually works
 # under call-by-push-value - thanks to thunks, we are able to
 # preserve the intention of lazy evaluation in `x` above.
 
-let fn y (f: U(U(Int -> F(Int)) -> Int -> F(Int))): F(U(Int -> F(Int))) =
-  ret {
-    (comatch | .y(x) -> ! f { ! x .y(x) } end :: Y)
-    .y({ (comatch | .y(x) -> ! f { ! x .y(x) } end :: Y) })
-  }
-in
+def fn rec' (A : VType) (B : CType) (f: U(U(A -> B) -> A -> B)): F(U(A -> B)) =
+  let prim : U(Y A B) = { comatch | .y(x) -> ! f { ! x .y(x) } end } in
+  ret { ! prim .y(prim) }
+end
 
 # good old factorial
 let fn fact (f: U(Int -> F Int)) (n: Int): F Int =
@@ -27,7 +26,7 @@ let fn fact (f: U(Int -> F Int)) (n: Int): F Int =
   end
 in
 
-do fact <- ! y fact;
+do fact <- ! rec' @(Int) @(F Int) fact;
 
 # tests
 let fn demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
@@ -35,7 +34,7 @@ let fn demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
   do correct <- ! int_eq x expected;
   match correct
   | True() -> ! t
-  | False() -> (
+  | False() ->
     do input <- ! int_to_str input;
     do expected <- ! int_to_str expected;
     do got <- ! int_to_str x;
@@ -45,7 +44,6 @@ let fn demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
     do msg <- ! str_append msg ", got ";
     do msg <- ! str_append msg got;
     ! write_line msg { ! exit 1 }
-  )
   end
 in
 
