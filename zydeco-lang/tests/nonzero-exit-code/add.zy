@@ -1,4 +1,3 @@
-data Nat where | Z() | S(Nat) end
 let add = {
   rec (add: Thunk(Nat -> Nat -> Ret(Nat))) -> (
     fn (x: Nat) (y: Nat) -> (

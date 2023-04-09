@@ -1,4 +1,3 @@
-data Nat where | Z() | S(Nat) end
 let rec odd: Nat -> Ret(Bool) = (
   let even = {
     rec (even: Thunk(Nat -> Ret(Bool))) -> (

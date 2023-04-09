@@ -131,6 +131,22 @@ pub def ifc : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -
 };
 
 
+## nat
+
+data Nat where
+| Z()
+| S(Nat)
+end
+
+def rec fn iter (A : VType) (n : Nat) (x : A) (f : U (A -> F A)) : F A =
+  match n
+  | Z() -> ret x
+  | S(n') ->
+    do x' <- ! iter @(A) n' x f;
+    ! f x'
+  end
+end
+
 ## arithmetic operations
 
 ### we support the constructors externally because
