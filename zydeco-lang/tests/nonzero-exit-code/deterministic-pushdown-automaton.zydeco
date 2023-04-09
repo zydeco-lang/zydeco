@@ -18,11 +18,13 @@ codata ParenCounterStk where
   | .some() : ParenCounterStk
 end
 
+alias ParenCounterTrans = ParenCounterState -> ParenCounterStk end
+
 let rec fn foldr
   (ll : Thunk(Ret(LList' Tok)))
-  (step : Thunk(Tok -> Thunk(ParenCounterState -> ParenCounterStk) -> ParenCounterState -> ParenCounterStk))
-  (final : Thunk(ParenCounterState -> ParenCounterStk))
-  : ParenCounterState -> ParenCounterStk =
+  (step : Thunk(Tok -> Thunk(ParenCounterTrans) -> ParenCounterTrans))
+  (final : Thunk(ParenCounterTrans))
+  : ParenCounterTrans =
   do l <- ! ll;
   match l
   | Nil()      -> ! final
@@ -34,14 +36,15 @@ let rec reject : ParenCounterStk =
   comatch
   | .none() -> ret false
   | .some() -> ! reject
-  end;
+  end
+in
   
 let try_accept : Thunk(ParenCounterStk) = {
   comatch
   | .none() -> ret true
   | .some() -> ! reject
   end
-};
+} in
 
 let fn accept_or_not (s : ParenCounterState) : ParenCounterStk =
   match s
@@ -50,7 +53,7 @@ let fn accept_or_not (s : ParenCounterState) : ParenCounterStk =
   end
 in
 
-let fn paren_counter_step (c : Tok) (k : Thunk(ParenCounterState -> ParenCounterStk)) (state : ParenCounterState) : ParenCounterStk =
+let fn paren_counter_step (c : Tok) (k : Thunk(ParenCounterTrans)) (state : ParenCounterState) : ParenCounterStk =
   match c
   | LParen() -> ! k state .some()
   | RParen() ->
@@ -79,7 +82,8 @@ in
 ! demonstrate ")(()" false {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
 ! demonstrate "()(" false {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Nil()})})})} {
 ! demonstrate "()" true {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})} {
-! demonstrate "(" false {ret Cons(LParen(), {ret Nil()})} {
-! demonstrate ")" false {ret Cons(RParen(), {ret Nil()})} {
+#! demonstrate "(" false {ret Cons(LParen(), {ret Nil()})} {
+#! demonstrate ")" false {ret Cons(RParen(), {ret Nil()})} {
 ! demonstrate ""  true {ret Nil()} {
-! exit 0 }}}}}}}}
+! exit 0 }}}}}}
+#}}

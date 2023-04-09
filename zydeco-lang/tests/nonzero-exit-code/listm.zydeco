@@ -1,0 +1,42 @@
+data List~ (A : VType) where
+  | Nil()
+  | Cons(A, U(F(List~ A)))
+end
+
+def rec fn foldr (A : VType) (B : CType) (ll : U(F(List~ A))) (f : U(A -> U(B) -> B)) (b : U(B)) : B =
+  do llv <- ! ll;
+  match llv
+  | Nil() -> ! b
+  | Cons(a, ll) -> ! f a { ! foldr @(A) @(B) ll f b }
+  end
+end
+
+## List~ is actually coinductive type
+
+let rec loop : F(List~ Int) =
+  ret Cons(0, loop)
+in
+
+## Since it's coinductive, here's iota
+
+let rec fn iota (i : Int) : F(List~ Int) =
+  do i+1 <- ! add i 1;
+  ret Cons(i, { ! iota i+1 })
+in
+
+## foldr and an example of summing up the list and exiting with the sum
+
+let loopy = {
+  ! foldr @(Int) @(OS)
+  { ! iota 0 }
+  { fn (x: Int) (b: U(OS)) ->
+    do next? <- ! int_lt x 10;
+    match next?
+    | True() -> ! write_int_line x b
+    | False() -> ! exit 0
+    end
+  }
+  { ! panic "unreachable" }
+} in
+
+! loopy

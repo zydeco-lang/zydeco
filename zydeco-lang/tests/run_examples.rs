@@ -123,9 +123,9 @@ mod batch_tests {
     // the file name with full path to the test file and click `Debug`
     use super::*;
     mk_batch_test!(defunctionalization, "defunctionalization.zydeco");
-    // mk_batch_test!(dpa, "deterministic-pushdown-automaton.zydeco");
+    mk_batch_test!(dpa, "deterministic-pushdown-automaton.zydeco");
     mk_batch_test!(interpreter, "interpreter.zydeco");
-    mk_batch_test!(lists, "lists.zydeco");
+    mk_batch_test!(list, "list.zydeco");
     mk_batch_test!(y, "Y.zydeco");
     mk_batch_test!(unit, "unit.zy");
     mk_batch_test!(num, "num.zy");
@@ -135,7 +135,7 @@ mod batch_tests {
     mk_batch_test!(nat, "nat.zy");
     mk_batch_test!(add, "add.zy");
     mk_batch_test!(regex, "regex.zy");
-    mk_batch_test!(llists, "llists.zydeco");
+    mk_batch_test!(listm, "listm.zydeco");
     mk_batch_test!(fn_opt, "fn-opt.zy");
     mk_batch_test!(abort, "abort.zy");
     mk_batch_test!(choice, "choice.zy");
@@ -155,7 +155,7 @@ mod pure_tests {
     mk_pure_test!(pure_thunk, "thunk.zy");
     mk_pure_test!(pure_bigmac, "bigmac.zy");
 }
-mod tyck_tests {
+mod chk_tests {
     use super::*;
     mk_check_test!(chk_loop, "loop.zydeco");
     mk_check_test!(chk_explosion, "explosion.zy");
