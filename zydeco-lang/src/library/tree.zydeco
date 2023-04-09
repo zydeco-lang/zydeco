@@ -12,6 +12,8 @@ data Option (A : VType) where
   | None()
 end
 
+alias Cmp (A : VType) = U(A -> A -> F(Bool)) end
+
 pub def fn max_int : Int -> Int -> F(Int) =
   fn x y ->
     do b <- ! int_gt x y;
@@ -79,7 +81,7 @@ pub def right : U(forall (A : VType) . AVL A -> F(AVL A)) = {
     end
 } end
 
-pub def rec min : forall (A : VType) . AVL A -> U(A -> A -> F(Bool)) -> F(Option A) =
+pub def rec min : forall (A : VType) . AVL A -> Cmp A -> F(Option A) =
   fn A tree cmp ->
     match tree
     | Leaf() -> ret None()
@@ -159,7 +161,7 @@ def balance : U(forall (A : VType) . AVL A -> F(AVL A)) = {
     end
 } end
 
-pub def rec insert : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> F(AVL A) =
+pub def rec insert : forall (A : VType) . A -> AVL A -> Cmp A -> F(AVL A) =
   fn A x tree cmp ->
     match tree
     | Leaf() -> ! singleton @(A) x
@@ -177,7 +179,7 @@ pub def rec insert : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> 
       end
   end;
 
-pub def rec search : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> U(A -> A -> F(Bool)) -> F(Option A) =
+pub def rec search : forall (A : VType) . A -> AVL A -> Cmp A -> Cmp A -> F(Option A) =
   fn A x tree cmp_eq cmp_lt ->
     match tree
     | Leaf() -> ret None()
@@ -194,7 +196,7 @@ pub def rec search : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> 
       end
   end;
 
-pub def rec change : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> U(A -> A -> F(Bool)) -> F(AVL A) =
+pub def rec change : forall (A : VType) . A -> AVL A -> Cmp A -> Cmp A -> F(AVL A) =
   fn A x tree cmp_eq cmp_lt ->
     match tree
     | Leaf() -> ret tree
@@ -216,7 +218,7 @@ pub def rec change : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> 
       end
   end;
 
-pub def rec delete : forall (A : VType) . A -> AVL A -> U(A -> A -> F(Bool)) -> U(A -> A -> F(Bool)) -> F(AVL A) =
+pub def rec delete : forall (A : VType) . A -> AVL A -> Cmp A -> Cmp A -> F(AVL A) =
   fn A x tree cmp_eq cmp_lt ->
     match tree
     | Leaf() -> ret tree
@@ -271,10 +273,10 @@ pub def rec pre_traversal : forall (A : VType) . AVL A -> U(A -> F(String)) -> U
 end
 
 data Hash (K : VType) (V : VType) where
-| Hash(AVL (Pair K V), U(Pair K V -> Pair K V -> F(Bool)), U(Pair K V -> Pair K V -> F(Bool)))
+| Hash(AVL (Pair K V), Cmp (Pair K V), Cmp (Pair K V))
 end
 
-pub def hash_new : U(forall (K : VType) (V : VType) . U(K -> K -> F(Bool)) -> U(K -> K -> F(Bool)) -> F(Hash K V)) = {
+pub def hash_new : U(forall (K : VType) (V : VType) . Cmp K -> Cmp K -> F(Hash K V)) = {
   fn (K : VType) (V : VType) ->
     fn insert_key_cmp search_key_cmp ->
       do body <- ! leaf @(Pair K V);
