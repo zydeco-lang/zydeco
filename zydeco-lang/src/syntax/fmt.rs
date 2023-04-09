@@ -132,10 +132,19 @@ where
     fn fmt_args(&self, fargs: Args) -> String {
         let Thunk(b) = self;
         let mut s = String::new();
-        s += "{ ";
-        let fargs = fargs.indent();
-        s += &b.fmt_args(fargs);
-        s += " }";
+        let s_thunk = &b.fmt_args(fargs.indent());
+        s += "{";
+        if s_thunk.len() > 40 {
+            // s += &fargs.indent().br_indent();
+            s += " ";
+            s += &s_thunk;
+            s += &fargs.br_indent();
+        } else {
+            s += " ";
+            s += &s_thunk;
+            s += " ";
+        }
+        s += "}";
         s
     }
 }

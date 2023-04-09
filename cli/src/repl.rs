@@ -21,9 +21,7 @@ pub fn launch() -> Result<i32, String> {
         if line.trim_start().starts_with("#") {
             // currently, the only command is #env
             if line.starts_with("#env") {
-                for (var, val) in zydeco_expr.env.iter() {
-                    println!("{} = {}", var.fmt(), val.fmt())
-                }
+                println!("{}", zydeco_expr.env.fmt());
             } else {
                 println!("Unknown command {}", line.trim());
             }

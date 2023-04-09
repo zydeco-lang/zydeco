@@ -5,10 +5,19 @@ impl FmtArgs for ds::Thunk {
     fn fmt_args(&self, fargs: Args) -> String {
         let ds::Thunk { body, env: _ } = self;
         let mut s = String::new();
-        s += "{ ";
-        let fargs = fargs.indent();
-        s += &body.fmt_args(fargs);
-        s += " }";
+        let s_thunk = &body.fmt_args(fargs.indent());
+        s += "{";
+        if s_thunk.len() > 40 {
+            // s += &fargs.indent().br_indent();
+            s += " ";
+            s += &s_thunk;
+            s += &fargs.br_indent();
+        } else {
+            s += " ";
+            s += &s_thunk;
+            s += " ";
+        }
+        s += "}";
         s
     }
 }
