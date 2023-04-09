@@ -75,7 +75,7 @@ pub struct GenLet {
     pub rec: bool,
     pub fun: bool,
     pub name: TermPattern,
-    pub params: Vec<TermPattern>,
+    pub params: Vec<Pattern>,
     pub def: Option<Box<Span<Term>>>,
 }
 

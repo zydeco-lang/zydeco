@@ -6,8 +6,8 @@ use crate::{
 };
 
 fn desugar_gen_let(
-    rec: bool, fun: bool, (var, ty): (TermV, Option<Span<ps::Type>>),
-    params: Vec<(TermV, Option<Span<ps::Type>>)>, def: Option<Box<Span<ps::Term>>>,
+    rec: bool, fun: bool, (var, ty): (TermV, Option<Span<ps::Type>>), params: Vec<ps::Pattern>,
+    def: Option<Box<Span<ps::Term>>>,
 ) -> Result<(TermV, RcType, Option<RcValue>), TyckErrorItem> {
     let name = var.clone();
     let ty_rc = {
@@ -48,13 +48,27 @@ fn desugar_gen_let(
             } else {
                 rc!(def.info.make(Hole.into()))
             };
-            for (var, ty_param) in params.iter().rev() {
-                let ty_dom = if let Some(ty_dom) = ty_param {
-                    rc!(ty_dom.to_owned().try_map(TryInto::try_into)?)
-                } else {
-                    rc!(def.info.make(Hole.into()))
-                };
-                ty = rc!(var.span().make(Type::internal("Fn", vec![ty_dom, ty])))
+            for param in params.iter().rev() {
+                match param {
+                    ps::Pattern::TypePattern((tvar, kd_param)) => {
+                        let Some(kd_dom) = kd_param else {
+                            Err(TyckErrorItem::NeedAnnotation {
+                                content: format!("gen let type variable elabrotion")
+                            })?
+                        };
+                        ty = rc!(tvar
+                            .span()
+                            .make(Forall { param: (tvar.clone(), kd_dom.clone()), ty }.into()))
+                    }
+                    ps::Pattern::TermPattern((var, ty_param)) => {
+                        let ty_dom = if let Some(ty_dom) = ty_param {
+                            rc!(ty_dom.to_owned().try_map(TryInto::try_into)?)
+                        } else {
+                            rc!(def.info.make(Hole.into()))
+                        };
+                        ty = rc!(var.span().make(Type::internal("Fn", vec![ty_dom, ty])))
+                    }
+                }
             }
             let body = rc!((*body).try_map(TryInto::try_into)?);
             ty = rc!(def.info.make(Type::make_thunk(ty)));

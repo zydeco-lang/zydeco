@@ -82,11 +82,8 @@ impl SpanHolder for syn::GenLet {
     {
         let syn::GenLet { rec: _, fun: _, name, params, def } = self;
         name.span_map_mut(f.clone());
-        for (var, ty) in params {
-            var.span_map_mut(f.clone());
-            if let Some(ty) = ty {
-                ty.span_map_mut(f.clone());
-            }
+        for param in params {
+            param.span_map_mut(f.clone());
         }
         def.span_map_mut(f);
     }

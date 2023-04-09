@@ -1,8 +1,10 @@
 def id : Thunk(forall (A : VType) . A -> Ret A) = {
-  fn A x -> (
-    ret x
-  )
+  fn A x -> ret x
 } end
 
+def fn id~ (B : CType) (b : Thunk B) : B =
+  ! b
+end
+
 do x <- ! id @(Int) 0;
-! exit x
+! id~ @(OS) { ! exit x }
