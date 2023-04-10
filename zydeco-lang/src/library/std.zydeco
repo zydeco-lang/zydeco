@@ -170,14 +170,13 @@ module Std where
       | Cons(A, List A)
     end
 
-    pub def rec foldl : forall (A : VType) (R : VType) . List A -> Thunk(A -> R -> Ret(R)) -> R -> Ret(R) =
+    pub def rec foldl : forall (A : VType) (R : VType) . List A -> Thunk(A -> R -> Ret R) -> R -> Ret R =
       fn A R l step s ->
         match l
         | Nil() -> ret s
-        | Cons(x, xs) -> (
+        | Cons(x, xs) ->
           do s' <- ! step x s;
           ! foldl @(A) @(R) xs step s'
-        )
         end
     end
   end
@@ -250,7 +249,6 @@ module Std where
     pub def fn cart_prod (A : VType) (A' : VType) (xs : U(LList A)) (ys : U(LList A')) : LList (Pair A A') =
       ! map2 @(A) @(A') @(Pair A A') {! pair @(A) @(A')} xs ys
     end
-
   end
 
   module Arith where

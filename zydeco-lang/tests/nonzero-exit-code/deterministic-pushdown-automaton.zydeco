@@ -81,9 +81,8 @@ in
 ! demonstrate "()()" true {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
 ! demonstrate ")(()" false {ret Cons(RParen(), {ret Cons(LParen(), {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})})})} {
 ! demonstrate "()(" false {ret Cons(LParen(), {ret Cons(RParen(), {ret Cons(LParen(), {ret Nil()})})})} {
-#! demonstrate "()" true {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})} {
-#! demonstrate "(" false {ret Cons(LParen(), {ret Nil()})} {
-#! demonstrate ")" false {ret Cons(RParen(), {ret Nil()})} {
+! demonstrate "()" true {ret Cons(LParen(), {ret Cons(RParen(), {ret Nil()})})} {
+! demonstrate "(" false {ret Cons(LParen(), {ret Nil()})} {
+! demonstrate ")" false {ret Cons(RParen(), {ret Nil()})} {
 ! demonstrate ""  true {ret Nil()} {
-! exit 0 }}}}}
-#}}}
+! exit 0 }}}}}}}}

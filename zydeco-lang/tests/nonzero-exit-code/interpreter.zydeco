@@ -35,7 +35,7 @@ end
 
 # The "final answer" of the interpreter is either the final value or
 # an error.
-data Option (A : VType) where
+data Answer (A : VType) where
   | Ok(A)
   | Err()
 end
@@ -45,7 +45,7 @@ end
 # variable and a bind.
 codata SemComp where
   | .app(SemVal) : SemComp
-  | .bind()      : Ret(Option SemVal)
+  | .bind()      : Ret(Answer SemVal)
 end
 
 # The interpreters for values and computations are implemented
@@ -53,7 +53,7 @@ end
 # Currently zydeco doesn't directly support mutual recursion but
 # it can be easily simulated:
 codata Interpreter where
-  | .valu(SynVal, Env)  : Ret(Option SemVal)
+  | .valu(SynVal, Env)  : Ret(Answer SemVal)
   | .comp(SynComp, Env) : SemComp
 end
 
@@ -65,7 +65,7 @@ let fn sem_val_to_str (s : SemVal) : F String =
   end
 in
 
-let rec fn lookup (x : String) (g : Env) : Ret(Option SemVal) =
+let rec fn lookup (x : String) (g : Env) : Ret(Answer SemVal) =
   match g
   | Empty() -> ret Err()
   | Cons(y,v,g) ->

@@ -18,3 +18,8 @@ zydeco_derive = { path = "./derive" }
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]
 lalrpop = "0.19"
+
+# Maybe we should consider adding a profile for test
+# [profile.test]
+# opt-level = 3
+# debug = 0

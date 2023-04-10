@@ -19,4 +19,4 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: RUST_MIN_STACK=4194304 cargo test --verbose

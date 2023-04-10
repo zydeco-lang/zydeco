@@ -5,11 +5,6 @@ data Syn where
   | Choose(Syn, Syn)
 end
 
-data Option (A : VType) where
-  | Some(A)
-  | None()
-end
-
 codata Matcher where
   | .str(String): F(Option String)
   | .concat(Syn, Syn): F(Option String)
