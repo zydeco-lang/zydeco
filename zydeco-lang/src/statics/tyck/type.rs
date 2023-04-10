@@ -161,12 +161,12 @@ impl TypeCheck for Span<Type> {
                 Ok(Step::Done(kd.clone()))
             }
             SynType::Forall(Forall { param: (param, kd), ty }) => {
-                ctx.type_ctx.insert(param.clone(), TypeArity { params: vec![], kd: kd.clone() });
+                ctx.type_ctx.insert(param, kd.into());
                 ty.ana(Kind::CType, ctx)?;
                 Ok(Step::Done(Kind::CType))
             }
             SynType::Exists(Exists { param: (param, kd), ty }) => {
-                ctx.type_ctx.insert(param.clone(), TypeArity { params: vec![], kd: kd.clone() });
+                ctx.type_ctx.insert(param, kd.into());
                 ty.ana(Kind::VType, ctx)?;
                 Ok(Step::Done(Kind::VType))
             }
@@ -191,7 +191,7 @@ impl TypeCheck for Span<Type> {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeApp(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::AbstVar(_) => {
                 let kd_syn = self.syn(ctx.clone())?;
-                kd_syn.lub(kd, Default::default(), span)?;
+                kd_syn.lub(kd, ctx, span)?;
                 Ok(Step::Done(kd))
             }
         }

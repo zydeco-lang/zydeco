@@ -128,7 +128,7 @@ impl TypeCheck for Span<TermValue> {
                 ty.ana(kd.clone(), ctx.clone())?;
                 let ty_body = ty_body
                     .inner_clone()
-                    .subst(Env::from_iter([(param.clone(), ty.inner_clone())]), &ctx)?;
+                    .subst(Env::from_iter([(param, ty.inner_clone())]), &ctx)?;
                 body.ana(ty_body, ctx)?;
                 Step::Done(typ)
             }

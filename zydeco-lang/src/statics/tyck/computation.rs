@@ -200,9 +200,8 @@ impl TypeCheck for Span<TermComputation> {
                     }))?
                 };
                 ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
-                let ty = ty
-                    .inner_clone()
-                    .subst(Env::from_iter([(param.clone(), tvar.clone().into())]), &ctx)?;
+                let ty =
+                    ty.inner_clone().subst(Env::from_iter([(param, tvar.clone().into())]), &ctx)?;
                 ctx.term_ctx.insert(var.clone(), ty);
                 let ty_body = body.syn(ctx.clone())?;
                 span.make(ty_body.clone()).ana(Kind::CType, ctx)?;

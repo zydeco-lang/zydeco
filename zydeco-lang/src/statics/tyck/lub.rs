@@ -62,7 +62,7 @@ impl Lub for Type {
                     let arg = Self::lub(lhs.inner_clone(), rhs.inner_clone(), ctx.clone(), span)?;
                     args.push(rc!(lhs.span().make(arg)));
                 }
-                Ok(TypeApp { tvar: lhs.tvar.clone(), args }.into())
+                Ok(TypeApp { tvar: lhs.tvar, args }.into())
             }
             (
                 SynType::Forall(Forall { param: (tvar, kd), ty }),
@@ -71,9 +71,9 @@ impl Lub for Type {
                 bool_test(kd == kd_, err)?;
                 let abst_var = ctx.fresh(kd.clone());
                 let lhs_ty = (ty.inner_clone())
-                    .subst(Env::from_iter([(tvar.clone(), abst_var.clone().into())]), &ctx)?;
-                let rhs_ty = (ty_.inner_clone())
-                    .subst(Env::from_iter([(tvar_.clone(), abst_var.into())]), &ctx)?;
+                    .subst(Env::from_iter([(tvar, abst_var.clone().into())]), &ctx)?;
+                let rhs_ty =
+                    ty_.inner_clone().subst(Env::from_iter([(tvar_, abst_var.into())]), &ctx)?;
                 let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
                 // HACK: needs revertable type subst
                 // Ok(Forall { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
@@ -86,9 +86,9 @@ impl Lub for Type {
                 bool_test(kd == kd_, err)?;
                 let abst_var = ctx.fresh(kd.clone());
                 let lhs_ty = (ty.inner_clone())
-                    .subst(Env::from_iter([(tvar.clone(), abst_var.clone().into())]), &ctx)?;
-                let rhs_ty = (ty_.inner_clone())
-                    .subst(Env::from_iter([(tvar_.clone(), abst_var.into())]), &ctx)?;
+                    .subst(Env::from_iter([(tvar, abst_var.clone().into())]), &ctx)?;
+                let rhs_ty =
+                    (ty_.inner_clone()).subst(Env::from_iter([(tvar_, abst_var.into())]), &ctx)?;
                 let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
                 // HACK: needs revertable type subst
                 // Ok(Exists { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
@@ -96,7 +96,7 @@ impl Lub for Type {
             }
             (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
                 bool_test(lhs == rhs, err)?;
-                Ok(lhs.clone().into())
+                Ok(lhs.into())
             }
             (SynType::TypeApp(_), _)
             | (SynType::Forall(_), _)
