@@ -192,7 +192,7 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 let ty_scrut = ctx.resolve_alias(ty_scrut, span)?;
-                let SynType::Exists(Exists { param: (param, kd), ty }) = &ty_scrut.resolve()? else {
+                let SynType::Exists(Exists { param: (param, kd), ty }) = ty_scrut.resolve()? else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("match-pack"),
                         expected: format!("exists"),
@@ -221,7 +221,8 @@ impl TypeCheck for Span<TermComputation> {
             info: self.span().clone(),
         });
         let typ = ctx.resolve_alias(typ, span)?;
-        if let SynType::Hole(_) = typ.resolve()? {
+        let typ_syn = typ.resolve()?;
+        if let SynType::Hole(_) = typ_syn {
             return Ok(Step::SynMode((ctx, self)));
         }
         span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
@@ -354,7 +355,7 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::TyAbsTerm(TyAbsTerm { param: (tvar_, kd_), body }) => {
-                let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ.resolve()? else {
+                let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ_syn else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("type abstraction"),
                         expected: format!("forall"),

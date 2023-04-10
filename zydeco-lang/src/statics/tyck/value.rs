@@ -52,7 +52,8 @@ impl TypeCheck for Span<TermValue> {
             info: self.span().clone(),
         });
         let typ = ctx.resolve_alias(typ, span)?;
-        if let SynType::Hole(_) = typ.synty {
+        let typ_syn = typ.resolve()?;
+        if let SynType::Hole(_) = typ_syn {
             return Ok(Step::SynMode((ctx, self)));
         }
         span.make(typ.clone()).ana(Kind::VType, ctx.clone())?;
@@ -117,7 +118,7 @@ impl TypeCheck for Span<TermValue> {
             TermValue::Pack(Pack { ty, body }) => {
                 let SynType::Exists(
                     Exists { param: (param, kd), ty: ty_body }
-                ) = &typ.synty else {
+                ) = typ_syn else {
                     Err(ctx.err(span,TypeExpected {
                         context: format!("pack"),
                         expected: format!("exists"),

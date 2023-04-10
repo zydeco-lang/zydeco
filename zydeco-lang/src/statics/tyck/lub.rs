@@ -38,8 +38,10 @@ impl Lub for Type {
             || ctx.err(span, TypeMismatch { context: format!("lub"), expected, found })
         };
         let lhs = ctx.resolve_alias(lhs, span)?;
+        let lhs_syn = lhs.resolve()?;
         let rhs = ctx.resolve_alias(rhs, span)?;
-        match (&lhs.resolve()?, &rhs.resolve()?) {
+        let rhs_syn = rhs.resolve()?;
+        match (lhs_syn, rhs_syn) {
             // (SynType::Hole(_), SynType::Hole(_)) => Err(err())?,
             (SynType::Hole(_), _) => Ok(rhs),
             (_, SynType::Hole(_)) => Ok(lhs),

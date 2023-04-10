@@ -63,7 +63,8 @@ impl Ctx {
         &self, ty: Type, span: &SpanInfo,
     ) -> Result<(prelude::Data, Vec<RcType>), TyckError> {
         let ty = self.resolve_alias(ty, span)?;
-        let SynType::TypeApp(TypeApp { tvar, args }) = ty.resolve()? else {
+        let ty_syn = ty.resolve()?;
+        let SynType::TypeApp(TypeApp { tvar, args }) = ty_syn else {
             Err(self.err(span, TypeExpected {
                 context: format!("resolve data"),
                 expected: format!("type application"),
@@ -80,7 +81,8 @@ impl Ctx {
         &self, ty: Type, span: &SpanInfo,
     ) -> Result<(prelude::Codata, Vec<RcType>), TyckError> {
         let ty = self.resolve_alias(ty, span)?;
-        let SynType::TypeApp(TypeApp { tvar, args }) = ty.resolve()? else {
+        let ty_syn = ty.resolve()?;
+        let SynType::TypeApp(TypeApp { tvar, args }) = ty_syn else {
             Err(self.err(span, TypeExpected {
                 context: format!("resolve codata"),
                 expected: format!("type application"),
@@ -94,7 +96,7 @@ impl Ctx {
         Ok((codata, args))
     }
     pub(super) fn resolve_alias(&self, mut typ: Type, span: &SpanInfo) -> Result<Type, TyckError> {
-        while let SynType::TypeApp(TypeApp { tvar, args }) = &typ.resolve()? {
+        while let SynType::TypeApp(TypeApp { ref tvar, ref args }) = typ.resolve()? {
             if let Some(Alias { name, params, ty }) = self.alias_env.get(tvar) {
                 let ty = ty.inner_clone();
                 let diff = Env::init(params, args, || {
@@ -130,7 +132,9 @@ impl TypeCheck for Span<Type> {
         });
         let span = self.span();
         let ty = self.inner_clone().subst(ctx.type_env.clone(), &ctx)?;
-        match &ty.resolve()? {
+        let ty = ctx.resolve_alias(ty, span)?;
+        let ty_syn = ty.resolve()?;
+        match ty_syn {
             SynType::TypeApp(app) => {
                 let tvar = &app.tvar;
                 // type constructor
@@ -166,7 +170,7 @@ impl TypeCheck for Span<Type> {
                 ty.ana(Kind::VType, ctx)?;
                 Ok(Step::Done(Kind::VType))
             }
-            SynType::AbstVar(AbstVar(abs)) => Ok(Step::Done(ctx.abst_ctx[*abs])),
+            SynType::AbstVar(AbstVar(abs)) => Ok(Step::Done(ctx.abst_ctx[abs])),
             SynType::Hole(_) => Err(ctx.err(span, NeedAnnotation { content: format!("hole") }))?,
         }
     }
@@ -181,7 +185,9 @@ impl TypeCheck for Span<Type> {
         });
         let span = self.span();
         let ty = self.inner_clone().subst(ctx.type_env.clone(), &ctx)?;
-        match ty.resolve()? {
+        let ty = ctx.resolve_alias(ty, span)?;
+        let ty_syn = ty.resolve()?;
+        match ty_syn {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeApp(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::AbstVar(_) => {
                 let kd_syn = self.syn(ctx.clone())?;
@@ -194,7 +200,9 @@ impl TypeCheck for Span<Type> {
 
 impl Type {
     pub(super) fn subst(self, mut diff: Env<TypeV, Type>, ctx: &Ctx) -> Result<Self, TyckError> {
-        match self.resolve()? {
+        let typ = ctx.resolve_alias(self, &SpanInfo::new(0, 0))?;
+        let typ_syn = typ.resolve()?;
+        match typ_syn {
             SynType::TypeApp(TypeApp { tvar, mut args }) => {
                 if let Some(ty) = diff.get(&tvar) {
                     bool_test(args.is_empty(), || {
@@ -210,8 +218,7 @@ impl Type {
                     Ok(ty.clone())
                 } else {
                     for arg in args.iter_mut() {
-                        *arg =
-                            rc!((arg.as_ref().clone()).try_map(|ty| ty.subst(diff.clone(), ctx))?);
+                        *arg = arg.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?;
                     }
                     Ok(Type { synty: TypeApp { tvar, args }.into() })
                 }
@@ -221,7 +228,7 @@ impl Type {
                 Ok(Type {
                     synty: Forall {
                         param,
-                        ty: rc!((ty.as_ref().clone()).try_map(|ty| ty.subst(diff.clone(), ctx))?),
+                        ty: ty.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?,
                     }
                     .into(),
                 })
@@ -231,12 +238,12 @@ impl Type {
                 Ok(Type {
                     synty: Exists {
                         param,
-                        ty: rc!((ty.as_ref().clone()).try_map(|ty| ty.subst(diff.clone(), ctx))?),
+                        ty: ty.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?,
                     }
                     .into(),
                 })
             }
-            SynType::AbstVar(_) | SynType::Hole(_) => Ok(self),
+            SynType::AbstVar(_) | SynType::Hole(_) => Ok(typ),
         }
     }
 }
