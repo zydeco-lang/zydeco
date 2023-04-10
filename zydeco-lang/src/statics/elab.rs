@@ -423,6 +423,14 @@ impl TryFrom<ps::Module> for Module {
         for declaration in declarations {
             let DeclSymbol { public, external, inner } = declaration;
             match inner {
+                ps::Declaration::Module(m) => {
+                    let Module { name: _, data: ds, codata: cs, alias: aliases, define: defs, define_ext: defexts } = m.try_into()?;
+                    data.extend(ds);
+                    codata.extend(cs);
+                    alias.extend(aliases);
+                    define.extend(defs);
+                    define_ext.extend(defexts);
+                }
                 ps::Declaration::Data(d) => {
                     data.push(DeclSymbol { public, external, inner: d.try_into()? })
                 }

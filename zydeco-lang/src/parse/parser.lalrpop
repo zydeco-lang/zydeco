@@ -9,10 +9,18 @@ grammar<'input>(input: &'input str);
 //* --------------------------------- Module --------------------------------- */
 
 pub Zydeco: Span<Program> = Span<Program>;
-pub ZydecoModule: Span<Module> = Span<Module>;
+pub ZydecoModule: Span<Module> = {
+    // Span<Module>,
+    <declarations:Span<DeclSymbol<Declaration>*>> => {
+        declarations.info.make(Module {
+            name: None,
+            declarations: declarations.inner,
+        })
+    },
+};
 
 Program: Program = {
-    <module:Span<Module>> <entry:Span<TermComputation>> => Program {
+    <module:ZydecoModule> <entry:Span<TermComputation>> => Program {
         module, entry,
     },
 };
@@ -22,9 +30,6 @@ Module: Module = {
         <declarations:DeclSymbol<Declaration>*>
     "end" => Module {
         name: Some(name), declarations
-    },
-    <declarations:DeclSymbol<Declaration>*> => Module {
-        name: None, declarations
     },
 };
 
@@ -37,6 +42,7 @@ DeclSymbol<T>: DeclSymbol<T> = {
 };
 
 Declaration: Declaration = {
+    <Module> => <>.into(),
     "data" <name:TypeV> <params:TypeKindPattern*>
         <ctors:("where" <DataBr*>)?>
     "end" => Data {
