@@ -1,5 +1,5 @@
-codata Y (A : VType) (B : CType) where
-  | .y(U(Y A B)): A -> B
+codata Y (B : CType) where
+  | .y(U(Y B)): B
 end
 
 # \f. (\x. f (x x)) (\x. f (x x))
@@ -7,8 +7,8 @@ end
 # under call-by-push-value - thanks to thunks, we are able to
 # preserve the intention of lazy evaluation in `x` above.
 
-def fn rec' (A : VType) (B : CType) (f: U(U(A -> B) -> A -> B)): F(U(A -> B)) =
-  let prim : U(Y A B) = { comatch | .y(x) -> ! f { ! x .y(x) } end } in
+def fn rec' (B : CType) (f: U(U B -> B)): F(U B) =
+  let prim : U(Y B) = { comatch | .y(x) -> ! f { ! x .y(x) } end } in
   ret { ! prim .y(prim) }
 end
 
@@ -17,16 +17,16 @@ let fn fact (f: U(Int -> F Int)) (n: Int): F Int =
   do is_zero <- ! int_eq n 0;
   match is_zero
   | True() -> ret 1
-  | False() -> (
-    do rest <-
-      do n-1 <- !sub n 1;
-      ! f n-1;
+  | False() ->
+    do rest <- (
+      do n-1 <- ! sub n 1;
+      ! f n-1
+    );
     ! mul n rest
-  )
   end
 in
 
-do fact <- ! rec' @(Int) @(F Int) fact;
+do fact <- ! rec' @(Int -> F Int) fact;
 
 # tests
 let fn demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
