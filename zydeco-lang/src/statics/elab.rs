@@ -232,11 +232,11 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 def = rc!(span.make(ps::Annotation { term: def, ty }.into()));
                 let body: Span<TermComputation> = body.try_map(TryInto::try_into)?;
                 let item = Let { var, def, body: () }.into();
-                if let TermComputation::TailGroup(TailGroup { mut group, tail }) = body.inner {
+                if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
                     group.push_front(item);
-                    TailGroup { group, tail }.into()
+                    TailGroup { group, body }.into()
                 } else {
-                    TailGroup { group: vector![item], tail: rc!(body) }.into()
+                    TailGroup { group: vector![item], body: rc!(body) }.into()
                 }
             }
             ps::TermComputation::Do(ps::Do { var: (var, ty), comp, body }) => {
@@ -248,11 +248,11 @@ impl TryFrom<ps::TermComputation> for TermComputation {
                 }
                 let body = body.try_map(TryInto::try_into)?;
                 let item = Do { var, comp, body: () }.into();
-                if let TermComputation::TailGroup(TailGroup { mut group, tail }) = body.inner {
+                if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
                     group.push_front(item);
-                    TailGroup { group, tail }.into()
+                    TailGroup { group, body }.into()
                 } else {
-                    TailGroup { group: vector![item], tail: rc!(body) }.into()
+                    TailGroup { group: vector![item], body: rc!(body) }.into()
                 }
             }
             ps::TermComputation::Rec(Rec { var: (var, ty), body }) => {

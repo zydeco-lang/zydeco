@@ -72,7 +72,7 @@ pub enum TailTerm {
 #[derive(Clone, Debug)]
 pub struct TailGroup {
     pub group: Vector<TailTerm>,
-    pub tail: RcComp,
+    pub body: RcComp,
 }
 
 #[derive(EnumGenerator, FmtArgs, Clone, Debug)]

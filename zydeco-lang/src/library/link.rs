@@ -55,8 +55,8 @@ impl From<&ss::TermComputation> for ZComp {
             }
             ss::TermComputation::Ret(Ret(v)) => Ret(rc!(v.inner_ref().into())).into(),
             ss::TermComputation::Force(Force(v)) => Force(rc!(v.inner_ref().into())).into(),
-            ss::TermComputation::TailGroup(ss::TailGroup { group, tail }) => {
-                let mut body: ZComp = tail.inner_ref().into();
+            ss::TermComputation::TailGroup(ss::TailGroup { group, body }) => {
+                let mut body: ZComp = body.inner_ref().into();
                 for item in group.into_iter().rev() {
                     match item {
                         ss::TailTerm::Let(Let { var, def, body: () }) => {

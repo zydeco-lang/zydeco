@@ -38,7 +38,7 @@ impl TypeCheck for Span<TermComputation> {
                 span.make(ty_body.to_owned()).ana(Kind::CType, ctx)?;
                 Step::Done(ty_body)
             }
-            TermComputation::TailGroup(TailGroup { group, tail }) => {
+            TermComputation::TailGroup(TailGroup { group, body }) => {
                 for item in group {
                     match item {
                         TailTerm::Let(Let { var, def, body: () }) => {
@@ -64,7 +64,7 @@ impl TypeCheck for Span<TermComputation> {
                         }
                     }
                 }
-                Step::SynMode((ctx, tail))
+                Step::SynMode((ctx, body))
             }
             TermComputation::Rec(Rec { var: _, body: _ }) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("rec") }))?
@@ -255,7 +255,7 @@ impl TypeCheck for Span<TermComputation> {
                 v.ana(Type::make_thunk(rc!(span.make(typ.clone()))), ctx)?;
                 Step::Done(typ)
             }
-            TermComputation::TailGroup(TailGroup { group, tail }) => {
+            TermComputation::TailGroup(TailGroup { group, body }) => {
                 for item in group {
                     match item {
                         TailTerm::Let(Let { var, def, body: () }) => {
@@ -281,7 +281,7 @@ impl TypeCheck for Span<TermComputation> {
                         }
                     }
                 }
-                Step::AnaMode((ctx, tail), typ)
+                Step::AnaMode((ctx, body), typ)
             }
             TermComputation::Rec(Rec { var, body }) => {
                 ctx.term_ctx.insert(var.to_owned(), Type::make_thunk(rc!(span.make(typ.clone()))));
