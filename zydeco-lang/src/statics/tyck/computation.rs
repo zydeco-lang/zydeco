@@ -178,7 +178,7 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::TyAppTerm(TyAppTerm { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
                 let ty_body = ctx.resolve_alias(ty_body, span)?;
-                let SynType::Forall(Forall { param: (param, kd), ty }) = ty_body.synty else {
+                let SynType::Forall(Forall { param: (param, kd), ty }) = ty_body.resolve()? else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("term-typ-application"),
                         expected: format!("forall"),
@@ -197,7 +197,7 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 let ty_scrut = ctx.resolve_alias(ty_scrut, span)?;
-                let SynType::Exists(Exists { param: (param, kd), ty }) = &ty_scrut.synty else {
+                let SynType::Exists(Exists { param: (param, kd), ty }) = &ty_scrut.resolve()? else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("match-pack"),
                         expected: format!("exists"),
@@ -227,7 +227,7 @@ impl TypeCheck for Span<TermComputation> {
             info: self.span().clone(),
         });
         let typ = ctx.resolve_alias(typ, span)?;
-        if let SynType::Hole(_) = typ.synty {
+        if let SynType::Hole(_) = typ.resolve()? {
             return Ok(Step::SynMode((ctx, self)));
         }
         span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
@@ -364,7 +364,7 @@ impl TypeCheck for Span<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::TyAbsTerm(TyAbsTerm { param: (tvar_, kd_), body }) => {
-                let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ.synty else {
+                let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ.resolve()? else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("type abstraction"),
                         expected: format!("forall"),

@@ -4,6 +4,9 @@ impl Type {
     pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
         TypeApp { tvar: TypeV::new(name.into(), SpanInfo::new(0, 0)), args }.into()
     }
+    pub fn resolve(&self) -> Result<SynType, TyckError> {
+        Ok(self.synty.clone())
+    }
     pub fn make_thunk(arg: RcType) -> Self {
         Type::internal("Thunk", vec![arg])
     }
@@ -60,7 +63,7 @@ impl Ctx {
         &self, ty: Type, span: &SpanInfo,
     ) -> Result<(prelude::Data, Vec<RcType>), TyckError> {
         let ty = self.resolve_alias(ty, span)?;
-        let SynType::TypeApp(TypeApp { tvar, args }) = ty.synty else {
+        let SynType::TypeApp(TypeApp { tvar, args }) = ty.resolve()? else {
             Err(self.err(span, TypeExpected {
                 context: format!("resolve data"),
                 expected: format!("type application"),
@@ -77,7 +80,7 @@ impl Ctx {
         &self, ty: Type, span: &SpanInfo,
     ) -> Result<(prelude::Codata, Vec<RcType>), TyckError> {
         let ty = self.resolve_alias(ty, span)?;
-        let SynType::TypeApp(TypeApp { tvar, args }) = ty.synty else {
+        let SynType::TypeApp(TypeApp { tvar, args }) = ty.resolve()? else {
             Err(self.err(span, TypeExpected {
                 context: format!("resolve codata"),
                 expected: format!("type application"),
@@ -91,7 +94,7 @@ impl Ctx {
         Ok((codata, args))
     }
     pub(super) fn resolve_alias(&self, mut typ: Type, span: &SpanInfo) -> Result<Type, TyckError> {
-        while let SynType::TypeApp(TypeApp { tvar, args }) = &typ.synty {
+        while let SynType::TypeApp(TypeApp { tvar, args }) = &typ.resolve()? {
             if let Some(Alias { name, params, ty }) = self.alias_env.get(tvar) {
                 let ty = ty.inner_ref().clone();
                 let diff = Env::init(params, args, || {
@@ -127,7 +130,7 @@ impl TypeCheck for Span<Type> {
         });
         let span = self.span();
         let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), ctx.clone())?;
-        match &ty.synty {
+        match &ty.resolve()? {
             SynType::TypeApp(app) => {
                 let tvar = &app.tvar;
                 // type constructor
@@ -178,7 +181,7 @@ impl TypeCheck for Span<Type> {
         });
         let span = self.span();
         let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), ctx.clone())?;
-        match ty.synty {
+        match ty.resolve()? {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeApp(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::AbstVar(_) => {
                 let kd_syn = self.syn(ctx.clone())?;
@@ -191,7 +194,7 @@ impl TypeCheck for Span<Type> {
 
 impl Type {
     pub(super) fn subst(self, mut diff: Env<TypeV, Type>, ctx: Ctx) -> Result<Self, TyckError> {
-        match self.synty {
+        match self.resolve()? {
             SynType::TypeApp(TypeApp { tvar, mut args }) => {
                 if let Some(ty) = diff.get(&tvar) {
                     bool_test(args.is_empty(), || {

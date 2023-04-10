@@ -39,7 +39,7 @@ impl Lub for Type {
         };
         let lhs = ctx.resolve_alias(lhs, span)?;
         let rhs = ctx.resolve_alias(rhs, span)?;
-        match (&lhs.synty, &rhs.synty) {
+        match (&lhs.resolve()?, &rhs.resolve()?) {
             // (SynType::Hole(_), SynType::Hole(_)) => Err(err())?,
             (SynType::Hole(_), _) => Ok(rhs),
             (_, SynType::Hole(_)) => Ok(lhs),
