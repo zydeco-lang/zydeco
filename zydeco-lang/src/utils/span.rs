@@ -176,10 +176,19 @@ pub struct Span<T> {
     pub info: SpanInfo,
 }
 
+impl<T: Clone> Span<T> {
+    #[inline]
+    pub fn inner_clone(&self) -> T {
+        self.inner.clone()
+    }
+}
+
 impl<T> Span<T> {
+    #[inline]
     pub fn inner_ref(&self) -> &T {
         &self.inner
     }
+    #[inline]
     pub fn inner(self) -> T {
         self.inner
     }

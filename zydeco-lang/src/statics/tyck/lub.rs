@@ -57,12 +57,7 @@ impl Lub for Type {
                 bool_test(lhs.tvar == rhs.tvar, err)?;
                 let mut args = vec![];
                 for (lhs, rhs) in (lhs.args.iter()).zip(rhs.args.iter()) {
-                    let arg = Self::lub(
-                        lhs.inner_ref().clone(),
-                        rhs.inner_ref().clone(),
-                        ctx.clone(),
-                        span,
-                    )?;
+                    let arg = Self::lub(lhs.inner_clone(), rhs.inner_clone(), ctx.clone(), span)?;
                     args.push(rc!(lhs.span().make(arg)));
                 }
                 Ok(TypeApp { tvar: lhs.tvar.clone(), args }.into())
@@ -73,9 +68,9 @@ impl Lub for Type {
             ) => {
                 bool_test(kd == kd_, err)?;
                 let abst_var = ctx.fresh(kd.clone());
-                let lhs_ty = (ty.inner_ref().clone())
+                let lhs_ty = (ty.inner_clone())
                     .subst(Env::from_iter([(tvar.clone(), abst_var.clone().into())]), &ctx)?;
-                let rhs_ty = (ty_.inner_ref().clone())
+                let rhs_ty = (ty_.inner_clone())
                     .subst(Env::from_iter([(tvar_.clone(), abst_var.into())]), &ctx)?;
                 let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
                 // HACK: needs revertable type subst
@@ -88,9 +83,9 @@ impl Lub for Type {
             ) => {
                 bool_test(kd == kd_, err)?;
                 let abst_var = ctx.fresh(kd.clone());
-                let lhs_ty = (ty.inner_ref().clone())
+                let lhs_ty = (ty.inner_clone())
                     .subst(Env::from_iter([(tvar.clone(), abst_var.clone().into())]), &ctx)?;
-                let rhs_ty = (ty_.inner_ref().clone())
+                let rhs_ty = (ty_.inner_clone())
                     .subst(Env::from_iter([(tvar_.clone(), abst_var.into())]), &ctx)?;
                 let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
                 // HACK: needs revertable type subst

@@ -1,6 +1,7 @@
 #![allow(clippy::style)]
 #![allow(clippy::useless_format)]
 #![allow(clippy::clone_on_copy)]
+#![allow(clippy::mutable_key_type)]
 
 pub mod syntax;
 

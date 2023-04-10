@@ -37,14 +37,14 @@ impl Type {
 impl TypeApp<TypeV, RcType> {
     pub fn elim_thunk_syntax(&self) -> Option<Type> {
         if self.tvar.name() == "Thunk" {
-            Some(self.args.first().unwrap().inner_ref().clone())
+            Some(self.args.first().unwrap().inner_clone())
         } else {
             None
         }
     }
     pub fn elim_ret_syntax(&self) -> Option<Type> {
         if self.tvar.name() == "Ret" {
-            Some(self.args.first().unwrap().inner_ref().clone())
+            Some(self.args.first().unwrap().inner_clone())
         } else {
             None
         }
@@ -96,7 +96,7 @@ impl Ctx {
     pub(super) fn resolve_alias(&self, mut typ: Type, span: &SpanInfo) -> Result<Type, TyckError> {
         while let SynType::TypeApp(TypeApp { tvar, args }) = &typ.resolve()? {
             if let Some(Alias { name, params, ty }) = self.alias_env.get(tvar) {
-                let ty = ty.inner_ref().clone();
+                let ty = ty.inner_clone();
                 let diff = Env::init(params, args, || {
                     self.err(
                         span,
@@ -129,7 +129,7 @@ impl TypeCheck for Span<Type> {
             info: self.span().clone(),
         });
         let span = self.span();
-        let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), &ctx)?;
+        let ty = self.inner_clone().subst(ctx.type_env.clone(), &ctx)?;
         match &ty.resolve()? {
             SynType::TypeApp(app) => {
                 let tvar = &app.tvar;
@@ -180,7 +180,7 @@ impl TypeCheck for Span<Type> {
             info: self.span().clone(),
         });
         let span = self.span();
-        let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), &ctx)?;
+        let ty = self.inner_clone().subst(ctx.type_env.clone(), &ctx)?;
         match ty.resolve()? {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeApp(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::AbstVar(_) => {
@@ -250,7 +250,7 @@ impl Env<TypeV, Type> {
             params
                 .iter()
                 .map(|(tvar, _)| tvar.to_owned())
-                .zip(ty_app_args.iter().map(|arg| arg.inner_ref().to_owned())),
+                .zip(ty_app_args.iter().map(|arg| arg.inner_clone())),
         ))
     }
 }

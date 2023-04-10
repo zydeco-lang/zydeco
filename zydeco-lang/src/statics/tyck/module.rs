@@ -154,7 +154,7 @@ impl TypeCheck for Span<Module> {
             ctx.codata_env.insert(coda.name.clone(), coda.clone());
         }
         for DeclSymbol { inner: Define { name: (var, ty), def: () }, .. } in define_ext {
-            ctx.term_ctx.insert(var.clone(), ty.inner_ref().clone());
+            ctx.term_ctx.insert(var.clone(), ty.inner_clone());
         }
         // register term declarations in the term context
         for DeclSymbol { inner: Define { name, def }, external, .. } in define {

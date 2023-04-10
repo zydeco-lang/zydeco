@@ -28,7 +28,7 @@ impl TypeCheck for Span<TermValue> {
         Ok(match self.inner_ref() {
             TermValue::Annotation(Annotation { term, ty }) => {
                 ty.ana(Kind::VType, ctx.clone())?;
-                Step::AnaMode((ctx, term), ty.inner_ref().clone())
+                Step::AnaMode((ctx, term), ty.inner_clone())
             }
             TermValue::Var(x) => Step::Done(
                 ctx.term_ctx.get(x).cloned().ok_or(ctx.err(span, UnboundVar { var: x.clone() }))?,
@@ -58,7 +58,7 @@ impl TypeCheck for Span<TermValue> {
         span.make(typ.clone()).ana(Kind::VType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermValue::Annotation(Annotation { term, ty }) => {
-                let ty_lub = Type::lub(ty.inner_ref().clone(), typ, ctx.clone(), span)?;
+                let ty_lub = Type::lub(ty.inner_clone(), typ, ctx.clone(), span)?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
             TermValue::Thunk(Thunk(c)) => {
@@ -110,7 +110,7 @@ impl TypeCheck for Span<TermValue> {
                     )
                 })?;
                 for (arg, ty) in args.iter().zip(tys.iter()) {
-                    arg.ana(ty.inner_ref().to_owned().subst(diff.clone(), &ctx)?, ctx.clone())?;
+                    arg.ana(ty.inner_clone().subst(diff.clone(), &ctx)?, ctx.clone())?;
                 }
                 Step::Done(typ)
             }
@@ -126,9 +126,8 @@ impl TypeCheck for Span<TermValue> {
                 };
                 ty.ana(kd.clone(), ctx.clone())?;
                 let ty_body = ty_body
-                    .inner_ref()
-                    .clone()
-                    .subst(Env::from_iter([(param.clone(), ty.inner_ref().clone())]), &ctx)?;
+                    .inner_clone()
+                    .subst(Env::from_iter([(param.clone(), ty.inner_clone())]), &ctx)?;
                 body.ana(ty_body, ctx)?;
                 Step::Done(typ)
             }

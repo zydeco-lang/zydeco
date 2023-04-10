@@ -18,7 +18,7 @@ impl TypeCheck for Span<TermComputation> {
         Ok(match self.inner_ref() {
             TermComputation::Annotation(Annotation { term, ty }) => {
                 ty.ana(Kind::CType, ctx.clone())?;
-                Step::AnaMode((ctx, term), ty.inner_ref().clone())
+                Step::AnaMode((ctx, term), ty.inner_clone())
             }
             TermComputation::Ret(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("ret") }))?
@@ -89,9 +89,7 @@ impl TypeCheck for Span<TermComputation> {
                         continue;
                     };
                     ctorv_set_arm.insert(ctor.to_owned());
-                    let tys = tys
-                        .into_iter()
-                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), &ctx));
+                    let tys = tys.into_iter().map(|ty| ty.inner_clone().subst(diff.clone(), &ctx));
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
                         ctx.term_ctx.insert(var.to_owned(), ty?);
@@ -165,9 +163,9 @@ impl TypeCheck for Span<TermComputation> {
                     )
                 })?;
                 for (arg, ty) in args.iter().zip(tys.iter()) {
-                    arg.ana(ty.inner_ref().to_owned().subst(diff.clone(), &ctx)?, ctx.clone())?;
+                    arg.ana(ty.inner_clone().subst(diff.clone(), &ctx)?, ctx.clone())?;
                 }
-                Step::Done(ty.inner_ref().to_owned().subst(diff, &ctx)?)
+                Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
             TermComputation::TyAbsTerm(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("typabs") }))?
@@ -189,7 +187,7 @@ impl TypeCheck for Span<TermComputation> {
                         ArityMismatch { context: format!("typapp"), expected: 1, found: 1 },
                     )
                 })?;
-                Step::Done(ty.inner_ref().clone().subst(diff, &ctx)?)
+                Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
             TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
@@ -203,8 +201,7 @@ impl TypeCheck for Span<TermComputation> {
                 };
                 ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
                 let ty = ty
-                    .inner_ref()
-                    .clone()
+                    .inner_clone()
                     .subst(Env::from_iter([(param.clone(), tvar.clone().into())]), &ctx)?;
                 ctx.term_ctx.insert(var.clone(), ty);
                 let ty_body = body.syn(ctx.clone())?;
@@ -230,7 +227,7 @@ impl TypeCheck for Span<TermComputation> {
         span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermComputation::Annotation(Annotation { term, ty }) => {
-                let ty_lub = Type::lub(ty.inner_ref().clone(), typ, ctx.clone(), span)?;
+                let ty_lub = Type::lub(ty.inner_clone(), typ, ctx.clone(), span)?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
             TermComputation::Ret(Ret(v)) => {
@@ -303,9 +300,7 @@ impl TypeCheck for Span<TermComputation> {
                         continue;
                     };
                     ctorv_set_arm.insert(ctor.to_owned());
-                    let tys = tys
-                        .into_iter()
-                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), &ctx));
+                    let tys = tys.into_iter().map(|ty| ty.inner_clone().subst(diff.clone(), &ctx));
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
                         ctx.term_ctx.insert(var.to_owned(), ty?);
@@ -343,10 +338,8 @@ impl TypeCheck for Span<TermComputation> {
                         continue;
                     };
                     dtorv_set_arm.insert(dtor.to_owned());
-                    let tys = tys
-                        .into_iter()
-                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), &ctx));
-                    let ty = ty.inner_ref().to_owned().subst(diff.clone(), &ctx)?;
+                    let tys = tys.into_iter().map(|ty| ty.inner_clone().subst(diff.clone(), &ctx));
+                    let ty = ty.inner_clone().subst(diff.clone(), &ctx)?;
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
                         ctx.term_ctx.insert(var.to_owned(), ty?);
@@ -382,10 +375,8 @@ impl TypeCheck for Span<TermComputation> {
                 }
                 let abst_var = ctx.fresh(kd.clone());
                 ctx.type_env.insert(tvar_.clone(), abst_var.clone().into());
-                ty.inner_ref()
-                    .clone()
-                    .subst(Env::from_iter([(tvar.clone(), abst_var.into())]), &ctx)?;
-                body.ana(ty.inner_ref().clone(), ctx)?;
+                ty.inner_clone().subst(Env::from_iter([(tvar.clone(), abst_var.into())]), &ctx)?;
+                body.ana(ty.inner_clone(), ctx)?;
                 Step::Done(typ)
             }
             TermComputation::Dtor(_)
