@@ -19,6 +19,32 @@ impl FmtArgs for Type {
     }
 }
 
+impl FmtArgs for TailTerm {
+    fn fmt_args(&self, fargs: Args) -> String {
+        match self {
+            TailTerm::Let(Let { var, def, body: () }) => {
+                format!("let {} = {} in", var.fmt_args(fargs), def.fmt_args(fargs))
+            }
+            TailTerm::Do(Do { var, comp, body: () }) => {
+                format!("do {} <- {} ;", var.fmt_args(fargs), comp.fmt_args(fargs))
+            }
+        }
+    }
+}
+
+impl FmtArgs for TailGroup {
+    fn fmt_args(&self, fargs: Args) -> String {
+        let mut s = String::new();
+        let TailGroup { group, tail } = self;
+        for item in group {
+            s += &item.fmt_args(fargs);
+            s += &fargs.br_indent();
+        }
+        s += &format!("{}", tail.fmt_args(fargs));
+        s
+    }
+}
+
 impl FmtArgs for Module {
     fn fmt_args(&self, args: Args) -> String {
         let mut s = String::new();

@@ -38,27 +38,33 @@ impl TypeCheck for Span<TermComputation> {
                 span.make(ty_body.to_owned()).ana(Kind::CType, ctx)?;
                 Step::Done(ty_body)
             }
-            TermComputation::Let(Let { var, def, body }) => {
-                let ty_def = def.syn(ctx.clone())?;
-                span.make(ty_def.clone()).ana(Kind::VType, ctx.clone())?;
-                ctx.term_ctx.insert(var.to_owned(), ty_def);
-                Step::SynMode((ctx, body))
-            }
-            TermComputation::Do(Do { var, comp, body }) => {
-                let ty_comp = comp.syn(ctx.clone())?;
-                span.make(ty_comp.clone()).ana(Kind::CType, ctx.clone())?;
-                let ty_val = ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
-                    ctx.err(
-                        span,
-                        TypeExpected {
-                            context: format!("do"),
-                            expected: format!("Ret a"),
-                            found: ty_comp.clone(),
-                        },
-                    )
-                })?;
-                ctx.term_ctx.insert(var.to_owned(), ty_val);
-                Step::SynMode((ctx, body))
+            TermComputation::TailGroup(TailGroup { group, tail }) => {
+                for item in group {
+                    match item {
+                        TailTerm::Let(Let { var, def, body: () }) => {
+                            let ty_def = def.syn(ctx.clone())?;
+                            span.make(ty_def.clone()).ana(Kind::VType, ctx.clone())?;
+                            ctx.term_ctx.insert(var.to_owned(), ty_def);
+                        }
+                        TailTerm::Do(Do { var, comp, body: () }) => {
+                            let ty_comp = comp.syn(ctx.clone())?;
+                            span.make(ty_comp.clone()).ana(Kind::CType, ctx.clone())?;
+                            let ty_val =
+                                ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
+                                    ctx.err(
+                                        span,
+                                        TypeExpected {
+                                            context: format!("do"),
+                                            expected: format!("Ret _?"),
+                                            found: ty_comp.clone(),
+                                        },
+                                    )
+                                })?;
+                            ctx.term_ctx.insert(var.to_owned(), ty_val);
+                        }
+                    }
+                }
+                Step::SynMode((ctx, tail))
             }
             TermComputation::Rec(Rec { var: _, body: _ }) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("rec") }))?
@@ -249,27 +255,33 @@ impl TypeCheck for Span<TermComputation> {
                 v.ana(Type::make_thunk(rc!(span.make(typ.clone()))), ctx)?;
                 Step::Done(typ)
             }
-            TermComputation::Let(Let { var, def, body }) => {
-                let ty_def = def.syn(ctx.clone())?;
-                span.make(ty_def.clone()).ana(Kind::VType, ctx.clone())?;
-                ctx.term_ctx.insert(var.to_owned(), ty_def);
-                Step::AnaMode((ctx, body), typ)
-            }
-            TermComputation::Do(Do { var, comp, body }) => {
-                let ty_comp = comp.syn(ctx.clone())?;
-                span.make(ty_comp.clone()).ana(Kind::CType, ctx.clone())?;
-                let ty_val = ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
-                    ctx.err(
-                        span,
-                        TypeExpected {
-                            context: format!("do"),
-                            expected: format!("Ret a"),
-                            found: ty_comp.clone(),
-                        },
-                    )
-                })?;
-                ctx.term_ctx.insert(var.to_owned(), ty_val);
-                Step::AnaMode((ctx, body), typ)
+            TermComputation::TailGroup(TailGroup { group, tail }) => {
+                for item in group {
+                    match item {
+                        TailTerm::Let(Let { var, def, body: () }) => {
+                            let ty_def = def.syn(ctx.clone())?;
+                            span.make(ty_def.clone()).ana(Kind::VType, ctx.clone())?;
+                            ctx.term_ctx.insert(var.to_owned(), ty_def);
+                        }
+                        TailTerm::Do(Do { var, comp, body: () }) => {
+                            let ty_comp = comp.syn(ctx.clone())?;
+                            span.make(ty_comp.clone()).ana(Kind::CType, ctx.clone())?;
+                            let ty_val =
+                                ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
+                                    ctx.err(
+                                        span,
+                                        TypeExpected {
+                                            context: format!("do"),
+                                            expected: format!("Ret _?"),
+                                            found: ty_comp.clone(),
+                                        },
+                                    )
+                                })?;
+                            ctx.term_ctx.insert(var.to_owned(), ty_val);
+                        }
+                    }
+                }
+                Step::AnaMode((ctx, tail), typ)
             }
             TermComputation::Rec(Rec { var, body }) => {
                 ctx.term_ctx.insert(var.to_owned(), Type::make_thunk(rc!(span.make(typ.clone()))));

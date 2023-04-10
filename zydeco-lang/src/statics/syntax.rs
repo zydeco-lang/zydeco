@@ -1,4 +1,5 @@
 use crate::utils::span::Span;
+use im::Vector;
 use std::rc::Rc;
 use zydeco_derive::{EnumGenerator, FmtArgs};
 
@@ -62,13 +63,24 @@ pub enum TermValue {
 pub type RcValue = Rc<Span<TermValue>>;
 impl ValueT for TermValue {}
 
+#[derive(EnumGenerator, Clone, Debug)]
+pub enum TailTerm {
+    Let(Let<TermV, RcValue, ()>),
+    Do(Do<TermV, RcComp, ()>),
+}
+
+#[derive(Clone, Debug)]
+pub struct TailGroup {
+    pub group: Vector<TailTerm>,
+    pub tail: RcComp,
+}
+
 #[derive(EnumGenerator, FmtArgs, Clone, Debug)]
 pub enum TermComputation {
     Annotation(Annotation<RcComp, RcType>),
     Ret(Ret<RcValue>),
     Force(Force<RcValue>),
-    Let(Let<TermV, RcValue, RcComp>),
-    Do(Do<TermV, RcComp, RcComp>),
+    TailGroup(TailGroup),
     Rec(Rec<TermV, RcComp>),
     Match(Match<CtorV, TermV, RcValue, RcComp>),
     Comatch(Comatch<DtorV, TermV, RcComp>),
