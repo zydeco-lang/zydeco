@@ -73,16 +73,14 @@ impl Lub for Type {
             ) => {
                 bool_test(kd == kd_, err)?;
                 let abst_var = ctx.fresh(kd.clone());
-                let lhs_ty = (ty.inner_ref().clone()).subst(
-                    Env::from_iter([(tvar.clone(), abst_var.clone().into())]),
-                    ctx.clone(),
-                )?;
+                let lhs_ty = (ty.inner_ref().clone())
+                    .subst(Env::from_iter([(tvar.clone(), abst_var.clone().into())]), &ctx)?;
                 let rhs_ty = (ty_.inner_ref().clone())
-                    .subst(Env::from_iter([(tvar_.clone(), abst_var.into())]), ctx.clone())?;
+                    .subst(Env::from_iter([(tvar_.clone(), abst_var.into())]), &ctx)?;
                 let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
                 // HACK: needs revertable type subst
                 // Ok(Forall { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
-                Ok(lhs.clone())
+                Ok(lhs)
             }
             (
                 SynType::Exists(Exists { param: (tvar, kd), ty }),
@@ -90,16 +88,14 @@ impl Lub for Type {
             ) => {
                 bool_test(kd == kd_, err)?;
                 let abst_var = ctx.fresh(kd.clone());
-                let lhs_ty = (ty.inner_ref().clone()).subst(
-                    Env::from_iter([(tvar.clone(), abst_var.clone().into())]),
-                    ctx.clone(),
-                )?;
+                let lhs_ty = (ty.inner_ref().clone())
+                    .subst(Env::from_iter([(tvar.clone(), abst_var.clone().into())]), &ctx)?;
                 let rhs_ty = (ty_.inner_ref().clone())
-                    .subst(Env::from_iter([(tvar_.clone(), abst_var.into())]), ctx.clone())?;
+                    .subst(Env::from_iter([(tvar_.clone(), abst_var.into())]), &ctx)?;
                 let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
                 // HACK: needs revertable type subst
                 // Ok(Exists { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
-                Ok(lhs.clone())
+                Ok(lhs)
             }
             (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {
                 bool_test(lhs == rhs, err)?;

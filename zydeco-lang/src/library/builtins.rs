@@ -2,7 +2,7 @@ use super::{impls::*, syntax::*};
 use crate::{rc, utils::span::SpanInfo};
 use std::collections::HashMap;
 
-pub (super) struct Builtin {
+pub(super) struct Builtin {
     name: &'static str,
     arity: u64,
     behavior: Box<PrimComp>,

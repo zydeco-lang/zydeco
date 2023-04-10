@@ -107,7 +107,7 @@ impl Ctx {
                         },
                     )
                 })?;
-                typ = ty.subst(diff, self.clone())?;
+                typ = ty.subst(diff, self)?;
             } else {
                 break;
             }
@@ -129,7 +129,7 @@ impl TypeCheck for Span<Type> {
             info: self.span().clone(),
         });
         let span = self.span();
-        let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), ctx.clone())?;
+        let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), &ctx)?;
         match &ty.resolve()? {
             SynType::TypeApp(app) => {
                 let tvar = &app.tvar;
@@ -180,7 +180,7 @@ impl TypeCheck for Span<Type> {
             info: self.span().clone(),
         });
         let span = self.span();
-        let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), ctx.clone())?;
+        let ty = self.inner_ref().clone().subst(ctx.type_env.clone(), &ctx)?;
         match ty.resolve()? {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeApp(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::AbstVar(_) => {
@@ -193,7 +193,7 @@ impl TypeCheck for Span<Type> {
 }
 
 impl Type {
-    pub(super) fn subst(self, mut diff: Env<TypeV, Type>, ctx: Ctx) -> Result<Self, TyckError> {
+    pub(super) fn subst(self, mut diff: Env<TypeV, Type>, ctx: &Ctx) -> Result<Self, TyckError> {
         match self.resolve()? {
             SynType::TypeApp(TypeApp { tvar, mut args }) => {
                 if let Some(ty) = diff.get(&tvar) {
@@ -210,8 +210,8 @@ impl Type {
                     Ok(ty.clone())
                 } else {
                     for arg in args.iter_mut() {
-                        *arg = rc!((arg.as_ref().clone())
-                            .try_map(|ty| ty.subst(diff.clone(), ctx.clone()))?);
+                        *arg =
+                            rc!((arg.as_ref().clone()).try_map(|ty| ty.subst(diff.clone(), ctx))?);
                     }
                     Ok(Type { synty: TypeApp { tvar, args }.into() })
                 }
@@ -221,8 +221,7 @@ impl Type {
                 Ok(Type {
                     synty: Forall {
                         param,
-                        ty: rc!((ty.as_ref().clone())
-                            .try_map(|ty| ty.subst(diff.clone(), ctx.clone()))?),
+                        ty: rc!((ty.as_ref().clone()).try_map(|ty| ty.subst(diff.clone(), ctx))?),
                     }
                     .into(),
                 })
@@ -232,8 +231,7 @@ impl Type {
                 Ok(Type {
                     synty: Exists {
                         param,
-                        ty: rc!((ty.as_ref().clone())
-                            .try_map(|ty| ty.subst(diff.clone(), ctx.clone()))?),
+                        ty: rc!((ty.as_ref().clone()).try_map(|ty| ty.subst(diff.clone(), ctx))?),
                     }
                     .into(),
                 })

@@ -91,7 +91,7 @@ impl TypeCheck for Span<TermComputation> {
                     ctorv_set_arm.insert(ctor.to_owned());
                     let tys = tys
                         .into_iter()
-                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone()));
+                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), &ctx));
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
                         ctx.term_ctx.insert(var.to_owned(), ty?);
@@ -165,12 +165,9 @@ impl TypeCheck for Span<TermComputation> {
                     )
                 })?;
                 for (arg, ty) in args.iter().zip(tys.iter()) {
-                    arg.ana(
-                        ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone())?,
-                        ctx.clone(),
-                    )?;
+                    arg.ana(ty.inner_ref().to_owned().subst(diff.clone(), &ctx)?, ctx.clone())?;
                 }
-                Step::Done(ty.inner_ref().to_owned().subst(diff, ctx.clone())?)
+                Step::Done(ty.inner_ref().to_owned().subst(diff, &ctx)?)
             }
             TermComputation::TyAbsTerm(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("typabs") }))?
@@ -192,7 +189,7 @@ impl TypeCheck for Span<TermComputation> {
                         ArityMismatch { context: format!("typapp"), expected: 1, found: 1 },
                     )
                 })?;
-                Step::Done(ty.inner_ref().clone().subst(diff, ctx)?)
+                Step::Done(ty.inner_ref().clone().subst(diff, &ctx)?)
             }
             TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
@@ -208,7 +205,7 @@ impl TypeCheck for Span<TermComputation> {
                 let ty = ty
                     .inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(param.clone(), tvar.clone().into())]), ctx.clone())?;
+                    .subst(Env::from_iter([(param.clone(), tvar.clone().into())]), &ctx)?;
                 ctx.term_ctx.insert(var.clone(), ty);
                 let ty_body = body.syn(ctx.clone())?;
                 span.make(ty_body.clone()).ana(Kind::CType, ctx)?;
@@ -308,7 +305,7 @@ impl TypeCheck for Span<TermComputation> {
                     ctorv_set_arm.insert(ctor.to_owned());
                     let tys = tys
                         .into_iter()
-                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone()));
+                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), &ctx));
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
                         ctx.term_ctx.insert(var.to_owned(), ty?);
@@ -348,8 +345,8 @@ impl TypeCheck for Span<TermComputation> {
                     dtorv_set_arm.insert(dtor.to_owned());
                     let tys = tys
                         .into_iter()
-                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone()));
-                    let ty = ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone())?;
+                        .map(|ty| ty.inner_ref().to_owned().subst(diff.clone(), &ctx));
+                    let ty = ty.inner_ref().to_owned().subst(diff.clone(), &ctx)?;
                     let mut ctx = ctx.clone();
                     for (var, ty) in vars.iter().zip(tys) {
                         ctx.term_ctx.insert(var.to_owned(), ty?);
@@ -387,7 +384,7 @@ impl TypeCheck for Span<TermComputation> {
                 ctx.type_env.insert(tvar_.clone(), abst_var.clone().into());
                 ty.inner_ref()
                     .clone()
-                    .subst(Env::from_iter([(tvar.clone(), abst_var.into())]), ctx.clone())?;
+                    .subst(Env::from_iter([(tvar.clone(), abst_var.into())]), &ctx)?;
                 body.ana(ty.inner_ref().clone(), ctx)?;
                 Step::Done(typ)
             }

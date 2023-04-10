@@ -1,10 +1,10 @@
 use crate::dynamics::syntax as ds;
 pub use crate::syntax::{env::Env, *};
+use im::Vector;
 use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use im::Vector;
 use zydeco_derive::{EnumGenerator, FmtArgs};
 
 /* ---------------------------------- Term ---------------------------------- */

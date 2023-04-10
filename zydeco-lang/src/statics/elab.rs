@@ -37,7 +37,7 @@ fn desugar_gen_let(
         (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
             if fun {
-                let params = params.clone().into_iter().map(|p| p.into()).collect();
+                let params = params.clone().into_iter().collect();
                 body = Box::new(def.info.make(ps::Abstraction { params, body }.into()));
             }
             if rec {

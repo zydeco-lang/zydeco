@@ -110,10 +110,7 @@ impl TypeCheck for Span<TermValue> {
                     )
                 })?;
                 for (arg, ty) in args.iter().zip(tys.iter()) {
-                    arg.ana(
-                        ty.inner_ref().to_owned().subst(diff.clone(), ctx.clone())?,
-                        ctx.clone(),
-                    )?;
+                    arg.ana(ty.inner_ref().to_owned().subst(diff.clone(), &ctx)?, ctx.clone())?;
                 }
                 Step::Done(typ)
             }
@@ -128,10 +125,10 @@ impl TypeCheck for Span<TermValue> {
                     }))?
                 };
                 ty.ana(kd.clone(), ctx.clone())?;
-                let ty_body = ty_body.inner_ref().clone().subst(
-                    Env::from_iter([(param.clone(), ty.inner_ref().clone())]),
-                    ctx.clone(),
-                )?;
+                let ty_body = ty_body
+                    .inner_ref()
+                    .clone()
+                    .subst(Env::from_iter([(param.clone(), ty.inner_ref().clone())]), &ctx)?;
                 body.ana(ty_body, ctx)?;
                 Step::Done(typ)
             }
