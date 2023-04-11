@@ -3,8 +3,9 @@ use crate::{
     library::syntax as ls,
     parse::{
         err::ParseError,
+        lexer::Lexer,
         parser::{TermSpanParser, ZydecoModuleParser, ZydecoParser},
-        syntax as ps, Lexer,
+        syntax as ps,
     },
     statics::{
         syntax as ss,

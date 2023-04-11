@@ -6,6 +6,10 @@
 pub mod syntax;
 
 pub mod parse {
+    pub mod syntax;
+    pub mod err;
+    pub mod lexer;
+
     #[allow(clippy::all)]
     pub mod parser {
         use lalrpop_util::lalrpop_mod;
@@ -13,32 +17,8 @@ pub mod parse {
         pub use parser_impl::*;
     }
 
-    pub mod token;
-    pub mod syntax;
-    pub mod err;
     mod escape;
     mod span;
-
-    use logos::{Logos, SpannedIter};
-    use token::Tok;
-
-    pub struct Lexer<'source> {
-        inner: SpannedIter<'source, Tok<'source>>,
-    }
-
-    impl<'source> Lexer<'source> {
-        pub fn new(source: &'source str) -> Self {
-            Self { inner: Tok::lexer(&source).spanned() }
-        }
-    }
-
-    impl<'source> Iterator for Lexer<'source> {
-        type Item = (usize, Tok<'source>, usize);
-
-        fn next(&mut self) -> Option<Self::Item> {
-            self.inner.next().map(|(tok, range)| (range.start, tok, range.end))
-        }
-    }
 }
 
 pub mod resolve {
@@ -47,9 +27,9 @@ pub mod resolve {
 
 pub mod statics {
     pub mod syntax;
+    pub mod err;
     mod elab;
     pub mod tyck;
-    pub mod err;
     mod fmt;
 
     pub use tyck::TypeCheck;

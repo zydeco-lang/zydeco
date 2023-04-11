@@ -1,4 +1,4 @@
-use super::token::Tok;
+use super::lexer::Tok;
 use crate::utils::span::{Cursor1, FileInfo};
 use std::fmt::Display;
 

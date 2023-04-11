@@ -1,5 +1,5 @@
 use crate::{
-    parse::{syntax::*, token::*, escape},
+    parse::{syntax::*, lexer::*, escape},
     syntax::DeclSymbol,
     utils::span::*,
 };

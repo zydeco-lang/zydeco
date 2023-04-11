@@ -1,4 +1,4 @@
-use logos::Logos;
+use logos::{Logos, SpannedIter};
 use std::fmt::{Debug, Display};
 
 #[derive(Logos, Clone, Debug, PartialEq)]
@@ -157,5 +157,23 @@ impl<'input> Display for Tok<'input> {
 
             Tok::Error => write!(f, "Error"),
         }
+    }
+}
+
+pub struct Lexer<'source> {
+    inner: SpannedIter<'source, Tok<'source>>,
+}
+
+impl<'source> Lexer<'source> {
+    pub fn new(source: &'source str) -> Self {
+        Self { inner: Tok::lexer(&source).spanned() }
+    }
+}
+
+impl<'source> Iterator for Lexer<'source> {
+    type Item = (usize, Tok<'source>, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(tok, range)| (range.start, tok, range.end))
     }
 }
