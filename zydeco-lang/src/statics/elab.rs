@@ -1,7 +1,8 @@
-use super::{err::TyckErrorItem, resolve::NameResolveError, syntax::*};
+use super::{err::TyckErrorItem, syntax::*};
 use crate::{
     parse::syntax as ps,
     rc,
+    resolve::err::NameResolveError,
     utils::span::{Span, SpanInfo, SpanView},
 };
 use im::vector;
@@ -424,7 +425,14 @@ impl TryFrom<ps::Module> for Module {
             let DeclSymbol { public, external, inner } = declaration;
             match inner {
                 ps::Declaration::Module(m) => {
-                    let Module { name: _, data: ds, codata: cs, alias: aliases, define: defs, define_ext: defexts } = m.try_into()?;
+                    let Module {
+                        name: _,
+                        data: ds,
+                        codata: cs,
+                        alias: aliases,
+                        define: defs,
+                        define_ext: defexts,
+                    } = m.try_into()?;
                     data.extend(ds);
                     codata.extend(cs);
                     alias.extend(aliases);

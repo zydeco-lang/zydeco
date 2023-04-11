@@ -10,7 +10,7 @@ use super::{
 };
 use crate::{
     rc,
-    statics::resolve::NameResolveError,
+    resolve::err::NameResolveError,
     syntax::env::Env,
     utils::{
         fmt::FmtArgs,

@@ -1,5 +1,4 @@
-use super::err::TyckErrorItem;
-use crate::syntax::binder::{CtorV, DtorV, TermV, TypeV};
+use crate::{statics::err::TyckErrorItem, syntax::binder::*};
 use std::fmt;
 
 #[derive(Clone, Debug)]

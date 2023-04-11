@@ -41,10 +41,13 @@ pub mod parse {
     }
 }
 
+pub mod resolve {
+    pub mod err;
+}
+
 pub mod statics {
     pub mod syntax;
     mod elab;
-    mod resolve;
     pub mod tyck;
     pub mod err;
     mod fmt;

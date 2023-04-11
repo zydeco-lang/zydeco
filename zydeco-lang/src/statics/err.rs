@@ -1,5 +1,5 @@
-use super::{resolve::*, syntax::*};
-use crate::prelude::*;
+use super::syntax::*;
+use crate::{prelude::*, resolve::err::NameResolveError};
 use std::fmt;
 
 #[derive(Clone, Debug)]
