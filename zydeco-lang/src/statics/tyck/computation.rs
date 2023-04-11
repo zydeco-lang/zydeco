@@ -17,7 +17,7 @@ impl TypeCheck for Span<TermComputation> {
         let span = self.span();
         Ok(match self.inner_ref() {
             TermComputation::Annotation(Annotation { term, ty }) => {
-                ty.ana(Kind::CType, ctx.clone())?;
+                ty.ana(KindBase::CType, ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_clone())
             }
             TermComputation::Ret(_) => {
@@ -35,7 +35,7 @@ impl TypeCheck for Span<TermComputation> {
                         },
                     )
                 })?;
-                span.make(ty_body.to_owned()).ana(Kind::CType, ctx)?;
+                span.make(ty_body.to_owned()).ana(KindBase::CType, ctx)?;
                 Step::Done(ty_body)
             }
             TermComputation::TailGroup(TailGroup { group, body }) => {
@@ -43,12 +43,12 @@ impl TypeCheck for Span<TermComputation> {
                     match item {
                         TailTerm::Let(Let { var, def, body: () }) => {
                             let ty_def = def.syn(ctx.clone())?;
-                            span.make(ty_def.clone()).ana(Kind::VType, ctx.clone())?;
+                            span.make(ty_def.clone()).ana(KindBase::VType, ctx.clone())?;
                             ctx.term_ctx.insert(var.to_owned(), ty_def);
                         }
                         TailTerm::Do(Do { var, comp, body: () }) => {
                             let ty_comp = comp.syn(ctx.clone())?;
-                            span.make(ty_comp.clone()).ana(Kind::CType, ctx.clone())?;
+                            span.make(ty_comp.clone()).ana(KindBase::CType, ctx.clone())?;
                             let ty_val =
                                 ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
                                     ctx.err(
@@ -71,7 +71,7 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::Match(Match { scrut, arms }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
-                span.make(ty_scrut.clone()).ana(Kind::VType, ctx.clone())?;
+                span.make(ty_scrut.clone()).ana(KindBase::VType, ctx.clone())?;
                 let (Data { name, params, ctors }, args) = ctx.resolve_data(ty_scrut, span)?;
                 // arity check on data type
                 let diff = Env::init(&params, &args, || {
@@ -102,7 +102,7 @@ impl TypeCheck for Span<TermComputation> {
                     }
                     let ty = body.syn(ctx.clone())?;
                     let span = body.span();
-                    span.make(ty.clone()).ana(Kind::CType, ctx)?;
+                    span.make(ty.clone()).ana(KindBase::CType, ctx)?;
                     ty_arms.push(ty);
                 }
                 let ctorv_set_data: HashSet<CtorV> = ctors.keys().cloned().collect();
@@ -210,7 +210,7 @@ impl TypeCheck for Span<TermComputation> {
                     ty.inner_clone().subst(Env::from_iter([(param, tvar.clone().into())]), &ctx)?;
                 ctx.term_ctx.insert(var.clone(), ty);
                 let ty_body = body.syn(ctx.clone())?;
-                span.make(ty_body.clone()).ana(Kind::CType, ctx)?;
+                span.make(ty_body.clone()).ana(KindBase::CType, ctx)?;
                 Step::Done(ty_body)
             }
         })
@@ -230,7 +230,7 @@ impl TypeCheck for Span<TermComputation> {
         if let SynType::Hole(_) = typ_syn {
             return Ok(Step::SynMode((ctx, self)));
         }
-        span.make(typ.clone()).ana(Kind::CType, ctx.clone())?;
+        span.make(typ.clone()).ana(KindBase::CType, ctx.clone())?;
         Ok(match self.inner_ref() {
             TermComputation::Annotation(Annotation { term, ty }) => {
                 let ty_lub = Type::lub(ty.inner_clone(), typ, ctx.clone(), span)?;
@@ -260,12 +260,12 @@ impl TypeCheck for Span<TermComputation> {
                     match item {
                         TailTerm::Let(Let { var, def, body: () }) => {
                             let ty_def = def.syn(ctx.clone())?;
-                            span.make(ty_def.clone()).ana(Kind::VType, ctx.clone())?;
+                            span.make(ty_def.clone()).ana(KindBase::VType, ctx.clone())?;
                             ctx.term_ctx.insert(var.to_owned(), ty_def);
                         }
                         TailTerm::Do(Do { var, comp, body: () }) => {
                             let ty_comp = comp.syn(ctx.clone())?;
-                            span.make(ty_comp.clone()).ana(Kind::CType, ctx.clone())?;
+                            span.make(ty_comp.clone()).ana(KindBase::CType, ctx.clone())?;
                             let ty_val =
                                 ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
                                     ctx.err(
@@ -289,7 +289,7 @@ impl TypeCheck for Span<TermComputation> {
             }
             TermComputation::Match(Match { scrut, arms }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
-                span.make(ty_scrut.clone()).ana(Kind::VType, ctx.clone())?;
+                span.make(ty_scrut.clone()).ana(KindBase::VType, ctx.clone())?;
                 let (Data { name, params, ctors }, args) = ctx.resolve_data(ty_scrut, span)?;
                 // arity check on data type
                 let diff = Env::init(&params, &args, || {

@@ -47,18 +47,19 @@ where
     }
 }
 
-impl FmtArgs for Kind {
+impl FmtArgs for KindBase {
     fn fmt_args(&self, _fargs: Args) -> String {
         match self {
-            Kind::VType => "VType".to_owned(),
-            Kind::CType => "CType".to_owned(),
+            KindBase::VType => "VType".to_owned(),
+            KindBase::CType => "CType".to_owned(),
         }
     }
 }
 
-impl<K> FmtArgs for TypeArity<K>
+impl<In, Out> FmtArgs for TypeArity<In, Out>
 where
-    K: KindT + FmtArgs,
+    In: KindT + FmtArgs,
+    Out: KindT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
         let TypeArity { params, kd } = self;

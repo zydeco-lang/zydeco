@@ -28,13 +28,13 @@ fn desugar_gen_let(
         }
         (_, _, ps::Term::Value(_)) => Err(TyckErrorItem::KindMismatch {
             context: format!("desugaring let"),
-            expected: Kind::CType,
-            found: Kind::VType,
+            expected: KindBase::CType,
+            found: KindBase::VType,
         }),
         (false, false, ps::Term::Computation(_)) => Err(TyckErrorItem::KindMismatch {
             context: format!("desugaring let"),
-            expected: Kind::VType,
-            found: Kind::CType,
+            expected: KindBase::VType,
+            found: KindBase::CType,
         }),
         (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
@@ -127,8 +127,8 @@ impl TryFrom<ps::Type> for Type {
                 let SynType::TypeApp(mut t1) = t1.synty else {
                      Err(TyckErrorItem::KindMismatch {
                         context: format!("desugaring type application"),
-                        expected: Kind::CType,
-                        found: Kind::VType,
+                        expected: KindBase::CType,
+                        found: KindBase::VType,
                     })?
                 };
                 t1.args.push(rc!(t2));
@@ -350,10 +350,10 @@ impl TryFrom<ps::Term> for Term {
     }
 }
 
-impl TryFrom<ps::Data<TypeV, Span<Kind>, CtorV, Span<ps::Type>>> for prelude::Data {
+impl TryFrom<ps::Data<TypeV, Span<KindBase>, CtorV, Span<ps::Type>>> for prelude::Data {
     type Error = TyckErrorItem;
     fn try_from(
-        Data { name, params, ctors }: ps::Data<TypeV, Span<Kind>, CtorV, Span<ps::Type>>,
+        Data { name, params, ctors }: ps::Data<TypeV, Span<KindBase>, CtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
         Ok(Self {
             name,
@@ -377,10 +377,10 @@ impl TryFrom<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
     }
 }
 
-impl TryFrom<ps::Codata<TypeV, Span<Kind>, DtorV, Span<ps::Type>>> for prelude::Codata {
+impl TryFrom<ps::Codata<TypeV, Span<KindBase>, DtorV, Span<ps::Type>>> for prelude::Codata {
     type Error = TyckErrorItem;
     fn try_from(
-        Codata { name, params, dtors }: ps::Codata<TypeV, Span<Kind>, DtorV, Span<ps::Type>>,
+        Codata { name, params, dtors }: ps::Codata<TypeV, Span<KindBase>, DtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
         Ok(Self {
             name,
@@ -404,10 +404,10 @@ impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
     }
 }
 
-impl TryFrom<ps::Alias<TypeV, Span<Kind>, ps::BoxType>> for prelude::Alias {
+impl TryFrom<ps::Alias<TypeV, Span<KindBase>, ps::BoxType>> for prelude::Alias {
     type Error = TyckErrorItem;
     fn try_from(
-        Alias { name, params, ty }: ps::Alias<TypeV, Span<Kind>, ps::BoxType>,
+        Alias { name, params, ty }: ps::Alias<TypeV, Span<KindBase>, ps::BoxType>,
     ) -> Result<Self, TyckErrorItem> {
         Ok(Self { name, params, ty: rc!(ty.try_map(TryInto::try_into)?) })
     }

@@ -9,7 +9,7 @@ impl SpanHolder for Hole {
     }
 }
 
-impl SpanHolder for Kind {
+impl SpanHolder for KindBase {
     fn span_map_mut<F>(&mut self, _f: F)
     where
         F: Fn(&mut SpanInfo) + Clone,
@@ -17,9 +17,10 @@ impl SpanHolder for Kind {
     }
 }
 
-impl<K> SpanHolder for TypeArity<K>
+impl<In, Out> SpanHolder for TypeArity<In, Out>
 where
-    K: KindT + SpanHolder,
+    In: KindT + SpanHolder,
+    Out: KindT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
     where

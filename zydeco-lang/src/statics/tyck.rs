@@ -31,8 +31,8 @@ impl CtxT for () {
 
 #[derive(Clone, Default)]
 pub struct Ctx {
-    pub abst_ctx: im::Vector<Kind>,
-    pub type_ctx: im::HashMap<TypeV, TypeArity<Kind>>,
+    pub abst_ctx: im::Vector<KindBase>,
+    pub type_ctx: im::HashMap<TypeV, TypeArity<KindBase, KindBase>>,
     pub term_ctx: im::HashMap<TermV, Type>,
     pub type_env: Env<TypeV, Type>,
     pub data_env: im::HashMap<TypeV, prelude::Data>,
@@ -44,7 +44,7 @@ pub struct Ctx {
 mod ctx {
     use super::*;
     impl Ctx {
-        pub(super) fn fresh(&mut self, kd: Kind) -> AbstVar {
+        pub(super) fn fresh(&mut self, kd: KindBase) -> AbstVar {
             self.abst_ctx.push_back(kd);
             AbstVar(self.abst_ctx.len() - 1)
         }

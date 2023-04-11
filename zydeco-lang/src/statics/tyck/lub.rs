@@ -16,10 +16,10 @@ impl<T> Lub for Seal<T> {
     }
 }
 
-impl Lub for Kind {
+impl Lub for KindBase {
     type Ctx = Ctx;
-    type Out = Kind;
-    fn lub(self, rhs: Kind, ctx: Ctx, span: &SpanInfo) -> Result<Kind, TyckError> {
+    type Out = KindBase;
+    fn lub(self, rhs: KindBase, ctx: Ctx, span: &SpanInfo) -> Result<KindBase, TyckError> {
         bool_test(self == rhs, || {
             ctx.err(span, KindMismatch { context: format!("lub"), expected: self, found: rhs })
         })?;

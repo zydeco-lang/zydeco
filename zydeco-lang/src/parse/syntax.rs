@@ -5,12 +5,12 @@ pub use crate::syntax::*;
 
 /* ---------------------------------- Kind ---------------------------------- */
 
-pub use crate::syntax::Kind;
+pub use crate::syntax::{KindBase, TypeArity};
 
 /* ---------------------------------- Type ---------------------------------- */
 
-pub type TypePattern = (TypeV, Option<Span<Kind>>);
-pub type TypeKindPattern = (TypeV, Span<Kind>);
+pub type TypePattern = (TypeV, Option<Span<KindBase>>);
+pub type TypeKindPattern = (TypeV, Span<KindBase>);
 
 #[derive(Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
@@ -131,9 +131,9 @@ pub type Define = GenLet;
 #[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum Declaration {
     Module(Module),
-    Data(Data<TypeV, Span<Kind>, CtorV, Span<Type>>),
-    Codata(Codata<TypeV, Span<Kind>, DtorV, Span<Type>>),
-    Alias(Alias<TypeV, Span<Kind>, BoxType>),
+    Data(Data<TypeV, Span<KindBase>, CtorV, Span<Type>>),
+    Codata(Codata<TypeV, Span<KindBase>, DtorV, Span<Type>>),
+    Alias(Alias<TypeV, Span<KindBase>, BoxType>),
     Define(Define),
 }
 

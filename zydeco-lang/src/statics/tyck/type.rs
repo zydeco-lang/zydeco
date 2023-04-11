@@ -120,7 +120,7 @@ impl Ctx {
 
 impl TypeCheck for Span<Type> {
     type Ctx = Ctx;
-    type Out = Kind;
+    type Out = KindBase;
     fn syn_step(
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
@@ -162,13 +162,13 @@ impl TypeCheck for Span<Type> {
             }
             SynType::Forall(Forall { param: (param, kd), ty }) => {
                 ctx.type_ctx.insert(param, kd.inner_clone().into());
-                ty.ana(Kind::CType, ctx)?;
-                Ok(Step::Done(Kind::CType))
+                ty.ana(KindBase::CType, ctx)?;
+                Ok(Step::Done(KindBase::CType))
             }
             SynType::Exists(Exists { param: (param, kd), ty }) => {
                 ctx.type_ctx.insert(param, kd.inner_clone().into());
-                ty.ana(Kind::VType, ctx)?;
-                Ok(Step::Done(Kind::VType))
+                ty.ana(KindBase::VType, ctx)?;
+                Ok(Step::Done(KindBase::VType))
             }
             SynType::AbstVar(AbstVar(abs)) => Ok(Step::Done(ctx.abst_ctx[abs])),
             SynType::Hole(_) => Err(ctx.err(span, NeedAnnotation { content: format!("hole") }))?,
@@ -250,7 +250,7 @@ impl Type {
 
 impl Env<TypeV, Type> {
     pub(super) fn init(
-        params: &[(TypeV, Span<Kind>)], ty_app_args: &[RcType],
+        params: &[(TypeV, Span<KindBase>)], ty_app_args: &[RcType],
         arity_err: impl FnOnce() -> TyckError,
     ) -> Result<Self, TyckError> {
         bool_test(params.len() == ty_app_args.len(), arity_err)?;

@@ -80,9 +80,9 @@ CodataBr: CodataBr<DtorV, Span<Type>> = {
 
 //* ---------------------------------- Kind ---------------------------------- */
 
-Kind: Kind = {
-    "VType" => Kind::VType,
-    "CType" => Kind::CType,
+KindBase: KindBase = {
+    "VType" => KindBase::VType,
+    "CType" => KindBase::CType,
 };
 
 //* ---------------------------------- Type ---------------------------------- */
@@ -119,10 +119,10 @@ TypeAtom: Type = {
 
 //* --------------------------------- Pattern -------------------------------- */
 
-TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Span<Kind>> ")" => (name, kind);
+TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Span<KindBase>> ")" => (name, kind);
 
 TypePattern: TypePattern = {
-    "(" <name:TypeV> <kind: (":" <Span<Kind>>)?> ")" => (name, kind),
+    "(" <name:TypeV> <kind: (":" <Span<KindBase>>)?> ")" => (name, kind),
     <name:TypeV> => (name, None),
 };
 

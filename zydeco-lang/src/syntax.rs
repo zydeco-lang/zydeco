@@ -117,19 +117,19 @@ impl TypeT for Hole {}
 /* ---------------------------------- Kind ---------------------------------- */
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Kind {
+pub enum KindBase {
     VType,
     CType,
 }
-impl KindT for Kind {}
+impl KindT for KindBase {}
 
 /// A kind that represents the arity, a.k.a. parameters of a type constructor.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TypeArity<K: KindT> {
-    pub params: Vec<K>,
-    pub kd: K,
+pub struct TypeArity<In: KindT, Out: KindT> {
+    pub params: Vec<In>,
+    pub kd: Out,
 }
-impl<K: KindT> KindT for TypeArity<K> {}
+impl<In: KindT, Out: KindT> KindT for TypeArity<In, Out> {}
 
 /* ---------------------------------- Types --------------------------------- */
 
