@@ -189,114 +189,53 @@ mod batch_tests {
 }
 mod pure_tests {
     use super::*;
-    mk_pure_test!(pure_bindings, "bindings.zy");
-    mk_pure_test!(pure_booleans, "booleans.zy");
-    mk_pure_test!(pure_comments, "comments.zy");
-    mk_pure_test!(pure_fn, "fn.zy");
-    mk_pure_test!(pure_fn2, "fn'.zy");
-    mk_pure_test!(pure_thunk, "thunk.zy");
-    mk_pure_test!(pure_bigmac, "bigmac.zy");
+    mk_pure_test!(bindings, "bindings.zy");
+    mk_pure_test!(booleans, "booleans.zy");
+    mk_pure_test!(comments, "comments.zy");
+    mk_pure_test!(fn1, "fn.zy");
+    mk_pure_test!(fn2, "fn'.zy");
+    mk_pure_test!(thunk, "thunk.zy");
+    mk_pure_test!(bigmac, "bigmac.zy");
 }
 mod chk_tests {
     use super::*;
-    mk_check_test!(chk_loop, "loop.zydeco");
-    mk_check_test!(chk_explosion, "explosion.zy");
-    mk_check_test!(chk_iota, "iota.zy");
+    mk_check_test!(r#loop, "loop.zydeco");
+    mk_check_test!(explosion, "explosion.zy");
+    mk_check_test!(iota, "iota.zy");
     mk_check_test!(alias, "alias.zy");
 }
 
 mod io_tests {
     use super::*;
-    mk_io_test!(io_echo_once, "echo_once.zydeco", &IOMatch {
-        args: vec![],
-        input: "hello\n".to_string(),
-        correct_answer: "hell1o\n".to_string(),
-    });
+    mk_io_test!(
+        echo_once,
+        "echo_once.zydeco",
+        &IOMatch {
+            args: vec![],
+            input: "hello\n".to_string(),
+            correct_answer: "hello\n".to_string(),
+        }
+    );
+
+    mk_io_test!(
+        print_args,
+        "print_args.zydeco",
+        &IOMatch {
+            args: vec!["hello".to_string(), "world".to_string()],
+            input: String::new(),
+            correct_answer: "hello\nworld\n".to_string(),
+        }
+    );
+
+    mk_io_test!(
+        print_list,
+        "print_list.zydeco",
+        &IOMatch {
+            args: vec![],
+            input: "hello\n".to_string(),
+            correct_answer: "hello world\n5 4 3 2 1".to_string(),
+        }
+    );
 }
 
-mod custom_tests {
-    use super::*;
-    #[test]
-    fn custom_test0() -> Result<(), String> {
-        let path = PathBuf::from("tests/custom/echo_once.zydeco");
-
-        let m = ZydecoFile::parse(path)?;
-        let m = ZydecoFile::elab(m)?;
-        ZydecoFile::tyck(m.clone())?;
-        let m = ZydecoFile::link(m.inner)?;
-
-        let mut input = std::io::Cursor::new("hello\n");
-        let mut output: Vec<u8> = Vec::new();
-
-        let ds::ProgKont::ExitCode(exit_code) =
-            ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[]).entry else {
-                Err("Expected ExitCode".to_string())?
-            };
-        if exit_code != 0 {
-            Err(format!("Non-zero exit code: {}", exit_code))?
-        }
-
-        let s = std::str::from_utf8(&output).unwrap();
-        assert_eq!("hello\n", s);
-
-        Ok(())
-    }
-
-    #[test]
-    fn custom_test1() -> Result<(), String> {
-        let path = PathBuf::from("tests/custom/print_args.zydeco");
-
-        let m = ZydecoFile::parse(path)?;
-        let m = ZydecoFile::elab(m)?;
-        ZydecoFile::tyck(m.clone())?;
-        let m = ZydecoFile::link(m.inner)?;
-
-        let mut input = std::io::Cursor::new("hello\n");
-        let mut output: Vec<u8> = Vec::new();
-        let ds::ProgKont::ExitCode(exit_code) =
-            ZydecoFile::eval_virtual_os(
-                m,
-                &mut input,
-                &mut output,
-                &["hello".to_string(), "world".to_string()],
-            ).entry else {
-                Err("Expected ExitCode".to_string())?
-            };
-        if exit_code != 0 {
-            Err(format!("Non-zero exit code: {}", exit_code))?
-        }
-        let s = std::str::from_utf8(&output).unwrap();
-        assert_eq!("hello\nworld\n", s);
-
-        Ok(())
-    }
-    #[test]
-    fn custom_test2() -> Result<(), String> {
-        let path = PathBuf::from("tests/custom/print_list.zydeco");
-
-        let m = ZydecoFile::parse(path)?;
-        let m = ZydecoFile::elab(m)?;
-        ZydecoFile::tyck(m.clone())?;
-        let m = ZydecoFile::link(m.inner)?;
-
-        let mut input = std::io::Cursor::new("hello\n");
-        let mut output: Vec<u8> = Vec::new();
-        let ds::ProgKont::ExitCode(exit_code) =
-            ZydecoFile::eval_virtual_os(
-                m,
-                &mut input,
-                &mut output,
-                &["hello".to_string(), "world".to_string()],
-            ).entry else {
-                Err("Expected ExitCode".to_string())?
-            };
-        if exit_code != 0 {
-            Err(format!("Non-zero exit code: {}", exit_code))?
-        }
-        let s = std::str::from_utf8(&output).unwrap();
-        assert_eq!("hello world\n5 4 3 2 1", s);
-
-        Ok(())
-    }
-
-}
+mod custom_tests {}
