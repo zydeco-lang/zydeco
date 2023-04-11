@@ -67,6 +67,34 @@ fn pure_test(f: &str) -> Result<(), String> {
     Ok(())
 }
 
+macro_rules! mk_pure_test {
+    ($test_name:ident, $file_name:expr) => {
+        #[test]
+        fn $test_name() {
+            wrapper(pure_test($file_name))
+        }
+    };
+}
+
+fn check_test(f: &str) -> Result<(), String> {
+    let mut path = PathBuf::from("tests/check-only");
+    path.push(f);
+    let m = ZydecoFile::parse(path)?;
+    let m = ZydecoFile::elab(m)?;
+    ZydecoFile::tyck(m)?;
+
+    Ok(())
+}
+
+macro_rules! mk_check_test {
+    ($test_name:ident, $file_name:expr) => {
+        #[test]
+        fn $test_name() {
+            wrapper(check_test($file_name))
+        }
+    };
+}
+
 fn batch_test(f: &str) -> Result<(), String> {
     let mut path = PathBuf::from("tests/nonzero-exit-code");
     path.push(f);
@@ -88,8 +116,17 @@ fn batch_test(f: &str) -> Result<(), String> {
     Ok(())
 }
 
+macro_rules! mk_batch_test {
+    ($test_name:ident, $file_name:expr) => {
+        #[test]
+        fn $test_name() {
+            wrapper(batch_test($file_name))
+        }
+    };
+}
+
 fn io_test(f: &str, iomatch: &IOMatch) -> Result<(), String> {
-    let mut path = PathBuf::from("tests/custom");
+    let mut path = PathBuf::from("tests/io");
     path.push(f);
     let m = ZydecoFile::parse(path)?;
     let m = ZydecoFile::elab(m)?;
@@ -114,43 +151,6 @@ fn io_test(f: &str, iomatch: &IOMatch) -> Result<(), String> {
     Ok(())
 }
 
-fn check_test(f: &str) -> Result<(), String> {
-    let mut path = PathBuf::from("tests/check-only");
-    path.push(f);
-    let m = ZydecoFile::parse(path)?;
-    let m = ZydecoFile::elab(m)?;
-    ZydecoFile::tyck(m)?;
-
-    Ok(())
-}
-
-macro_rules! mk_pure_test {
-    ($test_name:ident, $file_name:expr) => {
-        #[test]
-        fn $test_name() {
-            wrapper(pure_test($file_name))
-        }
-    };
-}
-
-macro_rules! mk_batch_test {
-    ($test_name:ident, $file_name:expr) => {
-        #[test]
-        fn $test_name() {
-            wrapper(batch_test($file_name))
-        }
-    };
-}
-
-macro_rules! mk_check_test {
-    ($test_name:ident, $file_name:expr) => {
-        #[test]
-        fn $test_name() {
-            wrapper(check_test($file_name))
-        }
-    };
-}
-
 macro_rules! mk_io_test {
     ($test_name:ident, $file_name:expr, $iomatch:expr) => {
         #[test]
@@ -160,6 +160,23 @@ macro_rules! mk_io_test {
     };
 }
 
+mod pure_tests {
+    use super::*;
+    mk_pure_test!(bindings, "bindings.zy");
+    mk_pure_test!(booleans, "booleans.zy");
+    mk_pure_test!(comments, "comments.zy");
+    mk_pure_test!(fn1, "fn.zy");
+    mk_pure_test!(fn2, "fn'.zy");
+    mk_pure_test!(thunk, "thunk.zy");
+}
+mod chk_tests {
+    use super::*;
+    mk_check_test!(r#loop, "loop.zydeco");
+    mk_check_test!(explosion, "explosion.zy");
+    mk_check_test!(iota, "iota.zy");
+    mk_check_test!(alias, "alias.zy");
+    mk_check_test!(bigmac, "bigmac.zy");
+}
 mod batch_tests {
     // Note: to use rust-analyzer's debug feature on tests, you can replace
     // the file name with full path to the test file and click `Debug`
@@ -187,24 +204,6 @@ mod batch_tests {
     mk_batch_test!(oo, "oo.zydeco");
     mk_batch_test!(ret, "ret.zydeco");
 }
-mod pure_tests {
-    use super::*;
-    mk_pure_test!(bindings, "bindings.zy");
-    mk_pure_test!(booleans, "booleans.zy");
-    mk_pure_test!(comments, "comments.zy");
-    mk_pure_test!(fn1, "fn.zy");
-    mk_pure_test!(fn2, "fn'.zy");
-    mk_pure_test!(thunk, "thunk.zy");
-    mk_pure_test!(bigmac, "bigmac.zy");
-}
-mod chk_tests {
-    use super::*;
-    mk_check_test!(r#loop, "loop.zydeco");
-    mk_check_test!(explosion, "explosion.zy");
-    mk_check_test!(iota, "iota.zy");
-    mk_check_test!(alias, "alias.zy");
-}
-
 mod io_tests {
     use super::*;
     mk_io_test!(

@@ -1,6 +1,9 @@
 use clap::Parser;
 use cli::{Cli, Commands};
-use zydeco_lang::{dynamics::syntax::ProgKont, utils::fmt::FmtArgs, zydeco::ZydecoFile};
+use zydeco_lang::{
+    prelude::*,
+    zydeco::{ProgKont, ZydecoFile},
+};
 
 fn main() -> Result<(), ()> {
     let res = match Cli::parse().command {
@@ -34,7 +37,7 @@ fn run_file(
     announce_phase(verbose, title, "tyck");
     ZydecoFile::tyck(m.clone())?;
     // link
-    announce_phase(verbose, title, "elab");
+    announce_phase(verbose, title, "link");
     let sem_m = ZydecoFile::link(m.inner())?;
     if verbose {
         println!("{}", sem_m.fmt());

@@ -17,6 +17,7 @@ use crate::{
         span::{FileInfo, Span, SpanHolder},
     },
 };
+pub use ds::ProgKont;
 use std::{path::PathBuf, rc::Rc};
 
 pub struct Zydeco;
