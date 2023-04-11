@@ -21,6 +21,12 @@ use zydeco_lang::{
     zydeco::{ZydecoExpr, ZydecoFile},
 };
 
+struct IOMatch {
+    args: Vec<String>,
+    input: String,
+    correct_answer: String,
+}
+
 fn wrapper<T>(r: Result<T, String>) {
     match r {
         Ok(_) => {}
@@ -82,6 +88,32 @@ fn batch_test(f: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn io_test(f: &str, iomatch: &IOMatch) -> Result<(), String> {
+    let mut path = PathBuf::from("tests/custom");
+    path.push(f);
+    let m = ZydecoFile::parse(path)?;
+    let m = ZydecoFile::elab(m)?;
+    ZydecoFile::tyck(m.clone())?;
+    let m = ZydecoFile::link(m.inner)?;
+
+    let mut input = std::io::Cursor::new(iomatch.input.as_str());
+    let mut output: Vec<u8> = Vec::new();
+    let args = iomatch.args.as_slice();
+
+    let ds::ProgKont::ExitCode(exit_code) =
+        ZydecoFile::eval_virtual_os(m, &mut input, &mut output, args).entry else {
+            Err("Expected ExitCode".to_string())?
+        };
+    if exit_code != 0 {
+        Err(format!("Non-zero exit code: {}", exit_code))?
+    }
+
+    let s = std::str::from_utf8(&output).unwrap();
+    assert_eq!(iomatch.correct_answer, s, "Output is not correct.");
+
+    Ok(())
+}
+
 fn check_test(f: &str) -> Result<(), String> {
     let mut path = PathBuf::from("tests/check-only");
     path.push(f);
@@ -93,7 +125,7 @@ fn check_test(f: &str) -> Result<(), String> {
 }
 
 macro_rules! mk_pure_test {
-    ($test_name:ident, $file_name : expr) => {
+    ($test_name:ident, $file_name:expr) => {
         #[test]
         fn $test_name() {
             wrapper(pure_test($file_name))
@@ -102,7 +134,7 @@ macro_rules! mk_pure_test {
 }
 
 macro_rules! mk_batch_test {
-    ($test_name:ident, $file_name : expr) => {
+    ($test_name:ident, $file_name:expr) => {
         #[test]
         fn $test_name() {
             wrapper(batch_test($file_name))
@@ -111,13 +143,23 @@ macro_rules! mk_batch_test {
 }
 
 macro_rules! mk_check_test {
-    ($test_name:ident, $file_name : expr) => {
+    ($test_name:ident, $file_name:expr) => {
         #[test]
         fn $test_name() {
             wrapper(check_test($file_name))
         }
     };
 }
+
+macro_rules! mk_io_test {
+    ($test_name:ident, $file_name:expr, $iomatch:expr) => {
+        #[test]
+        fn $test_name() {
+            wrapper(io_test($file_name, $iomatch))
+        }
+    };
+}
+
 mod batch_tests {
     // Note: to use rust-analyzer's debug feature on tests, you can replace
     // the file name with full path to the test file and click `Debug`
@@ -161,6 +203,15 @@ mod chk_tests {
     mk_check_test!(chk_explosion, "explosion.zy");
     mk_check_test!(chk_iota, "iota.zy");
     mk_check_test!(alias, "alias.zy");
+}
+
+mod io_tests {
+    use super::*;
+    mk_io_test!(io_echo_once, "echo_once.zydeco", &IOMatch {
+        args: vec![],
+        input: "hello\n".to_string(),
+        correct_answer: "hell1o\n".to_string(),
+    });
 }
 
 mod custom_tests {
@@ -247,4 +298,5 @@ mod custom_tests {
 
         Ok(())
     }
+
 }
