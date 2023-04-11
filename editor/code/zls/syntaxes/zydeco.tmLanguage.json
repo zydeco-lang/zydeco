@@ -21,7 +21,7 @@
 				},
 				{
 					"name": "keyword.operator.zydeco",
-					"match": "\\b(ret|fn|rec|let|do|match|comatch)\\b"
+					"match": "\\b(ret|fn|rec|let|in|do|match|comatch|forall|exists)\\b"
 				}
 			]
 		},
