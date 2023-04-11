@@ -58,7 +58,7 @@ let fn paren_counter_step (c : Tok) (k : Thunk(ParenCounterTrans)) (state : Pare
   | LParen() -> ! k state .some()
   | RParen() ->
   (comatch
-  | .none() -> ! k (Reject()::ParenCounterState) .none() # Note: would be more efficient to just ! reject here
+  | .none() -> ! k (Reject() : ParenCounterState) .none() # Note: would be more efficient to just ! reject here
   | .some() -> ! k state
   end)
   end
@@ -66,7 +66,7 @@ in
 
 let fn demonstrate (s: String) (expect: Bool) (toks: Thunk(Ret(LList' Tok))) (t : Thunk(OS)) : OS =
   do s' <- ! str_append "The following parens are balanced? "  s;
-  do b <- ! foldr toks paren_counter_step accept_or_not (Ok()::ParenCounterState) .none();
+  do b <- ! foldr toks paren_counter_step accept_or_not (Ok() : ParenCounterState) .none();
   do pass <- ! bool_eq expect b;
   match pass
   | True() -> (

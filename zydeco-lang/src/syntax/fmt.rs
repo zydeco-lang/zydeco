@@ -127,7 +127,7 @@ where
 {
     fn fmt_args(&self, fargs: Args) -> String {
         let Annotation { term: body, ty } = self;
-        format!("({} :: {})", body.fmt_args(fargs), ty.fmt_args(fargs))
+        format!("({} : {})", body.fmt_args(fargs), ty.fmt_args(fargs))
     }
 }
 

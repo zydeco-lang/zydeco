@@ -147,7 +147,7 @@ Term: Term = {
 
 TermValue: TermValue = {
     "(" <TermValue> ")" => <>.into(),
-    "(" <tv:Box<Span<TermValue>>> "::" <ty:Span<Type>> ")" => Annotation {
+    "(" <tv:Box<Span<TermValue>>> ":" <ty:Span<Type>> ")" => Annotation {
         term: tv,
         ty,
     }.into(),
@@ -213,7 +213,7 @@ TermComputationRight: TermComputation = {
 
 TermComputationAtom: TermComputation = {
     "(" <tc:TermComputation> ")" => tc.into(),
-    "(" <tc:Box<Span<TermComputation>>> "::" <ty:Span<Type>> ")" => Annotation {
+    "(" <tc:Box<Span<TermComputation>>> ":" <ty:Span<Type>> ")" => Annotation {
         term: tc, ty,
     }.into(),
     "ret" <v:Box<Span<TermValue>>> => Ret(v).into(),

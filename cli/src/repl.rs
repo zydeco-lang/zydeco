@@ -50,8 +50,8 @@ pub fn launch() -> Result<i32, String> {
                         // NOTE: not evaluating the value, just printing its type
                         // let v = ZydecoExpr::link_value(v);
                         // let v = zydeco_expr.eval_value(v);
-                        // println!("{} :: {}", v.fmt(), ty.fmt())
-                        println!("{} :: {}", v.fmt(), ty.fmt())
+                        // println!("{} : {}", v.fmt(), ty.fmt())
+                        println!("{} : {}", v.fmt(), ty.fmt())
                     }
                 }
             }
@@ -82,7 +82,7 @@ pub fn launch() -> Result<i32, String> {
                             let c = zydeco_expr.eval_ret_computation(c);
                             match c {
                                 ds::ProgKont::Ret(value) => {
-                                    println!("{} :: {}", value.fmt(), ty.fmt())
+                                    println!("{} : {}", value.fmt(), ty.fmt())
                                 }
                                 ds::ProgKont::ExitCode(i) => {
                                     unreachable!()

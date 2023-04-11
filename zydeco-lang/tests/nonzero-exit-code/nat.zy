@@ -1,6 +1,6 @@
 let zero: Nat = Z();
 let fn suc (x: Nat): F Nat =
-  ret (S(x)::Nat)
+  ret (S(x) : Nat)
 in
 let fn ifz (z: Bool) (pred: Comp(Nat -> Ret Bool)) (x: Nat): Ret Bool =
   match x

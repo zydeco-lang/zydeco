@@ -1,2 +1,2 @@
-let rec loop : OS = ! (loop :: U(OS));
+let rec loop : OS = ! (loop : U(OS));
 ! loop

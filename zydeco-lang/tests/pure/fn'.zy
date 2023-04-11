@@ -1,1 +1,1 @@
-(fn x y -> ! y x :: Bool -> Thunk(Bool -> Ret Bool) -> Ret Bool) True() { fn x -> ret x }
+(fn x y -> ! y x : Bool -> Thunk(Bool -> Ret Bool) -> Ret Bool) True() { fn x -> ret x }
