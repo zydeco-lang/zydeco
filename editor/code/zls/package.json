@@ -6,20 +6,35 @@
   "engines": {
     "vscode": "^1.76.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zydeco-lang/zydeco"
+  },
+  "publisher": "LitiaEeloo",
   "categories": [
     "Programming Languages"
   ],
   "contributes": {
-    "languages": [{
-      "id": "zydeco",
-      "aliases": ["Zydeco", "zydeco"],
-      "extensions": [".zy",".zydeco"],
-      "configuration": "./language-configuration.json"
-    }],
-    "grammars": [{
-      "language": "zydeco",
-      "scopeName": "source.zydeco",
-      "path": "./syntaxes/zydeco.tmLanguage.json"
-    }]
+    "languages": [
+      {
+        "id": "zydeco",
+        "aliases": [
+          "Zydeco",
+          "zydeco"
+        ],
+        "extensions": [
+          ".zy",
+          ".zydeco"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "zydeco",
+        "scopeName": "source.zydeco",
+        "path": "./syntaxes/zydeco.tmLanguage.json"
+      }
+    ]
   }
 }

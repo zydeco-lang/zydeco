@@ -7,14 +7,23 @@
 		},
 		{
 			"include": "#strings"
+		},
+		{
+			"include": "#comment"
 		}
 	],
 	"repository": {
 		"keywords": {
-			"patterns": [{
-				"name": "keyword.control.zydeco",
-				"match": "\\b(module|where|end|data|codata|let|do|match|comatch)\\b"
-			}]
+			"patterns": [
+				{
+					"name": "keyword.control.zydeco",
+					"match": "\\b(module|where|pub|extern|ext|end|data|codata|alias|define|def)\\b"
+				},
+				{
+					"name": "keyword.operator.zydeco",
+					"match": "\\b(ret|fn|rec|let|do|match|comatch)\\b"
+				}
+			]
 		},
 		"strings": {
 			"name": "string.quoted.double.zydeco",
@@ -26,6 +35,12 @@
 					"match": "\\\\."
 				}
 			]
+		},
+		"comment": {
+			"patterns": [{
+				"name": "comment.line.number-sign",
+				"match": "#.*$"
+			}]
 		}
 	},
 	"scopeName": "source.zydeco"
