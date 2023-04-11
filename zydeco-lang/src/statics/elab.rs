@@ -349,10 +349,10 @@ impl TryFrom<ps::Term> for Term {
     }
 }
 
-impl TryFrom<ps::Data<TypeV, Kind, CtorV, Span<ps::Type>>> for prelude::Data {
+impl TryFrom<ps::Data<TypeV, Span<Kind>, CtorV, Span<ps::Type>>> for prelude::Data {
     type Error = TyckErrorItem;
     fn try_from(
-        Data { name, params, ctors }: ps::Data<TypeV, Kind, CtorV, Span<ps::Type>>,
+        Data { name, params, ctors }: ps::Data<TypeV, Span<Kind>, CtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
         Ok(Self {
             name,
@@ -376,10 +376,10 @@ impl TryFrom<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
     }
 }
 
-impl TryFrom<ps::Codata<TypeV, Kind, DtorV, Span<ps::Type>>> for prelude::Codata {
+impl TryFrom<ps::Codata<TypeV, Span<Kind>, DtorV, Span<ps::Type>>> for prelude::Codata {
     type Error = TyckErrorItem;
     fn try_from(
-        Codata { name, params, dtors }: ps::Codata<TypeV, Kind, DtorV, Span<ps::Type>>,
+        Codata { name, params, dtors }: ps::Codata<TypeV, Span<Kind>, DtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
         Ok(Self {
             name,
@@ -403,10 +403,10 @@ impl TryFrom<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
     }
 }
 
-impl TryFrom<ps::Alias<TypeV, Kind, ps::BoxType>> for prelude::Alias {
+impl TryFrom<ps::Alias<TypeV, Span<Kind>, ps::BoxType>> for prelude::Alias {
     type Error = TyckErrorItem;
     fn try_from(
-        Alias { name, params, ty }: ps::Alias<TypeV, Kind, ps::BoxType>,
+        Alias { name, params, ty }: ps::Alias<TypeV, Span<Kind>, ps::BoxType>,
     ) -> Result<Self, TyckErrorItem> {
         Ok(Self { name, params, ty: rc!(ty.try_map(TryInto::try_into)?) })
     }

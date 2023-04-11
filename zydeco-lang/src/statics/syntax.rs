@@ -16,8 +16,8 @@ pub struct AbstVar(pub usize);
 #[derive(EnumGenerator, FmtArgs, Clone, Debug)]
 pub enum SynType {
     TypeApp(TypeApp<TypeV, RcType>),
-    Forall(Forall<(TypeV, Kind), RcType>),
-    Exists(Exists<(TypeV, Kind), RcType>),
+    Forall(Forall<(TypeV, Span<Kind>), RcType>),
+    Exists(Exists<(TypeV, Span<Kind>), RcType>),
     AbstVar(AbstVar),
     Hole(Hole),
 }
@@ -39,8 +39,8 @@ macro_rules! impl_from {
     };
 }
 impl_from!(TypeApp<TypeV, RcType>);
-impl_from!(Forall<(TypeV, Kind), RcType>);
-impl_from!(Exists<(TypeV, Kind), RcType>);
+impl_from!(Forall<(TypeV, Span<Kind>), RcType>);
+impl_from!(Exists<(TypeV, Span<Kind>), RcType>);
 impl_from!(AbstVar);
 impl_from!(Hole);
 impl From<TypeV> for Type {
@@ -85,7 +85,7 @@ pub enum TermComputation {
     Match(Match<CtorV, TermV, RcValue, RcComp>),
     Comatch(Comatch<DtorV, TermV, RcComp>),
     Dtor(Dtor<RcComp, DtorV, RcValue>),
-    TyAbsTerm(TyAbsTerm<(TypeV, Option<Kind>), RcComp>),
+    TyAbsTerm(TyAbsTerm<(TypeV, Option<Span<Kind>>), RcComp>),
     TyAppTerm(TyAppTerm<RcComp, RcType>),
     MatchPack(MatchPack<RcValue, TypeV, TermV, RcComp>),
 }
@@ -118,7 +118,7 @@ pub struct Program {
 
 pub mod prelude {
     use super::*;
-    pub type Data = super::Data<TypeV, Kind, CtorV, RcType>;
-    pub type Codata = super::Codata<TypeV, Kind, DtorV, RcType>;
-    pub type Alias = super::Alias<TypeV, Kind, RcType>;
+    pub type Data = super::Data<TypeV, Span<Kind>, CtorV, RcType>;
+    pub type Codata = super::Codata<TypeV, Span<Kind>, DtorV, RcType>;
+    pub type Alias = super::Alias<TypeV, Span<Kind>, RcType>;
 }

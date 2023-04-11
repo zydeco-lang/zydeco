@@ -69,7 +69,7 @@ impl Lub for Type {
                 SynType::Forall(Forall { param: (tvar_, kd_), ty: ty_ }),
             ) => {
                 bool_test(kd == kd_, err)?;
-                let abst_var = ctx.fresh(kd.clone());
+                let abst_var = ctx.fresh(kd.inner_clone());
                 let lhs_ty = (ty.inner_clone())
                     .subst(Env::from_iter([(tvar, abst_var.clone().into())]), &ctx)?;
                 let rhs_ty =
@@ -84,7 +84,7 @@ impl Lub for Type {
                 SynType::Exists(Exists { param: (tvar_, kd_), ty: ty_ }),
             ) => {
                 bool_test(kd == kd_, err)?;
-                let abst_var = ctx.fresh(kd.clone());
+                let abst_var = ctx.fresh(kd.inner_clone());
                 let lhs_ty = (ty.inner_clone())
                     .subst(Env::from_iter([(tvar, abst_var.clone().into())]), &ctx)?;
                 let rhs_ty =

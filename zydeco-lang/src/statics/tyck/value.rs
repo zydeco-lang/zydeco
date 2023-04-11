@@ -125,7 +125,7 @@ impl TypeCheck for Span<TermValue> {
                         found: typ,
                     }))?
                 };
-                ty.ana(kd.clone(), ctx.clone())?;
+                ty.ana(kd.inner_clone(), ctx.clone())?;
                 let ty_body = ty_body
                     .inner_clone()
                     .subst(Env::from_iter([(param, ty.inner_clone())]), &ctx)?;

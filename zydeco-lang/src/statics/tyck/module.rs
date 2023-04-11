@@ -3,7 +3,7 @@ use super::*;
 impl prelude::Data {
     fn type_arity(&self) -> TypeArity<Kind> {
         TypeArity {
-            params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
+            params: (self.params.iter()).map(|(_, kd)| kd.inner_clone()).collect(),
             kd: Kind::VType,
         }
     }
@@ -12,7 +12,7 @@ impl prelude::Data {
 impl prelude::Codata {
     fn type_arity(&self) -> TypeArity<Kind> {
         TypeArity {
-            params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
+            params: (self.params.iter()).map(|(_, kd)| kd.inner_clone()).collect(),
             kd: Kind::CType,
         }
     }
@@ -20,7 +20,7 @@ impl prelude::Codata {
 
 impl prelude::Alias {
     fn type_arity(&self, kd: Kind) -> TypeArity<Kind> {
-        TypeArity { params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(), kd }
+        TypeArity { params: (self.params.iter()).map(|(_, kd)| kd.inner_clone()).collect(), kd }
     }
 }
 
@@ -39,7 +39,7 @@ impl TypeCheck for Span<&prelude::Data> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
-            ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
+            ctx.type_ctx.insert(tvar.clone(), kd.inner_clone().into());
         }
         let mut ctorvs = HashSet::new();
         for DataBr(ctorv, tys) in data.ctors.iter() {
@@ -68,7 +68,7 @@ impl TypeCheck for Span<&prelude::Codata> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
-            ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
+            ctx.type_ctx.insert(tvar.clone(), kd.inner_clone().into());
         }
         let mut dtorvs = HashSet::new();
         for CodataBr(dtorv, tys, ty) in data.dtors.iter() {
@@ -98,7 +98,7 @@ impl TypeCheck for Span<&prelude::Alias> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
-            ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
+            ctx.type_ctx.insert(tvar.clone(), kd.inner_clone().into());
         }
         let kd = data.ty.syn(ctx.clone())?;
         Ok(Step::Done(kd))

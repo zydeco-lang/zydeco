@@ -119,10 +119,10 @@ TypeAtom: Type = {
 
 //* --------------------------------- Pattern -------------------------------- */
 
-TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Kind> ")" => (name, kind);
+TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Span<Kind>> ")" => (name, kind);
 
 TypePattern: TypePattern = {
-    "(" <name:TypeV> ":" <kind:Kind?> ")" => (name, kind),
+    "(" <name:TypeV> <kind: (":" <Span<Kind>>)?> ")" => (name, kind),
     <name:TypeV> => (name, None),
 };
 

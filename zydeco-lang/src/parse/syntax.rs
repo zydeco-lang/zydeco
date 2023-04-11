@@ -9,8 +9,8 @@ pub use crate::syntax::Kind;
 
 /* ---------------------------------- Type ---------------------------------- */
 
-pub type TypePattern = (TypeV, Option<Kind>);
-pub type TypeKindPattern = (TypeV, Kind);
+pub type TypePattern = (TypeV, Option<Span<Kind>>);
+pub type TypeKindPattern = (TypeV, Span<Kind>);
 
 #[derive(Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
@@ -131,9 +131,9 @@ pub type Define = GenLet;
 #[derive(EnumGenerator, SpanHolder, Clone, Debug)]
 pub enum Declaration {
     Module(Module),
-    Data(Data<TypeV, Kind, CtorV, Span<Type>>),
-    Codata(Codata<TypeV, Kind, DtorV, Span<Type>>),
-    Alias(Alias<TypeV, Kind, BoxType>),
+    Data(Data<TypeV, Span<Kind>, CtorV, Span<Type>>),
+    Codata(Codata<TypeV, Span<Kind>, DtorV, Span<Type>>),
+    Alias(Alias<TypeV, Span<Kind>, BoxType>),
     Define(Define),
 }
 

@@ -25,13 +25,19 @@ mod binder {
     var_fmt!(TermV);
 }
 
-impl FmtArgs for (TypeV, Kind) {
+impl<Kd> FmtArgs for (TypeV, Kd)
+where
+    Kd: KindT + FmtArgs,
+{
     fn fmt_args(&self, fargs: Args) -> String {
         let (tvar, kd) = self;
         format!("({} : {})", tvar.fmt_args(fargs), kd.fmt_args(fargs))
     }
 }
-impl FmtArgs for (TypeV, Option<Kind>) {
+impl<Kd> FmtArgs for (TypeV, Option<Kd>)
+where
+    Kd: KindT + FmtArgs,
+{
     fn fmt_args(&self, fargs: Args) -> String {
         let (tvar, kd) = self;
         match kd {

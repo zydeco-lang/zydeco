@@ -161,12 +161,12 @@ impl TypeCheck for Span<Type> {
                 Ok(Step::Done(kd.clone()))
             }
             SynType::Forall(Forall { param: (param, kd), ty }) => {
-                ctx.type_ctx.insert(param, kd.into());
+                ctx.type_ctx.insert(param, kd.inner_clone().into());
                 ty.ana(Kind::CType, ctx)?;
                 Ok(Step::Done(Kind::CType))
             }
             SynType::Exists(Exists { param: (param, kd), ty }) => {
-                ctx.type_ctx.insert(param, kd.into());
+                ctx.type_ctx.insert(param, kd.inner_clone().into());
                 ty.ana(Kind::VType, ctx)?;
                 Ok(Step::Done(Kind::VType))
             }
@@ -250,7 +250,8 @@ impl Type {
 
 impl Env<TypeV, Type> {
     pub(super) fn init(
-        params: &[(TypeV, Kind)], ty_app_args: &[RcType], arity_err: impl FnOnce() -> TyckError,
+        params: &[(TypeV, Span<Kind>)], ty_app_args: &[RcType],
+        arity_err: impl FnOnce() -> TyckError,
     ) -> Result<Self, TyckError> {
         bool_test(params.len() == ty_app_args.len(), arity_err)?;
         Ok(Env::from_iter(

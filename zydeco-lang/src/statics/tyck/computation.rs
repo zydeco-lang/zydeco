@@ -186,7 +186,7 @@ impl TypeCheck for Span<TermComputation> {
                         found: ty_body,
                     }))?
                 };
-                arg.ana(kd.clone(), ctx.clone())?;
+                arg.ana(kd.inner_clone(), ctx.clone())?;
                 let diff = Env::init(&[(param, kd)], &[arg.clone()], || {
                     ctx.err(
                         span,
@@ -205,7 +205,7 @@ impl TypeCheck for Span<TermComputation> {
                         found: ty_scrut,
                     }))?
                 };
-                ctx.type_ctx.insert(tvar.clone(), kd.clone().into());
+                ctx.type_ctx.insert(tvar.clone(), kd.inner_clone().into());
                 let ty =
                     ty.inner_clone().subst(Env::from_iter([(param, tvar.clone().into())]), &ctx)?;
                 ctx.term_ctx.insert(var.clone(), ty);
@@ -379,13 +379,13 @@ impl TypeCheck for Span<TermComputation> {
                             span,
                             KindMismatch {
                                 context: format!("type application"),
-                                expected: kd.clone(),
-                                found: kd_.clone(),
+                                expected: kd.inner_clone(),
+                                found: kd_.inner_clone(),
                             },
                         )
                     })?;
                 }
-                let abst_var = ctx.fresh(kd.clone());
+                let abst_var = ctx.fresh(kd.inner_clone());
                 ctx.type_env.insert(tvar_.clone(), abst_var.clone().into());
                 ty.inner_clone().subst(Env::from_iter([(tvar.clone(), abst_var.into())]), &ctx)?;
                 body.ana(ty.inner_clone(), ctx)?;
