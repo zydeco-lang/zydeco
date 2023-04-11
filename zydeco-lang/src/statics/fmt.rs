@@ -36,10 +36,17 @@ impl FmtArgs for TailGroup {
     fn fmt_args(&self, fargs: Args) -> String {
         let mut s = String::new();
         let TailGroup { group, body } = self;
-        for item in group {
-            s += &item.fmt_args(fargs);
-            s += &fargs.br_indent();
+        s += "begin";
+        {
+            let fargs = fargs.indent();
+            for item in group {
+                s += &fargs.br_indent();
+                s += &item.fmt_args(fargs);
+            }
         }
+        s += &fargs.br_indent();
+        s += "in";
+        s += &fargs.br_indent();
         s += &format!("{}", body.fmt_args(fargs));
         s
     }
