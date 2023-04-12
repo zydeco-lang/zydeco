@@ -19,19 +19,6 @@ impl FmtArgs for Type {
     }
 }
 
-impl FmtArgs for TailTerm {
-    fn fmt_args(&self, fargs: Args) -> String {
-        match self {
-            TailTerm::Let(Let { var, def, body: () }) => {
-                format!("let {} = {} in", var.fmt_args(fargs), def.fmt_args(fargs))
-            }
-            TailTerm::Do(Do { var, comp, body: () }) => {
-                format!("do {} <- {} ;", var.fmt_args(fargs), comp.fmt_args(fargs))
-            }
-        }
-    }
-}
-
 impl FmtArgs for TailGroup {
     fn fmt_args(&self, fargs: Args) -> String {
         let mut s = String::new();

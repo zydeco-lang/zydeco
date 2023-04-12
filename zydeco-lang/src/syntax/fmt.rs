@@ -25,6 +25,12 @@ mod binder {
     var_fmt!(TermV);
 }
 
+impl FmtArgs for () {
+    fn fmt_args(&self, _fargs: Args) -> String {
+        String::new()
+    }
+}
+
 impl<Kd> FmtArgs for (TypeV, Kd)
 where
     Kd: KindT + FmtArgs,

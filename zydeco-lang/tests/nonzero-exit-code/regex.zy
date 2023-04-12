@@ -17,22 +17,22 @@ codata Regex where
   | .run(String): Matcher
 end
 
-let str_chop_hd : U(String -> Int -> F(String)) = { fn (s: String) (i: Int) -> (
+let str_chop_hd : U(String -> Int -> F String) = { fn (s: String) (i: Int) ->
   do l <- ! str_length s;
-  let rec str_collect : String -> Int -> String -> Ret(String) = fn (s: String) (i: Int) (r: String) -> (
+  let rec str_collect : String -> Int -> String -> Ret(String) = fn (s: String) (i: Int) (r: String) ->
     do continue? <- ! int_lt i l;
     match continue?
     | False() -> ret r
-    | True() -> (
+    | True() ->
       do tl <- ! str_index s i;
       do tl <- ! char_to_str tl;
       do r <- ! str_append r tl;
       do i+1 <- ! add i 1;
-      ! str_collect s i+1 r)
+      ! str_collect s i+1 r
     end
-  );
+  in
   ! str_collect s i ""
-)};
+} in
 
 let fn str_eq_at (a: String) (b: String) (i: Int): F Bool =
   do ai <- ! str_index a i;
@@ -42,65 +42,68 @@ in
 
 let str_match : U(String -> String -> F(Option String)) = {
   let rec str_match : Int -> String -> String -> F(Option String) =
-    fn (i: Int) (s: String) (p: String) -> (
+    fn (i: Int) (s: String) (p: String) ->
       do s_len <- ! str_length s;
       do p_len <- ! str_length p;
       do i_lt_s <- ! int_lt i s_len;
       do i_lt_p <- ! int_lt i p_len;
       match i_lt_p
-      | False() -> (
+      | False() ->
         do s' <- ! str_chop_hd s i;
-        ret Some(s'))
-      | True() -> (
+        ret Some(s')
+      | True() ->
         match i_lt_s
         | False() -> ret None()
-        | True() -> (
+        | True() ->
           do eq? <- ! str_eq_at s p i;
           match eq?
           | False() -> ret None()
-          | True() -> (
+          | True() ->
             do i+1 <- ! add i 1;
-            ! str_match i+1 s p)
-          end)
-        end)
+            ! str_match i+1 s p
+          end
+        end
       end
-    );
+  in
   ! str_match 0
-};
+} in
 
-let rec regex : Regex = ( comatch | .run(s) -> (
+let rec regex : Regex = 
   comatch
-  | .str(p) -> ! str_match s p
-  | .concat(sy1, sy2) -> (
-    do s? <- ! regex .run(s) .bind(sy1);
-    match s?
-    | None() -> ret None()
-    | Some(s) -> (
-      ! regex .run(s) .bind(sy2))
-    end)
-  | .kleene(sy) -> (
-    do s? <- ! regex .run(s) .bind(sy);
-    match s?
-    | None() -> ret Some(s)
-    | Some(s) -> ! regex .run(s) .kleene(sy)
-    end)
-  | .choose(sy1, sy2) -> (
-    do s? <- ! regex .run(s) .bind(sy1);
-    match s?
-    | Some(s) -> ret Some(s)
-    | None() -> ! regex .run(s) .bind(sy2)
-    end)
-  | .bind(sy) -> (
-    match sy
-    | Str(p) -> ! regex .run(s) .str(p)
-    | Concat(sy1, sy2) -> ! regex .run(s) .concat(sy1, sy2)
-    | Kleene(sy) -> ! regex .run(s) .kleene(sy)
-    | Choose(sy1, sy2) -> ! regex .run(s) .choose(sy1, sy2)
-    end)
-  end)
-end);
+  | .run(s) ->
+    comatch
+    | .str(p) -> ! str_match s p
+    | .concat(sy1, sy2) ->
+      do s? <- ! regex .run(s) .bind(sy1);
+      match s?
+      | None() -> ret None()
+      | Some(s) ->
+        ! regex .run(s) .bind(sy2)
+      end
+    | .kleene(sy) ->
+      do s? <- ! regex .run(s) .bind(sy);
+      match s?
+      | None() -> ret Some(s)
+      | Some(s) -> ! regex .run(s) .kleene(sy)
+      end
+    | .choose(sy1, sy2) ->
+      do s? <- ! regex .run(s) .bind(sy1);
+      match s?
+      | Some(s) -> ret Some(s)
+      | None() -> ! regex .run(s) .bind(sy2)
+      end
+    | .bind(sy) ->
+      match sy
+      | Str(p) -> ! regex .run(s) .str(p)
+      | Concat(sy1, sy2) -> ! regex .run(s) .concat(sy1, sy2)
+      | Kleene(sy) -> ! regex .run(s) .kleene(sy)
+      | Choose(sy1, sy2) -> ! regex .run(s) .choose(sy1, sy2)
+      end
+    end
+  end
+in
 
-let fn demo (syn: Syn) (str: String) (kont: U(OS)): OS =
+let fn demo (syn: Syn) (str: String) (kont: Thunk OS): OS =
   do res <- ! regex .run(str) .bind(syn);
   match res
   | Some(s) -> (
@@ -109,6 +112,7 @@ let fn demo (syn: Syn) (str: String) (kont: U(OS)): OS =
   end
 in
 
+# p*q*(xos|sox)
 ! demo (Concat(Kleene(Str("p")), Concat(Kleene(Str("q")), Choose(Str("xos"), Str("sox"))))) "pppqqqsox\\^o^/" {
 ! exit 0
 }
