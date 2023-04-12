@@ -34,14 +34,14 @@ module Std where
     | Unit()
   end
 
-  ## the Pair type
+  module Prod where
+    pub data Pair (A : VType) (A' : VType) where
+      | Cons(A, A')
+    end
 
-  pub data Pair (A : VType) (A' : VType) where
-    | Cons(A, A')
-  end
-
-  pub def fn pair (A : VType) (A' : VType) (x : A) (y : A') : F(Pair A A') = 
-    ret Cons(x, y)
+    pub def fn pair (A : VType) (A' : VType) (x : A) (y : A') : F(Pair A A') = 
+      ret Cons(x, y)
+    end
   end
 
   ## the Option type
@@ -246,8 +246,8 @@ module Std where
       }
     end
 
-    pub def fn cart_prod (A : VType) (A' : VType) (xs : U(LList A)) (ys : U(LList A')) : LList (Pair A A') =
-      ! map2 @(A) @(A') @(Pair A A') {! pair @(A) @(A')} xs ys
+    pub def fn cart_prod (A : VType) (A' : VType) (xs : U(LList A)) (ys : U(LList A')) : LList (Prod.Pair A A') =
+      ! map2 @(A) @(A') @(Prod.Pair A A') {! Prod.pair @(A) @(A')} xs ys
     end
   end
 

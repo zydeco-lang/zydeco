@@ -191,7 +191,7 @@ mod batch_tests {
     mk_batch_test!(eo_data, "even-odd-data.zy");
     mk_batch_test!(eo_rec, "even-old-rec.zy");
     mk_batch_test!(eo_coda, "even-odd-codata.zy");
-    mk_batch_test!(nat, "nat.zy");
+    mk_batch_test!(ifz, "ifz.zy");
     mk_batch_test!(add, "add.zy");
     mk_batch_test!(regex, "regex.zy");
     mk_batch_test!(listm, "listm.zydeco");
