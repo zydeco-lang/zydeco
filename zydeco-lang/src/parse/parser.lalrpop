@@ -77,6 +77,24 @@ CodataBr: CodataBr<DtorV, Span<Type>> = {
     }
 };
 
+//* --------------------------------- Pattern -------------------------------- */
+
+TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Span<KindBase>> ")" => (name, kind);
+
+TypePattern: TypePattern = {
+    "(" <name:TypeV> <kind: (":" <Span<KindBase>>)?> ")" => (name, kind),
+    <TypeV> => (<>, None),
+};
+
+TermPattern: TermPattern = {
+    "(" <v:TermV> <ty:(":" <Span<Type>>)?> ")" => (v, ty),
+    <TermV> => (<>, None),
+};
+
+Pattern: Pattern = {
+    <TypePattern> => <>.into(),
+    <TermPattern> => <>.into(),
+};
 
 //* ---------------------------------- Kind ---------------------------------- */
 
@@ -115,25 +133,6 @@ TypeAtom: Type = {
     "(" <Type> ")" => <>,
     <TypeV> => <>.into(),
     "_?" => Hole.into(),
-};
-
-//* --------------------------------- Pattern -------------------------------- */
-
-TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Span<KindBase>> ")" => (name, kind);
-
-TypePattern: TypePattern = {
-    "(" <name:TypeV> <kind: (":" <Span<KindBase>>)?> ")" => (name, kind),
-    <name:TypeV> => (name, None),
-};
-
-TermPattern: TermPattern = {
-    "(" <v:TermV> <ty:(":" <Span<Type>>)?> ")" => (v, ty),
-    TermV => (<>, None),
-};
-
-Pattern: Pattern = {
-    <TypePattern> => <>.into(),
-    <TermPattern> => <>.into(),
 };
 
 //* ---------------------------------- Term ---------------------------------- */
@@ -212,12 +211,12 @@ TermComputationRight: TermComputation = {
 };
 
 TermComputationAtom: TermComputation = {
-    "(" <tc:TermComputation> ")" => tc.into(),
+    "(" <TermComputation> ")" => <>.into(),
     "(" <tc:Box<Span<TermComputation>>> ":" <ty:Span<Type>> ")" => Annotation {
         term: tc, ty,
     }.into(),
-    "ret" <v:Box<Span<TermValue>>> => Ret(v).into(),
-    "!" <v:Box<Span<TermValue>>> => Force(v).into(),
+    "ret" <Box<Span<TermValue>>> => Ret(<>).into(),
+    "!" <Box<Span<TermValue>>> => Force(<>).into(),
 };
 
 GenLet: GenLet = {
@@ -251,15 +250,21 @@ Literal: Literal = {
     <Char> => <>.into(),
 };
 
-//* -------------------------------- Terminals ------------------------------- */
+//* ------------------------------- Identifiers ------------------------------ */
 
-CtorV: CtorV = <Span<UpperId>> => <>.into();
-DtorV: DtorV = <Span<LowerId>> => <>.into();
-TypeV: TypeV = <Span<UpperId>> => <>.into();
-TermV: TermV = <Span<LowerId>> => <>.into();
+CtorV: CtorV = <PathPrefix<Span<UpperId>>> => <>.into();
+DtorV: DtorV = <PathPrefix<Span<LowerId>>> => <>.into();
+TypeV: TypeV = <PathPrefix<Span<UpperId>>> => <>.into();
+TermV: TermV = <PathPrefix<Span<LowerId>>> => <>.into();
+
+PathPrefix<T>: T = {
+    <path:(<Span<UpperId>> ".")*> <v:T>=> v,
+};
 
 UpperId: String = "UpperId" => <>.into();
 LowerId: String = "LowerId" => <>.into();
+
+//* -------------------------------- Terminals ------------------------------- */
 
 Int: i64 = <s:"NumLit"> => s.parse().unwrap();
 String: String = <s:"StrLit"> => escape::apply_string_escapes(&s[1..s.len()-1]);

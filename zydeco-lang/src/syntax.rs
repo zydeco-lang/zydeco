@@ -46,34 +46,39 @@ pub mod binder {
         ( $Var:ident ) => {
             #[allow(clippy::mutable_key_type)]
             #[derive(Clone, Debug)]
-            pub struct $Var(String, SpanInfo);
-            impl $Var {
-                pub fn new(s: String, span: SpanInfo) -> Self {
-                    Self(s, span)
+            pub struct $Var<Id = String, Ty = ()> {
+                name: Id,
+                info: SpanInfo,
+                #[allow(unused)]
+                ty: Ty,
+            }
+            impl<Id: AsRef<str> + Eq, Ty: Default> $Var<Id, Ty> {
+                pub fn new(name: Id, info: SpanInfo) -> Self {
+                    Self { name, info, ty: Default::default() }
                 }
                 pub fn name(&self) -> &str {
-                    &self.0
+                    self.name.as_ref()
                 }
             }
             impl From<Span<String>> for $Var {
                 fn from(span: Span<String>) -> Self {
-                    Self(span.inner, span.info)
+                    Self { name: span.inner, info: span.info, ty: Default::default() }
                 }
             }
             impl PartialEq for $Var {
                 fn eq(&self, other: &Self) -> bool {
-                    self.0.eq(&other.0)
+                    self.name.eq(&other.name)
                 }
             }
             impl Eq for $Var {}
             impl Hash for $Var {
                 fn hash<H: Hasher>(&self, state: &mut H) {
-                    self.0.hash(state);
+                    self.name.hash(state);
                 }
             }
             impl SpanView for $Var {
                 fn span(&self) -> &SpanInfo {
-                    &self.1
+                    &self.info
                 }
             }
             impl SpanHolder for $Var {
@@ -81,7 +86,7 @@ pub mod binder {
                 where
                     F: Fn(&mut SpanInfo) + Clone,
                 {
-                    f(&mut self.1);
+                    f(&mut self.info);
                 }
             }
         };
@@ -97,6 +102,8 @@ pub mod binder {
     var!(TermV);
     impl VarT for TermV {}
     impl<Ty: TypeT> VarT for (TermV, Ty) {}
+    var!(ModV);
+    impl VarT for ModV {}
 }
 pub use binder::*;
 
