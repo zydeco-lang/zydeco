@@ -577,6 +577,29 @@ module Std where
       end
     end
 
+    pub def rec fn equal (A : VType) (tree1 : AVL A) (tree2 : AVL A) (cmp_eq : Cmp A) : F(Bool) =
+      match tree1
+      | Leaf() ->
+        match tree2
+        | Leaf() -> ret True()
+        | Node(_, _, _, _) -> ret False()
+        end
+      | Node(l1, n1, h1, r1) ->
+        match tree2
+        | Leaf() -> ret False()
+        | Node(l2, n2, h2, r2) ->
+          do b3 <- ! cmp_eq n1 n2;
+          match b3
+          | True() ->
+            do b1 <- ! equal @(A) l1 l2 cmp_eq;
+            do b2 <- ! equal @(A) r1 r2 cmp_eq;
+            ! and b1 b2
+          | False() -> ret False()
+          end
+        end
+      end
+    end
+
     pub def rec fn pre_traversal (A : VType) (tree : AVL A) (fmt : U(A -> F(String))) (next : U OS) : OS =
       match tree
       | Leaf() -> ! next
@@ -594,10 +617,10 @@ module Std where
 
   module Hash where
     data Hash (K : VType) (V : VType) where
-      | Hash(AVL (Pair K V), Cmp (Pair K V), Cmp (Pair K V))
+      | Hash(AVL (Pair K V), Cmp (Pair K V), Cmp (Pair K V), Cmp (Pair K V))
     end
 
-    pub def fn hash_new (K : VType) (V : VType) (insert_key_cmp : Cmp K) (search_key_cmp : Cmp K) : F(Hash K V) =
+    pub def fn hash_new (K : VType) (V : VType) (insert_key_cmp : Cmp K) (search_key_cmp : Cmp K) (equal_value_cmp : Cmp V) : F(Hash K V) =
       do body <- ! leaf @(Pair K V);
       ret Hash(body, {
         fn p1 p2 ->
@@ -615,21 +638,32 @@ module Std where
             | Cons(k2, v2) -> ! search_key_cmp k1 k2
             end
           end
+      }, {
+        fn p1 p2 ->
+          match p1
+          | Cons(k1, v1) ->
+            match p2
+            | Cons(k2, v2) ->
+              do b1 <- ! equal_value_cmp v1 v2;
+              do b2 <- ! search_key_cmp k1 k2;
+              ! and b1 b2
+            end
+          end
       })
     end
 
     pub def fn hash_insert (K : VType) (V : VType) (k : K) (v : V) (tree : Hash K V) : F(Hash K V) =
       match tree
-      | Hash(body, insert_cmp, search_cmp) ->
+      | Hash(body, insert_cmp, search_cmp, equal_cmp) ->
         do body' <- ! insert @(Pair K V) Cons(k,v) body insert_cmp;
-        ret Hash(body', insert_cmp, search_cmp)
+        ret Hash(body', insert_cmp, search_cmp, equal_cmp)
       end
     end
 
     # in search, a default value for v is needed, because the type of v is unknown
     pub def fn hash_search (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Option V) =
           match hash
-          | Hash(body, insert_cmp, search_cmp) ->
+          | Hash(body, insert_cmp, search_cmp, equal_cmp) ->
             do res <- ! search @(Pair K V) Cons(k, default) body search_cmp insert_cmp;
             match res
             | None() -> ret None()
@@ -643,17 +677,27 @@ module Std where
 
     pub def fn hash_delete (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Hash K V) =
       match hash
-      | Hash(body, insert_cmp, search_cmp) -> 
+      | Hash(body, insert_cmp, search_cmp, equal_cmp) -> 
         do body' <- ! delete @(Pair K V) Cons(k, default) body search_cmp insert_cmp;
-        ret Hash(body', insert_cmp, search_cmp)
+        ret Hash(body', insert_cmp, search_cmp, equal_cmp)
       end
     end
 
     pub def fn hash_change (K : VType) (V : VType) (k : K) (v : V) (hash : Hash K V) : F(Hash K V) =
       match hash
-      | Hash(body, insert_cmp, search_cmp) ->
+      | Hash(body, insert_cmp, search_cmp, equal_cmp) ->
         do body' <- ! change @(Pair K V) Cons(k, v) body search_cmp insert_cmp;
-        ret Hash(body', insert_cmp, search_cmp)
+        ret Hash(body', insert_cmp, search_cmp, equal_cmp)
+      end
+    end
+
+    pub def fn hash_equal (K : VType) (V : VType) (hash1 : Hash K V) (hash2 : Hash K V) : F(Bool) =
+      match hash1
+      | Hash(body1, insert_cmp1, search_cmp1, v_cmp1) ->
+        match hash2
+        | Hash(body2, insert_cmp2, search_cmp2, v_cmp2) ->
+          ! equal @(Pair K V) body1 body2 v_cmp1
+        end
       end
     end
   end

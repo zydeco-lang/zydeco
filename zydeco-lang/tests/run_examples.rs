@@ -203,6 +203,7 @@ mod batch_tests {
     mk_batch_test!(partial_ann, "partial-annotation.zy");
     mk_batch_test!(oo, "oo.zydeco");
     mk_batch_test!(ret, "ret.zydeco");
+    mk_batch_test!(hash, "hash.zy");
 }
 mod io_tests {
     use super::*;
