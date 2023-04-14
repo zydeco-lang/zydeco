@@ -16,7 +16,7 @@ pub enum Commands {
     Run {
         /// Path to the file to run
         #[arg(value_name = "FILE")]
-        file: PathBuf,
+        files: Vec<PathBuf>,
         /// Dry run (don't execute)
         #[arg(long, default_value_t = false)]
         dry: bool,
@@ -31,7 +31,7 @@ pub enum Commands {
     Check {
         /// Path to the file to check
         #[arg(value_name = "FILE")]
-        file: PathBuf,
+        files: Vec<PathBuf>,
         /// Level of verbosity
         #[arg(short, long, default_value_t = false)]
         verbose: bool,

@@ -7,8 +7,8 @@ use zydeco_lang::{
 
 fn main() -> Result<(), ()> {
     let res = match Cli::parse().command {
-        Commands::Run { file, dry, verbose, args } => run_file(file, dry, verbose, args),
-        Commands::Check { file, verbose } => run_file(file, true, verbose, vec![]),
+        Commands::Run { files, dry, verbose, args } => run_files(files, dry, verbose, args),
+        Commands::Check { files, verbose } => run_files(files, true, verbose, vec![]),
         Commands::Repl { .. } => Repl::launch(),
     };
     match res {
@@ -22,13 +22,14 @@ fn main() -> Result<(), ()> {
     }
 }
 
-fn run_file(
-    file: std::path::PathBuf, dry_run: bool, verbose: bool, args: Vec<String>,
+fn run_files(
+    paths: Vec<std::path::PathBuf>, dry_run: bool, verbose: bool, args: Vec<String>,
 ) -> Result<i32, String> {
-    let title = &format!("{}", file.display());
+    let title =
+        &paths.iter().map(|path| format!("{}", path.display())).collect::<Vec<_>>().join(", ");
     // parse
     announce_phase(verbose, title, "parse");
-    let m = ZydecoFile::parse(file)?;
+    let m = ZydecoFile::parse(paths)?;
     let m = ZydecoFile::elab(m)?;
     if verbose {
         println!("{}", m.fmt())

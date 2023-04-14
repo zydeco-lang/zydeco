@@ -23,7 +23,7 @@ fn wrapper<T>(r: Result<T, String>) {
 fn check_test(f: &str) -> Result<(), String> {
     let mut path = PathBuf::from("tests/check-only");
     path.push(f);
-    let m = ZydecoFile::parse(path)?;
+    let m = ZydecoFile::parse(vec![path])?;
     let m = ZydecoFile::elab(m)?;
     ZydecoFile::tyck(m)?;
 
@@ -42,7 +42,7 @@ macro_rules! mk_check_test {
 fn batch_test(f: &str) -> Result<(), String> {
     let mut path = PathBuf::from("tests/nonzero-exit-code");
     path.push(f);
-    let m = ZydecoFile::parse(path)?;
+    let m = ZydecoFile::parse(vec![path])?;
     let m = ZydecoFile::elab(m)?;
     ZydecoFile::tyck(m.clone())?;
     let m = ZydecoFile::link(m.inner)?;
@@ -78,7 +78,7 @@ struct IOMatch {
 fn io_test(f: &str, iomatch: &IOMatch) -> Result<(), String> {
     let mut path = PathBuf::from("tests/io");
     path.push(f);
-    let m = ZydecoFile::parse(path)?;
+    let m = ZydecoFile::parse(vec![path])?;
     let m = ZydecoFile::elab(m)?;
     ZydecoFile::tyck(m.clone())?;
     let m = ZydecoFile::link(m.inner)?;

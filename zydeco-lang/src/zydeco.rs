@@ -39,19 +39,22 @@ impl Zydeco {
 pub struct ZydecoFile;
 
 impl ZydecoFile {
-    pub fn parse(path: PathBuf) -> Result<Span<ps::TopLevel>, String> {
-        let source = std::fs::read_to_string(&path).map_err(|e| format!("{}", e))?;
-        Self::parse_src(&source, path)
+    pub fn parse(paths: Vec<PathBuf>) -> Result<Span<ps::TopLevel>, String> {
+        let mut top = Zydeco::std()?;
+        for path in paths {
+            let source = std::fs::read_to_string(&path).map_err(|e| format!("{}", e))?;
+            top.inner = top.inner.append(Self::parse_src(&source, path)?.inner);
+        }
+        Ok(top)
     }
     pub fn parse_src(source: &str, path: PathBuf) -> Result<Span<ps::TopLevel>, String> {
         let file_info = FileInfo::new(source, Rc::new(path));
-        let mut p = ZydecoParser::new()
+        let p = ZydecoParser::new()
             .parse(source, Lexer::new(source))
             .map_err(|e| format!("{}", ParseError(e, &file_info)))?
             .span_map(|span| {
                 span.set_info(&file_info);
             });
-        p.inner = Zydeco::std()?.inner.append(p.inner);
         Ok(p)
     }
     pub fn elab(p: Span<ps::TopLevel>) -> Result<Span<ss::Program>, String> {
