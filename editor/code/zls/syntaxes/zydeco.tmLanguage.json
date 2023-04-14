@@ -41,10 +41,21 @@
 			]
 		},
 		"comment": {
-			"patterns": [{
-				"name": "comment.line.number-sign",
-				"match": "#.*$"
-			}]
+			"patterns": [
+				{
+					"name": "comment.line.number-sign",
+					"match": "#.*$"
+				},
+				{
+					"name": "comment.line.double-slash",
+					"match": "//.*$"
+				},
+				{
+					"name": "comment.block",
+					"begin": "/\\*",
+					"end": "\\*/"
+				}
+			]
 		}
 	},
 	"scopeName": "source.zydeco"
