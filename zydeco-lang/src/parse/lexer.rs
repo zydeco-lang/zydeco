@@ -91,8 +91,6 @@ pub enum Tok<'input> {
     Comma,
     #[token(":")]
     Colon,
-    #[token("::")]
-    ColonColon,
     #[token("=")]
     Equals,
     #[token(";")]
@@ -103,6 +101,8 @@ pub enum Tok<'input> {
     Branch,
     #[token(".")]
     Dot,
+    #[token("..")]
+    DotDot,
     #[token("->")]
     Arrow,
     #[token("<-")]
@@ -152,12 +152,12 @@ impl<'input> Display for Tok<'input> {
             Tok::BraceClose => write!(f, "}}"),
             Tok::Comma => write!(f, ","),
             Tok::Colon => write!(f, ":"),
-            Tok::ColonColon => write!(f, "::"),
             Tok::Equals => write!(f, "="),
             Tok::Semicolon => write!(f, ";"),
             Tok::Force => write!(f, "!"),
             Tok::Branch => write!(f, "|"),
             Tok::Dot => write!(f, "."),
+            Tok::DotDot => write!(f, ".."),
             Tok::Arrow => write!(f, "->"),
             Tok::Assign => write!(f, "<-"),
             Tok::Hole => write!(f, "_?"),

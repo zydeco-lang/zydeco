@@ -18,14 +18,6 @@ TopLevel: TopLevel = {
     },
 };
 
-Module: Module = {
-    "module" <name:UpperId> "where"
-        <declarations:DeclSymbol<Declaration>*>
-    "end" => Module {
-        name: Some(name), declarations
-    },
-};
-
 DeclSymbol<T>: DeclSymbol<T> = {
     <public:"pub"?> <external:"extern"?> <inner:T> => DeclSymbol {
         public: public.is_some(),
@@ -35,10 +27,12 @@ DeclSymbol<T>: DeclSymbol<T> = {
 };
 
 Declaration: Declaration = {
-    <Module> => <>.into(),
-    "use" <modv:ModV> <exposed:SepByDelim<"(", ",", NameV, ")">> "end" => UseDef {
-        modv, exposed,
+    "module" <name:UpperId> "where"
+        <declarations:DeclSymbol<Declaration>*>
+    "end" => Module {
+        name: Some(name), declarations
     }.into(),
+    "use" <UseDef> "end" => <>.into(),
     "data" <name:TypeV> <params:TypeKindPattern*>
         <ctors:("where" <DataBr*>)?>
     "end" => Data {
@@ -55,6 +49,14 @@ Declaration: Declaration = {
     "define" <gen:GenLet> DefineEnd => gen.into(),
     "main" <entry:Span<TermComputation>> "end" => Main {
         entry,
+    }.into(),
+};
+
+UseDef: UseDef = {
+    <NameV> => <>.into(),
+    ".." => UseAll.into(),
+    <modv:ModV>  <cluster:SepByDelim<"(", ",", UseDef, ")">> => UseCluster {
+        modv, cluster,
     }.into(),
 };
 
@@ -358,12 +360,12 @@ extern {
         "}" => Tok::BraceClose,
         "," => Tok::Comma,
         ":" => Tok::Colon,
-        "::" => Tok::ColonColon,
         "=" => Tok::Equals,
         ";" => Tok::Semicolon,
         "!" => Tok::Force,
         "|" => Tok::Branch,
         "." => Tok::Dot,
+        ".." => Tok::DotDot,
         "->" => Tok::Arrow,
         "<-" => Tok::Assign,
         "_?" => Tok::Hole,

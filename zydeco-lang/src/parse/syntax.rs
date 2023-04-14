@@ -142,9 +142,19 @@ pub enum Term {
 pub type Define = GenLet;
 
 #[derive(SpanHolder, Clone, Debug)]
-pub struct UseDef {
+pub struct UseAll;
+
+#[derive(SpanHolder, Clone, Debug)]
+pub struct UseCluster {
     pub modv: ModV,
-    pub exposed: Vec<NameV>,
+    pub cluster: Vec<UseDef>,
+}
+
+#[derive(IntoEnum, SpanHolder, Clone, Debug)]
+pub enum UseDef {
+    Name(NameV),
+    UseAll(UseAll),
+    Cluster(UseCluster),
 }
 
 #[derive(SpanHolder, Clone, Debug)]
