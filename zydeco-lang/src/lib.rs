@@ -18,7 +18,6 @@ pub mod parse {
     }
 
     mod escape;
-    mod span;
 }
 
 pub mod resolve {

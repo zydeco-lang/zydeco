@@ -89,31 +89,74 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let typ = input.ident;
     let mut variant_idents = Vec::new();
-    let Data::Enum(data) = input.data else {
-        panic!("Only enums can be derived")
-    };
-    for variant in data.variants {
-        variant_idents.push(variant.ident);
-        match &variant.fields {
-            Fields::Unnamed(field) if field.unnamed.len() == 1 => {}
-            Fields::Unnamed(_) | Fields::Named(_) | Fields::Unit => {
-                panic!("Only single-tuple variants can be derived")
-            }
-        }
-    }
-    let gen = quote!(
-        impl crate::utils::span::SpanHolder for #typ {
-            fn span_map_mut<F>(&mut self, f: F)
-            where
-                F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
-            {
-                match self {
-                    #( #typ::#variant_idents(t) => t.span_map_mut(f) ),*
+    match input.data {
+        Data::Enum(data) => {
+            for variant in data.variants {
+                variant_idents.push(variant.ident);
+                match &variant.fields {
+                    Fields::Unnamed(field) if field.unnamed.len() == 1 => {}
+                    Fields::Unnamed(_) | Fields::Named(_) | Fields::Unit => {
+                        panic!("Only single-tuple variants can be derived")
+                    }
                 }
             }
+            let gen = quote!(
+                impl crate::utils::span::SpanHolder for #typ {
+                    fn span_map_mut<F>(&mut self, f: F)
+                    where
+                        F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
+                    {
+                        match self {
+                            #( #typ::#variant_idents(t) => t.span_map_mut(f) ),*
+                        }
+                    }
+                }
+            );
+            res.extend(TokenStream::from(gen));
         }
-    );
-    res.extend(TokenStream::from(gen));
+        Data::Struct(data) => match data.fields {
+            Fields::Named(fields) => {
+                let field_idents: Vec<_> = (&fields.named).into_iter().map(|f| &f.ident).collect();
+                let gen = quote!(
+                    impl crate::utils::span::SpanHolder for #typ {
+                        fn span_map_mut<F>(&mut self, f: F)
+                        where
+                            F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
+                        {
+                            #( self.#field_idents.span_map_mut(f.clone()) );*
+                        }
+                    }
+                );
+                res.extend(TokenStream::from(gen));
+            }
+            Fields::Unnamed(fields) => {
+                let idx: Vec<_> = (0..fields.unnamed.len()).map(syn::Index::from).collect();
+                let gen = quote!(
+                    impl crate::utils::span::SpanHolder for #typ {
+                        fn span_map_mut<F>(&mut self, f: F)
+                        where
+                            F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
+                        {
+                            #( self.#idx.span_map_mut(f.clone()) );*
+                        }
+                    }
+                );
+                res.extend(TokenStream::from(gen));
+            }
+            Fields::Unit => {
+                let gen = quote!(
+                    impl crate::utils::span::SpanHolder for #typ {
+                        fn span_map_mut<F>(&mut self, _: F)
+                        where
+                            F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
+                        {}
+                    }
+                );
+                res.extend(TokenStream::from(gen));
+            }
+        },
+        _ => unreachable!("SpanHolder can only be derived for enums and structs"),
+    }
     res
 }
 

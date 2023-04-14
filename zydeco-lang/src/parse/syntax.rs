@@ -12,16 +12,16 @@ pub use crate::syntax::{KindBase, TypeArity};
 pub type TypePattern = (TypeV, Option<Span<KindBase>>);
 pub type TypeKindPattern = (TypeV, Span<KindBase>);
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct Arrow(pub BoxType, pub BoxType);
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct Forall(pub Vec<TypeKindPattern>, pub BoxType);
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct Exists(pub Vec<TypeKindPattern>, pub BoxType);
 
 #[derive(EnumGenerator, SpanHolder, Clone, Debug)]
@@ -58,19 +58,19 @@ pub enum Pattern {
     TermPattern(TermPattern),
 }
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct Abstraction {
     pub params: Vec<Pattern>,
     pub body: BoxComp,
 }
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct Application {
     pub body: BoxComp,
     pub arg: BoxValue,
 }
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct GenLet {
     pub rec: bool,
     pub fun: bool,
@@ -79,19 +79,19 @@ pub struct GenLet {
     pub def: Option<Box<Span<Term>>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct Let {
     pub gen: GenLet,
     pub body: BoxComp,
 }
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct TyAppTerm {
     pub body: BoxComp,
     pub arg: Box<Span<Type>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct MatchPack {
     pub scrut: BoxValue,
     pub tvar: TypeV,
@@ -137,7 +137,7 @@ pub enum Declaration {
     Define(Define),
 }
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct Module {
     pub name: Option<String>,
     pub declarations: Vec<DeclSymbol<Declaration>>,
@@ -155,7 +155,7 @@ impl Monoid for Module {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(SpanHolder, Clone, Debug)]
 pub struct Program {
     pub module: Span<Module>,
     pub entry: Span<TermComputation>,
