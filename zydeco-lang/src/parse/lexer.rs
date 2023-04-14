@@ -2,6 +2,8 @@ use logos::{Logos, SpannedIter};
 use std::fmt::{Debug, Display};
 
 #[derive(Logos, Clone, Debug, PartialEq)]
+#[logos(skip r"/\*([^*]|\*[^/])*\*/")]
+#[logos(skip r"//.*\n")]
 #[logos(skip r"#.*\n")]
 #[logos(skip r"[ \t\n\f]+")]
 // #[regex(r"#.*\n", logos::skip, priority = 2)]
