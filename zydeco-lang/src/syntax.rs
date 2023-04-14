@@ -2,7 +2,8 @@ pub mod env;
 mod fmt;
 mod span;
 
-use zydeco_derive::IntoEnum;
+use crate::prelude::Span;
+use zydeco_derive::{FmtArgs, IntoEnum, SpanHolder};
 
 /* ---------------------------------- Meta ---------------------------------- */
 
@@ -137,6 +138,14 @@ pub struct TypeArity<In: KindT, Out: KindT> {
     pub kd: Out,
 }
 impl<In: KindT, Out: KindT> KindT for TypeArity<In, Out> {}
+
+#[derive(IntoEnum, SpanHolder, FmtArgs, Clone, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Kind(KindBase),
+    TypeArity(TypeArity<BoxKind, BoxKind>),
+}
+pub type BoxKind = Box<Span<Kind>>;
+impl KindT for Kind {}
 
 /* ---------------------------------- Types --------------------------------- */
 

@@ -106,6 +106,18 @@ KindBase: KindBase = {
     "CType" => KindBase::CType,
 };
 
+TypeArity: TypeArity<BoxKind, BoxKind> = {
+    <kd:Box<Span<Kind>>> "->" <mut ar:TypeArity> => {
+        ar.params.insert(0, kd);
+        ar
+    },
+};
+
+Kind: Kind = {
+    <KindBase> => <>.into(),
+    <TypeArity> => <>.into(),
+};
+
 //* ---------------------------------- Type ---------------------------------- */
 
 Type: Type = {

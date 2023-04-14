@@ -5,7 +5,7 @@ pub use crate::syntax::*;
 
 /* ---------------------------------- Kind ---------------------------------- */
 
-pub use crate::syntax::{KindBase, TypeArity};
+pub use crate::syntax::{KindBase, TypeArity, Kind};
 
 /* ---------------------------------- Type ---------------------------------- */
 
