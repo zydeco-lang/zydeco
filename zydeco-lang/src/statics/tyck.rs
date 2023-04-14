@@ -59,7 +59,9 @@ mod ctx {
 pub trait TypeCheck: SpanView + Sized {
     type Ctx: Default + Clone + CtxT;
     type Out: Lub<Out = Self::Out>;
+    #[allow(clippy::type_complexity)]
     fn syn_step(&self, ctx: Self::Ctx) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError>;
+    #[allow(clippy::type_complexity)]
     fn ana_step(
         &self, typ: Self::Out, ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {

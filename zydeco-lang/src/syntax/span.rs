@@ -43,9 +43,7 @@ where
         F: Fn(&mut SpanInfo) + Clone,
     {
         let TypeArity { params, kd } = self;
-        for param in params {
-            param.span_map_mut(f.clone());
-        }
+        params.span_map_mut(f.clone());
         kd.span_map_mut(f);
     }
 }
@@ -61,9 +59,7 @@ where
     {
         let TypeApp { tvar, args } = self;
         tvar.span_map_mut(f.clone());
-        for arg in args {
-            arg.span_map_mut(f.clone());
-        }
+        args.span_map_mut(f);
     }
 }
 
@@ -144,9 +140,7 @@ where
     {
         let Ctor { ctor, args } = self;
         ctor.span_map_mut(f.clone());
-        for arg in args {
-            arg.span_map_mut(f.clone());
-        }
+        args.span_map_mut(f);
     }
 }
 
@@ -255,9 +249,7 @@ where
         scrut.span_map_mut(f.clone());
         for Matcher { ctor, vars, body } in arms {
             ctor.span_map_mut(f.clone());
-            for var in vars {
-                var.span_map_mut(f.clone());
-            }
+            vars.span_map_mut(f.clone());
             body.span_map_mut(f.clone());
         }
     }
@@ -276,9 +268,7 @@ where
         let Comatch { arms } = self;
         for Comatcher { dtor, vars, body } in arms {
             dtor.span_map_mut(f.clone());
-            for var in vars {
-                var.span_map_mut(f.clone());
-            }
+            vars.span_map_mut(f.clone());
             body.span_map_mut(f.clone());
         }
     }
@@ -297,9 +287,7 @@ where
         let Dtor { body, dtor, args } = self;
         body.span_map_mut(f.clone());
         dtor.span_map_mut(f.clone());
-        for arg in args {
-            arg.span_map_mut(f.clone());
-        }
+        args.span_map_mut(f);
     }
 }
 
@@ -374,15 +362,10 @@ where
     {
         let Data { name, params, ctors } = self;
         name.span_map_mut(f.clone());
-        for (ty, kd) in params {
-            ty.span_map_mut(f.clone());
-            kd.span_map_mut(f.clone());
-        }
+        params.span_map_mut(f.clone());
         for DataBr(ctor, tys) in ctors {
             ctor.span_map_mut(f.clone());
-            for ty in tys {
-                ty.span_map_mut(f.clone());
-            }
+            tys.span_map_mut(f.clone());
         }
     }
 }
@@ -400,15 +383,10 @@ where
     {
         let Codata { name, params, dtors } = self;
         name.span_map_mut(f.clone());
-        for (ty, kd) in params {
-            ty.span_map_mut(f.clone());
-            kd.span_map_mut(f.clone());
-        }
+        params.span_map_mut(f.clone());
         for CodataBr(dtor, tys, ty) in dtors {
             dtor.span_map_mut(f.clone());
-            for ty in tys {
-                ty.span_map_mut(f.clone());
-            }
+            tys.span_map_mut(f.clone());
             ty.span_map_mut(f.clone());
         }
     }
@@ -426,10 +404,7 @@ where
     {
         let Alias { name, params, ty } = self;
         name.span_map_mut(f.clone());
-        for (ty, kd) in params {
-            ty.span_map_mut(f.clone());
-            kd.span_map_mut(f.clone());
-        }
+        params.span_map_mut(f.clone());
         ty.span_map_mut(f);
     }
 }

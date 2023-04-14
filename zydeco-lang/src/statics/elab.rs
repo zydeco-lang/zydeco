@@ -205,17 +205,17 @@ impl Elaboration<ps::Type> for Type {
             }
             ps::Type::Forall(ps::Forall(params, t)) => {
                 let mut t = t.try_map(Elaboration::elab)?;
-                for (tvar, kd) in params.into_iter().rev() {
-                    let kd = kd.try_map(Elaboration::elab)?;
-                    t = t.span().clone().make(Forall { param: (tvar, kd), ty: rc!(t) }.into())
+                for param in params.into_iter().rev() {
+                    let param = Elaboration::elab(param)?;
+                    t = t.span().clone().make(Forall { param, ty: rc!(t) }.into())
                 }
                 t.inner
             }
             ps::Type::Exists(ps::Exists(params, t)) => {
                 let mut t = t.try_map(Elaboration::elab)?;
-                for (tvar, kd) in params.into_iter().rev() {
-                    let kd = kd.try_map(Elaboration::elab)?;
-                    t = t.span().clone().make(Exists { param: (tvar, kd), ty: rc!(t) }.into())
+                for param in params.into_iter().rev() {
+                    let param = Elaboration::elab(param)?;
+                    t = t.span().clone().make(Exists { param, ty: rc!(t) }.into())
                 }
                 t.inner
             }
@@ -243,17 +243,10 @@ impl Elaboration<ps::TermValue> for TermValue {
                 }
                 .into()
             }
-            ps::TermValue::Ctor(Ctor { ctor, args }) => Ctor {
-                ctor,
-                args: args
-                    .into_iter()
-                    .map(|arg| arg.try_map(Elaboration::elab))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .into_iter()
-                    .map(|arg| rc!(arg))
-                    .collect(),
+            ps::TermValue::Ctor(Ctor { ctor, args }) => {
+                Ctor { ctor, args: Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect() }
+                    .into()
             }
-            .into(),
             ps::TermValue::Literal(t) => t.into(),
             ps::TermValue::Pack(ps::Pack { ty, body }) => {
                 let ty = ty.try_map(Elaboration::elab)?;
@@ -382,13 +375,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
             }
             ps::TermComputation::Dtor(ps::Dtor { body, dtor, args }) => {
                 let body = rc!((body).try_map(Elaboration::elab)?);
-                let args = args
-                    .into_iter()
-                    .map(|arg| arg.try_map(Elaboration::elab))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .into_iter()
-                    .map(|arg| rc!(arg))
-                    .collect();
+                let args = Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect();
                 Dtor { body, dtor, args }.into()
             }
             ps::TermComputation::TyAppTerm(ps::TyAppTerm { body, arg }) => {
@@ -420,11 +407,7 @@ impl Elaboration<ps::Data<TypeV, Span<ps::Kind>, CtorV, Span<ps::Type>>> for pre
     fn elab(
         Data { name, params, ctors }: ps::Data<TypeV, Span<ps::Kind>, CtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
-        Ok(Self {
-            name,
-            params: Elaboration::elab(params)?,
-            ctors: ctors.into_iter().map(Elaboration::elab).collect::<Result<_, _>>()?,
-        })
+        Ok(Self { name, params: Elaboration::elab(params)?, ctors: Elaboration::elab(ctors)? })
     }
 }
 
@@ -433,11 +416,7 @@ impl Elaboration<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
     fn elab(
         DataBr(ctor, params): ps::DataBr<CtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
-        let params = params
-            .into_iter()
-            .map(|param| param.try_map(Elaboration::elab))
-            .map(|param| param.map(|ty| rc!(ty)))
-            .collect::<Result<Vec<_>, _>>()?;
+        let params = Vec::<_>::elab(params)?.into_iter().map(|ty| rc!(ty)).collect();
         Ok(Self(ctor, params))
     }
 }
@@ -447,11 +426,7 @@ impl Elaboration<ps::Codata<TypeV, Span<ps::Kind>, DtorV, Span<ps::Type>>> for p
     fn elab(
         Codata { name, params, dtors }: ps::Codata<TypeV, Span<ps::Kind>, DtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
-        Ok(Self {
-            name,
-            params: Elaboration::elab(params)?,
-            dtors: dtors.into_iter().map(Elaboration::elab).collect::<Result<_, _>>()?,
-        })
+        Ok(Self { name, params: Elaboration::elab(params)?, dtors: Elaboration::elab(dtors)? })
     }
 }
 
@@ -460,11 +435,7 @@ impl Elaboration<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType
     fn elab(
         CodataBr(dtor, params, ty): ps::CodataBr<DtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
-        let params = params
-            .into_iter()
-            .map(|param| param.try_map(Elaboration::elab))
-            .map(|param| param.map(|ty| rc!(ty)))
-            .collect::<Result<Vec<_>, _>>()?;
+        let params = Vec::<_>::elab(params)?.into_iter().map(|ty| rc!(ty)).collect();
         Ok(Self(dtor, params, rc!(ty.try_map(Elaboration::elab)?)))
     }
 }

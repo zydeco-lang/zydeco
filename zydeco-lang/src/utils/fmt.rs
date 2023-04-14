@@ -6,6 +6,7 @@ pub struct Args {
     indent_unit: usize,
     allow_br: bool,
     indent: usize,
+    line: usize,
 }
 impl Args {
     pub fn indent(&self) -> Self {
@@ -21,20 +22,23 @@ impl Args {
             " ".into()
         }
     }
+    pub fn max_width(&self) -> usize {
+        self.line - self.indent
+    }
 }
 
 pub trait FmtArgs {
     fn fmt_args(&self, fargs: Args) -> String;
     fn fmt(&self) -> String {
-        self.fmt_args(Args { indent_unit: 2, allow_br: true, indent: 0 })
+        self.fmt_args(Args { indent_unit: 2, allow_br: true, indent: 0, line: 80 })
     }
     fn fmt_no_br(&self) -> String {
-        self.fmt_args(Args { indent_unit: 2, allow_br: false, indent: 0 })
+        self.fmt_args(Args { indent_unit: 2, allow_br: false, indent: 0, line: 80 })
     }
     fn fmt_truncate(&self, n: usize) -> String {
         let s = self.fmt_no_br();
         if s.len() > n {
-            format!("{}...", &s[..n])
+            format!("{}...", &s[..n].trim())
         } else {
             s
         }
