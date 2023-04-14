@@ -144,7 +144,7 @@ fn desugar_fn(ps::GenAbs { params, body }: ps::GenAbs) -> Result<TermComputation
     ) -> Result<TermComputation, TyckErrorItem> {
         let mut body = Comatch {
             arms: vec![ps::Comatcher {
-                dtor: DtorV::new(format!("arg"), SpanInfo::new(0, 0)),
+                dtorv: DtorV::new(format!("arg"), SpanInfo::new(0, 0)),
                 vars: vec![var],
                 body,
             }],
@@ -241,8 +241,8 @@ impl Elaboration<ps::TermValue> for TermValue {
                 }
                 .into()
             }
-            ps::TermValue::Ctor(Ctor { ctor, args }) => {
-                Ctor { ctor, args: Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect() }
+            ps::TermValue::Ctor(Ctor { ctorv: ctor, args }) => {
+                Ctor { ctorv: ctor, args: Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect() }
                     .into()
             }
             ps::TermValue::Literal(t) => t.into(),
@@ -342,20 +342,20 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let arms = arms
                     .into_iter()
                     .map(|arm| {
-                        let ps::Matcher { ctor, vars, body } = arm;
+                        let ps::Matcher { ctorv: ctor, vars, body } = arm;
                         let body = rc!((body).try_map(Elaboration::elab)?);
-                        Ok(Matcher { ctor, vars, body })
+                        Ok(Matcher { ctorv: ctor, vars, body })
                     })
                     .collect::<Result<_, TyckErrorItem>>()?;
                 Match { scrut, arms }.into()
             }
             ps::TermComputation::Abs(t) => desugar_fn(t)?,
-            ps::TermComputation::App(ps::Application { body, arg }) => {
+            ps::TermComputation::App(ps::TermApp { body, arg }) => {
                 let fun = rc!((body).try_map(Elaboration::elab)?);
                 let arg = arg.try_map(Elaboration::elab)?;
                 Dtor {
                     body: fun,
-                    dtor: DtorV::new(format!("arg"), SpanInfo::new(0, 0)),
+                    dtorv: DtorV::new(format!("arg"), SpanInfo::new(0, 0)),
                     args: vec![rc!(arg)],
                 }
                 .into()
@@ -364,17 +364,17 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let arms = arms
                     .into_iter()
                     .map(|arm| {
-                        let ps::Comatcher { dtor, vars, body } = arm;
+                        let ps::Comatcher { dtorv: dtor, vars, body } = arm;
                         let body = rc!((body).try_map(Elaboration::elab)?);
-                        Ok(Comatcher { dtor, vars, body })
+                        Ok(Comatcher { dtorv: dtor, vars, body })
                     })
                     .collect::<Result<Vec<_>, TyckErrorItem>>()?;
                 Comatch { arms }.into()
             }
-            ps::TermComputation::Dtor(ps::Dtor { body, dtor, args }) => {
+            ps::TermComputation::Dtor(ps::Dtor { body, dtorv: dtor, args }) => {
                 let body = rc!((body).try_map(Elaboration::elab)?);
                 let args = Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect();
-                Dtor { body, dtor, args }.into()
+                Dtor { body, dtorv: dtor, args }.into()
             }
             ps::TermComputation::TyAppTerm(ps::TyAppTerm { body, arg }) => {
                 let body = rc!((body).try_map(Elaboration::elab)?);

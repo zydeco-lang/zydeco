@@ -138,7 +138,7 @@ where
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let Ctor { ctor, args } = self;
+        let Ctor { ctorv: ctor, args } = self;
         ctor.span_map_mut(f.clone());
         args.span_map_mut(f);
     }
@@ -247,7 +247,7 @@ where
     {
         let Match { scrut, arms } = self;
         scrut.span_map_mut(f.clone());
-        for Matcher { ctor, vars, body } in arms {
+        for Matcher { ctorv: ctor, vars, body } in arms {
             ctor.span_map_mut(f.clone());
             vars.span_map_mut(f.clone());
             body.span_map_mut(f.clone());
@@ -266,7 +266,7 @@ where
         F: Fn(&mut SpanInfo) + Clone,
     {
         let Comatch { arms } = self;
-        for Comatcher { dtor, vars, body } in arms {
+        for Comatcher { dtorv: dtor, vars, body } in arms {
             dtor.span_map_mut(f.clone());
             vars.span_map_mut(f.clone());
             body.span_map_mut(f.clone());
@@ -284,7 +284,7 @@ where
     where
         F: Fn(&mut SpanInfo) + Clone,
     {
-        let Dtor { body, dtor, args } = self;
+        let Dtor { body, dtorv: dtor, args } = self;
         body.span_map_mut(f.clone());
         dtor.span_map_mut(f.clone());
         args.span_map_mut(f);

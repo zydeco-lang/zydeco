@@ -15,11 +15,11 @@ fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
 
 // /* Constructors and Destructors */
 fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
-    Ctor { ctor: CtorV::new(format!("{}", ctor), SpanInfo::new(0, 0)), args }.into()
+    Ctor { ctorv: CtorV::new(format!("{}", ctor), SpanInfo::new(0, 0)), args }.into()
 }
 fn dtor(body: Rc<ZCompute>, dtor: &str, args: Vec<ZValue>) -> ZCompute {
     let args = args.into_iter().map(|a| rc!(a.into())).collect();
-    Dtor { body, dtor: DtorV::new(format!("{}", dtor), SpanInfo::new(0, 0)), args }.into()
+    Dtor { body, dtorv: DtorV::new(format!("{}", dtor), SpanInfo::new(0, 0)), args }.into()
 }
 
 // /* Bool */

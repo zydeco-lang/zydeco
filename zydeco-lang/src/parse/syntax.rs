@@ -3,6 +3,19 @@ use zydeco_derive::{IntoEnum, SpanHolder};
 
 pub use crate::syntax::*;
 
+/* --------------------------------- Pattern -------------------------------- */
+
+pub type TypePattern = (TypeV, Option<Span<Kind>>);
+pub type TypeKindPattern = (TypeV, Span<Kind>);
+
+pub type TermPattern = (TermV, Option<Span<Type>>);
+
+#[derive(IntoEnum, SpanHolder, Clone, Debug)]
+pub enum Pattern {
+    TypePattern(TypePattern),
+    TermPattern(TermPattern),
+}
+
 /* ---------------------------------- Kind ---------------------------------- */
 
 pub use crate::syntax::{KindBase, TypeArity};
@@ -19,9 +32,6 @@ pub type BoxKind = Box<Span<Kind>>;
 impl KindT for Kind {}
 
 /* ---------------------------------- Type ---------------------------------- */
-
-pub type TypePattern = (TypeV, Option<Span<Kind>>);
-pub type TypeKindPattern = (TypeV, Span<Kind>);
 
 #[derive(SpanHolder, Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
@@ -49,8 +59,6 @@ impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
 
-pub type TermPattern = (TermV, Option<Span<Type>>);
-
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum TermValue {
     TermAnn(Annotation<BoxValue, Span<Type>>),
@@ -63,12 +71,6 @@ pub enum TermValue {
 pub type BoxValue = Box<Span<TermValue>>;
 impl ValueT for TermValue {}
 
-#[derive(IntoEnum, SpanHolder, Clone, Debug)]
-pub enum Pattern {
-    TypePattern(TypePattern),
-    TermPattern(TermPattern),
-}
-
 #[derive(SpanHolder, Clone, Debug)]
 pub struct GenAbs {
     pub params: Vec<Pattern>,
@@ -76,7 +78,7 @@ pub struct GenAbs {
 }
 
 #[derive(SpanHolder, Clone, Debug)]
-pub struct Application {
+pub struct TermApp {
     pub body: BoxComp,
     pub arg: BoxValue,
 }
@@ -120,7 +122,7 @@ pub enum TermComputation {
     Rec(Rec<TermPattern, BoxComp>),
     Match(Match<CtorV, TermV, BoxValue, Span<TermComputation>>),
     Abs(GenAbs),
-    App(Application),
+    App(TermApp),
     Comatch(Comatch<DtorV, TermV, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
     TyAppTerm(TyAppTerm),

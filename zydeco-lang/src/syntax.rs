@@ -177,7 +177,7 @@ impl ValueT for Literal {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ctor<C: CtorT, A: ValueT> {
-    pub ctor: C,
+    pub ctorv: C,
     pub args: Vec<A>,
 }
 impl<C: CtorT, A: ValueT> ValueT for Ctor<C, A> {}
@@ -229,7 +229,7 @@ pub struct Match<C: CtorT, TeV: VarT, A: ValueT, B: ComputationT> {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Matcher<C: CtorT, TeV: VarT, B: ComputationT> {
-    pub ctor: C,
+    pub ctorv: C,
     pub vars: Vec<TeV>,
     pub body: B,
 }
@@ -241,7 +241,7 @@ pub struct Comatch<D: DtorT, TeV: VarT, B: ComputationT> {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Comatcher<D: DtorT, TeV: VarT, B: ComputationT> {
-    pub dtor: D,
+    pub dtorv: D,
     pub vars: Vec<TeV>,
     pub body: B,
 }
@@ -250,7 +250,7 @@ impl<D: DtorT, TeV: VarT, B: ComputationT> ComputationT for Comatch<D, TeV, B> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dtor<B: ComputationT, D: DtorT, A: ValueT> {
     pub body: B,
-    pub dtor: D,
+    pub dtorv: D,
     pub args: Vec<A>,
 }
 impl<B: ComputationT, D: DtorT, A: ValueT> ComputationT for Dtor<B, D, A> {}

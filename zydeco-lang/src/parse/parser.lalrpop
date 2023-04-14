@@ -61,8 +61,8 @@ DefineEnd: () = {
 };
 
 DataBr: DataBr<CtorV, Span<Type>> = {
-    "|" <ctor:CtorV> <args:SepByDelim<"(", ",", <Span<Type>>, ")">> => {
-        DataBr(ctor, args)
+    "|" <ctorv:CtorV> <args:SepByDelim<"(", ",", <Span<Type>>, ")">> => {
+        DataBr(ctorv, args)
     }
 };
 
@@ -160,8 +160,8 @@ TermValue: TermValue = {
     }.into(),
     <TermV> => <>.into(),
     "{" <tc:Box<Span<TermComputation>>> "}" => Thunk(tc).into(),
-    <ctor:CtorV> <args:SepByDelim<"(", ",", Span<TermValue>, ")">> => Ctor {
-        ctor, args,
+    <ctorv:CtorV> <args:SepByDelim<"(", ",", Span<TermValue>, ")">> => Ctor {
+        ctorv, args,
     }.into(),
     <Literal> => <>.into(),
     "pack" "(" <ty:Box<Span<Type>>> "," <body:Box<Span<TermValue>>> ")" => Pack {
@@ -206,15 +206,15 @@ LetSep: () = {
 
 TermComputationRight: TermComputation = {
     TermComputationAtom,
-    <body:Box<Span<TermComputationRight>>> <arg:Box<Span<TermValue>>> => Application {
+    <body:Box<Span<TermComputationRight>>> <arg:Box<Span<TermValue>>> => TermApp {
         body, arg,
     }.into(),
     <body:Box<Span<TermComputationRight>>> "@" "(" <arg:Box<Span<Type>>> ")" => TyAppTerm {
         body, arg,
     }.into(),
-    <body:Box<Span<TermComputationRight>>> "." <dtor:DtorV>
+    <body:Box<Span<TermComputationRight>>> "." <dtorv:DtorV>
     <args:SepByDelim<"(", ",", Span<TermValue>, ")">> => Dtor {
-        body, dtor, args,
+        body, dtorv, args,
     }.into(),
 };
 
@@ -239,16 +239,16 @@ GenLet: GenLet = {
 };
 
 MatchBr: Matcher<CtorV, TermV, Span<TermComputation>> = {
-    "|" <ctor:CtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->"
+    "|" <ctorv:CtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->"
     <body:Span<TermComputation>> => Matcher {
-        ctor, vars, body
+        ctorv, vars, body
     }
 };
 
 ComatchBr: Comatcher<DtorV, TermV, Span<TermComputation>> = {
-    "|" "." <dtor:DtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->"
+    "|" "." <dtorv:DtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->"
     <body:Span<TermComputation>> => Comatcher {
-        dtor, vars, body
+        dtorv, vars, body
     }
 };
 

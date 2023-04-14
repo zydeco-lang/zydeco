@@ -184,7 +184,7 @@ where
     A: ValueT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let Ctor { ctor, args } = self;
+        let Ctor { ctorv: ctor, args } = self;
         let mut s = String::new();
         s += &ctor.fmt_args(fargs);
         s += "(";
@@ -291,7 +291,7 @@ where
         let mut s = String::new();
         s += "match ";
         s += &scrut.fmt_args(fargs);
-        for Matcher { ctor, vars, body } in arms {
+        for Matcher { ctorv: ctor, vars, body } in arms {
             s += &fargs.br_indent();
             s += "| ";
             s += &ctor.fmt_args(fargs);
@@ -320,7 +320,7 @@ where
         let Comatch { arms } = self;
         let mut s = String::new();
         s += "comatch";
-        for Comatcher { dtor, vars, body } in arms {
+        for Comatcher { dtorv: dtor, vars, body } in arms {
             s += &fargs.br_indent();
             s += "| .";
             s += &dtor.fmt_args(fargs);
@@ -346,7 +346,7 @@ where
     A: ValueT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let Dtor { body, dtor, args } = self;
+        let Dtor { body, dtorv: dtor, args } = self;
         let mut s = String::new();
         s += &body.fmt_args(fargs);
         s += " .";

@@ -77,7 +77,7 @@ impl TypeCheck for Span<TermValue> {
                 let typ_lub = Type::lub(ty, typ, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
-            TermValue::Ctor(Ctor { ctor, args }) => {
+            TermValue::Ctor(Ctor { ctorv: ctor, args }) => {
                 let (Data { name, params, ctors }, ty_args) =
                     ctx.resolve_data(typ.clone(), span)?;
                 let diff = Env::init(&params, &ty_args, || {

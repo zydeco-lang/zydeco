@@ -89,7 +89,7 @@ impl TypeCheck for Span<TermComputation> {
                 let mut unexpected = Vec::new();
                 let mut ctorv_set_arm: HashSet<CtorV> = HashSet::new();
                 let mut ty_arms = Vec::new();
-                for Matcher { ctor, vars, body } in arms {
+                for Matcher { ctorv: ctor, vars, body } in arms {
                     let Some(tys) = ctors.get(ctor) else {
                         unexpected.push(ctor.to_owned());
                         continue;
@@ -130,7 +130,7 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::Comatch(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("comatch") }))?
             }
-            TermComputation::Dtor(Dtor { body, dtor, args }) => {
+            TermComputation::Dtor(Dtor { body, dtorv: dtor, args }) => {
                 let ty_body = body.syn(ctx.clone())?;
                 let (Codata { name, params, dtors }, ty_args) =
                     ctx.resolve_codata(ty_body, span)?;
@@ -306,7 +306,7 @@ impl TypeCheck for Span<TermComputation> {
                     ctors.into_iter().map(|DataBr(ctor, tys)| (ctor, tys)).collect();
                 let mut unexpected = Vec::new();
                 let mut ctorv_set_arm: HashSet<CtorV> = HashSet::new();
-                for Matcher { ctor, vars, body } in arms {
+                for Matcher { ctorv: ctor, vars, body } in arms {
                     let Some(tys) = ctors.get(ctor) else {
                         unexpected.push(ctor.to_owned());
                         continue;
@@ -344,7 +344,7 @@ impl TypeCheck for Span<TermComputation> {
                     dtors.into_iter().map(|CodataBr(dtor, tys, ty)| (dtor, (tys, ty))).collect();
                 let mut unexpected = Vec::new();
                 let mut dtorv_set_arm: HashSet<DtorV> = HashSet::new();
-                for Comatcher { dtor, vars, body } in arms {
+                for Comatcher { dtorv: dtor, vars, body } in arms {
                     let Some((tys, ty)) = dtors.get(dtor).cloned() else {
                         unexpected.push(dtor.to_owned());
                         continue;

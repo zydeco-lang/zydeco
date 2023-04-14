@@ -37,9 +37,9 @@ impl From<&ss::TermValue> for ZVal {
             ss::TermValue::Annotation(Annotation { term: body, ty: _ }) => body.inner_ref().into(),
             ss::TermValue::Var(x) => x.clone().into(),
             ss::TermValue::Thunk(Thunk(e)) => Thunk(rc!(e.inner_ref().into())).into(),
-            ss::TermValue::Ctor(Ctor { ctor, args }) => {
+            ss::TermValue::Ctor(Ctor { ctorv: ctor, args }) => {
                 let args = args.iter().map(|v| rc!(v.inner_ref().into())).collect();
-                Ctor { ctor: ctor.clone(), args }.into()
+                Ctor { ctorv: ctor.clone(), args }.into()
             }
             ss::TermValue::Literal(l) => l.clone().into(),
             ss::TermValue::Pack(Pack { ty: _, body }) => body.inner_ref().into(),
@@ -79,9 +79,9 @@ impl From<&ss::TermComputation> for ZComp {
                 let scrut = rc!(scrut.inner_ref().into());
                 let arms = arms
                     .iter()
-                    .map(|Matcher { ctor, vars, body }| {
+                    .map(|Matcher { ctorv: ctor, vars, body }| {
                         let body = rc!(body.inner_ref().into());
-                        Matcher { ctor: ctor.clone(), vars: vars.clone(), body }
+                        Matcher { ctorv: ctor.clone(), vars: vars.clone(), body }
                     })
                     .collect();
                 Match { scrut, arms }.into()
@@ -89,17 +89,17 @@ impl From<&ss::TermComputation> for ZComp {
             ss::TermComputation::Comatch(Comatch { arms }) => {
                 let arms = arms
                     .iter()
-                    .map(|Comatcher { dtor, vars, body }| {
+                    .map(|Comatcher { dtorv: dtor, vars, body }| {
                         let body = rc!(body.inner_ref().into());
-                        Comatcher { dtor: dtor.clone(), vars: vars.clone(), body }
+                        Comatcher { dtorv: dtor.clone(), vars: vars.clone(), body }
                     })
                     .collect();
                 Comatch { arms }.into()
             }
-            ss::TermComputation::Dtor(Dtor { body, dtor, args }) => {
+            ss::TermComputation::Dtor(Dtor { body, dtorv: dtor, args }) => {
                 let body = rc!(body.inner_ref().into());
                 let args = args.iter().map(|arg| rc!(arg.inner_ref().into())).collect();
-                Dtor { body, dtor: dtor.clone(), args }.into()
+                Dtor { body, dtorv: dtor.clone(), args }.into()
             }
             ss::TermComputation::TyAbsTerm(TyAbsTerm { param: _, body }) => body.inner_ref().into(),
             ss::TermComputation::TyAppTerm(TyAppTerm { body, arg: _ }) => body.inner_ref().into(),
