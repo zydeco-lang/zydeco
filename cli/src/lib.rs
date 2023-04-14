@@ -43,3 +43,5 @@ pub enum Commands {
         verbose: bool,
     },
 }
+
+pub use repl::Repl;

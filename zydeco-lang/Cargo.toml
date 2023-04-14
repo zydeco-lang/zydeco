@@ -19,6 +19,9 @@ zydeco_derive = { path = "./derive" }
 [build-dependencies]
 lalrpop = "0.19"
 
+[lib]
+doctest = false
+
 # Maybe we should consider adding a profile for test
 # [profile.test]
 # opt-level = 3

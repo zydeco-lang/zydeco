@@ -1,5 +1,5 @@
 use clap::Parser;
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, Repl};
 use zydeco_lang::{
     prelude::*,
     zydeco::{ProgKont, ZydecoFile},
@@ -9,7 +9,7 @@ fn main() -> Result<(), ()> {
     let res = match Cli::parse().command {
         Commands::Run { file, dry, verbose, args } => run_file(file, dry, verbose, args),
         Commands::Check { file, verbose } => run_file(file, true, verbose, vec![]),
-        Commands::Repl { .. } => cli::repl::launch(),
+        Commands::Repl { .. } => Repl::launch(),
     };
     match res {
         Ok(x) => {

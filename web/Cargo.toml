@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 yew = "0.19"
-zydeco-lang = { path = "../zydeco-lang"}
+zydeco-lang = { path = "../zydeco-lang" }
 web-sys = "0.3"

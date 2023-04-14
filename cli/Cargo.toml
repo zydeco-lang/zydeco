@@ -12,3 +12,6 @@ zydeco-lang = { path = "../zydeco-lang" }
 [[bin]]
 name = "zydeco"
 path = "src/main.rs"
+
+[lib]
+doctest = false

@@ -1,43 +1,44 @@
 #![allow(unused)]
 use zydeco_lang::{dynamics::syntax as ds, prelude::*, statics::syntax as ss, zydeco::ZydecoExpr};
 
-pub fn launch() -> Result<i32, String> {
-    println!("Zydeco v0.2.0");
-    let mut zydeco_expr = ZydecoExpr::new();
-    loop {
-        let mut line = String::new();
-        {
-            use std::io::Write;
-            print!("> ");
-            std::io::stdout().flush().unwrap();
-            let stdin = std::io::stdin();
-            let n = stdin.read_line(&mut line).map_err(|e| e.to_string())?;
-            // Ctrl-D to exit
-            if n == 0 {
-                break Ok(0);
+pub struct Repl;
+
+impl Repl {
+    pub fn launch() -> Result<i32, String> {
+        println!("Zydeco v0.2.0");
+        let mut zydeco_expr = ZydecoExpr::new();
+        loop {
+            let mut line = String::new();
+            {
+                use std::io::Write;
+                print!("> ");
+                std::io::stdout().flush().unwrap();
+                let stdin = std::io::stdin();
+                let n = stdin.read_line(&mut line).map_err(|e| e.to_string())?;
+                // Ctrl-D to exit
+                if n == 0 {
+                    break Ok(0);
+                }
             }
-        }
-        // check for commands
-        if line.trim_start().starts_with("#") {
-            // currently, the only command is #env
-            if line.starts_with("#env") {
-                println!("{}", zydeco_expr.env.fmt());
-            } else {
-                println!("Unknown command {}", line.trim());
-            }
-            continue;
-        }
-        // parse and elaborate
-        let term = match ZydecoExpr::parse(&line) {
-            Err(e) => {
-                println!("Parse Error: {}", e);
+            // check for commands
+            if line.trim_start().starts_with("#") {
+                // currently, the only command is #env
+                if line.starts_with("#env") {
+                    println!("{}", zydeco_expr.env.fmt());
+                } else {
+                    println!("Unknown command {}", line.trim());
+                }
                 continue;
             }
+            Self::run(&mut zydeco_expr, &line);
+        }
+    }
+    pub fn run(zydeco_expr: &mut ZydecoExpr, line: &str) -> Result<(), String> {
+        // parse and elaborate
+        let term = match ZydecoExpr::parse(&line) {
+            Err(e) => Err(format!("Parse Error: {}", e))?,
             Ok(term) => match ZydecoExpr::elab(term) {
-                Err(e) => {
-                    println!("Elaboration Error: {}", e);
-                    continue;
-                }
+                Err(e) => Err(format!("Elaboration Error: {}", e))?,
                 Ok(term) => term,
             },
         };
@@ -45,24 +46,25 @@ pub fn launch() -> Result<i32, String> {
         match term.inner_ref() {
             ss::Term::Value(v) => {
                 match zydeco_expr.tyck_value(term.span().make(v.clone())) {
-                    Err(e) => println!("Type Error: {}", e),
+                    Err(e) => Err(format!("Type Error: {}", e)),
                     Ok(ty) => {
-                        // NOTE: not evaluating the value, just printing its type
+                        // Note: not evaluating the value, just printing its type
                         // let v = ZydecoExpr::link_value(v);
                         // let v = zydeco_expr.eval_value(v);
                         // println!("{} : {}", v.fmt(), ty.fmt())
-                        println!("{} : {}", v.fmt(), ty.fmt())
+                        println!("{} : {}", v.fmt(), ty.fmt());
+                        Ok(())
                     }
                 }
             }
             ss::Term::Computation(c) => {
                 match zydeco_expr.tyck_computation(term.span().make(c.clone())) {
-                    Err(e) => println!("Type Error: {}", e),
+                    Err(e) => Err(format!("Type Error: {}", e)),
                     Ok(ty) => {
-                        // HACK: The final call to OS will destroy the environment,
+                        // Note: The final call to OS will destroy the environment,
                         // so we need to save a snapshot of it before we run.
                         let snapshot = zydeco_expr.clone();
-                        if let Some(()) =
+                        let res = if let Some(()) =
                             ty.clone().elim_os(zydeco_expr.ctx.clone(), &SpanInfo::new(0, 0))
                         {
                             let c = ZydecoExpr::link_computation(c);
@@ -75,6 +77,7 @@ pub fn launch() -> Result<i32, String> {
                                     println!("exited with code {}", i)
                                 }
                             }
+                            Ok(())
                         } else if let Some(ty) =
                             ty.clone().elim_ret(zydeco_expr.ctx.clone(), &SpanInfo::new(0, 0))
                         {
@@ -88,12 +91,16 @@ pub fn launch() -> Result<i32, String> {
                                     unreachable!()
                                 }
                             }
+                            Ok(())
                         } else {
-                            println!("Can't run computation of type {}", ty.fmt());
-                            println!("Can only run computations of type OS or Ret(a)")
-                        }
-                        // HACK: Restore the environment
-                        zydeco_expr = snapshot;
+                            let mut s = String::new();
+                            s += &format!("Can't run computation of type {}", ty.fmt());
+                            s += &format!("Can only run computations of type OS or Ret(a)");
+                            Err(s)
+                        };
+                        // Note: Restore the environment
+                        *zydeco_expr = snapshot;
+                        res
                     }
                 }
             }

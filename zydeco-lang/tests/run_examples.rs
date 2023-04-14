@@ -1,79 +1,23 @@
 /*
-* Test files are sorted by how they should be run
-* - non-zero-exit-code/ holds tests that are OS programs don't read
-*   anything from stdin, stdout is ignored and the exit code must be
-*   0 to succeed
-*
-* - check-only/ holds tests that should typecheck as OS programs but
-*   are not executed
-*
-* - pure/ holds tests that consist of a single expression of type
-*   Ret(a) and pass if the test runs without error
-*
-* - custom/ holds tests that need custom I/O mocking to execute.
-*/
+ * Test files are sorted by how they should be run
+ * - non-zero-exit-code/ holds tests that are OS programs don't read
+ *   anything from stdin, stdout is ignored and the exit code must be
+ *   0 to succeed
+ *
+ * - check-only/ holds tests that should typecheck as OS programs but
+ *   are not executed
+ *
+ * - custom/ holds tests that need custom I/O mocking to execute.
+ */
 
-use std::{io::Read, path::PathBuf};
-use zydeco_lang::{
-    dynamics::syntax as ds,
-    statics::syntax as ss,
-    utils::fmt::FmtArgs,
-    zydeco::{ZydecoExpr, ZydecoFile},
-};
-
-struct IOMatch {
-    args: Vec<String>,
-    input: String,
-    correct_answer: String,
-}
+use std::path::PathBuf;
+use zydeco_lang::{dynamics::syntax as ds, zydeco::ZydecoFile};
 
 fn wrapper<T>(r: Result<T, String>) {
     match r {
         Ok(_) => {}
         Err(e) => panic!("{}", e),
     }
-}
-
-fn pure_test(f: &str) -> Result<(), String> {
-    let mut path = PathBuf::from("tests/pure");
-    path.push(f);
-    let mut buf = String::new();
-    std::fs::File::open(path)
-        .map_err(|e| e.to_string())?
-        .read_to_string(&mut buf)
-        .map_err(|e| e.to_string())?;
-    let mut zydeco_expr = ZydecoExpr::new();
-    match ZydecoExpr::parse(&buf) {
-        Err(_) => Err("Didn't parse".to_string())?,
-        Ok(term) => match ZydecoExpr::elab(term) {
-            Err(_) => Err("Didn't elaborate".to_string())?,
-            Ok(term) => match term.inner {
-                ss::Term::Value(_) => Err("Expecting a computation, found a value".to_string())?,
-                ss::Term::Computation(comp) => {
-                    let comp = term.info.make(comp);
-                    zydeco_expr.tyck_computation(comp.clone())?;
-                    let comp = ZydecoExpr::link_computation(comp.inner_ref());
-                    let comp = zydeco_expr.eval_ret_computation(comp);
-                    match comp {
-                        ds::ProgKont::Ret(value) => {
-                            println!("{}", value.fmt());
-                        }
-                        ds::ProgKont::ExitCode(i) => Err(format!("exited with code {}", i))?,
-                    }
-                }
-            },
-        },
-    };
-    Ok(())
-}
-
-macro_rules! mk_pure_test {
-    ($test_name:ident, $file_name:expr) => {
-        #[test]
-        fn $test_name() {
-            wrapper(pure_test($file_name))
-        }
-    };
 }
 
 fn check_test(f: &str) -> Result<(), String> {
@@ -125,6 +69,12 @@ macro_rules! mk_batch_test {
     };
 }
 
+struct IOMatch {
+    args: Vec<String>,
+    input: String,
+    correct_answer: String,
+}
+
 fn io_test(f: &str, iomatch: &IOMatch) -> Result<(), String> {
     let mut path = PathBuf::from("tests/io");
     path.push(f);
@@ -160,15 +110,6 @@ macro_rules! mk_io_test {
     };
 }
 
-mod pure_tests {
-    use super::*;
-    mk_pure_test!(bindings, "bindings.zy");
-    mk_pure_test!(booleans, "booleans.zy");
-    mk_pure_test!(comments, "comments.zy");
-    mk_pure_test!(fn1, "fn.zy");
-    mk_pure_test!(fn2, "fn'.zy");
-    mk_pure_test!(thunk, "thunk.zy");
-}
 mod chk_tests {
     use super::*;
     mk_check_test!(r#loop, "loop.zydeco");
