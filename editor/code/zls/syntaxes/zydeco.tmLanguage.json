@@ -16,12 +16,16 @@
 		"keywords": {
 			"patterns": [
 				{
-					"name": "keyword.control.zydeco",
-					"match": "\\b(module|where|pub|extern|ext|end|data|codata|alias|define|def)\\b"
+					"name": "storage.type.zydeco",
+					"match": "\\b(module|where|end|data|codata|alias|def|define|main|let|in|do|match|comatch)\\b"
 				},
 				{
-					"name": "keyword.operator.zydeco",
-					"match": "\\b(ret|fn|rec|let|in|do|match|comatch|forall|exists)\\b"
+					"name": "keyword.control.zydeco",
+					"match": "\\b(ret|forall|exists)\\b"
+				},
+				{
+					"name": "keyword.other.zydeco",
+					"match": "\\b(pub|ext|extern|fn|rec)\\b"
 				}
 			]
 		},
