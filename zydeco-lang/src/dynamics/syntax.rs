@@ -5,7 +5,7 @@ use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_derive::{EnumGenerator, FmtArgs};
+use zydeco_derive::{FmtArgs, IntoEnum};
 
 #[derive(Clone)]
 pub struct Thunk {
@@ -13,7 +13,7 @@ pub struct Thunk {
     pub env: Env<TermV, SemVal>,
 }
 
-#[derive(EnumGenerator, FmtArgs, Clone)]
+#[derive(IntoEnum, FmtArgs, Clone)]
 pub enum SemVal {
     Thunk(Thunk),
     Ctor(Ctor<CtorV, TV>),

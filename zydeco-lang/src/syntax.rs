@@ -2,7 +2,7 @@ pub mod env;
 mod fmt;
 mod span;
 
-use zydeco_derive::EnumGenerator;
+use zydeco_derive::IntoEnum;
 
 /* ---------------------------------- Meta ---------------------------------- */
 
@@ -167,7 +167,7 @@ impl<TyV: TyVarT, Ty: TypeT> TypeT for Exists<TyV, Ty> {}
 pub struct Thunk<B: ComputationT>(pub B);
 impl<B: ComputationT> ValueT for Thunk<B> {}
 
-#[derive(EnumGenerator, Clone, Debug, PartialEq, Eq)]
+#[derive(IntoEnum, Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
     String(String),

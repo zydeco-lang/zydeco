@@ -5,11 +5,11 @@ use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_derive::{EnumGenerator, FmtArgs};
+use zydeco_derive::{FmtArgs, IntoEnum};
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(EnumGenerator, FmtArgs, Clone)]
+#[derive(IntoEnum, FmtArgs, Clone)]
 pub enum ZVal {
     Var(TermV),
     Thunk(Thunk<RcComp>),
@@ -29,7 +29,7 @@ pub struct Prim {
     pub body: PrimComp,
 }
 
-#[derive(EnumGenerator, FmtArgs, Clone)]
+#[derive(IntoEnum, FmtArgs, Clone)]
 pub enum ZComp {
     Ret(Ret<RcValue>),
     Force(Force<RcValue>),
@@ -44,7 +44,7 @@ pub enum ZComp {
 type RcComp = Rc<ZComp>;
 impl ComputationT for ZComp {}
 
-#[derive(EnumGenerator, FmtArgs, Clone)]
+#[derive(IntoEnum, FmtArgs, Clone)]
 pub enum Term {
     Val(ZVal),
     Comp(ZComp),

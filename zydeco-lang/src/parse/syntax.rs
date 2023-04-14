@@ -1,5 +1,5 @@
 use crate::utils::{monoid::Monoid, span::Span};
-use zydeco_derive::{EnumGenerator, SpanHolder};
+use zydeco_derive::{IntoEnum, SpanHolder};
 
 pub use crate::syntax::*;
 
@@ -24,7 +24,7 @@ pub struct Forall(pub Vec<TypeKindPattern>, pub BoxType);
 #[derive(SpanHolder, Clone, Debug)]
 pub struct Exists(pub Vec<TypeKindPattern>, pub BoxType);
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
+#[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Type {
     Basic(TypeV),
     App(TypeApp),
@@ -40,7 +40,7 @@ impl TypeT for Type {}
 
 pub type TermPattern = (TermV, Option<Span<Type>>);
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
+#[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum TermValue {
     TermAnn(Annotation<BoxValue, Span<Type>>),
     Var(TermV),
@@ -52,7 +52,7 @@ pub enum TermValue {
 pub type BoxValue = Box<Span<TermValue>>;
 impl ValueT for TermValue {}
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
+#[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Pattern {
     TypePattern(TypePattern),
     TermPattern(TermPattern),
@@ -99,7 +99,7 @@ pub struct MatchPack {
     pub body: BoxComp,
 }
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
+#[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum TermComputation {
     TermAnn(Annotation<BoxComp, Span<Type>>),
     Ret(Ret<BoxValue>),
@@ -118,7 +118,7 @@ pub enum TermComputation {
 pub type BoxComp = Box<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
+#[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Term {
     Value(TermValue),
     Computation(TermComputation),
@@ -128,7 +128,7 @@ pub enum Term {
 
 pub type Define = GenLet;
 
-#[derive(EnumGenerator, SpanHolder, Clone, Debug)]
+#[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Declaration {
     Module(Module),
     Data(Data<TypeV, Span<KindBase>, CtorV, Span<Type>>),

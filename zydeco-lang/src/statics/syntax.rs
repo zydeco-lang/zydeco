@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use im::Vector;
 use std::rc::Rc;
-use zydeco_derive::{EnumGenerator, FmtArgs};
+use zydeco_derive::{FmtArgs, IntoEnum};
 
 pub use crate::syntax::*;
 
@@ -13,7 +13,7 @@ pub use crate::syntax::KindBase;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AbstVar(pub usize);
-#[derive(EnumGenerator, FmtArgs, Clone, Debug)]
+#[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum SynType {
     TypeApp(TypeApp<TypeV, RcType>),
     Forall(Forall<(TypeV, Span<KindBase>), RcType>),
@@ -51,7 +51,7 @@ impl From<TypeV> for Type {
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(EnumGenerator, FmtArgs, Clone, Debug)]
+#[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum TermValue {
     Annotation(Annotation<RcValue, RcType>),
     Var(TermV),
@@ -63,7 +63,7 @@ pub enum TermValue {
 pub type RcValue = Rc<Span<TermValue>>;
 impl ValueT for TermValue {}
 
-#[derive(EnumGenerator, FmtArgs, Clone, Debug)]
+#[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum TailTerm {
     Let(Let<TermV, RcValue, ()>),
     Do(Do<TermV, RcComp, ()>),
@@ -75,7 +75,7 @@ pub struct TailGroup {
     pub body: RcComp,
 }
 
-#[derive(EnumGenerator, FmtArgs, Clone, Debug)]
+#[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum TermComputation {
     Annotation(Annotation<RcComp, RcType>),
     Ret(Ret<RcValue>),
@@ -92,7 +92,7 @@ pub enum TermComputation {
 pub type RcComp = Rc<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
 
-#[derive(EnumGenerator, Clone, Debug)]
+#[derive(IntoEnum, Clone, Debug)]
 pub enum Term {
     Value(TermValue),
     Computation(TermComputation),

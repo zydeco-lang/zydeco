@@ -2,8 +2,8 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
-#[proc_macro_derive(EnumGenerator)]
-pub fn enum_generator_derive(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(IntoEnum)]
+pub fn into_enum_derive(input: TokenStream) -> TokenStream {
     let mut res = TokenStream::new();
     let input = parse_macro_input!(input as DeriveInput);
     let cod = input.ident;
@@ -78,7 +78,7 @@ pub fn enum_generator_derive(input: TokenStream) -> TokenStream {
                 };
             }
         }
-        _ => unreachable!("EnumGenerator can only be derived for enums"),
+        _ => unreachable!("IntoEnum can only be derived for enums"),
     }
     res
 }
