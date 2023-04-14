@@ -7,11 +7,11 @@
  * - check-only/ holds tests that should typecheck as OS programs but
  *   are not executed
  *
- * - custom/ holds tests that need custom I/O mocking to execute.
+ * - io/ holds tests that need custom I/O mocking to execute.
  */
 
 use std::path::PathBuf;
-use zydeco_lang::{dynamics::syntax as ds, zydeco::ZydecoFile};
+use zydeco_lang::{dynamics::syntax as ds, prelude::*, statics::syntax as ss, zydeco::ZydecoFile};
 
 fn wrapper<T>(r: Result<T, String>) {
     match r {
@@ -20,31 +20,30 @@ fn wrapper<T>(r: Result<T, String>) {
     }
 }
 
-fn check_test(f: &str) -> Result<(), String> {
-    let mut path = PathBuf::from("tests/check-only");
-    path.push(f);
-    let m = ZydecoFile::parse(vec![path])?;
+fn till_check(base: &str, f: &[&str]) -> Result<Span<ss::Program>, String> {
+    let path = PathBuf::from(base);
+    let paths = f
+        .iter()
+        .map(|f| {
+            let mut path = path.clone();
+            path.push(f);
+            path
+        })
+        .collect();
+    let m = ZydecoFile::parse(paths)?;
     let m = ZydecoFile::elab(m)?;
-    ZydecoFile::tyck(m)?;
+    ZydecoFile::tyck(m.clone())?;
 
+    Ok(m)
+}
+
+fn check_test(f: &[&str]) -> Result<(), String> {
+    till_check("tests/check-only", f)?;
     Ok(())
 }
 
-macro_rules! mk_check_test {
-    ($test_name:ident, $file_name:expr) => {
-        #[test]
-        fn $test_name() {
-            wrapper(check_test($file_name))
-        }
-    };
-}
-
-fn batch_test(f: &str) -> Result<(), String> {
-    let mut path = PathBuf::from("tests/nonzero-exit-code");
-    path.push(f);
-    let m = ZydecoFile::parse(vec![path])?;
-    let m = ZydecoFile::elab(m)?;
-    ZydecoFile::tyck(m.clone())?;
+fn batch_test(f: &[&str]) -> Result<(), String> {
+    let m = till_check("tests/nonzero-exit-code", f)?;
     let m = ZydecoFile::link(m.inner)?;
 
     let mut input = std::io::empty();
@@ -60,27 +59,14 @@ fn batch_test(f: &str) -> Result<(), String> {
     Ok(())
 }
 
-macro_rules! mk_batch_test {
-    ($test_name:ident, $file_name:expr) => {
-        #[test]
-        fn $test_name() {
-            wrapper(batch_test($file_name))
-        }
-    };
-}
-
 struct IOMatch {
     args: Vec<String>,
     input: String,
     correct_answer: String,
 }
 
-fn io_test(f: &str, iomatch: &IOMatch) -> Result<(), String> {
-    let mut path = PathBuf::from("tests/io");
-    path.push(f);
-    let m = ZydecoFile::parse(vec![path])?;
-    let m = ZydecoFile::elab(m)?;
-    ZydecoFile::tyck(m.clone())?;
+fn io_test(f: &[&str], iomatch: &IOMatch) -> Result<(), String> {
+    let m = till_check("tests/io", f)?;
     let m = ZydecoFile::link(m.inner)?;
 
     let mut input = std::io::Cursor::new(iomatch.input.as_str());
@@ -101,56 +87,63 @@ fn io_test(f: &str, iomatch: &IOMatch) -> Result<(), String> {
     Ok(())
 }
 
-macro_rules! mk_io_test {
-    ($test_name:ident, $file_name:expr, $iomatch:expr) => {
+macro_rules! mk_test {
+    ($test_sort:ident, $test_name:ident, $file_name:expr, $($rest:expr),*) => {
         #[test]
         fn $test_name() {
-            wrapper(io_test($file_name, $iomatch))
+            wrapper($test_sort($file_name, $($rest),*))
+        }
+    };
+    ($test_sort:ident, $test_name:ident, $file_name:expr) => {
+        #[test]
+        fn $test_name() {
+            wrapper($test_sort($file_name))
         }
     };
 }
 
 mod chk_tests {
     use super::*;
-    mk_check_test!(r#loop, "loop.zydeco");
-    mk_check_test!(explosion, "explosion.zy");
-    mk_check_test!(iota, "iota.zy");
-    mk_check_test!(alias, "alias.zy");
-    mk_check_test!(bigmac, "bigmac.zy");
+    mk_test!(check_test, r#loop, &["loop.zydeco"]);
+    mk_test!(check_test, explosion, &["explosion.zy"]);
+    mk_test!(check_test, iota, &["iota.zy"]);
+    mk_test!(check_test, alias, &["alias.zy"]);
+    mk_test!(check_test, bigmac, &["bigmac.zy"]);
 }
 mod batch_tests {
     // Note: to use rust-analyzer's debug feature on tests, you can replace
     // the file name with full path to the test file and click `Debug`
     use super::*;
-    mk_batch_test!(defunctionalization, "defunctionalization.zydeco");
-    mk_batch_test!(dpa, "deterministic-pushdown-automaton.zydeco");
-    mk_batch_test!(interpreter, "interpreter.zydeco");
-    mk_batch_test!(list, "list.zydeco");
-    mk_batch_test!(y, "Y.zydeco");
-    mk_batch_test!(unit, "unit.zy");
-    mk_batch_test!(num, "num.zy");
-    mk_batch_test!(eo_data, "even-odd-data.zy");
-    mk_batch_test!(eo_rec, "even-old-rec.zy");
-    mk_batch_test!(eo_coda, "even-odd-codata.zy");
-    mk_batch_test!(ifz, "ifz.zy");
-    mk_batch_test!(add, "add.zy");
-    mk_batch_test!(regex, "regex.zy");
-    mk_batch_test!(listm, "listm.zydeco");
-    mk_batch_test!(fn_opt, "fn-opt.zy");
-    mk_batch_test!(abort, "abort.zy");
-    mk_batch_test!(choice, "choice.zy");
-    mk_batch_test!(forall, "forall.zy");
-    mk_batch_test!(exists, "exists.zy");
-    mk_batch_test!(partial_ann, "partial-annotation.zy");
-    mk_batch_test!(oo, "oo.zydeco");
-    mk_batch_test!(ret, "ret.zydeco");
-    mk_batch_test!(hash, "hash.zy");
+    mk_test!(batch_test, defunctionalization, &["defunctionalization.zydeco"]);
+    mk_test!(batch_test, dpa, &["deterministic-pushdown-automaton.zydeco"]);
+    mk_test!(batch_test, interpreter, &["interpreter.zydeco"]);
+    mk_test!(batch_test, list, &["list.zydeco"]);
+    mk_test!(batch_test, y, &["Y.zydeco"]);
+    mk_test!(batch_test, unit, &["unit.zy"]);
+    mk_test!(batch_test, num, &["num.zy"]);
+    mk_test!(batch_test, eo_data, &["even-odd-data.zy"]);
+    mk_test!(batch_test, eo_rec, &["even-old-rec.zy"]);
+    mk_test!(batch_test, eo_coda, &["even-odd-codata.zy"]);
+    mk_test!(batch_test, ifz, &["ifz.zy"]);
+    mk_test!(batch_test, add, &["add.zy"]);
+    mk_test!(batch_test, regex, &["regex.zy"]);
+    mk_test!(batch_test, listm, &["listm.zydeco"]);
+    mk_test!(batch_test, fn_opt, &["fn-opt.zy"]);
+    mk_test!(batch_test, abort, &["abort.zy"]);
+    mk_test!(batch_test, choice, &["choice.zy"]);
+    mk_test!(batch_test, forall, &["forall.zy"]);
+    mk_test!(batch_test, exists, &["exists.zy"]);
+    mk_test!(batch_test, partial_ann, &["partial-annotation.zy"]);
+    mk_test!(batch_test, oo, &["oo.zydeco"]);
+    mk_test!(batch_test, ret, &["ret.zydeco"]);
+    mk_test!(batch_test, hash, &["hash.zy"]);
 }
 mod io_tests {
     use super::*;
-    mk_io_test!(
+    mk_test!(
+        io_test,
         echo_once,
-        "echo_once.zydeco",
+        &["echo_once.zydeco"],
         &IOMatch {
             args: vec![],
             input: "hello\n".to_string(),
@@ -158,9 +151,10 @@ mod io_tests {
         }
     );
 
-    mk_io_test!(
+    mk_test!(
+        io_test,
         print_args,
-        "print_args.zydeco",
+        &["print_args.zydeco"],
         &IOMatch {
             args: vec!["hello".to_string(), "world".to_string()],
             input: String::new(),
@@ -168,9 +162,10 @@ mod io_tests {
         }
     );
 
-    mk_io_test!(
+    mk_test!(
+        io_test,
         print_list,
-        "print_list.zydeco",
+        &["print_list.zydeco"],
         &IOMatch {
             args: vec![],
             input: "hello\n".to_string(),
