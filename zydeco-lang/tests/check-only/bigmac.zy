@@ -43,14 +43,4 @@ do a <- ret a;
 do a <- ret a;
 do a <- ret a;
 do a <- ret a;
-do a <- ret a;
-do a <- ret a;
-do a <- ret a;
-do a <- ret a;
-do a <- ret a;
-do a <- ret a;
-do a <- ret a;
-do a <- ret a;
-do a <- ret a;
-do a <- ret a;
 ! exit a

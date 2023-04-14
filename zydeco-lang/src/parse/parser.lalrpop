@@ -106,7 +106,7 @@ Kind: Kind = {
 };
 
 KindArrow: Kind = {
-    <k:Box<Span<KindAtom>>> "->" <kd:KindArrow> => {
+    <k:Box<Span<KindAtom>>> "->" <kd:Box<Span<KindArrow>>> => {
         KindArrow(k, kd).into()
     },
     KindAtom,

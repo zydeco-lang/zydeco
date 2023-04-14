@@ -22,7 +22,7 @@ impl fmt::Display for TyckError {
 #[derive(Clone, Debug)]
 pub enum TyckErrorItem {
     UnboundVar { var: TermV },
-    KindMismatch { context: String, expected: KindBase, found: KindBase },
+    KindMismatch { context: String, expected: Kind, found: Kind },
     TypeMismatch { context: String, expected: Type, found: Type },
     TypeExpected { context: String, expected: String, found: Type },
     ArityMismatch { context: String, expected: usize, found: usize },

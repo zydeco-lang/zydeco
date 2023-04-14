@@ -16,14 +16,70 @@ impl<T> Lub for Seal<T> {
     }
 }
 
-impl Lub for KindBase {
+impl Kind {
+    fn normalize(self) -> Self {
+        match self {
+            Kind::Base(_) => self,
+            Kind::TypeArity(TypeArity { params, kd }) => {
+                if params.is_empty() {
+                    kd.inner()
+                } else {
+                    Kind::TypeArity(TypeArity { params, kd })
+                }
+            }
+        }
+    }
+}
+
+impl Lub for Kind {
     type Ctx = Ctx;
-    type Out = KindBase;
-    fn lub(self, rhs: KindBase, ctx: Ctx, span: &SpanInfo) -> Result<KindBase, TyckError> {
-        bool_test(self == rhs, || {
-            ctx.err(span, KindMismatch { context: format!("lub"), expected: self, found: rhs })
-        })?;
-        Ok(self)
+    type Out = Kind;
+    fn lub(self, rhs: Kind, ctx: Ctx, span: &SpanInfo) -> Result<Kind, TyckError> {
+        let lhs = self;
+        let lhs = lhs.normalize();
+        let rhs = rhs.normalize();
+        match (lhs.clone(), rhs.clone()) {
+            (Kind::Base(lhs), Kind::Base(rhs)) => {
+                bool_test(lhs == rhs, || {
+                    ctx.err(
+                        span,
+                        KindMismatch {
+                            context: format!("lub"),
+                            expected: lhs.into(),
+                            found: rhs.into(),
+                        },
+                    )
+                })?;
+                Ok(lhs.into())
+            }
+            (Kind::TypeArity(lhs), Kind::TypeArity(rhs)) => {
+                bool_test(lhs.params.len() == rhs.params.len(), || {
+                    ctx.err(
+                        span,
+                        ArityMismatch {
+                            context: format!("lub"),
+                            expected: lhs.params.len(),
+                            found: rhs.params.len(),
+                        },
+                    )
+                })?;
+                let mut params = Vec::new();
+                for (l, r) in lhs.params.into_iter().zip(rhs.params.into_iter()) {
+                    let span = l.span().clone();
+                    let kd = l.inner().lub(r.inner(), ctx.clone(), &span)?;
+                    params.push(span.make(kd))
+                }
+                let kd = Box::new(lhs.kd.try_map(|kd| kd.lub(rhs.kd.inner(), ctx, span))?);
+                Ok(TypeArity { params, kd }.into())
+            }
+            _ => {
+                Err(ctx
+                    .err(span, KindMismatch { context: format!("lub"), expected: lhs, found: rhs }))
+            }
+        }
+        // bool_test(self == rhs, || {
+        //     ctx.err(span, KindMismatch { context: format!("lub"), expected: self, found: rhs })
+        // })?;
     }
 }
 
@@ -68,8 +124,8 @@ impl Lub for Type {
                 SynType::Forall(Forall { param: (tvar, kd), ty }),
                 SynType::Forall(Forall { param: (tvar_, kd_), ty: ty_ }),
             ) => {
-                bool_test(kd == kd_, err)?;
-                let abst_var = ctx.fresh(kd.inner_clone());
+                let kd = kd.inner().lub(kd_.inner(), ctx.clone(), span)?;
+                let abst_var = ctx.fresh(kd);
                 let lhs_ty = (ty.inner_clone())
                     .subst(Env::from_iter([(tvar, abst_var.clone().into())]), &ctx)?;
                 let rhs_ty =
@@ -83,8 +139,8 @@ impl Lub for Type {
                 SynType::Exists(Exists { param: (tvar, kd), ty }),
                 SynType::Exists(Exists { param: (tvar_, kd_), ty: ty_ }),
             ) => {
-                bool_test(kd == kd_, err)?;
-                let abst_var = ctx.fresh(kd.inner_clone());
+                let kd = kd.inner().lub(kd_.inner(), ctx.clone(), span)?;
+                let abst_var = ctx.fresh(kd);
                 let lhs_ty = (ty.inner_clone())
                     .subst(Env::from_iter([(tvar, abst_var.clone().into())]), &ctx)?;
                 let rhs_ty =

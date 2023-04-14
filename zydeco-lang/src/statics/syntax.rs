@@ -9,9 +9,9 @@ pub use crate::syntax::*;
 
 pub use crate::syntax::{KindBase, TypeArity};
 
-#[derive(IntoEnum, FmtArgs, Clone, Debug, PartialEq, Eq)]
+#[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum Kind {
-    Kind(KindBase),
+    Base(KindBase),
     TypeArity(TypeArity<Span<Kind>, BoxKind>),
 }
 pub type BoxKind = Box<Span<Kind>>;

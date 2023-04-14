@@ -1,32 +1,32 @@
 use super::*;
 
 impl prelude::Data {
-    fn type_arity(&self) -> TypeArity<KindBase, KindBase> {
+    fn type_arity(&self) -> Kind {
         TypeArity {
-            params: (self.params.iter()).map(|(_, kd)| kd.inner_clone()).collect(),
-            kd: KindBase::VType,
+            params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
+            kd: Box::new(self.name.span().make(KindBase::VType.into())),
         }
+        .into()
     }
 }
 
 impl prelude::Codata {
-    fn type_arity(&self) -> TypeArity<KindBase, KindBase> {
+    fn type_arity(&self) -> Kind {
         TypeArity {
-            params: (self.params.iter()).map(|(_, kd)| kd.inner_clone()).collect(),
-            kd: KindBase::CType,
+            params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
+            kd: Box::new(self.name.span().make(KindBase::CType.into())),
         }
+        .into()
     }
 }
 
 impl prelude::Alias {
-    fn type_arity(&self, kd: KindBase) -> TypeArity<KindBase, KindBase> {
-        TypeArity { params: (self.params.iter()).map(|(_, kd)| kd.inner_clone()).collect(), kd }
-    }
-}
-
-impl From<KindBase> for TypeArity<KindBase, KindBase> {
-    fn from(kd: KindBase) -> Self {
-        TypeArity { params: vec![], kd }
+    fn type_arity(&self, kd: Kind) -> Kind {
+        TypeArity {
+            params: (self.params.iter()).map(|(_, kd)| kd.clone()).collect(),
+            kd: Box::new(self.name.span().make(kd)),
+        }
+        .into()
     }
 }
 
@@ -52,7 +52,7 @@ impl TypeCheck for Span<&prelude::Data> {
             }
             ctorvs.insert(ctorv.clone());
             for ty in tys {
-                ty.ana(KindBase::VType, ctx.clone())?;
+                ty.ana(KindBase::VType.into(), ctx.clone())?;
             }
         }
         Ok(Step::Done(()))
@@ -81,9 +81,9 @@ impl TypeCheck for Span<&prelude::Codata> {
             }
             dtorvs.insert(dtorv.clone());
             for ty in tys {
-                ty.ana(KindBase::VType, ctx.clone())?;
+                ty.ana(KindBase::VType.into(), ctx.clone())?;
             }
-            ty.ana(KindBase::CType, ctx.clone())?;
+            ty.ana(KindBase::CType.into(), ctx.clone())?;
         }
         Ok(Step::Done(()))
     }
@@ -91,7 +91,7 @@ impl TypeCheck for Span<&prelude::Codata> {
 
 impl TypeCheck for Span<&prelude::Alias> {
     type Ctx = Ctx;
-    type Out = KindBase;
+    type Out = Kind;
 
     fn syn_step(
         &self, mut ctx: Self::Ctx,
@@ -166,7 +166,7 @@ impl TypeCheck for Span<Module> {
             })?;
             let ty_def = def.syn(ctx.clone())?;
             let span = name.span();
-            span.make(ty_def.clone()).ana(KindBase::VType, ctx.clone())?;
+            span.make(ty_def.clone()).ana(KindBase::VType.into(), ctx.clone())?;
             ctx.term_ctx.insert(name.clone(), ty_def);
         }
         Ok(Step::Done(Seal(ctx)))

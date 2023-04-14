@@ -46,11 +46,11 @@ impl Elaboration<ps::Kind> for Kind {
     type Error = TyckErrorItem;
     fn elab(kd: ps::Kind) -> Result<Self, Self::Error> {
         match kd {
-            ps::Kind::Kind(kd) => Ok(Kind::Kind(kd)),
-            ps::Kind::KindArrow(ps::KindArrow(k, kd)) => {
+            ps::Kind::Base(kd) => Ok(Kind::Base(kd)),
+            ps::Kind::Arrow(ps::KindArrow(k, kd)) => {
                 let kd: Span<Kind> = Elaboration::elab(*kd)?;
                 match kd.inner {
-                    Kind::Kind(_) => Ok(TypeArity {
+                    Kind::Base(_) => Ok(TypeArity {
                         params: vec![k.try_map(Elaboration::elab)?],
                         kd: Box::new(kd),
                     }
@@ -86,13 +86,13 @@ fn desugar_gen_let(
         }
         (_, _, ps::Term::Value(_)) => Err(TyckErrorItem::KindMismatch {
             context: format!("desugaring let"),
-            expected: KindBase::CType,
-            found: KindBase::VType,
+            expected: KindBase::CType.into(),
+            found: KindBase::VType.into(),
         }),
         (false, false, ps::Term::Computation(_)) => Err(TyckErrorItem::KindMismatch {
             context: format!("desugaring let"),
-            expected: KindBase::VType,
-            found: KindBase::CType,
+            expected: KindBase::VType.into(),
+            found: KindBase::CType.into(),
         }),
         (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
@@ -116,7 +116,7 @@ fn desugar_gen_let(
                                 content: format!("gen let type variable elabrotion")
                             })?
                         };
-                        let kd_dom = kd_dom.try_map(Elaboration::elab)?;
+                        let kd_dom = kd_dom.clone().try_map(Elaboration::elab)?;
                         ty = rc!(tvar
                             .span()
                             .make(Forall { param: (tvar.clone(), kd_dom.clone()), ty }.into()))
@@ -190,8 +190,8 @@ impl Elaboration<ps::Type> for Type {
                 let SynType::TypeApp(mut t1) = t1.synty else {
                      Err(TyckErrorItem::KindMismatch {
                         context: format!("desugaring type application"),
-                        expected: KindBase::CType,
-                        found: KindBase::VType,
+                        expected: KindBase::CType.into(),
+                        found: KindBase::VType.into(),
                     })?
                 };
                 t1.args.push(rc!(t2));
@@ -474,7 +474,11 @@ impl Elaboration<ps::Alias<TypeV, Span<ps::Kind>, ps::BoxType>> for prelude::Ali
     fn elab(
         Alias { name, params, ty }: ps::Alias<TypeV, Span<ps::Kind>, ps::BoxType>,
     ) -> Result<Self, TyckErrorItem> {
-        Ok(Self { name, params: Elaboration::elab(params)?, ty: rc!(ty.try_map(Elaboration::elab)?) })
+        Ok(Self {
+            name,
+            params: Elaboration::elab(params)?,
+            ty: rc!(ty.try_map(Elaboration::elab)?),
+        })
     }
 }
 

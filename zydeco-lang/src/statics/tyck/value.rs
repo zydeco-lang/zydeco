@@ -27,7 +27,7 @@ impl TypeCheck for Span<TermValue> {
         let span = self.span();
         Ok(match self.inner_ref() {
             TermValue::Annotation(Annotation { term, ty }) => {
-                ty.ana(KindBase::VType, ctx.clone())?;
+                ty.ana(KindBase::VType.into(), ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_clone())
             }
             TermValue::Var(x) => Step::Done(
@@ -56,7 +56,7 @@ impl TypeCheck for Span<TermValue> {
         if let SynType::Hole(_) = typ_syn {
             return Ok(Step::SynMode((ctx, self)));
         }
-        span.make(typ.clone()).ana(KindBase::VType, ctx.clone())?;
+        span.make(typ.clone()).ana(KindBase::VType.into(), ctx.clone())?;
         Ok(match self.inner_ref() {
             TermValue::Annotation(Annotation { term, ty }) => {
                 let ty_lub = Type::lub(ty.inner_clone(), typ, ctx.clone(), span)?;

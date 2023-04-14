@@ -12,8 +12,8 @@ pub struct KindArrow(pub BoxKind, pub BoxKind);
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug, PartialEq, Eq)]
 pub enum Kind {
-    Kind(KindBase),
-    KindArrow(KindArrow),
+    Base(KindBase),
+    Arrow(KindArrow),
 }
 pub type BoxKind = Box<Span<Kind>>;
 impl KindT for Kind {}
