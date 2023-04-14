@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
-use zydeco_lang::{dynamics::syntax as ds, utils::fmt::FmtArgs, zydeco::ZydecoFile};
+use zydeco_lang::{dynamics::syntax as ds, prelude::*, zydeco::ZydecoFile};
 
 const EXAMPLE: &str = "
 let f = {
@@ -10,8 +10,8 @@ let f = {
 ! f 3
 ";
 
-#[function_component(ZydecoUI)]
-fn ui() -> Html {
+#[function_component]
+fn ZydecoUI() -> Html {
     let cur_buf: UseStateHandle<String> = use_state(|| String::from(EXAMPLE));
     let display_text = use_state(|| String::from(""));
     let text_update = {
@@ -59,5 +59,5 @@ fn run(input: &str) -> Result<String, String> {
 }
 
 fn main() {
-    yew::start_app::<ZydecoUI>();
+    yew::Renderer::<ZydecoUI>::new().render();
 }

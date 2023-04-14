@@ -2,6 +2,10 @@ use logos::{Logos, SpannedIter};
 use std::fmt::{Debug, Display};
 
 #[derive(Logos, Clone, Debug, PartialEq)]
+#[logos(skip r"#.*\n")]
+#[logos(skip r"[ \t\n\f]+")]
+// #[regex(r"#.*\n", logos::skip, priority = 2)]
+// #[regex(r"[ \t\n\f]+", logos::skip, priority = 1)]
 pub enum Tok<'input> {
     #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
     UpperIdent(&'input str),
@@ -101,11 +105,6 @@ pub enum Tok<'input> {
     Assign,
     #[token("_?")]
     Hole,
-
-    #[error]
-    #[regex(r"#.*\n", logos::skip, priority = 2)]
-    #[regex(r"[ \t\n\f]+", logos::skip, priority = 1)]
-    Error,
 }
 
 impl<'input> Display for Tok<'input> {
@@ -157,8 +156,6 @@ impl<'input> Display for Tok<'input> {
             Tok::Arrow => write!(f, "->"),
             Tok::Assign => write!(f, "<-"),
             Tok::Hole => write!(f, "_?"),
-
-            Tok::Error => write!(f, "Error"),
         }
     }
 }
@@ -177,6 +174,9 @@ impl<'source> Iterator for Lexer<'source> {
     type Item = (usize, Tok<'source>, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|(tok, range)| (range.start, tok, range.end))
+        match self.inner.next() {
+            Some((Ok(tok), range)) => Some((range.start, tok, range.end)),
+            _ => None,
+        }
     }
 }
