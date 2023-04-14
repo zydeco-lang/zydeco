@@ -137,9 +137,15 @@ pub enum Term {
     Computation(TermComputation),
 }
 
-/* --------------------------------- Module --------------------------------- */
+/* -------------------------------- TopLevel -------------------------------- */
 
 pub type Define = GenLet;
+
+#[derive(SpanHolder, Clone, Debug)]
+pub struct UseDef {
+    pub modv: ModV,
+    pub exposed: Vec<NameV>,
+}
 
 #[derive(SpanHolder, Clone, Debug)]
 pub struct Main {
@@ -149,6 +155,7 @@ pub struct Main {
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Declaration {
     Module(Module),
+    UseDef(UseDef),
     Data(Data<TypeV, Span<Kind>, CtorV, Span<Type>>),
     Codata(Codata<TypeV, Span<Kind>, DtorV, Span<Type>>),
     Alias(Alias<TypeV, Span<Kind>, BoxType>),

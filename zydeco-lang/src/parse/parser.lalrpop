@@ -36,6 +36,9 @@ DeclSymbol<T>: DeclSymbol<T> = {
 
 Declaration: Declaration = {
     <Module> => <>.into(),
+    "use" <modv:ModV> <exposed:SepByDelim<"(", ",", NameV, ")">> "end" => UseDef {
+        modv, exposed,
+    }.into(),
     "data" <name:TypeV> <params:TypeKindPattern*>
         <ctors:("where" <DataBr*>)?>
     "end" => Data {
@@ -260,13 +263,22 @@ Literal: Literal = {
 
 //* ------------------------------- Identifiers ------------------------------ */
 
+ModV: ModV = <PathPrefix<Span<UpperId>>> => <>.into();
+NameV: NameV = <PathPrefix<Span<MixedId>>> => <>.into();
+
 CtorV: CtorV = <PathPrefix<Span<UpperId>>> => <>.into();
 DtorV: DtorV = <PathPrefix<Span<LowerId>>> => <>.into();
+
 TypeV: TypeV = <PathPrefix<Span<UpperId>>> => <>.into();
 TermV: TermV = <PathPrefix<Span<LowerId>>> => <>.into();
 
 PathPrefix<T>: T = {
     <path:(<Span<UpperId>> ".")*> <v:T> => v,
+};
+
+MixedId: String = {
+    <UpperId> => <>,
+    <LowerId> => <>,
 };
 
 UpperId: String = "UpperId" => <>.into();
@@ -307,16 +319,17 @@ extern {
         "UpperId" => Tok::UpperIdent(<&'input str>),
         "LowerId" => Tok::LowerIdent(<&'input str>),
 
-        "module" => Tok::Module,
         "where" => Tok::Where,
         "end" => Tok::End,
+        "module" => Tok::Module,
+        "use" => Tok::Use,
         "pub" => Tok::Pub,
         "extern" => Tok::Extern,
         "data" => Tok::Data,
         "codata" => Tok::Codata,
         "alias" => Tok::Alias,
-        "main" => Tok::Main,
         "define" => Tok::Define,
+        "main" => Tok::Main,
         "let" => Tok::Let,
         "in" => Tok::In,
         "do" => Tok::Do,

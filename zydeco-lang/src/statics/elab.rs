@@ -241,10 +241,11 @@ impl Elaboration<ps::TermValue> for TermValue {
                 }
                 .into()
             }
-            ps::TermValue::Ctor(Ctor { ctorv: ctor, args }) => {
-                Ctor { ctorv: ctor, args: Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect() }
-                    .into()
+            ps::TermValue::Ctor(Ctor { ctorv: ctor, args }) => Ctor {
+                ctorv: ctor,
+                args: Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect(),
             }
+            .into(),
             ps::TermValue::Literal(t) => t.into(),
             ps::TermValue::Pack(ps::Pack { ty, body }) => {
                 let ty = ty.try_map(Elaboration::elab)?;
@@ -486,6 +487,7 @@ impl Elaboration<ps::TopLevel> for Module {
                     define.extend(defs);
                     define_ext.extend(defexts);
                 }
+                ps::Declaration::UseDef(_d) => {}
                 ps::Declaration::Data(d) => {
                     data.push(DeclSymbol { public, external, inner: Elaboration::elab(d)? })
                 }

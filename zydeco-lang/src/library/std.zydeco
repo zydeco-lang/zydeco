@@ -20,15 +20,17 @@ end
 
 
 module Std where
-  ## identities
+  use Builtin(Thunk, Ret, Comp, U, F, Fn) end
 
-  pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
-    fn A x -> ret x
-  } end
+  module Identity where
+    pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
+      fn A x -> ret x
+    } end
 
-  pub def id~ : Thunk(forall (B : CType) . Thunk B -> B) = {
-    fn B x -> ! x
-  } end
+    pub def id~ : Thunk(forall (B : CType) . Thunk B -> B) = {
+      fn B x -> ! x
+    } end
+  end
 
   pub data Unit where
     | Unit()

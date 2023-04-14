@@ -92,16 +92,22 @@ pub mod binder {
         };
     }
 
+    var!(NameV);
+
     var!(CtorV);
     impl CtorT for CtorV {}
+
     var!(DtorV);
     impl DtorT for DtorV {}
+
     var!(TypeV);
     impl TyVarT for TypeV {}
     impl<Kd: KindT> TyVarT for (TypeV, Kd) {}
+
     var!(TermV);
     impl VarT for TermV {}
     impl<Ty: TypeT> VarT for (TermV, Ty) {}
+
     var!(ModV);
     impl VarT for ModV {}
 }

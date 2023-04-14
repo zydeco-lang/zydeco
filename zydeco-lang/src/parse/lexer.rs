@@ -15,26 +15,28 @@ pub enum Tok<'input> {
     #[regex(r"(\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=|~)*")]
     LowerIdent(&'input str),
 
-    #[token("module")]
-    Module,
-    #[token("where")]
-    Where,
-    #[token("end")]
-    End,
     #[token("pub")]
     Pub,
     #[token("ext")]
     #[token("extern")]
     Extern,
-    #[token("def")]
-    #[token("define")]
-    Define,
+    #[token("where")]
+    Where,
+    #[token("end")]
+    End,
+    #[token("module")]
+    Module,
+    #[token("use")]
+    Use,
     #[token("data")]
     Data,
     #[token("codata")]
     Codata,
     #[token("alias")]
     Alias,
+    #[token("def")]
+    #[token("define")]
+    Define,
     #[token("main")]
     Main,
     #[token("let")]
@@ -114,15 +116,16 @@ impl<'input> Display for Tok<'input> {
         match self {
             Tok::UpperIdent(s) => write!(f, "UpperIdentifier({})", s),
             Tok::LowerIdent(s) => write!(f, "LowerIdentifier({})", s),
-            Tok::Module => write!(f, "module"),
             Tok::Where => write!(f, "where"),
             Tok::End => write!(f, "end"),
             Tok::Pub => write!(f, "pub"),
             Tok::Extern => write!(f, "extern"),
-            Tok::Define => write!(f, "define"),
+            Tok::Module => write!(f, "module"),
+            Tok::Use => write!(f, "use"),
             Tok::Data => write!(f, "data"),
             Tok::Codata => write!(f, "codata"),
             Tok::Alias => write!(f, "alias"),
+            Tok::Define => write!(f, "define"),
             Tok::Main => write!(f, "main"),
             Tok::Let => write!(f, "let"),
             Tok::In => write!(f, "in"),
