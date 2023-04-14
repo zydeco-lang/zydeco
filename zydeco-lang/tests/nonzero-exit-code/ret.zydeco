@@ -30,6 +30,8 @@ def id' : Thunk(forall (A : VType) . Thunk(Ret' A) -> Ret' A) = {
   )
 } end
 
-let n = 0 in
-do n <- ! id @(Int) { ret n };
-! id' @(Int) { fn R ar -> ! ar n } @(OS) exit
+main
+  let n = 0 in
+  do n <- ! id @(Int) { ret n };
+  ! id' @(Int) { fn R ar -> ! ar n } @(OS) exit
+end

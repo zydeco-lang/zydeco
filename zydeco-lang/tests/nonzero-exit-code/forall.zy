@@ -6,5 +6,7 @@ def fn id~ (B : CType) (b : Thunk B) : B =
   ! b
 end
 
-do x <- ! id @(Int) 0;
-! id~ @(OS) { ! exit x }
+main
+  do x <- ! id @(Int) 0;
+  ! id~ @(OS) { ! exit x }
+end

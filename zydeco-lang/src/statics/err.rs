@@ -32,6 +32,9 @@ pub enum TyckErrorItem {
     InconsistentComatchers { unexpected: Vec<DtorV>, missing: Vec<DtorV> },
     InconsistentBranches { tys: Vec<Type> },
     NameResolve(NameResolveError),
+    NoMainEntry,
+    MultipleMainEntries,
+    MainEntryInModule,
     WrongMain { found: Type },
 }
 
@@ -108,6 +111,15 @@ impl fmt::Display for TyckErrorItem {
                 Ok(())
             }
             NameResolve(nr) => write!(f, "{}", nr),
+            NoMainEntry => {
+                write!(f, "No main entry is defined")
+            }
+            MultipleMainEntries => {
+                write!(f, "Multiple main entries are defined")
+            }
+            MainEntryInModule => {
+                write!(f, "The main entry should be defined in the top level module")
+            }
             WrongMain { found } => {
                 write!(f, "The type of the main expression should be OS but got {}", found.fmt())
             }

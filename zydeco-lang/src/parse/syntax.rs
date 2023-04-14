@@ -139,6 +139,11 @@ pub enum Term {
 
 pub type Define = GenLet;
 
+#[derive(SpanHolder, Clone, Debug)]
+pub struct Main {
+    pub entry: Span<TermComputation>,
+}
+
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Declaration {
     Module(Module),
@@ -146,6 +151,7 @@ pub enum Declaration {
     Codata(Codata<TypeV, Span<Kind>, DtorV, Span<Type>>),
     Alias(Alias<TypeV, Span<Kind>, BoxType>),
     Define(Define),
+    Main(Main),
 }
 
 #[derive(SpanHolder, Clone, Debug)]
@@ -167,7 +173,17 @@ impl Monoid for Module {
 }
 
 #[derive(SpanHolder, Clone, Debug)]
-pub struct Program {
-    pub module: Span<Module>,
-    pub entry: Span<TermComputation>,
+pub struct TopLevel {
+    pub declarations: Vec<DeclSymbol<Declaration>>,
+}
+
+impl Monoid for TopLevel {
+    fn empty() -> Self {
+        Self { declarations: Vec::new() }
+    }
+    fn append(self, other: Self) -> Self {
+        Self {
+            declarations: self.declarations.into_iter().chain(other.declarations).collect(),
+        }
+    }
 }

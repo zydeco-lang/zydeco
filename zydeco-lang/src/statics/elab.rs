@@ -485,6 +485,15 @@ impl Elaboration<ps::Alias<TypeV, Span<ps::Kind>, ps::BoxType>> for prelude::Ali
 impl Elaboration<ps::Module> for Module {
     type Error = TyckErrorItem;
     fn elab(ps::Module { name, declarations }: ps::Module) -> Result<Self, TyckErrorItem> {
+        let mut module: Module = Elaboration::elab(ps::TopLevel { declarations })?;
+        module.name = name;
+        Ok(module)
+    }
+}
+
+impl Elaboration<ps::TopLevel> for Module {
+    type Error = TyckErrorItem;
+    fn elab(ps::TopLevel { declarations }: ps::TopLevel) -> Result<Self, TyckErrorItem> {
         let mut data = Vec::new();
         let mut codata = Vec::new();
         let mut alias = Vec::new();
@@ -535,19 +544,39 @@ impl Elaboration<ps::Module> for Module {
                         define.push(DeclSymbol { public, external, inner: Define { name, def } })
                     }
                 }
+                ps::Declaration::Main(ps::Main { entry: _ }) => {
+                    Err(TyckErrorItem::MainEntryInModule)?
+                }
             }
         }
-        Ok(Self { name, data, codata, alias, define, define_ext })
+        Ok(Self { name: None, data, codata, alias, define, define_ext })
     }
 }
 
-impl Elaboration<ps::Program> for Program {
+impl Elaboration<ps::TopLevel> for Program {
     type Error = TyckErrorItem;
 
-    fn elab(value: ps::Program) -> Result<Self, Self::Error> {
-        let ps::Program { module, entry } = value;
-        let module = module.try_map(Elaboration::elab)?;
-        let entry = entry.try_map(Elaboration::elab)?;
-        Ok(Self { module, entry })
+    fn elab(value: ps::TopLevel) -> Result<Self, Self::Error> {
+        let ps::TopLevel { declarations } = value;
+        let mut non_main = Vec::new();
+        let mut main_entry = None;
+        for decl in declarations {
+            match decl.inner {
+                ps::Declaration::Main(ps::Main { entry }) => {
+                    if main_entry.is_some() {
+                        Err(TyckErrorItem::MultipleMainEntries)?
+                    }
+                    main_entry = Some(entry)
+                }
+                _ => non_main.push(decl),
+            }
+        }
+        let Some(entry) = main_entry else { Err(TyckErrorItem::NoMainEntry)? };
+        Ok(Self {
+            module: Elaboration::elab(
+                SpanInfo::new(0, 0).make(ps::TopLevel { declarations: non_main }),
+            )?,
+            entry: Elaboration::elab(entry)?,
+        })
     }
 }

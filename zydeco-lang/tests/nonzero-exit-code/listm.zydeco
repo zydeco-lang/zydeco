@@ -13,30 +13,32 @@ end
 
 ## List~ is actually coinductive type
 
-let rec loop : F(List~ Int) =
+def rec loop : F(List~ Int) =
   ret Cons(0, loop)
-in
+end
 
 ## Since it's coinductive, here's iota
 
-let rec fn iota (i : Int) : F(List~ Int) =
+def rec fn iota (i : Int) : F(List~ Int) =
   do i+1 <- ! add i 1;
   ret Cons(i, { ! iota i+1 })
-in
+end
 
 ## foldr and an example of summing up the list and exiting with the sum
 
-let loopy = {
-  ! foldr @(Int) @(OS)
-  { ! iota 0 }
-  { fn (x: Int) (b: U(OS)) ->
-    do next? <- ! int_lt x 10;
-    match next?
-    | True() -> ! write_int_line x b
-    | False() -> ! exit 0
-    end
-  }
-  { ! panic "unreachable" }
-} in
+main
+  let loopy = {
+    ! foldr @(Int) @(OS)
+    { ! iota 0 }
+    { fn (x: Int) (b: U(OS)) ->
+      do next? <- ! int_lt x 10;
+      match next?
+      | True() -> ! write_int_line x b
+      | False() -> ! exit 0
+      end
+    }
+    { ! panic "unreachable" }
+  } in
 
-! loopy
+  ! loopy
+end

@@ -1,23 +1,25 @@
-let rec odd: Nat -> Ret(Bool) = (
-  let even = {
-    rec (even: Thunk(Nat -> Ret(Bool))) -> (
-      fn (x: Nat) -> (
-        match x
-        | Z() -> ret True()
-        | S(x) -> !odd x
-        end
+main
+  let rec odd: Nat -> Ret(Bool) = (
+    let even = {
+      rec (even: Thunk(Nat -> Ret(Bool))) -> (
+        fn (x: Nat) -> (
+          match x
+          | Z() -> ret True()
+          | S(x) -> !odd x
+          end
+        )
       )
+    };
+    fn (x: Nat) -> (
+      match x
+      | Z() -> ret False()
+      | S(x) -> !even x
+      end
     )
-  };
-  fn (x: Nat) -> (
-    match x
-    | Z() -> ret False()
-    | S(x) -> !even x
-    end
-  )
-);
-do b <- !odd S(S(S(Z())));
-match b
-| True() -> ! exit 0
-| False() -> ! exit 1
+  );
+  do b <- !odd S(S(S(Z())));
+  match b
+  | True() -> ! exit 0
+  | False() -> ! exit 1
+  end
 end

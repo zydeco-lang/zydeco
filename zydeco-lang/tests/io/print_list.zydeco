@@ -1,22 +1,23 @@
-let rec print_a_number : Int -> OS = (
-  fn (num : Int) ->
-    do isOne <- ! int_eq num 1;
-    do strNum <- ! int_to_str num;
-    do prt <- ! str_append strNum " ";
-    match isOne
-    | True() -> ! write_str strNum {! exit 0}
-    | False() -> (
-      do minus1 <- ! sub num 1;
-      ! write_str prt {! print_a_number minus1}
-    )
-    end
-);
+main
+  let rec print_a_number : Int -> OS =
+    fn (num : Int) ->
+      do isOne <- ! int_eq num 1;
+      do strNum <- ! int_to_str num;
+      do prt <- ! str_append strNum " ";
+      match isOne
+      | True() -> ! write_str strNum {! exit 0}
+      | False() -> (
+        do minus1 <- ! sub num 1;
+        ! write_str prt {! print_a_number minus1}
+      )
+      end
+  in
 
-! read_line { fn (input: String) ->
-  ! write_str input {
-    ! write_line " world" {
-      ! print_a_number 5
+  ! read_line { fn (input: String) ->
+    ! write_str input {
+      ! write_line " world" {
+        ! print_a_number 5
+      }
     }
   }
-}
-
+end

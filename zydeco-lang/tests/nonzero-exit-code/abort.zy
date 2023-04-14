@@ -3,13 +3,14 @@ codata Stack (A : VType) where
   | .return(): F(A)
 end
 
-let rec fn abort (x: Int): Stack Int =
+def rec fn abort (x: Int): Stack Int =
   comatch
   | .app(_) -> ! abort x
   | .return() -> ret x
   end
-in
+end
 
-do x <- ! abort 0 .app(1) .app(2) .app(3) .return();
-! exit x
-
+main
+  do x <- ! abort 0 .app(1) .app(2) .app(3) .return();
+  ! exit x
+end

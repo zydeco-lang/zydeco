@@ -9,12 +9,14 @@ def nat : exists (X : VType) . Seal X Int = pack(
   )
 ) end
 
-match nat
-| pack(Nat, seal) ->
-  match seal
-  | Seal(of, to) ->
-    do n <- ! of 0;
-    do i <- ! to n;
-    ! exit i
+main
+  match nat
+  | pack(Nat, seal) ->
+    match seal
+    | Seal(of, to) ->
+      do n <- ! of 0;
+      do i <- ! to n;
+      ! exit i
+    end
   end
 end

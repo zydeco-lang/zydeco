@@ -3,13 +3,13 @@ data LList' (A : VType) where
   | Cons(A, U(F(LList' A)))
 end
 
-let rec iota : Int -> F(LList' Int) = (
+def rec iota : Int -> F(LList' Int) = (
   fn (i: Int) ->
     do i+1 <- ! add i 1;
     ret Cons(i, { ! iota i+1 })
 );
 
-let rec foldr : U(F(LList' Int)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
+def rec foldr : U(F(LList' Int)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
   fn ll f b ->
     do llv <- ! ll;
     match llv
@@ -18,7 +18,7 @@ let rec foldr : U(F(LList' Int)) -> U(Int -> U(OS) -> OS) -> U(OS) -> OS = (
     end
 );
 
-let loopy = {
+def loopy = {
   ! foldr
   { ! iota 0 }
   { fn (x: Int) (b: U(OS)) ->
@@ -28,4 +28,6 @@ let loopy = {
   { ! panic "unreachable" }
 };
 
-! loopy
+main
+  ! loopy
+end

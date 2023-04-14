@@ -17,7 +17,7 @@ codata Regex where
   | .run(String): Matcher
 end
 
-let str_chop_hd : U(String -> Int -> F String) = { fn (s: String) (i: Int) ->
+def str_chop_hd : U(String -> Int -> F String) = { fn (s: String) (i: Int) ->
   do l <- ! str_length s;
   let rec str_collect : String -> Int -> String -> Ret(String) = fn (s: String) (i: Int) (r: String) ->
     do continue? <- ! int_lt i l;
@@ -32,15 +32,15 @@ let str_chop_hd : U(String -> Int -> F String) = { fn (s: String) (i: Int) ->
     end
   in
   ! str_collect s i ""
-} in
+} end
 
-let fn str_eq_at (a: String) (b: String) (i: Int): F Bool =
+def fn str_eq_at (a: String) (b: String) (i: Int): F Bool =
   do ai <- ! str_index a i;
   do bi <- ! str_index b i;
   ! char_eq ai bi
-in
+end
 
-let str_match : U(String -> String -> F(Option String)) = {
+def str_match : U(String -> String -> F(Option String)) = {
   let rec str_match : Int -> String -> String -> F(Option String) =
     fn (i: Int) (s: String) (p: String) ->
       do s_len <- ! str_length s;
@@ -66,9 +66,9 @@ let str_match : U(String -> String -> F(Option String)) = {
       end
   in
   ! str_match 0
-} in
+} end
 
-let rec regex : Regex = 
+def rec regex : Regex = 
   comatch
   | .run(s) ->
     comatch
@@ -101,18 +101,19 @@ let rec regex : Regex =
       end
     end
   end
-in
+end
 
-let fn demo (syn: Syn) (str: String) (kont: Thunk OS): OS =
+def fn demo (syn: Syn) (str: String) (kont: Thunk OS): OS =
   do res <- ! regex .run(str) .bind(syn);
   match res
   | Some(s) -> (
     ! write_line s kont)
   | None() -> ! exit 1
   end
-in
+end
 
-# p*q*(xos|sox)
-! demo (Concat(Kleene(Str("p")), Concat(Kleene(Str("q")), Choose(Str("xos"), Str("sox"))))) "pppqqqsox\\^o^/" {
-! exit 0
-}
+main
+  # p*q*(xos|sox)
+  ! demo (Concat(Kleene(Str("p")), Concat(Kleene(Str("q")), Choose(Str("xos"), Str("sox"))))) "pppqqqsox\\^o^/" {
+  ! exit 0 }
+end

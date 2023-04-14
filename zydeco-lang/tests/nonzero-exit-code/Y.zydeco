@@ -12,41 +12,43 @@ def fn rec' (B : CType) (f: U(U B -> B)): F(U B) =
   ret { ! prim .y(prim) }
 end
 
-# good old factorial
-let fn fact (f: U(Int -> F Int)) (n: Int): F Int =
-  do is_zero <- ! int_eq n 0;
-  match is_zero
-  | True() -> ret 1
-  | False() ->
-    do rest <- (
-      do n-1 <- ! sub n 1;
-      ! f n-1
-    );
-    ! mul n rest
-  end
-in
+main
+  # good old factorial
+  let fn fact (f: U(Int -> F Int)) (n: Int): F Int =
+    do is_zero <- ! int_eq n 0;
+    match is_zero
+    | True() -> ret 1
+    | False() ->
+      do rest <- (
+        do n-1 <- ! sub n 1;
+        ! f n-1
+      );
+      ! mul n rest
+    end
+  in
 
-do fact <- ! rec' @(Int -> F Int) fact;
+  do fact <- ! rec' @(Int -> F Int) fact;
 
-# tests
-let fn demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
-  do x <- ! fact input;
-  do correct <- ! int_eq x expected;
-  match correct
-  | True() -> ! t
-  | False() ->
-    do input <- ! int_to_str input;
-    do expected <- ! int_to_str expected;
-    do got <- ! int_to_str x;
-    do msg <- ! str_append "f " input;
-    do msg <- ! str_append msg " = ";
-    do msg <- ! str_append msg expected;
-    do msg <- ! str_append msg ", got ";
-    do msg <- ! str_append msg got;
-    ! write_line msg { ! exit 1 }
-  end
-in
+  # tests
+  let fn demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
+    do x <- ! fact input;
+    do correct <- ! int_eq x expected;
+    match correct
+    | True() -> ! t
+    | False() ->
+      do input <- ! int_to_str input;
+      do expected <- ! int_to_str expected;
+      do got <- ! int_to_str x;
+      do msg <- ! str_append "f " input;
+      do msg <- ! str_append msg " = ";
+      do msg <- ! str_append msg expected;
+      do msg <- ! str_append msg ", got ";
+      do msg <- ! str_append msg got;
+      ! write_line msg { ! exit 1 }
+    end
+  in
 
-! demo 5 120 {
-! demo 10 3628800 {
-! exit 0 }}
+  ! demo 5 120 {
+  ! demo 10 3628800 {
+  ! exit 0 }}
+end

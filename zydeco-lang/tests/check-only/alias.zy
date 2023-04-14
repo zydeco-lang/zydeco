@@ -1,3 +1,5 @@
 alias Num = Int end
 def fn done (x : Num) : OS = ! exit x end
-! done 0
+main
+  ! done 0
+end

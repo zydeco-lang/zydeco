@@ -3,5 +3,7 @@ data Kont (A : VType) (B : CType) where
 | Done(A)
 end
 
-let k : Kont Int _? = Done(1) in
-! exit 0
+main
+  let k : Kont Int _? = Done(1) in
+  ! exit 0
+end

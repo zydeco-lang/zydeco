@@ -4,7 +4,7 @@ use crate::{
     parse::{
         err::ParseError,
         lexer::Lexer,
-        parser::{TermSpanParser, ZydecoModuleParser, ZydecoParser},
+        parser::{TermSpanParser, ZydecoParser},
         syntax as ps,
     },
     statics::{
@@ -24,11 +24,11 @@ use std::{path::PathBuf, rc::Rc};
 pub struct Zydeco;
 
 impl Zydeco {
-    pub fn std() -> Result<Span<ps::Module>, String> {
+    pub fn std() -> Result<Span<ps::TopLevel>, String> {
         let source = include_str!("library/std.zydeco");
         let std_path: PathBuf = "zydeco-lang/src/library/std.zydeco".into();
         let file_info = FileInfo::new(&source, Rc::new(std_path));
-        let ds = ZydecoModuleParser::new()
+        let ds = ZydecoParser::new()
             .parse(&source, Lexer::new(&source))
             .map_err(|e| format!("{}", ParseError(e, &file_info)))?
             .span_map(|span| {
@@ -41,11 +41,11 @@ impl Zydeco {
 pub struct ZydecoFile;
 
 impl ZydecoFile {
-    pub fn parse(path: PathBuf) -> Result<Span<ps::Program>, String> {
+    pub fn parse(path: PathBuf) -> Result<Span<ps::TopLevel>, String> {
         let source = std::fs::read_to_string(&path).map_err(|e| format!("{}", e))?;
         Self::parse_src(&source, path)
     }
-    pub fn parse_src(source: &str, path: PathBuf) -> Result<Span<ps::Program>, String> {
+    pub fn parse_src(source: &str, path: PathBuf) -> Result<Span<ps::TopLevel>, String> {
         let file_info = FileInfo::new(source, Rc::new(path));
         let mut p = ZydecoParser::new()
             .parse(source, Lexer::new(source))
@@ -53,10 +53,10 @@ impl ZydecoFile {
             .span_map(|span| {
                 span.set_info(&file_info);
             });
-        p.inner.module = Zydeco::std()?.append(p.inner.module);
+        p.inner = Zydeco::std()?.inner.append(p.inner);
         Ok(p)
     }
-    pub fn elab(p: Span<ps::Program>) -> Result<Span<ss::Program>, String> {
+    pub fn elab(p: Span<ps::TopLevel>) -> Result<Span<ss::Program>, String> {
         let p = Elaboration::elab(p).map_err(|e| format!("{}", e))?;
         Ok(p)
     }

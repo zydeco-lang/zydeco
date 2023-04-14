@@ -13,17 +13,17 @@ data Path (A : VType) where
   | Cons(A, Path A)
 end
 
-let beep : Choice (U OS -> OS) = L({ fn (k) ->
+def beep : Choice (U OS -> OS) = L({ fn (k) ->
   ! write_line "0" k
 });
-let boop : Choice (U OS -> OS) = R({ fn (k) ->
+def boop : Choice (U OS -> OS) = R({ fn (k) ->
   ! write_line "1" k
 });
 
-let tree : Tree String = Fork(Fork(Final("x"), Final("o")), Final("x"));
-let path : Path (Choice (U OS -> OS)) = Cons(beep, Cons(boop, Nil()));
+def tree : Tree String = Fork(Fork(Final("x"), Final("o")), Final("x"));
+def path : Path (Choice (U OS -> OS)) = Cons(beep, Cons(boop, Nil()));
 
-let rec walk : Tree String -> Path (Choice (U OS -> OS)) -> OS = fn t p -> (
+def rec walk : Tree String -> Path (Choice (U OS -> OS)) -> OS = fn t p -> (
   match t
   | Final(res) -> (
     match p
@@ -53,4 +53,6 @@ let rec walk : Tree String -> Path (Choice (U OS -> OS)) -> OS = fn t p -> (
   end
 );
 
-! walk tree path
+main
+  ! walk tree path
+end

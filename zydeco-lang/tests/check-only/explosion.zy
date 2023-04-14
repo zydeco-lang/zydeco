@@ -1,2 +1,4 @@
-let loop = { rec (loop: Thunk(OS)) -> ! loop };
-! loop
+main
+  let loop = { rec (loop: Thunk(OS)) -> ! loop };
+  ! loop
+end

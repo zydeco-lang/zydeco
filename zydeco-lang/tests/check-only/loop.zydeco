@@ -1,2 +1,4 @@
-let rec loop : OS = ! (loop : U(OS));
-! loop
+def rec loop : OS = ! (loop : U(OS));
+main
+  ! loop
+end

@@ -57,15 +57,15 @@ codata Interpreter where
   | .comp(SynComp, Env) : SemComp
 end
 
-let fn sem_val_to_str (s : SemVal) : F String =
+def fn sem_val_to_str (s : SemVal) : F String =
   match s
   | True() -> ret "true"
   | False() -> ret "false"
   | ThunkV(_) -> ret "<thunk>"
   end
-in
+end
 
-let rec fn lookup (x : String) (g : Env) : Ret(Answer SemVal) =
+def rec fn lookup (x : String) (g : Env) : Ret(Answer SemVal) =
   match g
   | Empty() -> ret Err()
   | Cons(y,v,g) ->
@@ -75,16 +75,16 @@ let rec fn lookup (x : String) (g : Env) : Ret(Answer SemVal) =
     | False() -> ! lookup x g
     end
   end
-in
+end
 
-let rec error: SemComp = (
+def rec error: SemComp =
   comatch
     | .app(_) -> ! error
     | .bind() -> ret Err()
   end
-);
+end
 
-let rec interp: Interpreter =
+def rec interp: Interpreter =
   comatch
     | .valu(v, g) -> (
       match v
@@ -146,13 +146,16 @@ let rec interp: Interpreter =
         end
       )
       end)
-    end;
+    end
+end
 
 # An example
-do x <- ! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty()) .bind();
-match x
-| Err() -> ! panic "ERROR"
-| Ok(sv) ->
-  (do s <- ! sem_val_to_str sv;
-      ! write_line s { ! exit 0 })
+main
+  do x <- ! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty()) .bind();
+  match x
+  | Err() -> ! panic "ERROR"
+  | Ok(sv) ->
+    (do s <- ! sem_val_to_str sv;
+        ! write_line s { ! exit 0 })
+  end
 end

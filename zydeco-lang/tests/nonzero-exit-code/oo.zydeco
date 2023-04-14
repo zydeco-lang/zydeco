@@ -22,10 +22,12 @@ def mk_counter : Thunk(Int -> Counter) = {
   end
 } end
 
-let counter_42: Thunk(Counter) = {
-  ! mk_counter 42
-} in
-do s <- ! counter_42 .fmt();
-! write_line s {
-do n <- ! counter_42 .incr(-42) .num();
-! exit n }
+main
+  let counter_42: Thunk(Counter) = {
+    ! mk_counter 42
+  } in
+  do s <- ! counter_42 .fmt();
+  ! write_line s {
+  do n <- ! counter_42 .incr(-42) .num();
+  ! exit n }
+end

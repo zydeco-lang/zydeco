@@ -8,20 +8,13 @@ grammar<'input>(input: &'input str);
 
 //* --------------------------------- Module --------------------------------- */
 
-pub Zydeco: Span<Program> = Span<Program>;
-pub ZydecoModule: Span<Module> = {
-    // Span<Module>,
-    <declarations:Span<DeclSymbol<Declaration>*>> => {
-        declarations.info.make(Module {
-            name: None,
-            declarations: declarations.inner,
-        })
-    },
-};
+pub Zydeco: Span<TopLevel> = Span<TopLevel>;
 
-Program: Program = {
-    <module:ZydecoModule> <entry:Span<TermComputation>> => Program {
-        module, entry,
+TopLevel: TopLevel = {
+    <declarations:DeclSymbol<Declaration>*> => {
+        TopLevel {
+            declarations: declarations,
+        }
     },
 };
 
@@ -57,9 +50,9 @@ Declaration: Declaration = {
         name, params, ty,
     }.into(),
     "define" <gen:GenLet> DefineEnd => gen.into(),
-    // "main" <entry:Span<TermComputation>> "end" => Main {
-    //     entry,
-    // }.into(),
+    "main" <entry:Span<TermComputation>> "end" => Main {
+        entry,
+    }.into(),
 };
 
 DefineEnd: () = {
