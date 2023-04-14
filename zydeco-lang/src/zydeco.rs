@@ -7,16 +7,14 @@ use crate::{
         parser::{TermSpanParser, ZydecoParser},
         syntax as ps,
     },
+    prelude::*,
     statics::{
         syntax as ss,
         tyck::{Ctx, Seal},
         Elaboration, TypeCheck,
     },
     syntax::env::Env,
-    utils::{
-        monoid::Monoid,
-        span::{FileInfo, Span, SpanHolder},
-    },
+    utils::span::FileInfo,
 };
 pub use ds::ProgKont;
 use std::{path::PathBuf, rc::Rc};

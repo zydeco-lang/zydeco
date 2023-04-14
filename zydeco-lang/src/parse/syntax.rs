@@ -1,4 +1,4 @@
-use crate::utils::{monoid::Monoid, span::Span};
+use crate::prelude::*;
 use zydeco_derive::{IntoEnum, SpanHolder};
 
 pub use crate::syntax::*;
@@ -182,8 +182,6 @@ impl Monoid for TopLevel {
         Self { declarations: Vec::new() }
     }
     fn append(self, other: Self) -> Self {
-        Self {
-            declarations: self.declarations.into_iter().chain(other.declarations).collect(),
-        }
+        Self { declarations: self.declarations.into_iter().chain(other.declarations).collect() }
     }
 }

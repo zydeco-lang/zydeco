@@ -61,6 +61,8 @@ pub mod utils {
 pub mod prelude {
     pub use crate::utils::{
         fmt::FmtArgs,
+        monoid::Monoid,
+        never::Never,
         span::{Span, SpanHolder, SpanInfo, SpanView},
     };
 }
