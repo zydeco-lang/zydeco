@@ -53,6 +53,23 @@ where
     }
 }
 
+impl<Term, Type> FmtArgs for Annotation<Term, Type>
+where
+    Term: FmtArgs,
+    Type: FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let Annotation { term: body, ty } = self;
+        format!("({} : {})", body.fmt_args(fargs), ty.fmt_args(fargs))
+    }
+}
+
+impl FmtArgs for Hole {
+    fn fmt_args(&self, _fargs: Args) -> String {
+        "_?".into()
+    }
+}
+
 impl FmtArgs for KindBase {
     fn fmt_args(&self, _fargs: Args) -> String {
         match self {
@@ -124,17 +141,6 @@ where
     fn fmt_args(&self, fargs: Args) -> String {
         let Exists { param, ty } = self;
         format!("exists {} . {}", param.fmt_args(fargs), ty.fmt_args(fargs))
-    }
-}
-
-impl<Term, Type> FmtArgs for Annotation<Term, Type>
-where
-    Term: FmtArgs,
-    Type: FmtArgs,
-{
-    fn fmt_args(&self, fargs: Args) -> String {
-        let Annotation { term: body, ty } = self;
-        format!("({} : {})", body.fmt_args(fargs), ty.fmt_args(fargs))
     }
 }
 

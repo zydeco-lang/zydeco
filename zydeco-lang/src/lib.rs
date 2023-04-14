@@ -16,12 +16,14 @@ pub mod parse {
         lalrpop_mod!(parser_impl, "/parse/parser.rs");
         pub use parser_impl::*;
     }
-
     mod escape;
 }
 
 pub mod resolve {
+    pub mod syntax;
     pub mod err;
+    // pub mod elab;
+    mod fmt;
 }
 
 pub mod statics {
@@ -36,8 +38,8 @@ pub mod statics {
 
 pub mod library {
     pub mod syntax;
-    mod link;
     pub mod builtins;
+    mod link;
     mod impls;
     mod fmt;
 }

@@ -188,7 +188,7 @@ TermComputation: TermComputation = {
     "comatch" <arms:ComatchBr*> "end" => Comatch {
         arms,
     }.into(),
-    "fn" <params:Pattern+> "->" <body:Box<Span<TermComputation>>> => Abstraction {
+    "fn" <params:Pattern*> "->" <body:Box<Span<TermComputation>>> => GenAbs {
         params, body,
     }.into(),
     "match" <scrut:Box<Span<TermValue>>> 

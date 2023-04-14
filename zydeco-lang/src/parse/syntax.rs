@@ -70,7 +70,7 @@ pub enum Pattern {
 }
 
 #[derive(SpanHolder, Clone, Debug)]
-pub struct Abstraction {
+pub struct GenAbs {
     pub params: Vec<Pattern>,
     pub body: BoxComp,
 }
@@ -119,7 +119,7 @@ pub enum TermComputation {
     Do(Do<TermPattern, BoxComp, BoxComp>),
     Rec(Rec<TermPattern, BoxComp>),
     Match(Match<CtorV, TermV, BoxValue, Span<TermComputation>>),
-    Abs(Abstraction),
+    Abs(GenAbs),
     App(Application),
     Comatch(Comatch<DtorV, TermV, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),

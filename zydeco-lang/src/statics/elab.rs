@@ -98,7 +98,7 @@ fn desugar_gen_let(
             let mut body = Box::new(def.info.make(body));
             if fun {
                 let params = params.clone().into_iter().collect();
-                body = Box::new(def.info.make(ps::Abstraction { params, body }.into()));
+                body = Box::new(def.info.make(ps::GenAbs { params, body }.into()));
             }
             if rec {
                 body = Box::new(def.info.make(Rec { var: (var, None), body }.into()));
@@ -138,9 +138,7 @@ fn desugar_gen_let(
     }
 }
 
-fn desugar_fn(
-    ps::Abstraction { params, body }: ps::Abstraction,
-) -> Result<TermComputation, TyckErrorItem> {
+fn desugar_fn(ps::GenAbs { params, body }: ps::GenAbs) -> Result<TermComputation, TyckErrorItem> {
     fn desugar_fn_one(
         (var, ty): (TermV, Option<Span<ps::Type>>), body: RcComp,
     ) -> Result<TermComputation, TyckErrorItem> {
