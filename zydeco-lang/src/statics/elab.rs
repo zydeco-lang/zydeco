@@ -18,7 +18,7 @@ where
 {
     type Error = S::Error;
     fn elab(value: Span<T>) -> Result<Self, Self::Error> {
-        Ok(value.try_map(Elaboration::elab)?)
+        value.try_map(Elaboration::elab)
     }
 }
 
@@ -198,7 +198,7 @@ impl Elaboration<ps::Type> for Type {
                 t1.into()
             }
             ps::Type::Arrow(t) => {
-                let ps::Arrow(t1, t2) = t;
+                let ps::TypeArrow(t1, t2) = t;
                 let t1 = t1.try_map(Elaboration::elab)?;
                 let t2 = t2.try_map(Elaboration::elab)?;
                 Type::internal("Fn", vec![rc!(t1), rc!(t2)])

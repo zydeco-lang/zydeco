@@ -205,7 +205,7 @@ impl TypeCheck for Span<TermComputation> {
                         found: ty_scrut,
                     }))?
                 };
-                ctx.type_ctx.insert(tvar.clone(), kd.inner_clone().into());
+                ctx.type_ctx.insert(tvar.clone(), kd.inner_clone());
                 let ty =
                     ty.inner_clone().subst(Env::from_iter([(param, tvar.clone().into())]), &ctx)?;
                 ctx.term_ctx.insert(var.clone(), ty);

@@ -165,12 +165,12 @@ impl TypeCheck for Span<Type> {
                 Ok(Step::Done(kd))
             }
             SynType::Forall(Forall { param: (param, kd), ty }) => {
-                ctx.type_ctx.insert(param, kd.inner_clone().into());
+                ctx.type_ctx.insert(param, kd.inner_clone());
                 ty.ana(KindBase::CType.into(), ctx)?;
                 Ok(Step::Done(KindBase::CType.into()))
             }
             SynType::Exists(Exists { param: (param, kd), ty }) => {
-                ctx.type_ctx.insert(param, kd.inner_clone().into());
+                ctx.type_ctx.insert(param, kd.inner_clone());
                 ty.ana(KindBase::VType.into(), ctx)?;
                 Ok(Step::Done(KindBase::VType.into()))
             }

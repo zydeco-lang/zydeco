@@ -39,7 +39,7 @@ impl TypeCheck for Span<&prelude::Data> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
-            ctx.type_ctx.insert(tvar.clone(), kd.inner_clone().into());
+            ctx.type_ctx.insert(tvar.clone(), kd.inner_clone());
         }
         let mut ctorvs = HashSet::new();
         for DataBr(ctorv, tys) in data.ctors.iter() {
@@ -68,7 +68,7 @@ impl TypeCheck for Span<&prelude::Codata> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
-            ctx.type_ctx.insert(tvar.clone(), kd.inner_clone().into());
+            ctx.type_ctx.insert(tvar.clone(), kd.inner_clone());
         }
         let mut dtorvs = HashSet::new();
         for CodataBr(dtorv, tys, ty) in data.dtors.iter() {
@@ -98,7 +98,7 @@ impl TypeCheck for Span<&prelude::Alias> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let data = self.inner_ref();
         for (tvar, kd) in data.params.iter() {
-            ctx.type_ctx.insert(tvar.clone(), kd.inner_clone().into());
+            ctx.type_ctx.insert(tvar.clone(), kd.inner_clone());
         }
         let kd = data.ty.syn(ctx.clone())?;
         Ok(Step::Done(kd))

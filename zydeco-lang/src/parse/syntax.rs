@@ -27,7 +27,7 @@ pub type TypeKindPattern = (TypeV, Span<Kind>);
 pub struct TypeApp(pub BoxType, pub BoxType);
 
 #[derive(SpanHolder, Clone, Debug)]
-pub struct Arrow(pub BoxType, pub BoxType);
+pub struct TypeArrow(pub BoxType, pub BoxType);
 
 #[derive(SpanHolder, Clone, Debug)]
 pub struct Forall(pub Vec<TypeKindPattern>, pub BoxType);
@@ -39,7 +39,7 @@ pub struct Exists(pub Vec<TypeKindPattern>, pub BoxType);
 pub enum Type {
     Basic(TypeV),
     App(TypeApp),
-    Arrow(Arrow),
+    Arrow(TypeArrow),
     Forall(Forall),
     Exists(Exists),
     Hole(Hole),

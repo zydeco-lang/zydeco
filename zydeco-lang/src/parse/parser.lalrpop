@@ -132,7 +132,7 @@ Type: Type = {
 
 TypeArrow: Type = {
     <t:Box<Span<TypeApp>>> "->" <ty:Box<Span<Type>>> => {
-        Arrow(t, ty).into()
+        TypeArrow(t, ty).into()
     },
     TypeApp,
 };
