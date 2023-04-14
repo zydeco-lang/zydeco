@@ -57,6 +57,9 @@ Declaration: Declaration = {
         name, params, ty,
     }.into(),
     "define" <gen:GenLet> DefineEnd => gen.into(),
+    // "main" <entry:Span<TermComputation>> "end" => Main {
+    //     entry,
+    // }.into(),
 };
 
 DefineEnd: () = {
@@ -258,7 +261,7 @@ TypeV: TypeV = <PathPrefix<Span<UpperId>>> => <>.into();
 TermV: TermV = <PathPrefix<Span<LowerId>>> => <>.into();
 
 PathPrefix<T>: T = {
-    <path:(<Span<UpperId>> ".")*> <v:T>=> v,
+    <path:(<Span<UpperId>> ".")*> <v:T> => v,
 };
 
 UpperId: String = "UpperId" => <>.into();
@@ -307,6 +310,7 @@ extern {
         "data" => Tok::Data,
         "codata" => Tok::Codata,
         "alias" => Tok::Alias,
+        "main" => Tok::Main,
         "define" => Tok::Define,
         "let" => Tok::Let,
         "in" => Tok::In,
