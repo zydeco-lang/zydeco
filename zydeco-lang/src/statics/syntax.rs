@@ -7,7 +7,15 @@ pub use crate::syntax::*;
 
 /* ---------------------------------- Kind ---------------------------------- */
 
-pub use crate::syntax::{KindBase, TypeArity, Kind};
+pub use crate::syntax::{KindBase, TypeArity};
+
+#[derive(IntoEnum, FmtArgs, Clone, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Kind(KindBase),
+    TypeArity(TypeArity<Span<Kind>, BoxKind>),
+}
+pub type BoxKind = Box<Span<Kind>>;
+impl KindT for Kind {}
 
 /* ---------------------------------- Type ---------------------------------- */
 
@@ -16,8 +24,8 @@ pub struct AbstVar(pub usize);
 #[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum SynType {
     TypeApp(TypeApp<TypeV, RcType>),
-    Forall(Forall<(TypeV, Span<KindBase>), RcType>),
-    Exists(Exists<(TypeV, Span<KindBase>), RcType>),
+    Forall(Forall<(TypeV, Span<Kind>), RcType>),
+    Exists(Exists<(TypeV, Span<Kind>), RcType>),
     AbstVar(AbstVar),
     Hole(Hole),
 }
@@ -39,8 +47,8 @@ macro_rules! impl_from {
     };
 }
 impl_from!(TypeApp<TypeV, RcType>);
-impl_from!(Forall<(TypeV, Span<KindBase>), RcType>);
-impl_from!(Exists<(TypeV, Span<KindBase>), RcType>);
+impl_from!(Forall<(TypeV, Span<Kind>), RcType>);
+impl_from!(Exists<(TypeV, Span<Kind>), RcType>);
 impl_from!(AbstVar);
 impl_from!(Hole);
 impl From<TypeV> for Type {
@@ -85,7 +93,7 @@ pub enum TermComputation {
     Match(Match<CtorV, TermV, RcValue, RcComp>),
     Comatch(Comatch<DtorV, TermV, RcComp>),
     Dtor(Dtor<RcComp, DtorV, RcValue>),
-    TyAbsTerm(TyAbsTerm<(TypeV, Option<Span<KindBase>>), RcComp>),
+    TyAbsTerm(TyAbsTerm<(TypeV, Option<Span<Kind>>), RcComp>),
     TyAppTerm(TyAppTerm<RcComp, RcType>),
     MatchPack(MatchPack<RcValue, TypeV, TermV, RcComp>),
 }
@@ -118,7 +126,7 @@ pub struct Program {
 
 pub mod prelude {
     use super::*;
-    pub type Data = super::Data<TypeV, Span<KindBase>, CtorV, RcType>;
-    pub type Codata = super::Codata<TypeV, Span<KindBase>, DtorV, RcType>;
-    pub type Alias = super::Alias<TypeV, Span<KindBase>, RcType>;
+    pub type Data = super::Data<TypeV, Span<Kind>, CtorV, RcType>;
+    pub type Codata = super::Codata<TypeV, Span<Kind>, DtorV, RcType>;
+    pub type Alias = super::Alias<TypeV, Span<Kind>, RcType>;
 }

@@ -27,11 +27,11 @@ pub mod resolve {
 pub mod statics {
     pub mod syntax;
     pub mod err;
-    mod elab;
+    pub mod elab;
     pub mod tyck;
     mod fmt;
 
-    pub use tyck::TypeCheck;
+    pub use {elab::Elaboration, tyck::TypeCheck};
 }
 
 pub mod library {

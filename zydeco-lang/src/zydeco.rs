@@ -9,7 +9,8 @@ use crate::{
     },
     statics::{
         syntax as ss,
-        tyck::{Ctx, Seal, TypeCheck},
+        tyck::{Ctx, Seal},
+        Elaboration, TypeCheck,
     },
     syntax::env::Env,
     utils::{
@@ -56,8 +57,8 @@ impl ZydecoFile {
         Ok(p)
     }
     pub fn elab(p: Span<ps::Program>) -> Result<Span<ss::Program>, String> {
-        let pr: ss::Program = p.inner.try_into().map_err(|e| format!("{}", e))?;
-        Ok(p.info.make(pr))
+        let p = Elaboration::elab(p).map_err(|e| format!("{}", e))?;
+        Ok(p)
     }
     pub fn tyck(m: Span<ss::Program>) -> Result<(), String> {
         m.syn(Ctx::default()).map_err(|e| format!("{}", e))?;
@@ -90,7 +91,7 @@ pub struct ZydecoExpr {
 impl ZydecoExpr {
     pub fn new() -> Self {
         let std = Zydeco::std().unwrap();
-        let std: Span<ss::Module> = std.info.make(std.inner.try_into().unwrap());
+        let std: Span<ss::Module> = Elaboration::elab(std).unwrap();
         let Seal(ctx) = std.syn(Ctx::default()).expect("std import failed");
         let std: ls::Module = std.inner.into();
         let mut input = std::io::empty();
@@ -103,8 +104,8 @@ impl ZydecoExpr {
         TermSpanParser::new().parse(source, Lexer::new(source)).map_err(|e| e.to_string())
     }
     pub fn elab(val: Span<ps::Term>) -> Result<Span<ss::Term>, String> {
-        let v: ss::Term = val.inner.try_into().map_err(|e| format!("{}", e))?;
-        Ok(val.info.make(v))
+        let v = Elaboration::elab(val).map_err(|e| format!("{}", e))?;
+        Ok(v)
     }
     pub fn tyck_value(&self, val: Span<ss::TermValue>) -> Result<ss::Type, String> {
         val.syn(self.ctx.clone()).map_err(|e| format!("{}", e))

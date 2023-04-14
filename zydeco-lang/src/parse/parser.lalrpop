@@ -82,10 +82,10 @@ CodataBr: CodataBr<DtorV, Span<Type>> = {
 
 //* --------------------------------- Pattern -------------------------------- */
 
-TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Span<KindBase>> ")" => (name, kind);
+TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Span<Kind>> ")" => (name, kind);
 
 TypePattern: TypePattern = {
-    "(" <name:TypeV> <kind: (":" <Span<KindBase>>)?> ")" => (name, kind),
+    "(" <name:TypeV> <kind: (":" <Span<Kind>>)?> ")" => (name, kind),
     <TypeV> => (<>, None),
 };
 
@@ -101,21 +101,21 @@ Pattern: Pattern = {
 
 //* ---------------------------------- Kind ---------------------------------- */
 
-KindBase: KindBase = {
-    "VType" => KindBase::VType,
-    "CType" => KindBase::CType,
-};
-
-TypeArity: TypeArity<BoxKind, BoxKind> = {
-    <kd:Box<Span<Kind>>> "->" <mut ar:TypeArity> => {
-        ar.params.insert(0, kd);
-        ar
-    },
-};
-
 Kind: Kind = {
-    <KindBase> => <>.into(),
-    <TypeArity> => <>.into(),
+    KindArrow,
+};
+
+KindArrow: Kind = {
+    <k:Box<Span<KindAtom>>> "->" <kd:KindArrow> => {
+        KindArrow(k, kd).into()
+    },
+    KindAtom,
+};
+
+KindAtom: Kind = {
+    "(" <Kind> ")" => <>,
+    "VType" => KindBase::VType.into(),
+    "CType" => KindBase::CType.into(),
 };
 
 //* ---------------------------------- Type ---------------------------------- */
