@@ -1,0 +1,62 @@
+// # Chapter 1: Term Syntax
+
+// This chapter is about the syntax of terms, namely value and computations.
+
+// Like said in the last chapter, the definitions have value types. From now on
+// we denote a value type by `A` and a value term `a`; similarly a computation
+// type `B` along with its term `b`.
+
+def zero : Int = 0 end
+
+// Currently zydeco has `Int`, `Char` and `String` types as primitive value
+// types, and the ability to introduce data types. Checkout the definition of
+// `Bool` and `List` by searching in the standard library
+// (zydeco-lang/src/library/std.zydeco).
+
+// Oh, how could I not mention the most important value type in a
+// call-by-push-value language: `Thunk B`. Here `B` is a computation type, which
+// will keep recurring. 
+
+def lazy-one : Thunk (Ret Int) = { ret 1 } end
+
+// Here `Ret A` type and `ret a` computation is the simplest computation type,
+// with the meaning of simply returning a value `a` of type `A`. Though this
+// particular computation is not sweating, it's wrapped in a `Thunk` and will
+// not be executed until runtime.
+
+def lazy-add-one-zero : Thunk (Ret Int) = {
+  do x <- ! lazy-one;
+  do y <- ret zero;
+  // equivalent to let y = zero in ...
+  ! add x y
+  // add is defined in the standard library too
+  // add: Thunk (Int -> Int -> Ret Int)
+} end
+
+//  The `do` notation is borrowed (again) from Haskell. It takes a `Ret A` typed
+//  term and binds it to a variable `x` of type `A`. It's the elimination form
+//  of `Ret A`. Note that the rhs isn't necessarily syntactically `ret a` - any
+//  computation of type `Ret A` would suffice.
+
+// The `!`, read as "force", is the operator to force a `Thunk B` typed term to
+// evaluate to a `B` typed term. It's the only way to "defrost" the computation
+// in a thunk. Notice that the thunks are able to capture `lazy-one` and `zero`
+// from the environment, which means that even if the thunk is not eagerly
+// evaluated, it can still run correctly on evaluation site.
+
+def decr~ : Thunk (Thunk (Ret Int) -> Ret Int) = {
+  // Function types are written as `A -> B`, and are by themselves computations.
+  fn x~ -> (
+    do x <- ! x~;
+    ! sub x 1
+  )
+} end
+
+// By convension, we use `~` to denote terms that is a thunk or takes a thunk as
+// its argument; it's just a valid symbol for values, so you may use any
+// variable name as you like.
+
+main
+  do zero' <- ! decr~ lazy-add-one-zero;
+  ! exit zero'
+end

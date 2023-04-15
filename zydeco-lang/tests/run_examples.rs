@@ -42,8 +42,8 @@ fn check_test(f: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-fn batch_test(f: &[&str]) -> Result<(), String> {
-    let m = till_check("tests/nonzero-exit-code", f)?;
+fn batch_test_template(parent: &'static str, f: &[&str]) -> Result<(), String> {
+    let m = till_check(parent, f)?;
     let m = ZydecoFile::link(m.inner)?;
 
     let mut input = std::io::empty();
@@ -57,6 +57,14 @@ fn batch_test(f: &[&str]) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn batch_test(f: &[&str]) -> Result<(), String> {
+    batch_test_template("tests/nonzero-exit-code", f)
+}
+
+fn doc_test(f: &[&str]) -> Result<(), String> {
+    batch_test_template("../docs/spell", f)
 }
 
 struct IOMatch {
@@ -172,6 +180,12 @@ mod io_tests {
             correct_answer: "hello world\n5 4 3 2 1".to_string(),
         }
     );
+}
+
+mod doc_tests {
+    use super::*;
+    mk_test!(doc_test, toplevel, &["0-toplevel.zy"]);
+    mk_test!(doc_test, thunk_and_ret, &["1-thunk-and-ret.zy"]);
 }
 
 mod custom_tests {}
