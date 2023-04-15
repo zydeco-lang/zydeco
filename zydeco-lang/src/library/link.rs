@@ -21,7 +21,10 @@ impl From<ss::Module> for Module {
             inner: ss::Define { name: (sym, _ty), def: () },
         } in m.define_ext
         {
-            let def = std_library[&sym].clone();
+            let def = std_library
+                .get(&sym)
+                .expect("no implementation found for the extern term definition")
+                .clone();
             define.push_back((sym, def));
         }
         for DeclSymbol { public: _, external: _, inner: ss::Define { name, def } } in m.define {

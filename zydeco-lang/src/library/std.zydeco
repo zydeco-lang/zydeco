@@ -143,7 +143,7 @@ module Std where
         | False() -> ! els
         end
     } end
-    pub def ifc : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -> B) = {
+    pub def if~ : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -> B) = {
       fn B b thn els ->
         do b <- ! b;
         ! if @(B) b thn els
@@ -311,8 +311,9 @@ module Std where
     pub extern codata OS end
     pub extern def write_str : Thunk(String -> Thunk(OS) -> OS) end
     pub extern def read_line : Thunk(Thunk(String -> OS) -> OS) end
-    pub extern def exit : Thunk(Int -> OS) end
+    pub extern def read_till_eof : Thunk(Thunk(String -> OS) -> OS) end
     pub extern def arg_list : Thunk(Thunk(List String -> OS) -> OS) end
+    pub extern def exit : Thunk(Int -> OS) end
 
     pub def write_line : Thunk(String -> Thunk(OS) -> OS) = {
       fn (s: String) (k: Thunk(OS)) ->
