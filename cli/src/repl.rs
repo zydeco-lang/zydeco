@@ -100,28 +100,20 @@ impl Repl {
                 if let Some(()) = ty.clone().elim_os(zydeco_expr.ctx.clone(), &SpanInfo::dummy()) {
                     let c = ZydecoExpr::link_computation(c);
                     let c = zydeco_expr.eval_os(c, &[]);
-                    match c.entry {
-                        ds::ProgKont::Ret(value) => {
-                            unreachable!()
-                        }
-                        ds::ProgKont::ExitCode(i) => {
-                            println!("exited with code {}", i)
-                        }
-                    }
+                    let ds::ProgKont::ExitCode(i) = c.entry else {
+                        unreachable!()
+                    };
+                    println!("Program exited with code {}", i);
                     Ok(())
                 } else if let Some(ty) =
                     ty.clone().elim_ret(zydeco_expr.ctx.clone(), &SpanInfo::dummy())
                 {
                     let c = ZydecoExpr::link_computation(c);
                     let c = zydeco_expr.eval_ret_computation(c);
-                    match c {
-                        ds::ProgKont::Ret(value) => {
-                            println!("{} : {}", value.fmt(), ty.fmt())
-                        }
-                        ds::ProgKont::ExitCode(i) => {
-                            unreachable!()
-                        }
-                    }
+                    let ds::ProgKont::Ret(value) = c else {
+                        unreachable!()
+                    };
+                    println!("{} : {}", value.fmt(), ty.fmt());
                     Ok(())
                 } else {
                     let mut s = String::new();
