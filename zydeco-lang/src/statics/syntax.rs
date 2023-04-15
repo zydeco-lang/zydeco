@@ -100,7 +100,7 @@ pub enum TermComputation {
 pub type RcComp = Rc<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
 
-#[derive(IntoEnum, Clone, Debug)]
+#[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum Term {
     Value(TermValue),
     Computation(TermComputation),

@@ -105,6 +105,16 @@ fn bool_test<E>(b: bool, f: impl FnOnce() -> E) -> Result<(), E> {
     b.then_some(()).ok_or_else(f)
 }
 
+impl Span<Term> {
+    pub fn syn_term(self, ctx: Ctx) -> Result<Type, TyckError> {
+        let span = self.span().clone();
+        match self.inner() {
+            Term::Value(t) => span.make(t).syn(ctx),
+            Term::Computation(t) => span.make(t).syn(ctx),
+        }
+    }
+}
+
 pub struct Seal<T>(pub T);
 
 impl TypeCheck for Span<Program> {

@@ -108,11 +108,8 @@ impl ZydecoExpr {
         let v = Elaboration::elab(val).map_err(|e| format!("{}", e))?;
         Ok(v)
     }
-    pub fn tyck_value(&self, val: Span<ss::TermValue>) -> Result<ss::Type, String> {
-        val.syn(self.ctx.clone()).map_err(|e| format!("{}", e))
-    }
-    pub fn tyck_computation(&self, comp: Span<ss::TermComputation>) -> Result<ss::Type, String> {
-        comp.syn(self.ctx.clone()).map_err(|e| format!("{}", e))
+    pub fn tyck(&self, t: Span<ss::Term>) -> Result<ss::Type, String> {
+        t.syn_term(self.ctx.clone()).map_err(|e| format!("{}", e))
     }
     pub fn link_value(val: &ss::TermValue) -> ls::ZVal {
         val.into()

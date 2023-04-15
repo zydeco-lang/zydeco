@@ -20,20 +20,57 @@ impl Repl {
                     break Ok(0);
                 }
             }
-            // check for commands
-            if line.trim_start().starts_with("#") {
-                // currently, the only command is #env
-                if line.starts_with("#env") {
-                    println!("{}", zydeco_expr.env.fmt());
-                } else {
-                    println!("Unknown command {}", line.trim());
+            let (line, dry) = match Self::preprocess(&mut zydeco_expr, line) {
+                Ok(Some(config)) => config,
+                Ok(None) => continue,
+                Err(e) => {
+                    println!("{}", e);
+                    continue;
                 }
-                continue;
+            };
+            match Self::run(&mut zydeco_expr, &line, dry) {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("{}", e);
+                    continue;
+                }
             }
-            Self::run(&mut zydeco_expr, &line);
         }
     }
-    pub fn run(zydeco_expr: &mut ZydecoExpr, line: &str) -> Result<(), String> {
+    pub fn preprocess(
+        zydeco_expr: &mut ZydecoExpr, mut line: String,
+    ) -> Result<Option<(String, bool)>, String> {
+        // if nothing's there, return
+        if line.trim().is_empty() {
+            return Ok(None);
+        }
+        // check for commands
+        let mut dry = false;
+        if line.trim_start().starts_with("#") {
+            if line.starts_with("#env") {
+                // command #env: print all variables in scope
+                // Note: with the module system we can have a more
+                // fine-grained control to the namespace and print
+                // less things
+                println!("{}", zydeco_expr.env.fmt());
+                return Ok(None);
+            } else if line.starts_with("#type") | line.starts_with("#t") | line.starts_with("#dry")
+            {
+                // command #type: type checks but not run a term
+                if let Some((_, term)) = line.split_once(" ") {
+                    line = term.to_string();
+                    dry = true;
+                } else {
+                    Err(format!("Missing term"))?
+                }
+            } else {
+                // unknown commands
+                Err(format!("Unknown command {}", line.trim()))?
+            }
+        }
+        Ok(Some((line, dry)))
+    }
+    pub fn run(zydeco_expr: &mut ZydecoExpr, line: &str, dry: bool) -> Result<(), String> {
         // parse and elaborate
         let term = match ZydecoExpr::parse(&line) {
             Err(e) => Err(format!("Parse Error: {}", e))?,
@@ -43,67 +80,58 @@ impl Repl {
             },
         };
         // typecheck and evaluate
-        match term.inner_ref() {
-            ss::Term::Value(v) => {
-                match zydeco_expr.tyck_value(term.span().make(v.clone())) {
-                    Err(e) => Err(format!("Type Error: {}", e)),
-                    Ok(ty) => {
-                        // Note: not evaluating the value, just printing its type
-                        // let v = ZydecoExpr::link_value(v);
-                        // let v = zydeco_expr.eval_value(v);
-                        // println!("{} : {}", v.fmt(), ty.fmt())
-                        println!("{} : {}", v.fmt(), ty.fmt());
-                        Ok(())
+        let ty = match zydeco_expr.tyck(term.clone()) {
+            Err(e) => Err(format!("Type Error: {}", e))?,
+            Ok(ty) => ty,
+        };
+        if dry || matches!(term.inner_ref(), ss::Term::Value(_)) {
+            // Note: not evaluating the value, just printing its type
+            println!("{} : {}", term.inner_ref().fmt(), ty.fmt());
+            Ok(())
+        } else {
+            let c = match term.inner_ref() {
+                ss::Term::Computation(c) => c,
+                _ => unreachable!(),
+            };
+            // Note: The evaluation will destroy the environment,
+            // so we need to save a snapshot of it before we run.
+            let snapshot = zydeco_expr.clone();
+            let res =
+                if let Some(()) = ty.clone().elim_os(zydeco_expr.ctx.clone(), &SpanInfo::dummy()) {
+                    let c = ZydecoExpr::link_computation(c);
+                    let c = zydeco_expr.eval_os(c, &[]);
+                    match c.entry {
+                        ds::ProgKont::Ret(value) => {
+                            unreachable!()
+                        }
+                        ds::ProgKont::ExitCode(i) => {
+                            println!("exited with code {}", i)
+                        }
                     }
-                }
-            }
-            ss::Term::Computation(c) => {
-                match zydeco_expr.tyck_computation(term.span().make(c.clone())) {
-                    Err(e) => Err(format!("Type Error: {}", e)),
-                    Ok(ty) => {
-                        // Note: The final call to OS will destroy the environment,
-                        // so we need to save a snapshot of it before we run.
-                        let snapshot = zydeco_expr.clone();
-                        let res = if let Some(()) =
-                            ty.clone().elim_os(zydeco_expr.ctx.clone(), &SpanInfo::dummy())
-                        {
-                            let c = ZydecoExpr::link_computation(c);
-                            let c = zydeco_expr.eval_os(c, &[]);
-                            match c.entry {
-                                ds::ProgKont::Ret(value) => {
-                                    unreachable!()
-                                }
-                                ds::ProgKont::ExitCode(i) => {
-                                    println!("exited with code {}", i)
-                                }
-                            }
-                            Ok(())
-                        } else if let Some(ty) =
-                            ty.clone().elim_ret(zydeco_expr.ctx.clone(), &SpanInfo::dummy())
-                        {
-                            let c = ZydecoExpr::link_computation(c);
-                            let c = zydeco_expr.eval_ret_computation(c);
-                            match c {
-                                ds::ProgKont::Ret(value) => {
-                                    println!("{} : {}", value.fmt(), ty.fmt())
-                                }
-                                ds::ProgKont::ExitCode(i) => {
-                                    unreachable!()
-                                }
-                            }
-                            Ok(())
-                        } else {
-                            let mut s = String::new();
-                            s += &format!("Can't run computation of type {}", ty.fmt());
-                            s += &format!("Can only run computations of type OS or Ret(a)");
-                            Err(s)
-                        };
-                        // Note: Restore the environment
-                        *zydeco_expr = snapshot;
-                        res
+                    Ok(())
+                } else if let Some(ty) =
+                    ty.clone().elim_ret(zydeco_expr.ctx.clone(), &SpanInfo::dummy())
+                {
+                    let c = ZydecoExpr::link_computation(c);
+                    let c = zydeco_expr.eval_ret_computation(c);
+                    match c {
+                        ds::ProgKont::Ret(value) => {
+                            println!("{} : {}", value.fmt(), ty.fmt())
+                        }
+                        ds::ProgKont::ExitCode(i) => {
+                            unreachable!()
+                        }
                     }
-                }
-            }
+                    Ok(())
+                } else {
+                    let mut s = String::new();
+                    s += &format!("Can't run computation of type {}", ty.fmt());
+                    s += &format!("Can only run computations of type OS or Ret(a)");
+                    Err(s)
+                };
+            // Note: Restore the environment
+            *zydeco_expr = snapshot;
+            res
         }
     }
 }
