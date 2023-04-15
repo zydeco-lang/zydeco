@@ -23,6 +23,7 @@ pub mod resolve {
     pub mod syntax;
     pub mod err;
     // pub mod elab;
+    pub mod map;
     mod fmt;
 }
 

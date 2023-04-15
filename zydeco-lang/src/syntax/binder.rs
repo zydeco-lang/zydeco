@@ -5,6 +5,8 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+/* ---------------------------------- Name ---------------------------------- */
+
 /// Unqualified names of module, type and term variables. Used at definition sites.
 #[derive(Clone, Debug)]
 pub struct NameDef {
@@ -46,6 +48,52 @@ impl SpanHolder for NameRef {
         f(&mut self.info);
     }
 }
+
+// A view for the name
+pub struct NameView<'a> {
+    pub path: &'a [Span<String>],
+    pub ident: &'a Span<String>,
+}
+
+pub trait NameT {
+    fn name(&self) -> NameView;
+}
+impl NameT for NameDef {
+    fn name(&self) -> NameView {
+        NameView {
+            path: &[],
+            ident: &self.ident,
+        }
+    }
+}
+impl NameT for NameRef {
+    fn name(&self) -> NameView {
+        NameView {
+            path: &self.path,
+            ident: &self.ident,
+        }
+    }
+}
+
+/* --------------------------------- Entity --------------------------------- */
+
+slotmap::new_key_type! { pub struct EntityId; }
+
+/// Note: Consider pairing up Entity with the following:
+/// ```no_run
+/// #[derive(IntoEnum, Clone, Debug)]
+/// pub enum Sort {
+///     Term(Term, Option<Type>),
+///     Type(Type, Option<Kind>),
+///     Kind,
+/// }
+/// ```
+pub struct Entity<Sort> {
+    pub def: NameDef,
+    pub sort: Sort,
+}
+
+/* --------------------------------- Legacy --------------------------------- */
 
 macro_rules! var {
     ( $Var:ident ) => {
