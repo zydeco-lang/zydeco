@@ -53,7 +53,7 @@ Declaration: Declaration = {
 };
 
 UseDef: UseDef = {
-    <NameV> => <>.into(),
+    <NameRef> => <>.into(),
     ".." => UseAll.into(),
     <modv:ModV>  <cluster:SepByDelim<"(", ",", UseDef, ")">> => UseCluster {
         modv, cluster,
@@ -265,17 +265,28 @@ Literal: Literal = {
 
 //* ------------------------------- Identifiers ------------------------------ */
 
-ModV: ModV = <PathPrefix<Span<UpperId>>> => <>.into();
-NameV: NameV = <PathPrefix<Span<MixedId>>> => <>.into();
+NameDef: NameDef = {
+    Span<(<Span<MixedId>>)> => NameDef {
+        ident: <>.inner, info: <>.info,
+    },
+};
 
-CtorV: CtorV = <PathPrefix<Span<UpperId>>> => <>.into();
-DtorV: DtorV = <PathPrefix<Span<LowerId>>> => <>.into();
+NameRef: NameRef = {
+    Span<(<(<Span<UpperId>> ".")*> <Span<MixedId>>)> => NameRef {
+        path: <>.inner.0, ident: <>.inner.1, info: <>.info,
+    },
+};
 
-TypeV: TypeV = <PathPrefix<Span<UpperId>>> => <>.into();
-TermV: TermV = <PathPrefix<Span<LowerId>>> => <>.into();
+ModV: ModV = <PathPrefix<Span<UpperId>, Span<UpperId>>> => <>.1.into();
 
-PathPrefix<T>: T = {
-    <path:(<Span<UpperId>> ".")*> <v:T> => v,
+CtorV: CtorV = <PathPrefix<Span<UpperId>, Span<UpperId>>> => <>.1.into();
+DtorV: DtorV = <PathPrefix<Span<UpperId>, Span<LowerId>>> => <>.1.into();
+
+TypeV: TypeV = <PathPrefix<Span<UpperId>, Span<UpperId>>> => <>.1.into();
+TermV: TermV = <PathPrefix<Span<UpperId>, Span<LowerId>>> => <>.1.into();
+
+PathPrefix<M, N>: (Vec<M>, N) = {
+    <path:(<Span<UpperId>> ".")*> <v:N> => (path, v),
 };
 
 MixedId: String = {

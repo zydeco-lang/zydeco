@@ -152,7 +152,7 @@ pub struct UseCluster {
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum UseDef {
-    Name(NameV),
+    Name(NameRef),
     UseAll(UseAll),
     Cluster(UseCluster),
 }

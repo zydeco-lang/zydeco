@@ -144,7 +144,7 @@ fn desugar_fn(ps::GenAbs { params, body }: ps::GenAbs) -> Result<TermComputation
     ) -> Result<TermComputation, TyckErrorItem> {
         let mut body = Comatch {
             arms: vec![ps::Comatcher {
-                dtorv: DtorV::new(format!("arg"), SpanInfo::new(0, 0)),
+                dtorv: DtorV::new(format!("arg"), SpanInfo::dummy()),
                 vars: vec![var],
                 body,
             }],
@@ -356,7 +356,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let arg = arg.try_map(Elaboration::elab)?;
                 Dtor {
                     body: fun,
-                    dtorv: DtorV::new(format!("arg"), SpanInfo::new(0, 0)),
+                    dtorv: DtorV::new(format!("arg"), SpanInfo::dummy()),
                     args: vec![rc!(arg)],
                 }
                 .into()
@@ -545,7 +545,7 @@ impl Elaboration<ps::TopLevel> for Program {
         let Some(entry) = main_entry else { Err(TyckErrorItem::NoMainEntry)? };
         Ok(Self {
             module: Elaboration::elab(
-                SpanInfo::new(0, 0).make(ps::TopLevel { declarations: non_main }),
+                SpanInfo::dummy().make(ps::TopLevel { declarations: non_main }),
             )?,
             entry: Elaboration::elab(entry)?,
         })

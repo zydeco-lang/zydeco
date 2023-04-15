@@ -9,7 +9,7 @@ use std::{
 #[derive(Clone, Debug)]
 pub struct FileInfo {
     newlines: Vec<usize>,
-    pub path: Rc<PathBuf>,
+    path: Rc<PathBuf>,
 }
 impl FileInfo {
     pub fn new(s: &str, path: Rc<PathBuf>) -> Self {
@@ -46,18 +46,27 @@ impl FileInfo {
             panic!("SpanInfo: offset {} is not in {:?}", offset, self)
         }
     }
+    pub fn display_path(&self) -> String {
+        self.path.display().to_string()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpanInfo {
-    pub span1: (Cursor1, Cursor1),
-    pub span2: OnceCell<(Cursor2, Cursor2)>,
-    pub path: OnceCell<Rc<PathBuf>>,
+    span1: (Cursor1, Cursor1),
+    span2: OnceCell<(Cursor2, Cursor2)>,
+    path: OnceCell<Rc<PathBuf>>,
 }
 
 impl SpanInfo {
     pub fn new(l: usize, r: usize) -> SpanInfo {
         SpanInfo { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
+    }
+    pub fn dummy() -> SpanInfo {
+        SpanInfo::new(0, 0)
+    }
+    pub fn is_dummy(&self) -> bool {
+        self.span1 == (0, 0) && self.span2.get().is_none() && self.path.get().is_none()
     }
     pub fn make<T>(&self, inner: T) -> Span<T> {
         Span { inner, info: self.clone() }
@@ -236,7 +245,9 @@ impl<T: Hash> Hash for Span<T> {
 
 impl<T: Display> Display for Span<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.inner, self.info)
+        let info =
+            if self.info.is_dummy() { format!("<internal>") } else { format!("{}", self.info) };
+        write!(f, "{} ({})", self.inner, info)
     }
 }
 

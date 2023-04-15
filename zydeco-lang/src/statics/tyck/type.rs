@@ -2,7 +2,7 @@ use super::*;
 
 impl Type {
     pub fn internal(name: &'static str, args: Vec<RcType>) -> Self {
-        TypeApp { tvar: TypeV::new(name.into(), SpanInfo::new(0, 0)), args }.into()
+        TypeApp { tvar: TypeV::new(name.into(), SpanInfo::dummy()), args }.into()
     }
     pub fn resolve(&self) -> Result<SynType, TyckError> {
         Ok(self.synty.clone())
@@ -204,7 +204,7 @@ impl TypeCheck for Span<Type> {
 
 impl Type {
     pub(super) fn subst(self, mut diff: Env<TypeV, Type>, ctx: &Ctx) -> Result<Self, TyckError> {
-        let typ = ctx.resolve_alias(self, &SpanInfo::new(0, 0))?;
+        let typ = ctx.resolve_alias(self, &SpanInfo::dummy())?;
         let typ_syn = typ.resolve()?;
         match typ_syn {
             SynType::TypeApp(TypeApp { tvar, mut args }) => {

@@ -13,7 +13,7 @@ pub trait Monoid: Sized {
 
 impl<T: Monoid> Monoid for Span<T> {
     fn empty() -> Self {
-        SpanInfo::new(0, 0).make(T::empty())
+        SpanInfo::dummy().make(T::empty())
     }
     fn append(self, other: Self) -> Self {
         other.info.make(self.inner.append(other.inner))
