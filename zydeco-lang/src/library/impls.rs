@@ -95,6 +95,54 @@ pub fn str_append(
     }
 }
 
+pub fn str_split_once(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        [ZValue::Literal(Literal::String(s)), ZValue::Literal(Literal::Char(p))] => {
+            match s.split_once(p.to_owned()) {
+                Some((a, b)) => ret(ctor(
+                    "Some",
+                    vec![rc!(ctor(
+                        "Pair",
+                        vec![
+                            rc!(Literal::String(a.to_owned()).into()),
+                            rc!(Literal::String(b.to_owned()).into()),
+                        ],
+                    ))],
+                )),
+                None => ret(ctor("None", vec![])),
+            }
+        }
+        _ => unreachable!(""),
+    }
+}
+
+pub fn str_split_n(
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        [ZValue::Literal(Literal::String(s)), ZValue::Literal(Literal::Int(n))] => {
+            if n.is_negative() {
+                return ret(ctor("None", vec![]));
+            }
+            match s.split_at(*n as usize) {
+                (a, b) => ret(ctor(
+                    "Some",
+                    vec![rc!(ctor(
+                        "Pair",
+                        vec![
+                            rc!(Literal::String(a.to_owned()).into()),
+                            rc!(Literal::String(b.to_owned()).into()),
+                        ],
+                    ))],
+                )),
+            }
+        }
+        _ => unreachable!(""),
+    }
+}
+
 pub fn str_eq(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {

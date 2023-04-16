@@ -1,0 +1,104 @@
+def rec fn write_list (A : VType) (f : Thunk (A -> Ret String)) (xs : List A) (kont : U OS) : OS =
+  match xs
+  | Nil() -> ! kont
+  | Cons(x, xs) ->
+    do s <- ! f x;
+    ! write_line s { ! write_list @(A) f xs kont }
+  end
+end
+
+alias FString-2 = F (Pair String String) end
+
+def fn bind (b : Bool) (b~ : Thunk (Ret Bool)) : Ret Bool =
+  ! if @(Ret Bool) b b~ { ret b }
+end
+
+// checks if line starts with "// " and remove it
+def fn guard (line : String) : Ret (Pair String Bool) =
+  do l <- ! str_length line;
+  let ifp~ = { ! if~ @(Ret (Pair String Bool)) } in
+  ! ifp~ { ! int_lt l 3 } {
+    ret Pair(line, true)
+  } {
+    // can index into
+    do c1 <- ! str_index line 0;
+    do c2 <- ! str_index line 1;
+    do c3 <- ! str_index line 2;
+    do p? <- ! str_split_n line 3;
+    match p?
+    | Some(p) ->
+      match p
+      | Pair(_, line') ->
+        do b1 <- ! bind true { ! char_eq c1 '/' };
+        do b2 <- ! bind b1 { ! char_eq c2 '/' };
+        do b3 <- ! bind b2 { ! char_eq c3 ' ' };
+        ! if @(Ret (Pair String Bool)) b3 {
+          ret Pair(line', true)
+        } {
+          ret Pair(line, false)
+        }
+      end
+    | None() -> 
+      ret Pair(line, false)
+    end
+  }
+end
+
+def fn str_empty? (s : String) : Ret Bool =
+  do l <- ! str_length s;
+  ! int_eq l 0
+end
+
+main
+  ! read_till_eof { fn file ->
+    let rec fn loop (rest : String) (code : Bool) : OS =
+      do p? <- ! str_split_once rest '\n';
+      match p?
+      | Some(p) ->
+        match p
+        | Pair(line, r) ->
+          do p <- ! guard line;
+          match p
+          | Pair(res, comment_head) ->
+            ! if~ @(OS) { ! not code } {
+              // normal mode:
+              ! if @(OS) comment_head {
+                // if starts with "// " then remove it and output the line
+                do empty? <- ! str_empty? res;
+                ! if @(OS) empty? {
+                  ! write_str "\n\n" {
+                  ! loop r code }
+                } {
+                  ! write_str res {
+                  ! write_str " " {
+                  ! loop r code } }
+                }
+              } {
+                // if not, output "```" and output the line and switch mode
+                ! write_str "\n```\n" {
+                ! write_line res {
+                ! loop r true } }
+              }
+            } {
+              // code mode:
+              ! if @(OS) comment_head {
+                // if starts with "// " then output "```", remove, output and switch mode
+                ! write_str "```\n\n" {
+                ! write_str " " {
+                ! write_str res {
+                ! loop r false } } }
+              } {
+                // if not, output the line
+                ! write_line res {
+                ! loop r code }
+              }
+            }
+          end
+        end
+      | None() ->
+        ! exit 0
+      end
+    in
+    ! loop file false
+  }
+end

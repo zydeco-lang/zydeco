@@ -33,6 +33,8 @@ impl Builtin {
             Builtin::new("int_gt", 2, int_gt),
             Builtin::new("str_length", 1, str_length),
             Builtin::new("str_append", 2, str_append),
+            Builtin::new("str_split_once", 2, str_split_once),
+            Builtin::new("str_split_n", 2, str_split_n),
             Builtin::new("str_eq", 2, str_eq),
             Builtin::new("str_index", 2, str_index),
             Builtin::new("int_to_str", 1, int_to_str),
