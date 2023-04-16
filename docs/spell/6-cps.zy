@@ -1,0 +1,21 @@
+// # Chapter 6: Continuation Passing Style
+
+// Peek the wikipedia article on [Continuation Passing Style]
+// (http://en.wikipedia.org/wiki/Continuation-passing_style) if you haven't
+// already. Any arbitrary example in it would be sufficient to demonstrate the
+// idea.
+
+// If you have closely inspected any test bench, you'll immediately notice how
+// we adopt CPS in the design of `OS` type.
+
+def xs : List String =
+  Cons("1", Cons("2", Cons("3", Cons("not only you and me", Nil()))))
+end
+
+// As the final exercise, choose one of the following tasks (or both):
+// 1. Reverse a list.
+// 2. Print a list.
+
+main
+  ! exit 0
+end

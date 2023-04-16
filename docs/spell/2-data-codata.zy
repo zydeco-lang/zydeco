@@ -25,7 +25,7 @@ def some-0~ : Thunk(Ret (Option Int)) = {
 // type that comatches the stack. It can be introduced by comatch computation
 // and and can be eliminated by codata destructors.
 
-// Read how `LList`, a.k.a. lazy list, is defined in `std.zydeco`.
+// Read how `LList`, a.k.a. lazy list, a.k.a. `CoList`, is defined in `std.zydeco`.
 
 def xs~ : Thunk (LList Int) = {
   comatch

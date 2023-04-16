@@ -1,6 +1,6 @@
-// # Chapter 3: Y Combinator
+// # Chapter 4: Y Combinator
 
-// In the last section we saw the `rec` keyword, which allows us to define
+// In the last few chapters we saw the `rec` keyword, which allows us to define
 // recursive functions. However, it is actually possible to define recursive
 // functions without the primitive `rec` terms. This is done by using the Y
 // combinator.
@@ -9,10 +9,11 @@ codata Y (B : CType) where
   | .y(Thunk (Y B)): B
 end
 
-// Exercise Y: Implement the Y combinator
+// Exercise Y: Implement the Y combinator.
 
-// Hint: In call-by-name sense, the Y combinator is given by: `Y f = f (Y f)` or
-// `\f. (\x. f (x x)) (\x. f (x x))`.
+// Hint: In call-by-name sense, the Y combinator is given by: `Y f = f (Y f)`
+// and can be defined as `\f. (\x. f (x x)) (\x. f (x x))`. Also note that
+// call-by-name is has a lazy semantics.
 
 alias FnInt = Int -> Ret Int end
 def rec' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
@@ -70,3 +71,15 @@ main
   ! write_line "factorial result is correct :)" {
   ! exit 0 }}
 end
+
+// Exercise (optional): Write a term that never terminates.
+// def loop : ... = ... end
+
+// Exercise (optional): Write iota, a `CoNat` that spills out infinite `Nat`s.
+// Define `CoNat` first, of course.
+
+data CoNat where
+  // Todo..
+end
+
+// def iota : Thunk CoNat = ... end

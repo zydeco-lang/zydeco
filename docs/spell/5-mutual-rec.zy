@@ -1,0 +1,44 @@
+// # Chapter 5: Mutual Recursion
+
+// Let's take the use of `rec` to a new level. With `codata`, we can define
+// mutually recursive functions with ease. 
+
+// Exercise `even-odd`: define `even` and `odd` for natural numbers.
+
+codata EvenOdd where
+  | .even(Nat): Ret Bool
+  | .odd(Nat): Ret Bool
+end
+
+def even-odd : Thunk EvenOdd = {
+  // Todo..
+  rec even-odd -> ! even-odd
+} end
+
+def even : Thunk (Nat -> Ret Bool) = {
+  // Todo..
+  fn n -> ret true
+} end
+
+def odd : Thunk (Nat -> Ret Bool) = {
+  // Todo..
+  fn n -> ret true
+} end
+
+main
+  let fn assert (b : Thunk (Ret Bool)) (b' : Bool) (kont : Thunk OS) =
+    do b <- ! b;
+    ! if~ @(OS) { ! bool_eq b b' } { ! kont } { ! panic "failed test case >_<" }
+  in
+  ! assert { ! even S(S(Z())) } true {
+  ! assert { ! odd S(S(S(Z()))) } true {
+  ! assert { ! even Z() } true {
+  ! assert { ! odd S(Z()) } true {
+  // Todo: uncomment the following lines
+  // ! assert { ! even S(Z()) } false {
+  // ! assert { ! odd S(S(Z())) } false {
+  ! exit 0
+  }}}}
+  // Todo: uncomment the following lines
+  // }}
+end

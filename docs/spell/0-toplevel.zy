@@ -56,6 +56,7 @@ main
     ! exit n
   end
 end
+// You'll see more details on `OS` type in chapter 6.
 
 // If you are familiar with Levy and his CBPV, you'll find the idea very
 // similar; the syntax, however, might feel different. However, don't worry if
@@ -72,3 +73,11 @@ end
 
 // The toplevel is as concise and declarative as possible. For a more detailed
 // explanation of the term level syntax, please refer to the next chapter.
+
+// A final comment is on `zydeco repl`.
+
+// You can `alias zydeco=cargo run --bin zydeco --` and try `zydeco repl`;
+// alternatively, install `rlwrap` and then try out a modern and advanced repl
+// via `rlwrap cargo run --bin zydeco -- repl`. If you don't know the type of a
+// builtin function, say `add`, you can try typing `add` and press enter. To
+// exit, press `Ctrl-D`.

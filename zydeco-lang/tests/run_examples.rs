@@ -186,7 +186,10 @@ mod doc_tests {
     mk_test!(doc_test, toplevel, &["0-toplevel.zy"]);
     mk_test!(doc_test, thunk_ret, &["1-thunk-ret.zy"]);
     mk_test!(doc_test, data_codata, &["2-data-codata.zy"]);
-    mk_test!(doc_test, y_combinator, &["3-y-combinator.zy"]);
+    mk_test!(doc_test, object, &["3-object.zy"]);
+    mk_test!(doc_test, y_combinator, &["4-y-combinator.zy"]);
+    mk_test!(doc_test, mutual_rec, &["5-mutual-rec.zy"]);
+    mk_test!(doc_test, cps, &["6-cps.zy"]);
 }
 
 mod custom_tests {}

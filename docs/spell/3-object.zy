@@ -1,0 +1,36 @@
+// # Chapter 3: Object-Oriented Programming (?)
+
+// Codata is defined by how the term is supposed to be used. To better
+// illustrate this idea, let's pretend that we are writing in a language with
+// `struct` or `class`. We have a `class` called `Counter` that can increment
+// and project out either `Int` or `String`.
+
+codata Counter where
+| .num(): Ret Int
+| .incr(Int): Counter
+| .fmt(): Ret String
+end
+
+// We can use `this` (or `self`) as in normal OO languages
+def mk_counter : Thunk(Int -> Counter) = {
+  rec mk_counter ->
+  fn n -> rec this ->
+  // Todo..
+  ! this
+} end
+
+main
+  let counter_42: Thunk(Counter) = {
+    ! mk_counter 42
+  } in
+  // Todo: uncomment the following lines
+  // do s <- ! counter_42 .fmt();
+  // ! write_line s {
+  // do n <- ! counter_42 .incr(-42) .num();
+  // ! exit n }
+  // Todo: comment out the following line
+  ! exit 0
+end
+
+// An interesting observation is that syntactic-wise, we can remove some of the
+// spaces in the example above and make the code look like method calls.
