@@ -79,7 +79,8 @@ main
                 // if starts with "// " then output "```", remove, output and switch mode
                 ! write_str "```\n\n" {
                 ! write_str res {
-                ! loop r false } }
+                ! write_str " " {
+                ! loop r false } } }
               } {
                 // if not, output the line
                 ! write_str "\n" {

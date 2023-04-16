@@ -33,10 +33,10 @@ def lazy-add-one-zero : Thunk (Ret Int) = {
   // add: Thunk (Int -> Int -> Ret Int)
 } end
 
-//  The `do` notation is borrowed (again) from Haskell. It takes a `Ret A` typed
-//  term and binds it to a variable `x` of type `A`. It's the elimination form
-//  of `Ret A`. Note that the rhs isn't necessarily syntactically `ret a` - any
-//  computation of type `Ret A` would suffice.
+// The `do` notation is borrowed (again) from Haskell. It takes a `Ret A` typed
+// term and binds it to a variable `x` of type `A`. It's the elimination form
+// of `Ret A`. Note that the rhs isn't necessarily syntactically `ret a` - any
+// computation of type `Ret A` would suffice.
 
 // The `!`, read as "force", is the operator to force a `Thunk B` typed term to
 // evaluate to a `B` typed term. It's the only way to "defrost" the computation
