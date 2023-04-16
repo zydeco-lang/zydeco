@@ -66,7 +66,7 @@ We have some ways of binding a certain value to variables which can be used late
 
 We can bind something with `value` type to a variable using `let`. 
 ```
-> let pre = "ann "; ! str_append pre "arbor"
+> let pre = "ann " in ! str_append pre "arbor"
 "ann arbor"
 ```
 
@@ -74,7 +74,7 @@ We can also define a function using `let`.
 ```
 > mod
 mod : Thunk(Int -> Int -> Ret(Int))
-> let mod10 = {fn (n : Int) -> ! mod n 10}; ! mod10 54
+> let mod10 = {fn (n : Int) -> ! mod n 10} in ! mod10 54
 4
 ```
 `mod` is a built-in function and we can define a function taking an `x : Int` and calculating `x mod 10`. The type of defined function `mod10` should also be `Thunk(B)`. Therefore, we add `{}` at each side of the definition part.
@@ -101,17 +101,21 @@ pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
 # echo what users just input in an infinite loop
 let rec loop : OS = ! read_line { fn (str : String) -> ( ! write_line str {! loop} 
   )
-};
+} in
 ! loop
 
 # echo what users just input in an infinite loop until the input string is "exit"
-let rec loop : OS = ! read_line { fn (str : String) -> (
-  do b <- ! str_eq str "exit";
-  match b
-  | True() -> ! write_line str {! exit 0}
-  | False() -> ! write_line str {! loop}
-  )
-};
+let loop : OS = {
+  rec loop -> ! read_line {
+    fn (str : String) -> (
+      do b <- ! str_eq str "exit";
+      match b
+      | True() -> ! write_line str { ! exit 0 }
+      | False() -> ! write_line str { ! loop }
+      end
+    )
+  }
+} in
 ! loop
 ```
 ## data (and match)
@@ -134,14 +138,13 @@ end
 # Notice that for each possible branch, the type after "->" must be the same
 let printListInt = {
   rec (printReal : Thunk(ListInt -> OS)) ->
-    fn (myList : ListInt) ->
+    fn myList ->
       match myList
       | NoInt() -> ! exit 0
-      | Cons(x, xs) -> (
+      | Cons(x, xs) ->
         do wx_ <- ! int_to_str x;
         do wx <- ! str_append wx_ ' ';
-        ! write_str wx {! printReal xs}
-      )
+        ! write_str wx { ! printReal xs }
       end
 };
 ```

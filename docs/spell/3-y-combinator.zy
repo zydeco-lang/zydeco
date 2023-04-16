@@ -1,0 +1,72 @@
+// # Chapter 3: Y Combinator
+
+// In the last section we saw the `rec` keyword, which allows us to define
+// recursive functions. However, it is actually possible to define recursive
+// functions without the primitive `rec` terms. This is done by using the Y
+// combinator.
+
+codata Y (B : CType) where
+  | .y(Thunk (Y B)): B
+end
+
+// Exercise Y: Implement the Y combinator
+
+// Hint: In call-by-name sense, the Y combinator is given by: `Y f = f (Y f)` or
+// `\f. (\x. f (x x)) (\x. f (x x))`.
+
+alias FnInt = Int -> Ret Int end
+def rec' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
+  fn (f : Thunk (Thunk FnInt -> FnInt)) -> (
+    // Todo..
+    ret { fn x -> ret 3628800 }
+  )
+} end
+
+// The fact that we can implement the Y combinator in zydeco implies that zydeco
+// is very likely to be a partial language with turning computability. In fact,
+// this is exactly the case.
+
+// With a little extra effort it is possible to implement the Y combinator in a
+// generic way. See zydeco-lang/tests/nonzero-exit-code/Y.zydeco for details.
+
+// The rest is just a test bench.
+main
+  # good old factorial
+  let fn fact (f: U(Int -> F Int)) (n: Int): F Int =
+    do is_zero <- ! int_eq n 0;
+    match is_zero
+    | True() -> ret 1
+    | False() ->
+      do rest <- (
+        do n-1 <- ! sub n 1;
+        ! f n-1
+      );
+      ! mul n rest
+    end
+  in
+
+  do fact <- ! rec' fact;
+
+  # tests
+  let fn demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
+    do x <- ! fact input;
+    do correct <- ! int_eq x expected;
+    match correct
+    | True() -> ! t
+    | False() ->
+      do input <- ! int_to_str input;
+      do expected <- ! int_to_str expected;
+      do got <- ! int_to_str x;
+      do msg <- ! str_append "f " input;
+      do msg <- ! str_append msg " = ";
+      do msg <- ! str_append msg expected;
+      do msg <- ! str_append msg ", got ";
+      do msg <- ! str_append msg got;
+      ! write_line msg { ! exit 1 }
+    end
+  in
+
+  ! demo 10 3628800 {
+  ! write_line "factorial result is correct :)" {
+  ! exit 0 }}
+end

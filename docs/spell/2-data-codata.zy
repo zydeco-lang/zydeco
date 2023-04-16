@@ -1,0 +1,126 @@
+// # Chapter 2: Data and Codata
+
+// `data` declaration positively defines a value type that can be matched
+// against. It can be treated as sum types together with product types. It can
+// be introduced by data constructors (values) and eliminated with match
+// computaion.
+
+// System-F hasn't been taught yet, so we'll use a trival example to illustrate.
+def hd-int : Thunk (List Int -> Ret (Option Int)) = {
+  fn xs -> (
+    match xs
+    | Nil() -> ret None()
+    | Cons(x, _) -> ret Some(x)
+    end
+  )
+} end
+
+def xs : List Int = Cons(0, Cons(2, Cons(4, Nil()))) end
+
+def some-0~ : Thunk(Ret (Option Int)) = {
+  ! hd-int xs
+} end
+
+// Unsuprisingly, `codata` declaration, dually, negatively defines a computation
+// type that comatches the stack. It can be introduced by comatch computation
+// and and can be eliminated by codata destructors.
+
+// Read how `LList`, a.k.a. lazy list, is defined in `std.zydeco`.
+
+def xs~ : Thunk (LList Int) = {
+  comatch
+  | .run() -> ret Cons(0, {
+    comatch
+    | .run() -> ret Cons(2, {
+      comatch
+      | .run() -> ret Cons(4, {
+        comatch
+        | .run() -> ret Nil()
+        end
+      }) end
+    }) end
+  }) end
+} end
+
+def some-0~' : Thunk(Ret (Option Int)) = {
+  do p <- ! xs~ .run();
+  match p
+  | Nil() -> ret None()
+  | Cons(x, _) -> ret Some(x)
+  end
+} end
+
+// Note that `data` can be used to naturally represent inductive types, and
+// `codata` - you tell me - can be used to represent coinductive types.
+
+// The good thing about writing dual definitions (and their explanations) is
+// that it's extremely copilot-friendly.
+
+// Exercise `data`: implement `foldl` for `List Int`.
+
+def foldl' : Thunk(Thunk (Int -> Int -> Ret Int) -> Int -> List Int -> Ret Int) = {
+  rec foldl' -> fn f -> fn acc -> fn xs -> (
+    // Todo..
+    ret 6
+  )
+} end
+
+// Exercise `codata`: implement `foldr` for `LList Int`.
+
+def foldr' : Thunk(
+  Thunk (Int -> Thunk (Ret Int) -> Ret Int)
+  -> Thunk (Ret Int) -> Thunk (LList Int)
+  -> Ret Int
+) = {
+  rec foldr' -> fn f -> fn base -> fn xs -> (
+    // Todo..
+    ret 6
+  )
+} end
+
+// You may wonder what is `rec`. It's *just* `fix` in System PCF sense. The only
+// caveat is that if the whole term is a computation of type `B`, then the
+// variable passed in is of type `Thunk B`, because variables must have value
+// types.
+
+// Exercise `data`-coinductive: declare the coinductive type `LList'` using only
+// `data`, yet still being "coinductive". The most important hint is that it
+// should at least be lazy.
+
+data LList' (A : VType) where
+  // Todo..
+end
+
+// Exercise (optional): Read how `fold`s are implemented in `std.zydeco`, and
+// get a taste of how parametric polymorphism (template functions in C++) work.
+
+main
+  let fn check_res (x : Int) (y : Int) (s : String) (kont : Thunk OS) : OS =
+    ! if~ @(OS) { ! int_eq x y } {
+      ! kont
+    } {
+      do msg <- ! str_append s " is not correct";
+      ! write_line msg { ! exit 1 }
+    }
+  in
+  let fn check (xs : List Int) (kont : Thunk OS) : OS =
+    do x <- ! foldl @(Int) @(Int) xs add 0;
+    do y <- ! foldl' add 0 xs;
+    ! check_res x y "foldl'" kont
+  in
+  let fn check~ (xs : Thunk (LList Int)) (kont : Thunk OS) : OS =
+    let add~ : Thunk (Int -> Thunk (Ret Int) -> Ret Int) = {
+      fn x y~ -> do y <- ! y~; ! add x y
+    } in
+    do x <- ! foldr @(Int) @(Ret Int) xs~ { ret 0 } add~;
+    do y <- ! foldr' add~ { ret 0 } xs~;
+    ! check_res x y "foldr'" kont
+  in
+  ! check xs {
+    ! check~ xs~ {
+      ! write_line "All tests passed" {
+        ! exit 0
+      }
+    }
+  }
+end

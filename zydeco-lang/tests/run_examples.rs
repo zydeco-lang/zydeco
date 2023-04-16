@@ -181,11 +181,12 @@ mod io_tests {
         }
     );
 }
-
 mod doc_tests {
     use super::*;
     mk_test!(doc_test, toplevel, &["0-toplevel.zy"]);
-    mk_test!(doc_test, thunk_and_ret, &["1-thunk-and-ret.zy"]);
+    mk_test!(doc_test, thunk_ret, &["1-thunk-ret.zy"]);
+    mk_test!(doc_test, data_codata, &["2-data-codata.zy"]);
+    mk_test!(doc_test, y_combinator, &["3-y-combinator.zy"]);
 }
 
 mod custom_tests {}

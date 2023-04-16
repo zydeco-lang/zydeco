@@ -56,7 +56,18 @@ def decr~ : Thunk (Thunk (Ret Int) -> Ret Int) = {
 // its argument; it's just a valid symbol for values, so you may use any
 // variable name as you like.
 
+// The `fn` keyword denotes a function, a computation type `A -> B`. In fact,
+// function types in call-by-push-value can be better defined by the general
+// form of codata. Search `Fn` in the standard library to see its definition.
+// We'll learn more about it in the next chapter.
+
+// As a finishing touch, we exit with a perfect zero'.
+
 main
   do zero' <- ! decr~ lazy-add-one-zero;
   ! exit zero'
 end
+
+// The `module` - actually namespace - part hasn't been implemented yet, so
+// anything you observe in `std.zydeco` related to `module` is only compatible
+// syntax without actually meaning and can be safely ignored.
