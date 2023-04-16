@@ -18,7 +18,7 @@ def fn guard (line : String) : Ret (Pair String Bool) =
   do l <- ! str_length line;
   let ifp~ = { ! if~ @(Ret (Pair String Bool)) } in
   ! ifp~ { ! int_lt l 3 } {
-    ret Pair(line, true)
+    ret Pair(line, false)
   } {
     // can index into
     do c1 <- ! str_index line 0;
@@ -62,22 +62,22 @@ main
           | Pair(res, comment_head) ->
             ! if~ @(OS) { ! not code } {
               // normal mode:
-              ! if @(OS) comment_head {
-                // if starts with "// " then remove it and output the line
-                do empty? <- ! str_empty? res;
-                ! if @(OS) empty? {
-                  ! write_str "\n\n" {
-                  ! loop r code }
-                } {
+              do empty? <- ! str_empty? res;
+              ! if @(OS) empty? {
+                ! write_str "\n\n" {
+                ! loop r code }
+              } {
+                ! if @(OS) comment_head {
+                  // if starts with "// " then remove it and output the line
                   ! write_str res {
                   ! write_str " " {
                   ! loop r code } }
+                } {
+                  // if not, output "```" and output the line and switch mode
+                  ! write_str "\n```\n" {
+                  ! write_str res {
+                  ! loop r true } }
                 }
-              } {
-                // if not, output "```" and output the line and switch mode
-                ! write_str "\n```\n" {
-                ! write_line res {
-                ! loop r true } }
               }
             } {
               // code mode:
@@ -89,8 +89,9 @@ main
                 ! loop r false } } }
               } {
                 // if not, output the line
-                ! write_line res {
-                ! loop r code }
+                ! write_str "\n" {
+                ! write_str res {
+                ! loop r code } }
               }
             }
           end
