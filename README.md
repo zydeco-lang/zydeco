@@ -37,11 +37,17 @@ implemented more features. For now, browse `zydeco-lang/tests/` for
 some example programs.
 
 To run all tests
-```base
+```bash
 RUST_MIN_STACK=4194304 cargo test -p zydeco-lang -p cli
 ```
 
-A legacy version of tutorial lies [here](docs/tutorial/intro_to_zydeco.md). With system-F, type parameter and type alias shipped in we'll update the tutorial shortly.
+A legacy version of the tutorial lies [here](docs/tutorial/intro_to_zydeco.md). With system-F, type parameter and type alias shipped in we'll update the tutorial shortly.
+
+And we now have a toy "literate zydeco" written in zydeco! Try it out by running
+```bash
+cd docs/spell && ./build.sh
+```
+and the product will show up right in the folder.
 
 ## Repository Structure
 
@@ -57,7 +63,7 @@ A legacy version of tutorial lies [here](docs/tutorial/intro_to_zydeco.md). With
 └── ...
 ```
 
-- `zydeco-lang/`: the library implementing the parser, typechecker and
+- `zydeco-lang/`: the library implementing the parser, type checker and
 interpreter for the Zydeco language.
 - `zydeco-lang/tests/`: test cases and example code
 - `cli/` Command-line interface
