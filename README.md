@@ -38,7 +38,7 @@ some example programs.
 
 To run all tests
 ```bash
-RUST_MIN_STACK=4194304 cargo test -p zydeco-lang -p cli
+cargo test --all
 ```
 
 A legacy version of the tutorial lies [here](docs/tutorial/intro_to_zydeco.md). With system-F, type parameter and type alias shipped in we'll update the tutorial shortly.
