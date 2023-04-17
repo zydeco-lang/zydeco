@@ -1,0 +1,27 @@
+// # Chapter 7: Call-by-need is Not an Interesting Dynamic Semantics
+
+// An naive implementation of call-by-need.
+
+extern data Ref (A : VType) end
+
+extern def ref : Thunk (forall (A : VType) . A -> Ret (Ref A)) end
+extern def get : Thunk (forall (A : VType) . Ref A -> Ret A) end
+extern def set : Thunk (forall (A : VType) . Ref A -> A -> Ret Unit) end
+
+def fn cbneed-thunk (A : VType) (u~ : Thunk (Ret A)) : Ret (Thunk (Ret A)) =
+  do r <- ! ref @(Option A) None();
+  ret {
+    do a? <- ! get @(Option A) r;
+    match a?
+    | Some(a) -> ret a
+    | None() ->
+      do a <- ! u~;
+      do _ <- ! set @(Option A) r Some(a);
+      ret a
+    end
+  }
+end
+
+main
+  ! exit 0
+end

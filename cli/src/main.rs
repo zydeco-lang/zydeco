@@ -37,14 +37,16 @@ fn run_files(
     // type check
     announce_phase(verbose, title, "tyck");
     ZydecoFile::tyck(m.clone())?;
-    // link
-    announce_phase(verbose, title, "link");
-    let sem_m = ZydecoFile::link(m.inner())?;
-    if verbose {
-        println!("{}", sem_m.fmt());
-    }
-    // eval
+
+    // if not dry run, link and eval
     if !dry_run {
+        // link
+        announce_phase(verbose, title, "link");
+        let sem_m = ZydecoFile::link(m.inner())?;
+        if verbose {
+            println!("{}", sem_m.fmt());
+        }
+        // eval
         announce_phase(verbose, title, "eval");
         let res = ZydecoFile::eval_os(sem_m, &args);
         let ProgKont::ExitCode(x) = res.entry else {

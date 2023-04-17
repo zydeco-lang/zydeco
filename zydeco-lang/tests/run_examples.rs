@@ -37,34 +37,37 @@ fn till_check(base: &str, f: &[&str]) -> Result<Span<ss::Program>, String> {
     Ok(m)
 }
 
-fn check_test(f: &[&str]) -> Result<(), String> {
-    till_check("tests/check-only", f)?;
-    Ok(())
-}
-
-fn batch_test_template(parent: &'static str, f: &[&str]) -> Result<(), String> {
+fn test_template(parent: &'static str, run: bool, f: &[&str]) -> Result<(), String> {
     let m = till_check(parent, f)?;
-    let m = ZydecoFile::link(m.inner)?;
 
-    let mut input = std::io::empty();
-    let mut output = std::io::sink();
-    let ds::ProgKont::ExitCode(exit_code) =
+    if run {
+        let m = ZydecoFile::link(m.inner)?;
+
+        let mut input = std::io::empty();
+        let mut output = std::io::sink();
+        let ds::ProgKont::ExitCode(exit_code) =
         ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[]).entry else {
             Err("Expected ExitCode".to_string())?
         };
-    if exit_code != 0 {
-        Err(format!("Non-zero exit code: {}", exit_code))?
+        if exit_code != 0 {
+            Err(format!("Non-zero exit code: {}", exit_code))?
+        }
     }
 
     Ok(())
 }
 
-fn batch_test(f: &[&str]) -> Result<(), String> {
-    batch_test_template("tests/nonzero-exit-code", f)
+fn check_test(f: &[&str]) -> Result<(), String> {
+    test_template("tests/check-only", false, f)?;
+    Ok(())
 }
 
-fn doc_test(f: &[&str]) -> Result<(), String> {
-    batch_test_template("../docs/spell", f)
+fn batch_test(f: &[&str]) -> Result<(), String> {
+    test_template("tests/nonzero-exit-code", true, f)
+}
+
+fn doc_test(f: &[&str], run: bool) -> Result<(), String> {
+    test_template("../docs/spell", run, f)
 }
 
 struct IOMatch {
@@ -183,13 +186,14 @@ mod io_tests {
 }
 mod doc_tests {
     use super::*;
-    mk_test!(doc_test, toplevel, &["0-toplevel.zy"]);
-    mk_test!(doc_test, thunk_ret, &["1-thunk-ret.zy"]);
-    mk_test!(doc_test, data_codata, &["2-data-codata.zy"]);
-    mk_test!(doc_test, object, &["3-object.zy"]);
-    mk_test!(doc_test, y_combinator, &["4-y-combinator.zy"]);
-    mk_test!(doc_test, mutual_rec, &["5-mutual-rec.zy"]);
-    mk_test!(doc_test, cps, &["6-cps.zy"]);
+    mk_test!(doc_test, toplevel, &["0-toplevel.zy"], true);
+    mk_test!(doc_test, thunk_ret, &["1-thunk-ret.zy"], true);
+    mk_test!(doc_test, data_codata, &["2-data-codata.zy"], true);
+    mk_test!(doc_test, object, &["3-object.zy"], true);
+    mk_test!(doc_test, y_combinator, &["4-y-combinator.zy"], true);
+    mk_test!(doc_test, mutual_rec, &["5-mutual-rec.zy"], true);
+    mk_test!(doc_test, cps, &["6-cps.zy"], true);
+    mk_test!(doc_test, call_by_need, &["7-call-by-need.zy"], false);
 }
 
 mod custom_tests {}
