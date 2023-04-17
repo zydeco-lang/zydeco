@@ -124,3 +124,6 @@ main
     }
   }
 end
+
+// The test bench is using more than what has been taught so far. It's ok if you
+// don't understand all of them, but you can make your best guess.

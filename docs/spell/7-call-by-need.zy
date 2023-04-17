@@ -1,6 +1,8 @@
 // # Chapter 7: Call-by-need is Not an Interesting Dynamic Semantics
 
-// An naive implementation of call-by-need.
+// To speed up the evaluation of a thunk, which is of great need in call-by-name
+// languages, we can cache the computation result of a pure thunk and reuse it
+// when asked next time ("sharing").
 
 extern data Ref (A : VType) end
 
@@ -8,13 +10,24 @@ extern def ref : Thunk (forall (A : VType) . A -> Ret (Ref A)) end
 extern def get : Thunk (forall (A : VType) . Ref A -> Ret A) end
 extern def set : Thunk (forall (A : VType) . Ref A -> A -> Ret Unit) end
 
+// Since we are just making up definitions, we use `extern` to claim that they
+// are implemented by ffi; this would mean that the example is not runnable.
+// Rather than running it via `zydeco run <file>` as usual, to get a sanity
+// check, run `zydeco check <file>` instead.
+
+// Below is an naive implementation of call-by-need. All you need to change from
+// call-by-name is the semantics of a thunk.
+
 def fn cbneed-thunk (A : VType) (u~ : Thunk (Ret A)) : Ret (Thunk (Ret A)) =
   do r <- ! ref @(Option A) None();
   ret {
     do a? <- ! get @(Option A) r;
     match a?
-    | Some(a) -> ret a
+    | Some(a) ->
+      // `a` is already cached
+      ret a
     | None() ->
+      // only evaluate `u~` once
       do a <- ! u~;
       do _ <- ! set @(Option A) r Some(a);
       ret a
@@ -25,3 +38,22 @@ end
 main
   ! exit 0
 end
+
+// See? Semantic-wise call-by-need is not interesting at all and should be
+// viewed as an implementation optimization of call-by-name. And to make matters
+// worse, this approach will no longer work if `u~` contains arbitrary side
+// effect, because it would only be evaluated once.
+
+// Exercise `Thunk (Ret A)`: Explain why the input is required to be of type
+// `Thunk (Ret A)` instead of just `Thunk B`.
+
+// Confronted with the problem of sharing, we can sense the urge of having
+// type-sensible approach of defining side effects. For instance, the type of
+// `ref`, `get` and `set` definitions given above is not the best choice for
+// encoding the reference semantics because the side effect is not represented
+// in the type signature - it is not possible to tell that the functions are
+// performing side effects merely from their type signature.
+
+// Exercise `Ref A`: think of a better way to encode the reference semantics.
+
+// Hint: you've seen how.

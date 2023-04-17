@@ -19,3 +19,5 @@ end
 main
   ! exit 0
 end
+
+// If you don't know how to print something, see `write_str` and `write_line`.

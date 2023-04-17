@@ -42,3 +42,6 @@ main
   // Todo: uncomment the following lines
   // }}
 end
+
+// At this point, I believe that you are convinced that `codata` is a general
+// representation of computation.
