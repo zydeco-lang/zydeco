@@ -1,3 +1,20 @@
+# Rust
 /target
-.vscode
+
+# Local script folders
 _*/
+
+# Editors
+.vscode
+
+# Folder config files
+.directory
+.DS_Store
+[Dd]esktop.ini
+
+# Temp files
+*~
+._*
+
+# Rustfmt
+**/*.rs.bk
