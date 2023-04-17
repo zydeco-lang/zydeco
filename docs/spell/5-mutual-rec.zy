@@ -3,7 +3,7 @@
 // Let's take the use of `rec` to a new level. With `codata`, we can define
 // mutually recursive functions with ease. 
 
-// Exercise `even-odd`: define `even` and `odd` for natural numbers.
+// Exercise `even-odd`: Define `even` and `odd` for natural numbers.
 
 codata EvenOdd where
   | .even(Nat): Ret Bool

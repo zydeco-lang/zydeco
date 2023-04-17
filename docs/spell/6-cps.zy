@@ -12,7 +12,7 @@ def xs : List String =
   Cons("1", Cons("2", Cons("3", Cons("not only you and me", Nil()))))
 end
 
-// As the final exercise, choose one of the following tasks (or both):
+// Exercise: Choose one of the following tasks (or both):
 // 1. Reverse a list.
 // 2. Print a list.
 
@@ -20,4 +20,4 @@ main
   ! exit 0
 end
 
-// If you don't know how to print something, see `write_str` and `write_line`.
+// Hint: If you don't know how to print something, see `write_str` and `write_line`.

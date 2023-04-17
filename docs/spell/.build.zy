@@ -1,12 +1,12 @@
 alias GuardResult = Pair String Bool end
 
 // checks if line starts with "// " and remove it
-def fn guard (line : String) : Ret (GuardResult) =
+def fn guard (line : String) : Ret GuardResult =
   let fn bind (b : Bool) (b~ : Thunk (Ret Bool)) : Ret Bool =
     ! if @(Ret Bool) b b~ { ret b }
   in
   do l <- ! str_length line;
-  let ifp~ = { ! if~ @(Ret (GuardResult)) } in
+  let ifp~ = { ! if~ @(Ret GuardResult) } in
   ! ifp~ { ! int_lt l 3 } {
     ret Pair(line, false)
   } {
@@ -22,7 +22,7 @@ def fn guard (line : String) : Ret (GuardResult) =
         do b1 <- ! bind true { ! char_eq c1 '/' };
         do b2 <- ! bind b1 { ! char_eq c2 '/' };
         do b3 <- ! bind b2 { ! char_eq c3 ' ' };
-        ! if @(Ret (GuardResult)) b3 {
+        ! if @(Ret GuardResult) b3 {
           ret Pair(line', true)
         } {
           ret Pair(line, false)
