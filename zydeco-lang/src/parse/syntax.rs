@@ -111,7 +111,11 @@ pub enum Term {
 
 /* -------------------------------- TopLevel -------------------------------- */
 
-pub type Define = GenLet;
+#[derive(SpanHolder, Clone, Debug)]
+pub struct Module {
+    pub name: Option<NameRef>,
+    pub declarations: Vec<DeclSymbol<Declaration>>,
+}
 
 #[derive(SpanHolder, Clone, Debug)]
 pub struct UseAll;
@@ -130,6 +134,9 @@ pub enum UseDef {
 }
 
 #[derive(SpanHolder, Clone, Debug)]
+pub struct Define(pub GenLet);
+
+#[derive(SpanHolder, Clone, Debug)]
 pub struct Main {
     pub entry: Span<TermComputation>,
 }
@@ -143,24 +150,6 @@ pub enum Declaration {
     Alias(Alias<NameDef, Option<Span<Kind>>, BoxType>),
     Define(Define),
     Main(Main),
-}
-
-#[derive(SpanHolder, Clone, Debug)]
-pub struct Module {
-    pub name: Option<String>,
-    pub declarations: Vec<DeclSymbol<Declaration>>,
-}
-
-impl Monoid for Module {
-    fn empty() -> Self {
-        Self { name: None, declarations: Vec::new() }
-    }
-    fn append(self, other: Self) -> Self {
-        Self {
-            name: other.name.or(self.name),
-            declarations: self.declarations.into_iter().chain(other.declarations).collect(),
-        }
-    }
 }
 
 #[derive(SpanHolder, Clone, Debug)]

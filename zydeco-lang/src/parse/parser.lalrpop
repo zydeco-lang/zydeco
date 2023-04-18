@@ -27,10 +27,10 @@ DeclSymbol<T>: DeclSymbol<T> = {
 };
 
 Declaration: Declaration = {
-    "module" <name:UpperId> "where"
+    "module" <name:NameRef<UpperId>?> "where"
         <declarations:DeclSymbol<Declaration>*>
     "end" => Module {
-        name: Some(name), declarations
+        name, declarations
     }.into(),
     "use" <UseDef> "end" => <>.into(),
     "data" <name:NameDef<UpperId>> <params:TypePattern*>
@@ -46,7 +46,7 @@ Declaration: Declaration = {
     "alias" <name:NameDef<UpperId>> <params:TypePattern*> "=" <ty:Box<Span<Type>>> "end" => Alias {
         name, params, ty,
     }.into(),
-    "define" <gen:GenLet> DefineEnd => gen.into(),
+    "define" <gen:GenLet> DefineEnd => Define(gen).into(),
     "main" <entry:Span<TermComputation>> "end" => Main {
         entry,
     }.into(),

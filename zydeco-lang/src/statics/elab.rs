@@ -534,7 +534,7 @@ impl Elaboration<ps::Module> for Module {
     type Error = TyckErrorItem;
     fn elab(ps::Module { name, declarations }: ps::Module) -> Result<Self, TyckErrorItem> {
         let mut module: Module = Elaboration::elab(ps::TopLevel { declarations })?;
-        module.name = name;
+        module.name = name.map(|name| name.ident.inner);
         Ok(module)
     }
 }
@@ -576,7 +576,7 @@ impl Elaboration<ps::TopLevel> for Module {
                     alias.push(DeclSymbol { public, external, inner: Elaboration::elab(d)? })
                 }
                 ps::Declaration::Define(d) => {
-                    let ps::GenLet { rec, fun, name, params, def } = d;
+                    let ps::Define(ps::GenLet { rec, fun, name, params, def }) = d;
                     let (name, ty, te) = desugar_gen_let(rec, fun, name, params, def)?;
                     if external {
                         define_ext.push(DeclSymbol {
