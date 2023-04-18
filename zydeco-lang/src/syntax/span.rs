@@ -336,36 +336,6 @@ where
     }
 }
 
-impl<TyV, B> SpanHolder for TyAbsTerm<TyV, B>
-where
-    TyV: TyVarT + SpanHolder,
-    B: ComputationT + SpanHolder,
-{
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        let TyAbsTerm { param: tvar, body } = self;
-        tvar.span_map_mut(f.clone());
-        body.span_map_mut(f);
-    }
-}
-
-impl<B, Ty> SpanHolder for TyAppTerm<B, Ty>
-where
-    B: ComputationT + SpanHolder,
-    Ty: TypeT + SpanHolder,
-{
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        let TyAppTerm { body, arg } = self;
-        body.span_map_mut(f.clone());
-        arg.span_map_mut(f);
-    }
-}
-
 impl<A, TyV, TeV, B> SpanHolder for MatchPack<A, TyV, TeV, B>
 where
     A: ValueT + SpanHolder,

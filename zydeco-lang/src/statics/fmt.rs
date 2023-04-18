@@ -1,5 +1,5 @@
 use super::syntax::*;
-use crate::utils::fmt::*;
+use crate::{prelude::*, utils::fmt::*};
 
 impl FmtArgs for AbstVar {
     fn fmt_args(&self, _fargs: Args) -> String {
@@ -30,6 +30,20 @@ impl FmtArgs for TailGroup {
         s += &fargs.br_indent();
         s += &format!("{}", body.fmt_args(fargs));
         s
+    }
+}
+
+impl FmtArgs for Abs<(TypeV, Option<Span<Kind>>), RcComp> {
+    fn fmt_args(&self, fargs: Args) -> String {
+        let Abs { param, body } = self;
+        format!("fn {} -> {}", param.fmt_args(fargs), body.fmt_args(fargs))
+    }
+}
+
+impl FmtArgs for App<RcComp, RcType> {
+    fn fmt_args(&self, fargs: Args) -> String {
+        let App { body, arg } = self;
+        format!("{} @({})", body.fmt_args(fargs), arg.fmt_args(fargs))
     }
 }
 
