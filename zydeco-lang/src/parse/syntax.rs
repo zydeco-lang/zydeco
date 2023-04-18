@@ -118,7 +118,7 @@ pub struct UseAll;
 
 #[derive(SpanHolder, Clone, Debug)]
 pub struct UseCluster {
-    pub modv: ModV,
+    pub path: NameRef,
     pub cluster: Vec<UseDef>,
 }
 

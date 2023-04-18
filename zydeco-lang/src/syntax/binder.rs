@@ -208,9 +208,6 @@ var!(TermV);
 impl VarT for TermV {}
 impl<Ty: TypeT> VarT for (TermV, Ty) {}
 
-var!(ModV);
-impl VarT for ModV {}
-
 mod legacy {
     use super::*;
 

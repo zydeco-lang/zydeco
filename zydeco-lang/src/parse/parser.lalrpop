@@ -55,8 +55,8 @@ Declaration: Declaration = {
 UseDef: UseDef = {
     <NameRef<MixedId>> => <>.into(),
     ".." => UseAll.into(),
-    <modv:ModV>  <cluster:SepByDelim<"(", ",", UseDef, ")">> => UseCluster {
-        modv, cluster,
+    <path:NameRef<UpperId>>  <cluster:SepByDelim<"(", ",", UseDef, ")">> => UseCluster {
+        path, cluster,
     }.into(),
 };
 
@@ -274,8 +274,6 @@ NameRef<T>: NameRef = {
         path: <>.inner.0, ident: <>.inner.1, info: <>.info,
     },
 };
-
-ModV: ModV = <PathPrefix<Span<UpperId>, Span<UpperId>>> => <>.1.into();
 
 CtorV: CtorV = <PathPrefix<Span<UpperId>, Span<UpperId>>> => <>.1.into();
 DtorV: DtorV = <PathPrefix<Span<UpperId>, Span<LowerId>>> => <>.1.into();
