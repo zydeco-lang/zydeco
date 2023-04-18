@@ -1,6 +1,6 @@
 use crate::syntax::binder::*;
-use slotmap::SlotMap;
 use im::HashMap;
+use slotmap::SlotMap;
 use std::ops::{Deref, DerefMut};
 
 pub struct NameMap<'a> {

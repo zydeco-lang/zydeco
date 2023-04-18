@@ -126,18 +126,17 @@ pub fn str_split_n(
             if n.is_negative() {
                 return ret(ctor("None", vec![]));
             }
-            match s.split_at(*n as usize) {
-                (a, b) => ret(ctor(
-                    "Some",
-                    vec![rc!(ctor(
-                        "Pair",
-                        vec![
-                            rc!(Literal::String(a.to_owned()).into()),
-                            rc!(Literal::String(b.to_owned()).into()),
-                        ],
-                    ))],
-                )),
-            }
+            let (a, b) = s.split_at(*n as usize);
+            ret(ctor(
+                "Some",
+                vec![rc!(ctor(
+                    "Pair",
+                    vec![
+                        rc!(Literal::String(a.to_owned()).into()),
+                        rc!(Literal::String(b.to_owned()).into()),
+                    ],
+                ))],
+            ))
         }
         _ => unreachable!(""),
     }
