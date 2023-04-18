@@ -214,16 +214,22 @@ impl Elaboration<ps::Type> for Type {
             }
             ps::Type::Forall(ps::Forall { param: params, ty: t }) => {
                 let mut t = t.try_map(Elaboration::elab)?;
-                for param in params.into_iter().rev() {
-                    let param = Elaboration::elab(param)?;
+                for (tvar, kd) in params.into_iter().rev() {
+                    let kd = kd.ok_or_else(|| TyckErrorItem::NeedAnnotation {
+                        content: format!("forall type variable elabrotion"),
+                    })?;
+                    let param = Elaboration::elab((tvar, kd))?;
                     t = t.span().clone().make(Forall { param, ty: rc!(t) }.into())
                 }
                 t.inner
             }
             ps::Type::Exists(ps::Exists { param: params, ty: t }) => {
                 let mut t = t.try_map(Elaboration::elab)?;
-                for param in params.into_iter().rev() {
-                    let param = Elaboration::elab(param)?;
+                for (tvar, kd) in params.into_iter().rev() {
+                    let kd = kd.ok_or_else(|| TyckErrorItem::NeedAnnotation {
+                        content: format!("exists type variable elabrotion"),
+                    })?;
+                    let param = Elaboration::elab((tvar, kd))?;
                     t = t.span().clone().make(Exists { param, ty: rc!(t) }.into())
                 }
                 t.inner
@@ -418,11 +424,29 @@ impl Elaboration<ps::Term> for Term {
     }
 }
 
-impl Elaboration<ps::Data<NameDef, Span<ps::Kind>, CtorV, Span<ps::Type>>> for prelude::Data {
+impl Elaboration<ps::Data<NameDef, Option<Span<ps::Kind>>, CtorV, Span<ps::Type>>>
+    for prelude::Data
+{
     type Error = TyckErrorItem;
     fn elab(
-        Data { name, params, ctors }: ps::Data<NameDef, Span<ps::Kind>, CtorV, Span<ps::Type>>,
+        Data { name, params, ctors }: ps::Data<
+            NameDef,
+            Option<Span<ps::Kind>>,
+            CtorV,
+            Span<ps::Type>,
+        >,
     ) -> Result<Self, TyckErrorItem> {
+        let params = params
+            .into_iter()
+            .map(|(tvar, kd)| {
+                Ok((
+                    tvar,
+                    kd.ok_or_else(|| TyckErrorItem::NeedAnnotation {
+                        content: format!("elaborating data type"),
+                    })?,
+                ))
+            })
+            .collect::<Result<_, TyckErrorItem>>()?;
         Ok(Self {
             name: name.into(),
             params: Elaboration::elab(params)?,
@@ -441,11 +465,29 @@ impl Elaboration<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
     }
 }
 
-impl Elaboration<ps::Codata<NameDef, Span<ps::Kind>, DtorV, Span<ps::Type>>> for prelude::Codata {
+impl Elaboration<ps::Codata<NameDef, Option<Span<ps::Kind>>, DtorV, Span<ps::Type>>>
+    for prelude::Codata
+{
     type Error = TyckErrorItem;
     fn elab(
-        Codata { name, params, dtors }: ps::Codata<NameDef, Span<ps::Kind>, DtorV, Span<ps::Type>>,
+        Codata { name, params, dtors }: ps::Codata<
+            NameDef,
+            Option<Span<ps::Kind>>,
+            DtorV,
+            Span<ps::Type>,
+        >,
     ) -> Result<Self, TyckErrorItem> {
+        let params = params
+            .into_iter()
+            .map(|(tvar, kd)| {
+                Ok((
+                    tvar,
+                    kd.ok_or_else(|| TyckErrorItem::NeedAnnotation {
+                        content: format!("elaborating codata type"),
+                    })?,
+                ))
+            })
+            .collect::<Result<_, TyckErrorItem>>()?;
         Ok(Self {
             name: name.into(),
             params: Elaboration::elab(params)?,
@@ -464,11 +506,22 @@ impl Elaboration<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType
     }
 }
 
-impl Elaboration<ps::Alias<NameDef, Span<ps::Kind>, ps::BoxType>> for prelude::Alias {
+impl Elaboration<ps::Alias<NameDef, Option<Span<ps::Kind>>, ps::BoxType>> for prelude::Alias {
     type Error = TyckErrorItem;
     fn elab(
-        Alias { name, params, ty }: ps::Alias<NameDef, Span<ps::Kind>, ps::BoxType>,
+        Alias { name, params, ty }: ps::Alias<NameDef, Option<Span<ps::Kind>>, ps::BoxType>,
     ) -> Result<Self, TyckErrorItem> {
+        let params = params
+            .into_iter()
+            .map(|(tvar, kd)| {
+                Ok((
+                    tvar,
+                    kd.ok_or_else(|| TyckErrorItem::NeedAnnotation {
+                        content: format!("elaborating alias type"),
+                    })?,
+                ))
+            })
+            .collect::<Result<_, TyckErrorItem>>()?;
         Ok(Self {
             name: name.into(),
             params: Elaboration::elab(params)?,

@@ -6,8 +6,6 @@ pub use crate::syntax::*;
 /* --------------------------------- Pattern -------------------------------- */
 
 pub type TypePattern = (NameDef, Option<Span<Kind>>);
-pub type TypeKindPattern = (NameDef, Span<Kind>);
-
 pub type TermPattern = (NameDef, Option<Span<Type>>);
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
@@ -38,8 +36,8 @@ pub enum Type {
     Basic(NameRef),
     App(TypeApp),
     Arrow(Arrow<BoxType>),
-    Forall(Forall<Vec<TypeKindPattern>, BoxType>),
-    Exists(Exists<Vec<TypeKindPattern>, BoxType>),
+    Forall(Forall<Vec<TypePattern>, BoxType>),
+    Exists(Exists<Vec<TypePattern>, BoxType>),
     Hole(Hole),
 }
 pub type BoxType = Box<Span<Type>>;
@@ -140,9 +138,9 @@ pub struct Main {
 pub enum Declaration {
     Module(Module),
     UseDef(UseDef),
-    Data(Data<NameDef, Span<Kind>, CtorV, Span<Type>>),
-    Codata(Codata<NameDef, Span<Kind>, DtorV, Span<Type>>),
-    Alias(Alias<NameDef, Span<Kind>, BoxType>),
+    Data(Data<NameDef, Option<Span<Kind>>, CtorV, Span<Type>>),
+    Codata(Codata<NameDef, Option<Span<Kind>>, DtorV, Span<Type>>),
+    Alias(Alias<NameDef, Option<Span<Kind>>, BoxType>),
     Define(Define),
     Main(Main),
 }

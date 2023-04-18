@@ -33,17 +33,17 @@ Declaration: Declaration = {
         name: Some(name), declarations
     }.into(),
     "use" <UseDef> "end" => <>.into(),
-    "data" <name:NameDef<UpperId>> <params:TypeKindPattern*>
+    "data" <name:NameDef<UpperId>> <params:TypePattern*>
         <ctors:("where" <DataBr*>)?>
     "end" => Data {
         name, params, ctors: ctors.unwrap_or_default(),
     }.into(),
-    "codata" <name:NameDef<UpperId>> <params:TypeKindPattern*>
+    "codata" <name:NameDef<UpperId>> <params:TypePattern*>
         <dtors:("where" <CodataBr*>)?>
     "end" => Codata {
         name, params, dtors: dtors.unwrap_or_default(),
     }.into(),
-    "alias" <name:NameDef<UpperId>> <params:TypeKindPattern*> "=" <ty:Box<Span<Type>>> "end" => Alias {
+    "alias" <name:NameDef<UpperId>> <params:TypePattern*> "=" <ty:Box<Span<Type>>> "end" => Alias {
         name, params, ty,
     }.into(),
     "define" <gen:GenLet> DefineEnd => gen.into(),
@@ -79,8 +79,6 @@ CodataBr: CodataBr<DtorV, Span<Type>> = {
 };
 
 //* --------------------------------- Pattern -------------------------------- */
-
-TypeKindPattern: TypeKindPattern = "(" <name:NameDef<UpperId>> ":" <kind:Span<Kind>> ")" => (name, kind);
 
 TypePattern: TypePattern = {
     "(" <name:NameDef<UpperId>> <kind: (":" <Span<Kind>>)?> ")" => (name, kind),
@@ -119,10 +117,10 @@ KindAtom: Kind = {
 //* ---------------------------------- Type ---------------------------------- */
 
 Type: Type = {
-    "forall" <param:TypeKindPattern+> "." <ty:Box<Span<TypeArrow>>> => {
+    "forall" <param:TypePattern+> "." <ty:Box<Span<TypeArrow>>> => {
         Forall { param, ty }.into()
     },
-    "exists" <param:TypeKindPattern+> "." <ty:Box<Span<TypeArrow>>> => {
+    "exists" <param:TypePattern+> "." <ty:Box<Span<TypeArrow>>> => {
         Exists { param, ty }.into()
     },
     TypeArrow,
