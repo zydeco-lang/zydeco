@@ -68,10 +68,52 @@ where
 //     }
 // }
 
+impl<TyV, B> FmtArgs for Abs<TyV, B>
+where
+    TyV: TyVarT + FmtArgs,
+    B: ComputationT + FmtArgs,
+{
+    fn fmt_args(&self, args: Args) -> String {
+        let Abs { param: tvar, body } = self;
+        format!("fn {} -> {}", tvar.fmt_args(args), body.fmt_args(args))
+    }
+}
+// impl<TeV, B> FmtArgs for Abs<TeV, B>
+// where
+//     TeV: VarT + FmtArgs,
+//     B: ComputationT + FmtArgs,
+// {
+//     fn fmt_args(&self, args: Args) -> String {
+//         let Abs { param: tvar, body } = self;
+//         format!("fn {} -> {}", tvar.fmt_args(args), body.fmt_args(args))
+//     }
+// }
+
 // impl<Body, Arg> FmtArgs for App<Body, Arg>
 // where
 //     Body: FmtArgs,
 //     Arg: FmtArgs,
+// {
+//     fn fmt_args(&self, fargs: Args) -> String {
+//         let App { body, arg } = self;
+//         format!("({} {})", body.fmt_args(fargs), arg.fmt_args(fargs))
+//     }
+// }
+
+impl<B, Ty> FmtArgs for App<B, Ty>
+where
+    B: ComputationT + FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let App { body, arg } = self;
+        format!("{} @({})", body.fmt_args(fargs), arg.fmt_args(fargs))
+    }
+}
+// impl<TeV, B> FmtArgs for App<TeV, B>
+// where
+//     TeV: VarT + FmtArgs,
+//     B: ComputationT + FmtArgs,
 // {
 //     fn fmt_args(&self, fargs: Args) -> String {
 //         let App { body, arg } = self;

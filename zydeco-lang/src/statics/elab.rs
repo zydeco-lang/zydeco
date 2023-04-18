@@ -178,8 +178,7 @@ fn desugar_fn(
                     Some(kd) => Some(kd.try_map(Elaboration::elab)?),
                     None => None,
                 };
-                func =
-                    TyAbsTerm { param: (tvar.into(), kd), body: rc!(body.info.make(func)) }.into()
+                func = Abs { param: (tvar.into(), kd), body: rc!(body.info.make(func)) }.into()
             }
             ps::Pattern::TermPattern(param) => {
                 func = desugar_fn_one(param, rc!(body.info.make(func)))?;
@@ -403,7 +402,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
             ps::TermComputation::TyAppTerm(ps::App { body, arg }) => {
                 let body = rc!((body).try_map(Elaboration::elab)?);
                 let arg = rc!(arg.try_map(Elaboration::elab)?);
-                TyAppTerm { body, arg }.into()
+                App { body, arg }.into()
             }
             ps::TermComputation::MatchPack(ps::MatchPack { scrut, tvar, var, body }) => {
                 let tvar = tvar.into();

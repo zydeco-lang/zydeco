@@ -176,7 +176,7 @@ impl TypeCheck for Span<TermComputation> {
             TermComputation::TyAbsTerm(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("typabs") }))?
             }
-            TermComputation::TyAppTerm(TyAppTerm { body, arg }) => {
+            TermComputation::TyAppTerm(App { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
                 let ty_body = ctx.resolve_alias(ty_body, span)?;
                 let SynType::Forall(Forall { param: (param, kd), ty }) = ty_body.resolve()? else {
@@ -365,7 +365,7 @@ impl TypeCheck for Span<TermComputation> {
                 })?;
                 Step::Done(typ)
             }
-            TermComputation::TyAbsTerm(TyAbsTerm { param: (tvar_, kd_), body }) => {
+            TermComputation::TyAbsTerm(Abs { param: (tvar_, kd_), body }) => {
                 let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ_syn else {
                     Err(ctx.err(span, TypeExpected {
                         context: format!("type abstraction"),

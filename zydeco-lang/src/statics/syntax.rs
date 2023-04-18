@@ -93,8 +93,8 @@ pub enum TermComputation {
     Match(Match<CtorV, TermV, RcValue, RcComp>),
     Comatch(Comatch<DtorV, TermV, RcComp>),
     Dtor(Dtor<RcComp, DtorV, RcValue>),
-    TyAbsTerm(TyAbsTerm<(TypeV, Option<Span<Kind>>), RcComp>),
-    TyAppTerm(TyAppTerm<RcComp, RcType>),
+    TyAbsTerm(Abs<(TypeV, Option<Span<Kind>>), RcComp>),
+    TyAppTerm(App<RcComp, RcType>),
     MatchPack(MatchPack<RcValue, TypeV, TermV, RcComp>),
 }
 pub type RcComp = Rc<Span<TermComputation>>;
