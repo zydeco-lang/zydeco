@@ -5,10 +5,10 @@ pub use crate::syntax::*;
 
 /* --------------------------------- Pattern -------------------------------- */
 
-pub type TypePattern = (TypeV, Option<Span<Kind>>);
-pub type TypeKindPattern = (TypeV, Span<Kind>);
+pub type TypePattern = (NameDef, Option<Span<Kind>>);
+pub type TypeKindPattern = (NameDef, Span<Kind>);
 
-pub type TermPattern = (TermV, Option<Span<Type>>);
+pub type TermPattern = (NameDef, Option<Span<Type>>);
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Pattern {
@@ -47,7 +47,7 @@ pub struct Exists(pub Vec<TypeKindPattern>, pub BoxType);
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Type {
-    Basic(TypeV),
+    Basic(NameRef),
     App(TypeApp),
     Arrow(TypeArrow),
     Forall(Forall),
@@ -62,7 +62,7 @@ impl TypeT for Type {}
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum TermValue {
     TermAnn(Annotation<BoxValue, Span<Type>>),
-    Var(TermV),
+    Var(NameRef),
     Thunk(Thunk<BoxComp>),
     Ctor(Ctor<CtorV, Span<TermValue>>),
     Literal(Literal),
@@ -107,8 +107,8 @@ pub struct TyAppTerm {
 #[derive(SpanHolder, Clone, Debug)]
 pub struct MatchPack {
     pub scrut: BoxValue,
-    pub tvar: TypeV,
-    pub var: TermV,
+    pub tvar: NameDef,
+    pub var: NameDef,
     pub body: BoxComp,
 }
 
@@ -120,10 +120,10 @@ pub enum TermComputation {
     Let(Let),
     Do(Do<TermPattern, BoxComp, BoxComp>),
     Rec(Rec<TermPattern, BoxComp>),
-    Match(Match<CtorV, TermV, BoxValue, Span<TermComputation>>),
+    Match(Match<CtorV, NameDef, BoxValue, Span<TermComputation>>),
     Abs(GenAbs),
     App(TermApp),
-    Comatch(Comatch<DtorV, TermV, Span<TermComputation>>),
+    Comatch(Comatch<DtorV, NameDef, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
     TyAppTerm(TyAppTerm),
     MatchPack(MatchPack),
@@ -166,9 +166,9 @@ pub struct Main {
 pub enum Declaration {
     Module(Module),
     UseDef(UseDef),
-    Data(Data<TypeV, Span<Kind>, CtorV, Span<Type>>),
-    Codata(Codata<TypeV, Span<Kind>, DtorV, Span<Type>>),
-    Alias(Alias<TypeV, Span<Kind>, BoxType>),
+    Data(Data<NameDef, Span<Kind>, CtorV, Span<Type>>),
+    Codata(Codata<NameDef, Span<Kind>, DtorV, Span<Type>>),
+    Alias(Alias<NameDef, Span<Kind>, BoxType>),
     Define(Define),
     Main(Main),
 }

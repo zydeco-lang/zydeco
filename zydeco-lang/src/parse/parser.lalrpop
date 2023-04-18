@@ -33,17 +33,17 @@ Declaration: Declaration = {
         name: Some(name), declarations
     }.into(),
     "use" <UseDef> "end" => <>.into(),
-    "data" <name:TypeV> <params:TypeKindPattern*>
+    "data" <name:NameDef<UpperId>> <params:TypeKindPattern*>
         <ctors:("where" <DataBr*>)?>
     "end" => Data {
         name, params, ctors: ctors.unwrap_or_default(),
     }.into(),
-    "codata" <name:TypeV> <params:TypeKindPattern*>
+    "codata" <name:NameDef<UpperId>> <params:TypeKindPattern*>
         <dtors:("where" <CodataBr*>)?>
     "end" => Codata {
         name, params, dtors: dtors.unwrap_or_default(),
     }.into(),
-    "alias" <name:TypeV> <params:TypeKindPattern*> "=" <ty:Box<Span<Type>>> "end" => Alias {
+    "alias" <name:NameDef<UpperId>> <params:TypeKindPattern*> "=" <ty:Box<Span<Type>>> "end" => Alias {
         name, params, ty,
     }.into(),
     "define" <gen:GenLet> DefineEnd => gen.into(),
@@ -53,7 +53,7 @@ Declaration: Declaration = {
 };
 
 UseDef: UseDef = {
-    <NameRef> => <>.into(),
+    <NameRef<MixedId>> => <>.into(),
     ".." => UseAll.into(),
     <modv:ModV>  <cluster:SepByDelim<"(", ",", UseDef, ")">> => UseCluster {
         modv, cluster,
@@ -80,16 +80,16 @@ CodataBr: CodataBr<DtorV, Span<Type>> = {
 
 //* --------------------------------- Pattern -------------------------------- */
 
-TypeKindPattern: TypeKindPattern = "(" <name:TypeV> ":" <kind:Span<Kind>> ")" => (name, kind);
+TypeKindPattern: TypeKindPattern = "(" <name:NameDef<UpperId>> ":" <kind:Span<Kind>> ")" => (name, kind);
 
 TypePattern: TypePattern = {
-    "(" <name:TypeV> <kind: (":" <Span<Kind>>)?> ")" => (name, kind),
-    <TypeV> => (<>, None),
+    "(" <name:NameDef<UpperId>> <kind: (":" <Span<Kind>>)?> ")" => (name, kind),
+    <NameDef<UpperId>> => (<>, None),
 };
 
 TermPattern: TermPattern = {
-    "(" <v:TermV> <ty:(":" <Span<Type>>)?> ")" => (v, ty),
-    <TermV> => (<>, None),
+    "(" <v:NameDef<LowerId>> <ty:(":" <Span<Type>>)?> ")" => (v, ty),
+    <NameDef<LowerId>> => (<>, None),
 };
 
 Pattern: Pattern = {
@@ -144,7 +144,7 @@ TypeApp: Type = {
 
 TypeAtom: Type = {
     "(" <Type> ")" => <>,
-    <TypeV> => <>.into(),
+    <NameRef<UpperId>> => <>.into(),
     "_?" => Hole.into(),
 };
 
@@ -163,7 +163,7 @@ TermValue: TermValue = {
         term: tv,
         ty,
     }.into(),
-    <TermV> => <>.into(),
+    <NameRef<LowerId>> => <>.into(),
     "{" <tc:Box<Span<TermComputation>>> "}" => Thunk(tc).into(),
     <ctorv:CtorV> <args:SepByDelim<"(", ",", Span<TermValue>, ")">> => Ctor {
         ctorv, args,
@@ -197,7 +197,7 @@ TermComputation: TermComputation = {
         params, body,
     }.into(),
     "match" <scrut:Box<Span<TermValue>>> 
-    "|"? "pack" "(" <tvar:TypeV> "," <var:TermV> ")" "->"
+    "|"? "pack" "(" <tvar:NameDef<UpperId>> "," <var:NameDef<LowerId>> ")" "->"
         <body:Box<Span<TermComputation>>> 
     "end" => MatchPack {
         scrut, tvar, var, body,
@@ -233,7 +233,7 @@ TermComputationAtom: TermComputation = {
 };
 
 GenLet: GenLet = {
-    <rec:"rec"?> <fun:"fn"?> <var:TermV> <params:Pattern*>
+    <rec:"rec"?> <fun:"fn"?> <var:NameDef<LowerId>> <params:Pattern*>
     <ty:(":" <Span<Type>>)?> <def: ("=" <Box<Span<Term>>>)?> => GenLet {
         rec: rec.is_some(),
         fun: fun.is_some(),
@@ -243,15 +243,15 @@ GenLet: GenLet = {
     }
 };
 
-MatchBr: Matcher<CtorV, TermV, Span<TermComputation>> = {
-    "|" <ctorv:CtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->"
+MatchBr: Matcher<CtorV, NameDef, Span<TermComputation>> = {
+    "|" <ctorv:CtorV> <vars:SepByDelim<"(", ",", NameDef<LowerId>, ")">> "->"
     <body:Span<TermComputation>> => Matcher {
         ctorv, vars, body
     }
 };
 
-ComatchBr: Comatcher<DtorV, TermV, Span<TermComputation>> = {
-    "|" "." <dtorv:DtorV> <vars:SepByDelim<"(", ",", TermV, ")">> "->"
+ComatchBr: Comatcher<DtorV, NameDef, Span<TermComputation>> = {
+    "|" "." <dtorv:DtorV> <vars:SepByDelim<"(", ",", NameDef<LowerId>, ")">> "->"
     <body:Span<TermComputation>> => Comatcher {
         dtorv, vars, body
     }
@@ -265,14 +265,14 @@ Literal: Literal = {
 
 //* ------------------------------- Identifiers ------------------------------ */
 
-NameDef: NameDef = {
-    Span<(<Span<MixedId>>)> => NameDef {
+NameDef<T>: NameDef = {
+    Span<(<Span<T>>)> => NameDef {
         ident: <>.inner, info: <>.info,
     },
 };
 
-NameRef: NameRef = {
-    Span<(<(<Span<UpperId>> ".")*> <Span<MixedId>>)> => NameRef {
+NameRef<T>: NameRef = {
+    Span<(<(<Span<UpperId>> ".")*> <Span<T>>)> => NameRef {
         path: <>.inner.0, ident: <>.inner.1, info: <>.info,
     },
 };
@@ -281,9 +281,6 @@ ModV: ModV = <PathPrefix<Span<UpperId>, Span<UpperId>>> => <>.1.into();
 
 CtorV: CtorV = <PathPrefix<Span<UpperId>, Span<UpperId>>> => <>.1.into();
 DtorV: DtorV = <PathPrefix<Span<UpperId>, Span<LowerId>>> => <>.1.into();
-
-TypeV: TypeV = <PathPrefix<Span<UpperId>, Span<UpperId>>> => <>.1.into();
-TermV: TermV = <PathPrefix<Span<UpperId>, Span<LowerId>>> => <>.1.into();
 
 PathPrefix<M, N>: (Vec<M>, N) = {
     <path:(<Span<UpperId>> ".")*> <v:N> => (path, v),

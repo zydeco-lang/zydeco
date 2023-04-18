@@ -1,30 +1,6 @@
 use super::*;
 use crate::utils::fmt::*;
 
-mod binder {
-    use super::*;
-    use crate::syntax::binder::*;
-    macro_rules! var_fmt {
-        ($Var:ident) => {
-            impl FmtArgs for $Var {
-                fn fmt_args(&self, _fargs: Args) -> String {
-                    format!("{}", self.name())
-                }
-            }
-            impl std::fmt::Display for $Var {
-                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "{}", <Self as FmtArgs>::fmt(self))
-                }
-            }
-        };
-    }
-
-    var_fmt!(CtorV);
-    var_fmt!(DtorV);
-    var_fmt!(TypeV);
-    var_fmt!(TermV);
-}
-
 impl FmtArgs for () {
     fn fmt_args(&self, _fargs: Args) -> String {
         String::new()
