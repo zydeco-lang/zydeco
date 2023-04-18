@@ -1,13 +1,13 @@
 // # Chapter 0: Toplevel
 
-// This is an toplevel syntax introduction as well as a meta thread for the
-// whole walkthrough.The series of tutorial is presented as a chain of single
-// files, each of which will focus on a single topic. Along the way we will
+// This is a top-level syntax introduction as well as a meta thread for the
+// whole walkthrough. The series of tutorials is presented as a chain of single
+// files, each of which will focus on a single topic. Along the way, we will
 // cover some of the key points from the previous workshops and company the
 // notes with some exercises.
 
-// A zydeco program is assemblied by a text file, conventionally with a .zy or
-// .zydeco extension. Within each file there is a top-level that contains all
+// A zydeco program is assembled by a text file, conventionally with a .zy or
+// .zydeco extension. Within each file, there is a top-level that contains all
 // the declarations used by the program. There are five types of declarations:
 
 // 1. Data type declaration
@@ -25,7 +25,7 @@ end
 // kinded by VType, which is the kind of all value types, and CType, which is
 // the kind of all computation types.
 
-// The syntax (especially the `where` part) is insipired by Agda and GADT in
+// The syntax (especially the `where` part) is inspired by Agda and GADT in
 // Haskell. But unlike both of them, zydeco is layout-insensitive, which means
 // you can place whitespaces and linebreaks in whatever way you like. The
 // tradeoff is that all declarations are syntactically guarded by the keyword
@@ -42,7 +42,7 @@ def some-co-prod : Thunk (CoProd-Bool-Sth (Prod-2 Int String)) = {
   end
 } end
 
-// All variables are value types, thus all term definitions are values. Just to
+// All variables are value types; thus, all term definitions are values. Just to
 // preview a little bit, to encode computations like functions and codata types,
 // we use the thunk `{ b }` to wrap the body `b`, a computation term, in a
 // "closure" and freeze it from running. For `b : B`, the thunk will have type
@@ -63,16 +63,16 @@ end
 // similar; the syntax, however, might feel different. However, don't worry if
 // they're not; the consequent chapters will walk you through the details.
 
-// It's a good practice (and exercise) to annotate all types at top level due to
-// the current implementation of the type checker. The type checker is not yet
-// smart enough (and sometimes theoretically impossible) to infer the types of
-// all the declarations. However, you'll need almost no type annotations beyond
-// the toplevel. This is done in `(x : T)`.
+// It's a good practice (and exercise) to annotate all types at the top level
+// due to the current implementation of the type checker. The type checker is
+// not yet smart enough (and sometimes theoretically impossible) to infer the
+// types of all the declarations. However, you'll need almost no type
+// annotations beyond the top level. This is done in `(x : T)`.
 
 // It's also possible to annotate terms directly like `(! exit 0 : OS)`. Note
 // that the parentheses are necessary to avoid ambiguity.
 
-// The toplevel is as concise and declarative as possible. For a more detailed
+// The top level is as concise and declarative as possible. For a more detailed
 // explanation of the term level syntax, please refer to the next chapter.
 
 // A final comment is on how to run a file and use REPL.

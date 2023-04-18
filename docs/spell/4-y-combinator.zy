@@ -1,8 +1,8 @@
 // # Chapter 4: Y Combinator
 
-// In the last few chapters we saw the `rec` keyword, which allows us to define
+// In the last few chapters, we saw the `rec` keyword, which allows us to define
 // recursive functions. However, it is actually possible to define recursive
-// functions without the primitive `rec` terms. This is done by using the Y
+// functions without the primitive `rec` terms. This can done by using the Y
 // combinator.
 
 codata Y (B : CType) where
@@ -12,8 +12,8 @@ end
 // Exercise Y: Implement the Y combinator.
 
 // Hint: In call-by-name sense, the Y combinator is given by: `Y f = f (Y f)`
-// and can be defined as `\f. (\x. f (x x)) (\x. f (x x))`. Also note that
-// call-by-name is has a lazy semantics.
+// and can be defined as `\f. (\x. f (x x)) (\x. f (x x))`. Also, note that
+// call-by-name has lazy semantics.
 
 alias FnInt = Int -> Ret Int end
 def rec' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
@@ -27,7 +27,7 @@ def rec' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
 // is very likely to be a partial language with turning computability. In fact,
 // this is exactly the case.
 
-// With a little extra effort it is possible to implement the Y combinator in a
+// With a little extra effort, it is possible to implement the Y combinator in a
 // generic way. See zydeco-lang/tests/nonzero-exit-code/Y.zydeco for details.
 
 // The rest is just a test bench.

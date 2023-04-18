@@ -1,11 +1,12 @@
 // # Chapter 2: Data and Codata
 
-// `data` declaration positively defines a value type that can be matched
+// A `data` declaration positively defines a value type that can be matched
 // against. It can be treated as sum types together with product types. It can
-// be introduced by data constructors (values) and eliminated with match
+// be introduced by data constructors (values) and eliminated with the `match`
 // computaion.
 
-// System-F hasn't been taught yet, so we'll use a trival example to illustrate.
+// System-F hasn't been formally introduced to you yet, so we'll use a trivial
+// example to illustrate; you'll see what it's all about in a week or two.
 def hd-int : Thunk (List Int -> Ret (Option Int)) = {
   fn xs -> (
     match xs
@@ -21,9 +22,9 @@ def some-0~ : Thunk(Ret (Option Int)) = {
   ! hd-int xs
 } end
 
-// Unsuprisingly, `codata` declaration, dually, negatively defines a computation
-// type that comatches the stack. It can be introduced by comatch computation
-// and and can be eliminated by codata destructors.
+// Unsurprisingly, `codata` declaration, dually, negatively defines a
+// computation type that comatches the stack. It can be introduced by comatch
+// computation and can be eliminated by codata destructors.
 
 // Read how `LList`, a.k.a. lazy list, a.k.a. `CoList`, is defined in `std.zydeco`.
 
@@ -78,8 +79,8 @@ def foldr' : Thunk(
   )
 } end
 
-// You may wonder what is `rec`. It's *just* `fix` in System PCF sense. The only
-// caveat is that if the whole term is a computation of type `B`, then the
+// You may wonder what is `rec`. It's *just* `fix` in the System PCF sense. The
+// only caveat is that if the whole term is a computation of type `B`, then the
 // variable passed in is of type `Thunk B`, because variables must have value
 // types.
 
@@ -125,5 +126,5 @@ main
   }
 end
 
-// The test bench is using more than what has been taught so far. It's ok if you
-// don't understand all of them, but you can make your best guess.
+// The test bench uses more than what has been taught. It's ok if you don't
+// understand all of them, but you can make your best guess.

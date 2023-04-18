@@ -15,7 +15,7 @@ extern def set : Thunk (forall (A : VType) . Ref A -> A -> Ret Unit) end
 // Rather than running it via `zydeco run <file>` as usual, to get a sanity
 // check, run `zydeco check <file>` instead.
 
-// Below is an naive implementation of call-by-need. All you need to change from
+// Below is a naive implementation of call-by-need. All you need to change from
 // call-by-name is the semantics of a thunk.
 
 def fn cbneed-thunk (A : VType) (u~ : Thunk (Ret A)) : Ret (Thunk (Ret A)) =
@@ -42,12 +42,12 @@ end
 // See? Semantic-wise call-by-need is not interesting at all and should be
 // viewed as an implementation optimization of call-by-name. And to make matters
 // worse, this approach will no longer work if `u~` contains arbitrary side
-// effect, because it would only be evaluated once.
+// effect because it would only be evaluated once.
 
 // Exercise `Thunk (Ret A)`: Explain why the input is required to be of type
 // `Thunk (Ret A)` instead of just `Thunk B`.
 
-// Confronted with the problem of sharing, we can sense the urge of having
+// Confronted with the problem of sharing, we can sense the urge to have a
 // type-sensible approach of defining side effects. For instance, the type of
 // `ref`, `get` and `set` definitions given above is not the best choice for
 // encoding the reference semantics because the side effect is not represented
