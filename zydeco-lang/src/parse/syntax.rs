@@ -58,18 +58,6 @@ pub type BoxValue = Box<Span<TermValue>>;
 impl ValueT for TermValue {}
 
 #[derive(SpanHolder, Clone, Debug)]
-pub struct GenAbs {
-    pub params: Vec<Pattern>,
-    pub body: BoxComp,
-}
-
-#[derive(SpanHolder, Clone, Debug)]
-pub struct TermApp {
-    pub body: BoxComp,
-    pub arg: BoxValue,
-}
-
-#[derive(SpanHolder, Clone, Debug)]
 pub struct GenLet {
     pub rec: bool,
     pub fun: bool,
@@ -93,11 +81,11 @@ pub enum TermComputation {
     Do(Do<TermPattern, BoxComp, BoxComp>),
     Rec(Rec<TermPattern, BoxComp>),
     Match(Match<CtorV, NameDef, BoxValue, Span<TermComputation>>),
-    Abs(GenAbs),
-    App(TermApp),
+    Abs(Abs<Vec<Pattern>, BoxComp>),
+    App(App<BoxComp, BoxValue>),
     Comatch(Comatch<DtorV, NameDef, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
-    TyAppTerm(TyAppTerm<BoxComp, BoxType>),
+    TyAppTerm(App<BoxComp, BoxType>),
     MatchPack(MatchPack<BoxValue, NameDef, NameDef, BoxComp>),
 }
 pub type BoxComp = Box<Span<TermComputation>>;

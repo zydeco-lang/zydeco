@@ -57,6 +57,28 @@ where
     }
 }
 
+// impl<Param, Body> FmtArgs for Abs<Param, Body>
+// where
+//     Param: FmtArgs,
+//     Body: FmtArgs,
+// {
+//     fn fmt_args(&self, fargs: Args) -> String {
+//         let Abs { param, body } = self;
+//         format!("λ{}. {}", param.fmt_args(fargs), body.fmt_args(fargs))
+//     }
+// }
+
+// impl<Body, Arg> FmtArgs for App<Body, Arg>
+// where
+//     Body: FmtArgs,
+//     Arg: FmtArgs,
+// {
+//     fn fmt_args(&self, fargs: Args) -> String {
+//         let App { body, arg } = self;
+//         format!("({} {})", body.fmt_args(fargs), arg.fmt_args(fargs))
+//     }
+// }
+
 impl FmtArgs for KindBase {
     fn fmt_args(&self, _fargs: Args) -> String {
         match self {

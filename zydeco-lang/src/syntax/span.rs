@@ -40,6 +40,36 @@ where
     }
 }
 
+impl<Param, Body> SpanHolder for Abs<Param, Body>
+where
+    Param: SpanHolder,
+    Body: SpanHolder,
+{
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        let Abs { param, body } = self;
+        param.span_map_mut(f.clone());
+        body.span_map_mut(f);
+    }
+}
+
+impl<Body, Arg> SpanHolder for App<Body, Arg>
+where
+    Body: SpanHolder,
+    Arg: SpanHolder,
+{
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        let App { body, arg } = self;
+        body.span_map_mut(f.clone());
+        arg.span_map_mut(f);
+    }
+}
+
 impl SpanHolder for KindBase {
     fn span_map_mut<F>(&mut self, _f: F)
     where

@@ -107,8 +107,8 @@ fn desugar_gen_let(
         (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
             if fun {
-                let params = params.clone().into_iter().collect();
-                body = Box::new(def.info.make(ps::GenAbs { params, body }.into()));
+                let param = params.clone().into_iter().collect();
+                body = Box::new(def.info.make(ps::Abs { param, body }.into()));
             }
             if rec {
                 body = Box::new(def.info.make(Rec { var: (var, None), body }.into()));
@@ -148,7 +148,9 @@ fn desugar_gen_let(
     }
 }
 
-fn desugar_fn(ps::GenAbs { params, body }: ps::GenAbs) -> Result<TermComputation, TyckErrorItem> {
+fn desugar_fn(
+    ps::Abs { param, body }: ps::Abs<Vec<ps::Pattern>, ps::BoxComp>,
+) -> Result<TermComputation, TyckErrorItem> {
     fn desugar_fn_one(
         (var, ty): (NameDef, Option<Span<ps::Type>>), body: RcComp,
     ) -> Result<TermComputation, TyckErrorItem> {
@@ -169,7 +171,7 @@ fn desugar_fn(ps::GenAbs { params, body }: ps::GenAbs) -> Result<TermComputation
         Ok(body)
     }
     let mut func = Elaboration::elab(body.inner)?;
-    for param in params.into_iter().rev() {
+    for param in param.into_iter().rev() {
         match param {
             ps::Pattern::TypePattern((tvar, kd)) => {
                 let kd = match kd {
@@ -371,7 +373,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 Match { scrut, arms }.into()
             }
             ps::TermComputation::Abs(t) => desugar_fn(t)?,
-            ps::TermComputation::App(ps::TermApp { body, arg }) => {
+            ps::TermComputation::App(ps::App { body, arg }) => {
                 let fun = rc!((body).try_map(Elaboration::elab)?);
                 let arg = arg.try_map(Elaboration::elab)?;
                 Dtor {
@@ -398,7 +400,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let args = Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect();
                 Dtor { body, dtorv, args }.into()
             }
-            ps::TermComputation::TyAppTerm(ps::TyAppTerm { body, arg }) => {
+            ps::TermComputation::TyAppTerm(ps::App { body, arg }) => {
                 let body = rc!((body).try_map(Elaboration::elab)?);
                 let arg = rc!(arg.try_map(Elaboration::elab)?);
                 TyAppTerm { body, arg }.into()

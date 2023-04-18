@@ -57,6 +57,18 @@ impl TypeT for Hole {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Arrow<In, Out = In>(pub In, pub Out);
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Abs<Param, Body> {
+    pub param: Param,
+    pub body: Body,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct App<Body, Arg> {
+    pub body: Body,
+    pub arg: Arg,
+}
+
 /* ---------------------------------- Kind ---------------------------------- */
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

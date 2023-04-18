@@ -191,8 +191,8 @@ TermComputation: TermComputation = {
     "comatch" <arms:ComatchBr*> "end" => Comatch {
         arms,
     }.into(),
-    "fn" <params:Pattern*> "->" <body:Box<Span<TermComputation>>> => GenAbs {
-        params, body,
+    "fn" <param:Pattern*> "->" <body:Box<Span<TermComputation>>> => Abs {
+        param, body,
     }.into(),
     "match" <scrut:Box<Span<TermValue>>> 
     "|"? "pack" "(" <tvar:NameDef<UpperId>> "," <var:NameDef<LowerId>> ")" "->"
@@ -209,10 +209,10 @@ LetSep: () = {
 
 TermComputationRight: TermComputation = {
     TermComputationAtom,
-    <body:Box<Span<TermComputationRight>>> <arg:Box<Span<TermValue>>> => TermApp {
+    <body:Box<Span<TermComputationRight>>> <arg:Box<Span<TermValue>>> => App {
         body, arg,
     }.into(),
-    <body:Box<Span<TermComputationRight>>> "@" "(" <arg:Box<Span<Type>>> ")" => TyAppTerm {
+    <body:Box<Span<TermComputationRight>>> "@" "(" <arg:Box<Span<Type>>> ")" => App {
         body, arg,
     }.into(),
     <body:Box<Span<TermComputationRight>>> "." <dtorv:DtorV>
