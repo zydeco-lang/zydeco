@@ -20,13 +20,10 @@ pub enum Pattern {
 
 pub use crate::syntax::{KindBase, TypeArity};
 
-#[derive(SpanHolder, Clone, Debug, PartialEq, Eq)]
-pub struct KindArrow(pub BoxKind, pub BoxKind);
-
 #[derive(IntoEnum, SpanHolder, Clone, Debug, PartialEq, Eq)]
 pub enum Kind {
     Base(KindBase),
-    Arrow(KindArrow),
+    Arrow(Arrow<BoxKind>),
 }
 pub type BoxKind = Box<Span<Kind>>;
 impl KindT for Kind {}
@@ -36,22 +33,13 @@ impl KindT for Kind {}
 #[derive(SpanHolder, Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
 
-#[derive(SpanHolder, Clone, Debug)]
-pub struct TypeArrow(pub BoxType, pub BoxType);
-
-#[derive(SpanHolder, Clone, Debug)]
-pub struct Forall(pub Vec<TypeKindPattern>, pub BoxType);
-
-#[derive(SpanHolder, Clone, Debug)]
-pub struct Exists(pub Vec<TypeKindPattern>, pub BoxType);
-
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Type {
     Basic(NameRef),
     App(TypeApp),
-    Arrow(TypeArrow),
-    Forall(Forall),
-    Exists(Exists),
+    Arrow(Arrow<BoxType>),
+    Forall(Forall<Vec<TypeKindPattern>, BoxType>),
+    Exists(Exists<Vec<TypeKindPattern>, BoxType>),
     Hole(Hole),
 }
 pub type BoxType = Box<Span<Type>>;
@@ -98,20 +86,6 @@ pub struct Let {
     pub body: BoxComp,
 }
 
-#[derive(SpanHolder, Clone, Debug)]
-pub struct TyAppTerm {
-    pub body: BoxComp,
-    pub arg: Box<Span<Type>>,
-}
-
-#[derive(SpanHolder, Clone, Debug)]
-pub struct MatchPack {
-    pub scrut: BoxValue,
-    pub tvar: NameDef,
-    pub var: NameDef,
-    pub body: BoxComp,
-}
-
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum TermComputation {
     TermAnn(Annotation<BoxComp, Span<Type>>),
@@ -125,8 +99,8 @@ pub enum TermComputation {
     App(TermApp),
     Comatch(Comatch<DtorV, NameDef, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
-    TyAppTerm(TyAppTerm),
-    MatchPack(MatchPack),
+    TyAppTerm(TyAppTerm<BoxComp, BoxType>),
+    MatchPack(MatchPack<BoxValue, NameDef, NameDef, BoxComp>),
 }
 pub type BoxComp = Box<Span<TermComputation>>;
 impl ComputationT for TermComputation {}

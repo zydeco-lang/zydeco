@@ -105,7 +105,7 @@ Kind: Kind = {
 
 KindArrow: Kind = {
     <k:Box<Span<KindAtom>>> "->" <kd:Box<Span<KindArrow>>> => {
-        KindArrow(k, kd).into()
+        Arrow(k, kd).into()
     },
     KindAtom,
 };
@@ -119,18 +119,18 @@ KindAtom: Kind = {
 //* ---------------------------------- Type ---------------------------------- */
 
 Type: Type = {
-    "forall" <params:TypeKindPattern+> "." <ty:Box<Span<TypeArrow>>> => {
-        Forall(params, ty).into()
+    "forall" <param:TypeKindPattern+> "." <ty:Box<Span<TypeArrow>>> => {
+        Forall { param, ty }.into()
     },
-    "exists" <params:TypeKindPattern+> "." <ty:Box<Span<TypeArrow>>> => {
-        Exists(params, ty).into()
+    "exists" <param:TypeKindPattern+> "." <ty:Box<Span<TypeArrow>>> => {
+        Exists { param, ty }.into()
     },
     TypeArrow,
 };
 
 TypeArrow: Type = {
     <t:Box<Span<TypeApp>>> "->" <ty:Box<Span<Type>>> => {
-        TypeArrow(t, ty).into()
+        Arrow(t, ty).into()
     },
     TypeApp,
 };

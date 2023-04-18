@@ -46,6 +46,17 @@ impl FmtArgs for Hole {
     }
 }
 
+impl<In, Out> FmtArgs for Arrow<In, Out>
+where
+    In: FmtArgs,
+    Out: FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let Arrow(in_ty, out_ty) = self;
+        format!("{} -> {}", in_ty.fmt_args(fargs), out_ty.fmt_args(fargs))
+    }
+}
+
 impl FmtArgs for KindBase {
     fn fmt_args(&self, _fargs: Args) -> String {
         match self {

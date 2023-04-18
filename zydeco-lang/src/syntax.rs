@@ -4,7 +4,7 @@ mod span;
 
 use zydeco_derive::IntoEnum;
 
-/* ---------------------------------- Meta ---------------------------------- */
+/* ---------------------------------- Sort ---------------------------------- */
 
 pub mod sort {
     use crate::utils::span::Span;
@@ -13,6 +13,7 @@ pub mod sort {
     macro_rules! sort {
         ( $Sort:ident ) => {
             pub trait $Sort {}
+            impl<T: $Sort> $Sort for Vec<T> {}
             impl<T: $Sort> $Sort for Box<T> {}
             impl<T: $Sort> $Sort for Rc<T> {}
             impl<T: $Sort> $Sort for Span<T> {}
@@ -50,6 +51,11 @@ impl<Term: ComputationT, Type> ComputationT for Annotation<Term, Type> {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Hole;
 impl TypeT for Hole {}
+
+/* ---------------------------------- Meta ---------------------------------- */
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Arrow<In, Out = In>(pub In, pub Out);
 
 /* ---------------------------------- Kind ---------------------------------- */
 

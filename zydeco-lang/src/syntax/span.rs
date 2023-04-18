@@ -25,6 +25,21 @@ impl SpanHolder for Hole {
     }
 }
 
+impl<In, Out> SpanHolder for Arrow<In, Out>
+where
+    In: SpanHolder,
+    Out: SpanHolder,
+{
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+        let Arrow(r#in, out) = self;
+        r#in.span_map_mut(f.clone());
+        out.span_map_mut(f);
+    }
+}
+
 impl SpanHolder for KindBase {
     fn span_map_mut<F>(&mut self, _f: F)
     where

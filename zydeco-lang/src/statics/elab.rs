@@ -57,7 +57,7 @@ impl Elaboration<ps::Kind> for Kind {
     fn elab(kd: ps::Kind) -> Result<Self, Self::Error> {
         match kd {
             ps::Kind::Base(kd) => Ok(Kind::Base(kd)),
-            ps::Kind::Arrow(ps::KindArrow(k, kd)) => {
+            ps::Kind::Arrow(ps::Arrow(k, kd)) => {
                 let kd: Span<Kind> = Elaboration::elab(*kd)?;
                 match kd.inner {
                     Kind::Base(_) => Ok(TypeArity {
@@ -207,12 +207,12 @@ impl Elaboration<ps::Type> for Type {
                 t1.into()
             }
             ps::Type::Arrow(t) => {
-                let ps::TypeArrow(t1, t2) = t;
+                let ps::Arrow(t1, t2) = t;
                 let t1 = t1.try_map(Elaboration::elab)?;
                 let t2 = t2.try_map(Elaboration::elab)?;
                 Type::internal("Fn", vec![rc!(t1), rc!(t2)])
             }
-            ps::Type::Forall(ps::Forall(params, t)) => {
+            ps::Type::Forall(ps::Forall { param: params, ty: t }) => {
                 let mut t = t.try_map(Elaboration::elab)?;
                 for param in params.into_iter().rev() {
                     let param = Elaboration::elab(param)?;
@@ -220,7 +220,7 @@ impl Elaboration<ps::Type> for Type {
                 }
                 t.inner
             }
-            ps::Type::Exists(ps::Exists(params, t)) => {
+            ps::Type::Exists(ps::Exists { param: params, ty: t }) => {
                 let mut t = t.try_map(Elaboration::elab)?;
                 for param in params.into_iter().rev() {
                     let param = Elaboration::elab(param)?;
