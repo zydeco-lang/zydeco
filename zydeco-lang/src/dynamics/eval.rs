@@ -33,33 +33,33 @@ impl<'rt> Runtime<'rt> {
     }
 }
 
-impl<'rt> Eval<'rt> for ls::ZVal {
+impl<'rt> Eval<'rt> for ls::SynVal {
     type Out = SemVal;
 
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         match self {
-            ls::ZVal::Var(var) => {
+            ls::SynVal::Var(var) => {
                 Step::Done(runtime.env.lookup(&var).expect("variable does not exist").clone())
             }
-            ls::ZVal::Thunk(ls::Thunk(body)) => {
+            ls::SynVal::Thunk(ls::Thunk(body)) => {
                 Step::Done(super::syntax::Thunk { body, env: runtime.env.clone() }.into())
             }
-            ls::ZVal::Ctor(ls::Ctor { ctorv: ctor, args }) => {
+            ls::SynVal::Ctor(ls::Ctor { ctorv: ctor, args }) => {
                 let args = args.iter().map(|arg| rc!(arg.as_ref().clone().eval(runtime))).collect();
                 Step::Done(ls::Ctor { ctorv: ctor, args }.into())
             }
-            ls::ZVal::Literal(lit) => Step::Done(lit.into()),
-            ls::ZVal::SemValue(sem) => Step::Done(sem),
+            ls::SynVal::Literal(lit) => Step::Done(lit.into()),
+            ls::SynVal::SemValue(sem) => Step::Done(sem),
         }
     }
 }
 
-impl<'rt> Eval<'rt> for ls::ZComp {
+impl<'rt> Eval<'rt> for ls::SynComp {
     type Out = ProgKont;
 
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         match self {
-            ls::ZComp::Ret(ls::Ret(v)) => {
+            ls::SynComp::Ret(ls::Ret(v)) => {
                 let v = v.as_ref().clone().eval(runtime);
                 match runtime.stack.pop_back() {
                     Some(SemComp::Kont(comp, env, var)) => {
@@ -71,7 +71,7 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                     _ => panic!("Kont not at stacktop"),
                 }
             }
-            ls::ZComp::Force(ls::Force(v)) => {
+            ls::SynComp::Force(ls::Force(v)) => {
                 let v = v.as_ref().clone().eval(runtime);
                 let SemVal::Thunk(thunk) = v else {
                     panic!("Force on non-thunk")
@@ -79,17 +79,17 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 runtime.env = thunk.env;
                 Step::Step(thunk.body.as_ref().clone())
             }
-            ls::ZComp::Let(ls::Let { var, def, body }) => {
+            ls::SynComp::Let(ls::Let { var, def, body }) => {
                 let def = def.as_ref().clone().eval(runtime);
                 let env = runtime.env.update(var, def);
                 runtime.env = env;
                 Step::Step(body.as_ref().clone())
             }
-            ls::ZComp::Do(ls::Do { var, comp, body }) => {
+            ls::SynComp::Do(ls::Do { var, comp, body }) => {
                 runtime.stack.push_back(SemComp::Kont(body, runtime.env.clone(), var));
                 Step::Step(comp.as_ref().clone())
             }
-            ls::ZComp::Rec(e) => {
+            ls::SynComp::Rec(e) => {
                 let ls::Rec { var, body } = e.clone();
                 let env = runtime
                     .env
@@ -97,7 +97,7 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 runtime.env = env;
                 Step::Step(body.as_ref().clone())
             }
-            ls::ZComp::Match(ls::Match { scrut, arms }) => {
+            ls::SynComp::Match(ls::Match { scrut, arms }) => {
                 let scrut = scrut.as_ref().clone().eval(runtime);
                 let SemVal::Ctor(ls::Ctor { ctorv: ctor, args }) = scrut else {
                     panic!("Match on non-ctor")
@@ -110,7 +110,7 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 }
                 Step::Step(body.as_ref().clone())
             }
-            ls::ZComp::Comatch(ls::Comatch { arms }) => {
+            ls::SynComp::Comatch(ls::Comatch { arms }) => {
                 let Some(SemComp::Dtor(dtor, args)) = runtime.stack.pop_back() else {
                     panic!("Comatch on non-Dtor")
                 };
@@ -122,13 +122,13 @@ impl<'rt> Eval<'rt> for ls::ZComp {
                 }
                 Step::Step(body.as_ref().clone())
             }
-            ls::ZComp::Dtor(ls::Dtor { body, dtorv: dtor, args }) => {
+            ls::SynComp::Dtor(ls::Dtor { body, dtorv: dtor, args }) => {
                 let args =
                     args.iter().map(|arg| Rc::new(arg.as_ref().clone().eval(runtime))).collect();
                 runtime.stack.push_back(SemComp::Dtor(dtor, args));
                 Step::Step(body.as_ref().clone())
             }
-            ls::ZComp::Prim(ls::Prim { arity, body }) => {
+            ls::SynComp::Prim(ls::Prim { arity, body }) => {
                 let mut args = Vec::new();
                 for _ in 0..arity {
                     let Some(SemComp::Dtor(_, arg)) = runtime.stack.pop_back() else {

@@ -6,7 +6,7 @@ use std::{
 };
 
 type ZValue = ds::SemVal;
-type ZCompute = ZComp;
+type ZCompute = SynComp;
 
 // /* Function helpers */
 fn ret<E>(value: ZValue) -> Result<ZCompute, E> {

@@ -111,20 +111,20 @@ impl ZydecoExpr {
     pub fn tyck(&self, t: Span<ss::Term>) -> Result<ss::Type, String> {
         t.syn_term(self.ctx.clone()).map_err(|e| format!("{}", e))
     }
-    pub fn link_value(val: &ss::TermValue) -> ls::ZVal {
+    pub fn link_value(val: &ss::TermValue) -> ls::SynVal {
         val.into()
     }
-    pub fn link_computation(comp: &ss::TermComputation) -> ls::ZComp {
+    pub fn link_computation(comp: &ss::TermComputation) -> ls::SynComp {
         comp.into()
     }
-    pub fn eval_value(&mut self, val: ls::ZVal) -> ds::SemVal {
+    pub fn eval_value(&mut self, val: ls::SynVal) -> ds::SemVal {
         let mut input = std::io::empty();
         let mut output = std::io::sink();
         let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);
         runtime.env = self.env.clone();
         val.eval(&mut runtime)
     }
-    pub fn eval_ret_computation(&mut self, comp: ls::ZComp) -> ds::ProgKont {
+    pub fn eval_ret_computation(&mut self, comp: ls::SynComp) -> ds::ProgKont {
         let mut input = std::io::empty();
         let mut output = std::io::sink();
         let mut runtime = ds::Runtime::new(&mut input, &mut output, &[]);
@@ -136,7 +136,7 @@ impl ZydecoExpr {
         self.env = runtime.env;
         m.entry
     }
-    pub fn eval_os(&mut self, comp: ls::ZComp, args: &[String]) -> ds::Program {
+    pub fn eval_os(&mut self, comp: ls::SynComp, args: &[String]) -> ds::Program {
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
         let p = ls::Program { module: ls::Module::pure(None), entry: comp };

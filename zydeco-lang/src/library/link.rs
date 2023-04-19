@@ -21,6 +21,7 @@ impl From<ss::Module> for Module {
             inner: ss::Define { name: (sym, _ty), def: () },
         } in m.define_ext
         {
+            // Todo: synthesize the arity from the type
             let def = std_library
                 .get(&sym)
                 .expect("no implementation found for the extern term definition")
@@ -34,7 +35,7 @@ impl From<ss::Module> for Module {
     }
 }
 
-impl From<&ss::TermValue> for ZVal {
+impl From<&ss::TermValue> for SynVal {
     fn from(v: &ss::TermValue) -> Self {
         match v {
             ss::TermValue::Annotation(Annotation { term: body, ty: _ }) => body.inner_ref().into(),
@@ -50,7 +51,7 @@ impl From<&ss::TermValue> for ZVal {
     }
 }
 
-impl From<&ss::TermComputation> for ZComp {
+impl From<&ss::TermComputation> for SynComp {
     fn from(e: &ss::TermComputation) -> Self {
         match e {
             ss::TermComputation::Annotation(Annotation { term: body, ty: _ }) => {
@@ -59,7 +60,7 @@ impl From<&ss::TermComputation> for ZComp {
             ss::TermComputation::Ret(Ret(v)) => Ret(rc!(v.inner_ref().into())).into(),
             ss::TermComputation::Force(Force(v)) => Force(rc!(v.inner_ref().into())).into(),
             ss::TermComputation::TailGroup(ss::TailGroup { group, body }) => {
-                let mut body: ZComp = body.inner_ref().into();
+                let mut body: SynComp = body.inner_ref().into();
                 for item in group.into_iter().rev() {
                     match item {
                         ss::TailTerm::Let(Let { var, def, body: () }) => {

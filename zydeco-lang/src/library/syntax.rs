@@ -10,18 +10,18 @@ use zydeco_derive::{FmtArgs, IntoEnum};
 /* ---------------------------------- Term ---------------------------------- */
 
 #[derive(IntoEnum, FmtArgs, Clone)]
-pub enum ZVal {
+pub enum SynVal {
     Var(TermV),
     Thunk(Thunk<RcComp>),
     Ctor(Ctor<CtorV, RcValue>),
     Literal(Literal),
     SemValue(ds::SemVal),
 }
-type RcValue = Rc<ZVal>;
-impl ValueT for ZVal {}
+type RcValue = Rc<SynVal>;
+impl ValueT for SynVal {}
 
 pub type PrimComp =
-    fn(Vec<ds::SemVal>, &mut (dyn BufRead), &mut (dyn Write), &[String]) -> Result<ZComp, i32>;
+    fn(Vec<ds::SemVal>, &mut (dyn BufRead), &mut (dyn Write), &[String]) -> Result<SynComp, i32>;
 
 #[derive(Clone)]
 pub struct Prim {
@@ -30,7 +30,7 @@ pub struct Prim {
 }
 
 #[derive(IntoEnum, FmtArgs, Clone)]
-pub enum ZComp {
+pub enum SynComp {
     Ret(Ret<RcValue>),
     Force(Force<RcValue>),
     Let(Let<TermV, RcValue, RcComp>),
@@ -41,13 +41,13 @@ pub enum ZComp {
     Dtor(Dtor<RcComp, DtorV, RcValue>),
     Prim(Prim),
 }
-type RcComp = Rc<ZComp>;
-impl ComputationT for ZComp {}
+type RcComp = Rc<SynComp>;
+impl ComputationT for SynComp {}
 
 #[derive(IntoEnum, FmtArgs, Clone)]
 pub enum Term {
-    Val(ZVal),
-    Comp(ZComp),
+    Val(SynVal),
+    Comp(SynComp),
 }
 
 /* --------------------------------- Module --------------------------------- */
@@ -55,11 +55,11 @@ pub enum Term {
 #[derive(Clone)]
 pub struct Module {
     pub name: Option<String>,
-    pub define: Vector<(TermV, ZVal)>,
+    pub define: Vector<(TermV, SynVal)>,
 }
 
 #[derive(Clone)]
 pub struct Program {
     pub module: Module,
-    pub entry: ZComp,
+    pub entry: SynComp,
 }

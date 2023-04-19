@@ -9,7 +9,7 @@ use zydeco_derive::{FmtArgs, IntoEnum};
 
 #[derive(Clone)]
 pub struct Thunk {
-    pub body: Rc<ls::ZComp>,
+    pub body: Rc<ls::SynComp>,
     pub env: Env<TermV, SemVal>,
 }
 
@@ -33,7 +33,7 @@ impl ComputationT for ProgKont {}
 
 #[derive(Clone)]
 pub enum SemComp {
-    Kont(Rc<ls::ZComp>, Env<TermV, SemVal>, TermV),
+    Kont(Rc<ls::SynComp>, Env<TermV, SemVal>, TermV),
     Dtor(DtorV, Vec<Rc<SemVal>>),
 }
 

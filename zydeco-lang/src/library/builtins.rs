@@ -12,7 +12,7 @@ impl Builtin {
     fn new(name: &'static str, arity: u64, behavior: PrimComp) -> Self {
         Builtin { name, arity, behavior: Box::new(behavior) }
     }
-    fn gen(self) -> (TermV, ZVal) {
+    fn gen(self) -> (TermV, SynVal) {
         let Builtin { name, arity, behavior } = self;
         (
             TermV::new(name.to_string(), SpanInfo::dummy()),
@@ -20,7 +20,7 @@ impl Builtin {
         )
     }
     // To add new builtin functions, provide impl and add declaration to std.zydeco
-    pub(super) fn std_library() -> HashMap<TermV, ZVal> {
+    pub(super) fn std_library() -> HashMap<TermV, SynVal> {
         use super::impls::*;
         [
             Builtin::new("add", 2, add),
