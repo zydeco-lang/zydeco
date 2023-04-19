@@ -45,12 +45,9 @@ pub struct Annotation<Term, Type> {
     pub term: Term,
     pub ty: Type,
 }
-impl<Term: ValueT, Type> ValueT for Annotation<Term, Type> {}
-impl<Term: ComputationT, Type> ComputationT for Annotation<Term, Type> {}
 
 #[derive(SpanHolder, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Hole;
-impl TypeT for Hole {}
 
 /* ---------------------------------- Meta ---------------------------------- */
 
@@ -76,7 +73,6 @@ pub enum KindBase {
     VType,
     CType,
 }
-impl KindT for KindBase {}
 
 /// A kind that represents the arity, a.k.a. parameters of a type constructor.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -84,7 +80,6 @@ pub struct TypeArity<In: KindT, Out: KindT> {
     pub params: Vec<In>,
     pub kd: Out,
 }
-impl<In: KindT, Out: KindT> KindT for TypeArity<In, Out> {}
 
 /* ---------------------------------- Types --------------------------------- */
 
@@ -93,27 +88,23 @@ pub struct TypeApp<TyV: TyVarT, Ty: TypeT> {
     pub tvar: TyV,
     pub args: Vec<Ty>,
 }
-impl<TyV: TyVarT, Ty: TypeT> TypeT for TypeApp<TyV, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Forall<TyV: TyVarT, Ty: TypeT> {
     pub param: TyV,
     pub ty: Ty,
 }
-impl<TyV: TyVarT, Ty: TypeT> TypeT for Forall<TyV, Ty> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Exists<TyV: TyVarT, Ty: TypeT> {
     pub param: TyV,
     pub ty: Ty,
 }
-impl<TyV: TyVarT, Ty: TypeT> TypeT for Exists<TyV, Ty> {}
 
 /* --------------------------------- Values --------------------------------- */
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Thunk<B: ComputationT>(pub B);
-impl<B: ComputationT> ValueT for Thunk<B> {}
 
 #[derive(IntoEnum, Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
@@ -121,21 +112,18 @@ pub enum Literal {
     String(String),
     Char(char),
 }
-impl ValueT for Literal {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ctor<C: CtorT, A: ValueT> {
     pub ctorv: C,
     pub args: Vec<A>,
 }
-impl<C: CtorT, A: ValueT> ValueT for Ctor<C, A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pack<Ty: TypeT, A: ValueT> {
     pub ty: Ty,
     pub body: A,
 }
-impl<Ty: TypeT, A: ValueT> ValueT for Pack<Ty, A> {}
 
 /* ------------------------------ Computations ------------------------------ */
 
@@ -145,7 +133,6 @@ impl<A: ValueT> ComputationT for Ret<A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Force<A: ValueT>(pub A);
-impl<A: ValueT> ComputationT for Force<A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Let<TeV: VarT, A: ValueT, B: ComputationT> {
@@ -153,7 +140,6 @@ pub struct Let<TeV: VarT, A: ValueT, B: ComputationT> {
     pub def: A,
     pub body: B,
 }
-impl<TeV: VarT, A: ValueT, B: ComputationT> ComputationT for Let<TeV, A, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Do<TeV: VarT, B1: ComputationT, B2: ComputationT> {
@@ -161,14 +147,12 @@ pub struct Do<TeV: VarT, B1: ComputationT, B2: ComputationT> {
     pub comp: B1,
     pub body: B2,
 }
-impl<TeV: VarT, B1: ComputationT, B2: ComputationT> ComputationT for Do<TeV, B1, B2> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rec<TeV: VarT, B: ComputationT> {
     pub var: TeV,
     pub body: B,
 }
-impl<TeV: VarT, B: ComputationT> ComputationT for Rec<TeV, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Match<C: CtorT, TeV: VarT, A: ValueT, B: ComputationT> {
@@ -181,7 +165,6 @@ pub struct Matcher<C: CtorT, TeV: VarT, B: ComputationT> {
     pub vars: Vec<TeV>,
     pub body: B,
 }
-impl<C: CtorT, TeV: VarT, A: ValueT, B: ComputationT> ComputationT for Match<C, TeV, A, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Comatch<D: DtorT, TeV: VarT, B: ComputationT> {
@@ -193,7 +176,6 @@ pub struct Comatcher<D: DtorT, TeV: VarT, B: ComputationT> {
     pub vars: Vec<TeV>,
     pub body: B,
 }
-impl<D: DtorT, TeV: VarT, B: ComputationT> ComputationT for Comatch<D, TeV, B> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dtor<B: ComputationT, D: DtorT, A: ValueT> {
@@ -201,7 +183,6 @@ pub struct Dtor<B: ComputationT, D: DtorT, A: ValueT> {
     pub dtorv: D,
     pub args: Vec<A>,
 }
-impl<B: ComputationT, D: DtorT, A: ValueT> ComputationT for Dtor<B, D, A> {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatchPack<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> {
@@ -209,10 +190,6 @@ pub struct MatchPack<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> {
     pub tvar: TyV,
     pub var: TeV,
     pub body: B,
-}
-impl<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> ComputationT
-    for MatchPack<A, TyV, TeV, B>
-{
 }
 
 /* ------------------------------ Declarations ------------------------------ */
