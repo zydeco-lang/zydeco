@@ -8,11 +8,7 @@ use crate::{
         syntax as ps,
     },
     prelude::*,
-    statics::{
-        syntax as ss,
-        tyck::{Ctx, Seal},
-        Elaboration, TypeCheck,
-    },
+    statics::{syntax as ss, Ctx, Elaboration, Seal, TypeCheck},
     syntax::env::Env,
     utils::span::FileInfo,
 };

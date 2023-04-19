@@ -26,13 +26,18 @@ pub mod resolve {
 }
 
 pub mod statics {
-    pub mod syntax;
-    pub mod err;
-    pub mod elab;
-    pub mod tyck;
-    mod fmt;
-
-    pub use {elab::Elaboration, tyck::TypeCheck};
+    pub mod legacy {
+        pub mod syntax;
+        pub mod err;
+        pub mod elab;
+        pub mod tyck;
+        mod fmt;
+    }
+    pub use legacy::{
+        elab::Elaboration,
+        err, syntax,
+        tyck::{Ctx, Seal, TypeCheck},
+    };
 }
 
 pub mod library {
