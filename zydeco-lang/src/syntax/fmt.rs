@@ -355,7 +355,7 @@ where
     fn fmt_args(&self, fargs: Args) -> String {
         let MatchPack { scrut, tvar, var, body } = self;
         format!(
-            "match {} exists {} : {} -> {}",
+            "match {} pack ({}, {}) -> {}",
             scrut.fmt_args(fargs),
             tvar.fmt_args(fargs),
             var.fmt_args(fargs),

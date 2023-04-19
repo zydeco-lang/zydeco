@@ -87,7 +87,10 @@ pub fn into_enum_derive(input: TokenStream) -> TokenStream {
 pub fn span_holder_derive(input: TokenStream) -> TokenStream {
     let mut res = TokenStream::new();
     let input = parse_macro_input!(input as DeriveInput);
-    let typ = input.ident;
+    let ident = input.ident;
+    let params = &input.generics.params.iter().collect::<Vec<_>>();
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let where_keyword = if where_clause.is_none() { Some(quote!{ where }) } else { None };
     let mut variant_idents = Vec::new();
     match input.data {
         Data::Enum(data) => {
@@ -101,13 +104,17 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
                 }
             }
             let gen = quote!(
-                impl crate::utils::span::SpanHolder for #typ {
+                impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics
+                #where_keyword
+                    #where_clause
+                    #( #params: crate::utils::span::SpanHolder ),*
+                {
                     fn span_map_mut<F>(&mut self, f: F)
                     where
                         F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
                     {
                         match self {
-                            #( #typ::#variant_idents(t) => t.span_map_mut(f) ),*
+                            #( #ident::#variant_idents(t) => t.span_map_mut(f) ),*
                         }
                     }
                 }
@@ -118,7 +125,11 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
             Fields::Named(fields) => {
                 let field_idents: Vec<_> = (&fields.named).into_iter().map(|f| &f.ident).collect();
                 let gen = quote!(
-                    impl crate::utils::span::SpanHolder for #typ {
+                    impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics
+                    #where_keyword
+                        #where_clause
+                        #( #params: crate::utils::span::SpanHolder ),*
+                    {
                         fn span_map_mut<F>(&mut self, f: F)
                         where
                             F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
@@ -132,7 +143,11 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
             Fields::Unnamed(fields) => {
                 let idx: Vec<_> = (0..fields.unnamed.len()).map(syn::Index::from).collect();
                 let gen = quote!(
-                    impl crate::utils::span::SpanHolder for #typ {
+                    impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics
+                    #where_keyword
+                        #where_clause
+                        #( #params: crate::utils::span::SpanHolder ),*
+                    {
                         fn span_map_mut<F>(&mut self, f: F)
                         where
                             F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
@@ -145,7 +160,11 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
             }
             Fields::Unit => {
                 let gen = quote!(
-                    impl crate::utils::span::SpanHolder for #typ {
+                    impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics
+                    #where_keyword
+                        #where_clause
+                        #( #params: crate::utils::span::SpanHolder ),*
+                    {
                         fn span_map_mut<F>(&mut self, _: F)
                         where
                             F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
@@ -164,7 +183,8 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
 pub fn fmt_args_derive(input: TokenStream) -> TokenStream {
     let mut res = TokenStream::new();
     let input = parse_macro_input!(input as DeriveInput);
-    let typ = input.ident;
+    let ident = input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let mut variant_idents = Vec::new();
     let Data::Enum(data) = input.data else {
         panic!("Only enums can be derived")
@@ -179,10 +199,10 @@ pub fn fmt_args_derive(input: TokenStream) -> TokenStream {
         }
     }
     let gen = quote!(
-        impl crate::utils::fmt::FmtArgs for #typ {
+        impl #impl_generics crate::utils::fmt::FmtArgs for #ident #ty_generics #where_clause {
             fn fmt_args(&self, fargs: crate::utils::fmt::Args) -> String {
                 match self {
-                    #( #typ::#variant_idents(t) => t.fmt_args(fargs) ),*
+                    #( #ident::#variant_idents(t) => t.fmt_args(fargs) ),*
                 }
             }
         }

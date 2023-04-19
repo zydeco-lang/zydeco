@@ -17,14 +17,6 @@ impl SpanHolder for String {
     }
 }
 
-impl SpanHolder for Hole {
-    fn span_map_mut<F>(&mut self, _f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-    }
-}
-
 impl<In, Out> SpanHolder for Arrow<In, Out>
 where
     In: SpanHolder,
@@ -37,36 +29,6 @@ where
         let Arrow(r#in, out) = self;
         r#in.span_map_mut(f.clone());
         out.span_map_mut(f);
-    }
-}
-
-impl<Param, Body> SpanHolder for Abs<Param, Body>
-where
-    Param: SpanHolder,
-    Body: SpanHolder,
-{
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        let Abs { param, body } = self;
-        param.span_map_mut(f.clone());
-        body.span_map_mut(f);
-    }
-}
-
-impl<Body, Arg> SpanHolder for App<Body, Arg>
-where
-    Body: SpanHolder,
-    Arg: SpanHolder,
-{
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        let App { body, arg } = self;
-        body.span_map_mut(f.clone());
-        arg.span_map_mut(f);
     }
 }
 
@@ -134,21 +96,6 @@ where
     {
         let Exists { param, ty } = self;
         param.span_map_mut(f.clone());
-        ty.span_map_mut(f);
-    }
-}
-
-impl<Term, Type> SpanHolder for Annotation<Term, Type>
-where
-    Term: SpanHolder,
-    Type: SpanHolder,
-{
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        let Annotation { term, ty } = self;
-        term.span_map_mut(f.clone());
         ty.span_map_mut(f);
     }
 }
@@ -352,15 +299,6 @@ where
         tvar.span_map_mut(f.clone());
         var.span_map_mut(f.clone());
         body.span_map_mut(f);
-    }
-}
-
-impl<T: SpanHolder> SpanHolder for DeclSymbol<T> {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-        self.inner.span_map_mut(f);
     }
 }
 

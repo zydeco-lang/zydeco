@@ -2,7 +2,7 @@ pub mod env;
 mod fmt;
 mod span;
 
-use zydeco_derive::IntoEnum;
+use zydeco_derive::{IntoEnum, SpanHolder};
 
 /* ---------------------------------- Sort ---------------------------------- */
 
@@ -40,7 +40,7 @@ pub use binder::*;
 
 /* ------------------------------ Bi-Diretional ----------------------------- */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(SpanHolder, Clone, Debug, PartialEq, Eq)]
 pub struct Annotation<Term, Type> {
     pub term: Term,
     pub ty: Type,
@@ -48,7 +48,7 @@ pub struct Annotation<Term, Type> {
 impl<Term: ValueT, Type> ValueT for Annotation<Term, Type> {}
 impl<Term: ComputationT, Type> ComputationT for Annotation<Term, Type> {}
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(SpanHolder, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Hole;
 impl TypeT for Hole {}
 
@@ -57,13 +57,13 @@ impl TypeT for Hole {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Arrow<In, Out = In>(pub In, pub Out);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(SpanHolder, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Abs<Param, Body> {
     pub param: Param,
     pub body: Body,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(SpanHolder, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct App<Body, Arg> {
     pub body: Body,
     pub arg: Arg,
@@ -217,7 +217,7 @@ impl<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> ComputationT
 
 /* ------------------------------ Declarations ------------------------------ */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(SpanHolder, Clone, Debug, PartialEq, Eq)]
 pub struct DeclSymbol<T> {
     pub public: bool,
     pub external: bool,
