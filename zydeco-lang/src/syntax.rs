@@ -71,7 +71,7 @@ pub struct App<Body, Arg> {
 
 /* ---------------------------------- Kind ---------------------------------- */
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(SpanHolder, Copy, Clone, Debug, PartialEq, Eq)]
 pub enum KindBase {
     VType,
     CType,

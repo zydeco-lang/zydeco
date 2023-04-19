@@ -90,92 +90,68 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
     let ident = input.ident;
     let params = &input.generics.params.iter().collect::<Vec<_>>();
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let where_keyword = if where_clause.is_none() { Some(quote!{ where }) } else { None };
-    let mut variant_idents = Vec::new();
+    let where_clause = if where_clause.is_none() {
+        // Fixme: `where` is not working
+        quote! { where #( #params: crate::utils::span::SpanHolder ),* }
+        // quote! {}
+    } else {
+        quote! { #where_clause, #( #params: crate::utils::span::SpanHolder ),* }
+    };
+    let span_map_mut_body;
     match input.data {
         Data::Enum(data) => {
+            let mut arms = Vec::new();
             for variant in data.variants {
-                variant_idents.push(variant.ident);
+                let variant_ident = &variant.ident;
                 match &variant.fields {
-                    Fields::Unnamed(field) if field.unnamed.len() == 1 => {}
-                    Fields::Unnamed(_) | Fields::Named(_) | Fields::Unit => {
+                    Fields::Unnamed(field) if field.unnamed.len() == 1 => {
+                        arms.push(quote! {
+                            #ident::#variant_ident(t) => t.span_map_mut(f)
+                        });
+                    }
+                    Fields::Unit => {
+                        arms.push(quote! {
+                            #ident::#variant_ident => {}
+                        });
+                    }
+                    Fields::Unnamed(_) | Fields::Named(_) => {
                         panic!("Only single-tuple variants can be derived")
                     }
                 }
             }
-            let gen = quote!(
-                impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics
-                #where_keyword
-                    #where_clause
-                    #( #params: crate::utils::span::SpanHolder ),*
-                {
-                    fn span_map_mut<F>(&mut self, f: F)
-                    where
-                        F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
-                    {
-                        match self {
-                            #( #ident::#variant_idents(t) => t.span_map_mut(f) ),*
-                        }
-                    }
+            span_map_mut_body = quote!(
+                match self {
+                    #( #arms ),*
                 }
             );
-            res.extend(TokenStream::from(gen));
         }
         Data::Struct(data) => match data.fields {
             Fields::Named(fields) => {
                 let field_idents: Vec<_> = (&fields.named).into_iter().map(|f| &f.ident).collect();
-                let gen = quote!(
-                    impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics
-                    #where_keyword
-                        #where_clause
-                        #( #params: crate::utils::span::SpanHolder ),*
-                    {
-                        fn span_map_mut<F>(&mut self, f: F)
-                        where
-                            F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
-                        {
-                            #( self.#field_idents.span_map_mut(f.clone()) );*
-                        }
-                    }
+                span_map_mut_body = quote!(
+                    #( self.#field_idents.span_map_mut(f.clone()) );*
                 );
-                res.extend(TokenStream::from(gen));
             }
             Fields::Unnamed(fields) => {
                 let idx: Vec<_> = (0..fields.unnamed.len()).map(syn::Index::from).collect();
-                let gen = quote!(
-                    impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics
-                    #where_keyword
-                        #where_clause
-                        #( #params: crate::utils::span::SpanHolder ),*
-                    {
-                        fn span_map_mut<F>(&mut self, f: F)
-                        where
-                            F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
-                        {
-                            #( self.#idx.span_map_mut(f.clone()) );*
-                        }
-                    }
+                span_map_mut_body = quote!(
+                    #( self.#idx.span_map_mut(f.clone()) );*
                 );
-                res.extend(TokenStream::from(gen));
             }
             Fields::Unit => {
-                let gen = quote!(
-                    impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics
-                    #where_keyword
-                        #where_clause
-                        #( #params: crate::utils::span::SpanHolder ),*
-                    {
-                        fn span_map_mut<F>(&mut self, _: F)
-                        where
-                            F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
-                        {}
-                    }
-                );
-                res.extend(TokenStream::from(gen));
+                span_map_mut_body = quote!();
             }
         },
         _ => unreachable!("SpanHolder can only be derived for enums and structs"),
     }
+    let gen = quote!(
+        impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics #where_clause
+        {
+            fn span_map_mut<F>(&mut self, f: F) where F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
+            { #span_map_mut_body }
+        }
+    );
+    res.extend(TokenStream::from(gen));
     res
 }
 

@@ -32,14 +32,6 @@ where
     }
 }
 
-impl SpanHolder for KindBase {
-    fn span_map_mut<F>(&mut self, _f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-    }
-}
-
 impl<In, Out> SpanHolder for TypeArity<In, Out>
 where
     In: KindT + SpanHolder,
