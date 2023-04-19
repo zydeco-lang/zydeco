@@ -9,8 +9,8 @@ impl TypeCheck for Span<TermComputation> {
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         ctx.trace.push(Frame {
-            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
-            sort: format!("synthezing computation"),
+            tycker_src: format!("{}", std::panic::Location::caller()),
+            sort: format!("synthesizing computation"),
             term: format!("{}", self.inner_ref().fmt_truncate(40)),
             info: self.span().clone(),
         });
@@ -220,7 +220,7 @@ impl TypeCheck for Span<TermComputation> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let span = self.span();
         ctx.trace.push(Frame {
-            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
+            tycker_src: format!("{}", std::panic::Location::caller()),
             sort: format!("analyzing computation against type {}", typ.fmt()),
             term: format!("{}", self.fmt_truncate(40)),
             info: self.span().clone(),

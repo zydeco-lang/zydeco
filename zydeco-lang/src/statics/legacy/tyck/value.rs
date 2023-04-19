@@ -19,8 +19,8 @@ impl TypeCheck for Span<TermValue> {
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         ctx.trace.push(Frame {
-            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
-            sort: "synthezing value".to_string(),
+            tycker_src: format!("{}", std::panic::Location::caller()),
+            sort: "synthesizing value".to_string(),
             term: format!("{}", self.inner_ref().fmt_truncate(40)),
             info: self.span().clone(),
         });
@@ -46,7 +46,7 @@ impl TypeCheck for Span<TermValue> {
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         let span = self.span();
         ctx.trace.push(Frame {
-            tycker_src: format!("{}:{}:{}", file!(), line!(), column!()),
+            tycker_src: format!("{}", std::panic::Location::caller()),
             sort: format!("analyzing value against type {}", typ.fmt()),
             term: format!("{}", self.inner_ref().fmt_truncate(40)),
             info: self.span().clone(),
