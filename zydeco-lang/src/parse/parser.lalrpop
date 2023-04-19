@@ -72,7 +72,7 @@ DataBr: DataBr<CtorV, Span<Type>> = {
 };
 
 CodataBr: CodataBr<DtorV, Span<Type>> = {
-    "|" "." <dtorv:DtorV> <tys:SepByDelim<"(", ",", <Span<Type>>, ")">> ":"
+    "|" <dtorv:DtorV> <tys:SepByDelim<"(", ",", <Span<Type>>, ")">> ":"
     <ty:Span<Type>> => {
         CodataBr { dtorv, tys, ty }
     }
@@ -215,7 +215,7 @@ TermComputationRight: TermComputation = {
     <body:Box<Span<TermComputationRight>>> "@" "(" <arg:Box<Span<Type>>> ")" => App {
         body, arg,
     }.into(),
-    <body:Box<Span<TermComputationRight>>> "." <dtorv:DtorV>
+    <body:Box<Span<TermComputationRight>>> <dtorv:DtorV>
     <args:SepByDelim<"(", ",", Span<TermValue>, ")">> => Dtor {
         body, dtorv, args,
     }.into(),
@@ -249,7 +249,7 @@ MatchBr: Matcher<CtorV, NameDef, Span<TermComputation>> = {
 };
 
 ComatchBr: Comatcher<DtorV, NameDef, Span<TermComputation>> = {
-    "|" "." <dtorv:DtorV> <vars:SepByDelim<"(", ",", NameDef<LowerId>, ")">> "->"
+    "|" <dtorv:DtorV> <vars:SepByDelim<"(", ",", NameDef<LowerId>, ")">> "->"
     <body:Span<TermComputation>> => Comatcher {
         dtorv, vars, body
     }
@@ -275,12 +275,8 @@ NameRef<T>: NameRef = {
     },
 };
 
-CtorV: CtorV = <PathPrefix<Span<UpperId>, Span<UpperId>>> => <>.1.into();
-DtorV: DtorV = <PathPrefix<Span<UpperId>, Span<LowerId>>> => <>.1.into();
-
-PathPrefix<M, N>: (Vec<M>, N) = {
-    <path:(<Span<UpperId>> ".")*> <v:N> => (path, v),
-};
+CtorV: CtorV = <Span<UpperId>> => <>.into();
+DtorV: DtorV = "." <Span<LowerId>> => <>.into();
 
 MixedId: String = {
     <UpperId> => <>,
