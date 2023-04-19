@@ -90,8 +90,10 @@ impl TypeCheck for Span<TermValue> {
                         },
                     )
                 })?;
-                let DataBr(_, tys) =
-                    ctors.into_iter().find(|DataBr(ctorv, _)| ctorv == ctor).ok_or_else(|| {
+                let DataBr { ctorv: _, tys } = ctors
+                    .into_iter()
+                    .find(|DataBr { ctorv, tys: _ }| ctorv == ctor)
+                    .ok_or_else(|| {
                         ctx.err(
                             span,
                             NameResolve(NameResolveError::UnknownConstructor {

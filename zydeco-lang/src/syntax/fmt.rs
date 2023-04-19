@@ -417,7 +417,7 @@ where
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let DataBr(ctorv, tys) = self;
+        let DataBr { ctorv, tys } = self;
         let mut s = String::new();
         s += "| ";
         s += &ctorv.fmt_args(fargs);
@@ -463,7 +463,7 @@ where
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let CodataBr(dtorv, tys, ty) = self;
+        let CodataBr { dtorv, tys, ty } = self;
         let mut s = String::new();
         s += "| .";
         s += &dtorv.fmt_args(fargs);

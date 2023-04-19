@@ -232,7 +232,10 @@ pub struct Data<TyV: TyVarT, Kd: KindT, C: CtorT, Ty: TypeT> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DataBr<C: CtorT, Ty: TypeT>(pub C, pub Vec<Ty>);
+pub struct DataBr<C: CtorT, Ty: TypeT> {
+    pub ctorv: C,
+    pub tys: Vec<Ty>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Codata<TyV: TyVarT, Kd: KindT, D: DtorT, Ty: TypeT> {
@@ -242,7 +245,11 @@ pub struct Codata<TyV: TyVarT, Kd: KindT, D: DtorT, Ty: TypeT> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CodataBr<D: DtorT, Ty: TypeT>(pub D, pub Vec<Ty>, pub Ty);
+pub struct CodataBr<D: DtorT, Ty: TypeT> {
+    pub dtorv: D,
+    pub tys: Vec<Ty>,
+    pub ty: Ty,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Alias<TyV: TyVarT, Kd: KindT, Ty: TypeT> {

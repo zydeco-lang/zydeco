@@ -308,8 +308,8 @@ where
         let Data { name, params, ctors } = self;
         name.span_map_mut(f.clone());
         params.span_map_mut(f.clone());
-        for DataBr(ctor, tys) in ctors {
-            ctor.span_map_mut(f.clone());
+        for DataBr { ctorv, tys } in ctors {
+            ctorv.span_map_mut(f.clone());
             tys.span_map_mut(f.clone());
         }
     }
@@ -329,8 +329,8 @@ where
         let Codata { name, params, dtors } = self;
         name.span_map_mut(f.clone());
         params.span_map_mut(f.clone());
-        for CodataBr(dtor, tys, ty) in dtors {
-            dtor.span_map_mut(f.clone());
+        for CodataBr { dtorv, tys, ty } in dtors {
+            dtorv.span_map_mut(f.clone());
             tys.span_map_mut(f.clone());
             ty.span_map_mut(f.clone());
         }

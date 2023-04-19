@@ -66,15 +66,15 @@ DefineEnd: () = {
 };
 
 DataBr: DataBr<CtorV, Span<Type>> = {
-    "|" <ctorv:CtorV> <args:SepByDelim<"(", ",", <Span<Type>>, ")">> => {
-        DataBr(ctorv, args)
+    "|" <ctorv:CtorV> <tys:SepByDelim<"(", ",", <Span<Type>>, ")">> => {
+        DataBr { ctorv, tys }
     }
 };
 
 CodataBr: CodataBr<DtorV, Span<Type>> = {
-    "|" "." <dtor:DtorV> <args:SepByDelim<"(", ",", <Span<Type>>, ")">> ":"
+    "|" "." <dtorv:DtorV> <tys:SepByDelim<"(", ",", <Span<Type>>, ")">> ":"
     <ty:Span<Type>> => {
-        CodataBr(dtor, args, ty)
+        CodataBr { dtorv, tys, ty }
     }
 };
 

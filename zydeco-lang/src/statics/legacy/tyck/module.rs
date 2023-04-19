@@ -42,7 +42,7 @@ impl TypeCheck for Span<&prelude::Data> {
             ctx.type_ctx.insert(tvar.clone(), kd.inner_clone());
         }
         let mut ctorvs = HashSet::new();
-        for DataBr(ctorv, tys) in data.ctors.iter() {
+        for DataBr { ctorv, tys } in data.ctors.iter() {
             let span = ctorv.span();
             if ctorvs.contains(ctorv) {
                 Err(ctx.err(
@@ -71,7 +71,7 @@ impl TypeCheck for Span<&prelude::Codata> {
             ctx.type_ctx.insert(tvar.clone(), kd.inner_clone());
         }
         let mut dtorvs = HashSet::new();
-        for CodataBr(dtorv, tys, ty) in data.dtors.iter() {
+        for CodataBr { dtorv, tys, ty } in data.dtors.iter() {
             let span = dtorv.span();
             if dtorvs.contains(dtorv) {
                 Err(ctx.err(

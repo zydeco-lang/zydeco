@@ -85,7 +85,7 @@ impl TypeCheck for Span<TermComputation> {
                     )
                 })?;
                 let ctors: HashMap<_, _> =
-                    ctors.into_iter().map(|DataBr(ctor, tys)| (ctor, tys)).collect();
+                    ctors.into_iter().map(|DataBr { ctorv, tys }| (ctorv, tys)).collect();
                 let mut unexpected = Vec::new();
                 let mut ctorv_set_arm: HashSet<CtorV> = HashSet::new();
                 let mut ty_arms = Vec::new();
@@ -145,9 +145,9 @@ impl TypeCheck for Span<TermComputation> {
                         },
                     )
                 })?;
-                let CodataBr(_, tys, ty) = dtors
+                let CodataBr { dtorv: _, tys, ty } = dtors
                     .into_iter()
-                    .find(|CodataBr(dtorv, _, _)| dtorv == dtor)
+                    .find(|CodataBr { dtorv, tys: _, ty: _ }| dtorv == dtor)
                     .ok_or_else(|| {
                         ctx.err(
                             body.span(),
@@ -303,7 +303,7 @@ impl TypeCheck for Span<TermComputation> {
                     )
                 })?;
                 let ctors: HashMap<_, _> =
-                    ctors.into_iter().map(|DataBr(ctor, tys)| (ctor, tys)).collect();
+                    ctors.into_iter().map(|DataBr { ctorv, tys }| (ctorv, tys)).collect();
                 let mut unexpected = Vec::new();
                 let mut ctorv_set_arm: HashSet<CtorV> = HashSet::new();
                 for Matcher { ctorv: ctor, vars, body } in arms {
@@ -340,8 +340,10 @@ impl TypeCheck for Span<TermComputation> {
                         },
                     )
                 })?;
-                let dtors: HashMap<_, _> =
-                    dtors.into_iter().map(|CodataBr(dtor, tys, ty)| (dtor, (tys, ty))).collect();
+                let dtors: HashMap<_, _> = dtors
+                    .into_iter()
+                    .map(|CodataBr { dtorv, tys, ty }| (dtorv, (tys, ty)))
+                    .collect();
                 let mut unexpected = Vec::new();
                 let mut dtorv_set_arm: HashSet<DtorV> = HashSet::new();
                 for Comatcher { dtorv: dtor, vars, body } in arms {

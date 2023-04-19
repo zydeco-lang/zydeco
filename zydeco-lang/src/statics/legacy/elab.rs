@@ -459,10 +459,10 @@ impl Elaboration<ps::Data<NameDef, Option<Span<ps::Kind>>, CtorV, Span<ps::Type>
 impl Elaboration<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
     type Error = TyckErrorItem;
     fn elab(
-        DataBr(ctor, params): ps::DataBr<CtorV, Span<ps::Type>>,
+        DataBr { ctorv, tys }: ps::DataBr<CtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
-        let params = Vec::<_>::elab(params)?.into_iter().map(|ty| rc!(ty)).collect();
-        Ok(Self(ctor, params))
+        let tys = Vec::<_>::elab(tys)?.into_iter().map(|ty| rc!(ty)).collect();
+        Ok(Self { ctorv, tys })
     }
 }
 
@@ -500,10 +500,10 @@ impl Elaboration<ps::Codata<NameDef, Option<Span<ps::Kind>>, DtorV, Span<ps::Typ
 impl Elaboration<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
     type Error = TyckErrorItem;
     fn elab(
-        CodataBr(dtor, params, ty): ps::CodataBr<DtorV, Span<ps::Type>>,
+        CodataBr { dtorv, tys, ty }: ps::CodataBr<DtorV, Span<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
-        let params = Vec::<_>::elab(params)?.into_iter().map(|ty| rc!(ty)).collect();
-        Ok(Self(dtor, params, rc!(ty.try_map(Elaboration::elab)?)))
+        let tys = Vec::<_>::elab(tys)?.into_iter().map(|ty| rc!(ty)).collect();
+        Ok(Self { dtorv, tys, ty: rc!(ty.try_map(Elaboration::elab)?) })
     }
 }
 
