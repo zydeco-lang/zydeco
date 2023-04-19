@@ -73,12 +73,12 @@ end
 // that the parentheses are necessary to avoid ambiguity.
 
 // The top level is as concise and declarative as possible. For a more detailed
-// explanation of the term level syntax, please refer to the next chapter.
+// explanation of the term-level syntax, please refer to the next chapter.
 
 // A final comment is on how to run a file and use REPL.
 
 // You can `alias zydeco=cargo run --bin zydeco --` and try `zydeco run <FILE>`.
 // For REPL, run `zydeco repl`; alternatively, install `rlwrap` and then try out
-// a modern and advanced repl via `rlwrap cargo run --bin zydeco -- repl`. If
-// you don't know the type of a builtin function, say `add`, you can try typing
+// a modern and advanced REPL via `rlwrap cargo run --bin zydeco -- repl`. If
+// you don't know the type of a built-in function, say `add`, you can try typing
 // `add` and press enter. To exit, press `Ctrl-D`.

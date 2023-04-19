@@ -2,7 +2,7 @@
 
 // In the last few chapters, we saw the `rec` keyword, which allows us to define
 // recursive functions. However, it is actually possible to define recursive
-// functions without the primitive `rec` terms. This can done by using the Y
+// functions without the primitive `rec` terms. This can be done by using the Y
 // combinator.
 
 codata Y (B : CType) where
