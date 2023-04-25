@@ -11,7 +11,7 @@ use super::{
 use crate::{
     rc,
     resolve::err::NameResolveError,
-    syntax::env::Env,
+    syntax::Env,
     utils::{
         fmt::FmtArgs,
         span::{Span, SpanInfo, SpanView},

@@ -1,5 +1,5 @@
 use crate::syntax::*;
-pub use crate::{library::syntax as ls, syntax::env::Env, utils::fmt::FmtArgs};
+pub use crate::{library::syntax as ls, syntax::Env, utils::fmt::FmtArgs};
 use im::Vector;
 use std::{
     io::{BufRead, Write},

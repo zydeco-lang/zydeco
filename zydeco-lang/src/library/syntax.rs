@@ -1,5 +1,5 @@
 use crate::dynamics::syntax as ds;
-pub use crate::syntax::{env::Env, *};
+pub use crate::syntax::*;
 use im::Vector;
 use std::{
     io::{BufRead, Write},

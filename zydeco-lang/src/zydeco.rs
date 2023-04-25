@@ -9,7 +9,7 @@ use crate::{
     },
     prelude::*,
     statics::{syntax as ss, Ctx, Elaboration, Seal, TypeCheck},
-    syntax::env::Env,
+    syntax::Env,
     utils::span::FileInfo,
 };
 pub use ds::ProgKont;
