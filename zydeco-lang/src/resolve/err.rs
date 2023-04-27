@@ -1,68 +1,26 @@
-use crate::{statics::err::TyckErrorItem, syntax::binder::*};
-use std::fmt;
+use crate::syntax::binder::*;
+use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Error, Clone, Debug)]
 pub enum NameResolveError {
+    #[error("{name} declared multiple times")]
     DuplicateTypeDeclaration { name: TypeV },
+    #[error("{name} declared multiple times")]
     DuplicateCtorDeclaration { name: CtorV },
+    #[error("{name} declared multiple times")]
     DuplicateDtorDeclaration { name: DtorV },
+    #[error("{name} declared with neither type signature nor binding")]
     EmptyDeclaration { name: String },
+    #[error("{name} declared as external but has implementation")]
     ExternalDeclaration { name: String },
+    #[error("Unknown identifier {name}")]
     UnknownIdentifier { name: String },
+    #[error("Unbound type variable {tvar}")]
     UnboundTypeVariable { tvar: TypeV },
+    #[error("Unbound term variable {var}")]
     UnboundTermVariable { var: TermV },
+    #[error("Unknown constructor. In {context}, no constructor named {ctor} is found.")]
     UnknownConstructor { context: String, ctor: CtorV },
+    #[error("Unknown destructor. In {context}, no destructor named {dtor} is found.")]
     UnknownDestructor { context: String, dtor: DtorV },
-}
-use NameResolveError::*;
-
-impl fmt::Display for NameResolveError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            DuplicateTypeDeclaration { name } => {
-                write!(f, "{} declared multiple times", name)
-            }
-            DuplicateCtorDeclaration { name } => {
-                write!(f, "{} declared multiple times", name)
-            }
-            DuplicateDtorDeclaration { name } => {
-                write!(f, "{} declared multiple times", name)
-            }
-            EmptyDeclaration { name } => {
-                write!(f, "{} declared with neither type signature nor binding", name)
-            }
-            ExternalDeclaration { name } => {
-                write!(f, "{} declared as external but has implementation", name)
-            }
-            UnknownIdentifier { name } => {
-                write!(f, "Unknown identifier {}", name)
-            }
-            UnboundTypeVariable { tvar: name } => {
-                write!(f, "Unbound type variable {}", name)
-            }
-            UnboundTermVariable { var: name } => {
-                write!(f, "Unbound term variable {}", name)
-            }
-            UnknownConstructor { context, ctor } => {
-                write!(
-                    f,
-                    "Unknown constructor. In {}, no constructor named {} is found.",
-                    context, ctor
-                )
-            }
-            UnknownDestructor { context, dtor } => {
-                write!(
-                    f,
-                    "Unknown destructor. In {}, no destructor named {} is found.",
-                    context, dtor
-                )
-            }
-        }
-    }
-}
-
-impl From<NameResolveError> for TyckErrorItem {
-    fn from(err: NameResolveError) -> Self {
-        TyckErrorItem::NameResolve(err)
-    }
 }

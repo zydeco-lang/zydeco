@@ -40,6 +40,10 @@ pub mod statics {
     };
 }
 
+pub mod core {
+    pub mod syntax;
+}
+
 pub mod library {
     pub mod syntax;
     pub mod builtins;

@@ -1,6 +1,7 @@
 use super::syntax::*;
 use crate::{prelude::*, resolve::err::NameResolveError};
 use std::fmt;
+use thiserror::Error;
 
 #[derive(Clone, Debug)]
 pub struct TyckError {
@@ -19,112 +20,38 @@ impl fmt::Display for TyckError {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Error, Clone, Debug)]
 pub enum TyckErrorItem {
+    #[error("Unbound variable {var}")]
     UnboundVar { var: TermV },
+    #[error("Kind mismatch. In {context}, expected {}, but got {}", .expected.fmt(), .found.fmt())]
     KindMismatch { context: String, expected: Kind, found: Kind },
+    #[error("Type mismatch. In {context}, expected {}, but got {}", .expected.fmt(), .found.fmt())]
     TypeMismatch { context: String, expected: Type, found: Type },
+    #[error("In {context}, expected {expected}, but got {}", .found.fmt())]
     TypeExpected { context: String, expected: String, found: Type },
+    #[error("In {context}, expected {expected} arguments but got {found}")]
     ArityMismatch { context: String, expected: usize, found: usize },
+    #[error("Need annotation for {content}")]
     NeedAnnotation { content: String },
+    #[error("Subsumption for sort {sort} failed")]
     Subsumption { sort: &'static str },
+    #[error("Inconsistent matchers.\nUnexpected:\n{unexpected:?}Missing:\n{missing:?}")]
     InconsistentMatchers { unexpected: Vec<CtorV>, missing: Vec<CtorV> },
+    #[error("Inconsistent comatchers.\nUnexpected:\n{unexpected:?}, Missing:\n{missing:?}")]
     InconsistentComatchers { unexpected: Vec<DtorV>, missing: Vec<DtorV> },
+    #[error("Inconsistent branches. Expected: {tys:?}")]
     InconsistentBranches { tys: Vec<Type> },
-    NameResolve(NameResolveError),
+    #[error(transparent)]
+    NameResolve(#[from] NameResolveError),
+    #[error("No main entry is defined")]
     NoMainEntry,
+    #[error("Multiple main entries are defined")]
     MultipleMainEntries,
+    #[error("The main entry should be defined in the top level module")]
     MainEntryInModule,
+    #[error("The type of the main expression should be OS but got {}", .found.fmt())]
     WrongMain { found: Type },
-}
-
-use TyckErrorItem::*;
-impl fmt::Display for TyckErrorItem {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            UnboundVar { var } => {
-                write!(f, "Unbound variable {}", var)
-            }
-            KindMismatch { context, expected, found } => write!(
-                f,
-                "Kind mismatch. In {}, expected {}, but got {}",
-                context,
-                expected.fmt(),
-                found.fmt()
-            ),
-            TypeMismatch { context, expected, found } => write!(
-                f,
-                "Type mismatch. In {}, expected {}, but got {}",
-                context,
-                expected.fmt(),
-                found.fmt()
-            ),
-            TypeExpected { context, expected, found } => {
-                write!(f, "In {}, expected {}, but got {}", context, expected, found.fmt())
-            }
-            ArityMismatch { context, expected, found } => {
-                write!(f, "In {}, expected {} arguments but got {}", context, expected, found)
-            }
-            NeedAnnotation { content } => {
-                write!(f, "Need annotation for {}", content)
-            }
-            Subsumption { sort } => {
-                write!(f, "Subsumption of sort {} failed", sort)
-            }
-            InconsistentMatchers { unexpected, missing } => {
-                writeln!(f, "Inconsistent matchers:")?;
-                if !unexpected.is_empty() {
-                    writeln!(f, "Unexpected:")?;
-                    for c in unexpected {
-                        writeln!(f, "\t- {}", c)?;
-                    }
-                }
-                if !missing.is_empty() {
-                    writeln!(f, "Missing:")?;
-                    for c in missing {
-                        writeln!(f, "\t- {}", c)?;
-                    }
-                }
-                Ok(())
-            }
-            InconsistentComatchers { unexpected, missing } => {
-                writeln!(f, "Inconsistent matchers:")?;
-                if !unexpected.is_empty() {
-                    writeln!(f, "Unexpected:")?;
-                    for c in unexpected {
-                        writeln!(f, "\t- {}", c)?;
-                    }
-                }
-                if !missing.is_empty() {
-                    writeln!(f, "Missing:")?;
-                    for c in missing {
-                        writeln!(f, "\t- {}", c)?;
-                    }
-                }
-                Ok(())
-            }
-            InconsistentBranches { tys } => {
-                writeln!(f, "Branches have mismatched types:")?;
-                for t in tys {
-                    writeln!(f, "\t- {}, ", t.fmt())?;
-                }
-                Ok(())
-            }
-            NameResolve(nr) => write!(f, "{}", nr),
-            NoMainEntry => {
-                write!(f, "No main entry is defined")
-            }
-            MultipleMainEntries => {
-                write!(f, "Multiple main entries are defined")
-            }
-            MainEntryInModule => {
-                write!(f, "The main entry should be defined in the top level module")
-            }
-            WrongMain { found } => {
-                write!(f, "The type of the main expression should be OS but got {}", found.fmt())
-            }
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -147,18 +74,18 @@ impl fmt::Display for Trace {
 
 #[derive(Clone, Debug)]
 pub struct Frame {
-    pub tycker_src: String,
-    pub sort: String,
+    pub blame: String,
+    pub context: String,
     pub term: String,
     pub info: SpanInfo,
 }
 
 impl fmt::Display for Frame {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "When {}:", self.sort)?;
+        writeln!(f, "When {}:", self.context)?;
         writeln!(f, "\t{}", self.term)?;
         writeln!(f, "\t({})", self.info)?;
-        // writeln!(f, "\t@({})", self.tycker_src)?;
+        // writeln!(f, "\t@({})", self.blame)?;
         Ok(())
     }
 }

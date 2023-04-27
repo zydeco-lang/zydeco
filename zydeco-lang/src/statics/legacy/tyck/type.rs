@@ -125,8 +125,8 @@ impl TypeCheck for Span<Type> {
         &self, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         ctx.trace.push(Frame {
-            tycker_src: format!("{}", std::panic::Location::caller()),
-            sort: "synthesizing type".to_owned(),
+            blame: format!("{}", std::panic::Location::caller()),
+            context: "synthesizing type".to_owned(),
             term: format!("{}", self.inner_ref().fmt()),
             info: self.span().clone(),
         });
@@ -182,8 +182,8 @@ impl TypeCheck for Span<Type> {
         &self, kd: Self::Out, mut ctx: Self::Ctx,
     ) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         ctx.trace.push(Frame {
-            tycker_src: format!("{}", std::panic::Location::caller()),
-            sort: format!("analyzing type with kind {}", kd.fmt()),
+            blame: format!("{}", std::panic::Location::caller()),
+            context: format!("analyzing type with kind {}", kd.fmt()),
             term: format!("{}", self.inner_ref().fmt()),
             info: self.span().clone(),
         });
