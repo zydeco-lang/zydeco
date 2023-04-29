@@ -5,25 +5,27 @@
 
 pub mod syntax;
 
-pub mod parse {
-    pub mod syntax;
-    pub mod err;
-    pub mod lexer;
+pub mod surface {
+    pub mod parse {
+        pub mod syntax;
+        pub mod err;
+        pub mod lexer;
 
-    #[allow(clippy::all)]
-    pub mod parser {
-        use lalrpop_util::lalrpop_mod;
-        lalrpop_mod!(parser_impl, "/parse/parser.rs");
-        pub use parser_impl::*;
+        #[allow(clippy::all)]
+        pub mod parser {
+            use lalrpop_util::lalrpop_mod;
+            lalrpop_mod!(parser_impl, "/surface/parse/parser.rs");
+            pub use parser_impl::*;
+        }
+        mod escape;
     }
-    mod escape;
+    pub mod resolve {
+        pub mod err;
+        // pub mod elab;
+        pub mod map;
+    }
 }
-
-pub mod resolve {
-    pub mod err;
-    // pub mod elab;
-    pub mod map;
-}
+use surface::*;
 
 pub mod statics {
     pub mod legacy {
