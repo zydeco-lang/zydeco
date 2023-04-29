@@ -116,6 +116,7 @@ macro_rules! mk_test {
 mod chk_tests {
     use super::*;
     mk_test!(check_test, r#loop, &["loop.zydeco"]);
+    mk_test!(check_test, loopy, &["loopy.zy"]);
     mk_test!(check_test, explosion, &["explosion.zy"]);
     mk_test!(check_test, iota, &["iota.zy"]);
     mk_test!(check_test, alias, &["alias.zy"]);
