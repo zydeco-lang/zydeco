@@ -3,10 +3,18 @@ use zydeco_derive::{IntoEnum, SpanHolder};
 
 pub use crate::syntax::*;
 
+/* --------------------------------- Binder --------------------------------- */
+
+type TypeDef = NameDef;
+type TypeRef = NameRef;
+
+type TermDef = NameDef;
+type TermRef = NameRef;
+
 /* --------------------------------- Pattern -------------------------------- */
 
-pub type TypePattern = (NameDef, Option<Span<Kind>>);
-pub type TermPattern = (NameDef, Option<Span<Type>>);
+pub type TypePattern = (TypeDef, Option<Span<Kind>>);
+pub type TermPattern = (TermDef, Option<Span<Type>>);
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Pattern {
@@ -33,7 +41,7 @@ pub struct TypeApp(pub BoxType, pub BoxType);
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Type {
-    Basic(NameRef),
+    Basic(TypeRef),
     App(TypeApp),
     Arrow(Arrow<BoxType>),
     Forall(Forall<Vec<TypePattern>, BoxType>),
@@ -48,7 +56,7 @@ impl TypeT for Type {}
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum TermValue {
     TermAnn(Annotation<BoxValue, Span<Type>>),
-    Var(NameRef),
+    Var(TermRef),
     Thunk(Thunk<BoxComp>),
     Ctor(Ctor<CtorV, Span<TermValue>>),
     Literal(Literal),
@@ -80,13 +88,13 @@ pub enum TermComputation {
     Let(Let),
     Do(Do<TermPattern, BoxComp, BoxComp>),
     Rec(Rec<TermPattern, BoxComp>),
-    Match(Match<CtorV, NameDef, BoxValue, Span<TermComputation>>),
+    Match(Match<CtorV, TermDef, BoxValue, Span<TermComputation>>),
     Abs(Abs<Vec<Pattern>, BoxComp>),
     App(App<BoxComp, BoxValue>),
-    Comatch(Comatch<DtorV, NameDef, Span<TermComputation>>),
+    Comatch(Comatch<DtorV, TermDef, Span<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
     TyAppTerm(App<BoxComp, BoxType>),
-    MatchPack(MatchPack<BoxValue, NameDef, NameDef, BoxComp>),
+    MatchPack(MatchPack<BoxValue, TypeDef, TermDef, BoxComp>),
 }
 pub type BoxComp = Box<Span<TermComputation>>;
 impl ComputationT for TermComputation {}
@@ -133,9 +141,9 @@ pub struct Main {
 pub enum Declaration {
     Module(Module),
     UseDef(UseDef),
-    Data(Data<NameDef, Option<Span<Kind>>, CtorV, Span<Type>>),
-    Codata(Codata<NameDef, Option<Span<Kind>>, DtorV, Span<Type>>),
-    Alias(Alias<NameDef, Option<Span<Kind>>, BoxType>),
+    Data(Data<TypeDef, Option<Span<Kind>>, CtorV, Span<Type>>),
+    Codata(Codata<TypeDef, Option<Span<Kind>>, DtorV, Span<Type>>),
+    Alias(Alias<TypeDef, Option<Span<Kind>>, BoxType>),
     Define(Define),
     Main(Main),
 }
