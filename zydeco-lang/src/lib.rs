@@ -42,13 +42,9 @@ pub mod statics {
     };
 }
 
-pub mod core {
-    pub mod syntax;
-}
-
 pub mod library {
     pub mod syntax;
-    pub mod builtins;
+    mod builtins;
     mod link;
     mod impls;
     mod fmt;
@@ -60,6 +56,21 @@ pub mod dynamics {
     mod fmt;
 
     pub use eval::Eval;
+}
+
+pub mod core {
+    pub mod library {
+        pub mod syntax;
+        // mod builtins;
+        // mod link;
+        // mod impls;
+        mod fmt;
+    }
+    pub mod runtime {
+        pub mod syntax;
+        pub mod eval;
+        mod fmt;
+    }
 }
 
 pub mod utils {
