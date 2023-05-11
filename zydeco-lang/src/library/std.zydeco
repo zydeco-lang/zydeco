@@ -180,6 +180,21 @@ module Std where
           ! foldl @(A) @(R) xs step s'
         end
     end
+    
+    def rec fn get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
+      match xs
+      | Nil() -> ret None()
+      | Cons(hd, tl) ->
+        do minus1 <- ! sub index 1;
+        ! if~ @(F(Option A)) {! int_eq 0 index} {ret Some(hd)} {
+          ! get_rec @(A) tl minus1
+        }
+      end
+    end
+
+    pub def fn get_element (A : VType) (xs : List A) (index : Int) : F(Option A) =
+      ! get_rec @(A) xs index
+    end
   end
 
   module LList where
@@ -200,6 +215,22 @@ module Std where
       end
     end
 
+    pub def rec fn foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
+      do xsv <- ! xs .run();
+      match xsv
+      | Nil() -> ret acc
+      | Cons(hd, tl) ->
+        do acc' <- ! f hd acc;
+        do b <- ! cond acc';
+        match b
+        | True() -> ret acc'
+        | False() -> 
+          ! foldl_break @(A) @(R) tl acc' f cond
+        end
+      end
+    end
+
+
     pub def fn nil (A : VType) : LList A =
       comatch | .run() -> ret Nil() end
     end
@@ -215,6 +246,14 @@ module Std where
       match xs'
       | Nil() -> ret None()
       | Cons(x, tl) -> ret Some(x)
+      end
+    end
+
+    pub def fn is_empty (A : VType) (xs : U(LList A)) : F Bool =
+      do xs' <- ! xs .run();
+      match xs'
+      | Nil() -> ret True()
+      | Cons(x, tl) -> ret False()
       end
     end
 
@@ -236,6 +275,109 @@ module Std where
       ! bind @(U(LList A)) @(A) xs {fn x -> ! x}
     end
 
+    pub def fn singleton_list (A : VType) (x : A) : LList A =
+      ! cons @(A) x {! nil @(A)}
+    end
+
+    pub def fn map (A : VType) (R : VType) (f : U(A -> F(R))) (xs : U(LList A)) : LList R =
+      ! foldr @(A) @(LList R) xs {! nil @(R)} {
+        fn x b ->
+          do x <- ! f x;
+          ! cons @(R) x b
+      }
+    end
+
+    pub def rec fn print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
+      do xs' <- ! xs .run();
+      match xs'
+      | Nil() -> ! write_str "\n" next
+      | Cons(x, tl) ->
+        do s <- ! fmt x;
+        do st <- ! str_append s " ";
+        ! write_str st {! print_list @(A) fmt tl next}
+      end
+    end
+
+    pub def fn length (A : VType) (xs : U(LList A)) : F(Int) =
+      ! foldr @(A) @(F Int) xs {ret 0} {fn x b -> do b' <- !b; ! add b' 1}
+    end
+
+    pub def rec fn min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+      do xs' <- ! xs .run();
+      match xs'
+      | Nil() -> ret None()
+      | Cons(x, tl) ->
+        do m <- ! min_list @(A) cmp tl;
+        match m
+        | None() -> ret Some(Pair(x, 0))
+        | Some(p) ->
+          match p
+          | Pair(m', i) ->
+            do c <- ! cmp x m';
+            match c
+            | True() -> ret Some(Pair(x, 0))
+            | False() -> 
+              do i <- ! add 1 i;
+              ret Some(Pair(m', i))
+            end
+          end
+        end
+      end
+    end
+
+    pub def rec fn max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+      do xs' <- ! xs .run();
+      match xs'
+      | Nil() -> ret None()
+      | Cons(x, tl) ->
+        do m <- ! max_list @(A) cmp tl;
+        match m
+        | None() -> ret Some(Pair(x, 0))
+        | Some(p) ->
+          match p
+          | Pair(m', i) ->
+            do c <- ! cmp x m';
+            match c
+            | True() -> 
+              do i <- ! add 1 i;
+              ret Some(Pair(m', i))
+            | False() -> ret Some(Pair(x, 0))
+            end
+          end
+        end
+      end
+    end
+
+    pub def fn reverse (A : VType) (xs : U(LList A)) : LList A =
+      ! foldr @(A) @(LList A) xs {! nil @(A)} {! cons @(A)}
+    end
+
+    pub def rec fn repeat (A : VType) (x : A) (n : Int) : LList A =
+      ! if~ @(LList A) {! int_eq 0 n} {
+        ! nil @(A)
+      } {
+        do n1 <- ! sub n 1;
+        ! cons @(A) x {! repeat @(A) x n1}
+      }
+    end
+
+    pub def rec fn range (left : Int) (right : Int) : LList Int =
+      ! if~ @(LList Int) {! int_eq left right} {
+        ! nil @(Int)
+      } {
+        do n1 <- ! add left 1;
+        ! cons @(Int) left {! range n1 right}
+      }
+    end
+
+    pub def rec fn any (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
+      ! foldr @(A) @(F Bool) xs {ret False()} {fn x b -> do b' <- ! b; do x <- ! f x; ! or b' x}
+    end
+
+    pub def rec fn all (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
+      ! foldr @(A) @(F Bool) xs {ret True()} {fn x b -> do b' <- ! b; do x <- ! f x; ! and b' x}
+    end
+
     pub def fn map2 (A : VType) (A' : VType) (R : VType) (f : U(A -> A' -> F(R))) (xs : U(LList A)) (ys : U(LList A')) : LList R =
       ! foldr @(A) @(LList R) xs {! nil @(R)} {
         fn x acc ->
@@ -249,6 +391,16 @@ module Std where
 
     pub def fn cart_prod (A : VType) (A' : VType) (xs : U(LList A)) (ys : U(LList A')) : LList (Prod.Pair A A') =
       ! map2 @(A) @(A') @(Prod.Pair A A') {! Prod.pair @(A) @(A')} xs ys
+    end
+
+    pub def fn str_to_list (s : String) : LList Char =
+      do sz <- ! str_length s;
+      let indexes = {! range 0 sz};
+      ! foldr @(Int) @(LList Char) indexes {! nil @(Char)} {
+        fn i acc ->
+          do c <- ! str_index s i;
+          ! cons @(Char) c acc
+      }  
     end
   end
 
@@ -268,6 +420,23 @@ module Std where
     pub extern def int_eq : Thunk(Int -> Int -> Ret Bool) end
     pub extern def int_lt : Thunk(Int -> Int -> Ret Bool) end
     pub extern def int_gt : Thunk(Int -> Int -> Ret Bool) end
+
+    pub def int_max : Thunk(Int -> Int -> Ret Int) = {
+      fn x y ->
+        do b <- ! int_gt x y;
+        match b
+        | True() -> ret x
+        | False() -> ret y
+        end
+    } end
+    pub def int_min : Thunk(Int -> Int -> Ret Int) = {
+      fn x y ->
+        do b <- ! int_lt x y;
+        match b
+        | True() -> ret x
+        | False() -> ret y
+        end
+    } end
   end
 
   module String where
@@ -287,6 +456,37 @@ module Std where
         do c' <- ! char_to_str c';
         ! str_eq c c'
     } end
+
+    pub def rec fn str_split_by (str : String) (sep : Char) : LList String =
+      do res <- ! str_split_once str sep;
+      match res
+      | None() -> ! singleton_list @(String) str
+      | Some(p) ->
+        match p
+        | Pair(s1, s2) ->
+          ! if~ @(LList String) {! str_eq s1 ""} {
+            ! str_split_by s2 sep
+          } {
+            let s2 = {! str_split_by s2 sep} in
+            ! cons @(String) s1 s2
+          }
+        end
+      end
+    end
+
+    pub def rec fn str_slice (str : String) (left : Int) (right : Int) : F String =
+      do cond <- ! int_lt left right;
+      ! if @(F String) cond {
+        do c <- ! str_index str left;
+        do c' <- ! char_to_str c;
+        do left' <- ! add left 1;
+        do s <- ! str_slice str left' right;
+        do s <- ! str_append c' s;
+        ret s
+      } {
+        ret ""
+      }
+    end
 
     ## conversions
 
