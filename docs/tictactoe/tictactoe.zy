@@ -1,0 +1,573 @@
+// black: 1, white: -1, empty: 0
+// black for first, white for second
+
+data GameTree (S : VType) (A : VType) (M : VType) where
+| Leaf(S, M)
+| Sons(U(LList (GameTree S A M)), M)
+end
+
+data Board where
+| Board(Row, Row, Row)
+end
+
+data Row where
+| Row(Int, Int, Int)
+end
+
+
+
+alias Loc = Pair Int Int end // (row, col)
+alias TicTacToe = GameTree Int Board Loc end //no need for int?
+data BestSol where
+| Cons(Loc, Int, Int)
+end
+// alias BestSol = Pair Loc Int end // ((row, col), score, depth)
+
+codata MinMax where
+| .min() : TicTacToe -> F BestSol
+| .max() : TicTacToe -> F BestSol
+end
+
+codata TakeTurn where
+| .ai() : Board -> Bool -> Bool -> U OS -> OS
+| .player() : Board -> Bool -> Bool -> U OS -> OS
+end
+
+def fn int_to_ox (i : Int) : F String =
+  ! if~ @(F String) {! int_eq i 1} {
+    ret "X"
+  } {
+    ! if~ @(F String) {! int_eq i -1} {
+      ret "O"
+    } {
+      ret "_"
+    }
+  }
+end
+
+def fn row_fmt (row : Row) : F String =
+  match row
+  | Row(c1, c2, c3) ->
+    do s1 <- ! int_to_ox c1;
+    do s <- ! str_append s1 " ";
+    do s2 <- ! int_to_ox c2;
+    do s <- ! str_append s s2;
+    do s <- ! str_append s " ";
+    do s3 <- ! int_to_ox c3;
+    do s <- ! str_append s s3;
+    ret s
+  end
+end
+
+def fn board_fmt (board : Board) : F String =
+  match board
+  | Board(r1, r2, r3) ->
+    do s1 <- ! row_fmt r1;
+    do s <- ! str_append s1 "\n";
+    do s2 <- ! row_fmt r2;
+    do s <- ! str_append s s2;
+    do s <- ! str_append s "\n";
+    do s3 <- ! row_fmt r3;
+    do s <- ! str_append s s3;
+    ret s
+  end
+end
+
+def fn loc_fmt (loc : Loc) : F String =
+  match loc
+  | Pair(r, c) ->
+    do sr <- ! int_to_str r;
+    do sc <- ! int_to_str c;
+    do s <- ! str_append sr " ";
+    do s <- ! str_append s sc;
+    do s <- ! str_append "(" s;
+    do s <- ! str_append s ")";
+    ret s
+  end
+end
+
+def rec fn gt_fmt (gt : TicTacToe) : F String =
+  match gt
+  | Leaf(s, m) ->
+    do ss <- ! int_to_str s;
+    do loc_str <- ! loc_fmt m;
+    do s <- ! str_append "Leaf(score: " ss;
+    do s <- ! str_append s ", ";
+    do s <- ! str_append s "move: ";
+    do s <- ! str_append s loc_str;
+    do s <- ! str_append s ")\n";
+    ret s
+  | Sons(l, m) ->
+    do gts <- ! LList.foldr @(TicTacToe) @(F String) l {ret ""} {fn gt b -> do b <- ! b; do gt_str <- ! gt_fmt gt;do gt_str <- ! str_append "-" gt_str; ! str_append gt_str b};
+    do loc_str <- ! loc_fmt m;
+    do s <- ! str_append "Sons(\nmove: " loc_str;
+    do s <- ! str_append s ",\n";
+    do s <- ! str_append s gts;
+    do s <- ! str_append s ")\n";
+    ret s
+  end
+end
+
+def fn sum_three (a : Int) (b : Int) (c : Int) : F Int =
+  do ab <- ! add a b;
+  ! add ab c
+end
+
+def fn sum_row (r : Row) : F Int =
+  match r
+  | Row(c1, c2, c3) -> 
+    ! sum_three c1 c2 c3
+  end
+end
+
+def fn print_row (r : Row) (next : U OS) : OS =
+  do s <- ! row_fmt r;
+  ! write_line s next
+end
+
+def fn print_board (b : Board) (next : U OS) : OS =
+  match b
+  | Board(r1, r2, r3) ->
+    ! print_row r1 {
+      ! print_row r2 {
+        ! print_row r3 next
+      }
+    }
+  end
+end
+
+def fn check_win (b : Board) (is_black : Bool) : F Bool =
+  do win <- ! if @(F Int) is_black {ret 3} {ret -3};
+  match b
+  | Board(r1, r2, r3) ->
+    do s1 <- ! sum_row r1;
+    do s2 <- ! sum_row r2;
+    do s3 <- ! sum_row r3;
+    ! if~ @(F Bool) {! int_eq s1 win} {
+      ret True()
+    } {
+      ! if~ @(F Bool) {! int_eq s2 win} {
+        ret True()
+      } {
+        ! if~ @(F Bool) {! int_eq s3 win} {
+          ret True()
+        } {
+          match r1
+          | Row(c11, c12, c13) ->
+            match r2
+            | Row(c21, c22, c23) ->
+              match r3
+              | Row(c31, c32, c33) ->
+                do s4 <- ! sum_three c11 c21 c31;
+                do s5 <- ! sum_three c12 c22 c32;
+                do s6 <- ! sum_three c13 c23 c33;
+                do s7 <- ! sum_three c11 c22 c33;
+                do s8 <- ! sum_three c13 c22 c31;
+                ! if~ @(F Bool) {! int_eq s4 win} {
+                  ret True()
+                } {
+                  ! if~ @(F Bool) {! int_eq s5 win} {
+                    ret True()
+                  } {
+                    ! if~ @(F Bool) {! int_eq s6 win} {
+                      ret True()
+                    } {
+                      ! if~ @(F Bool) {! int_eq s7 win} {
+                        ret True()
+                      } {
+                        ! if~ @(F Bool) {! int_eq s8 win} {
+                          ret True()
+                        } {
+                          ret False()
+                        }
+                      }
+                    }
+                  }
+                }
+              end
+            end
+          end
+        }
+      }
+    }
+  end
+end
+
+//black win: 1, white win: -1, draw: 0
+def fn get_score (b : Board) : F Int =
+  ! if~ @(F Int) {! check_win b True()} {
+    ret 1
+  } {
+    ! if~ @(F Int) {! check_win b False()} {
+      ret -1
+    } {
+      ret 0
+    }
+  }
+end
+
+def fn get_holes_row (r : Row) (rn : Int) : LList Loc =
+  match r
+  | Row(c1, c2, c3) ->
+    let res = {! if~ @(LList Loc) {! int_eq c1 0} {
+      ! cons @(Loc) Pair(rn, 1) {! nil @(Loc)}} {! nil @(Loc)}};
+    let res = {! if~ @(LList Loc) {! int_eq c2 0} {
+      ! cons @(Loc) Pair(rn, 2) res} {! res}};
+    ! if~ @(LList Loc) {! int_eq c3 0} {
+      ! cons @(Loc) Pair(rn, 3) res} {! res}
+  end
+end
+
+def fn get_holes (b : Board) : LList Loc =
+  match b
+  | Board(r1, r2, r3) ->
+    let res1 = {! get_holes_row r1 1} in
+    let res2 = {! get_holes_row r2 2} in
+    let res3 = {! get_holes_row r3 3} in
+    let res = {! LList.append @(Loc) res1 res2} in
+    ! LList.append @(Loc) res res3
+  end
+end
+
+def fn play_row (r : Row) (c : Int) (change : Int) : F Row =
+  match r
+  | Row(c1, c2, c3) ->
+    ! if~ @(F Row) {! int_eq c 1} {
+      ret Row(change, c2, c3)
+    } {
+      ! if~ @(F Row) {! int_eq c 2} {
+        ret Row(c1, change, c3)
+      } {
+        ret Row(c1, c2, change)
+      }
+    }
+  end
+end
+
+def fn play (b : Board) (r : Int) (c : Int) (is_black : Bool) : F Board =
+  do change <- ! if @(F Int) is_black {ret 1} {ret -1};
+  match b
+  | Board(r1, r2, r3) ->
+    ! if~ @(F Board) {! int_eq r 1} {
+      do r1' <- ! play_row r1 c change;
+      ret Board(r1', r2, r3)
+    } {
+      ! if~ @(F Board) {! int_eq r 2} {
+        do r2' <- ! play_row r2 c change;
+        ret Board(r1, r2', r3)
+      } {
+        do r3' <- ! play_row r3 c change;
+        ret Board(r1, r2, r3')
+      }
+    }
+  end
+end
+
+def rec fn generate_gametree (b : Board) (move : Loc) (is_black : Bool) : F TicTacToe =
+  do sc <- ! get_score b;
+  ! if~ @(F TicTacToe) {! int_eq 0 sc} {
+    let holes = {! get_holes b} in
+    ! if~ @(F TicTacToe) {! LList.is_empty @(Loc) holes} {
+      ret Leaf(sc, move)
+    } {
+    ret Sons({! LList.map @(Loc) @(TicTacToe) {
+      fn (p : Loc) ->
+        match p
+        | Pair(r, c) ->
+          do nb <- ! play b r c is_black;
+          do is_white <- ! not is_black;
+          ! generate_gametree nb p is_white
+        end
+    } holes
+    }, move)
+    }
+  } {
+    ret Leaf(sc, move)
+  }
+end
+
+def fn pair_lt (a : BestSol) (b : BestSol) : F Bool =
+  match a
+  | Cons(a1, a2, a3) ->
+    match b
+    | Cons(b1, b2, b3) ->
+      ! int_lt a2 b2
+    end
+  end
+end
+
+def fn is_tie (b : Board) : F Bool =
+  let holes = {! get_holes b};
+  ! LList.is_empty @(Loc) holes
+end
+
+def fn get_loc (gt : TicTacToe) : F Loc =
+  match gt
+  | Leaf(s, m) -> ret m
+  | Sons(l, m) -> ret m
+  end
+end
+
+def rec minimax : MinMax =
+  comatch
+  | .min() -> (fn x ->
+    match x
+    | Leaf(a, loc) -> ret Cons(loc, a, 0)
+    | Sons(l, loc) ->
+      // if bestSol's score reach 1 or -1, stop searching
+      // no need to use map, we can break the loop when we find the bestSol
+      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l Cons(Pair(22,22), 10, 10) { // default, which is sure to be replaced
+        fn gt acc ->
+        do sol <- ! minimax .max() gt;
+        do cur_loc <- ! get_loc gt;
+        match sol
+        | Cons(loc, sc, depth) ->
+          match acc
+          | Cons(loc', sc', depth') ->
+            ! if~ @(F BestSol) {! int_lt sc sc'} {
+              ret Cons(cur_loc, sc, depth)
+            } {
+              do m1 <- ! int_eq sc sc';
+              do m2 <- ! int_lt depth depth';
+              do m <- ! and m1 m2;
+              ! if @(F BestSol) m {
+                ret Cons(cur_loc, sc, depth)
+              } {
+                ret acc
+              }
+            }
+          end
+        end
+      } { fn sol -> 
+        match sol 
+        | Cons(loc, sc, depth) -> 
+          do m1 <- ! int_eq sc -1;
+          do m2 <- ! int_eq depth 0; 
+          ! and m1 m2 end 
+      };
+      match best
+      | Cons(loc, sc, depth) ->
+        do depth' <- ! add depth 1;
+        ret Cons(loc, sc, depth')
+      end
+    end)
+  | .max() -> (fn x ->
+    match x
+    | Leaf(a, loc) -> ret Cons(loc, a, 0)
+    | Sons(l, loc) ->
+      // if bestSol's score reach 1 or -1, stop searching
+      // no need to use map, we can break the loop when we find the bestSol
+      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l Cons(Pair(22,22), -10, 10) { // default, which is sure to be replaced
+        fn gt acc ->
+        do sol <- ! minimax .min() gt;
+        do cur_loc <- ! get_loc gt;
+        match sol
+        | Cons(loc, sc, depth) ->
+          match acc
+          | Cons(loc', sc', depth') ->
+            ! if~ @(F BestSol) {! int_gt sc sc'} {
+              ret Cons(cur_loc, sc, depth)
+            } {
+              do m1 <- ! int_eq sc sc';
+              do m2 <- ! int_lt depth depth';
+              do m <- ! and m1 m2;
+              ! if @(F BestSol) m {
+                ret Cons(cur_loc, sc, depth)
+              } {
+                ret acc
+              }
+            }
+          end
+        end
+      } { fn sol -> 
+        match sol 
+        | Cons(loc, sc, depth) -> 
+          do m1 <- ! int_eq sc 1;
+          do m2 <- ! int_eq depth 0; 
+          ! and m1 m2 end 
+      };
+      match best
+      | Cons(loc, sc, depth) ->
+        do depth' <- ! add depth 1;
+        ret Cons(loc, sc, depth')
+      end
+    end)
+  end
+end
+
+def rec take_turn : TakeTurn =
+  comatch
+  | .ai() -> (
+    fn b is_black is_auto next ->
+      ! write_line "------AI turn------" {
+        do find_str <- ! if @(F String) is_black {ret "black"} {ret "white"};
+        ! write_line find_str {
+        do gt <- ! generate_gametree b Pair(11,11) is_black; // generate a static gametree for current board
+        // do gt_str <- ! gt_fmt gt;
+        match gt
+        | Leaf(sc) ->
+          ! write_line "Game Over!" {
+            do win_state <- ! if @(F Int) is_black {ret 1} {ret -1};
+            do lose_state <- ! mul win_state -1;
+            ! if~ @(OS) {! int_eq sc win_state} {
+              ! write_line "AI win11!" {
+                ! next
+              }
+            } {
+              ! if~ @(OS) {! int_eq sc lose_state} {
+                ! write_line "AI lose11!" {
+                  ! next
+                }
+              } {
+                ! write_line "Draw!" {
+                  ! next
+                }
+              }
+            }
+          }
+        | Sons(s, loc) ->
+          do sol <- ! if @(F BestSol) is_black {! minimax .max() gt} {! minimax .min() gt};
+          match sol
+          | Cons(loc, sc, depth) ->
+            match loc
+            | Pair(r, c) ->
+              do nb <- ! play b r c is_black;
+              ! write_line "AI played:" {
+                do loc_str <- ! loc_fmt loc;
+                ! write_line "debug: gt_str" {
+                ! write_line loc_str {
+                  do is_white <- ! not is_black;
+                  ! print_board nb {
+                    do sc <- ! get_score nb;
+                    do win_state <- ! if @(F Int) is_black {ret 1} {ret -1};
+                    do lose_state <- ! mul win_state -1;
+                    ! if~ @(OS) {! int_eq sc win_state} {
+                      ! write_line "AI win22!" {
+                        ! next
+                      }
+                    } {
+                      ! if~ @(OS) {! int_eq sc lose_state} {
+                        ! write_line "AI lose22!" {
+                          ! next
+                        }
+                      } {
+                        ! if~ @(OS) {! is_tie nb} {
+                          ! write_line "Draw!" {
+                            ! next
+                          }
+                        } {
+                          ! if @(OS) is_auto {
+                            ! take_turn .ai() nb is_white is_auto next
+                          } {
+                            ! take_turn .player() nb is_white is_auto next
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                }
+              }
+            end
+          end
+        end
+  }})
+  | .player() -> (
+    fn b is_black is_auto next ->
+      ! write_line "------Your turn------" {
+        ! write_line "Enter row number(1-3)" {
+          ! read_line {
+            fn (input : String) ->
+              do r <- ! str_to_int input;
+              ! write_line "Enter column number(1-3)" {
+                ! read_line {
+                  fn (input : String) ->
+                    do c <- ! str_to_int input;
+                    do nb <- ! play b r c is_black;
+                    do is_white <- ! not is_black;
+                    ! print_board nb {
+                      do sc <- ! get_score nb;
+                      do win_state <- ! if @(F Int) is_black {ret 1} {ret -1};
+                      ! if~ @(OS) {! int_eq sc win_state} {
+                        ! write_line "You win!" {
+                          ! next
+                        }
+                      } {
+                        ! if~ @(OS) {! int_eq sc win_state} {
+                          ! write_line "You lose!" {
+                            ! next
+                          }
+                        } {
+                          ! if~ @(OS) {! is_tie nb} {
+                            ! write_line "Draw!" {
+                              ! next
+                            }
+                          } {
+                          ! take_turn .ai() nb is_white is_auto next
+                          }
+                        }
+                      }
+                    }
+                }
+              }
+          }
+        }
+      })
+  end
+end
+
+main
+  let initial : Board = Board(Row(1,0,0), 
+                              Row(0,-1,0), 
+                              Row(0,0,0)) in
+  let rec turn : U OS -> OS =
+    fn next ->
+    ! write_line "Welcome to Tic Tac Toe!\n1. Play With AI\n2. Watch AI Play\n3. Exit" {
+      ! read_line {
+        fn (input : String) ->
+          ! if~ @(OS) {! str_eq "1" input} {
+            ! write_line "Starting Game...\n1. AI play first\n2. You play first" {
+              ! read_line {
+                fn (input : String) ->
+                  ! if~ @(OS) {! str_eq "1" input} {
+                    ! write_line "AI play first" {
+                      ! take_turn .ai() initial True() False() next
+                    }
+                  } {
+                    ! if~ @(OS) {! str_eq "2" input} {
+                      ! write_line "You play first" {
+                        ! take_turn .player() initial True() False() next
+                      }
+                    } {
+                      ! write_line "Invalid Input" {
+                        ! turn next
+                      }
+                    }
+                  }
+              }
+            }
+            }
+           {
+            ! if~ @(OS) {! str_eq "2" input} {
+              ! take_turn .ai() initial True() True() next
+            } {
+              ! if~ @(OS) {! str_eq "3" input} {
+                ! write_line "Bye..." {
+                  ! exit 0
+                }
+              } {
+                ! write_line "Invalid Input" {
+                  ! turn next
+                }
+              }
+            }
+          }
+  }} in
+
+  ! turn {
+    ! write_line "Game Over! Bye..." {
+      ! exit 0
+    }
+  }
+
+end
