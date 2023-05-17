@@ -1,0 +1,727 @@
+
+// should be moved to stdlib...
+pub def rec fn foldl (A : VType) (B : CType) (xs : U(LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
+  do xsv <- ! xs .run();
+  match xsv
+  | Nil() -> ! b
+  | Cons(hd, tl) ->
+    ! foldl @(A) @(B) tl {! f hd b} f
+  end
+end
+
+pub def fn tail (A : VType) (xs : U(LList A)) : LList A =
+  do xs' <- ! xs .run();
+  match xs'
+  | Nil() -> ! nil @(A)
+  | Cons(x, tl) -> ! tl
+  end
+end 
+
+pub def rec fn list_to_str (s : U(LList Char)) : F String =
+  do s' <- ! s .run();
+  match s'
+  | Nil() -> ret ""
+  | Cons(c, tl) ->
+    do s <- ! list_to_str tl;
+    do c <- ! char_to_str c;
+    ! str_append c s
+  end
+end
+
+// definition for parser
+alias Parser (A : VType) = String -> (LList (Pair A String)) end
+
+def fn result (A : VType) (v : A) : Parser A =
+  fn (input : String) ->
+    ! LList.singleton_list @(Pair A String) (Pair(v, input))
+end
+
+def fn zero (A : VType) : Parser A =
+  fn (input : String) ->
+    ! LList.nil @(Pair A String)
+end
+
+def fn item : Parser Char =
+  fn (input : String) ->
+    ! if~ @(LList (Pair Char String)) {! str_eq "" input} {
+      ! LList.nil @(Pair Char String)
+    } {
+      do x <- ! str_index input 0;
+      do len <- ! str_length input;
+      do xs <- ! str_slice input 1 len;
+      ! LList.singleton_list @(Pair Char String) (Pair(x, xs))
+    }
+end
+
+def fn bind' (A : VType) (B : VType) (p : U(Parser A)) (f : U(A -> Parser B)) : Parser B =
+  fn (input : String) ->
+    let ps = {! p input} in
+    ! LList.bind @(Pair A String) @(Pair B String) ps {fn (pa : Pair A String) ->
+      match pa
+      | Pair(a, input) ->
+        ! f a input
+      end
+     }
+end
+
+// dont know why it's always wrong
+// def fn seq (A : VType) (B : VType) (p : U(Parser A)) (q : U(Parser B)) : Parser (Pair A B) =
+//   ! bind' @(A) @(Pair A B) p {
+//     fn x -> 
+//       ! bind' @(B) @(Pair A B) q {
+//         fn y -> 
+//           ! result @(Pair A B) (Pair(x, y))
+//       }
+//     }
+// end
+
+def fn sat (p : U(Char -> F Bool)) : Parser Char =
+  ! bind' @(Char) @(Char) item {fn (x : Char) ->
+    ! if~ @(Parser Char) {! p x} {
+      ! result @(Char) x
+    } {
+      ! zero @(Char)
+    }
+  }
+end
+
+def fn char (x : Char) : Parser Char =
+  ! sat {fn y -> ! char_eq x y}
+end
+
+def fn digit : Parser Char =
+  ! sat {
+    fn x ->
+      do n <- ! char_to_int x;
+      do b1 <- ! int_lt n 58;
+      do b2 <- ! int_gt n 47;
+      ! and b1 b2
+  }
+end
+
+def fn lower : Parser Char =
+  ! sat {
+    fn x ->
+      do n <- ! char_to_int x;
+      do b1 <- ! int_lt n 123;
+      do b2 <- ! int_gt n 96;
+      ! and b1 b2
+  }
+end
+
+def fn upper : Parser Char =
+  ! sat {
+    fn x ->
+      do n <- ! char_to_int x;
+      do b1 <- ! int_lt n 91;
+      do b2 <- ! int_gt n 64;
+      ! and b1 b2
+  }
+end
+
+def fn plus (A : VType) (p : U(Parser A)) (q : U(Parser A)) : Parser A =
+  fn (input : String) ->
+    ! LList.append @(Pair A String) {! p input} {! q input}
+end
+
+def fn letter : Parser Char =
+  ! plus @(Char) lower upper
+end
+
+def fn alphanum : Parser Char =
+  ! plus @(Char) letter digit
+end
+
+def rec fn word : Parser String =
+  ! plus @(String) { ! result @(String) ""} {
+    ! bind' @(Char) @(String) {! letter} {
+      fn x ->
+        ! bind' @(String) @(String) {! word} {
+          fn xs ->
+            do x' <- ! char_to_str x;
+            do xs' <- ! str_append x' xs;
+            ! result @(String) xs'
+        }
+    }
+  }
+end
+
+def rec fn string (s : String) : Parser String =
+  ! if~ @(Parser String) {! str_eq "" s} {
+    ! result @(String) ""
+  } {
+    do x <- ! str_index s 0;
+    do len <- ! str_length s;
+    do xs <- ! str_slice s 1 len;
+    ! bind' @(Char) @(String) {! char x} {
+      fn _ ->
+      ! bind' @(String) @(String) {! string xs} {
+        fn _ ->
+        ! result @(String) s
+      }
+    }
+  }
+end
+
+// redefined in laziness part
+def rec fn many (A : VType) (p : U(Parser A)) : Parser (U(LList A)) =
+  ! plus @(U(LList A)) { ! result @(U(LList A)) {! LList.nil @(A)}} {
+    ! bind' @(A) @(U(LList A)) p {
+      fn x ->
+        ! bind' @(U(LList A)) @(U(LList A)) {! many @(A) p} {
+          fn xs ->
+            ! result @(U(LList A)) {! LList.cons @(A) x xs}
+        }
+    }
+  }
+end
+
+def fn many1 (A : VType) (p : U(Parser A)) : Parser (U(LList A)) =
+  ! bind' @(A) @(U(LList A)) p {
+    fn x ->
+      ! bind' @(U(LList A)) @(U(LList A)) {! many @(A) p} {
+        fn xs ->
+          ! result @(U(LList A)) {! LList.cons @(A) x xs}
+      }
+  }
+end
+
+def fn ident : Parser String =
+  ! bind' @(Char) @(String) {! lower} {
+    fn x ->
+      ! bind' @(U(LList Char)) @(String) {! many @(Char) alphanum} {
+        fn xs ->
+          do x' <- ! char_to_str x;
+          do xs' <- ! list_to_str xs;
+          do xs'' <- ! str_append x' xs';
+          ! result @(String) xs'
+      }
+  }
+end
+
+def fn nat : Parser Int =
+  ! bind' @(U(LList Char)) @(Int) {! many1 @(Char) digit} {
+    fn xs ->
+      do xs' <- ! list_to_str xs;
+      do n <- ! str_to_int xs';
+      ! result @(Int) n
+  }
+end
+
+def fn int : Parser Int =
+  let op = {
+    ! plus @(U(Int -> F Int)) {
+      ! bind' @(Char) @(U(Int -> F Int)) {! char '-'} {fn _ -> ! result @(U(Int -> F Int)) {fn x -> ! sub 0 x}}
+    } {
+      ! result @(U(Int -> F Int)) {fn x -> ret x}
+    }
+  }
+  in
+  ! bind' @(U(Int -> F Int)) @(Int) op {
+    fn f ->
+      ! bind' @(Int) @(Int) {! nat} {
+        fn n ->
+          do n' <- ! f n;
+          ! result @(Int) n'
+      }
+  }
+end
+
+def fn ints1 : Parser (U(LList Int)) =
+  ! bind' @(Char) @(U(LList Int)) {! char '['} {
+    fn _ ->
+      ! bind' @(Int) @(U(LList Int)) {! int} {
+        fn n ->
+          ! bind' @(U(LList Int)) @(U(LList Int)) {! many @(Int) {
+            ! bind' @(Char) @(Int) {! char ','} {
+              fn _ ->
+                ! bind' @(Int) @(Int) {! int} {
+                  fn n ->
+                    ! result @(Int) n
+                }
+            }}} {
+            fn ns ->
+              ! bind' @(Char) @(U(LList Int)) {! char ']'} {
+                fn _ ->
+                  ! result @(U(LList Int)) {! LList.cons @(Int) n ns}
+              }
+          }
+      }
+  }
+end
+
+def fn sepby1 (A : VType) (S : VType) (p : U(Parser A)) (sep : U(Parser S)) : Parser (U(LList A)) =
+  ! bind' @(A) @(U(LList A)) p {
+    fn x ->
+      ! bind' @(U(LList A)) @(U(LList A)) {! many @(A) {
+        ! bind' @(S) @(A) sep {
+          fn _ ->
+            ! bind' @(A) @(A) p {
+              fn y ->
+                ! result @(A) y
+            }
+        }}} {
+        fn xs ->
+          ! result @(U(LList A)) {! LList.cons @(A) x xs}
+      }
+  }
+end
+
+def fn ints2 : Parser (U(LList Int)) =
+  ! bind' @(Char) @(U(LList Int)) {! char '['} {
+    fn _ ->
+      ! bind' @(U(LList Int)) @(U(LList Int)) {! sepby1 @(Int) @(Char) {! int} {! char ','}} {
+        fn ns ->
+          ! bind' @(Char) @(U(LList Int)) {! char ']'} {
+            fn _ ->
+              ! result @(U(LList Int)) ns
+          }
+      }
+  }
+end
+
+def fn bracket (M : VType) (A : VType) (N : VType) (open : U(Parser M)) (p : U(Parser A)) (close : U(Parser N)) : Parser A =
+  ! bind' @(M) @(A) open {
+    fn _ ->
+      ! bind' @(A) @(A) p {
+        fn x ->
+          ! bind' @(N) @(A) close {
+            fn _ ->
+              ! result @(A) x
+          }
+      }
+  }
+end
+
+def fn ints : Parser (U(LList Int)) =
+  ! bracket @(Char) @(U(LList Int)) @(Char) {! char '['} {! sepby1 @(Int) @(Char) {! int} {! char ','}} {! char ']'}
+end
+
+def fn sepby (A : VType) (S : VType) (p : U(Parser A)) (sep : U(Parser S)) : Parser (U(LList A)) =
+  ! plus @(U(LList A)) { ! result @(U(LList A)) {! LList.nil @(A)}} {
+    ! sepby1 @(A) @(S) p sep
+  }
+end
+
+
+def rec fn foldl' (A : VType) (R : VType) (g : U(A -> R -> F R)) (a : R) (xs : U(LList A)) : F R =
+  ! LList.foldl @(A) @(F R) xs {ret a} {fn x acc -> do acc' <- ! acc;! g x acc'}
+end
+
+def rec fn chainl1 (A : VType) (p : U(Parser A)) (op : U(Parser (U(A -> A -> F A)))) : Parser A =
+  ! bind' @(A) @(A) p {
+    fn x ->
+      ! bind' @(U(LList (Pair (U(A -> A -> F A)) A))) @(A) {
+        ! many @(Pair (U(A -> A -> F A)) A) {
+          ! bind' @(U(A -> A -> F A)) @(Pair (U(A -> A -> F A)) A) op {
+            fn f ->
+              ! bind' @(A) @(Pair (U(A -> A -> F A)) A) p {
+                fn y ->
+                  ! result @(Pair (U(A -> A -> F A)) A) Pair(f, y)
+              }
+          }
+        }
+      } {
+        fn fys ->
+          do res <- ! foldl' @(Pair (U(A -> A -> F A)) A) @(A) {
+            fn p acc ->
+              match p
+              | Pair(f,y) ->
+                ! f acc y
+              end
+          } x fys;
+          ! result @(A) x
+      }
+  }
+end
+
+def rec fn chainr1 (A : VType) (p : U(Parser A)) (op : U(Parser (U (A -> A -> F A)))) : Parser A =
+  ! bind' @(A) @(A) p {
+    fn x ->
+      ! plus @(A) {! result @(A) x} {! bind' @(U (A -> A -> F A)) @(A) op {
+        fn f ->
+          ! bind' @(A) @(A) {
+            ! chainr1 @(A) p op
+          } {
+            fn y ->
+              do res <- ! f x y;
+              ! result @(A) res
+          }
+      }}
+  }
+end
+
+// addition, subtraction, and parentheses
+
+def fn addop : Parser (U(Int -> Int -> F Int)) =
+  ! plus @(U(Int -> Int -> F Int)) {
+    ! bind' @(Char) @(U(Int -> Int -> F Int)) {! char '+'} {fn _ -> ! result @(U(Int -> Int -> F Int)) add}
+  } {
+    ! bind' @(Char) @(U(Int -> Int -> F Int)) {! char '-'} {fn _ -> ! result @(U(Int -> Int -> F Int)) sub}
+  }
+end
+
+// def rec fn foldr1 (A : VType) (B : CType) (g : U(A -> U B -> B)) (xs : U(LList A)) (b : U B) : B =
+//   ! LList.foldr @(A) @(B) xs b g
+// end
+
+// def fn ops (A : VType) (R : VType) (xs : U(LList (Pair A R))) : Parser R =
+//   ! foldr1 @(Pair A R) @(Parser R) {
+    
+//   } xs {! zero @(R)}
+// end
+
+
+// Can be moved to stdlib
+
+def rec fn pow (x : Int) (y : Int) : F Int =
+  ! if~ @(F Int) {! int_eq y 0} {
+    ret 1
+  } {
+    do y' <- ! sub y 1;
+    do res <- ! pow x y';
+    ! mul x res
+  }
+end
+
+
+def fn expop : Parser (U(Int -> Int -> F Int)) =
+  ! bind' @(Char) @(U(Int -> Int -> F Int)) {! char '^'} {fn _ -> ! result @(U(Int -> Int -> F Int)) pow}
+end
+
+def rec fn expr : Parser Int =
+  let factor = {
+    ! plus @(Int) {! nat} {
+      ! bracket @(Char) @(Int) @(Char) {! char '('} expr {! char ')'}
+    }
+  } in
+  ! chainl1 @(Int) factor addop
+end
+
+def fn term : Parser Int =
+  let factor = {
+    ! plus @(Int) {! nat} {
+      ! bracket @(Char) @(Int) @(Char) {! char '('} expr {! char ')'}
+    }
+  } in
+  ! chainr1 @(Int) factor expop
+end
+
+def fn chainl (A : VType) (p : U(Parser A)) (op : U(Parser (U(A -> A -> F A)))) (v : A) : Parser A =
+  ! plus @(A) {! result @(A) v} {! chainl1 @(A) p op}
+end
+
+def fn chainr (A : VType) (p : U(Parser A)) (op : U(Parser (U(A -> A -> F A)))) (v : A) : Parser A =
+  ! plus @(A) {! result @(A) v} {! chainr1 @(A) p op}
+end
+
+// two kinds of evaluations: improving efficiency
+// inefficient
+def fn eval' : Parser Int =
+  let add' = {
+    ! bind' @(Int) @(Int) {! nat} {
+      fn x ->
+        ! bind' @(Char) @(Int) {! char '+'} {
+          fn _ ->
+            ! bind' @(Int) @(Int) {! nat} {
+              fn y ->
+                do res <- ! add x y;
+                ! result @(Int) res
+            }
+        }
+    }
+  } in
+  let sub' = {
+    ! bind' @(Int) @(Int) {! nat} {
+      fn x ->
+        ! bind' @(Char) @(Int) {! char '-'} {
+          fn _ ->
+            ! bind' @(Int) @(Int) {! nat} {
+              fn y ->
+                do res <- ! sub x y;
+                ! result @(Int) res
+            }
+        }
+    }
+  } in
+  ! plus @(Int) add' sub'
+end
+
+// efficient: left and right factorization
+def fn eval : Parser Int =
+  ! bind' @(Int) @(Int) {! nat} {
+    fn x ->
+      ! bind' @(U(Int -> Int -> F Int)) @(Int) {! addop} {
+        fn f ->
+          ! bind' @(Int) @(Int) {! nat} {
+            fn y ->
+              do res <- ! f x y;
+              ! result @(Int) res
+          }
+      }
+  }
+end
+
+//improving laziness
+
+def fn force (A : VType) (p : U(Parser A)) : Parser A =
+  fn (input : String) ->
+    let x = {! p input} in
+    do hd <- ! LList.head @(Pair A String) x;
+    let tl = {! LList.tail @(Pair A String) x};
+    match hd
+    | None() -> ! LList.nil @(Pair A String)
+    | Some(p) ->
+      match p
+      | Pair(a, input) ->
+        ! LList.cons @(Pair A String) (Pair(a, input)) tl
+      end
+    end
+end
+
+def rec fn many' (A : VType) (p : U(Parser A)) : Parser (U(LList A)) =
+  ! force @(U(LList A)) {
+    ! plus @(U(LList A)) {
+      ! bind' @(A) @(U(LList A)) p {
+        fn x ->
+          ! bind' @(U(LList A)) @(U(LList A)) {
+            ! many' @(A) p
+          } {
+            fn xs ->
+              ! result @(U(LList A)) {! LList.cons @(A) x xs}
+          }
+      }
+    } {
+      ! result @(U(LList A)) {! LList.nil @(A)}
+    }
+  }
+end
+
+// Limiting the number of results
+
+def fn number : Parser Int =
+  ! plus @(Int) {! nat} {! result @(Int) 0}
+end
+
+// first p only returns the first result of p (if there is any)
+def fn first (A : VType) (p : U(Parser A)) : Parser A =
+  fn (input : String) ->
+    do xs <- ! {! p input} .run();
+    match xs
+    | Nil() -> ! LList.nil @(Pair A String)
+    | Cons(hd, tl) ->
+      ! LList.singleton_list @(Pair A String) hd
+    end
+end
+
+// deterministic choice, if p matches, q will never be applied
+// improve efficiency
+def fn dplus (A : VType) (p : U(Parser A)) (q : U(Parser A)) : Parser A =
+  ! first @(A) {
+    ! plus @(A) p q
+  }
+end
+
+// lexical: White space, comments, and keywords
+def fn space : Parser Unit =
+  let is_space : U(Char -> F Bool) = {
+    fn x ->
+      do b1 <- ! char_eq x ' ';
+      do b2 <- ! char_eq x '\n';
+      do b3 <- ! char_eq x '\t';
+      do b' <- ! or b2 b3;
+      ! or b1 b'
+  } in
+  ! bind' @(U(LList Char)) @(Unit) {! many1 @(Char) {! sat is_space}} {fn _ -> ! result @(Unit) Unit()}
+end
+
+def fn comment : Parser Unit =
+  ! bind' @(String) @(Unit) {! string "--"} {
+    fn _ ->
+      ! bind' @(U(LList Char)) @(Unit) {! many @(Char) {! sat {fn x -> ! not~ {! char_eq '\n' x}}}} {
+        fn _ ->
+          ! result @(Unit) Unit()
+      }
+  }
+end
+
+def fn junk : Parser Unit =
+  ! bind' @(U(LList Unit)) @(Unit) {! many @(Unit) {! dplus @(Unit) {! space} {! comment}}} {
+    fn _ ->
+      ! result @(Unit) Unit()
+  }
+end
+
+// parse removes junk before applying a given parser
+def fn parse (A : VType) (p : U(Parser A)) : Parser A =
+  ! bind' @(Unit) @(A) {! junk} {
+    fn _ ->
+      ! bind' @(A) @(A) {! p} {
+        fn v ->
+          ! result @(A) v
+      }
+  }
+end
+
+// token applies a parser and then removes trailing junk
+def fn token (A : VType) (p : U(Parser A)) : Parser A =
+  ! bind' @(A) @(A) {! p} {
+    fn v ->
+      ! bind' @(Unit) @(A) {! junk} {
+        fn _ ->
+          ! result @(A) v
+      }
+  }
+end
+
+def fn natural : Parser Int =
+  ! token @(Int) {! nat}
+end
+
+def fn integer : Parser Int =
+  ! token @(Int) {! int}
+end
+
+def fn symbol (s : String) : Parser String =
+  ! token @(String) {! string s}
+end
+
+def fn identifier (xs : U(LList String)) : Parser String =
+  ! token @(String) {
+    ! bind' @(String) @(String) {! ident} {
+      fn x ->
+        ! if~ @(Parser String) {! LList.any @(String) {fn s -> ! str_eq x s} xs} {
+          ! zero @(String)
+        } {
+          ! result @(String) x
+        }
+    }
+  }
+end
+
+// A parser for simple lambda expressions
+
+data Expr where
+  | App(Expr, Expr)
+  | Lam(String, Expr)
+  | Let(String, Expr, Expr)
+  | Var(String)
+end
+
+def fn keywords : LList String =
+  let l1 = {! LList.singleton_list @(String) "let"} in
+  ! LList.cons @(String) "in" l1
+end
+
+def fn variable : Parser String =
+  ! identifier {! keywords}
+end
+
+// TODO? add evaluation...
+def fn app : Parser (U(Expr -> Expr -> F Expr)) =
+  ! result @(U(Expr -> Expr -> F Expr)) {fn x y -> ret App(x, y)}
+end
+
+def rec fn expr : Parser Expr =
+  let atom = {
+    let lam = {
+      ! bind' @(String) @(Expr) {! symbol "\\"} {
+        fn _ ->
+          ! bind' @(String) @(Expr) {! variable} {
+            fn x ->
+              ! bind' @(String) @(Expr) {! symbol "->"} {
+                fn _ ->
+                  ! bind' @(Expr) @(Expr) {! expr} {
+                    fn e ->
+                      ! result @(Expr) Lam(x, e)
+                  }
+              }
+          }
+      }
+    } in
+    let local = {
+      ! bind' @(String) @(Expr) {! symbol "let"} {
+        fn _ ->
+          ! bind' @(String) @(Expr) {! variable} {
+            fn x ->
+              ! bind' @(String) @(Expr) {! symbol "="} {
+                fn _ ->
+                  ! bind' @(Expr) @(Expr) {! expr} {
+                    fn e1 ->
+                      ! bind' @(String) @(Expr) {! symbol "in"} {
+                        fn _ ->
+                          ! bind' @(Expr) @(Expr) {! expr} {
+                            fn e2 ->
+                              ! result @(Expr) Let(x, e1, e2)
+                          }
+                      }
+                  }
+              }
+          }
+      }
+    } in
+    let var = {
+      ! bind' @(String) @(Expr) {! variable} {
+        fn x ->
+          ! result @(Expr) Var(x)
+      }
+    } in
+    let paren = {
+      ! bracket @(String) @(Expr) @(String) {! symbol "("} {! expr} {! symbol ")"}
+    } in
+    ! dplus @(Expr) lam {
+      ! dplus @(Expr) local {
+        ! dplus @(Expr) var paren
+      }
+    }
+  } in
+  ! chainl1 @(Expr) atom app
+end
+
+
+
+
+
+
+// print the result
+def rec fn print_parser_hd (A : VType) (fmt : U(A -> F String)) (res : U(LList (Pair A String))) (next : U OS) : OS =
+  do hd <- ! LList.head @(Pair A String) res;
+  match hd
+  | None() -> ! next
+  | Some(p) ->
+    match p
+    | Pair(a, str) ->
+      do str' <- ! fmt a;
+      do bf <- ! str_append str' ",";
+      do res <- ! str_append bf str;
+      ! write_line res next
+    end
+  end
+end
+
+def rec fn print_parser_all (A : VType) (fmt : U(A -> F String)) (res : U(LList (Pair A String))) (next : U OS) : OS =
+  do ll <- ! res .run();
+  match ll
+  | Nil() -> ! next
+  | Cons(p, tl) ->
+    match p
+    | Pair(a, str) ->
+      do str' <- ! fmt a;
+      do bf <- ! str_append str' ",";
+      do res <- ! str_append bf str;
+      ! write_line res {! print_parser_all @(A) fmt tl next}
+    end
+  end
+end
+
+main
+  // the difference between many and many' is that many' is lazy
+  let m = {! many' @(Char) {! char 'a'} "aaab"} in
+  // let m = {! many @(Char) {! char 'a'} "aaab"} in
+  ! print_parser_all @(U(LList Char)) list_to_str m {
+  ! exit 0
+  }
+
+  // let m = {! expr "let x = \\y -> y in x"} in
+  // ! exit 0
+end

@@ -1,0 +1,27 @@
+// Takes an initial state of type S, and yield a value of type A with a new state of type S
+alias State (S : VType) (A : VType) = S -> F (Pair A S) end
+
+// Original definition for Parser A
+// alias Parser (A : VType) = String -> (LList (Pair A String)) end
+
+
+// using StateM to implement Parser A
+// the way to define type constructor M is ok?
+// Tales an initial state of type S, and yield a pair of (a value of type A with a new state of type S) 
+// using a type constructor M
+alias StateM (M : VType -> CType) (S : VType) (A : VType) = S -> M (Pair A S) end
+
+alias Pos = Pair Int Int end
+alias Pstring = Pair Pos String end
+// alias Parser (A : VType) = Pos -> StateM [] Pstring A end
+// here, how to define [] in type level?
+
+
+alias ReaderM (M : VType -> CType) (S : VType) (A : VType) = S -> M A end
+
+// using ReaderM to implement Parser A
+// alias Parser (A : VType) = ReaderM (StateM [] Pstring) Pos A end
+
+main
+  ! exit 0
+end
