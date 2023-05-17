@@ -75,7 +75,7 @@ end
 
 def fn loc_fmt (loc : Loc) : F String =
   match loc
-  | Pair(r, c) ->
+  | Cons(r, c) ->
     do sr <- ! int_to_str r;
     do sc <- ! int_to_str c;
     do s <- ! str_append sr " ";
@@ -210,11 +210,11 @@ def fn get_holes_row (r : Row) (rn : Int) : LList Loc =
   match r
   | Row(c1, c2, c3) ->
     let res = {! if~ @(LList Loc) {! int_eq c1 0} {
-      ! cons @(Loc) Pair(rn, 1) {! nil @(Loc)}} {! nil @(Loc)}};
+      ! cons @(Loc) Cons(rn, 1) {! nil @(Loc)}} {! nil @(Loc)}};
     let res = {! if~ @(LList Loc) {! int_eq c2 0} {
-      ! cons @(Loc) Pair(rn, 2) res} {! res}};
+      ! cons @(Loc) Cons(rn, 2) res} {! res}};
     ! if~ @(LList Loc) {! int_eq c3 0} {
-      ! cons @(Loc) Pair(rn, 3) res} {! res}
+      ! cons @(Loc) Cons(rn, 3) res} {! res}
   end
 end
 
@@ -273,7 +273,7 @@ def rec fn generate_gametree (b : Board) (move : Loc) (is_black : Bool) : F TicT
     ret Sons({! LList.map @(Loc) @(TicTacToe) {
       fn (p : Loc) ->
         match p
-        | Pair(r, c) ->
+        | Cons(r, c) ->
           do nb <- ! play b r c is_black;
           do is_white <- ! not is_black;
           ! generate_gametree nb p is_white
@@ -316,7 +316,7 @@ def rec minimax : MinMax =
     | Sons(l, loc) ->
       // if bestSol's score reach 1 or -1, stop searching
       // no need to use map, we can break the loop when we find the bestSol
-      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l Cons(Pair(22,22), 10, 10) { // default, which is sure to be replaced
+      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l Cons(Cons(22,22), 10, 10) { // default, which is sure to be replaced
         fn gt acc ->
         do sol <- ! minimax .max() gt;
         do cur_loc <- ! get_loc gt;
@@ -357,7 +357,7 @@ def rec minimax : MinMax =
     | Sons(l, loc) ->
       // if bestSol's score reach 1 or -1, stop searching
       // no need to use map, we can break the loop when we find the bestSol
-      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l Cons(Pair(22,22), -10, 10) { // default, which is sure to be replaced
+      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l Cons(Cons(22,22), -10, 10) { // default, which is sure to be replaced
         fn gt acc ->
         do sol <- ! minimax .min() gt;
         do cur_loc <- ! get_loc gt;
@@ -402,7 +402,7 @@ def rec take_turn : TakeTurn =
       ! write_line "------AI turn------" {
         do find_str <- ! if @(F String) is_black {ret "black"} {ret "white"};
         ! write_line find_str {
-        do gt <- ! generate_gametree b Pair(11,11) is_black; // generate a static gametree for current board
+        do gt <- ! generate_gametree b Cons(11,11) is_black; // generate a static gametree for current board
         // do gt_str <- ! gt_fmt gt;
         match gt
         | Leaf(sc) ->
@@ -430,7 +430,7 @@ def rec take_turn : TakeTurn =
           match sol
           | Cons(loc, sc, depth) ->
             match loc
-            | Pair(r, c) ->
+            | Cons(r, c) ->
               do nb <- ! play b r c is_black;
               ! write_line "AI played:" {
                 do loc_str <- ! loc_fmt loc;

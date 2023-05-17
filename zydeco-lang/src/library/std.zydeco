@@ -37,11 +37,11 @@ module Std where
 
   module Prod where
     pub data Pair (A : VType) (A' : VType) where
-      | Pair(A, A')
+      | Cons(A, A')
     end
 
     pub def fn pair (A : VType) (A' : VType) (x : A) (y : A') : F(Pair A A') = 
-      ret Pair(x, y)
+      ret Cons(x, y)
     end
   end
 
@@ -309,16 +309,16 @@ module Std where
       | Cons(x, tl) ->
         do m <- ! min_list @(A) cmp tl;
         match m
-        | None() -> ret Some(Pair(x, 0))
+        | None() -> ret Some(Cons(x, 0))
         | Some(p) ->
           match p
-          | Pair(m', i) ->
+          | Cons(m', i) ->
             do c <- ! cmp x m';
             match c
-            | True() -> ret Some(Pair(x, 0))
+            | True() -> ret Some(Cons(x, 0))
             | False() -> 
               do i <- ! add 1 i;
-              ret Some(Pair(m', i))
+              ret Some(Cons(m', i))
             end
           end
         end
@@ -332,16 +332,16 @@ module Std where
       | Cons(x, tl) ->
         do m <- ! max_list @(A) cmp tl;
         match m
-        | None() -> ret Some(Pair(x, 0))
+        | None() -> ret Some(Cons(x, 0))
         | Some(p) ->
           match p
-          | Pair(m', i) ->
+          | Cons(m', i) ->
             do c <- ! cmp x m';
             match c
             | True() -> 
               do i <- ! add 1 i;
-              ret Some(Pair(m', i))
-            | False() -> ret Some(Pair(x, 0))
+              ret Some(Cons(m', i))
+            | False() -> ret Some(Cons(x, 0))
             end
           end
         end
@@ -463,7 +463,7 @@ module Std where
       | None() -> ! singleton_list @(String) str
       | Some(p) ->
         match p
-        | Pair(s1, s2) ->
+        | Cons(s1, s2) ->
           ! if~ @(LList String) {! str_eq s1 ""} {
             ! str_split_by s2 sep
           } {
@@ -828,25 +828,25 @@ module Std where
       ret Hash(body, {
         fn p1 p2 ->
           match p1
-          | Pair(k1, v1) ->
+          | Cons(k1, v1) ->
             match p2
-            | Pair(k2, v2) -> ! insert_key_cmp k1 k2
+            | Cons(k2, v2) -> ! insert_key_cmp k1 k2
             end
           end
       }, {
         fn p1 p2 -> 
           match p1
-          | Pair(k1, v1) ->
+          | Cons(k1, v1) ->
             match p2
-            | Pair(k2, v2) -> ! search_key_cmp k1 k2
+            | Cons(k2, v2) -> ! search_key_cmp k1 k2
             end
           end
       }, {
         fn p1 p2 ->
           match p1
-          | Pair(k1, v1) ->
+          | Cons(k1, v1) ->
             match p2
-            | Pair(k2, v2) ->
+            | Cons(k2, v2) ->
               do b1 <- ! equal_value_cmp v1 v2;
               do b2 <- ! search_key_cmp k1 k2;
               ! and b1 b2
@@ -858,7 +858,7 @@ module Std where
     pub def fn hash_insert (K : VType) (V : VType) (k : K) (v : V) (tree : Hash K V) : F(Hash K V) =
       match tree
       | Hash(body, insert_cmp, search_cmp, equal_cmp) ->
-        do body' <- ! insert @(Pair K V) Pair(k,v) body insert_cmp;
+        do body' <- ! insert @(Pair K V) Cons(k,v) body insert_cmp;
         ret Hash(body', insert_cmp, search_cmp, equal_cmp)
       end
     end
@@ -867,12 +867,12 @@ module Std where
     pub def fn hash_search (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Option V) =
           match hash
           | Hash(body, insert_cmp, search_cmp, equal_cmp) ->
-            do res <- ! search @(Pair K V) Pair(k, default) body search_cmp insert_cmp;
+            do res <- ! search @(Pair K V) Cons(k, default) body search_cmp insert_cmp;
             match res
             | None() -> ret None()
             | Some(p) ->
               match p
-              | Pair(k, v) -> ret Some(v)
+              | Cons(k, v) -> ret Some(v)
               end
             end
           end
@@ -881,7 +881,7 @@ module Std where
     pub def fn hash_delete (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Hash K V) =
       match hash
       | Hash(body, insert_cmp, search_cmp, equal_cmp) -> 
-        do body' <- ! delete @(Pair K V) Pair(k, default) body search_cmp insert_cmp;
+        do body' <- ! delete @(Pair K V) Cons(k, default) body search_cmp insert_cmp;
         ret Hash(body', insert_cmp, search_cmp, equal_cmp)
       end
     end
@@ -889,7 +889,7 @@ module Std where
     pub def fn hash_change (K : VType) (V : VType) (k : K) (v : V) (hash : Hash K V) : F(Hash K V) =
       match hash
       | Hash(body, insert_cmp, search_cmp, equal_cmp) ->
-        do body' <- ! change @(Pair K V) Pair(k, v) body search_cmp insert_cmp;
+        do body' <- ! change @(Pair K V) Cons(k, v) body search_cmp insert_cmp;
         ret Hash(body', insert_cmp, search_cmp, equal_cmp)
       end
     end
