@@ -9,16 +9,17 @@ description = "A language implementation for zydeco, a call-by-push-value langua
 [dependencies]
 regex = "1"
 logos = "0.13"
-lalrpop-util = "0.19"
+lalrpop-util = "0.20"
 once_cell = "1.17"
 im = "15"
 slotmap = "1.0"
 thiserror = "1.0.40"
-zydeco_derive = { path = "./derive" }
+codespan-reporting = "0.11"
+zydeco-derive = { path = "./derive" }
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]
-lalrpop = "0.19"
+lalrpop = "0.20"
 
 [lib]
 doctest = false

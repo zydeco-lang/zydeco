@@ -1,5 +1,5 @@
 [package]
-name = "zydeco_derive"
+name = "zydeco-derive"
 version = "0.2.0"
 edition = "2021"
 description = "derive macros for zydeco"

@@ -1,3 +1,4 @@
+#![allow(unused)]
 use super::syntax::{self as ds, Thunk as SemThunk, *};
 use crate::{rc, utils::fmt::FmtArgs};
 use im::Vector;

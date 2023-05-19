@@ -16,7 +16,7 @@ impl Display for ParseError<'_> {
             InvalidToken { ref location } => {
                 write!(f, "Invalid token at {}:{}", gen.display_path(), gen.trans_span2(*location))
             }
-            UnrecognizedEOF { ref location, ref expected } => {
+            UnrecognizedEof { ref location, ref expected } => {
                 write!(
                     f,
                     "Unrecognized EOF found at {}:{}{}",
