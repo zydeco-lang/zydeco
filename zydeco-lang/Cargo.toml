@@ -4,8 +4,6 @@ version = "0.2.0"
 edition = "2021"
 description = "A language implementation for zydeco, a call-by-push-value language"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 regex = "1"
 logos = "0.13"
@@ -16,7 +14,7 @@ slotmap = "1.0"
 thiserror = "1.0.40"
 zydeco-derive = { path = "./derive" }
 
-# Add a build-time dependency on the lalrpop library:
+# build-time dependency on the lalrpop library:
 [build-dependencies]
 lalrpop = "0.20"
 

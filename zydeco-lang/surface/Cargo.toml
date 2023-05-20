@@ -1,0 +1,21 @@
+[package]
+name = "zydeco-surface"
+version = "0.2.0"
+edition = "2021"
+description = "surface syntax for zydeco"
+
+[dependencies]
+regex = "1"
+logos = "0.13"
+lalrpop-util = "0.20"
+codespan = { version = "0.11", features = ["serialization"] }
+codespan-reporting = "0.11"
+slotmap = { version = "1", features = ["serde"] }
+zydeco-derive = { path = "../derive" }
+
+# build-time dependency on the lalrpop library:
+[build-dependencies]
+lalrpop = "0.20"
+
+[lib]
+doctest = false

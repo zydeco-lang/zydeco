@@ -1,2 +1,8 @@
 [workspace]
-members = ["zydeco-lang", "zydeco-lang/derive", "cli", "web"]
+members = [
+    "zydeco-lang",
+    "zydeco-lang/derive",
+    "zydeco-lang/surface",
+    "cli",
+    "web",
+]

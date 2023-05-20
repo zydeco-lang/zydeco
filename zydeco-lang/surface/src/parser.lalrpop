@@ -1,0 +1,129 @@
+use crate::{
+    arena::*,
+    syntax::*,
+    lexer::*,
+    escape,
+};
+
+grammar<'input, 'arena>(
+    input: &'input str,
+    ar: &'arena mut Arena,
+);
+
+//* --------------------------------- Tokens --------------------------------- */
+
+extern {
+    type Location = usize;
+    
+    enum Tok<'input> {
+        "UpperId" => Tok::UpperIdent(<&'input str>),
+        "LowerId" => Tok::LowerIdent(<&'input str>),
+
+        "where" => Tok::Where,
+        "end" => Tok::End,
+        "module" => Tok::Module,
+        "use" => Tok::Use,
+        "pub" => Tok::Pub,
+        "extern" => Tok::Extern,
+        "data" => Tok::Data,
+        "codata" => Tok::Codata,
+        "alias" => Tok::Alias,
+        "define" => Tok::Define,
+        "main" => Tok::Main,
+        "let" => Tok::Let,
+        "in" => Tok::In,
+        "do" => Tok::Do,
+        "ret" => Tok::Ret,
+        "fn" => Tok::Fn,
+        "rec" => Tok::Rec,
+        "match" => Tok::Match,
+        "comatch" => Tok::Comatch,
+        "forall" => Tok::Forall,
+        "exists" => Tok::Exists,
+        "@" => Tok::At,
+        "pack" => Tok::Pack,
+
+        "NumLit" => Tok::NumLit(<&'input str>),
+        "StrLit" => Tok::StrLit(<&'input str>),
+        "CharLit" => Tok::CharLit(<&'input str>),
+
+        "VType" => Tok::VType,
+        "CType" => Tok::CType,
+
+        "(" => Tok::ParenOpen,
+        ")" => Tok::ParenClose,
+        "[" => Tok::BracketOpen,
+        "]" => Tok::BracketClose,
+        "{" => Tok::BraceOpen,
+        "}" => Tok::BraceClose,
+        "," => Tok::Comma,
+        ":" => Tok::Colon,
+        "=" => Tok::Equals,
+        ";" => Tok::Semicolon,
+        "!" => Tok::Force,
+        "|" => Tok::Branch,
+        "." => Tok::Dot,
+        ".." => Tok::DotDot,
+        "->" => Tok::Arrow,
+        "<-" => Tok::Assign,
+        "_?" => Tok::Hole,
+    }
+}
+
+//* -------------------------------- Utilities ------------------------------- */
+
+#[inline]
+Sp<T>: Sp<T> = {
+    <l:@L> <inner:T> <r:@R> => Sp {
+        span: Span::new(l,r),
+        inner,
+    },
+};
+
+#[inline]
+SepByDelim<Start, Sep, T, End>: Vec<T> = {
+    Start <mut v: (<T> Sep)*> <last: T?> End => {
+        match last {
+            None => { },
+            Some(t) => { v.push(t); }
+        };
+        v
+    }
+};
+
+//* --------------------------------- Pattern -------------------------------- */
+
+Pattern: PatternId = {
+};
+
+//* ---------------------------------- Term ---------------------------------- */
+
+#[inline]
+Literal: Literal = {
+    <Int> => <>.into(),
+    <String> => <>.into(),
+    <Char> => <>.into(),
+};
+
+NameRef<T>: NameRef = {
+    Sp<(<(<Sp<UpperId>> ".")*> <Sp<T>>)> => NameRef {
+        path: <>.inner.0, ident: <>.inner.1, info: <>.info,
+    },
+};
+
+TermId: TermId = {
+    <Term> => ar.term(<>),
+}
+Term: Term = {
+    "(" <Sp<Term>> ")" => <>.into(),
+    // "(" <tv:Sp<Term>> ":" <ty:Sp<Term>> ")" => Annotation {
+        term: tv,
+        ty,
+    }.into(),
+    <NameRef> => <>.into(),
+    <Literal> => <>.into(),
+};
+
+//* -------------------------------- TopLevel -------------------------------- */
+
+pub Zydeco: Sp<()> = Sp<"!">;
