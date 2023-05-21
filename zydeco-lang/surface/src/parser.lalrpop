@@ -75,7 +75,7 @@ extern {
 #[inline]
 Sp<T>: Sp<T> = {
     <l:@L> <inner:T> <r:@R> => Sp {
-        span: Span::new(l,r),
+        span: Span::new(l as u32, r as u32),
         inner,
     },
 };
@@ -91,12 +91,50 @@ SepByDelim<Start, Sep, T, End>: Vec<T> = {
     }
 };
 
+//* -------------------------------- Terminals ------------------------------- */
+
+Int: i64 = <s:"NumLit"> => s.parse().unwrap();
+String: String = <s:"StrLit"> => escape::apply_string_escapes(&s[1..s.len()-1]);
+Char: char = <s:"CharLit"> => escape::apply_char_escapes(s);
+
+//* ------------------------------- Identifiers ------------------------------ */
+
+UpperId: String = "UpperId" => <>.into();
+LowerId: String = "LowerId" => <>.into();
+MixedId: String = { <UpperId>, <LowerId>, };
+
+CtorName: String = <UpperId> => <>;
+DtorName: String = "." <LowerId> => <>;
+
+NameDef<T>: NameDef = {
+    <T> => NameDef(<>.into()),
+};
+
+NameRef<T>: NameRef = {
+    (<(<UpperId> ".")*> <T>) => NameRef (<>.0, <>.1),
+};
+
 //* --------------------------------- Pattern -------------------------------- */
 
-Pattern: PatternId = {
+PatternId: PatternId = {
+    <Sp<Pattern>> => ar.pattern(<>),
+}
+Pattern: Pattern = {
 };
 
 //* ---------------------------------- Term ---------------------------------- */
+
+GenBind: GenBind = {
+    <rec:"rec"?> <fun:"fn"?> <binder:PatternId> <params:PatternId*>
+    <ty:(":" <TermId>)?> <bindee: ("=" <TermId>)?> => GenBind {
+        rec: rec.is_some(),
+        fun: fun.is_some(),
+        binder,
+        params,
+        ty,
+        bindee,
+    }
+};
 
 #[inline]
 Literal: Literal = {
@@ -105,25 +143,22 @@ Literal: Literal = {
     <Char> => <>.into(),
 };
 
-NameRef<T>: NameRef = {
-    Sp<(<(<Sp<UpperId>> ".")*> <Sp<T>>)> => NameRef {
-        path: <>.inner.0, ident: <>.inner.1, info: <>.info,
-    },
-};
-
 TermId: TermId = {
-    <Term> => ar.term(<>),
+    <Sp<Term>> => ar.term(<>),
 }
 Term: Term = {
-    "(" <Sp<Term>> ")" => <>.into(),
-    // "(" <tv:Sp<Term>> ":" <ty:Sp<Term>> ")" => Annotation {
-        term: tv,
-        ty,
+    "(" <Term> ")" => <>.into(),
+    "(" <term:TermId> ":" <ty:TermId> ")" => Annotation {
+        term, ty,
     }.into(),
-    <NameRef> => <>.into(),
+    <NameRef<MixedId>> => <>.into(),
+    "{" <TermId> "}" => Thunk(<>).into(),
+    <ctor_name:NameRef<CtorName>> <args:SepByDelim<"(", ",", <TermId>, ")">> => Constructor(
+        ctor_name, args
+    ).into(),
     <Literal> => <>.into(),
 };
 
 //* -------------------------------- TopLevel -------------------------------- */
 
-pub Zydeco: Sp<()> = Sp<"!">;
+pub Zydeco: () = Sp<"!"> => ();

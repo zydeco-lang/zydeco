@@ -34,9 +34,10 @@ pub enum Pattern {
 pub struct GenBind {
     pub rec: bool,
     pub fun: bool,
-    pub params: Vec<PatternId>,
     pub binder: PatternId,
-    pub bindee: TermId,
+    pub params: Vec<PatternId>,
+    pub ty: Option<TermId>,
+    pub bindee: Option<TermId>,
 }
 
 /// literals in term
