@@ -1,4 +1,4 @@
-use crate::syntax::*;
+use super::syntax::*;
 use slotmap::SlotMap;
 
 slotmap::new_key_type! {

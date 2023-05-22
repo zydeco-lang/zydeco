@@ -1,6 +1,6 @@
 //! The surface syntax of zydeco is defined in this module.
 
-use crate::arena::*;
+use super::arena::*;
 pub use codespan::Span;
 use zydeco_derive::IntoEnum;
 

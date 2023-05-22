@@ -1,4 +1,4 @@
-use crate::{
+use crate::textual::{
     arena::*, syntax::*, lexer::*, escape,
 };
 
@@ -318,7 +318,7 @@ Modifiers<T>: Modifiers<T> = {
         public: public.is_some(),
         external: external.is_some(),
         inner,
-    }
+    },
 };
 
 pub ModifiedDeclaration: Modifiers<Declaration> = {
