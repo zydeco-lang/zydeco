@@ -21,11 +21,17 @@ pub struct Hole;
 
 /* --------------------------------- Pattern -------------------------------- */
 
+pub struct CtorPattern {
+    pub name: NameRef,
+    pub args: Vec<PatternId>,
+}
+
 #[derive(IntoEnum)]
 pub enum Pattern {
     Var(NameDef),
     Ann(Annotation<PatternId, TermId>),
     Hole(Hole),
+    CtorPattern(CtorPattern),
 }
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -83,7 +89,6 @@ pub struct Match<Tail> {
     pub arms: Vec<Matcher<Tail>>,
 }
 pub struct Matcher<Tail> {
-    pub name: NameRef,
     pub binder: PatternId,
     pub tail: Tail,
 }
@@ -94,7 +99,7 @@ pub struct CoMatch<Tail> {
 }
 pub struct CoMatcher<Tail> {
     pub name: NameRef,
-    pub binder: PatternId,
+    pub binders: Vec<PatternId>,
     pub tail: Tail,
 }
 /// `b .d(a_1, ...)`
@@ -133,14 +138,24 @@ pub enum Term {
 }
 
 /* -------------------------------- TopLevel -------------------------------- */
+
+pub enum TypeDefHead {
+    Data,
+    CoData,
+}
+
 pub struct TypeDef {
+    /// `data` or `codata`
+    pub head: TypeDefHead,
     pub name: NameDef,
     pub params: Vec<PatternId>,
-    /// `data` or `codata`
-    pub kind: TermId,
-    pub arms: Vec<TypeArm>,
+    pub arms: Option<Vec<TypeArm>>,
 }
-pub struct TypeArm(pub NameDef, pub Vec<TermId>, pub Option<TermId>);
+pub struct TypeArm {
+    pub name: NameDef,
+    pub args: Vec<TermId>,
+    pub out: Option<TermId>,
+}
 
 pub struct Define(pub GenBind);
 
@@ -156,6 +171,7 @@ pub struct UseCluster {
     pub cluster: Vec<UseDef>,
 }
 
+#[derive(IntoEnum)]
 pub enum UseDef {
     Name(NameRef),
     UseAll(UseAll),
@@ -166,10 +182,10 @@ pub struct Main(pub TermId);
 
 #[derive(IntoEnum)]
 pub enum Declaration {
-    Module(Module),
-    UseDef(UseDef),
     Type(TypeDef),
     Define(Define),
+    Module(Module),
+    UseDef(UseDef),
     Main(Main),
 }
 
