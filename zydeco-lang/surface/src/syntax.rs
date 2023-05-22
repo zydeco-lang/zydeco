@@ -40,18 +40,21 @@ pub struct GenBind {
     pub bindee: Option<TermId>,
 }
 
-/// literals in term
-#[derive(IntoEnum)]
-pub enum Literal {
-    Int(i64),
-    String(String),
-    Char(char),
-}
-
 /// any binding structure
 pub struct Abstraction<Tail>(pub Vec<PatternId>, pub Tail);
 /// any application
 pub struct Application(pub TermId, pub Vec<TermId>);
+/// `rec (x: A) -> b`
+pub struct Recursion(pub PatternId, pub TermId);
+
+// `pi (x: A) -> B`
+pub struct Pi(pub Vec<PatternId>, pub TermId);
+// `a -> b`
+pub struct Arrow(pub TermId, pub TermId);
+// `forall (x: A) . B`
+pub struct Forall(pub Vec<PatternId>, pub TermId);
+// `exists (x: A) . B`
+pub struct Exists(pub Vec<PatternId>, pub TermId);
 
 /// `{ b }` has type `Thunk B`
 pub struct Thunk(pub TermId);
@@ -68,12 +71,9 @@ pub struct Bind<Tail> {
 }
 /// `let x = a in ...`
 pub struct PureBind<Tail> {
-    pub bind: GenBind,
+    pub binding: GenBind,
     pub tail: Tail,
 }
-
-/// `rec (x: A) -> b`
-pub struct Recursion(pub PatternId, pub TermId);
 
 /// `C(a_1, ...)`
 pub struct Constructor(pub NameRef, pub Vec<TermId>);
@@ -100,24 +100,36 @@ pub struct CoMatcher<Tail> {
 /// `b .d(a_1, ...)`
 pub struct Destructor(pub TermId, pub NameRef, pub Vec<TermId>);
 
+/// literals in term
+#[derive(IntoEnum)]
+pub enum Literal {
+    Int(i64),
+    String(String),
+    Char(char),
+}
+
 #[derive(IntoEnum)]
 pub enum Term {
     Ann(Annotation<TermId, TermId>),
     Hole(Hole),
     Var(NameRef),
-    Lit(Literal),
     Abs(Abstraction<TermId>),
     App(Application),
+    Rec(Recursion),
+    Pi(Pi),
+    Arrow(Arrow),
+    Forall(Forall),
+    Exists(Exists),
     Thunk(Thunk),
     Force(Force),
     Ret(Return),
     Do(Bind<TermId>),
     Let(PureBind<TermId>),
-    Rec(Recursion),
     Ctor(Constructor),
     Match(Match<TermId>),
     CoMatch(CoMatch<TermId>),
     Dtor(Destructor),
+    Lit(Literal),
 }
 
 /* -------------------------------- TopLevel -------------------------------- */

@@ -11,8 +11,8 @@ use std::fmt::{Debug, Display};
 pub enum Tok<'input> {
     #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
     UpperIdent(&'input str),
-    #[regex(r"([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
-    #[regex(r"(\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=|~)*")]
+    #[regex(r"([a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
+    // #[regex(r"(\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=|~)*")]
     LowerIdent(&'input str),
 
     #[token("pub")]
@@ -49,6 +49,8 @@ pub enum Tok<'input> {
     Ret,
     #[token("fn")]
     Fn,
+    #[token("pi")]
+    Pi,
     #[token("rec")]
     Rec,
     #[token("match")]
@@ -70,10 +72,6 @@ pub enum Tok<'input> {
     StrLit(&'input str),
     #[regex(r#"'([ -~]|\\[nrt'|(\\)])'"#)]
     CharLit(&'input str),
-    #[token("VType")]
-    VType,
-    #[token("CType")]
-    CType,
 
     #[token("(")]
     ParenOpen,
@@ -91,14 +89,20 @@ pub enum Tok<'input> {
     Comma,
     #[token(":")]
     Colon,
+    #[token("::")]
+    ColonColon,
     #[token("=")]
     Equals,
     #[token(";")]
     Semicolon,
     #[token("!")]
     Force,
+    #[token("/")]
+    Slash,
     #[token("|")]
     Branch,
+    #[token("+")]
+    Plus,
     #[token(".")]
     Dot,
     #[token("..")]
@@ -107,7 +111,7 @@ pub enum Tok<'input> {
     Arrow,
     #[token("<-")]
     Assign,
-    #[token("_?")]
+    #[token("_")]
     Hole,
 }
 
@@ -132,18 +136,17 @@ impl<'input> Display for Tok<'input> {
             Tok::Do => write!(f, "do"),
             Tok::Ret => write!(f, "ret"),
             Tok::Fn => write!(f, "fn"),
+            Tok::Pi => write!(f, "pi"),
             Tok::Rec => write!(f, "rec"),
             Tok::Match => write!(f, "match"),
             Tok::Comatch => write!(f, "comatch"),
             Tok::Forall => write!(f, "Forall"),
             Tok::Exists => write!(f, "Exists"),
             Tok::At => write!(f, "@"),
-            Tok::Pack => write!(f, "exists"),
+            Tok::Pack => write!(f, "pack"),
             Tok::NumLit(s) => write!(f, "NumLiteral({})", s),
             Tok::StrLit(s) => write!(f, "StrLiteral({})", s),
             Tok::CharLit(s) => write!(f, "CharLiteral({})", s),
-            Tok::VType => write!(f, "VType"),
-            Tok::CType => write!(f, "CType"),
             Tok::ParenOpen => write!(f, "("),
             Tok::ParenClose => write!(f, ")"),
             Tok::BracketOpen => write!(f, "["),
@@ -152,15 +155,18 @@ impl<'input> Display for Tok<'input> {
             Tok::BraceClose => write!(f, "}}"),
             Tok::Comma => write!(f, ","),
             Tok::Colon => write!(f, ":"),
+            Tok::ColonColon => write!(f, "::"),
             Tok::Equals => write!(f, "="),
             Tok::Semicolon => write!(f, ";"),
             Tok::Force => write!(f, "!"),
+            Tok::Slash => write!(f, "/"),
             Tok::Branch => write!(f, "|"),
+            Tok::Plus => write!(f, "+"),
             Tok::Dot => write!(f, "."),
             Tok::DotDot => write!(f, ".."),
             Tok::Arrow => write!(f, "->"),
             Tok::Assign => write!(f, "<-"),
-            Tok::Hole => write!(f, "_?"),
+            Tok::Hole => write!(f, "_"),
         }
     }
 }

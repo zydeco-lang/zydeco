@@ -35,6 +35,7 @@ extern {
         "do" => Tok::Do,
         "ret" => Tok::Ret,
         "fn" => Tok::Fn,
+        "pi" => Tok::Pi,
         "rec" => Tok::Rec,
         "match" => Tok::Match,
         "comatch" => Tok::Comatch,
@@ -47,9 +48,6 @@ extern {
         "StrLit" => Tok::StrLit(<&'input str>),
         "CharLit" => Tok::CharLit(<&'input str>),
 
-        "VType" => Tok::VType,
-        "CType" => Tok::CType,
-
         "(" => Tok::ParenOpen,
         ")" => Tok::ParenClose,
         "[" => Tok::BracketOpen,
@@ -58,15 +56,18 @@ extern {
         "}" => Tok::BraceClose,
         "," => Tok::Comma,
         ":" => Tok::Colon,
+        "::" => Tok::ColonColon,
         "=" => Tok::Equals,
         ";" => Tok::Semicolon,
         "!" => Tok::Force,
+        "/" => Tok::Slash,
         "|" => Tok::Branch,
+        "+" => Tok::Plus,
         "." => Tok::Dot,
         ".." => Tok::DotDot,
         "->" => Tok::Arrow,
         "<-" => Tok::Assign,
-        "_?" => Tok::Hole,
+        "_" => Tok::Hole,
     }
 }
 
@@ -103,23 +104,40 @@ UpperId: String = "UpperId" => <>.into();
 LowerId: String = "LowerId" => <>.into();
 MixedId: String = { <UpperId>, <LowerId>, };
 
-CtorName: String = <UpperId> => <>;
-DtorName: String = "." <LowerId> => <>;
+CtorName: String = {
+    "+" <UpperId> => {
+        let mut s = String::from("+"); s += &<>; s
+    },
+    "pack" => String::from("pack"),
+};
+DtorName: String = {
+    "." <LowerId> => {
+        let mut s = String::from("."); s += &<>; s
+    },
+    "@" => String::from("@"),
+};
 
 NameDef<T>: NameDef = {
     <T> => NameDef(<>.into()),
 };
 
 NameRef<T>: NameRef = {
-    (<(<UpperId> ".")*> <T>) => NameRef (<>.0, <>.1),
+    (<(<UpperId> "::")*> <T>) => NameRef (<>.0, <>.1),
 };
 
 //* --------------------------------- Pattern -------------------------------- */
 
+#[inline]
 PatternId: PatternId = {
     <Sp<Pattern>> => ar.pattern(<>),
 }
 Pattern: Pattern = {
+    "(" <Pattern> ")" => <>.into(),
+    <NameDef<MixedId>> => <>.into(),
+    "(" <term:PatternId> ":" <ty:TermId> ")" => Annotation {
+        term, ty,
+    }.into(),
+    "_" => Hole.into(),
 };
 
 //* ---------------------------------- Term ---------------------------------- */
@@ -143,22 +161,82 @@ Literal: Literal = {
     <Char> => <>.into(),
 };
 
-TermId: TermId = {
-    <Sp<Term>> => ar.term(<>),
+#[inline]
+TermGen<T>: TermId = {
+    <Sp<T>> => ar.term(<>),
 }
+
+#[inline]
+TermId: TermId = <TermGen<Term>>;
 Term: Term = {
+    TermRight,
+    // abstraction
+    "fn" <params:PatternId*> "->"
+        <term:TermId> => Abstraction(params, term).into(),
+    // pi
+    "pi" <params:PatternId*> "->"
+        <term:TermId> => Pi(params, term).into(),
+    // forall
+    "forall" <params:PatternId*> "." <ty:TermRightId> => Forall(
+        params, ty
+    ).into(),
+    // exists
+    "exists" <params:PatternId*> "." <ty:TermRightId> => Exists(
+        params, ty
+    ).into(),
+    // recursion
+    "rec" <binder:PatternId> "->"
+        <term:TermId> => Recursion(binder, term).into(),
+    // bind
+    "do" <binder:PatternId> "<-" <bindee:TermId> ";"
+    <tail:TermId> => Bind {
+        binder, bindee, tail
+    }.into(),
+    // pure bind
+    "let" <binding:GenBind> "in" <tail:TermId> => PureBind {
+        binding, tail
+    }.into(),
+};
+
+#[inline]
+TermRightId: TermId = <TermGen<TermRight>>;
+TermRight: Term = {
+    TermAtom,
+    // application
+    <term:TermRightId> <arg:TermAtomId> => Application(
+        term, vec![arg]
+    ).into(),
+    // arrow
+    <ty_in:TermRightId> "->" <ty_out:TermAtomId> => Arrow(
+        ty_in, ty_out
+    ).into(),
+    // constructor
+    <ctor_name:NameRef<CtorName>>
+    <args:SepByDelim<"(", ",", <TermId>, ")">> => Constructor(
+        ctor_name, args
+    ).into(),
+    // destructor
+    <term:TermGen<TermRight>> <dtor_name:NameRef<DtorName>>
+    <args:SepByDelim<"(", ",", <TermId>, ")">> => Destructor(
+        term, dtor_name, args
+    ).into(),
+};
+
+#[inline]
+TermAtomId: TermId = <TermGen<TermAtom>>;
+TermAtom: Term = {
     "(" <Term> ")" => <>.into(),
     "(" <term:TermId> ":" <ty:TermId> ")" => Annotation {
         term, ty,
     }.into(),
+    "_" => Hole.into(),
     <NameRef<MixedId>> => <>.into(),
     "{" <TermId> "}" => Thunk(<>).into(),
-    <ctor_name:NameRef<CtorName>> <args:SepByDelim<"(", ",", <TermId>, ")">> => Constructor(
-        ctor_name, args
-    ).into(),
+    "!" <TermAtomId> => Force(<>).into(),
+    "ret" <TermAtomId> => Return(<>).into(),
     <Literal> => <>.into(),
 };
 
 //* -------------------------------- TopLevel -------------------------------- */
 
-pub Zydeco: () = Sp<"!"> => ();
+pub Zydeco: TermId = TermId;

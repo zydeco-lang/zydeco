@@ -14,9 +14,11 @@ mod tests {
     #[test]
     fn it_works() {
         use super::*;
-        let source = "!";
+        let source = "!(!1)";
         let mut arena = arena::Arena::default();
-        let _r = parser::ZydecoParser::new()
-            .parse(&source, &mut arena, lexer::Lexer::new(&source)).unwrap();
+        let t = parser::ZydecoParser::new()
+            .parse(&source, &mut arena, lexer::Lexer::new(&source))
+            .unwrap();
+        assert!(arena.terms.get(t).is_some());
     }
 }
