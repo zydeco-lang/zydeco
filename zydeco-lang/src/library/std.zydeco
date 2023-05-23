@@ -215,17 +215,18 @@ module Std where
       end
     end
 
-    pub def rec fn foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
+    pub def rec fn foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : U(F R)) (f : U (A -> U(F R) -> F R)) (cond : U (R -> F Bool)) : F R =
       do xsv <- ! xs .run();
       match xsv
-      | Nil() -> ret acc
+      | Nil() -> 
+        ! acc
       | Cons(hd, tl) ->
         do acc' <- ! f hd acc;
         do b <- ! cond acc';
         match b
         | True() -> ret acc'
         | False() -> 
-          ! foldl_break @(A) @(R) tl acc' f cond
+          ! foldl_break @(A) @(R) tl { ret acc'} f cond
         end
       end
     end

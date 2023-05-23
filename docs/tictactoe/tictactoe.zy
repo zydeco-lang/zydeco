@@ -193,9 +193,31 @@ def fn check_win (b : Board) (is_black : Bool) : F Bool =
   end
 end
 
+def fn get_holes_row_num (r : Row) : F Int =
+  match r
+  | Row(c1, c2, c3) ->
+    do s1 <- ! if~ @(F Int) {! int_eq c1 0} {ret 1} {ret 0};
+    do s2 <- ! if~ @(F Int) {! int_eq c2 0} {ret 1} {ret 0};
+    do s3 <- ! if~ @(F Int) {! int_eq c3 0} {ret 1} {ret 0};
+    do s <- ! add s1 s2;
+    ! add s s3
+  end
+end
+
+def fn get_holes_num (b : Board) : F Int =
+  match b
+  | Board(r1, r2, r3) ->
+    do s1 <- ! get_holes_row_num r1;
+    do s2 <- ! get_holes_row_num r2;
+    do s3 <- ! get_holes_row_num r3;
+    do s <- ! add s1 s2;
+    ! add s s3
+  end
+end
+
 //black win: 1, white win: -1, draw: 0
 def fn get_score (b : Board) : F Int =
-  ! if~ @(F Int) {! check_win b True()} {
+  do base <- ! if~ @(F Int) {! check_win b True()} {
     ret 1
   } {
     ! if~ @(F Int) {! check_win b False()} {
@@ -203,7 +225,10 @@ def fn get_score (b : Board) : F Int =
     } {
       ret 0
     }
-  }
+  };
+  do holes <- ! get_holes_num b;
+  do holes <- ! add holes 1;
+  ! mul base holes // if 0 holes, then holes is 1
 end
 
 def fn get_holes_row (r : Row) (rn : Int) : LList Loc =
@@ -316,12 +341,13 @@ def rec minimax : MinMax =
     | Sons(l, loc) ->
       // if bestSol's score reach 1 or -1, stop searching
       // no need to use map, we can break the loop when we find the bestSol
-      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l Cons(Cons(22,22), 10, 10) { // default, which is sure to be replaced
-        fn gt acc ->
+      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l {ret Cons(Cons(22,22), 10, 10)} { // default, which is sure to be replaced
+        fn gt acc~ ->
         do sol <- ! minimax .max() gt;
         do cur_loc <- ! get_loc gt;
         match sol
         | Cons(loc, sc, depth) ->
+          do acc <- ! acc~;
           match acc
           | Cons(loc', sc', depth') ->
             ! if~ @(F BestSol) {! int_lt sc sc'} {
@@ -341,7 +367,7 @@ def rec minimax : MinMax =
       } { fn sol -> 
         match sol 
         | Cons(loc, sc, depth) -> 
-          do m1 <- ! int_eq sc -1;
+          do m1 <- ! int_lt sc 0;
           do m2 <- ! int_eq depth 0; 
           ! and m1 m2 end 
       };
@@ -357,12 +383,13 @@ def rec minimax : MinMax =
     | Sons(l, loc) ->
       // if bestSol's score reach 1 or -1, stop searching
       // no need to use map, we can break the loop when we find the bestSol
-      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l Cons(Cons(22,22), -10, 10) { // default, which is sure to be replaced
-        fn gt acc ->
+      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l {ret Cons(Cons(22,22), -10, 10)} { // default, which is sure to be replaced
+        fn gt acc~ ->
         do sol <- ! minimax .min() gt;
         do cur_loc <- ! get_loc gt;
         match sol
         | Cons(loc, sc, depth) ->
+          do acc <- ! acc~;
           match acc
           | Cons(loc', sc', depth') ->
             ! if~ @(F BestSol) {! int_gt sc sc'} {
@@ -382,7 +409,7 @@ def rec minimax : MinMax =
       } { fn sol -> 
         match sol 
         | Cons(loc, sc, depth) -> 
-          do m1 <- ! int_eq sc 1;
+          do m1 <- ! int_gt sc 0;
           do m2 <- ! int_eq depth 0; 
           ! and m1 m2 end 
       };
@@ -439,14 +466,16 @@ def rec take_turn : TakeTurn =
                   do is_white <- ! not is_black;
                   ! print_board nb {
                     do sc <- ! get_score nb;
-                    do win_state <- ! if @(F Int) is_black {ret 1} {ret -1};
-                    do lose_state <- ! mul win_state -1;
-                    ! if~ @(OS) {! int_eq sc win_state} {
+                    let is_win = {! if @(Int -> F Bool) is_black {fn x -> ! int_gt x 0} {fn x -> ! int_lt x 0}} in
+                    let is_loss = {! if @(Int -> F Bool) is_black {fn x -> ! int_lt x 0} {fn x -> ! int_gt x 0}} in
+                    // do win_state <- ! if @(F Int) is_black {ret 1} {ret -1};
+                    // do lose_state <- ! mul win_state -1;
+                    ! if~ @(OS) {! is_win sc} {
                       ! write_line "AI win22!" {
                         ! next
                       }
                     } {
-                      ! if~ @(OS) {! int_eq sc lose_state} {
+                      ! if~ @(OS) {! is_loss sc} {
                         ! write_line "AI lose22!" {
                           ! next
                         }
@@ -487,13 +516,14 @@ def rec take_turn : TakeTurn =
                     do is_white <- ! not is_black;
                     ! print_board nb {
                       do sc <- ! get_score nb;
-                      do win_state <- ! if @(F Int) is_black {ret 1} {ret -1};
-                      ! if~ @(OS) {! int_eq sc win_state} {
+                      let is_win = {! if @(Int -> F Bool) is_black {fn x -> ! int_gt x 0} {fn x -> ! int_lt x 0}} in
+                      let is_loss = {! if @(Int -> F Bool) is_black {fn x -> ! int_lt x 0} {fn x -> ! int_gt x 0}} in
+                      ! if~ @(OS) {! is_win sc} {
                         ! write_line "You win!" {
                           ! next
                         }
                       } {
-                        ! if~ @(OS) {! int_eq sc win_state} {
+                        ! if~ @(OS) {! is_loss sc} {
                           ! write_line "You lose!" {
                             ! next
                           }
