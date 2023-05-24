@@ -182,11 +182,11 @@ impl<'source> Lexer<'source> {
 }
 
 impl<'source> Iterator for Lexer<'source> {
-    type Item = (usize, Tok<'source>, usize);
+    type Item = (u32, Tok<'source>, u32);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.inner.next() {
-            Some((Ok(tok), range)) => Some((range.start, tok, range.end)),
+            Some((Ok(tok), range)) => Some((range.start as u32, tok, range.end as u32)),
             _ => None,
         }
     }

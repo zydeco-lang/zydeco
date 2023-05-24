@@ -11,6 +11,7 @@ lalrpop-util = "0.20"
 codespan = { version = "0.11", features = ["serialization"] }
 codespan-reporting = "0.11"
 slotmap = { version = "1", features = ["serde"] }
+unindent = "0.2"
 zydeco-derive = { path = "../derive" }
 
 # build-time dependency on the lalrpop library:

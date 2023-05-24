@@ -10,7 +10,7 @@ grammar<'input, 'arena>(
 //* --------------------------------- Tokens --------------------------------- */
 
 extern {
-    type Location = usize;
+    type Location = u32;
     
     enum Tok<'input> {
         "UpperId" => Tok::UpperIdent(<&'input str>),
@@ -73,7 +73,7 @@ extern {
 #[inline]
 Sp<T>: Sp<T> = {
     <l:@L> <inner:T> <r:@R> => Sp {
-        span: Span::new(l as u32, r as u32),
+        span: Span::new(l, r),
         inner,
     },
 };
@@ -234,11 +234,6 @@ TermRight: Term = {
     <ty_in:TermRightId> "->" <ty_out:TermAtomId> => Arrow(
         ty_in, ty_out
     ).into(),
-    // constructor
-    <ctor_name:NameRef<CtorName>>
-    <args:SepByDelim<"(", ",", <TermId>, ")">> => Constructor(
-        ctor_name, args
-    ).into(),
     // destructor
     <term:TermGen<TermRight>> <dtor_name:NameRef<DtorName>>
     <args:SepByDelim<"(", ",", <TermId>, ")">> => Destructor(
@@ -258,6 +253,11 @@ TermAtom: Term = {
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermAtomId> => Force(<>).into(),
     "ret" <TermAtomId> => Return(<>).into(),
+    // constructor
+    <ctor_name:NameRef<CtorName>>
+    <args:SepByDelim<"(", ",", <TermId>, ")">> => Constructor(
+        ctor_name, args
+    ).into(),
     <Literal> => <>.into(),
 };
 
@@ -303,7 +303,7 @@ UseDef: UseDef = {
 
 Declaration: Declaration = {
     <TypeDef> => <>.into(),
-    "define" <GenBind> DefineEnd => Define(<>).into(),
+    DefineHead <GenBind> DefineEnd => Define(<>).into(),
     "module" <name:NameDef<UpperId>> "where"
         <top:TopLevel>
     "end" => Module {
