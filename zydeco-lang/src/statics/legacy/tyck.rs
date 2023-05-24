@@ -31,12 +31,19 @@ impl CtxT for () {
 
 #[derive(Clone, Default)]
 pub struct Ctx {
+    /// the kind of each abstract variable
     pub abst_ctx: im::Vector<Kind>,
+    /// the kind of type variables; paired with type_env
     pub type_ctx: im::HashMap<TypeV, Kind>,
+    /// the type of term variables
     pub term_ctx: im::HashMap<TermV, Type>,
+    /// the actual type of type variables
     pub type_env: Env<TypeV, Type>,
+    /// the data definition of data types
     pub data_env: im::HashMap<TypeV, prelude::Data>,
+    /// the codata definition of codata types
     pub codata_env: im::HashMap<TypeV, prelude::Codata>,
+    /// the type aliases
     pub alias_env: im::HashMap<TypeV, prelude::Alias>,
     pub trace: Trace,
 }

@@ -153,7 +153,7 @@ impl TypeCheck for Span<Type> {
                     ctx.err(
                         span,
                         ArityMismatch {
-                            context: format!("{}", self.inner_ref().fmt()),
+                            context: format!("`{}`", self.inner_ref().fmt()),
                             expected: params.len(),
                             found: app.args.len(),
                         },
@@ -209,16 +209,16 @@ impl Type {
         match typ_syn {
             SynType::TypeApp(TypeApp { tvar, mut args }) => {
                 if let Some(ty) = diff.get(&tvar) {
-                    bool_test(args.is_empty(), || {
-                        ctx.err(
-                            tvar.span(),
-                            ArityMismatch {
-                                context: format!("type variable `{}`", tvar),
-                                expected: 0,
-                                found: args.len(),
-                            },
-                        )
-                    })?;
+                    // bool_test(args.is_empty(), || {
+                    //     ctx.err(
+                    //         tvar.span(),
+                    //         ArityMismatch {
+                    //             context: format!("type variable `{}`", tvar),
+                    //             expected: 0,
+                    //             found: args.len(),
+                    //         },
+                    //     )
+                    // })?;
                     Ok(ty.clone())
                 } else {
                     for arg in args.iter_mut() {
