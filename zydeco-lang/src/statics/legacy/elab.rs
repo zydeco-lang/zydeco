@@ -192,7 +192,9 @@ impl Elaboration<ps::Type> for Type {
     type Error = TyckErrorItem;
     fn elab(ty: ps::Type) -> Result<Self, TyckErrorItem> {
         Ok(match ty {
-            ps::Type::Basic(tvar) => TypeApp { tvar: tvar.into(), args: vec![] }.into(),
+            ps::Type::Basic(tvar) => {
+                TypeApp { tvar: TypeV::from(tvar).into(), args: vec![] }.into()
+            }
             ps::Type::App(t) => {
                 let ps::TypeApp(t1, t2) = t;
                 let t1: Type = Elaboration::elab(t1.inner())?;

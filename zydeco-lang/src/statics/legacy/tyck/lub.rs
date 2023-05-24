@@ -109,15 +109,31 @@ impl Lub for Type {
                 // Todo..
                 Ok(lhs.into())
             }
-            (SynType::TypeApp(lhs), _) if ctx.type_env.contains_key(&lhs.tvar) => {
+            (SynType::TypeApp(TypeApp { tvar: NeutralVar::Var(tvar), args: _ }), _)
+                if ctx.type_env.contains_key(&tvar) =>
+            {
                 // lhs is a type variable
-                let ty = ctx.clone().type_env[&lhs.tvar].clone();
+                let ty = ctx.clone().type_env[&tvar].clone();
                 ty.lub(rhs, ctx, span)
             }
-            (_, SynType::TypeApp(rhs)) if ctx.type_env.contains_key(&rhs.tvar) => {
+            (SynType::TypeApp(TypeApp { tvar: NeutralVar::Abst(abst_var), args }), _)
+                if args.is_empty() =>
+            {
+                // lhs is an abstract type variable
+                Type::from(abst_var).lub(rhs, ctx, span)
+            }
+            (_, SynType::TypeApp(TypeApp { tvar: NeutralVar::Var(tvar), args: _ }))
+                if ctx.type_env.contains_key(&tvar) =>
+            {
                 // rhs is a type variable
-                let ty = ctx.clone().type_env[&rhs.tvar].clone();
+                let ty = ctx.clone().type_env[&tvar].clone();
                 lhs.lub(ty, ctx, span)
+            }
+            (_, SynType::TypeApp(TypeApp { tvar: NeutralVar::Abst(abst_var), args }))
+                if args.is_empty() =>
+            {
+                // rhs is an abstract type variable
+                lhs.lub(Type::from(abst_var), ctx, span)
             }
             (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
                 bool_test(lhs.tvar == rhs.tvar, err)?;

@@ -21,10 +21,16 @@ impl KindT for Kind {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AbstVar(pub usize);
+#[derive(IntoEnum, FmtArgs, Clone, Debug, PartialEq)]
+pub enum NeutralVar {
+    Var(TypeV),
+    Abst(AbstVar),
+}
+impl TyVarT for NeutralVar {}
 #[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum SynType {
-    TypeAbs(TypeAbs<(TypeV, Span<Kind>), RcType>), 
-    TypeApp(TypeApp<TypeV, RcType>),
+    TypeAbs(TypeAbs<(TypeV, Span<Kind>), RcType>),
+    TypeApp(TypeApp<NeutralVar, RcType>),
     Forall(Forall<(TypeV, Span<Kind>), RcType>),
     Exists(Exists<(TypeV, Span<Kind>), RcType>),
     AbstVar(AbstVar),
@@ -48,14 +54,14 @@ macro_rules! impl_from {
     };
 }
 impl_from!(TypeAbs<(TypeV, Span<Kind>), RcType>);
-impl_from!(TypeApp<TypeV, RcType>);
+impl_from!(TypeApp<NeutralVar, RcType>);
 impl_from!(Forall<(TypeV, Span<Kind>), RcType>);
 impl_from!(Exists<(TypeV, Span<Kind>), RcType>);
 impl_from!(AbstVar);
 impl_from!(Hole);
 impl From<TypeV> for Type {
     fn from(tvar: TypeV) -> Self {
-        TypeApp { tvar, args: vec![] }.into()
+        TypeApp { tvar: tvar.into(), args: vec![] }.into()
     }
 }
 
