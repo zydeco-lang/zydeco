@@ -1,22 +1,6 @@
 use super::*;
 use crate::utils::span::*;
 
-impl SpanHolder for bool {
-    fn span_map_mut<F>(&mut self, _f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-    }
-}
-
-impl SpanHolder for String {
-    fn span_map_mut<F>(&mut self, _f: F)
-    where
-        F: Fn(&mut SpanInfo) + Clone,
-    {
-    }
-}
-
 impl<In, Out> SpanHolder for Arrow<In, Out>
 where
     In: SpanHolder,

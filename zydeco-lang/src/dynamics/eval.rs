@@ -1,5 +1,5 @@
 use super::syntax::{Thunk as SemThunk, *};
-use crate::{rc, utils::fmt::FmtArgs};
+use crate::prelude::*;
 use im::Vector;
 use std::{
     io::{BufRead, Write},

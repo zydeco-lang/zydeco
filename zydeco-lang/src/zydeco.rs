@@ -8,7 +8,7 @@ use crate::{
         syntax as ps,
     },
     prelude::*,
-    statics::{syntax as ss, Ctx, Elaboration, Seal, TypeCheck},
+    statics::{syntax as ss, tyck, Ctx, Elaboration, Seal, TypeCheck},
     syntax::Env,
     utils::span::FileInfo,
 };
@@ -105,7 +105,7 @@ impl ZydecoExpr {
         Ok(v)
     }
     pub fn tyck(&self, t: Span<ss::Term>) -> Result<ss::Type, String> {
-        t.syn_term(self.ctx.clone()).map_err(|e| format!("{}", e))
+        tyck::syn_term(t, self.ctx.clone()).map_err(|e| format!("{}", e))
     }
     pub fn link_value(val: &ss::TermValue) -> ls::SynVal {
         val.into()

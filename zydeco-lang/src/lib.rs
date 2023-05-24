@@ -28,16 +28,13 @@ pub mod surface {
 use surface::*;
 
 pub mod statics {
-    pub mod legacy {
-        pub mod syntax;
-        pub mod err;
-        pub mod elab;
-        pub mod tyck;
-        mod fmt;
-    }
-    pub use legacy::{
+    pub mod syntax;
+    pub mod err;
+    pub mod elab;
+    pub mod tyck;
+    mod fmt;
+    pub use self::{
         elab::Elaboration,
-        err, syntax,
         tyck::{Ctx, Seal, TypeCheck},
     };
 }
@@ -74,20 +71,12 @@ pub mod core {
 }
 
 pub mod utils {
+    pub use zydeco_utils::*;
     pub mod fmt;
-    pub mod span;
-    pub mod never;
-    pub mod wrappers;
-    pub mod monoid;
 }
-
 pub mod prelude {
-    pub use crate::utils::{
-        fmt::FmtArgs,
-        monoid::Monoid,
-        never::Never,
-        span::{Span, SpanHolder, SpanInfo, SpanView},
-    };
+    pub use super::utils::fmt::FmtArgs;
+    pub use zydeco_utils::prelude::*;
 }
 
 pub mod zydeco;

@@ -4,7 +4,7 @@ use_field_init_shorthand = true
 use_small_heuristics = "Max"
 
 # fn_single_line = true
-fn_args_layout = "Compressed"
+fn_params_layout = "Compressed"
 # where_single_line = true
 # brace_style = "PreferSameLine"
 

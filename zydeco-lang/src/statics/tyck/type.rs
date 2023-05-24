@@ -188,7 +188,7 @@ impl TypeCheck for Span<Type> {
                         }
                         let (_, remainder) = params.split_at(args.len());
                         if remainder.is_empty() {
-                            Ok(Step::Done(kd.inner_clone().into()))
+                            Ok(Step::Done(kd.inner_clone()))
                         } else {
                             Ok(Step::Done(
                                 TypeArity { params: remainder.to_vec(), kd: kd.clone() }.into(),

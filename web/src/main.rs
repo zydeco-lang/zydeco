@@ -52,10 +52,10 @@ fn run(input: &str) -> Result<String, String> {
     let p = ZydecoFile::link(p.inner)?;
     let p = ZydecoFile::eval_os(p, &[]);
     let s = match p.entry {
-        ds::ProgKont::Ret(v) => format!("{}", v.fmt()),
+        ds::ProgKont::Ret(v) => v.fmt(),
         ds::ProgKont::ExitCode(i) => format!("exit code: {}", i),
     };
-    Ok(String::from(s))
+    Ok(s)
 }
 
 fn main() {

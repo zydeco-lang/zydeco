@@ -1,11 +1,11 @@
 use crate::core::runtime::syntax as ds;
 pub use crate::syntax::*;
+use im::Vector;
 use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
 use zydeco_derive::{FmtArgs, IntoEnum};
-use im::Vector;
 
 #[derive(IntoEnum, FmtArgs, Clone)]
 pub enum Value {

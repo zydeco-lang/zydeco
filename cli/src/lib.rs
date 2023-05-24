@@ -1,3 +1,6 @@
+#![allow(clippy::style)]
+#![allow(clippy::useless_format)]
+
 pub mod repl;
 
 use clap::{Parser, Subcommand};

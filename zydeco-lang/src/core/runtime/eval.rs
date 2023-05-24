@@ -1,6 +1,6 @@
 #![allow(unused)]
 use super::syntax::{self as ds, Thunk as SemThunk, *};
-use crate::{rc, utils::fmt::FmtArgs};
+use crate::prelude::*;
 use im::Vector;
 use std::{
     io::{BufRead, Write},
@@ -35,7 +35,7 @@ impl<'rt> Runtime<'rt> {
 }
 
 impl ls::Value {
-    fn step<'e, 'rt>(self, runtime: &'e mut Runtime<'rt>) -> ds::Value {
+    fn step(self, runtime: &mut Runtime<'_>) -> ds::Value {
         match self {
             ls::Value::Var(var) => {
                 runtime.env.lookup(&var).expect("variable does not exist").clone()

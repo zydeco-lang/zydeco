@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "zydeco-lang",
+    "zydeco-lang/utils",
     "zydeco-lang/derive",
     "zydeco-lang/surface",
     "cli",

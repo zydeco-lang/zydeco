@@ -1663,11 +1663,11 @@ dependencies = [
  "lalrpop",
  "lalrpop-util",
  "logos",
- "once_cell",
  "regex",
  "slotmap",
  "thiserror",
  "zydeco-derive",
+ "zydeco-utils",
 ]
 
 [[package]]
@@ -1683,4 +1683,11 @@ dependencies = [
  "slotmap",
  "unindent",
  "zydeco-derive",
+]
+
+[[package]]
+name = "zydeco-utils"
+version = "0.2.0"
+dependencies = [
+ "once_cell",
 ]

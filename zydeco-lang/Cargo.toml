@@ -8,10 +8,10 @@ description = "A language implementation for zydeco, a call-by-push-value langua
 regex = "1"
 logos = "0.13"
 lalrpop-util = "0.20"
-once_cell = "1.17"
 im = "15"
 slotmap = "1.0"
 thiserror = "1.0.40"
+zydeco-utils = { path = "./utils" }
 zydeco-derive = { path = "./derive" }
 
 # build-time dependency on the lalrpop library:

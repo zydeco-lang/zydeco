@@ -266,3 +266,19 @@ impl<T: SpanHolder> SpanHolder for Span<T> {
         self.inner.span_map_mut(f);
     }
 }
+
+impl SpanHolder for bool {
+    fn span_map_mut<F>(&mut self, _f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+    }
+}
+
+impl SpanHolder for String {
+    fn span_map_mut<F>(&mut self, _f: F)
+    where
+        F: Fn(&mut SpanInfo) + Clone,
+    {
+    }
+}

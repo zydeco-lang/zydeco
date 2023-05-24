@@ -8,15 +8,7 @@ use super::{
     err::{Frame, Trace, TyckError, TyckErrorItem},
     syntax::*,
 };
-use crate::{
-    rc,
-    resolve::err::NameResolveError,
-    syntax::Env,
-    utils::{
-        fmt::FmtArgs,
-        span::{Span, SpanInfo, SpanView},
-    },
-};
+use crate::{prelude::*, resolve::err::NameResolveError, syntax::Env};
 use std::collections::HashSet;
 use TyckErrorItem::*;
 
@@ -112,13 +104,11 @@ fn bool_test<E>(b: bool, f: impl FnOnce() -> E) -> Result<(), E> {
     b.then_some(()).ok_or_else(f)
 }
 
-impl Span<Term> {
-    pub fn syn_term(self, ctx: Ctx) -> Result<Type, TyckError> {
-        let span = self.span().clone();
-        match self.inner() {
-            Term::Value(t) => span.make(t).syn(ctx),
-            Term::Computation(t) => span.make(t).syn(ctx),
-        }
+pub(crate) fn syn_term(term: Span<Term>, ctx: Ctx) -> Result<Type, TyckError> {
+    let span = term.span().clone();
+    match term.inner() {
+        Term::Value(t) => span.make(t).syn(ctx),
+        Term::Computation(t) => span.make(t).syn(ctx),
     }
 }
 

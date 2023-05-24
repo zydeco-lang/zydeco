@@ -28,7 +28,7 @@ fn command_test(f: &str) -> Result<(), String> {
         .read_to_string(&mut buf)
         .map_err(|e| e.to_string())?;
     let mut zydeco_expr = ZydecoExpr::new();
-    for line in buf.split("\n") {
+    for line in buf.split('\n') {
         let (line, dry) = match Repl::preprocess(&mut zydeco_expr, line.to_string()) {
             Ok(Some(config)) => config,
             Ok(None) => continue,

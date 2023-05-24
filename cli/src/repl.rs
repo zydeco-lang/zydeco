@@ -46,7 +46,7 @@ impl Repl {
         }
         // check for commands
         let mut dry = false;
-        if line.trim_start().starts_with("#") {
+        if line.trim_start().starts_with('#') {
             if line.starts_with("#env") {
                 // command #env: print all variables in scope
                 // Note: with the module system we can have a more
@@ -57,7 +57,7 @@ impl Repl {
             } else if line.starts_with("#type") | line.starts_with("#t") | line.starts_with("#dry")
             {
                 // command #type: type checks but not run a term
-                if let Some((_, term)) = line.split_once(" ") {
+                if let Some((_, term)) = line.split_once(' ') {
                     line = term.to_string();
                     dry = true;
                 } else {

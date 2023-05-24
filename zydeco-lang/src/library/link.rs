@@ -1,5 +1,5 @@
 use super::{builtins::Builtin, syntax::*};
-use crate::{rc, statics::syntax as ss};
+use crate::{prelude::rc, statics::syntax as ss};
 use im::Vector;
 
 impl From<ss::Program> for Program {

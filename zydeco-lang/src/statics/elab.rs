@@ -1,10 +1,5 @@
 use super::{err::TyckErrorItem, syntax::*};
-use crate::{
-    parse::syntax as ps,
-    rc,
-    resolve::err::NameResolveError,
-    utils::span::{Span, SpanInfo, SpanView},
-};
+use crate::{parse::syntax as ps, prelude::*, resolve::err::NameResolveError};
 use im::vector;
 
 pub trait Elaboration<T>: Sized {

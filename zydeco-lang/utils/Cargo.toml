@@ -1,0 +1,8 @@
+[package]
+name = "zydeco-utils"
+version = "0.2.0"
+edition = "2021"
+description = "utilities for zydeco"
+
+[dependencies]
+once_cell = "1.17"
