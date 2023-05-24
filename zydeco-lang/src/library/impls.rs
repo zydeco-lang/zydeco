@@ -104,7 +104,7 @@ pub fn str_split_once(
                 Some((a, b)) => ret(ctor(
                     "Some",
                     vec![rc!(ctor(
-                        "Pair",
+                        "Cons",
                         vec![
                             rc!(Literal::String(a.to_owned()).into()),
                             rc!(Literal::String(b.to_owned()).into()),
@@ -130,7 +130,7 @@ pub fn str_split_n(
             ret(ctor(
                 "Some",
                 vec![rc!(ctor(
-                    "Pair",
+                    "Cons",
                     vec![
                         rc!(Literal::String(a.to_owned()).into()),
                         rc!(Literal::String(b.to_owned()).into()),

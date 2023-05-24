@@ -121,6 +121,7 @@ mod chk_tests {
     mk_test!(check_test, iota, &["iota.zy"]);
     mk_test!(check_test, alias, &["alias.zy"]);
     mk_test!(check_test, bigmac, &["bigmac.zy"]);
+    mk_test!(check_test, optiont, &["optiont.zy"]);
 }
 mod batch_tests {
     // Note: to use rust-analyzer's debug feature on tests, you can replace

@@ -1,7 +1,5 @@
 // # Chapter 8: Lense, Prism and Optics
 
-// Fixme: waiting for System F-omega
-
 // The following code is only a sketch of the idea.
 
 alias Lens (S : VType) (A : VType) = forall (Fun : VType -> CType) . Thunk (A -> Fun A) -> (S -> Fun S) end
@@ -25,3 +23,5 @@ end
 main
   ! exit 0
 end
+
+// To be continued...

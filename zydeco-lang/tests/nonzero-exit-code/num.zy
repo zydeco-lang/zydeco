@@ -2,10 +2,7 @@ main
   do x <- (fn x -> ret 1 : Bool -> F Int) True();
   do y <- (fn x -> ret true : Int -> F Bool) +123;
   do z <- (fn x -> ret true : Int -> F Bool) -123;
-  let + = add;
-  let - = sub;
-  let * = mul;
-  do x <- !* 1 -1;
-  do x <- !+ 1 x;
+  do x <- ! mul 1 -1;
+  do x <- ! add 1 x;
   ! exit x
 end

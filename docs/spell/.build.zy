@@ -8,7 +8,7 @@ def fn guard (line : String) : Ret GuardResult =
   do l <- ! str_length line;
   let ifp~ = { ! if~ @(Ret GuardResult) } in
   ! ifp~ { ! int_lt l 3 } {
-    ret Pair(line, false)
+    ret Cons(line, false)
   } {
     // can index into
     do c1 <- ! str_index line 0;
@@ -18,18 +18,18 @@ def fn guard (line : String) : Ret GuardResult =
     match p?
     | Some(p) ->
       match p
-      | Pair(_, line') ->
+      | Cons(_, line') ->
         do b1 <- ! bind true { ! char_eq c1 '/' };
         do b2 <- ! bind b1 { ! char_eq c2 '/' };
         do b3 <- ! bind b2 { ! char_eq c3 ' ' };
         ! if @(Ret GuardResult) b3 {
-          ret Pair(line', true)
+          ret Cons(line', true)
         } {
-          ret Pair(line, false)
+          ret Cons(line, false)
         }
       end
     | None() -> 
-      ret Pair(line, false)
+      ret Cons(line, false)
     end
   }
 end
@@ -45,10 +45,10 @@ main
     match p?
     | Some(p) ->
       match p
-      | Pair(line, r) ->
+      | Cons(line, r) ->
         do p <- ! guard line;
         match p
-        | Pair(res, comment_head) ->
+        | Cons(res, comment_head) ->
           ! if~ @(OS) { ! not code } {
             // normal mode:
             do empty? <- ! str_empty? res;
