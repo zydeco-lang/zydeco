@@ -18,6 +18,12 @@ pub struct TypeArity<In: KindT, Out: KindT> {
 /* ---------------------------------- Types --------------------------------- */
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypeAbs<TyV: TyVarT, Ty: TypeT> {
+    pub params: Vec<TyV>,
+    pub body: Ty,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeApp<TyV: TyVarT, Ty: TypeT> {
     pub tvar: TyV,
     pub args: Vec<Ty>,

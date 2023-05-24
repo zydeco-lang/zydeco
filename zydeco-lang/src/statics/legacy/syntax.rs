@@ -23,6 +23,7 @@ impl KindT for Kind {}
 pub struct AbstVar(pub usize);
 #[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum SynType {
+    TypeAbs(TypeAbs<(TypeV, Span<Kind>), RcType>), 
     TypeApp(TypeApp<TypeV, RcType>),
     Forall(Forall<(TypeV, Span<Kind>), RcType>),
     Exists(Exists<(TypeV, Span<Kind>), RcType>),
@@ -46,6 +47,7 @@ macro_rules! impl_from {
         }
     };
 }
+impl_from!(TypeAbs<(TypeV, Span<Kind>), RcType>);
 impl_from!(TypeApp<TypeV, RcType>);
 impl_from!(Forall<(TypeV, Span<Kind>), RcType>);
 impl_from!(Exists<(TypeV, Span<Kind>), RcType>);

@@ -82,6 +82,25 @@ where
     }
 }
 
+impl<TyV, Ty> FmtArgs for TypeAbs<TyV, Ty>
+where
+    TyV: TyVarT + FmtArgs,
+    Ty: TypeT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let TypeAbs { params, body } = self;
+        let mut s = String::new();
+        s += "fn ";
+        for param in params {
+            s += &param.fmt_args(fargs);
+            s += " ";
+        }
+        s += " . ";
+        s += &body.fmt_args(fargs);
+        s
+    }
+}
+
 impl<TyV, T> FmtArgs for TypeApp<TyV, T>
 where
     TyV: TyVarT + FmtArgs,

@@ -101,6 +101,14 @@ impl Lub for Type {
             // (SynType::Hole(_), SynType::Hole(_)) => Err(err())?,
             (SynType::Hole(_), _) => Ok(rhs),
             (_, SynType::Hole(_)) => Ok(lhs),
+            (SynType::TypeAbs(lhs), SynType::TypeAbs(_rhs)) => {
+                // bool_test(lhs.param == rhs.param, err)?;
+                // let param = lhs.param;
+                // let ty = lhs.ty.inner_clone().lub(rhs.ty.inner_clone(), ctx, span)?;
+                // Ok(TypeAbs { param, ty }.into())
+                // Todo..
+                Ok(lhs.into())
+            }
             (SynType::TypeApp(lhs), _) if ctx.type_env.contains_key(&lhs.tvar) => {
                 // lhs is a type variable
                 let ty = ctx.clone().type_env[&lhs.tvar].clone();
@@ -154,7 +162,8 @@ impl Lub for Type {
                 bool_test(lhs == rhs, err)?;
                 Ok(lhs.into())
             }
-            (SynType::TypeApp(_), _)
+            (SynType::TypeAbs(_), _)
+            | (SynType::TypeApp(_), _)
             | (SynType::Forall(_), _)
             | (SynType::Exists(_), _)
             | (SynType::AbstVar(_), _) => Err(err()),

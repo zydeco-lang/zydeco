@@ -32,6 +32,8 @@ pub enum TyckErrorItem {
     TypeExpected { context: String, expected: String, found: Type },
     #[error("In {context}, expected {expected} arguments but got {found}")]
     ArityMismatch { context: String, expected: usize, found: usize },
+    #[error("Applying type arguments to {}, which is not a type abstraction", .found.fmt())]
+    ApplyToNonTypeAbs { found: Type },
     #[error("Need annotation for {content}")]
     NeedAnnotation { content: String },
     #[error("Subsumption for sort {sort} failed")]
