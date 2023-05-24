@@ -321,10 +321,11 @@ Modifiers<T>: Modifiers<T> = {
     },
 };
 
-pub ModifiedDeclaration: Modifiers<Declaration> = {
-    Modifiers<Declaration>,
+pub ReplInput: ReplInput = {
+    <Modifiers<Declaration>> => <>.into(),
+    <TermId> => <>.into(),
 };
 
 pub TopLevel: TopLevel = {
-    <ModifiedDeclaration*> => TopLevel(<>),
+    <Modifiers<Declaration>*> => TopLevel(<>),
 };

@@ -200,4 +200,10 @@ pub struct Sp<T> {
     pub inner: T,
 }
 
+#[derive(IntoEnum)]
+pub enum ReplInput {
+    Declaration(Modifiers<Declaration>),
+    Term(TermId),
+}
+
 pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
