@@ -243,6 +243,7 @@ impl Type {
     pub(super) fn subst(self, mut diff: Env<TypeV, Type>, ctx: &Ctx) -> Result<Self, TyckError> {
         let typ = ctx.resolve_alias(self, &SpanInfo::dummy())?;
         let typ_syn = typ.resolve()?;
+        // println!("<subst>:\n{}\n{}", diff.fmt(), typ_syn.fmt());
         match typ_syn {
             SynType::TypeAbs(TypeAbs { params, body }) => {
                 for (tv, _) in params.iter() {
@@ -299,6 +300,11 @@ impl Type {
     pub(super) fn apply(self, args: Vec<RcType>, ctx: &Ctx) -> Result<Self, TyckError> {
         let typ = ctx.resolve_alias(self, &SpanInfo::dummy())?;
         let typ_syn = typ.resolve()?;
+        // println!(
+        //     "<apply>:\n{}\n{}",
+        //     typ_syn.fmt(),
+        //     args.iter().map(|ty| ty.fmt()).collect::<Vec<String>>().join(", ")
+        // );
         match typ_syn {
             SynType::TypeAbs(TypeAbs { params, body }) => {
                 // Hack: need to support curried type application
@@ -323,7 +329,11 @@ impl Type {
                 Ok(Type { synty: TypeApp { tvar: NeutralVar::Abst(abst_var), args }.into() })
             }
             SynType::Forall(_) | SynType::Exists(_) | SynType::Hole(_) => {
-                Err(ctx.err(&SpanInfo::dummy(), ApplyToNonTypeAbs { found: typ }))?
+                if args.is_empty() {
+                    Ok(typ)
+                } else {
+                    Err(ctx.err(&SpanInfo::dummy(), ApplyToNonTypeAbs { found: typ }))?
+                }
             }
         }
     }
