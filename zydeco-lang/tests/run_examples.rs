@@ -195,6 +195,7 @@ mod doc_tests {
     mk_test!(doc_test, mutual_rec, &["5-mutual-rec.zy"], true);
     mk_test!(doc_test, cps, &["6-cps.zy"], true);
     mk_test!(doc_test, call_by_need, &["7-call-by-need.zy"], false);
+    mk_test!(doc_test, lense_prism_optics, &["8-lense-prism-optics.zy"], false);
 }
 
 mod custom_tests {}
