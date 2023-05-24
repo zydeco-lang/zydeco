@@ -98,16 +98,22 @@ impl Lub for Type {
         let rhs = ctx.resolve_alias(rhs, span)?;
         let rhs_syn = rhs.resolve()?;
         match (lhs_syn, rhs_syn) {
-            // (SynType::Hole(_), SynType::Hole(_)) => Err(err())?,
             (SynType::Hole(_), _) => Ok(rhs),
             (_, SynType::Hole(_)) => Ok(lhs),
-            (SynType::TypeAbs(lhs), SynType::TypeAbs(_rhs)) => {
-                // bool_test(lhs.param == rhs.param, err)?;
-                // let param = lhs.param;
-                // let ty = lhs.ty.inner_clone().lub(rhs.ty.inner_clone(), ctx, span)?;
-                // Ok(TypeAbs { param, ty }.into())
-                // Todo..
-                Ok(lhs.into())
+            (SynType::TypeAbs(lhs), SynType::TypeAbs(rhs)) => {
+                bool_test(
+                    lhs.params.iter().zip(rhs.params.iter()).all(|(lhs, rhs)| {
+                        lhs.0 == rhs.0
+                            && lhs
+                                .1
+                                .inner_clone()
+                                .lub(rhs.1.inner_clone(), ctx.clone(), span)
+                                .is_ok()
+                    }),
+                    err,
+                )?;
+                let body = lhs.body.inner_clone().lub(rhs.body.inner_clone(), ctx, span)?;
+                Ok(TypeAbs { params: lhs.params, body: rc!(lhs.body.span().make(body)) }.into())
             }
             (SynType::TypeApp(TypeApp { tvar: NeutralVar::Var(tvar), args: _ }), _)
                 if ctx.type_env.contains_key(&tvar) =>

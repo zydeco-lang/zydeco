@@ -21,7 +21,7 @@ impl From<ss::Module> for Module {
             inner: ss::Define { name: (sym, _ty), def: () },
         } in m.define_ext
         {
-            // Todo: synthesize the arity from the type
+            // Note: synthesize the arity from the type?
             let def = std_library
                 .get(&sym)
                 .expect("no implementation found for the extern term definition")
