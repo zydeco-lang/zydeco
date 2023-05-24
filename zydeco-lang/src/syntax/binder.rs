@@ -119,7 +119,7 @@ mod span {
 slotmap::new_key_type! { pub struct EntityId; }
 
 /// Note: Consider pairing up Entity with the following:
-/// ```no_run
+/// ```ignore
 /// #[derive(IntoEnum, Clone, Debug)]
 /// pub enum Sort {
 ///     Term(Term, Option<Type>),

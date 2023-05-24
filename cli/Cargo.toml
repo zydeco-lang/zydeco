@@ -13,5 +13,5 @@ zydeco-lang = { path = "../zydeco-lang" }
 name = "zydeco"
 path = "src/main.rs"
 
-[lib]
-doctest = false
+# [lib]
+# doctest = false

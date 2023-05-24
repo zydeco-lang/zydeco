@@ -14,15 +14,14 @@ once_cell = "1.17"
 im = "15"
 slotmap = "1.0"
 thiserror = "1.0.40"
-codespan-reporting = "0.11"
 zydeco-derive = { path = "./derive" }
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]
 lalrpop = "0.20"
 
-[lib]
-doctest = false
+# [lib]
+# doctest = false
 
 # Maybe we should consider adding a profile for test
 # [profile.test]
