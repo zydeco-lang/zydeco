@@ -617,8 +617,8 @@ def fn variable : Parser String =
   ! identifier {! keywords}
 end
 
-def fn app : Parser (U(Expr -> Expr -> F Expr)) =
-  ! result @(U(Expr -> Expr -> F Expr)) {fn x y -> ret App(x, y)}
+def fn appop : Parser (U(Expr -> Expr -> F Expr)) =
+  ! bind' @(Char) @(U(Expr -> Expr -> F Expr)) {! char '.'} {fn _ -> ! result @(U(Expr -> Expr -> F Expr)) {fn x y -> ret App(x, y)}}
 end
 
 def rec fn expr : Parser Expr =
@@ -647,7 +647,7 @@ def rec fn expr : Parser Expr =
                 fn _ ->
                   ! bind' @(Expr) @(Expr) {! expr} {
                     fn e1 ->
-                      ! bind' @(String) @(Expr) {! symbol "in"} {
+                      ! bind' @(String) @(Expr) {! symbol " in"} {
                         fn _ ->
                           ! bind' @(Expr) @(Expr) {! expr} {
                             fn e2 ->
@@ -674,7 +674,7 @@ def rec fn expr : Parser Expr =
       }
     }
   } in
-  ! chainl1 @(Expr) atom app
+  ! chainl1 @(Expr) atom appop
 end
 
 // print the result
@@ -742,6 +742,33 @@ def rec fn expr_fmt (e : Expr) : F String =
   end
 end
 
+data Symbol where
+| Def(String)
+end
+
+def fn symbol_parser : Parser Symbol =
+  ! bind' @(String) @(Symbol) {! symbol "def"} {
+    fn _ ->
+      ! bind' @(String) @(Symbol) {! variable} {
+        fn x ->
+          ! bind' @(String) @(Symbol) {! symbol "end"} {
+            fn _ ->
+            ! result @(Symbol) Def(x)
+      }
+    }
+  }
+end
+
+def fn symbol_fmt (s : Symbol) : F String =
+  match s
+  | Def(x) ->
+    do res <- ! str_append x ")";
+    do res <- ! str_append "Def(" res;
+    ret res
+  end
+end
+
+
 main
   // // the difference between many and many' is that many' is lazy
   // let m = {! many' @(Char) {! char 'a'} "aaab"} in
@@ -756,8 +783,17 @@ main
   //   ! exit 0
   // }
 
-  let m = {! expr "let x = 1 in x"} in
-  ! print_parser_hd @(Expr) expr_fmt m {
+  // let works
+  // let m = {! expr "let x = (| y -> y) in x"} in
+  // ! print_parser_all @(Expr) expr_fmt m {
+  //   ! exit 0
+  // }
+
+  // application doesnt work
+  let m = {! expr "(x) . (y)"} in
+  ! print_parser_all @(Expr) expr_fmt m {
     ! exit 0
   }
 end
+
+// Let(x, Var(x), Var(y))
