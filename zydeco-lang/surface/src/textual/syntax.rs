@@ -6,8 +6,18 @@ pub use zydeco_utils::span::Span;
 
 /* --------------------------------- Binder --------------------------------- */
 
-pub struct NameDef(pub String);
-pub struct NameRef(pub Vec<String>, pub String);
+pub struct ModName(pub String);
+pub struct VarName(pub String);
+pub struct CtorName(pub String);
+pub struct DtorName(pub String);
+#[derive(IntoEnum)]
+pub enum TypeArmName {
+    Ctor(CtorName),
+    Dtor(DtorName),
+}
+
+pub struct NameDef<T>(pub T);
+pub struct NameRef<T>(pub Vec<ModName>, pub T);
 
 /* ----------------------------- Bi-Directional ----------------------------- */
 
@@ -28,7 +38,7 @@ pub struct Hole;
 
 #[derive(IntoEnum)]
 pub enum Pattern {
-    Var(NameDef),
+    Var(NameDef<VarName>),
     Ann(Annotation<PatternId, TermId>),
     Hole(Hole),
     // CtorPattern(CtorPattern),
@@ -82,14 +92,14 @@ pub struct PureBind<Tail> {
 }
 
 /// `C(a_1, ...)`
-pub struct Constructor(pub NameRef, pub Vec<TermId>);
+pub struct Constructor(pub NameRef<CtorName>, pub Vec<TermId>);
 /// `match a | C_1(x_11, ...) -> b_1 | ...`
 pub struct Match<Tail> {
     pub scrut: TermId,
     pub arms: Vec<Matcher<Tail>>,
 }
 pub struct Matcher<Tail> {
-    pub name: NameRef,
+    pub name: NameRef<CtorName>,
     pub binders: Vec<PatternId>,
     pub tail: Tail,
 }
@@ -99,12 +109,12 @@ pub struct CoMatch<Tail> {
     pub arms: Vec<CoMatcher<Tail>>,
 }
 pub struct CoMatcher<Tail> {
-    pub name: NameRef,
+    pub name: NameRef<DtorName>,
     pub binders: Vec<PatternId>,
     pub tail: Tail,
 }
 /// `b .d(a_1, ...)`
-pub struct Destructor(pub TermId, pub NameRef, pub Vec<TermId>);
+pub struct Destructor(pub TermId, pub NameRef<DtorName>, pub Vec<TermId>);
 
 /// literals in term
 #[derive(IntoEnum)]
@@ -118,7 +128,7 @@ pub enum Literal {
 pub enum Term {
     Ann(Annotation<TermId, TermId>),
     Hole(Hole),
-    Var(NameRef),
+    Var(NameRef<VarName>),
     Abs(Abstraction<TermId>),
     App(Application),
     Rec(Recursion),
@@ -148,12 +158,12 @@ pub enum TypeDefHead {
 pub struct TypeDef {
     /// `data` or `codata`
     pub head: TypeDefHead,
-    pub name: NameDef,
+    pub name: NameDef<VarName>,
     pub params: Vec<PatternId>,
     pub arms: Option<Vec<TypeArm>>,
 }
 pub struct TypeArm {
-    pub name: NameDef,
+    pub name: NameDef<TypeArmName>,
     pub args: Vec<TermId>,
     pub out: Option<TermId>,
 }
@@ -161,20 +171,20 @@ pub struct TypeArm {
 pub struct Define(pub GenBind);
 
 pub struct Module {
-    pub name: NameDef,
+    pub name: NameDef<ModName>,
     pub top: TopLevel,
 }
 
 pub struct UseAll;
 
 pub struct UseCluster {
-    pub path: NameRef,
+    pub path: NameRef<ModName>,
     pub cluster: Vec<UseDef>,
 }
 
 #[derive(IntoEnum)]
 pub enum UseDef {
-    Name(NameRef),
+    Name(NameRef<VarName>),
     UseAll(UseAll),
     Cluster(UseCluster),
 }

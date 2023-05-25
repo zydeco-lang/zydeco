@@ -71,12 +71,7 @@ extern {
 //* -------------------------------- Utilities ------------------------------- */
 
 #[inline]
-Sp<T>: Sp<T> = {
-    <l:@L> <inner:T> <r:@R> => Sp {
-        span: Span::new(l, r),
-        inner,
-    },
-};
+Sp<T>: Sp<T> = <l:@L> <inner:T> <r:@R> => Sp { span: Span::new(l, r), inner, };
 
 // #[inline]
 SepByDelim<Start, Sep, T, End>: Vec<T> = {
@@ -103,40 +98,40 @@ Literal: Literal = {
 
 //* ------------------------------- Identifiers ------------------------------ */
 
+#[inline]
 UpperId: String = "UpperId" => <>.into();
+#[inline]
 LowerId: String = "LowerId" => <>.into();
+#[inline]
 MixedId: String = { <UpperId>, <LowerId>, };
 
-CtorName: String = {
+#[inline]
+ModName: ModName = <UpperId> => ModName(<>);
+#[inline]
+VarName: VarName = <MixedId> => VarName(<>);
+CtorName: CtorName = {
     "+" <"UpperId"> => {
-        let mut s = String::from("+"); s += <>; s
+        let mut s = String::from("+"); s += <>; CtorName(s)
     },
-    "pack" => String::from("pack"),
+    "pack" => CtorName(String::from("pack")),
 };
-DtorName: String = {
+DtorName: DtorName = {
     "." <"LowerId"> => {
-        let mut s = String::from("."); s += <>; s
+        let mut s = String::from("."); s += <>; DtorName(s)
     },
-    "@" => String::from("@"),
+    "@" => DtorName(String::from("@")),
 };
 
-NameDef<T>: NameDef = {
-    <T> => NameDef(<>.into()),
-};
-
-NameRef<T>: NameRef = {
-    (<(<UpperId> "::")*> <T>) => NameRef (<>.0, <>.1),
-};
+NameDef<T>: NameDef<T> = <T> => NameDef(<>);
+NameRef<T>: NameRef<T> = <path:(<ModName> "::")*> <inner:T> => NameRef(path, inner);
 
 //* --------------------------------- Pattern -------------------------------- */
 
 #[inline]
-PatternId: PatternId = {
-    <Sp<Pattern>> => ar.pattern(<>),
-}
+PatternId: PatternId = <Sp<Pattern>> => ar.pattern(<>);
 Pattern: Pattern = {
     "(" <Pattern> ")" => <>.into(),
-    <NameDef<MixedId>> => <>.into(),
+    <NameDef<VarName>> => <>.into(),
     "(" <term:PatternId> ":" <ty:TermId> ")" => Annotation {
         term, ty,
     }.into(),
@@ -181,9 +176,7 @@ CoMatcher: CoMatcher<TermId> = {
 };
 
 #[inline]
-TermGen<T>: TermId = {
-    <Sp<T>> => ar.term(<>),
-}
+TermGen<T>: TermId = <Sp<T>> => ar.term(<>);
 
 #[inline]
 TermId: TermId = <TermGen<Term>>;
@@ -251,7 +244,7 @@ TermAtom: Term = {
         term, ty,
     }.into(),
     "_" => Hole.into(),
-    <NameRef<MixedId>> => <>.into(),
+    <NameRef<VarName>> => <>.into(),
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermAtomId> => Force(<>).into(),
     "ret" <TermAtomId> => Return(<>).into(),
@@ -269,7 +262,7 @@ pub SingleTerm: TermId = TermId;
 
 // #[inline]
 TypeDef: TypeDef = {
-    <head:TypeDefHead> <name:NameDef<MixedId>> <params:PatternId*>
+    <head:TypeDefHead> <name:NameDef<VarName>> <params:PatternId*>
         <arms:("where" <TypeArm*>)?>
     "end" => TypeDef {
         head, name, params, arms,
@@ -281,9 +274,13 @@ TypeDefHead: TypeDefHead = {
     "codata" => TypeDefHead::CoData,
 };
 // #[inline]
-TypeArmName: NameDef = { NameDef<CtorName>, NameDef<DtorName>, };
+TypeArmName: TypeArmName = {
+    <CtorName> => <>.into(),
+    <DtorName> => <>.into(),
+};
+#[inline]
 TypeArm: TypeArm = {
-    "|" <name:TypeArmName> <args:SepByDelim<"(", ",", <TermId>, ")">>
+    "|" <name:NameDef<TypeArmName>> <args:SepByDelim<"(", ",", <TermId>, ")">>
     <out:(":" <TermId>)?> => TypeArm {
         name, args, out,
     },
@@ -295,9 +292,9 @@ DefineHead: () = { "define", "alias", };
 DefineEnd: () = { "end", ";", };
 
 UseDef: UseDef = {
-    <NameRef<MixedId>> => <>.into(),
+    <NameRef<VarName>> => <>.into(),
     ".." => UseAll.into(),
-    <path:NameRef<UpperId>>
+    <path:NameRef<ModName>>
     <cluster:SepByDelim<"(", ",", UseDef, ")">> => UseCluster {
         path, cluster,
     }.into(),
@@ -306,7 +303,7 @@ UseDef: UseDef = {
 Declaration: Declaration = {
     <TypeDef> => <>.into(),
     DefineHead <GenBind> DefineEnd => Define(<>).into(),
-    "module" <name:NameDef<UpperId>> "where"
+    "module" <name:NameDef<ModName>> "where"
         <top:TopLevel>
     "end" => Module {
         name, top,
