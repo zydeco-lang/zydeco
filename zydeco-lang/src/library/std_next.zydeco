@@ -183,7 +183,7 @@ module Std where
     
     def rec fn get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
       match xs
-      | +Nil() -> ret None()
+      | +Nil() -> ret +None()
       | +Cons(hd, tl) ->
         do minus1 <- ! sub index 1;
         ! if~ @(F(Option A)) {! int_eq 0 index} {ret +Some(hd)} {

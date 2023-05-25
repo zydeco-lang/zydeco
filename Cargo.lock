@@ -1669,6 +1669,7 @@ dependencies = [
  "logos",
  "regex",
  "slotmap",
+ "thiserror",
  "unindent",
  "zydeco-derive",
  "zydeco-utils",

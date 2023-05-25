@@ -3,6 +3,7 @@
 
 pub mod files {
     pub mod driver;
+    pub mod err;
 }
 
 pub mod textual {
@@ -16,6 +17,7 @@ pub mod textual {
         pub use parser_impl::*;
     }
     pub mod escape;
+    pub mod err;
 
     #[cfg(test)]
     mod tests;

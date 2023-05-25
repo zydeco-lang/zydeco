@@ -1,15 +1,15 @@
+use super::err::SurfaceError;
 use crate::textual::{
-    arena::Arena,
-    lexer::{Lexer, Tok},
-    parser::TopLevelParser,
-    syntax::TopLevel,
+    arena::Arena, err::ParseError, lexer::Lexer, parser::TopLevelParser, syntax::TopLevel,
 };
 use codespan_reporting::files::SimpleFiles;
 use std::{
     collections::HashMap,
     fmt::{self, Display},
     path::{Path, PathBuf},
+    rc::Rc,
 };
+use zydeco_utils::span::FileInfo;
 
 pub struct FileLoc {
     pub parent: PathBuf,
@@ -49,19 +49,37 @@ impl Driver {
         driver
     }
     // HACK: add error handling
-    pub fn parse_file(path: impl AsRef<Path>) -> Result<FileParsedMeta, String> {
+    pub fn parse_file(path: impl AsRef<Path>) -> Result<FileParsedMeta, SurfaceError> {
+        // path searching
         let path = path.as_ref();
-        let source = std::fs::read_to_string(&path).unwrap();
+        // HACK: search for file in search paths
+        let source = std::fs::read_to_string(&path).map_err(|_| SurfaceError::PathNotFound {
+            searched: vec![],
+            path: path.to_path_buf(),
+        })?;
         let loc = FileLoc {
-            parent: path.parent().unwrap().into(),
-            name: path.file_name().unwrap().into(),
+            parent: path
+                .parent()
+                .ok_or_else(|| SurfaceError::PathNotFileOrUnderRoot { path: path.to_path_buf() })?
+                .into(),
+            name: path
+                .file_name()
+                .ok_or_else(|| SurfaceError::PathNotFileOrUnderRoot { path: path.to_path_buf() })?
+                .into(),
         };
+
+        // parsing and span mapping
         let mut arena = Arena::default();
-        let parsed = FileParsed {
-            deps: vec![],
-            top: TopLevelParser::new().parse(&source, &mut arena, Lexer::new(&source)).unwrap(),
-            arena,
-        };
+        let file_info = FileInfo::new(&source, Rc::new(path.to_path_buf()));
+        let top = TopLevelParser::new().parse(&source, &mut arena, Lexer::new(&source)).map_err(
+            |error| {
+                SurfaceError::ParseError(ParseError { error, file_info: &file_info }.to_string())
+            },
+        )?;
+        arena.span_map(&file_info);
+
+        // assemble
+        let parsed = FileParsed { deps: vec![], top, arena };
         Ok(FileParsedMeta { loc, source, parsed })
     }
     pub fn add_file_parsed(&mut self, FileParsedMeta { loc, source, parsed }: FileParsedMeta) {
@@ -70,23 +88,17 @@ impl Driver {
     }
 
     pub fn std() -> FileParsedMeta {
-        Self::parse_file("zydeco-lang/src/library/std_next.zydeco").unwrap()
+        Self::parse_file("zydeco-lang/src/library/std_next.zydeco")
+            .unwrap_or_else(|e| panic!("{}", e))
     }
-}
-
-#[derive(Debug)]
-pub enum Error<'input> {
-    PathNotFound { searched: Vec<PathBuf>, path: PathBuf },
-    PathNotFileOrUnderRoot { path: PathBuf },
-    ParseError { path: PathBuf, error: lalrpop_util::ParseError<u32, Tok<'input>, &'input str> },
 }
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
-    // #[test]
-    // fn it_works() {
-    //     std::env::set_current_dir("../../").unwrap();
-    //     let _driver = Driver::new();
-    // }
+    use super::*;
+    #[test]
+    fn it_works() {
+        std::env::set_current_dir("../../").unwrap();
+        let _driver = Driver::new();
+    }
 }
