@@ -141,10 +141,10 @@ Pattern: Pattern = {
         term, ty,
     }.into(),
     "_" => Hole.into(),
-    <name:NameRef<CtorName>>
-    <args:SepByDelim<"(", ",", <PatternId>, ")">> => CtorPattern {
-        name, args,
-    }.into(),
+    // <name:NameRef<CtorName>>
+    // <args:SepByDelim<"(", ",", <PatternId>, ")">> => CtorPattern {
+    //     name, args,
+    // }.into(),
 };
 
 //* ---------------------------------- Term ---------------------------------- */
@@ -165,8 +165,10 @@ GenBind: GenBind = {
 LetSep: () = { ";", "in", };
 
 Matcher: Matcher<TermId> = {
-    "|" <binder:PatternId> "->" <tail:TermId> => Matcher {
-        binder, tail
+    "|" <name:NameRef<CtorName>>
+        <binders:SepByDelim<"(", ",", <PatternId>, ")">>
+    "->" <tail:TermId> => Matcher {
+        name, binders, tail
     },
 };
 

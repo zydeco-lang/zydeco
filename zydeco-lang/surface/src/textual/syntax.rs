@@ -21,17 +21,17 @@ pub struct Hole;
 
 /* --------------------------------- Pattern -------------------------------- */
 
-pub struct CtorPattern {
-    pub name: NameRef,
-    pub args: Vec<PatternId>,
-}
+// pub struct CtorPattern {
+//     pub name: NameRef,
+//     pub args: Vec<PatternId>,
+// }
 
 #[derive(IntoEnum)]
 pub enum Pattern {
     Var(NameDef),
     Ann(Annotation<PatternId, TermId>),
     Hole(Hole),
-    CtorPattern(CtorPattern),
+    // CtorPattern(CtorPattern),
 }
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -89,7 +89,8 @@ pub struct Match<Tail> {
     pub arms: Vec<Matcher<Tail>>,
 }
 pub struct Matcher<Tail> {
-    pub binder: PatternId,
+    pub name: NameRef,
+    pub binders: Vec<PatternId>,
     pub tail: Tail,
 }
 
