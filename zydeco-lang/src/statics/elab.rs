@@ -232,6 +232,17 @@ impl Elaboration<ps::Type> for Type {
                 }
                 t.inner
             }
+            ps::Type::TypeAbs(ps::TypeAbs { params: params_, body: t }) => {
+                let mut params = vec![];
+                for (tvar, kd) in params_ {
+                    let kd = kd.ok_or_else(|| TyckErrorItem::NeedAnnotation {
+                        content: format!("type abstraction elabrotion"),
+                    })?;
+                    params.push(Elaboration::elab((tvar, kd))?);
+                }
+                let t = t.try_map(Elaboration::elab)?;
+                TypeAbs { params, body: rc!(t) }.into()
+            }
             ps::Type::Hole(ps::Hole) => Hole.into(),
         })
     }

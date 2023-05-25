@@ -123,6 +123,9 @@ Type: Type = {
     "exists" <param:TypePattern+> "." <ty:Box<Sp<TypeArrow>>> => {
         Exists { param, ty }.into()
     },
+    "type" <params:TypePattern+> "." <body:Box<Sp<TypeArrow>>> => {
+        TypeAbs { params, body }.into()
+    },
     TypeArrow,
 };
 
@@ -340,6 +343,7 @@ extern {
         "do" => Tok::Do,
         "ret" => Tok::Ret,
         "fn" => Tok::Fn,
+        "type" => Tok::Type,
         "rec" => Tok::Rec,
         "match" => Tok::Match,
         "comatch" => Tok::Comatch,

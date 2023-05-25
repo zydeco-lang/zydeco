@@ -46,6 +46,7 @@ pub enum Type {
     Arrow(Arrow<BoxType>),
     Forall(Forall<Vec<TypePattern>, BoxType>),
     Exists(Exists<Vec<TypePattern>, BoxType>),
+    TypeAbs(TypeAbs<TypePattern, BoxType>),
     Hole(Hole),
 }
 pub type BoxType = Box<Sp<Type>>;

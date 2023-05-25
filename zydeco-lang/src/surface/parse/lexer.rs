@@ -49,6 +49,8 @@ pub enum Tok<'input> {
     Ret,
     #[token("fn")]
     Fn,
+    #[token("type")]
+    Type,
     #[token("rec")]
     Rec,
     #[token("match")]
@@ -132,13 +134,14 @@ impl<'input> Display for Tok<'input> {
             Tok::Do => write!(f, "do"),
             Tok::Ret => write!(f, "ret"),
             Tok::Fn => write!(f, "fn"),
+            Tok::Type => write!(f, "type"),
             Tok::Rec => write!(f, "rec"),
             Tok::Match => write!(f, "match"),
             Tok::Comatch => write!(f, "comatch"),
             Tok::Forall => write!(f, "Forall"),
             Tok::Exists => write!(f, "Exists"),
             Tok::At => write!(f, "@"),
-            Tok::Pack => write!(f, "exists"),
+            Tok::Pack => write!(f, "pack"),
             Tok::NumLit(s) => write!(f, "NumLiteral({})", s),
             Tok::StrLit(s) => write!(f, "StrLiteral({})", s),
             Tok::CharLit(s) => write!(f, "CharLiteral({})", s),

@@ -76,6 +76,21 @@ where
     }
 }
 
+impl<TyV, Ty> SpanHolder for TypeAbs<TyV, Ty>
+where
+    TyV: TyVarT + SpanHolder,
+    Ty: TypeT + SpanHolder,
+{
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut Span) + Clone,
+    {
+        let TypeAbs { params, body } = self;
+        params.span_map_mut(f.clone());
+        body.span_map_mut(f);
+    }
+}
+
 impl<B> SpanHolder for Thunk<B>
 where
     B: ComputationT + SpanHolder,
