@@ -11,20 +11,29 @@ use std::{
 };
 use zydeco_utils::span::FileInfo;
 
-pub struct FileLoc {
-    pub parent: PathBuf,
-    pub name: PathBuf,
-}
+pub struct FileLoc(pub PathBuf);
 impl Display for FileLoc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.parent.join(&self.name).display())
+        write!(f, "{}", self.0.display())
     }
 }
 
 pub type FileId = usize;
 
-pub struct FileParsed<Dep> {
-    pub deps: Vec<Dep>,
+pub enum Project {
+    Managed,
+    Root,
+    RootNoStd,
+}
+impl Default for Project {
+    fn default() -> Self {
+        Self::Managed
+    }
+}
+
+pub struct FileParsed {
+    pub project: Project,
+    pub deps: Vec<String>,
     pub top: TopLevel,
     pub arena: Arena,
 }
@@ -32,12 +41,12 @@ pub struct FileParsed<Dep> {
 pub struct FileParsedMeta {
     pub loc: FileLoc,
     pub source: String,
-    pub parsed: FileParsed<String>,
+    pub parsed: FileParsed,
 }
 
 pub struct Driver {
     pub files: SimpleFiles<FileLoc, String>,
-    pub parsed_map: HashMap<FileId, FileParsed<String>>,
+    pub parsed_map: HashMap<FileId, FileParsed>,
 }
 
 impl Driver {
@@ -48,25 +57,14 @@ impl Driver {
         driver.add_file_parsed(Self::std());
         driver
     }
-    // HACK: add error handling
     pub fn parse_file(path: impl AsRef<Path>) -> Result<FileParsedMeta, SurfaceError> {
-        // path searching
+        // read file
         let path = path.as_ref();
-        // HACK: search for file in search paths
         let source = std::fs::read_to_string(&path).map_err(|_| SurfaceError::PathNotFound {
             searched: vec![],
             path: path.to_path_buf(),
         })?;
-        let loc = FileLoc {
-            parent: path
-                .parent()
-                .ok_or_else(|| SurfaceError::PathNotFileOrUnderRoot { path: path.to_path_buf() })?
-                .into(),
-            name: path
-                .file_name()
-                .ok_or_else(|| SurfaceError::PathNotFileOrUnderRoot { path: path.to_path_buf() })?
-                .into(),
-        };
+        let loc = FileLoc(path.to_path_buf());
 
         // parsing and span mapping
         let mut arena = Arena::default();
@@ -78,8 +76,20 @@ impl Driver {
         )?;
         arena.span_map(&file_info);
 
+        // processing project and dependency specs
+        let project = match &arena.project {
+            Some(project) => match project.as_str() {
+                "managed" => Project::Managed,
+                "root" => Project::Root,
+                "root_no_std" => Project::RootNoStd,
+                _ => Err(SurfaceError::InvalidProject)?,
+            },
+            None => Default::default(),
+        };
+        let deps = arena.deps.clone();
+
         // assemble
-        let parsed = FileParsed { deps: vec![], top, arena };
+        let parsed = FileParsed { project, deps, top, arena };
         Ok(FileParsedMeta { loc, source, parsed })
     }
     pub fn add_file_parsed(&mut self, FileParsedMeta { loc, source, parsed }: FileParsedMeta) {

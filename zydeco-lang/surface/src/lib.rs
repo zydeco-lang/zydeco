@@ -4,6 +4,7 @@
 pub mod files {
     pub mod driver;
     pub mod err;
+    pub mod config;
 }
 
 pub mod textual {
@@ -24,4 +25,5 @@ pub mod textual {
 
 pub mod binded {
     pub mod resolver;
+    pub mod syntax;
 }

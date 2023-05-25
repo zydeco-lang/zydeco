@@ -292,11 +292,9 @@ UseDef: UseDef = <NameRef<UseEnum>> => UseDef(<>);
 Declaration: Declaration = {
     <TypeDef> => <>.into(),
     DefineHead <GenBind> DefineEnd => Define(<>).into(),
-    "module" <name:NameDef<ModName>> "where"
-        <top:TopLevel>
-    "end" => Module {
-        name, top,
-    }.into(),
+    "module" <name:NameDef<ModName>>
+        <top:("where" <TopLevel>)?>
+    "end" => Module { name, top }.into(),
     "use" <UseDef> "end" => <>.into(),
     "main" <TermId> "end" => Main(<>).into(),
 };

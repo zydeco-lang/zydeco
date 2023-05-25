@@ -11,6 +11,8 @@ slotmap::new_key_type! {
 pub struct Arena {
     pub patterns: SlotMap<PatternId, Sp<Pattern>>,
     pub terms: SlotMap<TermId, Sp<Term>>,
+    pub deps: Vec<String>,
+    pub project: Option<String>,
 }
 
 impl Arena {

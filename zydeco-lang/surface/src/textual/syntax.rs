@@ -172,7 +172,7 @@ pub struct Define(pub GenBind);
 
 pub struct Module {
     pub name: NameDef<ModName>,
-    pub top: TopLevel,
+    pub top: Option<TopLevel>,
 }
 
 pub struct UseAll;
