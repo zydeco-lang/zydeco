@@ -5,7 +5,7 @@ use thiserror::Error;
 
 #[derive(Clone, Debug)]
 pub struct TyckError {
-    pub item: Span<TyckErrorItem>,
+    pub item: Sp<TyckErrorItem>,
     pub trace: Trace,
 }
 
@@ -79,7 +79,7 @@ pub struct Frame {
     pub blame: String,
     pub context: String,
     pub term: String,
-    pub info: SpanInfo,
+    pub info: Span,
 }
 
 impl fmt::Display for Frame {

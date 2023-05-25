@@ -18,7 +18,7 @@ use std::{path::PathBuf, rc::Rc};
 pub struct Zydeco;
 
 impl Zydeco {
-    pub fn std() -> Result<Span<ps::TopLevel>, String> {
+    pub fn std() -> Result<Sp<ps::TopLevel>, String> {
         let source = include_str!("library/std.zydeco");
         let std_path: PathBuf = "zydeco-lang/src/library/std.zydeco".into();
         let file_info = FileInfo::new(&source, Rc::new(std_path));
@@ -35,7 +35,7 @@ impl Zydeco {
 pub struct ZydecoFile;
 
 impl ZydecoFile {
-    pub fn parse(paths: Vec<PathBuf>) -> Result<Span<ps::TopLevel>, String> {
+    pub fn parse(paths: Vec<PathBuf>) -> Result<Sp<ps::TopLevel>, String> {
         let mut top = Zydeco::std()?;
         for path in paths {
             let source = std::fs::read_to_string(&path).map_err(|e| format!("{}", e))?;
@@ -43,7 +43,7 @@ impl ZydecoFile {
         }
         Ok(top)
     }
-    pub fn parse_src(source: &str, path: PathBuf) -> Result<Span<ps::TopLevel>, String> {
+    pub fn parse_src(source: &str, path: PathBuf) -> Result<Sp<ps::TopLevel>, String> {
         let file_info = FileInfo::new(source, Rc::new(path));
         let p = ZydecoParser::new()
             .parse(source, Lexer::new(source))
@@ -53,11 +53,11 @@ impl ZydecoFile {
             });
         Ok(p)
     }
-    pub fn elab(p: Span<ps::TopLevel>) -> Result<Span<ss::Program>, String> {
+    pub fn elab(p: Sp<ps::TopLevel>) -> Result<Sp<ss::Program>, String> {
         let p = Elaboration::elab(p).map_err(|e| format!("{}", e))?;
         Ok(p)
     }
-    pub fn tyck(m: Span<ss::Program>) -> Result<(), String> {
+    pub fn tyck(m: Sp<ss::Program>) -> Result<(), String> {
         m.syn(Ctx::default()).map_err(|e| format!("{}", e))?;
         Ok(())
     }
@@ -88,7 +88,7 @@ pub struct ZydecoExpr {
 impl ZydecoExpr {
     pub fn new() -> Self {
         let std = Zydeco::std().unwrap();
-        let std: Span<ss::Module> = Elaboration::elab(std).unwrap();
+        let std: Sp<ss::Module> = Elaboration::elab(std).unwrap();
         let Seal(ctx) = std.syn(Ctx::default()).expect("std import failed");
         let std: ls::Module = std.inner.into();
         let mut input = std::io::empty();
@@ -97,14 +97,14 @@ impl ZydecoExpr {
         std.eval(&mut runtime);
         Self { ctx, env: runtime.env }
     }
-    pub fn parse(source: &str) -> Result<Span<ps::Term>, String> {
+    pub fn parse(source: &str) -> Result<Sp<ps::Term>, String> {
         TermSpanParser::new().parse(source, Lexer::new(source)).map_err(|e| e.to_string())
     }
-    pub fn elab(val: Span<ps::Term>) -> Result<Span<ss::Term>, String> {
+    pub fn elab(val: Sp<ps::Term>) -> Result<Sp<ss::Term>, String> {
         let v = Elaboration::elab(val).map_err(|e| format!("{}", e))?;
         Ok(v)
     }
-    pub fn tyck(&self, t: Span<ss::Term>) -> Result<ss::Type, String> {
+    pub fn tyck(&self, t: Sp<ss::Term>) -> Result<ss::Type, String> {
         tyck::syn_term(t, self.ctx.clone()).map_err(|e| format!("{}", e))
     }
     pub fn link_value(val: &ss::TermValue) -> ls::SynVal {

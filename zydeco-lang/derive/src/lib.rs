@@ -147,7 +147,7 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
     let gen = quote!(
         impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics #where_clause
         {
-            fn span_map_mut<F>(&mut self, f: F) where F: Fn(&mut crate::utils::span::SpanInfo) + Clone,
+            fn span_map_mut<F>(&mut self, f: F) where F: Fn(&mut crate::utils::span::Span) + Clone,
             { #span_map_mut_body }
         }
     );

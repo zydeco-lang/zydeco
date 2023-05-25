@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::*;
 
-impl TypeCheck for Span<TermComputation> {
+impl TypeCheck for Sp<TermComputation> {
     type Ctx = Ctx;
     type Out = Type;
     fn syn_step(

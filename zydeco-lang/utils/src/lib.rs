@@ -11,6 +11,6 @@ pub mod prelude {
         monoid::Monoid,
         never::Never,
         rc,
-        span::{Span, SpanHolder, SpanInfo, SpanView},
+        span::{Sp, Span, SpanHolder, SpanView},
     };
 }

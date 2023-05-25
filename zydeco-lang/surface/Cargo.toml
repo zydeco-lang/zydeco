@@ -8,10 +8,10 @@ description = "surface syntax for zydeco"
 regex = "1"
 logos = "0.13"
 lalrpop-util = "0.20"
-codespan = { version = "0.11", features = ["serialization"] }
 codespan-reporting = "0.11"
 slotmap = { version = "1", features = ["serde"] }
 unindent = "0.2"
+zydeco-utils = { path = "../utils" }
 zydeco-derive = { path = "../derive" }
 
 # build-time dependency on the lalrpop library:

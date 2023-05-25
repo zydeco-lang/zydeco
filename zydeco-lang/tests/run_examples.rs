@@ -20,7 +20,7 @@ fn wrapper<T>(r: Result<T, String>) {
     }
 }
 
-fn till_check(base: &str, f: &[&str]) -> Result<Span<ss::Program>, String> {
+fn till_check(base: &str, f: &[&str]) -> Result<Sp<ss::Program>, String> {
     let path = PathBuf::from(base);
     let paths = f
         .iter()

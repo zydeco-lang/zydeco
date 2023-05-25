@@ -1,5 +1,5 @@
 use super::syntax::*;
-use crate::{rc, utils::span::SpanInfo};
+use crate::{rc, utils::span::Span};
 use std::collections::HashMap;
 
 pub(super) struct Builtin {
@@ -15,7 +15,7 @@ impl Builtin {
     fn gen(self) -> (TermV, Value) {
         let Builtin { name, arity, behavior } = self;
         (
-            TermV::new(name.to_string(), SpanInfo::dummy()),
+            TermV::new(name.to_string(), Span::dummy()),
             Thunk(rc!(Prim { arity, body: *behavior }.into())).into(),
         )
     }

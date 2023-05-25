@@ -12,9 +12,9 @@ pub use crate::syntax::{KindBase, TypeArity};
 #[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum Kind {
     Base(KindBase),
-    TypeArity(TypeArity<Span<Kind>, BoxKind>),
+    TypeArity(TypeArity<Sp<Kind>, BoxKind>),
 }
-pub type BoxKind = Box<Span<Kind>>;
+pub type BoxKind = Box<Sp<Kind>>;
 impl KindT for Kind {}
 
 /* ---------------------------------- Type ---------------------------------- */
@@ -29,10 +29,10 @@ pub enum NeutralVar {
 impl TyVarT for NeutralVar {}
 #[derive(IntoEnum, FmtArgs, Clone, Debug)]
 pub enum SynType {
-    TypeAbs(TypeAbs<(TypeV, Span<Kind>), RcType>),
+    TypeAbs(TypeAbs<(TypeV, Sp<Kind>), RcType>),
     TypeApp(TypeApp<NeutralVar, RcType>),
-    Forall(Forall<(TypeV, Span<Kind>), RcType>),
-    Exists(Exists<(TypeV, Span<Kind>), RcType>),
+    Forall(Forall<(TypeV, Sp<Kind>), RcType>),
+    Exists(Exists<(TypeV, Sp<Kind>), RcType>),
     AbstVar(AbstVar),
     Hole(Hole),
 }
@@ -41,7 +41,7 @@ pub enum SynType {
 pub struct Type {
     pub synty: SynType,
 }
-pub type RcType = Rc<Span<Type>>;
+pub type RcType = Rc<Sp<Type>>;
 impl TypeT for Type {}
 
 macro_rules! impl_from {
@@ -53,10 +53,10 @@ macro_rules! impl_from {
         }
     };
 }
-impl_from!(TypeAbs<(TypeV, Span<Kind>), RcType>);
+impl_from!(TypeAbs<(TypeV, Sp<Kind>), RcType>);
 impl_from!(TypeApp<NeutralVar, RcType>);
-impl_from!(Forall<(TypeV, Span<Kind>), RcType>);
-impl_from!(Exists<(TypeV, Span<Kind>), RcType>);
+impl_from!(Forall<(TypeV, Sp<Kind>), RcType>);
+impl_from!(Exists<(TypeV, Sp<Kind>), RcType>);
 impl_from!(AbstVar);
 impl_from!(Hole);
 impl From<TypeV> for Type {
@@ -76,7 +76,7 @@ pub enum TermValue {
     Literal(Literal),
     Pack(Pack<RcType, RcValue>),
 }
-pub type RcValue = Rc<Span<TermValue>>;
+pub type RcValue = Rc<Sp<TermValue>>;
 impl ValueT for TermValue {}
 
 #[derive(IntoEnum, FmtArgs, Clone, Debug)]
@@ -101,11 +101,11 @@ pub enum TermComputation {
     Match(Match<CtorV, TermV, RcValue, RcComp>),
     Comatch(Comatch<DtorV, TermV, RcComp>),
     Dtor(Dtor<RcComp, DtorV, RcValue>),
-    TyAbsTerm(Abs<(TypeV, Option<Span<Kind>>), RcComp>),
+    TyAbsTerm(Abs<(TypeV, Option<Sp<Kind>>), RcComp>),
     TyAppTerm(App<RcComp, RcType>),
     MatchPack(MatchPack<RcValue, TypeV, TermV, RcComp>),
 }
-pub type RcComp = Rc<Span<TermComputation>>;
+pub type RcComp = Rc<Sp<TermComputation>>;
 impl ComputationT for TermComputation {}
 
 #[derive(IntoEnum, FmtArgs, Clone, Debug)]
@@ -128,13 +128,13 @@ pub struct Module {
 
 #[derive(Clone, Debug)]
 pub struct Program {
-    pub module: Span<Module>,
-    pub entry: Span<TermComputation>,
+    pub module: Sp<Module>,
+    pub entry: Sp<TermComputation>,
 }
 
 pub mod prelude {
     use super::*;
-    pub type Data = super::Data<TypeV, Span<Kind>, CtorV, RcType>;
-    pub type Codata = super::Codata<TypeV, Span<Kind>, DtorV, RcType>;
-    pub type Alias = super::Alias<TypeV, Span<Kind>, RcType>;
+    pub type Data = super::Data<TypeV, Sp<Kind>, CtorV, RcType>;
+    pub type Codata = super::Codata<TypeV, Sp<Kind>, DtorV, RcType>;
+    pub type Alias = super::Alias<TypeV, Sp<Kind>, RcType>;
 }

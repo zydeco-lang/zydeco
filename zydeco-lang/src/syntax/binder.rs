@@ -1,7 +1,7 @@
 use super::sort::*;
 use crate::utils::{
     fmt::*,
-    span::{Span, SpanHolder, SpanInfo, SpanView},
+    span::{Sp, Span, SpanHolder, SpanView},
 };
 use std::{
     cmp::{Eq, PartialEq},
@@ -13,8 +13,8 @@ use std::{
 /// Unqualified names of module, type and term variables. Used at definition sites.
 #[derive(Clone, Debug)]
 pub struct NameDef {
-    pub ident: Span<String>,
-    pub info: SpanInfo,
+    pub ident: Sp<String>,
+    pub info: Span,
 }
 impl<Kd: KindT> TyVarT for (NameDef, Kd) {}
 impl TyVarT for NameDef {}
@@ -25,9 +25,9 @@ impl VarT for NameDef {}
 /// (There's no plan for supporting qualified Ctors and Dtors.)
 #[derive(Clone, Debug)]
 pub struct NameRef {
-    pub path: Vec<Span<String>>,
-    pub ident: Span<String>,
-    pub info: SpanInfo,
+    pub path: Vec<Sp<String>>,
+    pub ident: Sp<String>,
+    pub info: Span,
 }
 impl<Kd: KindT> TyVarT for (NameRef, Kd) {}
 impl TyVarT for NameRef {}
@@ -37,8 +37,8 @@ impl VarT for NameRef {}
 // A view for the name
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NameView<'a> {
-    pub path: &'a [Span<String>],
-    pub ident: &'a Span<String>,
+    pub path: &'a [Sp<String>],
+    pub ident: &'a Sp<String>,
 }
 
 pub trait NameT {
@@ -81,14 +81,14 @@ mod span {
     use super::*;
 
     impl SpanView for NameDef {
-        fn span(&self) -> &SpanInfo {
+        fn span(&self) -> &Span {
             &self.info
         }
     }
     impl SpanHolder for NameDef {
         fn span_map_mut<F>(&mut self, f: F)
         where
-            F: Fn(&mut SpanInfo) + Clone,
+            F: Fn(&mut Span) + Clone,
         {
             self.ident.span_map_mut(f.clone());
             f(&mut self.info);
@@ -96,14 +96,14 @@ mod span {
     }
 
     impl SpanView for NameRef {
-        fn span(&self) -> &SpanInfo {
+        fn span(&self) -> &Span {
             &self.info
         }
     }
     impl SpanHolder for NameRef {
         fn span_map_mut<F>(&mut self, f: F)
         where
-            F: Fn(&mut SpanInfo) + Clone,
+            F: Fn(&mut Span) + Clone,
         {
             for p in &mut self.path {
                 p.span_map_mut(f.clone());
@@ -140,20 +140,20 @@ macro_rules! var {
         #[derive(Clone, Debug)]
         pub struct $Var<Id = String, Ty = ()> {
             name: Id,
-            info: SpanInfo,
+            info: Span,
             #[allow(unused)]
             ty: Ty,
         }
         impl<Id: AsRef<str> + Eq, Ty: Default> $Var<Id, Ty> {
-            pub fn new(name: Id, info: SpanInfo) -> Self {
+            pub fn new(name: Id, info: Span) -> Self {
                 Self { name, info, ty: Default::default() }
             }
             pub fn name(&self) -> &str {
                 self.name.as_ref()
             }
         }
-        impl From<Span<String>> for $Var {
-            fn from(span: Span<String>) -> Self {
+        impl From<Sp<String>> for $Var {
+            fn from(span: Sp<String>) -> Self {
                 Self { name: span.inner, info: span.info, ty: Default::default() }
             }
         }
@@ -179,14 +179,14 @@ macro_rules! var {
             }
         }
         impl SpanView for $Var {
-            fn span(&self) -> &SpanInfo {
+            fn span(&self) -> &Span {
                 &self.info
             }
         }
         impl SpanHolder for $Var {
             fn span_map_mut<F>(&mut self, f: F)
             where
-                F: Fn(&mut SpanInfo) + Clone,
+                F: Fn(&mut Span) + Clone,
             {
                 f(&mut self.info);
             }

@@ -1,8 +1,8 @@
 //! The surface syntax of zydeco is defined in this module.
 
 use super::arena::*;
-pub use codespan::Span;
 use zydeco_derive::IntoEnum;
+pub use zydeco_utils::span::Span;
 
 /* --------------------------------- Binder --------------------------------- */
 

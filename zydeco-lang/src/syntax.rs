@@ -12,7 +12,7 @@ use zydeco_derive::{IntoEnum, SpanHolder};
 /* ---------------------------------- Sort ---------------------------------- */
 
 pub mod sort {
-    use crate::utils::span::Span;
+    use crate::utils::span::Sp;
     use std::rc::Rc;
 
     macro_rules! sort {
@@ -21,7 +21,7 @@ pub mod sort {
             impl<T: $Sort> $Sort for Vec<T> {}
             impl<T: $Sort> $Sort for Box<T> {}
             impl<T: $Sort> $Sort for Rc<T> {}
-            impl<T: $Sort> $Sort for Span<T> {}
+            impl<T: $Sort> $Sort for Sp<T> {}
             impl<T: $Sort> $Sort for Option<T> {}
             impl $Sort for () {}
         };

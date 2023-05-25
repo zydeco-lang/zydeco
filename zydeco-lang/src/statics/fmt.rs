@@ -33,7 +33,7 @@ impl FmtArgs for TailGroup {
     }
 }
 
-impl FmtArgs for Abs<(TypeV, Option<Span<Kind>>), RcComp> {
+impl FmtArgs for Abs<(TypeV, Option<Sp<Kind>>), RcComp> {
     fn fmt_args(&self, fargs: Args) -> String {
         let Abs { param, body } = self;
         format!("fn {} -> {}", param.fmt_args(fargs), body.fmt_args(fargs))

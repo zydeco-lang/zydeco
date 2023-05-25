@@ -30,7 +30,7 @@ impl prelude::Alias {
     }
 }
 
-impl TypeCheck for Span<&prelude::Data> {
+impl TypeCheck for Sp<&prelude::Data> {
     type Ctx = Ctx;
     type Out = ();
 
@@ -59,7 +59,7 @@ impl TypeCheck for Span<&prelude::Data> {
     }
 }
 
-impl TypeCheck for Span<&prelude::Codata> {
+impl TypeCheck for Sp<&prelude::Codata> {
     type Ctx = Ctx;
     type Out = ();
 
@@ -89,7 +89,7 @@ impl TypeCheck for Span<&prelude::Codata> {
     }
 }
 
-impl TypeCheck for Span<&prelude::Alias> {
+impl TypeCheck for Sp<&prelude::Alias> {
     type Ctx = Ctx;
     type Out = Kind;
 
@@ -105,7 +105,7 @@ impl TypeCheck for Span<&prelude::Alias> {
     }
 }
 
-impl TypeCheck for Span<Module> {
+impl TypeCheck for Sp<Module> {
     type Ctx = Ctx;
     type Out = Seal<Ctx>;
     fn syn_step(

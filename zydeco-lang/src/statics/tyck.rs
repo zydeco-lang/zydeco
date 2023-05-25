@@ -13,10 +13,10 @@ use std::collections::HashSet;
 use TyckErrorItem::*;
 
 pub trait CtxT {
-    fn err(&self, span: &SpanInfo, item: TyckErrorItem) -> TyckError;
+    fn err(&self, span: &Span, item: TyckErrorItem) -> TyckError;
 }
 impl CtxT for () {
-    fn err(&self, span: &SpanInfo, item: TyckErrorItem) -> TyckError {
+    fn err(&self, span: &Span, item: TyckErrorItem) -> TyckError {
         TyckError { item: span.make(item), trace: Default::default() }
     }
 }
@@ -49,7 +49,7 @@ mod ctx {
         }
     }
     impl CtxT for Ctx {
-        fn err(&self, span: &SpanInfo, item: TyckErrorItem) -> TyckError {
+        fn err(&self, span: &Span, item: TyckErrorItem) -> TyckError {
             TyckError { item: span.make(item), trace: self.trace.clone() }
         }
     }
@@ -104,7 +104,7 @@ fn bool_test<E>(b: bool, f: impl FnOnce() -> E) -> Result<(), E> {
     b.then_some(()).ok_or_else(f)
 }
 
-pub(crate) fn syn_term(term: Span<Term>, ctx: Ctx) -> Result<Type, TyckError> {
+pub(crate) fn syn_term(term: Sp<Term>, ctx: Ctx) -> Result<Type, TyckError> {
     let span = term.span().clone();
     match term.inner() {
         Term::Value(t) => span.make(t).syn(ctx),
@@ -114,7 +114,7 @@ pub(crate) fn syn_term(term: Span<Term>, ctx: Ctx) -> Result<Type, TyckError> {
 
 pub struct Seal<T>(pub T);
 
-impl TypeCheck for Span<Program> {
+impl TypeCheck for Sp<Program> {
     type Ctx = Ctx;
     type Out = Seal<(Ctx, Type)>;
 
@@ -135,5 +135,5 @@ impl TypeCheck for Span<Program> {
 pub trait Lub<Rhs = Self> {
     type Ctx: Default;
     type Out;
-    fn lub(self, other: Rhs, ctx: Self::Ctx, span: &SpanInfo) -> Result<Self::Out, TyckError>;
+    fn lub(self, other: Rhs, ctx: Self::Ctx, span: &Span) -> Result<Self::Out, TyckError>;
 }

@@ -8,7 +8,7 @@ grammar<'input>(input: &'input str);
 
 //* --------------------------------- Module --------------------------------- */
 
-pub Zydeco: Span<TopLevel> = Span<TopLevel>;
+pub Zydeco: Sp<TopLevel> = Sp<TopLevel>;
 
 TopLevel: TopLevel = {
     <declarations:DeclSymbol<Declaration>*> => {
@@ -43,11 +43,11 @@ Declaration: Declaration = {
     "end" => Codata {
         name, params, dtors: dtors.unwrap_or_default(),
     }.into(),
-    "alias" <name:NameDef<UpperId>> <params:TypePattern*> "=" <ty:Box<Span<Type>>> "end" => Alias {
+    "alias" <name:NameDef<UpperId>> <params:TypePattern*> "=" <ty:Box<Sp<Type>>> "end" => Alias {
         name, params, ty,
     }.into(),
     "define" <gen:GenLet> DefineEnd => Define(gen).into(),
-    "main" <entry:Span<TermComputation>> "end" => Main {
+    "main" <entry:Sp<TermComputation>> "end" => Main {
         entry,
     }.into(),
 };
@@ -65,15 +65,15 @@ DefineEnd: () = {
     ";" => (),
 };
 
-DataBr: DataBr<CtorV, Span<Type>> = {
-    "|" <ctorv:CtorV> <tys:SepByDelim<"(", ",", <Span<Type>>, ")">> => {
+DataBr: DataBr<CtorV, Sp<Type>> = {
+    "|" <ctorv:CtorV> <tys:SepByDelim<"(", ",", <Sp<Type>>, ")">> => {
         DataBr { ctorv, tys }
     }
 };
 
-CodataBr: CodataBr<DtorV, Span<Type>> = {
-    "|" <dtorv:DtorV> <tys:SepByDelim<"(", ",", <Span<Type>>, ")">> ":"
-    <ty:Span<Type>> => {
+CodataBr: CodataBr<DtorV, Sp<Type>> = {
+    "|" <dtorv:DtorV> <tys:SepByDelim<"(", ",", <Sp<Type>>, ")">> ":"
+    <ty:Sp<Type>> => {
         CodataBr { dtorv, tys, ty }
     }
 };
@@ -81,12 +81,12 @@ CodataBr: CodataBr<DtorV, Span<Type>> = {
 //* --------------------------------- Pattern -------------------------------- */
 
 TypePattern: TypePattern = {
-    "(" <name:NameDef<UpperId>> <kind: (":" <Span<Kind>>)?> ")" => (name, kind),
+    "(" <name:NameDef<UpperId>> <kind: (":" <Sp<Kind>>)?> ")" => (name, kind),
     <NameDef<UpperId>> => (<>, None),
 };
 
 TermPattern: TermPattern = {
-    "(" <v:NameDef<LowerId>> <ty:(":" <Span<Type>>)?> ")" => (v, ty),
+    "(" <v:NameDef<LowerId>> <ty:(":" <Sp<Type>>)?> ")" => (v, ty),
     <NameDef<LowerId>> => (<>, None),
 };
 
@@ -102,7 +102,7 @@ Kind: Kind = {
 };
 
 KindArrow: Kind = {
-    <k:Box<Span<KindAtom>>> "->" <kd:Box<Span<KindArrow>>> => {
+    <k:Box<Sp<KindAtom>>> "->" <kd:Box<Sp<KindArrow>>> => {
         Arrow(k, kd).into()
     },
     KindAtom,
@@ -117,24 +117,24 @@ KindAtom: Kind = {
 //* ---------------------------------- Type ---------------------------------- */
 
 Type: Type = {
-    "forall" <param:TypePattern+> "." <ty:Box<Span<TypeArrow>>> => {
+    "forall" <param:TypePattern+> "." <ty:Box<Sp<TypeArrow>>> => {
         Forall { param, ty }.into()
     },
-    "exists" <param:TypePattern+> "." <ty:Box<Span<TypeArrow>>> => {
+    "exists" <param:TypePattern+> "." <ty:Box<Sp<TypeArrow>>> => {
         Exists { param, ty }.into()
     },
     TypeArrow,
 };
 
 TypeArrow: Type = {
-    <t:Box<Span<TypeApp>>> "->" <ty:Box<Span<Type>>> => {
+    <t:Box<Sp<TypeApp>>> "->" <ty:Box<Sp<Type>>> => {
         Arrow(t, ty).into()
     },
     TypeApp,
 };
 
 TypeApp: Type = {
-    <t:Box<Span<TypeApp>>> <ty:Box<Span<TypeAtom>>> => {
+    <t:Box<Sp<TypeApp>>> <ty:Box<Sp<TypeAtom>>> => {
         TypeApp(t, ty).into()
     },
     TypeAtom,
@@ -148,7 +148,7 @@ TypeAtom: Type = {
 
 //* ---------------------------------- Term ---------------------------------- */
 
-pub TermSpan: Span<Term> = Span<Term>;
+pub TermSpan: Sp<Term> = Sp<Term>;
 
 Term: Term = {
     <TermComputation> => <>.into(),
@@ -157,46 +157,46 @@ Term: Term = {
 
 TermValue: TermValue = {
     "(" <TermValue> ")" => <>.into(),
-    "(" <tv:Box<Span<TermValue>>> ":" <ty:Span<Type>> ")" => Annotation {
+    "(" <tv:Box<Sp<TermValue>>> ":" <ty:Sp<Type>> ")" => Annotation {
         term: tv,
         ty,
     }.into(),
     <NameRef<LowerId>> => <>.into(),
-    "{" <tc:Box<Span<TermComputation>>> "}" => Thunk(tc).into(),
-    <ctorv:CtorV> <args:SepByDelim<"(", ",", Span<TermValue>, ")">> => Ctor {
+    "{" <tc:Box<Sp<TermComputation>>> "}" => Thunk(tc).into(),
+    <ctorv:CtorV> <args:SepByDelim<"(", ",", Sp<TermValue>, ")">> => Ctor {
         ctorv, args,
     }.into(),
     <Literal> => <>.into(),
-    "pack" "(" <ty:Box<Span<Type>>> "," <body:Box<Span<TermValue>>> ")" => Pack {
+    "pack" "(" <ty:Box<Sp<Type>>> "," <body:Box<Sp<TermValue>>> ")" => Pack {
         ty, body,
     }.into(),
 };
 
 TermComputation: TermComputation = {
     TermComputationRight,
-    "let" <gen:GenLet> LetSep <body:Box<Span<TermComputation>>> => Let {
+    "let" <gen:GenLet> LetSep <body:Box<Sp<TermComputation>>> => Let {
         gen, body,
     }.into(),
     "do" <var:TermPattern> "<-"
-        <comp:Box<Span<TermComputation>>> ";"
-    <body:Box<Span<TermComputation>>> => Do {
+        <comp:Box<Sp<TermComputation>>> ";"
+    <body:Box<Sp<TermComputation>>> => Do {
         var, comp, body,
     }.into(),
-    "rec" <var:TermPattern> "->" <body:Box<Span<TermComputation>>> => Rec {
+    "rec" <var:TermPattern> "->" <body:Box<Sp<TermComputation>>> => Rec {
         var, body,
     }.into(),
-    "match" <scrut:Box<Span<TermValue>>> <arms:MatchBr*> "end" => Match {
+    "match" <scrut:Box<Sp<TermValue>>> <arms:MatchBr*> "end" => Match {
         scrut, arms,
     }.into(),
     "comatch" <arms:ComatchBr*> "end" => Comatch {
         arms,
     }.into(),
-    "fn" <param:Pattern*> "->" <body:Box<Span<TermComputation>>> => Abs {
+    "fn" <param:Pattern*> "->" <body:Box<Sp<TermComputation>>> => Abs {
         param, body,
     }.into(),
-    "match" <scrut:Box<Span<TermValue>>> 
+    "match" <scrut:Box<Sp<TermValue>>> 
     "|"? "pack" "(" <tvar:NameDef<UpperId>> "," <var:NameDef<LowerId>> ")" "->"
-        <body:Box<Span<TermComputation>>> 
+        <body:Box<Sp<TermComputation>>> 
     "end" => MatchPack {
         scrut, tvar, var, body,
     }.into(),
@@ -209,30 +209,30 @@ LetSep: () = {
 
 TermComputationRight: TermComputation = {
     TermComputationAtom,
-    <body:Box<Span<TermComputationRight>>> <arg:Box<Span<TermValue>>> => App {
+    <body:Box<Sp<TermComputationRight>>> <arg:Box<Sp<TermValue>>> => App {
         body, arg,
     }.into(),
-    <body:Box<Span<TermComputationRight>>> "@" "(" <arg:Box<Span<Type>>> ")" => App {
+    <body:Box<Sp<TermComputationRight>>> "@" "(" <arg:Box<Sp<Type>>> ")" => App {
         body, arg,
     }.into(),
-    <body:Box<Span<TermComputationRight>>> <dtorv:DtorV>
-    <args:SepByDelim<"(", ",", Span<TermValue>, ")">> => Dtor {
+    <body:Box<Sp<TermComputationRight>>> <dtorv:DtorV>
+    <args:SepByDelim<"(", ",", Sp<TermValue>, ")">> => Dtor {
         body, dtorv, args,
     }.into(),
 };
 
 TermComputationAtom: TermComputation = {
     "(" <TermComputation> ")" => <>.into(),
-    "(" <tc:Box<Span<TermComputation>>> ":" <ty:Span<Type>> ")" => Annotation {
+    "(" <tc:Box<Sp<TermComputation>>> ":" <ty:Sp<Type>> ")" => Annotation {
         term: tc, ty,
     }.into(),
-    "ret" <Box<Span<TermValue>>> => Ret(<>).into(),
-    "!" <Box<Span<TermValue>>> => Force(<>).into(),
+    "ret" <Box<Sp<TermValue>>> => Ret(<>).into(),
+    "!" <Box<Sp<TermValue>>> => Force(<>).into(),
 };
 
 GenLet: GenLet = {
     <rec:"rec"?> <fun:"fn"?> <var:NameDef<LowerId>> <params:Pattern*>
-    <ty:(":" <Span<Type>>)?> <def: ("=" <Box<Span<Term>>>)?> => GenLet {
+    <ty:(":" <Sp<Type>>)?> <def: ("=" <Box<Sp<Term>>>)?> => GenLet {
         rec: rec.is_some(),
         fun: fun.is_some(),
         name: (var, ty),
@@ -241,16 +241,16 @@ GenLet: GenLet = {
     }
 };
 
-MatchBr: Matcher<CtorV, NameDef, Span<TermComputation>> = {
+MatchBr: Matcher<CtorV, NameDef, Sp<TermComputation>> = {
     "|" <ctorv:CtorV> <vars:SepByDelim<"(", ",", NameDef<LowerId>, ")">> "->"
-    <body:Span<TermComputation>> => Matcher {
+    <body:Sp<TermComputation>> => Matcher {
         ctorv, vars, body
     }
 };
 
-ComatchBr: Comatcher<DtorV, NameDef, Span<TermComputation>> = {
+ComatchBr: Comatcher<DtorV, NameDef, Sp<TermComputation>> = {
     "|" <dtorv:DtorV> <vars:SepByDelim<"(", ",", NameDef<LowerId>, ")">> "->"
-    <body:Span<TermComputation>> => Comatcher {
+    <body:Sp<TermComputation>> => Comatcher {
         dtorv, vars, body
     }
 };
@@ -264,19 +264,19 @@ Literal: Literal = {
 //* ------------------------------- Identifiers ------------------------------ */
 
 NameDef<T>: NameDef = {
-    Span<(<Span<T>>)> => NameDef {
+    Sp<(<Sp<T>>)> => NameDef {
         ident: <>.inner, info: <>.info,
     },
 };
 
 NameRef<T>: NameRef = {
-    Span<(<(<Span<UpperId>> ".")*> <Span<T>>)> => NameRef {
+    Sp<(<(<Sp<UpperId>> ".")*> <Sp<T>>)> => NameRef {
         path: <>.inner.0, ident: <>.inner.1, info: <>.info,
     },
 };
 
-CtorV: CtorV = <Span<UpperId>> => <>.into();
-DtorV: DtorV = "." <Span<LowerId>> => <>.into();
+CtorV: CtorV = <Sp<UpperId>> => <>.into();
+DtorV: DtorV = "." <Sp<LowerId>> => <>.into();
 
 MixedId: String = {
     <UpperId> => <>,
@@ -295,8 +295,8 @@ Char: char = <s:"CharLit"> => escape::apply_char_escapes(s);
 //* -------------------------------- Utilities ------------------------------- */
 
 #[inline]
-Span<T>: Span<T> = {
-    <l:@L> <inner:T> <r:@R> => SpanInfo::new(l,r).make(inner)
+Sp<T>: Sp<T> = {
+    <l:@L> <inner:T> <r:@R> => Span::new(l,r).make(inner)
 };
 
 #[inline]

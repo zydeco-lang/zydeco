@@ -8,7 +8,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Arrow(r#in, out) = self;
         r#in.span_map_mut(f.clone());
@@ -23,7 +23,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let TypeArity { params, kd } = self;
         params.span_map_mut(f.clone());
@@ -38,7 +38,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let TypeApp { tvar, args } = self;
         tvar.span_map_mut(f.clone());
@@ -53,7 +53,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Forall { param, ty } = self;
         param.span_map_mut(f.clone());
@@ -68,7 +68,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Exists { param, ty } = self;
         param.span_map_mut(f.clone());
@@ -82,7 +82,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Thunk(body) = self;
         body.span_map_mut(f);
@@ -92,7 +92,7 @@ where
 impl SpanHolder for Literal {
     fn span_map_mut<F>(&mut self, _f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
     }
 }
@@ -104,7 +104,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Ctor { ctorv: ctor, args } = self;
         ctor.span_map_mut(f.clone());
@@ -119,7 +119,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Pack { ty, body: val } = self;
         ty.span_map_mut(f.clone());
@@ -133,7 +133,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Ret(arg) = self;
         arg.span_map_mut(f);
@@ -146,7 +146,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Force(arg) = self;
         arg.span_map_mut(f);
@@ -161,7 +161,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Let { var, def, body } = self;
         var.span_map_mut(f.clone());
@@ -178,7 +178,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Do { var, comp, body } = self;
         var.span_map_mut(f.clone());
@@ -194,7 +194,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Rec { var, body } = self;
         var.span_map_mut(f.clone());
@@ -211,7 +211,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Match { scrut, arms } = self;
         scrut.span_map_mut(f.clone());
@@ -231,7 +231,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Comatch { arms } = self;
         for Comatcher { dtorv: dtor, vars, body } in arms {
@@ -250,7 +250,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Dtor { body, dtorv: dtor, args } = self;
         body.span_map_mut(f.clone());
@@ -268,7 +268,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let MatchPack { scrut, tvar, var, body } = self;
         scrut.span_map_mut(f.clone());
@@ -287,7 +287,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Data { name, params, ctors } = self;
         name.span_map_mut(f.clone());
@@ -308,7 +308,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Codata { name, params, dtors } = self;
         name.span_map_mut(f.clone());
@@ -329,7 +329,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Alias { name, params, ty } = self;
         name.span_map_mut(f.clone());
@@ -345,7 +345,7 @@ where
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
-        F: Fn(&mut SpanInfo) + Clone,
+        F: Fn(&mut Span) + Clone,
     {
         let Define { name, def } = self;
         name.span_map_mut(f.clone());

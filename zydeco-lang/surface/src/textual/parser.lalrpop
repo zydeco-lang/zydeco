@@ -10,7 +10,7 @@ grammar<'input, 'arena>(
 //* --------------------------------- Tokens --------------------------------- */
 
 extern {
-    type Location = u32;
+    type Location = usize;
     
     enum Tok<'input> {
         "UpperId" => Tok::UpperIdent(<&'input str>),

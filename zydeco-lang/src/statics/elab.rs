@@ -7,12 +7,12 @@ pub trait Elaboration<T>: Sized {
     fn elab(value: T) -> Result<Self, Self::Error>;
 }
 
-impl<T, S> Elaboration<Span<T>> for Span<S>
+impl<T, S> Elaboration<Sp<T>> for Sp<S>
 where
     S: Elaboration<T>,
 {
     type Error = S::Error;
-    fn elab(value: Span<T>) -> Result<Self, Self::Error> {
+    fn elab(value: Sp<T>) -> Result<Self, Self::Error> {
         value.try_map(Elaboration::elab)
     }
 }
@@ -53,7 +53,7 @@ impl Elaboration<ps::Kind> for Kind {
         match kd {
             ps::Kind::Base(kd) => Ok(Kind::Base(kd)),
             ps::Kind::Arrow(ps::Arrow(k, kd)) => {
-                let kd: Span<Kind> = Elaboration::elab(*kd)?;
+                let kd: Sp<Kind> = Elaboration::elab(*kd)?;
                 match kd.inner {
                     Kind::Base(_) => Ok(TypeArity {
                         params: vec![k.try_map(Elaboration::elab)?],
@@ -71,8 +71,8 @@ impl Elaboration<ps::Kind> for Kind {
 }
 
 fn desugar_gen_let(
-    rec: bool, fun: bool, (var, ty): (NameDef, Option<Span<ps::Type>>), params: Vec<ps::Pattern>,
-    def: Option<Box<Span<ps::Term>>>,
+    rec: bool, fun: bool, (var, ty): (NameDef, Option<Sp<ps::Type>>), params: Vec<ps::Pattern>,
+    def: Option<Box<Sp<ps::Term>>>,
 ) -> Result<(TermV, RcType, Option<RcValue>), TyckErrorItem> {
     let name = var.clone().into();
     let ty_rc = {
@@ -147,11 +147,11 @@ fn desugar_fn(
     ps::Abs { param, body }: ps::Abs<Vec<ps::Pattern>, ps::BoxComp>,
 ) -> Result<TermComputation, TyckErrorItem> {
     fn desugar_fn_one(
-        (var, ty): (NameDef, Option<Span<ps::Type>>), body: RcComp,
+        (var, ty): (NameDef, Option<Sp<ps::Type>>), body: RcComp,
     ) -> Result<TermComputation, TyckErrorItem> {
         let mut body = Comatch {
             arms: vec![ps::Comatcher {
-                dtorv: DtorV::new(format!("arg"), SpanInfo::dummy()),
+                dtorv: DtorV::new(format!("arg"), Span::dummy()),
                 vars: vec![var.into()],
                 body,
             }],
@@ -303,7 +303,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let mut def = def;
                 let span = def.span().clone();
                 def = rc!(span.make(ps::Annotation { term: def, ty }.into()));
-                let body: Span<TermComputation> = body.try_map(Elaboration::elab)?;
+                let body: Sp<TermComputation> = body.try_map(Elaboration::elab)?;
                 let item = Let { var, def, body: () }.into();
                 if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
                     group.push_front(item);
@@ -335,7 +335,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let span = body.span().clone();
                 let mut body: TermComputation = Rec { var, body }.into();
                 if let Some(ty) = ty {
-                    let ty: Span<Type> = ty.try_map(Elaboration::elab)?;
+                    let ty: Sp<Type> = ty.try_map(Elaboration::elab)?;
                     let ty_ = ty.inner.clone();
                     let SynType::TypeApp(ty_app) = ty.inner.synty else {
                         Err(TyckErrorItem::TypeExpected {
@@ -374,7 +374,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let arg = arg.try_map(Elaboration::elab)?;
                 Dtor {
                     body: fun,
-                    dtorv: DtorV::new(format!("arg"), SpanInfo::dummy()),
+                    dtorv: DtorV::new(format!("arg"), Span::dummy()),
                     args: vec![rc!(arg)],
                 }
                 .into()
@@ -422,17 +422,10 @@ impl Elaboration<ps::Term> for Term {
     }
 }
 
-impl Elaboration<ps::Data<NameDef, Option<Span<ps::Kind>>, CtorV, Span<ps::Type>>>
-    for prelude::Data
-{
+impl Elaboration<ps::Data<NameDef, Option<Sp<ps::Kind>>, CtorV, Sp<ps::Type>>> for prelude::Data {
     type Error = TyckErrorItem;
     fn elab(
-        Data { name, params, ctors }: ps::Data<
-            NameDef,
-            Option<Span<ps::Kind>>,
-            CtorV,
-            Span<ps::Type>,
-        >,
+        Data { name, params, ctors }: ps::Data<NameDef, Option<Sp<ps::Kind>>, CtorV, Sp<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
         let params = params
             .into_iter()
@@ -453,26 +446,24 @@ impl Elaboration<ps::Data<NameDef, Option<Span<ps::Kind>>, CtorV, Span<ps::Type>
     }
 }
 
-impl Elaboration<ps::DataBr<CtorV, Span<ps::Type>>> for DataBr<CtorV, RcType> {
+impl Elaboration<ps::DataBr<CtorV, Sp<ps::Type>>> for DataBr<CtorV, RcType> {
     type Error = TyckErrorItem;
-    fn elab(
-        DataBr { ctorv, tys }: ps::DataBr<CtorV, Span<ps::Type>>,
-    ) -> Result<Self, TyckErrorItem> {
+    fn elab(DataBr { ctorv, tys }: ps::DataBr<CtorV, Sp<ps::Type>>) -> Result<Self, TyckErrorItem> {
         let tys = Vec::<_>::elab(tys)?.into_iter().map(|ty| rc!(ty)).collect();
         Ok(Self { ctorv, tys })
     }
 }
 
-impl Elaboration<ps::Codata<NameDef, Option<Span<ps::Kind>>, DtorV, Span<ps::Type>>>
+impl Elaboration<ps::Codata<NameDef, Option<Sp<ps::Kind>>, DtorV, Sp<ps::Type>>>
     for prelude::Codata
 {
     type Error = TyckErrorItem;
     fn elab(
         Codata { name, params, dtors }: ps::Codata<
             NameDef,
-            Option<Span<ps::Kind>>,
+            Option<Sp<ps::Kind>>,
             DtorV,
-            Span<ps::Type>,
+            Sp<ps::Type>,
         >,
     ) -> Result<Self, TyckErrorItem> {
         let params = params
@@ -494,20 +485,20 @@ impl Elaboration<ps::Codata<NameDef, Option<Span<ps::Kind>>, DtorV, Span<ps::Typ
     }
 }
 
-impl Elaboration<ps::CodataBr<DtorV, Span<ps::Type>>> for CodataBr<DtorV, RcType> {
+impl Elaboration<ps::CodataBr<DtorV, Sp<ps::Type>>> for CodataBr<DtorV, RcType> {
     type Error = TyckErrorItem;
     fn elab(
-        CodataBr { dtorv, tys, ty }: ps::CodataBr<DtorV, Span<ps::Type>>,
+        CodataBr { dtorv, tys, ty }: ps::CodataBr<DtorV, Sp<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
         let tys = Vec::<_>::elab(tys)?.into_iter().map(|ty| rc!(ty)).collect();
         Ok(Self { dtorv, tys, ty: rc!(ty.try_map(Elaboration::elab)?) })
     }
 }
 
-impl Elaboration<ps::Alias<NameDef, Option<Span<ps::Kind>>, ps::BoxType>> for prelude::Alias {
+impl Elaboration<ps::Alias<NameDef, Option<Sp<ps::Kind>>, ps::BoxType>> for prelude::Alias {
     type Error = TyckErrorItem;
     fn elab(
-        Alias { name, params, ty }: ps::Alias<NameDef, Option<Span<ps::Kind>>, ps::BoxType>,
+        Alias { name, params, ty }: ps::Alias<NameDef, Option<Sp<ps::Kind>>, ps::BoxType>,
     ) -> Result<Self, TyckErrorItem> {
         let params = params
             .into_iter()
@@ -620,9 +611,7 @@ impl Elaboration<ps::TopLevel> for Program {
         }
         let Some(entry) = main_entry else { Err(TyckErrorItem::NoMainEntry)? };
         Ok(Self {
-            module: Elaboration::elab(
-                SpanInfo::dummy().make(ps::TopLevel { declarations: non_main }),
-            )?,
+            module: Elaboration::elab(Span::dummy().make(ps::TopLevel { declarations: non_main }))?,
             entry: Elaboration::elab(entry)?,
         })
     }

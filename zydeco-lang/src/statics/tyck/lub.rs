@@ -3,7 +3,7 @@ use super::*;
 impl Lub for () {
     type Ctx = Ctx;
     type Out = ();
-    fn lub(self, _rhs: (), _ctx: Ctx, _span: &SpanInfo) -> Result<(), TyckError> {
+    fn lub(self, _rhs: (), _ctx: Ctx, _span: &Span) -> Result<(), TyckError> {
         Ok(())
     }
 }
@@ -11,7 +11,7 @@ impl Lub for () {
 impl<T> Lub for Seal<T> {
     type Ctx = ();
     type Out = Seal<T>;
-    fn lub(self, _other: Self, _: Self::Ctx, _: &SpanInfo) -> Result<Self::Out, TyckError> {
+    fn lub(self, _other: Self, _: Self::Ctx, _: &Span) -> Result<Self::Out, TyckError> {
         unreachable!()
     }
 }
@@ -34,7 +34,7 @@ impl Kind {
 impl Lub for Kind {
     type Ctx = Ctx;
     type Out = Kind;
-    fn lub(self, rhs: Kind, ctx: Ctx, span: &SpanInfo) -> Result<Kind, TyckError> {
+    fn lub(self, rhs: Kind, ctx: Ctx, span: &Span) -> Result<Kind, TyckError> {
         let lhs = self;
         let lhs = lhs.normalize();
         let rhs = rhs.normalize();
@@ -86,7 +86,7 @@ impl Lub for Kind {
 impl Lub for Type {
     type Ctx = Ctx;
     type Out = Type;
-    fn lub(self, rhs: Type, mut ctx: Ctx, span: &SpanInfo) -> Result<Type, TyckError> {
+    fn lub(self, rhs: Type, mut ctx: Ctx, span: &Span) -> Result<Type, TyckError> {
         let lhs = self;
         let err = {
             let expected = lhs.clone();

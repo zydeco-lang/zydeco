@@ -13,8 +13,8 @@ type TermRef = NameRef;
 
 /* --------------------------------- Pattern -------------------------------- */
 
-pub type TypePattern = (TypeDef, Option<Span<Kind>>);
-pub type TermPattern = (TermDef, Option<Span<Type>>);
+pub type TypePattern = (TypeDef, Option<Sp<Kind>>);
+pub type TermPattern = (TermDef, Option<Sp<Type>>);
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Pattern {
@@ -31,7 +31,7 @@ pub enum Kind {
     Base(KindBase),
     Arrow(Arrow<BoxKind>),
 }
-pub type BoxKind = Box<Span<Kind>>;
+pub type BoxKind = Box<Sp<Kind>>;
 impl KindT for Kind {}
 
 /* ---------------------------------- Type ---------------------------------- */
@@ -48,21 +48,21 @@ pub enum Type {
     Exists(Exists<Vec<TypePattern>, BoxType>),
     Hole(Hole),
 }
-pub type BoxType = Box<Span<Type>>;
+pub type BoxType = Box<Sp<Type>>;
 impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum TermValue {
-    TermAnn(Annotation<BoxValue, Span<Type>>),
+    TermAnn(Annotation<BoxValue, Sp<Type>>),
     Var(TermRef),
     Thunk(Thunk<BoxComp>),
-    Ctor(Ctor<CtorV, Span<TermValue>>),
+    Ctor(Ctor<CtorV, Sp<TermValue>>),
     Literal(Literal),
     Pack(Pack<BoxType, BoxValue>),
 }
-pub type BoxValue = Box<Span<TermValue>>;
+pub type BoxValue = Box<Sp<TermValue>>;
 impl ValueT for TermValue {}
 
 #[derive(SpanHolder, Clone, Debug)]
@@ -71,7 +71,7 @@ pub struct GenLet {
     pub fun: bool,
     pub name: TermPattern,
     pub params: Vec<Pattern>,
-    pub def: Option<Box<Span<Term>>>,
+    pub def: Option<Box<Sp<Term>>>,
 }
 
 #[derive(SpanHolder, Clone, Debug)]
@@ -82,21 +82,21 @@ pub struct Let {
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum TermComputation {
-    TermAnn(Annotation<BoxComp, Span<Type>>),
+    TermAnn(Annotation<BoxComp, Sp<Type>>),
     Ret(Ret<BoxValue>),
     Force(Force<BoxValue>),
     Let(Let),
     Do(Do<TermPattern, BoxComp, BoxComp>),
     Rec(Rec<TermPattern, BoxComp>),
-    Match(Match<CtorV, TermDef, BoxValue, Span<TermComputation>>),
+    Match(Match<CtorV, TermDef, BoxValue, Sp<TermComputation>>),
     Abs(Abs<Vec<Pattern>, BoxComp>),
     App(App<BoxComp, BoxValue>),
-    Comatch(Comatch<DtorV, TermDef, Span<TermComputation>>),
-    Dtor(Dtor<BoxComp, DtorV, Span<TermValue>>),
+    Comatch(Comatch<DtorV, TermDef, Sp<TermComputation>>),
+    Dtor(Dtor<BoxComp, DtorV, Sp<TermValue>>),
     TyAppTerm(App<BoxComp, BoxType>),
     MatchPack(MatchPack<BoxValue, TypeDef, TermDef, BoxComp>),
 }
-pub type BoxComp = Box<Span<TermComputation>>;
+pub type BoxComp = Box<Sp<TermComputation>>;
 impl ComputationT for TermComputation {}
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
@@ -134,16 +134,16 @@ pub struct Define(pub GenLet);
 
 #[derive(SpanHolder, Clone, Debug)]
 pub struct Main {
-    pub entry: Span<TermComputation>,
+    pub entry: Sp<TermComputation>,
 }
 
 #[derive(IntoEnum, SpanHolder, Clone, Debug)]
 pub enum Declaration {
     Module(Module),
     UseDef(UseDef),
-    Data(Data<TypeDef, Option<Span<Kind>>, CtorV, Span<Type>>),
-    Codata(Codata<TypeDef, Option<Span<Kind>>, DtorV, Span<Type>>),
-    Alias(Alias<TypeDef, Option<Span<Kind>>, BoxType>),
+    Data(Data<TypeDef, Option<Sp<Kind>>, CtorV, Sp<Type>>),
+    Codata(Codata<TypeDef, Option<Sp<Kind>>, DtorV, Sp<Type>>),
+    Alias(Alias<TypeDef, Option<Sp<Kind>>, BoxType>),
     Define(Define),
     Main(Main),
 }

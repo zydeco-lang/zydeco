@@ -15,7 +15,7 @@ impl Builtin {
     fn gen(self) -> (TermV, SynVal) {
         let Builtin { name, arity, behavior } = self;
         (
-            TermV::new(name.to_string(), SpanInfo::dummy()),
+            TermV::new(name.to_string(), Span::dummy()),
             Thunk(rc!(Prim { arity, body: *behavior }.into())).into(),
         )
     }

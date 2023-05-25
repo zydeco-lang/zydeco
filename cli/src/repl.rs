@@ -96,31 +96,29 @@ impl Repl {
             // Note: The evaluation will destroy the environment,
             // so we need to save a snapshot of it before we run.
             let snapshot = zydeco_expr.clone();
-            let res =
-                if let Some(()) = ty.clone().elim_os(zydeco_expr.ctx.clone(), &SpanInfo::dummy()) {
-                    let c = ZydecoExpr::link_computation(c);
-                    let c = zydeco_expr.eval_os(c, &[]);
-                    let ds::ProgKont::ExitCode(i) = c.entry else {
+            let res = if let Some(()) = ty.clone().elim_os(zydeco_expr.ctx.clone(), &Span::dummy())
+            {
+                let c = ZydecoExpr::link_computation(c);
+                let c = zydeco_expr.eval_os(c, &[]);
+                let ds::ProgKont::ExitCode(i) = c.entry else {
                         unreachable!()
                     };
-                    println!("Program exited with code {}", i);
-                    Ok(())
-                } else if let Some(ty) =
-                    ty.clone().elim_ret(zydeco_expr.ctx.clone(), &SpanInfo::dummy())
-                {
-                    let c = ZydecoExpr::link_computation(c);
-                    let c = zydeco_expr.eval_ret_computation(c);
-                    let ds::ProgKont::Ret(value) = c else {
+                println!("Program exited with code {}", i);
+                Ok(())
+            } else if let Some(ty) = ty.clone().elim_ret(zydeco_expr.ctx.clone(), &Span::dummy()) {
+                let c = ZydecoExpr::link_computation(c);
+                let c = zydeco_expr.eval_ret_computation(c);
+                let ds::ProgKont::Ret(value) = c else {
                         unreachable!()
                     };
-                    println!("{} : {}", value.fmt(), ty.fmt());
-                    Ok(())
-                } else {
-                    let mut s = String::new();
-                    s += &format!("Can't run computation of type {}", ty.fmt());
-                    s += &format!("Can only run computations of type OS or Ret(a)");
-                    Err(s)
-                };
+                println!("{} : {}", value.fmt(), ty.fmt());
+                Ok(())
+            } else {
+                let mut s = String::new();
+                s += &format!("Can't run computation of type {}", ty.fmt());
+                s += &format!("Can only run computations of type OS or Ret(a)");
+                Err(s)
+            };
             // Note: Restore the environment
             *zydeco_expr = snapshot;
             res

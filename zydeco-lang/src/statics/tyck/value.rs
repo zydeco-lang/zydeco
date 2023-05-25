@@ -1,6 +1,6 @@
 use super::*;
 
-impl TypeCheck for Span<&Literal> {
+impl TypeCheck for Sp<&Literal> {
     type Ctx = ();
     type Out = Type;
     fn syn_step(&self, _ctx: Self::Ctx) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
@@ -12,7 +12,7 @@ impl TypeCheck for Span<&Literal> {
     }
 }
 
-impl TypeCheck for Span<TermValue> {
+impl TypeCheck for Sp<TermValue> {
     type Ctx = Ctx;
     type Out = Type;
     fn syn_step(
