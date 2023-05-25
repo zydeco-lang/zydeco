@@ -1,6 +1,10 @@
 use super::{err::SurfaceError, package::ProjectMode};
 use crate::textual::{
-    arena::Arena, err::ParseError, lexer::Lexer, parser::TopLevelParser, syntax::TopLevel,
+    arena::{Arena, ArenaNameRef},
+    err::ParseError,
+    lexer::Lexer,
+    parser::TopLevelParser,
+    syntax::TopLevel,
 };
 use codespan_reporting::files::SimpleFiles;
 use std::{
@@ -24,7 +28,7 @@ pub struct FileParsed {
     pub mode: ProjectMode,
     pub deps: Vec<String>,
     pub top: TopLevel,
-    pub arena: Arena,
+    pub arena: ArenaNameRef,
 }
 
 pub struct FileParsedMeta {

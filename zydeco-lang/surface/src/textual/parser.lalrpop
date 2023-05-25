@@ -4,7 +4,7 @@ use crate::textual::{
 
 grammar<'input, 'arena>(
     input: &'input str,
-    ar: &'arena mut Arena,
+    ar: &'arena mut Arena<NameRef<VarName>>,
 );
 
 //* --------------------------------- Tokens --------------------------------- */
@@ -175,7 +175,7 @@ TermGen<T>: TermId = <Sp<T>> => ar.term(<>);
 
 #[inline]
 TermId: TermId = <TermGen<Term>>;
-Term: Term = {
+Term: Term<NameRef<VarName>> = {
     TermRight,
     // abstraction
     "fn" <params:PatternId*> "->"
@@ -211,7 +211,7 @@ Term: Term = {
 
 #[inline]
 TermRightId: TermId = <TermGen<TermRight>>;
-TermRight: Term = {
+TermRight: Term<NameRef<VarName>> = {
     TermAtom,
     // application
     <term:TermRightId> <arg:TermAtomId> => Application(
@@ -230,7 +230,7 @@ TermRight: Term = {
 
 #[inline]
 TermAtomId: TermId = <TermGen<TermAtom>>;
-TermAtom: Term = {
+TermAtom: Term<NameRef<VarName>> = {
     "(" <Term> ")" => <>.into(),
     "(" <term:TermId> ":" <ty:TermId> ")" => Annotation {
         term, ty,

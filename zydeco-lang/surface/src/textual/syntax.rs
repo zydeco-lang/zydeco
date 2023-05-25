@@ -119,11 +119,11 @@ pub enum Literal {
 }
 
 #[derive(IntoEnum)]
-pub enum Term {
+pub enum Term<Ref> {
     Ann(Annotation<TermId, TermId>),
     Hole(Hole),
     #[skip]
-    Var(NameRef<VarName>),
+    Var(Ref),
     Abs(Abstraction<TermId>),
     App(Application),
     Rec(Recursion),

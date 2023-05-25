@@ -24,6 +24,6 @@ pub mod textual {
 }
 
 pub mod binded {
+    pub mod context;
     pub mod resolver;
-    pub mod syntax;
 }
