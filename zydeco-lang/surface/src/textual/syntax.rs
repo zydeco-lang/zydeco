@@ -1,6 +1,6 @@
 //! The surface syntax of zydeco is defined in this module.
 
-use super::arena::*;
+pub use super::arena::*;
 use zydeco_derive::IntoEnum;
 pub use zydeco_utils::span::Span;
 
@@ -31,17 +31,11 @@ pub struct Hole;
 
 /* --------------------------------- Pattern -------------------------------- */
 
-// pub struct CtorPattern {
-//     pub name: NameRef,
-//     pub args: Vec<PatternId>,
-// }
-
 #[derive(IntoEnum)]
 pub enum Pattern {
-    Var(NameDef<VarName>),
+    Var(DefId),
     Ann(Annotation<PatternId, TermId>),
     Hole(Hole),
-    // CtorPattern(CtorPattern),
 }
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -128,6 +122,7 @@ pub enum Literal {
 pub enum Term {
     Ann(Annotation<TermId, TermId>),
     Hole(Hole),
+    #[skip]
     Var(NameRef<VarName>),
     Abs(Abstraction<TermId>),
     App(Application),
@@ -158,7 +153,7 @@ pub enum TypeDefHead {
 pub struct TypeDef {
     /// `data` or `codata`
     pub head: TypeDefHead,
-    pub name: NameDef<VarName>,
+    pub name: DefId,
     pub params: Vec<PatternId>,
     pub arms: Option<Vec<TypeArm>>,
 }

@@ -125,13 +125,15 @@ DtorName: DtorName = {
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
 NameRef<T>: NameRef<T> = <path:(<ModName> "/")*> <inner:T> => NameRef(path, inner);
 
+DefId: DefId = <NameDef<Sp<VarName>>> => ar.def(<>.0);
+
 //* --------------------------------- Pattern -------------------------------- */
 
 #[inline]
 PatternId: PatternId = <Sp<Pattern>> => ar.pattern(<>);
 Pattern: Pattern = {
     "(" <Pattern> ")" => <>.into(),
-    <NameDef<VarName>> => <>.into(),
+    <DefId> => <>.into(),
     "(" <term:PatternId> ":" <ty:TermId> ")" => Annotation {
         term, ty,
     }.into(),
@@ -234,7 +236,7 @@ TermAtom: Term = {
         term, ty,
     }.into(),
     "_" => Hole.into(),
-    <NameRef<VarName>> => <>.into(),
+    <NameRef<VarName>> => Term::Var(<>),
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermAtomId> => Force(<>).into(),
     "ret" <TermAtomId> => Return(<>).into(),
@@ -252,7 +254,7 @@ pub SingleTerm: TermId = TermId;
 
 // #[inline]
 TypeDef: TypeDef = {
-    <head:TypeDefHead> <name:NameDef<VarName>> <params:PatternId*>
+    <head:TypeDefHead> <name:DefId> <params:PatternId*>
         <arms:("where" <TypeArm*>)?>
     "end" => TypeDef {
         head, name, params, arms,

@@ -2,21 +2,25 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
-#[proc_macro_derive(IntoEnum)]
+#[proc_macro_derive(IntoEnum, attributes(skip))]
 pub fn into_enum_derive(input: TokenStream) -> TokenStream {
     let mut res = TokenStream::new();
     let input = parse_macro_input!(input as DeriveInput);
+    let params = &input.generics.params.iter().collect::<Vec<_>>();
     let cod = input.ident;
     match input.data {
         Data::Enum(data) => {
             for variant in &data.variants {
+                if variant.attrs.iter().any(|a| a.path().is_ident("skip")) {
+                    continue;
+                }
                 let variant_ident = &variant.ident;
                 match &variant.fields {
                     Fields::Unnamed(field) => {
                         if field.unnamed.len() == 1 {
                             let dom = &field.unnamed[0].ty;
                             let gen = quote! {
-                                impl From<#dom> for #cod {
+                                impl<#(#params),*> From<#dom> for #cod<#(#params),*> {
                                     fn from(item: #dom) -> Self {
                                         #cod::#variant_ident(item)
                                     }
@@ -27,7 +31,7 @@ pub fn into_enum_derive(input: TokenStream) -> TokenStream {
                             let dom: Vec<_> = (&field.unnamed).into_iter().map(|f| &f.ty).collect();
                             let idx: Vec<_> = (0..dom.len()).map(syn::Index::from).collect();
                             let gen = quote! {
-                                impl From<(#(#dom),*)> for #cod {
+                                impl<#(#params),*> From<(#(#dom),*)> for #cod<#(#params),*> {
                                     fn from(item: (#(#dom),*)) -> Self {
                                         #cod::#variant_ident(#(item.#idx),*)
                                     }
@@ -43,7 +47,7 @@ pub fn into_enum_derive(input: TokenStream) -> TokenStream {
 
                             let dom = &field.ty;
                             let gen = quote! {
-                                impl From<#dom> for #cod {
+                                impl<#(#params),*> From<#dom> for #cod<#(#params),*> {
                                     fn from(item: #dom) -> Self {
                                         #cod::#variant_ident { #field_ident: item }
                                     }
@@ -56,7 +60,7 @@ pub fn into_enum_derive(input: TokenStream) -> TokenStream {
                             let field_idents: Vec<_> =
                                 (&field.named).into_iter().map(|f| &f.ident).collect();
                             let gen = quote! {
-                                impl From<(#(#dom),*)> for #cod {
+                                impl<#(#params),*> From<(#(#dom),*)> for #cod<#(#params),*> {
                                     fn from(item: (#(#dom),*)) -> Self {
                                         #cod::#variant_ident { #( #field_idents: item.#idx ),* }
                                     }
@@ -67,7 +71,7 @@ pub fn into_enum_derive(input: TokenStream) -> TokenStream {
                     }
                     Fields::Unit => {
                         let gen = quote! {
-                            impl From<()> for #cod {
+                            impl<#(#params),*> From<()> for #cod<#(#params),*> {
                                 fn from(_: ()) -> Self {
                                     #cod::#variant_ident
                                 }
