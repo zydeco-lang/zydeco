@@ -3,8 +3,8 @@
 
 pub mod files {
     pub mod driver;
+    pub mod package;
     pub mod err;
-    pub mod config;
 }
 
 pub mod textual {

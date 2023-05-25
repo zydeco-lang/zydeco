@@ -123,7 +123,7 @@ DtorName: DtorName = {
 };
 
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
-NameRef<T>: NameRef<T> = <path:(<ModName> "::")*> <inner:T> => NameRef(path, inner);
+NameRef<T>: NameRef<T> = <path:(<ModName> "/")*> <inner:T> => NameRef(path, inner);
 
 //* --------------------------------- Pattern -------------------------------- */
 

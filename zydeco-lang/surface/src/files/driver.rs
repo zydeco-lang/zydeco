@@ -20,19 +20,34 @@ impl Display for FileLoc {
 
 pub type FileId = usize;
 
-pub enum Project {
+/// Specifies how to deal with imports in the source code file.
+pub enum ProjectMode {
+    /// `Managed` mode, with a `Zydeco.toml` project file. The project file is
+    /// then used as the root of all direct imports and also a place for
+    /// declaring dependencies, metadata for the package, etc.. The driver will
+    /// search for a valid project file starting from the same level as the
+    /// current `.zy` file, and then recursively, the parent directories with a
+    /// depth limit (defaults to `64`).
     Managed,
+    /// `Root` mode, the default mode to keep old codebase working, and also the
+    /// simplest mode to understand. In this mode, the base path of the current
+    /// `.zy` file is treated as the root for all imports. The driver will
+    /// basically do nothing to help figure out the project structure and
+    /// totally rely on the imports you write.
     Root,
+    /// Same as `Root` mode, but without the standard library. Since we can't do
+    /// much for project management under the `Root` mode, we have to introduce
+    /// this mode to satisfy users who don't want std.
     RootNoStd,
 }
-impl Default for Project {
+impl Default for ProjectMode {
     fn default() -> Self {
-        Self::Managed
+        Self::Root
     }
 }
 
 pub struct FileParsed {
-    pub project: Project,
+    pub mode: ProjectMode,
     pub deps: Vec<String>,
     pub top: TopLevel,
     pub arena: Arena,
@@ -57,6 +72,7 @@ impl Driver {
         driver.add_file_parsed(Self::std());
         driver
     }
+    
     pub fn parse_file(path: impl AsRef<Path>) -> Result<FileParsedMeta, SurfaceError> {
         // read file
         let path = path.as_ref();
@@ -77,11 +93,11 @@ impl Driver {
         arena.span_map(&file_info);
 
         // processing project and dependency specs
-        let project = match &arena.project {
+        let mode = match &arena.project {
             Some(project) => match project.as_str() {
-                "managed" => Project::Managed,
-                "root" => Project::Root,
-                "root_no_std" => Project::RootNoStd,
+                "managed" => ProjectMode::Managed,
+                "root" => ProjectMode::Root,
+                "root_no_std" => ProjectMode::RootNoStd,
                 _ => Err(SurfaceError::InvalidProject)?,
             },
             None => Default::default(),
@@ -89,9 +105,10 @@ impl Driver {
         let deps = arena.deps.clone();
 
         // assemble
-        let parsed = FileParsed { project, deps, top, arena };
+        let parsed = FileParsed { mode, deps, top, arena };
         Ok(FileParsedMeta { loc, source, parsed })
     }
+
     pub fn add_file_parsed(&mut self, FileParsedMeta { loc, source, parsed }: FileParsedMeta) {
         let fid = self.files.add(loc, source);
         self.parsed_map.insert(fid, parsed);
