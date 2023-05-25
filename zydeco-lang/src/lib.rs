@@ -13,8 +13,7 @@ pub mod surface {
 
         #[allow(clippy::all)]
         pub mod parser {
-            use lalrpop_util::lalrpop_mod;
-            lalrpop_mod!(parser_impl, "/surface/parse/parser.rs");
+            lalrpop_util::lalrpop_mod!(parser_impl, "/surface/parse/parser.rs");
             pub use parser_impl::*;
         }
         mod escape;
