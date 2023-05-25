@@ -136,10 +136,6 @@ Pattern: Pattern = {
         term, ty,
     }.into(),
     "_" => Hole.into(),
-    // <name:NameRef<CtorName>>
-    // <args:SepByDelim<"(", ",", <PatternId>, ")">> => CtorPattern {
-    //     name, args,
-    // }.into(),
 };
 
 //* ---------------------------------- Term ---------------------------------- */
@@ -149,10 +145,7 @@ GenBind: GenBind = {
     <ty:(":" <TermId>)?> <bindee: ("=" <TermId>)?> => GenBind {
         rec: rec.is_some(),
         fun: fun.is_some(),
-        binder,
-        params,
-        ty,
-        bindee,
+        binder, params, ty, bindee,
     }
 };
 
@@ -189,19 +182,16 @@ Term: Term = {
     "pi" <params:PatternId*> "->"
         <term:TermId> => Pi(params, term).into(),
     // forall
-    "forall" <params:PatternId*> "." <ty:TermRightId> => Forall(
-        params, ty
-    ).into(),
+    "forall" <params:PatternId*> "." <ty:TermRightId> =>
+        Forall(params, ty).into(),
     // exists
-    "exists" <params:PatternId*> "." <ty:TermRightId> => Exists(
-        params, ty
-    ).into(),
+    "exists" <params:PatternId*> "." <ty:TermRightId> =>
+        Exists(params, ty).into(),
     // recursion
     "rec" <binder:PatternId> "->"
         <term:TermId> => Recursion(binder, term).into(),
     // bind
-    "do" <binder:PatternId> "<-" <bindee:TermId> ";"
-    <tail:TermId> => Bind {
+    "do" <binder:PatternId> "<-" <bindee:TermId> ";" <tail:TermId> => Bind {
         binder, bindee, tail
     }.into(),
     // pure bind
@@ -291,14 +281,13 @@ DefineHead: () = { "define", "alias", };
 #[inline]
 DefineEnd: () = { "end", ";", };
 
-UseDef: UseDef = {
-    <NameRef<VarName>> => <>.into(),
+UseEnum: UseEnum = {
+    <VarName> => <>.into(),
+    <binder:VarName> "=" <origin:VarName> => UseAlias(binder, origin).into(),
     ".." => UseAll.into(),
-    <path:NameRef<ModName>>
-    <cluster:SepByDelim<"(", ",", UseDef, ")">> => UseCluster {
-        path, cluster,
-    }.into(),
+    <SepByDelim<"(", ",", UseDef, ")">> => UseCluster(<>).into(),
 };
+UseDef: UseDef = <NameRef<UseEnum>> => UseDef(<>);
 
 Declaration: Declaration = {
     <TypeDef> => <>.into(),

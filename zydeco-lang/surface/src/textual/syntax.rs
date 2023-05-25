@@ -176,18 +176,16 @@ pub struct Module {
 }
 
 pub struct UseAll;
-
-pub struct UseCluster {
-    pub path: NameRef<ModName>,
-    pub cluster: Vec<UseDef>,
-}
-
+pub struct UseAlias(pub VarName, pub VarName);
+pub struct UseCluster(pub Vec<UseDef>);
 #[derive(IntoEnum)]
-pub enum UseDef {
-    Name(NameRef<VarName>),
-    UseAll(UseAll),
+pub enum UseEnum {
+    Name(VarName),
+    Alias(UseAlias),
+    All(UseAll),
     Cluster(UseCluster),
 }
+pub struct UseDef(pub NameRef<UseEnum>);
 
 pub struct Main(pub TermId);
 
