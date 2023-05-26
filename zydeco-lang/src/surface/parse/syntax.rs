@@ -1,5 +1,6 @@
 use crate::prelude::*;
-use zydeco_derive::{IntoEnum, SpanHolder};
+use derive_more::From;
+use zydeco_derive::SpanHolder;
 
 pub use crate::syntax::*;
 
@@ -16,7 +17,7 @@ type TermRef = NameRef;
 pub type TypePattern = (TypeDef, Option<Sp<Kind>>);
 pub type TermPattern = (TermDef, Option<Sp<Type>>);
 
-#[derive(IntoEnum, SpanHolder, Clone, Debug)]
+#[derive(From, SpanHolder, Clone, Debug)]
 pub enum Pattern {
     TypePattern(TypePattern),
     TermPattern(TermPattern),
@@ -26,7 +27,7 @@ pub enum Pattern {
 
 pub use crate::syntax::{KindBase, TypeArity};
 
-#[derive(IntoEnum, SpanHolder, Clone, Debug, PartialEq, Eq)]
+#[derive(From, SpanHolder, Clone, Debug, PartialEq, Eq)]
 pub enum Kind {
     Base(KindBase),
     Arrow(Arrow<BoxKind>),
@@ -39,7 +40,7 @@ impl KindT for Kind {}
 #[derive(SpanHolder, Clone, Debug)]
 pub struct TypeApp(pub BoxType, pub BoxType);
 
-#[derive(IntoEnum, SpanHolder, Clone, Debug)]
+#[derive(From, SpanHolder, Clone, Debug)]
 pub enum Type {
     Basic(TypeRef),
     App(TypeApp),
@@ -54,7 +55,7 @@ impl TypeT for Type {}
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(IntoEnum, SpanHolder, Clone, Debug)]
+#[derive(From, SpanHolder, Clone, Debug)]
 pub enum TermValue {
     TermAnn(Annotation<BoxValue, Sp<Type>>),
     Var(TermRef),
@@ -81,7 +82,7 @@ pub struct Let {
     pub body: BoxComp,
 }
 
-#[derive(IntoEnum, SpanHolder, Clone, Debug)]
+#[derive(From, SpanHolder, Clone, Debug)]
 pub enum TermComputation {
     TermAnn(Annotation<BoxComp, Sp<Type>>),
     Ret(Ret<BoxValue>),
@@ -100,7 +101,7 @@ pub enum TermComputation {
 pub type BoxComp = Box<Sp<TermComputation>>;
 impl ComputationT for TermComputation {}
 
-#[derive(IntoEnum, SpanHolder, Clone, Debug)]
+#[derive(From, SpanHolder, Clone, Debug)]
 pub enum Term {
     Value(TermValue),
     Computation(TermComputation),
@@ -123,7 +124,7 @@ pub struct UseCluster {
     pub cluster: Vec<UseDef>,
 }
 
-#[derive(IntoEnum, SpanHolder, Clone, Debug)]
+#[derive(From, SpanHolder, Clone, Debug)]
 pub enum UseDef {
     Name(NameRef),
     UseAll(UseAll),
@@ -138,7 +139,7 @@ pub struct Main {
     pub entry: Sp<TermComputation>,
 }
 
-#[derive(IntoEnum, SpanHolder, Clone, Debug)]
+#[derive(From, SpanHolder, Clone, Debug)]
 pub enum Declaration {
     Module(Module),
     UseDef(UseDef),

@@ -1693,6 +1693,7 @@ dependencies = [
 name = "zydeco-lang"
 version = "0.2.0"
 dependencies = [
+ "derive_more",
  "im",
  "lalrpop",
  "lalrpop-util",

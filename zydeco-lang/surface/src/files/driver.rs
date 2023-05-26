@@ -1,6 +1,9 @@
 use super::{err::SurfaceError, package::ProjectMode};
 use crate::textual::{
-    err::ParseError, lexer::Lexer, parser::TopLevelParser, syntax::{TopLevel, Context},
+    err::ParseError,
+    lexer::Lexer,
+    parser::TopLevelParser,
+    syntax::{Context, TopLevel},
 };
 use codespan_reporting::files::SimpleFiles;
 use std::{

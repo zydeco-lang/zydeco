@@ -72,8 +72,8 @@ impl Resolve<Pattern> for Pattern {
             }
             Pattern::Var(def) => {
                 let name = state.textual_arena.defs[*def].clone().inner();
-                state.context.lookup.insert(NameRef(Vec::new(), name), def.clone());
-                Ok(def.clone().into())
+                state.context.lookup.insert(NameRef(Vec::new(), name), *def);
+                Ok((*def).into())
             }
             Pattern::Hole(_) => Ok(self.clone()),
         }
@@ -91,7 +91,7 @@ impl Resolve<GenBind> for GenBind {
         let params = params.resolve(state)?;
         let ty = ty.resolve(state)?;
         let bindee = bindee.resolve(state)?;
-        Ok(GenBind { rec, fun, binder, params, ty, bindee }.into())
+        Ok(GenBind { rec, fun, binder, params, ty, bindee })
     }
 }
 
@@ -101,7 +101,7 @@ impl Resolve<Matcher<TermId>> for Matcher<TermId> {
         let name = name.clone();
         let binders = binders.resolve(state)?;
         let tail = tail.resolve(state)?;
-        Ok(Matcher { name, binders, tail }.into())
+        Ok(Matcher { name, binders, tail })
     }
 }
 
@@ -111,7 +111,7 @@ impl Resolve<CoMatcher<TermId>> for CoMatcher<TermId> {
         let name = name.clone();
         let binders = binders.resolve(state)?;
         let tail = tail.resolve(state)?;
-        Ok(CoMatcher { name, binders, tail }.into())
+        Ok(CoMatcher { name, binders, tail })
     }
 }
 
@@ -131,12 +131,11 @@ impl Resolve<Term<DefId>> for Term<NameRef<VarName>> {
             }
             Term::Hole(Hole) => Ok(Hole.into()),
             Term::Var(v) => {
-                let def = state
+                let def = *state
                     .context
                     .lookup
                     .get(v)
-                    .ok_or_else(|| ResolveError::UnboundVar(v.clone()))?
-                    .clone();
+                    .ok_or_else(|| ResolveError::UnboundVar(v.clone()))?;
                 Ok(Term::Var(def))
             }
             Term::Abs(Abstraction(params, term)) => {
@@ -228,11 +227,11 @@ impl Resolve<Term<DefId>> for Term<NameRef<VarName>> {
 
 impl<'a> Resolver<'a> {
     pub fn exec(&mut self) -> Result<(), Vec<ResolveError>> {
-        let mut errors = Vec::new();
+        let errors = Vec::new();
         let ts::TopLevel(decls) = self.textual_top;
-        for Modifiers { public, external, inner: decl } in decls {
+        for Modifiers { public: _, external: _, inner: decl } in decls {
             match decl {
-                Declaration::Type(TypeDef { head, name, params, arms }) => {}
+                Declaration::Type(TypeDef { head: _, name: _, params: _, arms: _ }) => {}
                 Declaration::Define(_) => todo!(),
                 Declaration::Module(_) => todo!(),
                 Declaration::UseDef(_) => todo!(),

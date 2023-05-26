@@ -1,13 +1,14 @@
 use crate::core::runtime::syntax as ds;
 pub use crate::syntax::*;
+use derive_more::From;
 use im::Vector;
 use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_derive::{FmtArgs, IntoEnum};
+use zydeco_derive::FmtArgs;
 
-#[derive(IntoEnum, FmtArgs, Clone)]
+#[derive(From, FmtArgs, Clone)]
 pub enum Value {
     Var(TermV),
     Thunk(Thunk<RcCommand>),
@@ -39,7 +40,7 @@ pub struct Push(pub RcValue);
 #[derive(Clone)]
 pub struct Pop(pub TermV, pub RcCommand);
 
-#[derive(IntoEnum, FmtArgs, Clone)]
+#[derive(From, FmtArgs, Clone)]
 pub enum Command {
     Seq(Seq),
     Skip(Skip),

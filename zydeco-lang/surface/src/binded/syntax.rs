@@ -1,9 +1,9 @@
 use crate::textual::syntax::*;
+use derive_more::From;
 use slotmap::SlotMap;
 // use std::collections::{HashMap, HashSet};
-use zydeco_derive::IntoEnum;
 
-#[derive(IntoEnum)]
+#[derive(From)]
 pub enum Declaration {
     Type(TypeDef),
     Define(Define),

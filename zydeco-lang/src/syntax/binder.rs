@@ -120,7 +120,7 @@ slotmap::new_key_type! { pub struct EntityId; }
 
 /// Note: Consider pairing up Entity with the following:
 /// ```ignore
-/// #[derive(IntoEnum, Clone, Debug)]
+/// #[derive(From, Clone, Debug)]
 /// pub enum Sort {
 ///     Term(Term, Option<Type>),
 ///     Type(Type, Option<Kind>),

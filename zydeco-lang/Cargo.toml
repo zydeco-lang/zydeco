@@ -13,6 +13,7 @@ slotmap = "1.0"
 thiserror = "1.0.40"
 zydeco-utils = { path = "./utils" }
 zydeco-derive = { path = "./derive" }
+derive_more = "0.99"
 
 # build-time dependency on the lalrpop library:
 [build-dependencies]

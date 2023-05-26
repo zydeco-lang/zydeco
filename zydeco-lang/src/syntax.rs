@@ -7,7 +7,7 @@ pub use env::*;
 mod fmt;
 mod span;
 
-use zydeco_derive::{IntoEnum, SpanHolder};
+use zydeco_derive::SpanHolder;
 
 /* ---------------------------------- Sort ---------------------------------- */
 

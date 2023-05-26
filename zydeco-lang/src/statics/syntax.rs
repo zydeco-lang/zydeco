@@ -1,7 +1,8 @@
 use crate::prelude::*;
+use derive_more::From;
 use im::Vector;
 use std::rc::Rc;
-use zydeco_derive::{FmtArgs, IntoEnum};
+use zydeco_derive::FmtArgs;
 
 pub use crate::syntax::*;
 
@@ -9,7 +10,7 @@ pub use crate::syntax::*;
 
 pub use crate::syntax::{KindBase, TypeArity};
 
-#[derive(IntoEnum, FmtArgs, Clone, Debug)]
+#[derive(From, FmtArgs, Clone, Debug)]
 pub enum Kind {
     Base(KindBase),
     TypeArity(TypeArity<Sp<Kind>, BoxKind>),
@@ -21,13 +22,13 @@ impl KindT for Kind {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AbstVar(pub usize);
-#[derive(IntoEnum, FmtArgs, Clone, Debug, PartialEq)]
+#[derive(From, FmtArgs, Clone, Debug, PartialEq)]
 pub enum NeutralVar {
     Var(TypeV),
     Abst(AbstVar),
 }
 impl TyVarT for NeutralVar {}
-#[derive(IntoEnum, FmtArgs, Clone, Debug)]
+#[derive(From, FmtArgs, Clone, Debug)]
 pub enum SynType {
     TypeAbs(TypeAbs<(TypeV, Sp<Kind>), RcType>),
     TypeApp(TypeApp<NeutralVar, RcType>),
@@ -67,7 +68,7 @@ impl From<TypeV> for Type {
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(IntoEnum, FmtArgs, Clone, Debug)]
+#[derive(From, FmtArgs, Clone, Debug)]
 pub enum TermValue {
     Annotation(Annotation<RcValue, RcType>),
     Var(TermV),
@@ -79,7 +80,7 @@ pub enum TermValue {
 pub type RcValue = Rc<Sp<TermValue>>;
 impl ValueT for TermValue {}
 
-#[derive(IntoEnum, FmtArgs, Clone, Debug)]
+#[derive(From, FmtArgs, Clone, Debug)]
 pub enum TailTerm {
     Let(Let<TermV, RcValue, ()>),
     Do(Do<TermV, RcComp, ()>),
@@ -91,7 +92,7 @@ pub struct TailGroup {
     pub body: RcComp,
 }
 
-#[derive(IntoEnum, FmtArgs, Clone, Debug)]
+#[derive(From, FmtArgs, Clone, Debug)]
 pub enum TermComputation {
     Annotation(Annotation<RcComp, RcType>),
     Ret(Ret<RcValue>),
@@ -108,7 +109,7 @@ pub enum TermComputation {
 pub type RcComp = Rc<Sp<TermComputation>>;
 impl ComputationT for TermComputation {}
 
-#[derive(IntoEnum, FmtArgs, Clone, Debug)]
+#[derive(From, FmtArgs, Clone, Debug)]
 pub enum Term {
     Value(TermValue),
     Computation(TermComputation),

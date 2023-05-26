@@ -1,11 +1,12 @@
 use crate::syntax::*;
 pub use crate::{core::library::syntax as ls, syntax::Env, utils::fmt::FmtArgs};
+use derive_more::From;
 use im::Vector;
 use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_derive::{FmtArgs, IntoEnum};
+use zydeco_derive::FmtArgs;
 
 #[derive(Clone)]
 pub struct Thunk {
@@ -13,7 +14,7 @@ pub struct Thunk {
     pub env: Env<TermV, Value>,
 }
 
-#[derive(IntoEnum, FmtArgs, Clone)]
+#[derive(From, FmtArgs, Clone)]
 pub enum Value {
     Thunk(Thunk),
     Ctor(Ctor<CtorV, TV>),

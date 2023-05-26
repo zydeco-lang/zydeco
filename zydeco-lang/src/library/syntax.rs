@@ -1,15 +1,16 @@
 use crate::dynamics::syntax as ds;
 pub use crate::syntax::*;
+use derive_more::From;
 use im::Vector;
 use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_derive::{FmtArgs, IntoEnum};
+use zydeco_derive::FmtArgs;
 
 /* ---------------------------------- Term ---------------------------------- */
 
-#[derive(IntoEnum, FmtArgs, Clone)]
+#[derive(From, FmtArgs, Clone)]
 pub enum SynVal {
     Var(TermV),
     Thunk(Thunk<RcComp>),
@@ -29,7 +30,7 @@ pub struct Prim {
     pub body: PrimComp,
 }
 
-#[derive(IntoEnum, FmtArgs, Clone)]
+#[derive(From, FmtArgs, Clone)]
 pub enum SynComp {
     Ret(Ret<RcValue>),
     Force(Force<RcValue>),
@@ -44,7 +45,7 @@ pub enum SynComp {
 type RcComp = Rc<SynComp>;
 impl ComputationT for SynComp {}
 
-#[derive(IntoEnum, FmtArgs, Clone)]
+#[derive(From, FmtArgs, Clone)]
 pub enum Term {
     Val(SynVal),
     Comp(SynComp),

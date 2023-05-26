@@ -1,4 +1,5 @@
 use super::*;
+use derive_more::From;
 
 /* ---------------------------------- Kind ---------------------------------- */
 
@@ -46,7 +47,7 @@ pub struct Exists<TyV: TyVarT, Ty: TypeT> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Thunk<B: ComputationT>(pub B);
 
-#[derive(IntoEnum, Clone, Debug, PartialEq, Eq)]
+#[derive(From, Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
     String(String),
