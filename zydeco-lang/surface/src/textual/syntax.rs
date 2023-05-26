@@ -1,7 +1,7 @@
 //! The surface syntax of zydeco is defined in this module.
 
+use derive_more::From;
 use slotmap::SlotMap;
-use zydeco_derive::IntoEnum;
 use zydeco_utils::span::FileInfo;
 pub use zydeco_utils::span::{Sp, Span};
 
@@ -15,7 +15,7 @@ pub struct VarName(pub String);
 pub struct CtorName(pub String);
 #[derive(Clone)]
 pub struct DtorName(pub String);
-#[derive(IntoEnum, Clone)]
+#[derive(From, Clone)]
 pub enum TypeArmName {
     Ctor(CtorName),
     Dtor(DtorName),
@@ -40,7 +40,7 @@ pub struct Hole;
 
 /* --------------------------------- Pattern -------------------------------- */
 
-#[derive(IntoEnum, Clone)]
+#[derive(From, Clone)]
 pub enum Pattern {
     Var(DefId),
     Ann(Annotation<PatternId, TermId>),
@@ -139,18 +139,18 @@ pub struct CoMatcher<Tail> {
 pub struct Destructor(pub TermId, pub NameRef<DtorName>, pub Vec<TermId>);
 
 /// literals in term
-#[derive(IntoEnum, Clone)]
+#[derive(From, Clone)]
 pub enum Literal {
     Int(i64),
     String(String),
     Char(char),
 }
 
-#[derive(IntoEnum, Clone)]
+#[derive(From, Clone)]
 pub enum Term<Ref> {
     Ann(Annotation<TermId, TermId>),
     Hole(Hole),
-    #[skip]
+    #[from(ignore)]
     Var(Ref),
     Abs(Abstraction<TermId>),
     App(Application),
@@ -205,7 +205,7 @@ pub struct Module {
 pub struct UseAll;
 pub struct UseAlias(pub VarName, pub VarName);
 pub struct UseCluster(pub Vec<UseDef>);
-#[derive(IntoEnum)]
+#[derive(From)]
 pub enum UseEnum {
     Name(VarName),
     Alias(UseAlias),
@@ -216,7 +216,7 @@ pub struct UseDef(pub NameRef<UseEnum>);
 
 pub struct Main(pub TermId);
 
-#[derive(IntoEnum)]
+#[derive(From)]
 pub enum Declaration {
     Type(TypeDef),
     Define(Define),
@@ -231,7 +231,7 @@ pub struct Modifiers<T> {
     pub inner: T,
 }
 
-#[derive(IntoEnum)]
+#[derive(From)]
 pub enum ReplInput {
     Declaration(Modifiers<Declaration>),
     Term(TermId),
@@ -247,6 +247,7 @@ slotmap::new_key_type! {
     pub struct DefId;
 }
 
+#[derive(Default)]
 pub struct Context {
     // arenas
     pub patterns: SlotMap<PatternId, Sp<Pattern>>,
@@ -255,17 +256,6 @@ pub struct Context {
     // meta
     pub project: Option<String>,
     pub deps: Vec<String>,
-}
-impl Default for Context {
-    fn default() -> Self {
-        Self {
-            patterns: Default::default(),
-            terms: Default::default(),
-            defs: Default::default(),
-            project: Default::default(),
-            deps: Default::default(),
-        }
-    }
 }
 
 impl Context {
