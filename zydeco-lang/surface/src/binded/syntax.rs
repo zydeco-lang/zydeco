@@ -25,12 +25,17 @@ pub enum Declaration {
 // }
 pub type TopLevel = Vec<Declaration>;
 
+#[derive(Default)]
 pub struct Context {
     // arenas
     pub patterns: SlotMap<PatternId, Sp<Pattern>>,
     pub terms: SlotMap<TermId, Sp<Term<DefId>>>,
+
     // meta
+    /// for matching backwards from reference site to definition site
     pub lookup: im::HashMap<NameRef<VarName>, DefId>,
+    /// for matching forwards from definition site to a declaration site;
+    /// typically used by type definitions without a body
     pub peeks: im::HashMap<NameRef<VarName>, DefId>,
 }
 

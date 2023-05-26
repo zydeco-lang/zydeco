@@ -1,8 +1,10 @@
 use super::{
     err::ResolveError,
-    syntax::{Context, TopLevel},
+    syntax::{Context, Declaration, TopLevel},
 };
 use crate::textual::syntax::{self as ts, *};
+
+/* -------------------------------- Resolver -------------------------------- */
 
 pub struct Resolver<'a> {
     // references to textual syntax
@@ -11,11 +13,32 @@ pub struct Resolver<'a> {
     // new binded syntax that is being built
     pub context: Context,
     pub top: TopLevel,
+    // meta
+    // Todo: use it to report errors
+    pub span: Span,
+}
+
+impl Resolver<'_> {
+    pub fn new<'a>(textual_arena: &'a ts::Context, textual_top: &'a ts::TopLevel) -> Resolver<'a> {
+        Resolver {
+            textual_arena,
+            textual_top,
+            context: Context::default(),
+            top: TopLevel::default(),
+            span: Span::dummy(),
+        }
+    }
 }
 
 pub trait Fold<S, E, U> {
     fn fold(&self, state: &mut S) -> Result<U, E>;
 }
+
+pub trait Resolve<T> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<T, ResolveError>;
+}
+
+/* ---------------------------------- Meta ---------------------------------- */
 
 impl<T, U> Fold<Resolver<'_>, ResolveError, U> for T
 where
@@ -26,15 +49,33 @@ where
     }
 }
 
-pub trait Resolve<T> {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<T, ResolveError>;
-}
-
-/* ---------------------------------- Meta ---------------------------------- */
-
 impl Resolve<bool> for bool {
     fn resolve(&self, _state: &mut Resolver<'_>) -> Result<bool, ResolveError> {
         Ok(*self)
+    }
+}
+
+impl Resolve<Hole> for Hole {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Hole, ResolveError> {
+        Ok(self.clone())
+    }
+}
+
+impl Resolve<CtorName> for CtorName {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<CtorName, ResolveError> {
+        Ok(self.clone())
+    }
+}
+
+impl Resolve<DtorName> for DtorName {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<DtorName, ResolveError> {
+        Ok(self.clone())
+    }
+}
+
+impl Resolve<TypeArmName> for TypeArmName {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<TypeArmName, ResolveError> {
+        Ok(self.clone())
     }
 }
 
@@ -53,12 +94,36 @@ impl<T: Resolve<T>> Resolve<Vec<T>> for Vec<T> {
     }
 }
 
+/* ---------------------------- Binders and Refs ---------------------------- */
+
+impl Resolve<DefId> for DefId {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<DefId, ResolveError> {
+        let name = state.textual_arena.defs[*self].clone().inner();
+        // Todo: work out module resolution
+        state.context.lookup.insert(NameRef(Vec::new(), name), *self);
+        Ok((*self).into())
+    }
+}
+
+impl Resolve<DefId> for NameRef<VarName> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<DefId, ResolveError> {
+        Ok(*state
+            .context
+            .lookup
+            .get(self)
+            .ok_or_else(|| ResolveError::UnboundVar(state.span.make(self.clone())))?)
+    }
+}
+
 /* --------------------------------- Pattern -------------------------------- */
 
 impl Resolve<PatternId> for PatternId {
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<PatternId, ResolveError> {
-        let pattern =
-            &state.textual_arena.patterns[*self].try_map_ref(|pattern| pattern.resolve(state))?;
+        let sp_pattern = &state.textual_arena.patterns[*self];
+        let span = state.span.clone();
+        state.span = sp_pattern.info.clone();
+        let pattern = sp_pattern.try_map_ref(|pattern| pattern.resolve(state))?;
+        state.span = span;
         Ok(state.context.pattern(pattern.clone()))
     }
 }
@@ -71,9 +136,8 @@ impl Resolve<Pattern> for Pattern {
                 Ok(Annotation { term, ty }.into())
             }
             Pattern::Var(def) => {
-                let name = state.textual_arena.defs[*def].clone().inner();
-                state.context.lookup.insert(NameRef(Vec::new(), name), *def);
-                Ok((*def).into())
+                let def = def.resolve(state)?;
+                Ok(Pattern::Var(def))
             }
             Pattern::Hole(_) => Ok(self.clone()),
         }
@@ -98,7 +162,7 @@ impl Resolve<GenBind> for GenBind {
 impl Resolve<Matcher<TermId>> for Matcher<TermId> {
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Matcher<TermId>, ResolveError> {
         let Matcher { name, binders, tail } = self;
-        let name = name.clone();
+        let name = name.resolve(state)?;
         let binders = binders.resolve(state)?;
         let tail = tail.resolve(state)?;
         Ok(Matcher { name, binders, tail })
@@ -108,7 +172,7 @@ impl Resolve<Matcher<TermId>> for Matcher<TermId> {
 impl Resolve<CoMatcher<TermId>> for CoMatcher<TermId> {
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<CoMatcher<TermId>, ResolveError> {
         let CoMatcher { name, binders, tail } = self;
-        let name = name.clone();
+        let name = name.resolve(state)?;
         let binders = binders.resolve(state)?;
         let tail = tail.resolve(state)?;
         Ok(CoMatcher { name, binders, tail })
@@ -117,7 +181,11 @@ impl Resolve<CoMatcher<TermId>> for CoMatcher<TermId> {
 
 impl Resolve<TermId> for TermId {
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<TermId, ResolveError> {
-        let term = &state.textual_arena.terms[*self].try_map_ref(|term| term.resolve(state))?;
+        let sp_term = &state.textual_arena.terms[*self];
+        let span = state.span.clone();
+        state.span = sp_term.info.clone();
+        let term = sp_term.try_map_ref(|term| term.resolve(state))?;
+        state.span = span;
         Ok(state.context.term(term.clone()))
     }
 }
@@ -129,13 +197,9 @@ impl Resolve<Term<DefId>> for Term<NameRef<VarName>> {
                 let ty = ty.resolve(state)?;
                 Ok(Annotation { term, ty }.into())
             }
-            Term::Hole(Hole) => Ok(Hole.into()),
+            Term::Hole(hole) => Ok(hole.resolve(state)?.into()),
             Term::Var(v) => {
-                let def = *state
-                    .context
-                    .lookup
-                    .get(v)
-                    .ok_or_else(|| ResolveError::UnboundVar(v.clone()))?;
+                let def = v.resolve(state)?;
                 Ok(Term::Var(def))
             }
             Term::Abs(Abstraction(params, term)) => {
@@ -197,8 +261,7 @@ impl Resolve<Term<DefId>> for Term<NameRef<VarName>> {
                 Ok(PureBind { binding, tail }.into())
             }
             Term::Ctor(Constructor(name, args)) => {
-                // let name = name.resolve(state)?;
-                let name = name.clone();
+                let name = name.resolve(state)?;
                 let args = args.resolve(state)?;
                 Ok(Constructor(name, args).into())
             }
@@ -213,8 +276,7 @@ impl Resolve<Term<DefId>> for Term<NameRef<VarName>> {
             }
             Term::Dtor(Destructor(term, name, args)) => {
                 let term = term.resolve(state)?;
-                // let name = name.resolve(state)?;
-                let name = name.clone();
+                let name = name.resolve(state)?;
                 let args = args.resolve(state)?;
                 Ok(Destructor(term, name, args).into())
             }
@@ -225,18 +287,97 @@ impl Resolve<Term<DefId>> for Term<NameRef<VarName>> {
 
 /* -------------------------------- TopLevel -------------------------------- */
 
+impl Resolve<TypeDefHead> for TypeDefHead {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<TypeDefHead, ResolveError> {
+        Ok(self.clone())
+    }
+}
+
+impl Resolve<TypeArm> for TypeArm {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<TypeArm, ResolveError> {
+        let TypeArm { name, args, out } = self;
+        let name = name.resolve(state)?;
+        let args = args.resolve(state)?;
+        let out = out.resolve(state)?;
+        Ok(TypeArm { name, args, out })
+    }
+}
+
+impl Resolve<Vec<Declaration>> for Modifiers<ts::Declaration> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Vec<Declaration>, ResolveError> {
+        let Modifiers { public: _, external, inner: decl } = self;
+        match decl {
+            ts::Declaration::Type(TypeDef { head, name, params, arms }) => {
+                if *external && arms.is_some() {
+                    let name = &state.textual_arena.defs[*name];
+                    Err(ResolveError::ExternButDefined(name.clone()))?
+                } else if !*external && arms.is_none() {
+                    // peeking ahead to see if this is a definition later
+                    let def = name;
+                    let name = state.textual_arena.defs[*def].clone().inner();
+                    // Todo: work out module resolution
+                    if let Some(prev_def) =
+                        state.context.peeks.insert(NameRef(Vec::new(), name), *def)
+                    {
+                        let name = state.textual_arena.defs[prev_def].clone();
+                        Err(ResolveError::DeclaredButNotDefined(name))?
+                    }
+                    Ok(Vec::new())
+                } else {
+                    let head = head.resolve(state)?;
+                    let name = name.resolve(state)?;
+                    let params = params.resolve(state)?;
+                    let arms = arms.resolve(state)?;
+                    Ok(vec![TypeDef { head, name, params, arms }.into()])
+                }
+            }
+            ts::Declaration::Define(Define(gen)) => {
+                let gen = gen.resolve(state)?;
+                if *external && gen.bindee.is_some() {
+                    let pat = &state.textual_arena.patterns[gen.binder];
+                    let def = pat.inner.get_def_id(state.textual_arena);
+                    let name = match def {
+                        Some(def) => state.textual_arena.defs[def].clone(),
+                        None => pat.info.make(VarName(String::from("<internal>"))),
+                    };
+                    Err(ResolveError::ExternButDefined(name))?
+                }
+                Ok(vec![Define(gen).into()])
+            }
+            ts::Declaration::Module(Module { name: _, top: None }) => {
+                // Todo: work out module resolution
+                unimplemented!()
+            }
+            ts::Declaration::Module(Module { name: _, top: Some(TopLevel(top_)) }) => {
+                // Todo: work out module resolution
+                let mut top = Vec::new();
+                for decl in top_ {
+                    top.extend(decl.resolve(state)?);
+                }
+                Ok(top)
+            }
+            ts::Declaration::UseDef(_) => Ok(Vec::new()),
+            ts::Declaration::Main(Main(term)) => {
+                let term = term.resolve(state)?;
+                Ok(vec![Main(term).into()])
+            }
+        }
+    }
+}
+
 impl<'a> Resolver<'a> {
     pub fn exec(&mut self) -> Result<(), Vec<ResolveError>> {
-        let errors = Vec::new();
+        let mut errors = Vec::new();
         let ts::TopLevel(decls) = self.textual_top;
-        for Modifiers { public: _, external: _, inner: decl } in decls {
-            match decl {
-                Declaration::Type(TypeDef { head: _, name: _, params: _, arms: _ }) => {}
-                Declaration::Define(_) => todo!(),
-                Declaration::Module(_) => todo!(),
-                Declaration::UseDef(_) => todo!(),
-                Declaration::Main(_) => todo!(),
-            }
+        for decl in decls {
+            let decls = match decl.resolve(self) {
+                Ok(decls) => decls,
+                Err(e) => {
+                    errors.push(e);
+                    continue;
+                }
+            };
+            self.top.extend(decls);
         }
         if errors.is_empty() {
             Ok(())

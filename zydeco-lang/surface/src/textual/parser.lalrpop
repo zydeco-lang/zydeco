@@ -155,7 +155,7 @@ GenBind: GenBind = {
 LetSep: () = { ";", "in", };
 
 Matcher: Matcher<TermId> = {
-    "|" <name:NameRef<CtorName>>
+    "|" <name:CtorName>
         <binders:SepByDelim<"(", ",", <PatternId>, ")">>
     "->" <tail:TermId> => Matcher {
         name, binders, tail
@@ -163,7 +163,7 @@ Matcher: Matcher<TermId> = {
 };
 
 CoMatcher: CoMatcher<TermId> = {
-    "|" <name:NameRef<DtorName>>
+    "|" <name:DtorName>
         <binders:SepByDelim<"(", ",", <PatternId>, ")">>
     "->" <tail:TermId> => CoMatcher {
         name, binders, tail
@@ -222,9 +222,9 @@ TermRight: Term<NameRef<VarName>> = {
         ty_in, ty_out
     ).into(),
     // destructor
-    <term:TermGen<TermRight>> <dtor_name:NameRef<DtorName>>
+    <term:TermGen<TermRight>> <name:DtorName>
     <args:SepByDelim<"(", ",", <TermId>, ")">> => Destructor(
-        term, dtor_name, args
+        term, name, args
     ).into(),
 };
 
@@ -241,9 +241,8 @@ TermAtom: Term<NameRef<VarName>> = {
     "!" <TermAtomId> => Force(<>).into(),
     "ret" <TermAtomId> => Return(<>).into(),
     // constructor
-    <ctor_name:NameRef<CtorName>>
-    <args:SepByDelim<"(", ",", <TermId>, ")">> => Constructor(
-        ctor_name, args
+    <name:CtorName> <args:SepByDelim<"(", ",", <TermId>, ")">> => Constructor(
+        name, args
     ).into(),
     <Literal> => <>.into(),
 };
@@ -272,7 +271,7 @@ TypeArmName: TypeArmName = {
 };
 #[inline]
 TypeArm: TypeArm = {
-    "|" <name:NameDef<TypeArmName>> <args:SepByDelim<"(", ",", <TermId>, ")">>
+    "|" <name:TypeArmName> <args:SepByDelim<"(", ",", <TermId>, ")">>
     <out:(":" <TermId>)?> => TypeArm {
         name, args, out,
     },
