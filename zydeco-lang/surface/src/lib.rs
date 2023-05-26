@@ -8,7 +8,6 @@ pub mod files {
 }
 
 pub mod textual {
-    pub mod arena;
     pub mod syntax;
     pub mod lexer;
     #[allow(clippy::all)]
@@ -24,6 +23,7 @@ pub mod textual {
 }
 
 pub mod binded {
-    pub mod context;
+    pub mod syntax;
     pub mod resolver;
+    pub mod err;
 }

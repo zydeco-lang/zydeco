@@ -1,10 +1,10 @@
 use crate::textual::{
-    arena::*, syntax::*, lexer::*, escape,
+    syntax::*, lexer::*, escape,
 };
 
-grammar<'input, 'arena>(
+grammar<'input, 'ctx>(
     input: &'input str,
-    ar: &'arena mut Arena<NameRef<VarName>>,
+    ctx: &'ctx mut Context,
 );
 
 //* --------------------------------- Tokens --------------------------------- */
@@ -71,7 +71,7 @@ extern {
 //* -------------------------------- Utilities ------------------------------- */
 
 #[inline]
-Sp<T>: Sp<T> = <l:@L> <inner:T> <r:@R> => Sp { span: Span::new(l, r), inner, };
+Sp<T>: Sp<T> = <l:@L> <inner:T> <r:@R> => Sp { info: Span::new(l, r), inner, };
 
 // #[inline]
 SepByDelim<Start, Sep, T, End>: Vec<T> = {
@@ -125,12 +125,12 @@ DtorName: DtorName = {
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
 NameRef<T>: NameRef<T> = <path:(<ModName> "/")*> <inner:T> => NameRef(path, inner);
 
-DefId: DefId = <NameDef<Sp<VarName>>> => ar.def(<>.0);
+DefId: DefId = <NameDef<Sp<VarName>>> => ctx.def(<>.0);
 
 //* --------------------------------- Pattern -------------------------------- */
 
 #[inline]
-PatternId: PatternId = <Sp<Pattern>> => ar.pattern(<>);
+PatternId: PatternId = <Sp<Pattern>> => ctx.pattern(<>);
 Pattern: Pattern = {
     "(" <Pattern> ")" => <>.into(),
     <DefId> => <>.into(),
@@ -171,7 +171,7 @@ CoMatcher: CoMatcher<TermId> = {
 };
 
 #[inline]
-TermGen<T>: TermId = <Sp<T>> => ar.term(<>);
+TermGen<T>: TermId = <Sp<T>> => ctx.term(<>);
 
 #[inline]
 TermId: TermId = <TermGen<Term>>;

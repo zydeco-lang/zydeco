@@ -1664,6 +1664,7 @@ name = "zydeco-surface"
 version = "0.2.0"
 dependencies = [
  "codespan-reporting",
+ "im",
  "lalrpop",
  "lalrpop-util",
  "logos",

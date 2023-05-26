@@ -1,10 +1,6 @@
 use super::{err::SurfaceError, package::ProjectMode};
 use crate::textual::{
-    arena::{Arena, ArenaNameRef},
-    err::ParseError,
-    lexer::Lexer,
-    parser::TopLevelParser,
-    syntax::TopLevel,
+    err::ParseError, lexer::Lexer, parser::TopLevelParser, syntax::{TopLevel, Context},
 };
 use codespan_reporting::files::SimpleFiles;
 use std::{
@@ -28,7 +24,7 @@ pub struct FileParsed {
     pub mode: ProjectMode,
     pub deps: Vec<String>,
     pub top: TopLevel,
-    pub arena: ArenaNameRef,
+    pub arena: Context,
 }
 
 pub struct FileParsedMeta {
@@ -61,7 +57,7 @@ impl Driver {
         let loc = FileLoc(path.to_path_buf());
 
         // parsing and span mapping
-        let mut arena = Arena::default();
+        let mut arena = Context::default();
         let file_info = FileInfo::new(&source, Rc::new(path.to_path_buf()));
         let top = TopLevelParser::new().parse(&source, &mut arena, Lexer::new(&source)).map_err(
             |error| {
