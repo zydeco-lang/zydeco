@@ -1,4 +1,7 @@
-use super::{err::SurfaceError, package::ProjectMode};
+use super::{
+    err::SurfaceError,
+    package::{FileId, FileLoc, ProjectMode},
+};
 use crate::textual::{
     err::ParseError,
     lexer::Lexer,
@@ -6,22 +9,8 @@ use crate::textual::{
     syntax::{Ctx, TopLevel},
 };
 use codespan_reporting::files::SimpleFiles;
-use std::{
-    collections::HashMap,
-    fmt::{self, Display},
-    path::{Path, PathBuf},
-    rc::Rc,
-};
+use std::{collections::HashMap, path::Path, rc::Rc};
 use zydeco_utils::span::FileInfo;
-
-pub struct FileLoc(pub PathBuf);
-impl Display for FileLoc {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0.display())
-    }
-}
-
-pub type FileId = usize;
 
 pub struct FileParsed {
     pub mode: ProjectMode,
@@ -36,12 +25,12 @@ pub struct FileParsedMeta {
     pub parsed: FileParsed,
 }
 
-pub struct Driver {
+pub struct ParsedMap {
     pub files: SimpleFiles<FileLoc, String>,
     pub parsed_map: HashMap<FileId, FileParsed>,
 }
 
-impl Driver {
+impl ParsedMap {
     pub fn new() -> Self {
         let files = SimpleFiles::new();
         let parsed_map = HashMap::new();
@@ -89,15 +78,5 @@ impl Driver {
     pub fn std() -> FileParsedMeta {
         Self::parse_file("zydeco-lang/src/library/std_next.zydeco")
             .unwrap_or_else(|e| panic!("{}", e))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn it_works() {
-        std::env::set_current_dir("../../").unwrap();
-        let _driver = Driver::new();
     }
 }

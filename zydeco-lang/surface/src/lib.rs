@@ -1,10 +1,14 @@
 #![allow(clippy::style)]
 #![allow(clippy::useless_format)]
 
-pub mod files {
-    pub mod driver;
+pub mod driver {
+    pub mod parsed;
+    pub mod resolved;
     pub mod package;
     pub mod err;
+
+    #[cfg(test)]
+    mod tests;
 }
 
 pub mod textual {

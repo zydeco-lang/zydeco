@@ -1,5 +1,8 @@
 use super::err::SurfaceError;
-use std::path::PathBuf;
+use std::{
+    fmt::{self, Display},
+    path::PathBuf,
+};
 
 /// Specifies how to deal with imports in the source code file.
 pub enum ProjectMode {
@@ -52,4 +55,19 @@ pub struct Package {
 pub struct Bin {
     pub name: String,
     pub root: PathBuf,
+}
+
+pub struct FileLoc(pub PathBuf);
+impl Display for FileLoc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.display())
+    }
+}
+
+pub type FileId = usize;
+
+pub enum Dependency {
+    DirectImport(PathBuf),
+    ManagedImport(PathBuf),
+    Hierachy(Vec<String>),
 }
