@@ -47,7 +47,7 @@ pub enum Pattern {
     Hole(Hole),
 }
 impl Pattern {
-    pub fn get_def_id(&self, ctx: &Context) -> Option<DefId> {
+    pub fn get_def_id(&self, ctx: &Ctx) -> Option<DefId> {
         match self {
             Pattern::Var(id) => Some(*id),
             Pattern::Ann(Annotation { term, ty: _ }) => ctx.patterns[*term].inner.get_def_id(ctx),
@@ -257,7 +257,7 @@ slotmap::new_key_type! {
 }
 
 #[derive(Default)]
-pub struct Context {
+pub struct Ctx {
     // arenas
     pub patterns: SlotMap<PatternId, Sp<Pattern>>,
     pub terms: SlotMap<TermId, Sp<Term<NameRef<VarName>>>>,
@@ -267,7 +267,7 @@ pub struct Context {
     pub deps: Vec<String>,
 }
 
-impl Context {
+impl Ctx {
     pub fn pattern(&mut self, pattern: Sp<Pattern>) -> PatternId {
         self.patterns.insert(pattern)
     }

@@ -4,7 +4,7 @@ use crate::textual::{
 
 grammar<'input, 'ctx>(
     input: &'input str,
-    ctx: &'ctx mut Context,
+    ctx: &'ctx mut Ctx,
 );
 
 //* --------------------------------- Tokens --------------------------------- */

@@ -8,20 +8,19 @@ use crate::textual::syntax::{self as ts, *};
 
 pub struct Resolver<'a> {
     // references to textual syntax
-    pub textual_arena: &'a ts::Context,
+    pub textual_ctx: &'a ts::Ctx,
     pub textual_top: &'a ts::TopLevel,
     // new binded syntax that is being built
     pub context: Context,
     pub top: TopLevel,
     // meta
-    // Todo: use it to report errors
     pub span: Span,
 }
 
 impl Resolver<'_> {
-    pub fn new<'a>(textual_arena: &'a ts::Context, textual_top: &'a ts::TopLevel) -> Resolver<'a> {
+    pub fn new<'a>(textual_ctx: &'a ts::Ctx, textual_top: &'a ts::TopLevel) -> Resolver<'a> {
         Resolver {
-            textual_arena,
+            textual_ctx,
             textual_top,
             context: Context::default(),
             top: TopLevel::default(),
@@ -98,7 +97,7 @@ impl<T: Resolve<T>> Resolve<Vec<T>> for Vec<T> {
 
 impl Resolve<DefId> for DefId {
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<DefId, ResolveError> {
-        let name = state.textual_arena.defs[*self].clone().inner();
+        let name = state.textual_ctx.defs[*self].clone().inner();
         // Todo: work out module resolution
         state.context.lookup.insert(NameRef(Vec::new(), name), *self);
         Ok((*self).into())
@@ -119,7 +118,7 @@ impl Resolve<DefId> for NameRef<VarName> {
 
 impl Resolve<PatternId> for PatternId {
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<PatternId, ResolveError> {
-        let sp_pattern = &state.textual_arena.patterns[*self];
+        let sp_pattern = &state.textual_ctx.patterns[*self];
         let span = state.span.clone();
         state.span = sp_pattern.info.clone();
         let pattern = sp_pattern.try_map_ref(|pattern| pattern.resolve(state))?;
@@ -181,7 +180,7 @@ impl Resolve<CoMatcher<TermId>> for CoMatcher<TermId> {
 
 impl Resolve<TermId> for TermId {
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<TermId, ResolveError> {
-        let sp_term = &state.textual_arena.terms[*self];
+        let sp_term = &state.textual_ctx.terms[*self];
         let span = state.span.clone();
         state.span = sp_term.info.clone();
         let term = sp_term.try_map_ref(|term| term.resolve(state))?;
@@ -309,17 +308,17 @@ impl Resolve<Vec<Declaration>> for Modifiers<ts::Declaration> {
         match decl {
             ts::Declaration::Type(TypeDef { head, name, params, arms }) => {
                 if *external && arms.is_some() {
-                    let name = &state.textual_arena.defs[*name];
+                    let name = &state.textual_ctx.defs[*name];
                     Err(ResolveError::ExternButDefined(name.clone()))?
                 } else if !*external && arms.is_none() {
                     // peeking ahead to see if this is a definition later
                     let def = name;
-                    let name = state.textual_arena.defs[*def].clone().inner();
+                    let name = state.textual_ctx.defs[*def].clone().inner();
                     // Todo: work out module resolution
                     if let Some(prev_def) =
                         state.context.peeks.insert(NameRef(Vec::new(), name), *def)
                     {
-                        let name = state.textual_arena.defs[prev_def].clone();
+                        let name = state.textual_ctx.defs[prev_def].clone();
                         Err(ResolveError::DeclaredButNotDefined(name))?
                     }
                     Ok(Vec::new())
@@ -334,10 +333,10 @@ impl Resolve<Vec<Declaration>> for Modifiers<ts::Declaration> {
             ts::Declaration::Define(Define(gen)) => {
                 let gen = gen.resolve(state)?;
                 if *external && gen.bindee.is_some() {
-                    let pat = &state.textual_arena.patterns[gen.binder];
-                    let def = pat.inner.get_def_id(state.textual_arena);
+                    let pat = &state.textual_ctx.patterns[gen.binder];
+                    let def = pat.inner.get_def_id(state.textual_ctx);
                     let name = match def {
-                        Some(def) => state.textual_arena.defs[def].clone(),
+                        Some(def) => state.textual_ctx.defs[def].clone(),
                         None => pat.info.make(VarName(String::from("<internal>"))),
                     };
                     Err(ResolveError::ExternButDefined(name))?

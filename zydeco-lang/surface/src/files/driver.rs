@@ -3,7 +3,7 @@ use crate::textual::{
     err::ParseError,
     lexer::Lexer,
     parser::TopLevelParser,
-    syntax::{Context, TopLevel},
+    syntax::{Ctx, TopLevel},
 };
 use codespan_reporting::files::SimpleFiles;
 use std::{
@@ -27,7 +27,7 @@ pub struct FileParsed {
     pub mode: ProjectMode,
     pub deps: Vec<String>,
     pub top: TopLevel,
-    pub arena: Context,
+    pub ctx: Ctx,
 }
 
 pub struct FileParsedMeta {
@@ -60,24 +60,24 @@ impl Driver {
         let loc = FileLoc(path.to_path_buf());
 
         // parsing and span mapping
-        let mut arena = Context::default();
+        let mut ctx = Ctx::default();
         let file_info = FileInfo::new(&source, Rc::new(path.to_path_buf()));
-        let top = TopLevelParser::new().parse(&source, &mut arena, Lexer::new(&source)).map_err(
+        let top = TopLevelParser::new().parse(&source, &mut ctx, Lexer::new(&source)).map_err(
             |error| {
                 SurfaceError::ParseError(ParseError { error, file_info: &file_info }.to_string())
             },
         )?;
-        arena.span_map(&file_info);
+        ctx.span_map(&file_info);
 
         // processing project and dependency specs
-        let mode = match &arena.project {
+        let mode = match &ctx.project {
             Some(project) => ProjectMode::new(project)?,
             None => Default::default(),
         };
-        let deps = arena.deps.clone();
+        let deps = ctx.deps.clone();
 
         // assemble
-        let parsed = FileParsed { mode, deps, top, arena };
+        let parsed = FileParsed { mode, deps, top, ctx };
         Ok(FileParsedMeta { loc, source, parsed })
     }
 
