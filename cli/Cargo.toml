@@ -9,6 +9,10 @@ edition = "2021"
 clap = { version = "4", features = ["derive"] }
 zydeco-lang = { path = "../zydeco-lang" }
 
+[build-dependencies]
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+
 [[bin]]
 name = "zydeco"
 path = "src/main.rs"
