@@ -265,6 +265,9 @@ pub struct Ctx {
     // meta
     pub project: Option<String>,
     pub deps: Vec<String>,
+    pub mod_decls: Vec<Vec<String>>,
+    // temp
+    pub mod_stack: Vec<String>,
 }
 
 impl Ctx {
@@ -277,6 +280,22 @@ impl Ctx {
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         self.defs.insert(def)
     }
+
+    pub fn enter_mod(&mut self, mod_name: NameDef<ModName>) -> NameDef<ModName> {
+        let NameDef(ModName(name)) = mod_name.clone();
+        self.mod_stack.push(name);
+        mod_name
+    }
+    pub fn mod_decl(&mut self, mod_name: NameDef<ModName>) {
+        let NameDef(ModName(name)) = mod_name.clone();
+        let mut stack = self.mod_stack.clone();
+        stack.push(name);
+        self.mod_decls.push(stack);
+    }
+    pub fn exit_mod(&mut self) {
+        self.mod_stack.pop();
+    }
+
     pub fn span_map(&mut self, file_info: &FileInfo) {
         for (_, pattern) in self.patterns.iter_mut() {
             pattern.info.set_info(file_info);

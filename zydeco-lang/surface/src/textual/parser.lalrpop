@@ -123,7 +123,9 @@ DtorName: DtorName = {
 };
 
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
-NameRef<T>: NameRef<T> = <path:(<ModName> "/")*> <inner:T> => NameRef(path, inner);
+NameRef<T>: NameRef<T> = <path:(<ModName> "/")*> <inner:T> => {
+    NameRef(path, inner)
+};
 
 DefId: DefId = <NameDef<Sp<VarName>>> => ctx.def(<>.0);
 
@@ -241,9 +243,9 @@ TermAtom: Term<NameRef<VarName>> = {
     "!" <TermAtomId> => Force(<>).into(),
     "ret" <TermAtomId> => Return(<>).into(),
     // constructor
-    <name:CtorName> <args:SepByDelim<"(", ",", <TermId>, ")">> => Constructor(
-        name, args
-    ).into(),
+    <name:CtorName> <args:SepByDelim<"(", ",", <TermId>, ")">> => {
+        Constructor(name, args).into()
+    },
     <Literal> => <>.into(),
 };
 
@@ -272,15 +274,20 @@ TypeArmName: TypeArmName = {
 #[inline]
 TypeArm: TypeArm = {
     "|" <name:TypeArmName> <args:SepByDelim<"(", ",", <TermId>, ")">>
-    <out:(":" <TermId>)?> => TypeArm {
-        name, args, out,
+    <out:(":" <TermId>)?> => {
+        TypeArm { name, args, out }
     },
 };
 
-#[inline]
 DefineHead: () = { "define", "alias", };
-#[inline]
 DefineEnd: () = { "end", ";", };
+
+ModuleHead: NameDef<ModName> = "module" <name:NameDef<ModName>> => {
+    ctx.enter_mod(name)
+};
+ModuleEnd: () = "end" => {
+    ctx.exit_mod()
+};
 
 UseEnum: UseEnum = {
     <VarName> => <>.into(),
@@ -293,9 +300,12 @@ UseDef: UseDef = <NameRef<UseEnum>> => UseDef(<>);
 Declaration: Declaration = {
     <TypeDef> => <>.into(),
     DefineHead <GenBind> DefineEnd => Define(<>).into(),
-    "module" <name:NameDef<ModName>>
-        <top:("where" <TopLevel>)?>
-    "end" => Module { name, top }.into(),
+    <name:ModuleHead> <top:("where" <TopLevel>)?> ModuleEnd => {
+        if top.is_none() {
+            ctx.mod_decl(name.clone())
+        }
+        Module { name, top }.into()
+    },
     "use" <UseDef> "end" => <>.into(),
     "main" <TermId> "end" => Main(<>).into(),
 };
