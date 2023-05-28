@@ -1,6 +1,6 @@
 use super::{
     err::SurfaceError,
-    package::{FileId, FileLoc, ProjectMode},
+    package::{Dependency, FileId, FileLoc, ProjectMode},
 };
 use crate::textual::{
     err::ParseError,
@@ -13,8 +13,9 @@ use std::{collections::HashMap, path::Path, rc::Rc};
 use zydeco_utils::span::FileInfo;
 
 pub struct FileParsed {
+    pub mod_path: Vec<String>,
     pub mode: ProjectMode,
-    pub deps: Vec<String>,
+    pub deps: Vec<Dependency>,
     pub top: TopLevel,
     pub ctx: Ctx,
 }
@@ -41,11 +42,15 @@ impl ParsedMap {
     pub fn parse_file(path: impl AsRef<Path>) -> Result<FileParsedMeta, SurfaceError> {
         // read file
         let path = path.as_ref();
-        let source = std::fs::read_to_string(&path).map_err(|_| SurfaceError::PathNotFound {
-            searched: vec![],
-            path: path.to_path_buf(),
-        })?;
+        let source = std::fs::read_to_string(&path)
+            .map_err(|_| SurfaceError::PathNotFound { path: path.to_path_buf() })?;
         let loc = FileLoc(path.to_path_buf());
+        // Todo: get a real module path
+        let mod_name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| SurfaceError::PathInvalid { path: path.to_path_buf() })?
+            .to_owned();
 
         // parsing and span mapping
         let mut ctx = Ctx::default();
@@ -65,7 +70,7 @@ impl ParsedMap {
         let deps = ctx.deps.clone();
 
         // assemble
-        let parsed = FileParsed { mode, deps, top, ctx };
+        let parsed = FileParsed { mode, deps, top, ctx, mod_path: vec![mod_name] };
         Ok(FileParsedMeta { loc, source, parsed })
     }
 

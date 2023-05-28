@@ -1,5 +1,6 @@
 //! The surface syntax of zydeco is defined in this module.
 
+use crate::path::package::Dependency;
 use derive_more::From;
 use slotmap::SlotMap;
 use zydeco_utils::span::FileInfo;
@@ -273,8 +274,7 @@ pub struct Ctx {
     pub defs: SlotMap<DefId, Sp<VarName>>,
     // meta
     pub project: Option<String>,
-    pub deps: Vec<String>,
-    pub mod_decls: Vec<Vec<String>>,
+    pub deps: Vec<Dependency>,
     // temp
     pub mod_stack: Vec<String>,
 }
@@ -299,7 +299,7 @@ impl Ctx {
         let NameDef(ModName(name)) = mod_name;
         let mut stack = self.mod_stack.clone();
         stack.push(name);
-        self.mod_decls.push(stack);
+        self.deps.push(Dependency::Hierachy(stack));
     }
     pub fn exit_mod(&mut self) {
         self.mod_stack.pop();

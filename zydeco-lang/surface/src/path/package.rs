@@ -5,6 +5,7 @@ use std::{
 };
 
 /// Specifies how to deal with imports in the source code file.
+#[derive(Default)]
 pub enum ProjectMode {
     /// `Managed` mode, with a `Zydeco.toml` project file. The project file is
     /// then used as the root of all direct imports and also a place for
@@ -18,6 +19,7 @@ pub enum ProjectMode {
     /// `.zy` file is treated as the root for all imports. The driver will
     /// basically do nothing to help figure out the project structure and
     /// totally rely on the imports you write.
+    #[default]
     Root,
     /// Same as `Root` mode, but without the standard library. Since we can't do
     /// much for project management under the `Root` mode, we have to introduce
@@ -30,13 +32,8 @@ impl ProjectMode {
             "managed" => ProjectMode::Managed,
             "root" => ProjectMode::Root,
             "root_no_std" => ProjectMode::RootNoStd,
-            _ => Err(SurfaceError::InvalidProject)?,
+            _ => Err(SurfaceError::ProjectInvalid)?,
         })
-    }
-}
-impl Default for ProjectMode {
-    fn default() -> Self {
-        Self::Root
     }
 }
 
@@ -66,6 +63,7 @@ impl Display for FileLoc {
 
 pub type FileId = usize;
 
+#[derive(Clone)]
 pub enum Dependency {
     DirectImport(PathBuf),
     ManagedImport(PathBuf),
