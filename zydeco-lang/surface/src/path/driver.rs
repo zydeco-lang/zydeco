@@ -10,7 +10,7 @@ impl Driver {
     }
     pub fn single_file(&mut self, path: impl AsRef<Path>) -> Result<(), SurfaceError> {
         let mut deps = DependencyTracker::default();
-        
+
         // parse
         let mut parsed = ParsedMap::default();
         let id = parsed.add_file_parsed(ParsedMap::parse_file(path)?);

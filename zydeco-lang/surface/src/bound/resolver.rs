@@ -1,6 +1,6 @@
 use super::{
     err::ResolveError,
-    syntax::{Context, Declaration, TopLevel},
+    syntax::{Ctx, Declaration, TopLevel},
 };
 use crate::textual::syntax::{self as ts, *};
 
@@ -11,10 +11,12 @@ pub struct Resolver<'a> {
     pub textual_ctx: &'a ts::Ctx,
     pub textual_top: &'a ts::TopLevel,
     // new binded syntax that is being built
-    pub context: Context,
+    pub ctx: Ctx,
     pub top: TopLevel,
     // temp
-    pub span: Span,
+    module_stack: Vec<ModName>,
+    lookup_stack: Vec<im::HashMap<NameRef<VarName>, DefId>>,
+    span_stack: Vec<Span>,
 }
 
 impl Resolver<'_> {
@@ -22,10 +24,38 @@ impl Resolver<'_> {
         Resolver {
             textual_ctx,
             textual_top,
-            context: Context::default(),
+            ctx: Ctx::default(),
             top: TopLevel::default(),
-            span: Span::dummy(),
+            module_stack: Default::default(),
+            lookup_stack: Default::default(),
+            span_stack: Default::default(),
         }
+    }
+    pub fn mod_enter(&mut self, name: &ModName) {
+        self.module_stack.push(name.clone());
+    }
+    pub fn mod_exit(&mut self) {
+        self.module_stack.pop();
+    }
+    /// a "reset point" for the lookup context
+    pub fn scope_enter(&mut self) {
+        self.lookup_stack.push(self.ctx.lookup.clone());
+    }
+    /// visit last reset point and consume it
+    pub fn scope_exit(&mut self) {
+        self.ctx.lookup = self.lookup_stack.pop().unwrap_or_default();
+    }
+    /// a "reset point" for the span
+    pub fn span_enter(&mut self, span: Span) {
+        self.span_stack.push(span);
+    }
+    /// get the current span
+    pub fn span(&self) -> Span {
+        self.span_stack.last().cloned().unwrap_or(Span::dummy())
+    }
+    /// discard the last span
+    pub fn span_exit(&mut self) {
+        self.span_stack.pop();
     }
 }
 
@@ -53,7 +83,7 @@ where
 impl Resolve for bool {
     type Out = bool;
     type Error = ResolveError;
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<bool, Self::Error> {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         Ok(*self)
     }
 }
@@ -61,7 +91,7 @@ impl Resolve for bool {
 impl Resolve for Hole {
     type Out = Hole;
     type Error = ResolveError;
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Hole, Self::Error> {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         Ok(self.clone())
     }
 }
@@ -69,7 +99,7 @@ impl Resolve for Hole {
 impl Resolve for CtorName {
     type Out = CtorName;
     type Error = ResolveError;
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<CtorName, Self::Error> {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         Ok(self.clone())
     }
 }
@@ -77,7 +107,7 @@ impl Resolve for CtorName {
 impl Resolve for DtorName {
     type Out = DtorName;
     type Error = ResolveError;
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<DtorName, Self::Error> {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         Ok(self.clone())
     }
 }
@@ -85,7 +115,7 @@ impl Resolve for DtorName {
 impl Resolve for TypeArmName {
     type Out = TypeArmName;
     type Error = ResolveError;
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<TypeArmName, Self::Error> {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         Ok(self.clone())
     }
 }
@@ -120,10 +150,10 @@ where
 impl Resolve for DefId {
     type Out = DefId;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<DefId, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let name = state.textual_ctx.defs[*self].clone().inner();
         // Todo: work out module resolution
-        state.context.lookup.insert(NameRef(Vec::new(), name), *self);
+        state.ctx.lookup.insert(NameRef(Vec::new(), name), *self);
         Ok(*self)
     }
 }
@@ -131,12 +161,12 @@ impl Resolve for DefId {
 impl Resolve for NameRef<VarName> {
     type Out = DefId;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<DefId, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         Ok(*state
-            .context
+            .ctx
             .lookup
             .get(self)
-            .ok_or_else(|| ResolveError::UnboundVar(state.span.make(self.clone())))?)
+            .ok_or_else(|| ResolveError::UnboundVar(state.span().make(self.clone())))?)
     }
 }
 
@@ -145,59 +175,99 @@ impl Resolve for NameRef<VarName> {
 impl Resolve for PatternId {
     type Out = PatternId;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<PatternId, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let sp_pattern = &state.textual_ctx.patterns[*self];
-        let span = state.span.clone();
-        state.span = sp_pattern.info.clone();
+        state.span_enter(sp_pattern.info.clone());
         let pattern = sp_pattern.try_map_ref(|pattern| pattern.resolve(state))?;
-        state.span = span;
-        Ok(state.context.pattern(pattern))
+        state.span_exit();
+        Ok(state.ctx.pattern(pattern))
     }
 }
 impl Resolve for Pattern {
     type Out = Pattern;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Pattern, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         match self {
             Pattern::Ann(Annotation { term, ty }) => {
-                let term = term.resolve(state)?;
+                // annotations are resolved before the binders
                 let ty = ty.resolve(state)?;
+                let term = term.resolve(state)?;
                 Ok(Annotation { term, ty }.into())
             }
             Pattern::Var(def) => {
+                // binders are inserted into the lookup table
                 let def = def.resolve(state)?;
                 Ok(Pattern::Var(def))
             }
-            Pattern::Hole(_) => Ok(self.clone()),
+            Pattern::Hole(h) => Ok(h.resolve(state)?.into()),
         }
     }
 }
 
 /* ---------------------------------- Term ---------------------------------- */
 
+struct GenBinder(PatternId);
+impl Resolve for GenBinder {
+    type Out = PatternId;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
+        let GenBinder(binder) = self;
+        let binder = binder.resolve(state)?;
+        match state.ctx.patterns[binder].inner {
+            Pattern::Ann(_) => {
+                let pat = &state.textual_ctx.patterns[binder];
+                let def = pat.inner.get_def_id(state.textual_ctx);
+                let name = match def {
+                    Some(def) => state.textual_ctx.defs[def].clone(),
+                    None => pat.info.make(VarName(String::from("<internal>"))),
+                };
+                Err(ResolveError::AmbiguousBinderAnnotation(name))
+            }
+            Pattern::Var(_) | Pattern::Hole(_) => Ok(binder),
+        }
+    }
+}
+
 impl Resolve for GenBind {
     type Out = GenBind;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<GenBind, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let GenBind { rec, fun, binder, params, ty, bindee } = self;
+        // currently all GenBind params are pi typed definitions
         let rec = rec.resolve(state)?;
         let fun = fun.resolve(state)?;
-        let binder = binder.resolve(state)?;
-        let params = params.resolve(state)?;
         let ty = ty.resolve(state)?;
-        let bindee = bindee.resolve(state)?;
-        Ok(GenBind { rec, fun, binder, params, ty, bindee })
+        let res = if rec {
+            // binders are in scope for the bindee
+            let binder = GenBinder(*binder).resolve(state)?;
+            state.scope_enter();
+            let params = params.resolve(state)?;
+            let bindee = bindee.resolve(state)?;
+            state.scope_exit();
+            GenBind { rec, fun, binder, params, ty, bindee }
+        } else {
+            state.scope_enter();
+            let params = params.resolve(state)?;
+            let bindee = bindee.resolve(state)?;
+            state.scope_exit();
+            // binders are **not** in scope for the bindee
+            let binder = GenBinder(*binder).resolve(state)?;
+            GenBind { rec, fun, binder, params, ty, bindee }
+        };
+        Ok(res)
     }
 }
 
 impl Resolve for Matcher<TermId> {
     type Out = Matcher<TermId>;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Matcher<TermId>, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let Matcher { name, binders, tail } = self;
+        state.scope_enter();
         let name = name.resolve(state)?;
         let binders = binders.resolve(state)?;
         let tail = tail.resolve(state)?;
+        state.scope_exit();
         Ok(Matcher { name, binders, tail })
     }
 }
@@ -205,11 +275,13 @@ impl Resolve for Matcher<TermId> {
 impl Resolve for CoMatcher<TermId> {
     type Out = CoMatcher<TermId>;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<CoMatcher<TermId>, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let CoMatcher { name, binders, tail } = self;
+        state.scope_enter();
         let name = name.resolve(state)?;
         let binders = binders.resolve(state)?;
         let tail = tail.resolve(state)?;
+        state.scope_exit();
         Ok(CoMatcher { name, binders, tail })
     }
 }
@@ -217,23 +289,22 @@ impl Resolve for CoMatcher<TermId> {
 impl Resolve for TermId {
     type Out = TermId;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<TermId, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let sp_term = &state.textual_ctx.terms[*self];
-        let span = state.span.clone();
-        state.span = sp_term.info.clone();
+        state.span_enter(sp_term.info.clone());
         let term = sp_term.try_map_ref(|term| term.resolve(state))?;
-        state.span = span;
-        Ok(state.context.term(term))
+        state.span_exit();
+        Ok(state.ctx.term(term))
     }
 }
 impl Resolve for Term<NameRef<VarName>> {
     type Out = Term<DefId>;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver) -> Result<Term<DefId>, Self::Error> {
+    fn resolve(&self, state: &mut Resolver) -> Result<Self::Out, Self::Error> {
         match self {
             Term::Ann(Annotation { term, ty }) => {
-                let term = term.resolve(state)?;
                 let ty = ty.resolve(state)?;
+                let term = term.resolve(state)?;
                 Ok(Annotation { term, ty }.into())
             }
             Term::Hole(hole) => Ok(hole.resolve(state)?.into()),
@@ -242,8 +313,10 @@ impl Resolve for Term<NameRef<VarName>> {
                 Ok(Term::Var(def))
             }
             Term::Abs(Abstraction(params, term)) => {
+                state.scope_enter();
                 let params = params.resolve(state)?;
                 let term = term.resolve(state)?;
+                state.scope_exit();
                 Ok(Abstraction(params, term).into())
             }
             Term::App(Application(term, args)) => {
@@ -252,13 +325,17 @@ impl Resolve for Term<NameRef<VarName>> {
                 Ok(Application(term, args).into())
             }
             Term::Rec(Recursion(binder, term)) => {
+                state.scope_enter();
                 let binder = binder.resolve(state)?;
                 let term = term.resolve(state)?;
+                state.scope_exit();
                 Ok(Recursion(binder, term).into())
             }
             Term::Pi(Pi(params, term)) => {
+                state.scope_enter();
                 let params = params.resolve(state)?;
                 let term = term.resolve(state)?;
+                state.scope_exit();
                 Ok(Pi(params, term).into())
             }
             Term::Arrow(Arrow(ty_in, ty_out)) => {
@@ -267,13 +344,17 @@ impl Resolve for Term<NameRef<VarName>> {
                 Ok(Arrow(ty_in, ty_out).into())
             }
             Term::Forall(Forall(params, ty)) => {
+                state.scope_enter();
                 let params = params.resolve(state)?;
                 let ty = ty.resolve(state)?;
+                state.scope_exit();
                 Ok(Forall(params, ty).into())
             }
             Term::Exists(Exists(params, ty)) => {
+                state.scope_enter();
                 let params = params.resolve(state)?;
                 let ty = ty.resolve(state)?;
+                state.scope_exit();
                 Ok(Exists(params, ty).into())
             }
             Term::Thunk(Thunk(term)) => {
@@ -289,8 +370,10 @@ impl Resolve for Term<NameRef<VarName>> {
                 Ok(Return(term).into())
             }
             Term::Do(Bind { binder, bindee, tail }) => {
-                let binder = binder.resolve(state)?;
+                state.scope_enter();
                 let bindee = bindee.resolve(state)?;
+                state.scope_exit();
+                let binder = binder.resolve(state)?;
                 let tail = tail.resolve(state)?;
                 Ok(Bind { binder, bindee, tail }.into())
             }
@@ -329,7 +412,7 @@ impl Resolve for Term<NameRef<VarName>> {
 impl Resolve for TypeDefHead {
     type Out = TypeDefHead;
     type Error = ResolveError;
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<TypeDefHead, Self::Error> {
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         Ok(self.clone())
     }
 }
@@ -337,7 +420,7 @@ impl Resolve for TypeDefHead {
 impl Resolve for TypeArm {
     type Out = TypeArm;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<TypeArm, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let TypeArm { name, args, out } = self;
         let name = name.resolve(state)?;
         let args = args.resolve(state)?;
@@ -346,35 +429,46 @@ impl Resolve for TypeArm {
     }
 }
 
+impl Resolve for ts::Modifiers<ts::TypeDef> {
+    type Out = Vec<Declaration>;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
+        let Modifiers { public: _, external, inner: ts::TypeDef { head, name, params, arms } } =
+            self;
+        if *external && arms.is_some() {
+            let name = &state.textual_ctx.defs[*name];
+            Err(ResolveError::ExternButDefined(name.clone()))?
+        } else if !*external && arms.is_none() {
+            // peeking ahead to see if this is a definition later
+            let def = name;
+            let name = state.textual_ctx.defs[*def].clone().inner();
+            // Todo: work out module resolution
+            if let Some(prev_def) = state.ctx.peeks.insert(NameRef(Vec::new(), name), *def) {
+                let name = state.textual_ctx.defs[prev_def].clone();
+                Err(ResolveError::DeclaredButNotDefined(name))?
+            }
+            Ok(Vec::new())
+        } else {
+            let head = head.resolve(state)?;
+            let name = name.resolve(state)?;
+            state.scope_enter();
+            let params = params.resolve(state)?;
+            let arms = arms.resolve(state)?;
+            state.scope_exit();
+            Ok(vec![TypeDef { head, name, params, arms }.into()])
+        }
+    }
+}
+
 impl Resolve for Modifiers<ts::Declaration> {
     type Out = Vec<Declaration>;
     type Error = ResolveError;
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Vec<Declaration>, Self::Error> {
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let Modifiers { public: _, external, inner: decl } = self;
         match decl {
-            ts::Declaration::Type(TypeDef { head, name, params, arms }) => {
-                if *external && arms.is_some() {
-                    let name = &state.textual_ctx.defs[*name];
-                    Err(ResolveError::ExternButDefined(name.clone()))?
-                } else if !*external && arms.is_none() {
-                    // peeking ahead to see if this is a definition later
-                    let def = name;
-                    let name = state.textual_ctx.defs[*def].clone().inner();
-                    // Todo: work out module resolution
-                    if let Some(prev_def) =
-                        state.context.peeks.insert(NameRef(Vec::new(), name), *def)
-                    {
-                        let name = state.textual_ctx.defs[prev_def].clone();
-                        Err(ResolveError::DeclaredButNotDefined(name))?
-                    }
-                    Ok(Vec::new())
-                } else {
-                    let head = head.resolve(state)?;
-                    let name = name.resolve(state)?;
-                    let params = params.resolve(state)?;
-                    let arms = arms.resolve(state)?;
-                    Ok(vec![TypeDef { head, name, params, arms }.into()])
-                }
+            ts::Declaration::Type(type_def) => {
+                let decls = self.try_map_ref(|_| Ok(type_def.clone()))?.resolve(state)?;
+                Ok(decls)
             }
             ts::Declaration::Define(Define(gen)) => {
                 let gen = gen.resolve(state)?;
@@ -393,17 +487,24 @@ impl Resolve for Modifiers<ts::Declaration> {
                 // Todo: work out module resolution
                 unimplemented!()
             }
-            ts::Declaration::Module(Module { name: _, top: Some(TopLevel(top_)) }) => {
+            ts::Declaration::Module(Module { name: NameDef(name), top: Some(TopLevel(top_)) }) => {
+                state.mod_enter(name);
                 // Todo: work out module resolution
                 let mut top = Vec::new();
                 for decl in top_ {
                     top.extend(decl.resolve(state)?);
                 }
+                state.mod_exit();
                 Ok(top)
             }
-            ts::Declaration::UseDef(_) => Ok(Vec::new()),
+            ts::Declaration::UseDef(_) => {
+                // Todo: work out module resolution
+                Ok(Vec::new())
+            }
             ts::Declaration::Main(Main(term)) => {
+                state.scope_enter();
                 let term = term.resolve(state)?;
+                state.scope_exit();
                 Ok(vec![Main(term).into()])
             }
         }
@@ -424,7 +525,7 @@ impl<'a> Resolver<'a> {
             };
             self.top.extend(decls);
         }
-        for def in self.context.peeks.values() {
+        for def in self.ctx.peeks.values() {
             let name = self.textual_ctx.defs[*def].clone();
             errors.push(ResolveError::DeclaredButNotDefined(name));
         }

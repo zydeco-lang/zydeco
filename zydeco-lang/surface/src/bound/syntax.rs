@@ -26,12 +26,12 @@ pub enum Declaration {
 pub type TopLevel = Vec<Declaration>;
 
 #[derive(Default)]
-pub struct Context {
+pub struct Ctx {
     // arenas
     pub patterns: SlotMap<PatternId, Sp<Pattern>>,
     pub terms: SlotMap<TermId, Sp<Term<DefId>>>,
 
-    // temp
+    // meta
     /// for matching backwards from reference site to definition site
     pub lookup: im::HashMap<NameRef<VarName>, DefId>,
     /// for matching forwards from definition site to a declaration site;
@@ -39,7 +39,7 @@ pub struct Context {
     pub peeks: im::HashMap<NameRef<VarName>, DefId>,
 }
 
-impl Context {
+impl Ctx {
     pub fn pattern(&mut self, pattern: Sp<Pattern>) -> PatternId {
         self.patterns.insert(pattern)
     }

@@ -239,6 +239,15 @@ pub struct Modifiers<T> {
     pub external: bool,
     pub inner: T,
 }
+impl<T> Modifiers<T> {
+    pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Modifiers<U>, E>
+    where
+        F: FnOnce(&T) -> Result<U, E>,
+    {
+        let Modifiers { public, external, inner } = self;
+        Ok(Modifiers { public: *public, external: *external, inner: f(inner)? })
+    }
+}
 
 #[derive(From)]
 pub enum ReplInput {

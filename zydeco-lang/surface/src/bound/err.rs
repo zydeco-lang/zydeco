@@ -26,4 +26,6 @@ pub enum ResolveError {
     ExternButDefined(Sp<VarName>),
     #[error("No definition found for: {0}")]
     DeclaredButNotDefined(Sp<VarName>),
+    #[error("Ambiguous annotation on binder: {0}")]
+    AmbiguousBinderAnnotation(Sp<VarName>),
 }
