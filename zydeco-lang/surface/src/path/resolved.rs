@@ -1,6 +1,11 @@
 use super::{err::SurfaceError, package::FileId, parsed::ParsedMap};
-use crate::bound::resolver::Resolver;
+use crate::bound::{
+    resolver::Resolver,
+    syntax::{Ctx, DefId, Pattern, PatternId, Term, TermId, TopLevel, VarName},
+};
+use slotmap::SlotMap;
 use std::collections::{HashMap, HashSet};
+use zydeco_utils::span::Sp;
 
 /// a file -> file_dependencies map; all files must be included in the map
 #[derive(Default)]
@@ -76,7 +81,12 @@ impl ResolutionTracker {
     }
 }
 
-pub struct ResolvedFile {}
+pub struct ResolvedFile {
+    pub patterns: SlotMap<PatternId, Sp<Pattern>>,
+    pub terms: SlotMap<TermId, Sp<Term<DefId>>>,
+    pub defs: SlotMap<DefId, Sp<VarName>>,
+    pub top: TopLevel,
+}
 
 #[derive(Default)]
 pub struct ResolvedMap {
@@ -100,7 +110,9 @@ impl ResolvedMap {
                     es.into_iter().map(|e| e.to_string()).collect::<Vec<String>>().join("\n"),
                 )
             })?;
-            // Todo: fill in the map
+            let Resolver { ctx: Ctx { patterns, terms, .. }, top, .. } = resolver;
+            let defs = parsed.ctx.defs.clone();
+            self.map.insert(id, ResolvedFile { top, patterns, terms, defs });
         }
         Ok(())
     }

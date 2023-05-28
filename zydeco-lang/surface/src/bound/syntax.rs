@@ -1,7 +1,6 @@
-use crate::textual::syntax::*;
+pub use crate::textual::syntax::*;
 use derive_more::From;
 use slotmap::SlotMap;
-// use std::collections::{HashMap, HashSet};
 
 #[derive(From)]
 pub enum Declaration {
