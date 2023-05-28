@@ -424,6 +424,10 @@ impl<'a> Resolver<'a> {
             };
             self.top.extend(decls);
         }
+        for def in self.context.peeks.values() {
+            let name = self.textual_ctx.defs[*def].clone();
+            errors.push(ResolveError::DeclaredButNotDefined(name));
+        }
         if errors.is_empty() {
             Ok(())
         } else {
