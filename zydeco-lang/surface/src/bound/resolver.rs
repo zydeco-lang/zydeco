@@ -232,29 +232,39 @@ impl Resolve for GenBind {
     type Out = GenBind;
     type Error = ResolveError;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
-        let GenBind { rec, fun, binder, params, ty, bindee } = self;
+        let GenBind {
+            rec,
+            fun,
+            binder: binder_old,
+            params: params_old,
+            ty: ty_old,
+            bindee: bindee_old,
+        } = self;
         // currently all GenBind params are pi typed definitions
         let rec = rec.resolve(state)?;
         let fun = fun.resolve(state)?;
-        let ty = ty.resolve(state)?;
-        let res = if rec {
+        let binder;
+        let params;
+        let ty;
+        let bindee;
+        if rec {
             // binders are in scope for the bindee
-            let binder = GenBinder(*binder).resolve(state)?;
+            binder = GenBinder(*binder_old).resolve(state)?;
             state.scope_enter();
-            let params = params.resolve(state)?;
-            let bindee = bindee.resolve(state)?;
+            params = params_old.resolve(state)?;
+            ty = ty_old.resolve(state)?;
+            bindee = bindee_old.resolve(state)?;
             state.scope_exit();
-            GenBind { rec, fun, binder, params, ty, bindee }
         } else {
             state.scope_enter();
-            let params = params.resolve(state)?;
-            let bindee = bindee.resolve(state)?;
+            params = params_old.resolve(state)?;
+            ty = ty_old.resolve(state)?;
+            bindee = bindee_old.resolve(state)?;
             state.scope_exit();
             // binders are **not** in scope for the bindee
-            let binder = GenBinder(*binder).resolve(state)?;
-            GenBind { rec, fun, binder, params, ty, bindee }
+            binder = GenBinder(*binder_old).resolve(state)?;
         };
-        Ok(res)
+        Ok(GenBind { rec, fun, binder, params, ty, bindee })
     }
 }
 
@@ -460,28 +470,38 @@ impl Resolve for ts::Modifiers<ts::TypeDef> {
     }
 }
 
+impl Resolve for ts::Modifiers<ts::Define> {
+    type Out = Vec<Declaration>;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
+        let Modifiers { public: _, external, inner: ts::Define(gen) } = self;
+        let gen = gen.resolve(state)?;
+        if *external && gen.bindee.is_some() {
+            let pat = &state.textual_ctx.patterns[gen.binder];
+            let def = pat.inner.get_def_id(state.textual_ctx);
+            let name = match def {
+                Some(def) => state.textual_ctx.defs[def].clone(),
+                None => pat.info.make(VarName(String::from("<internal>"))),
+            };
+            Err(ResolveError::ExternButDefined(name))?
+        }
+        Ok(vec![Define(gen).into()])
+    }
+}
+
 impl Resolve for Modifiers<ts::Declaration> {
     type Out = Vec<Declaration>;
     type Error = ResolveError;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
-        let Modifiers { public: _, external, inner: decl } = self;
+        let Modifiers { public: _, external: _, inner: decl } = self;
         match decl {
             ts::Declaration::Type(type_def) => {
                 let decls = self.try_map_ref(|_| Ok(type_def.clone()))?.resolve(state)?;
                 Ok(decls)
             }
-            ts::Declaration::Define(Define(gen)) => {
-                let gen = gen.resolve(state)?;
-                if *external && gen.bindee.is_some() {
-                    let pat = &state.textual_ctx.patterns[gen.binder];
-                    let def = pat.inner.get_def_id(state.textual_ctx);
-                    let name = match def {
-                        Some(def) => state.textual_ctx.defs[def].clone(),
-                        None => pat.info.make(VarName(String::from("<internal>"))),
-                    };
-                    Err(ResolveError::ExternButDefined(name))?
-                }
-                Ok(vec![Define(gen).into()])
+            ts::Declaration::Define(def) => {
+                let decls = self.try_map_ref(|_| Ok(def.clone()))?.resolve(state)?;
+                Ok(decls)
             }
             ts::Declaration::Module(Module { name: _, top: None }) => {
                 // Todo: work out module resolution
