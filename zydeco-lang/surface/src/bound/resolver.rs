@@ -507,7 +507,7 @@ impl Resolve for Modifiers<ts::Declaration> {
                 // Todo: work out module resolution
                 unimplemented!()
             }
-            ts::Declaration::Module(Module { name: NameDef(name), top: Some(TopLevel(top_)) }) => {
+            ts::Declaration::Module(Module { name: NameDef(name), top: Some(ts::TopLevel(top_)) }) => {
                 state.mod_enter(name);
                 // Todo: work out module resolution
                 let mut top = Vec::new();

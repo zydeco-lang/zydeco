@@ -9,20 +9,15 @@ pub enum Declaration {
     Main(Main),
 }
 
-// slotmap::new_key_type! {
-//     pub struct TopId;
-// }
+#[derive(Default)]
+pub struct TopLevel(pub Vec<Declaration>);
 
-// pub struct TopSlice {
-//     pub deps: HashSet<TopId>,
-//     pub decls: Vec<Declaration>,
-// }
-// pub struct TopLevel {
-//     pub map: SlotMap<TopId, TopSlice>,
-//     pub tops: HashSet<TopId>,
-//     pub blocks: HashMap<TopId, HashSet<TopId>>,
-// }
-pub type TopLevel = Vec<Declaration>;
+impl Extend<Declaration> for TopLevel {
+    fn extend<T: IntoIterator<Item = Declaration>>(&mut self, iter: T) {
+        let Self(top) = self;
+        top.extend(iter);
+    }
+}
 
 #[derive(Default)]
 pub struct Ctx {
