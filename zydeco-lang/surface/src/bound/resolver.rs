@@ -33,53 +33,70 @@ pub trait Fold<S, E, U> {
     fn fold(&self, state: &mut S) -> Result<U, E>;
 }
 
-pub trait Resolve<T> {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<T, ResolveError>;
+pub trait Resolve {
+    type Out;
+    type Error;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error>;
 }
 
 /* ---------------------------------- Meta ---------------------------------- */
 
-impl<T, U> Fold<Resolver<'_>, ResolveError, U> for T
+impl<T, U, E> Fold<Resolver<'_>, E, U> for T
 where
-    T: Resolve<U>,
+    T: Resolve<Out = U, Error = E>,
 {
-    fn fold(&self, state: &mut Resolver) -> Result<U, ResolveError> {
+    fn fold(&self, state: &mut Resolver) -> Result<U, E> {
         self.resolve(state)
     }
 }
 
-impl Resolve<bool> for bool {
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<bool, ResolveError> {
+impl Resolve for bool {
+    type Out = bool;
+    type Error = ResolveError;
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<bool, Self::Error> {
         Ok(*self)
     }
 }
 
-impl Resolve<Hole> for Hole {
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Hole, ResolveError> {
+impl Resolve for Hole {
+    type Out = Hole;
+    type Error = ResolveError;
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<Hole, Self::Error> {
         Ok(self.clone())
     }
 }
 
-impl Resolve<CtorName> for CtorName {
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<CtorName, ResolveError> {
+impl Resolve for CtorName {
+    type Out = CtorName;
+    type Error = ResolveError;
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<CtorName, Self::Error> {
         Ok(self.clone())
     }
 }
 
-impl Resolve<DtorName> for DtorName {
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<DtorName, ResolveError> {
+impl Resolve for DtorName {
+    type Out = DtorName;
+    type Error = ResolveError;
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<DtorName, Self::Error> {
         Ok(self.clone())
     }
 }
 
-impl Resolve<TypeArmName> for TypeArmName {
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<TypeArmName, ResolveError> {
+impl Resolve for TypeArmName {
+    type Out = TypeArmName;
+    type Error = ResolveError;
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<TypeArmName, Self::Error> {
         Ok(self.clone())
     }
 }
 
-impl<T: Resolve<T>> Resolve<Option<T>> for Option<T> {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Option<T>, ResolveError> {
+impl<T, U, E> Resolve for Option<T>
+where
+    T: Resolve<Out = U, Error = E>,
+{
+    type Out = Option<U>;
+    type Error = E;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         match self {
             Some(t) => t.resolve(state).map(Some),
             None => Ok(None),
@@ -87,16 +104,23 @@ impl<T: Resolve<T>> Resolve<Option<T>> for Option<T> {
     }
 }
 
-impl<T: Resolve<T>> Resolve<Vec<T>> for Vec<T> {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Vec<T>, ResolveError> {
+impl<T, U, E> Resolve for Vec<T>
+where
+    T: Resolve<Out = U, Error = E>,
+{
+    type Out = Vec<U>;
+    type Error = E;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         self.iter().map(|t| t.resolve(state)).collect()
     }
 }
 
 /* ---------------------------- Binders and Refs ---------------------------- */
 
-impl Resolve<DefId> for DefId {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<DefId, ResolveError> {
+impl Resolve for DefId {
+    type Out = DefId;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<DefId, Self::Error> {
         let name = state.textual_ctx.defs[*self].clone().inner();
         // Todo: work out module resolution
         state.context.lookup.insert(NameRef(Vec::new(), name), *self);
@@ -104,8 +128,10 @@ impl Resolve<DefId> for DefId {
     }
 }
 
-impl Resolve<DefId> for NameRef<VarName> {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<DefId, ResolveError> {
+impl Resolve for NameRef<VarName> {
+    type Out = DefId;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<DefId, Self::Error> {
         Ok(*state
             .context
             .lookup
@@ -116,8 +142,10 @@ impl Resolve<DefId> for NameRef<VarName> {
 
 /* --------------------------------- Pattern -------------------------------- */
 
-impl Resolve<PatternId> for PatternId {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<PatternId, ResolveError> {
+impl Resolve for PatternId {
+    type Out = PatternId;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<PatternId, Self::Error> {
         let sp_pattern = &state.textual_ctx.patterns[*self];
         let span = state.span.clone();
         state.span = sp_pattern.info.clone();
@@ -126,8 +154,10 @@ impl Resolve<PatternId> for PatternId {
         Ok(state.context.pattern(pattern))
     }
 }
-impl Resolve<Pattern> for Pattern {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Pattern, ResolveError> {
+impl Resolve for Pattern {
+    type Out = Pattern;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Pattern, Self::Error> {
         match self {
             Pattern::Ann(Annotation { term, ty }) => {
                 let term = term.resolve(state)?;
@@ -145,8 +175,10 @@ impl Resolve<Pattern> for Pattern {
 
 /* ---------------------------------- Term ---------------------------------- */
 
-impl Resolve<GenBind> for GenBind {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<GenBind, ResolveError> {
+impl Resolve for GenBind {
+    type Out = GenBind;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<GenBind, Self::Error> {
         let GenBind { rec, fun, binder, params, ty, bindee } = self;
         let rec = rec.resolve(state)?;
         let fun = fun.resolve(state)?;
@@ -158,8 +190,10 @@ impl Resolve<GenBind> for GenBind {
     }
 }
 
-impl Resolve<Matcher<TermId>> for Matcher<TermId> {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Matcher<TermId>, ResolveError> {
+impl Resolve for Matcher<TermId> {
+    type Out = Matcher<TermId>;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Matcher<TermId>, Self::Error> {
         let Matcher { name, binders, tail } = self;
         let name = name.resolve(state)?;
         let binders = binders.resolve(state)?;
@@ -168,8 +202,10 @@ impl Resolve<Matcher<TermId>> for Matcher<TermId> {
     }
 }
 
-impl Resolve<CoMatcher<TermId>> for CoMatcher<TermId> {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<CoMatcher<TermId>, ResolveError> {
+impl Resolve for CoMatcher<TermId> {
+    type Out = CoMatcher<TermId>;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<CoMatcher<TermId>, Self::Error> {
         let CoMatcher { name, binders, tail } = self;
         let name = name.resolve(state)?;
         let binders = binders.resolve(state)?;
@@ -178,8 +214,10 @@ impl Resolve<CoMatcher<TermId>> for CoMatcher<TermId> {
     }
 }
 
-impl Resolve<TermId> for TermId {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<TermId, ResolveError> {
+impl Resolve for TermId {
+    type Out = TermId;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<TermId, Self::Error> {
         let sp_term = &state.textual_ctx.terms[*self];
         let span = state.span.clone();
         state.span = sp_term.info.clone();
@@ -188,8 +226,10 @@ impl Resolve<TermId> for TermId {
         Ok(state.context.term(term))
     }
 }
-impl Resolve<Term<DefId>> for Term<NameRef<VarName>> {
-    fn resolve(&self, state: &mut Resolver) -> Result<Term<DefId>, ResolveError> {
+impl Resolve for Term<NameRef<VarName>> {
+    type Out = Term<DefId>;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver) -> Result<Term<DefId>, Self::Error> {
         match self {
             Term::Ann(Annotation { term, ty }) => {
                 let term = term.resolve(state)?;
@@ -286,14 +326,18 @@ impl Resolve<Term<DefId>> for Term<NameRef<VarName>> {
 
 /* -------------------------------- TopLevel -------------------------------- */
 
-impl Resolve<TypeDefHead> for TypeDefHead {
-    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<TypeDefHead, ResolveError> {
+impl Resolve for TypeDefHead {
+    type Out = TypeDefHead;
+    type Error = ResolveError;
+    fn resolve(&self, _state: &mut Resolver<'_>) -> Result<TypeDefHead, Self::Error> {
         Ok(self.clone())
     }
 }
 
-impl Resolve<TypeArm> for TypeArm {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<TypeArm, ResolveError> {
+impl Resolve for TypeArm {
+    type Out = TypeArm;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<TypeArm, Self::Error> {
         let TypeArm { name, args, out } = self;
         let name = name.resolve(state)?;
         let args = args.resolve(state)?;
@@ -302,8 +346,10 @@ impl Resolve<TypeArm> for TypeArm {
     }
 }
 
-impl Resolve<Vec<Declaration>> for Modifiers<ts::Declaration> {
-    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Vec<Declaration>, ResolveError> {
+impl Resolve for Modifiers<ts::Declaration> {
+    type Out = Vec<Declaration>;
+    type Error = ResolveError;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Vec<Declaration>, Self::Error> {
         let Modifiers { public: _, external, inner: decl } = self;
         match decl {
             ts::Declaration::Type(TypeDef { head, name, params, arms }) => {
