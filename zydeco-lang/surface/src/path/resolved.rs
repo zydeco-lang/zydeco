@@ -1,0 +1,106 @@
+use super::{err::SurfaceError, package::FileId, parsed::ParsedMap};
+use crate::bound::resolver::Resolver;
+use std::collections::{HashMap, HashSet};
+
+/// a file -> file_dependencies map; all files must be included in the map
+#[derive(Default)]
+pub struct DependencyTracker(pub HashMap<FileId, HashSet<FileId>>);
+impl DependencyTracker {
+    pub fn update_dep(&mut self, id: FileId, dep: FileId) {
+        let Self(map) = self;
+        map.entry(id).or_default().insert(dep);
+        map.entry(dep).or_default();
+    }
+
+    pub fn update_deps(&mut self, id: FileId, deps: HashSet<FileId>) {
+        let Self(map) = self;
+        map.entry(id).or_default().extend(deps);
+    }
+
+    pub fn gen_resolved(self) -> ResolutionTracker {
+        let Self(map) = self;
+        let mut rev_dep: HashMap<FileId, HashSet<FileId>> = HashMap::default();
+        let mut ref_cnt = HashMap::default();
+        let mut ready = HashSet::default();
+        for (id, deps) in map {
+            if deps.is_empty() {
+                ready.insert(id);
+            } else {
+                ref_cnt.insert(id, deps.len());
+                for dep in deps {
+                    rev_dep.entry(dep).or_default().insert(id);
+                }
+            }
+        }
+        ResolutionTracker { rev_dep, ref_cnt, ready }
+    }
+}
+
+#[derive(Default)]
+pub struct ResolutionTracker {
+    /// reversed_dependency map, depended_file -> files_affected after the
+    /// depended_file's compilation
+    pub rev_dep: HashMap<FileId, HashSet<FileId>>,
+    /// reference counting; if a zero is mapped to then the file is ready to get
+    /// compiled; should never contain a zero-referenced file
+    pub ref_cnt: HashMap<FileId, usize>,
+    /// files with all dependencies compiled and is now ready to get compiled
+    pub ready: HashSet<FileId>,
+}
+
+impl ResolutionTracker {
+    /// pick a file to resolve
+    pub fn pick(&mut self) -> Option<FileId> {
+        let id = self.ready.iter().next().copied();
+        if let Some(ref id) = id {
+            self.ready.remove(id);
+        }
+        id
+    }
+
+    /// pick all resolvable files
+    pub fn pick_all(&mut self) -> HashSet<FileId> {
+        std::mem::take(&mut self.ready)
+    }
+
+    /// done resolving a file
+    pub fn done(&mut self, id: FileId) {
+        let Self { rev_dep, ref_cnt, ready } = self;
+        for dep in rev_dep.remove(&id).unwrap() {
+            let cnt = ref_cnt.get_mut(&dep).unwrap();
+            *cnt -= 1;
+            if *cnt == 0 {
+                ready.insert(dep);
+            }
+        }
+    }
+}
+
+pub struct ResolvedFile {}
+
+#[derive(Default)]
+pub struct ResolvedMap {
+    pub tracker: ResolutionTracker,
+    pub map: HashMap<FileId, ResolvedFile>,
+}
+
+impl ResolvedMap {
+    pub fn new(deps: DependencyTracker) -> Self {
+        let tracker = deps.gen_resolved();
+        let map = HashMap::default();
+        Self { tracker, map }
+    }
+
+    pub fn resolve_one_by_one(&mut self, parsed: &ParsedMap) -> Result<(), SurfaceError> {
+        while let Some(id) = self.tracker.pick() {
+            let parsed = &parsed.map[&id];
+            let mut resolver = Resolver::new(&parsed.ctx, &parsed.top);
+            resolver.exec().map_err(|es| {
+                SurfaceError::ResolveErrors(
+                    es.into_iter().map(|e| e.to_string()).collect::<Vec<String>>().join("\n"),
+                )
+            })?;
+        }
+        Ok(())
+    }
+}

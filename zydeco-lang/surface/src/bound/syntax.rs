@@ -31,7 +31,7 @@ pub struct Context {
     pub patterns: SlotMap<PatternId, Sp<Pattern>>,
     pub terms: SlotMap<TermId, Sp<Term<DefId>>>,
 
-    // meta
+    // temp
     /// for matching backwards from reference site to definition site
     pub lookup: im::HashMap<NameRef<VarName>, DefId>,
     /// for matching forwards from definition site to a declaration site;

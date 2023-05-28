@@ -287,7 +287,7 @@ impl Ctx {
         mod_name
     }
     pub fn mod_decl(&mut self, mod_name: NameDef<ModName>) {
-        let NameDef(ModName(name)) = mod_name.clone();
+        let NameDef(ModName(name)) = mod_name;
         let mut stack = self.mod_stack.clone();
         stack.push(name);
         self.mod_decls.push(stack);

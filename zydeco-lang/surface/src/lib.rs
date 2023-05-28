@@ -1,11 +1,14 @@
 #![allow(clippy::style)]
 #![allow(clippy::useless_format)]
 
-pub mod driver {
+pub mod path {
     pub mod parsed;
     pub mod resolved;
     pub mod package;
+    pub mod driver;
     pub mod err;
+
+    pub use driver::Driver;
 
     #[cfg(test)]
     mod tests;
@@ -26,7 +29,7 @@ pub mod textual {
     mod tests;
 }
 
-pub mod binded {
+pub mod bound {
     pub mod syntax;
     pub mod resolver;
     pub mod err;

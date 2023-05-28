@@ -13,7 +13,7 @@ pub struct Resolver<'a> {
     // new binded syntax that is being built
     pub context: Context,
     pub top: TopLevel,
-    // meta
+    // temp
     pub span: Span,
 }
 
@@ -100,7 +100,7 @@ impl Resolve<DefId> for DefId {
         let name = state.textual_ctx.defs[*self].clone().inner();
         // Todo: work out module resolution
         state.context.lookup.insert(NameRef(Vec::new(), name), *self);
-        Ok((*self).into())
+        Ok(*self)
     }
 }
 
@@ -123,7 +123,7 @@ impl Resolve<PatternId> for PatternId {
         state.span = sp_pattern.info.clone();
         let pattern = sp_pattern.try_map_ref(|pattern| pattern.resolve(state))?;
         state.span = span;
-        Ok(state.context.pattern(pattern.clone()))
+        Ok(state.context.pattern(pattern))
     }
 }
 impl Resolve<Pattern> for Pattern {
@@ -185,7 +185,7 @@ impl Resolve<TermId> for TermId {
         state.span = sp_term.info.clone();
         let term = sp_term.try_map_ref(|term| term.resolve(state))?;
         state.span = span;
-        Ok(state.context.term(term.clone()))
+        Ok(state.context.term(term))
     }
 }
 impl Resolve<Term<DefId>> for Term<NameRef<VarName>> {

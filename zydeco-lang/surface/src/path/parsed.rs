@@ -27,18 +27,17 @@ pub struct FileParsedMeta {
 
 pub struct ParsedMap {
     pub files: SimpleFiles<FileLoc, String>,
-    pub parsed_map: HashMap<FileId, FileParsed>,
+    pub map: HashMap<FileId, FileParsed>,
+}
+impl Default for ParsedMap {
+    fn default() -> Self {
+        let files = SimpleFiles::new();
+        let map = HashMap::new();
+        Self { files, map }
+    }
 }
 
 impl ParsedMap {
-    pub fn new() -> Self {
-        let files = SimpleFiles::new();
-        let parsed_map = HashMap::new();
-        let mut driver = Self { files, parsed_map };
-        driver.add_file_parsed(Self::std());
-        driver
-    }
-
     pub fn parse_file(path: impl AsRef<Path>) -> Result<FileParsedMeta, SurfaceError> {
         // read file
         let path = path.as_ref();
@@ -70,9 +69,12 @@ impl ParsedMap {
         Ok(FileParsedMeta { loc, source, parsed })
     }
 
-    pub fn add_file_parsed(&mut self, FileParsedMeta { loc, source, parsed }: FileParsedMeta) {
+    pub fn add_file_parsed(
+        &mut self, FileParsedMeta { loc, source, parsed }: FileParsedMeta,
+    ) -> FileId {
         let fid = self.files.add(loc, source);
-        self.parsed_map.insert(fid, parsed);
+        self.map.insert(fid, parsed);
+        fid
     }
 
     pub fn std() -> FileParsedMeta {

@@ -12,7 +12,6 @@ fn it_works_1() {
 fn it_works_2() {
     let source = "main { let x = 1 in ! exit x } end";
     let mut ctx = syntax::Ctx::default();
-    let _t = parser::TopLevelParser::new()
-        .parse(&source, &mut ctx, lexer::Lexer::new(&source))
-        .unwrap();
+    let _t =
+        parser::TopLevelParser::new().parse(&source, &mut ctx, lexer::Lexer::new(&source)).unwrap();
 }
