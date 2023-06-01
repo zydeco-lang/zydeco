@@ -339,37 +339,44 @@ def rec minimax : MinMax =
     match x
     | Leaf(a, loc) -> ret Cons(loc, a, 0)
     | Sons(l, loc) ->
-      // if bestSol's score reach 1 or -1, stop searching
-      // no need to use map, we can break the loop when we find the bestSol
-      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l {ret Cons(Cons(22,22), 10, 10)} { // default, which is sure to be replaced
-        fn gt acc~ ->
-        do sol <- ! minimax .max() gt;
-        do cur_loc <- ! get_loc gt;
-        match sol
-        | Cons(loc, sc, depth) ->
-          do acc <- ! acc~;
-          match acc
-          | Cons(loc', sc', depth') ->
-            ! if~ @(F BestSol) {! int_lt sc sc'} {
-              ret Cons(cur_loc, sc, depth)
-            } {
-              do m1 <- ! int_eq sc sc';
-              do m2 <- ! int_lt depth depth';
-              do m <- ! and m1 m2;
-              ! if @(F BestSol) m {
+      // first use LList.map to get a list of thunk of best solution, the score is calculated when needed
+      let sol~ = {! LList.map @(TicTacToe) @(Pair (U(F BestSol)) Loc) {
+        fn gt ->
+          do cur_loc <- ! get_loc gt;
+          let sol~ = {! minimax .max() gt} in
+          ret Cons(sol~, cur_loc)
+      } l};
+      do best <- ! LList.foldl_break @(Pair (U(F BestSol)) Loc) @(BestSol) sol~ Cons(Cons(22,22), 10, 10) {
+        fn p acc ->
+          match p
+          | Cons(sol~, cur_loc) ->
+          do sol <- ! sol~; // U (F BestSol) is forced here
+          match sol
+          | Cons(loc, sc, depth) ->
+            match acc
+            | Cons(loc', sc', depth') ->
+              ! if~ @(F BestSol) {! int_lt sc sc'} {
                 ret Cons(cur_loc, sc, depth)
               } {
-                ret acc
+                do m1 <- ! int_eq sc sc';
+                do m2 <- ! int_lt depth depth';
+                do m <- ! and m1 m2;
+                ! if @(F BestSol) m {
+                  ret Cons(cur_loc, sc, depth)
+                } {
+                  ret acc
+                }
               }
-            }
+            end
           end
-        end
-      } { fn sol -> 
-        match sol 
+          end
+      } { fn sol ->
+        match sol
         | Cons(loc, sc, depth) -> 
           do m1 <- ! int_lt sc 0;
           do m2 <- ! int_eq depth 0; 
-          ! and m1 m2 end 
+          ! and m1 m2
+        end
       };
       match best
       | Cons(loc, sc, depth) ->
@@ -381,37 +388,43 @@ def rec minimax : MinMax =
     match x
     | Leaf(a, loc) -> ret Cons(loc, a, 0)
     | Sons(l, loc) ->
-      // if bestSol's score reach 1 or -1, stop searching
-      // no need to use map, we can break the loop when we find the bestSol
-      do best <- ! LList.foldl_break @(TicTacToe) @(BestSol) l {ret Cons(Cons(22,22), -10, 10)} { // default, which is sure to be replaced
-        fn gt acc~ ->
-        do sol <- ! minimax .min() gt;
-        do cur_loc <- ! get_loc gt;
-        match sol
-        | Cons(loc, sc, depth) ->
-          do acc <- ! acc~;
-          match acc
-          | Cons(loc', sc', depth') ->
-            ! if~ @(F BestSol) {! int_gt sc sc'} {
-              ret Cons(cur_loc, sc, depth)
-            } {
-              do m1 <- ! int_eq sc sc';
-              do m2 <- ! int_lt depth depth';
-              do m <- ! and m1 m2;
-              ! if @(F BestSol) m {
+      let sol~ = {! LList.map @(TicTacToe) @(Pair (U(F BestSol)) Loc) {
+        fn gt ->
+          do cur_loc <- ! get_loc gt;
+          let sol~ = {! minimax .min() gt} in
+          ret Cons(sol~, cur_loc)
+      } l};
+      do best <- ! LList.foldl_break @(Pair (U(F BestSol)) Loc) @(BestSol) sol~ Cons(Cons(22,22), -10, 10) {
+        fn p acc ->
+          match p
+          | Cons(sol~, cur_loc) ->
+          do sol <- ! sol~; // U (F BestSol) is forced here
+          match sol
+          | Cons(loc, sc, depth) ->
+            match acc
+            | Cons(loc', sc', depth') ->
+              ! if~ @(F BestSol) {! int_gt sc sc'} {
                 ret Cons(cur_loc, sc, depth)
               } {
-                ret acc
+                do m1 <- ! int_eq sc sc';
+                do m2 <- ! int_lt depth depth';
+                do m <- ! and m1 m2;
+                ! if @(F BestSol) m {
+                  ret Cons(cur_loc, sc, depth)
+                } {
+                  ret acc
+                }
               }
-            }
+            end
           end
-        end
-      } { fn sol -> 
-        match sol 
+          end
+      } { fn sol ->
+        match sol
         | Cons(loc, sc, depth) -> 
           do m1 <- ! int_gt sc 0;
           do m2 <- ! int_eq depth 0; 
-          ! and m1 m2 end 
+          ! and m1 m2
+        end
       };
       match best
       | Cons(loc, sc, depth) ->
@@ -419,6 +432,157 @@ def rec minimax : MinMax =
         ret Cons(loc, sc, depth')
       end
     end)
+  end
+end
+
+// alpha-beta pruning version
+codata MinMax' where
+| .fmin() : BestSol -> BestSol -> TicTacToe -> F BestSol
+| .fmax() : BestSol -> BestSol -> TicTacToe -> F BestSol
+| .gmin() : BestSol -> BestSol -> Pair (U(LList TicTacToe)) Loc -> F BestSol
+| .gmax() : BestSol -> BestSol -> Pair (U(LList TicTacToe)) Loc -> F BestSol
+end
+
+def fn max_sol (a : BestSol) (b : BestSol) : F BestSol =
+  match a
+  | Cons(loc, sc, depth) ->
+    match b
+    | Cons(loc', sc', depth') ->
+      ! if~ @(F BestSol) {! int_gt sc sc'} {
+        ret a
+      } {
+        do m1 <- ! int_eq sc sc';
+        do m2 <- ! int_lt depth depth';
+        do m <- ! and m1 m2;
+        ! if @(F BestSol) m {
+          ret a
+        } {
+          ret b
+        }
+      }
+    end
+  end
+end
+
+def fn min_sol (a : BestSol) (b : BestSol) : F BestSol =
+  match a
+  | Cons(loc, sc, depth) ->
+    match b
+    | Cons(loc', sc', depth') ->
+      ! if~ @(F BestSol) {! int_lt sc sc'} {
+        ret a
+      } {
+        do m1 <- ! int_eq sc sc';
+        do m2 <- ! int_lt depth depth';
+        do m <- ! and m1 m2;
+        ! if @(F BestSol) m {
+          ret a
+        } {
+          ret b
+        }
+      }
+    end
+  end
+end
+
+def fn sol_lt (a : BestSol) (b : BestSol) : F Bool =
+  match a
+  | Cons(loc, sc, depth) ->
+    match b
+    | Cons(loc', sc', depth') ->
+      do m1 <- ! int_lt sc sc';
+      ! if @(F Bool) m1 {
+        ret True()
+      } {
+        do m2 <- ! int_eq sc sc';
+        do m3 <- ! int_lt depth depth';
+        ! and m2 m3
+      }
+    end
+  end
+end
+
+def fn sol_gt (a : BestSol) (b : BestSol) : F Bool =
+  match a
+  | Cons(loc, sc, depth) ->
+    match b
+    | Cons(loc', sc', depth') ->
+      do m1 <- ! int_gt sc sc';
+      ! if @(F Bool) m1 {
+        ret True()
+      } {
+        do m2 <- ! int_eq sc sc';
+        do m3 <- ! int_lt depth depth';
+        ! and m2 m3
+      }
+    end
+  end
+end
+
+def rec minimax' : MinMax' =
+  comatch
+  | .fmax() -> fn a b x ->
+    match x
+    | Leaf(sc, move) -> 
+      do minbx <- ! min_sol b Cons(move, sc, 0);
+      ! max_sol a minbx
+      // ret Cons(move, sc, 0)
+    | Sons(l, move) ->
+      ! minimax' .gmax() a b Cons(l, move)
+    end
+  | .fmin() -> fn a b x ->
+    match x
+    | Leaf(sc, move) -> 
+      do maxax <- ! max_sol a Cons(move, sc, 0);
+      ! min_sol maxax b
+      // ret Cons(move, sc, 0)
+    | Sons(l, move) ->
+      ! minimax' .gmin() a b Cons(l, move)
+    end
+  | .gmax() -> fn a b p ->
+    match p
+    | Cons(l~, cur_mv) ->
+      do l <- ! l~ .run();
+      match l
+      | Nil() -> ret a // should not happen
+      | Cons(hd, tl) ->
+        ! if~ @(F BestSol) {! LList.is_empty @(TicTacToe) tl} {
+          match hd
+          | Leaf(sc, move) ->
+            ! minimax' .fmin() a b Leaf(sc, cur_mv)
+          | Sons(nl, move) ->
+            ! minimax' .fmin() a b Sons(nl, cur_mv)
+          end
+        } {
+          do hd_sol <- ! minimax' .fmin() a b hd;
+          ! if~ @(F BestSol) {! sol_gt hd_sol b} {ret hd_sol} {
+            ! minimax' .gmax() hd_sol b Cons(tl, cur_mv)
+          }
+        }
+      end
+    end
+  | .gmin() -> fn a b p ->
+    match p
+    | Cons(l~, cur_mv) ->
+      do l <- ! l~ .run();
+      match l
+      | Nil() -> ret a // should not happen
+      | Cons(hd, tl) ->
+        ! if~ @(F BestSol) {! LList.is_empty @(TicTacToe) tl} {
+          match hd
+          | Leaf(sc, move) ->
+            ! minimax' .fmax() a b Leaf(sc, cur_mv)
+          | Sons(nl, move) ->
+            ! minimax' .fmax() a b Sons(nl, cur_mv)
+          end
+        } {
+          do hd_sol <- ! minimax' .fmax() a b hd;
+          ! if~ @(F BestSol) {! sol_lt hd_sol a} {ret hd_sol} {
+            ! minimax' .gmin() a hd_sol Cons(tl, cur_mv)
+          }
+        }
+      end
+    end
   end
 end
 
@@ -430,6 +594,11 @@ def rec take_turn : TakeTurn =
         do find_str <- ! if @(F String) is_black {ret "black"} {ret "white"};
         ! write_line find_str {
         do gt <- ! generate_gametree b Cons(11,11) is_black; // generate a static gametree for current board
+        // do holes_num <- ! get_holes_num b;
+        // do s_num <- ! sub holes_num 1;
+        // do a_num <- ! mul s_num -1;
+        let alpha : BestSol = Cons(Cons(0,0), -10, 0) in
+        let beta : BestSol = Cons(Cons(0,0), 10, 0) in
         // do gt_str <- ! gt_fmt gt;
         match gt
         | Leaf(sc) ->
@@ -453,7 +622,8 @@ def rec take_turn : TakeTurn =
             }
           }
         | Sons(s, loc) ->
-          do sol <- ! if @(F BestSol) is_black {! minimax .max() gt} {! minimax .min() gt};
+          do sol <- ! if @(F BestSol) is_black {! minimax' .fmax() alpha beta gt} {! minimax' .fmin() alpha beta gt};
+          // do sol <- ! if @(F BestSol) is_black {! minimax .max() gt} {! minimax .min() gt};
           match sol
           | Cons(loc, sc, depth) ->
             match loc
@@ -547,9 +717,9 @@ def rec take_turn : TakeTurn =
 end
 
 main
-  let initial : Board = Board(Row(1,0,0), 
-                              Row(0,-1,0), 
-                              Row(0,0,0)) in
+  let initial : Board = Board(Row(1,0,-1), 
+                              Row(-1,1,0), 
+                              Row(1,0,-1)) in
   let rec turn : U OS -> OS =
     fn next ->
     ! write_line "Welcome to Tic Tac Toe!\n1. Play With AI\n2. Watch AI Play\n3. Exit" {
