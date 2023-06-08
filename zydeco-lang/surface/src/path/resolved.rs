@@ -3,9 +3,8 @@ use crate::bound::{
     resolver::Resolver,
     syntax::{Ctx, DefId, Pattern, PatternId, Term, TermId, TopLevel, VarName},
 };
-use slotmap::{SlotMap, SecondaryMap};
+use slotmap::SecondaryMap;
 use std::collections::{HashMap, HashSet};
-use zydeco_utils::span::Sp;
 
 /// a file -> file_dependencies map; all files must be included in the map
 #[derive(Default)]
@@ -82,9 +81,9 @@ impl ResolutionTracker {
 }
 
 pub struct ResolvedFile {
-    pub patterns: SecondaryMap<PatternId, Sp<Pattern>>,
-    pub terms: SecondaryMap<TermId, Sp<Term<DefId>>>,
-    pub defs: SlotMap<DefId, Sp<VarName>>,
+    pub patterns: SecondaryMap<PatternId, Pattern>,
+    pub terms: SecondaryMap<TermId, Term<DefId>>,
+    pub defs: SecondaryMap<DefId, VarName>,
     pub top: TopLevel,
 }
 

@@ -2,7 +2,7 @@
 
 use crate::path::package::Dependency;
 use derive_more::From;
-use slotmap::SlotMap;
+use slotmap::{SecondaryMap, SlotMap};
 use zydeco_utils::span::FileInfo;
 pub use zydeco_utils::span::{Sp, Span};
 
@@ -51,7 +51,7 @@ impl Pattern {
     pub fn get_def_id(&self, ctx: &Ctx) -> Option<DefId> {
         match self {
             Pattern::Var(id) => Some(*id),
-            Pattern::Ann(Annotation { term, ty: _ }) => ctx.patterns[*term].inner.get_def_id(ctx),
+            Pattern::Ann(Annotation { term, ty: _ }) => ctx.patterns[*term].get_def_id(ctx),
             Pattern::Hole(Hole) => None,
         }
     }
@@ -261,17 +261,70 @@ pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 /* --------------------------------- Context -------------------------------- */
 
 slotmap::new_key_type! {
+    pub struct DefId;
     pub struct PatternId;
     pub struct TermId;
-    pub struct DefId;
+}
+
+#[derive(From, Clone)]
+pub enum AnyId {
+    Def(DefId),
+    Pattern(PatternId),
+    Term(TermId),
+}
+
+/// keeps all ids and spans, the corresponding source location
+#[derive(Default)]
+pub struct SpanArena {
+    pub defs: SlotMap<DefId, Span>,
+    pub patterns: SlotMap<PatternId, Span>,
+    pub terms: SlotMap<TermId, Span>,
+}
+
+impl std::ops::Index<AnyId> for SpanArena {
+    type Output = Span;
+
+    fn index(&self, id: AnyId) -> &Self::Output {
+        match id {
+            AnyId::Def(id) => self.defs.get(id).unwrap(),
+            AnyId::Pattern(id) => self.patterns.get(id).unwrap(),
+            AnyId::Term(id) => self.terms.get(id).unwrap(),
+        }
+    }
+}
+
+impl std::ops::Index<DefId> for SpanArena {
+    type Output = Span;
+
+    fn index(&self, id: DefId) -> &Self::Output {
+        self.defs.get(id).unwrap()
+    }
+}
+
+impl std::ops::Index<PatternId> for SpanArena {
+    type Output = Span;
+
+    fn index(&self, id: PatternId) -> &Self::Output {
+        self.patterns.get(id).unwrap()
+    }
+}
+
+impl std::ops::Index<TermId> for SpanArena {
+    type Output = Span;
+
+    fn index(&self, id: TermId) -> &Self::Output {
+        self.terms.get(id).unwrap()
+    }
 }
 
 #[derive(Default)]
 pub struct Ctx {
+    // span arena
+    pub spans: SpanArena,
     // arenas
-    pub patterns: SlotMap<PatternId, Sp<Pattern>>,
-    pub terms: SlotMap<TermId, Sp<Term<NameRef<VarName>>>>,
-    pub defs: SlotMap<DefId, Sp<VarName>>,
+    pub defs: SecondaryMap<DefId, VarName>,
+    pub patterns: SecondaryMap<PatternId, Pattern>,
+    pub terms: SecondaryMap<TermId, Term<NameRef<VarName>>>,
     // meta
     pub project: Option<String>,
     pub deps: Vec<Dependency>,
@@ -280,14 +333,20 @@ pub struct Ctx {
 }
 
 impl Ctx {
+    pub fn def(&mut self, def: Sp<VarName>) -> DefId {
+        let id = self.spans.defs.insert(def.info);
+        self.defs.insert(id, def.inner);
+        id
+    }
     pub fn pattern(&mut self, pattern: Sp<Pattern>) -> PatternId {
-        self.patterns.insert(pattern)
+        let id = self.spans.patterns.insert(pattern.info);
+        self.patterns.insert(id, pattern.inner);
+        id
     }
     pub fn term(&mut self, term: Sp<Term<NameRef<VarName>>>) -> TermId {
-        self.terms.insert(term)
-    }
-    pub fn def(&mut self, def: Sp<VarName>) -> DefId {
-        self.defs.insert(def)
+        let id = self.spans.terms.insert(term.info);
+        self.terms.insert(id, term.inner);
+        id
     }
 
     pub fn enter_mod(&mut self, mod_name: NameDef<ModName>) -> NameDef<ModName> {
@@ -306,11 +365,14 @@ impl Ctx {
     }
 
     pub fn span_map(&mut self, file_info: &FileInfo) {
-        for (_, pattern) in self.patterns.iter_mut() {
-            pattern.info.set_info(file_info);
+        for (_, info) in self.spans.defs.iter_mut() {
+            info.set_info(file_info);
         }
-        for (_, term) in self.terms.iter_mut() {
-            term.info.set_info(file_info);
+        for (_, info) in self.spans.patterns.iter_mut() {
+            info.set_info(file_info);
+        }
+        for (_, info) in self.spans.terms.iter_mut() {
+            info.set_info(file_info);
         }
     }
 }

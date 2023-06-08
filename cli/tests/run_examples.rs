@@ -8,7 +8,7 @@ fn wrapper<T>(r: Result<T, String>) {
         Err(e) => {
             eprintln!("{}", e);
             panic!()
-        },
+        }
     }
 }
 

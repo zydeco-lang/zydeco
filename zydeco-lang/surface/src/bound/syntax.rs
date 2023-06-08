@@ -22,8 +22,8 @@ impl Extend<Declaration> for TopLevel {
 #[derive(Default)]
 pub struct Ctx {
     // arenas
-    pub patterns: SecondaryMap<PatternId, Sp<Pattern>>,
-    pub terms: SecondaryMap<TermId, Sp<Term<DefId>>>,
+    pub patterns: SecondaryMap<PatternId, Pattern>,
+    pub terms: SecondaryMap<TermId, Term<DefId>>,
 
     // meta
     /// for matching backwards from reference site to definition site
@@ -34,14 +34,14 @@ pub struct Ctx {
 }
 
 impl Ctx {
-    pub fn pattern(&mut self, id: PatternId, pattern: Sp<Pattern>) -> PatternId {
+    pub fn pattern(&mut self, id: PatternId, pattern: Pattern) -> PatternId {
         let res = self.patterns.insert(id.clone(), pattern);
         if res.is_some() {
             panic!("duplicate pattern inserted")
         }
         id
     }
-    pub fn term(&mut self, id: TermId, term: Sp<Term<DefId>>) -> TermId {
+    pub fn term(&mut self, id: TermId, term: Term<DefId>) -> TermId {
         let res = self.terms.insert(id.clone(), term);
         if res.is_some() {
             panic!("duplicate term inserted")

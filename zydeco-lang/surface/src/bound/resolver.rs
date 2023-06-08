@@ -151,7 +151,7 @@ impl Resolve for DefId {
     type Out = DefId;
     type Error = ResolveError;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
-        let name = state.textual_ctx.defs[*self].clone().inner();
+        let name = state.textual_ctx.defs[*self].clone();
         // Todo: work out module resolution
         state.ctx.lookup.insert(NameRef(Vec::new(), name), *self);
         Ok(*self)
@@ -176,9 +176,9 @@ impl Resolve for PatternId {
     type Out = PatternId;
     type Error = ResolveError;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
-        let sp_pattern = &state.textual_ctx.patterns[*self];
-        state.span_enter(sp_pattern.info.clone());
-        let pattern = sp_pattern.try_map_ref(|pattern| pattern.resolve(state))?;
+        let info = &state.textual_ctx.spans[*self];
+        state.span_enter(info.clone());
+        let pattern = (&state.textual_ctx.patterns[*self]).resolve(state)?;
         state.span_exit();
         Ok(state.ctx.pattern(self.clone(), pattern))
     }
@@ -213,15 +213,17 @@ impl Resolve for GenBinder {
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let GenBinder(binder) = self;
         let binder = binder.resolve(state)?;
-        match state.ctx.patterns[binder].inner {
+        match state.ctx.patterns[binder] {
             Pattern::Ann(_) => {
                 let pat = &state.textual_ctx.patterns[binder];
-                let def = pat.inner.get_def_id(state.textual_ctx);
+                let def = pat.get_def_id(state.textual_ctx);
                 let name = match def {
                     Some(def) => state.textual_ctx.defs[def].clone(),
-                    None => pat.info.make(VarName(String::from("<internal>"))),
+                    None => VarName(String::from("<internal>")),
                 };
-                Err(ResolveError::AmbiguousBinderAnnotation(name))
+                Err(ResolveError::AmbiguousBinderAnnotation(
+                    state.textual_ctx.spans[binder].make(name),
+                ))
             }
             Pattern::Var(_) | Pattern::Hole(_) => Ok(binder),
         }
@@ -300,9 +302,10 @@ impl Resolve for TermId {
     type Out = TermId;
     type Error = ResolveError;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
-        let sp_term = &state.textual_ctx.terms[*self];
-        state.span_enter(sp_term.info.clone());
-        let term = sp_term.try_map_ref(|term| term.resolve(state))?;
+        let info = &state.textual_ctx.spans[*self];
+        let term = &state.textual_ctx.terms[*self];
+        state.span_enter(info.clone());
+        let term = term.resolve(state)?;
         state.span_exit();
         Ok(state.ctx.term(self.clone(), term))
     }
@@ -446,16 +449,18 @@ impl Resolve for ts::Modifiers<ts::TypeDef> {
         let Modifiers { public: _, external, inner: ts::TypeDef { head, name, params, arms } } =
             self;
         if *external && arms.is_some() {
+            let info = &state.textual_ctx.spans[*name];
             let name = &state.textual_ctx.defs[*name];
-            Err(ResolveError::ExternButDefined(name.clone()))?
+            Err(ResolveError::ExternButDefined(info.make(name.clone())))?
         } else if !*external && arms.is_none() {
             // peeking ahead to see if this is a definition later
             let def = name;
-            let name = state.textual_ctx.defs[*def].clone().inner();
+            let name = state.textual_ctx.defs[*def].clone();
             // Todo: work out module resolution
             if let Some(prev_def) = state.ctx.peeks.insert(NameRef(Vec::new(), name), *def) {
+                let info = state.textual_ctx.spans[prev_def].clone();
                 let name = state.textual_ctx.defs[prev_def].clone();
-                Err(ResolveError::DeclaredButNotDefined(name))?
+                Err(ResolveError::DeclaredButNotDefined(info.make(name)))?
             }
             Ok(Vec::new())
         } else {
@@ -477,13 +482,14 @@ impl Resolve for ts::Modifiers<ts::Define> {
         let Modifiers { public: _, external, inner: ts::Define(gen) } = self;
         let gen = gen.resolve(state)?;
         if *external && gen.bindee.is_some() {
+            let info = &state.textual_ctx.spans[gen.binder];
             let pat = &state.textual_ctx.patterns[gen.binder];
-            let def = pat.inner.get_def_id(state.textual_ctx);
+            let def = pat.get_def_id(state.textual_ctx);
             let name = match def {
                 Some(def) => state.textual_ctx.defs[def].clone(),
-                None => pat.info.make(VarName(String::from("<internal>"))),
+                None => VarName(String::from("<internal>")),
             };
-            Err(ResolveError::ExternButDefined(name))?
+            Err(ResolveError::ExternButDefined(info.make(name)))?
         }
         Ok(vec![Define(gen).into()])
     }
@@ -507,7 +513,10 @@ impl Resolve for Modifiers<ts::Declaration> {
                 // Todo: work out module resolution
                 unimplemented!()
             }
-            ts::Declaration::Module(Module { name: NameDef(name), top: Some(ts::TopLevel(top_)) }) => {
+            ts::Declaration::Module(Module {
+                name: NameDef(name),
+                top: Some(ts::TopLevel(top_)),
+            }) => {
                 state.mod_enter(name);
                 // Todo: work out module resolution
                 let mut top = Vec::new();
@@ -546,8 +555,9 @@ impl<'a> Resolver<'a> {
             self.top.extend(decls);
         }
         for def in self.ctx.peeks.values() {
+            let info = self.textual_ctx.spans[*def].clone();
             let name = self.textual_ctx.defs[*def].clone();
-            errors.push(ResolveError::DeclaredButNotDefined(name));
+            errors.push(ResolveError::DeclaredButNotDefined(info.make(name)));
         }
         if errors.is_empty() {
             Ok(())
