@@ -62,10 +62,3 @@ impl Display for FileLoc {
 }
 
 pub type FileId = usize;
-
-#[derive(Clone)]
-pub enum Dependency {
-    DirectImport(PathBuf),
-    ManagedImport(PathBuf),
-    Hierachy(Vec<String>),
-}

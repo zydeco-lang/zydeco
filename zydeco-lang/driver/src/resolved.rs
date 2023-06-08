@@ -1,10 +1,10 @@
 use super::{err::SurfaceError, package::FileId, parsed::ParsedMap};
-use crate::bound::{
+use slotmap::SecondaryMap;
+use std::collections::{HashMap, HashSet};
+use zydeco_surface::bound::{
     resolver::Resolver,
     syntax::{Ctx, DefId, Pattern, PatternId, SpanArena, Term, TermId, TopLevel, VarName},
 };
-use slotmap::SecondaryMap;
-use std::collections::{HashMap, HashSet};
 
 /// a file -> file_dependencies map; all files must be included in the map
 #[derive(Default)]

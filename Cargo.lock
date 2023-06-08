@@ -1700,6 +1700,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zydeco-driver"
+version = "0.2.0"
+dependencies = [
+ "codespan-reporting",
+ "derive-where",
+ "derive_more",
+ "im",
+ "slotmap",
+ "thiserror",
+ "unindent",
+ "zydeco-derive",
+ "zydeco-surface",
+ "zydeco-utils",
+]
+
+[[package]]
 name = "zydeco-lang"
 version = "0.2.0"
 dependencies = [
@@ -1712,6 +1728,22 @@ dependencies = [
  "slotmap",
  "thiserror",
  "zydeco-derive",
+ "zydeco-utils",
+]
+
+[[package]]
+name = "zydeco-statics"
+version = "0.2.0"
+dependencies = [
+ "codespan-reporting",
+ "derive-where",
+ "derive_more",
+ "im",
+ "slotmap",
+ "thiserror",
+ "unindent",
+ "zydeco-derive",
+ "zydeco-surface",
  "zydeco-utils",
 ]
 

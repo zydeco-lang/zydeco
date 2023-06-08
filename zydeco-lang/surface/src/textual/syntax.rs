@@ -1,8 +1,8 @@
 //! The surface syntax of zydeco is defined in this module.
 
-use crate::path::package::Dependency;
 use derive_more::From;
 use slotmap::{SecondaryMap, SlotMap};
+use std::path::PathBuf;
 use zydeco_utils::span::FileInfo;
 pub use zydeco_utils::span::{Sp, Span};
 
@@ -257,6 +257,15 @@ pub enum ReplInput {
 }
 
 pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
+
+/* ------------------------------- Dependency ------------------------------- */
+
+#[derive(Clone)]
+pub enum Dependency {
+    DirectImport(PathBuf),
+    ManagedImport(PathBuf),
+    Hierachy(Vec<String>),
+}
 
 /* --------------------------------- Context -------------------------------- */
 

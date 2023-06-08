@@ -3,7 +3,9 @@ members = [
     "zydeco-lang",
     "zydeco-lang/utils",
     "zydeco-lang/derive",
+    "zydeco-lang/driver",
     "zydeco-lang/surface",
+    "zydeco-lang/statics",
     "cli",
     "web",
 ]

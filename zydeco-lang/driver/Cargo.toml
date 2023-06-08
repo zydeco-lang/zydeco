@@ -1,0 +1,20 @@
+[package]
+name = "zydeco-driver"
+version = "0.2.0"
+edition = "2021"
+description = "driver for zydeco"
+
+[dependencies]
+codespan-reporting = "0.11"
+slotmap = { version = "1", features = ["serde"] }
+im = "15"
+unindent = "0.2"
+thiserror = "1"
+zydeco-utils = { path = "../utils" }
+zydeco-derive = { path = "../derive" }
+zydeco-surface = { path = "../surface" }
+derive_more = "0.99"
+derive-where = "1.2"
+
+[lib]
+doctest = false

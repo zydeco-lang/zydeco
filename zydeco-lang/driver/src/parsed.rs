@@ -1,15 +1,15 @@
 use super::{
     err::SurfaceError,
-    package::{Dependency, FileId, FileLoc, ProjectMode},
-};
-use crate::textual::{
-    err::ParseError,
-    lexer::Lexer,
-    parser::TopLevelParser,
-    syntax::{Ctx, TopLevel},
+    package::{FileId, FileLoc, ProjectMode},
 };
 use codespan_reporting::files::SimpleFiles;
 use std::{collections::HashMap, path::Path, rc::Rc};
+use zydeco_surface::textual::{
+    err::ParseError,
+    lexer::Lexer,
+    parser::TopLevelParser,
+    syntax::{Ctx, Dependency, TopLevel},
+};
 use zydeco_utils::span::FileInfo;
 
 pub struct FileParsed {
