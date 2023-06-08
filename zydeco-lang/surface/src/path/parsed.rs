@@ -83,7 +83,9 @@ impl ParsedMap {
     }
 
     pub fn std() -> FileParsedMeta {
-        Self::parse_file("zydeco-lang/src/library/std_next.zydeco")
-            .unwrap_or_else(|e| panic!("{}", e))
+        Self::parse_file("zydeco-lang/src/library/std_next.zydeco").unwrap_or_else(|e| {
+            eprintln!("{}", e);
+            panic!()
+        })
     }
 }

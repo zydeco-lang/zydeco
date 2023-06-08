@@ -5,7 +5,10 @@ use zydeco_lang::zydeco::ZydecoExpr;
 fn wrapper<T>(r: Result<T, String>) {
     match r {
         Ok(_) => {}
-        Err(e) => panic!("{}", e),
+        Err(e) => {
+            eprintln!("{}", e);
+            panic!()
+        },
     }
 }
 

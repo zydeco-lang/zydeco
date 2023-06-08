@@ -1,6 +1,6 @@
 pub use crate::textual::syntax::*;
 use derive_more::From;
-use slotmap::SlotMap;
+use slotmap::SecondaryMap;
 
 #[derive(From)]
 pub enum Declaration {
@@ -22,8 +22,8 @@ impl Extend<Declaration> for TopLevel {
 #[derive(Default)]
 pub struct Ctx {
     // arenas
-    pub patterns: SlotMap<PatternId, Sp<Pattern>>,
-    pub terms: SlotMap<TermId, Sp<Term<DefId>>>,
+    pub patterns: SecondaryMap<PatternId, Sp<Pattern>>,
+    pub terms: SecondaryMap<TermId, Sp<Term<DefId>>>,
 
     // meta
     /// for matching backwards from reference site to definition site
@@ -34,10 +34,18 @@ pub struct Ctx {
 }
 
 impl Ctx {
-    pub fn pattern(&mut self, pattern: Sp<Pattern>) -> PatternId {
-        self.patterns.insert(pattern)
+    pub fn pattern(&mut self, id: PatternId, pattern: Sp<Pattern>) -> PatternId {
+        let res = self.patterns.insert(id.clone(), pattern);
+        if res.is_some() {
+            panic!("duplicate pattern inserted")
+        }
+        id
     }
-    pub fn term(&mut self, term: Sp<Term<DefId>>) -> TermId {
-        self.terms.insert(term)
+    pub fn term(&mut self, id: TermId, term: Sp<Term<DefId>>) -> TermId {
+        let res = self.terms.insert(id.clone(), term);
+        if res.is_some() {
+            panic!("duplicate term inserted")
+        }
+        id
     }
 }

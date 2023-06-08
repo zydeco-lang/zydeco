@@ -180,7 +180,7 @@ impl Resolve for PatternId {
         state.span_enter(sp_pattern.info.clone());
         let pattern = sp_pattern.try_map_ref(|pattern| pattern.resolve(state))?;
         state.span_exit();
-        Ok(state.ctx.pattern(pattern))
+        Ok(state.ctx.pattern(self.clone(), pattern))
     }
 }
 impl Resolve for Pattern {
@@ -304,7 +304,7 @@ impl Resolve for TermId {
         state.span_enter(sp_term.info.clone());
         let term = sp_term.try_map_ref(|term| term.resolve(state))?;
         state.span_exit();
-        Ok(state.ctx.term(term))
+        Ok(state.ctx.term(self.clone(), term))
     }
 }
 impl Resolve for Term<NameRef<VarName>> {
