@@ -266,31 +266,12 @@ slotmap::new_key_type! {
     pub struct TermId;
 }
 
-#[derive(From, Clone)]
-pub enum AnyId {
-    Def(DefId),
-    Pattern(PatternId),
-    Term(TermId),
-}
-
 /// keeps all ids and spans, the corresponding source location
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SpanArena {
     pub defs: SlotMap<DefId, Span>,
     pub patterns: SlotMap<PatternId, Span>,
     pub terms: SlotMap<TermId, Span>,
-}
-
-impl std::ops::Index<AnyId> for SpanArena {
-    type Output = Span;
-
-    fn index(&self, id: AnyId) -> &Self::Output {
-        match id {
-            AnyId::Def(id) => self.defs.get(id).unwrap(),
-            AnyId::Pattern(id) => self.patterns.get(id).unwrap(),
-            AnyId::Term(id) => self.terms.get(id).unwrap(),
-        }
-    }
 }
 
 impl std::ops::Index<DefId> for SpanArena {

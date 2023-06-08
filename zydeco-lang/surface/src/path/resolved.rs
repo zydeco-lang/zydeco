@@ -1,7 +1,7 @@
 use super::{err::SurfaceError, package::FileId, parsed::ParsedMap};
 use crate::bound::{
     resolver::Resolver,
-    syntax::{Ctx, DefId, Pattern, PatternId, Term, TermId, TopLevel, VarName},
+    syntax::{Ctx, DefId, Pattern, PatternId, SpanArena, Term, TermId, TopLevel, VarName},
 };
 use slotmap::SecondaryMap;
 use std::collections::{HashMap, HashSet};
@@ -81,9 +81,13 @@ impl ResolutionTracker {
 }
 
 pub struct ResolvedFile {
+    // span arena
+    pub spans: SpanArena,
+    // arenas
+    pub defs: SecondaryMap<DefId, VarName>,
     pub patterns: SecondaryMap<PatternId, Pattern>,
     pub terms: SecondaryMap<TermId, Term<DefId>>,
-    pub defs: SecondaryMap<DefId, VarName>,
+    // top level
     pub top: TopLevel,
 }
 
@@ -109,9 +113,10 @@ impl ResolvedMap {
                     es.into_iter().map(|e| e.to_string()).collect::<Vec<String>>().join("\n"),
                 )
             })?;
-            let Resolver { ctx: Ctx { patterns, terms, .. }, top, .. } = resolver;
+            let spans = parsed.ctx.spans.clone();
             let defs = parsed.ctx.defs.clone();
-            self.map.insert(id, ResolvedFile { top, patterns, terms, defs });
+            let Resolver { ctx: Ctx { patterns, terms, .. }, top, .. } = resolver;
+            self.map.insert(id, ResolvedFile { spans, defs, patterns, terms, top });
         }
         Ok(())
     }
