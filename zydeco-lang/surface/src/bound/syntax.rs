@@ -1,3 +1,5 @@
+use std::cell::OnceCell;
+
 pub use crate::textual::syntax::*;
 use derive_more::From;
 use slotmap::SecondaryMap;
@@ -20,7 +22,22 @@ impl Extend<Declaration> for TopLevel {
 }
 
 #[derive(Default)]
+pub struct SymbolTable {
+    pub set: OnceCell<DefId>,
+    pub vtype_kind: OnceCell<DefId>,
+    pub ctype_kind: OnceCell<DefId>,
+    pub thunk_type: OnceCell<DefId>,
+    pub ret_type: OnceCell<DefId>,
+    pub fn_type: OnceCell<DefId>,
+    pub int_type: OnceCell<DefId>,
+    pub string_type: OnceCell<DefId>,
+}
+
+#[derive(Default)]
 pub struct Ctx {
+    // symbol table
+    pub symbol_table: SymbolTable,
+
     // arenas
     pub patterns: SecondaryMap<PatternId, Pattern>,
     pub terms: SecondaryMap<TermId, Term<DefId>>,
