@@ -28,4 +28,6 @@ pub enum ResolveError {
     DeclaredButNotDefined(Sp<VarName>),
     #[error("Ambiguous annotation on binder: {0}")]
     AmbiguousBinderAnnotation(Sp<VarName>),
+    #[error("Define twice: {0}")]
+    DefineTwice(Sp<VarName>),
 }

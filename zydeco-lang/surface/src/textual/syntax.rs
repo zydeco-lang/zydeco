@@ -212,16 +212,20 @@ pub struct Module {
     pub top: Option<TopLevel>,
 }
 
+#[derive(Clone)]
 pub struct UseAll;
+#[derive(Clone)]
 pub struct UseAlias(pub VarName, pub VarName);
+#[derive(Clone)]
 pub struct UseCluster(pub Vec<UseDef>);
-#[derive(From)]
+#[derive(Clone, From)]
 pub enum UseEnum {
     Name(VarName),
     Alias(UseAlias),
     All(UseAll),
     Cluster(UseCluster),
 }
+#[derive(Clone)]
 pub struct UseDef(pub NameRef<UseEnum>);
 
 pub struct Main(pub TermId);

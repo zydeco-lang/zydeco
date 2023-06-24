@@ -177,6 +177,8 @@ module Std where
     ### the parsers of their constructors are customized
     ### so the type is registered as a data type but the constructors
     ### are not implemented as internal constructors
+    use Bool/ (Bool, if) end
+
     pub extern data Int end
 
     pub extern def add : Thunk(Int -> Int -> Ret Int) end
@@ -202,6 +204,9 @@ module Std where
   end
 
   module String where
+    use Arith/ (Int, int_lt, add) end
+    use Prod/ (Pair) end
+    use Bool/ (Bool, if) end
     pub extern data Char end
     pub extern data String end
 
@@ -267,6 +272,9 @@ module Std where
   end
 
   module List where
+    use Arith/ (Int, sub, int_eq) end
+    use Bool/ (if~) end
+
     pub data List (A : VType) where
       | +Nil()
       | +Cons(A, List A)
@@ -506,6 +514,9 @@ module Std where
 //   end
 
   module OS where
+    use String/ (String, str_append, int_to_str) end
+    use List/ (List) end
+    use Arith/ (Int) end
     pub extern codata OS end
     pub extern def write_str : Thunk(String -> Thunk(OS) -> OS) end
     pub extern def read_line : Thunk(Thunk(String -> OS) -> OS) end
