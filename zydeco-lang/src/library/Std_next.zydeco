@@ -1,7 +1,7 @@
 # zydeco std
 
 
-module Builtin where
+pub module Builtin where
 
   ## the big bang
   pub extern def Set end
@@ -25,8 +25,8 @@ module Builtin where
 end
 
 
-module Std where
-  use Builtin/(VType, CType, Thunk, Ret, Comp, U, F, Fn) end
+pub module Std where
+  use Builtin/(VType, CType, Thunk, Ret, Comp, U, F, Fn, Set) end
 
   module Identity where
     pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
