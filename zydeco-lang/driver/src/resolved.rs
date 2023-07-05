@@ -1,10 +1,13 @@
 use super::{err::SurfaceError, package::FileId, parsed::ParsedMap};
 use slotmap::SecondaryMap;
 use std::collections::{HashMap, HashSet};
-use zydeco_surface::{bound::{
-    resolver::Resolver,
-    syntax::{Ctx, DefId, Pattern, PatternId, SpanArena, Term, TermId, TopLevel, VarName},
-}, textual::syntax::ModName};
+use zydeco_surface::{
+    bound::{
+        resolver::Resolver,
+        syntax::{Ctx, DefId, Pattern, PatternId, SpanArena, Term, TermId, TopLevel, VarName},
+    },
+    textual::syntax::ModName,
+};
 
 /// a file -> file_dependencies map; all files must be included in the map
 #[derive(Default)]
@@ -40,7 +43,7 @@ impl DependencyTracker {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ResolutionTracker {
     /// reversed_dependency map, depended_file -> files_affected after the
     /// depended_file's compilation
@@ -111,7 +114,8 @@ impl ResolvedMap {
         while let Some(id) = self.tracker.pick() {
             let parsed = &parsed_map.map[&id];
             println!("Tops: \n{}", &parsed.top); //Debug
-            let mut resolver = Resolver::new(&parsed.ctx, &parsed.top, global_ctx, global_heads.clone());
+            let mut resolver =
+                Resolver::new(&parsed.ctx, &parsed.top, global_ctx, global_heads.clone());
             resolver.exec().map_err(|es| {
                 SurfaceError::ResolveErrors(
                     es.into_iter().map(|e| e.to_string()).collect::<Vec<String>>().join("\n"),

@@ -60,25 +60,23 @@ pub struct FileParsedMeta {
 
 #[derive(Clone, Debug)]
 pub struct ModuleTree {
-    pub root: (Vec<String>, Option<FileId>),
+    pub root: (String, Option<FileId>),
     pub children: Vec<ModuleTree>,
 }
 
 impl Default for ModuleTree {
     fn default() -> Self {
-        Self { root: (vec![String::new()], None), children: vec![] }
+        Self { root: (String::new(), None), children: vec![] }
     }
 }
 
 impl ModuleTree {
     pub fn new(root: String) -> Self {
-        Self { root: (vec![root], None), children: vec![] }
+        Self { root: (root, None), children: vec![] }
     }
 
     pub fn add_child(&mut self, mod_name: String) {
-        let mut prefix = self.root.0.clone();
-        prefix.push(mod_name);
-        self.children.push(ModuleTree { root: (prefix, None), children: vec![] })
+        self.children.push(ModuleTree { root: (mod_name, None), children: vec![] })
     }
 
     pub fn get_children(&self) -> &Vec<ModuleTree> {
@@ -90,7 +88,7 @@ impl ModuleTree {
             self.root.1 = Some(id);
         } else {
             for child in self.children.iter_mut() {
-                if child.root.0.last().unwrap() == path[1].as_str() {
+                if child.root.0 == path[1].as_str() {
                     child.set_file_id(&path[1..].to_vec(), id);
                 }
             }
@@ -98,17 +96,30 @@ impl ModuleTree {
     }
 
     // get the module_tree entry of the given path
-    pub fn get_node_path(&mut self, path: &Vec<String>) -> &mut ModuleTree {
-        if path.len() == 1 {
-            self
+    pub fn get_node_path(&mut self, path: &Vec<String>) -> Option<&mut ModuleTree> {
+        if path.len() == 1 && self.root.0 == path[0] {
+            return Some(self);
         } else {
             for child in self.children.iter_mut() {
-                if child.root.0.last().unwrap() == path[1].as_str() {
+                if child.root.0 == path[1].as_str() {
                     return child.get_node_path(&path[1..].to_vec());
                 }
             }
-            panic!("ModuleTree::get_node_path: path not found")
         }
+        None
+    }
+
+    pub fn get_id_path(&self, path: &Vec<String>) -> Option<FileId> {
+        if path.len() == 1 && self.root.0 == path[0] {
+            return self.root.1;
+        } else {
+            for child in self.children.iter() {
+                if child.root.0 == path[1].as_str() {
+                    return child.get_id_path(&path[1..].to_vec());
+                }
+            }
+        }
+        None
     }
 }
 
@@ -122,6 +133,7 @@ pub struct ParsedMap {
     // temp
     pub to_parse: Vec<FileLoc>,
     pub all_names: HashSet<String>,
+    pub deps_record: HashMap<FileId, HashSet<Vec<String>>>,
 }
 impl Default for ParsedMap {
     fn default() -> Self {
@@ -132,6 +144,7 @@ impl Default for ParsedMap {
         let to_parse = Vec::default();
         let module_tree = ModuleTree::default();
         let all_names = HashSet::default();
+        let deps_record = HashMap::default();
         Self {
             project_name,
             files,
@@ -141,6 +154,7 @@ impl Default for ParsedMap {
             module_current: vec![],
             to_parse,
             all_names,
+            deps_record,
         }
     }
 }
@@ -152,7 +166,8 @@ impl ParsedMap {
         let ctx = Ctx::default();
         let to_parse = Vec::default();
         let module_tree = ModuleTree::new(prj_name.clone());
-        let all_names = create_all_name(path);
+        let all_names = create_all_name(path, true); // Todo: std is not needed
+        let deps_record = HashMap::default();
         Self {
             project_name: prj_name,
             files,
@@ -162,17 +177,18 @@ impl ParsedMap {
             module_current: vec![],
             to_parse,
             all_names,
+            deps_record,
         }
     }
 
-    pub fn parse_file_wp(&mut self, path: impl AsRef<Path>) -> Result<FileId, SurfaceError> {
+    pub fn parse_file_wp(&mut self, path: impl AsRef<Path>) -> Result<(), SurfaceError> {
         // read file
         let path = path.as_ref();
         let source = std::fs::read_to_string(&path)
             .map_err(|_| SurfaceError::PathNotFound { path: path.to_path_buf() })?;
         let loc = FileLoc(path.to_path_buf());
         let parent_name = path.parent().unwrap_or(Path::new("..")).to_str().unwrap().to_owned();
-        let mut mod_name = path
+        let mod_name = path
             .file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| SurfaceError::PathInvalid { path: path.to_path_buf() })?
@@ -182,21 +198,15 @@ impl ParsedMap {
         if mod_name == "Module" && parent_name == "src" {
             // The root module
             self.module_current = vec![mod_name.clone()];
-            mod_name = self.project_name.clone();
         } else if mod_name == "Module" && parent_name != "src" {
             // A sub module folder
             self.module_current = self.deal_with_module_folder(mod_path);
-            mod_name = self.module_current.last().unwrap().clone();
         } else if mod_name != "Std_next" {
             // A sub module file
             self.module_current = self.deal_with_module_file(mod_path);
         } else {
             self.module_current = vec![self.project_name.clone(), mod_name.clone()];
         }
-        println!("Parsing file: {}", path.display()); //Debug
-        println!("Module name: {}", mod_name); //Debug
-        println!("Module path: {:?}", self.module_current); //Debug
-
         // parsing and span mapping
         let mut ctx = Ctx::default();
         ctx.spans = self.ctx.spans.clone();
@@ -223,7 +233,6 @@ impl ParsedMap {
         // let FileParsedMeta { loc, source, mut parsed } = meta;
         let fid = self.files.add(loc, source);
         self.module_root.set_file_id(&self.module_current, fid);
-        println!("File id: {}", fid); //Debug
         // add the module "XX" end to the to-parse list
         for to_parse_file in parsed.ctx.deps.clone() {
             match to_parse_file {
@@ -233,21 +242,23 @@ impl ParsedMap {
                     let filename = modnames.last().unwrap();
                     if let Some(path) = find_mod_file(filename) {
                         self.add_file_to_parse(path);
-                        let module_entry = self.module_root.get_node_path(&self.module_current);
+                        let module_entry =
+                            self.module_root.get_node_path(&self.module_current).unwrap();
                         module_entry.add_child(filename.clone());
                     } else {
-                        todo!()
+                        return Err(SurfaceError::ModuleNotFound { mod_name: modnames });
                     }
                 }
                 Dependency::Use(NameRef(mod_path, _)) => {
-                    // 急Todo: locate the dependency file, check its fileloc/fileid and add to the dependency list/hashset
-
                     if mod_path.is_empty() {
                         continue;
                     } else {
                         let ModName(filename) = &mod_path[0];
                         if self.all_names.contains(filename) {
-                            println!("Try to find a fileID/fileLoc for the dependency: {}", filename); //Debug
+                            self.deps_record
+                                .entry(fid)
+                                .or_insert(HashSet::new())
+                                .insert(mod_path.into_iter().map(|ModName(s)| s).collect());
                         }
                     }
                 }
@@ -258,7 +269,7 @@ impl ParsedMap {
         self.ctx.merge(&parsed.ctx);
         parsed.mod_toplevel(self.module_current.last().unwrap().clone());
         self.map.insert(fid, parsed);
-        Ok(fid)
+        Ok(())
     }
 
     pub fn parse_file(&self, path: impl AsRef<Path>) -> Result<FileParsedMeta, SurfaceError> {
@@ -304,7 +315,7 @@ impl ParsedMap {
         fid
     }
 
-    pub fn std_wp(&mut self) -> FileId {
+    pub fn std_wp(&mut self) -> () {
         self.module_root.add_child("Std_next".to_owned());
         self.parse_file_wp("zydeco-lang/src/library/Std_next.zydeco").unwrap_or_else(|e| {
             eprintln!("{}", e);
@@ -352,9 +363,32 @@ impl ParsedMap {
         mod_path
     }
 
-    // Todo: Try to find a fileID/fileLoc for the dependency file and add to the dependency list/hashset:
-    pub fn add_dependency(&self, path: Vec<ModName>) {
-        todo!()
+    pub fn get_dep_id(&self, dep_path: &Vec<String>, fid: &FileId) -> Result<FileId, SurfaceError> {
+        //Todo: deal with the managed imported package (like std)
+        let mut prefix_path = self.map.get(fid).unwrap().mod_path.clone();
+        let mut try_path = dep_path.clone();
+        let mut failed = false;
+        if prefix_path.len() != 1 {
+            prefix_path.pop();
+        }
+        loop {
+            if !failed {
+                prefix_path.push(try_path.remove(0));
+            }
+            if let Some(id) = self.module_root.get_id_path(&prefix_path) {
+                if !try_path.is_empty() && self.all_names.contains(&try_path[0]) {
+                    failed = false;
+                    continue;
+                }
+                return Ok(id);
+            }
+            prefix_path.remove(prefix_path.len() - 2);
+            failed = true;
+            if prefix_path.is_empty() {
+                break;
+            }
+        }
+        Err(SurfaceError::ModuleNotFound { mod_name: dep_path.clone() })
     }
 }
 
@@ -376,7 +410,7 @@ pub fn find_mod_file(name: &String) -> Option<FileLoc> {
     None
 }
 
-pub fn create_all_name(path: &Path) -> HashSet<String> {
+pub fn create_all_name(path: &Path, has_std: bool) -> HashSet<String> {
     let mut set = HashSet::new();
     let project_name = path.file_name().unwrap().to_str().unwrap().to_owned();
     for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
@@ -396,16 +430,13 @@ pub fn create_all_name(path: &Path) -> HashSet<String> {
                     .unwrap_or_default()
                     .to_owned()
             } else {
-                entry
-                    .path()
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_str()
-                    .unwrap_or_default()
-                    .to_owned()
+                entry.path().file_stem().unwrap_or_default().to_str().unwrap_or_default().to_owned()
             };
             set.insert(name);
         }
+    }
+    if has_std {
+        set.insert("Std_next".to_owned());
     }
     set
 }

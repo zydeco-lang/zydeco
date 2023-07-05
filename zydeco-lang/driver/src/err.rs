@@ -14,4 +14,6 @@ pub enum SurfaceError {
     ParseError(String),
     #[error("Resolve errors:\n{0}")]
     ResolveErrors(String),
+    #[error("Module not found: `{:?}`", .mod_name )]
+    ModuleNotFound { mod_name: Vec<String> },
 }

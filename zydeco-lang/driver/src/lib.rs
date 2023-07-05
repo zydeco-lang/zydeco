@@ -10,7 +10,6 @@ use self::{err::SurfaceError, parsed::*, resolved::*};
 use package::{FileLoc, ProjectMode};
 use serde::Deserialize;
 use std::path::Path;
-use zydeco_surface::textual::syntax::ModName;
 
 #[derive(Deserialize)]
 struct Config {
@@ -32,9 +31,9 @@ impl Driver {
         let mut parsed = ParsedMap::default();
         let id = parsed.add_file_parsed(parsed.parse_file(path)?);
         let std = parsed.add_file_parsed(parsed.std());
-        // deps.update_dep(id, std);
+        deps.update_dep(id, std);
 
-        // // resolve
+        // resolve
         // let mut resolved = ResolvedMap::new(deps);
         // resolved.resolve_one_by_one(&parsed)?;
 
@@ -55,7 +54,7 @@ impl Driver {
         // parse
         let mut parsed = ParsedMap::new(project_name.to_str().unwrap().to_string(), path.as_ref());
         // Todo: If std isn't neeeded
-        let id = parsed.std_wp();
+        parsed.std_wp();
         // The first file to parse
         parsed.add_file_to_parse(FileLoc(path.as_ref().join(Path::new("src/Module.zy"))));
         loop {
@@ -63,16 +62,15 @@ impl Driver {
                 break;
             }
             let FileLoc(loc) = parsed.to_parse.pop().unwrap();
-            let id = parsed.parse_file_wp(loc)?;
+            parsed.parse_file_wp(loc)?;
         }
-        println!("{:?}", parsed.module_root);
         // update dependency
-        // dependency pair should be (id, dep_fileloc)
-        // if the dep hasn't been parsed, use dep_fileloc instead.
-        // Once a file is parsed, look up the set of pair to update the fileloc and insert it into the map.
-        // If a file is parsed, it should have a place in module tree and has its own id.
-        // finally, use update_deps(id, hash_deps_id).
-        // deps.update_dep(id, std);
+        for (id, deps_path) in &parsed.deps_record {
+            for dep_path in deps_path {
+                let dep_id = parsed.get_dep_id(dep_path, id)?;
+                deps.update_dep(id.clone(), dep_id)
+            }
+        }
 
         // resolve
         let mut resolved = ResolvedMap::new(deps);
