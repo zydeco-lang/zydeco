@@ -28,7 +28,7 @@ impl Extend<Declaration> for TopLevel {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SymbolTable {
     pub set: OnceCell<DefId>,
     pub vtype_kind: OnceCell<DefId>,
@@ -40,7 +40,7 @@ pub struct SymbolTable {
     pub string_type: OnceCell<DefId>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Ctx {
     // symbol table
     pub symbol_table: SymbolTable,

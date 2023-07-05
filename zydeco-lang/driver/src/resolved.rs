@@ -1,10 +1,10 @@
 use super::{err::SurfaceError, package::FileId, parsed::ParsedMap};
 use slotmap::SecondaryMap;
 use std::collections::{HashMap, HashSet};
-use zydeco_surface::bound::{
+use zydeco_surface::{bound::{
     resolver::Resolver,
     syntax::{Ctx, DefId, Pattern, PatternId, SpanArena, Term, TermId, TopLevel, VarName},
-};
+}, textual::syntax::ModName};
 
 /// a file -> file_dependencies map; all files must be included in the map
 #[derive(Default)]
@@ -104,17 +104,24 @@ impl ResolvedMap {
         Self { tracker, map }
     }
 
-    pub fn resolve_one_by_one(&mut self, parsed: &ParsedMap) -> Result<(), SurfaceError> {
+    pub fn resolve_one_by_one(&mut self, parsed_map: &ParsedMap) -> Result<(), SurfaceError> {
+        println!("Ready files: {}", self.tracker.ready.len()); //Debug
+        let mut global_ctx = Ctx::default();
+        let mut global_heads: Vec<Vec<ModName>> = Vec::new();
         while let Some(id) = self.tracker.pick() {
-            let parsed = &parsed.map[&id];
-            let mut resolver = Resolver::new(&parsed.ctx, &parsed.top);
+            let parsed = &parsed_map.map[&id];
+            println!("Tops: \n{}", &parsed.top); //Debug
+            let mut resolver = Resolver::new(&parsed.ctx, &parsed.top, global_ctx, global_heads.clone());
             resolver.exec().map_err(|es| {
                 SurfaceError::ResolveErrors(
                     es.into_iter().map(|e| e.to_string()).collect::<Vec<String>>().join("\n"),
                 )
             })?;
+            self.tracker.done(id);
             let spans = parsed.ctx.spans.clone();
             let defs = parsed.ctx.defs.clone();
+            global_ctx = resolver.ctx.clone();
+            global_heads = resolver.heads.clone();
             let Resolver { ctx: Ctx { patterns, terms, .. }, top, .. } = resolver;
             self.map.insert(id, ResolvedFile { spans, defs, patterns, terms, top });
         }
