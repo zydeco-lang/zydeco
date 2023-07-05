@@ -15,6 +15,9 @@ zydeco-derive = { path = "../derive" }
 zydeco-surface = { path = "../surface" }
 derive_more = "0.99"
 derive-where = "1.2"
+toml = "0.4.2"
+serde = "1.0"
+walkdir = "2"
 
 [lib]
 doctest = false

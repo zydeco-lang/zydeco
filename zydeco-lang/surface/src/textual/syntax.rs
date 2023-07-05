@@ -1,8 +1,12 @@
 //! The surface syntax of zydeco is defined in this module.
 
 use derive_more::From;
+use im::HashSet;
 use slotmap::{SecondaryMap, SlotMap};
-use std::path::PathBuf;
+use std::{
+    fmt::{Debug, Display},
+    path::PathBuf,
+};
 use zydeco_utils::span::FileInfo;
 pub use zydeco_utils::span::{Sp, Span};
 
@@ -207,30 +211,39 @@ pub struct TypeArm {
 #[derive(Clone, Debug)]
 pub struct Define(pub GenBind);
 
+#[derive(Clone)]
 pub struct Module {
     pub name: NameDef<ModName>,
     pub top: Option<TopLevel>,
 }
 
-#[derive(Clone)]
+impl Display for Module {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let NameDef(ModName(mod_name)) = self.name.clone();
+        write!(f, "{}", mod_name)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct UseAll;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UseAlias(pub VarName, pub VarName);
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UseCluster(pub Vec<UseDef>);
-#[derive(Clone, From)]
+#[derive(Clone, From, Debug)]
 pub enum UseEnum {
     Name(VarName),
     Alias(UseAlias),
     All(UseAll),
     Cluster(UseCluster),
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UseDef(pub NameRef<UseEnum>);
 
+#[derive(Clone)]
 pub struct Main(pub TermId);
 
-#[derive(From)]
+#[derive(Clone, From)]
 pub enum Declaration {
     Type(TypeDef),
     Define(Define),
@@ -239,6 +252,21 @@ pub enum Declaration {
     Main(Main),
 }
 
+//Debug
+
+impl Display for Declaration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Declaration::Type(_) => write!(f, "data/codata"),
+            Declaration::Define(_) => write!(f, "define"),
+            Declaration::Module(m) => write!(f, "module: {}", m),
+            Declaration::UseDef(_) => write!(f, "use"),
+            Declaration::Main(_) => write!(f, "main"),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Modifiers<T> {
     pub public: bool,
     pub external: bool,
@@ -260,15 +288,41 @@ pub enum ReplInput {
     Term(TermId),
 }
 
+#[derive(Clone)]
 pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
+
+//Debug
+
+impl Debug for TopLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let TopLevel(inside) = self;
+        writeln!(f, "Length: {}", inside.len()).unwrap();
+        for Modifiers { inner, .. } in inside {
+            writeln!(f, "{}", inner)?;
+        }
+        writeln!(f, "")
+    }
+}
+
+impl Display for TopLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let TopLevel(inside) = self;
+        writeln!(f, "Length: {}", inside.len()).unwrap();
+        for Modifiers { inner, .. } in inside {
+            writeln!(f, "{}", inner)?;
+        }
+        writeln!(f, "")
+    }
+}
 
 /* ------------------------------- Dependency ------------------------------- */
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Dependency {
     DirectImport(PathBuf),
     ManagedImport(PathBuf),
     Hierachy(Vec<String>),
+    Use(NameRef<UseEnum>),
 }
 
 /* --------------------------------- Context -------------------------------- */
@@ -324,22 +378,26 @@ pub struct Ctx {
     pub deps: Vec<Dependency>,
     // temp
     pub mod_stack: Vec<String>,
+    pub added_id: (HashSet<DefId>, HashSet<PatternId>, HashSet<TermId>),
 }
 
 impl Ctx {
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.defs.insert(def.info);
         self.defs.insert(id, def.inner);
+        self.added_id.0.insert(id);
         id
     }
     pub fn pattern(&mut self, pattern: Sp<Pattern>) -> PatternId {
         let id = self.spans.patterns.insert(pattern.info);
         self.patterns.insert(id, pattern.inner);
+        self.added_id.1.insert(id);
         id
     }
     pub fn term(&mut self, term: Sp<Term<NameRef<VarName>>>) -> TermId {
         let id = self.spans.terms.insert(term.info);
         self.terms.insert(id, term.inner);
+        self.added_id.2.insert(id);
         id
     }
 
@@ -354,19 +412,39 @@ impl Ctx {
         stack.push(name);
         self.deps.push(Dependency::Hierachy(stack));
     }
+
+    pub fn update_dep_pairs(&mut self, use_def: &NameRef<UseEnum>) {
+        self.deps.push(Dependency::Use(use_def.clone()));
+    }
+
     pub fn exit_mod(&mut self) {
         self.mod_stack.pop();
     }
 
     pub fn span_map(&mut self, file_info: &FileInfo) {
-        for (_, info) in self.spans.defs.iter_mut() {
+        for (_, info) in self.spans.defs.iter_mut().filter(|(id, _)| self.added_id.0.contains(id)) {
             info.set_info(file_info);
         }
-        for (_, info) in self.spans.patterns.iter_mut() {
+        for (_, info) in self.spans.patterns.iter_mut().filter(|(id, _)| self.added_id.1.contains(id)) {
             info.set_info(file_info);
         }
-        for (_, info) in self.spans.terms.iter_mut() {
+        for (_, info) in self.spans.terms.iter_mut().filter(|(id, _)| self.added_id.2.contains(id)) {
             info.set_info(file_info);
         }
+    }
+
+    pub fn merge(&mut self, other: &Ctx) {
+        self.defs.extend(other.defs.clone());
+        // There will be only one definition
+        self.patterns.extend(other.patterns.clone());
+        self.terms.extend(other.terms.clone());
+        self.spans = other.spans.clone();
+        // Question: "Pass the former span to latter one so that no repeat id" will lead to error
+    }
+
+    pub fn clear_added_id(&mut self) {
+        self.added_id.0.clear();
+        self.added_id.1.clear();
+        self.added_id.2.clear();
     }
 }

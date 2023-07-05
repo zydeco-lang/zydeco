@@ -3,9 +3,10 @@ use std::{
     fmt::{self, Display},
     path::PathBuf,
 };
+use serde::Deserialize;
 
 /// Specifies how to deal with imports in the source code file.
-#[derive(Default)]
+#[derive(Default, Deserialize)]
 pub enum ProjectMode {
     /// `Managed` mode, with a `Zydeco.toml` project file. The project file is
     /// then used as the root of all direct imports and also a place for
@@ -54,6 +55,7 @@ pub struct Bin {
     pub root: PathBuf,
 }
 
+#[derive(PartialEq, Debug)]
 pub struct FileLoc(pub PathBuf);
 impl Display for FileLoc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

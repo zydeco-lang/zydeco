@@ -295,7 +295,11 @@ UseEnum: UseEnum = {
     ".." => UseAll.into(),
     <SepByDelim<"(", ",", UseDef, ")">> => UseCluster(<>).into(),
 };
-UseDef: UseDef = <NameRef<UseEnum>> => UseDef(<>);
+// UseDef: UseDef = <NameRef<UseEnum>> => UseDef(<>);
+UseDef: UseDef = <use_def:NameRef<UseEnum>> => {
+    ctx.update_dep_pairs(&use_def);
+    UseDef(use_def)
+};
 
 Declaration: Declaration = {
     <TypeDef> => <>.into(),
