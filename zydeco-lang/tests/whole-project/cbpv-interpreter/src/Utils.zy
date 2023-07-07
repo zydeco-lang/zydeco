@@ -1,0 +1,21 @@
+use Structure/ Others/ .. end
+use Structure/ Sem/ .. end
+use Std_next/ Std/ String/ .. end
+use Std_next/ Builtin/ .. end
+
+
+
+pub def fn sem_val_to_str (s : SemVal) : F String =
+  match s
+  | +True() -> ret "true"
+  | +False() -> ret "false"
+  | +ThunkV(_) -> ret "<thunk>"
+  end
+end
+
+pub def rec error: SemComp =
+  comatch
+    | .app(_) -> ! error
+    | .bind() -> ret +Err()
+  end
+end

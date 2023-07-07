@@ -1,0 +1,20 @@
+use Std_next/ Std/ String/ (String) end
+use Std_next/ Builtin/ .. end
+use Syn/ .. end
+use Sem/ .. end
+
+# Environments are implemented as association lists.
+pub data Env where
+  | +Empty()
+  | +Cons(String, SemVal, Env)
+end
+
+
+# The interpreters for values and computations are implemented
+# mutually recursively.
+# Currently zydeco doesn't directly support mutual recursion but
+# it can be easily simulated:
+pub codata Interpreter where
+  | .valu(SynVal, Env)  : Ret(Answer SemVal)
+  | .comp(SynComp, Env) : SemComp
+end

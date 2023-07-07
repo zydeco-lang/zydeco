@@ -1,0 +1,27 @@
+use Std_next/ Builtin/ .. end
+
+# The interpreter works with semantic values, which do not include
+# variables. We use closures in the interpreter to implement semantic
+# thunks.
+codata SemComp end
+
+pub data SemVal where
+  | +True()
+  | +False()
+  | +ThunkV(Thunk(SemComp))
+end
+
+# The "final answer" of the interpreter is either the final value or
+# an error.
+pub data Answer (A : VType) where
+  | +Ok(A)
+  | +Err()
+end
+
+# The semantics of computations are Zydeco computations which satisfy
+# this codata type. There are two eliminators: application to a
+# variable and a bind.
+pub codata SemComp where
+  | .app(SemVal) : SemComp
+  | .bind()      : Ret(Answer SemVal)
+end

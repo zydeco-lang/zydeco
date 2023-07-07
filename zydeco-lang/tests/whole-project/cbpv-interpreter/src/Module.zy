@@ -1,0 +1,19 @@
+module Interp end
+module Utils end
+module Structure end
+
+use Interp/ .. end
+use Utils/ .. end
+use Std_next/ Std/ (String/ .. , OS/ .. ) end
+
+
+# An example
+main
+  do x <- ! interp .comp( +App( +Lam("x", +Return( +Var("x"))), +False()), +Empty()) .bind();
+  match x
+  | +Err() -> ! panic "ERROR"
+  | +Ok(sv) ->
+    (do s <- ! sem_val_to_str sv;
+        ! write_line s { ! exit 0 })
+  end
+end
