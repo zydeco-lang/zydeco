@@ -16,8 +16,8 @@ use zydeco_surface::textual::{
     lexer::Lexer,
     parser::TopLevelParser,
     syntax::{
-        Ctx, Declaration, Dependency, ModName, Modifiers, Module, NameDef, NameRef, TopLevel,
-        UseDef,
+        Ctx, Declaration, Dependency, ModName, Modifiers, Module, ModuleTree, NameDef, NameRef,
+        TopLevel,
     },
 };
 use zydeco_utils::span::FileInfo;
@@ -56,71 +56,6 @@ pub struct FileParsedMeta {
     pub loc: FileLoc,
     pub source: String,
     pub parsed: FileParsed,
-}
-
-#[derive(Clone, Debug)]
-pub struct ModuleTree {
-    pub root: (String, Option<FileId>),
-    pub children: Vec<ModuleTree>,
-}
-
-impl Default for ModuleTree {
-    fn default() -> Self {
-        Self { root: (String::new(), None), children: vec![] }
-    }
-}
-
-impl ModuleTree {
-    pub fn new(root: String) -> Self {
-        Self { root: (root, None), children: vec![] }
-    }
-
-    pub fn add_child(&mut self, mod_name: String) {
-        self.children.push(ModuleTree { root: (mod_name, None), children: vec![] })
-    }
-
-    pub fn get_children(&self) -> &Vec<ModuleTree> {
-        self.children.as_ref()
-    }
-
-    pub fn set_file_id(&mut self, path: &Vec<String>, id: FileId) {
-        if path.len() == 1 {
-            self.root.1 = Some(id);
-        } else {
-            for child in self.children.iter_mut() {
-                if child.root.0 == path[1].as_str() {
-                    child.set_file_id(&path[1..].to_vec(), id);
-                }
-            }
-        }
-    }
-
-    // get the module_tree entry of the given path
-    pub fn get_node_path(&mut self, path: &Vec<String>) -> Option<&mut ModuleTree> {
-        if path.len() == 1 && self.root.0 == path[0] {
-            return Some(self);
-        } else {
-            for child in self.children.iter_mut() {
-                if child.root.0 == path[1].as_str() {
-                    return child.get_node_path(&path[1..].to_vec());
-                }
-            }
-        }
-        None
-    }
-
-    pub fn get_id_path(&self, path: &Vec<String>) -> Option<FileId> {
-        if path.len() == 1 && self.root.0 == path[0] {
-            return self.root.1;
-        } else {
-            for child in self.children.iter() {
-                if child.root.0 == path[1].as_str() {
-                    return child.get_id_path(&path[1..].to_vec());
-                }
-            }
-        }
-        None
-    }
 }
 
 pub struct ParsedMap {
@@ -243,7 +178,7 @@ impl ParsedMap {
                     if let Some(path) = find_mod_file(filename) {
                         self.add_file_to_parse(path);
                         let module_entry =
-                            self.module_root.get_node_path(&self.module_current).unwrap();
+                            self.module_root.get_node_path_mut(&self.module_current).unwrap();
                         module_entry.add_child(filename.clone());
                     } else {
                         return Err(SurfaceError::ModuleNotFound { mod_name: modnames });

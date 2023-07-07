@@ -28,7 +28,7 @@ end
 pub module Std where
   use Builtin/(VType, CType, Thunk, Ret, Comp, U, F, Fn, Set) end
 
-  module Identity where
+  pub module Identity where
     pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
       fn A x -> ret x
     } end
@@ -42,7 +42,7 @@ pub module Std where
     | +Unit()
   end
 
-  module Prod where
+  pub module Prod where
     pub data Pair (A : VType) (A' : VType) where
       | +Cons(A, A')
     end
@@ -59,7 +59,7 @@ pub module Std where
     | +Some(A)
   end
 
-  module Bool where
+  pub module Bool where
     pub data Bool where
       | +True()
       | +False()
@@ -156,7 +156,7 @@ pub module Std where
     } end
   end
 
-  module Nat where
+  pub module Nat where
     pub data Nat where
       | +Z()
       | +S(Nat)
@@ -172,7 +172,7 @@ pub module Std where
     end
   end
 
-  module Arith where
+  pub module Arith where
     ### we support the constructors externally because
     ### the parsers of their constructors are customized
     ### so the type is registered as a data type but the constructors
@@ -203,7 +203,7 @@ pub module Std where
     } end
   end
 
-  module String where
+  pub module String where
     use Arith/ (Int, int_lt, add) end
     use Prod/ (Pair) end
     use Bool/ (Bool, if) end
@@ -271,7 +271,7 @@ pub module Std where
     end
   end
 
-  module List where
+  pub module List where
     use Arith/ (Int, sub, int_eq) end
     use Bool/ (if~) end
 
@@ -513,7 +513,7 @@ pub module Std where
 //     end
 //   end
 
-  module OS where
+  pub module OS where
     use String/ (String, str_append, int_to_str) end
     use List/ (List) end
     use Arith/ (Int) end

@@ -11,9 +11,9 @@ pub enum Declaration {
     Main(Main),
 }
 
-#[derive(From, Clone)]
+#[derive(From, Clone, Debug)]
 pub enum PublicDec {
-    Module(ModName),
+    Module(String),
     Def(VarName),
     // Use(NameRef<UseEnum>),
 }
@@ -52,10 +52,8 @@ pub struct Ctx {
     /// for matching backwards from reference site to definition site
     pub lookup: im::HashMap<NameRef<VarName>, DefId>,
     // . / means local scope, will be destroyed and remain the pubs
-    pub lookup_new: im::HashMap<Vec<ModName>, im::HashMap<VarName, DefId>>,
-    pub cur_module: Vec<ModName>,
-    // absolute module tree
-    // pub module_tree: Tree<ModName>,
+    pub lookup_new: im::HashMap<Vec<String>, im::HashMap<VarName, DefId>>,
+    pub current_pub: Vec<PublicDec>,
 
     /// for matching forwards from definition site to a declaration site;
     /// typically used by type definitions without a body
@@ -77,26 +75,5 @@ impl Ctx {
             panic!("duplicate term inserted")
         }
         id
-    }
-    pub fn debug_print_lookup(&mut self, situation: String) {
-        println!("When {}:", situation);
-        for lookup in self.lookup_new.clone() {
-            print!("Module path:");
-            for ModName(mod_name) in lookup.0.clone() {
-                print!("{}/", mod_name)
-            }
-            print!("\n");
-            for (VarName(name), _) in lookup.1.clone() {
-                print!("{}, ", name)
-            }
-            print!("\n");
-        }
-    }
-    pub fn debug_insert_lookup(&mut self, path: Vec<ModName>, name: VarName) {
-        print!("Insert {} into: ", name);
-        for ModName(mod_name) in path {
-            print!("{}/", mod_name)
-        }
-        println!("")
     }
 }

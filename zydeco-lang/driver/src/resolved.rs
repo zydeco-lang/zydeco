@@ -1,12 +1,9 @@
 use super::{err::SurfaceError, package::FileId, parsed::ParsedMap};
 use slotmap::SecondaryMap;
 use std::collections::{HashMap, HashSet};
-use zydeco_surface::{
-    bound::{
-        resolver::Resolver,
-        syntax::{Ctx, DefId, Pattern, PatternId, SpanArena, Term, TermId, TopLevel, VarName},
-    },
-    textual::syntax::ModName,
+use zydeco_surface::bound::{
+    resolver::Resolver,
+    syntax::{Ctx, DefId, Pattern, PatternId, SpanArena, Term, TermId, TopLevel, VarName},
 };
 
 /// a file -> file_dependencies map; all files must be included in the map
@@ -73,7 +70,7 @@ impl ResolutionTracker {
     /// done resolving a file
     pub fn done(&mut self, id: FileId) {
         let Self { rev_dep, ref_cnt, ready } = self;
-        for dep in rev_dep.remove(&id).unwrap() {
+        for dep in rev_dep.remove(&id).unwrap_or_default() {
             let cnt = ref_cnt.get_mut(&dep).unwrap();
             *cnt -= 1;
             if *cnt == 0 {
@@ -108,14 +105,18 @@ impl ResolvedMap {
     }
 
     pub fn resolve_one_by_one(&mut self, parsed_map: &ParsedMap) -> Result<(), SurfaceError> {
-        println!("Ready files: {}", self.tracker.ready.len()); //Debug
         let mut global_ctx = Ctx::default();
-        let mut global_heads: Vec<Vec<ModName>> = Vec::new();
+        let mut global_heads: Vec<Vec<String>> = Vec::new();
         while let Some(id) = self.tracker.pick() {
             let parsed = &parsed_map.map[&id];
-            println!("Tops: \n{}", &parsed.top); //Debug
-            let mut resolver =
-                Resolver::new(&parsed.ctx, &parsed.top, global_ctx, global_heads.clone());
+            let mut resolver = Resolver::new(
+                &parsed.ctx,
+                &parsed.top,
+                global_ctx,
+                global_heads.clone(),
+                parsed_map.map[&id].mod_path.clone(),
+                parsed_map.module_root.clone(),
+            );
             resolver.exec().map_err(|es| {
                 SurfaceError::ResolveErrors(
                     es.into_iter().map(|e| e.to_string()).collect::<Vec<String>>().join("\n"),

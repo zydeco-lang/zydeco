@@ -16,59 +16,62 @@ pub struct Resolver<'a> {
     pub ctx: Ctx,
     pub top: TopLevel,
     // temp
-    module_stack: Vec<ModName>,
-    lookup_stack_new: Vec<im::HashMap<Vec<ModName>, im::HashMap<VarName, DefId>>>,
-    pub heads: Vec<Vec<ModName>>,
+    module_stack: Vec<String>,
+    lookup_stack_new: Vec<im::HashMap<Vec<String>, im::HashMap<VarName, DefId>>>,
+    pub heads: Vec<Vec<String>>,
+    pub module_tree: ModuleTree,
 
     /// all public variables under current scope
     ///  
     /// or just use DefId?
-    current_pub: Vec<PublicDec>,
+    current_pub_stack: Vec<Vec<PublicDec>>,
     span_stack: Vec<Span>,
 }
 
 impl Resolver<'_> {
     pub fn new<'a>(
-        textual_ctx: &'a ts::Ctx, textual_top: &'a ts::TopLevel, ctx: Ctx, heads: Vec<Vec<ModName>>,
+        textual_ctx: &'a ts::Ctx, textual_top: &'a ts::TopLevel, ctx: Ctx, heads: Vec<Vec<String>>,
+        mut outer_module: Vec<String>, module_tree: ModuleTree,
     ) -> Resolver<'a> {
+        outer_module.pop();
         Resolver {
             textual_ctx,
             textual_top,
             ctx,
             top: TopLevel::default(),
-            module_stack: Default::default(),
+            module_stack: outer_module,
             lookup_stack_new: Default::default(),
             heads,
-            current_pub: Default::default(),
+            module_tree,
+            current_pub_stack: Default::default(),
             span_stack: Default::default(),
         }
     }
-    pub fn mod_enter(&mut self, name: &ModName) {
+    pub fn mod_enter(&mut self, name: &String) {
         if !self.module_stack.is_empty() {
-            self.ctx.cur_module.push(self.module_stack.last().unwrap().clone());
+            self.module_tree.get_node_path_mut(&self.module_stack).unwrap().add_child(name.clone());
         }
         self.module_stack.push(name.clone());
     }
-    pub fn mod_exit(&mut self) -> HashMap<VarName, DefId> {
-        println!("mod exit"); //Debug
-        debug_print_path(self.get_mod());
-        self.ctx.debug_print_lookup(String::from("mod exit"));
-        
-        let path: Vec<ModName> = Vec::new();
-        let default_in_module: HashMap<VarName, DefId> = HashMap::new();
-        let in_module = self.ctx.lookup_new.get(&path).unwrap_or(&default_in_module).clone();
+    pub fn mod_exit(&mut self) -> HashMap<Vec<String>, HashMap<VarName, DefId>> {
         self.module_stack.pop();
-        self.ctx.cur_module.pop();
-        in_module
+        self.ctx.lookup_new.clone()
     }
-    pub fn get_mod(&mut self) -> Vec<ModName> {
+    pub fn get_mod(&mut self) -> Vec<String> {
         self.module_stack.clone()
     }
-    pub fn add_pub_def(&mut self, name: VarName) {
-        self.current_pub.push(PublicDec::Def(name));
+    pub fn pub_enter(&mut self) {
+        self.current_pub_stack.push(self.ctx.current_pub.clone());
+        self.ctx.current_pub.clear();
     }
-    pub fn add_pub_mod(&mut self, name: ModName) {
-        self.current_pub.push(PublicDec::Module(name));
+    pub fn pub_exit(&mut self) {
+        self.ctx.current_pub = self.current_pub_stack.pop().unwrap_or_default();
+    }
+    pub fn add_pub_def(&mut self, name: VarName) {
+        self.ctx.current_pub.push(PublicDec::Def(name));
+    }
+    pub fn add_pub_mod(&mut self, name: String) {
+        self.ctx.current_pub.push(PublicDec::Module(name));
     }
     // pub fn add_pub_use(&mut self, name: NameRef<UseEnum>) {
     //     self.current_pub.push(PublicDec::Use(name));
@@ -95,48 +98,21 @@ impl Resolver<'_> {
         self.span_stack.pop();
     }
 
-    pub fn debug_cur_pub(&mut self) {
-        print!("Under current module: ");
-        debug_print_path(self.get_mod().clone());
-        for pub_dec in self.current_pub.clone() {
-            match pub_dec {
-                PublicDec::Module(ModName(mod_name)) => {
-                    print!("m({}), ", mod_name);
-                }
-                PublicDec::Def(var_name) => {
-                    print!("v({}), ", var_name);
+    pub fn retain_scope(
+        &mut self, path: &Vec<String>, name: &String,
+        top_lookup: &HashMap<Vec<String>, HashMap<VarName, DefId>>,
+    ) {
+        let mut path = path.clone();
+        path.push(name.clone());
+        if let Some(scope) = top_lookup.get(&path) {
+            self.ctx.lookup_new.insert(path.clone(), scope.clone());
+            if let Some(tree) = self.module_tree.get_node_path(&path) {
+                for child in &tree.children {
+                    self.retain_scope(&path, &child.root.0, top_lookup)
                 }
             }
         }
-        print!("\n");
     }
-    pub fn debug_cur_use(&mut self, path: Vec<ModName>, use_enum: UseEnum) {
-        print!("Current path: ");
-        debug_print_path(self.get_mod());
-        print!("Use path: ");
-        debug_print_path(path);
-        match use_enum {
-            UseEnum::Name(VarName(name)) => println!("var name: {}\n", name),
-            UseEnum::Alias(_) => println!("alias"),
-            UseEnum::All(_) => println!("all"),
-            UseEnum::Cluster(_) => println!("cluster"),
-        }
-    }
-    pub fn debug_cur_heads(&mut self) {
-        println!("Current heads: ");
-        for head in self.heads.clone() {
-            print!("--");
-            debug_print_path(head);
-        }
-        print!("\n");
-    }
-}
-
-pub fn debug_print_path(path: Vec<ModName>) {
-    for ModName(mod_name) in path {
-        print!("{}/", mod_name);
-    }
-    print!("\n");
 }
 
 pub trait Fold<S, E, U> {
@@ -232,8 +208,11 @@ impl Resolve for DefId {
     type Error = ResolveError;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let name = state.textual_ctx.defs[*self].clone();
+        if state.ctx.peeks.contains_key(&name) {
+            state.ctx.peeks.remove(&name);
+        }
         // Todo: work out module resolution
-        let cur_module: Vec<ModName> = Vec::new();
+        let cur_module: Vec<String> = Vec::new();
         let var_set = state.ctx.lookup_new.get(&cur_module);
         match var_set {
             Some(old_map) => {
@@ -259,18 +238,17 @@ impl Resolve for NameRef<VarName> {
     type Out = DefId;
     type Error = ResolveError;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
-        let NameRef(path, name) = self;
-        // println!("Looking for {}", name); //Debug
-        // state.ctx.debug_print_lookup(String::from("looking for")); //Debug
-        // state.debug_cur_heads(); //Debug
+        let NameRef(mod_path, name) = self;
+        if let Some(def_id) = state.ctx.peeks.get(name) {
+            return Ok(*def_id);
+        }
+        let path = mod_path.iter().map(|ModName(s)| s.clone()).collect::<Vec<_>>();
         let default_map: HashMap<VarName, DefId> = HashMap::new();
         let mut found_in_his: Option<DefId> = None;
         for head in state.heads.clone() {
-            let his_scope = state.ctx.lookup_new.get(&head);
-            if his_scope.is_some() {
-                let _def_id = his_scope.unwrap().get(name);
-                if _def_id.is_some() {
-                    found_in_his = Some(_def_id.unwrap().clone());
+            if let Some(his_scope) = state.ctx.lookup_new.get(&head) {
+                if let Some(def_id) = his_scope.get(name) {
+                    found_in_his = Some(def_id.clone());
                     break;
                 }
             }
@@ -280,7 +258,7 @@ impl Resolve for NameRef<VarName> {
             None => Ok(*state
                 .ctx
                 .lookup_new
-                .get(path)
+                .get(&path)
                 .unwrap_or(&default_map)
                 .get(name)
                 .ok_or_else(|| ResolveError::UnboundVar(state.span().make(self.clone())))?),
@@ -573,7 +551,6 @@ impl Resolve for ts::Modifiers<ts::TypeDef> {
             // peeking ahead to see if this is a definition later
             let def = name;
             let name = state.textual_ctx.defs[*def].clone();
-            // Todo: work out module resolution
             if let Some(prev_def) = state.ctx.peeks.insert(name, *def) {
                 let info = state.textual_ctx.spans[prev_def].clone();
                 let name = state.textual_ctx.defs[prev_def].clone();
@@ -632,62 +609,58 @@ impl Resolve for UseDef {
     type Error = ResolveError;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let UseDef(path_name) = self;
+        let mod_path: Vec<String> =
+            path_name.0.clone().iter().map(|ModName(s)| s.clone()).collect();
         let use_enum = &path_name.1;
         match use_enum {
             ts::UseEnum::All(_) => {
-                let mut path = state.ctx.cur_module.clone();
-                path.extend(path_name.0.clone());
-                if state.ctx.lookup_new.get(&path).is_some() && !state.heads.contains(&path) {
-                    state.heads.extend(vec![path]);
-                    Ok(())
-                } else {
-                    //TODO: No such module name error
-                    Ok(())
+                let mut path = state.module_stack.clone();
+                while !path.is_empty() {
+                    let mut prefix_path = path.clone();
+                    prefix_path.extend(mod_path.clone());
+                    if let Some(_) = state.ctx.lookup_new.get(&prefix_path).cloned() {
+                        state.heads.push(prefix_path);
+                        return Ok(());
+                    }
+                    path.pop();
                 }
+                Err(ResolveError::UnboundVar(state.span().make(NameRef(
+                    path.clone().iter().map(|s| ModName(s.clone())).collect(),
+                    VarName(String::from("all")),
+                ))))
             }
             ts::UseEnum::Cluster(UseCluster(use_defs)) => {
                 for UseDef(NameRef(in_path, in_enum)) in use_defs {
                     // Add path/ before all usew_defs
                     let mut new_path = path_name.0.clone();
                     new_path.extend(in_path.clone());
-                    // change to another function?
                     let _ = UseDef(NameRef(new_path, in_enum.clone())).resolve(state);
                 }
                 Ok(())
             }
             ts::UseEnum::Name(name) => {
-                let mut path = state.ctx.cur_module.clone();
-                path.extend(path_name.0.clone());
-                let mut _scope = state.ctx.lookup_new.get(&path).cloned();
-                // move Path/ key to ./ key
-                match _scope {
-                    Some(mut scope) => {
-                        let _def_id = scope.get(name).cloned();
-                        match _def_id {
-                            Some(def_id) => {
-                                scope.remove(name);
-                                state.ctx.lookup_new.insert(path, scope);
-                                let cur_path: Vec<ModName> = Vec::new();
-                                let default_scope: HashMap<VarName, DefId> = HashMap::default();
-                                let mut cur_scope = state
-                                    .ctx
-                                    .lookup_new
-                                    .get(&cur_path)
-                                    .unwrap_or(&default_scope)
-                                    .clone();
-                                cur_scope.insert(name.clone(), def_id);
-                                state.ctx.lookup_new.insert(cur_path, cur_scope);
-                                Ok(())
-                            }
-                            None => Err(ResolveError::UnboundVar(
-                                state.span().make(NameRef(path, name.clone())),
-                            )),
+                let mut path = state.module_stack.clone();
+                while !path.is_empty() {
+                    let mut prefix_path = path.clone();
+                    prefix_path.extend(mod_path.clone());
+                    if let Some(mut scope) = state.ctx.lookup_new.get(&prefix_path).cloned() {
+                        if let Some(def_id) = scope.get(name).cloned() {
+                            scope.remove(name);
+                            state.ctx.lookup_new.insert(path, scope);
+                            let cur_path: Vec<String> = vec![String::from(".")];
+                            let cur_scope =
+                                state.ctx.lookup_new.entry(cur_path).or_insert(HashMap::default());
+                            cur_scope.insert(name.clone(), def_id);
+                            return Ok(());
                         }
                     }
-                    None => Err(ResolveError::UnboundVar(
-                        state.span().make(NameRef(path, name.clone())),
-                    )),
+                    path.pop();
                 }
+                // Ok(())
+                Err(ResolveError::UnboundVar(state.span().make(NameRef(
+                    path.clone().iter().map(|s| ModName(s.clone())).collect(),
+                    name.clone(),
+                ))))
             }
             _ => Ok(()),
         }
@@ -708,8 +681,7 @@ impl Resolve for Modifiers<ts::Declaration> {
                 let decls = self.try_map_ref(|_| Ok(def.clone()))?.resolve(state)?;
                 Ok(decls)
             }
-            ts::Declaration::Module(Module { name: NameDef(name), top: None }) => {
-                // Todo: work out module resolution
+            ts::Declaration::Module(Module { name: NameDef(ModName(name)), top: None }) => {
                 if *public {
                     state.add_pub_mod(name.clone())
                 }
@@ -717,13 +689,11 @@ impl Resolve for Modifiers<ts::Declaration> {
                 Ok(Vec::new())
             }
             ts::Declaration::Module(Module {
-                name: NameDef(name),
+                name: NameDef(ModName(name)),
                 top: Some(ts::TopLevel(top_)),
             }) => {
-                if *public {
-                    state.add_pub_mod(name.clone())
-                }
                 state.mod_enter(name);
+                state.pub_enter();
                 // When entering a new module, take a snapshot of the lookup table
                 state.scope_enter();
                 // Todo: work out module resolution
@@ -731,36 +701,28 @@ impl Resolve for Modifiers<ts::Declaration> {
                 for decl in top_ {
                     top.extend(decl.resolve(state)?);
                 }
-                let module_path = state.get_mod();
-                let in_modules = state.mod_exit();
-                state.ctx.debug_print_lookup(String::from("before scope exit"));
+                let module_path = state.get_mod(); // the path of the module we are in
+                let top_lookup = state.mod_exit(); // the lookup table inside the module
+                let default_map: HashMap<VarName, DefId> = HashMap::default();
+                let in_modules = top_lookup.get(&Vec::new()).unwrap_or(&default_map).clone(); // the scope of the path of the module
                 state.scope_exit();
-                state.ctx.debug_print_lookup(String::from("after scope exit"));
                 // When exiting a new module, abandon the new defs in the module except the ones with "pub"
-                let mut var_map: im::HashMap<VarName, DefId> =
-                    if state.ctx.lookup_new.contains_key(&module_path) {
-                        state.ctx.lookup_new.get(&module_path).unwrap().clone()
-                        // Question: Hardly happen?
-                    } else {
-                        HashMap::new()
-                    };
-                state.debug_cur_pub();
-                for pub_decl in &state.current_pub {
+                let mut var_map = state.ctx.lookup_new.remove(&module_path).unwrap_or_default();
+                for pub_decl in state.ctx.current_pub.clone() {
                     match pub_decl {
                         PublicDec::Def(name) => {
-                            var_map.insert(name.clone(), in_modules.get(name).unwrap().clone());
+                            var_map.insert(name.clone(), in_modules.get(&name).unwrap().clone());
                         }
-                        PublicDec::Module(_) => {
-                            // Question: useless name?
-                            if !state.heads.contains(&module_path) {
-                                state.heads.push(module_path.clone());
-                            }
+                        PublicDec::Module(name) => {
+                            state.retain_scope(&module_path, &name, &top_lookup)
                         }
                     }
                 }
-                state.debug_cur_heads();
                 state.ctx.lookup_new.insert(module_path, var_map);
-                state.current_pub.clear();
+                state.pub_exit();
+                if *public {
+                    state.add_pub_mod(name.clone())
+                }
                 Ok(top)
             }
             ts::Declaration::UseDef(use_def) => {
@@ -768,6 +730,7 @@ impl Resolve for Modifiers<ts::Declaration> {
                 //     let UseDef(name_ref) = use_def;
                 //     state.add_pub_use(name_ref.clone())
                 // }
+                // Todo: pub use
                 use_def.resolve(state)?;
                 Ok(Vec::new())
             }
@@ -785,8 +748,8 @@ impl<'a> Resolver<'a> {
     pub fn exec(&mut self) -> Result<(), Vec<ResolveError>> {
         let mut errors = Vec::new();
         // Current path?
-        if !self.heads.contains(vec![ModName(String::from("."))].as_ref()) {
-            self.heads.push(vec![ModName(String::from("."))]);
+        if !self.heads.contains(vec![String::from(".")].as_ref()) {
+            self.heads.push(vec![String::from(".")]);
         }
         let ts::TopLevel(decls) = self.textual_top;
         for decl in decls {
@@ -799,6 +762,8 @@ impl<'a> Resolver<'a> {
             };
             self.top.extend(decls);
         }
+        // if !self.ctx.current_pub.is_empty() {
+        // }
         for def in self.ctx.peeks.values() {
             let info = self.textual_ctx.spans[*def].clone();
             let name = self.textual_ctx.defs[*def].clone();

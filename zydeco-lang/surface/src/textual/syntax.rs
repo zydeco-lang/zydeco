@@ -425,10 +425,13 @@ impl Ctx {
         for (_, info) in self.spans.defs.iter_mut().filter(|(id, _)| self.added_id.0.contains(id)) {
             info.set_info(file_info);
         }
-        for (_, info) in self.spans.patterns.iter_mut().filter(|(id, _)| self.added_id.1.contains(id)) {
+        for (_, info) in
+            self.spans.patterns.iter_mut().filter(|(id, _)| self.added_id.1.contains(id))
+        {
             info.set_info(file_info);
         }
-        for (_, info) in self.spans.terms.iter_mut().filter(|(id, _)| self.added_id.2.contains(id)) {
+        for (_, info) in self.spans.terms.iter_mut().filter(|(id, _)| self.added_id.2.contains(id))
+        {
             info.set_info(file_info);
         }
     }
@@ -446,5 +449,95 @@ impl Ctx {
         self.added_id.0.clear();
         self.added_id.1.clear();
         self.added_id.2.clear();
+    }
+}
+
+type FileId = usize;
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModuleTree {
+    pub root: (String, Option<FileId>),
+    pub children: Vec<ModuleTree>,
+}
+
+impl Default for ModuleTree {
+    fn default() -> Self {
+        Self { root: (String::new(), None), children: vec![] }
+    }
+}
+
+impl ModuleTree {
+    pub fn new(root: String) -> Self {
+        Self { root: (root, None), children: vec![] }
+    }
+
+    pub fn add_child(&mut self, mod_name: String) {
+        if !self.children_has_name(&mod_name) {
+            self.children.push(ModuleTree { root: (mod_name, None), children: vec![] })
+        }
+    }
+
+    pub fn get_children(&self) -> &Vec<ModuleTree> {
+        self.children.as_ref()
+    }
+
+    pub fn set_file_id(&mut self, path: &Vec<String>, id: FileId) {
+        if path.len() == 1 {
+            self.root.1 = Some(id);
+        } else {
+            for child in self.children.iter_mut() {
+                if child.root.0 == path[1].as_str() {
+                    child.set_file_id(&path[1..].to_vec(), id);
+                }
+            }
+        }
+    }
+
+    pub fn children_has_name(&mut self, name: &String) -> bool {
+        for child in self.children.iter() {
+            if child.root.0 == name.as_str() {
+                return true;
+            }
+        }
+        false
+    }
+
+    // get the module_tree entry of the given path
+    pub fn get_node_path_mut(&mut self, path: &Vec<String>) -> Option<&mut ModuleTree> {
+        if path.len() == 1 && self.root.0 == path[0] {
+            return Some(self);
+        } else {
+            for child in self.children.iter_mut() {
+                if child.root.0 == path[1].as_str() {
+                    return child.get_node_path_mut(&path[1..].to_vec());
+                }
+            }
+        }
+        None
+    }
+
+    pub fn get_node_path(&self, path: &Vec<String>) -> Option<ModuleTree> {
+        if path.len() == 1 && self.root.0 == path[0] {
+            return Some(self.clone());
+        } else {
+            for child in self.children.iter() {
+                if child.root.0 == path[1].as_str() {
+                    return child.get_node_path(&path[1..].to_vec());
+                }
+            }
+        }
+        None
+    }
+
+    pub fn get_id_path(&self, path: &Vec<String>) -> Option<FileId> {
+        if path.len() == 1 && self.root.0 == path[0] {
+            return self.root.1;
+        } else {
+            for child in self.children.iter() {
+                if child.root.0 == path[1].as_str() {
+                    return child.get_id_path(&path[1..].to_vec());
+                }
+            }
+        }
+        None
     }
 }
