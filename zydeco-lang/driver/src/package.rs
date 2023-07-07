@@ -6,7 +6,7 @@ use std::{
 use serde::Deserialize;
 
 /// Specifies how to deal with imports in the source code file.
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, Debug)]
 pub enum ProjectMode {
     /// `Managed` mode, with a `Zydeco.toml` project file. The project file is
     /// then used as the root of all direct imports and also a place for

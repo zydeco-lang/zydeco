@@ -4,7 +4,7 @@ pub use crate::textual::syntax::*;
 use derive_more::From;
 use slotmap::SecondaryMap;
 
-#[derive(From)]
+#[derive(From, Debug)]
 pub enum Declaration {
     Type(TypeDef),
     Define(Define),
@@ -18,7 +18,7 @@ pub enum PublicDec {
     // Use(NameRef<UseEnum>),
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TopLevel(pub Vec<Declaration>);
 
 impl Extend<Declaration> for TopLevel {

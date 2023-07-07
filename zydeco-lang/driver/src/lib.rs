@@ -26,16 +26,23 @@ impl Driver {
     }
     pub fn single_file(&mut self, path: impl AsRef<Path>) -> Result<(), SurfaceError> {
         let mut deps = DependencyTracker::default();
+        let project_name = path.as_ref().file_stem().unwrap();
 
         // parse
-        let mut parsed = ParsedMap::default();
-        let id = parsed.add_file_parsed(parsed.parse_file(path)?);
-        let std = parsed.add_file_parsed(parsed.std());
-        deps.update_dep(id, std);
+        let mut parsed = ParsedMap::new(project_name.to_str().unwrap().to_string(), path.as_ref());
+        parsed.std_wp();
+        parsed.parse_file_wp(path.as_ref())?;
+
+        for (id, deps_path) in &parsed.deps_record {
+            for dep_path in deps_path {
+                let dep_id = parsed.get_dep_id(dep_path, id)?;
+                deps.update_dep(id.clone(), dep_id)
+            }
+        }
 
         // resolve
-        // let mut resolved = ResolvedMap::new(deps);
-        // resolved.resolve_one_by_one(&parsed)?;
+        let mut resolved = ResolvedMap::new(deps);
+        resolved.resolve_one_by_one(&parsed)?;
 
         Ok(())
     }
@@ -53,6 +60,7 @@ impl Driver {
 
         // parse
         let mut parsed = ParsedMap::new(project_name.to_str().unwrap().to_string(), path.as_ref());
+        parsed.mode = config.mode;
         // Todo: If std isn't neeeded
         parsed.std_wp();
         // The first file to parse

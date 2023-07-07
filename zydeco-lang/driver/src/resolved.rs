@@ -80,6 +80,7 @@ impl ResolutionTracker {
     }
 }
 
+#[derive(Debug)]
 pub struct ResolvedFile {
     // span arena
     pub spans: SpanArena,
@@ -91,7 +92,7 @@ pub struct ResolvedFile {
     pub top: TopLevel,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ResolvedMap {
     pub tracker: ResolutionTracker,
     pub map: HashMap<FileId, ResolvedFile>,

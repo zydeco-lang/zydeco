@@ -24,7 +24,6 @@ use zydeco_utils::span::FileInfo;
 
 pub struct FileParsed {
     pub mod_path: Vec<String>,
-    pub mode: ProjectMode,
     pub deps: Vec<Dependency>,
     pub top: TopLevel,
     pub ctx: Ctx,
@@ -58,8 +57,10 @@ pub struct FileParsedMeta {
     pub parsed: FileParsed,
 }
 
+#[derive(Debug)]
 pub struct ParsedMap {
     pub project_name: String,
+    pub mode: ProjectMode,
     pub files: SimpleFiles<FileLoc, String>,
     pub map: HashMap<FileId, FileParsed>,
     pub ctx: Ctx,
@@ -73,6 +74,7 @@ pub struct ParsedMap {
 impl Default for ParsedMap {
     fn default() -> Self {
         let project_name = String::new();
+        let mode = ProjectMode::default();
         let files = SimpleFiles::new();
         let map: HashMap<usize, FileParsed> = HashMap::new();
         let ctx = Ctx::default();
@@ -82,6 +84,7 @@ impl Default for ParsedMap {
         let deps_record = HashMap::default();
         Self {
             project_name,
+            mode,
             files,
             map,
             ctx,
@@ -97,6 +100,7 @@ impl Default for ParsedMap {
 impl ParsedMap {
     pub fn new(prj_name: String, path: &Path) -> Self {
         let files = SimpleFiles::new();
+        let mode = ProjectMode::default();
         let map: HashMap<usize, FileParsed> = HashMap::new();
         let ctx = Ctx::default();
         let to_parse = Vec::default();
@@ -105,6 +109,7 @@ impl ParsedMap {
         let deps_record = HashMap::default();
         Self {
             project_name: prj_name,
+            mode,
             files,
             map,
             ctx,
@@ -128,19 +133,30 @@ impl ParsedMap {
             .and_then(|s| s.to_str())
             .ok_or_else(|| SurfaceError::PathInvalid { path: path.to_path_buf() })?
             .to_owned();
-        let mod_path: PathBuf =
-            path.iter().skip_while(|s| *s != self.project_name.as_str()).skip(2).collect();
-        if mod_name == "Module" && parent_name == "src" {
-            // The root module
-            self.module_current = vec![mod_name.clone()];
-        } else if mod_name == "Module" && parent_name != "src" {
-            // A sub module folder
-            self.module_current = self.deal_with_module_folder(mod_path);
-        } else if mod_name != "Std_next" {
-            // A sub module file
-            self.module_current = self.deal_with_module_file(mod_path);
-        } else {
-            self.module_current = vec![self.project_name.clone(), mod_name.clone()];
+        match self.mode {
+            ProjectMode::Managed => {
+                let mod_path: PathBuf =
+                    path.iter().skip_while(|s| *s != self.project_name.as_str()).skip(2).collect();
+                if mod_name == "Module" && parent_name == "src" {
+                    // The root module
+                    self.module_current = vec![mod_name.clone()];
+                } else if mod_name == "Module" && parent_name != "src" {
+                    // A sub module folder
+                    self.module_current = self.deal_with_module_folder(mod_path);
+                } else if mod_name != "Std_next" {
+                    // A sub module file
+                    self.module_current = self.deal_with_module_file(mod_path);
+                } else {
+                    self.module_current = vec![self.project_name.clone(), mod_name.clone()];
+                }
+            }
+            _ => {
+                if mod_name == "Std_next" {
+                    self.module_current = vec![self.project_name.clone(), mod_name.clone()]
+                } else {
+                    self.module_current = vec![self.project_name.clone()];
+                }
+            }
         }
         // parsing and span mapping
         let mut ctx = Ctx::default();
@@ -155,14 +171,10 @@ impl ParsedMap {
         ctx.clear_added_id();
 
         // processing project and dependency specs
-        let mode = match &ctx.project {
-            Some(project) => ProjectMode::new(project)?,
-            None => Default::default(),
-        };
         let deps = ctx.deps.clone();
 
         // assemble
-        let mut parsed = FileParsed { mode, deps, top, ctx, mod_path: self.module_current.clone() };
+        let mut parsed = FileParsed { deps, top, ctx, mod_path: self.module_current.clone() };
         // Ok(FileParsedMeta { loc, source, parsed })
 
         // let FileParsedMeta { loc, source, mut parsed } = meta;
@@ -231,14 +243,10 @@ impl ParsedMap {
         ctx.span_map(&file_info);
 
         // processing project and dependency specs
-        let mode = match &ctx.project {
-            Some(project) => ProjectMode::new(project)?,
-            None => Default::default(),
-        };
         let deps = ctx.deps.clone();
 
         // assemble
-        let parsed = FileParsed { mode, deps, top, ctx, mod_path: vec![mod_name] };
+        let parsed = FileParsed { deps, top, ctx, mod_path: vec![mod_name] };
         Ok(FileParsedMeta { loc, source, parsed })
     }
 

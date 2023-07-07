@@ -240,7 +240,7 @@ pub enum UseEnum {
 #[derive(Clone, Debug)]
 pub struct UseDef(pub NameRef<UseEnum>);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Main(pub TermId);
 
 #[derive(Clone, From)]
@@ -334,7 +334,7 @@ slotmap::new_key_type! {
 }
 
 /// keeps all ids and spans, the corresponding source location
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct SpanArena {
     pub defs: SlotMap<DefId, Span>,
     pub patterns: SlotMap<PatternId, Span>,
@@ -365,7 +365,7 @@ impl std::ops::Index<TermId> for SpanArena {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Ctx {
     // span arena
     pub spans: SpanArena,

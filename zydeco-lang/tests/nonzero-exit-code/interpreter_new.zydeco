@@ -2,6 +2,11 @@
 
 # As it is a CBPV language, our syntax distinguishes between values
 # and computations
+use Std_next/ Builtin/ .. end
+use Std_next/ Std/ (String/ .. , OS/ .. ) end
+
+data SynComp end
+
 data SynVal where
   | +Var(String)
   | +True()
@@ -18,6 +23,8 @@ data SynComp where
   | +Bind(SynComp, String, SynComp)
 end
 
+data SemVal end
+
 # Environments are implemented as association lists.
 data Env where
   | +Empty()
@@ -27,6 +34,9 @@ end
 # The interpreter works with semantic values, which do not include
 # variables. We use closures in the interpreter to implement semantic
 # thunks.
+
+codata SemComp end
+
 data SemVal where
   | +True()
   | +False()
@@ -92,7 +102,7 @@ def rec interp: Interpreter =
       | +True() -> ret +Ok( +True() )
       | +False() -> ret +Ok( +False() )
       # Here we use the meta-language closures to capture the environment g 
-      | +ThunkV(m) -> ret Ok(ThunkV({ ! interp .comp(m, g) }))
+      | +ThunkV(m) -> ret +Ok( +ThunkV({ ! interp .comp(m, g) }))
       end
     )
     | .comp(m, g) -> (
