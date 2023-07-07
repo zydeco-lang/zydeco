@@ -9,6 +9,8 @@ pub enum SurfaceError {
     PathInvalid { path: PathBuf },
     #[error("Invalid project setting; valid options are `managed`, `root` or `root_no_std`")]
     ProjectInvalid,
+    #[error("Project name mismatch: `{}` != `{}`", .name, .config_name)]
+    ProjectNameMismatch { name: String, config_name: String},
     // Todo: use codespan-reporting
     #[error("Parse error:\n{0}")]
     ParseError(String),

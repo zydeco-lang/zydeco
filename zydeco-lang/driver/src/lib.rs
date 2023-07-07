@@ -61,6 +61,12 @@ impl Driver {
         // parse
         let mut parsed = ParsedMap::new(project_name.to_str().unwrap().to_string(), path.as_ref());
         parsed.mode = config.mode;
+        if project_name.to_str().unwrap() != config.name {
+            return Err(SurfaceError::ProjectNameMismatch {
+                name: project_name.to_str().unwrap().to_string(),
+                config_name: config.name,
+            });
+        }
         // Todo: If std isn't neeeded
         parsed.std_wp();
         // The first file to parse
