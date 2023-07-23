@@ -1,0 +1,25 @@
+use Builtin/ (Thunk, Ret) end
+use Bool/ (Bool, if) end
+
+pub extern data Int end
+
+pub extern def add : Thunk(Int -> Int -> Ret Int) end
+pub extern def sub : Thunk(Int -> Int -> Ret Int) end
+pub extern def mul : Thunk(Int -> Int -> Ret Int) end
+pub extern def div : Thunk(Int -> Int -> Ret Int) end
+pub extern def mod : Thunk(Int -> Int -> Ret Int) end
+
+pub extern def int_eq : Thunk(Int -> Int -> Ret Bool) end
+pub extern def int_lt : Thunk(Int -> Int -> Ret Bool) end
+pub extern def int_gt : Thunk(Int -> Int -> Ret Bool) end
+
+pub def int_max : Thunk(Int -> Int -> Ret Int) = {
+  fn x y ->
+    do b <- ! int_gt x y;
+    ! if @(Ret Int) b { ret x } { ret y }
+} end
+pub def int_min : Thunk(Int -> Int -> Ret Int) = {
+  fn x y ->
+    do b <- ! int_lt x y;
+    ! if @(Ret Int) b { ret x } { ret y }
+} end

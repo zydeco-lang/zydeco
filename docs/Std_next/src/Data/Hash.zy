@@ -1,0 +1,90 @@
+use Builtin/ (VType, Thunk, Ret, F, U) end
+use AVLTree/ (AVL, leaf, insert, search, delete, change, equal) end
+use Std/ Prod/ Pair end
+use Std/ Bool/ (Cmp, and, Bool) end
+use Std/ Option end
+
+data Hash (K : VType) (V : VType) where
+  | +Hash(AVL (Pair K V), Cmp (Pair K V), Cmp (Pair K V), Cmp (Pair K V))
+end
+
+pub def fn hash_new (K : VType) (V : VType) (insert_key_cmp : Cmp K) (search_key_cmp : Cmp K) (equal_value_cmp : Cmp V) : F(Hash K V) =
+  do body <- ! leaf @(Pair K V);
+  ret +Hash(body, {
+    fn p1 p2 ->
+      match p1
+      | +Cons(k1, v1) ->
+        match p2
+        | +Cons(k2, v2) -> ! insert_key_cmp k1 k2
+        end
+      end
+  }, {
+    fn p1 p2 -> 
+      match p1
+      | +Cons(k1, v1) ->
+        match p2
+        | +Cons(k2, v2) -> ! search_key_cmp k1 k2
+        end
+      end
+  }, {
+    fn p1 p2 ->
+      match p1
+      | +Cons(k1, v1) ->
+        match p2
+        | +Cons(k2, v2) ->
+          do b1 <- ! equal_value_cmp v1 v2;
+          do b2 <- ! search_key_cmp k1 k2;
+          ! and b1 b2
+        end
+      end
+  })
+end
+
+pub def fn hash_insert (K : VType) (V : VType) (k : K) (v : V) (tree : Hash K V) : F(Hash K V) =
+  match tree
+  | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
+    do body' <- ! insert @(Pair K V) +Cons(k,v) body insert_cmp;
+    ret +Hash(body', insert_cmp, search_cmp, equal_cmp)
+  end
+end
+
+# in search, a default value for v is needed, because the type of v is unknown
+pub def fn hash_search (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Option V) =
+      match hash
+      | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
+        do res <- ! search @(Pair K V) +Cons(k, default) body search_cmp insert_cmp;
+        match res
+        | +None() -> ret +None()
+        | +Some(p) ->
+          match p
+          | +Cons(k, v) -> ret +Some(v)
+          end
+        end
+      end
+end
+
+pub def fn hash_delete (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Hash K V) =
+  match hash
+  | +Hash(body, insert_cmp, search_cmp, equal_cmp) -> 
+    do body' <- ! delete @(Pair K V) +Cons(k, default) body search_cmp insert_cmp;
+    ret +Hash(body', insert_cmp, search_cmp, equal_cmp)
+  end
+end
+
+pub def fn hash_change (K : VType) (V : VType) (k : K) (v : V) (hash : Hash K V) : F(Hash K V) =
+  match hash
+  | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
+    do body' <- ! change @(Pair K V) +Cons(k, v) body search_cmp insert_cmp;
+    ret +Hash(body', insert_cmp, search_cmp, equal_cmp)
+  end
+end
+
+pub def fn hash_equal (K : VType) (V : VType) (hash1 : Hash K V) (hash2 : Hash K V) : F(Bool) =
+  match hash1
+  | +Hash(body1, insert_cmp1, search_cmp1, v_cmp1) ->
+    match hash2
+    | +Hash(body2, insert_cmp2, search_cmp2, v_cmp2) ->
+      ! equal @(Pair K V) body1 body2 v_cmp1
+    end
+  end
+end

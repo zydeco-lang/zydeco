@@ -1,0 +1,230 @@
+use Builtin/ (VType, CType, Thunk, Ret, F, U) end
+use Std/ Bool/ (Bool, Cmp, if~, or, and) end
+use Std/ Option end
+use Std/ String/ (String, str_append, Char, str_length, str_index, str_split_once, str_eq) end
+use Std/ OS/ (OS, write_str) end
+use Std/ Arith/ (Int, add, int_eq, sub) end
+use Std/ Prod/ (pair, Pair) end
+
+
+pub data LListV (A : VType) (B : CType) where
+  | +Nil()
+  | +Cons(A, Thunk(B))
+end
+
+pub codata LList (A : VType) where
+  | .run(): Ret (LListV A (LList A))
+end
+
+pub def rec fn foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
+  do xsv <- ! xs .run();
+  match xsv
+  | +Nil() -> ! b
+  | +Cons(hd, tl) -> ! f hd {! foldr @(A) @(B) tl b f}
+  end
+end
+
+pub def rec fn foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
+  do xsv <- ! xs .run();
+  match xsv
+  | +Nil() -> ret acc
+  | +Cons(hd, tl) ->
+    do acc' <- ! f hd acc;
+    do b <- ! cond acc';
+    match b
+    | +True() -> ret acc'
+    | +False() -> 
+      ! foldl_break @(A) @(R) tl acc' f cond
+    end
+  end
+end
+
+
+pub def fn nil (A : VType) : LList A =
+  comatch | .run() -> ret +Nil() end
+end
+
+pub def rec fn forever (A : VType) (x : A) : LList A =
+  comatch
+  | .run() -> ret +Cons(x, { ! forever @(A) x })
+  end
+end
+
+pub def fn head (A : VType) (xs : U(LList A)) : F(Option A) =
+  do xs' <- ! xs .run();
+  match xs'
+  | +Nil() -> ret +None()
+  | +Cons(x, tl) -> ret +Some(x)
+  end
+end
+
+pub def fn is_empty (A : VType) (xs : U(LList A)) : F Bool =
+  do xs' <- ! xs .run();
+  match xs'
+  | +Nil() -> ret +True()
+  | +Cons(x, tl) -> ret +False()
+  end
+end
+
+pub def fn cons (A : VType) (hd : A) (tl : U (LList A)) : LList A =
+  comatch 
+  | .run() -> ret +Cons(hd, tl)
+  end
+end
+
+pub def fn append (A : VType) (xs : U(LList A)) (ys : U(LList A)) : LList A =
+  ! foldr @(A) @(LList A) xs ys {fn x b -> ! cons @(A) x b}
+end
+
+pub def rec fn bind (A : VType) (A' : VType) (xs : U(LList A)) (f : U(A -> LList A')) : LList A' =
+  ! foldr @(A) @(LList A') xs {! nil @(A')} {fn x b -> ! append @(A') {! f x} b}
+end
+
+pub def fn squash (A : VType) (xs : U(LList (U(LList A)))) : LList A =
+  ! bind @(U(LList A)) @(A) xs {fn x -> ! x}
+end
+
+pub def fn singleton_list (A : VType) (x : A) : LList A =
+  ! cons @(A) x {! nil @(A)}
+end
+
+pub def fn map (A : VType) (R : VType) (f : U(A -> F(R))) (xs : U(LList A)) : LList R =
+  ! foldr @(A) @(LList R) xs {! nil @(R)} {
+    fn x b ->
+      do x <- ! f x;
+      ! cons @(R) x b
+  }
+end
+
+pub def rec fn print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
+  do xs' <- ! xs .run();
+  match xs'
+  | +Nil() -> ! write_str "\n" next
+  | +Cons(x, tl) ->
+    do s <- ! fmt x;
+    do st <- ! str_append s " ";
+    ! write_str st {! print_list @(A) fmt tl next}
+  end
+end
+
+pub def fn length (A : VType) (xs : U(LList A)) : F(Int) =
+  ! foldr @(A) @(F Int) xs {ret 0} {fn x b -> do b' <- !b; ! add b' 1}
+end
+
+pub def rec fn min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+  do xs' <- ! xs .run();
+  match xs'
+  | +Nil() -> ret +None()
+  | +Cons(x, tl) ->
+    do m <- ! min_list @(A) cmp tl;
+    match m
+    | +None() -> ret +Some( +Cons(x, 0))
+    | +Some(p) ->
+      match p
+      | +Cons(m', i) ->
+        do c <- ! cmp x m';
+        match c
+        | +True() -> ret +Some( +Cons(x, 0))
+        | +False() -> 
+          do i <- ! add 1 i;
+          ret +Some( +Cons(m', i))
+        end
+      end
+    end
+  end
+end
+
+pub def rec fn max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+  do xs' <- ! xs .run();
+  match xs'
+  | +Nil() -> ret +None()
+  | +Cons(x, tl) ->
+    do m <- ! max_list @(A) cmp tl;
+    match m
+    | +None() -> ret +Some( +Cons(x, 0))
+    | +Some(p) ->
+      match p
+      | +Cons(m', i) ->
+        do c <- ! cmp x m';
+        match c
+        | +True() -> 
+          do i <- ! add 1 i;
+          ret +Some( +Cons(m', i))
+        | +False() -> ret +Some( +Cons(x, 0))
+        end
+      end
+    end
+  end
+end
+
+pub def fn reverse (A : VType) (xs : U(LList A)) : LList A =
+  ! foldr @(A) @(LList A) xs {! nil @(A)} {! cons @(A)}
+end
+
+pub def rec fn repeat (A : VType) (x : A) (n : Int) : LList A =
+  ! if~ @(LList A) {! int_eq 0 n} {
+    ! nil @(A)
+  } {
+    do n1 <- ! sub n 1;
+    ! cons @(A) x {! repeat @(A) x n1}
+  }
+end
+
+pub def rec fn range (left : Int) (right : Int) : LList Int =
+  ! if~ @(LList Int) {! int_eq left right} {
+    ! nil @(Int)
+  } {
+    do n1 <- ! add left 1;
+    ! cons @(Int) left {! range n1 right}
+  }
+end
+
+pub def rec fn any (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
+  ! foldr @(A) @(F Bool) xs {ret +False()} {fn x b -> do b' <- ! b; do x <- ! f x; ! or b' x}
+end
+
+pub def rec fn all (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
+  ! foldr @(A) @(F Bool) xs {ret +True()} {fn x b -> do b' <- ! b; do x <- ! f x; ! and b' x}
+end
+
+pub def fn map2 (A : VType) (A' : VType) (R : VType) (f : U(A -> A' -> F(R))) (xs : U(LList A)) (ys : U(LList A')) : LList R =
+  ! foldr @(A) @(LList R) xs {! nil @(R)} {
+    fn x acc ->
+     ! foldr @(A') @(LList R) ys acc {
+      fn y acc' ->
+        do r <- ! f x y;
+        ! cons @(R) r acc'
+     }
+  }
+end
+
+pub def fn cart_prod (A : VType) (A' : VType) (xs : U(LList A)) (ys : U(LList A')) : LList (Pair A A') =
+  ! map2 @(A) @(A') @(Pair A A') {! pair @(A) @(A')} xs ys
+end
+
+pub def fn str_to_list (s : String) : LList Char =
+  do sz <- ! str_length s;
+  let indexes = {! range 0 sz};
+  ! foldr @(Int) @(LList Char) indexes {! nil @(Char)} {
+    fn i acc ->
+      do c <- ! str_index s i;
+      ! cons @(Char) c acc
+  }  
+end
+
+pub def rec fn str_split_by (str : String) (sep : Char) : LList String =
+  do res <- ! str_split_once str sep;
+  match res
+  | +None() -> ! singleton_list @(String) str
+  | +Some(p) ->
+    match p
+    | +Cons(s1, s2) ->
+      ! if~ @(LList String) {! str_eq s1 ""} {
+        ! str_split_by s2 sep
+      } {
+        let s2 = {! str_split_by s2 sep} in
+        ! cons @(String) s1 s2
+      }
+    end
+  end
+end

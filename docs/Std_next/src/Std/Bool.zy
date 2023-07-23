@@ -1,0 +1,99 @@
+use Builtin/ (CType, Thunk, Ret, VType, U, F) end
+
+pub data Bool where
+  | +True()
+  | +False()
+end
+
+pub def true : Bool = +True() end
+pub def false : Bool = +False() end
+
+pub alias Cmp (A : VType) = U(A -> A -> F(Bool)) end
+
+pub def not : Thunk(Bool -> Ret(Bool)) = {
+  fn (x) ->
+    match x
+    | +True() -> ret false
+    | +False() -> ret true
+    end
+} end
+
+# lazy not
+pub def not~ : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn t~ ->
+    do x <- ! t~;
+    match x
+    | +True() -> ret false
+    | +False() -> ret true
+    end
+} end
+
+pub def and : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn x y ->
+    match x
+    | +True() -> ret y
+    | +False() -> ret false
+    end
+} end
+
+# Lazy, short-circuiting (left to right) and
+pub def and~ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn b1~ b2~ ->
+  do b1 <- ! b1~;
+  match b1
+  | +True() -> ! b2~
+  | +False() -> ret false
+  end
+} end
+
+pub def or : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn x y ->
+    match x
+    | +True() -> ret true
+    | +False() -> ret y
+    end
+} end
+
+# Lazy, short-circuiting (left to right) or
+pub def or~ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
+  fn b1~ b2~ ->
+  do b1 <- ! b1~;
+  match b1
+  | +True() -> ret true
+  | +False() -> ! b2~
+  end
+} end
+
+pub def nand : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn x y ->
+    do a <- ! and x y;
+    ! not a
+} end
+
+pub def nor : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn x y ->
+    do a <- ! or x y;
+    ! not a
+} end
+
+pub def bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
+  fn b b' ->
+    match b
+    | +True() -> ret b'
+    | +False() -> ! not b'
+    end
+} end
+
+pub def if : Thunk(forall (B : CType) . Bool -> Thunk B -> Thunk B -> B) = {
+  fn B b thn els ->
+    match b
+    | +True()  -> ! thn
+    | +False() -> ! els
+    end
+} end
+
+pub def if~ : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -> B) = {
+  fn B b thn els ->
+    do b <- ! b;
+    ! if @(B) b thn els
+} end

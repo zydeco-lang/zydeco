@@ -1,0 +1,40 @@
+use Builtin/ (VType, CType, Thunk, Ret, F) end
+
+pub module Identity where
+  pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
+    fn A x -> ret x
+  } end
+  pub def id~ : Thunk(forall (B : CType) . Thunk B -> B) = {
+    fn B x -> ! x
+  } end
+end
+
+pub data Unit where
+  | +Unit()
+end
+
+pub module Prod where
+  pub data Pair (A : VType) (A' : VType) where
+    | +Cons(A, A')
+  end
+  pub def fn pair (A : VType) (A' : VType) (x : A) (y : A') : F(Pair A A') = 
+    ret +Cons(x, y)
+  end
+end
+
+//   ## the Option type
+
+pub data Option (A : VType) where
+  | +None()
+  | +Some(A)
+end
+
+module Bool end
+
+module Nat end
+
+module Arith end
+
+module String end
+
+module OS end
