@@ -15,7 +15,7 @@ pub enum Declaration {
 pub enum PublicDec {
     Module(String),
     Def(VarName),
-    // Use(NameRef<UseEnum>),
+    Use(NameRef<UseEnum>),
 }
 
 #[derive(Default, Debug)]
@@ -50,9 +50,8 @@ pub struct Ctx {
     pub terms: SecondaryMap<TermId, Term<DefId>>,
     // meta
     /// for matching backwards from reference site to definition site
-    pub lookup: im::HashMap<NameRef<VarName>, DefId>,
     // . / means local scope, will be destroyed and remain the pubs
-    pub lookup_new: im::HashMap<Vec<String>, im::HashMap<VarName, DefId>>,
+    pub lookup: im::HashMap<Vec<String>, im::HashMap<VarName, DefId>>,
     pub current_pub: Vec<PublicDec>,
 
     /// for matching forwards from definition site to a declaration site;

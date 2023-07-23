@@ -211,7 +211,7 @@ pub struct TypeArm {
 #[derive(Clone, Debug)]
 pub struct Define(pub GenBind);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Module {
     pub name: NameDef<ModName>,
     pub top: Option<TopLevel>,
@@ -243,7 +243,7 @@ pub struct UseDef(pub NameRef<UseEnum>);
 #[derive(Clone, Debug)]
 pub struct Main(pub TermId);
 
-#[derive(Clone, From)]
+#[derive(Clone, From, Debug)]
 pub enum Declaration {
     Type(TypeDef),
     Define(Define),
@@ -266,7 +266,7 @@ impl Display for Declaration {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Modifiers<T> {
     pub public: bool,
     pub external: bool,
@@ -442,7 +442,6 @@ impl Ctx {
         self.patterns.extend(other.patterns.clone());
         self.terms.extend(other.terms.clone());
         self.spans = other.spans.clone();
-        // Question: "Pass the former span to latter one so that no repeat id" will lead to error
     }
 
     pub fn clear_added_id(&mut self) {
@@ -471,7 +470,7 @@ impl ModuleTree {
     }
 
     pub fn add_child(&mut self, mod_name: String) {
-        if !self.children_has_name(&mod_name) {
+        if !self.children.iter().any(|c| c.root.0 == mod_name) {
             self.children.push(ModuleTree { root: (mod_name, None), children: vec![] })
         }
     }
@@ -490,15 +489,6 @@ impl ModuleTree {
                 }
             }
         }
-    }
-
-    pub fn children_has_name(&mut self, name: &String) -> bool {
-        for child in self.children.iter() {
-            if child.root.0 == name.as_str() {
-                return true;
-            }
-        }
-        false
     }
 
     // get the module_tree entry of the given path
@@ -531,7 +521,10 @@ impl ModuleTree {
     pub fn get_id_path(&self, path: &Vec<String>) -> Option<FileId> {
         if path.len() == 1 && self.root.0 == path[0] {
             return self.root.1;
-        } else {
+        } else if path.len() <= 1 && self.root.0 != path[0] {
+            return None
+        } 
+        else {
             for child in self.children.iter() {
                 if child.root.0 == path[1].as_str() {
                     return child.get_id_path(&path[1..].to_vec());

@@ -10,12 +10,12 @@ pub enum SurfaceError {
     #[error("Invalid project setting; valid options are `managed`, `root` or `root_no_std`")]
     ProjectInvalid,
     #[error("Project name mismatch: `{}` != `{}`", .name, .config_name)]
-    ProjectNameMismatch { name: String, config_name: String},
+    ProjectNameMismatch { name: String, config_name: String },
     // Todo: use codespan-reporting
     #[error("Parse error:\n{0}")]
     ParseError(String),
     #[error("Resolve errors:\n{0}")]
     ResolveErrors(String),
-    #[error("Module not found: `{:?}`", .mod_name )]
-    ModuleNotFound { mod_name: Vec<String> },
+    #[error("Module not found: `{:?}` in file: {}", .mod_name, .path.display() )]
+    ModuleNotFound { mod_name: Vec<String>, path: PathBuf },
 }

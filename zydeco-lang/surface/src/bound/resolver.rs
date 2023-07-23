@@ -55,7 +55,7 @@ impl Resolver<'_> {
     }
     pub fn mod_exit(&mut self) -> HashMap<Vec<String>, HashMap<VarName, DefId>> {
         self.module_stack.pop();
-        self.ctx.lookup_new.clone()
+        self.ctx.lookup.clone()
     }
     pub fn get_mod(&mut self) -> Vec<String> {
         self.module_stack.clone()
@@ -73,17 +73,16 @@ impl Resolver<'_> {
     pub fn add_pub_mod(&mut self, name: String) {
         self.ctx.current_pub.push(PublicDec::Module(name));
     }
-    // pub fn add_pub_use(&mut self, name: NameRef<UseEnum>) {
-    //     self.current_pub.push(PublicDec::Use(name));
-    // }
-    // TODO: pub use ...
+    pub fn add_pub_use(&mut self, name: NameRef<UseEnum>) {
+        self.ctx.current_pub.push(PublicDec::Use(name));
+    }
     /// a "reset point" for the lookup context
     pub fn scope_enter(&mut self) {
-        self.lookup_stack_new.push(self.ctx.lookup_new.clone());
+        self.lookup_stack_new.push(self.ctx.lookup.clone());
     }
     /// visit last reset point and consume it
     pub fn scope_exit(&mut self) {
-        self.ctx.lookup_new = self.lookup_stack_new.pop().unwrap_or_default();
+        self.ctx.lookup = self.lookup_stack_new.pop().unwrap_or_default();
     }
     /// a "reset point" for the span
     pub fn span_enter(&mut self, span: Span) {
@@ -105,7 +104,7 @@ impl Resolver<'_> {
         let mut path = path.clone();
         path.push(name.clone());
         if let Some(scope) = top_lookup.get(&path) {
-            self.ctx.lookup_new.insert(path.clone(), scope.clone());
+            self.ctx.lookup.insert(path.clone(), scope.clone());
             if let Some(tree) = self.module_tree.get_node_path(&path) {
                 for child in &tree.children {
                     self.retain_scope(&path, &child.root.0, top_lookup)
@@ -113,6 +112,7 @@ impl Resolver<'_> {
             }
         }
     }
+
 }
 
 pub trait Fold<S, E, U> {
@@ -213,7 +213,7 @@ impl Resolve for DefId {
         }
         // Todo: work out module resolution
         let cur_module: Vec<String> = Vec::new();
-        let var_set = state.ctx.lookup_new.get(&cur_module);
+        let var_set = state.ctx.lookup.get(&cur_module);
         match var_set {
             Some(old_map) => {
                 // if old_map.get(&name).is_some() {
@@ -221,13 +221,13 @@ impl Resolve for DefId {
                 // } else { Question: do b <- ! b;
                 let mut new_map = old_map.clone();
                 new_map.insert(name.clone(), *self);
-                state.ctx.lookup_new.insert(cur_module, new_map);
+                state.ctx.lookup.insert(cur_module, new_map);
                 Ok(*self)
                 // }
             }
             None => {
                 let new_map = im::hashmap! {name => *self};
-                state.ctx.lookup_new.insert(cur_module, new_map);
+                state.ctx.lookup.insert(cur_module, new_map);
                 Ok(*self)
             }
         }
@@ -246,7 +246,7 @@ impl Resolve for NameRef<VarName> {
         let default_map: HashMap<VarName, DefId> = HashMap::new();
         let mut found_in_his: Option<DefId> = None;
         for head in state.heads.clone() {
-            if let Some(his_scope) = state.ctx.lookup_new.get(&head) {
+            if let Some(his_scope) = state.ctx.lookup.get(&head) {
                 if let Some(def_id) = his_scope.get(name) {
                     found_in_his = Some(def_id.clone());
                     break;
@@ -257,7 +257,7 @@ impl Resolve for NameRef<VarName> {
             Some(def_id) => Ok(def_id),
             None => Ok(*state
                 .ctx
-                .lookup_new
+                .lookup
                 .get(&path)
                 .unwrap_or(&default_map)
                 .get(name)
@@ -605,7 +605,7 @@ impl Resolve for ts::Modifiers<ts::Define> {
 }
 
 impl Resolve for UseDef {
-    type Out = ();
+    type Out = Vec<PublicDec>;
     type Error = ResolveError;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         let UseDef(path_name) = self;
@@ -618,51 +618,51 @@ impl Resolve for UseDef {
                 while !path.is_empty() {
                     let mut prefix_path = path.clone();
                     prefix_path.extend(mod_path.clone());
-                    if let Some(_) = state.ctx.lookup_new.get(&prefix_path).cloned() {
+                    if let Some(_) = state.ctx.lookup.get(&prefix_path).cloned() {
                         state.heads.push(prefix_path);
-                        return Ok(());
+                        return Ok(vec![PublicDec::Use(path_name.clone())]);
                     }
                     path.pop();
                 }
-                Err(ResolveError::UnboundVar(state.span().make(NameRef(
-                    path.clone().iter().map(|s| ModName(s.clone())).collect(),
-                    VarName(String::from("all")),
+                Err(ResolveError::ModuleNotFound(state.span().make(NameRef(
+                    mod_path.clone().iter().map(|s| ModName(s.clone())).collect(),
+                    VarName(String::from("..")),
                 ))))
             }
             ts::UseEnum::Cluster(UseCluster(use_defs)) => {
+                let mut pub_decls = vec![];
                 for UseDef(NameRef(in_path, in_enum)) in use_defs {
                     // Add path/ before all usew_defs
                     let mut new_path = path_name.0.clone();
                     new_path.extend(in_path.clone());
-                    let _ = UseDef(NameRef(new_path, in_enum.clone())).resolve(state);
+                    pub_decls.extend(UseDef(NameRef(new_path, in_enum.clone())).resolve(state)?);
                 }
-                Ok(())
+                Ok(pub_decls)
             }
             ts::UseEnum::Name(name) => {
                 let mut path = state.module_stack.clone();
                 while !path.is_empty() {
                     let mut prefix_path = path.clone();
                     prefix_path.extend(mod_path.clone());
-                    if let Some(mut scope) = state.ctx.lookup_new.get(&prefix_path).cloned() {
+                    if let Some(mut scope) = state.ctx.lookup.get(&prefix_path).cloned() {
                         if let Some(def_id) = scope.get(name).cloned() {
                             scope.remove(name);
-                            state.ctx.lookup_new.insert(path, scope);
+                            state.ctx.lookup.insert(prefix_path, scope);
                             let cur_path: Vec<String> = vec![String::from(".")];
                             let cur_scope =
-                                state.ctx.lookup_new.entry(cur_path).or_insert(HashMap::default());
+                                state.ctx.lookup.entry(cur_path).or_insert(HashMap::default());
                             cur_scope.insert(name.clone(), def_id);
-                            return Ok(());
+                            return Ok(vec![PublicDec::Use(path_name.clone())]);
                         }
                     }
                     path.pop();
                 }
-                // Ok(())
-                Err(ResolveError::UnboundVar(state.span().make(NameRef(
-                    path.clone().iter().map(|s| ModName(s.clone())).collect(),
+                Err(ResolveError::ModuleNotFound(state.span().make(NameRef(
+                    mod_path.iter().map(|s| ModName(s.clone())).collect(),
                     name.clone(),
                 ))))
             }
-            _ => Ok(()),
+            _ => Ok(vec![]),
         }
     }
 }
@@ -696,7 +696,6 @@ impl Resolve for Modifiers<ts::Declaration> {
                 state.pub_enter();
                 // When entering a new module, take a snapshot of the lookup table
                 state.scope_enter();
-                // Todo: work out module resolution
                 let mut top = Vec::new();
                 for decl in top_ {
                     top.extend(decl.resolve(state)?);
@@ -707,7 +706,7 @@ impl Resolve for Modifiers<ts::Declaration> {
                 let in_modules = top_lookup.get(&Vec::new()).unwrap_or(&default_map).clone(); // the scope of the path of the module
                 state.scope_exit();
                 // When exiting a new module, abandon the new defs in the module except the ones with "pub"
-                let mut var_map = state.ctx.lookup_new.remove(&module_path).unwrap_or_default();
+                let mut var_map = state.ctx.lookup.remove(&module_path).unwrap_or_default();
                 for pub_decl in state.ctx.current_pub.clone() {
                     match pub_decl {
                         PublicDec::Def(name) => {
@@ -716,9 +715,31 @@ impl Resolve for Modifiers<ts::Declaration> {
                         PublicDec::Module(name) => {
                             state.retain_scope(&module_path, &name, &top_lookup)
                         }
+                        PublicDec::Use(name) => {
+                            let NameRef(mod_path, use_enum) = name;
+                            let path: Vec<String> = mod_path.iter().map(| ModName(s) | s.clone()).collect();
+                            match use_enum {
+                                UseEnum::Name(name) => {
+                                    if let Some(from_scope) = state.ctx.lookup.get(&path) {
+                                        if let Some(id) = from_scope.get(&name) {
+                                            var_map.insert(name.clone(), id.clone());
+                                            // only copy the used variable to the target scope 
+                                        }
+                                    }
+                                },
+                                UseEnum::Alias(_) => todo!(),
+                                UseEnum::All(_) => {
+                                    if let Some(move_scope) = state.ctx.lookup.get(&path) {
+                                        var_map.extend(move_scope.clone())
+                                        // copy the whole scope to the target scope
+                                    }
+                                },
+                                _ => {}
+                            }
+                        }
                     }
                 }
-                state.ctx.lookup_new.insert(module_path, var_map);
+                state.ctx.lookup.insert(module_path, var_map);
                 state.pub_exit();
                 if *public {
                     state.add_pub_mod(name.clone())
@@ -726,12 +747,12 @@ impl Resolve for Modifiers<ts::Declaration> {
                 Ok(top)
             }
             ts::Declaration::UseDef(use_def) => {
-                // if *public {
-                //     let UseDef(name_ref) = use_def;
-                //     state.add_pub_use(name_ref.clone())
-                // }
-                // Todo: pub use
-                use_def.resolve(state)?;
+                if *public {
+                    let pubs = use_def.resolve(state)?;
+                    state.ctx.current_pub.extend(pubs);
+                } else {
+                    use_def.resolve(state)?;
+                }
                 Ok(Vec::new())
             }
             ts::Declaration::Main(Main(term)) => {

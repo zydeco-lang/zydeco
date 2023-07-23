@@ -18,6 +18,7 @@ derive-where = "1.2"
 toml = "0.4.2"
 serde = "1.0"
 walkdir = "2"
+home = "0.5.5"
 
 [lib]
 doctest = false

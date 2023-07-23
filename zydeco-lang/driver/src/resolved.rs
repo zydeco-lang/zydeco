@@ -7,7 +7,7 @@ use zydeco_surface::bound::{
 };
 
 /// a file -> file_dependencies map; all files must be included in the map
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct DependencyTracker(pub HashMap<FileId, HashSet<FileId>>);
 impl DependencyTracker {
     pub fn update_dep(&mut self, id: FileId, dep: FileId) {
@@ -94,15 +94,16 @@ pub struct ResolvedFile {
 
 #[derive(Default, Debug)]
 pub struct ResolvedMap {
+    pub deps: DependencyTracker,
     pub tracker: ResolutionTracker,
     pub map: HashMap<FileId, ResolvedFile>,
 }
 
 impl ResolvedMap {
     pub fn new(deps: DependencyTracker) -> Self {
-        let tracker = deps.gen_resolved();
+        let tracker = deps.clone().gen_resolved();
         let map = HashMap::default();
-        Self { tracker, map }
+        Self { deps, tracker, map }
     }
 
     pub fn resolve_one_by_one(&mut self, parsed_map: &ParsedMap) -> Result<(), SurfaceError> {
@@ -118,11 +119,15 @@ impl ResolvedMap {
                 parsed_map.map[&id].mod_path.clone(),
                 parsed_map.module_root.clone(),
             );
+            // println!("start resolving {:?}", parsed_map.map[&id].mod_path);
             resolver.exec().map_err(|es| {
                 SurfaceError::ResolveErrors(
                     es.into_iter().map(|e| e.to_string()).collect::<Vec<String>>().join("\n"),
                 )
             })?;
+            // println!("finished resolving {:?}", parsed_map.map[&id].mod_path);
+            // println!("current lookup: {:?}", resolver.ctx.lookup_new);
+            // println!("current module tree: {:?}", resolver.module_tree);
             self.tracker.done(id);
             let spans = parsed.ctx.spans.clone();
             let defs = parsed.ctx.defs.clone();

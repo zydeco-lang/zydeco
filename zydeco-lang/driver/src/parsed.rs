@@ -25,6 +25,7 @@ use zydeco_utils::span::FileInfo;
 pub struct FileParsed {
     pub mod_path: Vec<String>,
     pub deps: Vec<Dependency>,
+    pub loc: FileLoc,
     pub top: TopLevel,
     pub ctx: Ctx,
 }
@@ -60,7 +61,6 @@ pub struct FileParsedMeta {
 #[derive(Debug)]
 pub struct ParsedMap {
     pub project_name: String,
-    pub mode: ProjectMode,
     pub files: SimpleFiles<FileLoc, String>,
     pub map: HashMap<FileId, FileParsed>,
     pub ctx: Ctx,
@@ -74,7 +74,6 @@ pub struct ParsedMap {
 impl Default for ParsedMap {
     fn default() -> Self {
         let project_name = String::new();
-        let mode = ProjectMode::default();
         let files = SimpleFiles::new();
         let map: HashMap<usize, FileParsed> = HashMap::new();
         let ctx = Ctx::default();
@@ -84,7 +83,6 @@ impl Default for ParsedMap {
         let deps_record = HashMap::default();
         Self {
             project_name,
-            mode,
             files,
             map,
             ctx,
@@ -100,16 +98,17 @@ impl Default for ParsedMap {
 impl ParsedMap {
     pub fn new(prj_name: String, path: &Path) -> Self {
         let files = SimpleFiles::new();
-        let mode = ProjectMode::default();
         let map: HashMap<usize, FileParsed> = HashMap::new();
         let ctx = Ctx::default();
         let to_parse = Vec::default();
         let module_tree = ModuleTree::new(prj_name.clone());
-        let all_names = create_all_name(path, true); // Todo: std is not needed
+        let mut all_names = create_all_name(path);
+        all_names.extend(create_all_name(
+            &home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next")),
+        ));
         let deps_record = HashMap::default();
         Self {
             project_name: prj_name,
-            mode,
             files,
             map,
             ctx,
@@ -121,8 +120,9 @@ impl ParsedMap {
         }
     }
 
-    pub fn parse_file_wp(&mut self, path: impl AsRef<Path>) -> Result<(), SurfaceError> {
-        // read file
+    pub fn parse_file(
+        &mut self, path: impl AsRef<Path>, mode: ProjectMode,
+    ) -> Result<(), SurfaceError> {
         let path = path.as_ref();
         let source = std::fs::read_to_string(&path)
             .map_err(|_| SurfaceError::PathNotFound { path: path.to_path_buf() })?;
@@ -133,30 +133,22 @@ impl ParsedMap {
             .and_then(|s| s.to_str())
             .ok_or_else(|| SurfaceError::PathInvalid { path: path.to_path_buf() })?
             .to_owned();
-        match self.mode {
-            ProjectMode::Managed => {
-                let mod_path: PathBuf =
-                    path.iter().skip_while(|s| *s != self.project_name.as_str()).skip(2).collect();
-                if mod_name == "Module" && parent_name == "src" {
-                    // The root module
-                    self.module_current = vec![mod_name.clone()];
-                } else if mod_name == "Module" && parent_name != "src" {
-                    // A sub module folder
-                    self.module_current = self.deal_with_module_folder(mod_path);
-                } else if mod_name != "Std_next" {
-                    // A sub module file
-                    self.module_current = self.deal_with_module_file(mod_path);
-                } else {
-                    self.module_current = vec![self.project_name.clone(), mod_name.clone()];
-                }
+        let is_std = self.project_name != "Std_next" && path.starts_with(&home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next")));
+        if is_std || mode == ProjectMode::Managed {
+            let mod_path: PathBuf =
+                path.iter().skip_while(|s| *s != self.project_name.as_str() && *s != "Std_next").skip(2).collect();
+            if mod_name == "Module" && parent_name == "src" && !is_std {
+                // The root module
+                self.module_current = vec![mod_name.clone()];
+            } else if mod_name == "Module" && parent_name != "src" {
+                // A sub module folder
+                self.module_current = self.deal_with_module_folder(mod_path, is_std);
+            } else {
+                self.module_current = self.deal_with_module_file(mod_path, is_std);
             }
-            _ => {
-                if mod_name == "Std_next" {
-                    self.module_current = vec![self.project_name.clone(), mod_name.clone()]
-                } else {
-                    self.module_current = vec![self.project_name.clone()];
-                }
-            }
+        } else {
+            let mod_path: PathBuf = path.iter().skip_while(|s| *s != self.project_name.as_str()).collect();
+            self.module_current = self.deal_with_module_file(mod_path, is_std);
         }
         // parsing and span mapping
         let mut ctx = Ctx::default();
@@ -174,7 +166,8 @@ impl ParsedMap {
         let deps = ctx.deps.clone();
 
         // assemble
-        let mut parsed = FileParsed { deps, top, ctx, mod_path: self.module_current.clone() };
+        let mut parsed =
+            FileParsed { deps, top, ctx, mod_path: self.module_current.clone(), loc: loc.clone() };
         // Ok(FileParsedMeta { loc, source, parsed })
 
         // let FileParsedMeta { loc, source, mut parsed } = meta;
@@ -187,13 +180,16 @@ impl ParsedMap {
                 Dependency::ManagedImport(_) => todo!(),
                 Dependency::Hierachy(modnames) => {
                     let filename = modnames.last().unwrap();
-                    if let Some(path) = find_mod_file(filename) {
+                    if let Some(path) = self.find_mod_file(filename, path.parent().unwrap()) {
                         self.add_file_to_parse(path);
                         let module_entry =
                             self.module_root.get_node_path_mut(&self.module_current).unwrap();
                         module_entry.add_child(filename.clone());
                     } else {
-                        return Err(SurfaceError::ModuleNotFound { mod_name: modnames });
+                        return Err(SurfaceError::ModuleNotFound {
+                            mod_name: modnames,
+                            path: PathBuf::new(),
+                        });
                     }
                 }
                 Dependency::Use(NameRef(mod_path, _)) => {
@@ -219,37 +215,6 @@ impl ParsedMap {
         Ok(())
     }
 
-    pub fn parse_file(&self, path: impl AsRef<Path>) -> Result<FileParsedMeta, SurfaceError> {
-        // read file
-        let path = path.as_ref();
-        let source = std::fs::read_to_string(&path)
-            .map_err(|_| SurfaceError::PathNotFound { path: path.to_path_buf() })?;
-        let loc = FileLoc(path.to_path_buf());
-        // Todo: get a real module path
-        let mod_name = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| SurfaceError::PathInvalid { path: path.to_path_buf() })?
-            .to_owned();
-
-        // parsing and span mapping
-        let mut ctx = Ctx::default();
-        let file_info = FileInfo::new(&source, Rc::new(path.to_path_buf()));
-        let top = TopLevelParser::new().parse(&source, &mut ctx, Lexer::new(&source)).map_err(
-            |error| {
-                SurfaceError::ParseError(ParseError { error, file_info: &file_info }.to_string())
-            },
-        )?;
-        ctx.span_map(&file_info);
-
-        // processing project and dependency specs
-        let deps = ctx.deps.clone();
-
-        // assemble
-        let parsed = FileParsed { deps, top, ctx, mod_path: vec![mod_name] };
-        Ok(FileParsedMeta { loc, source, parsed })
-    }
-
     pub fn add_file_parsed(
         &mut self, FileParsedMeta { loc, source, parsed }: FileParsedMeta,
     ) -> FileId {
@@ -258,28 +223,13 @@ impl ParsedMap {
         fid
     }
 
-    pub fn std_wp(&mut self) -> () {
-        self.module_root.add_child("Std_next".to_owned());
-        self.parse_file_wp("zydeco-lang/src/library/Std_next.zydeco").unwrap_or_else(|e| {
-            eprintln!("{}", e);
-            panic!()
-        })
-    }
-
-    pub fn std(&self) -> FileParsedMeta {
-        self.parse_file("zydeco-lang/src/library/Std_next.zydeco").unwrap_or_else(|e| {
-            eprintln!("{}", e);
-            panic!()
-        })
-    }
-
     pub fn add_file_to_parse(&mut self, loc: FileLoc) {
         if !self.to_parse.contains(&loc) {
             self.to_parse.push(loc);
         }
     }
 
-    pub fn deal_with_module_folder(&self, mod_path: PathBuf) -> Vec<String> {
+    pub fn deal_with_module_folder(&self, mod_path: PathBuf, is_std: bool) -> Vec<String> {
         let mut mod_path = mod_path
             .into_os_string()
             .into_string()
@@ -288,11 +238,14 @@ impl ParsedMap {
             .map(|s| s.to_owned())
             .collect::<Vec<_>>();
         mod_path.pop(); // remove the Module.zy
+        if is_std {
+            mod_path.insert(0, "Std_next".to_owned());
+        }
         mod_path.insert(0, self.project_name.clone());
         mod_path
     }
 
-    pub fn deal_with_module_file(&self, mod_path: PathBuf) -> Vec<String> {
+    pub fn deal_with_module_file(&self, mod_path: PathBuf, is_std: bool) -> Vec<String> {
         let mut mod_path = mod_path
             .into_os_string()
             .into_string()
@@ -302,12 +255,14 @@ impl ParsedMap {
             .split("/")
             .map(|s| s.to_owned())
             .collect::<Vec<_>>();
+        if is_std {
+            mod_path.insert(0, "Std_next".to_owned());
+        }
         mod_path.insert(0, self.project_name.clone());
         mod_path
     }
 
     pub fn get_dep_id(&self, dep_path: &Vec<String>, fid: &FileId) -> Result<FileId, SurfaceError> {
-        //Todo: deal with the managed imported package (like std)
         let mut prefix_path = self.map.get(fid).unwrap().mod_path.clone();
         let mut try_path = dep_path.clone();
         let mut failed = false;
@@ -325,35 +280,38 @@ impl ParsedMap {
                 }
                 return Ok(id);
             }
-            prefix_path.remove(prefix_path.len() - 2);
-            failed = true;
-            if prefix_path.is_empty() {
+            if prefix_path.len() == 1 {
                 break;
             }
+            prefix_path.remove(prefix_path.len() - 2);
+            failed = true;
         }
-        Err(SurfaceError::ModuleNotFound { mod_name: dep_path.clone() })
+        Err(SurfaceError::ModuleNotFound {
+            mod_name: dep_path.clone(),
+            path: self.map.get(fid).unwrap().loc.0.clone(),
+        })
+    }
+
+    pub fn find_mod_file(&self, name: &String, path: impl AsRef<Path>) -> Option<FileLoc> {
+        let mut longname = name.clone();
+        let mut shortname = name.clone();
+        longname.push_str(".zydeco");
+        shortname.push_str(".zy");
+        // Todo: replace "." with the project src root
+        for entry in WalkDir::new(path.as_ref()).into_iter().filter_map(|e| e.ok()) {
+            if entry.path().file_name().unwrap_or_default() == longname.as_str()
+                || entry.path().file_name().unwrap_or_default() == shortname.as_str()
+            {
+                return Some(FileLoc(entry.path().to_path_buf()));
+            } else if entry.path().file_name().unwrap_or_default() == name.as_str() {
+                return Some(FileLoc(entry.path().to_path_buf().join(Path::new("Module.zy"))));
+            }
+        }
+        None
     }
 }
 
-pub fn find_mod_file(name: &String) -> Option<FileLoc> {
-    let mut longname = name.clone();
-    let mut shortname = name.clone();
-    longname.push_str(".zydeco");
-    shortname.push_str(".zy");
-    // Todo: replace "." with the project src root
-    for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
-        if entry.path().file_name().unwrap_or_default() == longname.as_str()
-            || entry.path().file_name().unwrap_or_default() == shortname.as_str()
-        {
-            return Some(FileLoc(entry.path().to_path_buf()));
-        } else if entry.path().file_name().unwrap_or_default() == name.as_str() {
-            return Some(FileLoc(entry.path().to_path_buf().join(Path::new("Module.zy"))));
-        }
-    }
-    None
-}
-
-pub fn create_all_name(path: &Path, has_std: bool) -> HashSet<String> {
+pub fn create_all_name(path: &Path) -> HashSet<String> {
     let mut set = HashSet::new();
     let project_name = path.file_name().unwrap().to_str().unwrap().to_owned();
     for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
@@ -377,9 +335,6 @@ pub fn create_all_name(path: &Path, has_std: bool) -> HashSet<String> {
             };
             set.insert(name);
         }
-    }
-    if has_std {
-        set.insert("Std_next".to_owned());
     }
     set
 }

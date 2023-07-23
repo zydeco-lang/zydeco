@@ -1,6 +1,6 @@
 use Structure/ Others/ .. end
 use Structure/ Syn/ .. end
-use Structure/ Sem/ .. end
+use Structure/ .. end
 use Utils/ .. end
 use Std_next/ Builtin/ .. end
 use Std_next/ Std/ String/ .. end

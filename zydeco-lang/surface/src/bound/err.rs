@@ -30,4 +30,6 @@ pub enum ResolveError {
     AmbiguousBinderAnnotation(Sp<VarName>),
     #[error("Define twice: {0}")]
     DefineTwice(Sp<VarName>),
+    #[error("No such module found: {0}")]
+    ModuleNotFound(Sp<NameRef<VarName>>),
 }

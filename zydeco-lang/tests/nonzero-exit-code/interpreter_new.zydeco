@@ -3,7 +3,8 @@
 # As it is a CBPV language, our syntax distinguishes between values
 # and computations
 use Std_next/ Builtin/ .. end
-use Std_next/ Std/ (String/ .. , OS/ .. ) end
+use Std_next/ Std/ String/ .. end
+use Std_next/ Std/ OS/ ..  end
 
 data SynComp end
 

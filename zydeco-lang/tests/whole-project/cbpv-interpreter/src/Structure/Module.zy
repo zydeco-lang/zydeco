@@ -1,3 +1,5 @@
 module Syn end
 module Sem end
 module Others end
+
+pub use Structure/ Sem/ .. end // test pub use

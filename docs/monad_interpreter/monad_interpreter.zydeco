@@ -6,6 +6,11 @@
 // //   | .view() : forall A . forall B . U(M(A)) -> U(A -> B) -> B
 // end
 
+codata Result' (A : VType) where
+  | .ok() : F A
+  | .err() : OS
+end
+
 data SynVal where
   | Var(String)
   | True()
@@ -44,32 +49,43 @@ codata Interpreter (M : VType -> CType) where
   | .comp(SynComp, Env M) : SemComp M
 end
 
-def rec fn error (M : VType -> CType) (m : U(SemVal M -> (M (SemVal M)))) (a : SemVal M) : SemComp M =
+data SemValOption  where
+  | True()
+  | False()
+  | ThunkV(Thunk(SemCompOption))
+end
+
+codata SemCompOption  where
+  | .app(SemValOption) : SemCompOption
+  | .bind()        : Result' (SemValOption)
+end
+
+def rec fn error_option (m : U(SemValOption -> (Result' (SemValOption)))) (a : SemValOption) : SemCompOption =
   comatch
-    | .app(_) -> ! error @(M) m a
+    | .app(_) -> ! error_option m a
     | .bind() -> ! m a
   end
 end
 
-def rec fn lookup (M : VType -> CType) (m : U((SemVal M) -> (M (SemVal M)))) (a : SemVal M) (x : String) (g : Env M) : M (SemVal M) =
-  match g
-  | Empty() -> ! m a
-  | Cons(y,v,g) ->
-    do b <- ! str_eq x y;
-    match b
-    | True() -> ! m v
-    | False() -> ! lookup @(M) m a x g
-    end
-  end
-end
+// def rec fn lookup (M : VType -> CType) (m : U((SemVal M) -> (M (SemVal M)))) (a : SemVal M) (x : String) (g : Env M) : M (SemVal M) =
+//   match g
+//   | Empty() -> ! m a
+//   | Cons(y,v,g) ->
+//     do b <- ! str_eq x y;
+//     match b
+//     | True() -> ! m v
+//     | False() -> ! lookup @(M) m a x g
+//     end
+//   end
+// end
 
-def fn sem_val_to_str (M : VType -> CType) (s : SemVal M) : F String =
-  match s
-  | True() -> ret "true"
-  | False() -> ret "false"
-  | ThunkV(_) -> ret "<thunk>"
-  end
-end
+// def fn sem_val_to_str (M : VType -> CType) (s : SemVal M) : F String =
+//   match s
+//   | True() -> ret "true"
+//   | False() -> ret "false"
+//   | ThunkV(_) -> ret "<thunk>"
+//   end
+// end
 
 // def rec fn interp (M : VType -> CType) (m : U((SemVal M) -> (M (SemVal M)))) (a : SemVal M) : M (SemVal M) =
 //   comatch
