@@ -104,7 +104,8 @@ impl ParsedMap {
         let module_tree = ModuleTree::new(prj_name.clone());
         let mut all_names = create_all_name(path);
         all_names.extend(create_all_name(
-            &home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next")),
+            &std::env::current_dir().unwrap().join(Path::new("docs/Std_next")),
+            // &home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next")),
         ));
         let deps_record = HashMap::default();
         Self {
@@ -133,7 +134,10 @@ impl ParsedMap {
             .and_then(|s| s.to_str())
             .ok_or_else(|| SurfaceError::PathInvalid { path: path.to_path_buf() })?
             .to_owned();
-        let is_std = self.project_name != "Std_next" && path.starts_with(&home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next")));
+        let is_std = self.project_name != "Std_next" && path.starts_with(
+            std::env::current_dir().unwrap().join(Path::new("docs/Std_next"))
+            // &home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next"))
+        );
         if is_std || mode == ProjectMode::Managed {
             let mod_path: PathBuf =
                 path.iter().skip_while(|s| *s != self.project_name.as_str() && *s != "Std_next").skip(2).collect();

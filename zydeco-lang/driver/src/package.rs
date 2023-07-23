@@ -170,7 +170,8 @@ impl Project {
         }
         if self.package.name != "Std_next" {
             self.parsed.add_file_to_parse(FileLoc(
-                home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next/src/Module.zy")),
+                std::env::current_dir().unwrap().join(Path::new("docs/Std_next/src/Module.zy")),
+                // home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next/src/Module.zy")),
             ));
             self.parsed.module_root.add_child("Std_next".to_string());
         }

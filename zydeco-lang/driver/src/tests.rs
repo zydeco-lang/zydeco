@@ -11,7 +11,7 @@ fn driver_1() {
 #[test]
 fn driver_2() {
     let mut driver = Driver::default();
-    let _ = driver.load_project("/home/akai/.zydeco/lib/Std_next").map_err(|_e| {
+    let _ = driver.load_project("docs/Std_next").map_err(|_e| {
         eprintln!("{}", _e);
         panic!()
     });
