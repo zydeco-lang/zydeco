@@ -17,7 +17,7 @@ pub enum Tok<'input> {
     LowerIdent(&'input str),
 
     #[token("pub")]
-    Pub,
+    Public,
     #[token("ext")]
     #[token("extern")]
     Extern,
@@ -123,7 +123,7 @@ impl<'input> Display for Tok<'input> {
             Tok::LowerIdent(s) => write!(f, "LowerIdentifier({})", s),
             Tok::Where => write!(f, "where"),
             Tok::End => write!(f, "end"),
-            Tok::Pub => write!(f, "pub"),
+            Tok::Public => write!(f, "pub"),
             Tok::Extern => write!(f, "extern"),
             Tok::Module => write!(f, "module"),
             Tok::Use => write!(f, "use"),

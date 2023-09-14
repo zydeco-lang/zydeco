@@ -20,7 +20,7 @@ extern {
         "end" => Tok::End,
         "module" => Tok::Module,
         "use" => Tok::Use,
-        "pub" => Tok::Pub,
+        "pub" => Tok::Public,
         "extern" => Tok::Extern,
         "data" => Tok::Data,
         "codata" => Tok::Codata,
