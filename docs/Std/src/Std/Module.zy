@@ -22,11 +22,14 @@ pub module Prod where
   end
 end
 
-//   ## the Option type
-
 pub data Option (A : VType) where
   | +None()
   | +Some(A)
+end
+
+pub data Either (A : VType) (E : VType) where
+  | +Left(A)
+  | +Right(E)
 end
 
 module Bool end
