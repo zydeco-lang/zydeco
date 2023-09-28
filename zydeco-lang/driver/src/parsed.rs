@@ -104,7 +104,7 @@ impl ParsedMap {
         let module_tree = ModuleTree::new(prj_name.clone());
         let mut all_names = create_all_name(path);
         all_names.extend(create_all_name(
-            &std::env::current_dir().unwrap().join(Path::new("docs/Std_next")),
+            &std::env::current_dir().unwrap().join(Path::new("docs/Std")),
             // &home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next")),
         ));
         let deps_record = HashMap::default();

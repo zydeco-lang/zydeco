@@ -16,7 +16,7 @@ pub mod textual {
     mod tests;
 }
 
-pub mod bound {
+pub mod scoped {
     pub mod syntax;
     pub mod resolver;
     pub mod err;

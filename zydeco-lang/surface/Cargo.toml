@@ -8,7 +8,6 @@ description = "surface syntax for zydeco"
 regex = "1"
 logos = "0.13"
 lalrpop-util = "0.20"
-codespan-reporting = "0.11"
 slotmap = { version = "1", features = ["serde"] }
 im = "15"
 unindent = "0.2"

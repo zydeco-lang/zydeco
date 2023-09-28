@@ -1,7 +1,7 @@
 use super::{err::SurfaceError, package::FileId, parsed::ParsedMap};
 use slotmap::SecondaryMap;
 use std::collections::{HashMap, HashSet};
-use zydeco_surface::bound::{
+use zydeco_surface::scoped::{
     resolver::Resolver,
     syntax::{Ctx, DefId, Pattern, PatternId, SpanArena, Term, TermId, TopLevel, VarName},
 };
