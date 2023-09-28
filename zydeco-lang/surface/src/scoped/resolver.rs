@@ -112,7 +112,6 @@ impl Resolver<'_> {
             }
         }
     }
-
 }
 
 pub trait Fold<S, E, U> {
@@ -198,6 +197,17 @@ where
     type Error = E;
     fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
         self.iter().map(|t| t.resolve(state)).collect()
+    }
+}
+
+impl<T, U, E> Resolve for Paren<T>
+where
+    T: Resolve<Out = U, Error = E>,
+{
+    type Out = Paren<U>;
+    type Error = E;
+    fn resolve(&self, state: &mut Resolver<'_>) -> Result<Self::Out, Self::Error> {
+        Ok(Paren(self.0.iter().map(|t| t.resolve(state)).collect::<Result<_, _>>()?))
     }
 }
 
@@ -290,12 +300,16 @@ impl Resolve for Pattern {
                 let term = term.resolve(state)?;
                 Ok(Annotation { term, ty }.into())
             }
+            Pattern::Hole(h) => Ok(h.resolve(state)?.into()),
             Pattern::Var(def) => {
                 // binders are inserted into the lookup table
                 let def = def.resolve(state)?;
                 Ok(Pattern::Var(def))
             }
-            Pattern::Hole(h) => Ok(h.resolve(state)?.into()),
+            Pattern::Paren(par) => {
+                let par = par.resolve(state)?;
+                Ok(Pattern::Paren(par))
+            }
         }
     }
 }
@@ -321,7 +335,7 @@ impl Resolve for GenBinder {
                     state.textual_ctx.spans[binder].make(name),
                 ))
             }
-            Pattern::Var(_) | Pattern::Hole(_) => Ok(binder),
+            Pattern::Hole(_) | Pattern::Var(_) | Pattern::Paren(_) => Ok(binder),
         }
     }
 }
@@ -420,6 +434,10 @@ impl Resolve for Term<NameRef<VarName>> {
             Term::Var(v) => {
                 let def = v.resolve(state)?;
                 Ok(Term::Var(def))
+            }
+            Term::Paren(Paren(terms)) => {
+                let terms = terms.resolve(state)?;
+                Ok(Paren(terms).into())
             }
             Term::Abs(Abstraction(params, term)) => {
                 state.scope_enter();
@@ -717,23 +735,24 @@ impl Resolve for Modifiers<ts::Declaration> {
                         }
                         PublicDec::Use(name) => {
                             let NameRef(mod_path, use_enum) = name;
-                            let path: Vec<String> = mod_path.iter().map(| ModName(s) | s.clone()).collect();
+                            let path: Vec<String> =
+                                mod_path.iter().map(|ModName(s)| s.clone()).collect();
                             match use_enum {
                                 UseEnum::Name(name) => {
                                     if let Some(from_scope) = state.ctx.lookup.get(&path) {
                                         if let Some(id) = from_scope.get(&name) {
                                             var_map.insert(name.clone(), id.clone());
-                                            // only copy the used variable to the target scope 
+                                            // only copy the used variable to the target scope
                                         }
                                     }
-                                },
+                                }
                                 UseEnum::Alias(_) => todo!(),
                                 UseEnum::All(_) => {
                                     if let Some(move_scope) = state.ctx.lookup.get(&path) {
                                         var_map.extend(move_scope.clone())
                                         // copy the whole scope to the target scope
                                     }
-                                },
+                                }
                                 _ => {}
                             }
                         }

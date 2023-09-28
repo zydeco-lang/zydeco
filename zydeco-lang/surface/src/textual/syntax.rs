@@ -31,6 +31,12 @@ pub struct NameDef<T>(pub T);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NameRef<T>(pub Vec<ModName>, pub T);
 
+/* ------------------------------- Structural ------------------------------- */
+
+/// `(...)` as paren-shaped container
+#[derive(From, Clone, Debug)]
+pub struct Paren<T>(pub Vec<T>);
+
 /* ----------------------------- Bi-Directional ----------------------------- */
 
 /// `(...: t)` for analyze mode motivator
@@ -47,16 +53,18 @@ pub struct Hole;
 
 #[derive(From, Clone, Debug)]
 pub enum Pattern {
-    Var(DefId),
     Ann(Annotation<PatternId, TermId>),
     Hole(Hole),
+    Var(DefId),
+    Paren(Paren<PatternId>),
 }
 impl Pattern {
     pub fn get_def_id(&self, ctx: &Ctx) -> Option<DefId> {
         match self {
-            Pattern::Var(id) => Some(*id),
             Pattern::Ann(Annotation { term, ty: _ }) => ctx.patterns[*term].get_def_id(ctx),
             Pattern::Hole(Hole) => None,
+            Pattern::Var(id) => Some(*id),
+            Pattern::Paren(Paren(pats)) => pats.iter().find_map(|pat| ctx.patterns[*pat].get_def_id(ctx)),
         }
     }
 }
@@ -84,16 +92,16 @@ pub struct Application(pub TermId, pub Vec<TermId>);
 #[derive(Clone, Debug)]
 pub struct Recursion(pub PatternId, pub TermId);
 
-// `pi (x: A) -> B`
+/// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
 pub struct Pi(pub Vec<PatternId>, pub TermId);
-// `a -> b`
+/// `a -> b`
 #[derive(Clone, Debug)]
 pub struct Arrow(pub TermId, pub TermId);
-// `forall (x: A) . B`
+/// `forall (x: A) . B`
 #[derive(Clone, Debug)]
 pub struct Forall(pub Vec<PatternId>, pub TermId);
-// `exists (x: A) . B`
+/// `exists (x: A) . B`
 #[derive(Clone, Debug)]
 pub struct Exists(pub Vec<PatternId>, pub TermId);
 
@@ -123,7 +131,7 @@ pub struct PureBind<Tail> {
 
 /// `C(a_1, ...)`
 #[derive(Clone, Debug)]
-pub struct Constructor(pub CtorName, pub Vec<TermId>);
+pub struct Constructor(pub CtorName, pub TermId);
 /// `match a | C_1(x_11, ...) -> b_1 | ...`
 #[derive(Clone, Debug)]
 pub struct Match<Tail> {
@@ -133,7 +141,7 @@ pub struct Match<Tail> {
 #[derive(Clone, Debug)]
 pub struct Matcher<Tail> {
     pub name: CtorName,
-    pub binders: Vec<PatternId>,
+    pub binders: PatternId,
     pub tail: Tail,
 }
 
@@ -145,12 +153,12 @@ pub struct CoMatch<Tail> {
 #[derive(Clone, Debug)]
 pub struct CoMatcher<Tail> {
     pub name: DtorName,
-    pub binders: Vec<PatternId>,
+    pub binders: PatternId,
     pub tail: Tail,
 }
 /// `b .d(a_1, ...)`
 #[derive(Clone, Debug)]
-pub struct Destructor(pub TermId, pub DtorName, pub Vec<TermId>);
+pub struct Destructor(pub TermId, pub DtorName, pub TermId);
 
 /// literals in term
 #[derive(From, Clone, Debug)]
@@ -166,6 +174,7 @@ pub enum Term<Ref> {
     Hole(Hole),
     #[from(ignore)]
     Var(Ref),
+    Paren(Paren<TermId>),
     Abs(Abstraction<TermId>),
     App(Application),
     Rec(Recursion),
@@ -522,9 +531,8 @@ impl ModuleTree {
         if path.len() == 1 && self.root.0 == path[0] {
             return self.root.1;
         } else if path.len() <= 1 && self.root.0 != path[0] {
-            return None
-        } 
-        else {
+            return None;
+        } else {
             for child in self.children.iter() {
                 if child.root.0 == path[1].as_str() {
                     return child.get_id_path(&path[1..].to_vec());

@@ -129,17 +129,24 @@ NameRef<T>: NameRef<T> = <path:(<ModName> "/")*> <inner:T> => {
 
 DefId: DefId = <NameDef<Sp<VarName>>> => ctx.def(<>.0);
 
+//* ------------------------------- Structural ------------------------------- */
+
+Paren<T>: Paren<T> = SepByDelim<"(", ",", <T>, ")"> => <>.into();
+
 //* --------------------------------- Pattern -------------------------------- */
 
 #[inline]
-PatternId: PatternId = <Sp<Pattern>> => ctx.pattern(<>);
+PatternGen<P>: PatternId = <Sp<P>> => ctx.pattern(<>);
+
+#[inline]
+PatternId: PatternId = <PatternGen<Pattern>>;
 Pattern: Pattern = {
-    "(" <Pattern> ")" => <>.into(),
-    <DefId> => <>.into(),
     "(" <term:PatternId> ":" <ty:TermId> ")" => Annotation {
         term, ty,
     }.into(),
     "_" => Hole.into(),
+    <DefId> => <>.into(),
+    <Paren<PatternId>> => <>.into(),
 };
 
 //* ---------------------------------- Term ---------------------------------- */
@@ -157,16 +164,14 @@ GenBind: GenBind = {
 LetSep: () = { ";", "in", };
 
 Matcher: Matcher<TermId> = {
-    "|" <name:CtorName>
-        <binders:SepByDelim<"(", ",", <PatternId>, ")">>
+    "|" <name:CtorName> <binders:PatternId>
     "->" <tail:TermId> => Matcher {
         name, binders, tail
     },
 };
 
 CoMatcher: CoMatcher<TermId> = {
-    "|" <name:DtorName>
-        <binders:SepByDelim<"(", ",", <PatternId>, ")">>
+    "|" <name:DtorName> <binders:PatternId>
     "->" <tail:TermId> => CoMatcher {
         name, binders, tail
     },
@@ -212,6 +217,10 @@ Term: Term<NameRef<VarName>> = {
 };
 
 #[inline]
+TermParenId: TermId = <TermGen<TermParen>>;
+TermParen: Term<NameRef<VarName>> = <Paren<TermId>> => <>.into();
+
+#[inline]
 TermRightId: TermId = <TermGen<TermRight>>;
 TermRight: Term<NameRef<VarName>> = {
     TermAtom,
@@ -224,16 +233,16 @@ TermRight: Term<NameRef<VarName>> = {
         ty_in, ty_out
     ).into(),
     // destructor
-    <term:TermGen<TermRight>> <name:DtorName>
-    <args:SepByDelim<"(", ",", <TermId>, ")">> => Destructor(
-        term, name, args
-    ).into(),
+    <term:TermGen<TermRight>> <name:DtorName> <args:TermParenId> => {
+        Destructor(term, name, args,).into()
+    },
 };
 
 #[inline]
 TermAtomId: TermId = <TermGen<TermAtom>>;
 TermAtom: Term<NameRef<VarName>> = {
-    "(" <Term> ")" => <>.into(),
+    // paren
+    <TermParen> => <>,
     "(" <term:TermId> ":" <ty:TermId> ")" => Annotation {
         term, ty,
     }.into(),
@@ -243,7 +252,7 @@ TermAtom: Term<NameRef<VarName>> = {
     "!" <TermAtomId> => Force(<>).into(),
     "ret" <TermAtomId> => Return(<>).into(),
     // constructor
-    <name:CtorName> <args:SepByDelim<"(", ",", <TermId>, ")">> => {
+    <name:CtorName> <args:TermParenId> => {
         Constructor(name, args).into()
     },
     <Literal> => <>.into(),
@@ -273,7 +282,7 @@ TypeArmName: TypeArmName = {
 };
 #[inline]
 TypeArm: TypeArm = {
-    "|" <name:TypeArmName> <args:SepByDelim<"(", ",", <TermId>, ")">>
+    "|" <name:TypeArmName> <args:TermParenId*>
     <out:(":" <TermId>)?> => {
         TypeArm { name, args, out }
     },
