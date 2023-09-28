@@ -27,9 +27,9 @@ pub data Option (A : VType) where
   | +Some(A)
 end
 
-pub data Either (A : VType) (E : VType) where
-  | +Left(A)
-  | +Right(E)
+pub data Either (E : VType) (A : VType) where
+  | +Left(E)
+  | +Right(A)
 end
 
 module Bool end

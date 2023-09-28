@@ -52,6 +52,12 @@ module Std where
     | Some(A)
   end
 
+
+  pub data Either (E : VType) (A : VType) where
+    | Left(E)
+    | Right(A)
+  end
+
   module Bool where
     pub data Bool where
       | True()
