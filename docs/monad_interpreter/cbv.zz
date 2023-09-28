@@ -38,7 +38,7 @@ module Env where
   end
 
   codata O where
-    | .lookup (x: String) : Option Value
+    | .lookup (x: String) : Ret (Option Value)
     | .extend (x: String) (v: Value) : O
   end
 
