@@ -1,6 +1,11 @@
 #![allow(clippy::style)]
 #![allow(clippy::useless_format)]
 
+pub mod driver {
+    pub mod parse;
+    pub mod err;
+}
+
 pub mod textual {
     pub mod syntax;
     pub mod lexer;

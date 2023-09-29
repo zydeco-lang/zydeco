@@ -62,7 +62,9 @@ impl Pattern {
             Pattern::Ann(Annotation { term, ty: _ }) => ctx.patterns[*term].get_def_id(ctx),
             Pattern::Hole(Hole) => None,
             Pattern::Var(id) => Some(*id),
-            Pattern::Paren(Paren(pats)) => pats.iter().find_map(|pat| ctx.patterns[*pat].get_def_id(ctx)),
+            Pattern::Paren(Paren(pats)) => {
+                pats.iter().find_map(|pat| ctx.patterns[*pat].get_def_id(ctx))
+            }
         }
     }
 }
@@ -344,27 +346,30 @@ pub struct SpanArena {
     pub terms: SlotMap<TermId, Span>,
 }
 
-impl std::ops::Index<DefId> for SpanArena {
-    type Output = Span;
+mod span_arena_impl {
+    use super::*;
+    impl std::ops::Index<DefId> for SpanArena {
+        type Output = Span;
 
-    fn index(&self, id: DefId) -> &Self::Output {
-        self.defs.get(id).unwrap()
+        fn index(&self, id: DefId) -> &Self::Output {
+            self.defs.get(id).unwrap()
+        }
     }
-}
 
-impl std::ops::Index<PatternId> for SpanArena {
-    type Output = Span;
+    impl std::ops::Index<PatternId> for SpanArena {
+        type Output = Span;
 
-    fn index(&self, id: PatternId) -> &Self::Output {
-        self.patterns.get(id).unwrap()
+        fn index(&self, id: PatternId) -> &Self::Output {
+            self.patterns.get(id).unwrap()
+        }
     }
-}
 
-impl std::ops::Index<TermId> for SpanArena {
-    type Output = Span;
+    impl std::ops::Index<TermId> for SpanArena {
+        type Output = Span;
 
-    fn index(&self, id: TermId) -> &Self::Output {
-        self.terms.get(id).unwrap()
+        fn index(&self, id: TermId) -> &Self::Output {
+            self.terms.get(id).unwrap()
+        }
     }
 }
 

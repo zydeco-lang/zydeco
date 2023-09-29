@@ -16,6 +16,7 @@ zydeco-utils = { path = "../utils" }
 zydeco-derive = { path = "../derive" }
 derive_more = "0.99"
 derive-where = "1.2"
+anyhow = "*"
 
 # build-time dependency on the lalrpop library:
 [build-dependencies]
