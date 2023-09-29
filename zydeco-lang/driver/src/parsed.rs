@@ -96,24 +96,24 @@ impl Default for ParsedMap {
 }
 
 impl ParsedMap {
-    pub fn new(prj_name: String, path: &Path) -> Self {
+    pub fn new(project_name: String, path: &Path) -> Self {
         let files = SimpleFiles::new();
         let map: HashMap<usize, FileParsed> = HashMap::new();
         let ctx = Ctx::default();
         let to_parse = Vec::default();
-        let module_tree = ModuleTree::new(prj_name.clone());
+        let module_root = ModuleTree::new(project_name.clone());
         let mut all_names = create_all_name(path);
         all_names.extend(create_all_name(
-            &std::env::current_dir().unwrap().join(Path::new("docs/Std")),
-            // &home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next")),
+            &std::env::current_dir().unwrap().join("docs/Std"),
+            // &home::home_dir().unwrap().join(".zydeco/lib/Std"),
         ));
         let deps_record = HashMap::default();
         Self {
-            project_name: prj_name,
+            project_name,
             files,
             map,
             ctx,
-            module_root: module_tree.clone(),
+            module_root,
             module_current: vec![],
             to_parse,
             all_names,
@@ -134,13 +134,16 @@ impl ParsedMap {
             .and_then(|s| s.to_str())
             .ok_or_else(|| SurfaceError::PathInvalid { path: path.to_path_buf() })?
             .to_owned();
-        let is_std = self.project_name != "Std_next" && path.starts_with(
-            std::env::current_dir().unwrap().join(Path::new("docs/Std_next"))
-            // &home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next"))
-        );
+        let is_std = self.project_name != "Std"
+            && path.starts_with(
+                std::env::current_dir().unwrap().join("docs/Std"), // &home::home_dir().unwrap().join(".zydeco/lib/Std")
+            );
         if is_std || mode == ProjectMode::Managed {
-            let mod_path: PathBuf =
-                path.iter().skip_while(|s| *s != self.project_name.as_str() && *s != "Std_next").skip(2).collect();
+            let mod_path: PathBuf = path
+                .iter()
+                .skip_while(|s| *s != self.project_name.as_str() && *s != "Std")
+                .skip(2)
+                .collect();
             if mod_name == "Module" && parent_name == "src" && !is_std {
                 // The root module
                 self.module_current = vec![mod_name.clone()];
@@ -151,7 +154,8 @@ impl ParsedMap {
                 self.module_current = self.deal_with_module_file(mod_path, is_std);
             }
         } else {
-            let mod_path: PathBuf = path.iter().skip_while(|s| *s != self.project_name.as_str()).collect();
+            let mod_path: PathBuf =
+                path.iter().skip_while(|s| *s != self.project_name.as_str()).collect();
             self.module_current = self.deal_with_module_file(mod_path, is_std);
         }
         // parsing and span mapping
@@ -243,7 +247,7 @@ impl ParsedMap {
             .collect::<Vec<_>>();
         mod_path.pop(); // remove the Module.zy
         if is_std {
-            mod_path.insert(0, "Std_next".to_owned());
+            mod_path.insert(0, "Std".to_owned());
         }
         mod_path.insert(0, self.project_name.clone());
         mod_path
@@ -260,7 +264,7 @@ impl ParsedMap {
             .map(|s| s.to_owned())
             .collect::<Vec<_>>();
         if is_std {
-            mod_path.insert(0, "Std_next".to_owned());
+            mod_path.insert(0, "Std".to_owned());
         }
         mod_path.insert(0, self.project_name.clone());
         mod_path
@@ -299,8 +303,8 @@ impl ParsedMap {
     pub fn find_mod_file(&self, name: &String, path: impl AsRef<Path>) -> Option<FileLoc> {
         let mut longname = name.clone();
         let mut shortname = name.clone();
-        longname.push_str(".zydeco");
-        shortname.push_str(".zy");
+        longname += ".zydeco";
+        shortname += ".zy";
         // Todo: replace "." with the project src root
         for entry in WalkDir::new(path.as_ref()).into_iter().filter_map(|e| e.ok()) {
             if entry.path().file_name().unwrap_or_default() == longname.as_str()

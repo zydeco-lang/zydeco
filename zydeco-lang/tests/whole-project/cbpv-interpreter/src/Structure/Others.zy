@@ -1,5 +1,5 @@
-use Std_next/ Std/ String/ (String) end
-use Std_next/ Builtin/ .. end
+use Std/ Std/ String/ (String) end
+use Std/ Builtin/ .. end
 use Syn/ .. end
 use Sem/ .. end
 

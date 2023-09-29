@@ -11,7 +11,7 @@ fn single_file() {
 // #[test]
 // fn driver_2() {
 //     let mut driver = Driver::default();
-//     let _ = driver.load_project("docs/Std_next").map_err(|_e| {
+//     let _ = driver.load_project("docs/Std").map_err(|_e| {
 //         eprintln!("{}", _e);
 //         panic!()
 //     });

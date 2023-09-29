@@ -4,8 +4,8 @@ module Structure end
 
 use Interp/ .. end
 use Utils/ .. end
-use Std_next/ Std/ String/ .. end
-use Std_next/ Std/ OS/ ..  end
+use Std/ Std/ String/ .. end
+use Std/ Std/ OS/ ..  end
 
 
 # An example

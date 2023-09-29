@@ -136,7 +136,7 @@ impl Project {
     //             }
     //         }
     //         ProjectMode::Root => {
-    //             let std_path = home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next"));
+    //             let std_path = home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std"));
     //             if std_path.exists() {}
     //             todo!()
     //         }
@@ -158,7 +158,7 @@ impl Project {
         match self.mode {
             ProjectMode::Managed => {
                 self.parsed.add_file_to_parse(FileLoc(
-                    self.package.root.as_ref().unwrap().join(Path::new("src/Module.zy")),
+                    self.package.root.as_ref().unwrap().join("src/Module.zy"),
                 ));
             },
             ProjectMode::Root => {
@@ -168,12 +168,12 @@ impl Project {
             },
             ProjectMode::RootNoStd => todo!(),
         }
-        if self.package.name != "Std_next" {
+        if self.package.name != "Std" {
             self.parsed.add_file_to_parse(FileLoc(
-                std::env::current_dir().unwrap().join(Path::new("docs/Std_next/src/Module.zy")),
-                // home::home_dir().unwrap().join(Path::new(".zydeco/lib/Std_next/src/Module.zy")),
+                std::env::current_dir().unwrap().join("docs/Std/src/Module.zy"),
+                // home::home_dir().unwrap().join(".zydeco/lib/Std/src/Module.zy"),
             ));
-            self.parsed.module_root.add_child("Std_next".to_string());
+            self.parsed.module_root.add_child("Std".to_string());
         }
         loop {
             if self.parsed.to_parse.is_empty() {
@@ -208,7 +208,7 @@ impl Project {
             todo!()
         } else {
             // else store the resolved files in the target of the project
-            let target_dir = self.package.root.as_ref().unwrap().join(Path::new("target"));
+            let target_dir = self.package.root.as_ref().unwrap().join("target");
             let _ = create_dir_all(&target_dir);
             let mut out = File::create(target_dir.join("res.zyc")).unwrap();
             // let encoded: Vec<u8> = bincode::serialize(&self.resolved.unwrap()).unwrap();

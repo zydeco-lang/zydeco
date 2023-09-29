@@ -2,8 +2,8 @@ use Structure/ Others/ .. end
 use Structure/ Syn/ .. end
 use Structure/ .. end
 use Utils/ .. end
-use Std_next/ Builtin/ .. end
-use Std_next/ Std/ String/ .. end
+use Std/ Builtin/ .. end
+use Std/ Std/ String/ .. end
 
 pub def rec fn lookup (x : String) (g : Env) : Ret(Answer SemVal) =
   match g

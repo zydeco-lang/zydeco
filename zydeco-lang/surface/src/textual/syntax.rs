@@ -37,8 +37,6 @@ pub struct NameRef<T>(pub Vec<ModName>, pub T);
 #[derive(From, Clone, Debug)]
 pub struct Paren<T>(pub Vec<T>);
 
-/* ----------------------------- Bi-Directional ----------------------------- */
-
 /// `(...: t)` for analyze mode motivator
 #[derive(Clone, Debug)]
 pub struct Annotation<Term, Type> {
@@ -261,8 +259,6 @@ pub enum Declaration {
     Main(Main),
 }
 
-//Debug
-
 impl Display for Declaration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -299,8 +295,6 @@ pub enum ReplInput {
 
 #[derive(Clone)]
 pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
-
-//Debug
 
 impl Debug for TopLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

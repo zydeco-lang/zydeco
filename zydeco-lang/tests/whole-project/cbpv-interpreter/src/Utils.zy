@@ -1,7 +1,7 @@
 use Structure/ Others/ .. end
 use Structure/ .. end
-use Std_next/ Std/ String/ .. end
-use Std_next/ Builtin/ .. end
+use Std/ Std/ String/ .. end
+use Std/ Builtin/ .. end
 
 
 

@@ -1,4 +1,4 @@
-use Std_next/ Std/ String/ String end
+use Std/ Std/ String/ String end
 
 data SynComp end
 
