@@ -523,11 +523,10 @@ impl Resolve for Term<NameRef<VarName>> {
                 let arms = arms.resolve(state)?;
                 Ok(CoMatch { arms }.into())
             }
-            Term::Dtor(Destructor(term, name, args)) => {
+            Term::Dtor(Destructor(term, name)) => {
                 let term = term.resolve(state)?;
                 let name = name.resolve(state)?;
-                let args = args.resolve(state)?;
-                Ok(Destructor(term, name, args).into())
+                Ok(Destructor(term, name).into())
             }
             Term::Lit(l) => Ok(l.clone().into()),
         }

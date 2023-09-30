@@ -158,7 +158,7 @@ pub struct CoMatcher<Tail> {
 }
 /// `b .d(a_1, ...)`
 #[derive(Clone, Debug)]
-pub struct Destructor(pub TermId, pub DtorName, pub TermId);
+pub struct Destructor(pub TermId, pub DtorName);
 
 /// literals in term
 #[derive(From, Clone, Debug)]

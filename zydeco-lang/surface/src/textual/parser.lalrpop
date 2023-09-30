@@ -132,6 +132,9 @@ DefId: DefId = <NameDef<Sp<VarName>>> => ctx.def(<>.0);
 //* ------------------------------- Structural ------------------------------- */
 
 Paren<T>: Paren<T> = SepByDelim<"(", ",", <T>, ")"> => <>.into();
+Annotation<Tm, Ty>: Annotation<Tm, Ty> = <term:Tm> ":" <ty:Ty> => {
+    Annotation { term, ty, }
+};
 
 //* --------------------------------- Pattern -------------------------------- */
 
@@ -141,9 +144,7 @@ PatternGen<P>: PatternId = <Sp<P>> => ctx.pattern(<>);
 #[inline]
 PatternId: PatternId = <PatternGen<Pattern>>;
 Pattern: Pattern = {
-    "(" <term:PatternId> ":" <ty:TermId> ")" => Annotation {
-        term, ty,
-    }.into(),
+    "(" <Annotation<PatternId, TermId>> ")" => <>.into(),
     "_" => Hole.into(),
     <DefId> => <>.into(),
     <Paren<PatternId>> => <>.into(),
@@ -217,24 +218,31 @@ Term: Term<NameRef<VarName>> = {
 };
 
 #[inline]
+TermAnnId: TermId = <TermGen<TermAnn>>;
+TermAnn: Term<NameRef<VarName>> = {
+    <Term>,
+    <Annotation<TermId, TermId>> => <>.into(),
+};
+
+#[inline]
 TermParenId: TermId = <TermGen<TermParen>>;
-TermParen: Term<NameRef<VarName>> = <Paren<TermId>> => <>.into();
+TermParen: Term<NameRef<VarName>> = <Paren<TermAnnId>> => <>.into();
 
 #[inline]
 TermRightId: TermId = <TermGen<TermRight>>;
 TermRight: Term<NameRef<VarName>> = {
     TermAtom,
     // application
-    <term:TermRightId> <arg:TermAtomId> => Application(
-        term, vec![arg]
-    ).into(),
+    <term:TermRightId> <arg:TermAtomId> => {
+        Application(term, vec![arg]).into()
+    },
     // arrow
-    <ty_in:TermRightId> "->" <ty_out:TermAtomId> => Arrow(
-        ty_in, ty_out
-    ).into(),
+    <ty_in:TermRightId> "->" <ty_out:TermAtomId> => {
+        Arrow(ty_in, ty_out).into()
+    },
     // destructor
-    <term:TermGen<TermRight>> <name:DtorName> <args:TermParenId> => {
-        Destructor(term, name, args,).into()
+    <term:TermRightId> <name:DtorName> => {
+        Destructor(term, name).into()
     },
 };
 
@@ -243,9 +251,6 @@ TermAtomId: TermId = <TermGen<TermAtom>>;
 TermAtom: Term<NameRef<VarName>> = {
     // paren
     <TermParen> => <>,
-    "(" <term:TermId> ":" <ty:TermId> ")" => Annotation {
-        term, ty,
-    }.into(),
     "_" => Hole.into(),
     <NameRef<VarName>> => Term::Var(<>),
     "{" <TermId> "}" => Thunk(<>).into(),
