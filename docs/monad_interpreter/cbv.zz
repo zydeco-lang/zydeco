@@ -62,7 +62,7 @@ end
 
 data Value where
   | +Bool(Bool)
-  | +Lam(U Env.T, String, Term)
+  | +Lam(U Env/T, String, Term)
 end
 
 data Term where
@@ -83,7 +83,7 @@ def fn raise (exn: Exception) : Interp =
   end
 end
 
-def rec fn interp (env: U Env.O) (t: Term) : Interp =
+def rec fn interp (env: U Env/O) (t: Term) : Interp =
   comatch
   | .run ->
     match t
@@ -123,6 +123,6 @@ end
 
 main
   let term : Term = +App(+Lam("x", +Var("x")), +Bool(+True()));
-  let env : U Env.O = { ! Env.o +Empty() };
+  let env : U Env/O = { ! Env/o +Empty() };
   ! interp env term .run
 end

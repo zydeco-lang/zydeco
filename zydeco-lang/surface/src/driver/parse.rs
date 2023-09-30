@@ -47,7 +47,7 @@ mod tests {
     fn it_works() -> anyhow::Result<()> {
         let pf = ParseFile::with_path("../../docs/monad_interpreter/cbv.zz");
         let ParseFileOut { top, ctx: _ } = pf.run()?;
-        println!("{:?}", top);
+        println!("{:#?}", top);
         Ok(())
     }
 }

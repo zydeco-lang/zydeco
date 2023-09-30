@@ -87,7 +87,7 @@ pub struct GenBind {
 pub struct Abstraction<Tail>(pub Vec<PatternId>, pub Tail);
 /// any application
 #[derive(Clone, Debug)]
-pub struct Application(pub TermId, pub Vec<TermId>);
+pub struct Application(pub TermId, pub TermId);
 /// `rec (x: A) -> b`
 #[derive(Clone, Debug)]
 pub struct Recursion(pub PatternId, pub TermId);
@@ -153,7 +153,7 @@ pub struct CoMatch<Tail> {
 #[derive(Clone, Debug)]
 pub struct CoMatcher<Tail> {
     pub name: DtorName,
-    pub binders: PatternId,
+    pub binders: Vec<PatternId>,
     pub tail: Tail,
 }
 /// `b .d(a_1, ...)`
@@ -264,7 +264,7 @@ pub enum Declaration {
 impl Display for Declaration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Declaration::Type(_) => write!(f, "data/codata"),
+            Declaration::Type(_) => write!(f, "type"),
             Declaration::Define(_) => write!(f, "define"),
             Declaration::Module(m) => write!(f, "module: {}", m),
             Declaration::UseDef(_) => write!(f, "use"),
@@ -289,36 +289,14 @@ impl<T> Modifiers<T> {
     }
 }
 
-#[derive(From)]
+#[derive(From, Clone, Debug)]
 pub enum ReplInput {
     Declaration(Modifiers<Declaration>),
     Term(TermId),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
-
-impl Debug for TopLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let TopLevel(inside) = self;
-        writeln!(f, "Length: {}", inside.len()).unwrap();
-        for Modifiers { inner, .. } in inside {
-            writeln!(f, "{}", inner)?;
-        }
-        writeln!(f, "")
-    }
-}
-
-impl Display for TopLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let TopLevel(inside) = self;
-        writeln!(f, "Length: {}", inside.len()).unwrap();
-        for Modifiers { inner, .. } in inside {
-            writeln!(f, "{}", inner)?;
-        }
-        writeln!(f, "")
-    }
-}
 
 /* ------------------------------- Dependency ------------------------------- */
 

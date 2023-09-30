@@ -172,7 +172,7 @@ Matcher: Matcher<TermId> = {
 };
 
 CoMatcher: CoMatcher<TermId> = {
-    "|" <name:DtorName> <binders:PatternId>
+    "|" <name:DtorName> <binders:PatternId*>
     "->" <tail:TermId> => CoMatcher {
         name, binders, tail
     },
@@ -201,7 +201,7 @@ Term: Term<NameRef<VarName>> = {
     "rec" <binder:PatternId> "->"
         <term:TermId> => Recursion(binder, term).into(),
     // bind
-    "do" <binder:PatternId> "<-" <bindee:TermId> ";" <tail:TermId> => Bind {
+    "do" ("[" TermId "]")? <binder:PatternId> "<-" <bindee:TermId> ";" <tail:TermId> => Bind {
         binder, bindee, tail
     }.into(),
     // pure bind
@@ -234,7 +234,7 @@ TermRight: Term<NameRef<VarName>> = {
     TermAtom,
     // application
     <term:TermRightId> <arg:TermAtomId> => {
-        Application(term, vec![arg]).into()
+        Application(term, arg).into()
     },
     // arrow
     <ty_in:TermRightId> "->" <ty_out:TermAtomId> => {
@@ -255,7 +255,7 @@ TermAtom: Term<NameRef<VarName>> = {
     <NameRef<VarName>> => Term::Var(<>),
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermAtomId> => Force(<>).into(),
-    "ret" <TermAtomId> => Return(<>).into(),
+    "ret" ("[" TermId "]")? <TermAtomId> => Return(<>).into(),
     // constructor
     <name:CtorName> <args:TermParenId> => {
         Constructor(name, args).into()
