@@ -12,9 +12,7 @@ impl Type {
     }
     pub fn elim_thunk(self, ctx: Ctx, span: &Span) -> Option<Type> {
         let ty = self.lub(Type::make_thunk(rc!(span.make(Hole.into()))), ctx, span).ok()?;
-        let SynType::TypeApp(ty_app) = ty.synty else {
-            None?
-        };
+        let SynType::TypeApp(ty_app) = ty.synty else { None? };
         ty_app.elim_thunk_syntax()
     }
     pub fn make_ret(arg: RcType) -> Self {
@@ -22,9 +20,7 @@ impl Type {
     }
     pub fn elim_ret(self, ctx: Ctx, span: &Span) -> Option<Type> {
         let ty = self.lub(Type::make_ret(rc!(span.make(Hole.into()))), ctx, span).ok()?;
-        let SynType::TypeApp(ty_app) = ty.synty else {
-            None?
-        };
+        let SynType::TypeApp(ty_app) = ty.synty else { None? };
         ty_app.elim_ret_syntax()
     }
     pub fn make_os() -> Self {
@@ -66,11 +62,14 @@ impl Ctx {
         let ty = self.resolve_alias(ty, span)?;
         let ty_syn = ty.resolve()?;
         let SynType::TypeApp(TypeApp { tvar: NeutralVar::Var(tvar), args }) = ty_syn else {
-            Err(self.err(span, TypeExpected {
-                context: format!("resolve data"),
-                expected: format!("type application"),
-                found: ty,
-            }))?
+            Err(self.err(
+                span,
+                TypeExpected {
+                    context: format!("resolve data"),
+                    expected: format!("type application"),
+                    found: ty,
+                },
+            ))?
         };
         let data =
             self.data_env.get(&tvar).cloned().ok_or_else(|| {
@@ -84,11 +83,14 @@ impl Ctx {
         let ty = self.resolve_alias(ty, span)?;
         let ty_syn = ty.resolve()?;
         let SynType::TypeApp(TypeApp { tvar: NeutralVar::Var(tvar), args }) = ty_syn else {
-            Err(self.err(span, TypeExpected {
-                context: format!("resolve codata"),
-                expected: format!("type application"),
-                found: ty,
-            }))?
+            Err(self.err(
+                span,
+                TypeExpected {
+                    context: format!("resolve codata"),
+                    expected: format!("type application"),
+                    found: ty,
+                },
+            ))?
         };
         let codata =
             self.codata_env.get(&tvar).cloned().ok_or_else(|| {
@@ -154,18 +156,16 @@ impl TypeCheck for Sp<Type> {
                     match tvar {
                         NeutralVar::Var(tvar) => {
                             let Some(kd) = ctx.type_ctx.get(&tvar) else {
-                                Err(ctx.err(span,
-                                    NameResolveError::UnboundTypeVariable {
-                                        tvar: tvar.to_owned(),
-                                    }.into()
+                                Err(ctx.err(
+                                    span,
+                                    NameResolveError::UnboundTypeVariable { tvar: tvar.to_owned() }
+                                        .into(),
                                 ))?
                             };
                             kd
                         }
                         NeutralVar::Abst(AbstVar(abs)) => {
-                            let Some(kd) = ctx.abst_ctx.get(abs) else {
-                                unreachable!()
-                            };
+                            let Some(kd) = ctx.abst_ctx.get(abs) else { unreachable!() };
                             kd
                         }
                     }

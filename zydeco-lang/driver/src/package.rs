@@ -160,12 +160,10 @@ impl Project {
                 self.parsed.add_file_to_parse(FileLoc(
                     self.package.root.as_ref().unwrap().join("src/Module.zy"),
                 ));
-            },
+            }
             ProjectMode::Root => {
-                self.parsed.add_file_to_parse(FileLoc(
-                    self.package.root.as_ref().unwrap().clone(),
-                ));
-            },
+                self.parsed.add_file_to_parse(FileLoc(self.package.root.as_ref().unwrap().clone()));
+            }
             ProjectMode::RootNoStd => todo!(),
         }
         if self.package.name != "Std" {

@@ -123,7 +123,7 @@ impl TypeCheck for Sp<TermComputation> {
                 }
                 // empty match
                 let Some(ty) = ty_opt else {
-                    Err(ctx.err(span, InconsistentBranches{tys:vec![]}))?
+                    Err(ctx.err(span, InconsistentBranches { tys: vec![] }))?
                 };
                 Step::Done(ty)
             }
@@ -180,11 +180,14 @@ impl TypeCheck for Sp<TermComputation> {
                 let ty_body = body.syn(ctx.clone())?;
                 let ty_body = ctx.resolve_alias(ty_body, span)?;
                 let SynType::Forall(Forall { param: (param, kd), ty }) = ty_body.resolve()? else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("term-typ-application"),
-                        expected: format!("forall"),
-                        found: ty_body,
-                    }))?
+                    Err(ctx.err(
+                        span,
+                        TypeExpected {
+                            context: format!("term-typ-application"),
+                            expected: format!("forall"),
+                            found: ty_body,
+                        },
+                    ))?
                 };
                 arg.ana(kd.inner_clone(), ctx.clone())?;
                 let diff = Env::init(&[(param, kd)], &[arg.clone()], || {
@@ -199,11 +202,14 @@ impl TypeCheck for Sp<TermComputation> {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 let ty_scrut = ctx.resolve_alias(ty_scrut, span)?;
                 let SynType::Exists(Exists { param: (param, kd), ty }) = ty_scrut.resolve()? else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("match-pack"),
-                        expected: format!("exists"),
-                        found: ty_scrut,
-                    }))?
+                    Err(ctx.err(
+                        span,
+                        TypeExpected {
+                            context: format!("match-pack"),
+                            expected: format!("exists"),
+                            found: ty_scrut,
+                        },
+                    ))?
                 };
                 ctx.type_ctx.insert(tvar.clone(), kd.inner_clone());
                 let ty =
@@ -369,11 +375,14 @@ impl TypeCheck for Sp<TermComputation> {
             }
             TermComputation::TyAbsTerm(Abs { param: (tvar_, kd_), body }) => {
                 let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ_syn else {
-                    Err(ctx.err(span, TypeExpected {
-                        context: format!("type abstraction"),
-                        expected: format!("forall"),
-                        found: typ,
-                    }))?
+                    Err(ctx.err(
+                        span,
+                        TypeExpected {
+                            context: format!("type abstraction"),
+                            expected: format!("forall"),
+                            found: typ,
+                        },
+                    ))?
                 };
                 let mut kd = kd.clone();
                 if let Some(kd_) = kd_ {

@@ -3,10 +3,12 @@ use super::*;
 fn single_file() {
     std::env::set_current_dir("../../").unwrap();
     let mut driver = Driver::default();
-    let _ = driver.load_project("zydeco-lang/tests/nonzero-exit-code/interpreter_new.zydeco").map_err(|_e| {
-        eprintln!("{}", _e);
-        panic!()
-    });
+    let _ = driver
+        .load_project("zydeco-lang/tests/nonzero-exit-code/interpreter_new.zydeco")
+        .map_err(|_e| {
+            eprintln!("{}", _e);
+            panic!()
+        });
 }
 // #[test]
 // fn driver_2() {

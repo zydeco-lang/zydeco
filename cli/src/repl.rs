@@ -100,17 +100,13 @@ impl Repl {
             {
                 let c = ZydecoExpr::link_computation(c);
                 let c = zydeco_expr.eval_os(c, &[]);
-                let ds::ProgKont::ExitCode(i) = c.entry else {
-                        unreachable!()
-                    };
+                let ds::ProgKont::ExitCode(i) = c.entry else { unreachable!() };
                 println!("Program exited with code {}", i);
                 Ok(())
             } else if let Some(ty) = ty.clone().elim_ret(zydeco_expr.ctx.clone(), &Span::dummy()) {
                 let c = ZydecoExpr::link_computation(c);
                 let c = zydeco_expr.eval_ret_computation(c);
-                let ds::ProgKont::Ret(value) = c else {
-                        unreachable!()
-                    };
+                let ds::ProgKont::Ret(value) = c else { unreachable!() };
                 println!("{} : {}", value.fmt(), ty.fmt());
                 Ok(())
             } else {

@@ -49,7 +49,8 @@ fn test_template(parent: &'static str, run: bool, f: &[&str]) -> Result<(), Stri
         let mut input = std::io::empty();
         let mut output = std::io::sink();
         let ds::ProgKont::ExitCode(exit_code) =
-        ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[]).entry else {
+            ZydecoFile::eval_virtual_os(m, &mut input, &mut output, &[]).entry
+        else {
             Err("Expected ExitCode".to_string())?
         };
         if exit_code != 0 {
@@ -88,9 +89,10 @@ fn io_test(f: &[&str], iomatch: &IOMatch) -> Result<(), String> {
     let args = iomatch.args.as_slice();
 
     let ds::ProgKont::ExitCode(exit_code) =
-        ZydecoFile::eval_virtual_os(m, &mut input, &mut output, args).entry else {
-            Err("Expected ExitCode".to_string())?
-        };
+        ZydecoFile::eval_virtual_os(m, &mut input, &mut output, args).entry
+    else {
+        Err("Expected ExitCode".to_string())?
+    };
     if exit_code != 0 {
         Err(format!("Non-zero exit code: {}", exit_code))?
     }

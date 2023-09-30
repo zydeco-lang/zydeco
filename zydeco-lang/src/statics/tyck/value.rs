@@ -118,14 +118,15 @@ impl TypeCheck for Sp<TermValue> {
                 Step::Done(typ)
             }
             TermValue::Pack(Pack { ty, body }) => {
-                let SynType::Exists(
-                    Exists { param: (param, kd), ty: ty_body }
-                ) = typ_syn else {
-                    Err(ctx.err(span,TypeExpected {
-                        context: format!("pack"),
-                        expected: format!("exists"),
-                        found: typ,
-                    }))?
+                let SynType::Exists(Exists { param: (param, kd), ty: ty_body }) = typ_syn else {
+                    Err(ctx.err(
+                        span,
+                        TypeExpected {
+                            context: format!("pack"),
+                            expected: format!("exists"),
+                            found: typ,
+                        },
+                    ))?
                 };
                 ty.ana(kd.inner_clone(), ctx.clone())?;
                 let ty_body = ty_body

@@ -73,9 +73,7 @@ impl<'rt> Eval<'rt> for ls::SynComp {
             }
             ls::SynComp::Force(ls::Force(v)) => {
                 let v = v.as_ref().clone().eval(runtime);
-                let SemVal::Thunk(thunk) = v else {
-                    panic!("Force on non-thunk")
-                };
+                let SemVal::Thunk(thunk) = v else { panic!("Force on non-thunk") };
                 runtime.env = thunk.env;
                 Step::Step(thunk.body.as_ref().clone())
             }

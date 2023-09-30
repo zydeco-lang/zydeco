@@ -81,9 +81,7 @@ pub fn fmt_args_derive(input: TokenStream) -> TokenStream {
     let ident = input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let mut variant_idents = Vec::new();
-    let Data::Enum(data) = input.data else {
-        panic!("Only enums can be derived")
-    };
+    let Data::Enum(data) = input.data else { panic!("Only enums can be derived") };
     for variant in data.variants {
         variant_idents.push(variant.ident);
         match &variant.fields {

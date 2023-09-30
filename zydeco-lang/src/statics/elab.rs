@@ -118,7 +118,7 @@ fn desugar_gen_let(
                     ps::Pattern::TypePattern((tvar, kd_param)) => {
                         let Some(kd_dom) = kd_param else {
                             Err(TyckErrorItem::NeedAnnotation {
-                                content: format!("gen let type variable elabrotion")
+                                content: format!("gen let type variable elabrotion"),
                             })?
                         };
                         let kd_dom = kd_dom.clone().try_map(Elaboration::elab)?;
@@ -195,7 +195,7 @@ impl Elaboration<ps::Type> for Type {
                 let t1: Type = Elaboration::elab(t1.inner())?;
                 let t2 = t2.try_map(Elaboration::elab)?;
                 let SynType::TypeApp(mut t1) = t1.synty else {
-                     Err(TyckErrorItem::KindMismatch {
+                    Err(TyckErrorItem::KindMismatch {
                         context: format!("desugaring type application"),
                         expected: KindBase::CType.into(),
                         found: KindBase::VType.into(),
@@ -352,14 +352,14 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                         Err(TyckErrorItem::TypeExpected {
                             context: format!("elaborating recursion"),
                             expected: format!("{{a}}"),
-                            found: ty_
+                            found: ty_,
                         })?
                     };
                     let Some(ty) = ty_app.elim_thunk_syntax() else {
                         Err(TyckErrorItem::TypeExpected {
                             context: format!("elaborating recursion"),
                             expected: format!("{{a}}"),
-                            found: ty_
+                            found: ty_,
                         })?
                     };
                     body = Annotation { term: rc!(span.make(body)), ty: rc!(span.make(ty)) }.into();
