@@ -13,21 +13,33 @@ end
 // end
 
 data Exception where
-  | TyprError()
+  | TypeError()
   | FreeVariable()
 end
 
-alias MExn (A: VType) = Ret (Either Exception A) end
+// alias MExn (A: VType) = Ret (Either Exception A) end
+
+codata MExn (A: VType) where
+  | .mexn(): Ret (Either Exception A)
+end
 
 def fn mexn : Monad MExn =
   comatch
-  | .return() -> fn A a -> ret Right(a)
-  | .bind() -> fn A A' m f ->
-    do x <- ! m;
-    match x
-    | Left(e) -> ret Left(e)
-    | Right(v) -> ! f v
+  | .return() -> fn A a -> comatch | .mexn() -> ret Right(a) end
+  | .bind() -> fn A A' m f -> comatch
+    | .mexn() -> 
+      do x <- ! m .mexn();
+      match x
+      | Left(e) -> ret Left(e)
+      | Right(v) -> ! f v .mexn()
+      end
     end
+  end
+end
+
+def fn mk_mexn (A: VType) (v: Either Exception A) : MExn A =
+  comatch
+  | .mexn() -> ret v
   end
 end
 
@@ -41,7 +53,7 @@ codata EnvO where
   | .extend(): String -> Value -> EnvO
 end
 
-def rec fn envo (env: Env) : EnvO =
+def rec fn envo (env: EnvT) : EnvO =
   comatch
   | .lookup() -> fn x ->
     match env
@@ -75,10 +87,8 @@ codata Interp where
   | .run() : MExn Value
 end
 
-def fn raise (exn: Exception) : Interp =
-  comatch
-  | .run() -> ret Left(exn)
-  end
+def fn raise (exn: Exception) : MExn Value =
+  ! mk_mexn @(Value) Left(exn)
 end
 
 def rec fn interp (env: U EnvO) (t: Term) : Interp =
@@ -97,10 +107,11 @@ def rec fn interp (env: U EnvO) (t: Term) : Interp =
       ! mexn .return() @(Value) Lam(env, x, t)
       // ret[mexn] Lam(env, x, t)
     | App(t1, t2) ->
-      do m1 <- ! interp env t1 .run();
-      ! mexn .bind() @(Value) @(Value) m1 { fn v1 ->
+      do m1 <- ! interp env t1 .run() .mexn();
+      ! mexn .bind() @(Value) @(Value) { ! mk_mexn @(Value) m1 } { fn v1 ->
         // do[mexn] v1 <- ! interp env t1 .run;
-        ! mexn .bind() @(Value) @(Value) m2 { fn v2 ->
+        do m2 <- ! interp env t2 .run() .mexn();
+        ! mexn .bind() @(Value) @(Value) { ! mk_mexn @(Value) m2 } { fn v2 ->
           // do[mexn] v2 <- ! interp env t2 .run;
           match v1
           | Bool(b) -> ! raise TypeError()
@@ -113,8 +124,8 @@ def rec fn interp (env: U EnvO) (t: Term) : Interp =
       ! mexn .return() @(Value) Bool(b)
       // ret[mexn] Bool(b)
     | If(t1, t2, t3) ->
-      do m1 <- ! interp env t1 .run();
-      ! mexn .bind() @(Value) @(Value) m1 { fn v1 ->
+      do m1 <- ! interp env t1 .run() .mexn();
+      ! mexn .bind() @(Value) @(Value) { ! mk_mexn @(Value) m1 } { fn v1 ->
         // do[mexn] v1 <- ! interp env t1 .run;
         match v1
         | Bool(b) ->
@@ -132,6 +143,23 @@ end
 main
   let term : Term = App(Lam("x", Var("x")), Bool(True()));
   let env : U EnvO = { ! envo Empty() };
-  do _ <- ! interp env term .run();
-  ! exit 0
+  do v? <- ! interp env term .run() .mexn();
+  match v?
+  | Left(_) -> ! panic "error"
+  | Right(v) ->
+    match v
+    | Bool(b) ->
+      match b
+      | True() -> ! exit 0
+      | False() -> ! panic "wrong value"
+      end
+    | Lam(_, _, _) -> ! panic "should be bool"
+    end
+  end
+
+  // let w : Term = Lam("x", App(Var("x"), Var("x")));
+  // let term : Term = App(w, w);
+  // let env : U EnvO = { ! envo Empty() };
+  // do v? <- ! interp env term .run() .mexn();
+  // ! panic "unreachable"
 end
