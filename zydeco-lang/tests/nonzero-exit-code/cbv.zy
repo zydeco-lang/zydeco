@@ -18,27 +18,67 @@ data Exception where
 end
 
 data State where
-  | State()
+  | State(Int, String)
 end
 
 alias Kont' (A: VType) =
   forall (R: CType) . U (A -> R) -> R
 end
 
-alias State' (S: VType) (A: VType) =
-  S -> Ret (Pair S A)
+def fn kret (v: Value) : Kont' Value =
+  fn R k -> ! k v
 end
 
-alias Exn (E: VType) (A: VType) =
-  Either E A
+alias State' (A: VType) =
+  State -> Ret (Pair State A)
+end
+
+alias Exn (A: VType) =
+  Either Exception A
 end
 
 alias Mo' (A: VType) =
-  State' State (Exn Exception (U (Kont' A)))
+  State' (Exn (U (Kont' A)))
 end
 
 codata Mo (A: VType) where
   | .mexn(): Mo' A
+end
+
+def fn mk_mexn (v: U (Mo' Value)) : Mo Value =
+  comatch
+  | .mexn() -> ! v
+  end
+end
+
+// def fn stdin (k: U (String -> OS)) : Mo Value =
+//   ! mk_mexn { fn s ->
+//     ret Cons(s, Right())
+//   }
+// end
+
+def fn cnt (v: Value) : Mo Value =
+  ! mk_mexn { fn s ->
+    match s
+    | State(c, o) ->
+      do c' <- ! add c 1;
+      ret Cons(State(c', o), Right({ ! kret v }))
+    end
+  }
+end
+
+def fn stdout (str: String) (v: Value) : Mo Value =
+  ! mk_mexn { fn s ->
+    match s
+    | State(c, o) ->
+      do o' <- ! str_append o str;
+      ret Cons(State(c, o'), Right({ ! kret v }))
+    end
+  }
+end
+
+def fn raise (exn: Exception) : Mo Value =
+  ! mk_mexn { fn s -> ret Cons(s, Left(exn)) }
 end
 
 def fn mexn : Monad Mo =
@@ -46,9 +86,7 @@ def fn mexn : Monad Mo =
   | .return() -> fn A a ->
     comatch
     | .mexn() -> fn s ->
-      ret Cons(s, Right({
-        fn R k -> ! k a
-      }))
+      ret Cons(s, Right({ ! kret a }))
     end
   | .bind() -> fn A A' m f -> comatch
     | .mexn() -> fn s -> 
@@ -63,12 +101,6 @@ def fn mexn : Monad Mo =
         end
       end
     end
-  end
-end
-
-def fn mk_mexn (v: U (Mo' Value)) : Mo Value =
-  comatch
-  | .mexn() -> ! v
   end
 end
 
@@ -114,10 +146,6 @@ end
 
 codata Interp where
   | .run() : Mo Value
-end
-
-def fn raise (exn: Exception) : Mo Value =
-  ! mk_mexn { fn s -> ret Cons(s, Left(exn)) }
 end
 
 def rec fn interp (env: U EnvO) (t: Term) : Interp =
@@ -172,7 +200,7 @@ end
 main
   let term : Term = App(Lam("x", Var("x")), Bool(True()));
   let env : U EnvO = { ! envo Empty() };
-  do sv? <- ! interp env term .run() .mexn() State();
+  do sv? <- ! interp env term .run() .mexn() State(0, "");
   match sv?
   | Cons(s, v?) ->
     match v?
