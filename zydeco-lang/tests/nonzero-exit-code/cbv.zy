@@ -21,17 +21,22 @@ data State where
   | State()
 end
 
-// alias MExn (A: VType) = Ret (Either Exception A) end
+// alias MExn' (A: VType) =
+//   State -> Ret (Either Exception (Pair State (U (forall (R: CType) . U (A -> R) -> R))))
+// end
 
 codata MExn (A: VType) where
-  | .mexn(): State -> Ret (Either Exception (Pair State A))
+  | .mexn(): State -> Ret (Either Exception (Pair State (U (forall (R: CType) . U (A -> R) -> R))))
 end
 
 def fn mexn : Monad MExn =
   comatch
   | .return() -> fn A a ->
     comatch
-    | .mexn() -> fn s -> ret Right(Cons(s, a))
+    | .mexn() -> fn s ->
+      ret Right(Cons(s, {
+        fn R k -> ! k a
+      }))
     end
   | .bind() -> fn A A' m f -> comatch
     | .mexn() -> fn s -> 
@@ -40,14 +45,16 @@ def fn mexn : Monad MExn =
       | Left(e) -> ret Left(e)
       | Right(v) ->
         match v
-        | Cons(s', a) -> ! f a .mexn() s'
+        | Cons(s', k) ->
+          do a <- ! k @(Ret A) { fn a -> ret a };
+          ! f a .mexn() s'
         end
       end
     end
   end
 end
 
-def fn mk_mexn (v: U (State -> Ret (Either Exception (Pair State Value)))) : MExn Value =
+def fn mk_mexn (v: U (State -> Ret (Either Exception (Pair State (U (forall (R: CType) . U (Value -> R) -> R)))))) : MExn Value =
   comatch
   | .mexn() -> ! v
   end
@@ -158,7 +165,7 @@ main
   | Left(_) -> ! panic "error"
   | Right(sv) ->
     match sv
-    | Cons(s, v) ->
+    | Cons(s, k) -> ! k @(OS) { fn v ->
       match v
       | Bool(b) ->
         match b
@@ -167,6 +174,7 @@ main
         end
       | Lam(_, _, _) -> ! panic "should be bool"
       end
+    }
     end
   end
 
