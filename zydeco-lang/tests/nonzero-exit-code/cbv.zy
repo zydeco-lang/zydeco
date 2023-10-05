@@ -3,15 +3,6 @@ codata Monad (M: VType -> CType) where
   | .bind(): forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
 end
 
-// def mret : Monad Ret =
-//   comatch
-//   | .return A a -> ret a
-//   | .bind A A' m f ->
-//     do x <- ! m;
-//     ! f x
-//   end
-// end
-
 data Exception where
   | TypeError()
   | FreeVariable()
@@ -42,12 +33,12 @@ alias Mo' (A: VType) =
 end
 
 codata Mo (A: VType) where
-  | .mexn(): Mo' A
+  | .run(): Mo' A
 end
 
 def fn mk_mexn (v: U (Mo' Value)) : Mo Value =
   comatch
-  | .mexn() -> ! v
+  | .run() -> ! v
   end
 end
 
@@ -85,19 +76,19 @@ def fn mexn : Monad Mo =
   comatch
   | .return() -> fn A a ->
     comatch
-    | .mexn() -> fn s ->
-      ret Cons(s, Right({ ! kret a }))
+    | .run() -> fn s ->
+      ret Cons(s, Right({ fn R k -> ! k a }))
     end
   | .bind() -> fn A A' m f -> comatch
-    | .mexn() -> fn s -> 
-      do x <- ! m .mexn() s;
+    | .run() -> fn s -> 
+      do x <- ! m .run() s;
       match x
       | Cons(s', v) ->
         match v
         | Left(e) -> ret Cons(s', Left(e))
         | Right(k) ->
           do a <- ! k @(Ret A) { fn a -> ret a };
-          ! f a .mexn() s'
+          ! f a .run() s'
         end
       end
     end
@@ -144,63 +135,56 @@ data Term where
   | If(Term, Term, Term)
 end
 
-codata Interp where
-  | .run() : Mo Value
-end
-
-def rec fn interp (env: U EnvO) (t: Term) : Interp =
-  comatch
-  | .run() ->
-    match t
-    | Var(x) ->
-      do x? <- ! env .lookup() x;
-      match x?
-      | None() -> ! raise FreeVariable()
-      | Some(v) ->
-        ! mexn .return() @(Value) v
-        // ret[mexn] v
-      end
-    | Lam(x, t) ->
-      ! mexn .return() @(Value) Lam(env, x, t)
-      // ret[mexn] Lam(env, x, t)
-    | App(t1, t2) ->
-      let m1 = { ! interp env t1 .run() .mexn() };
-      ! mexn .bind() @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
-        // do[mexn] v1 <- ! interp env t1 .run;
-        let m2 = { ! interp env t2 .run() .mexn() };
-        ! mexn .bind() @(Value) @(Value) { ! mk_mexn m2 } { fn v2 ->
-          // do[mexn] v2 <- ! interp env t2 .run;
-          match v1
-          | Bool(b) -> ! raise TypeError()
-          | Lam(env', x, t) ->
-            ! interp { ! env' .extend() x v2 } t .run()
-          end
-        }
-      }
-    | Bool(b) ->
-      ! mexn .return() @(Value) Bool(b)
-      // ret[mexn] Bool(b)
-    | If(t1, t2, t3) ->
-      let m1 = { ! interp env t1 .run() .mexn() };
-      ! mexn .bind() @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
-        // do[mexn] v1 <- ! interp env t1 .run;
+def rec fn interp (env: U EnvO) (t: Term) : Mo Value =
+  match t
+  | Var(x) ->
+    do x? <- ! env .lookup() x;
+    match x?
+    | None() -> ! raise FreeVariable()
+    | Some(v) ->
+      ! mexn .return() @(Value) v
+      // ret[mexn] v
+    end
+  | Lam(x, t) ->
+    ! mexn .return() @(Value) Lam(env, x, t)
+    // ret[mexn] Lam(env, x, t)
+  | App(t1, t2) ->
+    let m1 = { ! interp env t1 .run() };
+    ! mexn .bind() @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
+      // do[mexn] v1 <- ! interp env t1 .run;
+      let m2 = { ! interp env t2 .run() };
+      ! mexn .bind() @(Value) @(Value) { ! mk_mexn m2 } { fn v2 ->
+        // do[mexn] v2 <- ! interp env t2 .run;
         match v1
-        | Bool(b) ->
-          match b
-          | True() -> ! interp env t2 .run()
-          | False() -> ! interp env t3 .run()
-          end
-        | Lam(env', x, t) -> ! raise TypeError()
+        | Bool(b) -> ! raise TypeError()
+        | Lam(env', x, t) ->
+          ! interp { ! env' .extend() x v2 } t
         end
       }
-    end
+    }
+  | Bool(b) ->
+    ! mexn .return() @(Value) Bool(b)
+    // ret[mexn] Bool(b)
+  | If(t1, t2, t3) ->
+    let m1 = { ! interp env t1 .run() };
+    ! mexn .bind() @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
+      // do[mexn] v1 <- ! interp env t1 .run;
+      match v1
+      | Bool(b) ->
+        match b
+        | True() -> ! interp env t2
+        | False() -> ! interp env t3
+        end
+      | Lam(env', x, t) -> ! raise TypeError()
+      end
+    }
   end
 end
 
 main
   let term : Term = App(Lam("x", Var("x")), Bool(True()));
   let env : U EnvO = { ! envo Empty() };
-  do sv? <- ! interp env term .run() .mexn() State(0, "");
+  do sv? <- ! interp env term .run() State(0, "");
   match sv?
   | Cons(s, v?) ->
     match v?
@@ -221,6 +205,6 @@ main
   // let w : Term = Lam("x", App(Var("x"), Var("x")));
   // let term : Term = App(w, w);
   // let env : U EnvO = { ! envo Empty() };
-  // do v? <- ! interp env term .run() .mexn();
+  // do v? <- ! interp env term .run();
   // ! panic "unreachable"
 end
