@@ -21,20 +21,32 @@ data State where
   | State()
 end
 
-// alias MExn' (A: VType) =
-//   State -> Ret (Either Exception (Pair State (U (forall (R: CType) . U (A -> R) -> R))))
-// end
-
-codata MExn (A: VType) where
-  | .mexn(): State -> Ret (Either Exception (Pair State (U (forall (R: CType) . U (A -> R) -> R))))
+alias Kont' (A: VType) =
+  forall (R: CType) . U (A -> R) -> R
 end
 
-def fn mexn : Monad MExn =
+alias State' (S: VType) (A: VType) =
+  S -> Ret (Pair S A)
+end
+
+alias Exn (E: VType) (A: VType) =
+  Either E A
+end
+
+alias Mo' (A: VType) =
+  State' State (Exn Exception (U (Kont' A)))
+end
+
+codata Mo (A: VType) where
+  | .mexn(): Mo' A
+end
+
+def fn mexn : Monad Mo =
   comatch
   | .return() -> fn A a ->
     comatch
     | .mexn() -> fn s ->
-      ret Right(Cons(s, {
+      ret Cons(s, Right({
         fn R k -> ! k a
       }))
     end
@@ -42,10 +54,10 @@ def fn mexn : Monad MExn =
     | .mexn() -> fn s -> 
       do x <- ! m .mexn() s;
       match x
-      | Left(e) -> ret Left(e)
-      | Right(v) ->
+      | Cons(s', v) ->
         match v
-        | Cons(s', k) ->
+        | Left(e) -> ret Cons(s', Left(e))
+        | Right(k) ->
           do a <- ! k @(Ret A) { fn a -> ret a };
           ! f a .mexn() s'
         end
@@ -54,7 +66,7 @@ def fn mexn : Monad MExn =
   end
 end
 
-def fn mk_mexn (v: U (State -> Ret (Either Exception (Pair State (U (forall (R: CType) . U (Value -> R) -> R)))))) : MExn Value =
+def fn mk_mexn (v: U (Mo' Value)) : Mo Value =
   comatch
   | .mexn() -> ! v
   end
@@ -101,11 +113,11 @@ data Term where
 end
 
 codata Interp where
-  | .run() : MExn Value
+  | .run() : Mo Value
 end
 
-def fn raise (exn: Exception) : MExn Value =
-  ! mk_mexn { fn s -> ret Left(exn) }
+def fn raise (exn: Exception) : Mo Value =
+  ! mk_mexn { fn s -> ret Cons(s, Left(exn)) }
 end
 
 def rec fn interp (env: U EnvO) (t: Term) : Interp =
@@ -162,14 +174,14 @@ main
   let env : U EnvO = { ! envo Empty() };
   do sv? <- ! interp env term .run() .mexn() State();
   match sv?
-  | Left(_) -> ! panic "error"
-  | Right(sv) ->
-    match sv
-    | Cons(s, k) -> ! k @(OS) { fn v ->
+  | Cons(s, v?) ->
+    match v?
+    | Left(_) -> ! panic "error"
+    | Right(k) -> ! k @(OS) { fn v ->
       match v
       | Bool(b) ->
         match b
-        | True() -> ! exit 0
+        | True() -> ! write_line "\\^o^/" { ! exit 0 }
         | False() -> ! panic "wrong value"
         end
       | Lam(_, _, _) -> ! panic "should be bool"
