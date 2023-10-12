@@ -155,6 +155,8 @@ mod batch_tests {
     mk_test!(batch_test, oo, &["oo.zydeco"]);
     mk_test!(batch_test, ret, &["ret.zydeco"]);
     mk_test!(batch_test, hash, &["hash.zy"]);
+    mk_test!(batch_test, cbv, &["cbv.zy"]);
+    mk_test!(batch_test, cbpv, &["cbpv.zy"]);
 }
 mod io_tests {
     use super::*;
