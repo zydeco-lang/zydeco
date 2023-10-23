@@ -70,15 +70,13 @@ end
 
 data Value where
   | Bool(Bool)
-  | Thunk(U (Mo Compu~))
+  | Thunk(U (Mo (U Compu)))
 end
 
 codata Compu where
-  | .app(): Value -> Mo Compu~
+  | .app(): Value -> Mo (U Compu)
   | .bind(): Mo Value
 end
-
-alias Compu~ = U Compu end
 
 data SValue where
   | Var(String)
@@ -97,7 +95,7 @@ end
 
 codata Interp where
   | .value(): SValue -> Mo Value
-  | .compu(): SCompu -> Mo Compu~
+  | .compu(): SCompu -> Mo (U Compu)
 end
 
 def rec fn interp (env: U EnvO) : Interp =
@@ -119,7 +117,7 @@ def rec fn interp (env: U EnvO) : Interp =
   | .compu() -> fn sc ->
     match sc
     | Lam(x, sc) ->
-      ! mexn .return() @(Compu~) {
+      ! mexn .return() @(U Compu) {
         comatch
         | .app() -> fn v ->
           ! interp { ! env .extend() x v } .compu() sc
@@ -128,52 +126,52 @@ def rec fn interp (env: U EnvO) : Interp =
       }
     | App(sc, sv) ->
       let m1 = { ! interp env .compu() sc };
-      ! mexn .bind() @(Compu~) @(Compu~) m1 { fn c ->
+      ! mexn .bind() @(U Compu) @(U Compu) m1 { fn c ->
         // do[mexn] c <- ! interp env .compu() sc;
         let m2 = { ! interp env .value() sv };
-        ! mexn .bind() @(Value) @(Compu~) m2 { fn v ->
+        ! mexn .bind() @(Value) @(U Compu) m2 { fn v ->
           // do[mexn] v <- ! interp env .value() sv;
           ! c .app() v
         }
       }
     | Ret(sv) ->
       let m = { ! interp env .value() sv };
-      ! mexn .bind() @(Value) @(Compu~) m { fn v ->
-        ! mexn .return() @(Compu~) {
+      ! mexn .bind() @(Value) @(U Compu) m { fn v ->
+        ! mexn .return() @(U Compu) {
           comatch
-          | .app() -> fn _ -> ! mexn .fail() @(Compu~) TypeError()
+          | .app() -> fn _ -> ! mexn .fail() @(U Compu) TypeError()
           | .bind() -> ! mexn .return() @(Value) v
           end
         }
       }
     | Bind(sc1, x, sc2) ->
       let m1 = { ! interp env .compu() sc1 };
-      ! mexn .bind() @(Compu~) @(Compu~) m1 { fn c1 ->
+      ! mexn .bind() @(U Compu) @(U Compu) m1 { fn c1 ->
         // do[mexn] c1 <- ! interp env .compu() sc1;
         let mv = { ! c1 .bind() };
-        ! mexn .bind() @(Value) @(Compu~) mv { fn v ->
+        ! mexn .bind() @(Value) @(U Compu) mv { fn v ->
           // do[mexn] v <- ! c1 .bind();
           ! interp { ! env .extend() x v } .compu() sc2
         }
       }
     | Force(sv) ->
       let m = { ! interp env .value() sv };
-      ! mexn .bind() @(Value) @(Compu~) m { fn v ->
+      ! mexn .bind() @(Value) @(U Compu) m { fn v ->
         match v
-        | Bool(_) -> ! mexn .fail() @(Compu~) TypeError()
+        | Bool(_) -> ! mexn .fail() @(U Compu) TypeError()
         | Thunk(c) -> ! c
         end
       }
     | If(sv, c1, c2) ->
       let m = { ! interp env .value() sv };
-      ! mexn .bind() @(Value) @(Compu~) m { fn v ->
+      ! mexn .bind() @(Value) @(U Compu) m { fn v ->
         match v
         | Bool(b) ->
           match b
           | True() -> ! interp env .compu() c1
           | False() -> ! interp env .compu() c2
           end
-        | Thunk(_) -> ! mexn .fail() @(Compu~) TypeError()
+        | Thunk(_) -> ! mexn .fail() @(U Compu) TypeError()
         end
       }
     end
