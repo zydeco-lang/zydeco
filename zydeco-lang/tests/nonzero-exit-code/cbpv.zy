@@ -12,12 +12,8 @@ alias MExn (A: VType) (E: VType) (R: CType) =
   U (A -> R) -> U (E -> R) -> R
 end
 
-alias Mo' (A: VType) =
-  MExn A Exception OS
-end
-
 codata Mo (A: VType) where
-  | .run(): Mo' A
+  | .run(): MExn A Exception OS
 end
 
 def fn mk_mexn (A: VType) (v: U (Mo' A)) : Mo A =
