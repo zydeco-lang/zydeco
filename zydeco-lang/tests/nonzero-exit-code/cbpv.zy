@@ -2,7 +2,7 @@ codata Monad (M: VType -> CType) where
   | .return(): forall (A: VType) . A -> M A
   | .bind(): forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
   | .fail(): forall (A: VType) . Exception -> M A
-  | .print(): String -> M Unit
+  // | .print(): String -> M Unit
 end
 
 data Exception where
@@ -10,34 +10,30 @@ data Exception where
   | FreeVariable()
 end
 
-alias MExn (A: VType) (E: VType) (R: CType) =
-  U (A -> R) -> U (E -> R) -> R
-end
-
 codata Mo (A: VType) where
-  | .run(): MExn A Exception OS
+  | .run(): forall (R: CType) . U (A -> R) -> U (Exception -> R) -> R
 end
 
 def fn mexn : Monad Mo =
   comatch
   | .return() -> fn A a ->
     comatch
-    | .run() -> fn ka _ -> ! ka a
+    | .run() -> fn R ka _ -> ! ka a
     end
   | .bind() -> fn A A' m f ->
     comatch
-    | .run() -> fn ka ke ->
-      ! m .run() { fn a -> ! f a .run() ka ke } { fn e -> ! ke e }
+    | .run() -> fn R ka ke ->
+      ! m .run() @(R) { fn a -> ! f a .run() @(R) ka ke } { fn e -> ! ke e }
     end
   | .fail() -> fn A e ->
     comatch
-    | .run() -> fn _ ke -> ! ke e
+    | .run() -> fn R _ ke -> ! ke e
     end
-  | .print() -> fn s ->
-    comatch
-    | .run() -> fn ka _ ->
-      ! write_line s { ! ka Unit() }
-    end
+  // | .print() -> fn s ->
+  //   comatch
+  //   | .run() -> fn R ka _ ->
+  //     ! write_line s { ! ka Unit() }
+  //   end
   end
 end
 
@@ -70,12 +66,19 @@ end
 
 data Value where
   | Bool(Bool)
-  | Thunk(U (Mo (U Compu)))
+  | Thunk(U Compu)
 end
 
 codata Compu where
-  | .app(): Value -> Mo (U Compu)
+  | .app(): Value -> Compu
   | .bind(): Mo Value
+end
+
+def rec fn abort (e: Exception) : Compu =
+  comatch
+  | .app() -> fn _ -> ! abort e
+  | .bind() -> ! mexn .fail() @(Value) e
+  end
 end
 
 data SValue where
@@ -95,7 +98,7 @@ end
 
 codata Interp where
   | .value(): SValue -> Mo Value
-  | .compu(): SCompu -> Mo (U Compu)
+  | .compu(): SCompu -> Compu
 end
 
 def rec fn interp (env: U EnvO) : Interp =
@@ -117,63 +120,45 @@ def rec fn interp (env: U EnvO) : Interp =
   | .compu() -> fn sc ->
     match sc
     | Lam(x, sc) ->
-      ! mexn .return() @(U Compu) {
-        comatch
-        | .app() -> fn v ->
-          ! interp { ! env .extend() x v } .compu() sc
-        | .bind() -> ! mexn .fail() @(Value) TypeError()
-        end
-      }
+      comatch
+      | .app() -> fn v ->
+        ! interp { ! env .extend() x v } .compu() sc
+      | .bind() -> ! mexn .fail() @(Value) TypeError()
+      end
     | App(sc, sv) ->
-      let m1 = { ! interp env .compu() sc };
-      ! mexn .bind() @(U Compu) @(U Compu) m1 { fn c ->
-        // do[mexn] c <- ! interp env .compu() sc;
-        let m2 = { ! interp env .value() sv };
-        ! mexn .bind() @(Value) @(U Compu) m2 { fn v ->
-          // do[mexn] v <- ! interp env .value() sv;
-          ! c .app() v
-        }
-      }
+      let mv = { ! interp env .value() sv } in
+      ! mv .run() @(Compu) { fn v -> ! interp env .compu() sc .app() v } abort
     | Ret(sv) ->
-      let m = { ! interp env .value() sv };
-      ! mexn .bind() @(Value) @(U Compu) m { fn v ->
-        ! mexn .return() @(U Compu) {
-          comatch
-          | .app() -> fn _ -> ! mexn .fail() @(U Compu) TypeError()
-          | .bind() -> ! mexn .return() @(Value) v
-          end
-        }
-      }
+      let rec fn unwind (m: U (Mo Value)) : Compu =
+        comatch
+        | .app() -> fn _ -> ! unwind { ! mexn .fail() @(Value) TypeError() }
+        | .bind() -> ! m
+        end
+      in
+      ! unwind { ! interp env .value() sv }
     | Bind(sc1, x, sc2) ->
-      let m1 = { ! interp env .compu() sc1 };
-      ! mexn .bind() @(U Compu) @(U Compu) m1 { fn c1 ->
-        // do[mexn] c1 <- ! interp env .compu() sc1;
-        let mv = { ! c1 .bind() };
-        ! mexn .bind() @(Value) @(U Compu) mv { fn v ->
-          // do[mexn] v <- ! c1 .bind();
-          ! interp { ! env .extend() x v } .compu() sc2
-        }
-      }
+      let mv = { ! interp env .compu() sc1 .bind() } in
+      ! mv .run() @(Compu) { fn v -> ! interp { ! env .extend() x v } .compu() sc2 } abort
     | Force(sv) ->
-      let m = { ! interp env .value() sv };
-      ! mexn .bind() @(Value) @(U Compu) m { fn v ->
+      let mv = { ! interp env .value() sv } in
+      ! mv .run() @(Compu) { fn v ->
         match v
-        | Bool(_) -> ! mexn .fail() @(U Compu) TypeError()
+        | Bool(_) -> ! abort TypeError()
         | Thunk(c) -> ! c
         end
-      }
+      } abort
     | If(sv, c1, c2) ->
-      let m = { ! interp env .value() sv };
-      ! mexn .bind() @(Value) @(U Compu) m { fn v ->
+      let mv = { ! interp env .value() sv };
+      ! mv .run() @(Compu) { fn v ->
         match v
         | Bool(b) ->
           match b
           | True() -> ! interp env .compu() c1
           | False() -> ! interp env .compu() c2
           end
-        | Thunk(_) -> ! mexn .fail() @(U Compu) TypeError()
+        | Thunk(_) -> ! abort TypeError()
         end
-      }
+      } abort
     end
   end
 end
@@ -187,16 +172,14 @@ main
     | FreeVariable() -> ! panic "free variable"
     end
   in
-  ! interp env .compu() term .run() {
-    fn c -> ! c .bind() .run() {
-      fn v -> match v
-      | Bool(b) ->
-        match b
-        | True() -> ! write_line "\\^o^/" { ! exit 0 }
-        | False() -> ! panic "wrong value"
-        end
-      | Thunk(_) -> ! panic "should be bool"
+  ! interp env .compu() term .bind() .run() @(OS) {
+    fn v -> match v
+    | Bool(b) ->
+      match b
+      | True() -> ! write_line "\\^o^/" { ! exit 0 }
+      | False() -> ! panic "wrong value"
       end
-    } report
+    | Thunk(_) -> ! panic "should be bool"
+    end
   } report
 end
