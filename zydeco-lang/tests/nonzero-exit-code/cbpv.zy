@@ -1,6 +1,8 @@
 codata Monad (M: VType -> CType) where
   | .return(): forall (A: VType) . A -> M A
   | .bind(): forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
+  | .fail(): forall (A: VType) . Exception -> M A
+  | .print(): String -> M Unit
 end
 
 data Exception where
@@ -16,24 +18,26 @@ codata Mo (A: VType) where
   | .run(): MExn A Exception OS
 end
 
-def fn mk_mexn (A: VType) (v: U (Mo' A)) : Mo A =
-  comatch
-  | .run() -> ! v
-  end
-end
-
-def fn raise (A: VType) (e: Exception) : Mo A =
-  ! mk_mexn @(A) { fn _ ke -> ! ke e }
-end
-
 def fn mexn : Monad Mo =
   comatch
   | .return() -> fn A a ->
-    ! mk_mexn @(A) { fn ka _ -> ! ka a }
+    comatch
+    | .run() -> fn ka _ -> ! ka a
+    end
   | .bind() -> fn A A' m f ->
-    ! mk_mexn @(A') { fn ka ke ->
+    comatch
+    | .run() -> fn ka ke ->
       ! m .run() { fn a -> ! f a .run() ka ke } { fn e -> ! ke e }
-    }
+    end
+  | .fail() -> fn A e ->
+    comatch
+    | .run() -> fn _ ke -> ! ke e
+    end
+  | .print() -> fn s ->
+    comatch
+    | .run() -> fn ka _ ->
+      ! write_line s { ! ka Unit() }
+    end
   end
 end
 
@@ -103,7 +107,7 @@ def rec fn interp (env: U EnvO) : Interp =
     | Var(x) ->
       do x? <- ! env .lookup() x;
       match x?
-      | None() -> ! raise @(Value) FreeVariable()
+      | None() -> ! mexn .fail() @(Value) FreeVariable()
       | Some(v) ->
         ! mexn .return() @(Value) v
       end
@@ -119,7 +123,7 @@ def rec fn interp (env: U EnvO) : Interp =
         comatch
         | .app() -> fn v ->
           ! interp { ! env .extend() x v } .compu() sc
-        | .bind() -> ! raise @(Value) TypeError()
+        | .bind() -> ! mexn .fail() @(Value) TypeError()
         end
       }
     | App(sc, sv) ->
@@ -137,7 +141,7 @@ def rec fn interp (env: U EnvO) : Interp =
       ! mexn .bind() @(Value) @(Compu~) m { fn v ->
         ! mexn .return() @(Compu~) {
           comatch
-          | .app() -> fn _ -> ! raise @(Compu~) TypeError()
+          | .app() -> fn _ -> ! mexn .fail() @(Compu~) TypeError()
           | .bind() -> ! mexn .return() @(Value) v
           end
         }
@@ -156,7 +160,7 @@ def rec fn interp (env: U EnvO) : Interp =
       let m = { ! interp env .value() sv };
       ! mexn .bind() @(Value) @(Compu~) m { fn v ->
         match v
-        | Bool(_) -> ! raise @(Compu~) TypeError()
+        | Bool(_) -> ! mexn .fail() @(Compu~) TypeError()
         | Thunk(c) -> ! c
         end
       }
@@ -169,7 +173,7 @@ def rec fn interp (env: U EnvO) : Interp =
           | True() -> ! interp env .compu() c1
           | False() -> ! interp env .compu() c2
           end
-        | Thunk(_) -> ! raise @(Compu~) TypeError()
+        | Thunk(_) -> ! mexn .fail() @(Compu~) TypeError()
         end
       }
     end
