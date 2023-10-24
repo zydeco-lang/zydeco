@@ -38,9 +38,9 @@ pub enum TyckErrorItem {
     NeedAnnotation { content: String },
     #[error("Subsumption for sort {sort} failed")]
     Subsumption { sort: &'static str },
-    #[error("Inconsistent matchers.\nUnexpected:\n{unexpected:?}Missing:\n{missing:?}")]
+    #[error("Inconsistent matchers.\nUnexpected:\n{unexpected:?}\nMissing:\n{missing:?}")]
     InconsistentMatchers { unexpected: Vec<CtorV>, missing: Vec<CtorV> },
-    #[error("Inconsistent comatchers.\nUnexpected:\n{unexpected:?}, Missing:\n{missing:?}")]
+    #[error("Inconsistent comatchers.\nUnexpected:\n{unexpected:?}\nMissing:\n{missing:?}")]
     InconsistentComatchers { unexpected: Vec<DtorV>, missing: Vec<DtorV> },
     #[error("Inconsistent branches. Expected: {tys:?}")]
     InconsistentBranches { tys: Vec<Type> },

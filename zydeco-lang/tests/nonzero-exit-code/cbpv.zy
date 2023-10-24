@@ -5,6 +5,10 @@ codata Monad (M: VType -> CType) where
   // | .print(): String -> M Unit
 end
 
+codata AlgebraValue (M: VType -> CType) (B: CType) where
+  | .bindA(): U (M Value) -> U (Value -> B) -> B
+end
+
 data Exception where
   | TypeError()
   | FreeVariable()
@@ -34,6 +38,18 @@ def fn mexn : Monad Mo =
   //   | .run() -> fn R ka _ ->
   //     ! write_line s { ! ka Unit() }
   //   end
+  end
+end
+
+def rec fn malg : AlgebraValue Mo Compu =
+  comatch
+  | .bindA() -> fn m f ->
+    ! m .run() @(Compu) f { fn e ->
+      rec unwind -> comatch
+      | .app() -> fn _ -> ! unwind
+      | .bind() -> ! mexn .fail() @(Value) e
+      end
+    }
   end
 end
 
@@ -127,7 +143,7 @@ def rec fn interp (env: U EnvO) : Interp =
       end
     | App(sc, sv) ->
       let mv = { ! interp env .value() sv } in
-      ! mv .run() @(Compu) { fn v -> ! interp env .compu() sc .app() v } abort
+      ! malg .bindA() mv { fn v -> ! interp env .compu() sc .app() v }
     | Ret(sv) ->
       let rec fn unwind (m: U (Mo Value)) : Compu =
         comatch
@@ -138,18 +154,20 @@ def rec fn interp (env: U EnvO) : Interp =
       ! unwind { ! interp env .value() sv }
     | Bind(sc1, x, sc2) ->
       let mv = { ! interp env .compu() sc1 .bind() } in
-      ! mv .run() @(Compu) { fn v -> ! interp { ! env .extend() x v } .compu() sc2 } abort
+      ! malg .bindA() mv { fn v ->
+        ! interp { ! env .extend() x v } .compu() sc2
+      }
     | Force(sv) ->
       let mv = { ! interp env .value() sv } in
-      ! mv .run() @(Compu) { fn v ->
+      ! malg .bindA() mv { fn v ->
         match v
         | Bool(_) -> ! abort TypeError()
         | Thunk(c) -> ! c
         end
-      } abort
+      }
     | If(sv, c1, c2) ->
-      let mv = { ! interp env .value() sv };
-      ! mv .run() @(Compu) { fn v ->
+      let mv = { ! interp env .value() sv } in
+      ! malg .bindA() mv { fn v ->
         match v
         | Bool(b) ->
           match b
@@ -158,28 +176,46 @@ def rec fn interp (env: U EnvO) : Interp =
           end
         | Thunk(_) -> ! abort TypeError()
         end
-      } abort
+      }
     end
   end
 end
 
 main
-  let term: SCompu = If(Bool(True()), Ret(Bool(True())), Ret(Bool(False())));
-  let env : U EnvO = { ! envo Empty() };
+  let env : U EnvO = { ! envo Empty() } in
   let fn report (e: Exception) : OS =
     match e
     | TypeError() -> ! panic "type error"
     | FreeVariable() -> ! panic "free variable"
     end
   in
-  ! interp env .compu() term .bind() .run() @(OS) {
-    fn v -> match v
-    | Bool(b) ->
-      match b
-      | True() -> ! write_line "\\^o^/" { ! exit 0 }
-      | False() -> ! panic "wrong value"
+  let fn value-eq (v1: Value) (v2: Value) (k: U OS) : OS =
+    let bool-value-panic = { ! panic "wrong bool value" } in
+    let thunk-panic = { ! panic "thunks are not comparable" } in
+    match v1
+    | Bool(b1) ->
+      match v2
+      | Bool(b2) ->
+        do eq? <- ! bool_eq b1 b2;
+        match eq?
+        | True() -> ! write_line "\\^o^/" k
+        | False() -> ! bool-value-panic
+        end
+      | Thunk(_) -> ! thunk-panic
       end
-    | Thunk(_) -> ! panic "should be bool"
+    | Thunk(_) -> ! thunk-panic
     end
-  } report
+  in
+  let fn demo (term: SCompu) (ans: Value) (k: U OS): OS =
+    ! interp env .compu() term .bind() .run() @(OS) {
+      fn v -> ! value-eq v ans k
+    } report
+  in
+  let term1: SCompu = If(Bool(True()), Ret(Bool(True())), Ret(Bool(False()))) in
+  let ans1: Value = Bool(True()) in
+  let term2: SCompu = App(Lam("x", Ret(Var("x"))), Bool(True())) in
+  let ans2: Value = Bool(True()) in
+  ! demo term1 ans1 {
+  ! demo term2 ans2 {
+  ! exit 0 }}
 end
