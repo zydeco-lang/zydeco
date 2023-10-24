@@ -16,8 +16,15 @@ use zydeco_surface::textual::{
     lexer::Lexer,
     parser::TopLevelParser,
     syntax::{
-        Ctx, Declaration, Dependency, ModName, Modifiers, Module, ModuleTree, NameDef, NameRef,
-        TopLevel,
+        Ctx,
+        Declaration,
+        Dependency,
+        ModName,
+        Modifiers,
+        Module,
+        NameDef,
+        // NameRef,
+        TopLevel, ModuleTree,
     },
 };
 use zydeco_utils::span::FileInfo;
@@ -184,8 +191,8 @@ impl ParsedMap {
         // add the module "XX" end to the to-parse list
         for to_parse_file in parsed.ctx.deps.clone() {
             match to_parse_file {
-                Dependency::DirectImport(_) => todo!(),
-                Dependency::ManagedImport(_) => todo!(),
+                // Dependency::DirectImport(_) => todo!(),
+                // Dependency::ManagedImport(_) => todo!(),
                 Dependency::Hierachy(modnames) => {
                     let filename = modnames.last().unwrap();
                     if let Some(path) = self.find_mod_file(filename, path.parent().unwrap()) {
@@ -200,19 +207,19 @@ impl ParsedMap {
                         });
                     }
                 }
-                Dependency::Use(NameRef(mod_path, _)) => {
-                    if mod_path.is_empty() {
-                        continue;
-                    } else {
-                        let ModName(filename) = &mod_path[0];
-                        if self.all_names.contains(filename) {
-                            self.deps_record
-                                .entry(fid)
-                                .or_insert(HashSet::new())
-                                .insert(mod_path.into_iter().map(|ModName(s)| s).collect());
-                        }
-                    }
-                }
+                // Dependency::Use(NameRef(mod_path, _)) => {
+                //     if mod_path.is_empty() {
+                //         continue;
+                //     } else {
+                //         let ModName(filename) = &mod_path[0];
+                //         if self.all_names.contains(filename) {
+                //             self.deps_record
+                //                 .entry(fid)
+                //                 .or_insert(HashSet::new())
+                //                 .insert(mod_path.into_iter().map(|ModName(s)| s).collect());
+                //         }
+                //     }
+                // }
             }
         }
 

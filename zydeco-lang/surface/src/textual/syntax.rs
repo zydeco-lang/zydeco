@@ -5,7 +5,7 @@ use im::HashSet;
 use slotmap::{SecondaryMap, SlotMap};
 use std::{
     fmt::{Debug, Display},
-    path::PathBuf,
+    // path::PathBuf,
 };
 use zydeco_utils::span::FileInfo;
 pub use zydeco_utils::span::{Sp, Span};
@@ -302,10 +302,10 @@ pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 
 #[derive(Clone, Debug)]
 pub enum Dependency {
-    DirectImport(PathBuf),
-    ManagedImport(PathBuf),
+    // DirectImport(PathBuf),
+    // ManagedImport(PathBuf),
     Hierachy(Vec<String>),
-    Use(NameRef<UseEnum>),
+    // Use(NameRef<UseEnum>),
 }
 
 /* --------------------------------- Context -------------------------------- */
@@ -399,8 +399,8 @@ impl Ctx {
         self.deps.push(Dependency::Hierachy(stack));
     }
 
-    pub fn update_dep_pairs(&mut self, use_def: &NameRef<UseEnum>) {
-        self.deps.push(Dependency::Use(use_def.clone()));
+    pub fn update_dep_pairs(&mut self, _use_def: &NameRef<UseEnum>) {
+        // self.deps.push(Dependency::Use(use_def.clone()));
     }
 
     pub fn exit_mod(&mut self) {

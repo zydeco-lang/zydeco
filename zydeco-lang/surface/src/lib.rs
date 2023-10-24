@@ -2,6 +2,7 @@
 #![allow(clippy::useless_format)]
 
 pub mod driver {
+    pub mod proj;
     pub mod parse;
     pub mod err;
 }

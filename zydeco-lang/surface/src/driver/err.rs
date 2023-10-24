@@ -11,11 +11,13 @@ pub enum SurfaceError {
     ProjectInvalid,
     #[error("Project name mismatch: `{}` != `{}`", .name, .config_name)]
     ProjectNameMismatch { name: String, config_name: String },
+    #[error("Ambiguous module: `{}` in path: {}", .name, .path.display() )]
+    AmbiguousModule { path: PathBuf, name: String },
+    #[error("Module not found: `{}` in path: {}", .name, .path.display() )]
+    ModuleNotFound { name: String, path: PathBuf },
     // Todo: use codespan-reporting
     #[error("Parse error:\n{0}")]
     ParseError(String),
     #[error("Resolve errors:\n{0}")]
     ResolveErrors(String),
-    #[error("Module not found: `{:?}` in file: {}", .mod_name, .path.display() )]
-    ModuleNotFound { mod_name: Vec<String>, path: PathBuf },
 }

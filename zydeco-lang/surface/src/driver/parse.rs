@@ -5,28 +5,20 @@ use crate::textual::{
     parser::TopLevelParser,
     syntax::{Ctx, TopLevel},
 };
-use std::{
-    path::{Path, PathBuf},
-    rc::Rc,
-};
+use std::{path::Path, rc::Rc};
 use zydeco_utils::span::FileInfo;
 
 pub struct ParseFile {
-    path: PathBuf,
-}
-pub struct ParseFileOut {
     pub top: TopLevel,
     pub ctx: Ctx,
 }
 
 impl ParseFile {
-    pub fn with_path(path: impl AsRef<Path>) -> Self {
-        Self { path: path.as_ref().to_owned() }
-    }
-    pub fn run(&self) -> Result<ParseFileOut, SurfaceError> {
-        let source = std::fs::read_to_string(&self.path)
-            .map_err(|_| SurfaceError::PathNotFound { path: self.path.clone() })?;
-        let file_info = FileInfo::new(&source, Rc::new(self.path.clone()));
+    pub fn run(path: impl AsRef<Path>) -> Result<ParseFile, SurfaceError> {
+        let path = path.as_ref().to_owned();
+        let source = std::fs::read_to_string(&path)
+            .map_err(|_| SurfaceError::PathNotFound { path: path.clone() })?;
+        let file_info = FileInfo::new(&source, Rc::new(path.clone()));
 
         let mut ctx = Ctx::default();
         let top = TopLevelParser::new().parse(&source, &mut ctx, Lexer::new(&source)).map_err(
@@ -36,7 +28,7 @@ impl ParseFile {
         )?;
         ctx.span_map(&file_info);
 
-        Ok(ParseFileOut { top, ctx })
+        Ok(ParseFile { top, ctx })
     }
 }
 
@@ -45,8 +37,7 @@ mod tests {
     use super::*;
     #[test]
     fn it_works() -> anyhow::Result<()> {
-        let pf = ParseFile::with_path("../../docs/monad_interpreter/cbv.zz");
-        let ParseFileOut { top, ctx: _ } = pf.run()?;
+        let ParseFile { top, ctx: _ } = ParseFile::run("../../docs/monad_interpreter/cbv.zz")?;
         println!("{:#?}", top);
         Ok(())
     }

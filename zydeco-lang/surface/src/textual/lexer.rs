@@ -6,8 +6,6 @@ use std::fmt::{Debug, Display};
 #[logos(skip r"//.*\n")]
 #[logos(skip r"#.*\n")]
 #[logos(skip r"[ \t\n\f]+")]
-// #[regex(r"#.*\n", logos::skip, priority = 2)]
-// #[regex(r"[ \t\n\f]+", logos::skip, priority = 1)]
 pub enum Tok<'input> {
     #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
     UpperIdent(&'input str),
