@@ -41,18 +41,6 @@ def fn mexn : Monad Mo =
   end
 end
 
-def rec fn malg : AlgebraValue Mo Compu =
-  comatch
-  | .bindA() -> fn m f ->
-    ! m .run() @(Compu) f { fn e ->
-      rec unwind -> comatch
-      | .app() -> fn _ -> ! unwind
-      | .bind() -> ! mexn .fail() @(Value) e
-      end
-    }
-  end
-end
-
 data EnvT where
   | Empty()
   | Extend(String, Value, EnvT)
@@ -90,10 +78,17 @@ codata Compu where
   | .bind(): Mo Value
 end
 
-def rec fn abort (e: Exception) : Compu =
-  comatch
-  | .app() -> fn _ -> ! abort e
+def fn abort (e: Exception) : Compu =
+  rec unwind -> comatch
+  | .app() -> fn _ -> ! unwind
   | .bind() -> ! mexn .fail() @(Value) e
+  end
+end
+
+def rec fn malg : AlgebraValue Mo Compu =
+  comatch
+  | .bindA() -> fn m f ->
+    ! m .run() @(Compu) f abort
   end
 end
 
