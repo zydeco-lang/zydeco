@@ -1,12 +1,13 @@
-codata Monad (M: VType -> CType) where
+// A monad structure that supports fail and print as well
+codata MonadErrPrint (M: VType -> CType) where
   | .return(): forall (A: VType) . A -> M A
   | .bind(): forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
   | .fail(): forall (A: VType) . Exception -> M A
-  // | .print(): String -> M Unit
+  | .print(): String -> M Unit
 end
 
-codata Algebra (M: VType -> CType) (N: VType -> CType) where
-  | .bindA(): forall (A: VType) . U (M A) -> U (A -> N A) -> N A
+codata Algebra (M: VType -> CType) (B: CType) where
+  | .bindA(): forall (A: VType) . U (M A) -> U (A -> B) -> B
 end
 
 data Exception where
@@ -14,30 +15,31 @@ data Exception where
   | FreeVariable()
 end
 
-codata MExn (A: VType) where
-  | .run(): forall (R: CType) . U (A -> R) -> U (Exception -> R) -> R
+// Continuation-based error monad
+codata MExnOS (A: VType) where
+  | .run(): U (A -> OS) -> U (Exception -> OS) -> OS
 end
 
-def fn mexn : Monad MExn =
+def fn mexn : MonadErrPrint MExnOS =
   comatch
   | .return() -> fn A a ->
     comatch
-    | .run() -> fn R ka _ -> ! ka a
+    | .run() -> fn ka _ -> ! ka a
     end
   | .bind() -> fn A A' m f ->
     comatch
-    | .run() -> fn R ka ke ->
-      ! m .run() @(R) { fn a -> ! f a .run() @(R) ka ke } { fn e -> ! ke e }
+    | .run() -> fn ka ke ->
+      ! m .run() { fn a -> ! f a .run() ka ke } { fn e -> ! ke e }
     end
   | .fail() -> fn A e ->
     comatch
-    | .run() -> fn R _ ke -> ! ke e
+    | .run() -> fn _ ke -> ! ke e
     end
-  // | .print() -> fn s ->
-  //   comatch
-  //   | .run() -> fn R ka _ ->
-  //     ! write_line s { ! ka Unit() }
-  //   end
+  | .print() -> fn s ->
+    comatch
+    | .run() -> fn ka _ ->
+      ! write_line s { ! ka Unit() }
+    end
   end
 end
 
@@ -70,25 +72,30 @@ end
 
 data Value where
   | Bool(Bool)
-  | Thunk(U (Compu Value))
+  | Thunk(U (Compu))
 end
 
-codata Compu (A: VType) where
-  | .app(): A -> Compu A
-  | .bind(): MExn A
+codata Compu where
+  | .app(): Value -> Compu
+  | .bind(): MExnOS Value
 end
 
-def fn abort (A: VType) (e: Exception) : Compu A =
+def fn abort (e: Exception) : Compu =
   rec unwind -> comatch
   | .app() -> fn _ -> ! unwind
-  | .bind() -> ! mexn .fail() @(A) e
+  | .bind() -> ! mexn .fail() @(Value) e
   end
 end
 
-def rec fn malg : Algebra MExn Compu =
+def rec fn malg : Algebra MExnOS Compu =
   comatch
-  | .bindA() -> fn A m f ->
-    ! m .run() @(Compu A) f { ! abort @(A) }
+  | .bindA() -> fn A m f -> // m : U (MExnOS A), f: U (A -> Compu)
+    comatch
+    | .app() -> fn a -> // goal: Compu
+      ! malg .bindA() @(A) m { fn v -> ! f v .app() a }
+    | .bind() -> // goal: MExnOS Value, use ordinary bind
+      ! mexn .bind() @(A) @(Value) m { fn x -> ! f x .bind() }
+    end
   end
 end
 
@@ -108,8 +115,8 @@ data SCompu where
 end
 
 codata Interp where
-  | .value(): SValue -> MExn Value
-  | .compu(): SCompu -> Compu Value
+  | .value(): SValue -> MExnOS Value
+  | .compu(): SCompu -> Compu
 end
 
 def rec fn interp (env: U EnvO) : Interp =
@@ -140,7 +147,7 @@ def rec fn interp (env: U EnvO) : Interp =
       let mv = { ! interp env .value() sv } in
       ! malg .bindA() @(Value) mv { fn v -> ! interp env .compu() sc .app() v }
     | Ret(sv) ->
-      let rec fn unwind (m: U (MExn Value)) : Compu Value =
+      let rec fn unwind (m: U (MExnOS Value)) : Compu =
         comatch
         | .app() -> fn _ -> ! unwind { ! mexn .fail() @(Value) TypeError() }
         | .bind() -> ! m
@@ -156,7 +163,7 @@ def rec fn interp (env: U EnvO) : Interp =
       let mv = { ! interp env .value() sv } in
       ! malg .bindA() @(Value) mv { fn v ->
         match v
-        | Bool(_) -> ! abort @(Value) TypeError()
+        | Bool(_) -> ! abort TypeError()
         | Thunk(c) -> ! c
         end
       }
@@ -169,7 +176,7 @@ def rec fn interp (env: U EnvO) : Interp =
           | True() -> ! interp env .compu() c1
           | False() -> ! interp env .compu() c2
           end
-        | Thunk(_) -> ! abort @(Value) TypeError()
+        | Thunk(_) -> ! abort TypeError()
         end
       }
     end
@@ -202,13 +209,17 @@ main
     end
   in
   let fn demo (term: SCompu) (ans: Value) (k: U OS): OS =
-    ! interp env .compu() term .bind() .run() @(OS) {
+    ! interp env .compu() term .bind() .run() {
       fn v -> ! value-eq v ans k
     } report
   in
+  // if true then ret true else ret false
   let term1: SCompu = If(Bool(True()), Ret(Bool(True())), Ret(Bool(False()))) in
   let ans1: Value = Bool(True()) in
-  let term2: SCompu = App(Lam("x", Ret(Var("x"))), Bool(True())) in
+  // (do x <- ret True in \b -> if b then x else false) True
+  let term2: SCompu = App(Bind(
+    Ret(Bool(True())), "x", Lam("b", If(Var("b"), Ret(Var("x")), Ret(Bool(False()))))
+  ), Bool(True())) in
   let ans2: Value = Bool(True()) in
   ! demo term1 ans1 {
   ! demo term2 ans2 {
