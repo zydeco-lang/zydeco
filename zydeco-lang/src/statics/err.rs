@@ -24,13 +24,13 @@ impl fmt::Display for TyckError {
 pub enum TyckErrorItem {
     #[error("Unbound variable {var}")]
     UnboundVar { var: TermV },
-    #[error("Kind mismatch. In {context}, expected {}, but got {}", .expected.fmt(), .found.fmt())]
+    #[error("We got {} during {context}, but {} is expected", .found.fmt(), .expected.fmt())]
     KindMismatch { context: String, expected: Kind, found: Kind },
-    #[error("Type mismatch. In {context}, expected {}, but got {}", .expected.fmt(), .found.fmt())]
+    #[error("We got {} during {context}, but {} is expected", .found.fmt(), .expected.fmt())]
     TypeMismatch { context: String, expected: Type, found: Type },
-    #[error("In {context}, expected {expected}, but got {}", .found.fmt())]
+    #[error("We got {} during {context}, but {expected} is expected", .found.fmt())]
     TypeExpected { context: String, expected: String, found: Type },
-    #[error("In {context}, expected {expected} arguments but got {found}")]
+    #[error("We got {found} arguments during {context}, but {expected} arguments are expected")]
     ArityMismatch { context: String, expected: usize, found: usize },
     #[error("Applying type arguments to {}, which is not a type abstraction", .found.fmt())]
     ApplyToNonTypeAbs { found: Type },

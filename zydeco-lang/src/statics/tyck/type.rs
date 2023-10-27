@@ -65,7 +65,7 @@ impl Ctx {
             Err(self.err(
                 span,
                 TypeExpected {
-                    context: format!("resolve data"),
+                    context: format!("data resolution"),
                     expected: format!("type application"),
                     found: ty,
                 },
@@ -86,7 +86,7 @@ impl Ctx {
             Err(self.err(
                 span,
                 TypeExpected {
-                    context: format!("resolve codata"),
+                    context: format!("codata resolution"),
                     expected: format!("type application"),
                     found: ty,
                 },
