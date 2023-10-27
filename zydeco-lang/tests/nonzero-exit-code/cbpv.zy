@@ -5,8 +5,8 @@ codata Monad (M: VType -> CType) where
   // | .print(): String -> M Unit
 end
 
-codata AlgebraValue (M: VType -> CType) (B: CType) where
-  | .bindA(): U (M Value) -> U (Value -> B) -> B
+codata Algebra (M: VType -> CType) (N: VType -> CType) where
+  | .bindA(): forall (A: VType) . U (M A) -> U (A -> N A) -> N A
 end
 
 data Exception where
@@ -14,11 +14,11 @@ data Exception where
   | FreeVariable()
 end
 
-codata Mo (A: VType) where
+codata MExn (A: VType) where
   | .run(): forall (R: CType) . U (A -> R) -> U (Exception -> R) -> R
 end
 
-def fn mexn : Monad Mo =
+def fn mexn : Monad MExn =
   comatch
   | .return() -> fn A a ->
     comatch
@@ -70,25 +70,25 @@ end
 
 data Value where
   | Bool(Bool)
-  | Thunk(U Compu)
+  | Thunk(U (Compu Value))
 end
 
-codata Compu where
-  | .app(): Value -> Compu
-  | .bind(): Mo Value
+codata Compu (A: VType) where
+  | .app(): A -> Compu A
+  | .bind(): MExn A
 end
 
-def fn abort (e: Exception) : Compu =
+def fn abort (A: VType) (e: Exception) : Compu A =
   rec unwind -> comatch
   | .app() -> fn _ -> ! unwind
-  | .bind() -> ! mexn .fail() @(Value) e
+  | .bind() -> ! mexn .fail() @(A) e
   end
 end
 
-def rec fn malg : AlgebraValue Mo Compu =
+def rec fn malg : Algebra MExn Compu =
   comatch
-  | .bindA() -> fn m f ->
-    ! m .run() @(Compu) f abort
+  | .bindA() -> fn A m f ->
+    ! m .run() @(Compu A) f { ! abort @(A) }
   end
 end
 
@@ -108,8 +108,8 @@ data SCompu where
 end
 
 codata Interp where
-  | .value(): SValue -> Mo Value
-  | .compu(): SCompu -> Compu
+  | .value(): SValue -> MExn Value
+  | .compu(): SCompu -> Compu Value
 end
 
 def rec fn interp (env: U EnvO) : Interp =
@@ -138,9 +138,9 @@ def rec fn interp (env: U EnvO) : Interp =
       end
     | App(sc, sv) ->
       let mv = { ! interp env .value() sv } in
-      ! malg .bindA() mv { fn v -> ! interp env .compu() sc .app() v }
+      ! malg .bindA() @(Value) mv { fn v -> ! interp env .compu() sc .app() v }
     | Ret(sv) ->
-      let rec fn unwind (m: U (Mo Value)) : Compu =
+      let rec fn unwind (m: U (MExn Value)) : Compu Value =
         comatch
         | .app() -> fn _ -> ! unwind { ! mexn .fail() @(Value) TypeError() }
         | .bind() -> ! m
@@ -149,27 +149,27 @@ def rec fn interp (env: U EnvO) : Interp =
       ! unwind { ! interp env .value() sv }
     | Bind(sc1, x, sc2) ->
       let mv = { ! interp env .compu() sc1 .bind() } in
-      ! malg .bindA() mv { fn v ->
+      ! malg .bindA() @(Value) mv { fn v ->
         ! interp { ! env .extend() x v } .compu() sc2
       }
     | Force(sv) ->
       let mv = { ! interp env .value() sv } in
-      ! malg .bindA() mv { fn v ->
+      ! malg .bindA() @(Value) mv { fn v ->
         match v
-        | Bool(_) -> ! abort TypeError()
+        | Bool(_) -> ! abort @(Value) TypeError()
         | Thunk(c) -> ! c
         end
       }
     | If(sv, c1, c2) ->
       let mv = { ! interp env .value() sv } in
-      ! malg .bindA() mv { fn v ->
+      ! malg .bindA() @(Value) mv { fn v ->
         match v
         | Bool(b) ->
           match b
           | True() -> ! interp env .compu() c1
           | False() -> ! interp env .compu() c2
           end
-        | Thunk(_) -> ! abort TypeError()
+        | Thunk(_) -> ! abort @(Value) TypeError()
         end
       }
     end
