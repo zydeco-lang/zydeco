@@ -44,7 +44,7 @@ impl Lub for Kind {
                     ctx.err(
                         span,
                         KindMismatch {
-                            context: format!("lub"),
+                            context: format!("finding type least-upper-bound"),
                             expected: lhs.into(),
                             found: rhs.into(),
                         },
@@ -57,7 +57,7 @@ impl Lub for Kind {
                     ctx.err(
                         span,
                         ArityMismatch {
-                            context: format!("lub"),
+                            context: format!("finding type least-upper-bound"),
                             expected: lhs.params.len(),
                             found: rhs.params.len(),
                         },
@@ -74,12 +74,9 @@ impl Lub for Kind {
             }
             _ => {
                 Err(ctx
-                    .err(span, KindMismatch { context: format!("lub"), expected: lhs, found: rhs }))
+                    .err(span, KindMismatch { context: format!("finding type least-upper-bound"), expected: lhs, found: rhs }))
             }
         }
-        // bool_test(self == rhs, || {
-        //     ctx.err(span, KindMismatch { context: format!("lub"), expected: self, found: rhs })
-        // })?;
     }
 }
 
@@ -91,7 +88,7 @@ impl Lub for Type {
         let err = {
             let expected = lhs.clone();
             let found = rhs.clone();
-            || ctx.err(span, TypeMismatch { context: format!("lub"), expected, found })
+            || ctx.err(span, TypeMismatch { context: format!("finding type least-upper-bound"), expected, found })
         };
         let lhs = ctx.resolve_alias(lhs, span)?;
         let lhs_syn = lhs.resolve()?;
