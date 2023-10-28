@@ -239,7 +239,7 @@ impl TypeCheck for Sp<TermComputation> {
         span.make(typ.clone()).ana(KindBase::CType.into(), ctx.clone())?;
         Ok(match self.inner_ref() {
             TermComputation::Annotation(Annotation { term, ty }) => {
-                let ty_lub = Type::lub(ty.inner_clone(), typ, ctx.clone(), span)?;
+                let ty_lub = Type::lub(typ, ty.inner_clone(), ctx.clone(), span)?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
             TermComputation::Ret(Ret(v)) => {
@@ -254,7 +254,7 @@ impl TypeCheck for Sp<TermComputation> {
                     )
                 })?;
                 let ty = Type::make_ret(rc!(span.make(v.ana(ty_body, ctx.clone())?)));
-                let typ_lub = Type::lub(ty, typ, ctx.clone(), span)?;
+                let typ_lub = Type::lub(typ, ty, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
             TermComputation::Force(Force(v)) => {
@@ -400,7 +400,6 @@ impl TypeCheck for Sp<TermComputation> {
             | TermComputation::MatchPack(_) => {
                 // subsumption
                 let typ_syn = self.syn(ctx.clone())?;
-                // println!("{} /\\ {}", typ.fmt(), typ_syn.fmt());
                 let typ_lub = Type::lub(typ, typ_syn, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
