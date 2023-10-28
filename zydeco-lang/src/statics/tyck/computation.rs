@@ -114,7 +114,7 @@ impl TypeCheck for Sp<TermComputation> {
                 let mut ty_opt: Option<Type> = None;
                 for ty in &ty_arms {
                     if let Some(ty_opt) = &ty_opt {
-                        ty_opt.clone().lub(ty.clone(), ctx.clone(), span).map_err(|_| {
+                        Type::lub(ty_opt.clone(), ty.clone(), ctx.clone(), span).map_err(|_| {
                             ctx.err(span, InconsistentBranches { tys: ty_arms.clone() })
                         })?;
                     } else {
@@ -387,7 +387,7 @@ impl TypeCheck for Sp<TermComputation> {
                 let mut kd = kd.clone();
                 if let Some(kd_) = kd_ {
                     let kd_ = kd_.inner.clone();
-                    kd = kd.try_map(|kd| kd.lub(kd_, ctx.clone(), span))?;
+                    kd = kd.try_map(|kd| Kind::lub(kd, kd_, ctx.clone(), span))?;
                 }
                 let abst_var = ctx.fresh(kd.inner_clone());
                 ctx.type_env.insert(tvar_.clone(), abst_var.clone().into());
