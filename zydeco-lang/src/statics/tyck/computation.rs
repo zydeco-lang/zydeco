@@ -174,7 +174,7 @@ impl TypeCheck for Sp<TermComputation> {
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
             TermComputation::TyAbsTerm(_) => {
-                Err(ctx.err(span, NeedAnnotation { content: format!("typabs") }))?
+                Err(ctx.err(span, NeedAnnotation { content: format!("type-abstraction") }))?
             }
             TermComputation::TyAppTerm(App { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
@@ -183,7 +183,7 @@ impl TypeCheck for Sp<TermComputation> {
                     Err(ctx.err(
                         span,
                         TypeExpected {
-                            context: format!("term-typ-application"),
+                            context: format!("type-application"),
                             expected: format!("forall"),
                             found: ty_body,
                         },
@@ -193,7 +193,7 @@ impl TypeCheck for Sp<TermComputation> {
                 let diff = Env::init(&[(param, kd)], &[arg.clone()], || {
                     ctx.err(
                         span,
-                        ArityMismatch { context: format!("typapp"), expected: 1, found: 1 },
+                        ArityMismatch { context: format!("type-application"), expected: 1, found: 1 },
                     )
                 })?;
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
