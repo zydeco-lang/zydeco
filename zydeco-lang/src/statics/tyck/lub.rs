@@ -44,7 +44,7 @@ impl Lub for Kind {
                     ctx.err(
                         span,
                         KindMismatch {
-                            context: format!("finding type least-upper-bound"),
+                            context: format!("finding least-upper-bound for types"),
                             expected: lhs.into(),
                             found: rhs.into(),
                         },
@@ -57,7 +57,7 @@ impl Lub for Kind {
                     ctx.err(
                         span,
                         ArityMismatch {
-                            context: format!("finding type least-upper-bound"),
+                            context: format!("finding least-upper-bound for types"),
                             expected: lhs.params.len(),
                             found: rhs.params.len(),
                         },
@@ -72,10 +72,14 @@ impl Lub for Kind {
                 let kd = Box::new(lhs.kd.try_map(|kd| kd.lub(rhs.kd.inner(), ctx, span))?);
                 Ok(TypeArity { params, kd }.into())
             }
-            _ => {
-                Err(ctx
-                    .err(span, KindMismatch { context: format!("finding type least-upper-bound"), expected: lhs, found: rhs }))
-            }
+            _ => Err(ctx.err(
+                span,
+                KindMismatch {
+                    context: format!("finding least-upper-bound for types"),
+                    expected: lhs,
+                    found: rhs,
+                },
+            )),
         }
     }
 }
@@ -88,7 +92,16 @@ impl Lub for Type {
         let err = {
             let expected = lhs.clone();
             let found = rhs.clone();
-            || ctx.err(span, TypeMismatch { context: format!("finding type least-upper-bound"), expected, found })
+            || {
+                ctx.err(
+                    span,
+                    TypeMismatch {
+                        context: format!("finding least-upper-bound for types"),
+                        expected,
+                        found,
+                    },
+                )
+            }
         };
         let lhs = ctx.resolve_alias(lhs, span)?;
         let lhs_syn = lhs.resolve()?;
@@ -112,41 +125,49 @@ impl Lub for Type {
                 let body = lhs.body.inner_clone().lub(rhs.body.inner_clone(), ctx, span)?;
                 Ok(TypeAbs { params: lhs.params, body: rc!(lhs.body.span().make(body)) }.into())
             }
-            (SynType::TypeApp(TypeApp { tvar: NeutralVar::Var(tvar), args: _ }), _)
-                if ctx.type_env.contains_key(&tvar) =>
-            {
-                // lhs is a type variable
-                let ty = ctx.clone().type_env[&tvar].clone();
-                ty.lub(rhs, ctx, span)
-            }
-            (SynType::TypeApp(TypeApp { tvar: NeutralVar::Abst(abst_var), args }), _)
-                if args.is_empty() =>
-            {
-                // lhs is an abstract type variable
-                Type::from(abst_var).lub(rhs, ctx, span)
-            }
-            (_, SynType::TypeApp(TypeApp { tvar: NeutralVar::Var(tvar), args: _ }))
-                if ctx.type_env.contains_key(&tvar) =>
-            {
-                // rhs is a type variable
-                let ty = ctx.clone().type_env[&tvar].clone();
-                lhs.lub(ty, ctx, span)
-            }
-            (_, SynType::TypeApp(TypeApp { tvar: NeutralVar::Abst(abst_var), args }))
-                if args.is_empty() =>
-            {
-                // rhs is an abstract type variable
-                lhs.lub(Type::from(abst_var), ctx, span)
-            }
-            (SynType::TypeApp(lhs), SynType::TypeApp(rhs)) => {
-                bool_test(lhs.tvar == rhs.tvar, err)?;
-                let mut args = vec![];
-                for (lhs, rhs) in (lhs.args.iter()).zip(rhs.args.iter()) {
-                    let arg = Self::lub(lhs.inner_clone(), rhs.inner_clone(), ctx.clone(), span)?;
-                    args.push(rc!(lhs.span().make(arg)));
+            (
+                SynType::TypeApp(TypeApp { tvar: tvar_lhs, args: args_lhs }),
+                SynType::TypeApp(TypeApp { tvar: tvar_rhs, args: args_rhs }),
+            ) => match (tvar_lhs, tvar_rhs) {
+                (NeutralVar::Var(lhs), NeutralVar::Var(rhs)) => {
+                    bool_test(lhs == rhs, err)?;
+                    let mut args = vec![];
+                    for (lhs, rhs) in (args_lhs.iter()).zip(args_rhs.iter()) {
+                        let arg =
+                            Self::lub(lhs.inner_clone(), rhs.inner_clone(), ctx.clone(), span)?;
+                        args.push(rc!(lhs.span().make(arg)));
+                    }
+                    Ok(TypeApp { tvar: NeutralVar::Var(lhs), args }.into())
                 }
-                Ok(TypeApp { tvar: lhs.tvar, args }.into())
-            }
+                (NeutralVar::Var(lhs), NeutralVar::Abst(_)) => {
+                    let Some(ty) = ctx.clone().type_env.get(&lhs).cloned() else {
+                        Err(ctx.err(
+                            span,
+                            NameResolveError::UnboundTypeVariable { tvar: lhs.clone() }.into(),
+                        ))?
+                    };
+                    Type::lub(ty, rhs.clone(), ctx, span)
+                }
+                (NeutralVar::Abst(_), NeutralVar::Var(rhs)) => {
+                    let Some(ty) = ctx.clone().type_env.get(&rhs).cloned() else {
+                        Err(ctx.err(
+                            span,
+                            NameResolveError::UnboundTypeVariable { tvar: rhs.clone() }.into(),
+                        ))?
+                    };
+                    Type::lub(lhs.clone(), ty, ctx, span)
+                }
+                (NeutralVar::Abst(lhs), NeutralVar::Abst(rhs)) => {
+                    bool_test(lhs == rhs, err)?;
+                    let mut args = vec![];
+                    for (lhs, rhs) in (args_lhs.iter()).zip(args_rhs.iter()) {
+                        let arg =
+                            Self::lub(lhs.inner_clone(), rhs.inner_clone(), ctx.clone(), span)?;
+                        args.push(rc!(lhs.span().make(arg)));
+                    }
+                    Ok(TypeApp { tvar: NeutralVar::Abst(lhs), args }.into())
+                }
+            },
             (
                 SynType::Forall(Forall { param: (tvar, kd), ty }),
                 SynType::Forall(Forall { param: (tvar_, kd_), ty: ty_ }),

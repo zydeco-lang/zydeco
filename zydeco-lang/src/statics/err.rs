@@ -22,8 +22,6 @@ impl fmt::Display for TyckError {
 
 #[derive(Error, Clone, Debug)]
 pub enum TyckErrorItem {
-    #[error("Unbound variable {var}")]
-    UnboundVar { var: TermV },
     #[error("We got {} during {context}, but {} is expected", .found.fmt(), .expected.fmt())]
     KindMismatch { context: String, expected: Kind, found: Kind },
     #[error("We got {} during {context}, but {} is expected", .found.fmt(), .expected.fmt())]
@@ -87,7 +85,8 @@ impl fmt::Display for Frame {
         writeln!(f, "When {}:", self.context)?;
         writeln!(f, "\t{}", self.term)?;
         writeln!(f, "\t({})", self.info)?;
-        // writeln!(f, "\t@({})", self.blame)?;
+        // uncomment the following to emit the rust implementation blame
+        writeln!(f, "\t@({})", self.blame)?;
         Ok(())
     }
 }
