@@ -128,6 +128,7 @@ mod chk_tests {
     mk_test!(check_test, bigmac, &["bigmac.zy"]);
     mk_test!(check_test, optiont, &["optiont.zy"]);
     mk_test!(check_test, hot, &["hot.zy"]);
+    mk_test!(check_test, alg, &["alg.zy"]);
 }
 mod batch_tests {
     // Note: to use rust-analyzer's debug feature on tests, you can replace

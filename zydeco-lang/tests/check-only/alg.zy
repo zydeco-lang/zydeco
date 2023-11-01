@@ -1,0 +1,29 @@
+codata Alg (M: VType -> CType) (B: CType) where
+  | .bindAlg(): forall (A: VType) . U (M A) -> U (A -> B) -> B
+end
+
+def fn bind-arrow (M: VType -> CType) (B: CType) (alg: U (Alg M B)) (A: VType) : Alg M (A -> B) =
+  comatch
+  | .bindAlg() -> fn A' m f -> fn a ->
+    ! alg .bindAlg() @(A) m { fn a' -> ! f a' a }
+  end
+end
+
+codata With (B1: CType) (B2: CType) where
+  | .left(): B1
+  | .right(): B2
+end
+
+def fn bind-with (M: VType -> CType) (B1: CType) (B2: CType) (alg1: U (Alg M B1)) (alg2: U (Alg M B2)): Alg M (With B1 B2) =
+  comatch
+  | .bindAlg() -> fn A m f ->
+    comatch
+    | .left() -> ! alg1 .bindAlg() @(A) m { fn a -> ! f a .left() }
+    | .right() -> ! alg2 .bindAlg() @(A) m { fn a -> ! f a .right() }
+    end
+  end
+end
+
+main
+  ! exit 0
+end
