@@ -31,7 +31,7 @@ impl TypeCheck for Sp<TermValue> {
                 Step::AnaMode((ctx, term), ty.inner_clone())
             }
             TermValue::Var(x) => Step::Done(
-                ctx.term_ctx.get(x).cloned().ok_or(ctx.err(span, UnboundVar { var: x.clone() }))?,
+                ctx.term_ctx.get(x).cloned().ok_or(ctx.err(span, NameResolveError::UnboundTermVariable { var: x.clone() }.into()))?,
             ),
             TermValue::Thunk(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("thunk") }))?

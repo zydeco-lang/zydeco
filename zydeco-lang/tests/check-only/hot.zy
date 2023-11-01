@@ -1,0 +1,25 @@
+codata Monad (M: VType -> CType) where
+  | .return(): forall (A: VType) . A -> M A
+  | .bind(): forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
+end
+
+codata MonadTrans (T: (VType -> CType) -> VType -> CType) where
+  | .lift(): forall (M: VType -> CType) (A: VType) . U (Monad M) -> U (M A) -> T M A
+end
+
+codata ReaderT (R: VType) (M: VType -> CType) (A: VType) where
+  | .run(): R -> M A
+end
+
+def fn reader_t_trans (R: VType) : MonadTrans (ReaderT R) =
+  comatch
+  | .lift() -> fn (M: VType -> CType) (A: VType) (mo: U (Monad M)) (m: U (M A)) ->
+    comatch
+    | .run() -> fn r -> ! m
+    end
+  end
+end
+
+main
+  ! exit 0
+end

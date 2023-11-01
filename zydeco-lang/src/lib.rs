@@ -21,7 +21,6 @@ pub mod surface {
     pub mod resolve {
         pub mod err;
         // pub mod elab;
-        pub mod map;
     }
 }
 use surface::*;
