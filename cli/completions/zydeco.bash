@@ -171,4 +171,4 @@ _zydeco() {
     esac
 }
 
-complete -F _zydeco -o bashdefault -o default zydeco
+complete -F _zydeco -o nosort -o bashdefault -o default zydeco
