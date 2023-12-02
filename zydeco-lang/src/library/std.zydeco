@@ -177,6 +177,14 @@ module Std where
       | Cons(A, List A)
     end
 
+    pub def fn match_list (A: VType) (B : CType) (xs: List A) : U B -> U(A -> List A -> B) -> B =
+        fn knil kcons ->
+        match xs
+        | Nil() -> ! knil
+        | Cons(x,xs) -> ! kcons x xs
+        end
+    end
+
     pub def rec foldl : forall (A : VType) (R : VType) . List A -> Thunk(A -> R -> Ret R) -> R -> Ret R =
       fn A R l step s ->
         match l
@@ -186,7 +194,14 @@ module Std where
           ! foldl @(A) @(R) xs step s'
         end
     end
-    
+
+    pub def rec fn reverse (A : VType) (xs : List A) : Ret(List A) =
+      ! foldl @(A) @(List A)
+              xs
+              {fn x xs -> ret Cons(x, xs)}
+              Nil()
+    end
+
     def rec fn get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
       match xs
       | Nil() -> ret None()
@@ -213,6 +228,25 @@ module Std where
       | .run(): Ret (LListV A (LList A))
     end
 
+
+    pub def fn nil (A : VType) : LList A =
+      comatch | .run() -> ret Nil() end
+    end
+
+    pub def fn cons (A : VType) (hd : A) (tl : U (LList A)) : LList A =
+      comatch
+      | .run() -> ret Cons(hd, tl)
+      end
+    end
+
+    pub def fn match_ll (A: VType) (R : CType) (xs : U(LList A)) (knil : U R) (kcons : U(A -> U(LList A) -> R)) : R =
+        do v <- ! xs .run();
+        match v
+        | Nil()       -> ! knil
+        | Cons(x, xs) -> ! kcons x xs
+        end
+    end
+
     pub def rec fn foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
       do xsv <- ! xs .run();
       match xsv
@@ -236,9 +270,28 @@ module Std where
       end
     end
 
+    pub def fn foldl' (A : VType) (R : VType) (f : U(A -> R -> F R)) (acc: R) (xs : U(LList A)) : F R =
+      ! foldr @(A) @(R -> F R) xs
+        { fn x -> ret x }
+        { fn x k acc ->
+          do acc <- ! f x acc;
+          ! k acc
+        }
+        acc
+    end
 
-    pub def fn nil (A : VType) : LList A =
-      comatch | .run() -> ret Nil() end
+    pub def fn take (A: VType) (n : Int) (xs : U(LList A)) : LList A =
+      ! foldr @(A) @(Int -> LList A) xs
+              {fn _ -> ! nil @(A) }
+              {fn x take_xs n ->
+                 !if~ @(LList A)
+                     { ! int_lt n 1 }
+                     { ! nil @(A) }
+                     { do n <- ! sub n 1;
+                       ! cons @(A) x { ! take_xs n }
+                     }
+              }
+              n
     end
 
     pub def rec fn forever (A : VType) (x : A) : LList A =
@@ -263,12 +316,6 @@ module Std where
       end
     end
 
-    pub def fn cons (A : VType) (hd : A) (tl : U (LList A)) : LList A =
-      comatch 
-      | .run() -> ret Cons(hd, tl)
-      end
-    end
-
     pub def fn append (A : VType) (xs : U(LList A)) (ys : U(LList A)) : LList A =
       ! foldr @(A) @(LList A) xs ys {fn x b -> ! cons @(A) x b}
     end
@@ -290,6 +337,26 @@ module Std where
         fn x b ->
           do x <- ! f x;
           ! cons @(R) x b
+      }
+    end
+
+    pub def fn filterMap (A: VType) (A' : VType) (f : U(A -> F(Option A'))) (xs : U(LList A)) : LList A' =
+      ! foldr @(A) @(LList A') xs {! nil @(A')} {
+        fn x l ->
+          do o <- ! f x;
+          match o
+          | None()   -> ! l
+          | Some(x') -> ! cons @(A') x' l
+          end
+      }
+    end
+
+    pub def fn filter (A : VType) (f : U(A -> F Bool)) : U(LList A) -> LList A =
+      ! filterMap @(A) @(A) { fn x ->
+        ! if~ @(Ret(Option A))
+              { ! f x }
+              { ret Some(x) }
+              { ret None() }
       }
     end
 
@@ -354,8 +421,11 @@ module Std where
       end
     end
 
-    pub def fn reverse (A : VType) (xs : U(LList A)) : LList A =
-      ! foldr @(A) @(LList A) xs {! nil @(A)} {! cons @(A)}
+    pub def fn ll_to_list (A : VType) (xs : U(LList A)) : Ret (List A) =
+      do sx <- !foldl' @(A) @(List A) {fn x xs -> ret Cons(x,xs)}
+                      Nil()
+                      xs;
+      ! reverse @(A) sx
     end
 
     pub def rec fn repeat (A : VType) (x : A) (n : Int) : LList A =
