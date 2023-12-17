@@ -50,7 +50,7 @@ pub struct Thunk<B: ComputationT>(pub B);
 #[derive(From, Clone, Debug, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
-    String(String),
+    String(Vec<char>),
     Char(char),
 }
 

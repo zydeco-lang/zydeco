@@ -89,7 +89,9 @@ pub fn str_append(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [ZValue::Literal(Literal::String(a)), ZValue::Literal(Literal::String(b))] => {
-            ret(Literal::String(a.to_owned() + b.as_str()).into())
+            let mut a = a.to_owned();
+            a.extend(b);
+            ret(Literal::String(a).into())
         }
         _ => unreachable!(""),
     }
@@ -100,14 +102,14 @@ pub fn str_split_once(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [ZValue::Literal(Literal::String(s)), ZValue::Literal(Literal::Char(p))] => {
-            match s.split_once(p.to_owned()) {
+            match s.into_iter().collect::<String>().split_once(p.to_owned()) {
                 Some((a, b)) => ret(ctor(
                     "Some",
                     vec![rc!(ctor(
                         "Cons",
                         vec![
-                            rc!(Literal::String(a.to_owned()).into()),
-                            rc!(Literal::String(b.to_owned()).into()),
+                            rc!(Literal::String(a.chars().collect()).into()),
+                            rc!(Literal::String(b.chars().collect()).into()),
                         ],
                     ))],
                 )),
@@ -158,7 +160,7 @@ pub fn str_index(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [ZValue::Literal(Literal::String(a)), ZValue::Literal(Literal::Int(b))] => {
-            ret(Literal::Char(a.chars().nth(*b as usize).unwrap()).into())
+            ret(Literal::Char(*a.into_iter().nth(*b as usize).unwrap()).into())
         }
         _ => unreachable!(""),
     }
@@ -168,7 +170,9 @@ pub fn int_to_str(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        [ZValue::Literal(Literal::Int(a))] => ret(Literal::String(a.to_string()).into()),
+        [ZValue::Literal(Literal::Int(a))] => {
+            ret(Literal::String(a.to_string().chars().collect()).into())
+        }
         _ => unreachable!(""),
     }
 }
@@ -177,7 +181,9 @@ pub fn char_to_str(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        [ZValue::Literal(Literal::Char(a))] => ret(Literal::String(a.to_string()).into()),
+        [ZValue::Literal(Literal::Char(a))] => {
+            ret(Literal::String(a.to_string().chars().collect()).into())
+        }
         _ => unreachable!(""),
     }
 }
@@ -195,7 +201,9 @@ pub fn str_to_int(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
-        [ZValue::Literal(Literal::String(s))] => ret(Literal::Int(s.parse().unwrap()).into()),
+        [ZValue::Literal(Literal::String(s))] => {
+            ret(Literal::Int(s.into_iter().collect::<String>().parse().unwrap()).into())
+        }
         _ => unreachable!(""),
     }
 }
@@ -206,7 +214,7 @@ pub fn write_str(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         [ZValue::Literal(Literal::String(s)), e @ ZValue::Thunk(..)] => {
-            write!(w, "{}", s).unwrap();
+            write!(w, "{}", s.into_iter().collect::<String>()).unwrap();
             Ok(Force(rc!(e.clone().into())).into())
         }
         _ => unreachable!(""),
@@ -224,7 +232,7 @@ pub fn read_line(
             Ok(dtor(
                 rc!(Force(rc!(e.clone().into())).into()),
                 "arg",
-                vec![Literal::String(line).into()],
+                vec![Literal::String(line.chars().collect()).into()],
             ))
         }
         _ => unreachable!(""),
@@ -241,7 +249,7 @@ pub fn read_till_eof(
             Ok(dtor(
                 rc!(Force(rc!(e.clone().into())).into()),
                 "arg",
-                vec![Literal::String(line).into()],
+                vec![Literal::String(line.chars().collect()).into()],
             ))
         }
         _ => unreachable!(""),
@@ -255,8 +263,10 @@ pub fn arg_list(
         [k] => {
             let mut z_arg_list = ctor("Nil", vec![]);
             for arg in argv.iter().rev() {
-                z_arg_list =
-                    ctor("Cons", vec![rc!(Literal::String(arg.clone()).into()), rc!(z_arg_list)]);
+                z_arg_list = ctor(
+                    "Cons",
+                    vec![rc!(Literal::String(arg.chars().collect()).into()), rc!(z_arg_list)],
+                );
             }
             Ok(dtor(rc!(Force(rc!(k.clone().into())).into()), "arg", vec![z_arg_list]))
         }

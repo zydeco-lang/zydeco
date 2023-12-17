@@ -260,7 +260,7 @@ ComatchBr: Comatcher<DtorV, NameDef, Sp<TermComputation>> = {
 
 Literal: Literal = {
     <Int> => <>.into(),
-    <String> => <>.into(),
+    <String> => <>.chars().collect::<Vec<_>>().into(),
     <Char> => <>.into(),
 };
 

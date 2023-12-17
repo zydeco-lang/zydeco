@@ -178,7 +178,9 @@ impl FmtArgs for Literal {
     fn fmt_args(&self, _fargs: Args) -> String {
         match self {
             Literal::Int(i) => format!("{}", i),
-            Literal::String(s) => format!("\"{}\"", s.escape_debug()),
+            Literal::String(s) => {
+                format!("\"{}\"", s.into_iter().collect::<String>().escape_debug())
+            }
             Literal::Char(c) => format!("'{}'", c.escape_debug()),
         }
     }
