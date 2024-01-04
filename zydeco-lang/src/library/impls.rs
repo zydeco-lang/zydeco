@@ -215,6 +215,7 @@ pub fn write_str(
     match args.as_slice() {
         [ZValue::Literal(Literal::String(s)), e @ ZValue::Thunk(..)] => {
             write!(w, "{}", s.into_iter().collect::<String>()).unwrap();
+            w.flush().unwrap();
             Ok(Force(rc!(e.clone().into())).into())
         }
         _ => unreachable!(""),

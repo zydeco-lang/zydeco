@@ -497,22 +497,27 @@ module Std where
     pub extern def int_lt : Thunk(Int -> Int -> Ret Bool) end
     pub extern def int_gt : Thunk(Int -> Int -> Ret Bool) end
 
-    pub def int_max : Thunk(Int -> Int -> Ret Int) = {
+    pub def fn int_le (x: Int) (y: Int) : Ret Bool =
+      ! not~ { ! int_gt x y }
+    end
+
+    pub def fn int_max : Int -> Int -> Ret Int =
       fn x y ->
         do b <- ! int_gt x y;
         match b
         | True() -> ret x
         | False() -> ret y
         end
-    } end
-    pub def int_min : Thunk(Int -> Int -> Ret Int) = {
+    end
+
+    pub def fn int_min : Int -> Int -> Ret Int =
       fn x y ->
         do b <- ! int_lt x y;
         match b
         | True() -> ret x
         | False() -> ret y
         end
-    } end
+    end
   end
 
   module String where
