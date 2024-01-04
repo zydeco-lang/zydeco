@@ -185,6 +185,14 @@ TermComputation: TermComputation = {
     <body:Box<Sp<TermComputation>>> => Do {
         var, comp, body,
     }.into(),
+    "do" <body:Box<Sp<TermComputation>>> ";" <kont:Box<Sp<TermComputation>>> => App {
+        body,
+        arg: {
+            let sp = kont.info.clone();
+            let v: Box<Sp<TermValue>> = Box::new(sp.make(Thunk(kont).into()));
+            v
+        },
+    }.into(),
     "rec" <var:TermPattern> "->" <body:Box<Sp<TermComputation>>> => Rec {
         var, body,
     }.into(),
