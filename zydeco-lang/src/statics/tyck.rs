@@ -5,7 +5,7 @@ mod module;
 mod lub;
 
 use super::{
-    err::{Frame, Trace, TyckError, TyckErrorItem},
+    err::{Frame, Trace, TyckError, TyckErrorItem, IndentVec},
     syntax::*,
 };
 use crate::{prelude::*, resolve::err::NameResolveError, syntax::Env};

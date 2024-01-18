@@ -1,6 +1,6 @@
 use super::syntax::*;
 use crate::{prelude::*, resolve::err::NameResolveError};
-use std::fmt;
+use std::fmt::{self, Display};
 use thiserror::Error;
 
 #[derive(Clone, Debug)]
@@ -36,12 +36,12 @@ pub enum TyckErrorItem {
     NeedAnnotation { content: String },
     #[error("Subsumption for sort {sort} failed")]
     Subsumption { sort: &'static str },
-    #[error("Inconsistent matchers.\nUnexpected:\n{unexpected:?}\nMissing:\n{missing:?}")]
-    InconsistentMatchers { unexpected: Vec<CtorV>, missing: Vec<CtorV> },
-    #[error("Inconsistent comatchers.\nUnexpected:\n{unexpected:?}\nMissing:\n{missing:?}")]
-    InconsistentComatchers { unexpected: Vec<DtorV>, missing: Vec<DtorV> },
-    #[error("Inconsistent branches. Expected: {tys:?}")]
-    InconsistentBranches { tys: Vec<Type> },
+    #[error("Inconsistent matchers.\nUnexpected:\n{unexpected}\nMissing:\n{missing}")]
+    InconsistentMatchers { unexpected: IndentVec<CtorV>, missing: IndentVec<CtorV> },
+    #[error("Inconsistent comatchers.\nUnexpected:\n{unexpected}\nMissing:\n{missing}")]
+    InconsistentComatchers { unexpected: IndentVec<DtorV>, missing: IndentVec<DtorV> },
+    #[error("Inconsistent branches. Expected: {tys}")]
+    InconsistentBranches { tys: IndentVec<Type> },
     #[error(transparent)]
     NameResolve(#[from] NameResolveError),
     #[error("No main entry is defined")]
@@ -52,6 +52,18 @@ pub enum TyckErrorItem {
     MainEntryInModule,
     #[error("The type of the main expression should be OS but got {}", .found.fmt())]
     WrongMain { found: Type },
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct IndentVec<T>(pub Vec<T>);
+
+impl<T: FmtArgs> Display for IndentVec<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for item in &self.0 {
+            write!(f, "\t{}", item.fmt())?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Default)]

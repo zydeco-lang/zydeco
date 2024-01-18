@@ -108,6 +108,8 @@ impl TypeCheck for Sp<TermComputation> {
                 let ctorv_set_data: HashSet<CtorV> = ctors.keys().cloned().collect();
                 let missing: Vec<_> = ctorv_set_data.difference(&ctorv_set_arm).cloned().collect();
                 bool_test(unexpected.is_empty() && missing.is_empty(), || {
+                    let unexpected = IndentVec(unexpected);
+                    let missing = IndentVec(missing);
                     ctx.err(span, InconsistentMatchers { unexpected, missing })
                 })?;
                 // branch consistency check
@@ -115,7 +117,7 @@ impl TypeCheck for Sp<TermComputation> {
                 for ty in &ty_arms {
                     if let Some(ty_opt) = &ty_opt {
                         Type::lub(ty_opt.clone(), ty.clone(), ctx.clone(), span).map_err(|_| {
-                            ctx.err(span, InconsistentBranches { tys: ty_arms.clone() })
+                            ctx.err(span, InconsistentBranches { tys: IndentVec(ty_arms.clone()) })
                         })?;
                     } else {
                         ty_opt = Some(ty.clone());
@@ -123,7 +125,7 @@ impl TypeCheck for Sp<TermComputation> {
                 }
                 // empty match
                 let Some(ty) = ty_opt else {
-                    Err(ctx.err(span, InconsistentBranches { tys: vec![] }))?
+                    Err(ctx.err(span, InconsistentBranches { tys: IndentVec(vec![]) }))?
                 };
                 Step::Done(ty)
             }
@@ -193,7 +195,11 @@ impl TypeCheck for Sp<TermComputation> {
                 let diff = Env::init(&[(param, kd)], &[arg.clone()], || {
                     ctx.err(
                         span,
-                        ArityMismatch { context: format!("type-application"), expected: 1, found: 1 },
+                        ArityMismatch {
+                            context: format!("type-application"),
+                            expected: 1,
+                            found: 1,
+                        },
                     )
                 })?;
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
@@ -328,6 +334,8 @@ impl TypeCheck for Sp<TermComputation> {
                 let ctorv_set_data: HashSet<CtorV> = ctors.keys().cloned().collect();
                 let missing: Vec<_> = ctorv_set_data.difference(&ctorv_set_arm).cloned().collect();
                 bool_test(unexpected.is_empty() && missing.is_empty(), || {
+                    let unexpected = IndentVec(unexpected);
+                    let missing = IndentVec(missing);
                     ctx.err(span, InconsistentMatchers { unexpected, missing })
                 })?;
                 Step::Done(typ)
@@ -369,6 +377,8 @@ impl TypeCheck for Sp<TermComputation> {
                 let dtorv_set_coda: HashSet<DtorV> = dtors.keys().cloned().collect();
                 let missing: Vec<_> = dtorv_set_coda.difference(&dtorv_set_arm).cloned().collect();
                 bool_test(unexpected.is_empty() && missing.is_empty(), || {
+                    let unexpected = IndentVec(unexpected);
+                    let missing = IndentVec(missing);
                     ctx.err(span, InconsistentComatchers { unexpected, missing })
                 })?;
                 Step::Done(typ)
