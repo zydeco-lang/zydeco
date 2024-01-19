@@ -205,6 +205,12 @@ TermComputation: TermComputation = {
     "fn" <param:Pattern*> "->" <body:Box<Sp<TermComputation>>> => Abs {
         param, body,
     }.into(),
+    "fn" <dtorv:DtorV> <vars:SepByDelim<"(", ",", NameDef<LowerId>, ")">> "->"
+    <body:Sp<TermComputation>> => Comatch {
+        arms: vec![Comatcher {
+            dtorv, vars, body
+        }],
+    }.into(),
     "match" <scrut:Box<Sp<TermValue>>> 
     "|"? "pack" "(" <tvar:NameDef<UpperId>> "," <var:NameDef<LowerId>> ")" "->"
         <body:Box<Sp<TermComputation>>> 
