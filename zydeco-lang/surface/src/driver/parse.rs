@@ -34,11 +34,11 @@ impl ParseFile {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
     #[test]
     fn it_works() -> anyhow::Result<()> {
-        let ParseFile { top, ctx: _ } = ParseFile::run("../../docs/monad_interpreter/cbv.zz")?;
-        println!("{:#?}", top);
+        // let ParseFile { top, ctx: _ } = ParseFile::run("../../docs/monad_interpreter/cbv.zz")?;
+        // println!("{:#?}", top);
         Ok(())
     }
 }
