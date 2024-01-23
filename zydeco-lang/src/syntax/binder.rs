@@ -148,9 +148,6 @@ macro_rules! var {
             pub fn new(name: Id, info: Span) -> Self {
                 Self { name, info, ty: Default::default() }
             }
-            pub fn dummy(name: Id) -> Self {
-                Self { name, info: Span::dummy(), ty: Default::default() }
-            }
             pub fn name(&self) -> &str {
                 self.name.as_ref()
             }
