@@ -12,6 +12,13 @@ impl CpsTransform for SynComp {
         let call = DtorV::new("$call".into(), Span::dummy());
         let cont = TermV::new("$cont".into(), Span::dummy());
         match self {
+            SynComp::Abs(Abs { param, body }) => {
+                Abs { param: param.clone(), body: Rc::new(body.cps_transform()) }.into()
+            }
+            SynComp::App(App { body, arg }) => {
+                App { body: Rc::new(body.cps_transform()), arg: Rc::new(arg.cps_transform()) }
+                    .into()
+            }
             SynComp::Do(Do { var, comp, body }) => Dtor {
                 body: Rc::new(comp.cps_transform()),
                 dtorv: call.clone(),

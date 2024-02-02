@@ -32,6 +32,7 @@ impl TyVarT for NeutralVar {}
 pub enum SynType {
     TypeAbs(TypeAbs<(TypeV, Sp<Kind>), RcType>),
     TypeApp(TypeApp<NeutralVar, RcType>),
+    Arrow(Arrow<RcType, RcType>),
     Forall(Forall<(TypeV, Sp<Kind>), RcType>),
     Exists(Exists<(TypeV, Sp<Kind>), RcType>),
     AbstVar(AbstVar),
@@ -56,6 +57,7 @@ macro_rules! impl_from {
 }
 impl_from!(TypeAbs<(TypeV, Sp<Kind>), RcType>);
 impl_from!(TypeApp<NeutralVar, RcType>);
+impl_from!(Arrow<RcType, RcType>);
 impl_from!(Forall<(TypeV, Sp<Kind>), RcType>);
 impl_from!(Exists<(TypeV, Sp<Kind>), RcType>);
 impl_from!(AbstVar);
@@ -95,6 +97,8 @@ pub struct TailGroup {
 #[derive(From, FmtArgs, Clone, Debug)]
 pub enum TermComputation {
     Annotation(Annotation<RcComp, RcType>),
+    Abs(Abs<TermV, RcComp>),
+    App(App<RcComp, RcValue>),
     Ret(Ret<RcValue>),
     Force(Force<RcValue>),
     TailGroup(TailGroup),

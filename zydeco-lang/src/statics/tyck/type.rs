@@ -197,6 +197,11 @@ impl TypeCheck for Sp<Type> {
                     }
                 }
             }
+            SynType::Arrow(Arrow(arg, ret)) => {
+                arg.ana(KindBase::CType.into(), ctx.clone())?;
+                ret.ana(KindBase::CType.into(), ctx)?;
+                Ok(Step::Done(KindBase::CType.into()))
+            }
             SynType::Forall(Forall { param: (param, kd), ty }) => {
                 ctx.type_ctx.insert(param, kd.inner_clone());
                 ty.ana(KindBase::CType.into(), ctx)?;
@@ -232,6 +237,7 @@ impl TypeCheck for Sp<Type> {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeAbs(_)
             | SynType::TypeApp(_)
+            | SynType::Arrow(_)
             | SynType::Forall(_)
             | SynType::Exists(_)
             | SynType::AbstVar(_) => {
@@ -277,6 +283,13 @@ impl Type {
                     }),
                 }
             }
+            SynType::Arrow(Arrow(arg, ret)) => Ok(Type {
+                synty: Arrow(
+                    arg.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?,
+                    ret.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?,
+                )
+                .into(),
+            }),
             SynType::Forall(Forall { param, ty }) => {
                 diff.remove(&param.0);
                 Ok(Type {
@@ -326,7 +339,7 @@ impl Type {
             SynType::AbstVar(abst_var) => {
                 Ok(Type { synty: TypeApp { tvar: NeutralVar::Abst(abst_var), args }.into() })
             }
-            SynType::Forall(_) | SynType::Exists(_) | SynType::Hole(_) => {
+            SynType::Arrow(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::Hole(_) => {
                 if args.is_empty() {
                     Ok(typ)
                 } else {

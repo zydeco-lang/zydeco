@@ -409,7 +409,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
             }
             ps::TermComputation::TyAppTerm(ps::App { body, arg }) => {
                 let body = rc!((body).try_map(Elaboration::elab)?);
-                let arg = rc!(arg.try_map(Elaboration::elab)?);
+                let arg: RcType = rc!(arg.try_map(Elaboration::elab)?);
                 App { body, arg }.into()
             }
             ps::TermComputation::MatchPack(ps::MatchPack { scrut, tvar, var, body }) => {

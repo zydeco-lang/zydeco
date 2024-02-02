@@ -32,6 +32,8 @@ pub struct Prim {
 
 #[derive(From, FmtArgs, Clone)]
 pub enum SynComp {
+    Abs(Abs<TermV, RcComp>),
+    App(App<RcComp, RcValue>),
     Ret(Ret<RcValue>),
     Force(Force<RcValue>),
     Let(Let<TermV, RcValue, RcComp>),

@@ -213,6 +213,33 @@ where
     }
 }
 
+impl<TeV, B> FmtArgs for Abs<TeV, B>
+where
+    TeV: VarT + FmtArgs,
+    B: ComputationT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let Abs { param, body } = self;
+        let mut s = String::new();
+        s += "fn ";
+        s += &param.fmt_args(fargs);
+        s += " -> ";
+        s += &body.fmt_args(fargs);
+        s
+    }
+}
+
+impl<A, B> FmtArgs for App<B, A>
+where
+    A: ValueT + FmtArgs,
+    B: ComputationT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let App { body, arg } = self;
+        format!("{} {}", body.fmt_args(fargs), arg.fmt_args(fargs))
+    }
+}
+
 impl<A> FmtArgs for Ret<A>
 where
     A: ValueT + FmtArgs,

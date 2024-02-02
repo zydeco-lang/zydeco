@@ -59,6 +59,20 @@ impl<'rt> Eval<'rt> for ls::SynComp {
 
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         match self {
+            ls::SynComp::Abs(ls::Abs { param, body }) => match runtime.stack.pop_back() {
+                Some(SemComp::App(arg)) => {
+                    let arg = arg.as_ref().clone();
+                    let env = runtime.env.update(param, arg);
+                    runtime.env = env;
+                    Step::Step(body.as_ref().clone())
+                }
+                _ => panic!("App not at stacktop"),
+            },
+            ls::SynComp::App(ls::App { body, arg }) => {
+                let arg = rc!(arg.as_ref().clone().eval(runtime));
+                runtime.stack.push_back(SemComp::App(arg));
+                Step::Step(body.as_ref().clone())
+            }
             ls::SynComp::Ret(ls::Ret(v)) => {
                 let v = v.as_ref().clone().eval(runtime);
                 match runtime.stack.pop_back() {

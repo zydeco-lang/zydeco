@@ -168,6 +168,11 @@ impl Lub for Type {
                     Ok(TypeApp { tvar: NeutralVar::Abst(lhs), args }.into())
                 }
             },
+            (SynType::Arrow(Arrow(lin, lout)), SynType::Arrow(Arrow(rin, rout))) => {
+                let lin = lin.span().make_rc(lin.inner_clone().lub(rin.inner_clone(), ctx.clone(), span)?);
+                let lout = lout.span().make_rc(lout.inner_clone().lub(rout.inner_clone(), ctx, span)?);
+                Ok(Arrow(lin, lout).into())
+            }
             (
                 SynType::Forall(Forall { param: (tvar, kd), ty }),
                 SynType::Forall(Forall { param: (tvar_, kd_), ty: ty_ }),
@@ -204,6 +209,7 @@ impl Lub for Type {
             }
             (SynType::TypeAbs(_), _)
             | (SynType::TypeApp(_), _)
+            | (SynType::Arrow(_), _)
             | (SynType::Forall(_), _)
             | (SynType::Exists(_), _)
             | (SynType::AbstVar(_), _) => Err(err()),

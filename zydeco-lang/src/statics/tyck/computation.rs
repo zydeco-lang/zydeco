@@ -20,6 +20,25 @@ impl TypeCheck for Sp<TermComputation> {
                 ty.ana(KindBase::CType.into(), ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_clone())
             }
+            TermComputation::Abs(_) => {
+                Err(ctx.err(span, NeedAnnotation { content: format!("fn") }))?
+            }
+            TermComputation::App(App { body, arg }) => {
+                let ty_body = body.syn(ctx.clone())?;
+                let ty_body = ctx.resolve_alias(ty_body, span)?;
+                let SynType::Arrow(Arrow(ty_in, ty_out)) = ty_body.resolve()? else {
+                    Err(ctx.err(
+                        span,
+                        TypeExpected {
+                            context: format!("application"),
+                            expected: format!("A -> B"),
+                            found: ty_body,
+                        },
+                    ))?
+                };
+                arg.ana(ty_in.inner_clone(), ctx.clone())?;
+                Step::Done(ty_out.inner_clone())
+            }
             TermComputation::Ret(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("ret") }))?
             }
@@ -30,7 +49,7 @@ impl TypeCheck for Sp<TermComputation> {
                         span,
                         TypeExpected {
                             context: format!("force"),
-                            expected: format!("{{a}}"),
+                            expected: format!("Thunk _?"),
                             found: ty_val,
                         },
                     )
@@ -248,13 +267,44 @@ impl TypeCheck for Sp<TermComputation> {
                 let ty_lub = Type::lub(typ, ty.inner_clone(), ctx.clone(), span)?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
+            TermComputation::Abs(Abs { param, body }) => {
+                let mut ctx = ctx.clone();
+                let SynType::Arrow(Arrow(ty_in, ty_out)) = typ_syn else {
+                    Err(ctx.err(
+                        span,
+                        TypeExpected {
+                            context: format!("abstraction"),
+                            expected: format!("A -> B"),
+                            found: typ,
+                        },
+                    ))?
+                };
+                ctx.term_ctx.insert(param.to_owned(), ty_in.inner_clone());
+                Step::AnaMode((ctx, body), ty_out.inner_clone())
+            }
+            TermComputation::App(App { body, arg }) => {
+                let ty_body = body.syn(ctx.clone())?;
+                let ty_body = ctx.resolve_alias(ty_body, span)?;
+                let SynType::Arrow(Arrow(ty_in, ty_out)) = ty_body.resolve()? else {
+                    Err(ctx.err(
+                        span,
+                        TypeExpected {
+                            context: format!("application"),
+                            expected: format!("A -> B"),
+                            found: ty_body,
+                        },
+                    ))?
+                };
+                arg.ana(ty_in.inner_clone(), ctx.clone())?;
+                Step::Done(ty_out.inner_clone())
+            }
             TermComputation::Ret(Ret(v)) => {
                 let ty_body = typ.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
                         span,
                         TypeExpected {
                             context: format!("ret"),
-                            expected: format!("Ret a"),
+                            expected: format!("Ret A"),
                             found: typ.clone(),
                         },
                     )

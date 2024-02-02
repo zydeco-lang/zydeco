@@ -57,6 +57,15 @@ impl From<&ss::TermComputation> for SynComp {
             ss::TermComputation::Annotation(Annotation { term: body, ty: _ }) => {
                 body.inner_ref().into()
             }
+            ss::TermComputation::Abs(Abs { param, body }) => {
+                let body = rc!(body.inner_ref().into());
+                Abs { param: param.clone(), body }.into()
+            }
+            ss::TermComputation::App(App { body, arg }) => {
+                let body = rc!(body.inner_ref().into());
+                let arg = rc!(arg.inner_ref().into());
+                App { body, arg }.into()
+            }
             ss::TermComputation::Ret(Ret(v)) => Ret(rc!(v.inner_ref().into())).into(),
             ss::TermComputation::Force(Force(v)) => Force(rc!(v.inner_ref().into())).into(),
             ss::TermComputation::TailGroup(ss::TailGroup { group, body }) => {
