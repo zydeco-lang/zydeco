@@ -21,7 +21,7 @@ impl TypeCheck for Sp<TermValue> {
         ctx.trace.push(Frame {
             blame: format!("{}", std::panic::Location::caller()),
             context: "synthesizing value".to_string(),
-            term: format!("{}", self.inner_ref().fmt_truncate(40)),
+            term: format!("{}", self.inner_ref().fmt_inline_debug()),
             info: self.span().clone(),
         });
         let span = self.span();
@@ -48,7 +48,7 @@ impl TypeCheck for Sp<TermValue> {
         ctx.trace.push(Frame {
             blame: format!("{}", std::panic::Location::caller()),
             context: format!("analyzing value against type {}", typ.fmt()),
-            term: format!("{}", self.inner_ref().fmt_truncate(40)),
+            term: format!("{}", self.inner_ref().fmt_inline_debug()),
             info: self.span().clone(),
         });
         let typ = ctx.resolve_alias(typ, span)?;
@@ -73,7 +73,7 @@ impl TypeCheck for Sp<TermValue> {
                         },
                     )
                 })?;
-                let ty = Type::make_thunk(rc!(span.make(c.ana(typ_comp, ctx.clone())?)));
+                let ty = Type::make_thunk(span.make_rc(c.ana(typ_comp, ctx.clone())?));
                 let typ_lub = Type::lub(typ, ty, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }

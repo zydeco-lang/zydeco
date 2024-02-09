@@ -67,13 +67,19 @@ module Std where
     pub def true : Bool = True() end
     pub def false : Bool = False() end
 
-    pub def not : Thunk(Bool -> Ret(Bool)) = {
-      fn (x) ->
-        match x
-        | True() -> ret false
-        | False() -> ret true
-        end
-    } end
+    pub def fn not (x: Bool) : Ret Bool =
+      match x
+      | True() -> ret false
+      | False() -> ret true
+      end
+    end
+    // pub def not : Thunk(Bool -> Ret(Bool)) = {
+    //   fn (x) ->
+    //     match x
+    //     | True() -> ret false
+    //     | False() -> ret true
+    //     end
+    // } end
 
     # lazy not
     pub def not~ : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {

@@ -85,14 +85,14 @@ pub struct Let {
 #[derive(From, SpanHolder, Clone, Debug)]
 pub enum TermComputation {
     TermAnn(Annotation<BoxComp, Sp<Type>>),
+    Abs(Abs<Vec<Pattern>, BoxComp>),
+    App(App<BoxComp, BoxValue>),
     Ret(Ret<BoxValue>),
     Force(Force<BoxValue>),
     Let(Let),
     Do(Do<TermPattern, BoxComp, BoxComp>),
     Rec(Rec<TermPattern, BoxComp>),
     Match(Match<CtorV, TermDef, BoxValue, Sp<TermComputation>>),
-    Abs(Abs<Vec<Pattern>, BoxComp>),
-    App(App<BoxComp, BoxValue>),
     Comatch(Comatch<DtorV, TermDef, Sp<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV, Sp<TermValue>>),
     TyAppTerm(App<BoxComp, BoxType>),

@@ -43,6 +43,10 @@ pub trait FmtArgs {
             s
         }
     }
+    fn fmt_inline_debug(&self) -> String {
+        // self.fmt_truncate(40)
+        self.fmt_no_br()
+    }
 }
 
 impl<T: FmtArgs> FmtArgs for Box<T> {

@@ -143,10 +143,10 @@ impl<'rt> Eval<'rt> for ls::SynComp {
             ls::SynComp::Prim(ls::Prim { arity, body }) => {
                 let mut args = Vec::new();
                 for _ in 0..arity {
-                    let Some(SemComp::Dtor(_, arg)) = runtime.stack.pop_back() else {
+                    let Some(SemComp::App(arg)) = runtime.stack.pop_back() else {
                         panic!("Prim on non-Dtor")
                     };
-                    args.push(arg.first().expect("empty arg").as_ref().clone());
+                    args.push(arg.as_ref().clone());
                 }
                 match body(args, runtime.input, runtime.output, runtime.args) {
                     Ok(e) => Step::Step(e),

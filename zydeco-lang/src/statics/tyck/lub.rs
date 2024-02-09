@@ -169,8 +169,18 @@ impl Lub for Type {
                 }
             },
             (SynType::Arrow(Arrow(lin, lout)), SynType::Arrow(Arrow(rin, rout))) => {
-                let lin = lin.span().make_rc(lin.inner_clone().lub(rin.inner_clone(), ctx.clone(), span)?);
-                let lout = lout.span().make_rc(lout.inner_clone().lub(rout.inner_clone(), ctx, span)?);
+                let lin = lin.span().make_rc(Type::lub(
+                    lin.inner_clone(),
+                    rin.inner_clone(),
+                    ctx.clone(),
+                    span,
+                )?);
+                let lout = lout.span().make_rc(Type::lub(
+                    lout.inner_clone(),
+                    rout.inner_clone(),
+                    ctx.clone(),
+                    span,
+                )?);
                 Ok(Arrow(lin, lout).into())
             }
             (

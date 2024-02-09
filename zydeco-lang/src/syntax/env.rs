@@ -123,7 +123,7 @@ where
         s += &"=".repeat(20);
         s += &fargs.br_indent();
         for (k, v) in self.inner.iter() {
-            s += &format!("[ {} := {} ]", k.fmt_args(fargs), v.fmt_truncate(40));
+            s += &format!("[ {} := {} ]", k.fmt_args(fargs), v.fmt_inline_debug());
             s += &fargs.br_indent();
         }
         s += &"=".repeat(20);

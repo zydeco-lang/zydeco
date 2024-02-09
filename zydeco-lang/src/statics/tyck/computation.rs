@@ -11,7 +11,7 @@ impl TypeCheck for Sp<TermComputation> {
         ctx.trace.push(Frame {
             blame: format!("{}", std::panic::Location::caller()),
             context: format!("synthesizing computation"),
-            term: format!("{}", self.inner_ref().fmt_truncate(40)),
+            term: format!("{}", self.inner_ref().fmt_inline_debug()),
             info: self.span().clone(),
         });
         let span = self.span();
@@ -253,7 +253,7 @@ impl TypeCheck for Sp<TermComputation> {
         ctx.trace.push(Frame {
             blame: format!("{}", std::panic::Location::caller()),
             context: format!("analyzing computation against type {}", typ.fmt()),
-            term: format!("{}", self.fmt_truncate(40)),
+            term: format!("{}", self.fmt_inline_debug()),
             info: self.span().clone(),
         });
         let typ = ctx.resolve_alias(typ, span)?;
@@ -280,7 +280,8 @@ impl TypeCheck for Sp<TermComputation> {
                     ))?
                 };
                 ctx.term_ctx.insert(param.to_owned(), ty_in.inner_clone());
-                Step::AnaMode((ctx, body), ty_out.inner_clone())
+                let ty_body = body.ana(ty_out.inner_clone(), ctx.clone())?;
+                Step::Done(Arrow(ty_in, ty_out.span().make_rc(ty_body)).into())
             }
             TermComputation::App(App { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;

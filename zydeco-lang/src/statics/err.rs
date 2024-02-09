@@ -98,7 +98,7 @@ impl fmt::Display for Frame {
         writeln!(f, "\t{}", self.term)?;
         writeln!(f, "\t({})", self.info)?;
         // uncomment the following to emit the rust implementation blame
-        // writeln!(f, "\t@({})", self.blame)?;
+        writeln!(f, "\t@({})", self.blame)?;
         Ok(())
     }
 }

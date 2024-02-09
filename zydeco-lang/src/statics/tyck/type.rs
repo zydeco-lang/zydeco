@@ -198,7 +198,7 @@ impl TypeCheck for Sp<Type> {
                 }
             }
             SynType::Arrow(Arrow(arg, ret)) => {
-                arg.ana(KindBase::CType.into(), ctx.clone())?;
+                arg.ana(KindBase::VType.into(), ctx.clone())?;
                 ret.ana(KindBase::CType.into(), ctx)?;
                 Ok(Step::Done(KindBase::CType.into()))
             }
@@ -229,10 +229,6 @@ impl TypeCheck for Sp<Type> {
         let ty = self.inner_clone().subst(ctx.type_env.clone(), &ctx)?;
         let ty = ctx.resolve_alias(ty, span)?;
         let ty_syn = ty.resolve()?;
-        // println!("===[ctx]===");
-        // for (idx, kd) in ctx.abst_ctx.iter().enumerate() {
-        //     println!("${}: {}", idx, kd.fmt());
-        // }
         match ty_syn {
             SynType::Hole(_) => Ok(Step::Done(kd)),
             SynType::TypeAbs(_)
@@ -261,14 +257,14 @@ impl Type {
                 Ok(Type {
                     synty: TypeAbs {
                         params,
-                        body: body.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?,
+                        body: body.try_map_rc_ref(|ty| ty.clone().subst(diff.clone(), ctx))?,
                     }
                     .into(),
                 })
             }
             SynType::TypeApp(TypeApp { tvar, mut args }) => {
                 for arg in args.iter_mut() {
-                    *arg = arg.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?;
+                    *arg = arg.try_map_rc_ref(|ty| ty.clone().subst(diff.clone(), ctx))?;
                 }
                 match tvar {
                     NeutralVar::Var(tvar) => {
@@ -285,8 +281,8 @@ impl Type {
             }
             SynType::Arrow(Arrow(arg, ret)) => Ok(Type {
                 synty: Arrow(
-                    arg.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?,
-                    ret.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?,
+                    arg.try_map_rc_ref(|ty| ty.clone().subst(diff.clone(), ctx))?,
+                    ret.try_map_rc_ref(|ty| ty.clone().subst(diff.clone(), ctx))?,
                 )
                 .into(),
             }),
@@ -295,7 +291,7 @@ impl Type {
                 Ok(Type {
                     synty: Forall {
                         param,
-                        ty: ty.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?,
+                        ty: ty.try_map_rc_ref(|ty| ty.clone().subst(diff.clone(), ctx))?,
                     }
                     .into(),
                 })
@@ -305,7 +301,7 @@ impl Type {
                 Ok(Type {
                     synty: Exists {
                         param,
-                        ty: ty.try_map_rc(|ty| ty.clone().subst(diff.clone(), ctx))?,
+                        ty: ty.try_map_rc_ref(|ty| ty.clone().subst(diff.clone(), ctx))?,
                     }
                     .into(),
                 })

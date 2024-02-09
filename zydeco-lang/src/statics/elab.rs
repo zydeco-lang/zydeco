@@ -122,23 +122,23 @@ fn desugar_gen_let(
                             })?
                         };
                         let kd_dom = kd_dom.clone().try_map(Elaboration::elab)?;
-                        ty = rc!(tvar
+                        ty = tvar
                             .span()
-                            .make(Forall { param: (tvar.into(), kd_dom.clone()), ty }.into()))
+                            .make_rc(Forall { param: (tvar.into(), kd_dom.clone()), ty }.into())
                     }
                     ps::Pattern::TermPattern((var, ty_param)) => {
                         let ty_dom = if let Some(ty_dom) = ty_param {
-                            rc!(ty_dom.to_owned().try_map(Elaboration::elab)?)
+                            ty_dom.to_owned().try_map_rc(Elaboration::elab)?
                         } else {
-                            rc!(def.info.make(Hole.into()))
+                            def.info.make_rc(Hole.into())
                         };
-                        ty = rc!(var.span().make(Type::internal("Fn", vec![ty_dom, ty])))
+                        ty = var.span().make_rc(Arrow(ty_dom, ty).into())
                     }
                 }
             }
-            let body = rc!((*body).try_map(Elaboration::elab)?);
-            ty = rc!(def.info.make(Type::make_thunk(ty)));
-            Ok((name, ty, Some(rc!(def.info.make(Thunk(body).into())))))
+            let body = (*body).try_map_rc(Elaboration::elab)?;
+            ty = def.info.make_rc(Type::make_thunk(ty));
+            Ok((name, ty, Some(def.info.make_rc(Thunk(body).into()))))
         }
     }
 }
@@ -147,21 +147,14 @@ fn desugar_fn(
     ps::Abs { param, body }: ps::Abs<Vec<ps::Pattern>, ps::BoxComp>,
 ) -> Result<TermComputation, TyckErrorItem> {
     fn desugar_fn_one(
-        (var, ty): (NameDef, Option<Sp<ps::Type>>), body: RcComp,
+        (param, ty): (TermV, Option<Sp<ps::Type>>), body: RcComp,
     ) -> Result<TermComputation, TyckErrorItem> {
-        let mut body = Comatch {
-            arms: vec![ps::Comatcher {
-                dtorv: DtorV::new(format!("arg"), Span::dummy()),
-                vars: vec![var.into()],
-                body,
-            }],
-        }
-        .into();
+        let mut body = Abs { param, body }.into();
         if let Some(ty) = ty {
-            let mut ty = ty.try_map(Elaboration::elab)?;
+            let mut ty = ty.try_map_rc(Elaboration::elab)?;
             let span = ty.span().clone();
-            ty = span.make(Type::internal("Fn", vec![rc!(ty), rc!(span.make(Hole.into()))]));
-            body = Annotation { term: rc!(span.make(body)), ty: rc!(ty) }.into();
+            ty = span.make_rc(Arrow(ty, span.make_rc(Hole.into())).into());
+            body = Annotation { term: span.make_rc(body), ty }.into();
         }
         Ok(body)
     }
@@ -173,10 +166,13 @@ fn desugar_fn(
                     Some(kd) => Some(kd.try_map(Elaboration::elab)?),
                     None => None,
                 };
-                func = Abs { param: (tvar.into(), kd), body: rc!(body.info.make(func)) }.into()
+                func = Abs { param: (tvar.into(), kd), body: body.info.make_rc(func) }.into()
             }
-            ps::Pattern::TermPattern(param) => {
-                func = desugar_fn_one(param, rc!(body.info.make(func)))?;
+            ps::Pattern::TermPattern((var, ty)) => {
+                func = desugar_fn_one(
+                    (TermV::new(var.ident.inner, var.info), ty),
+                    body.info.make_rc(func),
+                )?;
             }
         }
     }
@@ -208,7 +204,7 @@ impl Elaboration<ps::Type> for Type {
                 let ps::Arrow(t1, t2) = t;
                 let t1 = t1.try_map(Elaboration::elab)?;
                 let t2 = t2.try_map(Elaboration::elab)?;
-                Type::internal("Fn", vec![rc!(t1), rc!(t2)])
+                Arrow(rc!(t1), rc!(t2)).into()
             }
             ps::Type::Forall(ps::Forall { param: params, ty: t }) => {
                 let mut t = t.try_map(Elaboration::elab)?;
@@ -291,6 +287,12 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 ty: rc!(ty.try_map(Elaboration::elab)?),
             }
             .into(),
+            ps::TermComputation::Abs(t) => desugar_fn(t)?,
+            ps::TermComputation::App(ps::App { body, arg }) => {
+                let fun: RcComp = rc!(body.try_map(Elaboration::elab)?);
+                let arg: RcValue = rc!(arg.try_map(Elaboration::elab)?);
+                App { body: fun, arg }.into()
+            }
             ps::TermComputation::Ret(Ret(body)) => {
                 let span = body.span().clone();
                 let body: TermComputation = Ret(rc!((body).try_map(Elaboration::elab)?)).into();
@@ -378,17 +380,6 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                     })
                     .collect::<Result<_, TyckErrorItem>>()?;
                 Match { scrut, arms }.into()
-            }
-            ps::TermComputation::Abs(t) => desugar_fn(t)?,
-            ps::TermComputation::App(ps::App { body, arg }) => {
-                let fun = rc!((body).try_map(Elaboration::elab)?);
-                let arg = arg.try_map(Elaboration::elab)?;
-                Dtor {
-                    body: fun,
-                    dtorv: DtorV::new(format!("arg"), Span::dummy()),
-                    args: vec![rc!(arg)],
-                }
-                .into()
             }
             ps::TermComputation::Comatch(ps::Comatch { arms }) => {
                 let arms = arms

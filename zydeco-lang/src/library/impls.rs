@@ -12,11 +12,13 @@ type ZCompute = SynComp;
 fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
     Ok(Ret(rc!(value.into())).into())
 }
-
-// /* Constructors and Destructors */
+fn app(body: Rc<ZCompute>, arg: ZValue) -> ZCompute {
+    App { body, arg: rc!(arg.into()) }.into()
+}
 fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
     Ctor { ctorv: CtorV::new(format!("{}", ctor), Span::dummy()), args }.into()
 }
+#[allow(unused)]
 fn dtor(body: Rc<ZCompute>, dtor: &str, args: Vec<ZValue>) -> ZCompute {
     let args = args.into_iter().map(|a| rc!(a.into())).collect();
     Dtor { body, dtorv: DtorV::new(format!("{}", dtor), Span::dummy()), args }.into()
@@ -230,10 +232,9 @@ pub fn read_line(
             let mut line = String::new();
             r.read_line(&mut line).unwrap();
             line.pop();
-            Ok(dtor(
+            Ok(app(
                 rc!(Force(rc!(e.clone().into())).into()),
-                "arg",
-                vec![Literal::String(line.chars().collect()).into()],
+                Literal::String(line.chars().collect()).into(),
             ))
         }
         _ => unreachable!(""),
@@ -247,10 +248,9 @@ pub fn read_till_eof(
         [e @ ZValue::Thunk(_)] => {
             let mut line = String::new();
             r.read_to_string(&mut line).unwrap();
-            Ok(dtor(
+            Ok(app(
                 rc!(Force(rc!(e.clone().into())).into()),
-                "arg",
-                vec![Literal::String(line.chars().collect()).into()],
+                Literal::String(line.chars().collect()).into(),
             ))
         }
         _ => unreachable!(""),
@@ -269,7 +269,7 @@ pub fn arg_list(
                     vec![rc!(Literal::String(arg.chars().collect()).into()), rc!(z_arg_list)],
                 );
             }
-            Ok(dtor(rc!(Force(rc!(k.clone().into())).into()), "arg", vec![z_arg_list]))
+            Ok(app(rc!(Force(rc!(k.clone().into())).into()), z_arg_list))
         }
         _ => unreachable!(""),
     }

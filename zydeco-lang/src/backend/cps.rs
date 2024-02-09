@@ -8,7 +8,6 @@ pub trait CpsTransform {
 
 impl CpsTransform for SynComp {
     fn cps_transform(&self) -> Self {
-        let arg = DtorV::new("arg".into(), Span::dummy());
         let call = DtorV::new("$call".into(), Span::dummy());
         let cont = TermV::new("$cont".into(), Span::dummy());
         match self {
@@ -24,14 +23,7 @@ impl CpsTransform for SynComp {
                 dtorv: call.clone(),
                 args: vec![Rc::new(
                     Thunk(Rc::new(
-                        Comatch {
-                            arms: vec![Comatcher {
-                                dtorv: arg.clone(),
-                                vars: vec![var.clone()],
-                                body: Rc::new(body.cps_transform()),
-                            }],
-                        }
-                        .into(),
+                        Abs { param: var.clone(), body: Rc::new(body.cps_transform()) }.into(),
                     ))
                     .into(),
                 )],
@@ -42,10 +34,9 @@ impl CpsTransform for SynComp {
                     dtorv: call.clone(),
                     vars: vec![cont.clone()],
                     body: Rc::new(
-                        Dtor {
+                        App {
                             body: Rc::new(Force(Rc::new(cont.clone().into())).into()),
-                            dtorv: arg.clone(),
-                            args: vec![Rc::new(val.cps_transform())],
+                            arg: Rc::new(val.cps_transform()),
                         }
                         .into(),
                     ),

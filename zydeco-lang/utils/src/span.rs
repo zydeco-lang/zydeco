@@ -239,24 +239,29 @@ impl<T> Sp<T> {
     {
         self.info.to_owned().make(f(self.inner))
     }
-
-    pub fn try_map_rc<F, U, E>(&self, f: F) -> Result<Rc<Sp<U>>, E>
+    pub fn try_map<F, U, E>(self, f: F) -> Result<Sp<U>, E>
+    where
+    F: FnOnce(T) -> Result<U, E>,
+    {
+        Ok(self.info.make(f(self.inner)?))
+    }
+    pub fn try_map_rc<F, U, E>(self, f: F) -> Result<Rc<Sp<U>>, E>
+    where
+        F: FnOnce(T) -> Result<U, E>,
+    {
+        Ok(Rc::new(self.info.make(f(self.inner)?)))
+    }
+    pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Sp<U>, E>
+    where
+    F: FnOnce(&T) -> Result<U, E>,
+    {
+        Ok(self.info.make(f(&self.inner)?))
+    }
+    pub fn try_map_rc_ref<F, U, E>(&self, f: F) -> Result<Rc<Sp<U>>, E>
     where
         F: FnOnce(&T) -> Result<U, E>,
     {
         Ok(Rc::new(self.info.make(f(&self.inner)?)))
-    }
-    pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Sp<U>, E>
-    where
-        F: FnOnce(&T) -> Result<U, E>,
-    {
-        Ok(self.info.make(f(&self.inner)?))
-    }
-    pub fn try_map<F, U, E>(self, f: F) -> Result<Sp<U>, E>
-    where
-        F: FnOnce(T) -> Result<U, E>,
-    {
-        Ok(self.info.make(f(self.inner)?))
     }
 }
 
