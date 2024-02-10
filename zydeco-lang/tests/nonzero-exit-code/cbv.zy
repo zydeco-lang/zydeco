@@ -76,11 +76,11 @@ def fn mexn : Monad Mo =
   comatch
   | .return -> fn A a ->
     comatch
-    | .run -> fn s ->
+    | .run s ->
       ret Cons(s, Right({ fn R k -> ! k a }))
     end
   | .bind -> fn A A' m f -> comatch
-    | .run -> fn s -> 
+    | .run s -> 
       do x <- ! m .run s;
       match x
       | Cons(s', v) ->
@@ -107,7 +107,7 @@ end
 
 def rec fn envo (env: EnvT) : EnvO =
   comatch
-  | .lookup -> fn x ->
+  | .lookup x ->
     match env
     | Empty() -> ret None()
     | Extend(x', v, env') ->

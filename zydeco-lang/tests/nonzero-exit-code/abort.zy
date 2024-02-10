@@ -5,7 +5,7 @@ end
 
 def rec fn abort (x: Int): Stack Int =
   comatch
-  | .app -> fn _ -> ! abort x
+  | .app _ -> ! abort x
   | .return -> ret x
   end
 end

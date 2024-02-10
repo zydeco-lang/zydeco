@@ -10,13 +10,13 @@ end
 main
   let fn_int : Thunk(FnRet Int) = {
     comatch
-    | .arg -> fn i -> ret i
+    | .arg i -> ret i
     end
   };
 
   let fn_opt_int : Thunk(FnOpt Int) = {
     comatch
-    | .one -> fn i -> ! fn_int .arg i
+    | .one i -> ! fn_int .arg i
     | .zero -> ! fn_int .arg 0
     end
   };

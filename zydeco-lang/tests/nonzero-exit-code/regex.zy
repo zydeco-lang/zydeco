@@ -70,9 +70,9 @@ def str_match : U(String -> String -> F(Option String)) = {
 
 def rec regex : Regex = 
   comatch
-  | .run -> fn s ->
+  | .run s ->
     comatch
-    | .str -> fn p -> ! str_match s p
+    | .str p -> ! str_match s p
     | .concat -> fn sy1 sy2 ->
       do s? <- ! regex .run s .bind sy1;
       match s?
@@ -80,7 +80,7 @@ def rec regex : Regex =
       | Some(s) ->
         ! regex .run s .bind sy2
       end
-    | .kleene -> fn sy ->
+    | .kleene sy ->
       do s? <- ! regex .run s .bind sy;
       match s?
       | None() -> ret Some(s)
@@ -92,7 +92,7 @@ def rec regex : Regex =
       | Some(s) -> ret Some(s)
       | None() -> ! regex .run s .bind sy2
       end
-    | .bind -> fn sy ->
+    | .bind sy ->
       match sy
       | Str(p) -> ! regex .run s .str p
       | Concat(sy1, sy2) -> ! regex .run s .concat sy1 sy2

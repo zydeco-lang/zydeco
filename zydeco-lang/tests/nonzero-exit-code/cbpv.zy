@@ -35,7 +35,7 @@ def fn mexn : MonadErrPrint MExnOS =
     comatch
     | .run -> fn _ ke -> ! ke e
     end
-  | .print -> fn s ->
+  | .print s ->
     comatch
     | .run -> fn ka _ ->
       ! write_line s { ! ka Unit() }
@@ -55,7 +55,7 @@ end
 
 def rec fn envo (env: EnvT) : EnvO =
   comatch
-  | .lookup -> fn x ->
+  | .lookup x ->
     match env
     | Empty() -> ret None()
     | Extend(x', v, env') ->
@@ -82,7 +82,7 @@ end
 
 def fn abort (e: Exception) : Compu =
   rec unwind -> comatch
-  | .app -> fn _ -> ! unwind
+  | .app _ -> ! unwind
   | .bind -> ! mexn .fail @(Value) e
   end
 end
@@ -91,7 +91,7 @@ def rec fn malg : Algebra MExnOS Compu =
   comatch
   | .bindA -> fn A m f -> // m : U (MExnOS A), f: U (A -> Compu)
     comatch
-    | .app -> fn a -> // goal: Compu
+    | .app a -> // goal: Compu
       ! malg .bindA @(A) m { fn v -> ! f v .app a }
     | .bind -> // goal: MExnOS Value, use ordinary bind
       ! mexn .bind @(A) @(Value) m { fn x -> ! f x .bind }
@@ -121,7 +121,7 @@ end
 
 def rec fn interp (env: U EnvO) : Interp =
   comatch
-  | .value -> fn sv ->
+  | .value sv ->
     match sv
     | Var(x) ->
       do x? <- ! env .lookup x;
@@ -135,11 +135,11 @@ def rec fn interp (env: U EnvO) : Interp =
     | Thunk(c) ->
       ! mexn .return @(Value) Thunk({ ! interp env .compu c })
     end
-  | .compu -> fn sc ->
+  | .compu sc ->
     match sc
     | Lam(x, sc) ->
       comatch
-      | .app -> fn v ->
+      | .app v ->
         ! interp { ! env .extend x v } .compu sc
       | .bind -> ! mexn .fail @(Value) TypeError()
       end
@@ -149,7 +149,7 @@ def rec fn interp (env: U EnvO) : Interp =
     | Ret(sv) ->
       let rec fn unwind (m: U (MExnOS Value)) : Compu =
         comatch
-        | .app -> fn _ -> ! unwind { ! mexn .fail @(Value) TypeError() }
+        | .app _ -> ! unwind { ! mexn .fail @(Value) TypeError() }
         | .bind -> ! m
         end
       in

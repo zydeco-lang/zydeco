@@ -8,7 +8,7 @@ end
 
 def fix : Thunk (forall (B : CType) . Thunk(Thunk B -> B) -> B) = {
   fn B f ->
-  let prim : Thunk (Y B) = { comatch | .y -> fn x -> ! f { ! x .y x } end } in
+  let prim : Thunk (Y B) = { comatch | .y x -> ! f { ! x .y x } end } in
   ! prim .y prim
 } end
 

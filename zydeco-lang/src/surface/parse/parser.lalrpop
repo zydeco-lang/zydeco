@@ -192,8 +192,12 @@ TermComputation: TermComputation = {
             v
         },
     }.into(),
-    "rec" <var:TermPattern> "->" <body:Box<Sp<TermComputation>>> => Rec {
-        var, body,
+    "rec" <var:TermPattern> <param:Pattern*> "->" <body:Box<Sp<TermComputation>>> => Rec {
+        var, body: {
+            // span should be from param to body
+            let sp = body.span().clone();
+            Box::new(sp.make(Abs { param, body }.into()))
+        },
     }.into(),
     "match" <scrut:Box<Sp<TermValue>>> <arms:MatchBr*> "end" => Match {
         scrut, arms,
@@ -242,6 +246,8 @@ TermComputationAtom: TermComputation = {
     "!" <Box<Sp<TermValue>>> => Force(<>).into(),
 };
 
+
+
 GenLet: GenLet = {
     <rec:"rec"?> <fun:"fn"?> <var:NameDef<LowerId>> <params:Pattern*>
     <ty:(":" <Sp<Type>>)?> <def: ("=" <Box<Sp<Term>>>)?> => GenLet {
@@ -261,9 +267,13 @@ MatchBr: Matcher<CtorV, NameDef, Sp<TermComputation>> = {
 };
 
 ComatchBr: Comatcher<DtorV, Sp<TermComputation>> = {
-    "|" <dtorv:DtorV> "->"
-    <body:Sp<TermComputation>> => Comatcher {
-        dtorv, body
+    "|" <dtorv:DtorV> <param:Pattern*> "->"
+    <body:Box<Sp<TermComputation>>> => Comatcher {
+        dtorv, body: {
+            // span should be from param to body
+            let sp = body.span().clone();
+            sp.make(Abs { param, body }.into())
+        },
     }
 };
 

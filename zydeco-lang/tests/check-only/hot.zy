@@ -15,7 +15,7 @@ def fn reader_t_trans (R: VType) : MonadTrans (ReaderT R) =
   comatch
   | .lift -> fn (M: VType -> CType) (A: VType) (mo: U (Monad M)) (m: U (M A)) ->
     comatch
-    | .run -> fn r -> ! m
+    | .run r -> ! m
     end
   end
 end
