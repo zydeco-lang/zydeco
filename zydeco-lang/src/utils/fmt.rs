@@ -44,8 +44,9 @@ pub trait FmtArgs {
         }
     }
     fn fmt_inline_debug(&self) -> String {
-        // self.fmt_truncate(40)
-        self.fmt_no_br()
+        self.fmt_truncate(40)
+        // uncomment the following line to debug
+        // self.fmt_no_br()
     }
 }
 

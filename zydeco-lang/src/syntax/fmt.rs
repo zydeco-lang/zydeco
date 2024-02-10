@@ -111,18 +111,13 @@ where
         let mut s = String::new();
         // HACK: pretty printing special types syntactically
         let tvar_name = tvar.fmt_args(fargs);
-        if tvar_name == "Fn" {
-            s += &args.into_iter().map(|arg| arg.fmt_args(fargs)).collect::<Vec<_>>().join(" -> ");
-        } else {
-            // normal type application
-            s += &tvar_name;
-            // omit parentheses for empty type application
-            if !args.is_empty() {
-                s += "(";
-                s +=
-                    &args.into_iter().map(|arg| arg.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
-                s += ")";
-            }
+        // normal type application
+        s += &tvar_name;
+        // omit parentheses for empty type application
+        if !args.is_empty() {
+            s += "(";
+            s += &args.into_iter().map(|arg| arg.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
+            s += ")";
         }
         s
     }
@@ -358,7 +353,7 @@ where
             s += &fargs.br_indent();
             s += "| .";
             s += &dtor.fmt_args(fargs);
-            s += " -> ";
+            s += " ->";
             {
                 let fargs = fargs.indent();
                 s += &fargs.br_indent();

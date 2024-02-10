@@ -13,20 +13,6 @@ impl FmtArgs for Type {
     }
 }
 
-// impl FmtArgs for Abs<TermV, RcComp> {
-//     fn fmt_args(&self, fargs: Args) -> String {
-//         let Abs { param, body } = self;
-//         format!("fn {} -> {}", param.fmt_args(fargs), body.fmt_args(fargs))
-//     }
-// }
-
-// impl FmtArgs for App<RcComp, RcValue> {
-//     fn fmt_args(&self, fargs: Args) -> String {
-//         let App { body, arg } = self;
-//         format!("{} {}", body.fmt_args(fargs), arg.fmt_args(fargs))
-//     }
-// }
-
 impl FmtArgs for TailGroup {
     fn fmt_args(&self, fargs: Args) -> String {
         let mut s = String::new();
