@@ -46,7 +46,7 @@ Declaration: Declaration = {
     "alias" <name:NameDef<UpperId>> <params:TypePattern*> "=" <ty:Box<Sp<Type>>> "end" => Alias {
         name, params, ty,
     }.into(),
-    "define" <gen:GenLet> DefineEnd => Define(gen).into(),
+    "define" <gen:GenLet> "end" => Define(gen).into(),
     "main" <entry:Sp<TermComputation>> "end" => Main {
         entry,
     }.into(),
@@ -58,11 +58,6 @@ UseDef: UseDef = {
     <path:NameRef<UpperId>>  <cluster:SepByDelim<"(", ",", UseDef, ")">> => UseCluster {
         path, cluster,
     }.into(),
-};
-
-DefineEnd: () = {
-    "end" => (),
-    ";" => (),
 };
 
 DataBr: DataBr<CtorV, Sp<Type>> = {
