@@ -6,9 +6,9 @@
 // and project out either `Int` or `String`.
 
 codata Counter where
-| .num(): Ret Int
-| .incr(Int): Counter
-| .fmt(): Ret String
+| .num  : Ret Int
+| .incr : Int -> Counter
+| .fmt  : Ret String
 end
 
 // We can use `this` (or `self`) as in normal OO languages
@@ -24,9 +24,9 @@ main
     ! mk_counter 42
   } in
   // Todo: uncomment the following lines
-  // do s <- ! counter_42 .fmt();
+  // do s <- ! counter_42 .fmt;
   // ! write_line s {
-  // do n <- ! counter_42 .incr(-42) .num();
+  // do n <- ! counter_42 .incr(-42) .num;
   // ! exit n }
   // Todo: comment out the following line
   ! exit 0

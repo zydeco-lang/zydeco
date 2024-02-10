@@ -6,15 +6,15 @@ data Syn where
 end
 
 codata Matcher where
-  | .str(String): F(Option String)
-  | .concat(Syn, Syn): F(Option String)
-  | .kleene(Syn): F(Option String)
-  | .choose(Syn, Syn): F(Option String)
-  | .bind(Syn): F(Option String)
+  | .str    : String -> F(Option String)
+  | .concat : Syn -> Syn -> F(Option String)
+  | .kleene : Syn -> F(Option String)
+  | .choose : Syn -> Syn -> F(Option String)
+  | .bind   : Syn -> F(Option String)
 end
 
 codata Regex where
-  | .run(String): Matcher
+  | .run : String -> Matcher
 end
 
 def str_chop_hd : U(String -> Int -> F String) = { fn (s: String) (i: Int) ->
@@ -70,44 +70,44 @@ def str_match : U(String -> String -> F(Option String)) = {
 
 def rec regex : Regex = 
   comatch
-  | .run(s) ->
+  | .run -> fn s ->
     comatch
-    | .str(p) -> ! str_match s p
-    | .concat(sy1, sy2) ->
-      do s? <- ! regex .run(s) .bind(sy1);
+    | .str -> fn p -> ! str_match s p
+    | .concat -> fn sy1 sy2 ->
+      do s? <- ! regex .run s .bind sy1;
       match s?
       | None() -> ret None()
       | Some(s) ->
-        ! regex .run(s) .bind(sy2)
+        ! regex .run s .bind sy2
       end
-    | .kleene(sy) ->
-      do s? <- ! regex .run(s) .bind(sy);
+    | .kleene -> fn sy ->
+      do s? <- ! regex .run s .bind sy;
       match s?
       | None() -> ret Some(s)
-      | Some(s) -> ! regex .run(s) .kleene(sy)
+      | Some(s) -> ! regex .run s .kleene sy
       end
-    | .choose(sy1, sy2) ->
-      do s? <- ! regex .run(s) .bind(sy1);
+    | .choose -> fn sy1 sy2 ->
+      do s? <- ! regex .run s .bind sy1;
       match s?
       | Some(s) -> ret Some(s)
-      | None() -> ! regex .run(s) .bind(sy2)
+      | None() -> ! regex .run s .bind sy2
       end
-    | .bind(sy) ->
+    | .bind -> fn sy ->
       match sy
-      | Str(p) -> ! regex .run(s) .str(p)
-      | Concat(sy1, sy2) -> ! regex .run(s) .concat(sy1, sy2)
-      | Kleene(sy) -> ! regex .run(s) .kleene(sy)
-      | Choose(sy1, sy2) -> ! regex .run(s) .choose(sy1, sy2)
+      | Str(p) -> ! regex .run s .str p
+      | Concat(sy1, sy2) -> ! regex .run s .concat sy1 sy2
+      | Kleene(sy) -> ! regex .run s .kleene sy
+      | Choose(sy1, sy2) -> ! regex .run s .choose sy1 sy2
       end
     end
   end
 end
 
 def fn demo (syn: Syn) (str: String) (kont: Thunk OS): OS =
-  do res <- ! regex .run(str) .bind(syn);
+  do res <- ! regex .run str .bind syn;
   match res
-  | Some(s) -> (
-    ! write_line s kont)
+  | Some(s) ->
+    ! write_line s kont
   | None() -> ! exit 1
   end
 end

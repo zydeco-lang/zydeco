@@ -17,8 +17,8 @@ end
 
 // 2. Codata type declaration
 codata CoProd-2 (A : VType) (A' : VType) where
-  | .prj-1() : Ret A
-  | .prj-2() : Ret A'
+  | .prj-1 : Ret A
+  | .prj-2 : Ret A'
 end
 
 // Both data and codata declarations can be parametric. The type parameters are
@@ -37,8 +37,8 @@ alias CoProd-Bool-Sth (A : VType) = CoProd-2 Bool A end
 // 4. Term definitions of value type
 def some-co-prod : Thunk (CoProd-Bool-Sth (Prod-2 Int String)) = {
   comatch
-  | .prj-1() -> ret false
-  | .prj-2() -> ret Pair(0, "42")
+  | .prj-1 -> ret false
+  | .prj-2 -> ret Pair(0, "42")
   end
 } end
 
@@ -50,7 +50,7 @@ def some-co-prod : Thunk (CoProd-Bool-Sth (Prod-2 Int String)) = {
 
 // 5. Main computation of type `OS`
 main
-  do p <- ! some-co-prod .prj-2();
+  do p <- ! some-co-prod .prj-2;
   match p
   | Pair(n, _) ->
     ! exit n

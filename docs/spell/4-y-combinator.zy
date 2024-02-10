@@ -6,7 +6,7 @@
 // combinator.
 
 codata Y (B : CType) where
-  | .y(Thunk (Y B)): B
+  | .y : Thunk (Y B) -> B
 end
 
 // Exercise Y: Implement the Y combinator.

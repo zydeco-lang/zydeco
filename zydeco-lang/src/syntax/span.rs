@@ -238,10 +238,9 @@ where
     }
 }
 
-impl<D, TeV, B> SpanHolder for Comatch<D, TeV, B>
+impl<D, B> SpanHolder for Comatch<D, B>
 where
     D: DtorT + SpanHolder,
-    TeV: VarT + SpanHolder,
     B: ComputationT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
@@ -249,28 +248,25 @@ where
         F: Fn(&mut Span) + Clone,
     {
         let Comatch { arms } = self;
-        for Comatcher { dtorv: dtor, vars, body } in arms {
+        for Comatcher { dtorv: dtor, body } in arms {
             dtor.span_map_mut(f.clone());
-            vars.span_map_mut(f.clone());
             body.span_map_mut(f.clone());
         }
     }
 }
 
-impl<B, D, A> SpanHolder for Dtor<B, D, A>
+impl<B, D> SpanHolder for Dtor<B, D>
 where
     B: ComputationT + SpanHolder,
     D: DtorT + SpanHolder,
-    A: ValueT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut Span) + Clone,
     {
-        let Dtor { body, dtorv: dtor, args } = self;
+        let Dtor { body, dtorv: dtor } = self;
         body.span_map_mut(f.clone());
-        dtor.span_map_mut(f.clone());
-        args.span_map_mut(f);
+        dtor.span_map_mut(f);
     }
 }
 
@@ -328,9 +324,8 @@ where
         let Codata { name, params, dtors } = self;
         name.span_map_mut(f.clone());
         params.span_map_mut(f.clone());
-        for CodataBr { dtorv, tys, ty } in dtors {
+        for CodataBr { dtorv, ty } in dtors {
             dtorv.span_map_mut(f.clone());
-            tys.span_map_mut(f.clone());
             ty.span_map_mut(f.clone());
         }
     }

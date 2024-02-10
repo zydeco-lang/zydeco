@@ -103,7 +103,6 @@ pub struct Codata<TyV: TyVarT, Kd: KindT, D: DtorT, Ty: TypeT> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CodataBr<D: DtorT, Ty: TypeT> {
     pub dtorv: D,
-    pub tys: Vec<Ty>,
     pub ty: Ty,
 }
 

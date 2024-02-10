@@ -102,17 +102,16 @@ impl From<&ss::TermComputation> for SynComp {
             ss::TermComputation::Comatch(Comatch { arms }) => {
                 let arms = arms
                     .iter()
-                    .map(|Comatcher { dtorv: dtor, vars, body }| {
+                    .map(|Comatcher { dtorv: dtor, body }| {
                         let body = rc!(body.inner_ref().into());
-                        Comatcher { dtorv: dtor.clone(), vars: vars.clone(), body }
+                        Comatcher { dtorv: dtor.clone(), body }
                     })
                     .collect();
                 Comatch { arms }.into()
             }
-            ss::TermComputation::Dtor(Dtor { body, dtorv: dtor, args }) => {
+            ss::TermComputation::Dtor(Dtor { body, dtorv: dtor }) => {
                 let body = rc!(body.inner_ref().into());
-                let args = args.iter().map(|arg| rc!(arg.inner_ref().into())).collect();
-                Dtor { body, dtorv: dtor.clone(), args }.into()
+                Dtor { body, dtorv: dtor.clone() }.into()
             }
             ss::TermComputation::TyAbsTerm(Abs { param: _, body }) => body.inner_ref().into(),
             ss::TermComputation::TyAppTerm(App { body, arg: _ }) => body.inner_ref().into(),

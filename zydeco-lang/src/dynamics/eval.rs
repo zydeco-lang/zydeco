@@ -1,10 +1,7 @@
 use super::syntax::{Thunk as SemThunk, *};
 use crate::prelude::*;
 use im::Vector;
-use std::{
-    io::{BufRead, Write},
-    rc::Rc,
-};
+use std::io::{BufRead, Write};
 
 pub trait Eval<'rt>: Sized + FmtArgs {
     type Out;
@@ -123,21 +120,15 @@ impl<'rt> Eval<'rt> for ls::SynComp {
                 Step::Step(body.as_ref().clone())
             }
             ls::SynComp::Comatch(ls::Comatch { arms }) => {
-                let Some(SemComp::Dtor(dtor, args)) = runtime.stack.pop_back() else {
+                let Some(SemComp::Dtor(dtor)) = runtime.stack.pop_back() else {
                     panic!("Comatch on non-Dtor")
                 };
-                let ls::Comatcher { dtorv: _, vars, body } =
+                let ls::Comatcher { dtorv: _, body } =
                     arms.into_iter().find(|arm| arm.dtorv == dtor).expect("no matching arm");
-                for (var, arg) in vars.into_iter().zip(args.into_iter()) {
-                    let env = runtime.env.update(var, arg.as_ref().clone());
-                    runtime.env = env;
-                }
                 Step::Step(body.as_ref().clone())
             }
-            ls::SynComp::Dtor(ls::Dtor { body, dtorv: dtor, args }) => {
-                let args =
-                    args.iter().map(|arg| Rc::new(arg.as_ref().clone().eval(runtime))).collect();
-                runtime.stack.push_back(SemComp::Dtor(dtor, args));
+            ls::SynComp::Dtor(ls::Dtor { body, dtorv: dtor }) => {
+                runtime.stack.push_back(SemComp::Dtor(dtor));
                 Step::Step(body.as_ref().clone())
             }
             ls::SynComp::Prim(ls::Prim { arity, body }) => {

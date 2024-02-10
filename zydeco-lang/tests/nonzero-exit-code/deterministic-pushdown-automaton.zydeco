@@ -14,8 +14,8 @@ data ParenCounterState where
 end
 
 codata ParenCounterStk where
-  | .none() : Ret(Bool)
-  | .some() : ParenCounterStk
+  | .none : Ret Bool
+  | .some : ParenCounterStk
 end
 
 alias ParenCounterTrans = ParenCounterState -> ParenCounterStk end
@@ -34,15 +34,15 @@ end
 
 def rec reject : ParenCounterStk =
   comatch
-  | .none() -> ret false
-  | .some() -> ! reject
+  | .none -> ret false
+  | .some -> ! reject
   end
 end
   
 def try_accept : Thunk(ParenCounterStk) = {
   comatch
-  | .none() -> ret true
-  | .some() -> ! reject
+  | .none -> ret true
+  | .some -> ! reject
   end
 } end
 
@@ -55,18 +55,18 @@ end
 
 def fn paren_counter_step (c : Tok) (k : Thunk(ParenCounterTrans)) (state : ParenCounterState) : ParenCounterStk =
   match c
-  | LParen() -> ! k state .some()
+  | LParen() -> ! k state .some
   | RParen() ->
   (comatch
-  | .none() -> ! k (Reject() : ParenCounterState) .none() # Note: would be more efficient to just ! reject here
-  | .some() -> ! k state
+  | .none -> ! k (Reject() : ParenCounterState) .none # Note: would be more efficient to just ! reject here
+  | .some -> ! k state
   end)
   end
 end
 
 def fn demonstrate (s: String) (expect: Bool) (toks: Thunk(Ret(LList' Tok))) (t : Thunk(OS)) : OS =
   do s' <- ! str_append "The following parens are balanced? "  s;
-  do b <- ! foldr toks paren_counter_step accept_or_not (Ok() : ParenCounterState) .none();
+  do b <- ! foldr toks paren_counter_step accept_or_not (Ok() : ParenCounterState) .none;
   do pass <- ! bool_eq expect b;
   match pass
   | True() -> (

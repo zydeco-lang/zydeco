@@ -1,6 +1,6 @@
 codata Monad (M: VType -> CType) where
-  | .return(): forall (A: VType) . A -> M A
-  | .bind(): forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
+  | .return: forall (A: VType) . A -> M A
+  | .bind: forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
 end
 
 data Exception where
@@ -33,12 +33,12 @@ alias Mo' (A: VType) =
 end
 
 codata Mo (A: VType) where
-  | .run(): Mo' A
+  | .run: Mo' A
 end
 
 def fn mk_mexn (v: U (Mo' Value)) : Mo Value =
   comatch
-  | .run() -> ! v
+  | .run -> ! v
   end
 end
 
@@ -74,21 +74,21 @@ end
 
 def fn mexn : Monad Mo =
   comatch
-  | .return() -> fn A a ->
+  | .return -> fn A a ->
     comatch
-    | .run() -> fn s ->
+    | .run -> fn s ->
       ret Cons(s, Right({ fn R k -> ! k a }))
     end
-  | .bind() -> fn A A' m f -> comatch
-    | .run() -> fn s -> 
-      do x <- ! m .run() s;
+  | .bind -> fn A A' m f -> comatch
+    | .run -> fn s -> 
+      do x <- ! m .run s;
       match x
       | Cons(s', v) ->
         match v
         | Left(e) -> ret Cons(s', Left(e))
         | Right(k) ->
           do a <- ! k @(Ret A) { fn a -> ret a };
-          ! f a .run() s'
+          ! f a .run s'
         end
       end
     end
@@ -101,23 +101,23 @@ data EnvT where
 end
 
 codata EnvO where
-  | .lookup(): String -> Ret (Option Value)
-  | .extend(): String -> Value -> EnvO
+  | .lookup: String -> Ret (Option Value)
+  | .extend: String -> Value -> EnvO
 end
 
 def rec fn envo (env: EnvT) : EnvO =
   comatch
-  | .lookup() -> fn x ->
+  | .lookup -> fn x ->
     match env
     | Empty() -> ret None()
     | Extend(x', v, env') ->
       do is-eq? <- ! str_eq x x';
       match is-eq?
       | True() -> ret Some(v)
-      | False() -> ! envo env' .lookup() x
+      | False() -> ! envo env' .lookup x
       end
     end
-  | .extend() -> fn x v ->
+  | .extend -> fn x v ->
     ! envo Extend(x, v, env)
   end
 end
@@ -138,36 +138,36 @@ end
 def rec fn interp (env: U EnvO) (t: Term) : Mo Value =
   match t
   | Var(x) ->
-    do x? <- ! env .lookup() x;
+    do x? <- ! env .lookup x;
     match x?
     | None() -> ! raise FreeVariable()
     | Some(v) ->
-      ! mexn .return() @(Value) v
+      ! mexn .return @(Value) v
       // ret[mexn] v
     end
   | Lam(x, t) ->
-    ! mexn .return() @(Value) Lam(env, x, t)
+    ! mexn .return @(Value) Lam(env, x, t)
     // ret[mexn] Lam(env, x, t)
   | App(t1, t2) ->
-    let m1 = { ! interp env t1 .run() };
-    ! mexn .bind() @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
+    let m1 = { ! interp env t1 .run };
+    ! mexn .bind @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
       // do[mexn] v1 <- ! interp env t1 .run;
-      let m2 = { ! interp env t2 .run() };
-      ! mexn .bind() @(Value) @(Value) { ! mk_mexn m2 } { fn v2 ->
+      let m2 = { ! interp env t2 .run };
+      ! mexn .bind @(Value) @(Value) { ! mk_mexn m2 } { fn v2 ->
         // do[mexn] v2 <- ! interp env t2 .run;
         match v1
         | Bool(b) -> ! raise TypeError()
         | Lam(env', x, t) ->
-          ! interp { ! env' .extend() x v2 } t
+          ! interp { ! env' .extend x v2 } t
         end
       }
     }
   | Bool(b) ->
-    ! mexn .return() @(Value) Bool(b)
+    ! mexn .return @(Value) Bool(b)
     // ret[mexn] Bool(b)
   | If(t1, t2, t3) ->
-    let m1 = { ! interp env t1 .run() };
-    ! mexn .bind() @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
+    let m1 = { ! interp env t1 .run };
+    ! mexn .bind @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
       // do[mexn] v1 <- ! interp env t1 .run;
       match v1
       | Bool(b) ->
@@ -184,7 +184,7 @@ end
 main
   let term : Term = App(Lam("x", Var("x")), Bool(True()));
   let env : U EnvO = { ! envo Empty() };
-  do sv? <- ! interp env term .run() State(0, "");
+  do sv? <- ! interp env term .run State(0, "");
   match sv?
   | Cons(s, v?) ->
     match v?
@@ -205,6 +205,6 @@ main
   // let w : Term = Lam("x", App(Var("x"), Var("x")));
   // let term : Term = App(w, w);
   // let env : U EnvO = { ! envo Empty() };
-  // do v? <- ! interp env term .run();
+  // do v? <- ! interp env term .run;
   // ! panic "unreachable"
 end

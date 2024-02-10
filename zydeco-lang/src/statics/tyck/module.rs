@@ -71,7 +71,7 @@ impl TypeCheck for Sp<&prelude::Codata> {
             ctx.type_ctx.insert(tvar.clone(), kd.inner_clone());
         }
         let mut dtorvs = HashSet::new();
-        for CodataBr { dtorv, tys, ty } in data.dtors.iter() {
+        for CodataBr { dtorv, ty } in data.dtors.iter() {
             let span = dtorv.span();
             if dtorvs.contains(dtorv) {
                 Err(ctx.err(
@@ -80,9 +80,6 @@ impl TypeCheck for Sp<&prelude::Codata> {
                 ))?;
             }
             dtorvs.insert(dtorv.clone());
-            for ty in tys {
-                ty.ana(KindBase::VType.into(), ctx.clone())?;
-            }
             ty.ana(KindBase::CType.into(), ctx.clone())?;
         }
         Ok(Step::Done(()))

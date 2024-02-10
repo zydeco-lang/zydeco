@@ -18,25 +18,31 @@ impl CpsTransform for SynComp {
                 App { body: Rc::new(body.cps_transform()), arg: Rc::new(arg.cps_transform()) }
                     .into()
             }
-            SynComp::Do(Do { var, comp, body }) => Dtor {
-                body: Rc::new(comp.cps_transform()),
-                dtorv: call.clone(),
-                args: vec![Rc::new(
+            SynComp::Do(Do { var, comp, body }) => App {
+                body: Rc::new(
+                    Dtor { body: Rc::new(comp.cps_transform()), dtorv: call.clone() }.into(),
+                ),
+                arg: Rc::new(
                     Thunk(Rc::new(
                         Abs { param: var.clone(), body: Rc::new(body.cps_transform()) }.into(),
                     ))
                     .into(),
-                )],
+                ),
             }
             .into(),
             SynComp::Ret(Ret(val)) => Comatch {
                 arms: vec![Comatcher {
                     dtorv: call.clone(),
-                    vars: vec![cont.clone()],
                     body: Rc::new(
-                        App {
-                            body: Rc::new(Force(Rc::new(cont.clone().into())).into()),
-                            arg: Rc::new(val.cps_transform()),
+                        Abs {
+                            param: cont.clone(),
+                            body: Rc::new(
+                                App {
+                                    body: Rc::new(Force(Rc::new(cont.clone().into())).into()),
+                                    arg: Rc::new(val.cps_transform()),
+                                }
+                                .into(),
+                            ),
                         }
                         .into(),
                     ),
@@ -68,20 +74,16 @@ impl CpsTransform for SynComp {
             SynComp::Comatch(Comatch { arms }) => Comatch {
                 arms: arms
                     .iter()
-                    .map(|Comatcher { dtorv, vars, body }| Comatcher {
+                    .map(|Comatcher { dtorv, body }| Comatcher {
                         dtorv: dtorv.clone(),
-                        vars: vars.clone(),
                         body: Rc::new(body.cps_transform()),
                     })
                     .collect(),
             }
             .into(),
-            SynComp::Dtor(Dtor { body, dtorv, args }) => Dtor {
-                body: Rc::new(body.cps_transform()),
-                dtorv: dtorv.clone(),
-                args: args.iter().map(|arg| Rc::new(arg.cps_transform())).collect(),
+            SynComp::Dtor(Dtor { body, dtorv }) => {
+                Dtor { body: Rc::new(body.cps_transform()), dtorv: dtorv.clone() }.into()
             }
-            .into(),
             SynComp::Prim(Prim { arity, body }) => {
                 Prim { arity: *arity, body: body.clone() }.into()
             }

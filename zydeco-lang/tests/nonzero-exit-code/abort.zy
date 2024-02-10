@@ -1,16 +1,16 @@
 codata Stack (A : VType) where
-  | .app(A): Stack A
-  | .return(): F(A)
+  | .app : A -> Stack A
+  | .return : F(A)
 end
 
 def rec fn abort (x: Int): Stack Int =
   comatch
-  | .app(_) -> ! abort x
-  | .return() -> ret x
+  | .app -> fn _ -> ! abort x
+  | .return -> ret x
   end
 end
 
 main
-  do x <- ! abort 0 .app(1) .app(2) .app(3) .return();
+  do x <- ! abort 0 .app 1 .app 2 .app 3 .return;
   ! exit x
 end

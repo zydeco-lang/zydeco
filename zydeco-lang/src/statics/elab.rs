@@ -385,18 +385,16 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let arms = arms
                     .into_iter()
                     .map(|arm| {
-                        let ps::Comatcher { dtorv, vars, body } = arm;
-                        let vars = vars.into_iter().map(Into::into).collect();
+                        let ps::Comatcher { dtorv, body } = arm;
                         let body = rc!((body).try_map(Elaboration::elab)?);
-                        Ok(Comatcher { dtorv, vars, body })
+                        Ok(Comatcher { dtorv, body })
                     })
                     .collect::<Result<Vec<_>, TyckErrorItem>>()?;
                 Comatch { arms }.into()
             }
-            ps::TermComputation::Dtor(ps::Dtor { body, dtorv, args }) => {
+            ps::TermComputation::Dtor(ps::Dtor { body, dtorv }) => {
                 let body = rc!((body).try_map(Elaboration::elab)?);
-                let args = Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect();
-                Dtor { body, dtorv, args }.into()
+                Dtor { body, dtorv }.into()
             }
             ps::TermComputation::TyAppTerm(ps::App { body, arg }) => {
                 let body = rc!((body).try_map(Elaboration::elab)?);
@@ -490,10 +488,9 @@ impl Elaboration<ps::Codata<NameDef, Option<Sp<ps::Kind>>, DtorV, Sp<ps::Type>>>
 impl Elaboration<ps::CodataBr<DtorV, Sp<ps::Type>>> for CodataBr<DtorV, RcType> {
     type Error = TyckErrorItem;
     fn elab(
-        CodataBr { dtorv, tys, ty }: ps::CodataBr<DtorV, Sp<ps::Type>>,
+        CodataBr { dtorv, ty }: ps::CodataBr<DtorV, Sp<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
-        let tys = Vec::<_>::elab(tys)?.into_iter().map(|ty| rc!(ty)).collect();
-        Ok(Self { dtorv, tys, ty: rc!(ty.try_map(Elaboration::elab)?) })
+        Ok(Self { dtorv, ty: rc!(ty.try_map(Elaboration::elab)?) })
     }
 }
 

@@ -5,19 +5,19 @@
 alias Lens (S : VType) (A : VType) = forall (Fun : VType -> CType) . Thunk (A -> Fun A) -> (S -> Fun S) end
 
 codata Identity (A : VType) where
-| .identity(): Ret A
+| .identity : Ret A
 end
 
 codata Const (A : VType) (B : VType) where
-| .const(): Ret A
+| .const: Ret A
 end
 
 def fn over (S : VType) (A : VType) (lens : Thunk (Lens S A)) (f : Thunk (A -> Ret A)) (s : S) : Ret S =
-  (! lens @(Identity) { fn a -> comatch | .identity() -> ! f a end } s) .identity()
+  (! lens @(Identity) { fn a -> comatch | .identity -> ! f a end } s) .identity
 end
 
 def fn view (S : VType) (A : VType) (lens : Thunk (Lens S A)) (s : S) : Ret A =
-  (! lens @(Const A) { fn a -> comatch | .const() -> ret a end } s) .const()
+  (! lens @(Const A) { fn a -> comatch | .const -> ret a end } s) .const
 end
 
 main

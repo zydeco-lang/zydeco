@@ -1,5 +1,5 @@
 codata Y (B : CType) where
-  | .y(U(Y B)): B
+  | .y : U(Y B) -> B
 end
 
 # \f. (\x. f (x x)) (\x. f (x x))
@@ -8,7 +8,7 @@ end
 # preserve the intention of lazy evaluation in `x` above.
 
 def fn rec' (B : CType) (f: U(U B -> B)): F(U B) =
-  let prim : U(Y B) = { comatch | .y(x) -> ! f { ! x .y(x) } end } in
+  let prim : U(Y B) = { comatch | .y -> fn x -> ! f { ! x .y x } end } in
   ret { ! prim .y(prim) }
 end
 
@@ -19,10 +19,10 @@ main
     match is_zero
     | True() -> ret 1
     | False() ->
-      do rest <- (
+      do rest <-
         do n-1 <- ! sub n 1;
         ! f n-1
-      );
+      ;
       ! mul n rest
     end
   in

@@ -6,8 +6,8 @@
 // Exercise `even-odd`: Define `even` and `odd` for natural numbers.
 
 codata EvenOdd where
-  | .even(Nat): Ret Bool
-  | .odd(Nat): Ret Bool
+  | .even : Nat -> Ret Bool
+  | .odd  : Nat -> Ret Bool
 end
 
 def even-odd : Thunk EvenOdd = {

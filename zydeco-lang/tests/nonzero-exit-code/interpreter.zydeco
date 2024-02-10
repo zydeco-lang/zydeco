@@ -44,8 +44,8 @@ end
 # this codata type. There are two eliminators: application to a
 # variable and a bind.
 codata SemComp where
-  | .app(SemVal) : SemComp
-  | .bind()      : Ret(Answer SemVal)
+  | .app  : SemVal -> SemComp
+  | .bind : Ret(Answer SemVal)
 end
 
 # The interpreters for values and computations are implemented
@@ -53,8 +53,8 @@ end
 # Currently zydeco doesn't directly support mutual recursion but
 # it can be easily simulated:
 codata Interpreter where
-  | .valu(SynVal, Env)  : Ret(Answer SemVal)
-  | .comp(SynComp, Env) : SemComp
+  | .valu : SynVal  -> Env -> Ret (Answer SemVal)
+  | .comp : SynComp -> Env -> SemComp
 end
 
 def fn sem_val_to_str (s : SemVal) : F String =
@@ -79,79 +79,71 @@ end
 
 def rec error: SemComp =
   comatch
-    | .app(_) -> ! error
-    | .bind() -> ret Err()
+    | .app -> fn _ -> ! error
+    | .bind -> ret Err()
   end
 end
 
 def rec interp: Interpreter =
   comatch
-    | .valu(v, g) -> (
+    | .valu -> fn v g ->
       match v
       | Var(x) -> ! lookup x g
       | True() -> ret Ok(True())
       | False() -> ret Ok(False())
       # Here we use the meta-language closures to capture the environment g 
-      | ThunkV(m) -> ret Ok(ThunkV({ ! interp .comp(m, g) }))
+      | ThunkV(m) -> ret Ok(ThunkV({ ! interp .comp m g }))
       end
-    )
-    | .comp(m, g) -> (
+    | .comp -> fn m g ->
       match m
-      | If(cond, mt, mf) -> (
+      | If(cond, mt, mf) ->
         match cond
         | Var(_) -> ! error
-        | True() -> ! interp .comp(mt, g)
-        | False() -> ! interp .comp(mf, g)
+        | True() -> ! interp .comp mt g
+        | False() -> ! interp .comp mf g
         | ThunkV(_) -> ! error
         end
-      )
-      | Force(syn_val) -> (
-        do v? <- ! interp .valu(syn_val, g);
+      | Force(syn_val) ->
+        do v? <- ! interp .valu syn_val g;
         match v?
-        | Ok(v) -> (
+        | Ok(v) ->
           match v
           | ThunkV(t) -> ! t
           | True() -> ! error
           | False() -> ! error
           end
-        )
         | Err() -> ! error
         end
-      )
-      | Return(syn_val) -> (
-        do v <- ! interp .valu(syn_val, g);
+      | Return(syn_val) ->
+        do v <- ! interp .valu syn_val g;
         comatch
-          | .bind() -> ret v
-          | .app(_) -> ! error
+          | .bind -> ret v
+          | .app -> fn _ -> ! error
         end
-      )
-      | Bind(m, x, k) -> (
-        do v? <- ! interp .comp(m, g) .bind();
+      | Bind(m, x, k) ->
+        do v? <- ! interp .comp m g .bind;
         match v?
-        | Ok(v) -> ! interp .comp(k, Cons(x, v, g))
+        | Ok(v) -> ! interp .comp k Cons(x, v, g)
         | Err() -> ! error
         end
-      )
-      | Lam(x, m) -> (
+      | Lam(x, m) ->
         comatch
-          | .app(v) -> (! interp .comp(m, Cons(x, v, g)))
-          | .bind() -> ret Err()
+          | .app -> fn v -> ! interp .comp m Cons(x, v, g)
+          | .bind -> ret Err()
         end
-      )
-      | App(m, v) -> (
-        do v? <- ! interp .valu(v, g);
+      | App(m, v) ->
+        do v? <- ! interp .valu v g;
         match v?
-        | Ok(v) -> ! interp .comp(m, g) .app(v)
+        | Ok(v) -> ! interp .comp m g .app v
         | Err() -> ! error
         end
-      )
-      end)
+      end
     end
 end
 
 # An example
 main
-  do x <- ! interp .comp(App(Lam("x", Return(Var("x"))), False()), Empty()) .bind();
+  do x <- ! interp .comp App(Lam("x", Return(Var("x"))), False()) Empty() .bind;
   match x
   | Err() -> ! panic "ERROR"
   | Ok(sv) ->

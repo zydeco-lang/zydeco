@@ -30,13 +30,13 @@ def some-0~ : Thunk(Ret (Option Int)) = {
 
 def xs~ : Thunk (LList Int) = {
   comatch
-  | .run() -> ret Cons(0, {
+  | .run -> ret Cons(0, {
     comatch
-    | .run() -> ret Cons(2, {
+    | .run -> ret Cons(2, {
       comatch
-      | .run() -> ret Cons(4, {
+      | .run -> ret Cons(4, {
         comatch
-        | .run() -> ret Nil()
+        | .run -> ret Nil()
         end
       }) end
     }) end
@@ -44,7 +44,7 @@ def xs~ : Thunk (LList Int) = {
 } end
 
 def some-0~' : Thunk(Ret (Option Int)) = {
-  do p <- ! xs~ .run();
+  do p <- ! xs~ .run;
   match p
   | Nil() -> ret None()
   | Cons(x, _) -> ret Some(x)

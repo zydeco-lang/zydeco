@@ -345,23 +345,20 @@ where
     }
 }
 
-impl<D, TeV, B> FmtArgs for Comatch<D, TeV, B>
+impl<D, B> FmtArgs for Comatch<D, B>
 where
     D: DtorT + FmtArgs,
-    TeV: VarT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
         let Comatch { arms } = self;
         let mut s = String::new();
         s += "comatch";
-        for Comatcher { dtorv: dtor, vars, body } in arms {
+        for Comatcher { dtorv: dtor, body } in arms {
             s += &fargs.br_indent();
             s += "| .";
             s += &dtor.fmt_args(fargs);
-            s += "(";
-            s += &vars.into_iter().map(|var| var.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
-            s += ") -> ";
+            s += " -> ";
             {
                 let fargs = fargs.indent();
                 s += &fargs.br_indent();
@@ -374,21 +371,17 @@ where
     }
 }
 
-impl<B, D, A> FmtArgs for Dtor<B, D, A>
+impl<B, D> FmtArgs for Dtor<B, D>
 where
     B: ComputationT + FmtArgs,
     D: DtorT + FmtArgs,
-    A: ValueT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let Dtor { body, dtorv: dtor, args } = self;
+        let Dtor { body, dtorv: dtor } = self;
         let mut s = String::new();
         s += &body.fmt_args(fargs);
         s += " .";
         s += &dtor.fmt_args(fargs);
-        s += "(";
-        s += &args.into_iter().map(|arg| arg.fmt_args(fargs)).collect::<Vec<_>>().join(", ");
-        s += ")";
         s
     }
 }
@@ -511,18 +504,11 @@ where
     Ty: TypeT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let CodataBr { dtorv, tys, ty } = self;
+        let CodataBr { dtorv, ty } = self;
         let mut s = String::new();
         s += "| .";
         s += &dtorv.fmt_args(fargs);
-        s += "(";
-        s += &tys
-            .into_iter()
-            .map(|ty| format!("{}", ty.fmt_args(fargs)))
-            .collect::<Vec<_>>()
-            .join(", ");
-        s += ")";
-        s += ": ";
+        s += " : ";
         s += &ty.fmt_args(fargs);
         s
     }

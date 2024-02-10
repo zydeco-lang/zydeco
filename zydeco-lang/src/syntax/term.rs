@@ -108,21 +108,19 @@ pub struct Matcher<C: CtorT, TeV: VarT, B: ComputationT> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Comatch<D: DtorT, TeV: VarT, B: ComputationT> {
-    pub arms: Vec<Comatcher<D, TeV, B>>,
+pub struct Comatch<D: DtorT, B: ComputationT> {
+    pub arms: Vec<Comatcher<D, B>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Comatcher<D: DtorT, TeV: VarT, B: ComputationT> {
+pub struct Comatcher<D: DtorT, B: ComputationT> {
     pub dtorv: D,
-    pub vars: Vec<TeV>,
     pub body: B,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Dtor<B: ComputationT, D: DtorT, A: ValueT> {
+pub struct Dtor<B: ComputationT, D: DtorT> {
     pub body: B,
     pub dtorv: D,
-    pub args: Vec<A>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -1,5 +1,5 @@
 codata Y (B : CType) where
-  | .y(Thunk (Y B)): B
+  | .y : Thunk (Y B) -> B
 end
 
 data Self (B : VType) where
@@ -8,8 +8,8 @@ end
 
 def fix : Thunk (forall (B : CType) . Thunk(Thunk B -> B) -> B) = {
   fn B f ->
-  let prim : Thunk (Y B) = { comatch | .y(x) -> ! f { ! x .y(x) } end } in
-  ! prim .y(prim)
+  let prim : Thunk (Y B) = { comatch | .y -> fn x -> ! f { ! x .y x } end } in
+  ! prim .y prim
 } end
 
 main

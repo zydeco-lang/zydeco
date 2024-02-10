@@ -72,9 +72,8 @@ DataBr: DataBr<CtorV, Sp<Type>> = {
 };
 
 CodataBr: CodataBr<DtorV, Sp<Type>> = {
-    "|" <dtorv:DtorV> <tys:SepByDelim<"(", ",", <Sp<Type>>, ")">> ":"
-    <ty:Sp<Type>> => {
-        CodataBr { dtorv, tys, ty }
+    "|" <dtorv:DtorV> ":" <ty:Sp<Type>> => {
+        CodataBr { dtorv, ty }
     }
 };
 
@@ -205,11 +204,8 @@ TermComputation: TermComputation = {
     "fn" <param:Pattern*> "->" <body:Box<Sp<TermComputation>>> => Abs {
         param, body,
     }.into(),
-    "fn" <dtorv:DtorV> <vars:SepByDelim<"(", ",", NameDef<LowerId>, ")">> "->"
-    <body:Sp<TermComputation>> => Comatch {
-        arms: vec![Comatcher {
-            dtorv, vars, body
-        }],
+    "fn" <dtorv:DtorV> "->" <body:Sp<TermComputation>> => Comatch {
+        arms: vec![Comatcher { dtorv, body }],
     }.into(),
     "match" <scrut:Box<Sp<TermValue>>> 
     "|"? "pack" "(" <tvar:NameDef<UpperId>> "," <var:NameDef<LowerId>> ")" "->"
@@ -232,9 +228,8 @@ TermComputationRight: TermComputation = {
     <body:Box<Sp<TermComputationRight>>> "@" "(" <arg:Box<Sp<Type>>> ")" => App {
         body, arg,
     }.into(),
-    <body:Box<Sp<TermComputationRight>>> <dtorv:DtorV>
-    <args:SepByDelim<"(", ",", Sp<TermValue>, ")">> => Dtor {
-        body, dtorv, args,
+    <body:Box<Sp<TermComputationRight>>> <dtorv:DtorV> => Dtor {
+        body, dtorv,
     }.into(),
 };
 
@@ -265,10 +260,10 @@ MatchBr: Matcher<CtorV, NameDef, Sp<TermComputation>> = {
     }
 };
 
-ComatchBr: Comatcher<DtorV, NameDef, Sp<TermComputation>> = {
-    "|" <dtorv:DtorV> <vars:SepByDelim<"(", ",", NameDef<LowerId>, ")">> "->"
+ComatchBr: Comatcher<DtorV, Sp<TermComputation>> = {
+    "|" <dtorv:DtorV> "->"
     <body:Sp<TermComputation>> => Comatcher {
-        dtorv, vars, body
+        dtorv, body
     }
 };
 

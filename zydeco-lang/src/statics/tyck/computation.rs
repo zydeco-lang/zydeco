@@ -151,7 +151,7 @@ impl TypeCheck for Sp<TermComputation> {
             TermComputation::Comatch(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("comatch") }))?
             }
-            TermComputation::Dtor(Dtor { body, dtorv: dtor, args }) => {
+            TermComputation::Dtor(Dtor { body, dtorv: dtor }) => {
                 let ty_body = body.syn(ctx.clone())?;
                 let (Codata { name, params, dtors }, ty_args) =
                     ctx.resolve_codata(ty_body, span)?;
@@ -166,9 +166,9 @@ impl TypeCheck for Sp<TermComputation> {
                         },
                     )
                 })?;
-                let CodataBr { dtorv: _, tys, ty } = dtors
+                let CodataBr { dtorv: _, ty } = dtors
                     .into_iter()
-                    .find(|CodataBr { dtorv, tys: _, ty: _ }| dtorv == dtor)
+                    .find(|CodataBr { dtorv, ty: _ }| dtorv == dtor)
                     .ok_or_else(|| {
                         ctx.err(
                             body.span(),
@@ -179,19 +179,6 @@ impl TypeCheck for Sp<TermComputation> {
                             .into(),
                         )
                     })?;
-                bool_test(args.len() == tys.len(), || {
-                    ctx.err(
-                        span,
-                        ArityMismatch {
-                            context: format!("dtor"),
-                            expected: tys.len(),
-                            found: args.len(),
-                        },
-                    )
-                })?;
-                for (arg, ty) in args.iter().zip(tys.iter()) {
-                    arg.ana(ty.inner_clone().subst(diff.clone(), &ctx)?, ctx.clone())?;
-                }
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
             TermComputation::TyAbsTerm(_) => {
@@ -405,25 +392,18 @@ impl TypeCheck for Sp<TermComputation> {
                         },
                     )
                 })?;
-                let dtors: HashMap<_, _> = dtors
-                    .into_iter()
-                    .map(|CodataBr { dtorv, tys, ty }| (dtorv, (tys, ty)))
-                    .collect();
+                let dtors: HashMap<_, _> =
+                    dtors.into_iter().map(|CodataBr { dtorv, ty }| (dtorv, ty)).collect();
                 let mut unexpected = Vec::new();
                 let mut dtorv_set_arm: HashSet<DtorV> = HashSet::new();
-                for Comatcher { dtorv: dtor, vars, body } in arms {
-                    let Some((tys, ty)) = dtors.get(dtor).cloned() else {
+                for Comatcher { dtorv: dtor, body } in arms {
+                    let Some(ty) = dtors.get(dtor).cloned() else {
                         unexpected.push(dtor.to_owned());
                         continue;
                     };
                     dtorv_set_arm.insert(dtor.to_owned());
-                    let tys = tys.into_iter().map(|ty| ty.inner_clone().subst(diff.clone(), &ctx));
                     let ty = ty.inner_clone().subst(diff.clone(), &ctx)?;
-                    let mut ctx = ctx.clone();
-                    for (var, ty) in vars.iter().zip(tys) {
-                        ctx.term_ctx.insert(var.to_owned(), ty?);
-                    }
-                    body.ana(ty, ctx)?;
+                    body.ana(ty, ctx.clone())?;
                 }
                 let dtorv_set_coda: HashSet<DtorV> = dtors.keys().cloned().collect();
                 let missing: Vec<_> = dtorv_set_coda.difference(&dtorv_set_arm).cloned().collect();

@@ -12,7 +12,7 @@ module Builtin where
 
   ## the Fn type
   pub codata Fn (A: VType) (B: CType) where
-    | .arg(A) : B
+    | .arg : A -> B
   end
   ### Functions are syntax sugars around this internal type definition.
 end
@@ -73,71 +73,57 @@ module Std where
       | False() -> ret true
       end
     end
-    // pub def not : Thunk(Bool -> Ret(Bool)) = {
-    //   fn (x) ->
-    //     match x
-    //     | True() -> ret false
-    //     | False() -> ret true
-    //     end
-    // } end
 
     # lazy not
-    pub def not~ : Thunk(Thunk(Ret(Bool)) -> Ret(Bool)) = {
-      fn t~ ->
-        do x <- ! t~;
-        match x
-        | True() -> ret false
-        | False() -> ret true
-        end
-    } end
+    pub def fn not~ (t~: Thunk(Ret Bool)) : Ret(Bool) =
+      do x <- ! t~;
+      match x
+      | True() -> ret false
+      | False() -> ret true
+      end
+    end
 
-    pub def and : Thunk(Bool -> Bool -> Ret(Bool)) = {
-      fn x y ->
+    pub def fn and (x: Bool) (y: Bool) : Ret Bool =
         match x
         | True() -> ret y
         | False() -> ret false
         end
-    } end
+    end
 
     # Lazy, short-circuiting (left to right) and
-    pub def and~ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
-      fn b1~ b2~ ->
+    pub def fn and~ : Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool) = fn b1~ b2~ ->
       do b1 <- ! b1~;
       match b1
       | True() -> ! b2~
       | False() -> ret false
       end
-    } end
+    end
 
-    pub def or : Thunk(Bool -> Bool -> Ret(Bool)) = {
-      fn x y ->
-        match x
-        | True() -> ret true
-        | False() -> ret y
-        end
-    } end
+    pub def fn or : Bool -> Bool -> Ret(Bool) = fn x y ->
+      match x
+      | True() -> ret true
+      | False() -> ret y
+      end
+    end
 
     # Lazy, short-circuiting (left to right) or
-    pub def or~ : Thunk(Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool)) = {
-      fn b1~ b2~ ->
+    pub def fn or~ : Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool) = fn b1~ b2~ ->
       do b1 <- ! b1~;
       match b1
       | True() -> ret true
       | False() -> ! b2~
       end
-    } end
+    end
 
-    pub def nand : Thunk(Bool -> Bool -> Ret(Bool)) = {
-      fn x y ->
-        do a <- ! and x y;
-        ! not a
-    } end
+    pub def fn nand : Bool -> Bool -> Ret(Bool) = fn x y ->
+      do a <- ! and x y;
+      ! not a
+    end
 
-    pub def nor : Thunk(Bool -> Bool -> Ret(Bool)) = {
-      fn x y ->
-        do a <- ! or x y;
-        ! not a
-    } end
+    pub def fn nor : Bool -> Bool -> Ret(Bool) = fn x y ->
+      do a <- ! or x y;
+      ! not a
+    end
 
     pub def bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
       fn b b' ->
@@ -231,22 +217,22 @@ module Std where
     end
 
     pub codata LList (A : VType) where
-      | .run(): Ret (LListV A (LList A))
+      | .run : Ret (LListV A (LList A))
     end
 
 
     pub def fn nil (A : VType) : LList A =
-      comatch | .run() -> ret Nil() end
+      comatch | .run -> ret Nil() end
     end
 
     pub def fn cons (A : VType) (hd : A) (tl : U (LList A)) : LList A =
       comatch
-      | .run() -> ret Cons(hd, tl)
+      | .run -> ret Cons(hd, tl)
       end
     end
 
     pub def fn match_ll (A: VType) (R : CType) (xs : U(LList A)) (knil : U R) (kcons : U(A -> U(LList A) -> R)) : R =
-        do v <- ! xs .run();
+        do v <- ! xs .run;
         match v
         | Nil()       -> ! knil
         | Cons(x, xs) -> ! kcons x xs
@@ -254,7 +240,7 @@ module Std where
     end
 
     pub def rec fn foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
-      do xsv <- ! xs .run();
+      do xsv <- ! xs .run;
       match xsv
       | Nil() -> ! b
       | Cons(hd, tl) -> ! f hd {! foldr @(A) @(B) tl b f}
@@ -262,7 +248,7 @@ module Std where
     end
 
     pub def rec fn foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
-      do xsv <- ! xs .run();
+      do xsv <- ! xs .run;
       match xsv
       | Nil() -> ret acc
       | Cons(hd, tl) ->
@@ -302,12 +288,12 @@ module Std where
 
     pub def rec fn forever (A : VType) (x : A) : LList A =
       comatch
-      | .run() -> ret Cons(x, { ! forever @(A) x })
+      | .run -> ret Cons(x, { ! forever @(A) x })
       end
     end
 
     pub def fn head (A : VType) (xs : U(LList A)) : F(Option A) =
-      do xs' <- ! xs .run();
+      do xs' <- ! xs .run;
       match xs'
       | Nil() -> ret None()
       | Cons(x, tl) -> ret Some(x)
@@ -315,7 +301,7 @@ module Std where
     end
 
     pub def fn is_empty (A : VType) (xs : U(LList A)) : F Bool =
-      do xs' <- ! xs .run();
+      do xs' <- ! xs .run;
       match xs'
       | Nil() -> ret True()
       | Cons(x, tl) -> ret False()
@@ -367,7 +353,7 @@ module Std where
     end
 
     pub def rec fn print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
-      do xs' <- ! xs .run();
+      do xs' <- ! xs .run;
       match xs'
       | Nil() -> ! write_str "\n" next
       | Cons(x, tl) ->
@@ -382,7 +368,7 @@ module Std where
     end
 
     pub def rec fn min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
-      do xs' <- ! xs .run();
+      do xs' <- ! xs .run;
       match xs'
       | Nil() -> ret None()
       | Cons(x, tl) ->
@@ -405,7 +391,7 @@ module Std where
     end
 
     pub def rec fn max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
-      do xs' <- ! xs .run();
+      do xs' <- ! xs .run;
       match xs'
       | Nil() -> ret None()
       | Cons(x, tl) ->

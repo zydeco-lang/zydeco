@@ -19,9 +19,8 @@ fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
     Ctor { ctorv: CtorV::new(format!("{}", ctor), Span::dummy()), args }.into()
 }
 #[allow(unused)]
-fn dtor(body: Rc<ZCompute>, dtor: &str, args: Vec<ZValue>) -> ZCompute {
-    let args = args.into_iter().map(|a| rc!(a.into())).collect();
-    Dtor { body, dtorv: DtorV::new(format!("{}", dtor), Span::dummy()), args }.into()
+fn dtor(body: Rc<ZCompute>, dtor: &str) -> ZCompute {
+    Dtor { body, dtorv: DtorV::new(format!("{}", dtor), Span::dummy()) }.into()
 }
 
 // /* Bool */

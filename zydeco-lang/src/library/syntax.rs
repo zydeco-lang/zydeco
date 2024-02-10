@@ -40,8 +40,8 @@ pub enum SynComp {
     Do(Do<TermV, RcComp, RcComp>),
     Rec(Rec<TermV, RcComp>),
     Match(Match<CtorV, TermV, RcValue, RcComp>),
-    Comatch(Comatch<DtorV, TermV, RcComp>),
-    Dtor(Dtor<RcComp, DtorV, RcValue>),
+    Comatch(Comatch<DtorV, RcComp>),
+    Dtor(Dtor<RcComp, DtorV>),
     Prim(Prim),
 }
 type RcComp = Rc<SynComp>;

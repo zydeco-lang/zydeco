@@ -36,7 +36,7 @@ impl ComputationT for ProgKont {}
 pub enum SemComp {
     Kont(Rc<ls::SynComp>, Env<TermV, SemVal>, TermV),
     App(Rc<SemVal>),
-    Dtor(DtorV, Vec<Rc<SemVal>>),
+    Dtor(DtorV),
 }
 
 use std::fmt;
@@ -47,12 +47,7 @@ impl fmt::Debug for SemComp {
                 write!(f, "Kont({} -> {})", comp.as_ref().fmt(), var)
             }
             SemComp::App(val) => write!(f, "App({})", val.as_ref().fmt()),
-            SemComp::Dtor(dtor, args) => write!(
-                f,
-                "Dtor(.{}({}))",
-                dtor,
-                args.into_iter().map(|arg| arg.fmt()).collect::<Vec<_>>().join(", ")
-            ),
+            SemComp::Dtor(dtor) => write!(f, "Dtor(.{})", dtor,),
         }
     }
 }
