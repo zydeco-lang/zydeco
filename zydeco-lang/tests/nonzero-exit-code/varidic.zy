@@ -1,0 +1,79 @@
+codata Varidic (A: VType) (B: CType) where
+  | .more : A -> Varidic A B
+  | .done : B
+end
+
+data VaridicStack (A: VType) where
+  | Less(A, VaridicStack A)
+  | Init()
+end
+
+// OoO for now ..
+
+// pub def fn capture (A: VType) : Varidic A (Ret (VaridicStack A)) =
+//   let rec fn capture (s: VaridicStack A): Varidic A (Ret (VaridicStack A)) =
+//     comatch
+//     | .more a -> ! capture Less(a, s)
+//     | .done -> ret s
+//     end
+//   in
+//   ! capture Init()
+// end
+
+// pub def rec fn resume (A: VType) (B: CType) (s: VaridicStack A) (f: U (Varidic A B)): B =
+//   match s
+//   | Less(a, s) -> ! resume @(A) @(B) s { ! f .more a }
+//   | Init() -> ! f .done
+//   end
+// end
+
+// A ->* B == List A -> B
+
+def rec fn l (A: VType) (B: CType) (fv: U (Varidic A B)): List A -> B = fn xs ->
+  match xs
+  | Nil() -> ! fv .done
+  | Cons(x, xs) -> ! l @(A) @(B) { ! fv .more x } xs
+  end
+end
+
+def fn r (A: VType) (B: CType) (fl: U (List A -> B)): Varidic A B =
+  let rec fn r (k: U (List A -> Ret (List A))): Varidic A B =
+    comatch
+    | .more x -> ! r { fn xs -> ! k Cons(x, xs) }
+    | .done ->
+      do xs <- ! k Nil();
+      ! fl xs
+    end
+  in
+  ! r { fn xs -> ret xs }
+end
+
+// continuation based mich wand
+
+// ! r @(B) @(A) { ! l @(B) @(A) fv } == fv
+// forall fv: U (Varidic A B)
+
+// ! l @(B) @(A) { ! r @(B) @(A) fl } == fl
+// forall fl: U (List A -> B)
+
+
+def rec fn printl (xs: List String) (kont: U OS) : OS =
+  match xs
+  | Nil() -> ! kont
+  | Cons(x, xs) ->
+    do ! write_line x;
+    ! printl xs kont
+  end
+end
+
+
+
+def rec fn printv: Varidic String (U OS -> OS) =
+  ! r @(String) @(U OS -> OS) printl
+end
+
+main
+  do ! l @(String) @(U OS -> OS) { ! r @(String) @(U OS -> OS) printl } (Cons("hello", Cons("world", Nil())));
+  do ! r @(String) @(U OS -> OS) { ! l @(String) @(U OS -> OS) printv } .more "hello" .more "world" .done;
+  ! exit 0
+end

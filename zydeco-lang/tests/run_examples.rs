@@ -159,6 +159,7 @@ mod batch_tests {
     mk_test!(batch_test, hash, &["hash.zy"]);
     mk_test!(batch_test, cbv, &["cbv.zy"]);
     mk_test!(batch_test, cbpv, &["cbpv.zy"]);
+    mk_test!(batch_test, varidic, &["varidic.zy"]);
 }
 mod io_tests {
     use super::*;
