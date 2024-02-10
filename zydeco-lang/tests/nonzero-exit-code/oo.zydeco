@@ -1,9 +1,9 @@
 # We can do good old object-oriented programming in here
 # e.g. define a Counter that can incr and project out Int or String
 codata Counter where
-| .num: Ret Int
+| .num : Ret Int
 | .incr : Int -> Counter
-| .fmt: Ret String
+| .fmt : Ret String
 end
 
 # We can use `this` (or `self`) as in normal OO languages
@@ -28,6 +28,7 @@ main
   } in
   do s <- ! counter_42 .fmt;
   ! write_line s {
-  do n <- ! counter_42 .incr -42 .num;
-  ! exit n }
+    do n <- ! counter_42 .incr -42 .num;
+    ! exit n
+  }
 end
