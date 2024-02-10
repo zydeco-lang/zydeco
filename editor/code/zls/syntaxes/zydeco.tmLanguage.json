@@ -21,7 +21,7 @@
 				},
 				{
 					"name": "keyword.control.zydeco",
-					"match": "\\b(ret|forall|exists)\\b"
+					"match": "\\b(ret|forall|exists|pack)\\b"
 				},
 				{
 					"name": "keyword.other.zydeco",
