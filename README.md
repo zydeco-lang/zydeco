@@ -7,7 +7,8 @@ Zydeco is a proof-of-concept programming language based on Call-by-push-value.
 Create a file `hello-world.zydeco`:
 ```plain
 main
-  ! write_line "hello, world!" { ! exit 0 }
+  do ! write_line "hello, world!";
+  ! exit 0
 end
 ```
 
@@ -32,22 +33,22 @@ Run `zydeco --help` for further usage information.
 
 ## Intro to Zydeco
 
+We now have a toy "literate zydeco" written in zydeco! Try it out by running
+```bash
+cd docs/spell && ./build.sh
+```
+and the product will show up right in the folder - which is also a series of guide to programming in zydeco.
+
+A legacy version of the tutorial lies [here](docs/tutorial/intro_to_zydeco.md). With system-F, type parameter and type alias shipped in we'll update the tutorial shortly.
+
 We will develop more introductory material on zydeco when we have
-implemented more features. For now, browse `zydeco-lang/tests/` for
+implemented more features. For now, you can also choose to browse `zydeco-lang/tests/` for
 some example programs.
 
 To run all tests
 ```bash
 cargo test --all
 ```
-
-A legacy version of the tutorial lies [here](docs/tutorial/intro_to_zydeco.md). With system-F, type parameter and type alias shipped in we'll update the tutorial shortly.
-
-And we now have a toy "literate zydeco" written in zydeco! Try it out by running
-```bash
-cd docs/spell && ./build.sh
-```
-and the product will show up right in the folder.
 
 ## Repository Structure
 
