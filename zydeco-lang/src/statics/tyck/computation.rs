@@ -297,12 +297,12 @@ impl TypeCheck for Sp<TermComputation> {
                         },
                     )
                 })?;
-                let ty = Type::make_ret(rc!(span.make(v.ana(ty_body, ctx.clone())?)));
+                let ty = Type::make_ret(span.make_rc(v.ana(ty_body, ctx.clone())?));
                 let typ_lub = Type::lub(typ, ty, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
             TermComputation::Force(Force(v)) => {
-                v.ana(Type::make_thunk(rc!(span.make(typ.clone()))), ctx)?;
+                v.ana(Type::make_thunk(span.make_rc(typ.clone())), ctx)?;
                 Step::Done(typ)
             }
             TermComputation::TailGroup(TailGroup { group, body }) => {
@@ -334,7 +334,7 @@ impl TypeCheck for Sp<TermComputation> {
                 Step::AnaMode((ctx, body), typ)
             }
             TermComputation::Rec(Rec { var, body }) => {
-                ctx.term_ctx.insert(var.to_owned(), Type::make_thunk(rc!(span.make(typ.clone()))));
+                ctx.term_ctx.insert(var.to_owned(), Type::make_thunk(span.make_rc(typ.clone())));
                 Step::AnaMode((ctx, body), typ)
             }
             TermComputation::Match(Match { scrut, arms }) => {

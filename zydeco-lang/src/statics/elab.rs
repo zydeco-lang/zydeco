@@ -77,9 +77,9 @@ fn desugar_gen_let(
     let name = var.clone().into();
     let ty_rc = {
         if let Some(ty) = ty.clone() {
-            rc!(ty.try_map(Elaboration::elab)?)
+            ty.try_map_rc(Elaboration::elab)?
         } else {
-            rc!(var.span().make(Hole.into()))
+            var.span().make_rc(Hole.into())
         }
     };
     let Some(def) = def else {
@@ -87,7 +87,7 @@ fn desugar_gen_let(
     };
     match (rec, fun, def.inner) {
         (false, false, ps::Term::Value(value)) => {
-            Ok((name, ty_rc, Some(rc!(def.info.make(Elaboration::elab(value)?)))))
+            Ok((name, ty_rc, Some(def.info.make_rc(Elaboration::elab(value)?))))
         }
         (_, _, ps::Term::Value(_)) => Err(TyckErrorItem::KindMismatch {
             context: format!("desugaring let"),
@@ -109,9 +109,9 @@ fn desugar_gen_let(
                 body = Box::new(def.info.make(Rec { var: (var, None), body }.into()));
             }
             let mut ty: RcType = if let Some(ty) = ty {
-                rc!(ty.try_map(Elaboration::elab)?)
+                ty.try_map_rc(Elaboration::elab)?
             } else {
-                rc!(def.info.make(Hole.into()))
+                def.info.make_rc(Hole.into())
             };
             for param in params.iter().rev() {
                 match param {
@@ -189,7 +189,7 @@ impl Elaboration<ps::Type> for Type {
             ps::Type::App(t) => {
                 let ps::TypeApp(t1, t2) = t;
                 let t1: Type = Elaboration::elab(t1.inner())?;
-                let t2 = t2.try_map(Elaboration::elab)?;
+                let t2 = t2.try_map_rc(Elaboration::elab)?;
                 let SynType::TypeApp(mut t1) = t1.synty else {
                     Err(TyckErrorItem::KindMismatch {
                         context: format!("desugaring type application"),
@@ -197,14 +197,14 @@ impl Elaboration<ps::Type> for Type {
                         found: KindBase::VType.into(),
                     })?
                 };
-                t1.args.push(rc!(t2));
+                t1.args.push(t2);
                 t1.into()
             }
             ps::Type::Arrow(t) => {
                 let ps::Arrow(t1, t2) = t;
-                let t1 = t1.try_map(Elaboration::elab)?;
-                let t2 = t2.try_map(Elaboration::elab)?;
-                Arrow(rc!(t1), rc!(t2)).into()
+                let t1 = t1.try_map_rc(Elaboration::elab)?;
+                let t2 = t2.try_map_rc(Elaboration::elab)?;
+                Arrow(t1, t2).into()
             }
             ps::Type::Forall(ps::Forall { param: params, ty: t }) => {
                 let mut t = t.try_map(Elaboration::elab)?;
@@ -236,8 +236,8 @@ impl Elaboration<ps::Type> for Type {
                     })?;
                     params.push(Elaboration::elab((tvar, kd))?);
                 }
-                let t = t.try_map(Elaboration::elab)?;
-                TypeAbs { params, body: rc!(t) }.into()
+                let t = t.try_map_rc(Elaboration::elab)?;
+                TypeAbs { params, body: t }.into()
             }
             ps::Type::Hole(ps::Hole) => Hole.into(),
         })
@@ -249,17 +249,17 @@ impl Elaboration<ps::TermValue> for TermValue {
     fn elab(value: ps::TermValue) -> Result<Self, TyckErrorItem> {
         Ok(match value {
             ps::TermValue::TermAnn(Annotation { term: body, ty }) => Annotation {
-                term: rc!(body.try_map(Elaboration::elab)?),
-                ty: rc!(ty.try_map(Elaboration::elab)?),
+                term: body.try_map_rc(Elaboration::elab)?,
+                ty: ty.try_map_rc(Elaboration::elab)?,
             }
             .into(),
             ps::TermValue::Var(x) => TermV::from(x).into(),
             ps::TermValue::Thunk(Thunk(body)) => {
                 let span = body.span().clone();
-                let body = Thunk(rc!((body).try_map(Elaboration::elab)?)).into();
+                let body = Thunk(body.try_map_rc(Elaboration::elab)?).into();
                 Annotation {
-                    term: rc!(span.make(body)),
-                    ty: rc!(span.make(Type::make_thunk(rc!(span.make(Hole.into()))))),
+                    term: span.make_rc(body),
+                    ty: span.make_rc(Type::make_thunk(span.make_rc(Hole.into()))),
                 }
                 .into()
             }
@@ -270,9 +270,9 @@ impl Elaboration<ps::TermValue> for TermValue {
             .into(),
             ps::TermValue::Literal(t) => t.into(),
             ps::TermValue::Pack(ps::Pack { ty, body }) => {
-                let ty = ty.try_map(Elaboration::elab)?;
-                let body = body.try_map(Elaboration::elab)?;
-                Pack { ty: rc!(ty), body: rc!(body) }.into()
+                let ty = ty.try_map_rc(Elaboration::elab)?;
+                let body = body.try_map_rc(Elaboration::elab)?;
+                Pack { ty, body }.into()
             }
         })
     }
@@ -283,27 +283,27 @@ impl Elaboration<ps::TermComputation> for TermComputation {
     fn elab(comp: ps::TermComputation) -> Result<Self, TyckErrorItem> {
         Ok(match comp {
             ps::TermComputation::TermAnn(Annotation { term: body, ty }) => Annotation {
-                term: rc!(body.try_map(Elaboration::elab)?),
-                ty: rc!(ty.try_map(Elaboration::elab)?),
+                term: body.try_map_rc(Elaboration::elab)?,
+                ty: ty.try_map_rc(Elaboration::elab)?,
             }
             .into(),
             ps::TermComputation::Abs(t) => desugar_fn(t)?,
             ps::TermComputation::App(ps::App { body, arg }) => {
-                let fun: RcComp = rc!(body.try_map(Elaboration::elab)?);
-                let arg: RcValue = rc!(arg.try_map(Elaboration::elab)?);
+                let fun: RcComp = body.try_map_rc(Elaboration::elab)?;
+                let arg: RcValue = arg.try_map_rc(Elaboration::elab)?;
                 App { body: fun, arg }.into()
             }
             ps::TermComputation::Ret(Ret(body)) => {
                 let span = body.span().clone();
-                let body: TermComputation = Ret(rc!((body).try_map(Elaboration::elab)?)).into();
+                let body: TermComputation = Ret(body.try_map_rc(Elaboration::elab)?).into();
                 Annotation {
-                    term: rc!(span.make(body)),
-                    ty: rc!(span.make(Type::make_ret(rc!(span.make(Hole.into()))))),
+                    term: span.make_rc(body),
+                    ty: span.make_rc(Type::make_ret(span.make_rc(Hole.into()))),
                 }
                 .into()
             }
             ps::TermComputation::Force(Force(body)) => {
-                Force(rc!((body).try_map(Elaboration::elab)?)).into()
+                Force(body.try_map_rc(Elaboration::elab)?).into()
             }
             ps::TermComputation::Let(ps::Let {
                 gen: ps::GenLet { rec, fun, name, params, def },
@@ -315,7 +315,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 };
                 let mut def = def;
                 let span = def.span().clone();
-                def = rc!(span.make(ps::Annotation { term: def, ty }.into()));
+                def = span.make_rc(ps::Annotation { term: def, ty }.into());
                 let body: Sp<TermComputation> = body.try_map(Elaboration::elab)?;
                 let item = Let { var, def, body: () }.into();
                 if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
@@ -327,11 +327,12 @@ impl Elaboration<ps::TermComputation> for TermComputation {
             }
             ps::TermComputation::Do(ps::Do { var: (var, ty), comp, body }) => {
                 let var = TermV::from(var);
-                let mut comp = rc!((comp).try_map(Elaboration::elab)?);
+                let span = comp.span().clone();
+                let mut comp = comp.try_map_rc(Elaboration::elab)?;
                 if let Some(ty) = ty {
-                    comp = rc!(comp.info.clone().make(
-                        Annotation { term: comp, ty: rc!(ty.try_map(Elaboration::elab)?) }.into(),
-                    ));
+                    comp = span.make_rc(
+                        Annotation { term: comp, ty: ty.try_map_rc(Elaboration::elab)? }.into(),
+                    );
                 }
                 let body = body.try_map(Elaboration::elab)?;
                 let item = Do { var, comp, body: () }.into();
@@ -344,7 +345,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
             }
             ps::TermComputation::Rec(Rec { var: (var, ty), body }) => {
                 let var = TermV::from(var);
-                let body = rc!((body).try_map(Elaboration::elab)?);
+                let body = body.try_map_rc(Elaboration::elab)?;
                 let span = body.span().clone();
                 let mut body: TermComputation = Rec { var, body }.into();
                 if let Some(ty) = ty {
@@ -364,18 +365,18 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                             found: ty_,
                         })?
                     };
-                    body = Annotation { term: rc!(span.make(body)), ty: rc!(span.make(ty)) }.into();
+                    body = Annotation { term: span.make_rc(body), ty: span.make_rc(ty) }.into();
                 }
                 body
             }
             ps::TermComputation::Match(ps::Match { scrut, arms }) => {
-                let scrut = rc!((scrut).try_map(Elaboration::elab)?);
+                let scrut = (scrut).try_map_rc(Elaboration::elab)?;
                 let arms = arms
                     .into_iter()
                     .map(|arm| {
                         let ps::Matcher { ctorv, vars, body } = arm;
                         let vars = vars.into_iter().map(Into::into).collect();
-                        let body = rc!((body).try_map(Elaboration::elab)?);
+                        let body = body.try_map_rc(Elaboration::elab)?;
                         Ok(Matcher { ctorv, vars, body })
                     })
                     .collect::<Result<_, TyckErrorItem>>()?;
@@ -386,26 +387,26 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                     .into_iter()
                     .map(|arm| {
                         let ps::Comatcher { dtorv, body } = arm;
-                        let body = rc!((body).try_map(Elaboration::elab)?);
+                        let body = body.try_map_rc(Elaboration::elab)?;
                         Ok(Comatcher { dtorv, body })
                     })
                     .collect::<Result<Vec<_>, TyckErrorItem>>()?;
                 Comatch { arms }.into()
             }
             ps::TermComputation::Dtor(ps::Dtor { body, dtorv }) => {
-                let body = rc!((body).try_map(Elaboration::elab)?);
+                let body = body.try_map_rc(Elaboration::elab)?;
                 Dtor { body, dtorv }.into()
             }
             ps::TermComputation::TyAppTerm(ps::App { body, arg }) => {
-                let body = rc!((body).try_map(Elaboration::elab)?);
-                let arg: RcType = rc!(arg.try_map(Elaboration::elab)?);
+                let body = body.try_map_rc(Elaboration::elab)?;
+                let arg: RcType = arg.try_map_rc(Elaboration::elab)?;
                 App { body, arg }.into()
             }
             ps::TermComputation::MatchPack(ps::MatchPack { scrut, tvar, var, body }) => {
                 let tvar = tvar.into();
                 let var = var.into();
-                let scrut = rc!((scrut).try_map(Elaboration::elab)?);
-                let body = rc!((body).try_map(Elaboration::elab)?);
+                let scrut = (scrut).try_map_rc(Elaboration::elab)?;
+                let body = body.try_map_rc(Elaboration::elab)?;
                 MatchPack { scrut, tvar, var, body }.into()
             }
         })
@@ -490,7 +491,7 @@ impl Elaboration<ps::CodataBr<DtorV, Sp<ps::Type>>> for CodataBr<DtorV, RcType> 
     fn elab(
         CodataBr { dtorv, ty }: ps::CodataBr<DtorV, Sp<ps::Type>>,
     ) -> Result<Self, TyckErrorItem> {
-        Ok(Self { dtorv, ty: rc!(ty.try_map(Elaboration::elab)?) })
+        Ok(Self { dtorv, ty: ty.try_map_rc(Elaboration::elab)? })
     }
 }
 
@@ -513,7 +514,7 @@ impl Elaboration<ps::Alias<NameDef, Option<Sp<ps::Kind>>, ps::BoxType>> for prel
         Ok(Self {
             name: name.into(),
             params: Elaboration::elab(params)?,
-            ty: rc!(ty.try_map(Elaboration::elab)?),
+            ty: ty.try_map_rc(Elaboration::elab)?,
         })
     }
 }
@@ -577,7 +578,7 @@ impl Elaboration<ps::TopLevel> for Module {
                             name: name.name().to_string(),
                         })?;
                         let span = term.span().clone();
-                        let def = rc!(span.make(Annotation { term, ty }.into()));
+                        let def = span.make_rc(Annotation { term, ty }.into());
                         define.push(DeclSymbol { public, external, inner: Define { name, def } })
                     }
                 }

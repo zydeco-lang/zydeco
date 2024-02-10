@@ -123,7 +123,7 @@ impl Lub for Type {
                     err,
                 )?;
                 let body = lhs.body.inner_clone().lub(rhs.body.inner_clone(), ctx, span)?;
-                Ok(TypeAbs { params: lhs.params, body: rc!(lhs.body.span().make(body)) }.into())
+                Ok(TypeAbs { params: lhs.params, body: lhs.body.span().make_rc(body) }.into())
             }
             (
                 SynType::TypeApp(TypeApp { tvar: tvar_lhs, args: args_lhs }),
@@ -135,7 +135,7 @@ impl Lub for Type {
                     for (lhs, rhs) in (args_lhs.iter()).zip(args_rhs.iter()) {
                         let arg =
                             Self::lub(lhs.inner_clone(), rhs.inner_clone(), ctx.clone(), span)?;
-                        args.push(rc!(lhs.span().make(arg)));
+                        args.push(lhs.span().make_rc(arg));
                     }
                     Ok(TypeApp { tvar: NeutralVar::Var(lhs), args }.into())
                 }
@@ -163,7 +163,7 @@ impl Lub for Type {
                     for (lhs, rhs) in (args_lhs.iter()).zip(args_rhs.iter()) {
                         let arg =
                             Self::lub(lhs.inner_clone(), rhs.inner_clone(), ctx.clone(), span)?;
-                        args.push(rc!(lhs.span().make(arg)));
+                        args.push(lhs.span().make_rc(arg));
                     }
                     Ok(TypeApp { tvar: NeutralVar::Abst(lhs), args }.into())
                 }
@@ -195,7 +195,7 @@ impl Lub for Type {
                     ty_.inner_clone().subst(Env::from_iter([(tvar_, abst_var.into())]), &ctx)?;
                 let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
                 // HACK: needs revertable type subst
-                // Ok(Forall { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
+                // Ok(Forall { param: lhs.param.clone(), ty: lhs.ty.span().make_rc(ty) }.into())
                 Ok(lhs)
             }
             (
@@ -210,7 +210,7 @@ impl Lub for Type {
                     (ty_.inner_clone()).subst(Env::from_iter([(tvar_, abst_var.into())]), &ctx)?;
                 let _ty = lhs_ty.lub(rhs_ty, ctx, span)?;
                 // HACK: needs revertable type subst
-                // Ok(Exists { param: lhs.param.clone(), ty: rc!(lhs.ty.span().make(ty)) }.into())
+                // Ok(Exists { param: lhs.param.clone(), ty: lhs.ty.span().make_rc(ty) }.into())
                 Ok(lhs)
             }
             (SynType::AbstVar(lhs), SynType::AbstVar(rhs)) => {

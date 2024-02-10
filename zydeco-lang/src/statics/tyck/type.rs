@@ -11,7 +11,7 @@ impl Type {
         Type::internal("Thunk", vec![arg])
     }
     pub fn elim_thunk(self, ctx: Ctx, span: &Span) -> Option<Type> {
-        let ty = Type::lub(Type::make_thunk(rc!(span.make(Hole.into()))), self, ctx, span).ok()?;
+        let ty = Type::lub(Type::make_thunk(span.make_rc(Hole.into())), self, ctx, span).ok()?;
         let SynType::TypeApp(ty_app) = ty.synty else { None? };
         ty_app.elim_thunk_syntax()
     }
@@ -19,7 +19,7 @@ impl Type {
         Type::internal("Ret", vec![arg])
     }
     pub fn elim_ret(self, ctx: Ctx, span: &Span) -> Option<Type> {
-        let ty = Type::lub(Type::make_ret(rc!(span.make(Hole.into()))), self, ctx, span).ok()?;
+        let ty = Type::lub(Type::make_ret(span.make_rc(Hole.into())), self, ctx, span).ok()?;
         let SynType::TypeApp(ty_app) = ty.synty else { None? };
         ty_app.elim_ret_syntax()
     }
