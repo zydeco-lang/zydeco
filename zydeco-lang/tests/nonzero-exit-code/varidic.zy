@@ -3,32 +3,9 @@ codata Varidic (A: VType) (B: CType) where
   | .done : B
 end
 
-data VaridicStack (A: VType) where
-  | Less(A, VaridicStack A)
-  | Init()
-end
-
-// OoO for now ..
-
-// pub def fn capture (A: VType) : Varidic A (Ret (VaridicStack A)) =
-//   let rec fn capture (s: VaridicStack A): Varidic A (Ret (VaridicStack A)) =
-//     comatch
-//     | .more a -> ! capture Less(a, s)
-//     | .done -> ret s
-//     end
-//   in
-//   ! capture Init()
-// end
-
-// pub def rec fn resume (A: VType) (B: CType) (s: VaridicStack A) (f: U (Varidic A B)): B =
-//   match s
-//   | Less(a, s) -> ! resume @(A) @(B) s { ! f .more a }
-//   | Init() -> ! f .done
-//   end
-// end
-
 // A ->* B == List A -> B
 
+// restore
 def rec fn l (A: VType) (B: CType) (fv: U (Varidic A B)): List A -> B = fn xs ->
   match xs
   | Nil() -> ! fv .done
@@ -36,16 +13,15 @@ def rec fn l (A: VType) (B: CType) (fv: U (Varidic A B)): List A -> B = fn xs ->
   end
 end
 
+// capture
 def fn r (A: VType) (B: CType) (fl: U (List A -> B)): Varidic A B =
-  let rec fn r (k: U (List A -> Ret (List A))): Varidic A B =
+  let rec fn r (k: U (List A -> B)): Varidic A B =
     comatch
     | .more x -> ! r { fn xs -> ! k Cons(x, xs) }
-    | .done ->
-      do xs <- ! k Nil();
-      ! fl xs
+    | .done -> ! k Nil()
     end
   in
-  ! r { fn xs -> ret xs }
+  ! r { fn xs -> ! fl xs }
 end
 
 // continuation based mich wand
