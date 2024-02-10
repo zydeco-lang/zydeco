@@ -192,12 +192,8 @@ TermComputation: TermComputation = {
             v
         },
     }.into(),
-    "rec" <var:TermPattern> <param:Pattern*> "->" <body:Box<Sp<TermComputation>>> => Rec {
-        var, body: {
-            // span should be from param to body
-            let sp = body.span().clone();
-            Box::new(sp.make(Abs { param, body }.into()))
-        },
+    "rec" <var:TermPattern> <body:Box<Sp<TermComputationAbs>>> => Rec {
+        var, body,
     }.into(),
     "match" <scrut:Box<Sp<TermValue>>> <arms:MatchBr*> "end" => Match {
         scrut, arms,
@@ -205,10 +201,8 @@ TermComputation: TermComputation = {
     "comatch" <arms:ComatchBr*> "end" => Comatch {
         arms,
     }.into(),
-    "fn" <param:Pattern*> "->" <body:Box<Sp<TermComputation>>> => Abs {
-        param, body,
-    }.into(),
-    "fn" <dtorv:DtorV> "->" <body:Sp<TermComputation>> => Comatch {
+    "fn" <TermComputationAbs> => <>,
+    "fn" <dtorv:DtorV> <body:Sp<TermComputationAbs>> => Comatch {
         arms: vec![Comatcher { dtorv, body }],
     }.into(),
     "match" <scrut:Box<Sp<TermValue>>> 
@@ -222,6 +216,12 @@ TermComputation: TermComputation = {
 LetSep: () = {
     ";" => (),
     "in" => (),
+};
+
+TermComputationAbs: TermComputation = {
+    <param:Pattern*> "->" <body:Box<Sp<TermComputation>>> => Abs {
+        param, body,
+    }.into()
 };
 
 TermComputationRight: TermComputation = {
@@ -246,8 +246,6 @@ TermComputationAtom: TermComputation = {
     "!" <Box<Sp<TermValue>>> => Force(<>).into(),
 };
 
-
-
 GenLet: GenLet = {
     <rec:"rec"?> <fun:"fn"?> <var:NameDef<LowerId>> <params:Pattern*>
     <ty:(":" <Sp<Type>>)?> <def: ("=" <Box<Sp<Term>>>)?> => GenLet {
@@ -267,13 +265,8 @@ MatchBr: Matcher<CtorV, NameDef, Sp<TermComputation>> = {
 };
 
 ComatchBr: Comatcher<DtorV, Sp<TermComputation>> = {
-    "|" <dtorv:DtorV> <param:Pattern*> "->"
-    <body:Box<Sp<TermComputation>>> => Comatcher {
-        dtorv, body: {
-            // span should be from param to body
-            let sp = body.span().clone();
-            sp.make(Abs { param, body }.into())
-        },
+    "|" <dtorv:DtorV> <body:Sp<TermComputationAbs>> => Comatcher {
+        dtorv, body,
     }
 };
 
