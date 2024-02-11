@@ -1,5 +1,5 @@
 main
-  let zero: Nat = Z();
+  let zero: Nat = Z() in
   let fn suc (x: Nat): F Nat =
     ret (S(x) : Nat)
   in

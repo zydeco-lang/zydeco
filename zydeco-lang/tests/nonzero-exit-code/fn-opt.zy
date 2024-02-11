@@ -12,14 +12,14 @@ main
     comatch
     | .arg i -> ret i
     end
-  };
+  } in
 
   let fn_opt_int : Thunk(FnOpt Int) = {
     comatch
     | .one i -> ! fn_int .arg i
     | .zero -> ! fn_int .arg 0
     end
-  };
+  } in
 
   do x <- ! fn_opt_int .zero;
   ! exit x

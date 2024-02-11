@@ -1,4 +1,4 @@
 main
-  let loop = { rec (loop: Thunk(OS)) -> ! loop };
+  let loop = { rec (loop: Thunk(OS)) -> ! loop } in
   ! loop
 end

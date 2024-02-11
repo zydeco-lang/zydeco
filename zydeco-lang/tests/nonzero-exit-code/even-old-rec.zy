@@ -1,5 +1,5 @@
 main
-  let rec odd: Nat -> Ret(Bool) = (
+  let rec odd: Nat -> Ret(Bool) =
     let even = {
       rec (even: Thunk(Nat -> Ret(Bool))) -> (
         fn (x: Nat) -> (
@@ -9,14 +9,14 @@ main
           end
         )
       )
-    };
+    } in
     fn (x: Nat) -> (
       match x
       | Z() -> ret False()
       | S(x) -> !even x
       end
     )
-  );
+  in
   do b <- !odd S(S(S(Z())));
   match b
   | True() -> ! exit 0

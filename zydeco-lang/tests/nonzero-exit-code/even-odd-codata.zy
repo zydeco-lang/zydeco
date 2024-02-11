@@ -4,18 +4,18 @@ codata OddEven where
 end
 
 main
-  let rec eo : OddEven = (
+  let rec eo : OddEven =
     comatch
-      | .even -> (fn (n : Nat) -> match n
-        | Z()  -> ret True()
-        | S(n) -> ((! eo .odd) n)
-        end)
-      | .odd -> (fn(n : Nat) -> match n
-        | Z()  -> ret False()
-        | S(n) -> (! eo.even) n
-        end)
+    | .even -> fn (n : Nat) -> match n
+      | Z()  -> ret True()
+      | S(n) -> ((! eo .odd) n)
       end
-  );
+    | .odd -> fn(n : Nat) -> match n
+      | Z()  -> ret False()
+      | S(n) -> (! eo.even) n
+      end
+    end
+  in
   do b <- (! eo .even) S(S(S(S(Z()))));
   match b
   | True() -> ! exit 0

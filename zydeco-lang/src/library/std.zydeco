@@ -463,7 +463,7 @@ module Std where
 
     pub def fn str_to_list (s : String) : LList Char =
       do sz <- ! str_length s;
-      let indexes = {! range 0 sz};
+      let indexes = {! range 0 sz} in
       ! foldr @(Int) @(LList Char) indexes {! nil @(Char)} {
         fn i acc ->
           do c <- ! str_index s i;

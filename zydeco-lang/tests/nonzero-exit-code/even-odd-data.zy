@@ -1,7 +1,7 @@
 data OddEven where | OddEven(Comp(Nat -> Ret(Bool)), Comp(Nat -> Ret(Bool))) end
 
 main
-  let rec fp: Ret(OddEven) = (
+  let rec fp: Ret(OddEven) =
     ret OddEven({
       do fp <- !fp;
       match fp | OddEven(odd, even) -> (fn (x: Nat) -> (
@@ -19,7 +19,7 @@ main
         end
       )) end
     })
-  );
+  in
   do odd <- (
     do fp <- !fp;
     match fp | OddEven(odd, even) -> ret { !odd } end

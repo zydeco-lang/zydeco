@@ -149,10 +149,10 @@ def rec fn interp (env: U EnvO) (t: Term) : Mo Value =
     ! mexn .return @(Value) Lam(env, x, t)
     // ret[mexn] Lam(env, x, t)
   | App(t1, t2) ->
-    let m1 = { ! interp env t1 .run };
+    let m1 = { ! interp env t1 .run } in
     ! mexn .bind @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
       // do[mexn] v1 <- ! interp env t1 .run;
-      let m2 = { ! interp env t2 .run };
+      let m2 = { ! interp env t2 .run } in
       ! mexn .bind @(Value) @(Value) { ! mk_mexn m2 } { fn v2 ->
         // do[mexn] v2 <- ! interp env t2 .run;
         match v1
@@ -166,7 +166,7 @@ def rec fn interp (env: U EnvO) (t: Term) : Mo Value =
     ! mexn .return @(Value) Bool(b)
     // ret[mexn] Bool(b)
   | If(t1, t2, t3) ->
-    let m1 = { ! interp env t1 .run };
+    let m1 = { ! interp env t1 .run } in
     ! mexn .bind @(Value) @(Value) { ! mk_mexn m1 } { fn v1 ->
       // do[mexn] v1 <- ! interp env t1 .run;
       match v1
@@ -182,8 +182,8 @@ def rec fn interp (env: U EnvO) (t: Term) : Mo Value =
 end
 
 main
-  let term : Term = App(Lam("x", Var("x")), Bool(True()));
-  let env : U EnvO = { ! envo Empty() };
+  let term : Term = App(Lam("x", Var("x")), Bool(True())) in
+  let env : U EnvO = { ! envo Empty() } in
   do sv? <- ! interp env term .run State(0, "");
   match sv?
   | Cons(s, v?) ->

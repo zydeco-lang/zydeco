@@ -8,7 +8,7 @@ main
         end
       )
     )
-  };
+  } in
   let rec fn add' (x: Nat) (y: Nat): Ret(Nat) =
     match x
     | Z() -> ret y
