@@ -1,5 +1,5 @@
 use super::{builtins::Builtin, syntax::*};
-use crate::{prelude::rc, statics::syntax as ss};
+use crate::{backend::cps::CpsTransform, prelude::rc, statics::syntax as ss};
 use im::Vector;
 
 impl From<ss::Program> for Program {
@@ -7,7 +7,8 @@ impl From<ss::Program> for Program {
         let ss::Program { module, entry } = p;
         let module = module.inner().into();
         let entry = entry.inner_ref().into();
-        Self { module, entry }
+        // Hack: Remove `cps_transform` to deactive CPS
+        Self { module, entry }.cps_transform()
     }
 }
 

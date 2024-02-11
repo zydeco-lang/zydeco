@@ -94,7 +94,6 @@ impl CpsTransform for SynComp {
 impl CpsTransform for SynVal {
     fn cps_transform(&self) -> Self {
         match self {
-            SynVal::SemValue(_) => unreachable!(),
             SynVal::Ctor(Ctor { ctorv, args }) => Ctor {
                 ctorv: ctorv.clone(),
                 args: args.iter().map(|arg| Rc::new(arg.cps_transform())).collect(),

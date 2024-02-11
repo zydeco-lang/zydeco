@@ -1,5 +1,5 @@
 use super::syntax::*;
-use crate::{dynamics::syntax as ds, prelude::*};
+use crate::{backend::cps::CpsTransform, dynamics::syntax as ds, prelude::*};
 use std::{
     io::{BufRead, Write},
     rc::Rc,
@@ -10,7 +10,10 @@ type ZCompute = SynComp;
 
 // /* Function helpers */
 fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
-    Ok(Ret(rc!(value.into())).into())
+    let comp: ZCompute = Ret(rc!(value.into())).into();
+    // Hack: Comment this line out to deactive CPS
+    let comp = comp.cps_transform();
+    Ok(comp)
 }
 fn app(body: Rc<ZCompute>, arg: ZValue) -> ZCompute {
     App { body, arg: rc!(arg.into()) }.into()
