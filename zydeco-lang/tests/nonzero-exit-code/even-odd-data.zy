@@ -1,7 +1,7 @@
-data OddEven where | OddEven(Comp(Nat -> Ret(Bool)), Comp(Nat -> Ret(Bool))) end
+data OddEven where | OddEven(Thunk (Nat -> Ret(Bool)), Thunk (Nat -> Ret(Bool))) end
 
 main
-  let rec fp: Ret(OddEven) =
+  let rec fp: Ret OddEven =
     ret OddEven({
       do fp <- !fp;
       match fp | OddEven(odd, even) -> (fn (x: Nat) -> (

@@ -3,7 +3,7 @@ main
   let fn suc (x: Nat): F Nat =
     ret (S(x) : Nat)
   in
-  let fn ifz (z: Bool) (pred: Comp(Nat -> Ret Bool)) (x: Nat): Ret Bool =
+  let fn ifz (z: Bool) (pred: U (Nat -> Ret Bool)) (x: Nat): Ret Bool =
     match x
     | Z() -> ret z
     | S(x) -> !pred x

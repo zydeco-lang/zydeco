@@ -2,24 +2,16 @@
 
 
 module Builtin where
-
   ## the Thunk and Ret types
   pub extern data Thunk (B : CType) end
   pub extern codata Ret (A : VType) end
-  pub alias Comp (B : CType) = Thunk B end
   pub alias U (B : CType) = Thunk B end
   pub alias F (A : VType) = Ret A end
-
-  ## the Fn type
-  pub codata Fn (A: VType) (B: CType) where
-    | .arg : A -> B
-  end
-  ### Functions are syntax sugars around this internal type definition.
 end
 
 
 module Std where
-  use Builtin(Thunk, Ret, Comp, U, F, Fn) end
+  use Builtin(Thunk, Ret, U, F) end
 
   module Identity where
     pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
@@ -274,8 +266,8 @@ module Std where
 
     pub def fn take (A: VType) (n : Int) (xs : U(LList A)) : LList A =
       ! foldr @(A) @(Int -> LList A) xs
-              {fn _ -> ! nil @(A) }
-              {fn x take_xs n ->
+              { fn _ -> ! nil @(A) }
+              { fn x take_xs n ->
                  !if~ @(LList A)
                      { ! int_lt n 1 }
                      { ! nil @(A) }
