@@ -26,6 +26,10 @@
 				{
 					"name": "keyword.other.zydeco",
 					"match": "\\b(pub|ext|extern|fn|rec)\\b"
+				},
+				{
+					"name": "entity.name.function.zydeco",
+					"match": "\\.[a-z_-]+"
 				}
 			]
 		},
