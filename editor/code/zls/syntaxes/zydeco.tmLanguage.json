@@ -28,8 +28,12 @@
 					"match": "\\b(pub|ext|extern|fn|rec)\\b"
 				},
 				{
+					"name": "variable.other.enummember.zydeco",
+					"match": "\\b\\+[A-Z][a-zA-Z_-]*\\b"
+				},
+				{
 					"name": "entity.name.function.zydeco",
-					"match": "\\.[a-z_-]+"
+					"match": "\\b\\.[a-z_-][a-zA-Z_-]*\\b"
 				}
 			]
 		},

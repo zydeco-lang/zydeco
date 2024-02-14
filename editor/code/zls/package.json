@@ -2,7 +2,7 @@
   "name": "zls",
   "displayName": "zls",
   "description": "A zydeco language support.",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "engines": {
     "vscode": "^1.76.0"
   },
