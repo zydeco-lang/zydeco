@@ -7,16 +7,16 @@ A value type classifies inert data and a computation type classifies programs th
 Value type can be: 
 - `X`: type variable defined using `data`.
 - `Int | String | Boolean | Unit`: basic primitive type with built-in functions.
-- `Thunk(Y)`: suspend a computation type and consider it as a value type. 
+- `Thunk Y`: suspend a computation type `Y` and consider it as a value type. 
 
 Computation type can be:
 - `Y`: type variable defined using `codata`.
-- `Ret(X)`: `Ret(X)` classifies computations that return X values.
+- `Ret X`: `Ret X` classifies computations that return X values.
 - `X -> Y`: takes a value type as an argument and return a computation type.
 
-For `Thunk(B)` type, we can represent its value as `{ some_computation_value }`.
+For `Thunk B` type, we can represent its value as `{ some_computation_value }`.
 
-For `Ret(A)` type, we can represent its value as `ret some_value_type`
+For `Ret A` type, we can represent its value as `ret some_value_type`
 
 ## Playing with REPL
 Using the REPL can help us get familiar with syntax and basic idea of zydeco fast. 
@@ -37,7 +37,7 @@ Basic value types can be interpreted in the ways above.
 > add
 add : Thunk(Int -> Int -> Ret(Int))
 ```
-Now `add` has a value type of `Thunk(B)`, where `B` is a computation type which takes two `Int` and returns a computation type `Ret(Int)`.
+Now `add` has a value type of `Thunk B`, where `B` is a computation type which takes two `Int` and returns a computation type `Ret Int`.
 
 Notice that `add` is still suspended, so if we try to apply it into practice by `add 1 2` and get the result, there will be an error.
 ```
@@ -77,7 +77,7 @@ mod : Thunk(Int -> Int -> Ret(Int))
 > let mod10 = {fn (n : Int) -> ! mod n 10} in ! mod10 54
 4
 ```
-`mod` is a built-in function and we can define a function taking an `x : Int` and calculating `x mod 10`. The type of defined function `mod10` should also be `Thunk(B)`. Therefore, we add `{}` at each side of the definition part.
+`mod` is a built-in function and we can define a function taking an `x : Int` and calculating `x mod 10`. The type of defined function `mod10` should also be `Thunk B`. Therefore, we add `{}` at each side of the definition part.
 
 For each `let` statement, a semicolon `;` is needed, indicating that it's not the main expression. We can add more `let` to bind more variables, but there must be a main expression at the end of the program.
 
@@ -90,7 +90,7 @@ The process a `do` statement is executed is similar to the process that we call 
 
 
 ## OS (Operating System)
-Besides `Ret(A)`, main expression can also have the built-in type of `OS` which classifies computations that can be run as a process that interacts with the `OS`. The idea of kontinuation requires programmers to specify what the `OS` looks like after the program reads or writes something. Here are some examples:
+Besides `Ret A`, main expression can also have the built-in type of `OS` which classifies computations that can be run as a process that interacts with the `OS`. The idea of kontinuation requires programmers to specify what the `OS` looks like after the program reads or writes something. Here are some examples:
 ```
 pub extern define write_line : Thunk(String -> Thunk(OS) -> OS);
 pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
@@ -99,8 +99,8 @@ pub extern define read_line : Thunk(Thunk(String -> OS) -> OS);
 ! write_line "hello world" {! exit 0}
 
 # echo what users just input in an infinite loop
-let rec loop : OS = ! read_line { fn (str : String) -> ( ! write_line str {! loop} 
-  )
+let rec loop : OS = ! read_line { fn (str : String) ->
+  ! write_line str {! loop} 
 } in
 ! loop
 
@@ -110,8 +110,8 @@ let loop : OS = {
     fn (str : String) -> (
       do b <- ! str_eq str "exit";
       match b
-      | True() -> ! write_line str { ! exit 0 }
-      | False() -> ! write_line str { ! loop }
+      | +True() -> ! write_line str { ! exit 0 }
+      | +False() -> ! write_line str { ! loop }
       end
     )
   }
@@ -123,15 +123,15 @@ We can define `union type` or `recursive type` as follows:
 ```
 # Non-recursive
 data Weather where
-  | Sunny()
-  | Rainy()
-  | Windy()
+  | +Sunny()
+  | +Rainy()
+  | +Windy()
 end
 
 # Recursive
 data ListInt where
-  | NoInt()
-  | Cons(Int, ListInt)
+  | +NoInt()
+  | +Cons(Int, ListInt)
 end
 
 # Here's a function print every element in the ListInt seperated by a ' '
@@ -140,8 +140,8 @@ let printListInt = {
   rec (printReal : Thunk(ListInt -> OS)) ->
     fn myList ->
       match myList
-      | NoInt() -> ! exit 0
-      | Cons(x, xs) ->
+      | +NoInt() -> ! exit 0
+      | +Cons(x, xs) ->
         do wx_ <- ! int_to_str x;
         do wx <- ! str_append wx_ ' ';
         ! write_str wx { ! printReal xs }
@@ -164,17 +164,17 @@ end
 let rec retSummer : Int -> Summer =
   fn (n : Int) ->
     comatch
-    | .done()  -> ret n
-    | .addN(x) ->
-    (do n' <- ! add n x;
-        ! retSummer n')
+    | .done   -> ret n
+    | .addN x ->
+      do n' <- ! add n x;
+      ! retSummer n'
     end;
 
 let rec sumOk : NumList -> Summer =
   fn (xs : NumList) ->
     match xs
-    | Empty()     -> ! retSummer 0 # When none of the elements remains, add a zero(.done()) at the end of stack
-    | Cons(x, xs) -> ! sumOk xs .addN(x); # As we call sumOk recursively, the label of .addN(x) is appended at the end of stack until xs is empty
+    | +Empty()     -> ! retSummer 0 # When none of the elements remains, add a zero(.done) at the end of stack
+    | +Cons(x, xs) -> ! sumOk xs .addN x; # As we call sumOk recursively, the label of .addN x is appended at the end of stack until xs is empty
     end
 ```
 
