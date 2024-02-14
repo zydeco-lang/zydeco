@@ -910,7 +910,7 @@ main
   ) +Int(6);
 
   // factorial, poor usage of stack
-  // do ! demo-scompu cbpv-env +App(Rec("fact", +Env(Lam("x",
+  // do ! demo-scompu cbpv-env +App(+Rec("fact", +Env(+Lam("x",
   //   +Bind(
   //     +App(+App(+Force(+Var("eq")), +Var("x")), +Int(0)),
   //     "b",
@@ -927,7 +927,7 @@ main
   // ))), +Int(6)) +Int(720);
 
   // factorial, tail call
-  // do ! demo-scompu cbpv-env +App(+App(Rec("fact", +Env(Lam("acc", +Lam("x",
+  // do ! demo-scompu cbpv-env +App(+App(+Rec("fact", +Env(+Lam("acc", +Lam("x",
   //   +Bind(
   //     +App(+App(+Force(+Var("eq")), +Var("x")), +Int(0)),
   //     "b",
