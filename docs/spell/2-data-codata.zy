@@ -10,13 +10,13 @@
 def hd-int : Thunk (List Int -> Ret (Option Int)) = {
   fn xs -> (
     match xs
-    | Nil() -> ret None()
-    | Cons(x, _) -> ret Some(x)
+    | +Nil() -> ret +None()
+    | +Cons(x, _) -> ret +Some(x)
     end
   )
 } end
 
-def xs : List Int = Cons(0, Cons(2, Cons(4, Nil()))) end
+def xs : List Int = +Cons(0, +Cons(2, +Cons(4, +Nil()))) end
 
 def some-0~ : Thunk(Ret (Option Int)) = {
   ! hd-int xs
@@ -30,13 +30,13 @@ def some-0~ : Thunk(Ret (Option Int)) = {
 
 def xs~ : Thunk (LList Int) = {
   comatch
-  | .run -> ret Cons(0, {
+  | .run -> ret +Cons(0, {
     comatch
-    | .run -> ret Cons(2, {
+    | .run -> ret +Cons(2, {
       comatch
-      | .run -> ret Cons(4, {
+      | .run -> ret +Cons(4, {
         comatch
-        | .run -> ret Nil()
+        | .run -> ret +Nil()
         end
       }) end
     }) end
@@ -46,8 +46,8 @@ def xs~ : Thunk (LList Int) = {
 def some-0~' : Thunk(Ret (Option Int)) = {
   do p <- ! xs~ .run;
   match p
-  | Nil() -> ret None()
-  | Cons(x, _) -> ret Some(x)
+  | +Nil() -> ret +None()
+  | +Cons(x, _) -> ret +Some(x)
   end
 } end
 

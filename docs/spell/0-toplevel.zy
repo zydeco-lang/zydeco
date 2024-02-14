@@ -12,7 +12,7 @@
 
 // 1. Data type declaration
 data Prod-2 (A : VType) (A' : VType) where
-  | Pair(A, A')
+  | +Pair(A, A')
 end
 
 // 2. Codata type declaration
@@ -38,7 +38,7 @@ alias CoProd-Bool-Sth (A : VType) = CoProd-2 Bool A end
 def some-co-prod : Thunk (CoProd-Bool-Sth (Prod-2 Int String)) = {
   comatch
   | .prj-1 -> ret false
-  | .prj-2 -> ret Pair(0, "42")
+  | .prj-2 -> ret +Pair(0, "42")
   end
 } end
 
@@ -52,7 +52,7 @@ def some-co-prod : Thunk (CoProd-Bool-Sth (Prod-2 Int String)) = {
 main
   do p <- ! some-co-prod .prj-2;
   match p
-  | Pair(n, _) ->
+  | +Pair(n, _) ->
     ! exit n
   end
 end

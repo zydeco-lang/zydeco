@@ -280,7 +280,7 @@ NameRef<T>: NameRef = {
     },
 };
 
-CtorV: CtorV = <Sp<UpperId>> => <>.into();
+CtorV: CtorV = "+" <Sp<UpperId>> => <>.into();
 DtorV: DtorV = "." <Sp<LowerId>> => <>.into();
 
 MixedId: String = {
@@ -373,6 +373,8 @@ extern {
         ";" => Tok::Semicolon,
         "!" => Tok::Force,
         "|" => Tok::Branch,
+        "+" => Tok::Plus,
+        "*" => Tok::Star,
         "." => Tok::Dot,
         ".." => Tok::DotDot,
         "->" => Tok::Arrow,

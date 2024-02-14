@@ -1,6 +1,6 @@
-let x: Bool = True() in
-let y = { ret (False() : Bool) } in
+let x: Bool = +True() in
+let y = { ret (+False() : Bool) } in
 let f = { (fn b -> ret b : Bool -> Ret Bool) } in
 do rx <- !f x;
 do ry <- do y <- !y; !f x;
-match x | True() -> ret rx | False() -> ret ry end
+match x | +True() -> ret rx | +False() -> ret ry end

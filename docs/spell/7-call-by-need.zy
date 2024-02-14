@@ -19,17 +19,17 @@ extern def set : Thunk (forall (A : VType) . Ref A -> A -> Ret Unit) end
 // call-by-name is the semantics of a thunk.
 
 def fn cbneed-thunk (A : VType) (u~ : Thunk (Ret A)) : Ret (Thunk (Ret A)) =
-  do r <- ! ref @(Option A) None();
+  do r <- ! ref @(Option A) +None();
   ret {
     do a? <- ! get @(Option A) r;
     match a?
-    | Some(a) ->
+    | +Some(a) ->
       // `a` is already cached
       ret a
-    | None() ->
+    | +None() ->
       // only evaluate `u~` once
       do a <- ! u~;
-      do _ <- ! set @(Option A) r Some(a);
+      do _ <- ! set @(Option A) r +Some(a);
       ret a
     end
   }

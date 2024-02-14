@@ -3,19 +3,19 @@ main
     rec (add: Thunk(Nat -> Nat -> Ret(Nat))) -> (
       fn (x: Nat) (y: Nat) -> (
         match x
-        | Z() -> ret y
-        | S(x) -> !add x S(y)
+        | +Z() -> ret y
+        | +S(x) -> !add x +S(y)
         end
       )
     )
   } in
   let rec fn add' (x: Nat) (y: Nat): Ret(Nat) =
     match x
-    | Z() -> ret y
-    | S(x) -> !add x S(y)
+    | +Z() -> ret y
+    | +S(x) -> !add x +S(y)
     end
   in
-  do x <- ! add S(S(Z())) S(Z());
-  do y <- ! add' x S(S(S(Z())));
+  do x <- ! add +S(+S(+Z())) +S(+Z());
+  do y <- ! add' x +S(+S(+S(+Z())));
   ! exit 0
 end

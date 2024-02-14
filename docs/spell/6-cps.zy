@@ -9,7 +9,7 @@
 // we adopt CPS in the design of `OS` type.
 
 def xs : List String =
-  Cons("1", Cons("2", Cons("3", Cons("not only you and me", Nil()))))
+  +Cons("1", +Cons("2", +Cons("3", +Cons("not only you and me", +Nil()))))
 end
 
 // Exercise: Choose one of the following tasks (or both):

@@ -30,13 +30,13 @@ main
     do b <- ! b;
     ! if~ @(OS) { ! bool_eq b b' } { ! kont } { ! panic "failed test case >_<" }
   in
-  ! assert { ! even S(S(Z())) } true {
-  ! assert { ! odd S(S(S(Z()))) } true {
-  ! assert { ! even Z() } true {
-  ! assert { ! odd S(Z()) } true {
+  ! assert { ! even +S(+S(+Z())) } true {
+  ! assert { ! odd +S(+S(+S(+Z()))) } true {
+  ! assert { ! even +Z() } true {
+  ! assert { ! odd +S(+Z()) } true {
   // Todo: uncomment the following lines
-  // ! assert { ! even S(Z()) } false {
-  // ! assert { ! odd S(S(Z())) } false {
+  // ! assert { ! even +S(+Z()) } false {
+  // ! assert { ! odd +S(+S(+Z())) } false {
   ! exit 0
   }}}}
   // Todo: uncomment the following lines

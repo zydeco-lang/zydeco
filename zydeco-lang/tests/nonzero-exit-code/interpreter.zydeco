@@ -3,41 +3,41 @@
 # As it is a CBPV language, our syntax distinguishes between values
 # and computations
 data SynVal where
-  | Var(String)
-  | True()
-  | False()
-  | ThunkV(SynComp)
+  | +Var(String)
+  | +True()
+  | +False()
+  | +ThunkV(SynComp)
 end
 
 data SynComp where
-  | If(SynVal, SynComp, SynComp)
-  | Force(SynVal)
-  | Lam(String, SynComp)
-  | App(SynComp, SynVal)
-  | Return(SynVal)
-  | Bind(SynComp, String, SynComp)
+  | +If(SynVal, SynComp, SynComp)
+  | +Force(SynVal)
+  | +Lam(String, SynComp)
+  | +App(SynComp, SynVal)
+  | +Return(SynVal)
+  | +Bind(SynComp, String, SynComp)
 end
 
 # Environments are implemented as association lists.
 data Env where
-  | Empty()
-  | Cons(String, SemVal, Env)
+  | +Empty()
+  | +Cons(String, SemVal, Env)
 end
 
 # The interpreter works with semantic values, which do not include
 # variables. We use closures in the interpreter to implement semantic
 # thunks.
 data SemVal where
-  | True()
-  | False()
-  | ThunkV(Thunk(SemComp))
+  | +True()
+  | +False()
+  | +ThunkV(Thunk(SemComp))
 end
 
 # The "final answer" of the interpreter is either the final value or
 # an error.
 data Answer (A : VType) where
-  | Ok(A)
-  | Err()
+  | +Ok(A)
+  | +Err()
 end
 
 # The semantics of computations are Zydeco computations which satisfy
@@ -59,20 +59,20 @@ end
 
 def fn sem_val_to_str (s : SemVal) : F String =
   match s
-  | True() -> ret "true"
-  | False() -> ret "false"
-  | ThunkV(_) -> ret "<thunk>"
+  | +True() -> ret "true"
+  | +False() -> ret "false"
+  | +ThunkV(_) -> ret "<thunk>"
   end
 end
 
 def rec fn lookup (x : String) (g : Env) : Ret(Answer SemVal) =
   match g
-  | Empty() -> ret Err()
-  | Cons(y,v,g) ->
+  | +Empty() -> ret +Err()
+  | +Cons(y,v,g) ->
     do b <- ! str_eq x y;
     match b
-    | True() -> ret Ok(v)
-    | False() -> ! lookup x g
+    | +True() -> ret +Ok(v)
+    | +False() -> ! lookup x g
     end
   end
 end
@@ -80,7 +80,7 @@ end
 def rec error: SemComp =
   comatch
     | .app -> fn _ -> ! error
-    | .bind -> ret Err()
+    | .bind -> ret +Err()
   end
 end
 
@@ -88,54 +88,54 @@ def rec interp: Interpreter =
   comatch
     | .valu -> fn v g ->
       match v
-      | Var(x) -> ! lookup x g
-      | True() -> ret Ok(True())
-      | False() -> ret Ok(False())
+      | +Var(x) -> ! lookup x g
+      | +True() -> ret +Ok(+True())
+      | +False() -> ret +Ok(+False())
       # Here we use the meta-language closures to capture the environment g 
-      | ThunkV(m) -> ret Ok(ThunkV({ ! interp .comp m g }))
+      | +ThunkV(m) -> ret +Ok(+ThunkV({ ! interp .comp m g }))
       end
     | .comp -> fn m g ->
       match m
-      | If(cond, mt, mf) ->
+      | +If(cond, mt, mf) ->
         match cond
-        | Var(_) -> ! error
-        | True() -> ! interp .comp mt g
-        | False() -> ! interp .comp mf g
-        | ThunkV(_) -> ! error
+        | +Var(_) -> ! error
+        | +True() -> ! interp .comp mt g
+        | +False() -> ! interp .comp mf g
+        | +ThunkV(_) -> ! error
         end
-      | Force(syn_val) ->
+      | +Force(syn_val) ->
         do v? <- ! interp .valu syn_val g;
         match v?
-        | Ok(v) ->
+        | +Ok(v) ->
           match v
-          | ThunkV(t) -> ! t
-          | True() -> ! error
-          | False() -> ! error
+          | +ThunkV(t) -> ! t
+          | +True() -> ! error
+          | +False() -> ! error
           end
-        | Err() -> ! error
+        | +Err() -> ! error
         end
-      | Return(syn_val) ->
+      | +Return(syn_val) ->
         do v <- ! interp .valu syn_val g;
         comatch
           | .bind -> ret v
           | .app -> fn _ -> ! error
         end
-      | Bind(m, x, k) ->
+      | +Bind(m, x, k) ->
         do v? <- ! interp .comp m g .bind;
         match v?
-        | Ok(v) -> ! interp .comp k Cons(x, v, g)
-        | Err() -> ! error
+        | +Ok(v) -> ! interp .comp k +Cons(x, v, g)
+        | +Err() -> ! error
         end
-      | Lam(x, m) ->
+      | +Lam(x, m) ->
         comatch
-          | .app -> fn v -> ! interp .comp m Cons(x, v, g)
-          | .bind -> ret Err()
+          | .app -> fn v -> ! interp .comp m +Cons(x, v, g)
+          | .bind -> ret +Err()
         end
-      | App(m, v) ->
+      | +App(m, v) ->
         do v? <- ! interp .valu v g;
         match v?
-        | Ok(v) -> ! interp .comp m g .app v
-        | Err() -> ! error
+        | +Ok(v) -> ! interp .comp m g .app v
+        | +Err() -> ! error
         end
       end
     end
@@ -143,10 +143,10 @@ end
 
 # An example
 main
-  do x <- ! interp .comp App(Lam("x", Return(Var("x"))), False()) Empty() .bind;
+  do x <- ! interp .comp +App(+Lam("x", +Return(+Var("x"))), +False()) +Empty() .bind;
   match x
-  | Err() -> ! panic "ERROR"
-  | Ok(sv) ->
+  | +Err() -> ! panic "ERROR"
+  | +Ok(sv) ->
     (do s <- ! sem_val_to_str sv;
         ! write_line s { ! exit 0 })
   end

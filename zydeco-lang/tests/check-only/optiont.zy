@@ -13,7 +13,7 @@ main
     | .trans ->
       comatch
       | .identity ->
-        ret Some(1)
+        ret +Some(1)
       end
     end
   } in

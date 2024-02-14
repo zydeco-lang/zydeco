@@ -24,45 +24,45 @@ module Std where
   end
 
   pub data Unit where
-    | Unit()
+    | +Unit()
   end
 
   module Prod where
     pub data Pair (A : VType) (A' : VType) where
-      | Cons(A, A')
+      | +Cons(A, A')
     end
 
     pub def fn pair (A : VType) (A' : VType) (x : A) (y : A') : F(Pair A A') = 
-      ret Cons(x, y)
+      ret +Cons(x, y)
     end
   end
 
   ## the Option type
 
   pub data Option (A : VType) where
-    | None()
-    | Some(A)
+    | +None()
+    | +Some(A)
   end
 
 
   pub data Either (E : VType) (A : VType) where
-    | Left(E)
-    | Right(A)
+    | +Left(E)
+    | +Right(A)
   end
 
   module Bool where
     pub data Bool where
-      | True()
-      | False()
+      | +True()
+      | +False()
     end
 
-    pub def true : Bool = True() end
-    pub def false : Bool = False() end
+    pub def true : Bool = +True() end
+    pub def false : Bool = +False() end
 
     pub def fn not (x: Bool) : Ret Bool =
       match x
-      | True() -> ret false
-      | False() -> ret true
+      | +True() -> ret false
+      | +False() -> ret true
       end
     end
 
@@ -70,15 +70,15 @@ module Std where
     pub def fn not~ (t~: Thunk(Ret Bool)) : Ret(Bool) =
       do x <- ! t~;
       match x
-      | True() -> ret false
-      | False() -> ret true
+      | +True() -> ret false
+      | +False() -> ret true
       end
     end
 
     pub def fn and (x: Bool) (y: Bool) : Ret Bool =
         match x
-        | True() -> ret y
-        | False() -> ret false
+        | +True() -> ret y
+        | +False() -> ret false
         end
     end
 
@@ -86,15 +86,15 @@ module Std where
     pub def fn and~ : Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool) = fn b1~ b2~ ->
       do b1 <- ! b1~;
       match b1
-      | True() -> ! b2~
-      | False() -> ret false
+      | +True() -> ! b2~
+      | +False() -> ret false
       end
     end
 
     pub def fn or : Bool -> Bool -> Ret(Bool) = fn x y ->
       match x
-      | True() -> ret true
-      | False() -> ret y
+      | +True() -> ret true
+      | +False() -> ret y
       end
     end
 
@@ -102,8 +102,8 @@ module Std where
     pub def fn or~ : Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool) = fn b1~ b2~ ->
       do b1 <- ! b1~;
       match b1
-      | True() -> ret true
-      | False() -> ! b2~
+      | +True() -> ret true
+      | +False() -> ! b2~
       end
     end
 
@@ -120,16 +120,16 @@ module Std where
     pub def bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
       fn b b' ->
         match b
-        | True() -> ret b'
-        | False() -> ! not b'
+        | +True() -> ret b'
+        | +False() -> ! not b'
         end
     } end
 
     pub def if : Thunk(forall (B : CType) . Bool -> Thunk B -> Thunk B -> B) = {
       fn B b thn els ->
         match b
-        | True()  -> ! thn
-        | False() -> ! els
+        | +True()  -> ! thn
+        | +False() -> ! els
         end
     } end
     pub def if~ : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -> B) = {
@@ -141,14 +141,14 @@ module Std where
 
   module Nat where
     pub data Nat where
-      | Z()
-      | S(Nat)
+      | +Z()
+      | +S(Nat)
     end
 
     pub def rec fn iter (A : VType) (n : Nat) (x : A) (f : U (A -> F A)) : F A =
       match n
-      | Z() -> ret x
-      | S(n') ->
+      | +Z() -> ret x
+      | +S(n') ->
         do x' <- ! iter @(A) n' x f;
         ! f x'
       end
@@ -157,23 +157,23 @@ module Std where
 
   module List where
     pub data List (A : VType) where
-      | Nil()
-      | Cons(A, List A)
+      | +Nil()
+      | +Cons(A, List A)
     end
 
     pub def fn match_list (A: VType) (B : CType) (xs: List A) : U B -> U(A -> List A -> B) -> B =
         fn knil kcons ->
         match xs
-        | Nil() -> ! knil
-        | Cons(x,xs) -> ! kcons x xs
+        | +Nil() -> ! knil
+        | +Cons(x,xs) -> ! kcons x xs
         end
     end
 
     pub def rec foldl : forall (A : VType) (R : VType) . List A -> Thunk(A -> R -> Ret R) -> R -> Ret R =
       fn A R l step s ->
         match l
-        | Nil() -> ret s
-        | Cons(x, xs) ->
+        | +Nil() -> ret s
+        | +Cons(x, xs) ->
           do s' <- ! step x s;
           ! foldl @(A) @(R) xs step s'
         end
@@ -182,16 +182,16 @@ module Std where
     pub def rec fn reverse (A : VType) (xs : List A) : Ret(List A) =
       ! foldl @(A) @(List A)
               xs
-              {fn x xs -> ret Cons(x, xs)}
-              Nil()
+              {fn x xs -> ret +Cons(x, xs)}
+              +Nil()
     end
 
     def rec fn get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
       match xs
-      | Nil() -> ret None()
-      | Cons(hd, tl) ->
+      | +Nil() -> ret +None()
+      | +Cons(hd, tl) ->
         do minus1 <- ! sub index 1;
-        ! if~ @(F(Option A)) {! int_eq 0 index} {ret Some(hd)} {
+        ! if~ @(F(Option A)) {! int_eq 0 index} {ret +Some(hd)} {
           ! get_rec @(A) tl minus1
         }
       end
@@ -204,8 +204,8 @@ module Std where
 
   module LList where
     pub data LListV (A : VType) (B : CType) where
-      | Nil()
-      | Cons(A, Thunk(B))
+      | +Nil()
+      | +Cons(A, Thunk(B))
     end
 
     pub codata LList (A : VType) where
@@ -214,41 +214,41 @@ module Std where
 
 
     pub def fn nil (A : VType) : LList A =
-      comatch | .run -> ret Nil() end
+      comatch | .run -> ret +Nil() end
     end
 
     pub def fn cons (A : VType) (hd : A) (tl : U (LList A)) : LList A =
       comatch
-      | .run -> ret Cons(hd, tl)
+      | .run -> ret +Cons(hd, tl)
       end
     end
 
     pub def fn match_ll (A: VType) (R : CType) (xs : U(LList A)) (knil : U R) (kcons : U(A -> U(LList A) -> R)) : R =
         do v <- ! xs .run;
         match v
-        | Nil()       -> ! knil
-        | Cons(x, xs) -> ! kcons x xs
+        | +Nil()       -> ! knil
+        | +Cons(x, xs) -> ! kcons x xs
         end
     end
 
     pub def rec fn foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
       do xsv <- ! xs .run;
       match xsv
-      | Nil() -> ! b
-      | Cons(hd, tl) -> ! f hd {! foldr @(A) @(B) tl b f}
+      | +Nil() -> ! b
+      | +Cons(hd, tl) -> ! f hd {! foldr @(A) @(B) tl b f}
       end
     end
 
     pub def rec fn foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
       do xsv <- ! xs .run;
       match xsv
-      | Nil() -> ret acc
-      | Cons(hd, tl) ->
+      | +Nil() -> ret acc
+      | +Cons(hd, tl) ->
         do acc' <- ! f hd acc;
         do b <- ! cond acc';
         match b
-        | True() -> ret acc'
-        | False() -> 
+        | +True() -> ret acc'
+        | +False() -> 
           ! foldl_break @(A) @(R) tl acc' f cond
         end
       end
@@ -280,23 +280,23 @@ module Std where
 
     pub def rec fn forever (A : VType) (x : A) : LList A =
       comatch
-      | .run -> ret Cons(x, { ! forever @(A) x })
+      | .run -> ret +Cons(x, { ! forever @(A) x })
       end
     end
 
     pub def fn head (A : VType) (xs : U(LList A)) : F(Option A) =
       do xs' <- ! xs .run;
       match xs'
-      | Nil() -> ret None()
-      | Cons(x, tl) -> ret Some(x)
+      | +Nil() -> ret +None()
+      | +Cons(x, tl) -> ret +Some(x)
       end
     end
 
     pub def fn is_empty (A : VType) (xs : U(LList A)) : F Bool =
       do xs' <- ! xs .run;
       match xs'
-      | Nil() -> ret True()
-      | Cons(x, tl) -> ret False()
+      | +Nil() -> ret +True()
+      | +Cons(x, tl) -> ret +False()
       end
     end
 
@@ -329,8 +329,8 @@ module Std where
         fn x l ->
           do o <- ! f x;
           match o
-          | None()   -> ! l
-          | Some(x') -> ! cons @(A') x' l
+          | +None()   -> ! l
+          | +Some(x') -> ! cons @(A') x' l
           end
       }
     end
@@ -339,16 +339,16 @@ module Std where
       ! filterMap @(A) @(A) { fn x ->
         ! if~ @(Ret(Option A))
               { ! f x }
-              { ret Some(x) }
-              { ret None() }
+              { ret +Some(x) }
+              { ret +None() }
       }
     end
 
     pub def rec fn print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
       do xs' <- ! xs .run;
       match xs'
-      | Nil() -> ! write_str "\n" next
-      | Cons(x, tl) ->
+      | +Nil() -> ! write_str "\n" next
+      | +Cons(x, tl) ->
         do s <- ! fmt x;
         do st <- ! str_append s " ";
         ! write_str st {! print_list @(A) fmt tl next}
@@ -362,20 +362,20 @@ module Std where
     pub def rec fn min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
       do xs' <- ! xs .run;
       match xs'
-      | Nil() -> ret None()
-      | Cons(x, tl) ->
+      | +Nil() -> ret +None()
+      | +Cons(x, tl) ->
         do m <- ! min_list @(A) cmp tl;
         match m
-        | None() -> ret Some(Cons(x, 0))
-        | Some(p) ->
+        | +None() -> ret +Some(+Cons(x, 0))
+        | +Some(p) ->
           match p
-          | Cons(m', i) ->
+          | +Cons(m', i) ->
             do c <- ! cmp x m';
             match c
-            | True() -> ret Some(Cons(x, 0))
-            | False() -> 
+            | +True() -> ret +Some(+Cons(x, 0))
+            | +False() -> 
               do i <- ! add 1 i;
-              ret Some(Cons(m', i))
+              ret +Some(+Cons(m', i))
             end
           end
         end
@@ -385,20 +385,20 @@ module Std where
     pub def rec fn max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
       do xs' <- ! xs .run;
       match xs'
-      | Nil() -> ret None()
-      | Cons(x, tl) ->
+      | +Nil() -> ret +None()
+      | +Cons(x, tl) ->
         do m <- ! max_list @(A) cmp tl;
         match m
-        | None() -> ret Some(Cons(x, 0))
-        | Some(p) ->
+        | +None() -> ret +Some(+Cons(x, 0))
+        | +Some(p) ->
           match p
-          | Cons(m', i) ->
+          | +Cons(m', i) ->
             do c <- ! cmp x m';
             match c
-            | True() -> 
+            | +True() -> 
               do i <- ! add 1 i;
-              ret Some(Cons(m', i))
-            | False() -> ret Some(Cons(x, 0))
+              ret +Some(+Cons(m', i))
+            | +False() -> ret +Some(+Cons(x, 0))
             end
           end
         end
@@ -406,8 +406,8 @@ module Std where
     end
 
     pub def fn ll_to_list (A : VType) (xs : U(LList A)) : Ret (List A) =
-      do sx <- !foldl' @(A) @(List A) {fn x xs -> ret Cons(x,xs)}
-                      Nil()
+      do sx <- !foldl' @(A) @(List A) {fn x xs -> ret +Cons(x,xs)}
+                      +Nil()
                       xs;
       ! reverse @(A) sx
     end
@@ -431,11 +431,11 @@ module Std where
     end
 
     pub def rec fn any (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
-      ! foldr @(A) @(F Bool) xs {ret False()} {fn x b -> do b' <- ! b; do x <- ! f x; ! or b' x}
+      ! foldr @(A) @(F Bool) xs {ret +False()} {fn x b -> do b' <- ! b; do x <- ! f x; ! or b' x}
     end
 
     pub def rec fn all (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
-      ! foldr @(A) @(F Bool) xs {ret True()} {fn x b -> do b' <- ! b; do x <- ! f x; ! and b' x}
+      ! foldr @(A) @(F Bool) xs {ret +True()} {fn x b -> do b' <- ! b; do x <- ! f x; ! and b' x}
     end
 
     pub def fn map2 (A : VType) (A' : VType) (R : VType) (f : U(A -> A' -> F(R))) (xs : U(LList A)) (ys : U(LList A')) : LList R =
@@ -489,8 +489,8 @@ module Std where
       fn x y ->
         do b <- ! int_gt x y;
         match b
-        | True() -> ret x
-        | False() -> ret y
+        | +True() -> ret x
+        | +False() -> ret y
         end
     end
 
@@ -498,8 +498,8 @@ module Std where
       fn x y ->
         do b <- ! int_lt x y;
         match b
-        | True() -> ret x
-        | False() -> ret y
+        | +True() -> ret x
+        | +False() -> ret y
         end
     end
   end
@@ -525,10 +525,10 @@ module Std where
     pub def rec fn str_split_by (str : String) (sep : Char) : LList String =
       do res <- ! str_split_once str sep;
       match res
-      | None() -> ! singleton_list @(String) str
-      | Some(p) ->
+      | +None() -> ! singleton_list @(String) str
+      | +Some(p) ->
         match p
-        | Cons(s1, s2) ->
+        | +Cons(s1, s2) ->
           ! if~ @(LList String) {! str_eq s1 ""} {
             ! str_split_by s2 sep
           } {
@@ -561,8 +561,8 @@ module Std where
     pub def bool_to_str : Thunk(Bool -> Ret String) = {
       fn (b : Bool) ->
         match b
-        | True() -> ret "True"
-        | False() -> ret "False"
+        | +True() -> ret "True"
+        | +False() -> ret "False"
         end
     } end
 
@@ -607,8 +607,8 @@ module Std where
 
   module AvlTree where
     pub data AVL (A : VType) where
-      | Leaf()
-      | Node(AVL A, A, Int, AVL A)
+      | +Leaf()
+      | +Node(AVL A, A, Int, AVL A)
     end
 
     alias Cmp (A : VType) = U(A -> A -> F(Bool)) end
@@ -616,43 +616,43 @@ module Std where
     def fn max_int (x : Int) (y : Int) : F(Int) =
       do b <- ! int_gt x y;
       match b
-      | True() -> ret x
-      | False() -> ret y
+      | +True() -> ret x
+      | +False() -> ret y
       end
     end
 
     pub def fn leaf (A : VType) : F(AVL A) =
-      ret Leaf()
+      ret +Leaf()
     end
 
     pub def fn singleton (A : VType) (x : A) : F(AVL A) =
       do lf <- ! leaf @(A);
-      ret Node(Leaf(), x, 1, Leaf())
+      ret +Node(+Leaf(), x, 1, +Leaf())
     end
 
     pub def fn height (A : VType) (tree : AVL A) : F(Int) =
       match tree
-      | Leaf() -> ret 0
-      | Node(l, n, h, r) -> ret h
+      | +Leaf() -> ret 0
+      | +Node(l, n, h, r) -> ret h
       end
     end
 
     pub def fn fix_height (A : VType) (tree : AVL A) : F(AVL A) =
       match tree
-      | Leaf() -> ret Leaf()
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ret +Leaf()
+      | +Node(l, n, h, r) ->
         do hl <- ! height @(A) l;
         do hr <- ! height @(A) r;
         do h' <- ! max_int hl hr;
         do h' <- ! add h' 1;
-        ret Node(l, n, h', r)
+        ret +Node(l, n, h', r)
       end
     end
 
     pub def fn balance_factor (A : VType) (tree : AVL A) : F(Int) =
       match tree
-      | Leaf() -> ret 0
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ret 0
+      | +Node(l, n, h, r) ->
         do hl <- ! height @(A) l;
         do hr <- ! height @(A) r;
         ! sub hl hr
@@ -661,89 +661,89 @@ module Std where
 
     pub def fn left (A : VType) (tree : AVL A) : F(AVL A) =
       match tree
-      | Leaf() -> ret Leaf()
-      | Node(l, n, h, r) -> ret l
+      | +Leaf() -> ret +Leaf()
+      | +Node(l, n, h, r) -> ret l
       end
     end
 
     pub def fn right (A : VType) (tree : AVL A) : F(AVL A) =
       match tree
-      | Leaf() -> ret Leaf()
-      | Node(l, n, h, r) -> ret r
+      | +Leaf() -> ret +Leaf()
+      | +Node(l, n, h, r) -> ret r
       end
     end
 
     pub def rec fn min_element (A : VType) (tree : AVL A) (cmp : Cmp A) : F(Option A) =
       match tree
-      | Leaf() -> ret None()
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ret +None()
+      | +Node(l, n, h, r) ->
         do l' <- ! min_element @(A) l cmp;
         match l'
-        | Some(x) -> ret Some(x)
-        | None() -> ret Some(n)
+        | +Some(x) -> ret +Some(x)
+        | +None() -> ret +Some(n)
         end
       end
     end
 
     pub def fn rotate_right (A : VType) (tree : AVL A) : F(AVL A) =
       match tree
-      | Leaf() -> ret Leaf()
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ret +Leaf()
+      | +Node(l, n, h, r) ->
         match l
-        | Leaf() -> ret Leaf()
-        | Node(ll, ln, lh, lr) ->
-          do n_tree <- ! fix_height @(A) Node(lr, n, h, r);
-          ! fix_height @(A) Node(ll, ln, lh, n_tree)
+        | +Leaf() -> ret +Leaf()
+        | +Node(ll, ln, lh, lr) ->
+          do n_tree <- ! fix_height @(A) +Node(lr, n, h, r);
+          ! fix_height @(A) +Node(ll, ln, lh, n_tree)
         end
       end
     end
 
     pub def fn rotate_left (A : VType) (tree : AVL A) : F(AVL A) =
       match tree
-      | Leaf() -> ret Leaf()
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ret +Leaf()
+      | +Node(l, n, h, r) ->
         match r
-        | Leaf() -> ret Leaf()
-        | Node(rl, rn, rh, rr) ->
-          do n_tree <- ! fix_height @(A) Node(l, n, h, rl);
-          ! fix_height @(A) Node(n_tree, rn, rh, rr)
+        | +Leaf() -> ret +Leaf()
+        | +Node(rl, rn, rh, rr) ->
+          do n_tree <- ! fix_height @(A) +Node(l, n, h, rl);
+          ! fix_height @(A) +Node(n_tree, rn, rh, rr)
         end
       end
     end
 
     pub def fn balance (A : VType) (tree : AVL A) : F(AVL A) =
       match tree
-      | Leaf() -> ret Leaf()
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ret +Leaf()
+      | +Node(l, n, h, r) ->
         do bf <- ! balance_factor @(A) tree;
         do g_1 <- ! int_gt bf 1;
         match g_1
-        | True() ->
+        | +True() ->
           do l_bf <- ! balance_factor @(A) l;
           do l_0 <- ! int_lt l_bf 0;
           match l_0
-          | True() -> 
+          | +True() -> 
             do l_tree' <- ! rotate_left @(A) l;
             do n_h <- ! height @(A) tree;
-            ! rotate_right @(A) Node(l_tree', n, n_h, r)
-          | False() ->
+            ! rotate_right @(A) +Node(l_tree', n, n_h, r)
+          | +False() ->
             ! rotate_right @(A) tree
           end
-        | False() ->
+        | +False() ->
           do l_m1 <- ! int_lt bf -1;
           match l_m1
-          | True() ->
+          | +True() ->
             do r_bf <- ! balance_factor @(A) r;
             do g_0 <- ! int_gt r_bf 0;
             match g_0
-            | True() -> 
+            | +True() -> 
               do r_tree' <- ! rotate_right @(A) r;
               do n_h <- ! height @(A) tree;
-              ! rotate_left @(A) Node(l, n, n_h, r_tree')
-            | False() ->
+              ! rotate_left @(A) +Node(l, n, n_h, r_tree')
+            | +False() ->
               ! rotate_left @(A) tree
             end
-          | False() -> ret tree
+          | +False() -> ret tree
           end
         end
       end
@@ -751,17 +751,17 @@ module Std where
 
     pub def rec fn insert (A : VType) (x : A) (tree : AVL A) (cmp : Cmp A) : F(AVL A) =
       match tree
-      | Leaf() -> ! singleton @(A) x
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ! singleton @(A) x
+      | +Node(l, n, h, r) ->
         do b <- ! cmp x n;
         match b
-        | True() ->
+        | +True() ->
           do l' <- ! insert @(A) x l cmp;
-          do n_tree <- ! fix_height @(A) Node(l', n, h, r);
+          do n_tree <- ! fix_height @(A) +Node(l', n, h, r);
           ! balance @(A) n_tree
-        | False() ->
+        | +False() ->
           do r' <- ! insert @(A) x r cmp;
-          do n_tree <- ! fix_height @(A) Node(l, n, h, r');
+          do n_tree <- ! fix_height @(A) +Node(l, n, h, r');
           ! balance @(A) n_tree
         end
       end
@@ -769,16 +769,16 @@ module Std where
 
     pub def rec fn search (A : VType) (x : A) (tree : AVL A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Option A) =
       match tree
-      | Leaf() -> ret None()
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ret +None()
+      | +Node(l, n, h, r) ->
         do b <- ! cmp_eq x n;
         match b
-        | True() -> ret Some(n)
-        | False() ->
+        | +True() -> ret +Some(n)
+        | +False() ->
           do b <- ! cmp_lt x n;
           match b
-          | True() -> ! search @(A) x l cmp_eq cmp_lt
-          | False() -> ! search @(A) x r cmp_eq cmp_lt
+          | +True() -> ! search @(A) x l cmp_eq cmp_lt
+          | +False() -> ! search @(A) x r cmp_eq cmp_lt
           end
         end
       end
@@ -786,21 +786,21 @@ module Std where
 
     pub def rec fn change (A : VType) (x : A) (tree : AVL A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(AVL A) =
       match tree
-      | Leaf() -> ret tree
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ret tree
+      | +Node(l, n, h, r) ->
         do b <- ! cmp_eq x n;
         match b
-        | True() ->
-          ret Node(l, x, h, r)
-        | False() ->
+        | +True() ->
+          ret +Node(l, x, h, r)
+        | +False() ->
           do b <- ! cmp_lt x n;
           match b
-          | True() ->
+          | +True() ->
             do l' <- ! change @(A) x l cmp_eq cmp_lt;
-            ret Node(l', n, h, r)
-          | False() ->
+            ret +Node(l', n, h, r)
+          | +False() ->
             do r' <- ! change @(A) x r cmp_eq cmp_lt;
-            ret Node(l, n, h, r')
+            ret +Node(l, n, h, r')
           end
         end
       end
@@ -808,37 +808,37 @@ module Std where
 
     pub def rec fn delete (A : VType) (x : A) (tree : AVL A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(AVL A) =
       match tree
-      | Leaf() -> ret tree
-      | Node(l, n, h, r) ->
+      | +Leaf() -> ret tree
+      | +Node(l, n, h, r) ->
         do b <- ! cmp_eq x n;
         match b
-        | True() ->
+        | +True() ->
           match l
-          | Leaf() -> ret r
-          | Node(ll, ln, lh, lr) ->
+          | +Leaf() -> ret r
+          | +Node(ll, ln, lh, lr) ->
             match r
-            | Leaf() -> ret l
-            | Node(rl, rn, rh, rr) ->
+            | +Leaf() -> ret l
+            | +Node(rl, rn, rh, rr) ->
               do right_min <- ! min_element @(A) r cmp_lt;
               match right_min
-              | None() -> ret l
-              | Some(m) ->
+              | +None() -> ret l
+              | +Some(m) ->
                 do r' <- ! delete @(A) m r cmp_eq cmp_lt;
-                do n_tree <- ! fix_height @(A) Node(l, m, h, r');
+                do n_tree <- ! fix_height @(A) +Node(l, m, h, r');
                 ! balance @(A) n_tree
               end
             end
           end
-        | False() ->
+        | +False() ->
           do bl <- ! cmp_lt x n;
           match bl
-          | True() ->
+          | +True() ->
             do l' <- ! delete @(A) x l cmp_eq cmp_lt;
-            do n_tree <- ! fix_height @(A) Node(l', n, h, r);
+            do n_tree <- ! fix_height @(A) +Node(l', n, h, r);
             ! balance @(A) n_tree
-          | False() ->
+          | +False() ->
             do r' <- ! delete @(A) x r cmp_eq cmp_lt;
-            do n_tree <- ! fix_height @(A) Node(l, n, h, r');
+            do n_tree <- ! fix_height @(A) +Node(l, n, h, r');
             ! balance @(A) n_tree
           end
         end
@@ -847,22 +847,22 @@ module Std where
 
     pub def rec fn equal (A : VType) (tree1 : AVL A) (tree2 : AVL A) (cmp_eq : Cmp A) : F(Bool) =
       match tree1
-      | Leaf() ->
+      | +Leaf() ->
         match tree2
-        | Leaf() -> ret True()
-        | Node(_, _, _, _) -> ret False()
+        | +Leaf() -> ret +True()
+        | +Node(_, _, _, _) -> ret +False()
         end
-      | Node(l1, n1, h1, r1) ->
+      | +Node(l1, n1, h1, r1) ->
         match tree2
-        | Leaf() -> ret False()
-        | Node(l2, n2, h2, r2) ->
+        | +Leaf() -> ret +False()
+        | +Node(l2, n2, h2, r2) ->
           do b3 <- ! cmp_eq n1 n2;
           match b3
-          | True() ->
+          | +True() ->
             do b1 <- ! equal @(A) l1 l2 cmp_eq;
             do b2 <- ! equal @(A) r1 r2 cmp_eq;
             ! and b1 b2
-          | False() -> ret False()
+          | +False() -> ret +False()
           end
         end
       end
@@ -870,8 +870,8 @@ module Std where
 
     pub def rec fn pre_traversal (A : VType) (tree : AVL A) (fmt : U(A -> F(String))) (next : U OS) : OS =
       match tree
-      | Leaf() -> ! next
-      | Node(left, v, h, right) ->
+      | +Leaf() -> ! next
+      | +Node(left, v, h, right) ->
         do r1 <- ! fmt v;
         do r2 <- ! str_append r1 " h:";
         do r3 <- ! int_to_str h;
@@ -885,33 +885,33 @@ module Std where
 
   module Hash where
     data Hash (K : VType) (V : VType) where
-      | Hash(AVL (Pair K V), Cmp (Pair K V), Cmp (Pair K V), Cmp (Pair K V))
+      | +Hash(AVL (Pair K V), Cmp (Pair K V), Cmp (Pair K V), Cmp (Pair K V))
     end
 
     pub def fn hash_new (K : VType) (V : VType) (insert_key_cmp : Cmp K) (search_key_cmp : Cmp K) (equal_value_cmp : Cmp V) : F(Hash K V) =
       do body <- ! leaf @(Pair K V);
-      ret Hash(body, {
+      ret +Hash(body, {
         fn p1 p2 ->
           match p1
-          | Cons(k1, v1) ->
+          | +Cons(k1, v1) ->
             match p2
-            | Cons(k2, v2) -> ! insert_key_cmp k1 k2
+            | +Cons(k2, v2) -> ! insert_key_cmp k1 k2
             end
           end
       }, {
         fn p1 p2 -> 
           match p1
-          | Cons(k1, v1) ->
+          | +Cons(k1, v1) ->
             match p2
-            | Cons(k2, v2) -> ! search_key_cmp k1 k2
+            | +Cons(k2, v2) -> ! search_key_cmp k1 k2
             end
           end
       }, {
         fn p1 p2 ->
           match p1
-          | Cons(k1, v1) ->
+          | +Cons(k1, v1) ->
             match p2
-            | Cons(k2, v2) ->
+            | +Cons(k2, v2) ->
               do b1 <- ! equal_value_cmp v1 v2;
               do b2 <- ! search_key_cmp k1 k2;
               ! and b1 b2
@@ -922,22 +922,22 @@ module Std where
 
     pub def fn hash_insert (K : VType) (V : VType) (k : K) (v : V) (tree : Hash K V) : F(Hash K V) =
       match tree
-      | Hash(body, insert_cmp, search_cmp, equal_cmp) ->
-        do body' <- ! insert @(Pair K V) Cons(k,v) body insert_cmp;
-        ret Hash(body', insert_cmp, search_cmp, equal_cmp)
+      | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
+        do body' <- ! insert @(Pair K V) +Cons(k,v) body insert_cmp;
+        ret +Hash(body', insert_cmp, search_cmp, equal_cmp)
       end
     end
 
     # in search, a default value for v is needed, because the type of v is unknown
     pub def fn hash_search (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Option V) =
           match hash
-          | Hash(body, insert_cmp, search_cmp, equal_cmp) ->
-            do res <- ! search @(Pair K V) Cons(k, default) body search_cmp insert_cmp;
+          | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
+            do res <- ! search @(Pair K V) +Cons(k, default) body search_cmp insert_cmp;
             match res
-            | None() -> ret None()
-            | Some(p) ->
+            | +None() -> ret +None()
+            | +Some(p) ->
               match p
-              | Cons(k, v) -> ret Some(v)
+              | +Cons(k, v) -> ret +Some(v)
               end
             end
           end
@@ -945,25 +945,25 @@ module Std where
 
     pub def fn hash_delete (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Hash K V) =
       match hash
-      | Hash(body, insert_cmp, search_cmp, equal_cmp) -> 
-        do body' <- ! delete @(Pair K V) Cons(k, default) body search_cmp insert_cmp;
-        ret Hash(body', insert_cmp, search_cmp, equal_cmp)
+      | +Hash(body, insert_cmp, search_cmp, equal_cmp) -> 
+        do body' <- ! delete @(Pair K V) +Cons(k, default) body search_cmp insert_cmp;
+        ret +Hash(body', insert_cmp, search_cmp, equal_cmp)
       end
     end
 
     pub def fn hash_change (K : VType) (V : VType) (k : K) (v : V) (hash : Hash K V) : F(Hash K V) =
       match hash
-      | Hash(body, insert_cmp, search_cmp, equal_cmp) ->
-        do body' <- ! change @(Pair K V) Cons(k, v) body search_cmp insert_cmp;
-        ret Hash(body', insert_cmp, search_cmp, equal_cmp)
+      | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
+        do body' <- ! change @(Pair K V) +Cons(k, v) body search_cmp insert_cmp;
+        ret +Hash(body', insert_cmp, search_cmp, equal_cmp)
       end
     end
 
     pub def fn hash_equal (K : VType) (V : VType) (hash1 : Hash K V) (hash2 : Hash K V) : F(Bool) =
       match hash1
-      | Hash(body1, insert_cmp1, search_cmp1, v_cmp1) ->
+      | +Hash(body1, insert_cmp1, search_cmp1, v_cmp1) ->
         match hash2
-        | Hash(body2, insert_cmp2, search_cmp2, v_cmp2) ->
+        | +Hash(body2, insert_cmp2, search_cmp2, v_cmp2) ->
           ! equal @(Pair K V) body1 body2 v_cmp1
         end
       end

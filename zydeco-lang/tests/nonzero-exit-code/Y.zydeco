@@ -17,8 +17,8 @@ main
   let fn fact (f: U(Int -> F Int)) (n: Int): F Int =
     do is_zero <- ! int_eq n 0;
     match is_zero
-    | True() -> ret 1
-    | False() ->
+    | +True() -> ret 1
+    | +False() ->
       do rest <-
         do n-1 <- ! sub n 1;
         ! f n-1
@@ -34,8 +34,8 @@ main
     do x <- ! fact input;
     do correct <- ! int_eq x expected;
     match correct
-    | True() -> ! t
-    | False() ->
+    | +True() -> ! t
+    | +False() ->
       do input <- ! int_to_str input;
       do expected <- ! int_to_str expected;
       do got <- ! int_to_str x;

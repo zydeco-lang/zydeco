@@ -5,8 +5,8 @@ main
       do strNum <- ! int_to_str num;
       do prt <- ! str_append strNum " ";
       match isOne
-      | True() -> ! write_str strNum {! exit 0}
-      | False() -> (
+      | +True() -> ! write_str strNum {! exit 0}
+      | +False() -> (
         do minus1 <- ! sub num 1;
         ! write_str prt {! print_a_number minus1}
       )

@@ -54,15 +54,15 @@ def fn option_t_monad (M: VType -> CType) (mo: U (Monad M)) : Monad (OptionT M) 
   | .return -> fn A a ->
     // goal: OptionT M A
     comatch
-    | .run -> ! mo .return @(Option A) Some(a)
+    | .run -> ! mo .return @(Option A) +Some(a)
     end
   | .bind -> fn A A' m f -> // m: U (OptionT M A), f: U (A -> OptionT M A')
     // goal: OptionT M A'
     comatch
     | .run -> ! mo .bind @(Option A) @(Option A') { ! m .run } { fn a? ->
       match a?
-      | Some(a) -> ! f a .run
-      | None() -> ! mo .return @(Option A') None()
+      | +Some(a) -> ! f a .run
+      | +None() -> ! mo .return @(Option A') +None()
       end
     }
     end
@@ -74,7 +74,7 @@ def fn option_t_trans : MonadTrans OptionT =
   | .lift -> fn M A mo m ->
     comatch
     | .run -> ! mo .bind @(A) @(Option A) m { fn a ->
-      ! mo .return @(Option A) Some(a)
+      ! mo .return @(Option A) +Some(a)
     }
     end
   end

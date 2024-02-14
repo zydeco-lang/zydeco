@@ -9,8 +9,7 @@ use std::fmt::{Debug, Display};
 pub enum Tok<'input> {
     #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
     UpperIdent(&'input str),
-    #[regex(r"([_a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
-    #[regex(r"(\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=|~)*")]
+    #[regex(r"([_a-z]|\?)([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
     LowerIdent(&'input str),
 
     #[token("pub")]
@@ -99,6 +98,10 @@ pub enum Tok<'input> {
     Force,
     #[token("|")]
     Branch,
+    #[token("+")]
+    Plus,
+    #[token("*")]
+    Star,
     #[token(".")]
     Dot,
     #[token("..")]
@@ -157,6 +160,8 @@ impl<'input> Display for Tok<'input> {
             Tok::Semicolon => write!(f, ";"),
             Tok::Force => write!(f, "!"),
             Tok::Branch => write!(f, "|"),
+            Tok::Plus => write!(f, "+"),
+            Tok::Star => write!(f, "*"),
             Tok::Dot => write!(f, "."),
             Tok::DotDot => write!(f, ".."),
             Tok::Arrow => write!(f, "->"),

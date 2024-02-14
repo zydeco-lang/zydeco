@@ -32,16 +32,16 @@ main
   do v1 <- ! hash_search @(Int) @(String) 1 "default" h;
   do v2 <- ! hash_search @(Int) @(String) 1 "default" h;
   match v1
-  | None() -> ! exit 1
-  | Some(v1) -> 
+  | +None() -> ! exit 1
+  | +Some(v1) -> 
       match v2
-      | None() -> ! exit 1
-      | Some(v2) -> 
+      | +None() -> ! exit 1
+      | +Some(v2) -> 
         do b2 <- ! str_eq v1 v2;
         do b <- ! and b b2;
         match b
-        | True() -> ! exit 0
-        | False() -> ! exit 1
+        | +True() -> ! exit 0
+        | +False() -> ! exit 1
         end
       end
   end

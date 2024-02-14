@@ -3,7 +3,7 @@ codata Y (B : CType) where
 end
 
 data Self (B : VType) where
-  | Roll(Thunk(Self B -> Ret B))
+  | +Roll(Thunk(Self B -> Ret B))
 end
 
 def fix : Thunk (forall (B : CType) . Thunk(Thunk B -> B) -> B) = {
