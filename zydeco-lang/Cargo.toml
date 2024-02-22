@@ -6,7 +6,7 @@ description = "A language implementation for zydeco, a call-by-push-value langua
 
 [dependencies]
 regex = "1"
-logos = "0.13"
+logos = "0.14"
 lalrpop-util = "0.20"
 im = "15"
 slotmap = "1.0"
@@ -14,6 +14,7 @@ thiserror = "1.0.40"
 zydeco-utils = { path = "./utils" }
 zydeco-derive = { path = "./derive" }
 derive_more = "0.99"
+rand = "0.8"
 
 # build-time dependency on the lalrpop library:
 [build-dependencies]

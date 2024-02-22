@@ -274,6 +274,20 @@ pub fn arg_list(
     }
 }
 
+pub fn random_int(
+    args: Vec<ZValue>, _: &mut (dyn BufRead), _: &mut (dyn Write), _: &[String],
+) -> Result<ZCompute, i32> {
+    use rand::Rng;
+    match args.as_slice() {
+        [k] => {
+            let mut rng = rand::thread_rng();
+            let i = Literal::Int(rng.gen_range(i64::MIN..=i64::MAX));
+            Ok(app(rc!(Force(rc!(k.clone().into())).into()), i.into()))
+        }
+        _ => unreachable!(""),
+    }
+}
+
 pub fn exit(
     args: Vec<ZValue>, _r: &mut (dyn BufRead), _w: &mut (dyn Write), _: &[String],
 ) -> Result<ZCompute, i32> {

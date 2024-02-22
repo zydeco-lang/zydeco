@@ -44,8 +44,9 @@ impl Builtin {
             Builtin::new("write_str", 2, write_str),
             Builtin::new("read_line", 1, read_line),
             Builtin::new("read_till_eof", 1, read_till_eof),
-            Builtin::new("exit", 1, exit),
             Builtin::new("arg_list", 1, arg_list),
+            Builtin::new("random_int", 1, random_int),
+            Builtin::new("exit", 1, exit),
         ]
         .into_iter()
         .map(Builtin::gen)
