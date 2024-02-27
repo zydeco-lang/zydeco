@@ -69,7 +69,27 @@ DataBr: DataBr<CtorV, Sp<Type>> = {
 CodataBr: CodataBr<DtorV, Sp<Type>> = {
     "|" <dtorv:DtorV> ":" <ty:Sp<Type>> => {
         CodataBr { dtorv, ty }
-    }
+    },
+    // "|" <dtorv:DtorV> <mut params:SepByDelim<"(", ",", <TypePattern*>, ")">>
+    // <mut tys:SepByDelim<"(", ",", <Sp<Type>>, ")">> ":" <mut ty:Sp<Type>> => {
+    //     while let Some(t) = tys.pop() {
+    //         ty = t.info.clone().make(Arrow(Box::new(t), Box::new(ty)).into());
+    //     }
+    //     while let Some((name, kind)) = params.pop() {
+    //         ty = name.info.clone().make(Forall {
+    //             param: (name.clone, kind),
+    //             ty: Box::new(ty),
+    //         }.into());
+    //     }
+    //     CodataBr { dtorv, ty }
+    // },
+    "|" <dtorv:DtorV> <mut tys:SepByDelim<"(", ",", <Sp<Type>>, ")">>
+    ":" <mut ty:Sp<Type>> => {
+        while let Some(t) = tys.pop() {
+            ty = t.info.clone().make(Arrow(Box::new(t), Box::new(ty)).into());
+        }
+        CodataBr { dtorv, ty }
+    },
 };
 
 //* --------------------------------- Pattern -------------------------------- */
