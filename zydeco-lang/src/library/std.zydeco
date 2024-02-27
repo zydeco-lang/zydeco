@@ -576,7 +576,7 @@ module Std where
     pub extern codata OS end
     pub extern def write_str : Thunk(String -> Thunk(OS) -> OS) end
     pub extern def read_line : Thunk(Thunk(String -> OS) -> OS) end
-    pub extern def read_line_as_int : Thunk(Thunk(Int -> OS) -> OS) end
+    pub extern def read_line_as_int : Thunk(Thunk(Option Int -> OS) -> OS) end
     pub extern def read_till_eof : Thunk(Thunk(String -> OS) -> OS) end
     pub extern def arg_list : Thunk(Thunk(List String -> OS) -> OS) end
     pub extern def random_int : Thunk(Thunk(Int -> OS) -> OS) end

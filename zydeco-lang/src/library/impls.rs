@@ -248,10 +248,17 @@ pub fn read_line_as_int(
             let mut line = String::new();
             r.read_line(&mut line).unwrap();
             line.pop();
-            Ok(app(
-                rc!(Force(rc!(e.clone().into())).into()),
-                Literal::Int(line.parse().unwrap()).into(),
-            ))
+            let i: Option<i64> = line.parse().ok();
+            match i {
+                Some(i) => Ok(app(
+                    rc!(Force(rc!(e.clone().into())).into()),
+                    ctor("Some", vec!(rc!(Literal::Int(i).into()))),
+                )),
+                None => Ok(app(
+                    rc!(Force(rc!(e.clone().into())).into()),
+                    ctor("None", vec![]),
+                )),
+            }
         }
         _ => unreachable!(""),
     }
