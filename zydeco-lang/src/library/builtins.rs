@@ -43,6 +43,7 @@ impl Builtin {
             Builtin::new("str_to_int", 1, str_to_int),
             Builtin::new("write_str", 2, write_str),
             Builtin::new("read_line", 1, read_line),
+            Builtin::new("read_line_as_int", 1, read_line_as_int),
             Builtin::new("read_till_eof", 1, read_till_eof),
             Builtin::new("arg_list", 1, arg_list),
             Builtin::new("random_int", 1, random_int),

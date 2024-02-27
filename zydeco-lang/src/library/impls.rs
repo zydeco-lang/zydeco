@@ -240,6 +240,23 @@ pub fn read_line(
     }
 }
 
+pub fn read_line_as_int(
+    args: Vec<ZValue>, r: &mut (dyn BufRead), _w: &mut (dyn Write), _: &[String],
+) -> Result<ZCompute, i32> {
+    match args.as_slice() {
+        [e @ ZValue::Thunk(_)] => {
+            let mut line = String::new();
+            r.read_line(&mut line).unwrap();
+            line.pop();
+            Ok(app(
+                rc!(Force(rc!(e.clone().into())).into()),
+                Literal::Int(line.parse().unwrap()).into(),
+            ))
+        }
+        _ => unreachable!(""),
+    }
+}
+
 pub fn read_till_eof(
     args: Vec<ZValue>, r: &mut (dyn BufRead), _w: &mut (dyn Write), _: &[String],
 ) -> Result<ZCompute, i32> {
