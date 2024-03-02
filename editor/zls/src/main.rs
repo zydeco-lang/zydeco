@@ -13,20 +13,22 @@ use async_lsp::router::Router;
 use async_lsp::server::LifecycleLayer;
 use async_lsp::tracing::TracingLayer;
 use async_lsp::ClientSocket;
-use lsp_textdocument::TextDocuments;
+use documents::DocumentStore;
 use tower::ServiceBuilder;
 use tracing::Level;
 
+mod documents;
+
 struct ServerState {
     client: ClientSocket,
-    documents: TextDocuments,
+    documents: DocumentStore,
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let (server, _) = async_lsp::MainLoop::new_server(|client| {
         let mut router =
-            Router::new(ServerState { client: client.clone(), documents: TextDocuments::new() });
+            Router::new(ServerState { client: client.clone(), documents: Default::default() });
         router
             .request::<request::Initialize, _>(|_, _params| async move {
                 eprintln!("init language server");
@@ -34,7 +36,7 @@ async fn main() {
                     capabilities: ServerCapabilities {
                         text_document_sync: Some(TextDocumentSyncCapability::Options(
                             TextDocumentSyncOptions {
-                                open_close: Some(false),
+                                open_close: Some(true),
                                 change: Some(TextDocumentSyncKind::INCREMENTAL),
                                 will_save: Some(false),
                                 will_save_wait_until: Some(false),
@@ -47,29 +49,33 @@ async fn main() {
                     ..Default::default()
                 })
             })
-            .request::<request::HoverRequest, _>(|_, _| async move {
-                Ok(Some(Hover {
-                    contents: HoverContents::Scalar(MarkedString::String(
-                        "hover from zls!!".to_owned(),
-                    )),
-                    range: None,
-                }))
+            .request::<request::HoverRequest, _>(|state, params| {
+                let document = state
+                    .documents
+                    .get_document(params.text_document_position_params.text_document.uri);
+
+                async move {
+                    let document = document.await.unwrap();
+                    let content = document.get_content(None);
+
+                    Ok(Some(Hover {
+                        contents: HoverContents::Scalar(MarkedString::String(content.to_owned())),
+                        range: None,
+                    }))
+                }
             })
             .notification::<notification::Initialized>(|_, _| ControlFlow::Continue(()))
             .notification::<notification::DidChangeConfiguration>(|_, _| ControlFlow::Continue(()))
             .notification::<notification::DidOpenTextDocument>(|state, params| {
-                let value = serde_json::to_value(params).unwrap();
-                state.documents.listen(notification::DidOpenTextDocument::METHOD, &value);
+                tokio::spawn(state.documents.open_document(params));
                 ControlFlow::Continue(())
             })
             .notification::<notification::DidChangeTextDocument>(|state, params| {
-                let value = serde_json::to_value(params).unwrap();
-                state.documents.listen(notification::DidChangeTextDocument::METHOD, &value);
+                tokio::spawn(state.documents.change_document(params));
                 ControlFlow::Continue(())
             })
             .notification::<notification::DidCloseTextDocument>(|state, params| {
-                let value = serde_json::to_value(params).unwrap();
-                state.documents.listen(notification::DidCloseTextDocument::METHOD, &value);
+                tokio::spawn(state.documents.close_document(params));
                 ControlFlow::Continue(())
             });
 
