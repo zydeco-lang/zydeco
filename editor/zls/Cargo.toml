@@ -1,0 +1,11 @@
+[package]
+name = "zls"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-lsp = { version = "0.2.0", features = ["tokio"] }
+tokio = { version = "1.36.0", features = ["full"] }
+tower = "0.4.13"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"

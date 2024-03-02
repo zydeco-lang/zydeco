@@ -9,4 +9,5 @@ members = [
     "zydeco-lang/statics",
     "cli",
     "web",
+    "editor/zls",
 ]
