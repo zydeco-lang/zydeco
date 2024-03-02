@@ -4,6 +4,7 @@ use std::{
     hash::Hash,
     path::PathBuf,
     rc::Rc,
+    sync::Arc,
 };
 
 #[derive(Clone, Debug)]
@@ -71,11 +72,17 @@ impl Span {
     pub fn make<T>(&self, inner: T) -> Sp<T> {
         Sp { inner, info: self.clone() }
     }
+    pub fn make_box<T>(&self, inner: T) -> Box<Sp<T>> {
+        Box::new(Sp { inner, info: self.clone() })
+    }
     pub fn make_ref<'a, T>(&self, inner: &'a T) -> Sp<&'a T> {
         Sp { inner, info: self.clone() }
     }
     pub fn make_rc<T>(&self, inner: T) -> Rc<Sp<T>> {
         Rc::new(Sp { inner, info: self.clone() })
+    }
+    pub fn make_arc<T>(&self, inner: T) -> Arc<Sp<T>> {
+        Arc::new(Sp { inner, info: self.clone() })
     }
     pub fn set_info(&self, gen: &FileInfo) {
         let (start, end) = self.span1;
