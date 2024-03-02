@@ -1,0 +1,49 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "VS Code Extension Prelaunch",
+            "dependsOn": [ "Compile VS Code Extension", "Build Debug LSP Binary", "Copy Debug LSP Binary to VS Code Extension" ],
+            "dependsOrder": "sequence"
+        },
+        {
+            "label": "Compile VS Code Extension",
+            "type": "npm",
+            "script": "compile",
+            "path": "editor/code/zls",
+            "group": "build"
+        },
+        {
+            "label": "Build Debug LSP Binary",
+            "type": "cargo",
+            "command": "build",
+            "problemMatcher": [ "$rustc" ],
+            "group": "build"
+        },
+        {
+            "label": "Copy Debug LSP Binary to VS Code Extension",
+            "type": "shell",
+            "windows": {
+                "command": "cp",
+                "args": [
+                    "${workspaceFolder}\\target\\debug\\zls.exe",
+                    "${workspaceFolder}\\editor\\code\\zls\\out\\"
+                ]
+            },
+            "linux": {
+                "command": "cp",
+                "args": [
+                    "${workspaceFolder}/target/debug/zls",
+                    "${workspaceFolder}/editor/code/zls/out/"
+                ]
+            },
+            "osx": {
+                "command": "cp",
+                "args": [
+                    "${workspaceFolder}/target/debug/zls",
+                    "${workspaceFolder}/editor/code/zls/out/"
+                ]
+            }
+        }
+    ]
+}
