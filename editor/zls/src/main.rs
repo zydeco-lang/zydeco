@@ -2,31 +2,45 @@ use std::ops::ControlFlow;
 
 use async_lsp::client_monitor::ClientProcessMonitorLayer;
 use async_lsp::concurrency::ConcurrencyLayer;
+use async_lsp::lsp_types::notification::Notification;
 use async_lsp::lsp_types::{
     notification, request, Hover, HoverContents, HoverProviderCapability, InitializeResult,
-    MarkedString, ServerCapabilities,
+    MarkedString, MessageType, ServerCapabilities, ShowMessageParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
 };
 use async_lsp::panic::CatchUnwindLayer;
 use async_lsp::router::Router;
 use async_lsp::server::LifecycleLayer;
 use async_lsp::tracing::TracingLayer;
 use async_lsp::ClientSocket;
+use lsp_textdocument::TextDocuments;
 use tower::ServiceBuilder;
 use tracing::Level;
 
 struct ServerState {
     client: ClientSocket,
+    documents: TextDocuments,
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let (server, _) = async_lsp::MainLoop::new_server(|client| {
-        let mut router = Router::new(ServerState { client: client.clone() });
+        let mut router =
+            Router::new(ServerState { client: client.clone(), documents: TextDocuments::new() });
         router
             .request::<request::Initialize, _>(|_, _params| async move {
                 eprintln!("init language server");
                 Ok(InitializeResult {
                     capabilities: ServerCapabilities {
+                        text_document_sync: Some(TextDocumentSyncCapability::Options(
+                            TextDocumentSyncOptions {
+                                open_close: Some(false),
+                                change: Some(TextDocumentSyncKind::INCREMENTAL),
+                                will_save: Some(false),
+                                will_save_wait_until: Some(false),
+                                save: Some(TextDocumentSyncSaveOptions::Supported(false)),
+                            },
+                        )),
                         hover_provider: Some(HoverProviderCapability::Simple(true)),
                         ..Default::default()
                     },
@@ -43,9 +57,21 @@ async fn main() {
             })
             .notification::<notification::Initialized>(|_, _| ControlFlow::Continue(()))
             .notification::<notification::DidChangeConfiguration>(|_, _| ControlFlow::Continue(()))
-            .notification::<notification::DidOpenTextDocument>(|_, _| ControlFlow::Continue(()))
-            .notification::<notification::DidChangeTextDocument>(|_, _| ControlFlow::Continue(()))
-            .notification::<notification::DidCloseTextDocument>(|_, _| ControlFlow::Continue(()));
+            .notification::<notification::DidOpenTextDocument>(|state, params| {
+                let value = serde_json::to_value(params).unwrap();
+                state.documents.listen(notification::DidOpenTextDocument::METHOD, &value);
+                ControlFlow::Continue(())
+            })
+            .notification::<notification::DidChangeTextDocument>(|state, params| {
+                let value = serde_json::to_value(params).unwrap();
+                state.documents.listen(notification::DidChangeTextDocument::METHOD, &value);
+                ControlFlow::Continue(())
+            })
+            .notification::<notification::DidCloseTextDocument>(|state, params| {
+                let value = serde_json::to_value(params).unwrap();
+                state.documents.listen(notification::DidCloseTextDocument::METHOD, &value);
+                ControlFlow::Continue(())
+            });
 
         ServiceBuilder::new()
             .layer(TracingLayer::default())
