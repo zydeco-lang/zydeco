@@ -17,37 +17,64 @@ pub fn handle(
         ResponseError::new(ErrorCode::REQUEST_FAILED, format!("parsing error: {err}"))
     })?;
 
-    let symbols = ast.inner.declarations.iter().flat_map(declaration_to_symbol).collect();
+    let symbols = ast
+        .inner
+        .declarations
+        .iter()
+        .flat_map(|decl| declaration_to_symbol(decl, document))
+        .collect();
     Ok(Some(DocumentSymbolResponse::Nested(symbols)))
 }
 
-fn declaration_to_symbol(decl: &Sp<DeclSymbol<Declaration>>) -> Vec<DocumentSymbol> {
+fn declaration_to_symbol(
+    decl: &Sp<DeclSymbol<Declaration>>, document: &FullTextDocument,
+) -> Vec<DocumentSymbol> {
     match &decl.inner.inner {
         Declaration::Module(module_def) => {
-            let children = module_def.declarations.iter().flat_map(declaration_to_symbol).collect();
+            let children = module_def
+                .declarations
+                .iter()
+                .flat_map(|decl| declaration_to_symbol(decl, document))
+                .collect();
 
             match &module_def.name {
                 Some(name_ref) => {
-                    vec![name_to_symbol(name_ref, decl.span(), SymbolKind::MODULE, children)]
+                    vec![name_to_symbol(
+                        name_ref,
+                        decl.span(),
+                        document,
+                        SymbolKind::MODULE,
+                        children,
+                    )]
                 }
                 None => children,
             }
         }
         Declaration::UseDef(_) => vec![],
         Declaration::Data(data_def) => {
-            let children = data_def.ctors.iter().map(|ctor| ctorv_to_symbol(&ctor.ctorv)).collect();
+            let children =
+                data_def.ctors.iter().map(|ctor| ctorv_to_symbol(&ctor.ctorv, document)).collect();
 
-            vec![name_to_symbol(&data_def.name, decl.span(), SymbolKind::ENUM, children)]
+            vec![name_to_symbol(&data_def.name, decl.span(), document, SymbolKind::ENUM, children)]
         }
         Declaration::Codata(codata_def) => {
-            let children =
-                codata_def.dtors.iter().map(|dtor| dtorv_to_symbol(&dtor.dtorv)).collect();
+            let children = codata_def
+                .dtors
+                .iter()
+                .map(|dtor| dtorv_to_symbol(&dtor.dtorv, document))
+                .collect();
 
-            vec![name_to_symbol(&codata_def.name, decl.span(), SymbolKind::CLASS, children)]
+            vec![name_to_symbol(
+                &codata_def.name,
+                decl.span(),
+                document,
+                SymbolKind::CLASS,
+                children,
+            )]
         }
         Declaration::Alias(alias_def) => {
             // TODO: lookup symbol to display correct kind
-            vec![name_to_symbol(&alias_def.name, decl.span(), SymbolKind::ENUM, vec![])]
+            vec![name_to_symbol(&alias_def.name, decl.span(), document, SymbolKind::ENUM, vec![])]
         }
         Declaration::Define(def) => {
             // TODO: handle local definitions
@@ -58,7 +85,7 @@ fn declaration_to_symbol(decl: &Sp<DeclSymbol<Declaration>>) -> Vec<DocumentSymb
                 _ => SymbolKind::FUNCTION,
             };
 
-            vec![name_to_symbol(&def.0.name.0, decl.span(), kind, children)]
+            vec![name_to_symbol(&def.0.name.0, decl.span(), document, kind, children)]
         }
         // TODO: handle main, local definitions
         Declaration::Main(_) => vec![],
@@ -67,13 +94,14 @@ fn declaration_to_symbol(decl: &Sp<DeclSymbol<Declaration>>) -> Vec<DocumentSymb
 
 #[allow(deprecated)]
 fn name_to_symbol(
-    name: &impl NameT, item_span: &Span, kind: SymbolKind, children: Vec<DocumentSymbol>,
+    name: &impl NameT, item_span: &Span, document: &FullTextDocument, kind: SymbolKind,
+    children: Vec<DocumentSymbol>,
 ) -> DocumentSymbol {
     let name_view = name.name();
     let name_str = name_view.ident.inner.clone();
-    let name_range = span_to_range(name_view.ident.span());
+    let name_range = span_to_range(name_view.ident.span(), document);
 
-    let item_range = span_to_range(item_span);
+    let item_range = span_to_range(item_span, document);
 
     DocumentSymbol {
         name: name_str,
@@ -88,8 +116,8 @@ fn name_to_symbol(
 }
 
 #[allow(deprecated)]
-fn ctorv_to_symbol(ctorv: &CtorV) -> DocumentSymbol {
-    let name_range = span_to_range(ctorv.span());
+fn ctorv_to_symbol(ctorv: &CtorV, document: &FullTextDocument) -> DocumentSymbol {
+    let name_range = span_to_range(ctorv.span(), document);
 
     DocumentSymbol {
         name: ctorv.name().to_owned(),
@@ -105,8 +133,8 @@ fn ctorv_to_symbol(ctorv: &CtorV) -> DocumentSymbol {
 }
 
 #[allow(deprecated)]
-fn dtorv_to_symbol(dtorv: &DtorV) -> DocumentSymbol {
-    let name_range = span_to_range(dtorv.span());
+fn dtorv_to_symbol(dtorv: &DtorV, document: &FullTextDocument) -> DocumentSymbol {
+    let name_range = span_to_range(dtorv.span(), document);
 
     DocumentSymbol {
         name: dtorv.name().to_owned(),
