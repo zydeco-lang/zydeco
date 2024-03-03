@@ -84,9 +84,8 @@ impl Span {
             .expect("span2 is already set");
         self.path.set(gen.path.clone()).expect("path is already set");
     }
-    pub fn get_cursor2(&self) -> (&Cursor2, &Cursor2) {
-        let (l, r) = self.span2.get().expect("span2 is not set");
-        (l, r)
+    pub fn get_cursor1(&self) -> (Cursor1, Cursor1) {
+        self.span1
     }
 }
 
