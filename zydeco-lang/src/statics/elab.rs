@@ -537,7 +537,7 @@ impl Elaboration<ps::TopLevel> for Module {
         let mut define = Vec::new();
         let mut define_ext = Vec::new();
         for declaration in declarations {
-            let DeclSymbol { public, external, inner } = declaration;
+            let DeclSymbol { public, external, inner } = declaration.inner;
             match inner {
                 ps::Declaration::Module(m) => {
                     let Module {
@@ -599,7 +599,7 @@ impl Elaboration<ps::TopLevel> for Program {
         let mut non_main = Vec::new();
         let mut main_entry = None;
         for decl in declarations {
-            match decl.inner {
+            match decl.inner.inner {
                 ps::Declaration::Main(ps::Main { entry }) => {
                     if main_entry.is_some() {
                         Err(TyckErrorItem::MultipleMainEntries)?
