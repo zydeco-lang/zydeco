@@ -23,6 +23,6 @@ pub mod textual {
 
 pub mod scoped {
     pub mod syntax;
-    pub mod resolver;
+    // pub mod resolver;
     pub mod err;
 }

@@ -137,9 +137,11 @@ DefId: DefId = <NameDef<Sp<VarName>>> => ctx.def(<>.0);
 //* ------------------------------- Structural ------------------------------- */
 
 Paren<T>: Paren<T> = SepByDelim<"(", ",", <T>, ")"> => <>.into();
-Annotation<Tm, Ty>: Annotation<Tm, Ty> = <term:Tm> ":" <ty:Ty> => {
-    Annotation { term, ty, }
+App<T>: App<T> = <T*> => App(<>);
+Annotation<Tm, Ty>: Annotation<Tm, Ty> = <tm:Tm> ":" <ty:Ty> => {
+    Annotation { tm, ty, }
 };
+Hole: Hole = "_" => Hole;
 
 //* --------------------------------- Pattern -------------------------------- */
 
@@ -150,16 +152,49 @@ PatternGen<P>: PatternId = <Sp<P>> => ctx.pattern(<>);
 PatternId: PatternId = <PatternGen<Pattern>>;
 Pattern: Pattern = {
     "(" <Annotation<PatternId, TermId>> ")" => <>.into(),
-    "_" => Hole.into(),
+    <Hole> => <>.into(),
     <DefId> => <>.into(),
+    <ctor:CtorName> <pat:PatternId> => {
+        Ctor(ctor, pat).into()
+    },
     <Paren<PatternId>> => <>.into(),
+};
+
+#[inline]
+CoPatternGen<P>: CoPatternId = <Sp<P>> => ctx.co_pattern(<>);
+
+#[inline]
+CoPatternId: CoPatternId = <CoPatternGen<CoPattern>>;
+CoPattern: CoPattern = {
+    <CoPatternAtom>,
+    <x:CoPatternAtomId> <y:CoPatternId> => {
+        App(vec![x, y]).into()
+    },
+    // <CoPatternAtomId*> => App(c).into(),
+};
+
+#[inline]
+CoPatternAtomId: CoPatternId = <CoPatternGen<CoPatternAtom>>;
+CoPatternAtom: CoPattern = {
+    <PatternId> => <>.into(),
+    <DtorName> => {
+        <>.into()
+    },
 };
 
 //* ---------------------------------- Term ---------------------------------- */
 
-GenBind: GenBind = {
-    <rec:"rec"?> <fun:"fn"?> <binder:PatternId> <params:PatternId*>
-    <ty:(":" <TermId>)?> <bindee: ("=" <TermId>)?> => GenBind {
+GenBindTerm: GenBind<TermId> = {
+    <rec:"rec"?> <fun:"fn"?> <binder:PatternId> <params:CoPatternId?>
+    <ty:(":" <TermId>)?> <bindee: ("=" <TermId>)> => GenBind {
+        rec: rec.is_some(),
+        fun: fun.is_some(),
+        binder, params, ty, bindee,
+    }
+};
+GenBindNull: GenBind<()> = {
+    <rec:"rec"?> <fun:"fn"?> <binder:PatternId> <params:CoPatternId?>
+    <ty:(":" <TermId>)?> <bindee: ()> => GenBind {
         rec: rec.is_some(),
         fun: fun.is_some(),
         binder, params, ty, bindee,
@@ -170,16 +205,14 @@ GenBind: GenBind = {
 LetSep: () = { ";", "in", };
 
 Matcher: Matcher<TermId> = {
-    "|" <name:CtorName> <binders:PatternId>
-    "->" <tail:TermId> => Matcher {
-        name, binders, tail
+    <binder:PatternId> "->" <tail:TermId> => Matcher {
+        binder, tail
     },
 };
 
 CoMatcher: CoMatcher<TermId> = {
-    "|" <name:DtorName> <binders:PatternId*>
-    "->" <tail:TermId> => CoMatcher {
-        name, binders, tail
+    <params:CoPatternId> "->" <tail:TermId> => CoMatcher {
+        params, tail
     },
 };
 
@@ -189,35 +222,35 @@ TermGen<T>: TermId = <Sp<T>> => ctx.term(<>);
 #[inline]
 TermId: TermId = <TermGen<Term>>;
 Term: Term<NameRef<VarName>> = {
-    TermRight,
+    <TermRight>,
     // abstraction
-    "fn" <params:PatternId*> "->"
-        <term:TermId> => Abstraction(params, term).into(),
+    "fn" <params:CoPatternId> "->"
+        <term:TermId> => Abs(params, term).into(),
     // pi
-    "pi" <params:PatternId*> "->"
+    "pi" <params:CoPatternId> "->"
         <term:TermId> => Pi(params, term).into(),
     // forall
-    "forall" <params:PatternId*> "." <ty:TermRightId> =>
+    "forall" <params:CoPatternId> "." <ty:TermRightId> =>
         Forall(params, ty).into(),
     // exists
-    "exists" <params:PatternId*> "." <ty:TermRightId> =>
+    "exists" <params:CoPatternId> "." <ty:TermRightId> =>
         Exists(params, ty).into(),
     // recursion
     "rec" <binder:PatternId> "->"
-        <term:TermId> => Recursion(binder, term).into(),
+        <term:TermId> => Rec(binder, term).into(),
     // bind
-    "do" ("[" TermId "]")? <binder:PatternId> "<-" <bindee:TermId> ";" <tail:TermId> => Bind {
+    "do" <binder:PatternId> "<-" <bindee:TermId> ";" <tail:TermId> => Bind {
         binder, bindee, tail
     }.into(),
     // pure bind
-    "let" <binding:GenBind> LetSep <tail:TermId> => PureBind {
+    "let" <binding:GenBindTerm> LetSep <tail:TermId> => PureBind {
         binding, tail
     }.into(),
     // match
-    "match" <scrut:TermId> <arms:Matcher*> "end" => Match {
+    "match" <scrut:TermId> <arms:("|" <Matcher>)*> "end" => Match {
         scrut, arms
     }.into(),
-    "comatch" <arms:CoMatcher*> "end" => CoMatch {
+    "comatch" <arms:("|" <CoMatcher>)*> "end" => CoMatch {
         arms
     }.into(),
 };
@@ -236,10 +269,10 @@ TermParen: Term<NameRef<VarName>> = <Paren<TermAnnId>> => <>.into();
 #[inline]
 TermRightId: TermId = <TermGen<TermRight>>;
 TermRight: Term<NameRef<VarName>> = {
-    TermAtom,
+    <TermAtom>,
     // application
     <term:TermRightId> <arg:TermAtomId> => {
-        Application(term, arg).into()
+        App(vec![term, arg]).into()
     },
     // arrow
     <ty_in:TermRightId> "->" <ty_out:TermAtomId> => {
@@ -247,7 +280,7 @@ TermRight: Term<NameRef<VarName>> = {
     },
     // destructor
     <term:TermRightId> <name:DtorName> => {
-        Destructor(term, name).into()
+        Dtor(term, name).into()
     },
 };
 
@@ -255,15 +288,15 @@ TermRight: Term<NameRef<VarName>> = {
 TermAtomId: TermId = <TermGen<TermAtom>>;
 TermAtom: Term<NameRef<VarName>> = {
     // paren
-    <TermParen> => <>,
-    "_" => Hole.into(),
+    <TermParen>,
+    <Hole> => <>.into(),
     <NameRef<VarName>> => Term::Var(<>),
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermAtomId> => Force(<>).into(),
-    "ret" ("[" TermId "]")? <TermAtomId> => Return(<>).into(),
+    "ret" <TermAtomId> => Return(<>).into(),
     // constructor
-    <name:CtorName> <args:TermParenId> => {
-        Constructor(name, args).into()
+    <name:CtorName> <args:TermAtomId> => {
+        Ctor(name, args).into()
     },
     <Literal> => <>.into(),
 };
@@ -272,41 +305,39 @@ pub SingleTerm: TermId = TermId;
 
 //* -------------------------------- TopLevel -------------------------------- */
 
-// #[inline]
-TypeDef: TypeDef = {
-    <head:TypeDefHead> <name:DefId> <params:PatternId*>
-        <arms:("where" <TypeArm*>)?>
-    "end" => TypeDef {
-        head, name, params, arms,
+DataDef: DataDef = {
+    "data" <name:DefId> <params:PatternId*>
+        <arms:("where" <DataArm*>)?>
+    "end" => DataDef {
+        name, params, arms,
     }
 };
-// #[inline]
-TypeDefHead: TypeDefHead = {
-    "data" => TypeDefHead::Data,
-    "codata" => TypeDefHead::CoData,
+#[inline]
+DataArm: DataArm = {
+    "|" <name:CtorName> <param:TermId> => {
+        DataArm { name, param }
+    },
 };
-// #[inline]
-TypeArmName: TypeArmName = {
-    <CtorName> => <>.into(),
-    <DtorName> => <>.into(),
+
+CoDataDef: CoDataDef = {
+    "codata" <name:DefId> <params:PatternId*>
+        <arms:("where" <CoDataArm*>)?>
+    "end" => CoDataDef {
+        name, params, arms,
+    }
 };
 #[inline]
-TypeArm: TypeArm = {
-    "|" <name:TypeArmName> <args:TermParenId*>
-    <out:(":" <TermId>)?> => {
-        TypeArm { name, args, out }
+CoDataArm: CoDataArm = {
+    "|" <name:DtorName> <params:CoPatternId?> ":" <out: TermId> => {
+        CoDataArm { name, params, out }
     },
 };
 
 DefineHead: () = { "define", "alias", };
 DefineEnd: () = { "end", ";", };
 
-ModuleHead: NameDef<ModName> = "module" <name:NameDef<ModName>> => {
-    ctx.enter_mod(name)
-};
-ModuleEnd: () = "end" => {
-    ctx.exit_mod()
-};
+ModuleHead: NameDef<ModName> = "module" <NameDef<ModName>>;
+ModuleEnd: () = "end";
 
 UseEnum: UseEnum = {
     <VarName> => <>.into(),
@@ -314,29 +345,23 @@ UseEnum: UseEnum = {
     ".." => UseAll.into(),
     <SepByDelim<"(", ",", UseDef, ")">> => UseCluster(<>).into(),
 };
-// UseDef: UseDef = <NameRef<UseEnum>> => UseDef(<>);
-UseDef: UseDef = <use_def:NameRef<UseEnum>> => {
-    ctx.update_dep_pairs(&use_def);
-    UseDef(use_def)
-};
+UseDef: UseDef = <NameRef<UseEnum>> => UseDef(<>);
 
 Declaration: Declaration = {
-    <TypeDef> => <>.into(),
-    DefineHead <GenBind> DefineEnd => Define(<>).into(),
+    <DataDef> => <>.into(),
+    <CoDataDef> => <>.into(),
+    DefineHead <GenBindTerm> DefineEnd => Define(<>).into(),
     <name:ModuleHead> <top:("where" <TopLevel>)?> ModuleEnd => {
-        if top.is_none() {
-            ctx.mod_decl(name.clone())
-        }
         Module { name, top }.into()
     },
+    "extern" <GenBindNull> "end" => Extern(<>).into(),
     "use" <UseDef> "end" => <>.into(),
     "main" <TermId> "end" => Main(<>).into(),
 };
 
 Modifiers<T>: Modifiers<T> = {
-    <public:"pub"?> <external:"extern"?> <inner:T> => Modifiers {
+    <public:"pub"?> <inner:T> => Modifiers {
         public: public.is_some(),
-        external: external.is_some(),
         inner,
     },
 };

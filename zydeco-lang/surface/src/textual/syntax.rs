@@ -1,14 +1,9 @@
 //! The surface syntax of zydeco is defined in this module.
 
 use derive_more::From;
-use im::HashSet;
 use slotmap::{SecondaryMap, SlotMap};
-use std::{
-    fmt::{Debug, Display},
-    // path::PathBuf,
-};
-use zydeco_utils::span::FileInfo;
-pub use zydeco_utils::span::{Sp, Span, LocationCtx};
+use std::fmt::Debug;
+pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 /* --------------------------------- Binder --------------------------------- */
 
@@ -20,11 +15,6 @@ pub struct VarName(pub String);
 pub struct CtorName(pub String);
 #[derive(Clone, Debug)]
 pub struct DtorName(pub String);
-#[derive(From, Clone, Debug)]
-pub enum TypeArmName {
-    Ctor(CtorName),
-    Dtor(DtorName),
-}
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NameDef<T>(pub T);
@@ -37,11 +27,15 @@ pub struct NameRef<T>(pub Vec<ModName>, pub T);
 #[derive(From, Clone, Debug)]
 pub struct Paren<T>(pub Vec<T>);
 
+/// `e1 e2` shaped application
+#[derive(Clone, Debug)]
+pub struct App<T>(pub Vec<T>);
+
 /// `(...: t)` for analyze mode motivator
 #[derive(Clone, Debug)]
-pub struct Annotation<Term, Type> {
-    pub term: Term,
-    pub ty: Type,
+pub struct Annotation<Tm, Ty> {
+    pub tm: Tm,
+    pub ty: Ty,
 }
 /// `_` for synthesize mode motivator
 #[derive(Clone, Debug)]
@@ -54,56 +48,49 @@ pub enum Pattern {
     Ann(Annotation<PatternId, TermId>),
     Hole(Hole),
     Var(DefId),
+    Ctor(Ctor<PatternId>),
     Paren(Paren<PatternId>),
 }
-impl Pattern {
-    pub fn get_def_id(&self, ctx: &Ctx) -> Option<DefId> {
-        match self {
-            Pattern::Ann(Annotation { term, ty: _ }) => ctx.patterns[*term].get_def_id(ctx),
-            Pattern::Hole(Hole) => None,
-            Pattern::Var(id) => Some(*id),
-            Pattern::Paren(Paren(pats)) => {
-                pats.iter().find_map(|pat| ctx.patterns[*pat].get_def_id(ctx))
-            }
-        }
-    }
+
+#[derive(From, Clone, Debug)]
+pub enum CoPattern {
+    Pat(PatternId),
+    Dtor(DtorName),
+    App(App<CoPatternId>),
 }
 
 /* ---------------------------------- Term ---------------------------------- */
 
 /// general binding structure
 #[derive(Clone, Debug)]
-pub struct GenBind {
+pub struct GenBind<Bindee> {
     pub rec: bool,
     pub fun: bool,
     pub binder: PatternId,
-    pub params: Vec<PatternId>,
+    pub params: Option<CoPatternId>,
     pub ty: Option<TermId>,
-    pub bindee: Option<TermId>,
+    pub bindee: Bindee,
 }
 
 /// any binding structure
 #[derive(Clone, Debug)]
-pub struct Abstraction<Tail>(pub Vec<PatternId>, pub Tail);
-/// any application
-#[derive(Clone, Debug)]
-pub struct Application(pub TermId, pub TermId);
+pub struct Abs<Tail>(pub CoPatternId, pub Tail);
 /// `rec (x: A) -> b`
 #[derive(Clone, Debug)]
-pub struct Recursion(pub PatternId, pub TermId);
+pub struct Rec(pub PatternId, pub TermId);
 
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
-pub struct Pi(pub Vec<PatternId>, pub TermId);
+pub struct Pi(pub CoPatternId, pub TermId);
 /// `a -> b`
 #[derive(Clone, Debug)]
 pub struct Arrow(pub TermId, pub TermId);
 /// `forall (x: A) . B`
 #[derive(Clone, Debug)]
-pub struct Forall(pub Vec<PatternId>, pub TermId);
+pub struct Forall(pub CoPatternId, pub TermId);
 /// `exists (x: A) . B`
 #[derive(Clone, Debug)]
-pub struct Exists(pub Vec<PatternId>, pub TermId);
+pub struct Exists(pub CoPatternId, pub TermId);
 
 /// `{ b }` has type `Thunk B`
 #[derive(Clone, Debug)]
@@ -125,13 +112,13 @@ pub struct Bind<Tail> {
 /// `let x = a in ...`
 #[derive(Clone, Debug)]
 pub struct PureBind<Tail> {
-    pub binding: GenBind,
+    pub binding: GenBind<TermId>,
     pub tail: Tail,
 }
 
 /// `C(a_1, ...)`
 #[derive(Clone, Debug)]
-pub struct Constructor(pub CtorName, pub TermId);
+pub struct Ctor<Tail>(pub CtorName, pub Tail);
 /// `match a | C_1(x_11, ...) -> b_1 | ...`
 #[derive(Clone, Debug)]
 pub struct Match<Tail> {
@@ -140,8 +127,7 @@ pub struct Match<Tail> {
 }
 #[derive(Clone, Debug)]
 pub struct Matcher<Tail> {
-    pub name: CtorName,
-    pub binders: PatternId,
+    pub binder: PatternId,
     pub tail: Tail,
 }
 
@@ -152,13 +138,12 @@ pub struct CoMatch<Tail> {
 }
 #[derive(Clone, Debug)]
 pub struct CoMatcher<Tail> {
-    pub name: DtorName,
-    pub binders: Vec<PatternId>,
+    pub params: CoPatternId,
     pub tail: Tail,
 }
-/// `b .d(a_1, ...)`
+/// `b .d_i`
 #[derive(Clone, Debug)]
-pub struct Destructor(pub TermId, pub DtorName);
+pub struct Dtor<Head>(pub Head, pub DtorName);
 
 /// literals in term
 #[derive(From, Clone, Debug)]
@@ -175,9 +160,9 @@ pub enum Term<Ref> {
     #[from(ignore)]
     Var(Ref),
     Paren(Paren<TermId>),
-    Abs(Abstraction<TermId>),
-    App(Application),
-    Rec(Recursion),
+    Abs(Abs<TermId>),
+    App(App<TermId>),
+    Rec(Rec),
     Pi(Pi),
     Arrow(Arrow),
     Forall(Forall),
@@ -187,50 +172,50 @@ pub enum Term<Ref> {
     Ret(Return),
     Do(Bind<TermId>),
     Let(PureBind<TermId>),
-    Ctor(Constructor),
+    Ctor(Ctor<TermId>),
     Match(Match<TermId>),
     CoMatch(CoMatch<TermId>),
-    Dtor(Destructor),
+    Dtor(Dtor<TermId>),
     Lit(Literal),
 }
 
 /* -------------------------------- TopLevel -------------------------------- */
 
 #[derive(Clone, Debug)]
-pub enum TypeDefHead {
-    Data,
-    CoData,
-}
-
-#[derive(Clone, Debug)]
-pub struct TypeDef {
-    /// `data` or `codata`
-    pub head: TypeDefHead,
+pub struct DataDef {
     pub name: DefId,
     pub params: Vec<PatternId>,
-    pub arms: Option<Vec<TypeArm>>,
+    pub arms: Option<Vec<DataArm>>,
 }
 #[derive(Clone, Debug)]
-pub struct TypeArm {
-    pub name: TypeArmName,
-    pub args: Vec<TermId>,
-    pub out: Option<TermId>,
+pub struct DataArm {
+    pub name: CtorName,
+    pub param: TermId,
 }
 
 #[derive(Clone, Debug)]
-pub struct Define(pub GenBind);
+pub struct CoDataDef {
+    pub name: DefId,
+    pub params: Vec<PatternId>,
+    pub arms: Option<Vec<CoDataArm>>,
+}
+#[derive(Clone, Debug)]
+pub struct CoDataArm {
+    pub name: DtorName,
+    pub params: Option<CoPatternId>,
+    pub out: TermId,
+}
+
+#[derive(Clone, Debug)]
+pub struct Define(pub GenBind<TermId>);
+
+#[derive(Clone, Debug)]
+pub struct Extern(pub GenBind<()>);
 
 #[derive(Clone, Debug)]
 pub struct Module {
     pub name: NameDef<ModName>,
     pub top: Option<TopLevel>,
-}
-
-impl Display for Module {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let NameDef(ModName(mod_name)) = self.name.clone();
-        write!(f, "{}", mod_name)
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -254,29 +239,18 @@ pub struct Main(pub TermId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
-    Type(TypeDef),
+    DataDef(DataDef),
+    CoDataDef(CoDataDef),
     Define(Define),
+    Extern(Extern),
     Module(Module),
     UseDef(UseDef),
     Main(Main),
 }
 
-impl Display for Declaration {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Declaration::Type(_) => write!(f, "type"),
-            Declaration::Define(_) => write!(f, "define"),
-            Declaration::Module(m) => write!(f, "module: {}", m),
-            Declaration::UseDef(_) => write!(f, "use"),
-            Declaration::Main(_) => write!(f, "main"),
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Modifiers<T> {
     pub public: bool,
-    pub external: bool,
     pub inner: T,
 }
 impl<T> Modifiers<T> {
@@ -284,8 +258,8 @@ impl<T> Modifiers<T> {
     where
         F: FnOnce(&T) -> Result<U, E>,
     {
-        let Modifiers { public, external, inner } = self;
-        Ok(Modifiers { public: *public, external: *external, inner: f(inner)? })
+        let Modifiers { public, inner } = self;
+        Ok(Modifiers { public: *public, inner: f(inner)? })
     }
 }
 
@@ -298,21 +272,12 @@ pub enum ReplInput {
 #[derive(Clone, Debug)]
 pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 
-/* ------------------------------- Dependency ------------------------------- */
-
-#[derive(Clone, Debug)]
-pub enum Dependency {
-    // DirectImport(PathBuf),
-    // ManagedImport(PathBuf),
-    Hierachy(Vec<String>),
-    // Use(NameRef<UseEnum>),
-}
-
 /* --------------------------------- Context -------------------------------- */
 
 slotmap::new_key_type! {
     pub struct DefId;
     pub struct PatternId;
+    pub struct CoPatternId;
     pub struct TermId;
 }
 
@@ -321,6 +286,7 @@ slotmap::new_key_type! {
 pub struct SpanArena {
     pub defs: SlotMap<DefId, Span>,
     pub patterns: SlotMap<PatternId, Span>,
+    pub co_patterns: SlotMap<CoPatternId, Span>,
     pub terms: SlotMap<TermId, Span>,
 }
 
@@ -342,6 +308,14 @@ mod span_arena_impl {
         }
     }
 
+    impl std::ops::Index<CoPatternId> for SpanArena {
+        type Output = Span;
+
+        fn index(&self, id: CoPatternId) -> &Self::Output {
+            self.co_patterns.get(id).unwrap()
+        }
+    }
+
     impl std::ops::Index<TermId> for SpanArena {
         type Output = Span;
 
@@ -358,68 +332,30 @@ pub struct Ctx {
     // arenas
     pub defs: SecondaryMap<DefId, VarName>,
     pub patterns: SecondaryMap<PatternId, Pattern>,
+    pub co_patterns: SecondaryMap<CoPatternId, CoPattern>,
     pub terms: SecondaryMap<TermId, Term<NameRef<VarName>>>,
-    // meta
-    pub project: Option<String>,
-    pub deps: Vec<Dependency>,
-    // temp
-    pub mod_stack: Vec<String>,
-    pub added_id: (HashSet<DefId>, HashSet<PatternId>, HashSet<TermId>),
 }
 
 impl Ctx {
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.defs.insert(def.info);
         self.defs.insert(id, def.inner);
-        self.added_id.0.insert(id);
         id
     }
     pub fn pattern(&mut self, pattern: Sp<Pattern>) -> PatternId {
         let id = self.spans.patterns.insert(pattern.info);
         self.patterns.insert(id, pattern.inner);
-        self.added_id.1.insert(id);
+        id
+    }
+    pub fn co_pattern(&mut self, co_pattern: Sp<CoPattern>) -> CoPatternId {
+        let id = self.spans.co_patterns.insert(co_pattern.info);
+        self.co_patterns.insert(id, co_pattern.inner);
         id
     }
     pub fn term(&mut self, term: Sp<Term<NameRef<VarName>>>) -> TermId {
         let id = self.spans.terms.insert(term.info);
         self.terms.insert(id, term.inner);
-        self.added_id.2.insert(id);
         id
-    }
-
-    pub fn enter_mod(&mut self, mod_name: NameDef<ModName>) -> NameDef<ModName> {
-        let NameDef(ModName(name)) = mod_name.clone();
-        self.mod_stack.push(name);
-        mod_name
-    }
-    pub fn mod_decl(&mut self, mod_name: NameDef<ModName>) {
-        let NameDef(ModName(name)) = mod_name;
-        let mut stack = self.mod_stack.clone();
-        stack.push(name);
-        self.deps.push(Dependency::Hierachy(stack));
-    }
-
-    pub fn update_dep_pairs(&mut self, _use_def: &NameRef<UseEnum>) {
-        // self.deps.push(Dependency::Use(use_def.clone()));
-    }
-
-    pub fn exit_mod(&mut self) {
-        self.mod_stack.pop();
-    }
-
-    pub fn span_map(&mut self, file_info: &FileInfo) {
-        for (_, info) in self.spans.defs.iter_mut().filter(|(id, _)| self.added_id.0.contains(id)) {
-            info.set_info(file_info);
-        }
-        for (_, info) in
-            self.spans.patterns.iter_mut().filter(|(id, _)| self.added_id.1.contains(id))
-        {
-            info.set_info(file_info);
-        }
-        for (_, info) in self.spans.terms.iter_mut().filter(|(id, _)| self.added_id.2.contains(id))
-        {
-            info.set_info(file_info);
-        }
     }
 
     pub fn merge(&mut self, other: &Ctx) {
@@ -430,92 +366,5 @@ impl Ctx {
         self.spans = other.spans.clone();
     }
 
-    pub fn clear_added_id(&mut self) {
-        self.added_id.0.clear();
-        self.added_id.1.clear();
-        self.added_id.2.clear();
-    }
-}
-
-type FileId = usize;
-#[derive(Clone, Debug, PartialEq)]
-pub struct ModuleTree {
-    pub root: (String, Option<FileId>),
-    pub children: Vec<ModuleTree>,
-}
-
-impl Default for ModuleTree {
-    fn default() -> Self {
-        Self { root: (String::new(), None), children: vec![] }
-    }
-}
-
-impl ModuleTree {
-    pub fn new(root: String) -> Self {
-        Self { root: (root, None), children: vec![] }
-    }
-
-    pub fn add_child(&mut self, mod_name: String) {
-        if !self.children.iter().any(|c| c.root.0 == mod_name) {
-            self.children.push(ModuleTree { root: (mod_name, None), children: vec![] })
-        }
-    }
-
-    pub fn get_children(&self) -> &Vec<ModuleTree> {
-        self.children.as_ref()
-    }
-
-    pub fn set_file_id(&mut self, path: &Vec<String>, id: FileId) {
-        if path.len() == 1 {
-            self.root.1 = Some(id);
-        } else {
-            for child in self.children.iter_mut() {
-                if child.root.0 == path[1].as_str() {
-                    child.set_file_id(&path[1..].to_vec(), id);
-                }
-            }
-        }
-    }
-
-    // get the module_tree entry of the given path
-    pub fn get_node_path_mut(&mut self, path: &Vec<String>) -> Option<&mut ModuleTree> {
-        if path.len() == 1 && self.root.0 == path[0] {
-            return Some(self);
-        } else {
-            for child in self.children.iter_mut() {
-                if child.root.0 == path[1].as_str() {
-                    return child.get_node_path_mut(&path[1..].to_vec());
-                }
-            }
-        }
-        None
-    }
-
-    pub fn get_node_path(&self, path: &Vec<String>) -> Option<ModuleTree> {
-        if path.len() == 1 && self.root.0 == path[0] {
-            return Some(self.clone());
-        } else {
-            for child in self.children.iter() {
-                if child.root.0 == path[1].as_str() {
-                    return child.get_node_path(&path[1..].to_vec());
-                }
-            }
-        }
-        None
-    }
-
-    pub fn get_id_path(&self, path: &Vec<String>) -> Option<FileId> {
-        if path.len() == 1 && self.root.0 == path[0] {
-            return self.root.1;
-        } else if path.len() <= 1 && self.root.0 != path[0] {
-            return None;
-        } else {
-            for child in self.children.iter() {
-                if child.root.0 == path[1].as_str() {
-                    return child.get_id_path(&path[1..].to_vec());
-                }
-            }
-        }
-        None
-    }
+    pub fn clear_added_id(&mut self) {}
 }
