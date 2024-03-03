@@ -112,7 +112,7 @@ pub enum Term {
 #[derive(SpanHolder, Clone, Debug)]
 pub struct Module {
     pub name: Option<NameRef>,
-    pub declarations: Vec<DeclSymbol<Declaration>>,
+    pub declarations: Vec<Sp<DeclSymbol<Declaration>>>,
 }
 
 #[derive(SpanHolder, Clone, Debug)]
@@ -152,7 +152,7 @@ pub enum Declaration {
 
 #[derive(SpanHolder, Clone, Debug)]
 pub struct TopLevel {
-    pub declarations: Vec<DeclSymbol<Declaration>>,
+    pub declarations: Vec<Sp<DeclSymbol<Declaration>>>,
 }
 
 impl Monoid for TopLevel {

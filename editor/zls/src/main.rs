@@ -2,10 +2,8 @@ use std::ops::ControlFlow;
 
 use async_lsp::client_monitor::ClientProcessMonitorLayer;
 use async_lsp::concurrency::ConcurrencyLayer;
-use async_lsp::lsp_types::notification::Notification;
 use async_lsp::lsp_types::{
-    notification, request, Hover, HoverContents, HoverProviderCapability, InitializeResult,
-    MarkedString, MessageType, ServerCapabilities, ShowMessageParams, TextDocumentSyncCapability,
+    notification, request, InitializeResult, OneOf, ServerCapabilities, TextDocumentSyncCapability,
     TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
 };
 use async_lsp::panic::CatchUnwindLayer;
@@ -18,8 +16,10 @@ use tower::ServiceBuilder;
 use tracing::Level;
 
 mod documents;
+mod document_symbols;
+mod text_position;
 
-struct ServerState {
+pub struct ServerState {
     client: ClientSocket,
     documents: DocumentStore,
 }
@@ -31,7 +31,6 @@ async fn main() {
             Router::new(ServerState { client: client.clone(), documents: Default::default() });
         router
             .request::<request::Initialize, _>(|_, _params| async move {
-                eprintln!("init language server");
                 Ok(InitializeResult {
                     capabilities: ServerCapabilities {
                         text_document_sync: Some(TextDocumentSyncCapability::Options(
@@ -43,25 +42,18 @@ async fn main() {
                                 save: Some(TextDocumentSyncSaveOptions::Supported(false)),
                             },
                         )),
-                        hover_provider: Some(HoverProviderCapability::Simple(true)),
+                        document_symbol_provider: Some(OneOf::Left(true)),
                         ..Default::default()
                     },
                     ..Default::default()
                 })
             })
-            .request::<request::HoverRequest, _>(|state, params| {
-                let document = state
-                    .documents
-                    .get_document(params.text_document_position_params.text_document.uri);
+            .request::<request::DocumentSymbolRequest, _>(|state, params| {
+                let document = state.documents.get_document(params.text_document.uri);
 
                 async move {
-                    let document = document.await.unwrap();
-                    let content = document.get_content(None);
-
-                    Ok(Some(Hover {
-                        contents: HoverContents::Scalar(MarkedString::String(content.to_owned())),
-                        range: None,
-                    }))
+                    let document = document.await?;
+                    document_symbols::handle(&document)
                 }
             })
             .notification::<notification::Initialized>(|_, _| ControlFlow::Continue(()))

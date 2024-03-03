@@ -84,6 +84,10 @@ impl Span {
             .expect("span2 is already set");
         self.path.set(gen.path.clone()).expect("path is already set");
     }
+    pub fn get_cursor2(&self) -> (&Cursor2, &Cursor2) {
+        let (l, r) = self.span2.get().expect("span2 is not set");
+        (l, r)
+    }
 }
 
 impl Display for Span {
@@ -241,7 +245,7 @@ impl<T> Sp<T> {
     }
     pub fn try_map<F, U, E>(self, f: F) -> Result<Sp<U>, E>
     where
-    F: FnOnce(T) -> Result<U, E>,
+        F: FnOnce(T) -> Result<U, E>,
     {
         Ok(self.info.make(f(self.inner)?))
     }
@@ -253,7 +257,7 @@ impl<T> Sp<T> {
     }
     pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Sp<U>, E>
     where
-    F: FnOnce(&T) -> Result<U, E>,
+        F: FnOnce(&T) -> Result<U, E>,
     {
         Ok(self.info.make(f(&self.inner)?))
     }

@@ -11,7 +11,7 @@ grammar<'input>(input: &'input str);
 pub Zydeco: Sp<TopLevel> = Sp<TopLevel>;
 
 TopLevel: TopLevel = {
-    <declarations:DeclSymbol<Declaration>*> => {
+    <declarations:Sp<DeclSymbol<Declaration>>*> => {
         TopLevel {
             declarations: declarations,
         }
@@ -28,7 +28,7 @@ DeclSymbol<T>: DeclSymbol<T> = {
 
 Declaration: Declaration = {
     "module" <name:NameRef<UpperId>?> "where"
-        <declarations:DeclSymbol<Declaration>*>
+        <declarations:Sp<DeclSymbol<Declaration>>*>
     "end" => Module {
         name, declarations
     }.into(),

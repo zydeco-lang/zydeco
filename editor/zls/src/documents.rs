@@ -6,6 +6,7 @@ use std::sync::Arc;
 use async_lsp::lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Url,
 };
+use async_lsp::{ErrorCode, ResponseError};
 use lsp_textdocument::FullTextDocument;
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
@@ -20,7 +21,9 @@ impl DocumentStore {
     /// owned read lock providing access to that document.
     pub fn get_document(
         &self, url: Url,
-    ) -> impl Future<Output = Option<impl Deref<Target = FullTextDocument>>> + Send + 'static {
+    ) -> impl Future<Output = Result<impl Deref<Target = FullTextDocument>, ResponseError>>
+           + Send
+           + 'static {
         // Notes on the signature and implementation:
         // - The `Future`s returned by the LSP router require `Send + 'static`, so for convenience,
         //   we want to provide a fully owned, thread safe `Future` given a reference to the
@@ -36,8 +39,13 @@ impl DocumentStore {
         let inner = Arc::clone(&self.inner);
         async move {
             let guard = inner.read_owned().await;
-            let doc = OwnedRwLockReadGuard::try_map(guard, move |doc_map| doc_map.get(&url)).ok();
-            doc
+            let doc = OwnedRwLockReadGuard::try_map(guard, |doc_map| doc_map.get(&url)).ok();
+            doc.ok_or_else(|| {
+                ResponseError::new(
+                    ErrorCode::INVALID_PARAMS,
+                    format!("could not find document {url}"),
+                )
+            })
         }
     }
 
