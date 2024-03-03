@@ -8,7 +8,7 @@ use std::{
     // path::PathBuf,
 };
 use zydeco_utils::span::FileInfo;
-pub use zydeco_utils::span::{Sp, Span};
+pub use zydeco_utils::span::{Sp, Span, LocationCtx};
 
 /* --------------------------------- Binder --------------------------------- */
 

@@ -12,29 +12,29 @@ _zydeco() {
             ",$1")
                 cmd="zydeco"
                 ;;
-            cli,check)
-                cmd="cli__check"
+            zydeco,check)
+                cmd="zydeco__check"
                 ;;
-            cli,help)
-                cmd="cli__help"
+            zydeco,help)
+                cmd="zydeco__help"
                 ;;
-            cli,repl)
-                cmd="cli__repl"
+            zydeco,repl)
+                cmd="zydeco__repl"
                 ;;
-            cli,run)
-                cmd="cli__run"
+            zydeco,run)
+                cmd="zydeco__run"
                 ;;
-            cli__help,check)
-                cmd="cli__help__check"
+            zydeco__help,check)
+                cmd="zydeco__help__check"
                 ;;
-            cli__help,help)
-                cmd="cli__help__help"
+            zydeco__help,help)
+                cmd="zydeco__help__help"
                 ;;
-            cli__help,repl)
-                cmd="cli__help__repl"
+            zydeco__help,repl)
+                cmd="zydeco__help__repl"
                 ;;
-            cli__help,run)
-                cmd="cli__help__run"
+            zydeco__help,run)
+                cmd="zydeco__help__run"
                 ;;
             *)
                 ;;
@@ -171,4 +171,8 @@ _zydeco() {
     esac
 }
 
-complete -F _zydeco -o nosort -o bashdefault -o default zydeco
+if [[ "${BASH_VERSINFO[0]}" -eq 4 && "${BASH_VERSINFO[1]}" -ge 4 || "${BASH_VERSINFO[0]}" -gt 4 ]]; then
+    complete -F _zydeco -o nosort -o bashdefault -o default zydeco
+else
+    complete -F _zydeco -o bashdefault -o default zydeco
+fi

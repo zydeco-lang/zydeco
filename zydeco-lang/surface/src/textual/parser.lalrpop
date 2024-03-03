@@ -4,6 +4,7 @@ use crate::textual::{
 
 grammar<'input, 'ctx>(
     input: &'input str,
+    loc: &'input LocationCtx,
     ctx: &'ctx mut Ctx,
 );
 
@@ -15,6 +16,8 @@ extern {
     enum Tok<'input> {
         "UpperId" => Tok::UpperIdent(<&'input str>),
         "LowerId" => Tok::LowerIdent(<&'input str>),
+        "CtorId" => Tok::CtorIdent(<&'input str>),
+        "DtorId" => Tok::DtorIdent(<&'input str>),
 
         "where" => Tok::Where,
         "end" => Tok::End,
@@ -71,7 +74,9 @@ extern {
 //* -------------------------------- Utilities ------------------------------- */
 
 #[inline]
-Sp<T>: Sp<T> = <l:@L> <inner:T> <r:@R> => Sp { info: Span::new(l, r), inner, };
+Sp<T>: Sp<T> = <l:@L> <inner:T> <r:@R> => Sp {
+    info: Span::new(l, r).under_loc_ctx(loc), inner,
+};
 
 // #[inline]
 SepByDelim<Start, Sep, T, End>: Vec<T> = {
@@ -104,21 +109,21 @@ UpperId: String = "UpperId" => <>.into();
 LowerId: String = "LowerId" => <>.into();
 #[inline]
 MixedId: String = { <UpperId>, <LowerId>, };
+#[inline]
+CtorId: String = "CtorId" => <>.into();
+#[inline]
+DtorId: String = "DtorId" => <>.into();
 
 #[inline]
 ModName: ModName = <UpperId> => ModName(<>);
 #[inline]
 VarName: VarName = <MixedId> => VarName(<>);
 CtorName: CtorName = {
-    "+" <"UpperId"> => {
-        let mut s = String::from("+"); s += <>; CtorName(s)
-    },
+    <CtorId> => CtorName(<>),
     "pack" => CtorName(String::from("pack")),
 };
 DtorName: DtorName = {
-    "." <"LowerId"> => {
-        let mut s = String::from("."); s += <>; DtorName(s)
-    },
+    <DtorId> => DtorName(<>),
     "@" => DtorName(String::from("@")),
 };
 

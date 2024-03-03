@@ -1,73 +1,91 @@
-use super::{err::SurfaceError, parse::ParseFile};
-use crate::textual::syntax::Dependency;
-use std::{collections::HashMap, path::PathBuf};
+// use crate::textual::syntax::Dependency;
+use super::err::{Result, SurfaceError};
+use crate::textual::lexer::Tok;
+use crate::textual::{
+    err::ParseError,
+    lexer::Lexer,
+    parser::TopLevelParser,
+    syntax::{Ctx, TopLevel},
+};
+use logos::Logos;
+use sculptor::ShaSnap;
+use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
+use zydeco_utils::span::{FileInfo, LocationCtx};
 
 pub struct Project {
     pub path: PathBuf,
-    pub path_map: HashMap<PathBuf, FileId>,
-    pub files: Vec<FileModule>,
+    // pub path_map: HashMap<PathBuf, FileId>,
+    // pub files: Vec<FileModule>,
 }
 
-impl Project {
-    pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into(), path_map: HashMap::new(), files: Vec::new() }
-    }
+// impl Project {
+//     pub fn new(path: impl Into<PathBuf>) -> Self {
+//         Self { path: path.into(), path_map: HashMap::new(), files: Vec::new() }
+//     }
+// }
 
-    fn add_file(&mut self, path: impl Into<PathBuf>) -> Result<FileId, SurfaceError> {
-        let path = path.into();
-        self.files.push(FileModule { parse: ParseFile::run(&path)? });
-        let id = FileId(self.files.len());
-        self.path_map.insert(path.clone(), id);
-        Ok(id)
-    }
+// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// pub struct FileId(usize);
 
-    fn get_file(&self, id: FileId) -> Option<&FileModule> {
-        self.files.get(id.0)
-    }
+pub struct File {
+    path: PathBuf,
+}
 
-    pub fn run(&mut self) -> Result<(), SurfaceError> {
-        let mut module_probes = vec![vec![]];
-        while let Some(mut module_probe) = module_probes.pop() {
-            let path = if let Some(name) = module_probe.pop() {
-                // File or Directory
-                let base = self.path.join("src").join(module_probe.join("/"));
-                let file_path = base.join(format!("{}.zy", name));
-                let dir_path = base.join(format!("{}/Module.zy", name));
-                let file = file_path.exists();
-                let dir = dir_path.exists();
-                if file && dir {
-                    return Err(SurfaceError::AmbiguousModule { path: base, name });
-                }
-                if !file && !dir {
-                    return Err(SurfaceError::ModuleNotFound { path: base, name });
-                }
-                if file {
-                    file_path.clone()
-                } else {
-                    dir_path.clone()
-                }
-            } else {
-                // Root
-                self.path.join("src/Module.zy")
-            };
-            let id = self.add_file(path)?;
-            if let Some(module) = self.get_file(id) {
-                for dep in &module.parse.ctx.deps {
-                    match dep {
-                        Dependency::Hierachy(v) => module_probes.push(v.clone()),
-                    }
-                }
-            } else {
-                unreachable!()
-            }
+impl File {
+    pub fn load(self) -> Result<FileLoaded> {
+        let path = self.path;
+        let source = std::fs::read_to_string(&path).map_err(|_| {
+            let path = path.clone();
+            SurfaceError::SrcFileNotFound { path }
+        })?;
+        let mut s = String::new();
+        for t in Tok::lexer(&source) {
+            s += &format!("{}", t.map_err(|()| SurfaceError::LexerError)?);
         }
-        Ok(())
+        let file_info = FileInfo::new(source.as_str(), Rc::new(path));
+        Ok(FileLoaded { info: file_info, source, hash: s.snap() })
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FileId(usize);
+pub struct FileLoaded {
+    pub info: FileInfo,
+    pub source: String,
+    pub hash: String,
+}
 
-pub struct FileModule {
-    pub parse: ParseFile,
+pub struct ProjectHash {
+    pub hashes: HashMap<PathBuf, String>,
+}
+
+pub struct ProjectSrc {
+    pub map: HashMap<PathBuf, String>,
+}
+
+impl FileLoaded {
+    pub fn merge<'a>(selves: impl IntoIterator<Item = &'a Self>) -> io::Result<ProjectHash> {
+        let mut hashes = HashMap::new();
+        for file in selves {
+            hashes.insert(file.info.canonicalize()?, file.hash.clone());
+        }
+        Ok(ProjectHash { hashes })
+    }
+    pub fn parse(self) -> Result<FileParsed> {
+        let FileLoaded { info, source, .. } = self;
+
+        let mut ctx = Ctx::default();
+        let top = TopLevelParser::new()
+            .parse(&source, &LocationCtx::File(info.clone()), &mut ctx, Lexer::new(&source))
+            .map_err(|error| {
+                SurfaceError::ParseError(ParseError { error, file_info: &info }.to_string())
+            })?;
+
+        Ok(FileParsed { info, source, top, ctx })
+    }
+}
+
+pub struct FileParsed {
+    pub info: FileInfo,
+    pub source: String,
+    pub top: TopLevel,
+    pub ctx: Ctx,
 }

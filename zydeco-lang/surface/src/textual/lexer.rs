@@ -9,10 +9,14 @@ use std::fmt::{Debug, Display};
 pub enum Tok<'input> {
     #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
     UpperIdent(&'input str),
-    #[regex(r"([a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
-    #[regex(r"_([a-z]|\?|\*|=)([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
-    // #[regex(r"(\+|\-)([a-zA-Z_]|'|\?|\+|\*|-|=|~)*")]
+    #[regex(r"[a-z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
+    #[regex(r"_([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)+")]
     LowerIdent(&'input str),
+
+    #[regex(r"\+[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
+    CtorIdent(&'input str),
+    #[regex(r"\.[a-z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
+    DtorIdent(&'input str),
 
     #[token("pub")]
     Public,
@@ -117,8 +121,10 @@ pub enum Tok<'input> {
 impl<'input> Display for Tok<'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Tok::UpperIdent(s) => write!(f, "UpperIdentifier({})", s),
-            Tok::LowerIdent(s) => write!(f, "LowerIdentifier({})", s),
+            Tok::UpperIdent(s) => write!(f, "UpperIdent({})", s),
+            Tok::LowerIdent(s) => write!(f, "LowerIdent({})", s),
+            Tok::CtorIdent(s) => write!(f, "CtorIdent({})", s),
+            Tok::DtorIdent(s) => write!(f, "DtorIdent({})", s),
             Tok::Where => write!(f, "where"),
             Tok::End => write!(f, "end"),
             Tok::Public => write!(f, "pub"),

@@ -2,10 +2,17 @@ use once_cell::unsync::OnceCell;
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
+    io,
     path::PathBuf,
     rc::Rc,
     sync::Arc,
 };
+
+#[derive(Clone, Debug)]
+pub enum LocationCtx {
+    File(FileInfo),
+    Plain,
+}
 
 #[derive(Clone, Debug)]
 pub struct FileInfo {
@@ -46,6 +53,9 @@ impl FileInfo {
         } else {
             panic!("Span: offset {} is not in {:?}", offset, self)
         }
+    }
+    pub fn canonicalize(&self) -> io::Result<PathBuf> {
+        self.path.canonicalize()
     }
     pub fn display_path(&self) -> String {
         self.path.display().to_string()
@@ -93,6 +103,15 @@ impl Span {
     }
     pub fn get_cursor1(&self) -> (Cursor1, Cursor1) {
         self.span1
+    }
+    pub fn under_loc_ctx(self, loc: &LocationCtx) -> Self {
+        match loc {
+            LocationCtx::File(info) => {
+                self.set_info(info);
+                self
+            }
+            LocationCtx::Plain => self,
+        }
     }
 }
 

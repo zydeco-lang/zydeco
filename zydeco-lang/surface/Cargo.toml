@@ -6,8 +6,10 @@ description = "surface syntax for zydeco"
 
 [dependencies]
 regex = "1"
-logos = "0.13"
+logos = "0.14"
 lalrpop-util = "0.20"
+sha2 = "0.10"
+sculptor = "0.0.4"
 slotmap = { version = "1", features = ["serde"] }
 im = "15"
 unindent = "0.2"
