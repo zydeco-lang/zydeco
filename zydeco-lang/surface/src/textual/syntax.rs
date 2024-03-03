@@ -3,43 +3,15 @@
 use derive_more::From;
 use slotmap::{SecondaryMap, SlotMap};
 use std::fmt::Debug;
+pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 /* --------------------------------- Binder --------------------------------- */
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ModName(pub String);
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct VarName(pub String);
-#[derive(Clone, Debug)]
-pub struct CtorName(pub String);
-#[derive(Clone, Debug)]
-pub struct DtorName(pub String);
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NameDef<T>(pub T);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NameRef<T>(pub Vec<ModName>, pub T);
-
-/* ------------------------------- Structural ------------------------------- */
-
-/// `(...)` as paren-shaped container
-#[derive(From, Clone, Debug)]
-pub struct Paren<T>(pub Vec<T>);
-
-/// `e1 e2` shaped application
-#[derive(Clone, Debug)]
-pub struct App<T>(pub Vec<T>);
-
-/// `(...: t)` for analyze mode motivator
-#[derive(Clone, Debug)]
-pub struct Annotation<Tm, Ty> {
-    pub tm: Tm,
-    pub ty: Ty,
-}
-/// `_` for synthesize mode motivator
-#[derive(Clone, Debug)]
-pub struct Hole;
 
 /* --------------------------------- Pattern -------------------------------- */
 
@@ -116,9 +88,6 @@ pub struct PureBind<Tail> {
     pub tail: Tail,
 }
 
-/// `C(a_1, ...)`
-#[derive(Clone, Debug)]
-pub struct Ctor<Tail>(pub CtorName, pub Tail);
 /// `match a | C_1(x_11, ...) -> b_1 | ...`
 #[derive(Clone, Debug)]
 pub struct Match<Tail> {
@@ -140,17 +109,6 @@ pub struct CoMatch<Tail> {
 pub struct CoMatcher<Tail> {
     pub params: CoPatternId,
     pub tail: Tail,
-}
-/// `b .d_i`
-#[derive(Clone, Debug)]
-pub struct Dtor<Head>(pub Head, pub DtorName);
-
-/// literals in term
-#[derive(From, Clone, Debug)]
-pub enum Literal {
-    Int(i64),
-    String(String),
-    Char(char),
 }
 
 #[derive(From, Clone, Debug)]

@@ -1,0 +1,14 @@
+[package]
+name = "zydeco-syntax"
+version = "0.2.0"
+edition = "2021"
+description = "general syntax structures for zydeco"
+
+[dependencies]
+zydeco-utils = { path = "../utils" }
+zydeco-derive = { path = "../derive" }
+derive_more = "0.99"
+derive-where = "1.2"
+
+[lib]
+doctest = false

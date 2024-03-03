@@ -2433,10 +2433,20 @@ dependencies = [
  "logos",
  "regex",
  "sculptor",
- "sha2",
  "slotmap",
  "thiserror",
  "unindent",
+ "zydeco-derive",
+ "zydeco-syntax",
+ "zydeco-utils",
+]
+
+[[package]]
+name = "zydeco-syntax"
+version = "0.2.0"
+dependencies = [
+ "derive-where",
+ "derive_more",
  "zydeco-derive",
  "zydeco-utils",
 ]

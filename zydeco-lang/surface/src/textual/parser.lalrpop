@@ -136,7 +136,7 @@ DefId: DefId = <NameDef<Sp<VarName>>> => ctx.def(<>.0);
 
 //* ------------------------------- Structural ------------------------------- */
 
-Paren<T>: Paren<T> = SepByDelim<"(", ",", <T>, ")"> => <>.into();
+Paren<T>: Paren<T> = SepByDelim<"(", ",", <T>, ")"> => Paren(<>);
 App<T>: App<T> = <T*> => App(<>);
 Annotation<Tm, Ty>: Annotation<Tm, Ty> = <tm:Tm> ":" <ty:Ty> => {
     Annotation { tm, ty, }
