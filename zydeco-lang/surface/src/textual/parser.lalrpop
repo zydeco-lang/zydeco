@@ -41,6 +41,7 @@ extern {
         "comatch" => Tok::Comatch,
         "forall" => Tok::Forall,
         "exists" => Tok::Exists,
+        "sigma" => Tok::Sigma,
         "@" => Tok::At,
         "pack" => Tok::Pack,
 
@@ -63,6 +64,7 @@ extern {
         "/" => Tok::Slash,
         "|" => Tok::Branch,
         "+" => Tok::Plus,
+        "*" => Tok::Star,
         "." => Tok::Dot,
         ".." => Tok::DotDot,
         "->" => Tok::Arrow,
@@ -138,8 +140,8 @@ DefId: DefId = <NameDef<Sp<VarName>>> => parser.def(<>.0);
 
 Paren<T>: Paren<T> = SepByDelim<"(", ",", <T>, ")"> => Paren(<>);
 App<T>: App<T> = <T*> => App(<>);
-Annotation<Tm, Ty>: Annotation<Tm, Ty> = <tm:Tm> ":" <ty:Ty> => {
-    Annotation { tm, ty, }
+Ann<Tm, Ty>: Ann<Tm, Ty> = <tm:Tm> ":" <ty:Ty> => {
+    Ann { tm, ty, }
 };
 Hole: Hole = "_" => Hole;
 
@@ -151,7 +153,7 @@ PatternGen<P>: PatternId = <Sp<P>> => parser.pat(<>);
 #[inline]
 PatternId: PatternId = <PatternGen<Pattern>>;
 Pattern: Pattern = {
-    "(" <Annotation<PatternId, TermId>> ")" => <>.into(),
+    "(" <Ann<PatternId, TermId>> ")" => <>.into(),
     <Hole> => <>.into(),
     <DefId> => <>.into(),
     <ctor:CtorName> <pat:PatternId> => {
@@ -235,20 +237,29 @@ TermId: TermId = <TermGen<Term>>;
 Term: Term<NameRef<VarName>> = {
     <TermRight>,
     // abstraction
-    "fn" <params:CoPatternId> "->"
-        <term:TermId> => Abs(params, term).into(),
+    "fn" <params:CoPatternId> "->" <term:TermId> => {
+        Abs(params, term)
+    }.into(),
     // pi
-    "pi" <params:CoPatternId> "->"
-        <term:TermId> => Pi(params, term).into(),
+    "pi" <params:CoPatternId> "." <term:TermId> => {
+        Pi(params, term)
+    }.into(),
     // forall
-    "forall" <params:CoPatternId> "." <ty:TermRightId> =>
-        Forall(params, ty).into(),
+    "forall" <params:CoPatternId> "." <ty:TermRightId> => {
+        Forall(params, ty)
+    }.into(),
+    // sigma
+    "sigma" <params:CoPatternId> "." <ty:TermRightId> => {
+        Sigma(params, ty)
+    }.into(),
     // exists
-    "exists" <params:CoPatternId> "." <ty:TermRightId> =>
-        Exists(params, ty).into(),
+    "exists" <params:CoPatternId> "." <ty:TermRightId> => {
+        Exists(params, ty)
+    }.into(),
     // recursion
-    "rec" <binder:PatternId> "->"
-        <term:TermId> => Rec(binder, term).into(),
+    "rec" <binder:PatternId> "->" <term:TermId> => {
+        Rec(binder, term)
+    }.into(),
     // bind
     "do" <binder:PatternId> "<-" <bindee:TermId> ";" <tail:TermId> => Bind {
         binder, bindee, tail
@@ -276,7 +287,7 @@ Term: Term<NameRef<VarName>> = {
 TermAnnId: TermId = <TermGen<TermAnn>>;
 TermAnn: Term<NameRef<VarName>> = {
     <Term>,
-    <Annotation<TermId, TermId>> => <>.into(),
+    <Ann<TermId, TermId>> => <>.into(),
 };
 
 #[inline]
@@ -294,6 +305,10 @@ TermRight: Term<NameRef<VarName>> = {
     // arrow
     <ty_in:TermRightId> "->" <ty_out:TermAtomId> => {
         Arrow(ty_in, ty_out).into()
+    },
+    // prod
+    <ty_in:TermRightId> "*" <ty_out:TermAtomId> => {
+        Prod(vec![ty_in, ty_out]).into()
     },
     // destructor
     <term:TermRightId> <name:DtorName> => {
@@ -338,12 +353,6 @@ CoDataDef: CoDataDef = {
     }
 };
 
-DefineHead: () = { "define", "alias", };
-DefineEnd: () = { "end", ";", };
-
-ModuleHead: NameDef<ModName> = "module" <NameDef<ModName>>;
-ModuleEnd: () = "end";
-
 UseEnum: UseEnum = {
     <VarName> => <>.into(),
     <binder:VarName> "=" <origin:VarName> => UseAlias(binder, origin).into(),
@@ -356,8 +365,9 @@ Uses: Uses = <SepByDelim<"(", ",", <UsePath>, ")">> => Uses(<>);
 Declaration: Declaration = {
     <DataDef> => <>.into(),
     <CoDataDef> => <>.into(),
-    DefineHead <GenBindTerm> DefineEnd => Define(<>).into(),
-    <name:ModuleHead> <top:("where" <TopLevel>)?> ModuleEnd => {
+    "define" <GenBindTerm> "end" => Define(<>).into(),
+    "alias" <GenBindTerm> "end" => Alias(<>).into(),
+    "module" <name:ModName> <top:("where" <TopLevel>)?> "end" => {
         Module { name, top }.into()
     },
     "extern" <GenBindNull> "end" => Extern(<>).into(),

@@ -37,7 +37,7 @@ pub struct Uses(pub Vec<UsePath>);
 
 #[derive(From, Clone, Debug)]
 pub enum Pattern {
-    Ann(Annotation<PatternId, TermId>),
+    Ann(Ann<PatternId, TermId>),
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<PatternId>),
@@ -80,7 +80,13 @@ pub struct Arrow(pub TermId, pub TermId);
 /// `forall (x: A) . B`
 #[derive(Clone, Debug)]
 pub struct Forall(pub CoPatternId, pub TermId);
-/// `exists (x: A) . B`
+/// `sigma (x: A) . A'`
+#[derive(Clone, Debug)]
+pub struct Sigma(pub CoPatternId, pub TermId);
+/// `A * ...`
+#[derive(Clone, Debug)]
+pub struct Prod(pub Vec<TermId>);
+/// `exists (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Exists(pub CoPatternId, pub TermId);
 
@@ -163,7 +169,7 @@ pub struct CoMatcher<Tail> {
 
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
-    Ann(Annotation<TermId, TermId>),
+    Ann(Ann<TermId, TermId>),
     Hole(Hole),
     #[from(ignore)]
     Var(Ref),
@@ -174,6 +180,8 @@ pub enum Term<Ref> {
     Pi(Pi),
     Arrow(Arrow),
     Forall(Forall),
+    Sigma(Sigma),
+    Prod(Prod),
     Exists(Exists),
     Thunk(Thunk),
     Force(Force),
@@ -210,11 +218,14 @@ pub struct CoDataDef {
 pub struct Define(pub GenBind<TermId>);
 
 #[derive(Clone, Debug)]
+pub struct Alias(pub GenBind<TermId>);
+
+#[derive(Clone, Debug)]
 pub struct Extern(pub GenBind<()>);
 
 #[derive(Clone, Debug)]
 pub struct Module {
-    pub name: NameDef<ModName>,
+    pub name: ModName,
     pub top: Option<TopLevel>,
 }
 
@@ -235,6 +246,7 @@ pub enum Declaration {
     DataDef(DataDef),
     CoDataDef(CoDataDef),
     Define(Define),
+    Alias(Alias),
     Extern(Extern),
     Module(Module),
     UseDef(UseDef),

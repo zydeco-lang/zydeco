@@ -62,6 +62,8 @@ pub enum Tok<'input> {
     Comatch,
     #[token("forall")]
     Forall,
+    #[token("sigma")]
+    Sigma,
     #[token("exists")]
     Exists,
     #[token("@")]
@@ -106,6 +108,8 @@ pub enum Tok<'input> {
     Branch,
     #[token("+")]
     Plus,
+    #[token("*")]
+    Star,
     #[token(".")]
     Dot,
     #[token("..")]
@@ -145,8 +149,9 @@ impl<'input> Display for Tok<'input> {
             Tok::Rec => write!(f, "rec"),
             Tok::Match => write!(f, "match"),
             Tok::Comatch => write!(f, "comatch"),
-            Tok::Forall => write!(f, "Forall"),
-            Tok::Exists => write!(f, "Exists"),
+            Tok::Forall => write!(f, "forall"),
+            Tok::Sigma => write!(f, "sigma"),
+            Tok::Exists => write!(f, "exists"),
             Tok::At => write!(f, "@"),
             Tok::Pack => write!(f, "pack"),
             Tok::NumLit(s) => write!(f, "NumLiteral({})", s),
@@ -167,6 +172,7 @@ impl<'input> Display for Tok<'input> {
             Tok::Slash => write!(f, "/"),
             Tok::Branch => write!(f, "|"),
             Tok::Plus => write!(f, "+"),
+            Tok::Star => write!(f, "*"),
             Tok::Dot => write!(f, "."),
             Tok::DotDot => write!(f, ".."),
             Tok::Arrow => write!(f, "->"),

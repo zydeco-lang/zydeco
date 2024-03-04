@@ -1,13 +1,15 @@
 //! The project notation of zydeco.
 
 use super::err::{Result, SurfaceError};
-use crate::arena::SpanArena;
-use crate::bitter::syntax as b;
-use crate::textual::{
-    err::ParseError,
-    lexer::{Lexer, Tok},
-    parser::TopLevelParser,
-    syntax as t,
+use crate::{
+    arena::SpanArena,
+    // bitter::syntax as b,
+    textual::{
+        err::ParseError,
+        lexer::{Lexer, Tok},
+        parser::TopLevelParser,
+        syntax as t,
+    },
 };
 use logos::Logos;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
@@ -87,9 +89,6 @@ impl Project {
     }
 }
 
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-// pub struct FileId(usize);
-
 pub struct File {
     path: PathBuf,
 }
@@ -143,27 +142,28 @@ impl FileLoaded {
             })?;
 
         let t::Parser { spans, ctx } = parser;
-        Ok(FileParsed { info, source, top, spans, ctx })
+        Ok(FileParsed { info, source, spans, ctx, top })
     }
 }
 
 pub struct FileParsed {
     pub info: FileInfo,
     pub source: String,
-    pub top: t::TopLevel,
     pub spans: SpanArena,
     pub ctx: t::Ctx,
+    pub top: t::TopLevel,
 }
 
 impl FileParsed {
-    pub fn desugar(self) -> FileBitter {
-        todo!()
-    }
+    // pub fn desugar(self) -> FileBitter {
+    //     todo!()
+    // }
 }
 
-pub struct FileBitter {
-    pub info: FileInfo,
-    pub source: String,
-    pub top: b::TopLevel,
-    pub ctx: b::Ctx,
-}
+// pub struct FileBitter {
+//     pub info: FileInfo,
+//     pub source: String,
+//     pub spans: SpanArena,
+//     pub ctx: b::Ctx,
+//     pub top: b::TopLevel,
+// }

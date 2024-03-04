@@ -7,7 +7,7 @@ use crate::textual::{
     syntax::{CoPatternId, DefId, PatternId, TermId},
 };
 use derive_more::From;
-use zydeco_syntax::*;
+pub use zydeco_syntax::*;
 pub use zydeco_utils::{
     arena::*,
     span::{LocationCtx, Sp, Span},
@@ -17,7 +17,7 @@ pub use zydeco_utils::{
 
 #[derive(From, Clone, Debug)]
 pub enum Pattern {
-    Ann(Annotation<PatternId, TermId>),
+    Ann(Ann<PatternId, TermId>),
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<PatternId>),
@@ -49,7 +49,13 @@ pub struct Arrow(pub TermId, pub TermId);
 /// `forall (x: A) . B`
 #[derive(Clone, Debug)]
 pub struct Forall(pub CoPatternId, pub TermId);
-/// `exists (x: A) . B`
+/// `sigma (x: A) . A'`
+#[derive(Clone, Debug)]
+pub struct Sigma(pub CoPatternId, pub TermId);
+/// `A * ...`
+#[derive(Clone, Debug)]
+pub struct Prod(pub Vec<TermId>);
+/// `exists (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Exists(pub CoPatternId, pub TermId);
 
@@ -133,7 +139,7 @@ pub struct CoMatcher<Tail> {
 
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
-    Ann(Annotation<TermId, TermId>),
+    Ann(Ann<TermId, TermId>),
     Hole(Hole),
     #[from(ignore)]
     Var(Ref),
@@ -142,9 +148,11 @@ pub enum Term<Ref> {
     App(App<TermId>),
     Rec(Rec),
     Pi(Pi),
-    // Arrow(Arrow),
-    // Forall(Forall),
-    // Exists(Exists),
+    Arrow(Arrow),
+    Forall(Forall),
+    Sigma(Sigma),
+    Prod(Prod),
+    Exists(Exists),
     Thunk(Thunk),
     Force(Force),
     Ret(Return),
@@ -175,7 +183,7 @@ pub struct Extern {
 
 #[derive(Clone, Debug)]
 pub struct Module {
-    pub name: t::NameDef<ModName>,
+    pub name: ModName,
     pub top: Option<TopLevel>,
 }
 
@@ -231,36 +239,11 @@ pub use t::SpanArena;
 
 #[derive(Debug)]
 pub struct Ctx {
-    // span arena
-    pub spans: SpanArena,
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatternId, Pattern>,
     pub copats: ArenaAssoc<CoPatternId, CoPattern>,
     pub terms: ArenaAssoc<TermId, Term<t::NameRef<VarName>>>,
-}
-
-impl Ctx {
-    // pub fn def(&mut self, def: Sp<VarName>) -> DefId {
-    //     let id = self.spans.defs.alloc(def.info);
-    //     self.defs.insert(id, def.inner);
-    //     id
-    // }
-    // pub fn pat(&mut self, pat: Sp<Pattern>) -> PatternId {
-    //     let id = self.spans.pats.alloc(pat.info);
-    //     self.pats.insert(id, pat.inner);
-    //     id
-    // }
-    // pub fn copat(&mut self, copat: Sp<CoPattern>) -> CoPatternId {
-    //     let id = self.spans.copats.alloc(copat.info);
-    //     self.copats.insert(id, copat.inner);
-    //     id
-    // }
-    // pub fn term(&mut self, term: Sp<Term<t::NameRef<VarName>>>) -> TermId {
-    //     let id = self.spans.terms.alloc(term.info);
-    //     self.terms.insert(id, term.inner);
-    //     id
-    // }
 }
 
 impl AddAssign<Ctx> for Ctx {
@@ -269,6 +252,5 @@ impl AddAssign<Ctx> for Ctx {
         self.pats += rhs.pats;
         self.copats += rhs.copats;
         self.terms += rhs.terms;
-        self.spans += rhs.spans;
     }
 }

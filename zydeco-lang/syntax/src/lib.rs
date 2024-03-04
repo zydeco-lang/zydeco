@@ -23,7 +23,7 @@ pub struct App<T>(pub Vec<T>);
 
 /// `(...: t)` for analyze mode motivator
 #[derive(Clone, Debug)]
-pub struct Annotation<Tm, Ty> {
+pub struct Ann<Tm, Ty> {
     pub tm: Tm,
     pub ty: Ty,
 }

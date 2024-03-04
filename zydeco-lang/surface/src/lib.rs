@@ -30,7 +30,7 @@ pub mod textual {
 /// Angostura
 pub mod bitter {
     pub mod syntax;
-    pub mod elab;
+    pub mod desugar;
     // pub mod err;
 }
 
