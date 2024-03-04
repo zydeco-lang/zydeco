@@ -16,6 +16,24 @@ pub struct NameDef<T>(pub T);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NameRef<T>(pub Vec<ModName>, pub T);
 
+/* ----------------------------------- Use ---------------------------------- */
+
+#[derive(Clone, Debug)]
+pub struct UseAll;
+#[derive(Clone, Debug)]
+pub struct UseAlias(pub VarName, pub VarName);
+#[derive(Clone, From, Debug)]
+pub enum UseEnum {
+    Name(VarName),
+    Alias(UseAlias),
+    All(UseAll),
+    Cluster(Uses),
+}
+#[derive(Clone, Debug)]
+pub struct UsePath(pub NameRef<UseEnum>);
+#[derive(Clone, Debug)]
+pub struct Uses(pub Vec<UsePath>);
+
 /* --------------------------------- Pattern -------------------------------- */
 
 #[derive(From, Clone, Debug)]
@@ -94,11 +112,22 @@ pub struct PureBind<Tail> {
 /// `use let x = a in ...`
 #[derive(Clone, Debug)]
 pub struct UseBind {
-    pub uses: UseDef,
+    pub uses: UsePath,
     pub tail: TermId,
 }
 
-/// `match a | C_1(x_11, ...) -> b_1 | ...`
+/// data | C_1 ty | ... end
+#[derive(Clone, Debug)]
+pub struct Data {
+    pub arms: Vec<DataArm>,
+}
+#[derive(Clone, Debug)]
+pub struct DataArm {
+    pub name: CtorName,
+    pub param: TermId,
+}
+
+/// `match a | C_1 p -> b_1 | ... end`
 #[derive(Clone, Debug)]
 pub struct Match<Tail> {
     pub scrut: TermId,
@@ -110,7 +139,19 @@ pub struct Matcher<Tail> {
     pub tail: Tail,
 }
 
-/// `comatch | .d_1(x_11, ...) -> b_1 | ...`
+/// `codata | .d_1 cp : ty | ... end`
+#[derive(Clone, Debug)]
+pub struct CoData {
+    pub arms: Vec<CoDataArm>,
+}
+#[derive(Clone, Debug)]
+pub struct CoDataArm {
+    pub name: DtorName,
+    pub params: Option<CoPatternId>,
+    pub out: TermId,
+}
+
+/// `comatch | .d_1 -> b_1 | ... end`
 #[derive(Clone, Debug)]
 pub struct CoMatch<Tail> {
     pub arms: Vec<CoMatcher<Tail>>,
@@ -141,6 +182,8 @@ pub enum Term<Ref> {
     Do(Bind<TermId>),
     Let(PureBind<TermId>),
     UseLet(UseBind),
+    Data(Data),
+    CoData(CoData),
     Ctor(Ctor<TermId>),
     Match(Match<TermId>),
     CoMatch(CoMatch<TermId>),
@@ -154,25 +197,14 @@ pub enum Term<Ref> {
 pub struct DataDef {
     pub name: DefId,
     pub params: Vec<PatternId>,
-    pub arms: Option<Vec<DataArm>>,
-}
-#[derive(Clone, Debug)]
-pub struct DataArm {
-    pub name: CtorName,
-    pub param: TermId,
+    pub def: Option<Data>,
 }
 
 #[derive(Clone, Debug)]
 pub struct CoDataDef {
     pub name: DefId,
     pub params: Vec<PatternId>,
-    pub arms: Option<Vec<CoDataArm>>,
-}
-#[derive(Clone, Debug)]
-pub struct CoDataArm {
-    pub name: DtorName,
-    pub params: Option<CoPatternId>,
-    pub out: TermId,
+    pub def: Option<CoData>,
 }
 
 #[derive(Clone, Debug)]
@@ -187,28 +219,12 @@ pub struct Module {
     pub top: Option<TopLevel>,
 }
 
-#[derive(Clone, Debug)]
-pub struct UseAll;
-#[derive(Clone, Debug)]
-pub struct UseAlias(pub VarName, pub VarName);
-#[derive(Clone, From, Debug)]
-pub enum UseEnum {
-    Name(VarName),
-    Alias(UseAlias),
-    All(UseAll),
-    Cluster(Uses),
-}
-#[derive(Clone, Debug)]
-pub struct UsePath(pub NameRef<UseEnum>);
-#[derive(Clone, Debug)]
-pub struct Uses(pub Vec<UsePath>);
-
 #[derive(From, Clone, Debug)]
 pub struct UseDef(pub UsePath);
 
 #[derive(Clone, Debug)]
 pub struct UseBlock {
-    pub uses: UseDef,
+    pub uses: UsePath,
     pub top: TopLevel,
 }
 
@@ -358,15 +374,5 @@ impl Ctx {
         let id = self.spans.terms.alloc(term.info);
         self.terms.insert(id, term.inner);
         id
-    }
-}
-
-impl AddAssign<Ctx> for Ctx {
-    fn add_assign(&mut self, rhs: Ctx) {
-        self.defs += rhs.defs;
-        self.pats += rhs.pats;
-        self.copats += rhs.copats;
-        self.terms += rhs.terms;
-        self.spans += rhs.spans;
     }
 }

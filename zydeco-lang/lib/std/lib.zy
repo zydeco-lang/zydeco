@@ -12,11 +12,11 @@ module Std where
 
   module Identity where
     pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
-      fn A x -> ret x
+      fn A a -> ret a
     } end
 
     pub def id~ : Thunk(forall (B : CType) . Thunk B -> B) = {
-      fn B x -> ! x
+      fn B b -> ! b
     } end
   end
 

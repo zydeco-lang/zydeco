@@ -115,7 +115,7 @@ CtorId: String = "CtorId" => <>.into();
 DtorId: String = "DtorId" => <>.into();
 
 #[inline]
-ModName: ModName = <UpperId> => ModName(<>);
+ModName: ModName = <MixedId> => ModName(<>);
 #[inline]
 VarName: VarName = <MixedId> => VarName(<>);
 CtorName: CtorName = {
@@ -201,14 +201,28 @@ GenBindNull: GenBind<()> = {
     }
 };
 
-Matcher: Matcher<TermId> = {
-    <binder:PatternId> "->" <tail:TermId> => Matcher {
-        binder, tail
+Data: Data = <DataArm*> => Data { arms: <> };
+#[inline]
+DataArm: DataArm = {
+    "|" <name:CtorName> <param:TermId> => {
+        DataArm { name, param }
+    },
+};
+CoData: CoData = <CoDataArm*> => CoData { arms: <> };
+#[inline]
+CoDataArm: CoDataArm = {
+    "|" <name:DtorName> <params:CoPatternId?> ":" <out: TermId> => {
+        CoDataArm { name, params, out }
     },
 };
 
+Matcher: Matcher<TermId> = {
+    "|" <binder:PatternId> "->" <tail:TermId> => Matcher {
+        binder, tail
+    },
+};
 CoMatcher: CoMatcher<TermId> = {
-    <params:CoPatternId> "->" <tail:TermId> => CoMatcher {
+    "|" <params:CoPatternId> "->" <tail:TermId> => CoMatcher {
         params, tail
     },
 };
@@ -244,14 +258,16 @@ Term: Term<NameRef<VarName>> = {
         binding, tail
     }.into(),
     // use bind
-    "use" <uses:UseDef> "in" <tail:TermId> => UseBind {
+    "use" <uses:UsePath> "in" <tail:TermId> => UseBind {
         uses, tail
     }.into(),
+    "data" <Data> "end" => <>.into(),
+    "codata" <CoData> "end" => <>.into(),
     // match
-    "match" <scrut:TermId> <arms:("|" <Matcher>)*> "end" => Match {
+    "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {
         scrut, arms
     }.into(),
-    "comatch" <arms:("|" <CoMatcher>)*> "end" => CoMatch {
+    "comatch" <arms:(<CoMatcher>)*> "end" => CoMatch {
         arms
     }.into(),
 };
@@ -308,30 +324,18 @@ pub SingleTerm: TermId = TermId;
 
 DataDef: DataDef = {
     "data" <name:DefId> <params:PatternId*>
-        <arms:("where" <DataArm*>)?>
+        <def:("where" <Data>)?>
     "end" => DataDef {
-        name, params, arms,
+        name, params, def,
     }
-};
-#[inline]
-DataArm: DataArm = {
-    "|" <name:CtorName> <param:TermId> => {
-        DataArm { name, param }
-    },
 };
 
 CoDataDef: CoDataDef = {
     "codata" <name:DefId> <params:PatternId*>
-        <arms:("where" <CoDataArm*>)?>
+        <def:("where" <CoData>)?>
     "end" => CoDataDef {
-        name, params, arms,
+        name, params, def,
     }
-};
-#[inline]
-CoDataArm: CoDataArm = {
-    "|" <name:DtorName> <params:CoPatternId?> ":" <out: TermId> => {
-        CoDataArm { name, params, out }
-    },
 };
 
 DefineHead: () = { "define", "alias", };
@@ -349,8 +353,6 @@ UseEnum: UseEnum = {
 UsePath: UsePath = <NameRef<UseEnum>> => UsePath(<>);
 Uses: Uses = <SepByDelim<"(", ",", <UsePath>, ")">> => Uses(<>);
 
-UseDef: UseDef = <UsePath> => <>.into();
-
 Declaration: Declaration = {
     <DataDef> => <>.into(),
     <CoDataDef> => <>.into(),
@@ -359,8 +361,8 @@ Declaration: Declaration = {
         Module { name, top }.into()
     },
     "extern" <GenBindNull> "end" => Extern(<>).into(),
-    "use" <UseDef> "end" => <>.into(),
-    "use" <uses:UseDef> "where" <top:TopLevel> "end" => UseBlock {
+    "use" <UsePath> "end" => UseDef(<>).into(),
+    "use" <uses:UsePath> "where" <top:TopLevel> "end" => UseBlock {
         uses, top
     }.into(),
     "main" <TermId> "end" => Main(<>).into(),

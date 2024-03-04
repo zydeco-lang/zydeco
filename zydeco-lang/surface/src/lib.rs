@@ -25,6 +25,7 @@ pub mod textual {
     mod tests;
 }
 
+/// Angostura
 pub mod bitter {
     pub mod syntax;
     // pub mod err;
