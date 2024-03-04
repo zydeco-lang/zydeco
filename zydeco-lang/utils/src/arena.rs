@@ -35,7 +35,7 @@ pub struct ArenaSparse<Id, T, Meta = usize> {
     _marker: std::marker::PhantomData<Id>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArenaAssoc<Id, T> {
     map: HashMap<Id, T>,
 }

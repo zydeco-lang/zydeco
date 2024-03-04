@@ -227,10 +227,12 @@ pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 
 /* --------------------------------- Context -------------------------------- */
 
+pub use t::SpanArena;
+
 #[derive(Debug)]
 pub struct Ctx {
     // span arena
-    pub spans: t::SpanArena,
+    pub spans: SpanArena,
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatternId, Pattern>,

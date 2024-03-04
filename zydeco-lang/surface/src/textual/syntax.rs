@@ -1,13 +1,12 @@
 //! The surface syntax of zydeco.
 
-use derive_more::From;
-use std::{fmt::Debug, ops::AddAssign};
+pub use crate::arena::*;
 pub use zydeco_syntax::*;
-pub use zydeco_utils::{
-    arena::*,
-    new_key_type,
-    span::{LocationCtx, Sp, Span},
-};
+pub use zydeco_utils::span::{LocationCtx, Sp, Span};
+
+use derive_more::From;
+use std::fmt::Debug;
+use zydeco_utils::arena::*;
 
 /* --------------------------------- Binder --------------------------------- */
 
@@ -269,70 +268,9 @@ pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 
 /* --------------------------------- Context -------------------------------- */
 
-new_key_type! {
-    pub struct DefId;
-    pub struct PatternId;
-    pub struct CoPatternId;
-    pub struct TermId;
-}
-
-/// keeps all ids and spans, the corresponding source location
-#[derive(Debug)]
-pub struct SpanArena {
-    pub defs: ArenaSparse<DefId, Span>,
-    pub pats: ArenaSparse<PatternId, Span>,
-    pub copats: ArenaSparse<CoPatternId, Span>,
-    pub terms: ArenaSparse<TermId, Span>,
-}
-
-impl AddAssign<SpanArena> for SpanArena {
-    fn add_assign(&mut self, rhs: SpanArena) {
-        self.defs += rhs.defs;
-        self.pats += rhs.pats;
-        self.copats += rhs.copats;
-        self.terms += rhs.terms;
-    }
-}
-
-mod span_arena_impl {
-    use super::*;
-    impl std::ops::Index<DefId> for SpanArena {
-        type Output = Span;
-
-        fn index(&self, id: DefId) -> &Self::Output {
-            self.defs.get(id).unwrap()
-        }
-    }
-
-    impl std::ops::Index<PatternId> for SpanArena {
-        type Output = Span;
-
-        fn index(&self, id: PatternId) -> &Self::Output {
-            self.pats.get(id).unwrap()
-        }
-    }
-
-    impl std::ops::Index<CoPatternId> for SpanArena {
-        type Output = Span;
-
-        fn index(&self, id: CoPatternId) -> &Self::Output {
-            self.copats.get(id).unwrap()
-        }
-    }
-
-    impl std::ops::Index<TermId> for SpanArena {
-        type Output = Span;
-
-        fn index(&self, id: TermId) -> &Self::Output {
-            self.terms.get(id).unwrap()
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Ctx {
-    // span arena
-    pub spans: SpanArena,
+    // pub spans: SpanArena,
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatternId, Pattern>,
@@ -341,38 +279,43 @@ pub struct Ctx {
 }
 
 impl Ctx {
-    pub fn new(alloc: &mut GlobalAlloc) -> Self {
+    pub fn new() -> Self {
         Self {
-            spans: SpanArena {
-                defs: ArenaSparse::new(alloc.alloc()),
-                pats: ArenaSparse::new(alloc.alloc()),
-                copats: ArenaSparse::new(alloc.alloc()),
-                terms: ArenaSparse::new(alloc.alloc()),
-            },
             defs: ArenaAssoc::new(),
             pats: ArenaAssoc::new(),
             copats: ArenaAssoc::new(),
             terms: ArenaAssoc::new(),
         }
     }
+}
+
+pub struct Parser {
+    pub spans: SpanArena,
+    pub ctx: Ctx,
+}
+
+impl Parser {
+    pub fn new(alloc: &mut GlobalAlloc) -> Self {
+        Self { spans: SpanArena::new(alloc), ctx: Ctx::new() }
+    }
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.defs.alloc(def.info);
-        self.defs.insert(id, def.inner);
+        self.ctx.defs.insert(id, def.inner);
         id
     }
     pub fn pat(&mut self, pat: Sp<Pattern>) -> PatternId {
         let id = self.spans.pats.alloc(pat.info);
-        self.pats.insert(id, pat.inner);
+        self.ctx.pats.insert(id, pat.inner);
         id
     }
     pub fn copat(&mut self, copat: Sp<CoPattern>) -> CoPatternId {
         let id = self.spans.copats.alloc(copat.info);
-        self.copats.insert(id, copat.inner);
+        self.ctx.copats.insert(id, copat.inner);
         id
     }
     pub fn term(&mut self, term: Sp<Term<NameRef<VarName>>>) -> TermId {
         let id = self.spans.terms.alloc(term.info);
-        self.terms.insert(id, term.inner);
+        self.ctx.terms.insert(id, term.inner);
         id
     }
 }

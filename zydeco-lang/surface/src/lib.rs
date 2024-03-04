@@ -10,6 +10,8 @@ pub mod driver {
     mod tests;
 }
 
+pub mod arena;
+
 pub mod textual {
     pub mod syntax;
     pub mod lexer;
@@ -28,6 +30,7 @@ pub mod textual {
 /// Angostura
 pub mod bitter {
     pub mod syntax;
+    pub mod elab;
     // pub mod err;
 }
 

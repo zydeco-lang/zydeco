@@ -5,7 +5,7 @@ use crate::textual::{
 grammar<'input, 'ctx>(
     input: &'input str,
     loc: &'input LocationCtx,
-    ctx: &'ctx mut Ctx,
+    parser: &'ctx mut Parser,
 );
 
 //* --------------------------------- Tokens --------------------------------- */
@@ -132,7 +132,7 @@ NameRef<T>: NameRef<T> = <path:(<ModName> "/")*> <inner:T> => {
     NameRef(path, inner)
 };
 
-DefId: DefId = <NameDef<Sp<VarName>>> => ctx.def(<>.0);
+DefId: DefId = <NameDef<Sp<VarName>>> => parser.def(<>.0);
 
 //* ------------------------------- Structural ------------------------------- */
 
@@ -146,7 +146,7 @@ Hole: Hole = "_" => Hole;
 //* --------------------------------- Pattern -------------------------------- */
 
 #[inline]
-PatternGen<P>: PatternId = <Sp<P>> => ctx.pat(<>);
+PatternGen<P>: PatternId = <Sp<P>> => parser.pat(<>);
 
 #[inline]
 PatternId: PatternId = <PatternGen<Pattern>>;
@@ -161,7 +161,7 @@ Pattern: Pattern = {
 };
 
 #[inline]
-CoPatternGen<P>: CoPatternId = <Sp<P>> => ctx.copat(<>);
+CoPatternGen<P>: CoPatternId = <Sp<P>> => parser.copat(<>);
 
 #[inline]
 CoPatternId: CoPatternId = <CoPatternGen<CoPattern>>;
@@ -228,7 +228,7 @@ CoMatcher: CoMatcher<TermId> = {
 };
 
 #[inline]
-TermGen<T>: TermId = <Sp<T>> => ctx.term(<>);
+TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
 
 #[inline]
 TermId: TermId = <TermGen<Term>>;

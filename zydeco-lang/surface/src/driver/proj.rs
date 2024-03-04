@@ -1,9 +1,14 @@
 //! The project notation of zydeco.
 
 use super::err::{Result, SurfaceError};
-use crate::textual::lexer::Tok;
-use crate::textual::{err::ParseError, lexer::Lexer, parser::TopLevelParser, syntax as t};
-// use crate::bitter::syntax as b;
+use crate::arena::SpanArena;
+use crate::bitter::syntax as b;
+use crate::textual::{
+    err::ParseError,
+    lexer::{Lexer, Tok},
+    parser::TopLevelParser,
+    syntax as t,
+};
 use logos::Logos;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
@@ -76,7 +81,7 @@ impl Project {
         // Todo: parallelize
         let _files = files
             .into_iter()
-            .map(|f| f.parse(t::Ctx::new(&mut alloc)))
+            .map(|f| f.parse(t::Parser::new(&mut alloc)))
             .collect::<Result<Vec<_>>>()?;
         Ok(())
     }
@@ -128,16 +133,17 @@ impl FileLoaded {
         }
         Ok(ProjectHash { hashes })
     }
-    pub fn parse(self, mut ctx: t::Ctx) -> Result<FileParsed> {
+    pub fn parse(self, mut parser: t::Parser) -> Result<FileParsed> {
         let FileLoaded { info, source, .. } = self;
 
         let top = TopLevelParser::new()
-            .parse(&source, &LocationCtx::File(info.clone()), &mut ctx, Lexer::new(&source))
+            .parse(&source, &LocationCtx::File(info.clone()), &mut parser, Lexer::new(&source))
             .map_err(|error| {
                 SurfaceError::ParseError(ParseError { error, file_info: &info }.to_string())
             })?;
 
-        Ok(FileParsed { info, source, top, ctx })
+        let t::Parser { spans, ctx } = parser;
+        Ok(FileParsed { info, source, top, spans, ctx })
     }
 }
 
@@ -145,17 +151,19 @@ pub struct FileParsed {
     pub info: FileInfo,
     pub source: String,
     pub top: t::TopLevel,
+    pub spans: SpanArena,
     pub ctx: t::Ctx,
 }
 
-// impl FileParsed {
-//     pub fn desugar(self) -> FileBitter {
-//     }
-// }
+impl FileParsed {
+    pub fn desugar(self) -> FileBitter {
+        todo!()
+    }
+}
 
-// pub struct FileBitter {
-//     pub info: FileInfo,
-//     pub source: String,
-//     pub top: b::TopLevel,
-//     pub ctx: b::Ctx,
-// }
+pub struct FileBitter {
+    pub info: FileInfo,
+    pub source: String,
+    pub top: b::TopLevel,
+    pub ctx: b::Ctx,
+}
