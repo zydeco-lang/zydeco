@@ -201,9 +201,6 @@ GenBindNull: GenBind<()> = {
     }
 };
 
-#[inline]
-LetSep: () = { ";", "in", };
-
 Matcher: Matcher<TermId> = {
     <binder:PatternId> "->" <tail:TermId> => Matcher {
         binder, tail
@@ -243,8 +240,12 @@ Term: Term<NameRef<VarName>> = {
         binder, bindee, tail
     }.into(),
     // pure bind
-    "let" <binding:GenBindTerm> LetSep <tail:TermId> => PureBind {
+    "let" <binding:GenBindTerm> "in" <tail:TermId> => PureBind {
         binding, tail
+    }.into(),
+    // use bind
+    "use" <uses:UseDef> "in" <tail:TermId> => UseBind {
+        uses, tail
     }.into(),
     // match
     "match" <scrut:TermId> <arms:("|" <Matcher>)*> "end" => Match {
@@ -343,9 +344,12 @@ UseEnum: UseEnum = {
     <VarName> => <>.into(),
     <binder:VarName> "=" <origin:VarName> => UseAlias(binder, origin).into(),
     ".." => UseAll.into(),
-    <SepByDelim<"(", ",", UseDef, ")">> => UseCluster(<>).into(),
+    <Uses> => <>.into(),
 };
-UseDef: UseDef = <NameRef<UseEnum>> => UseDef(<>);
+UsePath: UsePath = <NameRef<UseEnum>> => UsePath(<>);
+Uses: Uses = <SepByDelim<"(", ",", <UsePath>, ")">> => Uses(<>);
+
+UseDef: UseDef = <UsePath> => <>.into();
 
 Declaration: Declaration = {
     <DataDef> => <>.into(),
@@ -356,6 +360,9 @@ Declaration: Declaration = {
     },
     "extern" <GenBindNull> "end" => Extern(<>).into(),
     "use" <UseDef> "end" => <>.into(),
+    "use" <uses:UseDef> "where" <top:TopLevel> "end" => UseBlock {
+        uses, top
+    }.into(),
     "main" <TermId> "end" => Main(<>).into(),
 };
 

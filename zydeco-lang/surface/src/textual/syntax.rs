@@ -91,6 +91,13 @@ pub struct PureBind<Tail> {
     pub tail: Tail,
 }
 
+/// `use let x = a in ...`
+#[derive(Clone, Debug)]
+pub struct UseBind {
+    pub uses: UseDef,
+    pub tail: TermId,
+}
+
 /// `match a | C_1(x_11, ...) -> b_1 | ...`
 #[derive(Clone, Debug)]
 pub struct Match<Tail> {
@@ -133,6 +140,7 @@ pub enum Term<Ref> {
     Ret(Return),
     Do(Bind<TermId>),
     Let(PureBind<TermId>),
+    UseLet(UseBind),
     Ctor(Ctor<TermId>),
     Match(Match<TermId>),
     CoMatch(CoMatch<TermId>),
@@ -183,17 +191,26 @@ pub struct Module {
 pub struct UseAll;
 #[derive(Clone, Debug)]
 pub struct UseAlias(pub VarName, pub VarName);
-#[derive(Clone, Debug)]
-pub struct UseCluster(pub Vec<UseDef>);
 #[derive(Clone, From, Debug)]
 pub enum UseEnum {
     Name(VarName),
     Alias(UseAlias),
     All(UseAll),
-    Cluster(UseCluster),
+    Cluster(Uses),
 }
 #[derive(Clone, Debug)]
-pub struct UseDef(pub NameRef<UseEnum>);
+pub struct UsePath(pub NameRef<UseEnum>);
+#[derive(Clone, Debug)]
+pub struct Uses(pub Vec<UsePath>);
+
+#[derive(From, Clone, Debug)]
+pub struct UseDef(pub UsePath);
+
+#[derive(Clone, Debug)]
+pub struct UseBlock {
+    pub uses: UseDef,
+    pub top: TopLevel,
+}
 
 #[derive(Clone, Debug)]
 pub struct Main(pub TermId);
@@ -206,6 +223,7 @@ pub enum Declaration {
     Extern(Extern),
     Module(Module),
     UseDef(UseDef),
+    UseBlock(UseBlock),
     Main(Main),
 }
 

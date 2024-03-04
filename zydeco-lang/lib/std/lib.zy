@@ -8,7 +8,7 @@ end
 
 
 module Std where
-  // pub use Builtin(Thunk, Ret, U, F) end
+  pub use Builtin/(Thunk, Ret, U, F) end
 
   module Identity where
     pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
