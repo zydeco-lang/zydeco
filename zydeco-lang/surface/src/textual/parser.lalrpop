@@ -186,8 +186,10 @@ CoPatternAtom: CoPattern = {
 
 //* ---------------------------------- Term ---------------------------------- */
 
+CompModifier: () = { "!", "fn" };
+
 GenBindTerm: GenBind<TermId> = {
-    <rec:"rec"?> <comp:"!"?> <binder:PatternId> <params:CoPatternId?>
+    <rec:"rec"?> <comp:CompModifier?> <binder:PatternId> <params:CoPatternId?>
     <ty:(":" <TermId>)?> <bindee: ("=" <TermId>)> => GenBind {
         rec: rec.is_some(),
         comp: comp.is_some(),
@@ -195,7 +197,7 @@ GenBindTerm: GenBind<TermId> = {
     }
 };
 GenBindNull: GenBind<()> = {
-    <rec:"rec"?> <comp:"!"?> <binder:PatternId> <params:CoPatternId?>
+    <rec:"rec"?> <comp:CompModifier?> <binder:PatternId> <params:CoPatternId?>
     <ty:(":" <TermId>)?> <bindee: ()> => GenBind {
         rec: rec.is_some(),
         comp: comp.is_some(),
