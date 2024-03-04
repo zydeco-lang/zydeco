@@ -15,7 +15,7 @@ impl<Meta: Copy> Iterator for IndexAlloc<Meta> {
     }
 }
 
-pub unsafe trait IndexLike {
+pub unsafe trait IndexLike: Clone + Copy + Eq + std::hash::Hash {
     type Meta;
     fn new(meta: Self::Meta, idx: usize) -> Self;
     fn index(&self) -> usize;
@@ -31,7 +31,7 @@ pub struct ArenaDense<Id, T, Meta = usize> {
 #[derive(Debug)]
 pub struct ArenaSparse<Id, T, Meta = usize> {
     allocator: IndexAlloc<Meta>,
-    map: HashMap<usize, T>,
+    map: HashMap<Id, T>,
     _marker: std::marker::PhantomData<Id>,
 }
 
@@ -61,6 +61,8 @@ impl GlobalAlloc {
 }
 
 mod impls {
+    use std::ops::AddAssign;
+
     use super::*;
 
     impl<Id, T, Meta> Index<Id> for ArenaDense<Id, T, Meta>
@@ -142,8 +144,9 @@ mod impls {
         }
         fn alloc(&mut self, val: T) -> Id {
             let id = self.allocator.next().unwrap();
-            self.map.insert(id.1, val);
-            IndexLike::new(id.0, id.1)
+            let id = IndexLike::new(id.0, id.1);
+            self.map.insert(id, val);
+            id
         }
     }
 
@@ -153,10 +156,42 @@ mod impls {
         Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
     {
         fn get(&self, id: Id) -> Option<&T> {
-            self.map.get(&id.index())
+            self.map.get(&id)
         }
         fn get_mut(&mut self, id: Id) -> Option<&mut T> {
-            self.map.get_mut(&id.index())
+            self.map.get_mut(&id)
+        }
+    }
+
+    impl<Id, T, Meta> IntoIterator for ArenaSparse<Id, T, Meta>
+    where
+        Meta: Copy,
+        Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
+    {
+        type Item = (Id, T);
+        type IntoIter = std::collections::hash_map::IntoIter<Id, T>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.map.into_iter()
+        }
+    }
+
+    impl<Id, T, Meta> Extend<(Id, T)> for ArenaSparse<Id, T, Meta>
+    where
+        Meta: Copy,
+        Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
+    {
+        fn extend<I: IntoIterator<Item = (Id, T)>>(&mut self, iter: I) {
+            self.map.extend(iter);
+        }
+    }
+
+    impl<Id, T, Meta> AddAssign for ArenaSparse<Id, T, Meta>
+    where
+        Meta: Copy,
+        Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
+    {
+        fn add_assign(&mut self, rhs: ArenaSparse<Id, T, Meta>) {
+            self.extend(rhs.into_iter());
         }
     }
 
@@ -188,6 +223,44 @@ mod impls {
         }
         fn get_mut(&mut self, id: Id) -> Option<&mut T> {
             self.map.get_mut(&id)
+        }
+    }
+
+    impl<Id, T> IntoIterator for ArenaAssoc<Id, T> {
+        type Item = (Id, T);
+        type IntoIter = std::collections::hash_map::IntoIter<Id, T>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.map.into_iter()
+        }
+    }
+
+    impl<Id, T> Extend<(Id, T)> for ArenaAssoc<Id, T>
+    where
+        Id: Eq + std::hash::Hash,
+    {
+        fn extend<I: IntoIterator<Item = (Id, T)>>(&mut self, iter: I) {
+            self.map.extend(iter);
+        }
+    }
+
+    impl<Id, T> AddAssign for ArenaAssoc<Id, T>
+    where
+        Id: Eq + std::hash::Hash,
+    {
+        fn add_assign(&mut self, rhs: ArenaAssoc<Id, T>) {
+            self.extend(rhs.into_iter());
+        }
+    }
+
+    impl<Id, T> ArenaAssoc<Id, T>
+    where
+        Id: Eq + std::hash::Hash,
+    {
+        pub fn new() -> Self {
+            ArenaAssoc { map: HashMap::new() }
+        }
+        pub fn insert(&mut self, id: Id, val: T) {
+            self.map.insert(id, val);
         }
     }
 }

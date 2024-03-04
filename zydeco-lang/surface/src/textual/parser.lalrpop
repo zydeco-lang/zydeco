@@ -146,7 +146,7 @@ Hole: Hole = "_" => Hole;
 //* --------------------------------- Pattern -------------------------------- */
 
 #[inline]
-PatternGen<P>: PatternId = <Sp<P>> => ctx.pattern(<>);
+PatternGen<P>: PatternId = <Sp<P>> => ctx.pat(<>);
 
 #[inline]
 PatternId: PatternId = <PatternGen<Pattern>>;
@@ -161,7 +161,7 @@ Pattern: Pattern = {
 };
 
 #[inline]
-CoPatternGen<P>: CoPatternId = <Sp<P>> => ctx.co_pattern(<>);
+CoPatternGen<P>: CoPatternId = <Sp<P>> => ctx.copat(<>);
 
 #[inline]
 CoPatternId: CoPatternId = <CoPatternGen<CoPattern>>;

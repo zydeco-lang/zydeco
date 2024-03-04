@@ -1,10 +1,13 @@
-//! The surface syntax of zydeco is defined in this module.
+//! The surface syntax of zydeco.
 
 use derive_more::From;
-use slotmap::{SecondaryMap, SlotMap};
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::AddAssign};
 pub use zydeco_syntax::*;
-pub use zydeco_utils::span::{LocationCtx, Sp, Span};
+pub use zydeco_utils::{
+    arena::*,
+    new_key_type,
+    span::{LocationCtx, Sp, Span},
+};
 
 /* --------------------------------- Binder --------------------------------- */
 
@@ -232,7 +235,7 @@ pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 
 /* --------------------------------- Context -------------------------------- */
 
-slotmap::new_key_type! {
+new_key_type! {
     pub struct DefId;
     pub struct PatternId;
     pub struct CoPatternId;
@@ -240,12 +243,21 @@ slotmap::new_key_type! {
 }
 
 /// keeps all ids and spans, the corresponding source location
-#[derive(Default, Clone, Debug)]
+#[derive(Debug)]
 pub struct SpanArena {
-    pub defs: SlotMap<DefId, Span>,
-    pub patterns: SlotMap<PatternId, Span>,
-    pub co_patterns: SlotMap<CoPatternId, Span>,
-    pub terms: SlotMap<TermId, Span>,
+    pub defs: ArenaSparse<DefId, Span>,
+    pub patterns: ArenaSparse<PatternId, Span>,
+    pub co_patterns: ArenaSparse<CoPatternId, Span>,
+    pub terms: ArenaSparse<TermId, Span>,
+}
+
+impl AddAssign<SpanArena> for SpanArena {
+    fn add_assign(&mut self, rhs: SpanArena) {
+        self.defs.extend(rhs.defs);
+        self.patterns.extend(rhs.patterns);
+        self.co_patterns.extend(rhs.co_patterns);
+        self.terms.extend(rhs.terms);
+    }
 }
 
 mod span_arena_impl {
@@ -283,46 +295,60 @@ mod span_arena_impl {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Ctx {
     // span arena
     pub spans: SpanArena,
     // arenas
-    pub defs: SecondaryMap<DefId, VarName>,
-    pub patterns: SecondaryMap<PatternId, Pattern>,
-    pub co_patterns: SecondaryMap<CoPatternId, CoPattern>,
-    pub terms: SecondaryMap<TermId, Term<NameRef<VarName>>>,
+    pub defs: ArenaAssoc<DefId, VarName>,
+    pub pats: ArenaAssoc<PatternId, Pattern>,
+    pub copats: ArenaAssoc<CoPatternId, CoPattern>,
+    pub terms: ArenaAssoc<TermId, Term<NameRef<VarName>>>,
 }
 
 impl Ctx {
+    pub fn new(alloc: &mut GlobalAlloc) -> Self {
+        Self {
+            spans: SpanArena {
+                defs: ArenaSparse::new(alloc.alloc()),
+                patterns: ArenaSparse::new(alloc.alloc()),
+                co_patterns: ArenaSparse::new(alloc.alloc()),
+                terms: ArenaSparse::new(alloc.alloc()),
+            },
+            defs: ArenaAssoc::new(),
+            pats: ArenaAssoc::new(),
+            copats: ArenaAssoc::new(),
+            terms: ArenaAssoc::new(),
+        }
+    }
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
-        let id = self.spans.defs.insert(def.info);
+        let id = self.spans.defs.alloc(def.info);
         self.defs.insert(id, def.inner);
         id
     }
-    pub fn pattern(&mut self, pattern: Sp<Pattern>) -> PatternId {
-        let id = self.spans.patterns.insert(pattern.info);
-        self.patterns.insert(id, pattern.inner);
+    pub fn pat(&mut self, pattern: Sp<Pattern>) -> PatternId {
+        let id = self.spans.patterns.alloc(pattern.info);
+        self.pats.insert(id, pattern.inner);
         id
     }
-    pub fn co_pattern(&mut self, co_pattern: Sp<CoPattern>) -> CoPatternId {
-        let id = self.spans.co_patterns.insert(co_pattern.info);
-        self.co_patterns.insert(id, co_pattern.inner);
+    pub fn copat(&mut self, co_pattern: Sp<CoPattern>) -> CoPatternId {
+        let id = self.spans.co_patterns.alloc(co_pattern.info);
+        self.copats.insert(id, co_pattern.inner);
         id
     }
     pub fn term(&mut self, term: Sp<Term<NameRef<VarName>>>) -> TermId {
-        let id = self.spans.terms.insert(term.info);
+        let id = self.spans.terms.alloc(term.info);
         self.terms.insert(id, term.inner);
         id
     }
+}
 
-    pub fn merge(&mut self, other: &Ctx) {
-        self.defs.extend(other.defs.clone());
-        // There will be only one definition
-        self.patterns.extend(other.patterns.clone());
-        self.terms.extend(other.terms.clone());
-        self.spans = other.spans.clone();
+impl AddAssign<Ctx> for Ctx {
+    fn add_assign(&mut self, rhs: Ctx) {
+        self.defs += rhs.defs;
+        self.pats += rhs.pats;
+        self.copats += rhs.copats;
+        self.terms += rhs.terms;
+        self.spans += rhs.spans;
     }
-
-    pub fn clear_added_id(&mut self) {}
 }

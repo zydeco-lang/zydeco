@@ -21,6 +21,11 @@ pub mod textual {
     mod tests;
 }
 
+pub mod desugar {
+    pub mod syntax;
+    // pub mod err;
+}
+
 pub mod scoped {
     pub mod syntax;
     // pub mod resolver;

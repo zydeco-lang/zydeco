@@ -114,24 +114,6 @@ mod span {
     }
 }
 
-/* --------------------------------- Entity --------------------------------- */
-
-slotmap::new_key_type! { pub struct EntityId; }
-
-/// Note: Consider pairing up Entity with the following:
-/// ```ignore
-/// #[derive(From, Clone, Debug)]
-/// pub enum Sort {
-///     Term(Term, Option<Type>),
-///     Type(Type, Option<Kind>),
-///     Kind,
-/// }
-/// ```
-pub struct Entity<Sort> {
-    pub def: NameDef,
-    pub sort: Sort,
-}
-
 /* --------------------------------- Legacy --------------------------------- */
 
 macro_rules! var {

@@ -69,10 +69,9 @@ impl FileLoaded {
         }
         Ok(ProjectHash { hashes })
     }
-    pub fn parse(self) -> Result<FileParsed> {
+    pub fn parse(self, mut ctx: Ctx) -> Result<FileParsed> {
         let FileLoaded { info, source, .. } = self;
 
-        let mut ctx = Ctx::default();
         let top = TopLevelParser::new()
             .parse(&source, &LocationCtx::File(info.clone()), &mut ctx, Lexer::new(&source))
             .map_err(|error| {
