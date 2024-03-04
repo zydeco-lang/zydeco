@@ -11,7 +11,6 @@ use crate::{
         syntax as t,
     },
 };
-use logos::Logos;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
@@ -95,6 +94,8 @@ pub struct File {
 
 impl File {
     pub fn load(self) -> Result<FileLoaded> {
+        use logos::Logos;
+
         let path = self.path;
         let source = std::fs::read_to_string(&path).map_err(|_| {
             let path = path.clone();
@@ -104,8 +105,8 @@ impl File {
         for t in Tok::lexer(&source) {
             s += &format!("{}", t.map_err(|()| SurfaceError::LexerError)?);
         }
-        let file_info = FileInfo::new(source.as_str(), Rc::new(path));
-        Ok(FileLoaded { info: file_info, source, hash: s.snap() })
+        let info = FileInfo::new(source.as_str(), Rc::new(path));
+        Ok(FileLoaded { info, source, hash: s.snap() })
     }
 }
 

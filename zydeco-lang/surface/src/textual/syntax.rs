@@ -280,25 +280,13 @@ pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 
 /* --------------------------------- Context -------------------------------- */
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Ctx {
-    // pub spans: SpanArena,
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatternId, Pattern>,
     pub copats: ArenaAssoc<CoPatternId, CoPattern>,
     pub terms: ArenaAssoc<TermId, Term<NameRef<VarName>>>,
-}
-
-impl Ctx {
-    pub fn new() -> Self {
-        Self {
-            defs: ArenaAssoc::new(),
-            pats: ArenaAssoc::new(),
-            copats: ArenaAssoc::new(),
-            terms: ArenaAssoc::new(),
-        }
-    }
 }
 
 pub struct Parser {
@@ -308,7 +296,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(alloc: &mut GlobalAlloc) -> Self {
-        Self { spans: SpanArena::new(alloc), ctx: Ctx::new() }
+        Self { spans: SpanArena::new(alloc), ctx: Ctx::default() }
     }
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.defs.alloc(def.info);

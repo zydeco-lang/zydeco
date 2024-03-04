@@ -241,7 +241,7 @@ pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 
 pub use t::SpanArena;
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Ctx {
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,

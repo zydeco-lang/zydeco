@@ -5,7 +5,8 @@ use crate::{
 };
 
 pub trait Desugar {
-    fn desugar(self);
+    type Out;
+    fn desugar(self) -> Self::Out;
 }
 
 pub struct Desugarer {
@@ -64,13 +65,18 @@ pub struct RunDesugar {
 }
 
 impl RunDesugar {
-    pub fn run(self) -> Desugarer {
-        todo!()
+    pub fn run(mut self) -> Desugarer {
+        let mut ctx = b::Ctx::default();
+        let top =
+            With { spans: &mut self.spans, tctx: &self.ctx, bctx: &mut ctx, id: (), t: self.top }
+                .desugar();
+        Desugarer { ctx, top }
     }
 }
 
 impl<'ctx> Desugar for With<'ctx, (), t::TopLevel> {
-    fn desugar(self) {
+    type Out = b::TopLevel;
+    fn desugar(self) -> Self::Out {
         let (with, (), t) = self.take();
         let t::TopLevel(decls) = t;
         for t::Modifiers { public, inner: decl } in decls {
@@ -95,6 +101,7 @@ impl<'ctx> Desugar for With<'ctx, (), t::TopLevel> {
 }
 
 impl<'ctx> Desugar for With<'ctx, TermId, t::Term<t::NameRef<t::VarName>>> {
+    type Out = ();
     fn desugar(self) {
         let (with, id, t) = self.take();
         use t::Term as Tm;

@@ -40,11 +40,6 @@ pub struct ArenaAssoc<Id, T> {
     map: HashMap<Id, T>,
 }
 
-pub trait ArenaLike<Id, T, Meta> {
-    fn new(allocator: IndexAlloc<Meta>) -> Self;
-    fn alloc(&mut self, val: T) -> Id;
-}
-
 pub trait ArenaAccess<Id, T, Meta>: Index<Id, Output = T> + IndexMut<Id, Output = T> {
     fn get(&self, id: Id) -> Option<&T>;
     fn get_mut(&mut self, id: Id) -> Option<&mut T>;
@@ -61,9 +56,10 @@ impl GlobalAlloc {
 }
 
 mod impls {
+    use super::*;
     use std::ops::AddAssign;
 
-    use super::*;
+    /* ------------------------------- ArenaDense ------------------------------- */
 
     impl<Id, T, Meta> Index<Id> for ArenaDense<Id, T, Meta>
     where
@@ -85,15 +81,15 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> ArenaLike<Id, T, Meta> for ArenaDense<Id, T, Meta>
+    impl<Id, T, Meta> ArenaDense<Id, T, Meta>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta>,
     {
-        fn new(allocator: IndexAlloc<Meta>) -> Self {
+        pub fn new(allocator: IndexAlloc<Meta>) -> Self {
             ArenaDense { allocator, vec: Vec::new(), _marker: std::marker::PhantomData }
         }
-        fn alloc(&mut self, val: T) -> Id {
+        pub fn alloc(&mut self, val: T) -> Id {
             let id = self.allocator.next().unwrap();
             self.vec.push(val);
             IndexLike::new(id.0, id.1)
@@ -112,6 +108,8 @@ mod impls {
             self.vec.get_mut(id.index())
         }
     }
+
+    /* ------------------------------- ArenaSparse ------------------------------ */
 
     impl<Id, T, Meta> Index<Id> for ArenaSparse<Id, T, Meta>
     where
@@ -134,15 +132,15 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> ArenaLike<Id, T, Meta> for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> ArenaSparse<Id, T, Meta>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
     {
-        fn new(allocator: IndexAlloc<Meta>) -> Self {
+        pub fn new(allocator: IndexAlloc<Meta>) -> Self {
             ArenaSparse { allocator, map: HashMap::new(), _marker: std::marker::PhantomData }
         }
-        fn alloc(&mut self, val: T) -> Id {
+        pub fn alloc(&mut self, val: T) -> Id {
             let id = self.allocator.next().unwrap();
             let id = IndexLike::new(id.0, id.1);
             self.map.insert(id, val);
@@ -192,6 +190,29 @@ mod impls {
     {
         fn add_assign(&mut self, rhs: ArenaSparse<Id, T, Meta>) {
             self.extend(rhs.into_iter());
+        }
+    }
+
+    /* ------------------------------- ArenaAssoc ------------------------------- */
+
+    impl<Id, T> ArenaAssoc<Id, T> {
+        pub fn new() -> Self {
+            ArenaAssoc { map: HashMap::new() }
+        }
+    }
+
+    impl<Id, T> Default for ArenaAssoc<Id, T> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl<Id, T> ArenaAssoc<Id, T>
+    where
+        Id: Eq + std::hash::Hash,
+    {
+        pub fn insert(&mut self, id: Id, val: T) {
+            self.map.insert(id, val);
         }
     }
 
@@ -249,18 +270,6 @@ mod impls {
     {
         fn add_assign(&mut self, rhs: ArenaAssoc<Id, T>) {
             self.extend(rhs.into_iter());
-        }
-    }
-
-    impl<Id, T> ArenaAssoc<Id, T>
-    where
-        Id: Eq + std::hash::Hash,
-    {
-        pub fn new() -> Self {
-            ArenaAssoc { map: HashMap::new() }
-        }
-        pub fn insert(&mut self, id: Id, val: T) {
-            self.map.insert(id, val);
         }
     }
 }

@@ -1,6 +1,7 @@
 #![allow(clippy::style)]
 #![allow(clippy::useless_format)]
 
+/// the topmost program that starts with a project configuration
 pub mod driver {
     pub mod proj;
     pub mod conf;
@@ -10,8 +11,12 @@ pub mod driver {
     mod tests;
 }
 
+/// defines the SpanArena and the id types for all the structures
 pub mod arena;
 
+/// lexing and parsing;
+/// introduces the surface syntax (AST);
+/// a formatter can be built on top of this
 pub mod textual {
     pub mod syntax;
     pub mod lexer;
@@ -27,6 +32,8 @@ pub mod textual {
     mod tests;
 }
 
+/// an elaboration atop the surface syntax;
+/// introduces the desugared syntax;
 /// Angostura
 pub mod bitter {
     pub mod syntax;
@@ -34,6 +41,8 @@ pub mod bitter {
     // pub mod err;
 }
 
+/// name resolution;
+/// introduces the bound syntax (ABT)
 pub mod scoped {
     pub mod syntax;
     // pub mod resolver;
