@@ -15,6 +15,8 @@ pub enum SurfaceError {
     // ModuleNotFound { name: String, path: PathBuf },
     #[error("Source file not found: `{}`", .path.display())]
     SrcFileNotFound { path: PathBuf },
+    #[error("Error while canonicalizing src file path: `{}`", .path)]
+    CanonicalizationError { path: String},
     #[error("Lexer error: failed to run lexer")]
     LexerError,
     #[error("Parse error:\n{0}")]

@@ -246,17 +246,17 @@ new_key_type! {
 #[derive(Debug)]
 pub struct SpanArena {
     pub defs: ArenaSparse<DefId, Span>,
-    pub patterns: ArenaSparse<PatternId, Span>,
-    pub co_patterns: ArenaSparse<CoPatternId, Span>,
+    pub pats: ArenaSparse<PatternId, Span>,
+    pub copats: ArenaSparse<CoPatternId, Span>,
     pub terms: ArenaSparse<TermId, Span>,
 }
 
 impl AddAssign<SpanArena> for SpanArena {
     fn add_assign(&mut self, rhs: SpanArena) {
-        self.defs.extend(rhs.defs);
-        self.patterns.extend(rhs.patterns);
-        self.co_patterns.extend(rhs.co_patterns);
-        self.terms.extend(rhs.terms);
+        self.defs += rhs.defs;
+        self.pats += rhs.pats;
+        self.copats += rhs.copats;
+        self.terms += rhs.terms;
     }
 }
 
@@ -274,7 +274,7 @@ mod span_arena_impl {
         type Output = Span;
 
         fn index(&self, id: PatternId) -> &Self::Output {
-            self.patterns.get(id).unwrap()
+            self.pats.get(id).unwrap()
         }
     }
 
@@ -282,7 +282,7 @@ mod span_arena_impl {
         type Output = Span;
 
         fn index(&self, id: CoPatternId) -> &Self::Output {
-            self.co_patterns.get(id).unwrap()
+            self.copats.get(id).unwrap()
         }
     }
 
@@ -311,8 +311,8 @@ impl Ctx {
         Self {
             spans: SpanArena {
                 defs: ArenaSparse::new(alloc.alloc()),
-                patterns: ArenaSparse::new(alloc.alloc()),
-                co_patterns: ArenaSparse::new(alloc.alloc()),
+                pats: ArenaSparse::new(alloc.alloc()),
+                copats: ArenaSparse::new(alloc.alloc()),
                 terms: ArenaSparse::new(alloc.alloc()),
             },
             defs: ArenaAssoc::new(),
@@ -326,14 +326,14 @@ impl Ctx {
         self.defs.insert(id, def.inner);
         id
     }
-    pub fn pat(&mut self, pattern: Sp<Pattern>) -> PatternId {
-        let id = self.spans.patterns.alloc(pattern.info);
-        self.pats.insert(id, pattern.inner);
+    pub fn pat(&mut self, pat: Sp<Pattern>) -> PatternId {
+        let id = self.spans.pats.alloc(pat.info);
+        self.pats.insert(id, pat.inner);
         id
     }
-    pub fn copat(&mut self, co_pattern: Sp<CoPattern>) -> CoPatternId {
-        let id = self.spans.co_patterns.alloc(co_pattern.info);
-        self.copats.insert(id, co_pattern.inner);
+    pub fn copat(&mut self, copat: Sp<CoPattern>) -> CoPatternId {
+        let id = self.spans.copats.alloc(copat.info);
+        self.copats.insert(id, copat.inner);
         id
     }
     pub fn term(&mut self, term: Sp<Term<NameRef<VarName>>>) -> TermId {

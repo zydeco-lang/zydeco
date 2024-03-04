@@ -9,7 +9,6 @@ regex = "1"
 logos = "0.14"
 lalrpop-util = "0.20"
 sculptor = "0.0.4"
-slotmap = { version = "1", features = ["serde"] }
 im = "15"
 unindent = "0.2"
 thiserror = "1"
@@ -18,7 +17,8 @@ zydeco-derive = { path = "../derive" }
 zydeco-syntax = { path = "../syntax" }
 derive_more = "0.99"
 derive-where = "1.2"
-anyhow = "*"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
 
 # build-time dependency on the lalrpop library:
 [build-dependencies]

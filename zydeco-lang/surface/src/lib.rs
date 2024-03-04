@@ -3,6 +3,7 @@
 
 pub mod driver {
     pub mod proj;
+    pub mod conf;
     pub mod err;
 }
 
@@ -21,7 +22,7 @@ pub mod textual {
     mod tests;
 }
 
-pub mod desugar {
+pub mod bitter {
     pub mod syntax;
     // pub mod err;
 }
