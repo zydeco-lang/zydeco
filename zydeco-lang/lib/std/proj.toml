@@ -1,0 +1,6 @@
+srcs = [
+    "lib.zy"
+]
+deps = []
+
+std = "NoStd"

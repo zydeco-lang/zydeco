@@ -1,22 +1,16 @@
 use std::path::PathBuf;
 use thiserror::Error;
 
-#[derive(Error, Clone, Debug)]
+#[derive(Error, Debug)]
 pub enum SurfaceError {
-    // #[error("Path not found: `{}`", .path.display())]
-    // PathNotFound { path: PathBuf },
-    // #[error("Path invalid: `{}`", .path.display())]
-    // PathInvalid { path: PathBuf },
-    // #[error("Project name mismatch: `{}` != `{}`", .name, .config_name)]
-    // ProjectNameMismatch { name: String, config_name: String },
-    // #[error("Ambiguous module: `{}` in path: {}", .name, .path.display() )]
-    // AmbiguousModule { path: PathBuf, name: String },
-    // #[error("Module not found: `{}` in path: {}", .name, .path.display() )]
-    // ModuleNotFound { name: String, path: PathBuf },
-    #[error("Source file not found: `{}`", .path.display())]
-    SrcFileNotFound { path: PathBuf },
-    #[error("Error while canonicalizing src file path: `{}`", .path)]
-    CanonicalizationError { path: String},
+    #[error("Project file not found: `{}`", .0.display())]
+    ProjectFileNotFound(PathBuf),
+    #[error("Project file at `{}` invalid: {}", .0.display(), .1)]
+    ProjectFileInvalid(PathBuf, std::io::Error),
+    #[error("Source file not found: `{}`", .0.display())]
+    SrcFileNotFound(PathBuf),
+    #[error("Error while canonicalizing src file path: `{}`", .0)]
+    CanonicalizationError(String),
     #[error("Lexer error: failed to run lexer")]
     LexerError,
     #[error("Parse error:\n{0}")]

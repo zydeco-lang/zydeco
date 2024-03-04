@@ -1471,9 +1471,9 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "sculptor"
-version = "0.0.4"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7c58d58ff7b6331589ac24def087253657076475f9ba9e06b4b16fffc7fa111"
+checksum = "b7c0b5e09120448b2ee94e2eaa6132ba313aaf5a7f2ff45a8e3a0787560e1ad8"
 dependencies = [
  "directories",
  "env_logger",

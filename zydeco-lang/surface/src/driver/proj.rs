@@ -2,12 +2,7 @@
 
 use super::err::{Result, SurfaceError};
 use crate::textual::lexer::Tok;
-use crate::textual::{
-    err::ParseError,
-    lexer::Lexer,
-    parser::TopLevelParser,
-    syntax as t,
-};
+use crate::textual::{err::ParseError, lexer::Lexer, parser::TopLevelParser, syntax as t};
 // use crate::bitter::syntax as b;
 use logos::Logos;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
@@ -18,12 +13,12 @@ use zydeco_utils::{
     span::{FileInfo, LocationCtx},
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Dependency {
     Local(PathBuf),
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Debug)]
 pub enum UseStd {
     #[default]
     Use,
@@ -31,15 +26,18 @@ pub enum UseStd {
     NoStd,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Project {
-    srcs: Vec<PathBuf>,
-    deps: Vec<Dependency>,
+    #[serde(skip)]
+    pub path: PathBuf,
+    pub srcs: Vec<PathBuf>,
     #[serde(default)]
-    std: UseStd,
+    pub deps: Vec<Dependency>,
+    #[serde(default)]
+    pub std: UseStd,
 }
 
-impl SerdeStr<()> for Project {
+impl SerdeStr for Project {
     fn de_from_str(s: &str) -> io::Result<Self>
     where
         Self: Sized,
@@ -53,16 +51,23 @@ impl SerdeStr<()> for Project {
 }
 
 impl Project {
-    pub fn new(path: impl Into<PathBuf>) -> FileIO<Self> {
-        FileIO::new(path.into())
+    pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
+        let path = path.into();
+        Ok(Self {
+            path: path
+                .parent()
+                .ok_or_else(|| SurfaceError::ProjectFileNotFound(path.clone()))?
+                .to_path_buf(),
+            ..FileIO::new(path.clone()).load().map_err(|e| match e.kind() {
+                io::ErrorKind::NotFound => SurfaceError::ProjectFileNotFound(path),
+                _ => SurfaceError::ProjectFileInvalid(path, e),
+            })?
+        })
     }
     pub fn run(self) -> Result<()> {
-        let Project { srcs, deps: _, std: _ } = self;
+        let Project { path, srcs, deps: _, std: _ } = self;
         // Todo: deal with std and deps
-        let mut files = Vec::new();
-        for src in srcs {
-            files.push(File { path: src });
-        }
+        let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
         // Todo: parallelize
         let files = files.into_iter().map(|f| f.load()).collect::<Result<Vec<_>>>()?;
         let ProjectHash { hashes: _ } = FileLoaded::merge(&files)?;
@@ -89,7 +94,7 @@ impl File {
         let path = self.path;
         let source = std::fs::read_to_string(&path).map_err(|_| {
             let path = path.clone();
-            SurfaceError::SrcFileNotFound { path }
+            SurfaceError::SrcFileNotFound(path)
         })?;
         let mut s = String::new();
         for t in Tok::lexer(&source) {
@@ -115,9 +120,9 @@ impl FileLoaded {
         let mut hashes = HashMap::new();
         for file in selves {
             hashes.insert(
-                file.info.canonicalize().map_err(|_| SurfaceError::CanonicalizationError {
-                    path: file.info.display_path(),
-                })?,
+                file.info
+                    .canonicalize()
+                    .map_err(|_| SurfaceError::CanonicalizationError(file.info.display_path()))?,
                 file.hash.clone(),
             );
         }

@@ -5,6 +5,9 @@ pub mod driver {
     pub mod proj;
     pub mod conf;
     pub mod err;
+
+    #[cfg(test)]
+    mod tests;
 }
 
 pub mod textual {
