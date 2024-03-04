@@ -204,14 +204,14 @@ pub enum Term<Ref> {
 pub struct DataDef {
     pub name: DefId,
     pub params: Vec<PatternId>,
-    pub def: Option<Data>,
+    pub def: Data,
 }
 
 #[derive(Clone, Debug)]
 pub struct CoDataDef {
     pub name: DefId,
     pub params: Vec<PatternId>,
-    pub def: Option<CoData>,
+    pub def: CoData,
 }
 
 #[derive(Clone, Debug)]
@@ -226,7 +226,7 @@ pub struct Extern(pub GenBind<()>);
 #[derive(Clone, Debug)]
 pub struct Module {
     pub name: ModName,
-    pub top: Option<TopLevel>,
+    pub top: TopLevel,
 }
 
 #[derive(From, Clone, Debug)]

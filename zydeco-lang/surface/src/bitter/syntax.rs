@@ -188,7 +188,7 @@ pub struct Extern {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub name: ModName,
-    pub top: Option<TopLevel>,
+    pub top: TopLevel,
 }
 
 #[derive(From, Clone, Debug)]

@@ -341,7 +341,7 @@ pub SingleTerm: TermId = TermId;
 
 DataDef: DataDef = {
     "data" <name:DefId> <params:PatternId*>
-        <def:("where" <Data>)?>
+        <def:("where" <Data>)>
     "end" => DataDef {
         name, params, def,
     }
@@ -349,7 +349,7 @@ DataDef: DataDef = {
 
 CoDataDef: CoDataDef = {
     "codata" <name:DefId> <params:PatternId*>
-        <def:("where" <CoData>)?>
+        <def:("where" <CoData>)>
     "end" => CoDataDef {
         name, params, def,
     }
@@ -369,7 +369,7 @@ Declaration: Declaration = {
     <CoDataDef> => <>.into(),
     "define" <GenBindTerm> "end" => Define(<>).into(),
     "alias" <GenBindTerm> "end" => Alias(<>).into(),
-    "module" <name:ModName> <top:("where" <TopLevel>)?> "end" => {
+    "module" <name:ModName> <top:("where" <TopLevel>)> "end" => {
         Module { name, top }.into()
     },
     "extern" <GenBindNull> "end" => Extern(<>).into(),
