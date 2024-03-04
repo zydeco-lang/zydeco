@@ -40,7 +40,7 @@ pub enum CoPattern {
 #[derive(Clone, Debug)]
 pub struct GenBind<Bindee> {
     pub rec: bool,
-    pub fun: bool,
+    pub comp: bool,
     pub binder: PatternId,
     pub params: Option<CoPatternId>,
     pub ty: Option<TermId>,
