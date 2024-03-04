@@ -33,6 +33,10 @@ pub enum CoPattern {
 
 /* ---------------------------------- Term ---------------------------------- */
 
+/// sealed term which is abstract, only eq to itself during tyck
+#[derive(Clone, Debug)]
+pub struct Sealed(pub TermId);
+
 /// any binding structure
 #[derive(Clone, Debug)]
 pub struct Abs<Tail>(pub CoPatternId, pub Tail);
@@ -171,7 +175,7 @@ pub enum Term<Ref> {
 /* -------------------------------- TopLevel -------------------------------- */
 
 #[derive(Clone, Debug)]
-pub struct Define {
+pub struct Alias {
     pub binder: PatternId,
     pub bindee: TermId,
 }
@@ -201,7 +205,7 @@ pub struct Main(pub TermId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
-    Define(Define),
+    Alias(Alias),
     Extern(Extern),
     Module(Module),
     UseDef(UseDef),
