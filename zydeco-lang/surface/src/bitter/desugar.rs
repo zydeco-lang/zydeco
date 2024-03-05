@@ -1,10 +1,9 @@
-use serde::de;
-
 use crate::{
     arena::*,
     bitter::syntax as b,
     textual::syntax::{self as t},
 };
+use zydeco_utils::span::Span;
 
 pub trait Desugar {
     type Out;
@@ -30,13 +29,17 @@ pub struct DesugarOut {
 }
 
 impl DesugarIn {
-    pub fn run(mut self) -> DesugarOut {
-        let mut desugarer =
-            Desugarer { spans: self.spans, tctx: self.ctx, bctx: b::Ctx::default() };
-        let top = self.top.desugar(&mut desugarer);
+    pub fn run(self) -> DesugarOut {
+        let DesugarIn { spans, ctx, top } = self;
+        let mut desugarer = Desugarer { spans, tctx: ctx, bctx: b::Ctx::default() };
+        let top = top.desugar(&mut desugarer);
         let Desugarer { bctx: ctx, spans, .. } = desugarer;
         DesugarOut { spans, ctx, top }
     }
+}
+
+trait Spanned {
+    fn span(&self, desugarer: &mut Desugarer) -> Span;
 }
 
 impl<T> Desugar for Vec<T>
@@ -59,10 +62,10 @@ impl Desugar for t::TopLevel {
             let inner = match inner {
                 Decl::DataDef(decl) => {
                     let t::DataDef { name, params, def } = decl;
-                    let span = desugarer.spans.defs[name].clone();
+                    let span = name.span(desugarer);
                     // name -> pat
                     let name = name.desugar(desugarer);
-                    let pat = desugarer.spans.pats.alloc(span.clone());
+                    let pat = desugarer.span_pat(span.clone());
                     let pat = desugarer.pat(pat, name.into());
                     // params -> copattern
                     let params = params.desugar(desugarer);
@@ -70,31 +73,31 @@ impl Desugar for t::TopLevel {
                         .into_iter()
                         .map(|param| {
                             // param -> copattern
-                            let span = desugarer.spans.pats[param].clone();
-                            let co = desugarer.spans.copats.alloc(span);
+                            let span = param.span(desugarer);
+                            let co = desugarer.span_copat(span);
                             let param = desugarer.copat(co, param.into());
                             param
                         })
                         .collect::<Vec<_>>();
-                    let co = desugarer.spans.copats.alloc(span.clone());
+                    let co = desugarer.span_copat(span.clone());
                     let params = desugarer.copat(co, b::App(params).into());
                     // def -> term
                     let def = span.make(def).desugar(desugarer);
                     // params & def -> abs term
-                    let abs = desugarer.spans.terms.alloc(span.clone());
+                    let abs = desugarer.span_term(span.clone());
                     let abs = desugarer.term(abs, b::Abs(params, def).into());
                     // abs -> sealed
-                    let sealed = desugarer.spans.terms.alloc(span.clone());
+                    let sealed = desugarer.span_term(span.clone());
                     let sealed = desugarer.term(sealed, b::Sealed(abs).into());
                     // pat & sealed -> alias
                     b::Alias { binder: pat, bindee: sealed }.into()
                 }
                 Decl::CoDataDef(decl) => {
                     let t::CoDataDef { name, params, def } = decl;
-                    let span = desugarer.spans.defs[name].clone();
+                    let span = name.span(desugarer);
                     // name -> pat
                     let name = name.desugar(desugarer);
-                    let pat = desugarer.spans.pats.alloc(span.clone());
+                    let pat = desugarer.span_pat(span.clone());
                     let pat = desugarer.pat(pat, name.into());
                     // params -> copattern
                     let params = params.desugar(desugarer);
@@ -102,21 +105,21 @@ impl Desugar for t::TopLevel {
                         .into_iter()
                         .map(|param| {
                             // param -> copattern
-                            let span = desugarer.spans.pats[param].clone();
-                            let co = desugarer.spans.copats.alloc(span);
+                            let span = param.span(desugarer);
+                            let co = desugarer.span_copat(span);
                             let param = desugarer.copat(co, param.into());
                             param
                         })
                         .collect::<Vec<_>>();
-                    let co = desugarer.spans.copats.alloc(span.clone());
+                    let co = desugarer.span_copat(span.clone());
                     let params = desugarer.copat(co, b::App(params).into());
                     // def -> term
                     let def = span.make(def).desugar(desugarer);
                     // params & def -> abs term
-                    let abs = desugarer.spans.terms.alloc(span.clone());
+                    let abs = desugarer.span_term(span.clone());
                     let abs = desugarer.term(abs, b::Abs(params, def).into());
                     // abs -> sealed
-                    let sealed = desugarer.spans.terms.alloc(span.clone());
+                    let sealed = desugarer.span_term(span.clone());
                     let sealed = desugarer.term(sealed, b::Sealed(abs).into());
                     // pat & sealed -> alias
                     b::Alias { binder: pat, bindee: sealed }.into()
@@ -125,7 +128,8 @@ impl Desugar for t::TopLevel {
                     let t::Define(genbind) = decl;
                     let (pat, term) = genbind.desugar(desugarer);
                     // sealed
-                    let sealed = desugarer.spans.terms.alloc(desugarer.spans.pats[pat].clone());
+                    let span = pat.span(desugarer);
+                    let sealed = desugarer.span_term(span);
                     let sealed = desugarer.term(sealed, b::Sealed(term).into());
                     // pat & sealed -> alias
                     b::Alias { binder: pat, bindee: sealed }.into()
@@ -346,7 +350,7 @@ impl Desugar for t::Sp<t::Data> {
                 b::DataArm { name, param }
             })
             .collect();
-        let term = desugarer.spans.terms.alloc(self.info);
+        let term = desugarer.span_term(self.info);
         desugarer.term(term, b::Data { arms }.into())
     }
 }
@@ -359,30 +363,30 @@ impl Desugar for t::GenBind<t::TermId> {
         let bindee = bindee.desugar(desugarer);
         let ty = ty.map(|ty| ty.desugar(desugarer));
         let bindee = if let Some(ty) = ty {
-            let span = desugarer.spans.terms[bindee].clone();
-            let ann = desugarer.spans.terms.alloc(span);
+            let span = bindee.span(desugarer);
+            let ann = desugarer.span_term(span);
             desugarer.term(ann, b::Ann { tm: bindee, ty }.into())
         } else {
             bindee
         };
         // params? & bindee -> abs term binding
         let mut binding = if let Some(params) = params {
-            let span = desugarer.spans.pats[binder].clone();
-            let binding = desugarer.spans.terms.alloc(span);
+            let span = binder.span(desugarer);
+            let binding = desugarer.span_term(span);
             desugarer.term(binding, b::Abs(params, bindee).into())
         } else {
             bindee
         };
         // rec?
         if rec {
-            let span = desugarer.spans.terms[binding].clone();
-            let rec = desugarer.spans.terms.alloc(span);
+            let span = binding.span(desugarer);
+            let rec = desugarer.span_term(span);
             binding = desugarer.term(rec, b::Rec(binder, binding).into());
         }
         // add thunk?
         if rec || comp {
-            let span = desugarer.spans.terms[binding].clone();
-            let thunk = desugarer.spans.terms.alloc(span);
+            let span = binding.span(desugarer);
+            let thunk = desugarer.span_term(span);
             binding = desugarer.term(thunk, b::Thunk(binding).into());
         }
         (binder, binding)
@@ -401,13 +405,34 @@ impl Desugar for t::Sp<t::CoData> {
                 b::CoDataArm { name, params, out }
             })
             .collect();
-        let term = desugarer.spans.terms.alloc(self.info);
+        let term = desugarer.span_term(self.info);
         desugarer.term(term, b::CoData { arms }.into())
     }
 }
 
 mod impls {
     use super::*;
+
+    impl Spanned for t::DefId {
+        fn span(&self, desugarer: &mut Desugarer) -> Span {
+            desugarer.spans.defs[*self].clone()
+        }
+    }
+    impl Spanned for t::PatternId {
+        fn span(&self, desugarer: &mut Desugarer) -> Span {
+            desugarer.spans.pats[*self].clone()
+        }
+    }
+    impl Spanned for t::CoPatternId {
+        fn span(&self, desugarer: &mut Desugarer) -> Span {
+            desugarer.spans.copats[*self].clone()
+        }
+    }
+    impl Spanned for t::TermId {
+        fn span(&self, desugarer: &mut Desugarer) -> Span {
+            desugarer.spans.terms[*self].clone()
+        }
+    }
 
     impl Desugarer {
         pub fn lookup_def(&self, id: t::DefId) -> t::VarName {
@@ -422,6 +447,20 @@ mod impls {
         pub fn lookup_term(&self, id: t::TermId) -> t::Term {
             self.tctx.terms[id].clone()
         }
+
+        pub fn span_def(&mut self, span: Span) -> b::DefId {
+            self.spans.defs.alloc(span)
+        }
+        pub fn span_pat(&mut self, span: Span) -> b::PatternId {
+            self.spans.pats.alloc(span)
+        }
+        pub fn span_copat(&mut self, span: Span) -> b::CoPatternId {
+            self.spans.copats.alloc(span)
+        }
+        pub fn span_term(&mut self, span: Span) -> b::TermId {
+            self.spans.terms.alloc(span)
+        }
+
         pub fn def(&mut self, id: b::DefId, def: b::VarName) -> b::DefId {
             self.bctx.defs.insert(id, def);
             id
