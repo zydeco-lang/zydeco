@@ -304,15 +304,29 @@ impl Desugar for t::TermId {
             }
             Tm::Arrow(term) => {
                 let t::Arrow(params, ty) = term;
+                // params -> ann = (hole: params)
                 let params = params.desugar(desugarer);
+                let span = params.span(desugarer);
+                let hole = desugarer.span_pat(span.clone());
+                let hole = desugarer.pat(hole, b::Hole.into());
+                let ann = desugarer.span_pat(span.clone());
+                let ann = desugarer.pat(ann, b::Ann { tm: hole, ty: params }.into());
+                // ann -> copat
+                let copat = desugarer.span_copat(span);
+                let copat = desugarer.copat(copat, ann.into());
+                // copat & ty -> pi
                 let ty = ty.desugar(desugarer);
-                desugarer.term(id, b::Arrow(params, ty).into())
+                desugarer.term(id, b::Pi(copat, ty).into())
             }
             Tm::Forall(term) => {
                 let t::Forall(params, ty) = term;
+                // params -> copat
                 let params = params.desugar(desugarer);
+                let span = params.span(desugarer);
+                let copat = desugarer.span_copat(span);
                 let ty = ty.desugar(desugarer);
-                desugarer.term(id, b::Forall(params, ty).into())
+                // copat & ty -> pi
+                desugarer.term(id, b::Pi(copat, ty).into())
             }
             Tm::Sigma(term) => {
                 let t::Sigma(params, ty) = term;
@@ -322,14 +336,34 @@ impl Desugar for t::TermId {
             }
             Tm::Prod(term) => {
                 let t::Prod(terms) = term;
-                let terms = terms.desugar(desugarer);
-                desugarer.term(id, b::Prod(terms).into())
+                let mut terms = terms.desugar(desugarer);
+                let mut out = terms.pop().unwrap();
+                while let Some(term) = terms.pop() {
+                    // term -> ann = (hole: pat)
+                    let span = term.span(desugarer);
+                    let hole = desugarer.span_pat(span.clone());
+                    let hole = desugarer.pat(hole, b::Hole.into());
+                    let ann = desugarer.span_pat(span.clone());
+                    let ann = desugarer.pat(ann, b::Ann { tm: hole, ty: term }.into());
+                    // ann -> copat
+                    let copat = desugarer.span_copat(span.clone());
+                    let copat = desugarer.copat(copat, ann.into());
+                    // copat & sigma -> sigma
+                    let span = out.span(desugarer);
+                    let sigma = desugarer.span_term(span);
+                    out = desugarer.term(sigma, b::Sigma(copat, out).into());
+                }
+                out
             }
             Tm::Exists(term) => {
                 let t::Exists(params, ty) = term;
+                // params -> copat
                 let params = params.desugar(desugarer);
+                let span = params.span(desugarer);
+                let copat = desugarer.span_copat(span);
+                // copat & ty -> exists
                 let ty = ty.desugar(desugarer);
-                desugarer.term(id, b::Exists(params, ty).into())
+                desugarer.term(id, b::Sigma(copat, ty).into())
             }
             Tm::Thunk(term) => {
                 let t::Thunk(term) = term;

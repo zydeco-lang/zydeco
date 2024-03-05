@@ -57,21 +57,21 @@ pub struct Rec(pub PatId, pub TermId);
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
 pub struct Pi(pub CoPatId, pub TermId);
-/// `a -> b`
-#[derive(Clone, Debug)]
-pub struct Arrow(pub TermId, pub TermId);
-/// `forall (x: A) . B`
-#[derive(Clone, Debug)]
-pub struct Forall(pub CoPatId, pub TermId);
+// /// `a -> b`
+// #[derive(Clone, Debug)]
+// pub struct Arrow(pub TermId, pub TermId);
+// /// `forall (x: A) . B`
+// #[derive(Clone, Debug)]
+// pub struct Forall(pub CoPatId, pub TermId);
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Sigma(pub CoPatId, pub TermId);
-/// `A * ...`
-#[derive(Clone, Debug)]
-pub struct Prod(pub Vec<TermId>);
-/// `exists (x: A) . A'`
-#[derive(Clone, Debug)]
-pub struct Exists(pub CoPatId, pub TermId);
+// /// `A * ...`
+// #[derive(Clone, Debug)]
+// pub struct Prod(pub Vec<TermId>);
+// /// `exists (x: A) . A'`
+// #[derive(Clone, Debug)]
+// pub struct Exists(pub CoPatId, pub TermId);
 
 /// `{ b }` has type `Thunk B`
 #[derive(Clone, Debug)]
@@ -163,11 +163,11 @@ pub enum Term<Ref> {
     App(App<TermId>),
     Rec(Rec),
     Pi(Pi),
-    Arrow(Arrow),
-    Forall(Forall),
+    // Arrow(Arrow),
+    // Forall(Forall),
     Sigma(Sigma),
-    Prod(Prod),
-    Exists(Exists),
+    // Prod(Prod),
+    // Exists(Exists),
     Thunk(Thunk),
     Force(Force),
     Ret(Return),
