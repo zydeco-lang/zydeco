@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use async_lsp::lsp_types::{DocumentSymbol, DocumentSymbolResponse, SymbolKind};
+use async_lsp::lsp_types::{DocumentSymbol, DocumentSymbolResponse, Range, SymbolKind};
 use async_lsp::{ErrorCode, ResponseError};
 use lsp_textdocument::FullTextDocument;
 use zydeco_lang::surface::parse::syntax::Declaration;
@@ -92,7 +92,6 @@ fn declaration_to_symbol(
     }
 }
 
-#[allow(deprecated)]
 fn name_to_symbol(
     name: &impl NameT, item_span: &Span, document: &FullTextDocument, kind: SymbolKind,
     children: Vec<DocumentSymbol>,
@@ -103,48 +102,45 @@ fn name_to_symbol(
 
     let item_range = span_to_range(item_span, document);
 
+    document_symbol_new(name_str, kind, item_range, name_range, Some(children))
+}
+
+fn ctorv_to_symbol(ctorv: &CtorV, document: &FullTextDocument) -> DocumentSymbol {
+    let name_range = span_to_range(ctorv.span(), document);
+
+    // TODO: get span of entire constructor
+    document_symbol_new(
+        ctorv.name().to_owned(),
+        SymbolKind::CONSTRUCTOR,
+        name_range,
+        name_range,
+        None,
+    )
+}
+
+fn dtorv_to_symbol(dtorv: &DtorV, document: &FullTextDocument) -> DocumentSymbol {
+    let name_range = span_to_range(dtorv.span(), document);
+
+    // TODO: get span of entire destructor
+    document_symbol_new(dtorv.name().to_owned(), SymbolKind::METHOD, name_range, name_range, None)
+}
+
+/// Constructs a [`DocumentSymbol`]. Since `DocumentSymbol::deprecated` is marked as
+/// `#[deprecated]`, we must put `#[allow(deprecated)]` on any function directly constructing a
+/// `DocumentSymbol`. We define this function to minimize where this happens.
+#[allow(deprecated)]
+fn document_symbol_new(
+    name: String, kind: SymbolKind, range: Range, selection_range: Range,
+    children: Option<Vec<DocumentSymbol>>,
+) -> DocumentSymbol {
     DocumentSymbol {
-        name: name_str,
+        name,
         detail: None,
         kind,
         tags: None,
         deprecated: None,
-        range: item_range,
-        selection_range: name_range,
-        children: Some(children),
-    }
-}
-
-#[allow(deprecated)]
-fn ctorv_to_symbol(ctorv: &CtorV, document: &FullTextDocument) -> DocumentSymbol {
-    let name_range = span_to_range(ctorv.span(), document);
-
-    DocumentSymbol {
-        name: ctorv.name().to_owned(),
-        detail: None,
-        kind: SymbolKind::CONSTRUCTOR,
-        tags: None,
-        deprecated: None,
-        // TODO: get span of entire constructor
-        range: name_range,
-        selection_range: name_range,
-        children: None,
-    }
-}
-
-#[allow(deprecated)]
-fn dtorv_to_symbol(dtorv: &DtorV, document: &FullTextDocument) -> DocumentSymbol {
-    let name_range = span_to_range(dtorv.span(), document);
-
-    DocumentSymbol {
-        name: dtorv.name().to_owned(),
-        detail: None,
-        kind: SymbolKind::METHOD,
-        tags: None,
-        deprecated: None,
-        // TODO: get span of entire constructor
-        range: name_range,
-        selection_range: name_range,
-        children: None,
+        range,
+        selection_range,
+        children,
     }
 }
