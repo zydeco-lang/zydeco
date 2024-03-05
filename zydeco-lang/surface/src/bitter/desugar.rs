@@ -419,7 +419,7 @@ mod impls {
         pub fn lookup_copat(&self, id: t::CoPatternId) -> t::CoPattern {
             self.tctx.copats[id].clone()
         }
-        pub fn lookup_term(&self, id: t::TermId) -> t::Term<t::NameRef<t::VarName>> {
+        pub fn lookup_term(&self, id: t::TermId) -> t::Term {
             self.tctx.terms[id].clone()
         }
         pub fn def(&mut self, id: b::DefId, def: b::VarName) -> b::DefId {

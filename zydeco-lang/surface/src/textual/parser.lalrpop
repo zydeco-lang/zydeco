@@ -236,7 +236,7 @@ TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
 
 #[inline]
 TermId: TermId = <TermGen<Term>>;
-Term: Term<NameRef<VarName>> = {
+Term: Term = {
     <TermRight>,
     // abstraction
     "fn" <params:CoPatternId> "->" <term:TermId> => {
@@ -287,18 +287,18 @@ Term: Term<NameRef<VarName>> = {
 
 #[inline]
 TermAnnId: TermId = <TermGen<TermAnn>>;
-TermAnn: Term<NameRef<VarName>> = {
+TermAnn: Term = {
     <Term>,
     <Ann<TermId, TermId>> => <>.into(),
 };
 
 #[inline]
 TermParenId: TermId = <TermGen<TermParen>>;
-TermParen: Term<NameRef<VarName>> = <Paren<TermAnnId>> => <>.into();
+TermParen: Term = <Paren<TermAnnId>> => <>.into();
 
 #[inline]
 TermRightId: TermId = <TermGen<TermRight>>;
-TermRight: Term<NameRef<VarName>> = {
+TermRight: Term = {
     <TermAtom>,
     // application
     <term:TermRightId> <arg:TermAtomId> => {
@@ -320,11 +320,11 @@ TermRight: Term<NameRef<VarName>> = {
 
 #[inline]
 TermAtomId: TermId = <TermGen<TermAtom>>;
-TermAtom: Term<NameRef<VarName>> = {
+TermAtom: Term = {
     // paren
     <TermParen>,
     <Hole> => <>.into(),
-    <NameRef<VarName>> => Term::Var(<>),
+    <NameRef<VarName>> => <>.into(),
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermAtomId> => Force(<>).into(),
     "ret" <TermAtomId> => Return(<>).into(),

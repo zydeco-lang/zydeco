@@ -168,11 +168,10 @@ pub struct CoMatcher<Tail> {
 }
 
 #[derive(From, Clone, Debug)]
-pub enum Term<Ref> {
+pub enum Term {
     Ann(Ann<TermId, TermId>),
     Hole(Hole),
-    #[from(ignore)]
-    Var(Ref),
+    Var(NameRef<VarName>),
     Paren(Paren<TermId>),
     Abs(Abs<TermId>),
     App(App<TermId>),
@@ -286,7 +285,7 @@ pub struct Ctx {
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatternId, Pattern>,
     pub copats: ArenaAssoc<CoPatternId, CoPattern>,
-    pub terms: ArenaAssoc<TermId, Term<NameRef<VarName>>>,
+    pub terms: ArenaAssoc<TermId, Term>,
 }
 
 pub struct Parser {
@@ -313,7 +312,7 @@ impl Parser {
         self.ctx.copats.insert(id, copat.inner);
         id
     }
-    pub fn term(&mut self, term: Sp<Term<NameRef<VarName>>>) -> TermId {
+    pub fn term(&mut self, term: Sp<Term>) -> TermId {
         let id = self.spans.terms.alloc(term.info);
         self.ctx.terms.insert(id, term.inner);
         id
