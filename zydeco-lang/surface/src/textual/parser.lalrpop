@@ -148,10 +148,10 @@ Hole: Hole = "_" => Hole;
 //* --------------------------------- Pattern -------------------------------- */
 
 #[inline]
-PatternGen<P>: PatternId = <Sp<P>> => parser.pat(<>);
+PatternGen<P>: PatId = <Sp<P>> => parser.pat(<>);
 
 #[inline]
-PatternId: PatternId = <PatternGen<Pattern>>;
+PatternId: PatId = <PatternGen<Pattern>>;
 Pattern: Pattern = {
     "(" <Ann<PatternId, TermId>> ")" => <>.into(),
     <Hole> => <>.into(),
@@ -163,20 +163,20 @@ Pattern: Pattern = {
 };
 
 #[inline]
-CoPatternGen<P>: CoPatternId = <Sp<P>> => parser.copat(<>);
+CoPatternGen<P>: CoPatId = <Sp<P>> => parser.copat(<>);
 
 #[inline]
-CoPatternId: CoPatternId = <CoPatternGen<CoPattern>>;
+CoPatternId: CoPatId = <CoPatternGen<CoPattern>>;
 CoPattern: CoPattern = {
     <CoPatternAtom>,
-    <x:CoPatternAtomId> <y:CoPatternId> => {
+    <x:CoPatternId> <y:CoPatternAtomId> => {
         App(vec![x, y]).into()
     },
     // <CoPatternAtomId*> => App(c).into(),
 };
 
 #[inline]
-CoPatternAtomId: CoPatternId = <CoPatternGen<CoPatternAtom>>;
+CoPatternAtomId: CoPatId = <CoPatternGen<CoPatternAtom>>;
 CoPatternAtom: CoPattern = {
     <PatternId> => <>.into(),
     <DtorName> => {
@@ -299,21 +299,33 @@ TermParen: Term = <Paren<TermAnnId>> => <>.into();
 #[inline]
 TermRightId: TermId = <TermGen<TermRight>>;
 TermRight: Term = {
-    <TermAtom>,
-    // application
-    <term:TermRightId> <arg:TermAtomId> => {
-        App(vec![term, arg]).into()
-    },
+    <TermLeft>,
     // arrow
-    <ty_in:TermRightId> "->" <ty_out:TermAtomId> => {
+    <ty_in:TermLeftId> "->" <ty_out:TermRightId> => {
         Arrow(ty_in, ty_out).into()
     },
+};
+
+#[inline]
+TermLeftId: TermId = <TermGen<TermLeft>>;
+TermLeft: Term = {
+    <TermApp>,
     // prod
-    <ty_in:TermRightId> "*" <ty_out:TermAtomId> => {
+    <ty_in:TermLeftId> "*" <ty_out:TermAppId> => {
         Prod(vec![ty_in, ty_out]).into()
     },
+};
+
+#[inline]
+TermAppId: TermId = <TermGen<TermApp>>;
+TermApp: Term = {
+    <TermAtom>,
+    // application
+    <term:TermAppId> <arg:TermAtomId> => {
+        App(vec![term, arg]).into()
+    },
     // destructor
-    <term:TermRightId> <name:DtorName> => {
+    <term:TermAppId> <name:DtorName> => {
         Dtor(term, name).into()
     },
 };
