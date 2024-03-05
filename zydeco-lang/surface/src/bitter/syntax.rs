@@ -2,16 +2,21 @@
 
 use std::ops::AddAssign;
 
-use crate::textual::{
-    syntax as t,
-    syntax::{CoPatternId, DefId, PatternId, TermId},
-};
+use crate::textual::syntax as t;
 use derive_more::From;
 pub use zydeco_syntax::*;
 pub use zydeco_utils::{
     arena::*,
     span::{LocationCtx, Sp, Span},
 };
+
+/* ------------------------------- Identifier ------------------------------- */
+
+pub use t::{CoPatternId, DefId, PatternId, TermId};
+
+/* --------------------------------- Binder --------------------------------- */
+
+pub use t::{NameDef, NameRef};
 
 /* --------------------------------- Pattern -------------------------------- */
 
@@ -143,6 +148,7 @@ pub struct CoMatcher<Tail> {
 
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
+    Sealed(Sealed),
     Ann(Ann<TermId, TermId>),
     Hole(Hole),
     #[from(ignore)]
@@ -183,6 +189,8 @@ pub struct Alias {
 #[derive(Clone, Debug)]
 pub struct Extern {
     pub binder: PatternId,
+    pub params: Option<CoPatternId>,
+    pub ty: Option<TermId>,
 }
 
 #[derive(Clone, Debug)]
