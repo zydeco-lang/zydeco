@@ -1,5 +1,4 @@
 use crate::{
-    arena::*,
     bitter::syntax as b,
     textual::syntax::{self as t},
 };
@@ -8,11 +7,6 @@ use zydeco_utils::span::Span;
 pub trait Desugar {
     type Out;
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out;
-}
-
-pub struct DesugarIn {
-    pub spans: t::SpanArenaTextual,
-    pub ctx: t::Ctx,
 }
 
 pub struct Desugarer {
@@ -28,26 +22,7 @@ pub struct DesugarOut {
     pub top: b::TopLevel,
 }
 
-// impl DesugarIn {
-//     pub fn run(self) -> DesugarOut {
-//         let DesugarIn { spans, ctx, top } = self;
-//         let mut desugarer = Desugarer { tspans: spans, tctx: ctx, bspans: b::SpanArenaBitter::new(), bctx: b::Ctx::default() };
-//         let top = top.desugar(&mut desugarer);
-//         let Desugarer { bctx: ctx, spans, .. } = desugarer;
-//         DesugarOut { spans, ctx, top }
-//     }
-// }
-
 impl Desugarer {
-    pub fn new(desugar_in: DesugarIn, alloc: &mut GlobalAlloc) -> Self {
-        let DesugarIn { spans, ctx } = desugar_in;
-        Desugarer {
-            tspans: spans,
-            tctx: ctx,
-            bspans: b::SpanArenaBitter::new(alloc),
-            bctx: b::Ctx::default(),
-        }
-    }
     pub fn run(self, top: t::TopLevel) -> DesugarOut {
         let mut desugarer = self;
         let top = top.desugar(&mut desugarer);

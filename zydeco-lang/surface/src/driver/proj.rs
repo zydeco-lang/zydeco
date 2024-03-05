@@ -2,7 +2,10 @@
 
 use super::err::{Result, SurfaceError};
 use crate::{
-    // bitter::syntax as b,
+    bitter::{
+        desugar::{DesugarOut, Desugarer},
+        syntax as b,
+    },
     textual::{
         err::ParseError,
         lexer::{Lexer, Tok},
@@ -79,10 +82,14 @@ impl Project {
 
         let mut alloc = GlobalAlloc::new();
         // Todo: parallelize
-        let _files = files
+        let files = files
             .into_iter()
             .map(|f| f.parse(t::Parser::new(&mut alloc)))
             .collect::<Result<Vec<_>>>()?;
+        let _files = files
+            .into_iter()
+            .map(|f| f.desugar(b::SpanArenaBitter::new(&mut alloc)))
+            .collect::<Vec<_>>();
         Ok(())
     }
 }
@@ -155,15 +162,18 @@ pub struct FileParsed {
 }
 
 impl FileParsed {
-    // pub fn desugar(self) -> FileBitter {
-    //     todo!()
-    // }
+    pub fn desugar(self, bspans: b::SpanArenaBitter) -> FileBitter {
+        let FileParsed { info, source, spans: tspans, ctx: tctx, top } = self;
+        let desugarer = Desugarer { tspans, tctx, bspans, bctx: b::Ctx::default() };
+        let DesugarOut { spans, ctx, top } = desugarer.run(top);
+        FileBitter { info, source, spans, ctx, top }
+    }
 }
 
-// pub struct FileBitter {
-//     pub info: FileInfo,
-//     pub source: String,
-//     pub spans: SpanArena,
-//     pub ctx: b::Ctx,
-//     pub top: b::TopLevel,
-// }
+pub struct FileBitter {
+    pub info: FileInfo,
+    pub source: String,
+    pub spans: b::SpanArenaBitter,
+    pub ctx: b::Ctx,
+    pub top: b::TopLevel,
+}
