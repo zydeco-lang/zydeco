@@ -1,18 +1,23 @@
 //! Desugaring of the zydeco surface syntax.
 
-use std::ops::AddAssign;
-
-use crate::textual::syntax as t;
+use crate::{arena::*, textual::syntax as t};
 use derive_more::From;
+use std::ops::AddAssign;
 pub use zydeco_syntax::*;
-pub use zydeco_utils::{
-    arena::*,
-    span::{LocationCtx, Sp, Span},
-};
+pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 /* ------------------------------- Identifier ------------------------------- */
 
-pub use t::{CoPatId, DefId, PatId, TermId};
+new_key_type! {
+    pub struct DefId;
+    pub struct PatId;
+    pub struct CoPatId;
+    pub struct TermId;
+}
+impl DefPtr for DefId {}
+impl PatPtr for PatId {}
+impl CoPatPtr for CoPatId {}
+impl TermPtr for TermId {}
 
 /* --------------------------------- Binder --------------------------------- */
 
@@ -247,7 +252,7 @@ pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 
 /* --------------------------------- Context -------------------------------- */
 
-pub use t::SpanArena;
+pub type SpanArenaBitter = SpanArena<DefId, PatId, CoPatId, TermId>;
 
 #[derive(Default, Debug)]
 pub struct Ctx {

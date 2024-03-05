@@ -2,7 +2,6 @@
 
 use super::err::{Result, SurfaceError};
 use crate::{
-    arena::SpanArena,
     // bitter::syntax as b,
     textual::{
         err::ParseError,
@@ -150,7 +149,7 @@ impl FileLoaded {
 pub struct FileParsed {
     pub info: FileInfo,
     pub source: String,
-    pub spans: SpanArena,
+    pub spans: t::SpanArenaTextual,
     pub ctx: t::Ctx,
     pub top: t::TopLevel,
 }

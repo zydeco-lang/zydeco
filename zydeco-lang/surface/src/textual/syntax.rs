@@ -6,7 +6,19 @@ pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use derive_more::From;
 use std::fmt::Debug;
-use zydeco_utils::arena::*;
+
+/* ------------------------------- Identifier ------------------------------- */
+
+new_key_type! {
+    pub struct DefId;
+    pub struct PatId;
+    pub struct CoPatId;
+    pub struct TermId;
+}
+impl DefPtr for DefId {}
+impl PatPtr for PatId {}
+impl CoPatPtr for CoPatId {}
+impl TermPtr for TermId {}
 
 /* --------------------------------- Binder --------------------------------- */
 
@@ -288,8 +300,10 @@ pub struct Ctx {
     pub terms: ArenaAssoc<TermId, Term>,
 }
 
+pub type SpanArenaTextual = SpanArena<DefId, PatId, CoPatId, TermId>;
+
 pub struct Parser {
-    pub spans: SpanArena,
+    pub spans: SpanArenaTextual,
     pub ctx: Ctx,
 }
 
