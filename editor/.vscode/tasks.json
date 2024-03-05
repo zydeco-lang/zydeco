@@ -10,7 +10,7 @@
             "label": "Compile VS Code Extension",
             "type": "npm",
             "script": "compile",
-            "path": "editor/code/zls",
+            "path": "code/zls/",
             "group": "build"
         },
         {
@@ -26,22 +26,22 @@
             "windows": {
                 "command": "cp",
                 "args": [
-                    "${workspaceFolder}\\target\\debug\\zls.exe",
-                    "${workspaceFolder}\\editor\\code\\zls\\out\\"
+                    "${workspaceFolder}\\..\\target\\debug\\zls.exe",
+                    "${workspaceFolder}\\code\\zls\\out\\"
                 ]
             },
             "linux": {
                 "command": "cp",
                 "args": [
-                    "${workspaceFolder}/target/debug/zls",
-                    "${workspaceFolder}/editor/code/zls/out/"
+                    "${workspaceFolder}/../target/debug/zls",
+                    "${workspaceFolder}/code/zls/out/"
                 ]
             },
             "osx": {
                 "command": "cp",
                 "args": [
-                    "${workspaceFolder}/target/debug/zls",
-                    "${workspaceFolder}/editor/code/zls/out/"
+                    "${workspaceFolder}/../target/debug/zls",
+                    "${workspaceFolder}/code/zls/out/"
                 ]
             }
         }
