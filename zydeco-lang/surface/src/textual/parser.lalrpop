@@ -106,33 +106,40 @@ Literal: Literal = {
 //* ------------------------------- Identifiers ------------------------------ */
 
 #[inline]
-UpperId: String = "UpperId" => <>.into();
-#[inline]
-LowerId: String = "LowerId" => <>.into();
-#[inline]
-MixedId: String = { <UpperId>, <LowerId>, };
-#[inline]
-CtorId: String = "CtorId" => <>.into();
-#[inline]
-DtorId: String = "DtorId" => <>.into();
+MixedId: String = { <"UpperId"> => <>.into(), <"LowerId"> => <>.into(), };
 
 #[inline]
 VarName: VarName = <MixedId> => VarName(<>);
 CtorName: CtorName = {
-    <CtorId> => CtorName(<>),
+    <"CtorId"> => CtorName(<>.into()),
     "pack" => CtorName(String::from("pack")),
 };
 DtorName: DtorName = {
-    <DtorId> => DtorName(<>),
+    <"DtorId"> => DtorName(<>.into()),
     "@" => DtorName(String::from("@")),
 };
 
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
+PathSeg: VarName = {
+    <VarName> => <>.into(),
+    // ".." => VarName(String::from("..")),
+};
 NameRef<T>: NameRef<T> = <path:(<VarName> "/")*> <inner:T> => {
     NameRef(path, inner)
 };
 
 DefId: DefId = <NameDef<Sp<VarName>>> => parser.def(<>.0);
+
+//* ----------------------------------- Use ---------------------------------- */
+
+UsePath: UsePath = <NameRef<UseEnum>> => UsePath(<>);
+UseEnum: UseEnum = {
+    <VarName> => <>.into(),
+    <binder:VarName> "=" <origin:VarName> => UseAlias(binder, origin).into(),
+    "*" => UseAll.into(),
+    <Uses> => <>.into(),
+};
+Uses: Uses = <SepByDelim<"(", ",", <UsePath>, ")">> => Uses(<>);
 
 //* ------------------------------- Structural ------------------------------- */
 
@@ -308,7 +315,7 @@ TermRight: Term = {
 TermLeftId: TermId = <TermGen<TermLeft>>;
 TermLeft: Term = {
     <TermApp>,
-    // prod
+    // product
     <ty_in:TermLeftId> "*" <ty_out:TermAppId> => {
         Prod(vec![ty_in, ty_out]).into()
     },
@@ -331,7 +338,7 @@ TermApp: Term = {
 #[inline]
 TermAtomId: TermId = <TermGen<TermAtom>>;
 TermAtom: Term = {
-    // paren
+    // parentheses
     <TermParen>,
     <Hole> => <>.into(),
     <NameRef<VarName>> => <>.into(),
@@ -364,15 +371,6 @@ CoDataDef: CoDataDef = {
         name, params, def,
     }
 };
-
-UseEnum: UseEnum = {
-    <VarName> => <>.into(),
-    <binder:VarName> "=" <origin:VarName> => UseAlias(binder, origin).into(),
-    ".." => UseAll.into(),
-    <Uses> => <>.into(),
-};
-UsePath: UsePath = <NameRef<UseEnum>> => UsePath(<>);
-Uses: Uses = <SepByDelim<"(", ",", <UsePath>, ")">> => Uses(<>);
 
 Declaration: Declaration = {
     <DataDef> => <>.into(),
