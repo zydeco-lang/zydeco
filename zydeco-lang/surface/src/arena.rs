@@ -3,17 +3,22 @@ use zydeco_utils::{arena::*, new_key_type, span::Span};
 
 new_key_type! {
     pub struct DefId;
-    pub struct PatternId;
-    pub struct CoPatternId;
+    pub struct PatId;
+    pub struct CoPatId;
     pub struct TermId;
 }
+
+pub trait DefPtr {}
+pub trait PatPtr {}
+pub trait CoPatPtr {}
+pub trait TermPtr {}
 
 /// keeps all ids and spans, the corresponding source location
 #[derive(Debug)]
 pub struct SpanArena {
     pub defs: ArenaSparse<DefId, Span>,
-    pub pats: ArenaSparse<PatternId, Span>,
-    pub copats: ArenaSparse<CoPatternId, Span>,
+    pub pats: ArenaSparse<PatId, Span>,
+    pub copats: ArenaSparse<CoPatId, Span>,
     pub terms: ArenaSparse<TermId, Span>,
 }
 
@@ -48,18 +53,18 @@ mod span_arena_impl {
         }
     }
 
-    impl std::ops::Index<PatternId> for SpanArena {
+    impl std::ops::Index<PatId> for SpanArena {
         type Output = Span;
 
-        fn index(&self, id: PatternId) -> &Self::Output {
+        fn index(&self, id: PatId) -> &Self::Output {
             self.pats.get(id).unwrap()
         }
     }
 
-    impl std::ops::Index<CoPatternId> for SpanArena {
+    impl std::ops::Index<CoPatId> for SpanArena {
         type Output = Span;
 
-        fn index(&self, id: CoPatternId) -> &Self::Output {
+        fn index(&self, id: CoPatId) -> &Self::Output {
             self.copats.get(id).unwrap()
         }
     }

@@ -182,8 +182,8 @@ impl Desugar for t::DefId {
     }
 }
 
-impl Desugar for t::PatternId {
-    type Out = b::PatternId;
+impl Desugar for t::PatId {
+    type Out = b::PatId;
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
         let id = self;
         let pat = desugarer.lookup_pat(id);
@@ -192,8 +192,8 @@ impl Desugar for t::PatternId {
     }
 }
 
-impl Desugar for t::CoPatternId {
-    type Out = b::CoPatternId;
+impl Desugar for t::CoPatId {
+    type Out = b::CoPatId;
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
         let id = self;
         let copat = desugarer.lookup_copat(id);
@@ -356,7 +356,7 @@ impl Desugar for t::Sp<t::Data> {
 }
 
 impl Desugar for t::GenBind<t::TermId> {
-    type Out = (PatternId, TermId);
+    type Out = (PatId, TermId);
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
         let t::GenBind { rec, comp, binder, params, ty, bindee } = self;
         // bindee & ty -> ann
@@ -418,12 +418,12 @@ mod impls {
             desugarer.spans.defs[*self].clone()
         }
     }
-    impl Spanned for t::PatternId {
+    impl Spanned for t::PatId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
             desugarer.spans.pats[*self].clone()
         }
     }
-    impl Spanned for t::CoPatternId {
+    impl Spanned for t::CoPatId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
             desugarer.spans.copats[*self].clone()
         }
@@ -438,10 +438,10 @@ mod impls {
         pub fn lookup_def(&self, id: t::DefId) -> t::VarName {
             self.tctx.defs[id].clone()
         }
-        pub fn lookup_pat(&self, id: t::PatternId) -> t::Pattern {
+        pub fn lookup_pat(&self, id: t::PatId) -> t::Pattern {
             self.tctx.pats[id].clone()
         }
-        pub fn lookup_copat(&self, id: t::CoPatternId) -> t::CoPattern {
+        pub fn lookup_copat(&self, id: t::CoPatId) -> t::CoPattern {
             self.tctx.copats[id].clone()
         }
         pub fn lookup_term(&self, id: t::TermId) -> t::Term {
@@ -451,10 +451,10 @@ mod impls {
         pub fn span_def(&mut self, span: Span) -> b::DefId {
             self.spans.defs.alloc(span)
         }
-        pub fn span_pat(&mut self, span: Span) -> b::PatternId {
+        pub fn span_pat(&mut self, span: Span) -> b::PatId {
             self.spans.pats.alloc(span)
         }
-        pub fn span_copat(&mut self, span: Span) -> b::CoPatternId {
+        pub fn span_copat(&mut self, span: Span) -> b::CoPatId {
             self.spans.copats.alloc(span)
         }
         pub fn span_term(&mut self, span: Span) -> b::TermId {
@@ -465,11 +465,11 @@ mod impls {
             self.bctx.defs.insert(id, def);
             id
         }
-        pub fn pat(&mut self, id: b::PatternId, pat: b::Pattern) -> b::PatternId {
+        pub fn pat(&mut self, id: b::PatId, pat: b::Pattern) -> b::PatId {
             self.bctx.pats.insert(id, pat);
             id
         }
-        pub fn copat(&mut self, id: b::CoPatternId, copat: b::CoPattern) -> b::CoPatternId {
+        pub fn copat(&mut self, id: b::CoPatId, copat: b::CoPattern) -> b::CoPatId {
             self.bctx.copats.insert(id, copat);
             id
         }

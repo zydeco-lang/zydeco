@@ -12,7 +12,7 @@ pub use zydeco_utils::{
 
 /* ------------------------------- Identifier ------------------------------- */
 
-pub use t::{CoPatternId, DefId, PatternId, TermId};
+pub use t::{CoPatId, DefId, PatId, TermId};
 
 /* --------------------------------- Binder --------------------------------- */
 
@@ -22,18 +22,18 @@ pub use t::{NameDef, NameRef};
 
 #[derive(From, Clone, Debug)]
 pub enum Pattern {
-    Ann(Ann<PatternId, TermId>),
+    Ann(Ann<PatId, TermId>),
     Hole(Hole),
     Var(DefId),
-    Ctor(Ctor<PatternId>),
-    Paren(Paren<PatternId>),
+    Ctor(Ctor<PatId>),
+    Paren(Paren<PatId>),
 }
 
 #[derive(From, Clone, Debug)]
 pub enum CoPattern {
-    Pat(PatternId),
+    Pat(PatId),
     Dtor(DtorName),
-    App(App<CoPatternId>),
+    App(App<CoPatId>),
 }
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -44,29 +44,29 @@ pub struct Sealed(pub TermId);
 
 /// any binding structure
 #[derive(Clone, Debug)]
-pub struct Abs<Tail>(pub CoPatternId, pub Tail);
+pub struct Abs<Tail>(pub CoPatId, pub Tail);
 /// `rec (x: A) -> b`
 #[derive(Clone, Debug)]
-pub struct Rec(pub PatternId, pub TermId);
+pub struct Rec(pub PatId, pub TermId);
 
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
-pub struct Pi(pub CoPatternId, pub TermId);
+pub struct Pi(pub CoPatId, pub TermId);
 /// `a -> b`
 #[derive(Clone, Debug)]
 pub struct Arrow(pub TermId, pub TermId);
 /// `forall (x: A) . B`
 #[derive(Clone, Debug)]
-pub struct Forall(pub CoPatternId, pub TermId);
+pub struct Forall(pub CoPatId, pub TermId);
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
-pub struct Sigma(pub CoPatternId, pub TermId);
+pub struct Sigma(pub CoPatId, pub TermId);
 /// `A * ...`
 #[derive(Clone, Debug)]
 pub struct Prod(pub Vec<TermId>);
 /// `exists (x: A) . A'`
 #[derive(Clone, Debug)]
-pub struct Exists(pub CoPatternId, pub TermId);
+pub struct Exists(pub CoPatId, pub TermId);
 
 /// `{ b }` has type `Thunk B`
 #[derive(Clone, Debug)]
@@ -81,14 +81,14 @@ pub struct Return(pub TermId);
 /// `do x <- b; ...`
 #[derive(Clone, Debug)]
 pub struct Bind<Tail> {
-    pub binder: PatternId,
+    pub binder: PatId,
     pub bindee: TermId,
     pub tail: Tail,
 }
 /// `let x = a in ...`
 #[derive(Clone, Debug)]
 pub struct PureBind<Tail> {
-    pub binder: PatternId,
+    pub binder: PatId,
     pub bindee: TermId,
     pub tail: Tail,
 }
@@ -119,7 +119,7 @@ pub struct Match<Tail> {
 }
 #[derive(Clone, Debug)]
 pub struct Matcher<Tail> {
-    pub binder: PatternId,
+    pub binder: PatId,
     pub tail: Tail,
 }
 
@@ -131,7 +131,7 @@ pub struct CoData {
 #[derive(Clone, Debug)]
 pub struct CoDataArm {
     pub name: DtorName,
-    pub params: Option<CoPatternId>,
+    pub params: Option<CoPatId>,
     pub out: TermId,
 }
 
@@ -142,7 +142,7 @@ pub struct CoMatch<Tail> {
 }
 #[derive(Clone, Debug)]
 pub struct CoMatcher<Tail> {
-    pub params: CoPatternId,
+    pub params: CoPatId,
     pub tail: Tail,
 }
 
@@ -182,14 +182,14 @@ pub enum Term<Ref> {
 
 #[derive(Clone, Debug)]
 pub struct Alias {
-    pub binder: PatternId,
+    pub binder: PatId,
     pub bindee: TermId,
 }
 
 #[derive(Clone, Debug)]
 pub struct Extern {
-    pub binder: PatternId,
-    pub params: Option<CoPatternId>,
+    pub binder: PatId,
+    pub params: Option<CoPatId>,
     pub ty: Option<TermId>,
 }
 
@@ -253,8 +253,8 @@ pub use t::SpanArena;
 pub struct Ctx {
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
-    pub pats: ArenaAssoc<PatternId, Pattern>,
-    pub copats: ArenaAssoc<CoPatternId, CoPattern>,
+    pub pats: ArenaAssoc<PatId, Pattern>,
+    pub copats: ArenaAssoc<CoPatId, CoPattern>,
     pub terms: ArenaAssoc<TermId, Term<t::NameRef<VarName>>>,
 }
 
