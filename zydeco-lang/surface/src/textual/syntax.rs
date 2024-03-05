@@ -25,12 +25,14 @@ impl TermPtr for TermId {}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NameDef<T>(pub T);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct NameRef<T>(pub Vec<ModName>, pub T);
+pub struct NameRef<T>(pub Vec<VarName>, pub T);
 
 /* ----------------------------------- Use ---------------------------------- */
 
+/// `..`
 #[derive(Clone, Debug)]
 pub struct UseAll;
+/// `binder = origin`
 #[derive(Clone, Debug)]
 pub struct UseAlias(pub VarName, pub VarName);
 #[derive(Clone, From, Debug)]
@@ -236,7 +238,7 @@ pub struct Extern(pub GenBind<()>);
 
 #[derive(Clone, Debug)]
 pub struct Module {
-    pub name: ModName,
+    pub name: VarName,
     pub top: TopLevel,
 }
 

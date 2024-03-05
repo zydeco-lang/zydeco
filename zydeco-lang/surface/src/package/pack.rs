@@ -87,6 +87,13 @@ impl Package {
             .into_iter()
             .map(|f| f.parse(t::Parser::new(&mut alloc)))
             .collect::<Result<Vec<_>>>()?;
+        // Debug: print the parsed files
+        // for file in &files {
+        //     println!(">>> [{}]", file.path.display());
+        //     use crate::ugly::fmt::*;
+        //     println!("{}", file.top.ugly(&Formatter::new(&file.ctx)));
+        //     println!("<<< [{}]", file.path.display());
+        // }
         let files = files
             .into_iter()
             .map(|f| f.desugar(b::SpanArenaBitter::new(&mut alloc)))

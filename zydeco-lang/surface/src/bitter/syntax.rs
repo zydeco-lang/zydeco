@@ -200,7 +200,7 @@ pub struct Extern {
 
 #[derive(Clone, Debug)]
 pub struct Module {
-    pub name: ModName,
+    pub name: VarName,
     pub top: TopLevel,
 }
 

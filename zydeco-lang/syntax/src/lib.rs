@@ -3,8 +3,6 @@ use derive_more::From;
 /* --------------------------------- Binder --------------------------------- */
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ModName(pub String);
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct VarName(pub String);
 #[derive(Clone, Debug)]
 pub struct CtorName(pub String);

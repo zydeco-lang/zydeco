@@ -65,7 +65,7 @@ impl FileInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Span {
     span1: (Cursor1, Cursor1),
     span2: OnceCell<(Cursor2, Cursor2)>,
@@ -133,6 +133,13 @@ impl Display for Span {
         }
         Ok(())
     }
+}
+
+impl Debug for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+
 }
 
 pub type Cursor1 = usize;

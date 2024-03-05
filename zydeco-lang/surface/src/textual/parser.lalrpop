@@ -117,8 +117,6 @@ CtorId: String = "CtorId" => <>.into();
 DtorId: String = "DtorId" => <>.into();
 
 #[inline]
-ModName: ModName = <MixedId> => ModName(<>);
-#[inline]
 VarName: VarName = <MixedId> => VarName(<>);
 CtorName: CtorName = {
     <CtorId> => CtorName(<>),
@@ -130,7 +128,7 @@ DtorName: DtorName = {
 };
 
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
-NameRef<T>: NameRef<T> = <path:(<ModName> "/")*> <inner:T> => {
+NameRef<T>: NameRef<T> = <path:(<VarName> "/")*> <inner:T> => {
     NameRef(path, inner)
 };
 
@@ -381,7 +379,7 @@ Declaration: Declaration = {
     <CoDataDef> => <>.into(),
     "define" <GenBindTerm> "end" => Define(<>).into(),
     "alias" <GenBindTerm> "end" => Alias(<>).into(),
-    "module" <name:ModName> <top:("where" <TopLevel>)> "end" => {
+    "module" <name:VarName> <top:("where" <TopLevel>)> "end" => {
         Module { name, top }.into()
     },
     "extern" <GenBindNull> "end" => Extern(<>).into(),
