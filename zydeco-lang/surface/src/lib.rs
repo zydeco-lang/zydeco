@@ -1,11 +1,13 @@
 #![allow(clippy::style)]
 #![allow(clippy::useless_format)]
 
-/// the topmost program that starts with a project configuration
-pub mod driver {
-    pub mod proj;
+/// the topmost compilation pipeline led by a package configuration
+pub mod package {
+    pub mod pack;
     pub mod conf;
     pub mod err;
+
+    pub use pack::*;
 
     #[cfg(test)]
     mod tests;

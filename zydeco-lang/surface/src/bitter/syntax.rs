@@ -249,6 +249,11 @@ pub enum ReplInput {
 
 #[derive(Clone, Debug)]
 pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
+impl AddAssign<TopLevel> for TopLevel {
+    fn add_assign(&mut self, rhs: TopLevel) {
+        self.0.extend(rhs.0);
+    }
+}
 
 /* --------------------------------- Context -------------------------------- */
 

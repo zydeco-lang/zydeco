@@ -3,10 +3,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum SurfaceError {
-    #[error("Project file not found: `{}`", .0.display())]
-    ProjectFileNotFound(PathBuf),
-    #[error("Project file at `{}` invalid: {}", .0.display(), .1)]
-    ProjectFileInvalid(PathBuf, std::io::Error),
+    #[error("Package file not found: `{}`", .0.display())]
+    PackageFileNotFound(PathBuf),
+    #[error("Package file at `{}` invalid: {}", .0.display(), .1)]
+    PackageFileInvalid(PathBuf, std::io::Error),
     #[error("Source file not found: `{}`", .0.display())]
     SrcFileNotFound(PathBuf),
     #[error("Error while canonicalizing src file path: `{}`", .0)]

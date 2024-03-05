@@ -3,6 +3,8 @@ use std::{
     ops::{Index, IndexMut},
 };
 
+pub use crate::new_key_type;
+
 #[derive(Debug)]
 pub struct IndexAlloc<Meta>(Meta, usize);
 impl<Meta: Copy> Iterator for IndexAlloc<Meta> {
@@ -61,6 +63,19 @@ mod impls {
 
     /* ------------------------------- ArenaDense ------------------------------- */
 
+    impl<Id, T> Default for ArenaDense<Id, T, ()>
+    where
+        Id: IndexLike<Meta = ()>,
+    {
+        fn default() -> Self {
+            Self {
+                allocator: IndexAlloc((), 0),
+                vec: Default::default(),
+                _marker: Default::default(),
+            }
+        }
+    }
+
     impl<Id, T, Meta> Index<Id> for ArenaDense<Id, T, Meta>
     where
         Meta: Copy,
@@ -110,6 +125,19 @@ mod impls {
     }
 
     /* ------------------------------- ArenaSparse ------------------------------ */
+
+    impl<Id, T> Default for ArenaSparse<Id, T, ()>
+    where
+        Id: IndexLike<Meta = ()> + Eq + std::hash::Hash,
+    {
+        fn default() -> Self {
+            Self {
+                allocator: IndexAlloc((), 0),
+                map: Default::default(),
+                _marker: Default::default(),
+            }
+        }
+    }
 
     impl<Id, T, Meta> Index<Id> for ArenaSparse<Id, T, Meta>
     where
@@ -276,7 +304,28 @@ mod impls {
 
 #[macro_export]
 macro_rules! new_key_type {
-    ( $(#[$outer:meta])* $vis:vis struct $name:ident; $($rest:tt)* ) => {
+    ( $(#[$outer:meta])* $vis:vis struct $name:ident < $meta:ty > ; $($rest:tt)* ) => {
+        $(#[$outer])*
+        #[derive(Copy, Clone, Default,
+                    Eq, PartialEq, Ord, PartialOrd,
+                    Hash, Debug)]
+        $vis struct $name($meta, usize);
+
+        unsafe impl $crate::arena::IndexLike for $name {
+            type Meta = $meta;
+            fn new(meta: Self::Meta, idx: usize) -> Self {
+                Self(meta, idx)
+            }
+            fn index(&self) -> usize {
+                self.1
+            }
+        }
+
+        $crate::new_key_type!($($rest)*);
+    };
+
+    // a nice default only for compiler use
+    ( $(#[$outer:meta])* $vis:vis struct $name:ident ; $($rest:tt)* ) => {
         $(#[$outer])*
         #[derive(Copy, Clone, Default,
                     Eq, PartialEq, Ord, PartialOrd,

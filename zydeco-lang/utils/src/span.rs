@@ -54,6 +54,9 @@ impl FileInfo {
             panic!("Span: offset {} is not in {:?}", offset, self)
         }
     }
+    pub fn path(&self) -> PathBuf {
+        self.path.to_path_buf()
+    }
     pub fn canonicalize(&self) -> io::Result<PathBuf> {
         self.path.canonicalize()
     }

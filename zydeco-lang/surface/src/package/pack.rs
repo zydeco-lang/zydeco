@@ -1,4 +1,4 @@
-//! The project notation of zydeco.
+//! The package notation of zydeco.
 
 use super::err::{Result, SurfaceError};
 use crate::{
@@ -35,7 +35,7 @@ pub enum UseStd {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Project {
+pub struct Package {
     #[serde(skip)]
     pub path: PathBuf,
     pub srcs: Vec<PathBuf>,
@@ -45,7 +45,7 @@ pub struct Project {
     pub std: UseStd,
 }
 
-impl SerdeStr for Project {
+impl SerdeStr for Package {
     fn de_from_str(s: &str) -> io::Result<Self>
     where
         Self: Sized,
@@ -58,27 +58,28 @@ impl SerdeStr for Project {
     }
 }
 
-impl Project {
+impl Package {
     pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
         let path = path.into();
         Ok(Self {
             path: path
                 .parent()
-                .ok_or_else(|| SurfaceError::ProjectFileNotFound(path.clone()))?
+                .ok_or_else(|| SurfaceError::PackageFileNotFound(path.clone()))?
                 .to_path_buf(),
             ..FileIO::new(path.clone()).load().map_err(|e| match e.kind() {
-                io::ErrorKind::NotFound => SurfaceError::ProjectFileNotFound(path),
-                _ => SurfaceError::ProjectFileInvalid(path, e),
+                io::ErrorKind::NotFound => SurfaceError::PackageFileNotFound(path),
+                _ => SurfaceError::PackageFileInvalid(path, e),
             })?
         })
     }
-    pub fn run(self) -> Result<()> {
-        let Project { path, srcs, deps: _, std: _ } = self;
+    pub fn run(&self) -> Result<()> {
+        let Package { path, srcs, deps: _, std: _ } = self;
         // Todo: deal with std and deps
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
         // Todo: parallelize
         let files = files.into_iter().map(|f| f.load()).collect::<Result<Vec<_>>>()?;
-        let ProjectHash { hashes: _ } = FileLoaded::merge(&files)?;
+        let PackageHash { hashes: _ } = FileLoaded::merge(&files)?;
+        // Todo: check hashes
 
         let mut alloc = GlobalAlloc::new();
         // Todo: parallelize
@@ -86,10 +87,21 @@ impl Project {
             .into_iter()
             .map(|f| f.parse(t::Parser::new(&mut alloc)))
             .collect::<Result<Vec<_>>>()?;
-        let _files = files
+        let files = files
             .into_iter()
             .map(|f| f.desugar(b::SpanArenaBitter::new(&mut alloc)))
             .collect::<Vec<_>>();
+        let _stew = FileBitter::merge(
+            PackageStew {
+                sources: HashMap::new(),
+                spans: b::SpanArenaBitter::new(&mut alloc),
+                ctx: b::Ctx::default(),
+                top: b::TopLevel(Vec::new()),
+            },
+            files,
+        )?;
+
+        // Todo: add deps
         Ok(())
     }
 }
@@ -122,12 +134,12 @@ pub struct FileLoaded {
     pub hash: String,
 }
 
-pub struct ProjectHash {
+pub struct PackageHash {
     pub hashes: HashMap<PathBuf, String>,
 }
 
 impl FileLoaded {
-    pub fn merge<'a>(selves: impl IntoIterator<Item = &'a Self>) -> Result<ProjectHash> {
+    pub fn merge<'a>(selves: impl IntoIterator<Item = &'a Self>) -> Result<PackageHash> {
         let mut hashes = HashMap::new();
         for file in selves {
             hashes.insert(
@@ -137,10 +149,11 @@ impl FileLoaded {
                 file.hash.clone(),
             );
         }
-        Ok(ProjectHash { hashes })
+        Ok(PackageHash { hashes })
     }
     pub fn parse(self, mut parser: t::Parser) -> Result<FileParsed> {
         let FileLoaded { info, source, .. } = self;
+        let path = info.path();
 
         let top = TopLevelParser::new()
             .parse(&source, &LocationCtx::File(info.clone()), &mut parser, Lexer::new(&source))
@@ -149,12 +162,12 @@ impl FileLoaded {
             })?;
 
         let t::Parser { spans, ctx } = parser;
-        Ok(FileParsed { info, source, spans, ctx, top })
+        Ok(FileParsed { path, source, spans, ctx, top })
     }
 }
 
 pub struct FileParsed {
-    pub info: FileInfo,
+    pub path: PathBuf,
     pub source: String,
     pub spans: t::SpanArenaTextual,
     pub ctx: t::Ctx,
@@ -163,16 +176,37 @@ pub struct FileParsed {
 
 impl FileParsed {
     pub fn desugar(self, bspans: b::SpanArenaBitter) -> FileBitter {
-        let FileParsed { info, source, spans: tspans, ctx: tctx, top } = self;
+        let FileParsed { path, source, spans: tspans, ctx: tctx, top } = self;
         let desugarer = Desugarer { tspans, tctx, bspans, bctx: b::Ctx::default() };
         let DesugarOut { spans, ctx, top } = desugarer.run(top);
-        FileBitter { info, source, spans, ctx, top }
+        FileBitter { path, source, spans, ctx, top }
     }
 }
 
 pub struct FileBitter {
-    pub info: FileInfo,
+    pub path: PathBuf,
     pub source: String,
+    pub spans: b::SpanArenaBitter,
+    pub ctx: b::Ctx,
+    pub top: b::TopLevel,
+}
+
+impl FileBitter {
+    pub fn merge(
+        mut stew: PackageStew, selves: impl IntoIterator<Item = Self>,
+    ) -> Result<PackageStew> {
+        for file in selves {
+            stew.sources.insert(file.path, file.source);
+            stew.spans += file.spans;
+            stew.ctx += file.ctx;
+            stew.top += file.top;
+        }
+        Ok(stew)
+    }
+}
+
+pub struct PackageStew {
+    pub sources: HashMap<PathBuf, String>,
     pub spans: b::SpanArenaBitter,
     pub ctx: b::Ctx,
     pub top: b::TopLevel,

@@ -1,4 +1,4 @@
-pub use zydeco_utils::{arena::*, new_key_type, span::Span};
+pub use zydeco_utils::{arena::*, span::Span};
 
 use std::{fmt::Debug, ops::AddAssign};
 

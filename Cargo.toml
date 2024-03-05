@@ -7,6 +7,7 @@ members = [
     "zydeco-lang/syntax",
     "zydeco-lang/surface",
     "zydeco-lang/statics",
+    "zydeco-lang/driver",
     "cli",
     "web",
     "editor/zls",

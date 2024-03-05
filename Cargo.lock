@@ -2382,6 +2382,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "zydeco-driver"
+version = "0.2.0"
+dependencies = [
+ "derive-where",
+ "derive_more",
+ "im",
+ "lalrpop",
+ "lalrpop-util",
+ "logos",
+ "regex",
+ "sculptor",
+ "serde",
+ "thiserror",
+ "toml",
+ "unindent",
+ "zydeco-derive",
+ "zydeco-surface",
+ "zydeco-syntax",
+ "zydeco-utils",
+]
+
+[[package]]
 name = "zydeco-lang"
 version = "0.2.0"
 dependencies = [
