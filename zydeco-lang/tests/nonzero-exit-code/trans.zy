@@ -5,7 +5,6 @@ end
 
 codata Algebra (M: VType -> CType) (B: CType) where
   | .bindA : forall (A: VType) . U (M A) -> U (A -> B) -> B
-
 end
 
 codata MonadTrans (T: (VType -> CType) -> VType -> CType) where

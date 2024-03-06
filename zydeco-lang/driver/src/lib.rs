@@ -5,11 +5,11 @@ pub mod err;
 pub use err::*;
 pub use zydeco_surface::package::*;
 
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
+use std::{collections::HashMap, path::PathBuf};
+use zydeco_utils::{
+    arena::{new_key_type, ArenaDense},
+    scc::DepGraph,
 };
-use zydeco_utils::arena::{new_key_type, ArenaDense};
 
 new_key_type! {
     pub struct PackId<()>;
@@ -20,12 +20,16 @@ pub struct BuildSystem {
     pub packages: ArenaDense<PackId, Package, ()>,
     /// a map from the canonicalized path of package file to the package id
     pub seen: HashMap<PathBuf, PackId>,
-    pub depends_on: HashMap<PackId, HashSet<PackId>>,
+    pub depends_on: DepGraph<PackId>,
 }
 
 impl BuildSystem {
     pub fn new() -> Self {
-        Self { packages: ArenaDense::default(), seen: HashMap::new(), depends_on: HashMap::new() }
+        Self {
+            packages: ArenaDense::default(),
+            seen: HashMap::new(),
+            depends_on: DepGraph::new(),
+        }
     }
     pub fn run(mut self, path: impl Into<PathBuf>) -> Result<()> {
         // add all dependent packages to the build system
@@ -71,7 +75,7 @@ impl BuildSystem {
                 self.add(pack)
             })
             .collect::<Result<Vec<_>>>()?;
-        self.depends_on.insert(id, deps_new.iter().cloned().chain(deps_old.into_iter()).collect());
+        self.depends_on.add(id, deps_new.iter().cloned().chain(deps_old.into_iter()));
         Ok(deps_new)
     }
 }

@@ -7,6 +7,11 @@ pub use crate::new_key_type;
 
 #[derive(Debug)]
 pub struct IndexAlloc<Meta>(Meta, usize);
+impl IndexAlloc<()> {
+    pub fn new() -> Self {
+        IndexAlloc((), 0)
+    }
+}
 impl<Meta: Copy> Iterator for IndexAlloc<Meta> {
     type Item = (Meta, usize);
     fn next(&mut self) -> Option<Self::Item> {
