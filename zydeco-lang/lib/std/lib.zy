@@ -1,4 +1,7 @@
 module Builtin where
+  ## the CType and VType kinds
+  pub extern CType end
+  pub extern VType end
   ## the Thunk and Ret types
   pub extern Thunk (B : CType) : VType end
   pub extern Ret (A : VType) : CType end

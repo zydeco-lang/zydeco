@@ -233,10 +233,7 @@ where
     }
 }
 
-impl<T> Ugly for Abs<T>
-where
-    T: Ugly,
-{
+impl Ugly for Abs {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Abs(p, t) = self;
@@ -359,10 +356,7 @@ impl Ugly for Return {
     }
 }
 
-impl<T> Ugly for Bind<T>
-where
-    T: Ugly,
-{
+impl Ugly for Bind {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Bind { binder, bindee, tail } = self;
@@ -376,10 +370,7 @@ where
     }
 }
 
-impl<T> Ugly for PureBind<T>
-where
-    T: Ugly,
-{
+impl Ugly for PureBind {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let PureBind { binding, tail } = self;
@@ -475,10 +466,7 @@ impl Ugly for CoData {
     }
 }
 
-impl<T> Ugly for Match<T>
-where
-    T: Ugly,
-{
+impl Ugly for Match {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Match { scrut, arms } = self;
@@ -495,10 +483,7 @@ where
     }
 }
 
-impl<T> Ugly for CoMatch<T>
-where
-    T: Ugly,
-{
+impl Ugly for CoMatch {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let CoMatch { arms } = self;

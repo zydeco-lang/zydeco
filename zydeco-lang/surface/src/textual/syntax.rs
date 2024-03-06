@@ -80,7 +80,7 @@ pub struct GenBind<Bindee> {
 
 /// any binding structure
 #[derive(Clone, Debug)]
-pub struct Abs<Tail>(pub CoPatId, pub Tail);
+pub struct Abs(pub CoPatId, pub TermId);
 /// `rec (x: A) -> b`
 #[derive(Clone, Debug)]
 pub struct Rec(pub PatId, pub TermId);
@@ -116,16 +116,16 @@ pub struct Force(pub TermId);
 pub struct Return(pub TermId);
 /// `do x <- b; ...`
 #[derive(Clone, Debug)]
-pub struct Bind<Tail> {
+pub struct Bind {
     pub binder: PatId,
     pub bindee: TermId,
-    pub tail: Tail,
+    pub tail: TermId,
 }
 /// `let x = a in ...`
 #[derive(Clone, Debug)]
-pub struct PureBind<Tail> {
+pub struct PureBind {
     pub binding: GenBind<TermId>,
-    pub tail: Tail,
+    pub tail: TermId,
 }
 
 /// `use let x = a in ...`
@@ -148,14 +148,14 @@ pub struct DataArm {
 
 /// `match a | C_1 p -> b_1 | ... end`
 #[derive(Clone, Debug)]
-pub struct Match<Tail> {
+pub struct Match {
     pub scrut: TermId,
-    pub arms: Vec<Matcher<Tail>>,
+    pub arms: Vec<Matcher>,
 }
 #[derive(Clone, Debug)]
-pub struct Matcher<Tail> {
+pub struct Matcher {
     pub binder: PatId,
-    pub tail: Tail,
+    pub tail: TermId,
 }
 
 /// `codata | .d_1 cp : ty | ... end`
@@ -172,13 +172,13 @@ pub struct CoDataArm {
 
 /// `comatch | .d_1 -> b_1 | ... end`
 #[derive(Clone, Debug)]
-pub struct CoMatch<Tail> {
-    pub arms: Vec<CoMatcher<Tail>>,
+pub struct CoMatch {
+    pub arms: Vec<CoMatcher>,
 }
 #[derive(Clone, Debug)]
-pub struct CoMatcher<Tail> {
+pub struct CoMatcher {
     pub params: CoPatId,
-    pub tail: Tail,
+    pub tail: TermId,
 }
 
 #[derive(From, Clone, Debug)]
@@ -187,7 +187,7 @@ pub enum Term {
     Hole(Hole),
     Var(NameRef<VarName>),
     Paren(Paren<TermId>),
-    Abs(Abs<TermId>),
+    Abs(Abs),
     App(App<TermId>),
     Rec(Rec),
     Pi(Pi),
@@ -199,14 +199,14 @@ pub enum Term {
     Thunk(Thunk),
     Force(Force),
     Ret(Return),
-    Do(Bind<TermId>),
-    Let(PureBind<TermId>),
+    Do(Bind),
+    Let(PureBind),
     UseLet(UseBind),
     Data(Data),
     CoData(CoData),
     Ctor(Ctor<TermId>),
-    Match(Match<TermId>),
-    CoMatch(CoMatch<TermId>),
+    Match(Match),
+    CoMatch(CoMatch),
     Dtor(Dtor<TermId>),
     Lit(Literal),
 }

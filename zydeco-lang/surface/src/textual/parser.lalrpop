@@ -225,12 +225,12 @@ CoDataArm: CoDataArm = {
     },
 };
 
-Matcher: Matcher<TermId> = {
+Matcher: Matcher = {
     "|" <binder:PatternId> "->" <tail:TermId> => Matcher {
         binder, tail
     },
 };
-CoMatcher: CoMatcher<TermId> = {
+CoMatcher: CoMatcher = {
     "|" <params:CoPatternId> "->" <tail:TermId> => CoMatcher {
         params, tail
     },
