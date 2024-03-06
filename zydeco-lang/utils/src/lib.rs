@@ -2,11 +2,12 @@
 #![allow(clippy::useless_format)]
 
 pub mod arena;
+pub mod deps;
+pub mod scc;
 pub mod span;
 pub mod never;
 pub mod monoid;
 pub mod wrappers;
-pub mod scc;
 
 pub mod prelude {
     pub use crate::{
@@ -14,7 +15,6 @@ pub mod prelude {
         monoid::Monoid,
         never::Never,
         rc,
-        scc::*,
         span::{Sp, Span, SpanHolder, SpanView},
     };
 }

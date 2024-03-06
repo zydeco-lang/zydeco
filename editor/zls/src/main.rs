@@ -20,7 +20,7 @@ mod document_symbols;
 mod text_position;
 
 pub struct ServerState {
-    client: ClientSocket,
+    _client: ClientSocket,
     documents: DocumentStore,
 }
 
@@ -28,7 +28,7 @@ pub struct ServerState {
 async fn main() {
     let (server, _) = async_lsp::MainLoop::new_server(|client| {
         let mut router =
-            Router::new(ServerState { client: client.clone(), documents: Default::default() });
+            Router::new(ServerState { _client: client.clone(), documents: Default::default() });
         router
             .request::<request::Initialize, _>(|_, _params| async move {
                 Ok(InitializeResult {

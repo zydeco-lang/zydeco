@@ -8,7 +8,7 @@ pub use zydeco_surface::package::*;
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{
     arena::{new_key_type, ArenaDense},
-    scc::DepGraph,
+    deps::DepGraph,
 };
 
 new_key_type! {
