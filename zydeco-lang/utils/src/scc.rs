@@ -1,4 +1,7 @@
-use crate::{arena::IndexAlloc, deps::DepGraph};
+use crate::{
+    arena::IndexAlloc,
+    deps::{DepGraph, SrcGraph},
+};
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
@@ -85,10 +88,13 @@ use std::{
 
 pub struct Kosaraju<'a, Id: Hash + Eq + Clone> {
     deps: &'a DepGraph<Id>,
-    rdeps: DepGraph<Id>,
+    rdeps: SrcGraph<Id>,
 }
 
-impl<'a, Id: Hash + Eq + Clone + std::fmt::Debug> Kosaraju<'a, Id> {
+impl<'a, Id: Hash + Eq + Clone> Kosaraju<'a, Id>
+// where
+//     Id: std::fmt::Debug,
+{
     pub fn new(deps: &'a DepGraph<Id>) -> Self {
         let rdeps = deps.reverse();
         Self { deps, rdeps }
@@ -136,39 +142,43 @@ impl<'a, Id: Hash + Eq + Clone + std::fmt::Debug> Kosaraju<'a, Id> {
 }
 
 /// Scc graph
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct SccGraph<Id: Hash + Eq + Clone> {
     /// maps scc index to the scc
     strongs: HashMap<usize, HashSet<Id>>,
     /// maps each node to its scc index
     belongs: HashMap<Id, usize>,
-    /// dag of sccs
+    /// dags of sccs
+    srcs: SrcGraph<usize>,
     deps: DepGraph<usize>,
-    /// sccs that are free of deps
-    roots: Vec<usize>,
+    /// roots of the dag
+    roots: HashSet<usize>,
 }
 
-impl<Id: Hash + Eq + Clone> SccGraph<Id> {
+impl<Id: Hash + Eq + Clone> SccGraph<Id>
+// where
+//     Id: std::fmt::Debug,
+{
     pub fn new<'a>(id_deps: &'a DepGraph<Id>, belongs: HashMap<Id, usize>) -> Self {
         let mut strongs = HashMap::new();
         for (id, low) in &belongs {
             strongs.entry(*low).or_insert_with(HashSet::new).insert(id.clone());
         }
+        let mut srcs = SrcGraph::new();
         let mut deps = DepGraph::new();
         for (k, scc) in &strongs {
-            let mut scc_deps = HashSet::new();
             for id in scc {
-                for dep in id_deps.query(id) {
-                    let dep_low = belongs[&dep];
-                    if dep_low != *k {
-                        scc_deps.insert(dep_low);
+                for d in id_deps.query(id) {
+                    let repr = belongs[&d];
+                    if repr != *k {
+                        srcs.add(repr, [*k]);
+                        deps.add(*k, [repr]);
                     }
                 }
             }
-            deps.add(*k, scc_deps);
         }
-        let roots = deps.roots();
-        Self { strongs, belongs, deps, roots }
+        let roots = srcs.roots();
+        Self { strongs, belongs, srcs, deps, roots }
     }
     pub fn top(&self) -> Vec<HashSet<Id>> {
         let mut top = Vec::new();
@@ -179,15 +189,28 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id> {
         top
     }
     pub fn release(&mut self, ids: impl IntoIterator<Item = Id>) {
+        let ids = ids.into_iter().collect::<HashSet<_>>();
+        // println!(">>> releasing: {:?}", ids);
         for id in ids {
             let Some(scc_id) = self.belongs.remove(&id) else { unreachable!() };
             let Some(scc) = &mut self.strongs.get_mut(&scc_id) else { unreachable!() };
             scc.remove(&id);
+            // println!("scc_id: {:?}, scc: {:?}", scc_id, scc);
             if scc.is_empty() {
+                // println!("empty: {:?}", scc_id);
                 self.strongs.remove(&scc_id);
-                self.deps.map.remove(&scc_id);
+                self.roots.remove(&scc_id);
+                let Some(mut next) = self.srcs.map.remove(&scc_id) else { continue };
+                // println!("next?: {:?}", next);
+                for n in &next {
+                    self.deps.map.get_mut(n).unwrap().remove(&scc_id);
+                }
+                next.retain(|x| self.deps.query(x).is_empty());
+                // println!("next: {:?}", next);
+                self.roots.extend(next);
             }
         }
+        // println!("<<<");
     }
 }
 
@@ -201,8 +224,44 @@ mod tests {
         deps.add(2, [3]);
         deps.add(3, [1]);
         deps.add(4, [3]);
-        let scc = Kosaraju::new(&deps).run();
-        println!("{:?}", scc);
-        // assert_eq!(scc.top(), vec![[4].into_iter().collect()]);
+        let mut scc = Kosaraju::new(&deps).run();
+        assert_eq!(scc.top(), vec![[1, 2, 3].into_iter().collect()]);
+        scc.release([1]);
+        assert_eq!(scc.top(), vec![[2, 3].into_iter().collect()]);
+        scc.release([2, 3]);
+        assert_eq!(scc.top(), vec![[4].into_iter().collect()]);
+        scc.release([4]);
+        assert_eq!(scc.top(), vec![]);
+    }
+    #[test]
+    fn test_scc_2() {
+        let mut deps = DepGraph::new();
+        deps.add(1, [2, 8]);
+        deps.add(2, [3, 7]);
+        deps.add(3, [4, 5, 6]);
+        deps.add(4, []);
+        deps.add(5, [6]);
+        deps.add(6, []);
+        deps.add(7, [1]);
+        deps.add(8, [9]);
+        deps.add(9, [7]);
+        // let mut scc = Tarjan::run(&deps);
+        let mut scc = Kosaraju::new(&deps).run();
+        // println!("{:?}", scc);
+        for s in scc.top() {
+            assert_eq!(s.len(), 1);
+            let n = s.into_iter().next().unwrap();
+            assert!(n == 4 || n == 6);
+        }
+        scc.release([4]);
+        // println!("{:?}", scc);
+        assert_eq!(scc.top(), vec![[6].into_iter().collect()]);
+        scc.release([6]);
+        // println!("{:?}", scc);
+        assert_eq!(scc.top(), vec![[5].into_iter().collect()]);
+        scc.release([5]);
+        assert_eq!(scc.top(), vec![[3].into_iter().collect()]);
+        scc.release([3]);
+        assert_eq!(scc.top(), vec![[1, 2, 7, 8, 9].into_iter().collect()]);
     }
 }
