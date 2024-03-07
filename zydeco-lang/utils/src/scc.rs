@@ -113,23 +113,24 @@ impl<'a, Id: Hash + Eq + Clone> Tarjan<'a, Id> {
 }
 
 /// Scc graph
+#[derive(Debug)]
 pub struct SccGraph<Id: Hash + Eq + Clone> {
     /// maps scc index to the scc
-    pub strongs: HashMap<usize, HashSet<Id>>,
+    strongs: HashMap<usize, HashSet<Id>>,
     /// maps each node to its scc index
-    pub belongs: HashMap<Id, usize>,
+    belongs: HashMap<Id, usize>,
     /// dag of sccs
-    pub deps: DepGraph<usize>,
+    deps: DepGraph<usize>,
     /// sccs that are free of deps
-    pub roots: Vec<usize>,
+    roots: Vec<usize>,
 }
 
 impl<Id: Hash + Eq + Clone> SccGraph<Id> {
-    pub fn top(&self) -> Vec<Id> {
+    pub fn top(&self) -> Vec<HashSet<Id>> {
         let mut top = Vec::new();
         for root in &self.roots {
             let scc = &self.strongs[root];
-            top.extend(scc.iter().cloned());
+            top.push(scc.iter().cloned().collect());
         }
         top
     }
@@ -143,5 +144,21 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id> {
                 self.deps.map.remove(&scc_id);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_scc_1() {
+        let mut deps = DepGraph::new();
+        deps.add(1, vec![2]);
+        deps.add(2, vec![3]);
+        deps.add(3, vec![1]);
+        deps.add(4, vec![3]);
+        let scc = Tarjan::run(&deps);
+        println!("{:?}", scc);
+        // assert_eq!(scc.top(), vec![[4].into_iter().collect()]);
     }
 }
