@@ -39,8 +39,23 @@ impl<Id: Hash + Eq + Clone> DepGraph<Id> {
     pub fn nodes(&self) -> HashSet<Id> {
         self.map.keys().cloned().collect()
     }
+    /// get all nodes in an order
+    pub fn order(&self) -> Vec<Id> {
+        self.map.keys().cloned().collect()
+    }
     /// query the dependencies of a node
     pub fn query(&self, id: &Id) -> Vec<Id> {
         self.map.get(id).map(|s| s.iter().cloned().collect::<Vec<_>>()).unwrap_or_default()
+    }
+    /// reverse the graph
+    pub fn reverse(&self) -> DepGraph<Id> {
+        let mut rdeps = DepGraph::new();
+        for (id, deps) in &self.map {
+            rdeps.add(id.clone(), []);
+            for dep in deps {
+                rdeps.add(dep.clone(), [id.clone()]);
+            }
+        }
+        rdeps
     }
 }
