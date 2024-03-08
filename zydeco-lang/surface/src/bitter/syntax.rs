@@ -23,6 +23,10 @@ impl TermPtr for TermId {}
 
 pub use t::{NameDef, NameRef};
 
+/* ----------------------------------- Use ---------------------------------- */
+
+pub use t::{UseAlias, UseAll, UseEnum, UsePath, Uses};
+
 /* --------------------------------- Pattern -------------------------------- */
 
 #[derive(From, Clone, Debug)]
@@ -101,7 +105,7 @@ pub struct PureBind {
 /// `use let x = a in ...`
 #[derive(Clone, Debug)]
 pub struct UseBind {
-    pub uses: t::UsePath,
+    pub uses: UsePath,
     pub tail: TermId,
 }
 
@@ -205,11 +209,11 @@ pub struct Module {
 }
 
 #[derive(From, Clone, Debug)]
-pub struct UseDef(pub t::UsePath);
+pub struct UseDef(pub UsePath);
 
 #[derive(Clone, Debug)]
 pub struct UseBlock {
-    pub uses: t::UsePath,
+    pub uses: UsePath,
     pub top: TopLevel,
 }
 

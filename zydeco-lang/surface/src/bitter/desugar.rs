@@ -235,9 +235,9 @@ impl Desugar for t::CoPatId {
         let id = desugarer.span_copat(span);
         use t::CoPattern as CoPat;
         match copat {
-            CoPat::Pat(copat) => {
-                let copat = copat.desugar(desugarer);
-                desugarer.copat(id, copat.into())
+            CoPat::Pat(pat) => {
+                let pat = pat.desugar(desugarer);
+                desugarer.copat(id, pat.into())
             }
             CoPat::Dtor(name) => desugarer.copat(id, name.into()),
             CoPat::App(copat) => {

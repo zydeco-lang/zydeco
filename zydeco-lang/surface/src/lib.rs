@@ -66,6 +66,7 @@ pub mod bitter {
 /// introduces the bound syntax (ABT);
 pub mod scoped {
     pub mod syntax;
+    pub mod collector;
     // pub mod resolver;
     pub mod err;
 }
