@@ -1,6 +1,6 @@
 //! The surface syntax of zydeco.
 
-pub use crate::arena::*;
+pub use crate::{arena::*, syntax::*};
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
@@ -19,33 +19,6 @@ impl DefPtr for DefId {}
 impl PatPtr for PatId {}
 impl CoPatPtr for CoPatId {}
 impl TermPtr for TermId {}
-
-/* --------------------------------- Binder --------------------------------- */
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct NameDef<T>(pub T);
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct NameRef<T>(pub Vec<VarName>, pub T);
-
-/* ----------------------------------- Use ---------------------------------- */
-
-/// `..`
-#[derive(Clone, Debug)]
-pub struct UseAll;
-/// `binder = origin`
-#[derive(Clone, Debug)]
-pub struct UseAlias(pub VarName, pub VarName);
-#[derive(Clone, From, Debug)]
-pub enum UseEnum {
-    Name(VarName),
-    Alias(UseAlias),
-    All(UseAll),
-    Cluster(Uses),
-}
-#[derive(Clone, Debug)]
-pub struct UsePath(pub NameRef<UseEnum>);
-#[derive(Clone, Debug)]
-pub struct Uses(pub Vec<UsePath>);
 
 /* --------------------------------- Pattern -------------------------------- */
 

@@ -16,6 +16,9 @@ pub mod package {
 /// defines the SpanArena and the id types for all the structures
 pub mod arena;
 
+/// defines common syntax in the surface language
+pub mod syntax;
+
 /// lexing and parsing;
 /// introduces the surface syntax (AST);
 pub mod textual {

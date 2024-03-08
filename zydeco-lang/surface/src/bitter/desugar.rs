@@ -130,16 +130,17 @@ impl Desugar for t::TopLevel {
                 Decl::Alias(decl) => {
                     let t::Alias(genbind) = decl;
                     let (pat, term) = genbind.desugar(desugarer);
-                    // pat & sealed -> alias
+                    // pat & term -> alias
                     b::Alias { binder: pat, bindee: term }.into()
                 }
                 Decl::Extern(decl) => {
-                    let t::Extern(t::GenBind { rec: _, comp: _, binder, params, ty, bindee: () }) =
+                    // Todo: error on rec
+                    let t::Extern(t::GenBind { rec: _, comp, binder, params, ty, bindee: () }) =
                         decl;
                     let binder = binder.desugar(desugarer);
                     let params = params.map(|params| params.desugar(desugarer));
                     let ty = ty.map(|ty| ty.desugar(desugarer));
-                    b::Extern { binder, params, ty }.into()
+                    b::Extern { comp, binder, params, ty }.into()
                 }
                 Decl::Module(decl) => {
                     let t::Module { name, top } = decl;

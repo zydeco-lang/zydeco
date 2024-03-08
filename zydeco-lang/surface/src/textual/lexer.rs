@@ -119,6 +119,7 @@ pub enum Tok<'input> {
     #[token("<-")]
     Assign,
     #[token("_")]
+    #[token("_?", priority = 2)]
     Hole,
 }
 
