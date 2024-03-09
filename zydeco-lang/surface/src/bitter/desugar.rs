@@ -1,5 +1,6 @@
 use crate::{
     bitter::syntax as b,
+    syntax::*,
     textual::syntax::{self as t},
 };
 use zydeco_utils::span::Span;
@@ -50,7 +51,7 @@ impl Desugar for t::TopLevel {
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
         let t::TopLevel(decls) = self;
         let mut decls_new = Vec::new();
-        for t::Modifiers { public, inner } in decls {
+        for Modifiers { public, inner } in decls {
             use t::Declaration as Decl;
             let inner = match inner {
                 Decl::DataDef(decl) => {
@@ -142,29 +143,34 @@ impl Desugar for t::TopLevel {
                     let ty = ty.map(|ty| ty.desugar(desugarer));
                     b::Extern { comp, binder, params, ty }.into()
                 }
-                Decl::Module(decl) => {
-                    let t::Module { name, top } = decl;
+                Decl::Layer(decl) => {
+                    let t::Layer { name, uses, top } = decl;
                     let top = top.desugar(desugarer);
-                    b::Module { name, top }.into()
-                }
-                Decl::UseDef(decl) => {
-                    let t::UseDef(uses) = decl;
                     // Todo: uses
-                    b::UseDef(uses).into()
+                    let uses = uses
+                        .into_iter()
+                        .map(|Modifiers { public, inner }| Modifiers { public, inner })
+                        .collect();
+                    b::Layer { name, uses, top }.into()
                 }
-                Decl::UseBlock(decl) => {
-                    let t::UseBlock { uses, top } = decl;
-                    // Todo: uses
-                    let top = top.desugar(desugarer);
-                    b::UseBlock { uses, top }.into()
-                }
+                // Decl::UseDef(decl) => {
+                //     let t::UseDef(uses) = decl;
+                //     // Todo: uses
+                //     b::UseDef(uses).into()
+                // }
+                // Decl::UseBlock(decl) => {
+                //     let t::UseBlock { uses, top } = decl;
+                //     // Todo: uses
+                //     let top = top.desugar(desugarer);
+                //     b::UseBlock { uses, top }.into()
+                // }
                 Decl::Main(decl) => {
                     let t::Main(term) = decl;
                     let term = term.desugar(desugarer);
                     b::Main(term).into()
                 }
             };
-            decls_new.push(b::Modifiers { public, inner })
+            decls_new.push(Modifiers { public, inner })
         }
         b::TopLevel(decls_new)
     }

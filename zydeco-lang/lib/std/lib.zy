@@ -1,7 +1,8 @@
-module Builtin where
+layer builtin where
+  pub extern Set end
   ## the CType and VType kinds
-  pub extern CType end
-  pub extern VType end
+  pub extern CType : Set end
+  pub extern VType : Set end
   ## the Thunk and Ret types
   pub extern Thunk (B : CType) : VType end
   pub extern Ret (A : VType) : CType end
@@ -10,10 +11,11 @@ module Builtin where
 end
 
 
-module Std where
-  pub use Builtin/(Thunk, Ret, U, F) end
+layer std
+  use builtin/(Thunk, Ret, U, F)
+where
 
-  module Identity where
+  layer Identity where
     pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
       fn A a -> ret a
     } end
@@ -27,7 +29,7 @@ module Std where
     | +Unit()
   end
 
-  module Prod where
+  layer Prod where
     pub data Pair (A : VType) (A' : VType) where
       | +Cons(A, A')
     end
@@ -50,7 +52,7 @@ module Std where
     | +Right(A)
   end
 
-  module Bool where
+  layer Bool where
     pub data Bool where
       | +True()
       | +False()
@@ -139,7 +141,7 @@ module Std where
     } end
   end
 
-  module Nat where
+  layer Nat where
     pub data Nat where
       | +Z()
       | +S(Nat)

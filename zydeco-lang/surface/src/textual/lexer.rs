@@ -20,15 +20,16 @@ pub enum Tok<'input> {
 
     #[token("pub")]
     Public,
-    #[token("ext")]
-    #[token("extern")]
-    Extern,
     #[token("where")]
     Where,
     #[token("end")]
     End,
     #[token("module")]
     Module,
+    #[token("layer")]
+    Layer,
+    #[token("root")]
+    Root,
     #[token("use")]
     Use,
     #[token("data")]
@@ -40,6 +41,8 @@ pub enum Tok<'input> {
     #[token("def")]
     #[token("define")]
     Define,
+    #[token("extern")]
+    Extern,
     #[token("main")]
     Main,
     #[token("let")]
@@ -72,7 +75,7 @@ pub enum Tok<'input> {
     Pack,
 
     #[regex(r"[\+-]?[0-9]+")]
-    NumLit(&'input str),
+    IntLit(&'input str),
     #[regex(r#""[^"\\]*(?:\\.[^"\\]*)*""#)]
     StrLit(&'input str),
     #[regex(r#"'([ -~]|\\[nrt'|(\\)])'"#)]
@@ -133,13 +136,15 @@ impl<'input> Display for Tok<'input> {
             Tok::Where => write!(f, "where"),
             Tok::End => write!(f, "end"),
             Tok::Public => write!(f, "pub"),
-            Tok::Extern => write!(f, "extern"),
             Tok::Module => write!(f, "module"),
+            Tok::Layer => write!(f, "layer"),
+            Tok::Root => write!(f, "root"),
             Tok::Use => write!(f, "use"),
             Tok::Data => write!(f, "data"),
             Tok::Codata => write!(f, "codata"),
             Tok::Alias => write!(f, "alias"),
             Tok::Define => write!(f, "define"),
+            Tok::Extern => write!(f, "extern"),
             Tok::Main => write!(f, "main"),
             Tok::Let => write!(f, "let"),
             Tok::In => write!(f, "in"),
@@ -155,9 +160,9 @@ impl<'input> Display for Tok<'input> {
             Tok::Exists => write!(f, "exists"),
             Tok::At => write!(f, "@"),
             Tok::Pack => write!(f, "pack"),
-            Tok::NumLit(s) => write!(f, "NumLiteral({})", s),
-            Tok::StrLit(s) => write!(f, "StrLiteral({})", s),
-            Tok::CharLit(s) => write!(f, "CharLiteral({})", s),
+            Tok::IntLit(s) => write!(f, "IntLit({})", s),
+            Tok::StrLit(s) => write!(f, "StrLit({})", s),
+            Tok::CharLit(s) => write!(f, "CharLit({})", s),
             Tok::ParenOpen => write!(f, "("),
             Tok::ParenClose => write!(f, ")"),
             Tok::BracketOpen => write!(f, "["),

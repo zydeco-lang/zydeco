@@ -32,9 +32,9 @@ impl Ugly for TopLevel {
                     Decl::Define(d) => s += &d.ugly(f),
                     Decl::Alias(d) => s += &d.ugly(f),
                     Decl::Extern(d) => s += &d.ugly(f),
-                    Decl::Module(d) => s += &d.ugly(f),
-                    Decl::UseDef(d) => s += &d.ugly(f),
-                    Decl::UseBlock(d) => s += &d.ugly(f),
+                    Decl::Layer(d) => s += &d.ugly(f),
+                    // Decl::UseDef(d) => s += &d.ugly(f),
+                    // Decl::UseBlock(d) => s += &d.ugly(f),
                     Decl::Main(d) => s += &d.ugly(f),
                 }
                 s
@@ -152,7 +152,10 @@ where
 {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let NameRef(path, name) = self;
+        let NameRef(root, path, name) = self;
+        if *root {
+            s += "root/";
+        }
         for p in path {
             s += &p.ugly(f);
             s += "/";
@@ -556,36 +559,45 @@ impl Ugly for UseEnum {
     }
 }
 
-impl Ugly for UseDef {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let UseDef(u) = self;
-        s += "use ";
-        s += &u.ugly(f);
-        s += " end";
-        s
-    }
-}
+// impl Ugly for UseDef {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let UseDef(u) = self;
+//         s += "use ";
+//         s += &u.ugly(f);
+//         s += " end";
+//         s
+//     }
+// }
 
-impl Ugly for UseBlock {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let UseBlock { uses, top } = self;
-        s += "use ";
-        s += &uses.ugly(f);
-        s += " where\n";
-        s += &top.ugly(f);
-        s += "\nend";
-        s
-    }
-}
+// impl Ugly for UseBlock {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let UseBlock { uses, top } = self;
+//         s += "use ";
+//         s += &uses.ugly(f);
+//         s += " where\n";
+//         s += &top.ugly(f);
+//         s += "\nend";
+//         s
+//     }
+// }
 
-impl Ugly for Module {
+impl Ugly for Layer {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Module { name, top } = self;
-        s += "module ";
-        s += &name.ugly(f);
+        let Layer { name, uses, top } = self;
+        if let Some(name) = name {
+            s += "layer ";
+            s += &name.ugly(f);
+        }
+        for Modifiers { public, inner } in uses {
+            if *public {
+                s += " pub";
+            }
+            s += " use ";
+            s += &inner.ugly(f);
+        }
         s += " where\n";
         s += &top.ugly(f);
         s += "\nend";

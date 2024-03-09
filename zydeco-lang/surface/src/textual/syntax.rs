@@ -210,19 +210,20 @@ pub struct Alias(pub GenBind<TermId>);
 pub struct Extern(pub GenBind<()>);
 
 #[derive(Clone, Debug)]
-pub struct Module {
-    pub name: VarName,
+pub struct Layer {
+    pub name: Option<NameRef<VarName>>,
+    pub uses: Vec<Modifiers<UsePath>>,
     pub top: TopLevel,
 }
 
-#[derive(From, Clone, Debug)]
-pub struct UseDef(pub UsePath);
+// #[derive(From, Clone, Debug)]
+// pub struct UseDef(pub UsePath);
 
-#[derive(Clone, Debug)]
-pub struct UseBlock {
-    pub uses: UsePath,
-    pub top: TopLevel,
-}
+// #[derive(Clone, Debug)]
+// pub struct UseBlock {
+//     pub uses: UsePath,
+//     pub top: TopLevel,
+// }
 
 #[derive(Clone, Debug)]
 pub struct Main(pub TermId);
@@ -234,25 +235,10 @@ pub enum Declaration {
     Define(Define),
     Alias(Alias),
     Extern(Extern),
-    Module(Module),
-    UseDef(UseDef),
-    UseBlock(UseBlock),
+    Layer(Layer),
+    // UseDef(UseDef),
+    // UseBlock(UseBlock),
     Main(Main),
-}
-
-#[derive(Clone, Debug)]
-pub struct Modifiers<T> {
-    pub public: bool,
-    pub inner: T,
-}
-impl<T> Modifiers<T> {
-    pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Modifiers<U>, E>
-    where
-        F: FnOnce(&T) -> Result<U, E>,
-    {
-        let Modifiers { public, inner } = self;
-        Ok(Modifiers { public: *public, inner: f(inner)? })
-    }
 }
 
 #[derive(From, Clone, Debug)]

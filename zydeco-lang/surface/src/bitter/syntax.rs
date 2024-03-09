@@ -1,5 +1,6 @@
 //! Desugaring of the zydeco surface syntax.
 
+use crate::syntax::*;
 use crate::{arena::*, textual::syntax as t};
 use derive_more::From;
 use std::ops::AddAssign;
@@ -204,19 +205,20 @@ pub struct Extern {
 }
 
 #[derive(Clone, Debug)]
-pub struct Module {
-    pub name: VarName,
+pub struct Layer {
+    pub name: Option<NameRef<VarName>>,
+    pub uses: Vec<Modifiers<UsePath>>,
     pub top: TopLevel,
 }
 
-#[derive(From, Clone, Debug)]
-pub struct UseDef(pub UsePath);
+// #[derive(From, Clone, Debug)]
+// pub struct UseDef(pub UsePath);
 
-#[derive(Clone, Debug)]
-pub struct UseBlock {
-    pub uses: UsePath,
-    pub top: TopLevel,
-}
+// #[derive(Clone, Debug)]
+// pub struct UseBlock {
+//     pub uses: UsePath,
+//     pub top: TopLevel,
+// }
 
 #[derive(Clone, Debug)]
 pub struct Main(pub TermId);
@@ -225,25 +227,10 @@ pub struct Main(pub TermId);
 pub enum Declaration {
     Alias(Alias),
     Extern(Extern),
-    Module(Module),
-    UseDef(UseDef),
-    UseBlock(UseBlock),
+    Layer(Layer),
+    // UseDef(UseDef),
+    // UseBlock(UseBlock),
     Main(Main),
-}
-
-#[derive(Clone, Debug)]
-pub struct Modifiers<T> {
-    pub public: bool,
-    pub inner: T,
-}
-impl<T> Modifiers<T> {
-    pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Modifiers<U>, E>
-    where
-        F: FnOnce(&T) -> Result<U, E>,
-    {
-        let Modifiers { public, inner } = self;
-        Ok(Modifiers { public: *public, inner: f(inner)? })
-    }
 }
 
 #[derive(From, Clone, Debug)]
