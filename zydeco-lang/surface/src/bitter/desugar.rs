@@ -153,11 +153,11 @@ impl Desugar for t::TopLevel {
                         .collect();
                     b::Layer { name, uses, top }.into()
                 }
-                // Decl::UseDef(decl) => {
-                //     let t::UseDef(uses) = decl;
-                //     // Todo: uses
-                //     b::UseDef(uses).into()
-                // }
+                Decl::UseDef(decl) => {
+                    let t::UseDef(uses) = decl;
+                    // Todo: uses
+                    b::UseDef(uses).into()
+                }
                 // Decl::UseBlock(decl) => {
                 //     let t::UseBlock { uses, top } = decl;
                 //     // Todo: uses

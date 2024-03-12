@@ -216,8 +216,8 @@ pub struct Layer {
     pub top: TopLevel,
 }
 
-// #[derive(From, Clone, Debug)]
-// pub struct UseDef(pub UsePath);
+#[derive(From, Clone, Debug)]
+pub struct UseDef(pub UsePath);
 
 // #[derive(Clone, Debug)]
 // pub struct UseBlock {
@@ -236,7 +236,7 @@ pub enum Declaration {
     Alias(Alias),
     Extern(Extern),
     Layer(Layer),
-    // UseDef(UseDef),
+    UseDef(UseDef),
     // UseBlock(UseBlock),
     Main(Main),
 }

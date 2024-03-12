@@ -15,7 +15,7 @@ pub trait DetectLayer {
 }
 
 impl DetectLayer for b::TopLevel {
-    fn detect(&self, path: NameRef<()>, detective: &mut Detective) -> Result<()> {
+    fn detect(&self, _path: NameRef<()>, _detective: &mut Detective) -> Result<()> {
         todo!()
     }
 }

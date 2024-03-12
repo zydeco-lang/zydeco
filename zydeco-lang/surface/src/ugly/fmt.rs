@@ -33,7 +33,7 @@ impl Ugly for TopLevel {
                     Decl::Alias(d) => s += &d.ugly(f),
                     Decl::Extern(d) => s += &d.ugly(f),
                     Decl::Layer(d) => s += &d.ugly(f),
-                    // Decl::UseDef(d) => s += &d.ugly(f),
+                    Decl::UseDef(d) => s += &d.ugly(f),
                     // Decl::UseBlock(d) => s += &d.ugly(f),
                     Decl::Main(d) => s += &d.ugly(f),
                 }
@@ -559,16 +559,16 @@ impl Ugly for UseEnum {
     }
 }
 
-// impl Ugly for UseDef {
-//     fn ugly(&self, f: &Formatter) -> String {
-//         let mut s = String::new();
-//         let UseDef(u) = self;
-//         s += "use ";
-//         s += &u.ugly(f);
-//         s += " end";
-//         s
-//     }
-// }
+impl Ugly for UseDef {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        let UseDef(u) = self;
+        s += "use ";
+        s += &u.ugly(f);
+        s += " end";
+        s
+    }
+}
 
 // impl Ugly for UseBlock {
 //     fn ugly(&self, f: &Formatter) -> String {

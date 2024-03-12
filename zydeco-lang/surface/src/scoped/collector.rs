@@ -69,7 +69,7 @@ impl Collect for b::TopLevel {
                     //     }
                     // }
                 }
-                // Decl::UseDef(_) => todo!(),
+                Decl::UseDef(_) => todo!(),
                 // Decl::UseBlock(_) => todo!(),
                 Decl::Main(_) => todo!(),
             }

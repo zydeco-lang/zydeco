@@ -393,7 +393,7 @@ Declaration: Declaration = {
         name, uses, top
     }.into(),
     "extern" <GenBindNull> "end" => Extern(<>).into(),
-    // "use" <UsePath> "end" => UseDef(<>).into(),
+    "use" <UsePath> "end" => UseDef(<>).into(),
     // "use" <uses:UsePath> "where" <top:TopLevel> "end" => UseBlock {
     //     uses, top
     // }.into(),
