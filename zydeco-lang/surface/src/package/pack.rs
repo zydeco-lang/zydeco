@@ -6,6 +6,7 @@ use crate::{
         desugar::{DesugarOut, Desugarer},
         syntax as b,
     },
+    scoped::detective::Detective,
     textual::{
         err::ParseError,
         lexer::{Lexer, Tok},
@@ -35,9 +36,12 @@ pub enum UseStd {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct Package {
     #[serde(skip)]
     pub path: PathBuf,
+    pub name: String,
+    #[serde(default)]
     pub srcs: Vec<PathBuf>,
     #[serde(default)]
     pub deps: Vec<Dependency>,
@@ -73,7 +77,7 @@ impl Package {
         })
     }
     pub fn run(&self) -> Result<()> {
-        let Package { path, srcs, deps: _, std: _ } = self;
+        let Package { path, name: _, srcs, deps: _, std: _ } = self;
         // Todo: deal with std and deps
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
         // Todo: parallelize
@@ -98,7 +102,7 @@ impl Package {
             .into_iter()
             .map(|f| f.desugar(b::SpanArenaBitter::new(&mut alloc)))
             .collect::<Vec<_>>();
-        let _stew = FileBitter::merge(
+        let stew = FileBitter::merge(
             PackageStew {
                 sources: HashMap::new(),
                 spans: b::SpanArenaBitter::new(&mut alloc),
@@ -109,6 +113,10 @@ impl Package {
         )?;
 
         // Todo: add deps
+        let tree = Detective::new(&stew.spans, &stew.ctx)
+            .run(&stew.top)
+            .map_err(|e| SurfaceError::ResolveError(format!("In layer detection: {}", e.to_string())))?;
+        println!("{:#?}", tree);
         Ok(())
     }
 }

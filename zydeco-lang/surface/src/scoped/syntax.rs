@@ -1,9 +1,10 @@
 pub use crate::bitter::syntax as b;
 pub use crate::bitter::syntax::*;
+pub use crate::syntax::*;
 
 use std::{
     collections::HashMap,
-    ops::{AddAssign, Index},
+    // ops::AddAssign,
 };
 use zydeco_utils::arena::ArenaAssoc;
 
@@ -18,46 +19,26 @@ pub struct Ctx {
     pub terms: ArenaAssoc<TermId, Term<DefId>>,
 }
 
-impl AddAssign<Ctx> for Ctx {
-    fn add_assign(&mut self, rhs: Ctx) {
-        self.defs += rhs.defs;
-        self.pats += rhs.pats;
-        self.copats += rhs.copats;
-        self.terms += rhs.terms;
-    }
-}
+// impl AddAssign<Ctx> for Ctx {
+//     fn add_assign(&mut self, rhs: Ctx) {
+//         self.defs += rhs.defs;
+//         self.pats += rhs.pats;
+//         self.copats += rhs.copats;
+//         self.terms += rhs.terms;
+//     }
+// }
 
 /* ---------------------------------- Layer --------------------------------- */
 
+/// the layer tree in a package
 #[derive(Clone, Debug)]
 pub struct LayerTree {
-    pub name: VarName,
-    // pub reexport: Vec<NameRef<VarName>>,
-    pub inner: HashMap<VarName, LayerTree>,
+    // pub name: VarName,
+    // pub deps: DepGraph<NameRef<()>>,
+    pub layer: HashMap<NameRef<()>, HashMap<VarName, DefId>>,
 }
-
-/* --------------------------------- Symbol --------------------------------- */
-
-pub enum Symbol {
-    Module(InternalSymbols),
-    Def(b::DefId),
-}
-
-/// symbols visible in the current package
-pub struct InternalSymbols {
-    pub map: HashMap<VarName, Symbol>,
-}
-impl InternalSymbols {
-    pub fn new() -> InternalSymbols {
-        Self { map: HashMap::new() }
-    }
-    // fn insert(&mut self, k: VarName, v: Symbol) -> Option<Symbol> {
-    //     self.map.insert(k, v)
-    // }
-}
-impl Index<&VarName> for InternalSymbols {
-    type Output = Symbol;
-    fn index(&self, index: &VarName) -> &Self::Output {
-        &self.map[index]
+impl Default for LayerTree {
+    fn default() -> Self {
+        LayerTree { layer: HashMap::new() }
     }
 }

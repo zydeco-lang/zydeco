@@ -5,9 +5,9 @@ use derive_more::From;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct VarName(pub String);
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CtorName(pub String);
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DtorName(pub String);
 
 /* ------------------------------- Structural ------------------------------- */

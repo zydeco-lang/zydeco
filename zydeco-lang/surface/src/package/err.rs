@@ -15,8 +15,8 @@ pub enum SurfaceError {
     LexerError,
     #[error("Parse error:\n{0}")]
     ParseError(String),
-    #[error("Resolve errors:\n{0}")]
-    ResolveErrors(String),
+    #[error("Resolve error:\n{0}")]
+    ResolveError(String),
 }
 
 pub type Result<T> = std::result::Result<T, SurfaceError>;

@@ -49,6 +49,30 @@ mod impls {
     use super::*;
     use std::fmt;
 
+    impl From<Vec<VarName>> for NameRef<()> {
+        fn from(path: Vec<VarName>) -> Self {
+            NameRef(false, path, ())
+        }
+    }
+
+    impl Extend<VarName> for NameRef<()> {
+        fn extend<T: IntoIterator<Item = VarName>>(&mut self, iter: T) {
+            self.1.extend(iter);
+        }
+    }
+
+    impl IntoIterator for NameRef<VarName> {
+        type Item = VarName;
+    
+        type IntoIter = std::vec::IntoIter<Self::Item>;
+    
+        fn into_iter(self) -> Self::IntoIter {
+            let NameRef(_, mut path, name) = self;
+            path.push(name);
+            path.into_iter()
+        }
+    }
+
     impl fmt::Display for NameRef<VarName> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             let NameRef(root, path, VarName(name)) = self;

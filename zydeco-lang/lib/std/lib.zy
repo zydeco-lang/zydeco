@@ -1,15 +1,15 @@
-/** the definition of Kind **/
+/// the definition of Kind
 pub extern Kind end
-/** the VType and CType kinds **/
+/// the VType and CType kinds
 pub extern VType : Kind end
 pub extern CType : Kind end
-/** the Thunk and Ret types **/
+/// the Thunk and Ret types
 pub extern Thunk (B : CType) : VType end
 pub extern Ret (A : VType) : CType end
 pub alias U (B : CType) = Thunk B end
 pub alias F (A : VType) = Ret A end
 
-/** the identity functions **/
+/// the identity functions
 
 pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
   fn A a -> ret a
@@ -19,13 +19,13 @@ pub def id~ : Thunk(forall (B : CType) . Thunk B -> B) = {
   fn B b -> ! b
 } end
 
-/** the Unit type **/
+/// the Unit type
 
 pub data Unit where
   | +Unit()
 end
 
-/** the Pair type **/
+/// the Pair type
 
 pub data Pair (A : VType) (A' : VType) where
   | +Cons(A, A')
@@ -35,21 +35,21 @@ pub def ! pair (A : VType) (A' : VType) (x : A) (y : A') : Ret (Pair A A') =
   ret +Cons(x, y)
 end
 
-/** the Option type **/
+/// the Option type
 
 pub data Option (A : VType) where
   | +None()
   | +Some(A)
 end
 
-/** the Either type **/
+/// the Either type
 
 pub data Either (E : VType) (A : VType) where
   | +Left(E)
   | +Right(A)
 end
 
-/** the Bool type **/
+/// the Bool type
 
 pub data Bool where
   | +True()
@@ -139,8 +139,7 @@ pub def if~ : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -
     ! if @(B) b thn els
 } end
 
-
-/** the Nat type **/
+/// the Nat type
 
 pub data Nat where
   | +Z()

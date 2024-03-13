@@ -7,8 +7,8 @@ pub enum ResolveError {
     UnboundVar(Sp<NameRef<VarName>>),
     #[error("Ambiguous annotation on binder: {0}")]
     AmbiguousBinderAnnotation(Sp<VarName>),
-    #[error("Define twice: {0}")]
-    DefineTwice(Sp<VarName>),
+    #[error("Duplicate definition: {0} and {1}")]
+    DuplicateDefinition(Sp<VarName>, Sp<VarName>),
     #[error("No such module found: {0}")]
     ModuleNotFound(Sp<NameRef<VarName>>),
 }

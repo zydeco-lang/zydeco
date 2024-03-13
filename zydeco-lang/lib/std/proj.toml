@@ -1,3 +1,5 @@
+name = "Std"
+
 srcs = [
     "lib.zy"
 ]

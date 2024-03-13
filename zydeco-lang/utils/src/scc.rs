@@ -142,7 +142,7 @@ impl<'a, Id: Hash + Eq + Clone> Kosaraju<'a, Id>
 }
 
 /// Scc graph
-// #[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SccGraph<Id: Hash + Eq + Clone> {
     /// maps scc index to the scc
     strongs: HashMap<usize, HashSet<Id>>,
