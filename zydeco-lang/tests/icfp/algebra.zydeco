@@ -1,0 +1,183 @@
+// Algebras of relative monads
+// Implementations and examples
+
+
+// The interface for the algebra
+codata Algebra (M: VType -> CType) (R: CType) where
+  | .bindA : forall (A: VType) .
+    Thunk (M A) -> Thunk (A -> R) -> R
+end
+
+
+codata IO (A: VType) where
+  | .run : Thunk (A -> OS) -> OS
+end
+
+// Algebra IO OS exists
+def fn alg_io : Algebra IO OS =
+  comatch
+  | .bindA A m k -> ! m .run k
+  end
+end
+
+
+// Algebra Ret R always exists
+def fn alg_ret (R: CType): Algebra Ret R =
+  comatch
+  | .bindA A m k ->
+    do a <- ! m; ! k a
+  end
+end
+
+
+// Algebra M (M V) always exists for M: Monad
+def fn alg_mo
+  (M: VType -> CType)
+  (V: VType)
+  (mo: Thunk (Monad M))
+: Algebra M (M V) =
+  comatch
+  | .bindA A m k ->
+    ! mo .bind @(A) @(V) m k
+  end
+end
+
+
+// Algebras can be defined on the arrow type
+def fn alg_arrow
+  (M: VType -> CType) (R: CType) (A: VType)
+  (alg: Thunk (Algebra M R))
+: Algebra M (A -> R) =
+  comatch
+  | .bindA A' m f -> fn a ->
+    ! alg .bindA @(A) m { fn a' -> ! f a' a }
+  end
+end
+
+
+codata With (L: CType) (R: CType) where
+  | .l : L
+  | .r : R
+end
+
+// Algebras can be defined on the with type
+def fn alg_with
+  (M: VType -> CType) (L: CType) (R: CType)
+  (algl: Thunk (Algebra M L))
+  (algr: Thunk (Algebra M R))
+: Algebra M (With L R) =
+  comatch
+  | .bindA A m f ->
+    comatch
+    | .l -> ! algl .bindA @(A) m { fn a -> ! f a .l }
+    | .r -> ! algr .bindA @(A) m { fn a -> ! f a .r }
+    end
+  end
+end
+
+
+codata FnVar (A: VType) (B: CType) where
+  | .more(A): FnVar A B
+  | .done( ): B
+end
+
+// Algebras can be defined on coinductive types like FnVar
+def rec fn alg_var (M: VType -> CType) (R: CType) (alg: Thunk (Algebra M R)) (V: VType)
+                   : Algebra M (FnVar V R) =
+  comatch
+  | .bindA A m ka ->
+    let rec fn loop (ka: Thunk (A -> FnVar V R))
+    : FnVar V R =
+      comatch
+      | .more v -> ! loop { fn a -> ! ka a .more v }
+      | .done -> ! alg .bindA @(A) m { fn a -> ! ka a .done }
+      end
+    in ! loop ka
+  end
+end
+
+
+// An example program of echo sum server which may error on add_of
+
+// The defunctionalized exception type
+codata ExnDe (E: VType) (A: VType) where
+  | .try : forall (E': VType) .
+    Thunk (E -> ExnDe E' A) -> ExnDe E' A
+  | .kont : forall (A': VType) .
+    Thunk (A -> ExnDe E A') -> ExnDe E A'
+  | .done : Ret (Either E A)
+end
+
+codata Monad (M: VType -> CType) where
+  | .return : forall (A: VType) .
+    A -> M A
+  | .bind : forall (A: VType) (A': VType) .
+    Thunk (M A) -> Thunk (A -> M A') -> M A'
+end
+
+codata MonadErr (E: VType) (M: VType -> CType) where
+  | .fail : forall (A: VType) . E -> M A
+end
+
+def rec fn mexnde (E: VType) : Monad (ExnDe E) =
+  comatch
+  | .return -> fn A a ->
+    comatch
+    | .try -> fn E' k -> ! mexnde @(E') .return @(A) a
+    | .kont -> fn A' k -> ! k a
+    | .done -> ret +Right(a)
+    end
+  | .bind -> fn A A' m f ->
+    ! m .kont @(A') f
+  end
+end
+
+def rec fn mexnde_err (E: VType) : MonadErr E (ExnDe E) =
+  comatch
+  | .fail -> fn A e ->
+    comatch
+    | .try -> fn E' k -> ! k e
+    | .kont -> fn A' k -> ! mexnde_err @(E) .fail @(E) e
+    | .done -> ret +Left(e)
+    end
+  end
+end
+
+// Algebra on the defunctionalized exception type
+def fn alg_exn :
+  Algebra (ExnDe String) OS
+=
+  comatch
+  | .bindA A m k ->
+    do a? <- ! m .done;
+    match a?
+    | +Left(s) -> ! panic s
+    | +Right(a) -> ! k a
+    end
+  end
+end
+
+// add_of errors if the sum >= 256 (8-bit overflow)
+def fn add_of (i: Int) (sum: Int) : ExnDe String Int =
+  do sum <- ! add i sum;
+  ! if~ @(ExnDe String Int) {
+    ! int_lt sum 256
+  } {
+    ! mexnde @(String) .return @(Int) sum
+  } {
+    ! mexnde_err @(String) .fail @(Int) "sum >= 256"
+  }
+end
+
+main
+  (rec (loop: Thunk (Int -> OS)) ->
+    fn sum ->
+    ! read_line_as_int { fn i? -> match i?
+      | +None() -> ! exit 0
+      | +Some(i) ->
+        ! alg_exn .bindA @(Int) { ! add_of i sum } { fn sum ->
+        ! write_int sum {
+        ! write_line " = sum" {
+        ! loop sum }}}
+      end }) 0
+end
