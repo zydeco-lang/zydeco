@@ -1,16 +1,17 @@
 use super::err::*;
 use super::syntax::*;
+use crate::bitter::syntax as b;
 
 pub struct Detective<'ctx> {
-    pub spans: &'ctx SpanArenaBitter,
+    pub spans: &'ctx b::SpanArenaBitter,
     pub ctx: &'ctx b::Ctx,
     pub tree: LayerTree,
     /// temporary path for the current layer
     path: NameRef<()>,
 }
 impl<'ctx> Detective<'ctx> {
-    pub fn new(spans: &'ctx SpanArenaBitter, ctx: &'ctx b::Ctx) -> Detective<'ctx> {
-        Detective { spans, ctx, path: NameRef::from(vec![]), tree: LayerTree::default() }
+    pub fn new(spans: &'ctx b::SpanArenaBitter, ctx: &'ctx b::Ctx) -> Detective<'ctx> {
+        Detective { spans, ctx, path: b::NameRef::from(vec![]), tree: LayerTree::default() }
     }
     fn register(&mut self, name: VarName, def: DefId) -> Result<()> {
         let res =
@@ -23,7 +24,7 @@ impl<'ctx> Detective<'ctx> {
         }
         Ok(())
     }
-    pub fn run(mut self, top: &TopLevel) -> Result<LayerTree> {
+    pub fn run(mut self, top: &b::TopLevel) -> Result<LayerTree> {
         top.detect(&mut self)?;
         Ok(self.tree)
     }
@@ -34,22 +35,22 @@ pub trait DetectLayer {
     fn detect(&self, detective: &mut Detective) -> Result<()>;
 }
 
-impl DetectLayer for TopLevel {
+impl DetectLayer for b::TopLevel {
     fn detect(&self, detective: &mut Detective) -> Result<()> {
-        let TopLevel(decls) = self;
-        for Modifiers { public: _, inner } in decls {
-            use Declaration as Decl;
+        let b::TopLevel(decls) = self;
+        for b::Modifiers { public: _, inner } in decls {
+            use b::Declaration as Decl;
             match inner {
                 Decl::Alias(decl) => {
-                    let Alias { binder, bindee: _ } = decl;
+                    let b::Alias { binder, bindee: _ } = decl;
                     binder.detect(detective)?;
                 }
                 Decl::Extern(decl) => {
-                    let Extern { comp: _, binder, params: _, ty: _ } = decl;
+                    let b::Extern { comp: _, binder, params: _, ty: _ } = decl;
                     binder.detect(detective)?;
                 }
                 Decl::Layer(decl) => {
-                    let Layer { name, uses: _, top } = decl;
+                    let b::Layer { name, uses: _, top } = decl;
                     if let Some(name) = name {
                         let old_path = detective.path.clone();
                         detective.path.extend(name.clone().into_iter());
@@ -67,27 +68,27 @@ impl DetectLayer for TopLevel {
     }
 }
 
-impl DetectLayer for PatId {
+impl DetectLayer for b::PatId {
     fn detect(&self, detective: &mut Detective) -> Result<()> {
         let pat = detective.ctx.pats[*self].clone();
         match pat {
-            Pattern::Ann(pat) => {
-                let Ann { tm, ty: _ } = pat;
+            b::Pattern::Ann(pat) => {
+                let b::Ann { tm, ty: _ } = pat;
                 tm.detect(detective)?;
             }
-            Pattern::Hole(pat) => {
-                let Hole = pat;
+            b::Pattern::Hole(pat) => {
+                let b::Hole = pat;
             }
-            Pattern::Var(def) => {
+            b::Pattern::Var(def) => {
                 let name = detective.ctx.defs[def].clone();
                 detective.register(name, def)?;
             }
-            Pattern::Ctor(pat) => {
-                let Ctor(_, arg) = pat;
+            b::Pattern::Ctor(pat) => {
+                let b::Ctor(_, arg) = pat;
                 arg.detect(detective)?;
             }
-            Pattern::Paren(pat) => {
-                let Paren(pats) = pat;
+            b::Pattern::Paren(pat) => {
+                let b::Paren(pats) = pat;
                 for pat in pats {
                     pat.detect(detective)?;
                 }

@@ -1,6 +1,6 @@
 //! Desugaring of the zydeco surface syntax.
 
-use crate::syntax::*;
+pub use crate::syntax::*;
 use crate::{arena::*, textual::syntax as t};
 use derive_more::From;
 use std::ops::AddAssign;
@@ -52,9 +52,6 @@ pub enum CoPattern {
 #[derive(Clone, Debug)]
 pub struct Sealed(pub TermId);
 
-/// any binding structure
-#[derive(Clone, Debug)]
-pub struct Abs(pub CoPatId, pub TermId);
 /// `rec (x: A) -> b`
 #[derive(Clone, Debug)]
 pub struct Rec(pub PatId, pub TermId);
@@ -77,13 +74,6 @@ pub struct Sigma(pub CoPatId, pub TermId);
 // /// `exists (x: A) . A'`
 // #[derive(Clone, Debug)]
 // pub struct Exists(pub CoPatId, pub TermId);
-
-/// `{ b }` has type `Thunk B`
-#[derive(Clone, Debug)]
-pub struct Thunk(pub TermId);
-/// `! a` has type `B` where `A = Thunk B`
-#[derive(Clone, Debug)]
-pub struct Force(pub TermId);
 
 /// `ret a` has type `Ret A`
 #[derive(Clone, Debug)]
@@ -164,7 +154,7 @@ pub enum Term<Ref> {
     #[from(ignore)]
     Var(Ref),
     Paren(Paren<TermId>),
-    Abs(Abs),
+    Abs(Abs<CoPatId, TermId>),
     App(App<TermId>),
     Rec(Rec),
     Pi(Pi),
@@ -173,8 +163,8 @@ pub enum Term<Ref> {
     Sigma(Sigma),
     // Prod(Prod),
     // Exists(Exists),
-    Thunk(Thunk),
-    Force(Force),
+    Thunk(Thunk<TermId>),
+    Force(Force<TermId>),
     Ret(Return),
     Do(Bind),
     Let(PureBind),
@@ -257,7 +247,7 @@ pub struct Ctx {
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub copats: ArenaAssoc<CoPatId, CoPattern>,
-    pub terms: ArenaAssoc<TermId, Term<t::NameRef<VarName>>>,
+    pub terms: ArenaAssoc<TermId, Term<NameRef<VarName>>>,
 }
 
 impl AddAssign<Ctx> for Ctx {

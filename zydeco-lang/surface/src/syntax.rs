@@ -49,6 +49,16 @@ mod impls {
     use super::*;
     use std::fmt;
 
+    impl NameRef<VarName> {
+        pub fn syntactic_local(&self) -> Option<VarName> {
+            if self.0 && self.1.is_empty() {
+                Some(self.2.clone())
+            } else {
+                None
+            }
+        }
+    }
+
     impl From<Vec<VarName>> for NameRef<()> {
         fn from(path: Vec<VarName>) -> Self {
             NameRef(false, path, ())
@@ -63,9 +73,9 @@ mod impls {
 
     impl IntoIterator for NameRef<VarName> {
         type Item = VarName;
-    
+
         type IntoIter = std::vec::IntoIter<Self::Item>;
-    
+
         fn into_iter(self) -> Self::IntoIter {
             let NameRef(_, mut path, name) = self;
             path.push(name);

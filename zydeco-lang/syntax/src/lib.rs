@@ -16,10 +16,6 @@ pub struct DtorName(pub String);
 #[derive(Clone, Debug)]
 pub struct Paren<T>(pub Vec<T>);
 
-/// `e1 e2` shaped application
-#[derive(Clone, Debug)]
-pub struct App<T>(pub Vec<T>);
-
 /// `(...: t)` for analyze mode motivator
 #[derive(Clone, Debug)]
 pub struct Ann<Tm, Ty> {
@@ -29,6 +25,22 @@ pub struct Ann<Tm, Ty> {
 /// `_` for synthesize mode motivator
 #[derive(Clone, Debug)]
 pub struct Hole;
+
+/// any binding structure
+#[derive(Clone, Debug)]
+pub struct Abs<Cp, Tm>(pub Cp, pub Tm);
+/// `e1 e2` shaped application
+#[derive(Clone, Debug)]
+pub struct App<T>(pub Vec<T>);
+
+/* --------------------------------- Common --------------------------------- */
+
+/// `{ b }` has type `Thunk B`
+#[derive(Clone, Debug)]
+pub struct Thunk<Tm>(pub Tm);
+/// `! a` has type `B` where `A = Thunk B`
+#[derive(Clone, Debug)]
+pub struct Force<Tm>(pub Tm);
 
 /// `C(a_1, ...)`
 #[derive(Clone, Debug)]

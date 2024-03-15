@@ -236,7 +236,7 @@ where
     }
 }
 
-impl Ugly for Abs {
+impl Ugly for Abs<CoPatId, TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Abs(p, t) = self;
@@ -328,7 +328,7 @@ impl Ugly for Exists {
     }
 }
 
-impl Ugly for Thunk {
+impl Ugly for Thunk<TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Thunk(t) = self;
@@ -339,7 +339,7 @@ impl Ugly for Thunk {
     }
 }
 
-impl Ugly for Force {
+impl Ugly for Force<TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Force(t) = self;

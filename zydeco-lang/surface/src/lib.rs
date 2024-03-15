@@ -70,6 +70,6 @@ pub mod bitter {
 pub mod scoped {
     pub mod syntax;
     pub mod detective;
-    // pub mod resolver;
+    pub mod resolver;
     pub mod err;
 }

@@ -51,9 +51,6 @@ pub struct GenBind<Bindee> {
     pub bindee: Bindee,
 }
 
-/// any binding structure
-#[derive(Clone, Debug)]
-pub struct Abs(pub CoPatId, pub TermId);
 /// `rec (x: A) -> b`
 #[derive(Clone, Debug)]
 pub struct Rec(pub PatId, pub TermId);
@@ -61,28 +58,21 @@ pub struct Rec(pub PatId, pub TermId);
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
 pub struct Pi(pub CoPatId, pub TermId);
-/// `a -> b`
-#[derive(Clone, Debug)]
-pub struct Arrow(pub TermId, pub TermId);
 /// `forall (x: A) . B`
 #[derive(Clone, Debug)]
 pub struct Forall(pub CoPatId, pub TermId);
+/// `a -> b`
+#[derive(Clone, Debug)]
+pub struct Arrow(pub TermId, pub TermId);
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Sigma(pub CoPatId, pub TermId);
-/// `A * ...`
-#[derive(Clone, Debug)]
-pub struct Prod(pub Vec<TermId>);
 /// `exists (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Exists(pub CoPatId, pub TermId);
-
-/// `{ b }` has type `Thunk B`
+/// `A * ...`
 #[derive(Clone, Debug)]
-pub struct Thunk(pub TermId);
-/// `! a` has type `B` where `A = Thunk B`
-#[derive(Clone, Debug)]
-pub struct Force(pub TermId);
+pub struct Prod(pub Vec<TermId>);
 
 /// `ret a` has type `Ret A`
 #[derive(Clone, Debug)]
@@ -160,17 +150,17 @@ pub enum Term {
     Hole(Hole),
     Var(NameRef<VarName>),
     Paren(Paren<TermId>),
-    Abs(Abs),
+    Abs(Abs<CoPatId, TermId>),
     App(App<TermId>),
     Rec(Rec),
     Pi(Pi),
-    Arrow(Arrow),
     Forall(Forall),
+    Arrow(Arrow),
     Sigma(Sigma),
-    Prod(Prod),
     Exists(Exists),
-    Thunk(Thunk),
-    Force(Force),
+    Prod(Prod),
+    Thunk(Thunk<TermId>),
+    Force(Force<TermId>),
     Ret(Return),
     Do(Bind),
     Let(PureBind),
