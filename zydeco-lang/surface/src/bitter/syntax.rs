@@ -217,8 +217,8 @@ pub struct Main(pub TermId);
 pub enum Declaration {
     Alias(Alias),
     Extern(Extern),
-    Layer(Layer),
-    UseDef(UseDef),
+    // Layer(Layer),
+    // UseDef(UseDef),
     // UseBlock(UseBlock),
     Main(Main),
 }

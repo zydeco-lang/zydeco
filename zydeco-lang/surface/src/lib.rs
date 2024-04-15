@@ -13,8 +13,20 @@ pub mod package {
     mod tests;
 }
 
-/// defines the SpanArena and the id types for all the structures
-pub mod arena;
+/// defines the GenArena and the id types for all the structures
+pub mod arena {
+    pub mod identifier;
+    pub mod general;
+    pub mod folder;
+
+    pub use general::*;
+    pub use identifier::*;
+    pub use zydeco_utils::arena::*;
+
+    /// keeps all ids and spans, the corresponding source location
+    pub type SpanArena<DefId, PatId, CoPatId, TermId> =
+        GenArena<zydeco_utils::span::Span, DefId, PatId, CoPatId, TermId>;
+}
 
 /// defines common syntax in the surface language
 pub mod syntax;
@@ -69,7 +81,6 @@ pub mod bitter {
 /// introduces the bound syntax (ABT);
 pub mod scoped {
     pub mod syntax;
-    pub mod detective;
     pub mod resolver;
     pub mod err;
 }

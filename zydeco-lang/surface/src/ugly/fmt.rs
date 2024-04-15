@@ -32,8 +32,8 @@ impl Ugly for TopLevel {
                     Decl::Define(d) => s += &d.ugly(f),
                     Decl::Alias(d) => s += &d.ugly(f),
                     Decl::Extern(d) => s += &d.ugly(f),
-                    Decl::Layer(d) => s += &d.ugly(f),
-                    Decl::UseDef(d) => s += &d.ugly(f),
+                    // Decl::Layer(d) => s += &d.ugly(f),
+                    // Decl::UseDef(d) => s += &d.ugly(f),
                     // Decl::UseBlock(d) => s += &d.ugly(f),
                     Decl::Main(d) => s += &d.ugly(f),
                 }

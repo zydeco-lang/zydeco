@@ -225,8 +225,8 @@ pub enum Declaration {
     Define(Define),
     Alias(Alias),
     Extern(Extern),
-    Layer(Layer),
-    UseDef(UseDef),
+    // Layer(Layer),
+    // UseDef(UseDef),
     // UseBlock(UseBlock),
     Main(Main),
 }

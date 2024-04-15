@@ -53,6 +53,8 @@ pub enum Tok<'input> {
     Do,
     #[token("ret")]
     Ret,
+    #[token("begin")]
+    Begin,
     #[token("fn")]
     Fn,
     #[token("pi")]
@@ -150,6 +152,7 @@ impl<'input> Display for Tok<'input> {
             Tok::In => write!(f, "in"),
             Tok::Do => write!(f, "do"),
             Tok::Ret => write!(f, "ret"),
+            Tok::Begin => write!(f, "begin"),
             Tok::Fn => write!(f, "fn"),
             Tok::Pi => write!(f, "pi"),
             Tok::Rec => write!(f, "rec"),

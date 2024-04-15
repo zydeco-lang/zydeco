@@ -143,24 +143,21 @@ impl Desugar for t::TopLevel {
                     let ty = ty.map(|ty| ty.desugar(desugarer));
                     b::Extern { comp, binder, params, ty }.into()
                 }
-                Decl::Layer(decl) => {
-                    let t::Layer { name, uses, top } = decl;
-                    let top = top.desugar(desugarer);
-                    // Todo: uses
-                    let uses = uses
-                        .into_iter()
-                        .map(|Modifiers { public, inner }| Modifiers { public, inner })
-                        .collect();
-                    b::Layer { name, uses, top }.into()
-                }
-                Decl::UseDef(decl) => {
-                    let t::UseDef(uses) = decl;
-                    // Todo: uses
-                    b::UseDef(uses).into()
-                }
+                // Decl::Layer(decl) => {
+                //     let t::Layer { name, uses, top } = decl;
+                //     let top = top.desugar(desugarer);
+                //     let uses = uses
+                //         .into_iter()
+                //         .map(|Modifiers { public, inner }| Modifiers { public, inner })
+                //         .collect();
+                //     b::Layer { name, uses, top }.into()
+                // }
+                // Decl::UseDef(decl) => {
+                //     let t::UseDef(uses) = decl;
+                //     b::UseDef(uses).into()
+                // }
                 // Decl::UseBlock(decl) => {
                 //     let t::UseBlock { uses, top } = decl;
-                //     // Todo: uses
                 //     let top = top.desugar(desugarer);
                 //     b::UseBlock { uses, top }.into()
                 // }

@@ -26,14 +26,7 @@ impl Resolver {
         terms_old: ArenaAssoc<b::TermId, b::Term<b::NameRef<b::VarName>>>, ctx: r::Ctx,
         tree: r::LayerTree,
     ) -> Resolver {
-        Resolver {
-            spans,
-            terms_old,
-            ctx,
-            local: im::HashMap::new(),
-            tree,
-            searching: vec![],
-        }
+        Resolver { spans, terms_old, ctx, local: im::HashMap::new(), tree, searching: vec![] }
     }
 }
 
@@ -71,22 +64,6 @@ impl Resolve for b::TopLevel {
                 Decl::Extern(d) => {
                     let b::Extern { comp, binder, params, ty } = d;
                     r::Extern { comp, binder, params, ty }.into()
-                }
-                Decl::Layer(d) => {
-                    let b::Layer { name, uses: _, top } = d;
-                    if let Some(_name) = name {
-                        // Todo: search path
-                        // let old_path = resolver.searching.clone();
-                        // resolver.searching.extend(name.clone().into_iter());
-                        top.resolve(resolver)?;
-                        // resolver.searching = old_path;
-                    }
-                    // Todo: Layer
-                    unimplemented!()
-                }
-                Decl::UseDef(d) => {
-                    let b::UseDef(_ud) = d;
-                    unimplemented!()
                 }
                 Decl::Main(d) => {
                     let b::Main(m) = d;

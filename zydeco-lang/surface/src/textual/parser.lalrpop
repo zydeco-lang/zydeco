@@ -387,13 +387,13 @@ Declaration: Declaration = {
     <CoDataDef> => <>.into(),
     "define" <GenBindTerm> "end" => Define(<>).into(),
     "alias" <GenBindTerm> "end" => Alias(<>).into(),
-    "layer" <name:(<NameRef<VarName>>)?>
-        <uses:(<UseLayer>)*>
-    <top:("where" <TopLevel>)> "end" => Layer {
-        name, uses, top
-    }.into(),
     "extern" <GenBindNull> "end" => Extern(<>).into(),
-    "use" <UsePath> "end" => UseDef(<>).into(),
+    // "layer" <name:(<NameRef<VarName>>)?>
+    //     <uses:(<UseLayer>)*>
+    // <top:("where" <TopLevel>)> "end" => Layer {
+    //     name, uses, top
+    // }.into(),
+    // "use" <UsePath> "end" => UseDef(<>).into(),
     // "use" <uses:UsePath> "where" <top:TopLevel> "end" => UseBlock {
     //     uses, top
     // }.into(),
