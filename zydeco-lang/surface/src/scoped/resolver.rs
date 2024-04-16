@@ -16,7 +16,6 @@ pub struct Resolver {
     pub terms_old: ArenaAssoc<b::TermId, b::Term<b::NameRef<b::VarName>>>,
     pub ctx: r::Ctx,
     pub local: im::HashMap<b::VarName, r::DefId>,
-    pub tree: r::LayerTree,
     pub searching: Vec<b::NameRef<()>>,
 }
 
@@ -24,9 +23,8 @@ impl Resolver {
     pub fn new(
         spans: b::SpanArenaBitter,
         terms_old: ArenaAssoc<b::TermId, b::Term<b::NameRef<b::VarName>>>, ctx: r::Ctx,
-        tree: r::LayerTree,
     ) -> Resolver {
-        Resolver { spans, terms_old, ctx, local: im::HashMap::new(), tree, searching: vec![] }
+        Resolver { spans, terms_old, ctx, local: im::HashMap::new(), searching: vec![] }
     }
 }
 
@@ -158,10 +156,6 @@ impl Resolve for &b::TermId {
                         resolver.ctx.terms.insert(*self, r::Term::Var(def));
                         return Ok(());
                     }
-                }
-                if let Some(def) = resolver.tree.query(t.clone()) {
-                    resolver.ctx.terms.insert(*self, r::Term::Var(def));
-                    return Ok(());
                 }
                 let span = &resolver.spans.terms[*self];
                 Err(ResolveError::UnboundVar(span.make(t)))?

@@ -239,7 +239,7 @@ impl AddAssign<TopLevel> for TopLevel {
 
 /* --------------------------------- Context -------------------------------- */
 
-pub type SpanArenaBitter = SpanArena<DefId, PatId, CoPatId, TermId>;
+pub type SpanArenaBitter = ArenaGen<Span, DefId, PatId, CoPatId, TermId>;
 
 #[derive(Default, Debug)]
 pub struct Ctx {

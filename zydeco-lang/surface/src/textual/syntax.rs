@@ -251,7 +251,7 @@ pub struct Ctx {
     pub terms: ArenaAssoc<TermId, Term>,
 }
 
-pub type SpanArenaTextual = SpanArena<DefId, PatId, CoPatId, TermId>;
+pub type SpanArenaTextual = ArenaGen<Span, DefId, PatId, CoPatId, TermId>;
 
 pub struct Parser {
     pub spans: SpanArenaTextual,
@@ -260,7 +260,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(alloc: &mut GlobalAlloc) -> Self {
-        Self { spans: SpanArena::new(alloc), ctx: Ctx::default() }
+        Self { spans: ArenaGen::new(alloc), ctx: Ctx::default() }
     }
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.defs.alloc(def.info);

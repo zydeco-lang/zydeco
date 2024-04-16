@@ -22,10 +22,6 @@ pub mod arena {
     pub use general::*;
     pub use identifier::*;
     pub use zydeco_utils::arena::*;
-
-    /// keeps all ids and spans, the corresponding source location
-    pub type SpanArena<DefId, PatId, CoPatId, TermId> =
-        GenArena<zydeco_utils::span::Span, DefId, PatId, CoPatId, TermId>;
 }
 
 /// defines common syntax in the surface language
