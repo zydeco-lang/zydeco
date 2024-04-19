@@ -340,3 +340,24 @@ impl<T: SpanHolder> SpanHolder for Sp<T> {
         self.inner.span_map_mut(f);
     }
 }
+
+// mod interval_forest {
+//     use super::*;
+//     use crate::interval_tree::IntervalTree;
+//     use std::collections::HashMap;
+
+//     pub struct SpanIntervalForest<T> {
+//         forest: HashMap<PathBuf, SpanIntervalTree<T>>,
+//     }
+
+//     pub struct SpanIntervalTree<T> {
+//         tree: IntervalTree<Cursor1>,
+//         item: HashMap<(Cursor1, Cursor1), T>,
+//     }
+
+//     impl<T> SpanIntervalForest<T> {
+        
+//     }
+// }
+
+// pub use interval_forest::{SpanIntervalForest, SpanIntervalTree};

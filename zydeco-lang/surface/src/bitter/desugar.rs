@@ -83,8 +83,11 @@ impl Desugar for t::TopLevel {
                     // abs -> sealed
                     let sealed = desugarer.span_term(span.clone());
                     let sealed = desugarer.term(sealed, b::Sealed(abs).into());
-                    // pat & sealed -> alias
-                    b::Alias { binder: pat, bindee: sealed }.into()
+                    // sealed -> rec
+                    let rec = desugarer.span_term(span.clone());
+                    let rec = desugarer.term(rec, b::Rec(pat, sealed).into());
+                    // pat & rec -> alias
+                    b::Alias { binder: pat, bindee: rec }.into()
                 }
                 Decl::CoDataDef(decl) => {
                     let t::CoDataDef { name, params, def } = decl;
@@ -115,8 +118,11 @@ impl Desugar for t::TopLevel {
                     // abs -> sealed
                     let sealed = desugarer.span_term(span.clone());
                     let sealed = desugarer.term(sealed, b::Sealed(abs).into());
+                    // sealed -> rec
+                    let rec = desugarer.span_term(span.clone());
+                    let rec = desugarer.term(rec, b::Rec(pat, sealed).into());
                     // pat & sealed -> alias
-                    b::Alias { binder: pat, bindee: sealed }.into()
+                    b::Alias { binder: pat, bindee: rec }.into()
                 }
                 Decl::Define(decl) => {
                     let t::Define(genbind) = decl;
