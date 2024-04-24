@@ -381,6 +381,25 @@ where
     }
 }
 
+impl<B> FmtArgs for BeginBlock<B>
+where
+    B: ComputationT + FmtArgs,
+{
+    fn fmt_args(&self, fargs: Args) -> String {
+        let BeginBlock { body } = self;
+        let mut s = String::new();
+        s += "with begin";
+        {
+            let fargs = fargs.indent();
+            s += &fargs.br_indent();
+            s += &body.fmt_args(fargs);
+        }
+        s += &fargs.br_indent();
+        s += "end";
+        s
+    }
+}
+
 impl<A, TyV, TeV, B> FmtArgs for MatchPack<A, TyV, TeV, B>
 where
     A: ValueT + FmtArgs,

@@ -181,6 +181,10 @@ impl TypeCheck for Sp<TermComputation> {
                     })?;
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
+            TermComputation::BeginBlock(BeginBlock { body }) => {
+                // Todo: begin block
+                Step::SynMode((ctx, body))
+            }
             TermComputation::TyAbsTerm(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("type-abstraction") }))?
             }
@@ -413,6 +417,10 @@ impl TypeCheck for Sp<TermComputation> {
                     ctx.err(span, InconsistentComatchers { unexpected, missing })
                 })?;
                 Step::Done(typ)
+            }
+            TermComputation::BeginBlock(BeginBlock { body }) => {
+                // Todo: begin block
+                Step::AnaMode((ctx, body), typ)
             }
             TermComputation::TyAbsTerm(Abs { param: (tvar_, kd_), body }) => {
                 let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ_syn else {

@@ -54,6 +54,10 @@ pub enum Tok<'input> {
     Match,
     #[token("comatch")]
     Comatch,
+    #[token("with")]
+    With,
+    #[token("begin")]
+    Begin,
     #[token("forall")]
     Forall,
     #[token("exists")]
@@ -139,6 +143,8 @@ impl<'input> Display for Tok<'input> {
             Tok::Rec => write!(f, "rec"),
             Tok::Match => write!(f, "match"),
             Tok::Comatch => write!(f, "comatch"),
+            Tok::With => write!(f, "with"),
+            Tok::Begin => write!(f, "begin"),
             Tok::Forall => write!(f, "Forall"),
             Tok::Exists => write!(f, "Exists"),
             Tok::At => write!(f, "@"),

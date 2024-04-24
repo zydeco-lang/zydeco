@@ -270,6 +270,19 @@ where
     }
 }
 
+impl<B> SpanHolder for BeginBlock<B>
+where
+    B: ComputationT + SpanHolder,
+{
+    fn span_map_mut<F>(&mut self, f: F)
+    where
+        F: Fn(&mut Span) + Clone,
+    {
+        let BeginBlock { body } = self;
+        body.span_map_mut(f);
+    }
+}
+
 impl<A, TyV, TeV, B> SpanHolder for MatchPack<A, TyV, TeV, B>
 where
     A: ValueT + SpanHolder,

@@ -95,6 +95,7 @@ pub enum TermComputation {
     Match(Match<CtorV, TermDef, BoxValue, Sp<TermComputation>>),
     Comatch(Comatch<DtorV, Sp<TermComputation>>),
     Dtor(Dtor<BoxComp, DtorV>),
+    BeginBlock(BeginBlock<BoxComp>),
     TyAppTerm(App<BoxComp, BoxType>),
     MatchPack(MatchPack<BoxValue, TypeDef, TermDef, BoxComp>),
 }

@@ -124,6 +124,11 @@ pub struct Dtor<B: ComputationT, D: DtorT> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BeginBlock<B: ComputationT> {
+    pub body: B,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatchPack<A: ValueT, TyV: TyVarT, TeV: VarT, B: ComputationT> {
     pub scrut: A,
     pub tvar: TyV,

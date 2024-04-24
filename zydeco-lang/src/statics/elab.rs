@@ -397,6 +397,10 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let body = body.try_map_rc(Elaboration::elab)?;
                 Dtor { body, dtorv }.into()
             }
+            ps::TermComputation::BeginBlock(ps::BeginBlock { body }) => {
+                let body = body.try_map_rc(Elaboration::elab)?;
+                BeginBlock { body }.into()
+            }
             ps::TermComputation::TyAppTerm(ps::App { body, arg }) => {
                 let body = body.try_map_rc(Elaboration::elab)?;
                 let arg: RcType = arg.try_map_rc(Elaboration::elab)?;
