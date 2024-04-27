@@ -181,9 +181,30 @@ impl TypeCheck for Sp<TermComputation> {
                     })?;
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
-            TermComputation::BeginBlock(BeginBlock { body }) => {
-                // Todo: begin block
-                Step::SynMode((ctx, body))
+            TermComputation::BeginBlock(BeginBlock { monad, body }) => {
+                let ty_u_monad = monad.syn(ctx.clone())?;
+                let ty_monad = ty_u_monad.clone().elim_thunk(ctx.clone(), span).ok_or_else(|| {
+                    ctx.err(
+                        span,
+                        TypeExpected {
+                            context: format!("begin-block"),
+                            expected: format!("Thunk _?"),
+                            found: ty_u_monad,
+                        },
+                    )
+                })?;
+                let ty_m = ty_monad.clone().elim_monad(ctx.clone(), span).ok_or_else(|| {
+                    ctx.err(
+                        span,
+                        TypeExpected {
+                            context: format!("begin-block"),
+                            expected: format!("Monad _?"),
+                            found: ty_monad,
+                        },
+                    )
+                })?;
+                let ty_body = body.syn(ctx.clone())?;
+                Step::Done(ty_body.lift_ty(ty_m, ctx.clone(), span)?)
             }
             TermComputation::TyAbsTerm(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("type-abstraction") }))?
@@ -418,10 +439,6 @@ impl TypeCheck for Sp<TermComputation> {
                 })?;
                 Step::Done(typ)
             }
-            TermComputation::BeginBlock(BeginBlock { body }) => {
-                // Todo: begin block
-                Step::AnaMode((ctx, body), typ)
-            }
             TermComputation::TyAbsTerm(Abs { param: (tvar_, kd_), body }) => {
                 let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ_syn else {
                     Err(ctx.err(
@@ -445,6 +462,7 @@ impl TypeCheck for Sp<TermComputation> {
                 Step::Done(typ)
             }
             TermComputation::Dtor(_)
+            | TermComputation::BeginBlock(_)
             | TermComputation::TyAppTerm(_)
             | TermComputation::MatchPack(_) => {
                 // subsumption

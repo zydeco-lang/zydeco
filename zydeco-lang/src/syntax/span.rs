@@ -270,15 +270,17 @@ where
     }
 }
 
-impl<B> SpanHolder for BeginBlock<B>
+impl<A, B> SpanHolder for BeginBlock<A, B>
 where
+    A: ValueT + SpanHolder,
     B: ComputationT + SpanHolder,
 {
     fn span_map_mut<F>(&mut self, f: F)
     where
         F: Fn(&mut Span) + Clone,
     {
-        let BeginBlock { body } = self;
+        let BeginBlock { monad, body } = self;
+        monad.span_map_mut(f.clone());
         body.span_map_mut(f);
     }
 }

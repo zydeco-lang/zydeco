@@ -124,7 +124,8 @@ pub struct Dtor<B: ComputationT, D: DtorT> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BeginBlock<B: ComputationT> {
+pub struct BeginBlock<A: ValueT, B: ComputationT> {
+    pub monad: A,
     pub body: B,
 }
 

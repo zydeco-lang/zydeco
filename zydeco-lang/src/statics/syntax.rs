@@ -106,7 +106,7 @@ pub enum TermComputation {
     Match(Match<CtorV, TermV, RcValue, RcComp>),
     Comatch(Comatch<DtorV, RcComp>),
     Dtor(Dtor<RcComp, DtorV>),
-    BeginBlock(BeginBlock<RcComp>),
+    BeginBlock(BeginBlock<RcValue, RcComp>),
     TyAbsTerm(Abs<(TypeV, Option<Sp<Kind>>), RcComp>),
     TyAppTerm(App<RcComp, RcType>),
     MatchPack(MatchPack<RcValue, TypeV, TermV, RcComp>),

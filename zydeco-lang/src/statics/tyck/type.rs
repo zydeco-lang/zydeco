@@ -29,6 +29,14 @@ impl Type {
     pub fn elim_os(self, ctx: Ctx, span: &Span) -> Option<()> {
         Type::lub(Type::make_os(), self, ctx, span).map(|_| ()).ok()
     }
+    pub fn make_monad(arg: RcType) -> Self {
+        Type::internal("Monad", vec![arg])
+    }
+    pub fn elim_monad(self, ctx: Ctx, span: &Span) -> Option<Type> {
+        let ty = Type::lub(Type::make_monad(span.make_rc(Hole.into())), self, ctx, span).ok()?;
+        let SynType::TypeApp(ty_app) = ty.synty else { None? };
+        ty_app.elim_monad_syntax()
+    }
 }
 impl TypeApp<NeutralVar, RcType> {
     pub fn elim_thunk_syntax(&self) -> Option<Type> {
@@ -50,6 +58,14 @@ impl TypeApp<NeutralVar, RcType> {
     pub fn elim_os_syntax(&self) -> Option<()> {
         match &self.tvar {
             NeutralVar::Var(tvar) if tvar.name() == "OS" => Some(()),
+            _ => None,
+        }
+    }
+    pub fn elim_monad_syntax(&self) -> Option<Type> {
+        match &self.tvar {
+            NeutralVar::Var(tvar) if tvar.name() == "Monad" => {
+                Some(self.args.first().unwrap().inner_clone())
+            }
             _ => None,
         }
     }

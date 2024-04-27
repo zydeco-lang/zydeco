@@ -57,21 +57,6 @@ pub mod backend {
     pub mod cps;
 }
 
-// pub mod core {
-//     pub mod library {
-//         pub mod syntax;
-//         // mod builtins;
-//         // mod link;
-//         // mod impls;
-//         mod fmt;
-//     }
-//     pub mod runtime {
-//         pub mod syntax;
-//         pub mod eval;
-//         mod fmt;
-//     }
-// }
-
 pub mod utils {
     pub use zydeco_utils::*;
     pub mod fmt;

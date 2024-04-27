@@ -381,14 +381,17 @@ where
     }
 }
 
-impl<B> FmtArgs for BeginBlock<B>
+impl<A, B> FmtArgs for BeginBlock<A, B>
 where
+    A: ValueT + FmtArgs,
     B: ComputationT + FmtArgs,
 {
     fn fmt_args(&self, fargs: Args) -> String {
-        let BeginBlock { body } = self;
+        let BeginBlock { monad, body } = self;
         let mut s = String::new();
-        s += "with begin";
+        s += "with ";
+        s += &monad.fmt_args(fargs);
+        s += " begin";
         {
             let fargs = fargs.indent();
             s += &fargs.br_indent();

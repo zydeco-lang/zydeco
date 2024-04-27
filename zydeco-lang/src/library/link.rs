@@ -113,7 +113,7 @@ impl From<&ss::TermComputation> for SynComp {
                 let body = rc!(body.inner_ref().into());
                 Dtor { body, dtorv: dtor.clone() }.into()
             }
-            ss::TermComputation::BeginBlock(BeginBlock { body }) => {
+            ss::TermComputation::BeginBlock(BeginBlock { monad, body }) => {
                 // Todo: begin block
                 body.inner_ref().into()
             },

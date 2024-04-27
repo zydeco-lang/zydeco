@@ -252,6 +252,10 @@ TermComputationAtom: TermComputation = {
     "(" <tc:Box<Sp<TermComputation>>> ":" <ty:Sp<Type>> ")" => Annotation {
         term: tc, ty,
     }.into(),
+    "with" <monad:Box<Sp<TermValue>>>
+    "begin" <body:Box<Sp<TermComputation>>> "end" => BeginBlock {
+        monad, body,
+    }.into(),
     "ret" <Box<Sp<TermValue>>> => Ret(<>).into(),
     "!" <Box<Sp<TermValue>>> => Force(<>).into(),
 };
@@ -369,6 +373,8 @@ extern {
         "rec" => Tok::Rec,
         "match" => Tok::Match,
         "comatch" => Tok::Comatch,
+        "with" => Tok::With,
+        "begin" => Tok::Begin,
         "forall" => Tok::Forall,
         "exists" => Tok::Exists,
         "@" => Tok::At,
