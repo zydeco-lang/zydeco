@@ -1,11 +1,12 @@
-use super::*;
+use crate::prelude::*;
+use crate::statics::{err::*, syntax::*, tyck::*};
 
-pub trait MonadTrans {
-    fn lift_ty(&self, ty_m: Type, ctx: Ctx, span: &Span) -> Result<Type, TyckError>;
+pub trait MonadTransType {
+    fn lift(&self, ty_m: Type, ctx: Ctx, span: &Span) -> Result<Type, TyckError>;
 }
 
-impl MonadTrans for Type {
-    fn lift_ty(&self, ty_m: Type, ctx: Ctx, span: &Span) -> Result<Type, TyckError> {
+impl MonadTransType for Type {
+    fn lift(&self, ty_m: Type, ctx: Ctx, span: &Span) -> Result<Type, TyckError> {
         let synty = match &self.synty {
             SynType::TypeAbs(_) => {
                 // Type abstraction would not be of kind "CType"
@@ -21,7 +22,7 @@ impl MonadTrans for Type {
             SynType::TypeApp(TypeApp { tvar, args: old_args }) => {
                 let mut args = Vec::new();
                 for arg in old_args {
-                    args.push(span.make_rc(arg.inner_ref().lift_ty(
+                    args.push(span.make_rc(arg.inner_ref().lift(
                         ty_m.clone(),
                         ctx.clone(),
                         span,
@@ -38,20 +39,20 @@ impl MonadTrans for Type {
             }
             SynType::Arrow(Arrow(ty_in, ty_out)) => {
                 let ty_in =
-                    span.make_rc(ty_in.inner_ref().lift_ty(ty_m.clone(), ctx.clone(), span)?);
-                let ty_out = span.make_rc(ty_out.inner_ref().lift_ty(ty_m, ctx, span)?);
+                    span.make_rc(ty_in.inner_ref().lift(ty_m.clone(), ctx.clone(), span)?);
+                let ty_out = span.make_rc(ty_out.inner_ref().lift(ty_m, ctx, span)?);
                 SynType::Arrow(Arrow(ty_in, ty_out))
             }
             SynType::Forall(Forall { param, ty }) => {
                 // Hack: shadowing not considered
                 let param = param.clone();
-                let ty = span.make_rc(ty.inner_ref().lift_ty(ty_m, ctx.clone(), span)?);
+                let ty = span.make_rc(ty.inner_ref().lift(ty_m, ctx.clone(), span)?);
                 SynType::Forall(Forall { param, ty })
             }
             SynType::Exists(Exists { param, ty }) => {
                 // Hack: shadowing not considered
                 let param = param.clone();
-                let ty = span.make_rc(ty.inner_ref().lift_ty(ty_m, ctx.clone(), span)?);
+                let ty = span.make_rc(ty.inner_ref().lift(ty_m, ctx.clone(), span)?);
                 SynType::Forall(Forall { param, ty })
             }
             SynType::AbstVar(_) | SynType::Hole(_) => self.synty.clone(),

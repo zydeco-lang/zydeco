@@ -1,5 +1,3 @@
-use std::collections::{HashMap, HashSet};
-
 use super::*;
 
 impl TypeCheck for Sp<TermComputation> {
@@ -182,17 +180,19 @@ impl TypeCheck for Sp<TermComputation> {
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
             TermComputation::BeginBlock(BeginBlock { monad, body }) => {
+                use crate::lift::MonadTransType;
                 let ty_u_monad = monad.syn(ctx.clone())?;
-                let ty_monad = ty_u_monad.clone().elim_thunk(ctx.clone(), span).ok_or_else(|| {
-                    ctx.err(
-                        span,
-                        TypeExpected {
-                            context: format!("begin-block"),
-                            expected: format!("Thunk _?"),
-                            found: ty_u_monad,
-                        },
-                    )
-                })?;
+                let ty_monad =
+                    ty_u_monad.clone().elim_thunk(ctx.clone(), span).ok_or_else(|| {
+                        ctx.err(
+                            span,
+                            TypeExpected {
+                                context: format!("begin-block"),
+                                expected: format!("Thunk _?"),
+                                found: ty_u_monad,
+                            },
+                        )
+                    })?;
                 let ty_m = ty_monad.clone().elim_monad(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
                         span,
@@ -204,7 +204,7 @@ impl TypeCheck for Sp<TermComputation> {
                     )
                 })?;
                 let ty_body = body.syn(ctx.clone())?;
-                Step::Done(ty_body.lift_ty(ty_m, ctx.clone(), span)?)
+                Step::Done(ty_body.lift(ty_m, ctx.clone(), span)?)
             }
             TermComputation::TyAbsTerm(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("type-abstraction") }))?

@@ -37,6 +37,14 @@ pub mod statics {
     };
 }
 
+/// monad transformers
+pub mod lift {
+    mod r#type;
+    mod term;
+    pub use r#type::MonadTransType;
+    pub use term::MonadTransTerm;
+}
+
 pub mod library {
     pub mod syntax;
     mod builtins;

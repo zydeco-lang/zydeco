@@ -325,7 +325,7 @@ impl Type {
             SynType::AbstVar(_) | SynType::Hole(_) => Ok(typ),
         }
     }
-    pub(super) fn apply(self, args: Vec<RcType>, ctx: &Ctx) -> Result<Self, TyckError> {
+    pub(crate) fn apply(self, args: Vec<RcType>, ctx: &Ctx) -> Result<Self, TyckError> {
         let typ = ctx.resolve_alias(self, &Span::dummy())?;
         let typ_syn = typ.resolve()?;
         match typ_syn {

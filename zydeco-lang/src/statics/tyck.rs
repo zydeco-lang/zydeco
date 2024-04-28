@@ -3,16 +3,14 @@ mod value;
 mod computation;
 mod module;
 mod lub;
-mod monad;
 
 use super::{
     err::{Frame, Trace, TyckError, TyckErrorItem, IndentVec},
     syntax::*,
 };
 use crate::{prelude::*, resolve::err::NameResolveError, syntax::Env};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use TyckErrorItem::*;
-use monad::MonadTrans;
 
 pub trait CtxT {
     fn err(&self, span: &Span, item: TyckErrorItem) -> TyckError;

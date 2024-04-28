@@ -114,9 +114,9 @@ impl From<&ss::TermComputation> for SynComp {
                 Dtor { body, dtorv: dtor.clone() }.into()
             }
             ss::TermComputation::BeginBlock(BeginBlock { monad, body }) => {
-                // Todo: begin block
-                body.inner_ref().into()
-            },
+                use crate::lift::MonadTransTerm;
+                (&body.inner_ref().lift(monad.inner_ref())).into()
+            }
             ss::TermComputation::TyAbsTerm(Abs { param: _, body }) => body.inner_ref().into(),
             ss::TermComputation::TyAppTerm(App { body, arg: _ }) => body.inner_ref().into(),
             ss::TermComputation::MatchPack(MatchPack { scrut, tvar: _, var, body }) => {
