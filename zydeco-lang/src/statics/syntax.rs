@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use derive_more::From;
-use im::Vector;
 use std::rc::Rc;
 use zydeco_derive::FmtArgs;
 
@@ -83,18 +82,6 @@ pub type RcValue = Rc<Sp<TermValue>>;
 impl ValueT for TermValue {}
 
 #[derive(From, FmtArgs, Clone, Debug)]
-pub enum TailTerm {
-    Let(Let<TermV, RcValue, ()>),
-    Do(Do<TermV, RcComp, ()>),
-}
-
-#[derive(Clone, Debug)]
-pub struct TailGroup {
-    pub group: Vector<TailTerm>,
-    pub body: RcComp,
-}
-
-#[derive(From, FmtArgs, Clone, Debug)]
 pub enum TermComputation {
     Annotation(Annotation<RcComp, RcType>),
     Abs(Abs<TermV, RcComp>),
@@ -103,7 +90,6 @@ pub enum TermComputation {
     Do(Do<TermV, RcComp, RcComp>),
     Force(Force<RcValue>),
     Let(Let<TermV, RcValue, RcComp>),
-    // TailGroup(TailGroup),
     Rec(Rec<TermV, RcComp>),
     Match(Match<CtorV, TermV, RcValue, RcComp>),
     Comatch(Comatch<DtorV, RcComp>),

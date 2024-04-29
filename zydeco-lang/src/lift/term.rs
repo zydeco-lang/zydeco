@@ -90,9 +90,6 @@ impl MonadTransTerm for TermComputation {
                 let body = span.make_rc(body.inner_ref().lift(m));
                 Do { var: var.clone(), comp, body }.into()
             }
-            // TermComputation::TailGroup(TailGroup { group, body }) => {
-            //     todo!()
-            // }
             TermComputation::Rec(Rec { var, body }) => {
                 let span = body.span();
                 let body = span.make_rc(body.inner_ref().lift(m));

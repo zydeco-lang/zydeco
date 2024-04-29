@@ -317,13 +317,6 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 def = span.make_rc(ps::Annotation { term: def, ty }.into());
                 let body = body.try_map_rc(Elaboration::elab)?;
                 Let { var, def, body }.into()
-                // let item = Let { var, def, body: () }.into();
-                // if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
-                //     group.push_front(item);
-                //     TailGroup { group, body }.into()
-                // } else {
-                //     TailGroup { group: vector![item], body: rc!(body) }.into()
-                // }
             }
             ps::TermComputation::Do(ps::Do { var: (var, ty), comp, body }) => {
                 let var = TermV::from(var);
@@ -336,13 +329,6 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 }
                 let body = body.try_map_rc(Elaboration::elab)?;
                 Do { var, comp, body }.into()
-                // let item = Do { var, comp, body: () }.into();
-                // if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
-                //     group.push_front(item);
-                //     TailGroup { group, body }.into()
-                // } else {
-                //     TailGroup { group: vector![item], body: rc!(body) }.into()
-                // }
             }
             ps::TermComputation::Rec(Rec { var: (var, ty), body }) => {
                 let var = TermV::from(var);

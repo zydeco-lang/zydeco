@@ -13,26 +13,6 @@ impl FmtArgs for Type {
     }
 }
 
-impl FmtArgs for TailGroup {
-    fn fmt_args(&self, fargs: Args) -> String {
-        let mut s = String::new();
-        let TailGroup { group, body } = self;
-        s += "begin";
-        {
-            let fargs = fargs.indent();
-            for item in group {
-                s += &fargs.br_indent();
-                s += &item.fmt_args(fargs);
-            }
-        }
-        s += &fargs.br_indent();
-        s += "in";
-        s += &fargs.br_indent();
-        s += &format!("{}", body.fmt_args(fargs));
-        s
-    }
-}
-
 impl FmtArgs for Abs<(TypeV, Option<Sp<Kind>>), RcComp> {
     fn fmt_args(&self, fargs: Args) -> String {
         let Abs { param, body } = self;
