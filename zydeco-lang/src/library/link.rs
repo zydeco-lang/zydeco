@@ -68,22 +68,32 @@ impl From<&ss::TermComputation> for SynComp {
             }
             ss::TermComputation::Ret(Ret(v)) => Ret(rc!(v.inner_ref().into())).into(),
             ss::TermComputation::Force(Force(v)) => Force(rc!(v.inner_ref().into())).into(),
-            ss::TermComputation::TailGroup(ss::TailGroup { group, body }) => {
-                let mut body: SynComp = body.inner_ref().into();
-                for item in group.into_iter().rev() {
-                    match item {
-                        ss::TailTerm::Let(Let { var, def, body: () }) => {
-                            let def = rc!(def.inner_ref().into());
-                            body = Let { var: var.clone(), def, body: rc!(body) }.into()
-                        }
-                        ss::TailTerm::Do(Do { var, comp, body: () }) => {
-                            let comp = rc!(comp.inner_ref().into());
-                            body = Do { var: var.clone(), comp, body: rc!(body) }.into()
-                        }
-                    }
-                }
-                body
+            ss::TermComputation::Let(Let { var, def, body }) => {
+                let def = rc!(def.inner_ref().into());
+                let body = rc!(body.inner_ref().into());
+                Let { var: var.clone(), def, body }.into()
             }
+            ss::TermComputation::Do(Do { var, comp, body }) => {
+                let comp = rc!(comp.inner_ref().into());
+                let body = rc!(body.inner_ref().into());
+                Do { var: var.clone(), comp, body }.into()
+            }
+            // ss::TermComputation::TailGroup(ss::TailGroup { group, body }) => {
+            //     let mut body: SynComp = body.inner_ref().into();
+            //     for item in group.into_iter().rev() {
+            //         match item {
+            //             ss::TailTerm::Let(Let { var, def, body: () }) => {
+            //                 let def = rc!(def.inner_ref().into());
+            //                 body = Let { var: var.clone(), def, body: rc!(body) }.into()
+            //             }
+            //             ss::TailTerm::Do(Do { var, comp, body: () }) => {
+            //                 let comp = rc!(comp.inner_ref().into());
+            //                 body = Do { var: var.clone(), comp, body: rc!(body) }.into()
+            //             }
+            //         }
+            //     }
+            //     body
+            // }
             ss::TermComputation::Rec(Rec { var, body }) => {
                 let body = rc!(body.inner_ref().into());
                 Rec { var: var.clone(), body }.into()

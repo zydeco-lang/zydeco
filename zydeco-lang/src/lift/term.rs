@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::statics::{syntax::*, tyck::*};
+use crate::statics::syntax::*;
 
 pub trait MonadTransTerm: Clone {
     fn lift(&self, m: &TermValue) -> Self;
@@ -75,9 +75,24 @@ impl MonadTransTerm for TermComputation {
                 let body = span.make_rc(body.inner_ref().lift(m));
                 Force(body).into()
             }
-            TermComputation::TailGroup(TailGroup { group, body }) => {
-                todo!()
+            TermComputation::Let(Let { var, def, body }) => {
+                let span = def.span();
+                let def = span.make_rc(def.inner_ref().lift(m));
+                let span = body.span();
+                let body = span.make_rc(body.inner_ref().lift(m));
+                Let { var: var.clone(), def, body }.into()
             }
+            TermComputation::Do(Do { var, comp, body }) => {
+                // Todo: ...
+                let span = comp.span();
+                let comp = span.make_rc(comp.inner_ref().lift(m));
+                let span = body.span();
+                let body = span.make_rc(body.inner_ref().lift(m));
+                Do { var: var.clone(), comp, body }.into()
+            }
+            // TermComputation::TailGroup(TailGroup { group, body }) => {
+            //     todo!()
+            // }
             TermComputation::Rec(Rec { var, body }) => {
                 let span = body.span();
                 let body = span.make_rc(body.inner_ref().lift(m));

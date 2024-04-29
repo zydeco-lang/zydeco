@@ -1,6 +1,5 @@
 use super::{err::TyckErrorItem, syntax::*};
 use crate::{parse::syntax as ps, prelude::*, resolve::err::NameResolveError};
-use im::vector;
 
 pub trait Elaboration<T>: Sized {
     type Error;
@@ -316,14 +315,15 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let mut def = def;
                 let span = def.span().clone();
                 def = span.make_rc(ps::Annotation { term: def, ty }.into());
-                let body: Sp<TermComputation> = body.try_map(Elaboration::elab)?;
-                let item = Let { var, def, body: () }.into();
-                if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
-                    group.push_front(item);
-                    TailGroup { group, body }.into()
-                } else {
-                    TailGroup { group: vector![item], body: rc!(body) }.into()
-                }
+                let body = body.try_map_rc(Elaboration::elab)?;
+                Let { var, def, body }.into()
+                // let item = Let { var, def, body: () }.into();
+                // if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
+                //     group.push_front(item);
+                //     TailGroup { group, body }.into()
+                // } else {
+                //     TailGroup { group: vector![item], body: rc!(body) }.into()
+                // }
             }
             ps::TermComputation::Do(ps::Do { var: (var, ty), comp, body }) => {
                 let var = TermV::from(var);
@@ -334,14 +334,15 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                         Annotation { term: comp, ty: ty.try_map_rc(Elaboration::elab)? }.into(),
                     );
                 }
-                let body = body.try_map(Elaboration::elab)?;
-                let item = Do { var, comp, body: () }.into();
-                if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
-                    group.push_front(item);
-                    TailGroup { group, body }.into()
-                } else {
-                    TailGroup { group: vector![item], body: rc!(body) }.into()
-                }
+                let body = body.try_map_rc(Elaboration::elab)?;
+                Do { var, comp, body }.into()
+                // let item = Do { var, comp, body: () }.into();
+                // if let TermComputation::TailGroup(TailGroup { mut group, body }) = body.inner {
+                //     group.push_front(item);
+                //     TailGroup { group, body }.into()
+                // } else {
+                //     TailGroup { group: vector![item], body: rc!(body) }.into()
+                // }
             }
             ps::TermComputation::Rec(Rec { var: (var, ty), body }) => {
                 let var = TermV::from(var);
