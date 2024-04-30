@@ -48,7 +48,8 @@ fn ZydecoUI() -> Html {
 fn run(input: &str) -> Result<String, String> {
     let p = ZydecoFile::parse_src(input, PathBuf::new())?;
     let p = ZydecoFile::elab(p)?;
-    ZydecoFile::tyck(p.clone())?;
+    let ctx = ZydecoFile::tyck(p.clone())?;
+    let p = ZydecoFile::lift(p, ctx.clone())?;
     let p = ZydecoFile::link(p.inner)?;
     let p = ZydecoFile::eval_os(p, &[]);
     let s = match p.entry {

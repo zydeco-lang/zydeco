@@ -108,7 +108,7 @@ impl From<&ss::TermComputation> for SynComp {
                 Dtor { body, dtorv: dtor.clone() }.into()
             }
             ss::TermComputation::BeginBlock(BeginBlock { monad, body }) => {
-                use crate::lift::MonadTransTerm;
+                use crate::statics::MonadTransTerm;
                 (&body.inner_ref().lift(monad.inner_ref())).into()
             }
             ss::TermComputation::TyAbsTerm(Abs { param: _, body }) => body.inner_ref().into(),

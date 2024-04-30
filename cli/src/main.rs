@@ -36,10 +36,13 @@ fn run_files(
     }
     // type check
     announce_phase(verbose, title, "tyck");
-    ZydecoFile::tyck(m.clone())?;
+    let ctx = ZydecoFile::tyck(m.clone())?;
 
-    // if not dry run, link and eval
+    // if not dry run: lift, link and eval
     if !dry_run {
+        // lift (monad transformation)
+        announce_phase(verbose, title, "lift");
+        let m = ZydecoFile::lift(m, ctx.clone())?;
         // link
         announce_phase(verbose, title, "link");
         let sem_m = ZydecoFile::link(m.inner())?;

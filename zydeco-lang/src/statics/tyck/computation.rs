@@ -174,7 +174,7 @@ impl TypeCheck for Sp<TermComputation> {
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
             TermComputation::BeginBlock(BeginBlock { monad, body }) => {
-                use crate::lift::MonadTransType;
+                use crate::statics::MonadTransType;
                 let ty_u_monad = monad.syn(ctx.clone())?;
                 let ty_monad =
                     ty_u_monad.clone().elim_thunk(ctx.clone(), span).ok_or_else(|| {

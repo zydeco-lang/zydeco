@@ -1,10 +1,4 @@
-use crate::prelude::*;
-use crate::statics::{err::*, syntax::*, tyck::*};
-
-pub trait MonadTransType {
-    fn lift(&self, ty_m: Type, ctx: Ctx, span: &Span) -> Result<Type, TyckError>;
-    fn alg(&self, m: RcValue, ctx: Ctx, span: &Span) -> Result<TermComputation, TyckError>;
-}
+use super::*;
 
 impl MonadTransType for Type {
     fn lift(&self, ty_m: Type, ctx: Ctx, span: &Span) -> Result<Type, TyckError> {

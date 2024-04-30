@@ -8,7 +8,7 @@ use crate::{
         syntax as ps,
     },
     prelude::*,
-    statics::{syntax as ss, tyck, Ctx, Elaboration, Seal, TypeCheck},
+    statics::{syntax as ss, tyck, Ctx, Elaboration, MonadTrans, Seal, TypeCheck},
     syntax::Env,
     utils::span::FileInfo,
 };
@@ -57,14 +57,14 @@ impl ZydecoFile {
         let p = Elaboration::elab(p).map_err(|e| format!("{}", e))?;
         Ok(p)
     }
-    pub fn tyck(m: Sp<ss::Program>) -> Result<(), String> {
-        m.syn(Ctx::default()).map_err(|e| format!("{}", e))?;
-        Ok(())
+    pub fn tyck(m: Sp<ss::Program>) -> Result<Ctx, String> {
+        let Seal((ctx, _ty)) = m.syn(Ctx::default()).map_err(|e| format!("{}", e))?;
+        Ok(ctx)
     }
-    // pub fn lift(m: Sp<ss::Program>) -> Result<ss::Program, String> {
-    //     let m = m.lift(Ctx::default());
-    //     Ok(m)
-    // }
+    pub fn lift(m: Sp<ss::Program>, ctx: Ctx) -> Result<Sp<ss::Program>, String> {
+        let m = m.lift(ctx);
+        Ok(m)
+    }
     pub fn link(m: ss::Program) -> Result<ls::Program, String> {
         let m: ls::Program = m.into();
         Ok(m)

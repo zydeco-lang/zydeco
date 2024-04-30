@@ -30,19 +30,13 @@ pub mod statics {
     pub mod err;
     pub mod elab;
     pub mod tyck;
+    pub mod lift;
     mod fmt;
     pub use self::{
         elab::Elaboration,
+        lift::{MonadTransTerm, MonadTransType, MonadTrans},
         tyck::{Ctx, Seal, TypeCheck},
     };
-}
-
-/// monad transformers
-pub mod lift {
-    mod r#type;
-    mod term;
-    pub use r#type::MonadTransType;
-    pub use term::MonadTransTerm;
 }
 
 pub mod library {

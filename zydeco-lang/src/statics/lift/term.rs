@@ -1,9 +1,4 @@
-use crate::prelude::*;
-use crate::statics::syntax::*;
-
-pub trait MonadTransTerm: Clone {
-    fn lift(&self, m: &TermValue) -> Self;
-}
+use super::*;
 
 // Note: no type level transformation is performed here since we're gonna remove them right after anyway
 
