@@ -23,7 +23,8 @@ end
 main
   let e = {
     with { ! mexnk @(String) } begin
-      ret 0
+      do x <- ret 0;
+      ret x
     end
   } in
   ! e .run @(OS) { fn e -> ! panic e } { fn a -> ! exit a }

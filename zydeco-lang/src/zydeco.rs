@@ -62,7 +62,7 @@ impl ZydecoFile {
         Ok(ctx)
     }
     pub fn lift(m: Sp<ss::Program>, ctx: Ctx) -> Result<Sp<ss::Program>, String> {
-        let m = m.lift(ctx);
+        let m = m.trans(ctx);
         Ok(m)
     }
     pub fn link(m: ss::Program) -> Result<ls::Program, String> {
