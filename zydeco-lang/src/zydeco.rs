@@ -61,6 +61,10 @@ impl ZydecoFile {
         m.syn(Ctx::default()).map_err(|e| format!("{}", e))?;
         Ok(())
     }
+    // pub fn lift(m: Sp<ss::Program>) -> Result<ss::Program, String> {
+    //     let m = m.lift(Ctx::default());
+    //     Ok(m)
+    // }
     pub fn link(m: ss::Program) -> Result<ls::Program, String> {
         let m: ls::Program = m.into();
         Ok(m)
