@@ -1,7 +1,13 @@
 [package]
 name = "zydeco-syntax"
-version = "0.2.0"
-edition = "2021"
+version = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+# homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
 description = "general syntax structures for zydeco"
 
 [dependencies]
