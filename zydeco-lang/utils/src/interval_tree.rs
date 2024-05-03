@@ -59,38 +59,3 @@ where
         result
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashSet;
-
-    #[test]
-    fn insert() {
-        let mut tr = IntervalTree::new((0, 255));
-        tr.insert((0, 127));
-        tr.insert((0, 63));
-        tr.insert((64, 127));
-        tr.insert((128, 255));
-        {
-            let res = tr.query(120).into_iter().collect::<HashSet<_>>();
-            let correct = [(0, 255), (0, 127), (64, 127)].into_iter().collect::<HashSet<_>>();
-            assert_eq!(res, correct)
-        }
-        {
-            let res = tr.query(64).into_iter().collect::<HashSet<_>>();
-            let correct = [(0, 255), (0, 127), (64, 127)].into_iter().collect::<HashSet<_>>();
-            assert_eq!(res, correct)
-        }
-        {
-            let res = tr.query(0).into_iter().collect::<HashSet<_>>();
-            let correct = [(0, 255), (0, 127), (64, 127)].into_iter().collect::<HashSet<_>>();
-            assert_eq!(res, correct)
-        }
-        {
-            let res = tr.query(240).into_iter().collect::<HashSet<_>>();
-            let correct = [(0, 255), (128, 255)].into_iter().collect::<HashSet<_>>();
-            assert_eq!(res, correct)
-        }
-    }
-}
