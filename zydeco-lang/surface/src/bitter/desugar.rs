@@ -83,11 +83,8 @@ impl Desugar for t::TopLevel {
                     // abs -> sealed
                     let sealed = desugarer.span_term(span.clone());
                     let sealed = desugarer.term(sealed, b::Sealed(abs).into());
-                    // sealed -> rec
-                    let rec = desugarer.span_term(span.clone());
-                    let rec = desugarer.term(rec, b::Rec(pat, sealed).into());
-                    // pat & rec -> alias
-                    b::Alias { binder: pat, bindee: rec }.into()
+                    // pat & sealed -> alias
+                    b::Alias { binder: pat, bindee: sealed }.into()
                 }
                 Decl::CoDataDef(decl) => {
                     let t::CoDataDef { name, params, def } = decl;
@@ -118,11 +115,8 @@ impl Desugar for t::TopLevel {
                     // abs -> sealed
                     let sealed = desugarer.span_term(span.clone());
                     let sealed = desugarer.term(sealed, b::Sealed(abs).into());
-                    // sealed -> rec
-                    let rec = desugarer.span_term(span.clone());
-                    let rec = desugarer.term(rec, b::Rec(pat, sealed).into());
                     // pat & sealed -> alias
-                    b::Alias { binder: pat, bindee: rec }.into()
+                    b::Alias { binder: pat, bindee: sealed }.into()
                 }
                 Decl::Define(decl) => {
                     let t::Define(genbind) = decl;
@@ -403,12 +397,12 @@ impl Desugar for t::TermId {
                 let tail = tail.desugar(desugarer);
                 desugarer.term(id, b::PureBind { binder, bindee, tail }.into())
             }
-            Tm::UseLet(term) => {
-                let t::UseBind { uses, tail } = term;
-                // Todo: uses
-                let tail = tail.desugar(desugarer);
-                desugarer.term(id, b::UseBind { uses, tail }.into())
-            }
+            // Tm::UseLet(term) => {
+            //     let t::UseBind { uses, tail } = term;
+            //     // Todo: uses
+            //     let tail = tail.desugar(desugarer);
+            //     desugarer.term(id, b::UseBind { uses, tail }.into())
+            // }
             Tm::Data(data) => {
                 let span = id.span(desugarer);
                 span.make(data).desugar(desugarer)

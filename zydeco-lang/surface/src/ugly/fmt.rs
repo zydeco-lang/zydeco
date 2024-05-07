@@ -103,7 +103,7 @@ impl Ugly for TermId {
             Term::Ret(t) => s += &t.ugly(f),
             Term::Do(t) => s += &t.ugly(f),
             Term::Let(t) => s += &t.ugly(f),
-            Term::UseLet(t) => s += &t.ugly(f),
+            // Term::UseLet(t) => s += &t.ugly(f),
             Term::Data(t) => s += &t.ugly(f),
             Term::CoData(t) => s += &t.ugly(f),
             Term::Ctor(t) => s += &t.ugly(f),

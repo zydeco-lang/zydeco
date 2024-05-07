@@ -164,7 +164,7 @@ pub enum Term {
     Ret(Return),
     Do(Bind),
     Let(PureBind),
-    UseLet(UseBind),
+    // UseLet(UseBind),
     Data(Data),
     CoData(CoData),
     Ctor(Ctor<TermId>),

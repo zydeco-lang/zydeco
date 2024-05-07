@@ -222,9 +222,6 @@ impl Resolve for &b::TermId {
                 binder.resolve(resolver)?;
                 tail.resolve(resolver)?;
             }
-            r::Term::UseLet(_t) => {
-                unimplemented!()
-            }
             r::Term::Data(t) => {
                 let b::Data { arms } = t;
                 for b::DataArm { name: _, param } in arms {
