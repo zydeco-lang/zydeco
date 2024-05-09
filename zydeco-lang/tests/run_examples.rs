@@ -74,6 +74,10 @@ fn doc_test(f: &[&str], run: bool) -> Result<(), String> {
     test_template("../docs/spell", run, f)
 }
 
+fn icfp_test(f: &[&str]) -> Result<(), String> {
+    test_template("tests/icfp", true, f)
+}
+
 struct IOMatch {
     args: Vec<String>,
     input: String,
@@ -209,6 +213,17 @@ mod doc_tests {
     mk_test!(doc_test, cps, &["6-cps.zy"], true);
     mk_test!(doc_test, call_by_need, &["7-call-by-need.zy"], false);
     mk_test!(doc_test, lense_prism_optics, &["8-lense-prism-optics.zy"], false);
+}
+mod icfp_tests {
+    use super::*;
+    mk_test!(icfp_test, abort, &["abort.zydeco"]);
+    mk_test!(icfp_test, algebra, &["algebra.zydeco"]);
+    // mk_test!(icfp_test, algtrans, &["algtrans.zydeco"]);
+    mk_test!(icfp_test, echo_sum, &["echo_sum.zydeco"]);
+    mk_test!(icfp_test, exn, &["exn.zydeco"]);
+    mk_test!(icfp_test, free, &["free.zydeco"]);
+    mk_test!(icfp_test, monads, &["monads.zydeco"]);
+    mk_test!(icfp_test, transformers, &["transformers.zydeco"]);
 }
 
 mod custom_tests {}
