@@ -43,6 +43,9 @@ fn run_files(
         // lift (monad transformation)
         announce_phase(verbose, title, "lift");
         let m = ZydecoFile::lift(m, ctx.clone())?;
+        if verbose {
+            println!("{}", m.fmt())
+        }
         // link
         announce_phase(verbose, title, "link");
         let sem_m = ZydecoFile::link(m.inner())?;

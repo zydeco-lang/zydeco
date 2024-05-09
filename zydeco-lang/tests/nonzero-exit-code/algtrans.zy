@@ -1,0 +1,32 @@
+codata Monad (M: VType -> CType) where
+  | .return : forall (A: VType) . A -> M A
+  | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
+end
+
+codata ExnK (E: VType) (A: VType) where
+  | .run : forall (R: CType) .
+    Thunk (E -> R) -> Thunk (A -> R) -> R
+end
+
+def fn mexnk (E: VType) : Monad (ExnK E) =
+  comatch
+  | .return A a ->
+    fn .run R ke ka ->
+    ! ka a
+  | .bind A A' m f ->
+    fn .run R ke ka ->
+    ! m .run @(R) ke
+    { fn a -> ! f a .run @(R) ke ka }
+  end
+end
+
+main
+  let e = {
+    with { ! mexnk @(String) } begin
+      do x <- ret 42;
+      ret x
+    end
+  } in
+  ! e .run @(OS) { fn e -> ! panic e } { fn a -> ! exit a }
+end
+
