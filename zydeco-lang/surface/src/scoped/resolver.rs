@@ -14,7 +14,7 @@ use zydeco_utils::arena::ArenaAssoc;
 pub struct Resolver {
     pub spans: b::SpanArenaBitter,
     pub terms_old: ArenaAssoc<b::TermId, b::Term<b::NameRef<b::VarName>>>,
-    pub ctx: r::Ctx,
+    pub arena: r::Arena,
     pub local: im::HashMap<b::VarName, r::DefId>,
     pub searching: Vec<b::NameRef<()>>,
 }
@@ -22,9 +22,9 @@ pub struct Resolver {
 impl Resolver {
     pub fn new(
         spans: b::SpanArenaBitter,
-        terms_old: ArenaAssoc<b::TermId, b::Term<b::NameRef<b::VarName>>>, ctx: r::Ctx,
+        terms_old: ArenaAssoc<b::TermId, b::Term<b::NameRef<b::VarName>>>, arena: r::Arena,
     ) -> Resolver {
-        Resolver { spans, terms_old, ctx, local: im::HashMap::new(), searching: vec![] }
+        Resolver { spans, terms_old, arena, local: im::HashMap::new(), searching: vec![] }
     }
 }
 
@@ -80,7 +80,7 @@ impl Resolve for b::TopLevel {
 impl Resolve for &b::PatId {
     type Out = ();
     fn resolve(self, resolver: &mut Resolver) -> Result<Self::Out> {
-        let pat = resolver.ctx.pats[*self].clone();
+        let pat = resolver.arena.pats[*self].clone();
         match pat {
             b::Pattern::Ann(p) => {
                 let b::Ann { tm, ty } = p;
@@ -93,7 +93,7 @@ impl Resolve for &b::PatId {
                 let b::Hole = p;
             }
             b::Pattern::Var(p) => {
-                let name = resolver.ctx.defs[p].clone();
+                let name = resolver.arena.defs[p].clone();
                 resolver.local.insert(name, p);
             }
             b::Pattern::Ctor(p) => {
@@ -114,7 +114,7 @@ impl Resolve for &b::PatId {
 impl Resolve for &b::CoPatId {
     type Out = ();
     fn resolve(self, resolver: &mut Resolver) -> Result<Self::Out> {
-        let copat = resolver.ctx.copats[*self].clone();
+        let copat = resolver.arena.copats[*self].clone();
         match copat {
             b::CoPattern::Pat(cp) => {
                 cp.resolve(resolver)?;
@@ -153,7 +153,7 @@ impl Resolve for &b::TermId {
             r::Term::Var(t) => {
                 if let Some(name) = t.clone().syntactic_local() {
                     if let Some(def) = resolver.local.get(&name).cloned() {
-                        resolver.ctx.terms.insert(*self, r::Term::Var(def));
+                        resolver.arena.terms.insert(*self, r::Term::Var(def));
                         return Ok(());
                     }
                 }

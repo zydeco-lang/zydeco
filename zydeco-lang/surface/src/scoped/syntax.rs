@@ -8,11 +8,10 @@ use zydeco_utils::arena::ArenaAssoc;
 #[derive(Clone, Debug)]
 pub struct TopLevel(pub Vec<Declaration>);
 
-/* --------------------------------- Context -------------------------------- */
+/* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Debug)]
-pub struct Ctx {
-    // arenas
+pub struct Arena {
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub copats: ArenaAssoc<CoPatId, CoPattern>,

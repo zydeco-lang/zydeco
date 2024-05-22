@@ -2,10 +2,10 @@ use crate::textual::{
     syntax::*, lexer::*, escape,
 };
 
-grammar<'input, 'ctx>(
+grammar<'input, 'arena>(
     input: &'input str,
     loc: &'input LocationCtx,
-    parser: &'ctx mut Parser,
+    parser: &'arena mut Parser,
 );
 
 //* --------------------------------- Tokens --------------------------------- */
@@ -281,10 +281,10 @@ Term: Term = {
     "let" <binding:GenBindTerm> "in" <tail:TermId> => PureBind {
         binding, tail
     }.into(),
-    // use bind
-    "use" <uses:UsePath> "in" <tail:TermId> => UseBind {
-        uses, tail
-    }.into(),
+    // // use bind
+    // "use" <uses:UsePath> "in" <tail:TermId> => UseBind {
+    //     uses, tail
+    // }.into(),
     "data" <Data> "end" => <>.into(),
     "codata" <CoData> "end" => <>.into(),
     // match
@@ -378,9 +378,9 @@ CoDataDef: CoDataDef = {
     }
 };
 
-UseLayer: Modifiers<UsePath> = {
-    <Modifiers<("use" <UsePath>)>> => <>.into(),
-};
+// UseLayer: Modifiers<UsePath> = {
+//     <Modifiers<("use" <UsePath>)>> => <>.into(),
+// };
 
 Declaration: Declaration = {
     <DataDef> => <>.into(),

@@ -4,13 +4,13 @@ pub trait Ugly {
     fn ugly(&self, f: &Formatter) -> String;
 }
 
-pub struct Formatter<'ctx> {
+pub struct Formatter<'arena> {
     // spans: SpanArenaTextual,
-    ctx: &'ctx Ctx,
+    arena: &'arena Arena,
 }
-impl<'ctx> Formatter<'ctx> {
-    pub fn new(ctx: &'ctx Ctx) -> Self {
-        Formatter { ctx }
+impl<'arena> Formatter<'arena> {
+    pub fn new(arena: &'arena Arena) -> Self {
+        Formatter { arena }
     }
 }
 
@@ -47,7 +47,7 @@ impl Ugly for TopLevel {
 
 impl Ugly for DefId {
     fn ugly(&self, f: &Formatter) -> String {
-        let name = &f.ctx.defs[*self];
+        let name = &f.arena.defs[*self];
         name.ugly(f)
     }
 }
@@ -55,7 +55,7 @@ impl Ugly for DefId {
 impl Ugly for PatId {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let pat = &f.ctx.pats[*self];
+        let pat = &f.arena.pats[*self];
         match pat {
             Pattern::Ann(p) => s += &p.ugly(f),
             Pattern::Hole(p) => s += &p.ugly(f),
@@ -70,7 +70,7 @@ impl Ugly for PatId {
 impl Ugly for CoPatId {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let copat = &f.ctx.copats[*self];
+        let copat = &f.arena.copats[*self];
         match copat {
             CoPattern::Pat(c) => s += &c.ugly(f),
             CoPattern::Dtor(c) => s += &c.ugly(f),
@@ -83,7 +83,7 @@ impl Ugly for CoPatId {
 impl Ugly for TermId {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let term = &f.ctx.terms[*self];
+        let term = &f.arena.terms[*self];
         match term {
             Term::Ann(t) => s += &t.ugly(f),
             Term::Hole(t) => s += &t.ugly(f),

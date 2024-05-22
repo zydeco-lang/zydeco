@@ -237,24 +237,23 @@ impl AddAssign<TopLevel> for TopLevel {
     }
 }
 
-/* --------------------------------- Context -------------------------------- */
-
-pub type SpanArenaBitter = ArenaGen<Span, DefId, PatId, CoPatId, TermId>;
+/* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Default, Debug)]
-pub struct Ctx {
-    // arenas
+pub struct Arena {
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub copats: ArenaAssoc<CoPatId, CoPattern>,
     pub terms: ArenaAssoc<TermId, Term<NameRef<VarName>>>,
 }
 
-impl AddAssign<Ctx> for Ctx {
-    fn add_assign(&mut self, rhs: Ctx) {
+impl AddAssign<Arena> for Arena {
+    fn add_assign(&mut self, rhs: Arena) {
         self.defs += rhs.defs;
         self.pats += rhs.pats;
         self.copats += rhs.copats;
         self.terms += rhs.terms;
     }
 }
+
+pub type SpanArenaBitter = ArenaGen<Span, DefId, PatId, CoPatId, TermId>;

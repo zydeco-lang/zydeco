@@ -12,14 +12,14 @@ pub trait Desugar {
 
 pub struct Desugarer {
     pub tspans: t::SpanArenaTextual,
-    pub tctx: t::Ctx,
+    pub t: t::Arena,
     pub bspans: b::SpanArenaBitter,
-    pub bctx: b::Ctx,
+    pub b: b::Arena,
 }
 
 pub struct DesugarOut {
     pub spans: b::SpanArenaBitter,
-    pub ctx: b::Ctx,
+    pub arena: b::Arena,
     pub top: b::TopLevel,
 }
 
@@ -27,8 +27,8 @@ impl Desugarer {
     pub fn run(self, top: t::TopLevel) -> DesugarOut {
         let mut desugarer = self;
         let top = top.desugar(&mut desugarer);
-        let Desugarer { bctx: ctx, bspans: spans, .. } = desugarer;
-        DesugarOut { spans, ctx, top }
+        let Desugarer { b: arena, bspans: spans, .. } = desugarer;
+        DesugarOut { spans, arena, top }
     }
 }
 
@@ -572,16 +572,16 @@ mod impls {
 
     impl Desugarer {
         pub fn lookup_def(&self, id: t::DefId) -> t::VarName {
-            self.tctx.defs[id].clone()
+            self.t.defs[id].clone()
         }
         pub fn lookup_pat(&self, id: t::PatId) -> t::Pattern {
-            self.tctx.pats[id].clone()
+            self.t.pats[id].clone()
         }
         pub fn lookup_copat(&self, id: t::CoPatId) -> t::CoPattern {
-            self.tctx.copats[id].clone()
+            self.t.copats[id].clone()
         }
         pub fn lookup_term(&self, id: t::TermId) -> t::Term {
-            self.tctx.terms[id].clone()
+            self.t.terms[id].clone()
         }
 
         pub fn span_def(&mut self, span: Span) -> b::DefId {
@@ -598,19 +598,19 @@ mod impls {
         }
 
         pub fn def(&mut self, id: b::DefId, def: b::VarName) -> b::DefId {
-            self.bctx.defs.insert(id, def);
+            self.b.defs.insert(id, def);
             id
         }
         pub fn pat(&mut self, id: b::PatId, pat: b::Pattern) -> b::PatId {
-            self.bctx.pats.insert(id, pat);
+            self.b.pats.insert(id, pat);
             id
         }
         pub fn copat(&mut self, id: b::CoPatId, copat: b::CoPattern) -> b::CoPatId {
-            self.bctx.copats.insert(id, copat);
+            self.b.copats.insert(id, copat);
             id
         }
         pub fn term(&mut self, id: b::TermId, term: b::Term<b::NameRef<b::VarName>>) -> b::TermId {
-            self.bctx.terms.insert(id, term);
+            self.b.terms.insert(id, term);
             id
         }
     }

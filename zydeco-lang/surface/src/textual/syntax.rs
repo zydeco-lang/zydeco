@@ -240,11 +240,10 @@ pub enum ReplInput {
 #[derive(Clone, Debug)]
 pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
 
-/* --------------------------------- Context -------------------------------- */
+/* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Default, Debug)]
-pub struct Ctx {
-    // arenas
+pub struct Arena {
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub copats: ArenaAssoc<CoPatId, CoPattern>,
@@ -253,33 +252,35 @@ pub struct Ctx {
 
 pub type SpanArenaTextual = ArenaGen<Span, DefId, PatId, CoPatId, TermId>;
 
+/* --------------------------------- Parser --------------------------------- */
+
 pub struct Parser {
     pub spans: SpanArenaTextual,
-    pub ctx: Ctx,
+    pub arena: Arena,
 }
 
 impl Parser {
     pub fn new(alloc: &mut GlobalAlloc) -> Self {
-        Self { spans: ArenaGen::new(alloc), ctx: Ctx::default() }
+        Self { spans: ArenaGen::new(alloc), arena: Arena::default() }
     }
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.defs.alloc(def.info);
-        self.ctx.defs.insert(id, def.inner);
+        self.arena.defs.insert(id, def.inner);
         id
     }
     pub fn pat(&mut self, pat: Sp<Pattern>) -> PatId {
         let id = self.spans.pats.alloc(pat.info);
-        self.ctx.pats.insert(id, pat.inner);
+        self.arena.pats.insert(id, pat.inner);
         id
     }
     pub fn copat(&mut self, copat: Sp<CoPattern>) -> CoPatId {
         let id = self.spans.copats.alloc(copat.info);
-        self.ctx.copats.insert(id, copat.inner);
+        self.arena.copats.insert(id, copat.inner);
         id
     }
     pub fn term(&mut self, term: Sp<Term>) -> TermId {
         let id = self.spans.terms.alloc(term.info);
-        self.ctx.terms.insert(id, term.inner);
+        self.arena.terms.insert(id, term.inner);
         id
     }
 }

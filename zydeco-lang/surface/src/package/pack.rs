@@ -105,7 +105,7 @@ impl Package {
             PackageStew {
                 sources: HashMap::new(),
                 spans: b::SpanArenaBitter::new(&mut alloc),
-                ctx: b::Ctx::default(),
+                arena: b::Arena::default(),
                 top: b::TopLevel(Vec::new()),
             },
             files,
@@ -171,8 +171,8 @@ impl FileLoaded {
                 SurfaceError::ParseError(ParseError { error, file_info: &info }.to_string())
             })?;
 
-        let t::Parser { spans, ctx } = parser;
-        Ok(FileParsed { path, source, spans, ctx, top })
+        let t::Parser { spans, arena } = parser;
+        Ok(FileParsed { path, source, spans, arena, top })
     }
 }
 
@@ -180,16 +180,16 @@ pub struct FileParsed {
     pub path: PathBuf,
     pub source: String,
     pub spans: t::SpanArenaTextual,
-    pub ctx: t::Ctx,
+    pub arena: t::Arena,
     pub top: t::TopLevel,
 }
 
 impl FileParsed {
     pub fn desugar(self, bspans: b::SpanArenaBitter) -> FileBitter {
-        let FileParsed { path, source, spans: tspans, ctx: tctx, top } = self;
-        let desugarer = Desugarer { tspans, tctx, bspans, bctx: b::Ctx::default() };
-        let DesugarOut { spans, ctx, top } = desugarer.run(top);
-        FileBitter { path, source, spans, ctx, top }
+        let FileParsed { path, source, spans: tspans, arena: t, top } = self;
+        let desugarer = Desugarer { tspans, t, bspans, b: b::Arena::default() };
+        let DesugarOut { spans, arena, top } = desugarer.run(top);
+        FileBitter { path, source, spans, arena, top }
     }
 }
 
@@ -197,7 +197,7 @@ pub struct FileBitter {
     pub path: PathBuf,
     pub source: String,
     pub spans: b::SpanArenaBitter,
-    pub ctx: b::Ctx,
+    pub arena: b::Arena,
     pub top: b::TopLevel,
 }
 
@@ -208,7 +208,7 @@ impl FileBitter {
         for file in selves {
             stew.sources.insert(file.path, file.source);
             stew.spans += file.spans;
-            stew.ctx += file.ctx;
+            stew.arena += file.arena;
             stew.top += file.top;
         }
         Ok(stew)
@@ -218,6 +218,6 @@ impl FileBitter {
 pub struct PackageStew {
     pub sources: HashMap<PathBuf, String>,
     pub spans: b::SpanArenaBitter,
-    pub ctx: b::Ctx,
+    pub arena: b::Arena,
     pub top: b::TopLevel,
 }

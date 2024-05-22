@@ -10,7 +10,7 @@ fn parsing_1() {
     let t = parser::SingleTermParser::new()
         .parse(&source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(&source))
         .unwrap();
-    println!("{:?}", &parser.ctx.terms[t]);
+    println!("{:?}", &parser.arena.terms[t]);
 }
 #[test]
 fn parsing_2() {
