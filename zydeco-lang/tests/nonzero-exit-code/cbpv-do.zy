@@ -121,11 +121,14 @@ module MExnOS where
     | .bindA A m f -> // m : U (MExnOS A), f: U (A -> Compu)
       comatch
       | .app a -> // goal: Compu
-        ! malg .bindA @(A) m { fn v -> ! f v .app a }
+        do[malg] v <- ! m;
+        ! f v .app a
       | .bind x sc k -> // goal: Compu
-        ! malg .bindA @(A) m { fn v -> ! f v .bind x sc k }
+        do[malg] v <- ! m;
+        ! f v .bind x sc k
       | .os -> // goal: MExnOS Value, use ordinary bind
-        ! mexn .bind @(A) @(Value) m { fn x -> ! f x .os }
+        do[mexn] x <- ! m;
+        ! f x .os
       end
     end
   end
@@ -626,14 +629,14 @@ def rec fn interp (env: U EnvO) : Interp =
       match x?
       | +None() -> ! mexn-err .fail @(Value) +FreeVariable()
       | +Some(v) ->
-        ! mexn .return @(Value) v
+        ret[mexn] v
       end
     | +Bool(b) ->
-      ! mexn .return @(Value) +Bool(b)
+      ret[mexn] +Bool(b)
     | +Int(i) ->
-      ! mexn .return @(Value) +Int(i)
+      ret[mexn] +Int(i)
     | +Thunk(c) ->
-      ! mexn .return @(Value) +Thunk({ ! interp env .compu c })
+      ret[mexn] +Thunk({ ! interp env .compu c })
     end
   | .compu sc ->
     let fn type-error = 
@@ -645,19 +648,19 @@ def rec fn interp (env: U EnvO) : Interp =
       | .app v ->
         ! interp { ! env .extend x v } .compu sc
       | .bind _ _ k ->
-        do ! malg .bindA @(Value) type-error; fn v ->
+        do[malg] v <- ! type-error;
         // the following is unreachable
         ! k v .app v
       | .os -> ! type-error
       end
     | +App(sc, sv) ->
-      do ! malg .bindA @(Value) { ! interp env .value sv }; fn v ->
+      do[malg] v <- ! interp env .value sv;
       ! interp env .compu sc .app v
     | +Ret(sv) ->
       comatch
       | .app _ -> ! malg-err .failA +TypeError()
       | .bind _ _ k ->
-        do ! malg .bindA @(Value) { ! interp env .value sv }; fn v ->
+        do[malg] v <- ! interp env .value sv;
         ! k v
       | .os -> ! interp env .value sv
       end
@@ -665,7 +668,7 @@ def rec fn interp (env: U EnvO) : Interp =
       do ! interp env .compu sc1 .bind x sc2; fn v ->
       ! interp { ! env .extend x v } .compu sc2
     | +Force(sv) ->
-      do ! malg .bindA @(Value) { ! interp env .value sv }; fn v ->
+      do[malg] v <- ! interp env .value sv;
       match v
       | +Bool(_) -> ! malg-err .failA +TypeError()
       | +Int(_) -> ! malg-err .failA +TypeError()
@@ -674,7 +677,7 @@ def rec fn interp (env: U EnvO) : Interp =
     | +Rec(x, sc) ->
       ! interp { ! env .extend x +Thunk({ ! interp env .compu +Rec(x, sc) }) } .compu sc
     | +If(sv, c1, c2) ->
-      do ! malg .bindA @(Value) { ! interp env .value sv }; fn v ->
+      do[malg] v <- ! interp env .value sv;
       match v
       | +Bool(b) ->
         match b
@@ -707,7 +710,7 @@ def rec fn interp (env: U EnvO) : Interp =
               ! ka +Unit()
             end
           } in
-          do ! mexn .bind @(Unit) @(Value) mp; fn _ ->
+          do[mexn] _ <- mp;
           let rec fn cowalk (items: List TraceItem): Compu =
             match items
             | +Nil() -> ! interp env .compu sc
@@ -809,9 +812,9 @@ def fn cbpv-env : EnvO =
     comatch
     | .app _ -> ! malg-err .failA +TypeError()
     | .bind _ _ k ->
-      do ! malg .bindA @(Value) { ! mexn .return @(Value) v }; fn v ->
+      do ! malg .bindA @(Value) { ret[mexn] v }; fn v ->
       ! k v
-    | .os -> ! mexn .return @(Value) v
+    | .os -> ret[mexn] v
     end
   in
   ! envo +Extend("add", +Thunk({
