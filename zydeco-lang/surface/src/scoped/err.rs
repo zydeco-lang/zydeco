@@ -5,8 +5,8 @@ use thiserror::Error;
 pub enum ResolveError {
     #[error("Unbound variable: {0}")]
     UnboundVar(Sp<NameRef<VarName>>),
-    #[error("Ambiguous annotation on binder: {0}")]
-    AmbiguousBinderAnnotation(Sp<VarName>),
+    // #[error("Ambiguous annotation on binder: {0}")]
+    // AmbiguousBinderAnnotation(Sp<VarName>),
     #[error("Duplicate definition: {0} and {1}")]
     DuplicateDefinition(Sp<VarName>, Sp<VarName>),
     #[error("No such module found: {0}")]

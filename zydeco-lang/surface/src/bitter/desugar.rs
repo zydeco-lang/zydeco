@@ -1,5 +1,5 @@
 use crate::{
-    bitter::syntax as b,
+    bitter::syntax::{self as b},
     syntax::*,
     textual::syntax::{self as t},
 };

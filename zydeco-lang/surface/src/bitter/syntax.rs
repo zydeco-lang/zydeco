@@ -2,7 +2,7 @@
 
 pub use crate::syntax::*;
 use crate::{arena::*, textual::syntax as t};
-use derive_more::From;
+use derive_more::{From, Into};
 use std::ops::AddAssign;
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
@@ -239,7 +239,7 @@ impl AddAssign<TopLevel> for TopLevel {
 
 /* ---------------------------------- Arena --------------------------------- */
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Into)]
 pub struct Arena {
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,

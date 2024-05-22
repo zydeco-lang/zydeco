@@ -16,6 +16,7 @@ pub struct UseAll;
 /// `binder = origin`
 #[derive(Clone, Debug)]
 pub struct UseAlias(pub VarName, pub VarName);
+/// the use tree
 #[derive(Clone, From, Debug)]
 pub enum UseEnum {
     Name(VarName),
@@ -23,8 +24,10 @@ pub enum UseEnum {
     All(UseAll),
     Cluster(Uses),
 }
+/// `a/b/c`
 #[derive(Clone, Debug)]
 pub struct UsePath(pub NameRef<UseEnum>);
+/// `(aa, bb, cc)`
 #[derive(Clone, Debug)]
 pub struct Uses(pub Vec<UsePath>);
 
@@ -48,16 +51,6 @@ impl<T> Modifiers<T> {
 mod impls {
     use super::*;
     use std::fmt;
-
-    impl NameRef<VarName> {
-        pub fn syntactic_local(&self) -> Option<VarName> {
-            if self.0 && self.1.is_empty() {
-                Some(self.2.clone())
-            } else {
-                None
-            }
-        }
-    }
 
     impl From<Vec<VarName>> for NameRef<()> {
         fn from(path: Vec<VarName>) -> Self {
