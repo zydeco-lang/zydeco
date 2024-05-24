@@ -199,22 +199,16 @@ CoPatternAtom: CoPattern = {
 
 CompModifier: () = { "!", "fn" };
 
-GenBindTerm: GenBind<TermId> = {
+GenBind<T>: GenBind<T> = {
     <rec:"rec"?> <comp:CompModifier?> <binder:PatternId> <params:CoPatternId?>
-    <ty:(":" <TermId>)?> <bindee: ("=" <TermId>)> => GenBind {
+    <ty:(":" <TermId>)?> <bindee:T> => GenBind {
         rec: rec.is_some(),
         comp: comp.is_some(),
         binder, params, ty, bindee,
     }
 };
-GenBindNull: GenBind<()> = {
-    <rec:"rec"?> <comp:CompModifier?> <binder:PatternId> <params:CoPatternId?>
-    <ty:(":" <TermId>)?> <bindee: ()> => GenBind {
-        rec: rec.is_some(),
-        comp: comp.is_some(),
-        binder, params, ty, bindee,
-    }
-};
+GenBindTerm: GenBind<TermId> = GenBind<("=" <TermId>)>;
+GenBindNull: GenBind<()> = GenBind<()>;
 
 Data: Data = <DataArm*> => Data { arms: <> };
 #[inline]

@@ -261,7 +261,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(alloc: &mut GlobalAlloc) -> Self {
-        Self { spans: ArenaGen::new(alloc), arena: Arena::default() }
+        Self { spans: SpanArenaTextual::new(alloc), arena: Arena::default() }
     }
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.defs.alloc(def.info);

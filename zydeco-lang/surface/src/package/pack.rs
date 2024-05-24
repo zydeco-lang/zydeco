@@ -79,24 +79,28 @@ impl Package {
         let Package { path, name: _, srcs, deps: _, std: _ } = self;
         // Todo: deal with std and deps
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
-        // Todo: parallelize
+        // Todo: parallelize w/ rayon (?)
         let files = files.into_iter().map(|f| f.load()).collect::<Result<Vec<_>>>()?;
         let PackageHash { hashes: _ } = FileLoaded::merge(&files)?;
         // Todo: check hashes
 
         let mut alloc = GlobalAlloc::new();
-        // Todo: parallelize
+        // parsing
+        // Todo: parallelize w/ rayon (?)
         let files = files
             .into_iter()
             .map(|f| f.parse(t::Parser::new(&mut alloc)))
             .collect::<Result<Vec<_>>>()?;
         // Debug: print the parsed files
-        // for file in &files {
-        //     println!(">>> [{}]", file.path.display());
-        //     use crate::ugly::fmt::*;
-        //     println!("{}", file.top.ugly(&Formatter::new(&file.ctx)));
-        //     println!("<<< [{}]", file.path.display());
-        // }
+        if cfg!(debug_assertions) {
+            for file in &files {
+                println!(">>> [{}]", file.path.display());
+                use crate::ugly::fmt::*;
+                println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
+                println!("<<< [{}]", file.path.display());
+            }
+        }
+        // desugaring
         let files = files
             .into_iter()
             .map(|f| f.desugar(b::SpanArenaBitter::new(&mut alloc)))
@@ -110,8 +114,9 @@ impl Package {
             },
             files,
         )?;
-
-        // Todo: add deps
+        // adding package dependencies
+        // Todo: ...
+        // resolving
         Ok(())
     }
 }
