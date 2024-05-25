@@ -36,7 +36,7 @@ impl Desugarer {
         if self.prim.vtype.is_empty() {
             let span = Span::dummy();
             let term = Alloc::alloc(self, span);
-            let id = self.term(term, b::Hole.into());
+            let id = self.term(term, b::Internal("VType".into()).into());
             *self.prim.vtype.init(id)
         } else {
             *self.prim.vtype.get()
@@ -46,7 +46,7 @@ impl Desugarer {
         if self.prim.ctype.is_empty() {
             let span = Span::dummy();
             let term = Alloc::alloc(self, span);
-            let id = self.term(term, b::Hole.into());
+            let id = self.term(term, b::Internal("CType".into()).into());
             *self.prim.ctype.init(id)
         } else {
             *self.prim.ctype.get()
@@ -428,19 +428,11 @@ impl Desugar for t::TermId {
             // }
             Tm::Data(data) => {
                 let span = id.span(desugarer);
-                let data = span.make(data).desugar(desugarer);
-                // data -> ann
-                let ann = Alloc::alloc(desugarer, span);
-                let vtype = desugarer.vtype();
-                desugarer.term(ann, b::Ann { tm: data, ty: vtype }.into())
+                span.make(data).desugar(desugarer)
             }
             Tm::CoData(codata) => {
                 let span = id.span(desugarer);
-                let codata = span.make(codata).desugar(desugarer);
-                // codata -> ann
-                let ann = Alloc::alloc(desugarer, span);
-                let ctype = desugarer.ctype();
-                desugarer.term(ann, b::Ann { tm: codata, ty: ctype }.into())
+                span.make(codata).desugar(desugarer)
             }
             Tm::Ctor(term) => {
                 let t::Ctor(name, term) = term;
@@ -535,8 +527,12 @@ impl Desugar for t::Sp<t::Data> {
                 b::DataArm { name, param }
             })
             .collect();
-        let term = Alloc::alloc(desugarer, self.info);
-        desugarer.term(term, b::Data { arms }.into())
+        let term = Alloc::alloc(desugarer, self.info.clone());
+        let data = desugarer.term(term, b::Data { arms }.into());
+        // data -> ann
+        let ann = Alloc::alloc(desugarer, self.info);
+        let vtype = desugarer.vtype();
+        desugarer.term(ann, b::Ann { tm: data, ty: vtype }.into())
     }
 }
 
@@ -552,8 +548,12 @@ impl Desugar for t::Sp<t::CoData> {
                 b::CoDataArm { name, params, out }
             })
             .collect();
-        let term = Alloc::alloc(desugarer, self.info);
-        desugarer.term(term, b::CoData { arms }.into())
+        let term = Alloc::alloc(desugarer, self.info.clone());
+        let codata = desugarer.term(term, b::CoData { arms }.into());
+        // codata -> ann
+        let ann = Alloc::alloc(desugarer, self.info);
+        let ctype = desugarer.ctype();
+        desugarer.term(ann, b::Ann { tm: codata, ty: ctype }.into())
     }
 }
 

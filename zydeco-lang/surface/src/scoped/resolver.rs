@@ -159,13 +159,29 @@ impl Resolve for TopLevel {
                 Declaration::Extern(decl) => {
                     let Extern { comp: _, binder, params: _, ty: _ } = decl;
                     let binders = binder.binders(&resolver.arena);
-                    // check if it's a primitive and probably update the term_to_def
+                    // check if it's a primitive and (later in terms) update the term_to_def
                     if binders.len() == 1 {
                         if let Some(def) = binders.get(&VarName("VType".into())) {
-                            resolver.alloc_vtype(*def)?;
+                            let vtype = resolver.alloc_vtype(*def)?;
+                            resolver.term_to_def.extend(
+                                resolver
+                                    .prim_term
+                                    .vtype
+                                    .all()
+                                    .into_iter()
+                                    .map(|term| (*term, vtype)),
+                            );
                         }
                         if let Some(def) = binders.get(&VarName("CType".into())) {
-                            resolver.alloc_ctype(*def)?;
+                            let ctype = resolver.alloc_ctype(*def)?;
+                            resolver.term_to_def.extend(
+                                resolver
+                                    .prim_term
+                                    .ctype
+                                    .all()
+                                    .into_iter()
+                                    .map(|term| (*term, ctype)),
+                            );
                         }
                     }
                     resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
@@ -307,7 +323,12 @@ impl Resolve for TermId {
         let term = resolver.arena.terms[*self].clone();
         match term {
             Term::Internal(_) => {
-                // internal terms will be resolved by looking up primitives
+                // internal terms should be resolved by looking up term_to_def
+                // which has already been updated by primitives when collecting top level
+                let def = resolver.term_to_def[*self];
+                // now the only thing left is to add the dependency
+                let decl = global.under_map[&def];
+                resolver.deps.add(local.under, [decl]);
             }
             Term::Sealed(term) => {
                 let Sealed(inner) = term;

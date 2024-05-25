@@ -120,6 +120,15 @@ impl Package {
             },
             files,
         )?;
+        // Debug: print the resolved package
+        if cfg!(debug_assertions) {
+            println!(">>> [{}]", self.name);
+            use crate::scoped::fmt::*;
+            for (decl, _) in &pack.spans.decls {
+                println!("{}", decl.ugly(&Formatter::new(&pack.arena)));
+            }
+            println!("<<< [{}]", self.name);
+        }
         // adding package dependencies
         // Todo: ...
         // resolving

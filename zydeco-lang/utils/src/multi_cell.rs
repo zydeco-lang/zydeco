@@ -25,6 +25,15 @@ impl<T> MultiCell<T> {
     pub fn get(&self) -> &T {
         self.cells.first().unwrap()
     }
+    pub fn all(&self) -> &[T] {
+        &self.cells
+    }
+    pub fn contains(&self, value: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        self.cells.contains(value)
+    }
 }
 
 impl<T> Default for MultiCell<T> {

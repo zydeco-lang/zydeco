@@ -205,6 +205,17 @@ mod impls {
             self.map.into_iter()
         }
     }
+    impl<'a, Id, T, Meta> IntoIterator for &'a ArenaSparse<Id, T, Meta>
+    where
+        Meta: Copy,
+        Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
+    {
+        type Item = (&'a Id, &'a T);
+        type IntoIter = std::collections::hash_map::Iter<'a, Id, T>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.map.iter()
+        }
+    }
 
     impl<Id, T, Meta> Extend<(Id, T)> for ArenaSparse<Id, T, Meta>
     where
@@ -287,6 +298,13 @@ mod impls {
         type IntoIter = std::collections::hash_map::IntoIter<Id, T>;
         fn into_iter(self) -> Self::IntoIter {
             self.map.into_iter()
+        }
+    }
+    impl<'a, Id, T> IntoIterator for &'a ArenaAssoc<Id, T> {
+        type Item = (&'a Id, &'a T);
+        type IntoIter = std::collections::hash_map::Iter<'a, Id, T>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.map.iter()
         }
     }
 
