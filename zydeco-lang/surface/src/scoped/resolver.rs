@@ -1,5 +1,5 @@
 use crate::scoped::{err::*, syntax::*};
-use zydeco_utils::{arena::ArenaAssoc, deps::DepGraph, scc::Kosaraju};
+use zydeco_utils::{arena::ArenaAssoc, deps::DepGraph, multi_cell::MultiCell, scc::Kosaraju};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {
@@ -54,9 +54,11 @@ impl Binders for PatId {
 }
 
 pub struct Resolver {
-    pub term_to_def: ArenaAssoc<TermId, DefId>,
-    pub arena: Arena,
     pub spans: SpanArenaBitter,
+    pub arena: Arena,
+    pub prim_term: PrimTerm,
+    pub prim_def: PrimDef,
+    pub term_to_def: ArenaAssoc<TermId, DefId>,
     /// the dependency of top level definitions
     pub deps: DepGraph<DeclId>,
 }
@@ -70,15 +72,15 @@ pub struct ResolveOut {
 impl Resolver {
     pub fn run(mut self, top: &TopLevel) -> Result<ResolveOut> {
         top.resolve(&mut self, Global::default())?;
-        let Resolver { term_to_def, arena, spans, deps } = self;
+        let Resolver { spans, arena, prim_term: _, prim_def: _, term_to_def, deps } = self;
         Ok(ResolveOut {
+            spans,
             arena,
             scoped: ScopedArena {
                 term_to_def: term_to_def.clone(),
                 scc: Kosaraju::new(&deps).run(),
                 deps,
             },
-            spans,
         })
     }
     fn check_duplicate_and_update_global(
@@ -100,8 +102,28 @@ impl Resolver {
         global.map = global.map.clone().union(binders);
         Ok(())
     }
+    /// register a term to its definition
     fn def(&mut self, term: TermId, def: DefId) {
         self.term_to_def.insert(term, def);
+    }
+    fn alloc_prim(
+        span: &SpanArenaBitter, mc: &mut MultiCell<DefId>, def: DefId, name: &'static str,
+    ) -> Result<DefId> {
+        if mc.is_empty() {
+            Ok(*mc.init(def))
+        } else {
+            let var = VarName(name.into());
+            Err(ResolveError::DuplicatePrim(
+                span.defs[def].clone().make(var.clone()),
+                span.defs[*mc.get()].clone().make(var),
+            ))
+        }
+    }
+    fn alloc_vtype(&mut self, vtype: DefId) -> Result<DefId> {
+        Self::alloc_prim(&self.spans, &mut self.prim_def.vtype, vtype, "VType")
+    }
+    fn alloc_ctype(&mut self, ctype: DefId) -> Result<DefId> {
+        Self::alloc_prim(&self.spans, &mut self.prim_def.ctype, ctype, "CType")
     }
 }
 
@@ -118,7 +140,9 @@ impl Resolve for TopLevel {
         &self, resolver: &mut Resolver, mut global: Self::Lookup<'f>,
     ) -> Result<Self::Out> {
         let TopLevel(decls) = self;
-        // collect all top-level binders and check for duplicates
+        // collect all top-level binders and ...
+        // 1. check for duplicates
+        // 2. update primitives to term_to_def
         for id in decls {
             let Modifiers { public: _, inner } = &resolver.arena.decls[*id];
             match inner {
@@ -132,11 +156,17 @@ impl Resolve for TopLevel {
                 }
                 Declaration::Extern(decl) => {
                     let Extern { comp: _, binder, params: _, ty: _ } = decl;
-                    resolver.check_duplicate_and_update_global(
-                        id,
-                        binder.binders(&resolver.arena),
-                        &mut global,
-                    )?;
+                    let binders = binder.binders(&resolver.arena);
+                    // check if it's a primitive and probably update the term_to_def
+                    if binders.len() == 1 {
+                        if let Some(def) = binders.get(&VarName("VType".into())) {
+                            resolver.alloc_vtype(*def)?;
+                        }
+                        if let Some(def) = binders.get(&VarName("CType".into())) {
+                            resolver.alloc_ctype(*def)?;
+                        }
+                    }
+                    resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }
                 Declaration::Main(_) => {}
             }
@@ -151,6 +181,19 @@ impl Resolve for TopLevel {
         for decl in decls {
             decl.resolve(resolver, &global)?;
         }
+        resolver.prim_def.check()?;
+        Ok(())
+    }
+}
+
+impl PrimDef {
+    pub fn check(&self) -> Result<()> {
+        if self.vtype.is_empty() {
+            return Err(ResolveError::MissingPrim("VType"));
+        }
+        if self.ctype.is_empty() {
+            return Err(ResolveError::MissingPrim("CType"));
+        }
         Ok(())
     }
 }
@@ -159,6 +202,8 @@ impl Resolve for DeclId {
     type Out = ();
     type Lookup<'a> = &'a Global;
     fn resolve<'f>(&self, resolver: &mut Resolver, global: Self::Lookup<'f>) -> Result<Self::Out> {
+        // register the global binder in deps
+        resolver.deps.add(*self, []);
         let decl = resolver.arena.decls[*self].clone();
         let local = Local { under: *self, ..Local::default() };
         let Modifiers { public: _, inner } = decl;
@@ -259,6 +304,9 @@ impl Resolve for TermId {
     ) -> Result<Self::Out> {
         let term = resolver.arena.terms[*self].clone();
         match term {
+            Term::Internal(_) => {
+                // internal terms will be resolved by looking up primitives
+            }
             Term::Sealed(term) => {
                 let Sealed(inner) = term;
                 let () = inner.resolve(resolver, (local, global))?;

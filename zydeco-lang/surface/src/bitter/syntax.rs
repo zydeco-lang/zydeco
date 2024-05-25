@@ -2,9 +2,10 @@
 
 pub use crate::syntax::*;
 use crate::{arena::*, textual::syntax as t};
-use derive_more::{From, Into};
+use derive_more::{AddAssign, From};
 use std::ops::AddAssign;
 pub use zydeco_syntax::*;
+use zydeco_utils::multi_cell::MultiCell;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 /* ------------------------------- Identifier ------------------------------- */
@@ -150,6 +151,7 @@ pub struct CoMatcher {
 
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
+    Internal(Internal),
     Sealed(Sealed),
     Ann(Ann<TermId, TermId>),
     Hole(Hole),
@@ -241,7 +243,7 @@ impl AddAssign<TopLevel> for TopLevel {
 
 /* ---------------------------------- Arena --------------------------------- */
 
-#[derive(Default, Debug, Into)]
+#[derive(Default, Debug, AddAssign)]
 pub struct Arena {
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
@@ -250,14 +252,12 @@ pub struct Arena {
     pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
-impl AddAssign<Arena> for Arena {
-    fn add_assign(&mut self, rhs: Arena) {
-        self.defs += rhs.defs;
-        self.pats += rhs.pats;
-        self.copats += rhs.copats;
-        self.terms += rhs.terms;
-        self.decls += rhs.decls;
-    }
-}
-
 pub type SpanArenaBitter = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
+
+/* -------------------------------- Primitive ------------------------------- */
+
+#[derive(Default, AddAssign)]
+pub struct PrimTerm {
+    pub vtype: MultiCell<TermId>,
+    pub ctype: MultiCell<TermId>,
+}

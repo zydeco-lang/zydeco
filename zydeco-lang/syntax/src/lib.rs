@@ -1,6 +1,11 @@
 mod impls;
 use derive_more::From;
 
+/* -------------------------------- Primitive ------------------------------- */
+
+#[derive(Clone, Debug)]
+pub struct Internal(pub String);
+
 /* --------------------------------- Binder --------------------------------- */
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

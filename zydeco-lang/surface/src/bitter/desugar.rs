@@ -12,14 +12,16 @@ pub trait Desugar {
 
 pub struct Desugarer {
     pub tspans: t::SpanArenaTextual,
-    pub t: t::Arena,
+    pub textual: t::Arena,
     pub bspans: b::SpanArenaBitter,
-    pub b: b::Arena,
+    pub bitter: b::Arena,
+    pub prim: b::PrimTerm,
 }
 
 pub struct DesugarOut {
     pub spans: b::SpanArenaBitter,
     pub arena: b::Arena,
+    pub prim: b::PrimTerm,
     pub top: b::TopLevel,
 }
 
@@ -27,8 +29,28 @@ impl Desugarer {
     pub fn run(self, top: t::TopLevel) -> DesugarOut {
         let mut desugarer = self;
         let top = top.desugar(&mut desugarer);
-        let Desugarer { b: arena, bspans: spans, .. } = desugarer;
-        DesugarOut { spans, arena, top }
+        let Desugarer { bitter: arena, bspans: spans, prim, .. } = desugarer;
+        DesugarOut { spans, arena, prim, top }
+    }
+    fn vtype(&mut self) -> b::TermId {
+        if self.prim.vtype.is_empty() {
+            let span = Span::dummy();
+            let term = Alloc::alloc(self, span);
+            let id = self.term(term, b::Hole.into());
+            *self.prim.vtype.init(id)
+        } else {
+            *self.prim.vtype.get()
+        }
+    }
+    fn ctype(&mut self) -> b::TermId {
+        if self.prim.ctype.is_empty() {
+            let span = Span::dummy();
+            let term = Alloc::alloc(self, span);
+            let id = self.term(term, b::Hole.into());
+            *self.prim.ctype.init(id)
+        } else {
+            *self.prim.ctype.get()
+        }
     }
 }
 
@@ -48,7 +70,7 @@ impl Desugar for t::TopLevel {
         let t::TopLevel(decls) = self;
         let mut decls_new = Vec::new();
         for decl in decls {
-            let Modifiers { public, inner } = desugarer.t.decls[decl].clone();
+            let Modifiers { public, inner } = desugarer.textual.decls[decl].clone();
             use t::Declaration as Decl;
             let inner = match inner {
                 Decl::DataDef(decl) => {
@@ -325,7 +347,12 @@ impl Desugar for t::TermId {
                 let t::Forall(params, ty) = term;
                 let params = params.desugar(desugarer);
                 let ty = ty.desugar(desugarer);
-                desugarer.term(id, b::Pi(params, ty).into())
+                let forall = desugarer.term(id, b::Pi(params, ty).into());
+                // forall -> ann
+                let span = forall.span(desugarer);
+                let ann = Alloc::alloc(desugarer, span);
+                let ctype = desugarer.ctype();
+                desugarer.term(ann, b::Ann { tm: forall, ty: ctype }.into())
             }
             Tm::Sigma(term) => {
                 let t::Sigma(params, ty) = term;
@@ -358,7 +385,12 @@ impl Desugar for t::TermId {
                 let t::Exists(params, ty) = term;
                 let params = params.desugar(desugarer);
                 let ty = ty.desugar(desugarer);
-                desugarer.term(id, b::Sigma(params, ty).into())
+                let exists = desugarer.term(id, b::Sigma(params, ty).into());
+                // exists -> ann
+                let span = exists.span(desugarer);
+                let ann = Alloc::alloc(desugarer, span);
+                let vtype = desugarer.vtype();
+                desugarer.term(ann, b::Ann { tm: exists, ty: vtype }.into())
             }
             Tm::Thunk(term) => {
                 let t::Thunk(term) = term;
@@ -396,11 +428,19 @@ impl Desugar for t::TermId {
             // }
             Tm::Data(data) => {
                 let span = id.span(desugarer);
-                span.make(data).desugar(desugarer)
+                let data = span.make(data).desugar(desugarer);
+                // data -> ann
+                let ann = Alloc::alloc(desugarer, span);
+                let vtype = desugarer.vtype();
+                desugarer.term(ann, b::Ann { tm: data, ty: vtype }.into())
             }
             Tm::CoData(codata) => {
                 let span = id.span(desugarer);
-                span.make(codata).desugar(desugarer)
+                let codata = span.make(codata).desugar(desugarer);
+                // codata -> ann
+                let ann = Alloc::alloc(desugarer, span);
+                let ctype = desugarer.ctype();
+                desugarer.term(ann, b::Ann { tm: codata, ty: ctype }.into())
             }
             Tm::Ctor(term) => {
                 let t::Ctor(name, term) = term;
@@ -609,39 +649,39 @@ mod impls {
 
     impl Desugarer {
         pub fn lookup_def(&self, id: t::DefId) -> t::VarName {
-            self.t.defs[id].clone()
+            self.textual.defs[id].clone()
         }
         pub fn lookup_pat(&self, id: t::PatId) -> t::Pattern {
-            self.t.pats[id].clone()
+            self.textual.pats[id].clone()
         }
         pub fn lookup_copat(&self, id: t::CoPatId) -> t::CoPattern {
-            self.t.copats[id].clone()
+            self.textual.copats[id].clone()
         }
         pub fn lookup_term(&self, id: t::TermId) -> t::Term {
-            self.t.terms[id].clone()
+            self.textual.terms[id].clone()
         }
         pub fn lookup_decl(&self, id: t::DeclId) -> Modifiers<t::Declaration> {
-            self.t.decls[id].clone()
+            self.textual.decls[id].clone()
         }
 
         pub fn def(&mut self, id: b::DefId, def: b::VarName) -> b::DefId {
-            self.b.defs.insert(id, def);
+            self.bitter.defs.insert(id, def);
             id
         }
         pub fn pat(&mut self, id: b::PatId, pat: b::Pattern) -> b::PatId {
-            self.b.pats.insert(id, pat);
+            self.bitter.pats.insert(id, pat);
             id
         }
         pub fn copat(&mut self, id: b::CoPatId, copat: b::CoPattern) -> b::CoPatId {
-            self.b.copats.insert(id, copat);
+            self.bitter.copats.insert(id, copat);
             id
         }
         pub fn term(&mut self, id: b::TermId, term: b::Term<b::NameRef<b::VarName>>) -> b::TermId {
-            self.b.terms.insert(id, term);
+            self.bitter.terms.insert(id, term);
             id
         }
         pub fn decl(&mut self, id: b::DeclId, decl: Modifiers<b::Declaration>) -> b::DeclId {
-            self.b.decls.insert(id, decl);
+            self.bitter.decls.insert(id, decl);
             id
         }
     }

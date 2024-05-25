@@ -9,6 +9,7 @@ pub mod never;
 pub mod monoid;
 pub mod wrappers;
 pub mod interval_tree;
+pub mod multi_cell;
 
 pub mod prelude {
     pub use crate::{
@@ -18,5 +19,6 @@ pub mod prelude {
         never::Never,
         rc,
         span::{Sp, Span, SpanHolder, SpanView},
+        multi_cell::MultiCell,
     };
 }

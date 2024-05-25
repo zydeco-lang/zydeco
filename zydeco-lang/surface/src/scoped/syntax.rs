@@ -1,10 +1,9 @@
 pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
 
-use zydeco_utils::{arena::*, deps::DepGraph, scc::SccGraph};
+use zydeco_utils::{arena::*, deps::DepGraph, multi_cell::MultiCell, scc::SccGraph};
 
 /* -------------------------------- TopLevel -------------------------------- */
-
 
 /* --------------------------------- Context -------------------------------- */
 
@@ -42,4 +41,12 @@ pub struct ScopedArena {
     pub deps: DepGraph<DeclId>,
     /// scc graph of the top level declarations
     pub scc: SccGraph<DeclId>,
+}
+
+/* -------------------------------- Primitive ------------------------------- */
+
+#[derive(Default)]
+pub struct PrimDef {
+    pub vtype: MultiCell<DefId>,
+    pub ctype: MultiCell<DefId>,
 }

@@ -69,6 +69,7 @@ impl Ugly for TermId {
         let mut s = String::new();
         let term = &f.arena.terms[*self];
         match term {
+            Term::Internal(t) => s += &t.ugly(f),
             Term::Sealed(t) => s += &t.ugly(f),
             Term::Ann(t) => s += &t.ugly(f),
             Term::Hole(t) => s += &t.ugly(f),
@@ -115,7 +116,17 @@ impl Ugly for DeclId {
         }
         s
     }
+}
 
+impl Ugly for Internal {
+    fn ugly(&self, _f: &Formatter) -> String {
+        let mut s = String::new();
+        let Internal(name) = self;
+        s += "${";
+        s += name;
+        s += "}";
+        s
+    }
 }
 
 impl Ugly for Sealed {

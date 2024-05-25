@@ -115,6 +115,7 @@ impl Package {
                 sources: HashMap::new(),
                 spans: b::SpanArenaBitter::new(&mut alloc),
                 arena: b::Arena::default(),
+                prim_term: b::PrimTerm::default(),
                 top: b::TopLevel(Vec::new()),
             },
             files,
@@ -127,36 +128,40 @@ impl Package {
         if cfg!(debug_assertions) {
             use crate::scoped::fmt::*;
             println!(">>> [{}]", self.name);
-            // println!("{:#?}", pack.scoped.deps);
             let mut scc = pack.scoped.scc.clone();
+            let mut cnt = 0;
             loop {
                 let roots = scc.top();
                 if roots.is_empty() {
                     break;
                 }
-                // let victim = roots.into_iter().next().unwrap().into_iter().next().unwrap();
-                // println!("releasing: {:?}", victim.ugly(&Formatter::new(&pack.arena)));
-                // scc.release([victim]);
-                let victims = roots.into_iter().flat_map(|s| s.into_iter()).collect::<Vec<_>>();
-                println!(
-                    "releasing: {:?}",
-                    victims
-                        .iter()
-                        .map(|decl| {
-                            let decl = &pack.arena.decls[*decl].inner;
-                            match decl {
-                                sc::Declaration::Alias(sc::Alias { binder, .. }) => {
-                                    binder.ugly(&Formatter::new(&pack.arena))
+                let grouped_victims = roots
+                    .into_iter()
+                    .map(|s| s.into_iter().collect::<Vec<_>>())
+                    .collect::<Vec<_>>();
+                println!("\tscc[{}]", cnt);
+                for victims in grouped_victims {
+                    println!(
+                        "\t\t{:?}",
+                        victims
+                            .iter()
+                            .map(|decl| {
+                                let decl = &pack.arena.decls[*decl].inner;
+                                match decl {
+                                    sc::Declaration::Alias(sc::Alias { binder, .. }) => {
+                                        binder.ugly(&Formatter::new(&pack.arena))
+                                    }
+                                    sc::Declaration::Extern(sc::Extern { binder, .. }) => {
+                                        binder.ugly(&Formatter::new(&pack.arena))
+                                    }
+                                    sc::Declaration::Main(_) => "$main".into(),
                                 }
-                                sc::Declaration::Extern(sc::Extern { binder, .. }) => {
-                                    binder.ugly(&Formatter::new(&pack.arena))
-                                }
-                                sc::Declaration::Main(_) => "$main".into(),
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                );
-                scc.release(victims);
+                            })
+                            .collect::<Vec<_>>()
+                    );
+                    scc.release(victims);
+                }
+                cnt += 1;
             }
             println!("<<< [{}]", self.name);
         }
@@ -234,10 +239,16 @@ pub struct FileParsed {
 
 impl FileParsed {
     pub fn desugar(self, bspans: b::SpanArenaBitter) -> FileBitter {
-        let FileParsed { path, source, spans: tspans, arena: t, top } = self;
-        let desugarer = Desugarer { tspans, t, bspans, b: b::Arena::default() };
-        let DesugarOut { spans, arena, top } = desugarer.run(top);
-        FileBitter { path, source, spans, arena, top }
+        let FileParsed { path, source, spans: tspans, arena: textual, top } = self;
+        let desugarer = Desugarer {
+            tspans,
+            textual,
+            bspans,
+            bitter: b::Arena::default(),
+            prim: b::PrimTerm::default(),
+        };
+        let DesugarOut { spans, arena, prim: prim_term, top } = desugarer.run(top);
+        FileBitter { path, source, spans, arena, prim_term, top }
     }
 }
 
@@ -246,6 +257,7 @@ pub struct FileBitter {
     pub source: String,
     pub spans: b::SpanArenaBitter,
     pub arena: b::Arena,
+    pub prim_term: b::PrimTerm,
     pub top: b::TopLevel,
 }
 
@@ -257,6 +269,7 @@ impl FileBitter {
             stew.sources.insert(file.path, file.source);
             stew.spans += file.spans;
             stew.arena += file.arena;
+            stew.prim_term += file.prim_term;
             stew.top += file.top;
         }
         Ok(stew)
@@ -267,16 +280,19 @@ pub struct PackageStew {
     pub sources: HashMap<PathBuf, String>,
     pub spans: b::SpanArenaBitter,
     pub arena: b::Arena,
+    pub prim_term: b::PrimTerm,
     pub top: b::TopLevel,
 }
 
 impl PackageStew {
     pub fn resolve(self) -> Result<PackageScoped> {
-        let PackageStew { sources, spans, arena: bitter, top } = self;
+        let PackageStew { sources, spans, arena: bitter, prim_term, top } = self;
         let resolver = Resolver {
-            term_to_def: ArenaAssoc::default(),
-            arena: bitter,
             spans,
+            arena: bitter,
+            prim_term,
+            prim_def: sc::PrimDef::default(),
+            term_to_def: ArenaAssoc::default(),
             deps: DepGraph::default(),
         };
         let ResolveOut { scoped, arena, spans } =

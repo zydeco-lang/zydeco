@@ -1,8 +1,6 @@
-/// the definition of Kind
-pub extern Kind end
 /// the VType and CType kinds
-pub extern VType : Kind end
-pub extern CType : Kind end
+pub extern VType end
+pub extern CType end
 /// the Thunk and Ret types
 pub extern Thunk (B : CType) : VType end
 pub extern Ret (A : VType) : CType end
