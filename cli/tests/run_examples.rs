@@ -1,4 +1,4 @@
-use cli::Repl;
+use zydeco_cli::Repl;
 use std::{io::Read, path::PathBuf};
 use zydeco_lang::zydeco::ZydecoExpr;
 

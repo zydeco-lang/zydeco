@@ -5,4 +5,6 @@ pub mod syntax {
     pub use zydeco_surface::scoped::syntax::*;
 }
 
-pub mod internal {}
+pub mod sorted {}
+
+pub mod typed {}

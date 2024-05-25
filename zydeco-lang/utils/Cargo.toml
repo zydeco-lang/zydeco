@@ -11,4 +11,4 @@ readme = { workspace = true }
 description = "utilities for zydeco"
 
 [dependencies]
-once_cell = "1.17"
+once_cell = { workspace = true }

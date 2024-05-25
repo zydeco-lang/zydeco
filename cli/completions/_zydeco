@@ -20,10 +20,10 @@ _zydeco() {
 '-V[Print version]' \
 '--version[Print version]' \
 ":: :_zydeco_commands" \
-"*::: :->cli" \
+"*::: :->zydeco-cli" \
 && ret=0
     case $state in
-    (cli)
+    (zydeco-cli)
         words=($line[1] "${words[@]}")
         (( CURRENT += 1 ))
         curcontext="${curcontext%:*:*}:zydeco-command-$line[1]:"

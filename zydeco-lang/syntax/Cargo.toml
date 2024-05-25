@@ -11,10 +11,10 @@ readme = { workspace = true }
 description = "general syntax structures for zydeco"
 
 [dependencies]
-zydeco-utils = { path = "../utils" }
-zydeco-derive = { path = "../derive" }
-derive_more = "0.99"
-derive-where = "1.2"
+zydeco-derive = { workspace = true }
+zydeco-utils = { workspace = true }
+derive_more = { workspace = true }
+derive-where = { workspace = true }
 
 [lib]
 doctest = false

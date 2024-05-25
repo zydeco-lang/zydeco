@@ -11,8 +11,8 @@ readme = { workspace = true }
 description = "derive macros for zydeco"
 
 [dependencies]
-syn = "2.0"
-quote = "1.0"
+syn = { workspace = true }
+quote = { workspace = true }
 
 [lib]
 doctest = false

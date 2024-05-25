@@ -1,5 +1,5 @@
 use clap::Parser;
-use cli::{Cli, Commands, Repl};
+use zydeco_cli::{Cli, Commands, Repl};
 use zydeco_lang::{
     prelude::*,
     zydeco::{ProgKont, ZydecoFile},

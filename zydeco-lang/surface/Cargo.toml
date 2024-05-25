@@ -11,25 +11,25 @@ readme = { workspace = true }
 description = "surface syntax for zydeco"
 
 [dependencies]
-regex = "1"
-logos = "0.14"
-lalrpop-util = "0.20"
-sculptor = "0.0.5"
-sequence_trie = "0.3"
-im = "15"
-unindent = "0.2"
-thiserror = "1"
-zydeco-utils = { path = "../utils" }
-zydeco-derive = { path = "../derive" }
-zydeco-syntax = { path = "../syntax" }
-derive_more = "0.99"
-derive-where = "1.2"
-serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
+regex = { workspace = true }
+logos = { workspace = true }
+lalrpop-util = { workspace = true }
+sculptor = { workspace = true }
+sequence_trie = { workspace = true }
+im = { workspace = true }
+unindent = { workspace = true }
+thiserror = { workspace = true }
+zydeco-utils = { workspace = true }
+zydeco-derive = { workspace = true }
+zydeco-syntax = { workspace = true }
+derive_more = { workspace = true }
+derive-where = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
 
 # build-time dependency on the lalrpop library:
 [build-dependencies]
-lalrpop = "0.20"
+lalrpop = { workspace = true }
 
 [lib]
 doctest = false

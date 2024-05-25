@@ -22,3 +22,39 @@ edition = "2021"
 repository = "https://github.com/zydeco-lang/zydeco"
 license = "MIT"
 readme = "README.md"
+
+[workspace.dependencies]
+zydeco-lang = { path = "zydeco-lang" }
+zydeco-utils = { path = "zydeco-lang/utils" }
+zydeco-derive = { path = "zydeco-lang/derive" }
+zydeco-syntax = { path = "zydeco-lang/syntax" }
+zydeco-surface = { path = "zydeco-lang/surface" }
+zydeco-statics = { path = "zydeco-lang/statics" }
+# meta
+syn = "2.0"
+quote = "1.0"
+# derive
+derive_more = "0.99"
+derive-where = "1.2"
+# utils
+once_cell = "1.17"
+sculptor = "0.0.5"
+rand = "0.8"
+# data structures
+sequence_trie = "0.3"
+im = "15"
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+# error handling
+thiserror = "1"
+unindent = "0.2"
+# parsing
+regex = "1"
+logos = "0.14"
+lalrpop = "0.20"
+lalrpop-util = "0.20"
+# cli
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+

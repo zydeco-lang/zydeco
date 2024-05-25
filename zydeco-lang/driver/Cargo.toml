@@ -11,25 +11,13 @@ readme = { workspace = true }
 description = "a minimal build system for zydeco"
 
 [dependencies]
-regex = "1"
-logos = "0.14"
-lalrpop-util = "0.20"
-sculptor = "0.0.5"
-im = "15"
-unindent = "0.2"
-thiserror = "1"
-zydeco-utils = { path = "../utils" }
-zydeco-derive = { path = "../derive" }
-zydeco-syntax = { path = "../syntax" }
-zydeco-surface = { path = "../surface" }
-derive_more = "0.99"
-derive-where = "1.2"
-serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
-
-# build-time dependency on the lalrpop library:
-[build-dependencies]
-lalrpop = "0.20"
+zydeco-utils = { workspace = true }
+zydeco-derive = { workspace = true }
+zydeco-syntax = { workspace = true }
+zydeco-surface = { workspace = true }
+derive_more = { workspace = true }
+derive-where = { workspace = true }
+thiserror = { workspace = true }
 
 [lib]
 doctest = false

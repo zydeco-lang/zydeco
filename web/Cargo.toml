@@ -6,6 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-yew = { version = "0.20", features = ["csr"] }
-zydeco-lang = { path = "../zydeco-lang" }
+yew = { version = "0.21", features = ["csr"] }
+zydeco-lang = { workspace = true }
 web-sys = "0.3"

@@ -11,20 +11,19 @@ readme = { workspace = true }
 description = "A language implementation for zydeco, a call-by-push-value language"
 
 [dependencies]
-regex = "1"
-logos = "0.14"
-lalrpop-util = "0.20"
-im = "15"
-slotmap = "1.0"
-thiserror = "1.0.40"
-zydeco-utils = { path = "./utils" }
-zydeco-derive = { path = "./derive" }
-derive_more = "0.99"
-rand = "0.8"
+regex = { workspace = true }
+logos = { workspace = true }
+lalrpop-util = { workspace = true }
+im = { workspace = true }
+thiserror = { workspace = true }
+zydeco-utils = { workspace = true }
+zydeco-derive = { workspace = true }
+derive_more = { workspace = true }
+rand = { workspace = true }
 
 # build-time dependency on the lalrpop library:
 [build-dependencies]
-lalrpop = "0.20"
+lalrpop = { workspace = true }
 
 # [lib]
 # doctest = false
