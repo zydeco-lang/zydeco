@@ -142,7 +142,18 @@ impl Package {
                     "releasing: {:?}",
                     victims
                         .iter()
-                        .map(|s| s.ugly(&Formatter::new(&pack.arena)))
+                        .map(|decl| {
+                            let decl = &pack.arena.decls[*decl].inner;
+                            match decl {
+                                sc::Declaration::Alias(sc::Alias { binder, .. }) => {
+                                    binder.ugly(&Formatter::new(&pack.arena))
+                                }
+                                sc::Declaration::Extern(sc::Extern { binder, .. }) => {
+                                    binder.ugly(&Formatter::new(&pack.arena))
+                                }
+                                sc::Declaration::Main(_) => "$main".into(),
+                            }
+                        })
                         .collect::<Vec<_>>()
                 );
                 scc.release(victims);

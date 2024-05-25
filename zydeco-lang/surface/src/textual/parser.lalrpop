@@ -162,25 +162,25 @@ Hole: Hole = "_" => Hole;
 PatternGen<P>: PatId = <Sp<P>> => parser.pat(<>);
 
 #[inline]
-PatternId: PatId = <PatternGen<Pattern>>;
+PatId: PatId = <PatternGen<Pattern>>;
 Pattern: Pattern = {
-    "(" <Ann<PatternId, TermId>> ")" => <>.into(),
+    "(" <Ann<PatId, TermId>> ")" => <>.into(),
     <Hole> => <>.into(),
     <DefId> => <>.into(),
-    <ctor:CtorName> <pat:PatternId> => {
+    <ctor:CtorName> <pat:PatId> => {
         Ctor(ctor, pat).into()
     },
-    <Paren<PatternId>> => <>.into(),
+    <Paren<PatId>> => <>.into(),
 };
 
 #[inline]
 CoPatternGen<P>: CoPatId = <Sp<P>> => parser.copat(<>);
 
 #[inline]
-CoPatternId: CoPatId = <CoPatternGen<CoPattern>>;
+CoPatId: CoPatId = <CoPatternGen<CoPattern>>;
 CoPattern: CoPattern = {
     <CoPatternAtom>,
-    <x:CoPatternId> <y:CoPatternAtomId> => {
+    <x:CoPatId> <y:CoPatternAtomId> => {
         App(vec![x, y]).into()
     },
     // <CoPatternAtomId*> => App(c).into(),
@@ -189,7 +189,7 @@ CoPattern: CoPattern = {
 #[inline]
 CoPatternAtomId: CoPatId = <CoPatternGen<CoPatternAtom>>;
 CoPatternAtom: CoPattern = {
-    <PatternId> => <>.into(),
+    <PatId> => <>.into(),
     <DtorName> => {
         <>.into()
     },
@@ -200,7 +200,7 @@ CoPatternAtom: CoPattern = {
 CompModifier: () = { "!", "fn" };
 
 GenBind<T>: GenBind<T> = {
-    <rec:"rec"?> <comp:CompModifier?> <binder:PatternId> <params:CoPatternId?>
+    <rec:"rec"?> <comp:CompModifier?> <binder:PatId> <params:CoPatId?>
     <ty:(":" <TermId>)?> <bindee:T> => GenBind {
         rec: rec.is_some(),
         comp: comp.is_some(),
@@ -220,18 +220,18 @@ DataArm: DataArm = {
 CoData: CoData = <CoDataArm*> => CoData { arms: <> };
 #[inline]
 CoDataArm: CoDataArm = {
-    "|" <name:DtorName> <params:CoPatternId?> ":" <out: TermId> => {
+    "|" <name:DtorName> <params:CoPatId?> ":" <out: TermId> => {
         CoDataArm { name, params, out }
     },
 };
 
 Matcher: Matcher = {
-    "|" <binder:PatternId> "->" <tail:TermId> => Matcher {
+    "|" <binder:PatId> "->" <tail:TermId> => Matcher {
         binder, tail
     },
 };
 CoMatcher: CoMatcher = {
-    "|" <params:CoPatternId> "->" <tail:TermId> => CoMatcher {
+    "|" <params:CoPatId> "->" <tail:TermId> => CoMatcher {
         params, tail
     },
 };
@@ -244,31 +244,31 @@ TermId: TermId = <TermGen<Term>>;
 Term: Term = {
     <TermRight>,
     // abstraction
-    "fn" <params:CoPatternId> "->" <term:TermId> => {
+    "fn" <params:CoPatId> "->" <term:TermId> => {
         Abs(params, term)
     }.into(),
     // pi
-    "pi" <params:CoPatternId> "." <term:TermId> => {
+    "pi" <params:CoPatId> "." <term:TermId> => {
         Pi(params, term)
     }.into(),
     // forall
-    "forall" <params:CoPatternId> "." <ty:TermRightId> => {
+    "forall" <params:CoPatId> "." <ty:TermRightId> => {
         Forall(params, ty)
     }.into(),
     // sigma
-    "sigma" <params:CoPatternId> "." <ty:TermRightId> => {
+    "sigma" <params:CoPatId> "." <ty:TermRightId> => {
         Sigma(params, ty)
     }.into(),
     // exists
-    "exists" <params:CoPatternId> "." <ty:TermRightId> => {
+    "exists" <params:CoPatId> "." <ty:TermRightId> => {
         Exists(params, ty)
     }.into(),
     // recursion
-    "rec" <binder:PatternId> "->" <term:TermId> => {
+    "rec" <binder:PatId> "->" <term:TermId> => {
         Rec(binder, term)
     }.into(),
     // bind
-    "do" <binder:PatternId> "<-" <bindee:TermId> ";" <tail:TermId> => {
+    "do" <binder:PatId> "<-" <bindee:TermId> ";" <tail:TermId> => {
         Bind { binder, bindee, tail }.into()
     },
     // pure bind
@@ -357,7 +357,7 @@ pub SingleTerm: TermId = TermId;
 //* -------------------------------- TopLevel -------------------------------- */
 
 DataDef: DataDef = {
-    "data" <name:DefId> <params:PatternId*>
+    "data" <name:DefId> <params:PatId*>
         <def:("where" <Data>)>
     "end" => DataDef {
         name, params, def,
@@ -365,7 +365,7 @@ DataDef: DataDef = {
 };
 
 CoDataDef: CoDataDef = {
-    "codata" <name:DefId> <params:PatternId*>
+    "codata" <name:DefId> <params:PatId*>
         <def:("where" <CoData>)>
     "end" => CoDataDef {
         name, params, def,
@@ -376,6 +376,11 @@ CoDataDef: CoDataDef = {
 //     <Modifiers<("use" <UsePath>)>> => <>.into(),
 // };
 
+#[inline]
+DeclarationGen<D>: DeclId = <Sp<D>> => parser.decl(<>);
+
+#[inline]
+DeclId: DeclId = <DeclarationGen<Modifiers<Declaration>>>;
 Declaration: Declaration = {
     <DataDef> => <>.into(),
     <CoDataDef> => <>.into(),
@@ -402,10 +407,10 @@ Modifiers<T>: Modifiers<T> = {
 };
 
 pub ReplInput: ReplInput = {
-    <Modifiers<Declaration>> => <>.into(),
+    <DeclId> => <>.into(),
     <TermId> => <>.into(),
 };
 
 pub TopLevel: TopLevel = {
-    <Modifiers<Declaration>*> => TopLevel(<>),
+    <DeclId*> => TopLevel(<>),
 };

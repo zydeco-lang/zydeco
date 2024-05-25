@@ -14,11 +14,13 @@ new_key_type! {
     pub struct PatId;
     pub struct CoPatId;
     pub struct TermId;
+    pub struct DeclId;
 }
 impl DefPtr for DefId {}
 impl PatPtr for PatId {}
 impl CoPatPtr for CoPatId {}
 impl TermPtr for TermId {}
+impl DeclPtr for DeclId {}
 
 /* --------------------------------- Binder --------------------------------- */
 
@@ -230,7 +232,7 @@ pub enum ReplInput {
 }
 
 #[derive(Clone, Debug)]
-pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
+pub struct TopLevel(pub Vec<DeclId>);
 impl AddAssign<TopLevel> for TopLevel {
     fn add_assign(&mut self, rhs: TopLevel) {
         self.0.extend(rhs.0);
@@ -245,6 +247,7 @@ pub struct Arena {
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub copats: ArenaAssoc<CoPatId, CoPattern>,
     pub terms: ArenaAssoc<TermId, Term<NameRef<VarName>>>,
+    pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
 impl AddAssign<Arena> for Arena {
@@ -253,7 +256,8 @@ impl AddAssign<Arena> for Arena {
         self.pats += rhs.pats;
         self.copats += rhs.copats;
         self.terms += rhs.terms;
+        self.decls += rhs.decls;
     }
 }
 
-pub type SpanArenaBitter = ArenaGen<Span, DefId, PatId, CoPatId, TermId>;
+pub type SpanArenaBitter = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;

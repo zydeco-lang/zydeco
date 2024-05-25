@@ -14,11 +14,13 @@ new_key_type! {
     pub struct PatId;
     pub struct CoPatId;
     pub struct TermId;
+    pub struct DeclId;
 }
 impl DefPtr for DefId {}
 impl PatPtr for PatId {}
 impl CoPatPtr for CoPatId {}
 impl TermPtr for TermId {}
+impl DeclPtr for DeclId {}
 
 /* --------------------------------- Pattern -------------------------------- */
 
@@ -233,12 +235,12 @@ pub enum Declaration {
 
 #[derive(From, Clone, Debug)]
 pub enum ReplInput {
-    Declaration(Modifiers<Declaration>),
+    Declaration(DeclId),
     Term(TermId),
 }
 
 #[derive(Clone, Debug)]
-pub struct TopLevel(pub Vec<Modifiers<Declaration>>);
+pub struct TopLevel(pub Vec<DeclId>);
 
 /* ---------------------------------- Arena --------------------------------- */
 
@@ -248,9 +250,10 @@ pub struct Arena {
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub copats: ArenaAssoc<CoPatId, CoPattern>,
     pub terms: ArenaAssoc<TermId, Term>,
+    pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
-pub type SpanArenaTextual = ArenaGen<Span, DefId, PatId, CoPatId, TermId>;
+pub type SpanArenaTextual = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
 
 /* --------------------------------- Parser --------------------------------- */
 
@@ -281,6 +284,11 @@ impl Parser {
     pub fn term(&mut self, term: Sp<Term>) -> TermId {
         let id = self.spans.terms.alloc(term.info);
         self.arena.terms.insert(id, term.inner);
+        id
+    }
+    pub fn decl(&mut self, decl: Sp<Modifiers<Declaration>>) -> DeclId {
+        let id = self.spans.decls.alloc(decl.info);
+        self.arena.decls.insert(id, decl.inner);
         id
     }
 }

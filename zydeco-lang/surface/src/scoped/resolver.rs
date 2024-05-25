@@ -5,12 +5,12 @@ use zydeco_utils::{arena::ArenaAssoc, deps::DepGraph, scc::Kosaraju};
 pub struct Global {
     /// map from variable names to their definitions
     map: im::HashMap<VarName, DefId>,
-    under_map: im::HashMap<DefId, PatId>,
+    under_map: im::HashMap<DefId, DeclId>,
 }
 #[derive(Clone, Debug, Default)]
 pub struct Local {
     /// which global declaration is the local scope checking in
-    under: Option<PatId>,
+    under: DeclId,
     /// map from variable names to their definitions
     map: im::HashMap<VarName, DefId>,
 }
@@ -58,7 +58,7 @@ pub struct Resolver {
     pub arena: Arena,
     pub spans: SpanArenaBitter,
     /// the dependency of top level definitions
-    pub deps: DepGraph<PatId>,
+    pub deps: DepGraph<DeclId>,
 }
 
 pub struct ResolveOut {
@@ -82,7 +82,7 @@ impl Resolver {
         })
     }
     fn check_duplicate_and_update_global(
-        &self, under: &PatId, binders: im::HashMap<VarName, DefId>, global: &mut Global,
+        &self, under: &DeclId, binders: im::HashMap<VarName, DefId>, global: &mut Global,
     ) -> Result<()> {
         for (name, def) in binders.iter() {
             if let Some(prev) = global.map.get(name) {
@@ -119,12 +119,13 @@ impl Resolve for TopLevel {
     ) -> Result<Self::Out> {
         let TopLevel(decls) = self;
         // collect all top-level binders and check for duplicates
-        for Modifiers { public: _, inner } in decls {
+        for id in decls {
+            let Modifiers { public: _, inner } = &resolver.arena.decls[*id];
             match inner {
                 Declaration::Alias(decl) => {
                     let Alias { binder, bindee: _ } = decl;
                     resolver.check_duplicate_and_update_global(
-                        binder,
+                        id,
                         binder.binders(&resolver.arena),
                         &mut global,
                     )?;
@@ -132,7 +133,7 @@ impl Resolve for TopLevel {
                 Declaration::Extern(decl) => {
                     let Extern { comp: _, binder, params: _, ty: _ } = decl;
                     resolver.check_duplicate_and_update_global(
-                        binder,
+                        id,
                         binder.binders(&resolver.arena),
                         &mut global,
                     )?;
@@ -147,21 +148,23 @@ impl Resolve for TopLevel {
         // 2. global binders (introduced lazily).
         // therefore, we shall introduce all local binders,
         // but introduce global binders in local scopes only if needed.
-        for Modifiers { public: _, inner } in decls {
-            inner.resolve(resolver, &global)?;
+        for decl in decls {
+            decl.resolve(resolver, &global)?;
         }
         Ok(())
     }
 }
 
-impl Resolve for Declaration {
+impl Resolve for DeclId {
     type Out = ();
     type Lookup<'a> = &'a Global;
     fn resolve<'f>(&self, resolver: &mut Resolver, global: Self::Lookup<'f>) -> Result<Self::Out> {
-        match self {
+        let decl = resolver.arena.decls[*self].clone();
+        let local = Local { under: *self, ..Local::default() };
+        let Modifiers { public: _, inner } = decl;
+        match inner {
             Declaration::Alias(decl) => {
                 let Alias { binder, bindee } = decl;
-                let local = Local { under: Some(binder.clone()), ..Local::default() };
                 // resolve bindee first
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 // and then binder, though we don't need the context yielded by binder
@@ -171,7 +174,6 @@ impl Resolve for Declaration {
             }
             Declaration::Extern(decl) => {
                 let Extern { comp: _, binder, params, ty } = decl;
-                let local = Local { under: Some(binder.clone()), ..Local::default() };
                 // no more bindee, but we still need to resolve the binders just for the type mentioned
                 if let Some(ty) = ty {
                     let () = ty.resolve(resolver, (local.clone(), global))?;
@@ -184,7 +186,6 @@ impl Resolve for Declaration {
             }
             Declaration::Main(decl) => {
                 let Main(term) = decl;
-                let local = Local { under: None, ..Local::default() };
                 let () = term.resolve(resolver, (local.clone(), global))?;
                 Ok(())
             }
@@ -281,10 +282,7 @@ impl Resolve for TermId {
                 if let Some(def) = global.map.get(var.leaf()) {
                     // if found, also add dependency
                     resolver.def(*self, *def);
-                    // .. only if it's under a global declaration
-                    if let Some(under) = local.under {
-                        resolver.deps.add(under, [global.under_map[def]]);
-                    }
+                    resolver.deps.add(local.under, [global.under_map[def]]);
                     return Ok(());
                 }
                 // if not found, report an error

@@ -20,21 +20,8 @@ impl Ugly for TopLevel {
         let TopLevel(decls) = self;
         s += &decls
             .iter()
-            .map(|Modifiers { public, inner }| {
-                let mut s = String::new();
-                if *public {
-                    s += "pub ";
-                }
-                use Declaration as Decl;
-                match inner {
-                    Decl::Alias(d) => s += &d.ugly(f),
-                    Decl::Extern(d) => s += &d.ugly(f),
-                    // Decl::Layer(d) => s += &d.ugly(f),
-                    // Decl::UseDef(d) => s += &d.ugly(f),
-                    // Decl::UseBlock(d) => s += &d.ugly(f),
-                    Decl::Main(d) => s += &d.ugly(f),
-                }
-                s
+            .map(|decl| {
+                decl.ugly(f)
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -108,6 +95,27 @@ impl Ugly for TermId {
         }
         s
     }
+}
+
+impl Ugly for DeclId {
+    fn ugly(&self, f: &Formatter) -> String {
+        let Modifiers { public, inner } = &f.arena.decls[*self];
+        let mut s = String::new();
+        if *public {
+            s += "pub ";
+        }
+        use Declaration as Decl;
+        match inner {
+            Decl::Alias(d) => s += &d.ugly(f),
+            Decl::Extern(d) => s += &d.ugly(f),
+            // Decl::Layer(d) => s += &d.ugly(f),
+            // Decl::UseDef(d) => s += &d.ugly(f),
+            // Decl::UseBlock(d) => s += &d.ugly(f),
+            Decl::Main(d) => s += &d.ugly(f),
+        }
+        s
+    }
+
 }
 
 impl Ugly for Sealed {

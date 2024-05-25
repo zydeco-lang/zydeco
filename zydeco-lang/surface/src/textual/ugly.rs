@@ -20,7 +20,8 @@ impl Ugly for TopLevel {
         let TopLevel(decls) = self;
         s += &decls
             .iter()
-            .map(|Modifiers { public, inner }| {
+            .map(|decl| {
+                let Modifiers { public, inner } = &f.arena.decls[*decl];
                 let mut s = String::new();
                 if *public {
                     s += "pub ";

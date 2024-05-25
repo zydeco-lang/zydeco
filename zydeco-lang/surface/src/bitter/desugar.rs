@@ -47,7 +47,8 @@ impl Desugar for t::TopLevel {
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
         let t::TopLevel(decls) = self;
         let mut decls_new = Vec::new();
-        for Modifiers { public, inner } in decls {
+        for decl in decls {
+            let Modifiers { public, inner } = desugarer.t.decls[decl].clone();
             use t::Declaration as Decl;
             let inner = match inner {
                 Decl::DataDef(decl) => {
@@ -163,7 +164,9 @@ impl Desugar for t::TopLevel {
                     b::Main(term).into()
                 }
             };
-            decls_new.push(Modifiers { public, inner })
+            let span = decl.span(desugarer);
+            let decl = Alloc::alloc(desugarer, span);
+            decls_new.push(desugarer.decl(decl, Modifiers { public, inner }))
         }
         b::TopLevel(decls_new)
     }
@@ -543,6 +546,11 @@ mod impls {
             desugarer.tspans.terms[*self].clone()
         }
     }
+    impl Spanned for t::DeclId {
+        fn span(&self, desugarer: &mut Desugarer) -> Span {
+            desugarer.tspans.decls[*self].clone()
+        }
+    }
     impl Spanned for b::DefId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
             desugarer.bspans.defs[*self].clone()
@@ -561,6 +569,11 @@ mod impls {
     impl Spanned for b::TermId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
             desugarer.bspans.terms[*self].clone()
+        }
+    }
+    impl Spanned for b::DeclId {
+        fn span(&self, desugarer: &mut Desugarer) -> Span {
+            desugarer.bspans.decls[*self].clone()
         }
     }
 
@@ -588,6 +601,11 @@ mod impls {
             desugarer.bspans.terms.alloc(span)
         }
     }
+    impl Alloc for b::DeclId {
+        fn alloc(desugarer: &mut Desugarer, span: Span) -> Self {
+            desugarer.bspans.decls.alloc(span)
+        }
+    }
 
     impl Desugarer {
         pub fn lookup_def(&self, id: t::DefId) -> t::VarName {
@@ -601,6 +619,9 @@ mod impls {
         }
         pub fn lookup_term(&self, id: t::TermId) -> t::Term {
             self.t.terms[id].clone()
+        }
+        pub fn lookup_decl(&self, id: t::DeclId) -> Modifiers<t::Declaration> {
+            self.t.decls[id].clone()
         }
 
         pub fn def(&mut self, id: b::DefId, def: b::VarName) -> b::DefId {
@@ -617,6 +638,10 @@ mod impls {
         }
         pub fn term(&mut self, id: b::TermId, term: b::Term<b::NameRef<b::VarName>>) -> b::TermId {
             self.b.terms.insert(id, term);
+            id
+        }
+        pub fn decl(&mut self, id: b::DeclId, decl: Modifiers<b::Declaration>) -> b::DeclId {
+            self.b.decls.insert(id, decl);
             id
         }
     }

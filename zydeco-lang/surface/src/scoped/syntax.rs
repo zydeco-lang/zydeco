@@ -3,6 +3,9 @@ pub use crate::syntax::*;
 
 use zydeco_utils::{arena::*, deps::DepGraph, scc::SccGraph};
 
+/* -------------------------------- TopLevel -------------------------------- */
+
+
 /* --------------------------------- Context -------------------------------- */
 
 new_key_type! {
@@ -35,8 +38,8 @@ pub struct ScopedArena {
     // pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
     /// if a term is a variable, it can be mapped to a def
     pub term_to_def: ArenaAssoc<TermId, DefId>,
-    /// dependency graph of the top level patterns
-    pub deps: DepGraph<PatId>,
-    /// scc graph of the top level patterns
-    pub scc: SccGraph<PatId>,
+    /// dependency graph of the top level declarations
+    pub deps: DepGraph<DeclId>,
+    /// scc graph of the top level declarations
+    pub scc: SccGraph<DeclId>,
 }
