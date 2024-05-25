@@ -245,7 +245,9 @@ mod impls {
         Id: Eq + std::hash::Hash,
     {
         pub fn insert(&mut self, id: Id, val: T) {
-            self.map.insert(id, val);
+            let None = self.map.insert(id, val) else {
+                panic!("duplicate key")
+            };
         }
     }
 

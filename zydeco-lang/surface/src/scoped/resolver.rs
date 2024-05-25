@@ -2,6 +2,15 @@ use crate::scoped::{err::*, syntax::*};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {
+    /// map from variable names to their definitions
+    map: im::HashMap<VarName, DefId>,
+    under_which: im::HashMap<DefId, PatId>,
+}
+#[derive(Clone, Debug, Default)]
+pub struct Local {
+    /// which global declaration is the local scope checking in
+    under: Option<PatId>,
+    /// map from variable names to their definitions
     map: im::HashMap<VarName, DefId>,
     set: im::HashMap<DefId, ()>,
 }
@@ -33,9 +42,9 @@ impl Binders for PatId {
                 args.binders(arena)
             }
             Pattern::Paren(pat) => {
-                let Paren(inner) = pat;
+                let Paren(pats) = pat;
                 let mut res = im::HashMap::new();
-                for binder in inner {
+                for binder in pats {
                     res = res.union(binder.binders(arena));
                 }
                 res
@@ -55,22 +64,26 @@ impl Resolver {
         top.resolve(self, Global::default())
     }
     fn check_duplicate_and_update_global(
-        &self, binders: im::HashMap<VarName, DefId>, global: &mut Global,
+        &self, under: &PatId, binders: im::HashMap<VarName, DefId>, global: &mut Global,
     ) -> Result<()> {
-        let dup = binders.clone().intersection(global.map.clone());
-        if !dup.is_empty() {
-            // get first duplicate
-            let (name, def1) = dup.into_iter().next().unwrap();
-            let def2 = global.map[&name];
-            // get spans
-            let span1 = &self.spans.defs[def1];
-            let span2 = &self.spans.defs[def2];
-            Err(ResolveError::DuplicateDefinition(span1.make(name.clone()), span2.make(name)))?;
+        for (name, def) in binders.iter() {
+            if let Some(prev) = global.map.get(name) {
+                let span1 = &self.spans.defs[*prev];
+                let span2 = &self.spans.defs[*def];
+                Err(ResolveError::DuplicateDefinition(
+                    span1.make(name.clone()),
+                    span2.make(name.clone()),
+                ))?;
+            }
         }
         // update names
-        global.set = global.set.clone().union(binders.values().map(|def| (*def, ())).collect());
+        global.under_which =
+            global.under_which.clone().union(binders.values().map(|def| (*def, *under)).collect());
         global.map = global.map.clone().union(binders);
         Ok(())
+    }
+    fn def(&mut self, term: TermId, def: DefId) {
+        self.scoped.term_to_def.insert(term, def);
     }
 }
 
@@ -93,6 +106,7 @@ impl Resolve for TopLevel {
                 Declaration::Alias(decl) => {
                     let Alias { binder, bindee: _ } = decl;
                     resolver.check_duplicate_and_update_global(
+                        binder,
                         binder.binders(&resolver.bitter),
                         &mut global,
                     )?;
@@ -100,13 +114,12 @@ impl Resolve for TopLevel {
                 Declaration::Extern(decl) => {
                     let Extern { comp: _, binder, params: _, ty: _ } = decl;
                     resolver.check_duplicate_and_update_global(
+                        binder,
                         binder.binders(&resolver.bitter),
                         &mut global,
                     )?;
                 }
-                Declaration::Main(decl) => {
-                    let Main(_) = decl;
-                }
+                Declaration::Main(_) => {}
             }
         }
         // within each term (when we also count types as terms),
@@ -130,28 +143,31 @@ impl Resolve for Declaration {
         match self {
             Declaration::Alias(decl) => {
                 let Alias { binder, bindee } = decl;
+                let local = Local { under: Some(binder.clone()), ..Local::default() };
                 // resolve bindee first
-                let () = bindee.resolve(resolver, (Context::new(), global))?;
+                let () = bindee.resolve(resolver, (local.clone(), global))?;
                 // and then binder, though we don't need the context yielded by binder
                 // since it's global and has been collected already
-                let _ = binder.resolve(resolver, (Context::new(), global))?;
+                let _ = binder.resolve(resolver, (local.clone(), global))?;
                 Ok(())
             }
             Declaration::Extern(decl) => {
                 let Extern { comp: _, binder, params, ty } = decl;
+                let local = Local { under: Some(binder.clone()), ..Local::default() };
                 // no more bindee, but we still need to resolve the binders just for the type mentioned
                 if let Some(ty) = ty {
-                    let () = ty.resolve(resolver, (Context::new(), global))?;
+                    let () = ty.resolve(resolver, (local.clone(), global))?;
                 }
                 if let Some(params) = params {
-                    let _ = params.resolve(resolver, (Context::new(), global))?;
+                    let _ = params.resolve(resolver, (local.clone(), global))?;
                 }
-                let _ = binder.resolve(resolver, (Context::new(), global))?;
+                let _ = binder.resolve(resolver, (local.clone(), global))?;
                 Ok(())
             }
             Declaration::Main(decl) => {
                 let Main(term) = decl;
-                let () = term.resolve(resolver, (Context::new(), global))?;
+                let local = Local { under: None, ..Local::default() };
+                let () = term.resolve(resolver, (local.clone(), global))?;
                 Ok(())
             }
         }
@@ -159,23 +175,208 @@ impl Resolve for Declaration {
 }
 
 impl Resolve for PatId {
-    type Out = Context<()>;
-    type Lookup<'a> = (Context<()>, &'a Global);
-    fn resolve<'f>(&self, resolver: &mut Resolver, lookup: Self::Lookup<'f>) -> Result<Self::Out> {
-        todo!()
+    // Note: returns the context yielded **after** the pattern
+    type Out = Local;
+    type Lookup<'a> = (Local, &'a Global);
+    fn resolve<'f>(
+        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
+    ) -> Result<Self::Out> {
+        let pat = resolver.bitter.pats[*self].clone();
+        match pat {
+            Pattern::Ann(pat) => {
+                let Ann { tm, ty } = pat;
+                let () = ty.resolve(resolver, (local.clone(), global))?;
+                tm.resolve(resolver, (local, global))
+            }
+            Pattern::Hole(pat) => {
+                let Hole = pat;
+                Ok(local)
+            }
+            Pattern::Var(def) => {
+                local.map.insert(resolver.bitter.defs[def].clone(), def);
+                local.set.insert(def, ());
+                Ok(local)
+            }
+            Pattern::Ctor(pat) => {
+                let Ctor(_ctor, args) = pat;
+                args.resolve(resolver, (local, global))
+            }
+            Pattern::Paren(pat) => {
+                let Paren(inner) = pat;
+                for binder in inner {
+                    // can be dependent on the previous binders
+                    local = binder.resolve(resolver, (local, global))?;
+                }
+                Ok(local)
+            }
+        }
     }
 }
 impl Resolve for CoPatId {
-    type Out = Context<()>;
-    type Lookup<'a> = (Context<()>, &'a Global);
-    fn resolve<'f>(&self, resolver: &mut Resolver, lookup: Self::Lookup<'f>) -> Result<Self::Out> {
-        todo!()
+    type Out = Local;
+    type Lookup<'a> = (Local, &'a Global);
+    fn resolve<'f>(
+        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
+    ) -> Result<Self::Out> {
+        let copat = resolver.bitter.copats[*self].clone();
+        match copat {
+            CoPattern::Pat(pat) => pat.resolve(resolver, (local, global)),
+            CoPattern::Dtor(_dtor) => Ok(local),
+            CoPattern::App(copat) => {
+                let App(args) = copat;
+                for arg in args {
+                    // can be dependent on the previous binders
+                    local = arg.resolve(resolver, (local, global))?;
+                }
+                Ok(local)
+            }
+        }
     }
 }
 impl Resolve for TermId {
     type Out = ();
-    type Lookup<'a> = (Context<()>, &'a Global);
-    fn resolve<'f>(&self, resolver: &mut Resolver, lookup: Self::Lookup<'f>) -> Result<Self::Out> {
-        todo!()
+    type Lookup<'a> = (Local, &'a Global);
+    fn resolve<'f>(
+        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
+    ) -> Result<Self::Out> {
+        let term = resolver.bitter.terms[*self].clone();
+        match term {
+            Term::Sealed(term) => {
+                let Sealed(inner) = term;
+                let () = inner.resolve(resolver, (local, global))?;
+            }
+            Term::Ann(term) => {
+                let Ann { tm, ty } = term;
+                let () = ty.resolve(resolver, (local.clone(), global))?;
+                let () = tm.resolve(resolver, (local, global))?;
+            }
+            Term::Hole(term) => {
+                let Hole = term;
+            }
+            Term::Var(var) => {
+                // first, try to find the variable locally
+                if let Some(def) = local.map.get(var.leaf()) {
+                    // if found, we're done
+                    resolver.def(*self, *def);
+                    return Ok(());
+                }
+                // otherwise, try to find the variable globally
+                if let Some(def) = global.map.get(var.leaf()) {
+                    // if found, also add dependency
+                    resolver.def(*self, *def);
+                    // .. only if it's under a global declaration
+                    if let Some(under) = local.under {
+                        resolver.scoped.deps.add(under, [global.under_which[def]]);
+                    }
+                    return Ok(());
+                }
+                // if not found, report an error
+                let span = &resolver.spans.terms[*self];
+                Err(ResolveError::UnboundVar(span.make(var.clone())))?;
+            }
+            Term::Paren(term) => {
+                let Paren(terms) = term;
+                for term in terms {
+                    let () = term.resolve(resolver, (local.clone(), global))?;
+                }
+            }
+            Term::Abs(term) => {
+                let Abs(copat, body) = term;
+                local = copat.resolve(resolver, (local.clone(), global))?;
+                let () = body.resolve(resolver, (local, global))?;
+            }
+            Term::App(term) => {
+                let App(terms) = term;
+                for term in terms {
+                    let () = term.resolve(resolver, (local.clone(), global))?;
+                }
+            }
+            Term::Rec(term) => {
+                let Rec(pat, body) = term;
+                local = pat.resolve(resolver, (local.clone(), global))?;
+                let () = body.resolve(resolver, (local, global))?;
+            }
+            Term::Pi(term) => {
+                let Pi(copat, body) = term;
+                local = copat.resolve(resolver, (local.clone(), global))?;
+                let () = body.resolve(resolver, (local, global))?;
+            }
+            Term::Sigma(term) => {
+                let Sigma(copat, body) = term;
+                local = copat.resolve(resolver, (local.clone(), global))?;
+                let () = body.resolve(resolver, (local, global))?;
+            }
+            Term::Thunk(term) => {
+                let Thunk(term) = term;
+                let () = term.resolve(resolver, (local.clone(), global))?;
+            }
+            Term::Force(term) => {
+                let Force(term) = term;
+                let () = term.resolve(resolver, (local.clone(), global))?;
+            }
+            Term::Ret(term) => {
+                let Return(term) = term;
+                let () = term.resolve(resolver, (local.clone(), global))?;
+            }
+            Term::Do(term) => {
+                let Bind { binder, bindee, tail } = term;
+                let () = bindee.resolve(resolver, (local.clone(), global))?;
+                local = binder.resolve(resolver, (local.clone(), global))?;
+                let () = tail.resolve(resolver, (local, global))?;
+            }
+            Term::Let(term) => {
+                let PureBind { binder, bindee, tail } = term;
+                let () = bindee.resolve(resolver, (local.clone(), global))?;
+                local = binder.resolve(resolver, (local.clone(), global))?;
+                let () = tail.resolve(resolver, (local, global))?;
+            }
+            Term::Data(term) => {
+                let Data { arms } = term;
+                for arm in arms {
+                    let DataArm { name: _, param } = arm;
+                    let () = param.resolve(resolver, (local.clone(), global))?;
+                }
+            }
+            Term::CoData(term) => {
+                let CoData { arms } = term;
+                for arm in arms {
+                    let mut local = local.clone();
+                    let CoDataArm { name: _, params, out } = arm;
+                    if let Some(params) = params {
+                        local = params.resolve(resolver, (local.clone(), global))?;
+                    }
+                    let () = out.resolve(resolver, (local.clone(), global))?;
+                }
+            }
+            Term::Ctor(term) => {
+                let Ctor(_ctor, term) = term;
+                let () = term.resolve(resolver, (local.clone(), global))?;
+            }
+            Term::Match(term) => {
+                let Match { scrut, arms } = term;
+                let () = scrut.resolve(resolver, (local.clone(), global))?;
+                for arm in arms {
+                    let mut local = local.clone();
+                    let Matcher { binder, tail } = arm;
+                    local = binder.resolve(resolver, (local.clone(), global))?;
+                    let () = tail.resolve(resolver, (local.clone(), global))?;
+                }
+            }
+            Term::CoMatch(term) => {
+                let CoMatch { arms } = term;
+                for arm in arms {
+                    let mut local = local.clone();
+                    let CoMatcher { params, tail } = arm;
+                    local = params.resolve(resolver, (local.clone(), global))?;
+                    let () = tail.resolve(resolver, (local.clone(), global))?;
+                }
+            }
+            Term::Dtor(term) => {
+                let Dtor(term, _dtor) = term;
+                let () = term.resolve(resolver, (local.clone(), global))?;
+            }
+            Term::Lit(_) => {}
+        }
+        Ok(())
     }
 }

@@ -52,6 +52,14 @@ mod impls {
     use super::*;
     use std::fmt;
 
+    impl<T> NameRef<T> {
+        /// the last element of the name, should only be used if no path prefix exist
+        pub fn leaf(&self) -> &T {
+            assert!(self.1.is_empty());
+            &self.2
+        }
+    }
+
     impl From<Vec<VarName>> for NameRef<()> {
         fn from(path: Vec<VarName>) -> Self {
             NameRef(false, path, ())
