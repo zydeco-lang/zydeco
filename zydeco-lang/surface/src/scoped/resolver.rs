@@ -1,4 +1,5 @@
 use crate::scoped::{err::*, syntax::*};
+use zydeco_utils::{arena::ArenaAssoc, deps::DepGraph, scc::Kosaraju};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {
@@ -53,14 +54,32 @@ impl Binders for PatId {
 }
 
 pub struct Resolver {
+    pub term_to_def: ArenaAssoc<TermId, DefId>,
+    pub arena: Arena,
+    pub spans: SpanArenaBitter,
+    /// the dependency of top level definitions
+    pub deps: DepGraph<PatId>,
+}
+
+pub struct ResolveOut {
     pub scoped: ScopedArena,
     pub arena: Arena,
     pub spans: SpanArenaBitter,
 }
 
 impl Resolver {
-    pub fn run(&mut self, top: &TopLevel) -> Result<()> {
-        top.resolve(self, Global::default())
+    pub fn run(mut self, top: &TopLevel) -> Result<ResolveOut> {
+        top.resolve(&mut self, Global::default())?;
+        let Resolver { term_to_def, arena, spans, deps } = self;
+        Ok(ResolveOut {
+            arena,
+            scoped: ScopedArena {
+                term_to_def: term_to_def.clone(),
+                scc: Kosaraju::new(&deps).run(),
+                deps,
+            },
+            spans,
+        })
     }
     fn check_duplicate_and_update_global(
         &self, under: &PatId, binders: im::HashMap<VarName, DefId>, global: &mut Global,
@@ -82,7 +101,7 @@ impl Resolver {
         Ok(())
     }
     fn def(&mut self, term: TermId, def: DefId) {
-        self.scoped.term_to_def.insert(term, def);
+        self.term_to_def.insert(term, def);
     }
 }
 
@@ -264,7 +283,7 @@ impl Resolve for TermId {
                     resolver.def(*self, *def);
                     // .. only if it's under a global declaration
                     if let Some(under) = local.under {
-                        resolver.scoped.deps.add(under, [global.under_map[def]]);
+                        resolver.deps.add(under, [global.under_map[def]]);
                     }
                     return Ok(());
                 }

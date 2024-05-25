@@ -6,7 +6,10 @@ use crate::{
         desugar::{DesugarOut, Desugarer},
         syntax as b,
     },
-    scoped::{resolver::Resolver, syntax as sc},
+    scoped::{
+        resolver::{ResolveOut, Resolver},
+        syntax as sc,
+    },
     textual::{
         err::ParseError,
         lexer::{Lexer, Tok},
@@ -18,7 +21,8 @@ use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
 use zydeco_utils::{
-    arena::GlobalAlloc,
+    arena::{ArenaAssoc, GlobalAlloc},
+    deps::DepGraph,
     span::{FileInfo, LocationCtx},
 };
 
@@ -122,7 +126,17 @@ impl Package {
         // Debug: print the in-package dependencies
         if cfg!(debug_assertions) {
             println!(">>> [{}]", self.name);
-            println!("{:#?}", pack.scoped.deps);
+            // println!("{:#?}", pack.scoped.deps);
+            let mut scc = pack.scoped.scc.clone();
+            loop {
+                let roots = scc.top();
+                if roots.is_empty() {
+                    break;
+                }
+                let victim = roots.into_iter().next().unwrap().into_iter().next().unwrap();
+                println!("releasing: {:?}", pack.arena.pats[victim]);
+                scc.release([victim]);
+            }
             println!("<<< [{}]", self.name);
         }
         Ok(())
@@ -238,10 +252,15 @@ pub struct PackageStew {
 impl PackageStew {
     pub fn resolve(self) -> Result<PackageScoped> {
         let PackageStew { sources, spans, arena: bitter, top } = self;
-        let mut resolver = Resolver { scoped: sc::ScopedArena::default(), arena: bitter, spans };
-        resolver.run(&top).map_err(|err| SurfaceError::ResolveError(err.to_string()))?;
-        let Resolver { scoped, arena: bitter, spans } = resolver;
-        Ok(PackageScoped { sources, spans, arena: bitter, scoped, top })
+        let resolver = Resolver {
+            term_to_def: ArenaAssoc::default(),
+            arena: bitter,
+            spans,
+            deps: DepGraph::default(),
+        };
+        let ResolveOut { scoped, arena, spans } =
+            resolver.run(&top).map_err(|err| SurfaceError::ResolveError(err.to_string()))?;
+        Ok(PackageScoped { sources, spans, arena, scoped, top })
     }
 }
 

@@ -61,7 +61,7 @@ impl<Id: Hash + Eq + Clone> DepGraph<Id> {
 }
 
 /// co-dependency graph
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SrcGraph<Id: Hash + Eq + Clone> {
     pub(crate) map: HashMap<Id, HashSet<Id>>,
 }
