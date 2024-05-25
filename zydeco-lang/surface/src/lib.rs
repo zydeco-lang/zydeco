@@ -40,29 +40,27 @@ pub mod textual {
     pub mod escape;
     pub mod err;
 
+    /// a formatter built on top of the textual syntax;
+    /// introduces the ugly syntax;
+    /// outputs a safe surface syntax
+    pub mod ugly;
+
+    // /// a formatter built on top of the textual syntax;
+    // /// introduces the pretty syntax;
+    // /// outputs a pretty-printed surface syntax
+    // pub mod pretty {
+    //     pub mod syntax {
+    //         pub struct NonBreak(pub String);
+    //         pub struct MorallyNonBreak(pub Vec<NonBreak>);
+    //         pub struct SoftBreak(pub Vec<MorallyNonBreak>);
+    //         pub struct HardBreak(pub Vec<SoftBreak>);
+    //         pub struct ParagraphBreak(pub Vec<HardBreak>);
+    //     }
+    // }
+
     #[cfg(test)]
     mod tests;
 }
-
-/// a formatter built on top of the textual syntax;
-/// introduces the ugly syntax;
-/// outputs a safe surface syntax
-pub mod ugly {
-    pub mod fmt;
-}
-
-// /// a formatter built on top of the textual syntax;
-// /// introduces the pretty syntax;
-// /// outputs a pretty-printed surface syntax
-// pub mod pretty {
-//     pub mod syntax {
-//         pub struct NonBreak(pub String);
-//         pub struct MorallyNonBreak(pub Vec<NonBreak>);
-//         pub struct SoftBreak(pub Vec<MorallyNonBreak>);
-//         pub struct HardBreak(pub Vec<SoftBreak>);
-//         pub struct ParagraphBreak(pub Vec<HardBreak>);
-//     }
-// }
 
 /// an elaboration atop the surface syntax;
 /// introduces the desugared syntax;

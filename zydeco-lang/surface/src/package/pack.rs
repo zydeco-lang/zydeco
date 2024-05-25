@@ -100,7 +100,7 @@ impl Package {
         if cfg!(debug_assertions) {
             for file in &files {
                 println!(">>> [{}]", file.path.display());
-                use crate::ugly::fmt::*;
+                use crate::textual::ugly::*;
                 println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
                 println!("<<< [{}]", file.path.display());
             }
