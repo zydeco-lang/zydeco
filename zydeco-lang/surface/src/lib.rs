@@ -43,12 +43,12 @@ pub mod textual {
     /// a formatter built on top of the textual syntax;
     /// introduces the ugly syntax;
     /// outputs a safe surface syntax
-    pub mod ugly;
+    mod ugly;
 
     // /// a formatter built on top of the textual syntax;
     // /// introduces the pretty syntax;
     // /// outputs a pretty-printed surface syntax
-    // pub mod pretty {
+    // mod pretty {
     //     pub mod syntax {
     //         pub struct NonBreak(pub String);
     //         pub struct MorallyNonBreak(pub Vec<NonBreak>);
@@ -57,6 +57,11 @@ pub mod textual {
     //         pub struct ParagraphBreak(pub Vec<HardBreak>);
     //     }
     // }
+
+    pub mod fmt {
+        pub use super::ugly::*;
+        // pub use super::pretty::*;
+    }
 
     #[cfg(test)]
     mod tests;
@@ -69,6 +74,7 @@ pub mod bitter {
     pub mod syntax;
     pub mod desugar;
     // pub mod err;
+    pub mod fmt;
 }
 
 /// name resolution;
@@ -77,4 +83,7 @@ pub mod scoped {
     pub mod syntax;
     pub mod resolver;
     pub mod err;
+    pub mod fmt {
+        pub use crate::bitter::fmt::*;
+    }
 }

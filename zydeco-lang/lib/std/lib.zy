@@ -25,6 +25,10 @@ pub data Unit where
   | +Unit()
 end
 
+/// the Top type
+pub codata Top where
+end
+
 /// the Pair type
 
 pub data Pair (A : VType) (A' : VType) where

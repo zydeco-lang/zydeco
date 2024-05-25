@@ -100,7 +100,7 @@ impl Package {
         if cfg!(debug_assertions) {
             for file in &files {
                 println!(">>> [{}]", file.path.display());
-                use crate::textual::ugly::*;
+                use crate::textual::fmt::*;
                 println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
                 println!("<<< [{}]", file.path.display());
             }
@@ -125,6 +125,7 @@ impl Package {
         let pack = pack.resolve()?;
         // Debug: print the in-package dependencies
         if cfg!(debug_assertions) {
+            use crate::scoped::fmt::*;
             println!(">>> [{}]", self.name);
             // println!("{:#?}", pack.scoped.deps);
             let mut scc = pack.scoped.scc.clone();
@@ -133,9 +134,18 @@ impl Package {
                 if roots.is_empty() {
                     break;
                 }
-                let victim = roots.into_iter().next().unwrap().into_iter().next().unwrap();
-                println!("releasing: {:?}", pack.arena.pats[victim]);
-                scc.release([victim]);
+                // let victim = roots.into_iter().next().unwrap().into_iter().next().unwrap();
+                // println!("releasing: {:?}", victim.ugly(&Formatter::new(&pack.arena)));
+                // scc.release([victim]);
+                let victims = roots.into_iter().flat_map(|s| s.into_iter()).collect::<Vec<_>>();
+                println!(
+                    "releasing: {:?}",
+                    victims
+                        .iter()
+                        .map(|s| s.ugly(&Formatter::new(&pack.arena)))
+                        .collect::<Vec<_>>()
+                );
+                scc.release(victims);
             }
             println!("<<< [{}]", self.name);
         }
