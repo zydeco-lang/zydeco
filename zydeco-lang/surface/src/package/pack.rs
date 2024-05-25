@@ -6,6 +6,7 @@ use crate::{
         desugar::{DesugarOut, Desugarer},
         syntax as b,
     },
+    scoped::{resolver::Resolver, syntax as sc},
     textual::{
         err::ParseError,
         lexer::{Lexer, Tok},
@@ -105,7 +106,7 @@ impl Package {
             .into_iter()
             .map(|f| f.desugar(b::SpanArenaBitter::new(&mut alloc)))
             .collect::<Vec<_>>();
-        let _stew = FileBitter::merge(
+        let pack = FileBitter::merge(
             PackageStew {
                 sources: HashMap::new(),
                 spans: b::SpanArenaBitter::new(&mut alloc),
@@ -117,6 +118,13 @@ impl Package {
         // adding package dependencies
         // Todo: ...
         // resolving
+        let pack = pack.resolve()?;
+        // Debug: print the in-package dependencies
+        if cfg!(debug_assertions) {
+            println!(">>> [{}]", self.name);
+            println!("{:#?}", pack.scoped.deps);
+            println!("<<< [{}]", self.name);
+        }
         Ok(())
     }
 }
@@ -225,4 +233,22 @@ pub struct PackageStew {
     pub spans: b::SpanArenaBitter,
     pub arena: b::Arena,
     pub top: b::TopLevel,
+}
+
+impl PackageStew {
+    pub fn resolve(self) -> Result<PackageScoped> {
+        let PackageStew { sources, spans, arena: bitter, top } = self;
+        let mut resolver = Resolver { scoped: sc::ScopedArena::default(), arena: bitter, spans };
+        resolver.run(&top).map_err(|err| SurfaceError::ResolveError(err.to_string()))?;
+        let Resolver { scoped, arena: bitter, spans } = resolver;
+        Ok(PackageScoped { sources, spans, arena: bitter, scoped, top })
+    }
+}
+
+pub struct PackageScoped {
+    pub sources: HashMap<PathBuf, String>,
+    pub spans: sc::SpanArenaBitter,
+    pub arena: sc::Arena,
+    pub scoped: sc::ScopedArena,
+    pub top: sc::TopLevel,
 }

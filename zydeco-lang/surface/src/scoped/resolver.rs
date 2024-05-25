@@ -4,7 +4,7 @@ use crate::scoped::{err::*, syntax::*};
 pub struct Global {
     /// map from variable names to their definitions
     map: im::HashMap<VarName, DefId>,
-    under_which: im::HashMap<DefId, PatId>,
+    under_map: im::HashMap<DefId, PatId>,
 }
 #[derive(Clone, Debug, Default)]
 pub struct Local {
@@ -12,7 +12,6 @@ pub struct Local {
     under: Option<PatId>,
     /// map from variable names to their definitions
     map: im::HashMap<VarName, DefId>,
-    set: im::HashMap<DefId, ()>,
 }
 
 trait Binders {
@@ -55,12 +54,12 @@ impl Binders for PatId {
 
 pub struct Resolver {
     pub scoped: ScopedArena,
-    pub bitter: Arena,
+    pub arena: Arena,
     pub spans: SpanArenaBitter,
 }
 
 impl Resolver {
-    pub fn run(&mut self, top: TopLevel) -> Result<()> {
+    pub fn run(&mut self, top: &TopLevel) -> Result<()> {
         top.resolve(self, Global::default())
     }
     fn check_duplicate_and_update_global(
@@ -77,8 +76,8 @@ impl Resolver {
             }
         }
         // update names
-        global.under_which =
-            global.under_which.clone().union(binders.values().map(|def| (*def, *under)).collect());
+        global.under_map =
+            global.under_map.clone().union(binders.values().map(|def| (*def, *under)).collect());
         global.map = global.map.clone().union(binders);
         Ok(())
     }
@@ -107,7 +106,7 @@ impl Resolve for TopLevel {
                     let Alias { binder, bindee: _ } = decl;
                     resolver.check_duplicate_and_update_global(
                         binder,
-                        binder.binders(&resolver.bitter),
+                        binder.binders(&resolver.arena),
                         &mut global,
                     )?;
                 }
@@ -115,7 +114,7 @@ impl Resolve for TopLevel {
                     let Extern { comp: _, binder, params: _, ty: _ } = decl;
                     resolver.check_duplicate_and_update_global(
                         binder,
-                        binder.binders(&resolver.bitter),
+                        binder.binders(&resolver.arena),
                         &mut global,
                     )?;
                 }
@@ -181,7 +180,7 @@ impl Resolve for PatId {
     fn resolve<'f>(
         &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
     ) -> Result<Self::Out> {
-        let pat = resolver.bitter.pats[*self].clone();
+        let pat = resolver.arena.pats[*self].clone();
         match pat {
             Pattern::Ann(pat) => {
                 let Ann { tm, ty } = pat;
@@ -193,8 +192,7 @@ impl Resolve for PatId {
                 Ok(local)
             }
             Pattern::Var(def) => {
-                local.map.insert(resolver.bitter.defs[def].clone(), def);
-                local.set.insert(def, ());
+                local.map.insert(resolver.arena.defs[def].clone(), def);
                 Ok(local)
             }
             Pattern::Ctor(pat) => {
@@ -218,7 +216,7 @@ impl Resolve for CoPatId {
     fn resolve<'f>(
         &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
     ) -> Result<Self::Out> {
-        let copat = resolver.bitter.copats[*self].clone();
+        let copat = resolver.arena.copats[*self].clone();
         match copat {
             CoPattern::Pat(pat) => pat.resolve(resolver, (local, global)),
             CoPattern::Dtor(_dtor) => Ok(local),
@@ -239,7 +237,7 @@ impl Resolve for TermId {
     fn resolve<'f>(
         &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
     ) -> Result<Self::Out> {
-        let term = resolver.bitter.terms[*self].clone();
+        let term = resolver.arena.terms[*self].clone();
         match term {
             Term::Sealed(term) => {
                 let Sealed(inner) = term;
@@ -266,7 +264,7 @@ impl Resolve for TermId {
                     resolver.def(*self, *def);
                     // .. only if it's under a global declaration
                     if let Some(under) = local.under {
-                        resolver.scoped.deps.add(under, [global.under_which[def]]);
+                        resolver.scoped.deps.add(under, [global.under_map[def]]);
                     }
                     return Ok(());
                 }

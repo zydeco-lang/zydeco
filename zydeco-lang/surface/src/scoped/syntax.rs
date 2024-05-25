@@ -30,7 +30,7 @@ where
 
 /* ---------------------------------- Arena --------------------------------- */
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ScopedArena {
     // pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
     // pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,

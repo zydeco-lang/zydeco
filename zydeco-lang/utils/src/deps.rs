@@ -4,7 +4,7 @@ use std::{
 };
 
 /// dependency graph
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DepGraph<Id: Hash + Eq + Clone> {
     pub(crate) map: HashMap<Id, HashSet<Id>>,
 }
