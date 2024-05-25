@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
 
@@ -26,14 +28,28 @@ where
         res
     }
 }
+impl<T> Add for Context<T>
+where
+    T: Clone,
+{
+    type Output = Self;
+    fn add(mut self, other: Self) -> Self {
+        self.defs.extend(other.defs);
+        self
+    }
+}
 
 /* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Debug)]
 pub struct ScopedArena {
-    // pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
-    // pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
-    /// if a term is a variable, it can be mapped to a def
+    /// arena for contexts (WIP)
+    // Note: not implemented yet
+    pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
+    /// context for every term (WIP)
+    // Note: not implemented yet
+    pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
+    /// all terms that are variables can be mapped to a corresponding def
     pub term_to_def: ArenaAssoc<TermId, DefId>,
     /// dependency graph of the top level declarations
     pub deps: DepGraph<DeclId>,

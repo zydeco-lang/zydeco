@@ -1,10 +1,16 @@
 use crate::scoped::{err::*, syntax::*};
-use zydeco_utils::{arena::ArenaAssoc, deps::DepGraph, multi_cell::MultiCell, scc::Kosaraju};
+use zydeco_utils::{
+    arena::{ArenaAssoc, ArenaSparse},
+    deps::DepGraph,
+    multi_cell::MultiCell,
+    scc::Kosaraju,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {
     /// map from variable names to their definitions
-    map: im::HashMap<VarName, DefId>,
+    var_to_def: im::HashMap<VarName, DefId>,
+    /// map from definitions to their global declarations
     under_map: im::HashMap<DefId, DeclId>,
 }
 #[derive(Clone, Debug, Default)]
@@ -12,7 +18,7 @@ pub struct Local {
     /// which global declaration is the local scope checking in
     under: DeclId,
     /// map from variable names to their definitions
-    map: im::HashMap<VarName, DefId>,
+    var_to_def: im::HashMap<VarName, DefId>,
 }
 
 trait Binders {
@@ -58,8 +64,9 @@ pub struct Resolver {
     pub arena: Arena,
     pub prim_term: PrimTerm,
     pub prim_def: PrimDef,
+    pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
+    pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
     pub term_to_def: ArenaAssoc<TermId, DefId>,
-    /// the dependency of top level definitions
     pub deps: DepGraph<DeclId>,
 }
 
@@ -73,12 +80,23 @@ pub struct ResolveOut {
 impl Resolver {
     pub fn run(mut self, top: &TopLevel) -> Result<ResolveOut> {
         top.resolve(&mut self, Global::default())?;
-        let Resolver { spans, arena, prim_term: _, prim_def: prim, term_to_def, deps } = self;
+        let Resolver {
+            spans,
+            arena,
+            prim_term: _,
+            prim_def: prim,
+            ctxs,
+            term_under_ctx,
+            term_to_def,
+            deps,
+        } = self;
         Ok(ResolveOut {
             spans,
             prim,
             arena,
             scoped: ScopedArena {
+                ctxs,
+                term_under_ctx,
                 term_to_def: term_to_def.clone(),
                 scc: Kosaraju::new(&deps).run(),
                 deps,
@@ -89,7 +107,7 @@ impl Resolver {
         &self, under: &DeclId, binders: im::HashMap<VarName, DefId>, global: &mut Global,
     ) -> Result<()> {
         for (name, def) in binders.iter() {
-            if let Some(prev) = global.map.get(name) {
+            if let Some(prev) = global.var_to_def.get(name) {
                 let span1 = &self.spans.defs[*prev];
                 let span2 = &self.spans.defs[*def];
                 Err(ResolveError::DuplicateDefinition(
@@ -101,7 +119,7 @@ impl Resolver {
         // update names
         global.under_map =
             global.under_map.clone().union(binders.values().map(|def| (*def, *under)).collect());
-        global.map = global.map.clone().union(binders);
+        global.var_to_def = global.var_to_def.clone().union(binders);
         Ok(())
     }
     /// register a term to its definition
@@ -115,7 +133,7 @@ impl Resolver {
             Ok(*mc.init(def))
         } else {
             let var = VarName(name.into());
-            Err(ResolveError::DuplicatePrim(
+            Err(ResolveError::DuplicatePrimitive(
                 span.defs[def].clone().make(var.clone()),
                 span.defs[*mc.get()].clone().make(var),
             ))
@@ -275,7 +293,7 @@ impl Resolve for PatId {
                 Ok(local)
             }
             Pattern::Var(def) => {
-                local.map.insert(resolver.arena.defs[def].clone(), def);
+                local.var_to_def.insert(resolver.arena.defs[def].clone(), def);
                 Ok(local)
             }
             Pattern::Ctor(pat) => {
@@ -344,13 +362,13 @@ impl Resolve for TermId {
             }
             Term::Var(var) => {
                 // first, try to find the variable locally
-                if let Some(def) = local.map.get(var.leaf()) {
+                if let Some(def) = local.var_to_def.get(var.leaf()) {
                     // if found, we're done
                     resolver.def(*self, *def);
                     return Ok(());
                 }
                 // otherwise, try to find the variable globally
-                if let Some(def) = global.map.get(var.leaf()) {
+                if let Some(def) = global.var_to_def.get(var.leaf()) {
                     // if found, also add dependency
                     resolver.def(*self, *def);
                     resolver.deps.add(local.under, [global.under_map[def]]);

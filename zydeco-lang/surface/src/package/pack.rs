@@ -21,7 +21,7 @@ use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
 use zydeco_utils::{
-    arena::{ArenaAssoc, GlobalAlloc},
+    arena::{ArenaAssoc, ArenaSparse, GlobalAlloc, IndexAlloc},
     deps::DepGraph,
     span::{FileInfo, LocationCtx},
 };
@@ -105,6 +105,7 @@ impl Package {
                 println!("<<< [{}]", file.path.display());
             }
         }
+
         // desugaring
         let files = files
             .into_iter()
@@ -129,10 +130,12 @@ impl Package {
             }
             println!("<<< [{}]", self.name);
         }
+
         // adding package dependencies
         // Todo: ...
+
         // resolving
-        let pack = pack.resolve()?;
+        let pack = pack.resolve(alloc.alloc())?;
         // Debug: print the in-package dependencies
         if cfg!(debug_assertions) {
             use crate::scoped::fmt::*;
@@ -174,6 +177,11 @@ impl Package {
             }
             println!("<<< [{}]", self.name);
         }
+
+        // sorting
+
+        // type-checking
+
         Ok(())
     }
 }
@@ -294,13 +302,15 @@ pub struct PackageStew {
 }
 
 impl PackageStew {
-    pub fn resolve(self) -> Result<PackageScoped> {
+    pub fn resolve(self, alloc: IndexAlloc<usize>) -> Result<PackageScoped> {
         let PackageStew { sources, spans, arena: bitter, prim_term, top } = self;
         let resolver = Resolver {
             spans,
             arena: bitter,
             prim_term,
             prim_def: sc::PrimDef::default(),
+            ctxs: ArenaSparse::new(alloc),
+            term_under_ctx: ArenaAssoc::default(),
             term_to_def: ArenaAssoc::default(),
             deps: DepGraph::default(),
         };

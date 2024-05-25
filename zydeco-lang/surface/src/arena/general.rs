@@ -3,7 +3,14 @@ use std::{fmt::Debug, ops::AddAssign};
 use zydeco_utils::arena::*;
 
 #[derive(Debug)]
-pub struct ArenaGen<T, DefId: DefPtr, PatId: PatPtr, CoPatId: CoPatPtr, TermId: TermPtr, DeclId: DeclPtr> {
+pub struct ArenaGen<
+    T,
+    DefId: DefPtr,
+    PatId: PatPtr,
+    CoPatId: CoPatPtr,
+    TermId: TermPtr,
+    DeclId: DeclPtr,
+> {
     pub defs: ArenaSparse<DefId, T>,
     pub pats: ArenaSparse<PatId, T>,
     pub copats: ArenaSparse<CoPatId, T>,
@@ -30,7 +37,7 @@ where
     }
 }
 
-impl<T, DefId, PatId, CoPatId, TermId, DeclId> AddAssign<ArenaGen<T, DefId, PatId, CoPatId, TermId, DeclId>>
+impl<T, DefId, PatId, CoPatId, TermId, DeclId> AddAssign
     for ArenaGen<T, DefId, PatId, CoPatId, TermId, DeclId>
 where
     DefId: DefPtr,

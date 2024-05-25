@@ -9,8 +9,8 @@ pub enum ResolveError {
     DuplicateDefinition(Sp<VarName>, Sp<VarName>),
     // #[error("Ambiguous annotation on binder: {0}")]
     // AmbiguousBinderAnnotation(Sp<VarName>),
-    #[error("Duplicate primitive: {0}")]
-    DuplicatePrim(Sp<VarName>, Sp<VarName>),
+    #[error("Duplicate primitive: {0} and {1}")]
+    DuplicatePrimitive(Sp<VarName>, Sp<VarName>),
     #[error("Missing primitive: {0}")]
     MissingPrim(&'static str),
     #[error("No such module found: {0}")]
