@@ -295,16 +295,16 @@ impl PackageStew {
             term_to_def: ArenaAssoc::default(),
             deps: DepGraph::default(),
         };
-        let ResolveOut { scoped, arena, spans } =
+        let ResolveOut { spans, prim, arena, scoped } =
             resolver.run(&top).map_err(|err| SurfaceError::ResolveError(err.to_string()))?;
-        Ok(PackageScoped { sources, spans, arena, scoped, top })
+        Ok(PackageScoped { sources, spans, prim, arena, scoped })
     }
 }
 
 pub struct PackageScoped {
     pub sources: HashMap<PathBuf, String>,
     pub spans: sc::SpanArenaBitter,
+    pub prim: sc::PrimDef,
     pub arena: sc::Arena,
     pub scoped: sc::ScopedArena,
-    pub top: sc::TopLevel,
 }

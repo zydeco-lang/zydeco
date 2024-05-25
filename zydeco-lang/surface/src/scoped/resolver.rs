@@ -64,17 +64,19 @@ pub struct Resolver {
 }
 
 pub struct ResolveOut {
-    pub scoped: ScopedArena,
-    pub arena: Arena,
     pub spans: SpanArenaBitter,
+    pub prim: PrimDef,
+    pub arena: Arena,
+    pub scoped: ScopedArena,
 }
 
 impl Resolver {
     pub fn run(mut self, top: &TopLevel) -> Result<ResolveOut> {
         top.resolve(&mut self, Global::default())?;
-        let Resolver { spans, arena, prim_term: _, prim_def: _, term_to_def, deps } = self;
+        let Resolver { spans, arena, prim_term: _, prim_def: prim, term_to_def, deps } = self;
         Ok(ResolveOut {
             spans,
+            prim,
             arena,
             scoped: ScopedArena {
                 term_to_def: term_to_def.clone(),

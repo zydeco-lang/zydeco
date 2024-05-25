@@ -3,8 +3,6 @@ pub use crate::syntax::*;
 
 use zydeco_utils::{arena::*, deps::DepGraph, multi_cell::MultiCell, scc::SccGraph};
 
-/* -------------------------------- TopLevel -------------------------------- */
-
 /* --------------------------------- Context -------------------------------- */
 
 new_key_type! {
