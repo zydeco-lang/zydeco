@@ -7,6 +7,9 @@ pub mod syntax {
 
 pub mod sorted {
     pub mod syntax;
+    pub mod sorter;
 }
 
-pub mod typed {}
+pub mod typed {
+    pub mod syntax;
+}

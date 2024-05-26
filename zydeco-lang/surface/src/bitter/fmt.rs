@@ -131,8 +131,11 @@ impl Ugly for Internal {
 
 impl Ugly for Sealed {
     fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
         let Sealed(t) = self;
-        t.ugly(f)
+        s += "[sealed] ";
+        s += &t.ugly(f);
+        s
     }
 }
 

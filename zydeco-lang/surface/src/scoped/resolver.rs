@@ -60,7 +60,7 @@ impl Binders for PatId {
 }
 
 pub struct Resolver {
-    pub spans: SpanArenaBitter,
+    pub spans: SpanArena,
     pub arena: Arena,
     pub prim_term: PrimTerm,
     pub prim_def: PrimDef,
@@ -71,7 +71,7 @@ pub struct Resolver {
 }
 
 pub struct ResolveOut {
-    pub spans: SpanArenaBitter,
+    pub spans: SpanArena,
     pub prim: PrimDef,
     pub arena: Arena,
     pub scoped: ScopedArena,
@@ -127,7 +127,7 @@ impl Resolver {
         self.term_to_def.insert(term, def);
     }
     fn alloc_prim(
-        span: &SpanArenaBitter, mc: &mut MultiCell<DefId>, def: DefId, name: &'static str,
+        span: &SpanArena, mc: &mut MultiCell<DefId>, def: DefId, name: &'static str,
     ) -> Result<DefId> {
         if mc.is_empty() {
             Ok(*mc.init(def))

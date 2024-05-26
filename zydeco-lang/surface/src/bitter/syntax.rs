@@ -252,7 +252,7 @@ pub struct Arena {
     pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
-pub type SpanArenaBitter = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
+pub type SpanArena = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
 
 /* -------------------------------- Primitive ------------------------------- */
 

@@ -109,12 +109,12 @@ impl Package {
         // desugaring
         let files = files
             .into_iter()
-            .map(|f| f.desugar(b::SpanArenaBitter::new(&mut alloc)))
+            .map(|f| f.desugar(b::SpanArena::new(&mut alloc)))
             .collect::<Vec<_>>();
         let pack = FileBitter::merge(
             PackageStew {
                 sources: HashMap::new(),
-                spans: b::SpanArenaBitter::new(&mut alloc),
+                spans: b::SpanArena::new(&mut alloc),
                 arena: b::Arena::default(),
                 prim_term: b::PrimTerm::default(),
                 top: b::TopLevel(Vec::new()),
@@ -249,13 +249,13 @@ impl FileLoaded {
 pub struct FileParsed {
     pub path: PathBuf,
     pub source: String,
-    pub spans: t::SpanArenaTextual,
+    pub spans: t::SpanArena,
     pub arena: t::Arena,
     pub top: t::TopLevel,
 }
 
 impl FileParsed {
-    pub fn desugar(self, bspans: b::SpanArenaBitter) -> FileBitter {
+    pub fn desugar(self, bspans: b::SpanArena) -> FileBitter {
         let FileParsed { path, source, spans: tspans, arena: textual, top } = self;
         let desugarer = Desugarer {
             tspans,
@@ -272,7 +272,7 @@ impl FileParsed {
 pub struct FileBitter {
     pub path: PathBuf,
     pub source: String,
-    pub spans: b::SpanArenaBitter,
+    pub spans: b::SpanArena,
     pub arena: b::Arena,
     pub prim_term: b::PrimTerm,
     pub top: b::TopLevel,
@@ -295,7 +295,7 @@ impl FileBitter {
 
 pub struct PackageStew {
     pub sources: HashMap<PathBuf, String>,
-    pub spans: b::SpanArenaBitter,
+    pub spans: b::SpanArena,
     pub arena: b::Arena,
     pub prim_term: b::PrimTerm,
     pub top: b::TopLevel,
@@ -322,7 +322,7 @@ impl PackageStew {
 
 pub struct PackageScoped {
     pub sources: HashMap<PathBuf, String>,
-    pub spans: sc::SpanArenaBitter,
+    pub spans: sc::SpanArena,
     pub prim: sc::PrimDef,
     pub arena: sc::Arena,
     pub scoped: sc::ScopedArena,

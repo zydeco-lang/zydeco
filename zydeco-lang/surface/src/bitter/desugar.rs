@@ -11,15 +11,15 @@ pub trait Desugar {
 }
 
 pub struct Desugarer {
-    pub tspans: t::SpanArenaTextual,
+    pub tspans: t::SpanArena,
     pub textual: t::Arena,
-    pub bspans: b::SpanArenaBitter,
+    pub bspans: b::SpanArena,
     pub bitter: b::Arena,
     pub prim: b::PrimTerm,
 }
 
 pub struct DesugarOut {
-    pub spans: b::SpanArenaBitter,
+    pub spans: b::SpanArena,
     pub arena: b::Arena,
     pub prim: b::PrimTerm,
     pub top: b::TopLevel,

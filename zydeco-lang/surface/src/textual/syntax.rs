@@ -253,18 +253,18 @@ pub struct Arena {
     pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
-pub type SpanArenaTextual = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
+pub type SpanArena = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
 
 /* --------------------------------- Parser --------------------------------- */
 
 pub struct Parser {
-    pub spans: SpanArenaTextual,
+    pub spans: SpanArena,
     pub arena: Arena,
 }
 
 impl Parser {
     pub fn new(alloc: &mut GlobalAlloc) -> Self {
-        Self { spans: SpanArenaTextual::new(alloc), arena: Arena::default() }
+        Self { spans: SpanArena::new(alloc), arena: Arena::default() }
     }
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.defs.alloc(def.info);
