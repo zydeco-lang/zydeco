@@ -18,13 +18,7 @@ impl Ugly for TopLevel {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let TopLevel(decls) = self;
-        s += &decls
-            .iter()
-            .map(|decl| {
-                decl.ugly(f)
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+        s += &decls.iter().map(|decl| decl.ugly(f)).collect::<Vec<_>>().join("\n");
         s
     }
 }
@@ -448,17 +442,17 @@ impl Ugly for Literal {
     }
 }
 
-impl Ugly for UseBind {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let UseBind { uses, tail } = self;
-        s += "use ";
-        s += &uses.ugly(f);
-        s += " in ";
-        s += &tail.ugly(f);
-        s
-    }
-}
+// impl Ugly for UseBind {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let UseBind { uses, tail } = self;
+//         s += "use ";
+//         s += &uses.ugly(f);
+//         s += " in ";
+//         s += &tail.ugly(f);
+//         s
+//     }
+// }
 
 impl Ugly for UsePath {
     fn ugly(&self, f: &Formatter) -> String {

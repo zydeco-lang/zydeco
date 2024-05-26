@@ -66,6 +66,7 @@ pub struct Forall(pub CoPatId, pub TermId);
 /// `a -> b`
 #[derive(Clone, Debug)]
 pub struct Arrow(pub TermId, pub TermId);
+
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Sigma(pub CoPatId, pub TermId);

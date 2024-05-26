@@ -62,21 +62,22 @@ pub struct Rec(pub PatId, pub TermId);
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
 pub struct Pi(pub CoPatId, pub TermId);
-// /// `a -> b`
-// #[derive(Clone, Debug)]
-// pub struct Arrow(pub TermId, pub TermId);
 // /// `forall (x: A) . B`
 // #[derive(Clone, Debug)]
 // pub struct Forall(pub CoPatId, pub TermId);
+// /// `a -> b`
+// #[derive(Clone, Debug)]
+// pub struct Arrow(pub TermId, pub TermId);
+
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Sigma(pub CoPatId, pub TermId);
-// /// `A * ...`
-// #[derive(Clone, Debug)]
-// pub struct Prod(pub Vec<TermId>);
 // /// `exists (x: A) . A'`
 // #[derive(Clone, Debug)]
 // pub struct Exists(pub CoPatId, pub TermId);
+// /// `A * ...`
+// #[derive(Clone, Debug)]
+// pub struct Prod(pub Vec<TermId>);
 
 /// `ret a` has type `Ret A`
 #[derive(Clone, Debug)]
@@ -96,12 +97,12 @@ pub struct PureBind {
     pub tail: TermId,
 }
 
-/// `use let x = a in ...`
-#[derive(Clone, Debug)]
-pub struct UseBind {
-    pub uses: UsePath,
-    pub tail: TermId,
-}
+// /// `use let x = a in ...`
+// #[derive(Clone, Debug)]
+// pub struct UseBind {
+//     pub uses: UsePath,
+//     pub tail: TermId,
+// }
 
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug)]

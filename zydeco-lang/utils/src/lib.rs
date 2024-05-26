@@ -16,9 +16,9 @@ pub mod prelude {
         arena::*,
         interval_tree::IntervalTree,
         monoid::Monoid,
+        multi_cell::MultiCell,
         never::Never,
         rc,
         span::{Sp, Span, SpanHolder, SpanView},
-        multi_cell::MultiCell,
     };
 }

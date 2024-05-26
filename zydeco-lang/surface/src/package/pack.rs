@@ -107,10 +107,8 @@ impl Package {
         }
 
         // desugaring
-        let files = files
-            .into_iter()
-            .map(|f| f.desugar(b::SpanArena::new(&mut alloc)))
-            .collect::<Vec<_>>();
+        let files =
+            files.into_iter().map(|f| f.desugar(b::SpanArena::new(&mut alloc))).collect::<Vec<_>>();
         let pack = FileBitter::merge(
             PackageStew {
                 sources: HashMap::new(),

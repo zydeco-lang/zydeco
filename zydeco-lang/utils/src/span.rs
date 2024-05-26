@@ -356,7 +356,7 @@ impl<T: SpanHolder> SpanHolder for Sp<T> {
 //     }
 
 //     impl<T> SpanIntervalForest<T> {
-        
+
 //     }
 // }
 

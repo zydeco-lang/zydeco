@@ -252,12 +252,9 @@ pub fn read_line_as_int(
             match i {
                 Some(i) => Ok(app(
                     rc!(Force(rc!(e.clone().into())).into()),
-                    ctor("Some", vec!(rc!(Literal::Int(i).into()))),
+                    ctor("Some", vec![rc!(Literal::Int(i).into())]),
                 )),
-                None => Ok(app(
-                    rc!(Force(rc!(e.clone().into())).into()),
-                    ctor("None", vec![]),
-                )),
+                None => Ok(app(rc!(Force(rc!(e.clone().into())).into()), ctor("None", vec![]))),
             }
         }
         _ => unreachable!(""),

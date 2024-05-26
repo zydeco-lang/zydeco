@@ -25,11 +25,7 @@ pub struct BuildSystem {
 
 impl BuildSystem {
     pub fn new() -> Self {
-        Self {
-            packages: ArenaDense::default(),
-            seen: HashMap::new(),
-            depends_on: DepGraph::new(),
-        }
+        Self { packages: ArenaDense::default(), seen: HashMap::new(), depends_on: DepGraph::new() }
     }
     pub fn run(mut self, path: impl Into<PathBuf>) -> Result<()> {
         // add all dependent packages to the build system

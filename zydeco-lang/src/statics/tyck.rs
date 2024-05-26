@@ -5,11 +5,11 @@ mod module;
 mod lub;
 
 use super::{
-    err::{Frame, Trace, TyckError, TyckErrorItem, IndentVec},
+    err::{Frame, IndentVec, Trace, TyckError, TyckErrorItem},
     syntax::*,
 };
 use crate::{prelude::*, resolve::err::NameResolveError, syntax::Env};
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use TyckErrorItem::*;
 
 pub trait CtxT {

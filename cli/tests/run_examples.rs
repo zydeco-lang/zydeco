@@ -1,5 +1,5 @@
-use zydeco_cli::Repl;
 use std::{io::Read, path::PathBuf};
+use zydeco_cli::Repl;
 use zydeco_lang::zydeco::ZydecoExpr;
 
 fn wrapper<T>(r: Result<T, String>) {

@@ -34,7 +34,7 @@ pub mod statics {
     mod fmt;
     pub use self::{
         elab::Elaboration,
-        lift::{MonadTransTerm, MonadTransType, MonadTrans},
+        lift::{MonadTrans, MonadTransTerm, MonadTransType},
         tyck::{Ctx, Seal, TypeCheck},
     };
 }
