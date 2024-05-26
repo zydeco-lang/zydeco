@@ -33,10 +33,18 @@ pub struct Hole;
 
 /// any binding structure
 #[derive(Clone, Debug)]
-pub struct Abs<Cp, Tm>(pub Cp, pub Tm);
+pub struct Abs<S, T>(pub S, pub T);
 /// `e1 e2` shaped application
 #[derive(Clone, Debug)]
 pub struct App<T>(pub Vec<T>);
+
+/// a -> b shaped arrow
+#[derive(Clone, Debug)]
+pub struct Arrow<S, T>(pub S, pub T);
+
+/// a * b shaped product
+#[derive(Clone, Debug)]
+pub struct Prod<T>(pub Vec<T>);
 
 /* --------------------------------- Common --------------------------------- */
 

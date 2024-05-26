@@ -43,6 +43,7 @@ rand = "0.8"
 # data structures
 sequence_trie = "0.3"
 im = "15"
+indexmap = "2.2"
 # serialization
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"

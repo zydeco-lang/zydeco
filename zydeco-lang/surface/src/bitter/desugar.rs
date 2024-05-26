@@ -267,7 +267,16 @@ impl Desugar for t::CoPatId {
             CoPat::Dtor(name) => desugarer.copat(id, name.into()),
             CoPat::App(copat) => {
                 let t::App(copats) = copat;
-                let copats = copats.desugar(desugarer);
+                let iter = copats.into_iter();
+                let mut copats = Vec::new();
+                for copat in iter {
+                    if let CoPat::App(copat) = desugarer.lookup_copat(copat) {
+                        let t::App(inner) = copat;
+                        copats.extend(inner.into_iter().map(|copat| copat.desugar(desugarer)));
+                    } else {
+                        copats.push(copat.desugar(desugarer))
+                    }
+                }
                 desugarer.copat(id, b::App(copats).into())
             }
         }
@@ -312,7 +321,17 @@ impl Desugar for t::TermId {
             }
             Tm::App(term) => {
                 let t::App(terms) = term;
-                let terms = terms.desugar(desugarer);
+                let mut iter = terms.into_iter();
+                let mut terms = Vec::new();
+                if let Some(head) = iter.next() {
+                    if let Tm::App(term) = desugarer.lookup_term(head) {
+                        let t::App(inner) = term;
+                        terms.extend(inner.into_iter().map(|term| term.desugar(desugarer)));
+                    } else {
+                        terms.push(head.desugar(desugarer))
+                    }
+                }
+                terms.extend(iter.map(|term| term.desugar(desugarer)));
                 desugarer.term(id, b::App(terms).into())
             }
             Tm::Rec(term) => {
@@ -543,9 +562,10 @@ impl Desugar for t::Sp<t::CoData> {
         let arms = arms
             .into_iter()
             .map(|t::CoDataArm { name, params, out }| {
-                let params = params.map(|params| params.desugar(desugarer));
+                // Todo: deal with params as if they are pi type inputs
+                assert!(params.is_none());
                 let out = out.desugar(desugarer);
-                b::CoDataArm { name, params, out }
+                b::CoDataArm { name, out }
             })
             .collect();
         let term = Alloc::alloc(desugarer, self.info.clone());

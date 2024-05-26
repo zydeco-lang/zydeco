@@ -21,6 +21,7 @@ zydeco-derive = { workspace = true }
 zydeco-surface = { workspace = true }
 derive_more = { workspace = true }
 derive-where = { workspace = true }
+indexmap = { workspace = true }
 
 [lib]
 doctest = false

@@ -444,11 +444,7 @@ impl Resolve for TermId {
             Term::CoData(term) => {
                 let CoData { arms } = term;
                 for arm in arms {
-                    let mut local = local.clone();
-                    let CoDataArm { name: _, params, out } = arm;
-                    if let Some(params) = params {
-                        local = params.resolve(resolver, (local.clone(), global))?;
-                    }
+                    let CoDataArm { name: _, out } = arm;
                     let () = out.resolve(resolver, (local.clone(), global))?;
                 }
             }

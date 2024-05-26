@@ -381,13 +381,9 @@ impl Ugly for CoData {
         let mut s = String::new();
         let CoData { arms } = self;
         s += "codata";
-        for CoDataArm { name, params, out } in arms {
+        for CoDataArm { name, out } in arms {
             s += " | ";
             s += &name.ugly(f);
-            if let Some(params) = params {
-                s += " ";
-                s += &params.ugly(f);
-            }
             s += " : ";
             s += &out.ugly(f);
         }

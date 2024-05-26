@@ -63,9 +63,6 @@ pub struct Pi(pub CoPatId, pub TermId);
 /// `forall (x: A) . B`
 #[derive(Clone, Debug)]
 pub struct Forall(pub CoPatId, pub TermId);
-/// `a -> b`
-#[derive(Clone, Debug)]
-pub struct Arrow(pub TermId, pub TermId);
 
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
@@ -73,9 +70,6 @@ pub struct Sigma(pub CoPatId, pub TermId);
 /// `exists (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Exists(pub CoPatId, pub TermId);
-/// `A * ...`
-#[derive(Clone, Debug)]
-pub struct Prod(pub Vec<TermId>);
 
 /// `ret a` has type `Ret A`
 #[derive(Clone, Debug)]
@@ -158,10 +152,10 @@ pub enum Term {
     Rec(Rec),
     Pi(Pi),
     Forall(Forall),
-    Arrow(Arrow),
+    Arrow(Arrow<TermId, TermId>),
     Sigma(Sigma),
     Exists(Exists),
-    Prod(Prod),
+    Prod(Prod<TermId>),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),
     Ret(Return),

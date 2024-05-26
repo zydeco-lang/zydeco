@@ -273,7 +273,11 @@ impl Ugly for Pi {
     }
 }
 
-impl Ugly for Arrow {
+impl<S, T> Ugly for Arrow<S, T>
+where
+    S: Ugly,
+    T: Ugly,
+{
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Arrow(t1, t2) = self;
@@ -308,7 +312,10 @@ impl Ugly for Sigma {
     }
 }
 
-impl Ugly for Prod {
+impl<T> Ugly for Prod<T>
+where
+    T: Ugly,
+{
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Prod(ts) = self;
