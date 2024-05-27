@@ -49,8 +49,14 @@ pub struct ScopedArena {
     /// context for every term (WIP)
     // Note: not implemented yet
     pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
-    /// all terms that are variables can be mapped to a corresponding def
-    pub term_to_def: ArenaAssoc<TermId, DefId>,
+
+    // arenas
+    pub defs: ArenaAssoc<DefId, VarName>,
+    pub pats: ArenaAssoc<PatId, Pattern>,
+    pub copats: ArenaAssoc<CoPatId, CoPattern>,
+    pub terms: ArenaAssoc<TermId, Term<DefId>>,
+    pub decls: ArenaAssoc<DeclId, Declaration>,
+
     /// dependency graph of the top level declarations
     pub deps: DepGraph<DeclId>,
     /// scc graph of the top level declarations

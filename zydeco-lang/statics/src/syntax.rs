@@ -1,5 +1,6 @@
 pub use crate::surface_syntax::*;
 
+use crate::surface_syntax as sc;
 use derive_more::From;
 use indexmap::IndexMap;
 use zydeco_utils::{
@@ -7,15 +8,14 @@ use zydeco_utils::{
     new_key_type,
 };
 
+pub type DeclId = sc::DeclId;
 new_key_type! {
-    pub struct DefId;
     pub struct PatId;
     pub struct CoPatId;
     pub struct KindId;
     pub struct TypeId;
     pub struct TermId;
 }
-
 
 /* ---------------------------------- Kind ---------------------------------- */
 
@@ -65,6 +65,7 @@ pub enum Type {
     Hole(Hole),
     Var(DefId),
     Abs(Abs<CoPatId, TypeId>),
+    // Arrow(Arrow<TypeId, TypeId>),
     Pi(Pi),
     Sigma(Sigma),
     Data(Data),

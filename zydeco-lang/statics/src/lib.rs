@@ -10,6 +10,7 @@ pub mod syntax;
 pub mod sorted {
     pub mod syntax;
     pub mod sorter;
+    pub mod err;
 }
 
 pub mod typed {

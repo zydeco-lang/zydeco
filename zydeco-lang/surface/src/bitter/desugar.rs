@@ -523,6 +523,7 @@ impl Desugar for t::GenBind<t::TermId> {
         if rec {
             let span = binding.span(desugarer);
             let rec = Alloc::alloc(desugarer, span);
+            let binder = binder.deep_clone(desugarer);
             binding = desugarer.term(rec, b::Rec(binder, binding).into());
         }
         // add thunk?
@@ -664,6 +665,228 @@ mod impls {
     impl Alloc for b::DeclId {
         fn alloc(desugarer: &mut Desugarer, span: Span) -> Self {
             desugarer.bspans.decls.alloc(span)
+        }
+    }
+
+    pub(super) trait DeepClone {
+        fn deep_clone(&self, desugarer: &mut Desugarer) -> Self;
+    }
+    impl<T> DeepClone for Vec<T>
+    where
+        T: DeepClone,
+    {
+        fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
+            self.iter().map(|x| x.deep_clone(desugarer)).collect()
+        }
+    }
+    impl DeepClone for b::DefId {
+        fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
+            let span = self.span(desugarer);
+            let def = desugarer.bitter.defs[*self].clone();
+            let id = Alloc::alloc(desugarer, span);
+            desugarer.def(id, def)
+        }
+    }
+    impl DeepClone for b::PatId {
+        fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
+            let span = self.span(desugarer);
+            let pat = desugarer.bitter.pats[*self].clone();
+            let pat = match &pat {
+                b::Pattern::Ann(pat) => {
+                    let b::Ann { tm, ty } = pat;
+                    let tm = tm.deep_clone(desugarer);
+                    let ty = ty.deep_clone(desugarer);
+                    b::Ann { tm, ty }.into()
+                }
+                b::Pattern::Hole(_pat) => b::Hole.into(),
+                b::Pattern::Var(pat) => {
+                    pat.deep_clone(desugarer).into()
+                }
+                b::Pattern::Ctor(pat) => {
+                    let b::Ctor(name, pat) = pat;
+                    let pat = pat.deep_clone(desugarer);
+                    b::Ctor(name.clone(), pat).into()
+                }
+                b::Pattern::Paren(pat) => {
+                    let b::Paren(pats) = pat;
+                    let pats = pats.deep_clone(desugarer);
+                    b::Paren(pats).into()
+                }
+            };
+            let id = Alloc::alloc(desugarer, span);
+            desugarer.pat(id, pat)
+        }
+    }
+    impl DeepClone for b::CoPatId {
+        fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
+            let span = self.span(desugarer);
+            let copat = desugarer.bitter.copats[*self].clone();
+            let copat = match &copat {
+                b::CoPattern::Pat(pat) => {
+                    let pat = pat.deep_clone(desugarer);
+                    pat.into()
+                }
+                b::CoPattern::Dtor(name) => name.clone().into(),
+                b::CoPattern::App(copat) => {
+                    let b::App(copats) = copat;
+                    let copats = copats.deep_clone(desugarer);
+                    b::App(copats).into()
+                }
+            };
+            let id = Alloc::alloc(desugarer, span);
+            desugarer.copat(id, copat)
+        }
+    }
+    impl DeepClone for b::TermId {
+        fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
+            let span = self.span(desugarer);
+            let term = desugarer.bitter.terms[*self].clone();
+            let term = match &term {
+                b::Term::Internal(_term) => {
+                    return *self;
+                }
+                b::Term::Sealed(_term) => {
+                    unreachable!()
+                    // let b::Sealed(term) = term;
+                    // let term = term.deep_clone(desugarer);
+                    // b::Sealed(term).into()
+                }
+                b::Term::Ann(term) => {
+                    let b::Ann { tm, ty } = term;
+                    let tm = tm.deep_clone(desugarer);
+                    let ty = ty.deep_clone(desugarer);
+                    b::Ann { tm, ty }.into()
+                }
+                b::Term::Hole(_term) => b::Hole.into(),
+                b::Term::Var(name) => b::Term::Var(name.clone()).into(),
+                b::Term::Paren(term) => {
+                    let b::Paren(terms) = term;
+                    let terms = terms.deep_clone(desugarer);
+                    b::Paren(terms).into()
+                }
+                b::Term::Abs(term) => {
+                    let b::Abs(params, tail) = term;
+                    let params = params.deep_clone(desugarer);
+                    let tail = tail.deep_clone(desugarer);
+                    b::Abs(params, tail).into()
+                }
+                b::Term::App(term) => {
+                    let b::App(terms) = term;
+                    let terms = terms.deep_clone(desugarer);
+                    b::App(terms).into()
+                }
+                b::Term::Rec(term) => {
+                    let b::Rec(pat, term) = term;
+                    let pat = pat.deep_clone(desugarer);
+                    let term = term.deep_clone(desugarer);
+                    b::Rec(pat, term).into()
+                }
+                b::Term::Pi(term) => {
+                    let b::Pi(params, ty) = term;
+                    let params = params.deep_clone(desugarer);
+                    let ty = ty.deep_clone(desugarer);
+                    b::Pi(params, ty).into()
+                }
+                b::Term::Sigma(term) => {
+                    let b::Sigma(params, ty) = term;
+                    let params = params.deep_clone(desugarer);
+                    let ty = ty.deep_clone(desugarer);
+                    b::Sigma(params, ty).into()
+                }
+                b::Term::Thunk(term) => {
+                    let b::Thunk(term) = term;
+                    let term = term.deep_clone(desugarer);
+                    b::Thunk(term).into()
+                }
+                b::Term::Force(term) => {
+                    let b::Force(term) = term;
+                    let term = term.deep_clone(desugarer);
+                    b::Force(term).into()
+                }
+                b::Term::Ret(term) => {
+                    let b::Return(term) = term;
+                    let term = term.deep_clone(desugarer);
+                    b::Return(term).into()
+                }
+                b::Term::Do(term) => {
+                    let b::Bind { binder, bindee, tail } = term;
+                    let binder = binder.deep_clone(desugarer);
+                    let bindee = bindee.deep_clone(desugarer);
+                    let tail = tail.deep_clone(desugarer);
+                    b::Bind { binder, bindee, tail }.into()
+                }
+                b::Term::Let(term) => {
+                    let b::PureBind { binder, bindee, tail } = term;
+                    let binder = binder.deep_clone(desugarer);
+                    let bindee = bindee.deep_clone(desugarer);
+                    let tail = tail.deep_clone(desugarer);
+                    b::PureBind { binder, bindee, tail }.into()
+                }
+                b::Term::Data(term) => {
+                    let b::Data { arms } = term;
+                    let arms = arms
+                        .into_iter()
+                        .map(|b::DataArm { name, param }| {
+                            let name = name.clone();
+                            let param = param.deep_clone(desugarer);
+                            b::DataArm { name, param }
+                        })
+                        .collect();
+                    b::Data { arms }.into()
+                }
+                b::Term::CoData(term) => {
+                    let b::CoData { arms } = term;
+                    let arms = arms
+                        .into_iter()
+                        .map(|b::CoDataArm { name, out }| {
+                            let name = name.clone();
+                            let out = out.deep_clone(desugarer);
+                            b::CoDataArm { name, out }
+                        })
+                        .collect();
+                    b::CoData { arms }.into()
+                }
+                b::Term::Ctor(term) => {
+                    let b::Ctor(name, term) = term;
+                    let term = term.deep_clone(desugarer);
+                    let name = name.clone();
+                    b::Ctor(name, term).into()
+                }
+                b::Term::Match(term) => {
+                    let b::Match { scrut, arms } = term;
+                    let scrut = scrut.deep_clone(desugarer);
+                    let arms = arms
+                        .into_iter()
+                        .map(|b::Matcher { binder, tail }| {
+                            let binder = binder.deep_clone(desugarer);
+                            let tail = tail.deep_clone(desugarer);
+                            b::Matcher { binder, tail }
+                        })
+                        .collect();
+                    b::Match { scrut, arms }.into()
+                }
+                b::Term::CoMatch(term) => {
+                    let b::CoMatch { arms } = term;
+                    let arms = arms
+                        .into_iter()
+                        .map(|b::CoMatcher { params, tail }| {
+                            let params = params.deep_clone(desugarer);
+                            let tail = tail.deep_clone(desugarer);
+                            b::CoMatcher { params, tail }
+                        })
+                        .collect();
+                    b::CoMatch { arms }.into()
+                }
+                b::Term::Dtor(term) => {
+                    let b::Dtor(term, name) = term;
+                    let term = term.deep_clone(desugarer);
+                    let name = name.clone();
+                    b::Dtor(term, name).into()
+                }
+                b::Term::Lit(term) => term.clone().into(),
+            };
+            let id = Alloc::alloc(desugarer, span);
+            desugarer.term(id, term)
         }
     }
 

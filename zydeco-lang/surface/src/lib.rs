@@ -83,7 +83,5 @@ pub mod scoped {
     pub mod syntax;
     pub mod resolver;
     pub mod err;
-    pub mod fmt {
-        pub use crate::bitter::fmt::*;
-    }
+    pub mod fmt;
 }

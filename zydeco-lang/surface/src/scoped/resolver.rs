@@ -61,20 +61,29 @@ impl Binders for PatId {
 
 pub struct Resolver {
     pub spans: SpanArena,
-    pub arena: Arena,
+    pub bitter: Arena,
     pub prim_term: PrimTerm,
     pub prim_def: PrimDef,
+    /// all internal definitions mapped to a corresponding def
+    pub internal_to_def: ArenaAssoc<TermId, DefId>,
+
     pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
     pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
-    pub term_to_def: ArenaAssoc<TermId, DefId>,
+
+    // arenas
+    pub defs: ArenaAssoc<DefId, VarName>,
+    pub pats: ArenaAssoc<PatId, Pattern>,
+    pub copats: ArenaAssoc<CoPatId, CoPattern>,
+    pub terms: ArenaAssoc<TermId, Term<DefId>>,
+    pub decls: ArenaAssoc<DeclId, Declaration>,
+
     pub deps: DepGraph<DeclId>,
 }
 
 pub struct ResolveOut {
     pub spans: SpanArena,
     pub prim: PrimDef,
-    pub arena: Arena,
-    pub scoped: ScopedArena,
+    pub arena: ScopedArena,
 }
 
 impl Resolver {
@@ -82,22 +91,35 @@ impl Resolver {
         top.resolve(&mut self, Global::default())?;
         let Resolver {
             spans,
-            arena,
+            bitter: _,
             prim_term: _,
             prim_def: prim,
+            internal_to_def: _,
+
             ctxs,
             term_under_ctx,
-            term_to_def,
+
+            defs,
+            pats,
+            copats,
+            terms,
+            decls,
+
             deps,
         } = self;
         Ok(ResolveOut {
             spans,
             prim,
-            arena,
-            scoped: ScopedArena {
+            arena: ScopedArena {
                 ctxs,
                 term_under_ctx,
-                term_to_def: term_to_def.clone(),
+
+                defs,
+                pats,
+                copats,
+                terms,
+                decls,
+
                 scc: Kosaraju::new(&deps).run(),
                 deps,
             },
@@ -121,10 +143,6 @@ impl Resolver {
             global.under_map.clone().union(binders.values().map(|def| (*def, *under)).collect());
         global.var_to_def = global.var_to_def.clone().union(binders);
         Ok(())
-    }
-    /// register a term to its definition
-    fn def(&mut self, term: TermId, def: DefId) {
-        self.term_to_def.insert(term, def);
     }
     fn alloc_prim(
         span: &SpanArena, mc: &mut MultiCell<DefId>, def: DefId, name: &'static str,
@@ -164,24 +182,24 @@ impl Resolve for TopLevel {
         // 1. check for duplicates
         // 2. update primitives to term_to_def
         for id in decls {
-            let Modifiers { public: _, inner } = &resolver.arena.decls[*id];
+            let Modifiers { public: _, inner } = &resolver.bitter.decls[*id];
             match inner {
                 Declaration::Alias(decl) => {
                     let Alias { binder, bindee: _ } = decl;
                     resolver.check_duplicate_and_update_global(
                         id,
-                        binder.binders(&resolver.arena),
+                        binder.binders(&resolver.bitter),
                         &mut global,
                     )?;
                 }
                 Declaration::Extern(decl) => {
                     let Extern { comp: _, binder, params: _, ty: _ } = decl;
-                    let binders = binder.binders(&resolver.arena);
+                    let binders = binder.binders(&resolver.bitter);
                     // check if it's a primitive and (later in terms) update the term_to_def
                     if binders.len() == 1 {
                         if let Some(def) = binders.get(&VarName("VType".into())) {
                             let vtype = resolver.alloc_vtype(*def)?;
-                            resolver.term_to_def.extend(
+                            resolver.internal_to_def.extend(
                                 resolver
                                     .prim_term
                                     .vtype
@@ -192,7 +210,7 @@ impl Resolve for TopLevel {
                         }
                         if let Some(def) = binders.get(&VarName("CType".into())) {
                             let ctype = resolver.alloc_ctype(*def)?;
-                            resolver.term_to_def.extend(
+                            resolver.internal_to_def.extend(
                                 resolver
                                     .prim_term
                                     .ctype
@@ -240,10 +258,10 @@ impl Resolve for DeclId {
     fn resolve<'f>(&self, resolver: &mut Resolver, global: Self::Lookup<'f>) -> Result<Self::Out> {
         // register the global binder in deps
         resolver.deps.add(*self, []);
-        let decl = resolver.arena.decls[*self].clone();
+        let decl = resolver.bitter.decls[*self].clone();
         let local = Local { under: *self, ..Local::default() };
         let Modifiers { public: _, inner } = decl;
-        match inner {
+        match inner.clone() {
             Declaration::Alias(decl) => {
                 let Alias { binder, bindee } = decl;
                 // resolve bindee first
@@ -251,7 +269,6 @@ impl Resolve for DeclId {
                 // and then binder, though we don't need the context yielded by binder
                 // since it's global and has been collected already
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
-                Ok(())
             }
             Declaration::Extern(decl) => {
                 let Extern { comp: _, binder, params, ty } = decl;
@@ -263,17 +280,27 @@ impl Resolve for DeclId {
                     let _ = params.resolve(resolver, (local.clone(), global))?;
                 }
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
-                Ok(())
             }
             Declaration::Main(decl) => {
                 let Main(term) = decl;
                 let () = term.resolve(resolver, (local.clone(), global))?;
-                Ok(())
             }
-        }
+        };
+        // no id changed, reuse old inner decl structure
+        resolver.decls.insert(*self, inner);
+        Ok(())
     }
 }
+impl Resolve for DefId {
+    type Out = ();
 
+    type Lookup<'a> = ();
+
+    fn resolve<'f>(&self, resolver: &mut Resolver, _lookup: Self::Lookup<'f>) -> Result<Self::Out> {
+        resolver.defs.insert(*self, resolver.bitter.defs[*self].clone());
+        Ok(())
+    }
+}
 impl Resolve for PatId {
     // Note: returns the context yielded **after** the pattern
     type Out = Local;
@@ -281,24 +308,25 @@ impl Resolve for PatId {
     fn resolve<'f>(
         &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
     ) -> Result<Self::Out> {
-        let pat = resolver.arena.pats[*self].clone();
-        match pat {
+        let pat = resolver.bitter.pats[*self].clone();
+        let local = match &pat {
             Pattern::Ann(pat) => {
                 let Ann { tm, ty } = pat;
                 let () = ty.resolve(resolver, (local.clone(), global))?;
-                tm.resolve(resolver, (local, global))
+                tm.resolve(resolver, (local, global))?
             }
             Pattern::Hole(pat) => {
                 let Hole = pat;
-                Ok(local)
+                local
             }
             Pattern::Var(def) => {
-                local.var_to_def.insert(resolver.arena.defs[def].clone(), def);
-                Ok(local)
+                let () = def.resolve(resolver, ())?;
+                local.var_to_def.insert(resolver.bitter.defs[*def].clone(), *def);
+                local
             }
             Pattern::Ctor(pat) => {
                 let Ctor(_ctor, args) = pat;
-                args.resolve(resolver, (local, global))
+                args.resolve(resolver, (local, global))?
             }
             Pattern::Paren(pat) => {
                 let Paren(inner) = pat;
@@ -306,9 +334,12 @@ impl Resolve for PatId {
                     // can be dependent on the previous binders
                     local = binder.resolve(resolver, (local, global))?;
                 }
-                Ok(local)
+                local
             }
-        }
+        };
+        // no id changed, reuse old inner pat structure
+        resolver.pats.insert(*self, pat);
+        Ok(local)
     }
 }
 impl Resolve for CoPatId {
@@ -317,19 +348,22 @@ impl Resolve for CoPatId {
     fn resolve<'f>(
         &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
     ) -> Result<Self::Out> {
-        let copat = resolver.arena.copats[*self].clone();
-        match copat {
-            CoPattern::Pat(pat) => pat.resolve(resolver, (local, global)),
-            CoPattern::Dtor(_dtor) => Ok(local),
+        let copat = resolver.bitter.copats[*self].clone();
+        let local = match &copat {
+            CoPattern::Pat(pat) => pat.resolve(resolver, (local, global))?,
+            CoPattern::Dtor(_dtor) => local,
             CoPattern::App(copat) => {
                 let App(args) = copat;
                 for arg in args {
                     // can be dependent on the previous binders
                     local = arg.resolve(resolver, (local, global))?;
                 }
-                Ok(local)
+                local
             }
-        }
+        };
+        // no id changed, reuse old inner copat structure
+        resolver.copats.insert(*self, copat);
+        Ok(local)
     }
 }
 impl Resolve for TermId {
@@ -338,122 +372,140 @@ impl Resolve for TermId {
     fn resolve<'f>(
         &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
     ) -> Result<Self::Out> {
-        let term = resolver.arena.terms[*self].clone();
-        match term {
+        let term = resolver.bitter.terms[*self].clone();
+        let res: Term<DefId> = match term {
             Term::Internal(_) => {
                 // internal terms should be resolved by looking up term_to_def
                 // which has already been updated by primitives when collecting top level
-                let def = resolver.term_to_def[*self];
+                let def = resolver.internal_to_def[*self];
                 // now the only thing left is to add the dependency
                 let decl = global.under_map[&def];
                 resolver.deps.add(local.under, [decl]);
+                return Ok(()); // no need to update the term structure
             }
             Term::Sealed(term) => {
-                let Sealed(inner) = term;
+                let Sealed(inner) = &term;
                 let () = inner.resolve(resolver, (local, global))?;
+                term.into()
             }
             Term::Ann(term) => {
-                let Ann { tm, ty } = term;
+                let Ann { tm, ty } = &term;
                 let () = ty.resolve(resolver, (local.clone(), global))?;
                 let () = tm.resolve(resolver, (local, global))?;
+                term.into()
             }
             Term::Hole(term) => {
-                let Hole = term;
+                let Hole = &term;
+                term.into()
             }
             Term::Var(var) => {
                 // first, try to find the variable locally
                 if let Some(def) = local.var_to_def.get(var.leaf()) {
                     // if found, we're done
-                    resolver.def(*self, *def);
+                    resolver.terms.insert(*self, Term::Var(*def));
                     return Ok(());
                 }
                 // otherwise, try to find the variable globally
                 if let Some(def) = global.var_to_def.get(var.leaf()) {
                     // if found, also add dependency
-                    resolver.def(*self, *def);
+                    resolver.terms.insert(*self, Term::Var(*def));
                     resolver.deps.add(local.under, [global.under_map[def]]);
                     return Ok(());
                 }
                 // if not found, report an error
                 let span = &resolver.spans.terms[*self];
-                Err(ResolveError::UnboundVar(span.make(var.clone())))?;
+                Err(ResolveError::UnboundVar(span.make(var.clone())))?
             }
             Term::Paren(term) => {
-                let Paren(terms) = term;
+                let Paren(terms) = &term;
                 for term in terms {
                     let () = term.resolve(resolver, (local.clone(), global))?;
                 }
+                term.into()
             }
             Term::Abs(term) => {
-                let Abs(copat, body) = term;
+                let Abs(copat, body) = &term;
                 local = copat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
+                term.into()
             }
             Term::App(term) => {
-                let App(terms) = term;
+                let App(terms) = &term;
                 for term in terms {
                     let () = term.resolve(resolver, (local.clone(), global))?;
                 }
+                term.into()
             }
             Term::Rec(term) => {
-                let Rec(pat, body) = term;
+                let Rec(pat, body) = &term;
                 local = pat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
+                term.into()
             }
             Term::Pi(term) => {
-                let Pi(copat, body) = term;
+                let Pi(copat, body) = &term;
                 local = copat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
+                term.into()
             }
             Term::Sigma(term) => {
-                let Sigma(copat, body) = term;
+                let Sigma(copat, body) = &term;
                 local = copat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
+                term.into()
             }
             Term::Thunk(term) => {
-                let Thunk(term) = term;
-                let () = term.resolve(resolver, (local.clone(), global))?;
+                let Thunk(body) = &term;
+                let () = body.resolve(resolver, (local.clone(), global))?;
+                term.into()
             }
             Term::Force(term) => {
-                let Force(term) = term;
-                let () = term.resolve(resolver, (local.clone(), global))?;
+                let Force(body) = &term;
+                let () = body.resolve(resolver, (local.clone(), global))?;
+                term.into()
             }
             Term::Ret(term) => {
-                let Return(term) = term;
-                let () = term.resolve(resolver, (local.clone(), global))?;
+                let Return(body) = &term;
+                let () = body.resolve(resolver, (local.clone(), global))?;
+                term.into()
             }
             Term::Do(term) => {
-                let Bind { binder, bindee, tail } = term;
+                let Bind { binder, bindee, tail } = &term;
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 local = binder.resolve(resolver, (local.clone(), global))?;
                 let () = tail.resolve(resolver, (local, global))?;
+                term.into()
             }
             Term::Let(term) => {
-                let PureBind { binder, bindee, tail } = term;
+                let PureBind { binder, bindee, tail } = &term;
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 local = binder.resolve(resolver, (local.clone(), global))?;
                 let () = tail.resolve(resolver, (local, global))?;
+                term.into()
             }
             Term::Data(term) => {
-                let Data { arms } = term;
+                let Data { arms } = &term;
                 for arm in arms {
                     let DataArm { name: _, param } = arm;
                     let () = param.resolve(resolver, (local.clone(), global))?;
                 }
+                term.into()
             }
             Term::CoData(term) => {
-                let CoData { arms } = term;
+                let CoData { arms } = &term;
                 for arm in arms {
                     let CoDataArm { name: _, out } = arm;
                     let () = out.resolve(resolver, (local.clone(), global))?;
                 }
+                term.into()
             }
             Term::Ctor(term) => {
-                let Ctor(_ctor, term) = term;
-                let () = term.resolve(resolver, (local.clone(), global))?;
+                let Ctor(_ctor, body) = &term;
+                let () = body.resolve(resolver, (local.clone(), global))?;
+                term.into()
             }
             Term::Match(term) => {
-                let Match { scrut, arms } = term;
+                let Match { scrut, arms } = &term;
                 let () = scrut.resolve(resolver, (local.clone(), global))?;
                 for arm in arms {
                     let mut local = local.clone();
@@ -461,22 +513,27 @@ impl Resolve for TermId {
                     local = binder.resolve(resolver, (local.clone(), global))?;
                     let () = tail.resolve(resolver, (local.clone(), global))?;
                 }
+                term.into()
             }
             Term::CoMatch(term) => {
-                let CoMatch { arms } = term;
+                let CoMatch { arms } = &term;
                 for arm in arms {
                     let mut local = local.clone();
                     let CoMatcher { params, tail } = arm;
                     local = params.resolve(resolver, (local.clone(), global))?;
                     let () = tail.resolve(resolver, (local.clone(), global))?;
                 }
+                term.into()
             }
             Term::Dtor(term) => {
-                let Dtor(term, _dtor) = term;
-                let () = term.resolve(resolver, (local.clone(), global))?;
+                let Dtor(body, _dtor) = &term;
+                let () = body.resolve(resolver, (local.clone(), global))?;
+                term.into()
             }
-            Term::Lit(_) => {}
-        }
+            Term::Lit(term) => term.into(),
+        };
+        // save the new term structure
+        resolver.terms.insert(*self, res);
         Ok(())
     }
 }

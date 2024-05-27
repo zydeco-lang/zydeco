@@ -107,8 +107,18 @@ impl Package {
         }
 
         // desugaring
+        // Todo: parallelize w/ rayon (?)
         let files =
             files.into_iter().map(|f| f.desugar(b::SpanArena::new(&mut alloc))).collect::<Vec<_>>();
+        // Debug: print the desugared package
+        if cfg!(debug_assertions) {
+            for file in &files {
+                println!(">>> [{}]", file.path.display());
+                use crate::bitter::fmt::*;
+                println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
+                println!("<<< [{}]", file.path.display());
+            }
+        }
         let pack = FileBitter::merge(
             PackageStew {
                 sources: HashMap::new(),
@@ -119,15 +129,6 @@ impl Package {
             },
             files,
         )?;
-        // Debug: print the resolved package
-        if cfg!(debug_assertions) {
-            println!(">>> [{}]", self.name);
-            use crate::scoped::fmt::*;
-            for (decl, _) in &pack.spans.decls {
-                println!("{}", decl.ugly(&Formatter::new(&pack.arena)));
-            }
-            println!("<<< [{}]", self.name);
-        }
 
         // adding package dependencies
         // Todo: ...
@@ -138,7 +139,7 @@ impl Package {
         if cfg!(debug_assertions) {
             use crate::scoped::fmt::*;
             println!(">>> [{}]", self.name);
-            let mut scc = pack.scoped.scc.clone();
+            let mut scc = pack.arena.scc.clone();
             let mut cnt = 0;
             loop {
                 let roots = scc.top();
@@ -156,7 +157,7 @@ impl Package {
                         victims
                             .iter()
                             .map(|decl| {
-                                let decl = &pack.arena.decls[*decl].inner;
+                                let decl = &pack.arena.decls[*decl];
                                 match decl {
                                     sc::Declaration::Alias(sc::Alias { binder, .. }) => {
                                         binder.ugly(&Formatter::new(&pack.arena))
@@ -304,17 +305,25 @@ impl PackageStew {
         let PackageStew { sources, spans, arena: bitter, prim_term, top } = self;
         let resolver = Resolver {
             spans,
-            arena: bitter,
+            bitter,
             prim_term,
             prim_def: sc::PrimDef::default(),
+            internal_to_def: ArenaAssoc::default(),
+
             ctxs: ArenaSparse::new(alloc),
             term_under_ctx: ArenaAssoc::default(),
-            term_to_def: ArenaAssoc::default(),
+
+            defs: ArenaAssoc::default(),
+            pats: ArenaAssoc::default(),
+            copats: ArenaAssoc::default(),
+            terms: ArenaAssoc::default(),
+            decls: ArenaAssoc::default(),
+
             deps: DepGraph::default(),
         };
-        let ResolveOut { spans, prim, arena, scoped } =
+        let ResolveOut { spans, prim, arena } =
             resolver.run(&top).map_err(|err| SurfaceError::ResolveError(err.to_string()))?;
-        Ok(PackageScoped { sources, spans, prim, arena, scoped })
+        Ok(PackageScoped { sources, spans, prim, arena })
     }
 }
 
@@ -322,6 +331,5 @@ pub struct PackageScoped {
     pub sources: HashMap<PathBuf, String>,
     pub spans: sc::SpanArena,
     pub prim: sc::PrimDef,
-    pub arena: sc::Arena,
-    pub scoped: sc::ScopedArena,
+    pub arena: sc::ScopedArena,
 }
