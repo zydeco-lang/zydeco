@@ -5,7 +5,7 @@ use crate::{arena::*, textual::syntax as t};
 use derive_more::{AddAssign, From};
 use std::ops::AddAssign;
 pub use zydeco_syntax::*;
-use zydeco_utils::multi_cell::MultiCell;
+use zydeco_utils::cells::MultiCell;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 /* ------------------------------- Identifier ------------------------------- */
@@ -186,15 +186,15 @@ pub struct Extern {
     pub ty: Option<TermId>,
 }
 
-#[derive(Clone, Debug)]
-pub struct Layer {
-    pub name: Option<NameRef<VarName>>,
-    pub uses: Vec<Modifiers<UsePath>>,
-    pub top: TopLevel,
-}
+// #[derive(Clone, Debug)]
+// pub struct Layer {
+//     pub name: Option<NameRef<VarName>>,
+//     pub uses: Vec<Modifiers<UsePath>>,
+//     pub top: TopLevel,
+// }
 
-#[derive(From, Clone, Debug)]
-pub struct UseDef(pub UsePath);
+// #[derive(From, Clone, Debug)]
+// pub struct UseDef(pub UsePath);
 
 // #[derive(Clone, Debug)]
 // pub struct UseBlock {

@@ -17,18 +17,22 @@ new_key_type! {
     pub struct TermId;
 }
 
-/* ---------------------------------- Kind ---------------------------------- */
+/* --------------------------------- Pattern -------------------------------- */
 
-#[derive(Clone, Debug)]
-pub struct VType;
-#[derive(Clone, Debug)]
-pub struct CType;
+#[derive(From, Clone, Debug)]
+pub enum Pattern {
+    Ann(Ann<PatId, TermId>),
+    Hole(Hole),
+    Var(DefId),
+    Ctor(Ctor<PatId>),
+    Paren(Paren<PatId>),
+}
 
-#[derive(Debug, Clone)]
-pub enum Kind {
-    VType(VType),
-    CType(CType),
-    Arrow(Arrow<KindId, KindId>),
+#[derive(From, Clone, Debug)]
+pub enum CoPattern {
+    Pat(PatId),
+    Dtor(DtorName),
+    App(App<CoPatId>),
 }
 
 /* ---------------------------------- Type ---------------------------------- */
@@ -72,10 +76,145 @@ pub enum Type {
     CoData(CoData),
 }
 
+/* ---------------------------------- Term ---------------------------------- */
+
+/// `rec (x: A) -> b`
+#[derive(Clone, Debug)]
+pub struct Rec(pub PatId, pub TermId);
+
+/// `ret a` has type `Ret A`
+#[derive(Clone, Debug)]
+pub struct Return(pub TermId);
+/// `do x <- b; ...`
+#[derive(Clone, Debug)]
+pub struct Bind {
+    pub binder: PatId,
+    pub bindee: TermId,
+    pub tail: TermId,
+}
+/// `let x = a in ...`
+#[derive(Clone, Debug)]
+pub struct PureBind {
+    pub binder: PatId,
+    pub bindee: TermId,
+    pub tail: TermId,
+}
+
+// /// `use let x = a in ...`
+// #[derive(Clone, Debug)]
+// pub struct UseBind {
+//     pub uses: UsePath,
+//     pub tail: TermId,
+// }
+
+/// `match a | C_1 p -> b_1 | ... end`
+#[derive(Clone, Debug)]
+pub struct Match {
+    pub scrut: TermId,
+    pub arms: Vec<Matcher>,
+}
+#[derive(Clone, Debug)]
+pub struct Matcher {
+    pub binder: PatId,
+    pub tail: TermId,
+}
+
+/// `comatch | .d_1 -> b_1 | ... end`
+#[derive(Clone, Debug)]
+pub struct CoMatch {
+    pub arms: Vec<CoMatcher>,
+}
+#[derive(Clone, Debug)]
+pub struct CoMatcher {
+    pub params: CoPatId,
+    pub tail: TermId,
+}
+
+#[derive(From, Clone, Debug)]
+pub enum Term {
+    Ann(Ann<TermId, TypeId>),
+    Hole(Hole),
+    Var(DefId),
+    Paren(Paren<TermId>),
+    Abs(Abs<CoPatId, TermId>),
+    App(App<TermId>),
+    Rec(Rec),
+    Thunk(Thunk<TermId>),
+    Force(Force<TermId>),
+    Ret(Return),
+    Do(Bind),
+    Let(PureBind),
+    // UseLet(UseBind),
+    Ctor(Ctor<TermId>),
+    Match(Match),
+    CoMatch(CoMatch),
+    Dtor(Dtor<TermId>),
+    Lit(Literal),
+}
+
+/* -------------------------------- TopLevel -------------------------------- */
+
+#[derive(Clone, Debug)]
+pub struct Alias {
+    pub binder: PatId,
+    pub bindee: TermId,
+}
+
+#[derive(Clone, Debug)]
+pub struct Extern {
+    pub comp: bool,
+    pub binder: PatId,
+    pub params: Option<CoPatId>,
+    pub ty: Option<TermId>,
+}
+
+// #[derive(Clone, Debug)]
+// pub struct Layer {
+//     pub name: Option<NameRef<VarName>>,
+//     pub uses: Vec<Modifiers<UsePath>>,
+//     pub top: TopLevel,
+// }
+
+// #[derive(From, Clone, Debug)]
+// pub struct UseDef(pub UsePath);
+
+// #[derive(Clone, Debug)]
+// pub struct UseBlock {
+//     pub uses: UsePath,
+//     pub top: TopLevel,
+// }
+
+#[derive(Clone, Debug)]
+pub struct Main(pub TermId);
+
+#[derive(Clone, From, Debug)]
+pub enum Declaration {
+    Alias(Alias),
+    Extern(Extern),
+    // Layer(Layer),
+    // UseDef(UseDef),
+    // UseBlock(UseBlock),
+    Main(Main),
+}
+
+/* ---------------------------------- Kind ---------------------------------- */
+
+#[derive(Clone, Debug)]
+pub struct VType;
+#[derive(Clone, Debug)]
+pub struct CType;
+
+#[derive(Debug, Clone)]
+pub enum Kind {
+    VType(VType),
+    CType(CType),
+    Arrow(Arrow<KindId, KindId>),
+}
+
 /* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Debug)]
-pub struct SortedArena {
+pub struct _SortedArena {
     /// arena for kinds
     pub kinds: ArenaSparse<KindId, Kind>,
     /// arena for types

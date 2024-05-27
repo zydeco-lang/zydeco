@@ -139,7 +139,7 @@ impl Package {
         if cfg!(debug_assertions) {
             use crate::scoped::fmt::*;
             println!(">>> [{}]", self.name);
-            let mut scc = pack.arena.scc.clone();
+            let mut scc = pack.arena.top.clone();
             let mut cnt = 0;
             loop {
                 let roots = scc.top();

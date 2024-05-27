@@ -1,99 +1,102 @@
-use crate::sorted::err::*;
-use crate::surface_syntax::{self as sc, PrimDef, ScopedArena, SpanArena};
-use crate::syntax::{self as ss, SortedArena};
+use crate::sorted::{err::*, syntax as so};
+use crate::surface_syntax::{self as su, PrimDef, ScopedArena, SpanArena};
+use zydeco_utils::arena::ArenaAssoc;
 
 pub struct Sorter {
     pub spans: SpanArena,
     pub prim: PrimDef,
     pub scoped: ScopedArena,
-    pub sorted: SortedArena,
+    pub sorted: ArenaAssoc<so::TermId, so::Sort>,
 }
 
-// impl Sorter {
-//     pub fn run(mut self) -> Result<()> {
-//         let scc = self.scoped.scc.clone();
-//         loop {
-//             let top = scc.top();
-//             if top.is_empty() {
-//                 break;
-//             }
-//             let mut sorted = Vec::new();
-//             for group in top {
-//                 for decl in group {
-//                     decl.sort(&mut self)?;
-//                     sorted.push(decl);
-//                 }
-//             }
-//             scc.release(sorted);
-//         }
-//         Ok(())
-//     }
-// }
+impl Sorter {
+    pub fn run(mut self) -> Result<()> {
+        let mut top = self.scoped.top.clone();
+        loop {
+            let groups = top.top();
+            if groups.is_empty() {
+                break;
+            }
+            let mut sorted = Vec::new();
+            for group in groups {
+                for decl in group {
+                    decl.sort(&mut self)?;
+                    sorted.push(decl);
+                }
+            }
+            top.release(sorted);
+        }
+        Ok(())
+    }
+}
 
-// pub trait Sort {
-//     type Out;
-//     fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out>;
-// }
+pub trait Sort {
+    type Out;
+    fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out>;
+}
 
-// impl Sort for sc::DeclId {
+impl Sort for su::DeclId {
+    type Out = ();
+
+    fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out> {
+        let decl = sorter.scoped.decls[*self].clone();
+        use su::Declaration as Decl;
+        match decl {
+            Decl::Alias(decl) => {
+                let su::Alias { binder, bindee } = decl;
+                binder.sort(sorter)?;
+                bindee.sort(sorter)?;
+            }
+            Decl::Extern(decl) => {
+                let su::Extern { comp: _, binder, params, ty } = decl;
+                binder.sort(sorter)?;
+                if let Some(params) = params {
+                    params.sort(sorter)?
+                } else {
+                };
+                if let Some(ty) = ty {
+                    ty.sort(sorter)?
+                } else {
+                };
+            }
+            Decl::Main(decl) => {
+                let su::Main(term) = decl;
+                term.sort(sorter)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+// impl Sort for su::DefId {
 //     type Out = ();
 
-//     fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out> {
-//         let decl = &sorter.scoped.decls[*self];
-//         use sc::Declaration as Decl;
-//         match decl {
-//             Decl::Alias(decl) => {
-//                 let sc::Alias { binder, bindee  } = decl;
-//                 binder.sort(sorter)?;
-//                 bindee.sort(sorter)?;
-//             }
-//             Decl::Extern(decl) => {
-//                 let sc::Extern { comp, binder, params, ty } = decl;
-//                 binder.sort(sorter)?;
-//                 for param in params {
-//                     param.sort(sorter)?;
-//                 }
-//                 for ty in ty {
-//                     ty.sort(sorter)?;
-//                 }
-//             }
-//             Decl::Main(decl) => {
-//                 let sc::Main(term) = decl;
-//                 term.sort(sorter)?;
-//             }
-//         }
+//     fn sort(&self, _sorter: &mut Sorter) -> Result<Self::Out> {
 //         Ok(())
 //     }
 // }
 
-// impl Sort for sc::DefId {
-//     type Out = ss::DefId;
+impl Sort for su::PatId {
+    type Out = ();
 
-//     fn sort(&self, _sorter: &mut Sorter) -> Result<Self::Out> {
-//         Ok(*self)
-//     }
-// }
+    fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out> {
+        todo!()
+    }
+}
 
-// impl Sort for sc::PatId {
-//     type Out;
+impl Sort for su::CoPatId {
+    type Out = ();
 
-//     fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out> {
-//         todo!()
-//     }
-// }
+    fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out> {
+        todo!()
+    }
+}
 
-// impl Sort for sc::CoPatId {
-//     type Out;
+impl Sort for su::TermId {
+    type Out = ();
 
-//     fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out> {
-//         todo!()
-//     }
-// }
-
-// impl Sort for sc::TermId {
-//     type Out;
-
-//     fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out> {
-//         let term = &sorter.surface.terms[*self];
-//     }
-// }
+    fn sort(&self, sorter: &mut Sorter) -> Result<Self::Out> {
+        let term = &sorter.scoped.terms[*self];
+        todo!()
+    }
+}

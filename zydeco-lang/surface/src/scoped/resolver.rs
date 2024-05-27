@@ -1,8 +1,8 @@
 use crate::scoped::{err::*, syntax::*};
 use zydeco_utils::{
     arena::{ArenaAssoc, ArenaSparse},
+    cells::SingCell,
     deps::DepGraph,
-    multi_cell::MultiCell,
     scc::Kosaraju,
 };
 
@@ -120,7 +120,7 @@ impl Resolver {
                 terms,
                 decls,
 
-                scc: Kosaraju::new(&deps).run(),
+                top: Kosaraju::new(&deps).run(),
                 deps,
             },
         })
@@ -145,17 +145,18 @@ impl Resolver {
         Ok(())
     }
     fn alloc_prim(
-        span: &SpanArena, mc: &mut MultiCell<DefId>, def: DefId, name: &'static str,
+        span: &SpanArena, mc: &mut SingCell<DefId>, def: DefId, name: &'static str,
     ) -> Result<DefId> {
-        if mc.is_empty() {
-            Ok(*mc.init(def))
-        } else {
-            let var = VarName(name.into());
-            Err(ResolveError::DuplicatePrimitive(
-                span.defs[def].clone().make(var.clone()),
-                span.defs[*mc.get()].clone().make(var),
-            ))
-        }
+        mc.init_or_else(
+            || def,
+            |id| {
+                ResolveError::DuplicatePrimitive(
+                    span.defs[def].clone().make(VarName(name.into())),
+                    span.defs[*id].clone().make(VarName(name.into())),
+                )
+            },
+        )
+        .cloned()
     }
     fn alloc_vtype(&mut self, vtype: DefId) -> Result<DefId> {
         Self::alloc_prim(&self.spans, &mut self.prim_def.vtype, vtype, "VType")
@@ -242,12 +243,8 @@ impl Resolve for TopLevel {
 
 impl PrimDef {
     pub fn check(&self) -> Result<()> {
-        if self.vtype.is_empty() {
-            return Err(ResolveError::MissingPrim("VType"));
-        }
-        if self.ctype.is_empty() {
-            return Err(ResolveError::MissingPrim("CType"));
-        }
+        self.vtype.once_or_else(|| ResolveError::MissingPrim("VType"))?;
+        self.ctype.once_or_else(|| ResolveError::MissingPrim("CType"))?;
         Ok(())
     }
 }

@@ -32,25 +32,15 @@ impl Desugarer {
         let Desugarer { bitter: arena, bspans: spans, prim, .. } = desugarer;
         DesugarOut { spans, arena, prim, top }
     }
-    fn vtype(&mut self) -> b::TermId {
-        if self.prim.vtype.is_empty() {
-            let span = Span::dummy();
-            let term = Alloc::alloc(self, span);
-            let id = self.term(term, b::Internal("VType".into()).into());
-            *self.prim.vtype.init(id)
-        } else {
-            *self.prim.vtype.get()
-        }
+    fn vtype(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal("VType".into()).into());
+        self.prim.vtype.extend_one(term).clone()
     }
-    fn ctype(&mut self) -> b::TermId {
-        if self.prim.ctype.is_empty() {
-            let span = Span::dummy();
-            let term = Alloc::alloc(self, span);
-            let id = self.term(term, b::Internal("CType".into()).into());
-            *self.prim.ctype.init(id)
-        } else {
-            *self.prim.ctype.get()
-        }
+    fn ctype(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal("VType".into()).into());
+        self.prim.vtype.extend_one(term).clone()
     }
 }
 
@@ -369,8 +359,8 @@ impl Desugar for t::TermId {
                 let forall = desugarer.term(id, b::Pi(params, ty).into());
                 // forall -> ann
                 let span = forall.span(desugarer);
-                let ann = Alloc::alloc(desugarer, span);
-                let ctype = desugarer.ctype();
+                let ann = Alloc::alloc(desugarer, span.clone());
+                let ctype = desugarer.ctype(span);
                 desugarer.term(ann, b::Ann { tm: forall, ty: ctype }.into())
             }
             Tm::Sigma(term) => {
@@ -407,8 +397,8 @@ impl Desugar for t::TermId {
                 let exists = desugarer.term(id, b::Sigma(params, ty).into());
                 // exists -> ann
                 let span = exists.span(desugarer);
-                let ann = Alloc::alloc(desugarer, span);
-                let vtype = desugarer.vtype();
+                let ann = Alloc::alloc(desugarer, span.clone());
+                let vtype = desugarer.vtype(span);
                 desugarer.term(ann, b::Ann { tm: exists, ty: vtype }.into())
             }
             Tm::Thunk(term) => {
@@ -550,8 +540,8 @@ impl Desugar for t::Sp<t::Data> {
         let term = Alloc::alloc(desugarer, self.info.clone());
         let data = desugarer.term(term, b::Data { arms }.into());
         // data -> ann
-        let ann = Alloc::alloc(desugarer, self.info);
-        let vtype = desugarer.vtype();
+        let ann = Alloc::alloc(desugarer, self.info.clone());
+        let vtype = desugarer.vtype(self.info);
         desugarer.term(ann, b::Ann { tm: data, ty: vtype }.into())
     }
 }
@@ -572,8 +562,8 @@ impl Desugar for t::Sp<t::CoData> {
         let term = Alloc::alloc(desugarer, self.info.clone());
         let codata = desugarer.term(term, b::CoData { arms }.into());
         // codata -> ann
-        let ann = Alloc::alloc(desugarer, self.info);
-        let ctype = desugarer.ctype();
+        let ann = Alloc::alloc(desugarer, self.info.clone());
+        let ctype = desugarer.ctype(self.info);
         desugarer.term(ann, b::Ann { tm: codata, ty: ctype }.into())
     }
 }
@@ -699,9 +689,7 @@ mod impls {
                     b::Ann { tm, ty }.into()
                 }
                 b::Pattern::Hole(_pat) => b::Hole.into(),
-                b::Pattern::Var(pat) => {
-                    pat.deep_clone(desugarer).into()
-                }
+                b::Pattern::Var(pat) => pat.deep_clone(desugarer).into(),
                 b::Pattern::Ctor(pat) => {
                     let b::Ctor(name, pat) = pat;
                     let pat = pat.deep_clone(desugarer);

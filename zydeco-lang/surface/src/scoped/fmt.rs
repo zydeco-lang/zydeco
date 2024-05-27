@@ -479,16 +479,16 @@ impl Ugly for UseEnum {
     }
 }
 
-impl Ugly for UseDef {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let UseDef(u) = self;
-        s += "use ";
-        s += &u.ugly(f);
-        s += " end";
-        s
-    }
-}
+// impl Ugly for UseDef {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let UseDef(u) = self;
+//         s += "use ";
+//         s += &u.ugly(f);
+//         s += " end";
+//         s
+//     }
+// }
 
 // impl Ugly for UseBlock {
 //     fn ugly(&self, f: &Formatter) -> String {
@@ -503,27 +503,27 @@ impl Ugly for UseDef {
 //     }
 // }
 
-impl Ugly for Layer {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let Layer { name, uses, top } = self;
-        if let Some(name) = name {
-            s += "layer ";
-            s += &name.ugly(f);
-        }
-        for Modifiers { public, inner } in uses {
-            if *public {
-                s += " pub";
-            }
-            s += " use ";
-            s += &inner.ugly(f);
-        }
-        s += " where\n";
-        s += &top.ugly(f);
-        s += "\nend";
-        s
-    }
-}
+// impl Ugly for Layer {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let Layer { name, uses, top } = self;
+//         if let Some(name) = name {
+//             s += "layer ";
+//             s += &name.ugly(f);
+//         }
+//         for Modifiers { public, inner } in uses {
+//             if *public {
+//                 s += " pub";
+//             }
+//             s += " use ";
+//             s += &inner.ugly(f);
+//         }
+//         s += " where\n";
+//         s += &top.ugly(f);
+//         s += "\nend";
+//         s
+//     }
+// }
 
 impl Ugly for Alias {
     fn ugly(&self, f: &Formatter) -> String {
