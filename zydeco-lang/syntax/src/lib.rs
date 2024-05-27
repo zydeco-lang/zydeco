@@ -4,7 +4,12 @@ use derive_more::From;
 /* -------------------------------- Primitive ------------------------------- */
 
 #[derive(Clone, Debug)]
-pub struct Internal(pub String);
+pub enum Internal {
+    VType,
+    CType,
+    Thunk,
+    Ret,
+}
 
 /* --------------------------------- Binder --------------------------------- */
 

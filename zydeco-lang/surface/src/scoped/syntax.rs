@@ -69,4 +69,6 @@ pub struct ScopedArena {
 pub struct PrimDef {
     pub vtype: SingCell<DefId>,
     pub ctype: SingCell<DefId>,
+    pub thunk: SingCell<DefId>,
+    pub ret: SingCell<DefId>,
 }

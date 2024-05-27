@@ -246,6 +246,12 @@ pub type SpanArena = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
 
 #[derive(Default, AddAssign)]
 pub struct PrimTerm {
+    /// VType kind
     pub vtype: MultiCell<TermId>,
+    /// CType kind
     pub ctype: MultiCell<TermId>,
+    /// Thunk type
+    pub thunk: MultiCell<TermId>,
+    /// Ret type
+    pub ret: MultiCell<TermId>,
 }

@@ -164,6 +164,12 @@ impl Resolver {
     fn alloc_ctype(&mut self, ctype: DefId) -> Result<DefId> {
         Self::alloc_prim(&self.spans, &mut self.prim_def.ctype, ctype, "CType")
     }
+    fn alloc_thunk(&mut self, thunk: DefId) -> Result<DefId> {
+        Self::alloc_prim(&self.spans, &mut self.prim_def.thunk, thunk, "Thunk")
+    }
+    fn alloc_ret(&mut self, ret: DefId) -> Result<DefId> {
+        Self::alloc_prim(&self.spans, &mut self.prim_def.ret, ret, "Ret")
+    }
 }
 
 pub trait Resolve {
@@ -220,6 +226,23 @@ impl Resolve for TopLevel {
                                     .map(|term| (*term, ctype)),
                             );
                         }
+                        if let Some(def) = binders.get(&VarName("Thunk".into())) {
+                            let thunk = resolver.alloc_thunk(*def)?;
+                            resolver.internal_to_def.extend(
+                                resolver
+                                    .prim_term
+                                    .thunk
+                                    .all()
+                                    .into_iter()
+                                    .map(|term| (*term, thunk)),
+                            );
+                        }
+                        if let Some(def) = binders.get(&VarName("Ret".into())) {
+                            let ret = resolver.alloc_ret(*def)?;
+                            resolver.internal_to_def.extend(
+                                resolver.prim_term.ret.all().into_iter().map(|term| (*term, ret)),
+                            );
+                        }
                     }
                     resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }
@@ -245,6 +268,8 @@ impl PrimDef {
     pub fn check(&self) -> Result<()> {
         self.vtype.once_or_else(|| ResolveError::MissingPrim("VType"))?;
         self.ctype.once_or_else(|| ResolveError::MissingPrim("CType"))?;
+        self.thunk.once_or_else(|| ResolveError::MissingPrim("Thunk"))?;
+        self.ret.once_or_else(|| ResolveError::MissingPrim("Ret"))?;
         Ok(())
     }
 }

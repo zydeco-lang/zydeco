@@ -34,13 +34,23 @@ impl Desugarer {
     }
     fn vtype(&mut self, span: Span) -> b::TermId {
         let term = Alloc::alloc(self, span);
-        let term = self.term(term, b::Internal("VType".into()).into());
+        let term = self.term(term, b::Internal::VType.into());
         self.prim.vtype.extend_one(term).clone()
     }
     fn ctype(&mut self, span: Span) -> b::TermId {
         let term = Alloc::alloc(self, span);
-        let term = self.term(term, b::Internal("VType".into()).into());
-        self.prim.vtype.extend_one(term).clone()
+        let term = self.term(term, b::Internal::CType.into());
+        self.prim.ctype.extend_one(term).clone()
+    }
+    fn thunk(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal::Thunk.into());
+        self.prim.thunk.extend_one(term).clone()
+    }
+    fn ret(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal::Ret.into());
+        self.prim.ret.extend_one(term).clone()
     }
 }
 
@@ -402,9 +412,20 @@ impl Desugar for t::TermId {
                 desugarer.term(ann, b::Ann { tm: exists, ty: vtype }.into())
             }
             Tm::Thunk(term) => {
-                let t::Thunk(term) = term;
-                let term = term.desugar(desugarer);
-                desugarer.term(id, b::Thunk(term).into())
+                let t::Thunk(body) = term;
+                let body = body.desugar(desugarer);
+                // body -> tm
+                let tm = desugarer.term(id, b::Thunk(body).into());
+                // thunk & hole -> ty
+                let span = self.span(desugarer);
+                let thunk = desugarer.thunk(span.clone());
+                let hole = Alloc::alloc(desugarer, span.clone());
+                let hole = desugarer.term(hole, b::Hole.into());
+                let ty = Alloc::alloc(desugarer, span.clone());
+                let ty = desugarer.term(ty, b::App(vec![thunk, hole]).into());
+                // tm & ty -> ann
+                let ann = Alloc::alloc(desugarer, span);
+                desugarer.term(ann, b::Ann { tm, ty }.into())
             }
             Tm::Force(term) => {
                 let t::Force(term) = term;
@@ -412,9 +433,20 @@ impl Desugar for t::TermId {
                 desugarer.term(id, b::Force(term).into())
             }
             Tm::Ret(term) => {
-                let t::Return(term) = term;
-                let term = term.desugar(desugarer);
-                desugarer.term(id, b::Return(term).into())
+                let t::Return(body) = term;
+                let body = body.desugar(desugarer);
+                // body -> tm
+                let tm = desugarer.term(id, b::Return(body).into());
+                // ret & hole -> ty
+                let span = self.span(desugarer);
+                let ret = desugarer.ret(span.clone());
+                let hole = Alloc::alloc(desugarer, span.clone());
+                let hole = desugarer.term(hole, b::Hole.into());
+                let ty = Alloc::alloc(desugarer, span.clone());
+                let ty = desugarer.term(ty, b::App(vec![ret, hole]).into());
+                // tm & ty -> ann
+                let ann = Alloc::alloc(desugarer, span);
+                desugarer.term(ann, b::Ann { tm, ty }.into())
             }
             Tm::Do(term) => {
                 let t::Bind { binder, bindee, tail } = term;
@@ -730,8 +762,22 @@ mod impls {
             let span = self.span(desugarer);
             let term = desugarer.bitter.terms[*self].clone();
             let term = match &term {
-                b::Term::Internal(_term) => {
-                    return *self;
+                b::Term::Internal(term) => {
+                    use zydeco_syntax::Internal;
+                    match term {
+                        Internal::VType => {
+                            return desugarer.vtype(span);
+                        }
+                        Internal::CType => {
+                            return desugarer.ctype(span);
+                        }
+                        Internal::Thunk => {
+                            return desugarer.thunk(span);
+                        }
+                        Internal::Ret => {
+                            return desugarer.ret(span);
+                        }
+                    }
                 }
                 b::Term::Sealed(_term) => {
                     unreachable!()

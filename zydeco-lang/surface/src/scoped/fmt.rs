@@ -112,10 +112,12 @@ impl Ugly for DeclId {
 impl Ugly for Internal {
     fn ugly(&self, _f: &Formatter) -> String {
         let mut s = String::new();
-        let Internal(name) = self;
-        s += "${";
-        s += name;
-        s += "}";
+        match self {
+            Internal::VType => s += "VType",
+            Internal::CType => s += "CType",
+            Internal::Thunk => s += "Thunk",
+            Internal::Ret => s += "Ret",
+        }
         s
     }
 }
