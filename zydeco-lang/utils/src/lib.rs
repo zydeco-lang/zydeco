@@ -2,6 +2,7 @@
 #![allow(clippy::useless_format)]
 
 pub mod arena;
+pub mod cells;
 pub mod deps;
 pub mod scc;
 pub mod span;
@@ -9,7 +10,6 @@ pub mod never;
 pub mod monoid;
 pub mod wrappers;
 pub mod interval_tree;
-pub mod cells;
 
 pub mod prelude {
     pub use crate::{
