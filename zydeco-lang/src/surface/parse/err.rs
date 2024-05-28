@@ -12,11 +12,11 @@ impl Display for ParseError<'_> {
         use lalrpop_util::ParseError::*;
         let ParseError(e, gen) = self;
         match e {
-            User { ref error } => write!(f, "{error}"),
-            InvalidToken { ref location } => {
+            | User { ref error } => write!(f, "{error}"),
+            | InvalidToken { ref location } => {
                 write!(f, "Invalid token at {}:{}", gen.display_path(), gen.trans_span2(*location))
             }
-            UnrecognizedEof { ref location, ref expected } => {
+            | UnrecognizedEof { ref location, ref expected } => {
                 write!(
                     f,
                     "Unrecognized EOF found at {}:{}{}",
@@ -25,7 +25,7 @@ impl Display for ParseError<'_> {
                     fmt_expected(expected)
                 )
             }
-            UnrecognizedToken { token: (ref start, ref token, ref end), ref expected } => {
+            | UnrecognizedToken { token: (ref start, ref token, ref end), ref expected } => {
                 write!(
                     f,
                     "Unrecognized token `{token}` found at {}:{} - {}{}",
@@ -35,7 +35,7 @@ impl Display for ParseError<'_> {
                     fmt_expected(expected)
                 )
             }
-            ExtraToken { token: (ref start, ref token, ref end) } => {
+            | ExtraToken { token: (ref start, ref token, ref end) } => {
                 write!(
                     f,
                     "Extra token `{token}` found at {}:{} - {}",
@@ -54,10 +54,10 @@ fn fmt_expected(expected: &[String]) -> String {
         res += &format!("; ");
         for (i, e) in expected.iter().enumerate() {
             let sep = match i {
-                0 => "Expected one of",
-                _ if i < expected.len() - 1 => ",",
+                | 0 => "Expected one of",
+                | _ if i < expected.len() - 1 => ",",
                 // Last expected message to be written
-                _ => " or",
+                | _ => " or",
             };
             res += &format!("{} {}", sep, e);
         }

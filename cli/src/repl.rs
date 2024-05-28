@@ -21,16 +21,16 @@ impl Repl {
                 }
             }
             let (line, dry) = match Self::preprocess(&mut zydeco_expr, line) {
-                Ok(Some(config)) => config,
-                Ok(None) => continue,
-                Err(e) => {
+                | Ok(Some(config)) => config,
+                | Ok(None) => continue,
+                | Err(e) => {
                     println!("{}", e);
                     continue;
                 }
             };
             match Self::run(&mut zydeco_expr, &line, dry) {
-                Ok(_) => {}
-                Err(e) => {
+                | Ok(_) => {}
+                | Err(e) => {
                     println!("{}", e);
                     continue;
                 }
@@ -73,16 +73,16 @@ impl Repl {
     pub fn run(zydeco_expr: &mut ZydecoExpr, line: &str, dry: bool) -> Result<(), String> {
         // parse and elaborate
         let term = match ZydecoExpr::parse(&line) {
-            Err(e) => Err(format!("Parse Error: {}", e))?,
-            Ok(term) => match ZydecoExpr::elab(term) {
-                Err(e) => Err(format!("Elaboration Error: {}", e))?,
-                Ok(term) => term,
+            | Err(e) => Err(format!("Parse Error: {}", e))?,
+            | Ok(term) => match ZydecoExpr::elab(term) {
+                | Err(e) => Err(format!("Elaboration Error: {}", e))?,
+                | Ok(term) => term,
             },
         };
         // typecheck and evaluate
         let ty = match zydeco_expr.tyck(term.clone()) {
-            Err(e) => Err(format!("Type Error: {}", e))?,
-            Ok(ty) => ty,
+            | Err(e) => Err(format!("Type Error: {}", e))?,
+            | Ok(ty) => ty,
         };
         if dry || matches!(term.inner_ref(), ss::Term::Value(_)) {
             // Note: not evaluating the value, just printing its type
@@ -90,8 +90,8 @@ impl Repl {
             Ok(())
         } else {
             let c = match term.inner_ref() {
-                ss::Term::Computation(c) => c,
-                _ => unreachable!(),
+                | ss::Term::Computation(c) => c,
+                | _ => unreachable!(),
             };
             // Note: The evaluation will destroy the environment,
             // so we need to save a snapshot of it before we run.

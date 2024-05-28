@@ -14,14 +14,14 @@ impl TypeCheck for Sp<TermComputation> {
         });
         let span = self.span();
         Ok(match self.inner_ref() {
-            TermComputation::Annotation(Annotation { term, ty }) => {
+            | TermComputation::Annotation(Annotation { term, ty }) => {
                 ty.ana(KindBase::CType.into(), ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_clone())
             }
-            TermComputation::Abs(_) => {
+            | TermComputation::Abs(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("fn") }))?
             }
-            TermComputation::App(App { body, arg }) => {
+            | TermComputation::App(App { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
                 let ty_body = ctx.resolve_alias(ty_body, span)?;
                 let SynType::Arrow(Arrow(ty_in, ty_out)) = ty_body.resolve()? else {
@@ -37,10 +37,10 @@ impl TypeCheck for Sp<TermComputation> {
                 arg.ana(ty_in.inner_clone(), ctx.clone())?;
                 Step::Done(ty_out.inner_clone())
             }
-            TermComputation::Ret(_) => {
+            | TermComputation::Ret(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("ret") }))?
             }
-            TermComputation::Force(Force(v)) => {
+            | TermComputation::Force(Force(v)) => {
                 let ty_val = v.syn(ctx.clone())?;
                 let ty_body = ty_val.clone().elim_thunk(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
@@ -55,13 +55,13 @@ impl TypeCheck for Sp<TermComputation> {
                 span.make(ty_body.to_owned()).ana(KindBase::CType.into(), ctx)?;
                 Step::Done(ty_body)
             }
-            TermComputation::Let(Let { var, def, body }) => {
+            | TermComputation::Let(Let { var, def, body }) => {
                 let ty_def = def.syn(ctx.clone())?;
                 span.make(ty_def.clone()).ana(KindBase::VType.into(), ctx.clone())?;
                 ctx.term_ctx.insert(var.to_owned(), ty_def);
                 Step::SynMode((ctx, body))
             }
-            TermComputation::Do(Do { var, comp, body }) => {
+            | TermComputation::Do(Do { var, comp, body }) => {
                 let ty_comp = comp.syn(ctx.clone())?;
                 span.make(ty_comp.clone()).ana(KindBase::CType.into(), ctx.clone())?;
                 let ty_val = ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
@@ -77,10 +77,10 @@ impl TypeCheck for Sp<TermComputation> {
                 ctx.term_ctx.insert(var.to_owned(), ty_val);
                 Step::SynMode((ctx, body))
             }
-            TermComputation::Rec(Rec { var: _, body: _ }) => {
+            | TermComputation::Rec(Rec { var: _, body: _ }) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("rec") }))?
             }
-            TermComputation::Match(Match { scrut, arms }) => {
+            | TermComputation::Match(Match { scrut, arms }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 span.make(ty_scrut.clone()).ana(KindBase::VType.into(), ctx.clone())?;
                 let (Data { name, params, ctors }, args) = ctx.resolve_data(ty_scrut, span)?;
@@ -140,10 +140,10 @@ impl TypeCheck for Sp<TermComputation> {
                 };
                 Step::Done(ty)
             }
-            TermComputation::Comatch(_) => {
+            | TermComputation::Comatch(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("comatch") }))?
             }
-            TermComputation::Dtor(Dtor { body, dtorv: dtor }) => {
+            | TermComputation::Dtor(Dtor { body, dtorv: dtor }) => {
                 let ty_body = body.syn(ctx.clone())?;
                 let (Codata { name, params, dtors }, ty_args) =
                     ctx.resolve_codata(ty_body, span)?;
@@ -173,7 +173,7 @@ impl TypeCheck for Sp<TermComputation> {
                     })?;
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
-            TermComputation::BeginBlock(BeginBlock { monad, body }) => {
+            | TermComputation::BeginBlock(BeginBlock { monad, body }) => {
                 use crate::statics::MonadTransType;
                 let ty_u_monad = monad.syn(ctx.clone())?;
                 let ty_monad =
@@ -200,10 +200,10 @@ impl TypeCheck for Sp<TermComputation> {
                 let ty_body = body.syn(ctx.clone())?;
                 Step::Done(ty_body.lift(ty_m, ctx.clone(), span)?)
             }
-            TermComputation::TyAbsTerm(_) => {
+            | TermComputation::TyAbsTerm(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("type-abstraction") }))?
             }
-            TermComputation::TyAppTerm(App { body, arg }) => {
+            | TermComputation::TyAppTerm(App { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
                 let ty_body = ctx.resolve_alias(ty_body, span)?;
                 let SynType::Forall(Forall { param: (param, kd), ty }) = ty_body.resolve()? else {
@@ -229,7 +229,7 @@ impl TypeCheck for Sp<TermComputation> {
                 })?;
                 Step::Done(ty.inner_clone().subst(diff, &ctx)?)
             }
-            TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
+            | TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 let ty_scrut = ctx.resolve_alias(ty_scrut, span)?;
                 let SynType::Exists(Exists { param: (param, kd), ty }) = ty_scrut.resolve()? else {
@@ -269,11 +269,11 @@ impl TypeCheck for Sp<TermComputation> {
         }
         span.make(typ.clone()).ana(KindBase::CType.into(), ctx.clone())?;
         Ok(match self.inner_ref() {
-            TermComputation::Annotation(Annotation { term, ty }) => {
+            | TermComputation::Annotation(Annotation { term, ty }) => {
                 let ty_lub = Type::lub(typ, ty.inner_clone(), ctx.clone(), span)?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
-            TermComputation::Abs(Abs { param, body }) => {
+            | TermComputation::Abs(Abs { param, body }) => {
                 let mut ctx = ctx.clone();
                 let SynType::Arrow(Arrow(ty_in, ty_out)) = typ_syn else {
                     Err(ctx.err(
@@ -289,7 +289,7 @@ impl TypeCheck for Sp<TermComputation> {
                 let ty_body = body.ana(ty_out.inner_clone(), ctx.clone())?;
                 Step::Done(Arrow(ty_in, ty_out.span().make_rc(ty_body)).into())
             }
-            TermComputation::App(App { body, arg }) => {
+            | TermComputation::App(App { body, arg }) => {
                 let ty_body = body.syn(ctx.clone())?;
                 let ty_body = ctx.resolve_alias(ty_body, span)?;
                 let SynType::Arrow(Arrow(ty_in, ty_out)) = ty_body.resolve()? else {
@@ -305,7 +305,7 @@ impl TypeCheck for Sp<TermComputation> {
                 arg.ana(ty_in.inner_clone(), ctx.clone())?;
                 Step::Done(ty_out.inner_clone())
             }
-            TermComputation::Ret(Ret(v)) => {
+            | TermComputation::Ret(Ret(v)) => {
                 let ty_body = typ.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
                         span,
@@ -320,17 +320,17 @@ impl TypeCheck for Sp<TermComputation> {
                 let typ_lub = Type::lub(typ, ty, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
-            TermComputation::Force(Force(v)) => {
+            | TermComputation::Force(Force(v)) => {
                 v.ana(Type::make_thunk(span.make_rc(typ.clone())), ctx)?;
                 Step::Done(typ)
             }
-            TermComputation::Let(Let { var, def, body }) => {
+            | TermComputation::Let(Let { var, def, body }) => {
                 let ty_def = def.syn(ctx.clone())?;
                 span.make(ty_def.clone()).ana(KindBase::VType.into(), ctx.clone())?;
                 ctx.term_ctx.insert(var.to_owned(), ty_def);
                 Step::AnaMode((ctx, body), typ)
             }
-            TermComputation::Do(Do { var, comp, body }) => {
+            | TermComputation::Do(Do { var, comp, body }) => {
                 let ty_comp = comp.syn(ctx.clone())?;
                 span.make(ty_comp.clone()).ana(KindBase::CType.into(), ctx.clone())?;
                 let ty_val = ty_comp.clone().elim_ret(ctx.clone(), span).ok_or_else(|| {
@@ -346,11 +346,11 @@ impl TypeCheck for Sp<TermComputation> {
                 ctx.term_ctx.insert(var.to_owned(), ty_val);
                 Step::AnaMode((ctx, body), typ)
             }
-            TermComputation::Rec(Rec { var, body }) => {
+            | TermComputation::Rec(Rec { var, body }) => {
                 ctx.term_ctx.insert(var.to_owned(), Type::make_thunk(span.make_rc(typ.clone())));
                 Step::AnaMode((ctx, body), typ)
             }
-            TermComputation::Match(Match { scrut, arms }) => {
+            | TermComputation::Match(Match { scrut, arms }) => {
                 let ty_scrut = scrut.syn(ctx.clone())?;
                 span.make(ty_scrut.clone()).ana(KindBase::VType.into(), ctx.clone())?;
                 let (Data { name, params, ctors }, args) = ctx.resolve_data(ty_scrut, span)?;
@@ -391,7 +391,7 @@ impl TypeCheck for Sp<TermComputation> {
                 })?;
                 Step::Done(typ)
             }
-            TermComputation::Comatch(Comatch { arms }) => {
+            | TermComputation::Comatch(Comatch { arms }) => {
                 let (Codata { name, params, dtors }, ty_args) =
                     ctx.resolve_codata(typ.clone(), span)?;
                 // arity check on codata type
@@ -427,7 +427,7 @@ impl TypeCheck for Sp<TermComputation> {
                 })?;
                 Step::Done(typ)
             }
-            TermComputation::TyAbsTerm(Abs { param: (tvar_, kd_), body }) => {
+            | TermComputation::TyAbsTerm(Abs { param: (tvar_, kd_), body }) => {
                 let SynType::Forall(Forall { param: (tvar, kd), ty }) = &typ_syn else {
                     Err(ctx.err(
                         span,
@@ -449,7 +449,7 @@ impl TypeCheck for Sp<TermComputation> {
                 body.ana(ty.inner_clone(), ctx)?;
                 Step::Done(typ)
             }
-            TermComputation::Dtor(_)
+            | TermComputation::Dtor(_)
             | TermComputation::BeginBlock(_)
             | TermComputation::TyAppTerm(_)
             | TermComputation::MatchPack(_) => {

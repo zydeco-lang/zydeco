@@ -30,7 +30,7 @@ fn declaration_to_symbol(
     decl: &Sp<DeclSymbol<Declaration>>, document: &FullTextDocument,
 ) -> Vec<DocumentSymbol> {
     match &decl.inner.inner {
-        Declaration::Module(module_def) => {
+        | Declaration::Module(module_def) => {
             let children = module_def
                 .declarations
                 .iter()
@@ -38,7 +38,7 @@ fn declaration_to_symbol(
                 .collect();
 
             match &module_def.name {
-                Some(name_ref) => {
+                | Some(name_ref) => {
                     vec![name_to_symbol(
                         name_ref,
                         decl.span(),
@@ -47,17 +47,17 @@ fn declaration_to_symbol(
                         children,
                     )]
                 }
-                None => children,
+                | None => children,
             }
         }
-        Declaration::UseDef(_) => vec![],
-        Declaration::Data(data_def) => {
+        | Declaration::UseDef(_) => vec![],
+        | Declaration::Data(data_def) => {
             let children =
                 data_def.ctors.iter().map(|ctor| ctorv_to_symbol(&ctor.ctorv, document)).collect();
 
             vec![name_to_symbol(&data_def.name, decl.span(), document, SymbolKind::ENUM, children)]
         }
-        Declaration::Codata(codata_def) => {
+        | Declaration::Codata(codata_def) => {
             let children = codata_def
                 .dtors
                 .iter()
@@ -72,23 +72,23 @@ fn declaration_to_symbol(
                 children,
             )]
         }
-        Declaration::Alias(alias_def) => {
+        | Declaration::Alias(alias_def) => {
             // TODO: lookup symbol to display correct kind
             vec![name_to_symbol(&alias_def.name, decl.span(), document, SymbolKind::ENUM, vec![])]
         }
-        Declaration::Define(def) => {
+        | Declaration::Define(def) => {
             // TODO: handle local definitions
             let children = vec![];
 
             let kind = match def.0.params.len() {
-                0 => SymbolKind::CONSTANT,
-                _ => SymbolKind::FUNCTION,
+                | 0 => SymbolKind::CONSTANT,
+                | _ => SymbolKind::FUNCTION,
             };
 
             vec![name_to_symbol(&def.0.name.0, decl.span(), document, kind, children)]
         }
         // TODO: handle main, local definitions
-        Declaration::Main(_) => vec![],
+        | Declaration::Main(_) => vec![],
     }
 }
 

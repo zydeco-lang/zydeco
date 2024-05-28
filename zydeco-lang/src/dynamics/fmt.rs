@@ -25,8 +25,8 @@ impl FmtArgs for ds::Thunk {
 impl FmtArgs for ProgKont {
     fn fmt_args(&self, fargs: Args) -> String {
         match self {
-            ProgKont::Ret(v) => v.fmt_args(fargs),
-            ProgKont::ExitCode(c) => format!("exit({})", c),
+            | ProgKont::Ret(v) => v.fmt_args(fargs),
+            | ProgKont::ExitCode(c) => format!("exit({})", c),
         }
     }
 }

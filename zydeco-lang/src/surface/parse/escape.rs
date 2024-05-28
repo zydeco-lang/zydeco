@@ -15,11 +15,11 @@ pub fn apply_string_escapes(code: &str) -> String {
                 // literal, so we know it can't end in a backslash.
                 let (_, next_ch) = iter.next().unwrap();
                 ch = match next_ch {
-                    '\\' | '\"' => next_ch,
-                    'n' => '\n',
-                    'r' => '\r',
-                    't' => '\t',
-                    _ => next_ch,
+                    | '\\' | '\"' => next_ch,
+                    | 'n' => '\n',
+                    | 'r' => '\r',
+                    | 't' => '\t',
+                    | _ => next_ch,
                 }
             }
             text.push(ch);
@@ -34,13 +34,13 @@ pub fn apply_char_escapes(code: &str) -> char {
     iter.next();
     iter.next_back();
     match iter.next().unwrap() {
-        '\\' => match iter.next() {
-            Some('n') => '\n',
-            Some('r') => '\r',
-            Some('t') => '\t',
-            Some('\'') => '\'',
-            _ => '\\', //Error?
+        | '\\' => match iter.next() {
+            | Some('n') => '\n',
+            | Some('r') => '\r',
+            | Some('t') => '\t',
+            | Some('\'') => '\'',
+            | _ => '\\', //Error?
         },
-        c => c,
+        | c => c,
     }
 }

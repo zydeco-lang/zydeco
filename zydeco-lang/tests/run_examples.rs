@@ -15,8 +15,8 @@ use zydeco_lang::{dynamics::syntax as ds, prelude::*, statics::syntax as ss, zyd
 
 fn wrapper<T>(r: Result<T, String>) {
     match r {
-        Ok(_) => {}
-        Err(e) => {
+        | Ok(_) => {}
+        | Err(e) => {
             eprintln!("{}", e);
             panic!()
         }

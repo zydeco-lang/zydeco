@@ -41,32 +41,32 @@ impl Type {
 impl TypeApp<NeutralVar, RcType> {
     pub fn elim_thunk_syntax(&self) -> Option<Type> {
         match &self.tvar {
-            NeutralVar::Var(tvar) if tvar.name() == "Thunk" => {
+            | NeutralVar::Var(tvar) if tvar.name() == "Thunk" => {
                 Some(self.args.first().unwrap().inner_clone())
             }
-            _ => None,
+            | _ => None,
         }
     }
     pub fn elim_ret_syntax(&self) -> Option<Type> {
         match &self.tvar {
-            NeutralVar::Var(tvar) if tvar.name() == "Ret" => {
+            | NeutralVar::Var(tvar) if tvar.name() == "Ret" => {
                 Some(self.args.first().unwrap().inner_clone())
             }
-            _ => None,
+            | _ => None,
         }
     }
     pub fn elim_os_syntax(&self) -> Option<()> {
         match &self.tvar {
-            NeutralVar::Var(tvar) if tvar.name() == "OS" => Some(()),
-            _ => None,
+            | NeutralVar::Var(tvar) if tvar.name() == "OS" => Some(()),
+            | _ => None,
         }
     }
     pub fn elim_monad_syntax(&self) -> Option<Type> {
         match &self.tvar {
-            NeutralVar::Var(tvar) if tvar.name() == "Monad" => {
+            | NeutralVar::Var(tvar) if tvar.name() == "Monad" => {
                 Some(self.args.first().unwrap().inner_clone())
             }
-            _ => None,
+            | _ => None,
         }
     }
 }
@@ -156,7 +156,7 @@ impl TypeCheck for Sp<Type> {
         let ty = ctx.resolve_alias(ty, span)?;
         let ty_syn = ty.resolve()?;
         match ty_syn {
-            SynType::TypeAbs(TypeAbs { params, body }) => {
+            | SynType::TypeAbs(TypeAbs { params, body }) => {
                 let mut kd_params = Vec::new();
                 for (tv, kd) in params.iter() {
                     ctx.type_ctx.insert(tv.clone(), kd.inner_clone());
@@ -166,11 +166,11 @@ impl TypeCheck for Sp<Type> {
                 // Hack: merge arity to support currying
                 Ok(Step::Done(TypeArity { params: kd_params, kd }.into()))
             }
-            SynType::TypeApp(TypeApp { tvar, args }) => {
+            | SynType::TypeApp(TypeApp { tvar, args }) => {
                 // type constructor
                 let kd = {
                     match tvar {
-                        NeutralVar::Var(tvar) => {
+                        | NeutralVar::Var(tvar) => {
                             let Some(kd) = ctx.type_ctx.get(&tvar) else {
                                 Err(ctx.err(
                                     span,
@@ -180,15 +180,15 @@ impl TypeCheck for Sp<Type> {
                             };
                             kd
                         }
-                        NeutralVar::Abst(AbstVar(abs)) => {
+                        | NeutralVar::Abst(AbstVar(abs)) => {
                             let Some(kd) = ctx.abst_ctx.get(abs) else { unreachable!() };
                             kd
                         }
                     }
                 };
                 match kd {
-                    Kind::Base(kd) => return Ok(Step::Done(kd.clone().into())),
-                    Kind::TypeArity(TypeArity { params, kd }) => {
+                    | Kind::Base(kd) => return Ok(Step::Done(kd.clone().into())),
+                    | Kind::TypeArity(TypeArity { params, kd }) => {
                         bool_test(args.len() <= params.len(), || {
                             ctx.err(
                                 span,
@@ -213,23 +213,23 @@ impl TypeCheck for Sp<Type> {
                     }
                 }
             }
-            SynType::Arrow(Arrow(arg, ret)) => {
+            | SynType::Arrow(Arrow(arg, ret)) => {
                 arg.ana(KindBase::VType.into(), ctx.clone())?;
                 ret.ana(KindBase::CType.into(), ctx)?;
                 Ok(Step::Done(KindBase::CType.into()))
             }
-            SynType::Forall(Forall { param: (param, kd), ty }) => {
+            | SynType::Forall(Forall { param: (param, kd), ty }) => {
                 ctx.type_ctx.insert(param, kd.inner_clone());
                 ty.ana(KindBase::CType.into(), ctx)?;
                 Ok(Step::Done(KindBase::CType.into()))
             }
-            SynType::Exists(Exists { param: (param, kd), ty }) => {
+            | SynType::Exists(Exists { param: (param, kd), ty }) => {
                 ctx.type_ctx.insert(param, kd.inner_clone());
                 ty.ana(KindBase::VType.into(), ctx)?;
                 Ok(Step::Done(KindBase::VType.into()))
             }
-            SynType::AbstVar(AbstVar(abs)) => Ok(Step::Done(ctx.abst_ctx[abs].clone())),
-            SynType::Hole(_) => Err(ctx.err(span, NeedAnnotation { content: format!("hole") }))?,
+            | SynType::AbstVar(AbstVar(abs)) => Ok(Step::Done(ctx.abst_ctx[abs].clone())),
+            | SynType::Hole(_) => Err(ctx.err(span, NeedAnnotation { content: format!("hole") }))?,
         }
     }
     fn ana_step(
@@ -246,8 +246,8 @@ impl TypeCheck for Sp<Type> {
         let ty = ctx.resolve_alias(ty, span)?;
         let ty_syn = ty.resolve()?;
         match ty_syn {
-            SynType::Hole(_) => Ok(Step::Done(kd)),
-            SynType::TypeAbs(_)
+            | SynType::Hole(_) => Ok(Step::Done(kd)),
+            | SynType::TypeAbs(_)
             | SynType::TypeApp(_)
             | SynType::Arrow(_)
             | SynType::Forall(_)
@@ -266,7 +266,7 @@ impl Type {
         let typ = ctx.resolve_alias(self, &Span::dummy())?;
         let typ_syn = typ.resolve()?;
         match typ_syn {
-            SynType::TypeAbs(TypeAbs { params, body }) => {
+            | SynType::TypeAbs(TypeAbs { params, body }) => {
                 for (tv, _) in params.iter() {
                     diff.remove(tv);
                 }
@@ -278,31 +278,31 @@ impl Type {
                     .into(),
                 })
             }
-            SynType::TypeApp(TypeApp { tvar, mut args }) => {
+            | SynType::TypeApp(TypeApp { tvar, mut args }) => {
                 for arg in args.iter_mut() {
                     *arg = arg.try_map_rc_ref(|ty| ty.clone().subst(diff.clone(), ctx))?;
                 }
                 match tvar {
-                    NeutralVar::Var(tvar) => {
+                    | NeutralVar::Var(tvar) => {
                         if let Some(ty) = diff.get(&tvar) {
                             ty.clone().apply(args, ctx)
                         } else {
                             Ok(Type { synty: TypeApp { tvar: NeutralVar::Var(tvar), args }.into() })
                         }
                     }
-                    NeutralVar::Abst(abst_var) => Ok(Type {
+                    | NeutralVar::Abst(abst_var) => Ok(Type {
                         synty: TypeApp { tvar: NeutralVar::Abst(abst_var), args }.into(),
                     }),
                 }
             }
-            SynType::Arrow(Arrow(arg, ret)) => Ok(Type {
+            | SynType::Arrow(Arrow(arg, ret)) => Ok(Type {
                 synty: Arrow(
                     arg.try_map_rc_ref(|ty| ty.clone().subst(diff.clone(), ctx))?,
                     ret.try_map_rc_ref(|ty| ty.clone().subst(diff.clone(), ctx))?,
                 )
                 .into(),
             }),
-            SynType::Forall(Forall { param, ty }) => {
+            | SynType::Forall(Forall { param, ty }) => {
                 diff.remove(&param.0);
                 Ok(Type {
                     synty: Forall {
@@ -312,7 +312,7 @@ impl Type {
                     .into(),
                 })
             }
-            SynType::Exists(Exists { param, ty }) => {
+            | SynType::Exists(Exists { param, ty }) => {
                 diff.remove(&param.0);
                 Ok(Type {
                     synty: Exists {
@@ -322,14 +322,14 @@ impl Type {
                     .into(),
                 })
             }
-            SynType::AbstVar(_) | SynType::Hole(_) => Ok(typ),
+            | SynType::AbstVar(_) | SynType::Hole(_) => Ok(typ),
         }
     }
     pub(crate) fn apply(self, args: Vec<RcType>, ctx: &Ctx) -> Result<Self, TyckError> {
         let typ = ctx.resolve_alias(self, &Span::dummy())?;
         let typ_syn = typ.resolve()?;
         match typ_syn {
-            SynType::TypeAbs(TypeAbs { params, body }) => {
+            | SynType::TypeAbs(TypeAbs { params, body }) => {
                 // Hack: need to support curried type application
                 bool_test(args.len() == params.len(), || {
                     ctx.err(
@@ -344,14 +344,14 @@ impl Type {
                 let diff = Env::init(&params, &args, || unreachable!())?;
                 body.inner_clone().subst(diff, ctx)
             }
-            SynType::TypeApp(TypeApp { tvar, args: mut old_args }) => {
+            | SynType::TypeApp(TypeApp { tvar, args: mut old_args }) => {
                 old_args.extend(args);
                 Ok(Type { synty: TypeApp { tvar, args: old_args }.into() })
             }
-            SynType::AbstVar(abst_var) => {
+            | SynType::AbstVar(abst_var) => {
                 Ok(Type { synty: TypeApp { tvar: NeutralVar::Abst(abst_var), args }.into() })
             }
-            SynType::Arrow(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::Hole(_) => {
+            | SynType::Arrow(_) | SynType::Forall(_) | SynType::Exists(_) | SynType::Hole(_) => {
                 if args.is_empty() {
                     Ok(typ)
                 } else {

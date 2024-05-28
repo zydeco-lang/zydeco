@@ -44,27 +44,27 @@ impl MonadTrans for RcValue {
     fn trans(self, ctx: Ctx) -> Self {
         let span = self.span().clone();
         match self.inner_ref() {
-            TermValue::Annotation(Annotation { term, ty }) => {
+            | TermValue::Annotation(Annotation { term, ty }) => {
                 let term = term.clone().trans(ctx.clone());
                 span.make_rc(Annotation { term, ty: ty.clone() }.into())
             }
-            TermValue::Var(x) => {
+            | TermValue::Var(x) => {
                 let x = x.clone();
                 span.make_rc(TermValue::Var(x))
             }
-            TermValue::Thunk(Thunk(body)) => {
+            | TermValue::Thunk(Thunk(body)) => {
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Thunk(body).into())
             }
-            TermValue::Ctor(Ctor { ctorv, args }) => {
+            | TermValue::Ctor(Ctor { ctorv, args }) => {
                 let args = args.iter().map(|v| v.clone().trans(ctx.clone()));
                 span.make_rc(Ctor { ctorv: ctorv.clone(), args: args.collect() }.into())
             }
-            TermValue::Literal(lit) => {
+            | TermValue::Literal(lit) => {
                 let lit = lit.clone();
                 span.make_rc(TermValue::Literal(lit))
             }
-            TermValue::Pack(Pack { ty, body }) => {
+            | TermValue::Pack(Pack { ty, body }) => {
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Pack { ty: ty.clone(), body }.into())
             }
@@ -77,43 +77,43 @@ impl MonadTrans for RcComp {
         let span = self.span().clone();
         // find only begin-block and call lift
         match self.inner_ref() {
-            TermComputation::Annotation(Annotation { term, ty }) => {
+            | TermComputation::Annotation(Annotation { term, ty }) => {
                 let term = term.clone().trans(ctx.clone());
                 let ty = ty.clone();
                 span.make_rc(Annotation { term, ty }.into())
             }
-            TermComputation::Abs(Abs { param, body }) => {
+            | TermComputation::Abs(Abs { param, body }) => {
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Abs { param: param.clone(), body }.into())
             }
-            TermComputation::App(App { body, arg }) => {
+            | TermComputation::App(App { body, arg }) => {
                 let body = body.clone().trans(ctx.clone());
                 let arg = arg.clone().trans(ctx.clone());
                 span.make_rc(App { body, arg }.into())
             }
-            TermComputation::Ret(Ret(body)) => {
+            | TermComputation::Ret(Ret(body)) => {
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Ret(body).into())
             }
-            TermComputation::Do(Do { var, comp, body }) => {
+            | TermComputation::Do(Do { var, comp, body }) => {
                 let comp = comp.clone().trans(ctx.clone());
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Do { var: var.clone(), comp, body }.into())
             }
-            TermComputation::Force(Force(body)) => {
+            | TermComputation::Force(Force(body)) => {
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Force(body).into())
             }
-            TermComputation::Let(Let { var, def, body }) => {
+            | TermComputation::Let(Let { var, def, body }) => {
                 let def = def.clone().trans(ctx.clone());
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Let { var: var.clone(), def, body }.into())
             }
-            TermComputation::Rec(Rec { var, body }) => {
+            | TermComputation::Rec(Rec { var, body }) => {
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Rec { var: var.clone(), body }.into())
             }
-            TermComputation::Match(Match { scrut, arms }) => {
+            | TermComputation::Match(Match { scrut, arms }) => {
                 let scrut = scrut.clone().trans(ctx.clone());
                 let arms = arms.iter().map(|arm| {
                     let Matcher { ctorv, vars, body } = arm;
@@ -122,7 +122,7 @@ impl MonadTrans for RcComp {
                 });
                 span.make_rc(Match { scrut, arms: arms.collect() }.into())
             }
-            TermComputation::Comatch(Comatch { arms }) => {
+            | TermComputation::Comatch(Comatch { arms }) => {
                 let arms = arms.iter().map(|arm| {
                     let Comatcher { dtorv, body } = arm;
                     let body = body.clone().trans(ctx.clone());
@@ -130,23 +130,23 @@ impl MonadTrans for RcComp {
                 });
                 span.make_rc(Comatch { arms: arms.collect() }.into())
             }
-            TermComputation::Dtor(Dtor { body, dtorv }) => {
+            | TermComputation::Dtor(Dtor { body, dtorv }) => {
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Dtor { body, dtorv: dtorv.clone() }.into())
             }
-            TermComputation::BeginBlock(BeginBlock { monad, body }) => {
+            | TermComputation::BeginBlock(BeginBlock { monad, body }) => {
                 span.make_rc(body.clone().lift(monad.clone(), ctx))
             }
-            TermComputation::TyAbsTerm(Abs { param, body }) => {
+            | TermComputation::TyAbsTerm(Abs { param, body }) => {
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(Abs { param: param.clone(), body }.into())
             }
-            TermComputation::TyAppTerm(App { body, arg }) => {
+            | TermComputation::TyAppTerm(App { body, arg }) => {
                 let body = body.clone().trans(ctx.clone());
                 let arg = arg.clone();
                 span.make_rc(App { body, arg }.into())
             }
-            TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
+            | TermComputation::MatchPack(MatchPack { scrut, tvar, var, body }) => {
                 let scrut = scrut.clone().trans(ctx.clone());
                 let body = body.clone().trans(ctx.clone());
                 span.make_rc(MatchPack { scrut, tvar: tvar.clone(), var: var.clone(), body }.into())

@@ -3,7 +3,7 @@ use super::*;
 impl MonadTransType for Type {
     fn lift(&self, ty_m: Type, ctx: Ctx, span: &Span) -> Result<Type, TyckError> {
         let synty = match &self.synty {
-            SynType::TypeAbs(_) => {
+            | SynType::TypeAbs(_) => {
                 // Type abstraction would not be of kind "CType"
                 Err(ctx.err(
                     span,
@@ -14,7 +14,7 @@ impl MonadTransType for Type {
                     },
                 ))?
             }
-            SynType::TypeApp(TypeApp { tvar, args: old_args }) => {
+            | SynType::TypeApp(TypeApp { tvar, args: old_args }) => {
                 let mut args = Vec::new();
                 for arg in old_args {
                     args.push(span.make_rc(arg.inner_ref().lift(
@@ -24,33 +24,33 @@ impl MonadTransType for Type {
                     )?));
                 }
                 let tvar = match tvar {
-                    NeutralVar::Var(tv) if tv.name() == "Ret" => {
+                    | NeutralVar::Var(tv) if tv.name() == "Ret" => {
                         // Substitute if it's Ret
                         return ty_m.apply(args, &ctx);
                     }
-                    _ => tvar.clone(),
+                    | _ => tvar.clone(),
                 };
                 SynType::TypeApp(TypeApp { tvar, args })
             }
-            SynType::Arrow(Arrow(ty_in, ty_out)) => {
+            | SynType::Arrow(Arrow(ty_in, ty_out)) => {
                 let ty_in =
                     span.make_rc(ty_in.inner_ref().lift(ty_m.clone(), ctx.clone(), span)?);
                 let ty_out = span.make_rc(ty_out.inner_ref().lift(ty_m, ctx, span)?);
                 SynType::Arrow(Arrow(ty_in, ty_out))
             }
-            SynType::Forall(Forall { param, ty }) => {
+            | SynType::Forall(Forall { param, ty }) => {
                 // Hack: shadowing not considered
                 let param = param.clone();
                 let ty = span.make_rc(ty.inner_ref().lift(ty_m, ctx.clone(), span)?);
                 SynType::Forall(Forall { param, ty })
             }
-            SynType::Exists(Exists { param, ty }) => {
+            | SynType::Exists(Exists { param, ty }) => {
                 // Hack: shadowing not considered
                 let param = param.clone();
                 let ty = span.make_rc(ty.inner_ref().lift(ty_m, ctx.clone(), span)?);
                 SynType::Forall(Forall { param, ty })
             }
-            SynType::AbstVar(_) | SynType::Hole(_) => self.synty.clone(),
+            | SynType::AbstVar(_) | SynType::Hole(_) => self.synty.clone(),
         };
         Ok(Type { synty })
     }
@@ -80,8 +80,8 @@ impl MonadTransType for Type {
             .into()
         };
         match &self.synty {
-            SynType::TypeAbs(_) => unreachable!(),
-            SynType::TypeApp(app) => {
+            | SynType::TypeAbs(_) => unreachable!(),
+            | SynType::TypeApp(app) => {
                 // using return guard pattern...
                 let NeutralVar::Var(tvar) = app.tvar.clone() else {
                     unreachable!("Encounter abstract type on generating algebra of relative monad")
@@ -142,7 +142,7 @@ impl MonadTransType for Type {
                 // there shouldn't be any other cases for type applications
                 unreachable!()
             }
-            SynType::Arrow(Arrow(_ty_in, ty_out)) => {
+            | SynType::Arrow(Arrow(_ty_in, ty_out)) => {
                 // Arrow: penetrate into the fn abstraction
                 let (var_fn_arg, value_fn_arg) = mk_var_value(format!("$fn_arg"));
                 let alg_body =
@@ -169,16 +169,16 @@ impl MonadTransType for Type {
                 let abs = span.make_rc(Abs { param: var_fn_arg, body }.into());
                 Ok(alg_template(abs))
             }
-            SynType::Forall(Forall { param: _, ty }) => {
+            | SynType::Forall(Forall { param: _, ty }) => {
                 // Hack: since types are erased, we can ignore the type parameter
                 ty.inner_ref().alg(m, ctx, span)
             }
             // there shouldn't be any other cases since we're only dealing with:
             // && concrete types
             // && types of kind CType
-            SynType::Exists(_) => unreachable!(),
-            SynType::AbstVar(_) => unreachable!(),
-            SynType::Hole(_) => unreachable!(),
+            | SynType::Exists(_) => unreachable!(),
+            | SynType::AbstVar(_) => unreachable!(),
+            | SynType::Hole(_) => unreachable!(),
         }
     }
 }

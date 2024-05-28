@@ -50,16 +50,16 @@ impl Elaboration<ps::Kind> for Kind {
     type Error = TyckErrorItem;
     fn elab(kd: ps::Kind) -> Result<Self, Self::Error> {
         match kd {
-            ps::Kind::Base(kd) => Ok(Kind::Base(kd)),
-            ps::Kind::Arrow(ps::Arrow(k, kd)) => {
+            | ps::Kind::Base(kd) => Ok(Kind::Base(kd)),
+            | ps::Kind::Arrow(ps::Arrow(k, kd)) => {
                 let kd: Sp<Kind> = Elaboration::elab(*kd)?;
                 match kd.inner {
-                    Kind::Base(_) => Ok(TypeArity {
+                    | Kind::Base(_) => Ok(TypeArity {
                         params: vec![k.try_map(Elaboration::elab)?],
                         kd: Box::new(kd),
                     }
                     .into()),
-                    Kind::TypeArity(TypeArity { mut params, kd }) => {
+                    | Kind::TypeArity(TypeArity { mut params, kd }) => {
                         params.insert(0, k.try_map(Elaboration::elab)?);
                         Ok(TypeArity { params, kd }.into())
                     }
@@ -85,20 +85,20 @@ fn desugar_gen_let(
         return Ok((name, ty_rc, None));
     };
     match (rec, fun, def.inner) {
-        (false, false, ps::Term::Value(value)) => {
+        | (false, false, ps::Term::Value(value)) => {
             Ok((name, ty_rc, Some(def.info.make_rc(Elaboration::elab(value)?))))
         }
-        (_, _, ps::Term::Value(_)) => Err(TyckErrorItem::KindMismatch {
+        | (_, _, ps::Term::Value(_)) => Err(TyckErrorItem::KindMismatch {
             context: format!("desugaring let"),
             expected: KindBase::CType.into(),
             found: KindBase::VType.into(),
         }),
-        (false, false, ps::Term::Computation(_)) => Err(TyckErrorItem::KindMismatch {
+        | (false, false, ps::Term::Computation(_)) => Err(TyckErrorItem::KindMismatch {
             context: format!("desugaring let"),
             expected: KindBase::VType.into(),
             found: KindBase::CType.into(),
         }),
-        (rec, fun, ps::Term::Computation(body)) => {
+        | (rec, fun, ps::Term::Computation(body)) => {
             let mut body = Box::new(def.info.make(body));
             if fun {
                 let param = params.clone().into_iter().collect();
@@ -114,7 +114,7 @@ fn desugar_gen_let(
             };
             for param in params.iter().rev() {
                 match param {
-                    ps::Pattern::TypePattern((tvar, kd_param)) => {
+                    | ps::Pattern::TypePattern((tvar, kd_param)) => {
                         let Some(kd_dom) = kd_param else {
                             Err(TyckErrorItem::NeedAnnotation {
                                 content: format!("gen let type variable elabrotion"),
@@ -125,7 +125,7 @@ fn desugar_gen_let(
                             .span()
                             .make_rc(Forall { param: (tvar.into(), kd_dom.clone()), ty }.into())
                     }
-                    ps::Pattern::TermPattern((var, ty_param)) => {
+                    | ps::Pattern::TermPattern((var, ty_param)) => {
                         let ty_dom = if let Some(ty_dom) = ty_param {
                             ty_dom.to_owned().try_map_rc(Elaboration::elab)?
                         } else {
@@ -160,14 +160,14 @@ fn desugar_fn(
     let mut func = Elaboration::elab(body.inner)?;
     for param in param.into_iter().rev() {
         match param {
-            ps::Pattern::TypePattern((tvar, kd)) => {
+            | ps::Pattern::TypePattern((tvar, kd)) => {
                 let kd = match kd {
-                    Some(kd) => Some(kd.try_map(Elaboration::elab)?),
-                    None => None,
+                    | Some(kd) => Some(kd.try_map(Elaboration::elab)?),
+                    | None => None,
                 };
                 func = Abs { param: (tvar.into(), kd), body: body.info.make_rc(func) }.into()
             }
-            ps::Pattern::TermPattern((var, ty)) => {
+            | ps::Pattern::TermPattern((var, ty)) => {
                 func = desugar_fn_one(
                     (TermV::new(var.ident.inner, var.info), ty),
                     body.info.make_rc(func),
@@ -182,10 +182,10 @@ impl Elaboration<ps::Type> for Type {
     type Error = TyckErrorItem;
     fn elab(ty: ps::Type) -> Result<Self, TyckErrorItem> {
         Ok(match ty {
-            ps::Type::Basic(tvar) => {
+            | ps::Type::Basic(tvar) => {
                 TypeApp { tvar: TypeV::from(tvar).into(), args: vec![] }.into()
             }
-            ps::Type::App(t) => {
+            | ps::Type::App(t) => {
                 let ps::TypeApp(t1, t2) = t;
                 let t1: Type = Elaboration::elab(t1.inner())?;
                 let t2 = t2.try_map_rc(Elaboration::elab)?;
@@ -199,13 +199,13 @@ impl Elaboration<ps::Type> for Type {
                 t1.args.push(t2);
                 t1.into()
             }
-            ps::Type::Arrow(t) => {
+            | ps::Type::Arrow(t) => {
                 let ps::Arrow(t1, t2) = t;
                 let t1 = t1.try_map_rc(Elaboration::elab)?;
                 let t2 = t2.try_map_rc(Elaboration::elab)?;
                 Arrow(t1, t2).into()
             }
-            ps::Type::Forall(ps::Forall { param: params, ty: t }) => {
+            | ps::Type::Forall(ps::Forall { param: params, ty: t }) => {
                 let mut t = t.try_map(Elaboration::elab)?;
                 for (tvar, kd) in params.into_iter().rev() {
                     let kd = kd.ok_or_else(|| TyckErrorItem::NeedAnnotation {
@@ -216,7 +216,7 @@ impl Elaboration<ps::Type> for Type {
                 }
                 t.inner
             }
-            ps::Type::Exists(ps::Exists { param: params, ty: t }) => {
+            | ps::Type::Exists(ps::Exists { param: params, ty: t }) => {
                 let mut t = t.try_map(Elaboration::elab)?;
                 for (tvar, kd) in params.into_iter().rev() {
                     let kd = kd.ok_or_else(|| TyckErrorItem::NeedAnnotation {
@@ -227,7 +227,7 @@ impl Elaboration<ps::Type> for Type {
                 }
                 t.inner
             }
-            ps::Type::TypeAbs(ps::TypeAbs { params: params_, body: t }) => {
+            | ps::Type::TypeAbs(ps::TypeAbs { params: params_, body: t }) => {
                 let mut params = vec![];
                 for (tvar, kd) in params_ {
                     let kd = kd.ok_or_else(|| TyckErrorItem::NeedAnnotation {
@@ -238,7 +238,7 @@ impl Elaboration<ps::Type> for Type {
                 let t = t.try_map_rc(Elaboration::elab)?;
                 TypeAbs { params, body: t }.into()
             }
-            ps::Type::Hole(ps::Hole) => Hole.into(),
+            | ps::Type::Hole(ps::Hole) => Hole.into(),
         })
     }
 }
@@ -247,13 +247,13 @@ impl Elaboration<ps::TermValue> for TermValue {
     type Error = TyckErrorItem;
     fn elab(value: ps::TermValue) -> Result<Self, TyckErrorItem> {
         Ok(match value {
-            ps::TermValue::TermAnn(Annotation { term: body, ty }) => Annotation {
+            | ps::TermValue::TermAnn(Annotation { term: body, ty }) => Annotation {
                 term: body.try_map_rc(Elaboration::elab)?,
                 ty: ty.try_map_rc(Elaboration::elab)?,
             }
             .into(),
-            ps::TermValue::Var(x) => TermV::from(x).into(),
-            ps::TermValue::Thunk(Thunk(body)) => {
+            | ps::TermValue::Var(x) => TermV::from(x).into(),
+            | ps::TermValue::Thunk(Thunk(body)) => {
                 let span = body.span().clone();
                 let body = Thunk(body.try_map_rc(Elaboration::elab)?).into();
                 Annotation {
@@ -262,13 +262,13 @@ impl Elaboration<ps::TermValue> for TermValue {
                 }
                 .into()
             }
-            ps::TermValue::Ctor(Ctor { ctorv: ctor, args }) => Ctor {
+            | ps::TermValue::Ctor(Ctor { ctorv: ctor, args }) => Ctor {
                 ctorv: ctor,
                 args: Vec::<_>::elab(args)?.into_iter().map(|arg| rc!(arg)).collect(),
             }
             .into(),
-            ps::TermValue::Literal(t) => t.into(),
-            ps::TermValue::Pack(ps::Pack { ty, body }) => {
+            | ps::TermValue::Literal(t) => t.into(),
+            | ps::TermValue::Pack(ps::Pack { ty, body }) => {
                 let ty = ty.try_map_rc(Elaboration::elab)?;
                 let body = body.try_map_rc(Elaboration::elab)?;
                 Pack { ty, body }.into()
@@ -281,18 +281,18 @@ impl Elaboration<ps::TermComputation> for TermComputation {
     type Error = TyckErrorItem;
     fn elab(comp: ps::TermComputation) -> Result<Self, TyckErrorItem> {
         Ok(match comp {
-            ps::TermComputation::TermAnn(Annotation { term: body, ty }) => Annotation {
+            | ps::TermComputation::TermAnn(Annotation { term: body, ty }) => Annotation {
                 term: body.try_map_rc(Elaboration::elab)?,
                 ty: ty.try_map_rc(Elaboration::elab)?,
             }
             .into(),
-            ps::TermComputation::Abs(t) => desugar_fn(t)?,
-            ps::TermComputation::App(ps::App { body, arg }) => {
+            | ps::TermComputation::Abs(t) => desugar_fn(t)?,
+            | ps::TermComputation::App(ps::App { body, arg }) => {
                 let fun: RcComp = body.try_map_rc(Elaboration::elab)?;
                 let arg: RcValue = arg.try_map_rc(Elaboration::elab)?;
                 App { body: fun, arg }.into()
             }
-            ps::TermComputation::Ret(Ret(body)) => {
+            | ps::TermComputation::Ret(Ret(body)) => {
                 let span = body.span().clone();
                 let body: TermComputation = Ret(body.try_map_rc(Elaboration::elab)?).into();
                 Annotation {
@@ -301,10 +301,10 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 }
                 .into()
             }
-            ps::TermComputation::Force(Force(body)) => {
+            | ps::TermComputation::Force(Force(body)) => {
                 Force(body.try_map_rc(Elaboration::elab)?).into()
             }
-            ps::TermComputation::Let(ps::Let {
+            | ps::TermComputation::Let(ps::Let {
                 gen: ps::GenLet { rec, fun, name, params, def },
                 body,
             }) => {
@@ -318,7 +318,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let body = body.try_map_rc(Elaboration::elab)?;
                 Let { var, def, body }.into()
             }
-            ps::TermComputation::Do(ps::Do { var: (var, ty), comp, body }) => {
+            | ps::TermComputation::Do(ps::Do { var: (var, ty), comp, body }) => {
                 let var = TermV::from(var);
                 let span = comp.span().clone();
                 let mut comp = comp.try_map_rc(Elaboration::elab)?;
@@ -330,7 +330,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 let body = body.try_map_rc(Elaboration::elab)?;
                 Do { var, comp, body }.into()
             }
-            ps::TermComputation::Rec(Rec { var: (var, ty), body }) => {
+            | ps::TermComputation::Rec(Rec { var: (var, ty), body }) => {
                 let var = TermV::from(var);
                 let body = body.try_map_rc(Elaboration::elab)?;
                 let span = body.span().clone();
@@ -356,7 +356,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                 }
                 body
             }
-            ps::TermComputation::Match(ps::Match { scrut, arms }) => {
+            | ps::TermComputation::Match(ps::Match { scrut, arms }) => {
                 let scrut = (scrut).try_map_rc(Elaboration::elab)?;
                 let arms = arms
                     .into_iter()
@@ -369,7 +369,7 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                     .collect::<Result<_, TyckErrorItem>>()?;
                 Match { scrut, arms }.into()
             }
-            ps::TermComputation::Comatch(ps::Comatch { arms }) => {
+            | ps::TermComputation::Comatch(ps::Comatch { arms }) => {
                 let arms = arms
                     .into_iter()
                     .map(|arm| {
@@ -380,21 +380,21 @@ impl Elaboration<ps::TermComputation> for TermComputation {
                     .collect::<Result<Vec<_>, TyckErrorItem>>()?;
                 Comatch { arms }.into()
             }
-            ps::TermComputation::Dtor(ps::Dtor { body, dtorv }) => {
+            | ps::TermComputation::Dtor(ps::Dtor { body, dtorv }) => {
                 let body = body.try_map_rc(Elaboration::elab)?;
                 Dtor { body, dtorv }.into()
             }
-            ps::TermComputation::BeginBlock(ps::BeginBlock { monad, body }) => {
+            | ps::TermComputation::BeginBlock(ps::BeginBlock { monad, body }) => {
                 let monad = monad.try_map_rc(Elaboration::elab)?;
                 let body = body.try_map_rc(Elaboration::elab)?;
                 BeginBlock { monad, body }.into()
             }
-            ps::TermComputation::TyAppTerm(ps::App { body, arg }) => {
+            | ps::TermComputation::TyAppTerm(ps::App { body, arg }) => {
                 let body = body.try_map_rc(Elaboration::elab)?;
                 let arg: RcType = arg.try_map_rc(Elaboration::elab)?;
                 App { body, arg }.into()
             }
-            ps::TermComputation::MatchPack(ps::MatchPack { scrut, tvar, var, body }) => {
+            | ps::TermComputation::MatchPack(ps::MatchPack { scrut, tvar, var, body }) => {
                 let tvar = tvar.into();
                 let var = var.into();
                 let scrut = (scrut).try_map_rc(Elaboration::elab)?;
@@ -409,8 +409,8 @@ impl Elaboration<ps::Term> for Term {
     type Error = TyckErrorItem;
     fn elab(term: ps::Term) -> Result<Self, TyckErrorItem> {
         Ok(match term {
-            ps::Term::Value(t) => Term::Value(Elaboration::elab(t)?),
-            ps::Term::Computation(t) => Term::Computation(Elaboration::elab(t)?),
+            | ps::Term::Value(t) => Term::Value(Elaboration::elab(t)?),
+            | ps::Term::Computation(t) => Term::Computation(Elaboration::elab(t)?),
         })
     }
 }
@@ -531,7 +531,7 @@ impl Elaboration<ps::TopLevel> for Module {
         for declaration in declarations {
             let DeclSymbol { public, external, inner } = declaration.inner;
             match inner {
-                ps::Declaration::Module(m) => {
+                | ps::Declaration::Module(m) => {
                     let Module {
                         name: _,
                         data: ds,
@@ -546,17 +546,17 @@ impl Elaboration<ps::TopLevel> for Module {
                     define.extend(defs);
                     define_ext.extend(defexts);
                 }
-                ps::Declaration::UseDef(_d) => {}
-                ps::Declaration::Data(d) => {
+                | ps::Declaration::UseDef(_d) => {}
+                | ps::Declaration::Data(d) => {
                     data.push(DeclSymbol { public, external, inner: Elaboration::elab(d)? })
                 }
-                ps::Declaration::Codata(d) => {
+                | ps::Declaration::Codata(d) => {
                     codata.push(DeclSymbol { public, external, inner: Elaboration::elab(d)? })
                 }
-                ps::Declaration::Alias(d) => {
+                | ps::Declaration::Alias(d) => {
                     alias.push(DeclSymbol { public, external, inner: Elaboration::elab(d)? })
                 }
-                ps::Declaration::Define(d) => {
+                | ps::Declaration::Define(d) => {
                     let ps::Define(ps::GenLet { rec, fun, name, params, def }) = d;
                     let (name, ty, te) = desugar_gen_let(rec, fun, name, params, def)?;
                     if external {
@@ -574,7 +574,7 @@ impl Elaboration<ps::TopLevel> for Module {
                         define.push(DeclSymbol { public, external, inner: Define { name, def } })
                     }
                 }
-                ps::Declaration::Main(ps::Main { entry: _ }) => {
+                | ps::Declaration::Main(ps::Main { entry: _ }) => {
                     Err(TyckErrorItem::MainEntryInModule)?
                 }
             }
@@ -592,13 +592,13 @@ impl Elaboration<ps::TopLevel> for Program {
         let mut main_entry = None;
         for decl in declarations {
             match decl.inner.inner {
-                ps::Declaration::Main(ps::Main { entry }) => {
+                | ps::Declaration::Main(ps::Main { entry }) => {
                     if main_entry.is_some() {
                         Err(TyckErrorItem::MultipleMainEntries)?
                     }
                     main_entry = Some(entry)
                 }
-                _ => non_main.push(decl),
+                | _ => non_main.push(decl),
             }
         }
         let Some(entry) = main_entry else { Err(TyckErrorItem::NoMainEntry)? };

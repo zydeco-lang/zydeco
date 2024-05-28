@@ -75,8 +75,8 @@ impl Package {
                 .ok_or_else(|| SurfaceError::PackageFileNotFound(path.clone()))?
                 .to_path_buf(),
             ..FileIO::new(path.clone()).load().map_err(|e| match e.kind() {
-                io::ErrorKind::NotFound => SurfaceError::PackageFileNotFound(path),
-                _ => SurfaceError::PackageFileInvalid(path, e),
+                | io::ErrorKind::NotFound => SurfaceError::PackageFileNotFound(path),
+                | _ => SurfaceError::PackageFileInvalid(path, e),
             })?
         })
     }
@@ -159,13 +159,13 @@ impl Package {
                             .map(|decl| {
                                 let decl = &pack.arena.decls[*decl];
                                 match decl {
-                                    sc::Declaration::Alias(sc::Alias { binder, .. }) => {
+                                    | sc::Declaration::Alias(sc::Alias { binder, .. }) => {
                                         binder.ugly(&Formatter::new(&pack.arena))
                                     }
-                                    sc::Declaration::Extern(sc::Extern { binder, .. }) => {
+                                    | sc::Declaration::Extern(sc::Extern { binder, .. }) => {
                                         binder.ugly(&Formatter::new(&pack.arena))
                                     }
-                                    sc::Declaration::Main(_) => "$main".into(),
+                                    | sc::Declaration::Main(_) => "$main".into(),
                                 }
                             })
                             .collect::<Vec<_>>()

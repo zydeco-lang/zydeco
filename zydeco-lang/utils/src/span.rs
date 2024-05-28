@@ -109,11 +109,11 @@ impl Span {
     }
     pub fn under_loc_ctx(self, loc: &LocationCtx) -> Self {
         match loc {
-            LocationCtx::File(info) => {
+            | LocationCtx::File(info) => {
                 self.set_info(info);
                 self
             }
-            LocationCtx::Plain => self,
+            | LocationCtx::Plain => self,
         }
     }
 }

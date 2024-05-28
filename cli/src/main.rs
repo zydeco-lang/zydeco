@@ -7,15 +7,15 @@ use zydeco_lang::{
 
 fn main() -> Result<(), ()> {
     let res = match Cli::parse().command {
-        Commands::Run { files, dry, verbose, args } => run_files(files, dry, verbose, args),
-        Commands::Check { files, verbose } => run_files(files, true, verbose, vec![]),
-        Commands::Repl { .. } => Repl::launch(),
+        | Commands::Run { files, dry, verbose, args } => run_files(files, dry, verbose, args),
+        | Commands::Check { files, verbose } => run_files(files, true, verbose, vec![]),
+        | Commands::Repl { .. } => Repl::launch(),
     };
     match res {
-        Ok(x) => {
+        | Ok(x) => {
             std::process::exit(x);
         }
-        Err(e) => {
+        | Err(e) => {
             eprintln!("Error: {}", e);
             Ok(())
         }

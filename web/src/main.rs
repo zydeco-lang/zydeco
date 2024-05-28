@@ -29,8 +29,8 @@ fn ZydecoUI() -> Html {
         let cur_buf_hdl: UseStateHandle<String> = cur_buf;
         let display_hdl = display_text.clone();
         Callback::from(move |_: MouseEvent| match run(&cur_buf_hdl) {
-            Ok(s) => display_hdl.set(s),
-            Err(e) => display_hdl.set(format!("Error: {}", e)),
+            | Ok(s) => display_hdl.set(s),
+            | Err(e) => display_hdl.set(format!("Error: {}", e)),
         })
     };
 
@@ -53,8 +53,8 @@ fn run(input: &str) -> Result<String, String> {
     let p = ZydecoFile::link(p.inner)?;
     let p = ZydecoFile::eval_os(p, &[]);
     let s = match p.entry {
-        ds::ProgKont::Ret(v) => v.fmt(),
-        ds::ProgKont::ExitCode(i) => format!("exit code: {}", i),
+        | ds::ProgKont::Ret(v) => v.fmt(),
+        | ds::ProgKont::ExitCode(i) => format!("exit code: {}", i),
     };
     Ok(s)
 }

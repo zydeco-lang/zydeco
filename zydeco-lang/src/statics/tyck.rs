@@ -72,13 +72,13 @@ pub trait TypeCheck: SpanView + Sized {
     fn tyck(mut step: Step<(Self::Ctx, &Self), Self::Out>) -> Result<Self::Out, TyckError> {
         loop {
             match step {
-                Step::SynMode((ctx, term)) => {
+                | Step::SynMode((ctx, term)) => {
                     step = term.syn_step(ctx)?;
                 }
-                Step::AnaMode((ctx, term), out) => {
+                | Step::AnaMode((ctx, term), out) => {
                     step = term.ana_step(out, ctx)?;
                 }
-                Step::Done(out) => {
+                | Step::Done(out) => {
                     break Ok(out);
                 }
             }
@@ -107,8 +107,8 @@ fn bool_test<E>(b: bool, f: impl FnOnce() -> E) -> Result<(), E> {
 pub(crate) fn syn_term(term: Sp<Term>, ctx: Ctx) -> Result<Type, TyckError> {
     let span = term.span().clone();
     match term.inner() {
-        Term::Value(t) => span.make(t).syn(ctx),
-        Term::Computation(t) => span.make(t).syn(ctx),
+        | Term::Value(t) => span.make(t).syn(ctx),
+        | Term::Computation(t) => span.make(t).syn(ctx),
     }
 }
 

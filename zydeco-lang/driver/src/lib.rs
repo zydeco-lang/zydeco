@@ -54,7 +54,7 @@ impl BuildSystem {
         let mut deps_new = Vec::new();
         for dep in &pack.deps {
             match dep {
-                Dependency::Local(path) => {
+                | Dependency::Local(path) => {
                     let path = path.canonicalize()?;
                     if let Some(id) = self.seen.get(&path) {
                         deps_old.push(*id);

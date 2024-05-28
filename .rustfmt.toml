@@ -12,6 +12,6 @@ fn_params_layout = "Compressed"
 # imports_granularity = "Crate"
 reorder_modules = false
 
-# match_arm_leading_pipes = "Never"
+match_arm_leading_pipes = "Always"
 # wrap_comments = true
 # overflow_delimited_expr = true

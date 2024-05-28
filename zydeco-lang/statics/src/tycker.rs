@@ -48,11 +48,11 @@ impl Annotated for su::Declaration {
     fn annotated(&self, tycker: &Tycker) -> Option<su::TermId> {
         use su::Declaration as Decl;
         match self {
-            Decl::Alias(su::Alias { binder, bindee }) => {
+            | Decl::Alias(su::Alias { binder, bindee }) => {
                 let _ = binder;
                 tycker.scoped.terms[*bindee].annotated(tycker)
             }
-            Decl::Extern(su::Extern { comp: _, binder, params, ty }) => {
+            | Decl::Extern(su::Extern { comp: _, binder, params, ty }) => {
                 assert!(params.is_none());
                 let _ = binder;
                 if let Some(ty) = ty {
@@ -61,7 +61,7 @@ impl Annotated for su::Declaration {
                     None
                 }
             }
-            Decl::Main(su::Main(_term)) => None,
+            | Decl::Main(su::Main(_term)) => None,
         }
     }
 }
@@ -69,16 +69,16 @@ impl Annotated for su::Term<su::DefId> {
     fn annotated(&self, tycker: &Tycker) -> Option<su::TermId> {
         use su::Term as Tm;
         match self {
-            Tm::Internal(_) => unreachable!(),
-            Tm::Sealed(term) => {
+            | Tm::Internal(_) => unreachable!(),
+            | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;
                 tycker.scoped.terms[*term].annotated(tycker)
             }
-            Tm::Ann(term) => {
+            | Tm::Ann(term) => {
                 let su::Ann { tm: _, ty } = term;
                 tycker.scoped.terms[*ty].annotated(tycker)
             }
-            Tm::Var(_)
+            | Tm::Var(_)
             | Tm::Hole(_)
             | Tm::Paren(_)
             | Tm::Abs(_)
@@ -110,12 +110,12 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
         let SccDeclarations(decls) = self;
         let decls: &HashSet<_> = decls;
         match decls.len() {
-            0 => unreachable!(),
-            1 => {
+            | 0 => unreachable!(),
+            | 1 => {
                 // just synthesize
                 todo!()
             }
-            _ => {
+            | _ => {
                 // mutually recursive declarations must..
                 // 1. all be types, and
                 // 2. all have kind annotations

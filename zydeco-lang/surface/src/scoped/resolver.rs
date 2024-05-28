@@ -31,23 +31,23 @@ impl Binders for PatId {
     fn binders<'f>(&self, arena: &'f Self::Arena) -> im::HashMap<VarName, DefId> {
         let pat = &arena.pats[*self];
         match pat {
-            Pattern::Ann(pat) => {
+            | Pattern::Ann(pat) => {
                 let Ann { tm, ty: _ } = pat;
                 tm.binders(arena)
             }
-            Pattern::Hole(pat) => {
+            | Pattern::Hole(pat) => {
                 let Hole = pat;
                 im::HashMap::new()
             }
-            Pattern::Var(pat) => {
+            | Pattern::Var(pat) => {
                 let def = pat;
                 im::hashmap! { arena.defs[*def].clone() => *def }
             }
-            Pattern::Ctor(pat) => {
+            | Pattern::Ctor(pat) => {
                 let Ctor(_ctor, args) = pat;
                 args.binders(arena)
             }
-            Pattern::Paren(pat) => {
+            | Pattern::Paren(pat) => {
                 let Paren(pats) = pat;
                 let mut res = im::HashMap::new();
                 for binder in pats {
@@ -194,7 +194,7 @@ impl Resolve for TopLevel {
         for id in decls {
             let Modifiers { public: _, inner } = &resolver.bitter.decls[*id];
             match inner {
-                Declaration::Alias(decl) => {
+                | Declaration::Alias(decl) => {
                     let Alias { binder, bindee: _ } = decl;
                     resolver.check_duplicate_and_update_global(
                         id,
@@ -202,7 +202,7 @@ impl Resolve for TopLevel {
                         &mut global,
                     )?;
                 }
-                Declaration::Extern(decl) => {
+                | Declaration::Extern(decl) => {
                     let Extern { comp: _, binder, params: _, ty: _ } = decl;
                     let binders = binder.binders(&resolver.bitter);
                     // check if it's a primitive and (later in terms) update the term_to_def
@@ -255,7 +255,7 @@ impl Resolve for TopLevel {
                     }
                     resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }
-                Declaration::Main(_) => {}
+                | Declaration::Main(_) => {}
             }
         }
         // within each term (when we also count types as terms),
@@ -294,7 +294,7 @@ impl Resolve for DeclId {
         let local = Local { under: *self, ..Local::default() };
         let Modifiers { public: _, inner } = decl;
         match inner.clone() {
-            Declaration::Alias(decl) => {
+            | Declaration::Alias(decl) => {
                 let Alias { binder, bindee } = decl;
                 // resolve bindee first
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
@@ -302,7 +302,7 @@ impl Resolve for DeclId {
                 // since it's global and has been collected already
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
             }
-            Declaration::Extern(decl) => {
+            | Declaration::Extern(decl) => {
                 let Extern { comp: _, binder, params, ty } = decl;
                 // no more bindee, but we still need to resolve the binders just for the type mentioned
                 if let Some(ty) = ty {
@@ -313,7 +313,7 @@ impl Resolve for DeclId {
                 }
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
             }
-            Declaration::Main(decl) => {
+            | Declaration::Main(decl) => {
                 let Main(term) = decl;
                 let () = term.resolve(resolver, (local.clone(), global))?;
             }
@@ -342,25 +342,25 @@ impl Resolve for PatId {
     ) -> Result<Self::Out> {
         let pat = resolver.bitter.pats[*self].clone();
         let local = match &pat {
-            Pattern::Ann(pat) => {
+            | Pattern::Ann(pat) => {
                 let Ann { tm, ty } = pat;
                 let () = ty.resolve(resolver, (local.clone(), global))?;
                 tm.resolve(resolver, (local, global))?
             }
-            Pattern::Hole(pat) => {
+            | Pattern::Hole(pat) => {
                 let Hole = pat;
                 local
             }
-            Pattern::Var(def) => {
+            | Pattern::Var(def) => {
                 let () = def.resolve(resolver, ())?;
                 local.var_to_def.insert(resolver.bitter.defs[*def].clone(), *def);
                 local
             }
-            Pattern::Ctor(pat) => {
+            | Pattern::Ctor(pat) => {
                 let Ctor(_ctor, args) = pat;
                 args.resolve(resolver, (local, global))?
             }
-            Pattern::Paren(pat) => {
+            | Pattern::Paren(pat) => {
                 let Paren(inner) = pat;
                 for binder in inner {
                     // can be dependent on the previous binders
@@ -382,9 +382,9 @@ impl Resolve for CoPatId {
     ) -> Result<Self::Out> {
         let copat = resolver.bitter.copats[*self].clone();
         let local = match &copat {
-            CoPattern::Pat(pat) => pat.resolve(resolver, (local, global))?,
-            CoPattern::Dtor(_dtor) => local,
-            CoPattern::App(copat) => {
+            | CoPattern::Pat(pat) => pat.resolve(resolver, (local, global))?,
+            | CoPattern::Dtor(_dtor) => local,
+            | CoPattern::App(copat) => {
                 let App(args) = copat;
                 for arg in args {
                     // can be dependent on the previous binders
@@ -406,7 +406,7 @@ impl Resolve for TermId {
     ) -> Result<Self::Out> {
         let term = resolver.bitter.terms[*self].clone();
         let res: Term<DefId> = match term {
-            Term::Internal(_) => {
+            | Term::Internal(_) => {
                 // internal terms should be resolved by looking up term_to_def
                 // which has already been updated by primitives when collecting top level
                 let def = resolver.internal_to_def[*self];
@@ -417,22 +417,22 @@ impl Resolve for TermId {
                 resolver.terms.insert(*self, Term::Var(def));
                 return Ok(());
             }
-            Term::Sealed(term) => {
+            | Term::Sealed(term) => {
                 let Sealed(inner) = &term;
                 let () = inner.resolve(resolver, (local, global))?;
                 term.into()
             }
-            Term::Ann(term) => {
+            | Term::Ann(term) => {
                 let Ann { tm, ty } = &term;
                 let () = ty.resolve(resolver, (local.clone(), global))?;
                 let () = tm.resolve(resolver, (local, global))?;
                 term.into()
             }
-            Term::Hole(term) => {
+            | Term::Hole(term) => {
                 let Hole = &term;
                 term.into()
             }
-            Term::Var(var) => {
+            | Term::Var(var) => {
                 // first, try to find the variable locally
                 if let Some(def) = local.var_to_def.get(var.leaf()) {
                     // if found, we're done
@@ -450,74 +450,74 @@ impl Resolve for TermId {
                 let span = &resolver.spans.terms[*self];
                 Err(ResolveError::UnboundVar(span.make(var.clone())))?
             }
-            Term::Paren(term) => {
+            | Term::Paren(term) => {
                 let Paren(terms) = &term;
                 for term in terms {
                     let () = term.resolve(resolver, (local.clone(), global))?;
                 }
                 term.into()
             }
-            Term::Abs(term) => {
+            | Term::Abs(term) => {
                 let Abs(copat, body) = &term;
                 local = copat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
                 term.into()
             }
-            Term::App(term) => {
+            | Term::App(term) => {
                 let App(terms) = &term;
                 for term in terms {
                     let () = term.resolve(resolver, (local.clone(), global))?;
                 }
                 term.into()
             }
-            Term::Rec(term) => {
+            | Term::Rec(term) => {
                 let Rec(pat, body) = &term;
                 local = pat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
                 term.into()
             }
-            Term::Pi(term) => {
+            | Term::Pi(term) => {
                 let Pi(copat, body) = &term;
                 local = copat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
                 term.into()
             }
-            Term::Sigma(term) => {
+            | Term::Sigma(term) => {
                 let Sigma(copat, body) = &term;
                 local = copat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
                 term.into()
             }
-            Term::Thunk(term) => {
+            | Term::Thunk(term) => {
                 let Thunk(body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
-            Term::Force(term) => {
+            | Term::Force(term) => {
                 let Force(body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
-            Term::Ret(term) => {
+            | Term::Ret(term) => {
                 let Return(body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
-            Term::Do(term) => {
+            | Term::Do(term) => {
                 let Bind { binder, bindee, tail } = &term;
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 local = binder.resolve(resolver, (local.clone(), global))?;
                 let () = tail.resolve(resolver, (local, global))?;
                 term.into()
             }
-            Term::Let(term) => {
+            | Term::Let(term) => {
                 let PureBind { binder, bindee, tail } = &term;
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 local = binder.resolve(resolver, (local.clone(), global))?;
                 let () = tail.resolve(resolver, (local, global))?;
                 term.into()
             }
-            Term::Data(term) => {
+            | Term::Data(term) => {
                 let Data { arms } = &term;
                 for arm in arms {
                     let DataArm { name: _, param } = arm;
@@ -525,7 +525,7 @@ impl Resolve for TermId {
                 }
                 term.into()
             }
-            Term::CoData(term) => {
+            | Term::CoData(term) => {
                 let CoData { arms } = &term;
                 for arm in arms {
                     let CoDataArm { name: _, out } = arm;
@@ -533,12 +533,12 @@ impl Resolve for TermId {
                 }
                 term.into()
             }
-            Term::Ctor(term) => {
+            | Term::Ctor(term) => {
                 let Ctor(_ctor, body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
-            Term::Match(term) => {
+            | Term::Match(term) => {
                 let Match { scrut, arms } = &term;
                 let () = scrut.resolve(resolver, (local.clone(), global))?;
                 for arm in arms {
@@ -549,7 +549,7 @@ impl Resolve for TermId {
                 }
                 term.into()
             }
-            Term::CoMatch(term) => {
+            | Term::CoMatch(term) => {
                 let CoMatch { arms } = &term;
                 for arm in arms {
                     let mut local = local.clone();
@@ -559,12 +559,12 @@ impl Resolve for TermId {
                 }
                 term.into()
             }
-            Term::Dtor(term) => {
+            | Term::Dtor(term) => {
                 let Dtor(body, _dtor) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
-            Term::Lit(term) => term.into(),
+            | Term::Lit(term) => term.into(),
         };
         // save the new term structure
         resolver.terms.insert(*self, res);

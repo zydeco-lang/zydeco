@@ -78,7 +78,7 @@ impl Desugar for t::TopLevel {
             let Modifiers { public, inner } = desugarer.textual.decls[decl].clone();
             use t::Declaration as Decl;
             let inner = match inner {
-                Decl::DataDef(decl) => {
+                | Decl::DataDef(decl) => {
                     let t::DataDef { name, params, def } = decl;
                     let span = name.span(desugarer);
                     // name -> pat
@@ -110,7 +110,7 @@ impl Desugar for t::TopLevel {
                     // pat & sealed -> alias
                     b::Alias { binder: pat, bindee: sealed }.into()
                 }
-                Decl::CoDataDef(decl) => {
+                | Decl::CoDataDef(decl) => {
                     let t::CoDataDef { name, params, def } = decl;
                     let span = name.span(desugarer);
                     // name -> pat
@@ -142,7 +142,7 @@ impl Desugar for t::TopLevel {
                     // pat & sealed -> alias
                     b::Alias { binder: pat, bindee: sealed }.into()
                 }
-                Decl::Define(decl) => {
+                | Decl::Define(decl) => {
                     let t::Define(genbind) = decl;
                     let (pat, term) = genbind.desugar(desugarer);
                     // sealed
@@ -152,13 +152,13 @@ impl Desugar for t::TopLevel {
                     // pat & sealed -> alias
                     b::Alias { binder: pat, bindee: sealed }.into()
                 }
-                Decl::Alias(decl) => {
+                | Decl::Alias(decl) => {
                     let t::Alias(genbind) = decl;
                     let (pat, term) = genbind.desugar(desugarer);
                     // pat & term -> alias
                     b::Alias { binder: pat, bindee: term }.into()
                 }
-                Decl::Extern(decl) => {
+                | Decl::Extern(decl) => {
                     // Todo: error on rec
                     let t::Extern(t::GenBind { rec: _, comp, binder, params, ty, bindee: () }) =
                         decl;
@@ -185,7 +185,7 @@ impl Desugar for t::TopLevel {
                 //     let top = top.desugar(desugarer);
                 //     b::UseBlock { uses, top }.into()
                 // }
-                Decl::Main(decl) => {
+                | Decl::Main(decl) => {
                     let t::Main(term) = decl;
                     let term = term.desugar(desugarer);
                     b::Main(term).into()
@@ -223,26 +223,26 @@ impl Desugar for t::PatId {
         let id = Alloc::alloc(desugarer, span);
         use t::Pattern as Pat;
         match pat {
-            Pat::Ann(pat) => {
+            | Pat::Ann(pat) => {
                 let t::Ann { tm, ty } = pat;
                 let tm = tm.desugar(desugarer);
                 let ty = ty.desugar(desugarer);
                 desugarer.pat(id, b::Ann { tm, ty }.into())
             }
-            Pat::Hole(pat) => {
+            | Pat::Hole(pat) => {
                 let t::Hole = pat;
                 desugarer.pat(id, b::Hole.into())
             }
-            Pat::Var(name) => {
+            | Pat::Var(name) => {
                 let name = name.desugar(desugarer).into();
                 desugarer.pat(id, name)
             }
-            Pat::Ctor(pat) => {
+            | Pat::Ctor(pat) => {
                 let t::Ctor(name, pat) = pat;
                 let pat = pat.desugar(desugarer);
                 desugarer.pat(id, b::Ctor(name, pat).into())
             }
-            Pat::Paren(pat) => {
+            | Pat::Paren(pat) => {
                 let t::Paren(pats) = pat;
                 let pats = pats.desugar(desugarer);
                 // if there is only one pat like `(p)`, remove the redundant paren
@@ -265,12 +265,12 @@ impl Desugar for t::CoPatId {
         let id = Alloc::alloc(desugarer, span);
         use t::CoPattern as CoPat;
         match copat {
-            CoPat::Pat(pat) => {
+            | CoPat::Pat(pat) => {
                 let pat = pat.desugar(desugarer);
                 desugarer.copat(id, pat.into())
             }
-            CoPat::Dtor(name) => desugarer.copat(id, name.into()),
-            CoPat::App(copat) => {
+            | CoPat::Dtor(name) => desugarer.copat(id, name.into()),
+            | CoPat::App(copat) => {
                 let t::App(copats) = copat;
                 let iter = copats.into_iter();
                 let mut copats = Vec::new();
@@ -297,18 +297,18 @@ impl Desugar for t::TermId {
         let id = Alloc::alloc(desugarer, span);
         use t::Term as Tm;
         match term {
-            Tm::Ann(term) => {
+            | Tm::Ann(term) => {
                 let t::Ann { tm, ty } = term;
                 let tm = tm.desugar(desugarer);
                 let ty = ty.desugar(desugarer);
                 desugarer.term(id, b::Ann { tm, ty }.into())
             }
-            Tm::Hole(term) => {
+            | Tm::Hole(term) => {
                 let t::Hole = term;
                 desugarer.term(id, b::Hole.into())
             }
-            Tm::Var(name) => desugarer.term(id, b::Term::Var(name).into()),
-            Tm::Paren(term) => {
+            | Tm::Var(name) => desugarer.term(id, b::Term::Var(name).into()),
+            | Tm::Paren(term) => {
                 let t::Paren(terms) = term;
                 let terms = terms.desugar(desugarer);
                 // if there is only one term like `(t)`, remove the redundant paren
@@ -318,13 +318,13 @@ impl Desugar for t::TermId {
                     desugarer.term(id, b::Paren(terms).into())
                 }
             }
-            Tm::Abs(term) => {
+            | Tm::Abs(term) => {
                 let t::Abs(params, tail) = term;
                 let params = params.desugar(desugarer);
                 let tail = tail.desugar(desugarer);
                 desugarer.term(id, b::Abs(params, tail).into())
             }
-            Tm::App(term) => {
+            | Tm::App(term) => {
                 let t::App(terms) = term;
                 let mut iter = terms.into_iter();
                 let mut terms = Vec::new();
@@ -339,19 +339,19 @@ impl Desugar for t::TermId {
                 terms.extend(iter.map(|term| term.desugar(desugarer)));
                 desugarer.term(id, b::App(terms).into())
             }
-            Tm::Rec(term) => {
+            | Tm::Rec(term) => {
                 let t::Rec(pat, term) = term;
                 let pat = pat.desugar(desugarer);
                 let term = term.desugar(desugarer);
                 desugarer.term(id, b::Rec(pat, term).into())
             }
-            Tm::Pi(term) => {
+            | Tm::Pi(term) => {
                 let t::Pi(params, ty) = term;
                 let params = params.desugar(desugarer);
                 let ty = ty.desugar(desugarer);
                 desugarer.term(id, b::Pi(params, ty).into())
             }
-            Tm::Arrow(term) => {
+            | Tm::Arrow(term) => {
                 let t::Arrow(params, ty) = term;
                 // params -> ann = (hole: params)
                 let params = params.desugar(desugarer);
@@ -367,7 +367,7 @@ impl Desugar for t::TermId {
                 let ty = ty.desugar(desugarer);
                 desugarer.term(id, b::Pi(copat, ty).into())
             }
-            Tm::Forall(term) => {
+            | Tm::Forall(term) => {
                 let t::Forall(params, ty) = term;
                 let params = params.desugar(desugarer);
                 let ty = ty.desugar(desugarer);
@@ -378,13 +378,13 @@ impl Desugar for t::TermId {
                 let ctype = desugarer.ctype(span);
                 desugarer.term(ann, b::Ann { tm: forall, ty: ctype }.into())
             }
-            Tm::Sigma(term) => {
+            | Tm::Sigma(term) => {
                 let t::Sigma(params, ty) = term;
                 let params = params.desugar(desugarer);
                 let ty = ty.desugar(desugarer);
                 desugarer.term(id, b::Sigma(params, ty).into())
             }
-            Tm::Prod(term) => {
+            | Tm::Prod(term) => {
                 let t::Prod(terms) = term;
                 let mut terms = terms.desugar(desugarer);
                 let mut out = terms.pop().unwrap();
@@ -405,7 +405,7 @@ impl Desugar for t::TermId {
                 }
                 out
             }
-            Tm::Exists(term) => {
+            | Tm::Exists(term) => {
                 let t::Exists(params, ty) = term;
                 let params = params.desugar(desugarer);
                 let ty = ty.desugar(desugarer);
@@ -416,7 +416,7 @@ impl Desugar for t::TermId {
                 let vtype = desugarer.vtype(span);
                 desugarer.term(ann, b::Ann { tm: exists, ty: vtype }.into())
             }
-            Tm::Thunk(term) => {
+            | Tm::Thunk(term) => {
                 let t::Thunk(body) = term;
                 let body = body.desugar(desugarer);
                 // body -> tm
@@ -432,12 +432,12 @@ impl Desugar for t::TermId {
                 let ann = Alloc::alloc(desugarer, span);
                 desugarer.term(ann, b::Ann { tm, ty }.into())
             }
-            Tm::Force(term) => {
+            | Tm::Force(term) => {
                 let t::Force(term) = term;
                 let term = term.desugar(desugarer);
                 desugarer.term(id, b::Force(term).into())
             }
-            Tm::Ret(term) => {
+            | Tm::Ret(term) => {
                 let t::Return(body) = term;
                 let body = body.desugar(desugarer);
                 // body -> tm
@@ -453,14 +453,14 @@ impl Desugar for t::TermId {
                 let ann = Alloc::alloc(desugarer, span);
                 desugarer.term(ann, b::Ann { tm, ty }.into())
             }
-            Tm::Do(term) => {
+            | Tm::Do(term) => {
                 let t::Bind { binder, bindee, tail } = term;
                 let binder = binder.desugar(desugarer);
                 let bindee = bindee.desugar(desugarer);
                 let tail = tail.desugar(desugarer);
                 desugarer.term(id, b::Bind { binder, bindee, tail }.into())
             }
-            Tm::Let(term) => {
+            | Tm::Let(term) => {
                 let t::PureBind { binding, tail } = term;
                 let (binder, bindee) = binding.desugar(desugarer);
                 let tail = tail.desugar(desugarer);
@@ -472,20 +472,20 @@ impl Desugar for t::TermId {
             //     let tail = tail.desugar(desugarer);
             //     desugarer.term(id, b::UseBind { uses, tail }.into())
             // }
-            Tm::Data(data) => {
+            | Tm::Data(data) => {
                 let span = id.span(desugarer);
                 span.make(data).desugar(desugarer)
             }
-            Tm::CoData(codata) => {
+            | Tm::CoData(codata) => {
                 let span = id.span(desugarer);
                 span.make(codata).desugar(desugarer)
             }
-            Tm::Ctor(term) => {
+            | Tm::Ctor(term) => {
                 let t::Ctor(name, term) = term;
                 let term = term.desugar(desugarer);
                 desugarer.term(id, b::Ctor(name, term).into())
             }
-            Tm::Match(term) => {
+            | Tm::Match(term) => {
                 let t::Match { scrut, arms } = term;
                 let scrut = scrut.desugar(desugarer);
                 let arms = arms
@@ -498,7 +498,7 @@ impl Desugar for t::TermId {
                     .collect();
                 desugarer.term(id, b::Match { scrut, arms }.into())
             }
-            Tm::CoMatch(term) => {
+            | Tm::CoMatch(term) => {
                 let t::CoMatch { arms } = term;
                 let arms = arms
                     .into_iter()
@@ -510,12 +510,12 @@ impl Desugar for t::TermId {
                     .collect();
                 desugarer.term(id, b::CoMatch { arms }.into())
             }
-            Tm::Dtor(term) => {
+            | Tm::Dtor(term) => {
                 let t::Dtor(term, name) = term;
                 let term = term.desugar(desugarer);
                 desugarer.term(id, b::Dtor(term, name).into())
             }
-            Tm::Lit(term) => desugarer.term(id, term.into()),
+            | Tm::Lit(term) => desugarer.term(id, term.into()),
         }
     }
 }
@@ -719,20 +719,20 @@ mod impls {
             let span = self.span(desugarer);
             let pat = desugarer.bitter.pats[*self].clone();
             let pat = match &pat {
-                b::Pattern::Ann(pat) => {
+                | b::Pattern::Ann(pat) => {
                     let b::Ann { tm, ty } = pat;
                     let tm = tm.deep_clone(desugarer);
                     let ty = ty.deep_clone(desugarer);
                     b::Ann { tm, ty }.into()
                 }
-                b::Pattern::Hole(_pat) => b::Hole.into(),
-                b::Pattern::Var(pat) => pat.deep_clone(desugarer).into(),
-                b::Pattern::Ctor(pat) => {
+                | b::Pattern::Hole(_pat) => b::Hole.into(),
+                | b::Pattern::Var(pat) => pat.deep_clone(desugarer).into(),
+                | b::Pattern::Ctor(pat) => {
                     let b::Ctor(name, pat) = pat;
                     let pat = pat.deep_clone(desugarer);
                     b::Ctor(name.clone(), pat).into()
                 }
-                b::Pattern::Paren(pat) => {
+                | b::Pattern::Paren(pat) => {
                     let b::Paren(pats) = pat;
                     let pats = pats.deep_clone(desugarer);
                     b::Paren(pats).into()
@@ -747,12 +747,12 @@ mod impls {
             let span = self.span(desugarer);
             let copat = desugarer.bitter.copats[*self].clone();
             let copat = match &copat {
-                b::CoPattern::Pat(pat) => {
+                | b::CoPattern::Pat(pat) => {
                     let pat = pat.deep_clone(desugarer);
                     pat.into()
                 }
-                b::CoPattern::Dtor(name) => name.clone().into(),
-                b::CoPattern::App(copat) => {
+                | b::CoPattern::Dtor(name) => name.clone().into(),
+                | b::CoPattern::App(copat) => {
                     let b::App(copats) = copat;
                     let copats = copats.deep_clone(desugarer);
                     b::App(copats).into()
@@ -767,104 +767,104 @@ mod impls {
             let span = self.span(desugarer);
             let term = desugarer.bitter.terms[*self].clone();
             let term = match &term {
-                b::Term::Internal(term) => {
+                | b::Term::Internal(term) => {
                     use zydeco_syntax::Internal;
                     match term {
-                        Internal::VType => {
+                        | Internal::VType => {
                             return desugarer.vtype(span);
                         }
-                        Internal::CType => {
+                        | Internal::CType => {
                             return desugarer.ctype(span);
                         }
-                        Internal::Thunk => {
+                        | Internal::Thunk => {
                             return desugarer.thunk(span);
                         }
-                        Internal::Ret => {
+                        | Internal::Ret => {
                             return desugarer.ret(span);
                         }
-                        Internal::OS => {
+                        | Internal::OS => {
                             return desugarer.os(span);
                         }
                     }
                 }
-                b::Term::Sealed(_term) => {
+                | b::Term::Sealed(_term) => {
                     unreachable!()
                     // let b::Sealed(term) = term;
                     // let term = term.deep_clone(desugarer);
                     // b::Sealed(term).into()
                 }
-                b::Term::Ann(term) => {
+                | b::Term::Ann(term) => {
                     let b::Ann { tm, ty } = term;
                     let tm = tm.deep_clone(desugarer);
                     let ty = ty.deep_clone(desugarer);
                     b::Ann { tm, ty }.into()
                 }
-                b::Term::Hole(_term) => b::Hole.into(),
-                b::Term::Var(name) => b::Term::Var(name.clone()).into(),
-                b::Term::Paren(term) => {
+                | b::Term::Hole(_term) => b::Hole.into(),
+                | b::Term::Var(name) => b::Term::Var(name.clone()).into(),
+                | b::Term::Paren(term) => {
                     let b::Paren(terms) = term;
                     let terms = terms.deep_clone(desugarer);
                     b::Paren(terms).into()
                 }
-                b::Term::Abs(term) => {
+                | b::Term::Abs(term) => {
                     let b::Abs(params, tail) = term;
                     let params = params.deep_clone(desugarer);
                     let tail = tail.deep_clone(desugarer);
                     b::Abs(params, tail).into()
                 }
-                b::Term::App(term) => {
+                | b::Term::App(term) => {
                     let b::App(terms) = term;
                     let terms = terms.deep_clone(desugarer);
                     b::App(terms).into()
                 }
-                b::Term::Rec(term) => {
+                | b::Term::Rec(term) => {
                     let b::Rec(pat, term) = term;
                     let pat = pat.deep_clone(desugarer);
                     let term = term.deep_clone(desugarer);
                     b::Rec(pat, term).into()
                 }
-                b::Term::Pi(term) => {
+                | b::Term::Pi(term) => {
                     let b::Pi(params, ty) = term;
                     let params = params.deep_clone(desugarer);
                     let ty = ty.deep_clone(desugarer);
                     b::Pi(params, ty).into()
                 }
-                b::Term::Sigma(term) => {
+                | b::Term::Sigma(term) => {
                     let b::Sigma(params, ty) = term;
                     let params = params.deep_clone(desugarer);
                     let ty = ty.deep_clone(desugarer);
                     b::Sigma(params, ty).into()
                 }
-                b::Term::Thunk(term) => {
+                | b::Term::Thunk(term) => {
                     let b::Thunk(term) = term;
                     let term = term.deep_clone(desugarer);
                     b::Thunk(term).into()
                 }
-                b::Term::Force(term) => {
+                | b::Term::Force(term) => {
                     let b::Force(term) = term;
                     let term = term.deep_clone(desugarer);
                     b::Force(term).into()
                 }
-                b::Term::Ret(term) => {
+                | b::Term::Ret(term) => {
                     let b::Return(term) = term;
                     let term = term.deep_clone(desugarer);
                     b::Return(term).into()
                 }
-                b::Term::Do(term) => {
+                | b::Term::Do(term) => {
                     let b::Bind { binder, bindee, tail } = term;
                     let binder = binder.deep_clone(desugarer);
                     let bindee = bindee.deep_clone(desugarer);
                     let tail = tail.deep_clone(desugarer);
                     b::Bind { binder, bindee, tail }.into()
                 }
-                b::Term::Let(term) => {
+                | b::Term::Let(term) => {
                     let b::PureBind { binder, bindee, tail } = term;
                     let binder = binder.deep_clone(desugarer);
                     let bindee = bindee.deep_clone(desugarer);
                     let tail = tail.deep_clone(desugarer);
                     b::PureBind { binder, bindee, tail }.into()
                 }
-                b::Term::Data(term) => {
+                | b::Term::Data(term) => {
                     let b::Data { arms } = term;
                     let arms = arms
                         .into_iter()
@@ -876,7 +876,7 @@ mod impls {
                         .collect();
                     b::Data { arms }.into()
                 }
-                b::Term::CoData(term) => {
+                | b::Term::CoData(term) => {
                     let b::CoData { arms } = term;
                     let arms = arms
                         .into_iter()
@@ -888,13 +888,13 @@ mod impls {
                         .collect();
                     b::CoData { arms }.into()
                 }
-                b::Term::Ctor(term) => {
+                | b::Term::Ctor(term) => {
                     let b::Ctor(name, term) = term;
                     let term = term.deep_clone(desugarer);
                     let name = name.clone();
                     b::Ctor(name, term).into()
                 }
-                b::Term::Match(term) => {
+                | b::Term::Match(term) => {
                     let b::Match { scrut, arms } = term;
                     let scrut = scrut.deep_clone(desugarer);
                     let arms = arms
@@ -907,7 +907,7 @@ mod impls {
                         .collect();
                     b::Match { scrut, arms }.into()
                 }
-                b::Term::CoMatch(term) => {
+                | b::Term::CoMatch(term) => {
                     let b::CoMatch { arms } = term;
                     let arms = arms
                         .into_iter()
@@ -919,13 +919,13 @@ mod impls {
                         .collect();
                     b::CoMatch { arms }.into()
                 }
-                b::Term::Dtor(term) => {
+                | b::Term::Dtor(term) => {
                     let b::Dtor(term, name) = term;
                     let term = term.deep_clone(desugarer);
                     let name = name.clone();
                     b::Dtor(term, name).into()
                 }
-                b::Term::Lit(term) => term.clone().into(),
+                | b::Term::Lit(term) => term.clone().into(),
             };
             let id = Alloc::alloc(desugarer, span);
             desugarer.term(id, term)

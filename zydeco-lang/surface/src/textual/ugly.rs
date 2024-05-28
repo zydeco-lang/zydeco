@@ -28,15 +28,15 @@ impl Ugly for TopLevel {
                 }
                 use Declaration as Decl;
                 match inner {
-                    Decl::DataDef(d) => s += &d.ugly(f),
-                    Decl::CoDataDef(d) => s += &d.ugly(f),
-                    Decl::Define(d) => s += &d.ugly(f),
-                    Decl::Alias(d) => s += &d.ugly(f),
-                    Decl::Extern(d) => s += &d.ugly(f),
+                    | Decl::DataDef(d) => s += &d.ugly(f),
+                    | Decl::CoDataDef(d) => s += &d.ugly(f),
+                    | Decl::Define(d) => s += &d.ugly(f),
+                    | Decl::Alias(d) => s += &d.ugly(f),
+                    | Decl::Extern(d) => s += &d.ugly(f),
                     // Decl::Layer(d) => s += &d.ugly(f),
                     // Decl::UseDef(d) => s += &d.ugly(f),
                     // Decl::UseBlock(d) => s += &d.ugly(f),
-                    Decl::Main(d) => s += &d.ugly(f),
+                    | Decl::Main(d) => s += &d.ugly(f),
                 }
                 s
             })
@@ -58,11 +58,11 @@ impl Ugly for PatId {
         let mut s = String::new();
         let pat = &f.arena.pats[*self];
         match pat {
-            Pattern::Ann(p) => s += &p.ugly(f),
-            Pattern::Hole(p) => s += &p.ugly(f),
-            Pattern::Var(p) => s += &p.ugly(f),
-            Pattern::Ctor(p) => s += &p.ugly(f),
-            Pattern::Paren(p) => s += &p.ugly(f),
+            | Pattern::Ann(p) => s += &p.ugly(f),
+            | Pattern::Hole(p) => s += &p.ugly(f),
+            | Pattern::Var(p) => s += &p.ugly(f),
+            | Pattern::Ctor(p) => s += &p.ugly(f),
+            | Pattern::Paren(p) => s += &p.ugly(f),
         }
         s
     }
@@ -73,9 +73,9 @@ impl Ugly for CoPatId {
         let mut s = String::new();
         let copat = &f.arena.copats[*self];
         match copat {
-            CoPattern::Pat(c) => s += &c.ugly(f),
-            CoPattern::Dtor(c) => s += &c.ugly(f),
-            CoPattern::App(c) => s += &c.ugly(f),
+            | CoPattern::Pat(c) => s += &c.ugly(f),
+            | CoPattern::Dtor(c) => s += &c.ugly(f),
+            | CoPattern::App(c) => s += &c.ugly(f),
         }
         s
     }
@@ -86,32 +86,32 @@ impl Ugly for TermId {
         let mut s = String::new();
         let term = &f.arena.terms[*self];
         match term {
-            Term::Ann(t) => s += &t.ugly(f),
-            Term::Hole(t) => s += &t.ugly(f),
-            Term::Var(t) => s += &t.ugly(f),
-            Term::Paren(t) => s += &t.ugly(f),
-            Term::Abs(t) => s += &t.ugly(f),
-            Term::App(t) => s += &t.ugly(f),
-            Term::Rec(t) => s += &t.ugly(f),
-            Term::Pi(t) => s += &t.ugly(f),
-            Term::Arrow(t) => s += &t.ugly(f),
-            Term::Forall(t) => s += &t.ugly(f),
-            Term::Sigma(t) => s += &t.ugly(f),
-            Term::Prod(t) => s += &t.ugly(f),
-            Term::Exists(t) => s += &t.ugly(f),
-            Term::Thunk(t) => s += &t.ugly(f),
-            Term::Force(t) => s += &t.ugly(f),
-            Term::Ret(t) => s += &t.ugly(f),
-            Term::Do(t) => s += &t.ugly(f),
-            Term::Let(t) => s += &t.ugly(f),
+            | Term::Ann(t) => s += &t.ugly(f),
+            | Term::Hole(t) => s += &t.ugly(f),
+            | Term::Var(t) => s += &t.ugly(f),
+            | Term::Paren(t) => s += &t.ugly(f),
+            | Term::Abs(t) => s += &t.ugly(f),
+            | Term::App(t) => s += &t.ugly(f),
+            | Term::Rec(t) => s += &t.ugly(f),
+            | Term::Pi(t) => s += &t.ugly(f),
+            | Term::Arrow(t) => s += &t.ugly(f),
+            | Term::Forall(t) => s += &t.ugly(f),
+            | Term::Sigma(t) => s += &t.ugly(f),
+            | Term::Prod(t) => s += &t.ugly(f),
+            | Term::Exists(t) => s += &t.ugly(f),
+            | Term::Thunk(t) => s += &t.ugly(f),
+            | Term::Force(t) => s += &t.ugly(f),
+            | Term::Ret(t) => s += &t.ugly(f),
+            | Term::Do(t) => s += &t.ugly(f),
+            | Term::Let(t) => s += &t.ugly(f),
             // Term::UseLet(t) => s += &t.ugly(f),
-            Term::Data(t) => s += &t.ugly(f),
-            Term::CoData(t) => s += &t.ugly(f),
-            Term::Ctor(t) => s += &t.ugly(f),
-            Term::Match(t) => s += &t.ugly(f),
-            Term::CoMatch(t) => s += &t.ugly(f),
-            Term::Dtor(t) => s += &t.ugly(f),
-            Term::Lit(t) => s += &t.ugly(f),
+            | Term::Data(t) => s += &t.ugly(f),
+            | Term::CoData(t) => s += &t.ugly(f),
+            | Term::Ctor(t) => s += &t.ugly(f),
+            | Term::Match(t) => s += &t.ugly(f),
+            | Term::CoMatch(t) => s += &t.ugly(f),
+            | Term::Dtor(t) => s += &t.ugly(f),
+            | Term::Lit(t) => s += &t.ugly(f),
         }
         s
     }
@@ -514,10 +514,10 @@ impl Ugly for Literal {
     fn ugly(&self, _f: &Formatter) -> String {
         let mut s = String::new();
         match self {
-            Literal::Int(i) => s += &format!("{:?}", i),
+            | Literal::Int(i) => s += &format!("{:?}", i),
             // Fixme: escape string
-            Literal::String(str) => s += &format!("{:?}", str),
-            Literal::Char(c) => s += &format!("{:?}", c),
+            | Literal::String(str) => s += &format!("{:?}", str),
+            | Literal::Char(c) => s += &format!("{:?}", c),
         }
         s
     }
@@ -548,16 +548,16 @@ impl Ugly for UseEnum {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         match self {
-            UseEnum::Name(n) => s += &n.ugly(f),
-            UseEnum::Alias(UseAlias(binder, origin)) => {
+            | UseEnum::Name(n) => s += &n.ugly(f),
+            | UseEnum::Alias(UseAlias(binder, origin)) => {
                 s += &binder.ugly(f);
                 s += " = ";
                 s += &origin.ugly(f);
             }
-            UseEnum::All(UseAll) => {
+            | UseEnum::All(UseAll) => {
                 s += "..";
             }
-            UseEnum::Cluster(Uses(u)) => {
+            | UseEnum::Cluster(Uses(u)) => {
                 s += "( ";
                 s += &u.iter().map(|u| u.ugly(f)).collect::<Vec<_>>().join(", ");
                 s += " )";

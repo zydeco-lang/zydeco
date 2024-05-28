@@ -18,17 +18,17 @@ impl<T> SingCell<T> {
         &mut self, init: impl FnOnce() -> T, err: impl FnOnce(&T) -> E,
     ) -> Result<&T, E> {
         match &self.cell {
-            None => {
+            | None => {
                 self.cell = Some(init());
                 Ok(self.cell.as_ref().unwrap())
             }
-            Some(t) => Err(err(t)),
+            | Some(t) => Err(err(t)),
         }
     }
     pub fn once_or_else<E>(&self, err: impl FnOnce() -> E) -> Result<&T, E> {
         match &self.cell {
-            None => Err(err()),
-            Some(t) => Ok(t),
+            | None => Err(err()),
+            | Some(t) => Ok(t),
         }
     }
     pub fn unwrap(&self) -> &T {

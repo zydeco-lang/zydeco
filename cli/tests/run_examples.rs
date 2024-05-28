@@ -4,8 +4,8 @@ use zydeco_lang::zydeco::ZydecoExpr;
 
 fn wrapper<T>(r: Result<T, String>) {
     match r {
-        Ok(_) => {}
-        Err(e) => {
+        | Ok(_) => {}
+        | Err(e) => {
             eprintln!("{}", e);
             panic!()
         }
@@ -33,13 +33,13 @@ fn command_test(f: &str) -> Result<(), String> {
     let mut zydeco_expr = ZydecoExpr::new();
     for line in buf.split('\n') {
         let (line, dry) = match Repl::preprocess(&mut zydeco_expr, line.to_string()) {
-            Ok(Some(config)) => config,
-            Ok(None) => continue,
-            Err(e) => Err(e)?,
+            | Ok(Some(config)) => config,
+            | Ok(None) => continue,
+            | Err(e) => Err(e)?,
         };
         match Repl::run(&mut zydeco_expr, &line, dry) {
-            Ok(_) => {}
-            Err(e) => Err(e)?,
+            | Ok(_) => {}
+            | Err(e) => Err(e)?,
         }
     }
     Ok(())

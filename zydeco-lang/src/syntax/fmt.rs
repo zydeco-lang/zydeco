@@ -23,8 +23,8 @@ where
     fn fmt_args(&self, fargs: Args) -> String {
         let (tvar, kd) = self;
         match kd {
-            Some(kd) => format!("({} : {})", tvar.fmt_args(fargs), kd.fmt_args(fargs)),
-            None => format!("{}", tvar.fmt_args(fargs)),
+            | Some(kd) => format!("({} : {})", tvar.fmt_args(fargs), kd.fmt_args(fargs)),
+            | None => format!("{}", tvar.fmt_args(fargs)),
         }
     }
 }
@@ -60,8 +60,8 @@ where
 impl FmtArgs for KindBase {
     fn fmt_args(&self, _fargs: Args) -> String {
         match self {
-            KindBase::VType => "VType".to_owned(),
-            KindBase::CType => "CType".to_owned(),
+            | KindBase::VType => "VType".to_owned(),
+            | KindBase::CType => "CType".to_owned(),
         }
     }
 }
@@ -172,11 +172,11 @@ where
 impl FmtArgs for Literal {
     fn fmt_args(&self, _fargs: Args) -> String {
         match self {
-            Literal::Int(i) => format!("{}", i),
-            Literal::String(s) => {
+            | Literal::Int(i) => format!("{}", i),
+            | Literal::String(s) => {
                 format!("\"{}\"", s.into_iter().collect::<String>().escape_debug())
             }
-            Literal::Char(c) => format!("'{}'", c.escape_debug()),
+            | Literal::Char(c) => format!("'{}'", c.escape_debug()),
         }
     }
 }

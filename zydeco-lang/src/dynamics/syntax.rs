@@ -43,11 +43,11 @@ use std::fmt;
 impl fmt::Debug for SemComp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SemComp::Kont(comp, _, var) => {
+            | SemComp::Kont(comp, _, var) => {
                 write!(f, "Kont({} -> {})", comp.as_ref().fmt(), var)
             }
-            SemComp::App(val) => write!(f, "App({})", val.as_ref().fmt()),
-            SemComp::Dtor(dtor) => write!(f, "Dtor(.{})", dtor,),
+            | SemComp::App(val) => write!(f, "App({})", val.as_ref().fmt()),
+            | SemComp::Dtor(dtor) => write!(f, "Dtor(.{})", dtor,),
         }
     }
 }

@@ -18,22 +18,22 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
     };
     let span_map_mut_body;
     match input.data {
-        Data::Enum(data) => {
+        | Data::Enum(data) => {
             let mut arms = Vec::new();
             for variant in data.variants {
                 let variant_ident = &variant.ident;
                 match &variant.fields {
-                    Fields::Unnamed(field) if field.unnamed.len() == 1 => {
+                    | Fields::Unnamed(field) if field.unnamed.len() == 1 => {
                         arms.push(quote! {
                             #ident::#variant_ident(t) => t.span_map_mut(f)
                         });
                     }
-                    Fields::Unit => {
+                    | Fields::Unit => {
                         arms.push(quote! {
                             #ident::#variant_ident => {}
                         });
                     }
-                    Fields::Unnamed(_) | Fields::Named(_) => {
+                    | Fields::Unnamed(_) | Fields::Named(_) => {
                         panic!("Only single-tuple variants can be derived")
                     }
                 }
@@ -44,24 +44,24 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
                 }
             );
         }
-        Data::Struct(data) => match data.fields {
-            Fields::Named(fields) => {
+        | Data::Struct(data) => match data.fields {
+            | Fields::Named(fields) => {
                 let field_idents: Vec<_> = (&fields.named).into_iter().map(|f| &f.ident).collect();
                 span_map_mut_body = quote!(
                     #( self.#field_idents.span_map_mut(f.clone()) );*
                 );
             }
-            Fields::Unnamed(fields) => {
+            | Fields::Unnamed(fields) => {
                 let idx: Vec<_> = (0..fields.unnamed.len()).map(syn::Index::from).collect();
                 span_map_mut_body = quote!(
                     #( self.#idx.span_map_mut(f.clone()) );*
                 );
             }
-            Fields::Unit => {
+            | Fields::Unit => {
                 span_map_mut_body = quote!();
             }
         },
-        _ => unreachable!("SpanHolder can only be derived for enums and structs"),
+        | _ => unreachable!("SpanHolder can only be derived for enums and structs"),
     }
     let gen = quote!(
         impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics #where_clause
@@ -85,8 +85,8 @@ pub fn fmt_args_derive(input: TokenStream) -> TokenStream {
     for variant in data.variants {
         variant_idents.push(variant.ident);
         match &variant.fields {
-            Fields::Unnamed(field) if field.unnamed.len() == 1 => {}
-            Fields::Unnamed(_) | Fields::Named(_) | Fields::Unit => {
+            | Fields::Unnamed(field) if field.unnamed.len() == 1 => {}
+            | Fields::Unnamed(_) | Fields::Named(_) | Fields::Unit => {
                 panic!("Only single-tuple variants can be derived")
             }
         }

@@ -5,9 +5,9 @@ impl TypeCheck for Sp<&Literal> {
     type Out = Type;
     fn syn_step(&self, _ctx: Self::Ctx) -> Result<Step<(Self::Ctx, &Self), Self::Out>, TyckError> {
         Ok(Step::Done(match self.inner_ref() {
-            Literal::Int(_) => Type::internal("Int", vec![]),
-            Literal::String(_) => Type::internal("String", vec![]),
-            Literal::Char(_) => Type::internal("Char", vec![]),
+            | Literal::Int(_) => Type::internal("Int", vec![]),
+            | Literal::String(_) => Type::internal("String", vec![]),
+            | Literal::Char(_) => Type::internal("Char", vec![]),
         }))
     }
 }
@@ -26,19 +26,23 @@ impl TypeCheck for Sp<TermValue> {
         });
         let span = self.span();
         Ok(match self.inner_ref() {
-            TermValue::Annotation(Annotation { term, ty }) => {
+            | TermValue::Annotation(Annotation { term, ty }) => {
                 ty.ana(KindBase::VType.into(), ctx.clone())?;
                 Step::AnaMode((ctx, term), ty.inner_clone())
             }
-            TermValue::Var(x) => Step::Done(ctx.term_ctx.get(x).cloned().ok_or(
+            | TermValue::Var(x) => Step::Done(ctx.term_ctx.get(x).cloned().ok_or(
                 ctx.err(span, NameResolveError::UnboundTermVariable { var: x.clone() }.into()),
             )?),
-            TermValue::Thunk(_) => {
+            | TermValue::Thunk(_) => {
                 Err(ctx.err(span, NeedAnnotation { content: format!("thunk") }))?
             }
-            TermValue::Ctor(_) => Err(ctx.err(span, NeedAnnotation { content: format!("ctor") }))?,
-            TermValue::Literal(l) => Step::Done(span.make(l).syn(())?),
-            TermValue::Pack(_) => Err(ctx.err(span, NeedAnnotation { content: format!("pack") }))?,
+            | TermValue::Ctor(_) => {
+                Err(ctx.err(span, NeedAnnotation { content: format!("ctor") }))?
+            }
+            | TermValue::Literal(l) => Step::Done(span.make(l).syn(())?),
+            | TermValue::Pack(_) => {
+                Err(ctx.err(span, NeedAnnotation { content: format!("pack") }))?
+            }
         })
     }
     fn ana_step(
@@ -58,11 +62,11 @@ impl TypeCheck for Sp<TermValue> {
         }
         span.make(typ.clone()).ana(KindBase::VType.into(), ctx.clone())?;
         Ok(match self.inner_ref() {
-            TermValue::Annotation(Annotation { term, ty }) => {
+            | TermValue::Annotation(Annotation { term, ty }) => {
                 let ty_lub = Type::lub(typ, ty.inner_clone(), ctx.clone(), span)?;
                 Step::AnaMode((ctx, term), ty_lub)
             }
-            TermValue::Thunk(Thunk(c)) => {
+            | TermValue::Thunk(Thunk(c)) => {
                 let typ_comp = typ.clone().elim_thunk(ctx.clone(), span).ok_or_else(|| {
                     ctx.err(
                         span,
@@ -77,7 +81,7 @@ impl TypeCheck for Sp<TermValue> {
                 let typ_lub = Type::lub(typ, ty, ctx.clone(), span)?;
                 Step::Done(typ_lub)
             }
-            TermValue::Ctor(Ctor { ctorv: ctor, args }) => {
+            | TermValue::Ctor(Ctor { ctorv: ctor, args }) => {
                 let (Data { name, params, ctors }, ty_args) =
                     ctx.resolve_data(typ.clone(), span)?;
                 let diff = Env::init(&params, &ty_args, || {
@@ -117,7 +121,7 @@ impl TypeCheck for Sp<TermValue> {
                 }
                 Step::Done(typ)
             }
-            TermValue::Pack(Pack { ty, body }) => {
+            | TermValue::Pack(Pack { ty, body }) => {
                 let SynType::Exists(Exists { param: (param, kd), ty: ty_body }) = typ_syn else {
                     Err(ctx.err(
                         span,
@@ -135,7 +139,7 @@ impl TypeCheck for Sp<TermValue> {
                 body.ana(ty_body, ctx)?;
                 Step::Done(typ)
             }
-            TermValue::Var(_) | TermValue::Literal(_) => {
+            | TermValue::Var(_) | TermValue::Literal(_) => {
                 // subsumption
                 let typ_syn = self.syn(ctx.clone())?;
                 let typ_lub = Type::lub(typ, typ_syn, ctx.clone(), span)?;
