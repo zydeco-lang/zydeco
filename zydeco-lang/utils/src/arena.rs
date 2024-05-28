@@ -81,22 +81,22 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> Index<Id> for ArenaDense<Id, T, Meta>
+    impl<Id, T, Meta> Index<&Id> for ArenaDense<Id, T, Meta>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta>,
     {
         type Output = T;
-        fn index(&self, id: Id) -> &Self::Output {
+        fn index(&self, id: &Id) -> &Self::Output {
             self.get(id).unwrap()
         }
     }
-    impl<Id, T, Meta> IndexMut<Id> for ArenaDense<Id, T, Meta>
+    impl<Id, T, Meta> IndexMut<&Id> for ArenaDense<Id, T, Meta>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta>,
     {
-        fn index_mut(&mut self, id: Id) -> &mut Self::Output {
+        fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
             self.get_mut(id).unwrap()
         }
     }
@@ -116,15 +116,15 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> ArenaAccess<Id, T, Meta> for ArenaDense<Id, T, Meta>
+    impl<Id, T, Meta> ArenaAccess<&Id, T, Meta> for ArenaDense<Id, T, Meta>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta>,
     {
-        fn get(&self, id: Id) -> Option<&T> {
+        fn get(&self, id: &Id) -> Option<&T> {
             self.vec.get(id.index())
         }
-        fn get_mut(&mut self, id: Id) -> Option<&mut T> {
+        fn get_mut(&mut self, id: &Id) -> Option<&mut T> {
             self.vec.get_mut(id.index())
         }
     }
@@ -353,57 +353,8 @@ macro_rules! new_key_type {
 
     // a nice default only for compiler use
     ( $(#[$outer:meta])* $vis:vis struct $name:ident ; $($rest:tt)* ) => {
-        $(#[$outer])*
-        #[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-        $vis struct $name(usize, usize);
-
-        unsafe impl $crate::arena::IndexLike for $name {
-            type Meta = usize;
-            fn new(meta: Self::Meta, idx: usize) -> Self {
-                Self(meta, idx)
-            }
-            fn index(&self) -> usize {
-                self.1
-            }
-        }
-
-        impl std::fmt::Debug for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}({}, {})", stringify!($name), self.0, self.1)
-            }
-        }
-
-        $crate::new_key_type!($($rest)*);
+        $crate::new_key_type!( $(#[$outer])* $vis struct $name<usize> ; $($rest)* );
     };
 
     () => {}
 }
-
-// macro_rules! new_key_type {
-//     ( $(#[$outer:meta])* $vis:vis struct $name:ident; $($rest:tt)* ) => {
-//         $(#[$outer])*
-//         #[derive(Copy, Clone, Default,
-//                     Eq, PartialEq, Ord, PartialOrd,
-//                     Hash, Debug)]
-//         #[repr(transparent)]
-//         $vis struct $name($crate::KeyData);
-
-//         impl From<$crate::KeyData> for $name {
-//             fn from(k: $crate::KeyData) -> Self {
-//                 $name(k)
-//             }
-//         }
-
-//         unsafe impl $crate::Key for $name {
-//             fn data(&self) -> $crate::KeyData {
-//                 self.0
-//             }
-//         }
-
-//         $crate::__serialize_key!($name);
-
-//         $crate::new_key_type!($($rest)*);
-//     };
-
-//     () => {}
-// }

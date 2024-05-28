@@ -55,7 +55,7 @@ impl BuildSystem {
     }
     /// probe unseen dependencies of a package within one step and add them
     pub fn probe(&mut self, id: PackId) -> Result<Vec<PackId>> {
-        let pack = &self.packages[id];
+        let pack = &self.packages[&id];
         let mut deps_old = Vec::new();
         let mut deps_new = Vec::new();
         for dep in &pack.deps {
