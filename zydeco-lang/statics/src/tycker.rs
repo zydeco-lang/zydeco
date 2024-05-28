@@ -41,24 +41,87 @@ pub enum Step<In, Out> {
     Done(Out),
 }
 
+pub trait Annotated {
+    fn annotated(&self, tycker: &Tycker) -> Option<su::TermId>;
+}
+impl Annotated for su::Declaration {
+    fn annotated(&self, tycker: &Tycker) -> Option<su::TermId> {
+        use su::Declaration as Decl;
+        match self {
+            Decl::Alias(su::Alias { binder, bindee }) => {
+                let _ = binder;
+                tycker.scoped.terms[*bindee].annotated(tycker)
+            }
+            Decl::Extern(su::Extern { comp: _, binder, params, ty }) => {
+                assert!(params.is_none());
+                let _ = binder;
+                if let Some(ty) = ty {
+                    Some(*ty)
+                } else {
+                    None
+                }
+            }
+            Decl::Main(su::Main(_term)) => None,
+        }
+    }
+}
+impl Annotated for su::Term<su::DefId> {
+    fn annotated(&self, tycker: &Tycker) -> Option<su::TermId> {
+        use su::Term as Tm;
+        match self {
+            Tm::Internal(_) => unreachable!(),
+            Tm::Sealed(term) => {
+                let su::Sealed(term) = term;
+                tycker.scoped.terms[*term].annotated(tycker)
+            }
+            Tm::Ann(term) => {
+                let su::Ann { tm: _, ty } = term;
+                tycker.scoped.terms[*ty].annotated(tycker)
+            }
+            Tm::Var(_)
+            | Tm::Hole(_)
+            | Tm::Paren(_)
+            | Tm::Abs(_)
+            | Tm::App(_)
+            | Tm::Rec(_)
+            | Tm::Pi(_)
+            | Tm::Sigma(_)
+            | Tm::Thunk(_)
+            | Tm::Force(_)
+            | Tm::Ret(_)
+            | Tm::Do(_)
+            | Tm::Let(_)
+            | Tm::Data(_)
+            | Tm::CoData(_)
+            | Tm::Ctor(_)
+            | Tm::Match(_)
+            | Tm::CoMatch(_)
+            | Tm::Dtor(_)
+            | Tm::Lit(_) => None,
+        }
+    }
+}
+
 pub struct SccDeclarations<'decl>(pub &'decl HashSet<so::DeclId>);
 impl<'decl> Tyck for SccDeclarations<'decl> {
     type Out = ();
-    
+
     fn tyck(&self, tycker: &mut Tycker) -> Result<Self::Out> {
         let SccDeclarations(decls) = self;
+        let decls: &HashSet<_> = decls;
         match decls.len() {
             0 => unreachable!(),
             1 => {
                 // just synthesize
+                todo!()
             }
             _ => {
                 // mutually recursive declarations must..
                 // 1. all be types, and
                 // 2. all have kind annotations
+                todo!()
             }
         }
-        todo!()
     }
 }
 
