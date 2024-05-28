@@ -233,7 +233,7 @@ mod impls {
         Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
     {
         fn add_assign(&mut self, rhs: ArenaSparse<Id, T, Meta>) {
-            self.extend(rhs.into_iter());
+            self.extend(rhs);
         }
     }
 
@@ -320,7 +320,7 @@ mod impls {
         Id: Eq + std::hash::Hash,
     {
         fn add_assign(&mut self, rhs: ArenaAssoc<Id, T>) {
-            self.extend(rhs.into_iter());
+            self.extend(rhs);
         }
     }
 }

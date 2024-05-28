@@ -159,7 +159,7 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
 // where
 //     Id: std::fmt::Debug,
 {
-    pub fn new<'a>(id_deps: &'a DepGraph<Id>, belongs: HashMap<Id, usize>) -> Self {
+    pub fn new(id_deps: &DepGraph<Id>, belongs: HashMap<Id, usize>) -> Self {
         let mut strongs = HashMap::new();
         for (id, low) in &belongs {
             strongs.entry(*low).or_insert_with(HashSet::new).insert(id.clone());

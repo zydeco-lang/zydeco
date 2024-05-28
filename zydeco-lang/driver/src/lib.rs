@@ -23,6 +23,12 @@ pub struct BuildSystem {
     pub depends_on: DepGraph<PackId>,
 }
 
+impl Default for BuildSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BuildSystem {
     pub fn new() -> Self {
         Self { packages: ArenaDense::default(), seen: HashMap::new(), depends_on: DepGraph::new() }
@@ -71,7 +77,7 @@ impl BuildSystem {
                 self.add(pack)
             })
             .collect::<Result<Vec<_>>>()?;
-        self.depends_on.add(id, deps_new.iter().cloned().chain(deps_old.into_iter()));
+        self.depends_on.add(id, deps_new.iter().cloned().chain(deps_old));
         Ok(deps_new)
     }
 }

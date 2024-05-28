@@ -10,7 +10,7 @@ impl MonadTransType for Type {
                     TyckErrorItem::KindMismatch {
                         context: format!("begin-block-lift"),
                         expected: KindBase::CType.into(),
-                        found: span.make(self.clone()).syn(ctx.clone())?.into(),
+                        found: span.make(self.clone()).syn(ctx.clone())?,
                     },
                 ))?
             }

@@ -23,12 +23,12 @@ pub struct Local {
 
 trait Binders {
     type Arena;
-    fn binders<'f>(&self, arena: &'f Self::Arena) -> im::HashMap<VarName, DefId>;
+    fn binders(&self, arena: &Self::Arena) -> im::HashMap<VarName, DefId>;
 }
 
 impl Binders for PatId {
     type Arena = Arena;
-    fn binders<'f>(&self, arena: &'f Self::Arena) -> im::HashMap<VarName, DefId> {
+    fn binders(&self, arena: &Self::Arena) -> im::HashMap<VarName, DefId> {
         let pat = &arena.pats[self];
         match pat {
             | Pattern::Ann(pat) => {
@@ -175,15 +175,13 @@ impl Resolver {
 pub trait Resolve {
     type Out;
     type Lookup<'a>;
-    fn resolve<'f>(&self, resolver: &mut Resolver, lookup: Self::Lookup<'f>) -> Result<Self::Out>;
+    fn resolve(&self, resolver: &mut Resolver, lookup: Self::Lookup<'_>) -> Result<Self::Out>;
 }
 
 impl Resolve for TopLevel {
     type Out = ();
     type Lookup<'a> = Global;
-    fn resolve<'f>(
-        &self, resolver: &mut Resolver, mut global: Self::Lookup<'f>,
-    ) -> Result<Self::Out> {
+    fn resolve(&self, resolver: &mut Resolver, mut global: Self::Lookup<'_>) -> Result<Self::Out> {
         let TopLevel(decls) = self;
         // collect all top-level binders and ...
         // 1. check for duplicates
@@ -274,7 +272,7 @@ impl Resolve for TopLevel {
 impl Resolve for DeclId {
     type Out = ();
     type Lookup<'a> = &'a Global;
-    fn resolve<'f>(&self, resolver: &mut Resolver, global: Self::Lookup<'f>) -> Result<Self::Out> {
+    fn resolve(&self, resolver: &mut Resolver, global: Self::Lookup<'_>) -> Result<Self::Out> {
         // register the global binder in deps
         resolver.deps.add(*self, []);
         let decl = resolver.bitter.decls[self].clone();
@@ -315,7 +313,7 @@ impl Resolve for DefId {
 
     type Lookup<'a> = ();
 
-    fn resolve<'f>(&self, resolver: &mut Resolver, _lookup: Self::Lookup<'f>) -> Result<Self::Out> {
+    fn resolve(&self, resolver: &mut Resolver, _lookup: Self::Lookup<'_>) -> Result<Self::Out> {
         resolver.defs.insert(*self, resolver.bitter.defs[self].clone());
         Ok(())
     }
@@ -324,8 +322,8 @@ impl Resolve for PatId {
     // Note: returns the context yielded **after** the pattern
     type Out = Local;
     type Lookup<'a> = (Local, &'a Global);
-    fn resolve<'f>(
-        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
+    fn resolve(
+        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'_>,
     ) -> Result<Self::Out> {
         let pat = resolver.bitter.pats[self].clone();
         let local = match &pat {
@@ -364,8 +362,8 @@ impl Resolve for PatId {
 impl Resolve for TermId {
     type Out = ();
     type Lookup<'a> = (Local, &'a Global);
-    fn resolve<'f>(
-        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
+    fn resolve(
+        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'_>,
     ) -> Result<Self::Out> {
         let term = resolver.bitter.terms[self].clone();
         let res: Term<DefId> = match term {

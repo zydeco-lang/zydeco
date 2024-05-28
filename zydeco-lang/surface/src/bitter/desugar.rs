@@ -35,27 +35,27 @@ impl Desugarer {
     fn vtype(&mut self, span: Span) -> b::TermId {
         let term = Alloc::alloc(self, span);
         let term = self.term(term, b::Internal::VType.into());
-        self.prim.vtype.extend_one(term).clone()
+        *self.prim.vtype.extend_one(term)
     }
     fn ctype(&mut self, span: Span) -> b::TermId {
         let term = Alloc::alloc(self, span);
         let term = self.term(term, b::Internal::CType.into());
-        self.prim.ctype.extend_one(term).clone()
+        *self.prim.ctype.extend_one(term)
     }
     fn thunk(&mut self, span: Span) -> b::TermId {
         let term = Alloc::alloc(self, span);
         let term = self.term(term, b::Internal::Thunk.into());
-        self.prim.thunk.extend_one(term).clone()
+        *self.prim.thunk.extend_one(term)
     }
     fn ret(&mut self, span: Span) -> b::TermId {
         let term = Alloc::alloc(self, span);
         let term = self.term(term, b::Internal::Ret.into());
-        self.prim.ret.extend_one(term).clone()
+        *self.prim.ret.extend_one(term)
     }
     fn os(&mut self, span: Span) -> b::TermId {
         let term = Alloc::alloc(self, span);
         let term = self.term(term, b::Internal::OS.into());
-        self.prim.os.extend_one(term).clone()
+        *self.prim.os.extend_one(term)
     }
 }
 
@@ -307,7 +307,7 @@ impl Desugar for t::TermId {
                 let t::Hole = term;
                 desugarer.term(id, b::Hole.into())
             }
-            | Tm::Var(name) => desugarer.term(id, b::Term::Var(name).into()),
+            | Tm::Var(name) => desugarer.term(id, b::Term::Var(name)),
             | Tm::Paren(term) => {
                 let t::Paren(terms) = term;
                 let terms = terms.desugar(desugarer);
@@ -874,7 +874,7 @@ mod impls {
                     b::Ann { tm, ty }.into()
                 }
                 | b::Term::Hole(_term) => b::Hole.into(),
-                | b::Term::Var(name) => b::Term::Var(name.clone()).into(),
+                | b::Term::Var(name) => b::Term::Var(name.clone()),
                 | b::Term::Paren(term) => {
                     let b::Paren(terms) = term;
                     let terms = terms.deep_clone(desugarer);
