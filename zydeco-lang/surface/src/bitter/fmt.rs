@@ -25,7 +25,7 @@ impl Ugly for TopLevel {
 
 impl Ugly for DefId {
     fn ugly(&self, f: &Formatter) -> String {
-        let name = &f.arena.defs[*self];
+        let name = &f.arena.defs[self];
         name.ugly(f)
     }
 }
@@ -33,7 +33,7 @@ impl Ugly for DefId {
 impl Ugly for PatId {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let pat = &f.arena.pats[*self];
+        let pat = &f.arena.pats[self];
         match pat {
             | Pattern::Ann(p) => s += &p.ugly(f),
             | Pattern::Hole(p) => s += &p.ugly(f),
@@ -48,7 +48,7 @@ impl Ugly for PatId {
 impl Ugly for TermId {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let term = &f.arena.terms[*self];
+        let term = &f.arena.terms[self];
         match term {
             | Term::Internal(t) => s += &t.ugly(f),
             | Term::Sealed(t) => s += &t.ugly(f),
@@ -81,7 +81,7 @@ impl Ugly for TermId {
 
 impl Ugly for DeclId {
     fn ugly(&self, f: &Formatter) -> String {
-        let Modifiers { public, inner } = &f.arena.decls[*self];
+        let Modifiers { public, inner } = &f.arena.decls[self];
         let mut s = String::new();
         if *public {
             s += "pub ";

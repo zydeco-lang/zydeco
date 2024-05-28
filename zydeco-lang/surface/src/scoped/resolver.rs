@@ -29,7 +29,7 @@ trait Binders {
 impl Binders for PatId {
     type Arena = Arena;
     fn binders<'f>(&self, arena: &'f Self::Arena) -> im::HashMap<VarName, DefId> {
-        let pat = &arena.pats[*self];
+        let pat = &arena.pats[self];
         match pat {
             | Pattern::Ann(pat) => {
                 let Ann { tm, ty: _ } = pat;
@@ -41,7 +41,7 @@ impl Binders for PatId {
             }
             | Pattern::Var(pat) => {
                 let def = pat;
-                im::hashmap! { arena.defs[*def].clone() => *def }
+                im::hashmap! { arena.defs[def].clone() => *def }
             }
             | Pattern::Ctor(pat) => {
                 let Ctor(_ctor, args) = pat;
@@ -127,8 +127,8 @@ impl Resolver {
     ) -> Result<()> {
         for (name, def) in binders.iter() {
             if let Some(prev) = global.var_to_def.get(name) {
-                let span1 = &self.spans.defs[*prev];
-                let span2 = &self.spans.defs[*def];
+                let span1 = &self.spans.defs[prev];
+                let span2 = &self.spans.defs[def];
                 Err(ResolveError::DuplicateDefinition(
                     span1.make(name.clone()),
                     span2.make(name.clone()),
@@ -148,8 +148,8 @@ impl Resolver {
             || def,
             |id| {
                 ResolveError::DuplicatePrimitive(
-                    span.defs[def].clone().make(VarName(name.into())),
-                    span.defs[*id].clone().make(VarName(name.into())),
+                    span.defs[&def].clone().make(VarName(name.into())),
+                    span.defs[id].clone().make(VarName(name.into())),
                 )
             },
         )
@@ -189,7 +189,7 @@ impl Resolve for TopLevel {
         // 1. check for duplicates
         // 2. update primitives to term_to_def
         for id in decls {
-            let Modifiers { public: _, inner } = &resolver.bitter.decls[*id];
+            let Modifiers { public: _, inner } = &resolver.bitter.decls[id];
             match inner {
                 | Declaration::Alias(decl) => {
                     let Alias { binder, bindee: _ } = decl;
@@ -265,18 +265,8 @@ impl Resolve for TopLevel {
         for decl in decls {
             decl.resolve(resolver, &global)?;
         }
+        // check all primitives are defined
         resolver.prim_def.check()?;
-        Ok(())
-    }
-}
-
-impl PrimDef {
-    pub fn check(&self) -> Result<()> {
-        self.vtype.once_or_else(|| ResolveError::MissingPrim("VType"))?;
-        self.ctype.once_or_else(|| ResolveError::MissingPrim("CType"))?;
-        self.thunk.once_or_else(|| ResolveError::MissingPrim("Thunk"))?;
-        self.ret.once_or_else(|| ResolveError::MissingPrim("Ret"))?;
-        self.os.once_or_else(|| ResolveError::MissingPrim("OS"))?;
         Ok(())
     }
 }
@@ -287,7 +277,7 @@ impl Resolve for DeclId {
     fn resolve<'f>(&self, resolver: &mut Resolver, global: Self::Lookup<'f>) -> Result<Self::Out> {
         // register the global binder in deps
         resolver.deps.add(*self, []);
-        let decl = resolver.bitter.decls[*self].clone();
+        let decl = resolver.bitter.decls[self].clone();
         let local = Local { under: *self, ..Local::default() };
         let Modifiers { public: _, inner } = decl;
         match inner.clone() {
@@ -326,7 +316,7 @@ impl Resolve for DefId {
     type Lookup<'a> = ();
 
     fn resolve<'f>(&self, resolver: &mut Resolver, _lookup: Self::Lookup<'f>) -> Result<Self::Out> {
-        resolver.defs.insert(*self, resolver.bitter.defs[*self].clone());
+        resolver.defs.insert(*self, resolver.bitter.defs[self].clone());
         Ok(())
     }
 }
@@ -337,7 +327,7 @@ impl Resolve for PatId {
     fn resolve<'f>(
         &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
     ) -> Result<Self::Out> {
-        let pat = resolver.bitter.pats[*self].clone();
+        let pat = resolver.bitter.pats[self].clone();
         let local = match &pat {
             | Pattern::Ann(pat) => {
                 let Ann { tm, ty } = pat;
@@ -350,7 +340,7 @@ impl Resolve for PatId {
             }
             | Pattern::Var(def) => {
                 let () = def.resolve(resolver, ())?;
-                local.var_to_def.insert(resolver.bitter.defs[*def].clone(), *def);
+                local.var_to_def.insert(resolver.bitter.defs[def].clone(), *def);
                 local
             }
             | Pattern::Ctor(pat) => {
@@ -377,12 +367,12 @@ impl Resolve for TermId {
     fn resolve<'f>(
         &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
     ) -> Result<Self::Out> {
-        let term = resolver.bitter.terms[*self].clone();
+        let term = resolver.bitter.terms[self].clone();
         let res: Term<DefId> = match term {
             | Term::Internal(_) => {
                 // internal terms should be resolved by looking up term_to_def
                 // which has already been updated by primitives when collecting top level
-                let def = resolver.internal_to_def[*self];
+                let def = resolver.internal_to_def[self];
                 // now the only thing left is to add the dependency
                 let decl = global.under_map[&def];
                 resolver.deps.add(local.under, [decl]);
@@ -420,7 +410,7 @@ impl Resolve for TermId {
                     return Ok(());
                 }
                 // if not found, report an error
-                let span = &resolver.spans.terms[*self];
+                let span = &resolver.spans.terms[self];
                 Err(ResolveError::UnboundVar(span.make(var.clone())))?
             }
             | Term::Paren(term) => {

@@ -72,3 +72,18 @@ pub struct PrimDef {
     pub ret: SingCell<DefId>,
     pub os: SingCell<DefId>,
 }
+
+mod impls {
+    use super::*;
+    use crate::scoped::err::*;
+    impl PrimDef {
+        pub fn check(&self) -> Result<()> {
+            self.vtype.once_or_else(|| ResolveError::MissingPrim("VType"))?;
+            self.ctype.once_or_else(|| ResolveError::MissingPrim("CType"))?;
+            self.thunk.once_or_else(|| ResolveError::MissingPrim("Thunk"))?;
+            self.ret.once_or_else(|| ResolveError::MissingPrim("Ret"))?;
+            self.os.once_or_else(|| ResolveError::MissingPrim("OS"))?;
+            Ok(())
+        }
+    }
+}

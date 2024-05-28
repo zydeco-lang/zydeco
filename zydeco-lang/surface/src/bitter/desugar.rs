@@ -75,7 +75,7 @@ impl Desugar for t::TopLevel {
         let t::TopLevel(decls) = self;
         let mut decls_new = Vec::new();
         for decl in decls {
-            let Modifiers { public, inner } = desugarer.textual.decls[decl].clone();
+            let Modifiers { public, inner } = desugarer.textual.decls[&decl].clone();
             use t::Declaration as Decl;
             let inner = match inner {
                 | Decl::DataDef(decl) => {
@@ -710,52 +710,52 @@ mod impls {
 
     impl Spanned for t::DefId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.tspans.defs[*self].clone()
+            desugarer.tspans.defs[self].clone()
         }
     }
     impl Spanned for t::PatId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.tspans.pats[*self].clone()
+            desugarer.tspans.pats[self].clone()
         }
     }
     impl Spanned for t::CoPatId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.tspans.copats[*self].clone()
+            desugarer.tspans.copats[self].clone()
         }
     }
     impl Spanned for t::TermId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.tspans.terms[*self].clone()
+            desugarer.tspans.terms[self].clone()
         }
     }
     impl Spanned for t::DeclId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.tspans.decls[*self].clone()
+            desugarer.tspans.decls[self].clone()
         }
     }
     impl Spanned for b::DefId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.bspans.defs[*self].clone()
+            desugarer.bspans.defs[self].clone()
         }
     }
     impl Spanned for b::PatId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.bspans.pats[*self].clone()
+            desugarer.bspans.pats[self].clone()
         }
     }
     impl Spanned for b::CoPatId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.bspans.copats[*self].clone()
+            desugarer.bspans.copats[self].clone()
         }
     }
     impl Spanned for b::TermId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.bspans.terms[*self].clone()
+            desugarer.bspans.terms[self].clone()
         }
     }
     impl Spanned for b::DeclId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.bspans.decls[*self].clone()
+            desugarer.bspans.decls[self].clone()
         }
     }
 
@@ -803,7 +803,7 @@ mod impls {
     impl DeepClone for b::DefId {
         fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
             let span = self.span(desugarer);
-            let def = desugarer.bitter.defs[*self].clone();
+            let def = desugarer.bitter.defs[self].clone();
             let id = Alloc::alloc(desugarer, span);
             desugarer.def(id, def)
         }
@@ -811,7 +811,7 @@ mod impls {
     impl DeepClone for b::PatId {
         fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
             let span = self.span(desugarer);
-            let pat = desugarer.bitter.pats[*self].clone();
+            let pat = desugarer.bitter.pats[self].clone();
             let pat = match &pat {
                 | b::Pattern::Ann(pat) => {
                     let b::Ann { tm, ty } = pat;
@@ -839,7 +839,7 @@ mod impls {
     impl DeepClone for b::TermId {
         fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
             let span = self.span(desugarer);
-            let term = desugarer.bitter.terms[*self].clone();
+            let term = desugarer.bitter.terms[self].clone();
             let term = match &term {
                 | b::Term::Internal(term) => {
                     use crate::syntax::Internal;
@@ -1008,19 +1008,19 @@ mod impls {
 
     impl Desugarer {
         pub fn lookup_def(&self, id: t::DefId) -> t::VarName {
-            self.textual.defs[id].clone()
+            self.textual.defs[&id].clone()
         }
         pub fn lookup_pat(&self, id: t::PatId) -> t::Pattern {
-            self.textual.pats[id].clone()
+            self.textual.pats[&id].clone()
         }
         pub fn lookup_copat(&self, id: t::CoPatId) -> t::CoPattern {
-            self.textual.copats[id].clone()
+            self.textual.copats[&id].clone()
         }
         pub fn lookup_term(&self, id: t::TermId) -> t::Term {
-            self.textual.terms[id].clone()
+            self.textual.terms[&id].clone()
         }
         pub fn lookup_decl(&self, id: t::DeclId) -> Modifiers<t::Declaration> {
-            self.textual.decls[id].clone()
+            self.textual.decls[&id].clone()
         }
 
         pub fn def(&mut self, id: b::DefId, def: b::VarName) -> b::DefId {

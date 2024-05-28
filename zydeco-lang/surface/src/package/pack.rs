@@ -157,7 +157,7 @@ impl Package {
                         victims
                             .iter()
                             .map(|decl| {
-                                let decl = &pack.arena.decls[*decl];
+                                let decl = &pack.arena.decls[decl];
                                 match decl {
                                     | sc::Declaration::Alias(sc::Alias { binder, .. }) => {
                                         binder.ugly(&Formatter::new(&pack.arena))

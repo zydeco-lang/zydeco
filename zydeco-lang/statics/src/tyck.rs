@@ -50,7 +50,7 @@ impl Annotated for su::Declaration {
         match self {
             | Decl::Alias(su::Alias { binder, bindee }) => {
                 let _ = binder;
-                tycker.scoped.terms[*bindee].annotated(tycker)
+                tycker.scoped.terms[bindee].annotated(tycker)
             }
             | Decl::Extern(su::Extern { comp: _, binder, params, ty }) => {
                 // Todo: implement this
@@ -73,11 +73,11 @@ impl Annotated for su::Term<su::DefId> {
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;
-                tycker.scoped.terms[*term].annotated(tycker)
+                tycker.scoped.terms[term].annotated(tycker)
             }
             | Tm::Ann(term) => {
                 let su::Ann { tm: _, ty } = term;
-                tycker.scoped.terms[*ty].annotated(tycker)
+                tycker.scoped.terms[ty].annotated(tycker)
             }
             | Tm::Var(_)
             | Tm::Hole(_)

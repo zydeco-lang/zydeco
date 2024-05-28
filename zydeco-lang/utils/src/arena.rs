@@ -144,23 +144,23 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> Index<Id> for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> Index<&Id> for ArenaSparse<Id, T, Meta>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
     {
         type Output = T;
-        fn index(&self, id: Id) -> &Self::Output {
+        fn index(&self, id: &Id) -> &Self::Output {
             self.get(id).unwrap()
         }
     }
 
-    impl<Id, T, Meta> IndexMut<Id> for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> IndexMut<&Id> for ArenaSparse<Id, T, Meta>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
     {
-        fn index_mut(&mut self, id: Id) -> &mut Self::Output {
+        fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
             self.get_mut(id).unwrap()
         }
     }
@@ -181,15 +181,15 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> ArenaAccess<Id, T, Meta> for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> ArenaAccess<&Id, T, Meta> for ArenaSparse<Id, T, Meta>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + std::hash::Hash,
     {
-        fn get(&self, id: Id) -> Option<&T> {
+        fn get(&self, id: &Id) -> Option<&T> {
             self.map.get(&id)
         }
-        fn get_mut(&mut self, id: Id) -> Option<&mut T> {
+        fn get_mut(&mut self, id: &Id) -> Option<&mut T> {
             self.map.get_mut(&id)
         }
     }
@@ -260,33 +260,33 @@ mod impls {
         }
     }
 
-    impl<Id, T> Index<Id> for ArenaAssoc<Id, T>
+    impl<Id, T> Index<&Id> for ArenaAssoc<Id, T>
     where
         Id: Eq + std::hash::Hash,
     {
         type Output = T;
-        fn index(&self, id: Id) -> &Self::Output {
+        fn index(&self, id: &Id) -> &Self::Output {
             self.get(id).unwrap()
         }
     }
 
-    impl<Id, T> IndexMut<Id> for ArenaAssoc<Id, T>
+    impl<Id, T> IndexMut<&Id> for ArenaAssoc<Id, T>
     where
         Id: Eq + std::hash::Hash,
     {
-        fn index_mut(&mut self, id: Id) -> &mut Self::Output {
+        fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
             self.get_mut(id).unwrap()
         }
     }
 
-    impl<Id, T> ArenaAccess<Id, T, ()> for ArenaAssoc<Id, T>
+    impl<'a, Id, T> ArenaAccess<&'a Id, T, ()> for ArenaAssoc<Id, T>
     where
         Id: Eq + std::hash::Hash,
     {
-        fn get(&self, id: Id) -> Option<&T> {
+        fn get(&self, id: &Id) -> Option<&T> {
             self.map.get(&id)
         }
-        fn get_mut(&mut self, id: Id) -> Option<&mut T> {
+        fn get_mut(&mut self, id: &Id) -> Option<&mut T> {
             self.map.get_mut(&id)
         }
     }
