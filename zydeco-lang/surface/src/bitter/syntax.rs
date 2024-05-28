@@ -254,4 +254,6 @@ pub struct PrimTerm {
     pub thunk: MultiCell<TermId>,
     /// Ret type
     pub ret: MultiCell<TermId>,
+    /// OS type
+    pub os: MultiCell<TermId>,
 }

@@ -117,6 +117,7 @@ impl Ugly for Internal {
             Internal::CType => s += "CType",
             Internal::Thunk => s += "Thunk",
             Internal::Ret => s += "Ret",
+            Internal::OS => s += "OS",
         }
         s
     }

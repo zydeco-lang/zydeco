@@ -35,6 +35,20 @@ pub enum CoPattern {
     App(App<CoPatId>),
 }
 
+/* ---------------------------------- Kind ---------------------------------- */
+
+#[derive(Clone, Debug)]
+pub struct VType;
+#[derive(Clone, Debug)]
+pub struct CType;
+
+#[derive(Debug, Clone)]
+pub enum Kind {
+    VType(VType),
+    CType(CType),
+    Arrow(Arrow<KindId, KindId>),
+}
+
 /* ---------------------------------- Type ---------------------------------- */
 
 #[derive(From, Clone, Debug)]
@@ -197,24 +211,10 @@ pub enum Declaration {
     Main(Main),
 }
 
-/* ---------------------------------- Kind ---------------------------------- */
-
-#[derive(Clone, Debug)]
-pub struct VType;
-#[derive(Clone, Debug)]
-pub struct CType;
-
-#[derive(Debug, Clone)]
-pub enum Kind {
-    VType(VType),
-    CType(CType),
-    Arrow(Arrow<KindId, KindId>),
-}
-
 /* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Debug)]
-pub struct _SortedArena {
+pub struct StaticArena {
     /// arena for kinds
     pub kinds: ArenaSparse<KindId, Kind>,
     /// arena for types

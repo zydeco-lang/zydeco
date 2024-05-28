@@ -170,6 +170,9 @@ impl Resolver {
     fn alloc_ret(&mut self, ret: DefId) -> Result<DefId> {
         Self::alloc_prim(&self.spans, &mut self.prim_def.ret, ret, "Ret")
     }
+    fn alloc_os(&mut self, os: DefId) -> Result<DefId> {
+        Self::alloc_prim(&self.spans, &mut self.prim_def.os, os, "OS")
+    }
 }
 
 pub trait Resolve {
@@ -243,6 +246,12 @@ impl Resolve for TopLevel {
                                 resolver.prim_term.ret.all().into_iter().map(|term| (*term, ret)),
                             );
                         }
+                        if let Some(def) = binders.get(&VarName("OS".into())) {
+                            let os = resolver.alloc_os(*def)?;
+                            resolver.internal_to_def.extend(
+                                resolver.prim_term.os.all().into_iter().map(|term| (*term, os)),
+                            );
+                        }
                     }
                     resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }
@@ -270,6 +279,7 @@ impl PrimDef {
         self.ctype.once_or_else(|| ResolveError::MissingPrim("CType"))?;
         self.thunk.once_or_else(|| ResolveError::MissingPrim("Thunk"))?;
         self.ret.once_or_else(|| ResolveError::MissingPrim("Ret"))?;
+        self.os.once_or_else(|| ResolveError::MissingPrim("OS"))?;
         Ok(())
     }
 }
@@ -403,7 +413,9 @@ impl Resolve for TermId {
                 // now the only thing left is to add the dependency
                 let decl = global.under_map[&def];
                 resolver.deps.add(local.under, [decl]);
-                return Ok(()); // no need to update the term structure
+                // no need update the term as def
+                resolver.terms.insert(*self, Term::Var(def));
+                return Ok(());
             }
             Term::Sealed(term) => {
                 let Sealed(inner) = &term;

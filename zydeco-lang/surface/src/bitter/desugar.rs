@@ -52,6 +52,11 @@ impl Desugarer {
         let term = self.term(term, b::Internal::Ret.into());
         self.prim.ret.extend_one(term).clone()
     }
+    fn os(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal::OS.into());
+        self.prim.os.extend_one(term).clone()
+    }
 }
 
 impl<T> Desugar for Vec<T>
@@ -776,6 +781,9 @@ mod impls {
                         }
                         Internal::Ret => {
                             return desugarer.ret(span);
+                        }
+                        Internal::OS => {
+                            return desugarer.os(span);
                         }
                     }
                 }

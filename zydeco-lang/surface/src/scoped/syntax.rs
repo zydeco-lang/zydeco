@@ -71,4 +71,5 @@ pub struct PrimDef {
     pub ctype: SingCell<DefId>,
     pub thunk: SingCell<DefId>,
     pub ret: SingCell<DefId>,
+    pub os: SingCell<DefId>,
 }

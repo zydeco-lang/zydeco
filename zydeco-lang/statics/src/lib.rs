@@ -6,13 +6,5 @@ pub mod surface_syntax {
 }
 
 pub mod syntax;
-
-pub mod sorted {
-    pub mod syntax;
-    pub mod sorter;
-    pub mod err;
-}
-
-pub mod typed {
-    pub mod syntax;
-}
+pub mod tycker;
+pub mod err;
