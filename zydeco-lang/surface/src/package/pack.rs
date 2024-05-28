@@ -315,7 +315,6 @@ impl PackageStew {
 
             defs: ArenaAssoc::default(),
             pats: ArenaAssoc::default(),
-            copats: ArenaAssoc::default(),
             terms: ArenaAssoc::default(),
             decls: ArenaAssoc::default(),
 

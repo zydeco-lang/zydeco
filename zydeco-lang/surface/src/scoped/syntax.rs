@@ -53,7 +53,6 @@ pub struct ScopedArena {
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
-    pub copats: ArenaAssoc<CoPatId, CoPattern>,
     pub terms: ArenaAssoc<TermId, Term<DefId>>,
     pub decls: ArenaAssoc<DeclId, Declaration>,
 

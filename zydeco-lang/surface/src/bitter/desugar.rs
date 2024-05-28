@@ -79,31 +79,21 @@ impl Desugar for t::TopLevel {
             use t::Declaration as Decl;
             let inner = match inner {
                 | Decl::DataDef(decl) => {
-                    let t::DataDef { name, params, def } = decl;
+                    let t::DataDef { name, params, def: body } = decl;
                     let span = name.span(desugarer);
                     // name -> pat
                     let name = name.desugar(desugarer);
                     let pat = Alloc::alloc(desugarer, span.clone());
                     let pat = desugarer.pat(pat, name.into());
-                    // params -> copattern
+                    // body -> term
+                    let body = span.make(body).desugar(desugarer);
+                    // params & body -> abs term
                     let params = params.desugar(desugarer);
-                    let params = params
-                        .into_iter()
-                        .map(|param| {
-                            // param -> copattern
-                            let span = param.span(desugarer);
-                            let co = Alloc::alloc(desugarer, span);
-                            let param = desugarer.copat(co, param.into());
-                            param
-                        })
-                        .collect::<Vec<_>>();
-                    let co = Alloc::alloc(desugarer, span.clone());
-                    let params = desugarer.copat(co, b::App(params).into());
-                    // def -> term
-                    let def = span.make(def).desugar(desugarer);
-                    // params & def -> abs term
-                    let abs = Alloc::alloc(desugarer, span.clone());
-                    let abs = desugarer.term(abs, b::Abs(params, def).into());
+                    let mut abs = body;
+                    for param in params.into_iter().rev() {
+                        let next = Alloc::alloc(desugarer, span.clone());
+                        abs = desugarer.term(next, b::Abs(param, abs).into());
+                    }
                     // abs -> sealed
                     let sealed = Alloc::alloc(desugarer, span.clone());
                     let sealed = desugarer.term(sealed, b::Sealed(abs).into());
@@ -111,31 +101,21 @@ impl Desugar for t::TopLevel {
                     b::Alias { binder: pat, bindee: sealed }.into()
                 }
                 | Decl::CoDataDef(decl) => {
-                    let t::CoDataDef { name, params, def } = decl;
+                    let t::CoDataDef { name, params, def: body } = decl;
                     let span = name.span(desugarer);
                     // name -> pat
                     let name = name.desugar(desugarer);
                     let pat = Alloc::alloc(desugarer, span.clone());
                     let pat = desugarer.pat(pat, name.into());
-                    // params -> copattern
+                    // body -> term
+                    let body = span.make(body).desugar(desugarer);
+                    // params & body -> abs term
                     let params = params.desugar(desugarer);
-                    let params = params
-                        .into_iter()
-                        .map(|param| {
-                            // param -> copattern
-                            let span = param.span(desugarer);
-                            let co = Alloc::alloc(desugarer, span);
-                            let param = desugarer.copat(co, param.into());
-                            param
-                        })
-                        .collect::<Vec<_>>();
-                    let co = Alloc::alloc(desugarer, span.clone());
-                    let params = desugarer.copat(co, b::App(params).into());
-                    // def -> term
-                    let def = span.make(def).desugar(desugarer);
-                    // params & def -> abs term
-                    let abs = Alloc::alloc(desugarer, span.clone());
-                    let abs = desugarer.term(abs, b::Abs(params, def).into());
+                    let mut abs = body;
+                    for param in params.into_iter().rev() {
+                        let next = Alloc::alloc(desugarer, span.clone());
+                        abs = desugarer.term(next, b::Abs(param, abs).into());
+                    }
                     // abs -> sealed
                     let sealed = Alloc::alloc(desugarer, span.clone());
                     let sealed = desugarer.term(sealed, b::Sealed(abs).into());
@@ -163,7 +143,21 @@ impl Desugar for t::TopLevel {
                     let t::Extern(t::GenBind { rec: _, comp, binder, params, ty, bindee: () }) =
                         decl;
                     let binder = binder.desugar(desugarer);
-                    let params = params.map(|params| params.desugar(desugarer));
+                    let params = if let Some(params) = params {
+                        let b::App(items) = params.desugar(desugarer);
+                        let mut res = Vec::new();
+                        for item in items {
+                            match item {
+                                | b::CoPatternItem::Pat(pat) => res.push(pat),
+                                | b::CoPatternItem::Dtor(_) => {
+                                    unimplemented!("Dtor in extern params")
+                                }
+                            }
+                        }
+                        res
+                    } else {
+                        Vec::new()
+                    };
                     let ty = ty.map(|ty| ty.desugar(desugarer));
                     b::Extern { comp, binder, params, ty }.into()
                 }
@@ -257,32 +251,38 @@ impl Desugar for t::PatId {
 }
 
 impl Desugar for t::CoPatId {
-    type Out = b::CoPatId;
+    type Out = b::App<b::CoPatternItem>;
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
-        let id = self;
-        let span = id.span(desugarer);
-        let copat = desugarer.lookup_copat(id);
-        let id = Alloc::alloc(desugarer, span);
         use t::CoPattern as CoPat;
-        match copat {
+        match desugarer.lookup_copat(self) {
             | CoPat::Pat(pat) => {
                 let pat = pat.desugar(desugarer);
-                desugarer.copat(id, pat.into())
+                b::App(vec![pat.into()])
             }
-            | CoPat::Dtor(name) => desugarer.copat(id, name.into()),
+            | CoPat::Dtor(name) => b::App(vec![name.into()]),
             | CoPat::App(copat) => {
                 let t::App(copats) = copat;
                 let iter = copats.into_iter();
                 let mut copats = Vec::new();
                 for copat in iter {
-                    if let CoPat::App(copat) = desugarer.lookup_copat(copat) {
-                        let t::App(inner) = copat;
-                        copats.extend(inner.into_iter().map(|copat| copat.desugar(desugarer)));
-                    } else {
-                        copats.push(copat.desugar(desugarer))
+                    match desugarer.lookup_copat(copat) {
+                        | CoPat::Pat(copat) => {
+                            let pat = copat.desugar(desugarer);
+                            copats.push(pat.into())
+                        }
+                        | CoPat::Dtor(name) => copats.push(name.into()),
+                        | CoPat::App(copat) => {
+                            let t::App(inner) = copat;
+                            for items in inner.into_iter().map(|copat| {
+                                let b::App(items) = copat.desugar(desugarer);
+                                items
+                            }) {
+                                copats.extend(items);
+                            }
+                        }
                     }
                 }
-                desugarer.copat(id, b::App(copats).into())
+                b::App(copats)
             }
         }
     }
@@ -320,9 +320,26 @@ impl Desugar for t::TermId {
             }
             | Tm::Abs(term) => {
                 let t::Abs(params, tail) = term;
-                let params = params.desugar(desugarer);
-                let tail = tail.desugar(desugarer);
-                desugarer.term(id, b::Abs(params, tail).into())
+                let b::App(params) = params.desugar(desugarer);
+                let mut tail = tail.desugar(desugarer);
+                for param in params.into_iter().rev() {
+                    match param {
+                        | b::CoPatternItem::Pat(pat) => {
+                            let span = pat.span(desugarer);
+                            let id = Alloc::alloc(desugarer, span);
+                            tail = desugarer.term(id, b::Abs(pat, tail).into())
+                        }
+                        | b::CoPatternItem::Dtor(dtor) => {
+                            let span = tail.span(desugarer);
+                            let id = Alloc::alloc(desugarer, span);
+                            tail = desugarer.term(
+                                id,
+                                b::CoMatch { arms: vec![b::CoMatcher { dtor, tail }] }.into(),
+                            )
+                        }
+                    }
+                }
+                tail
             }
             | Tm::App(term) => {
                 let t::App(terms) = term;
@@ -347,9 +364,21 @@ impl Desugar for t::TermId {
             }
             | Tm::Pi(term) => {
                 let t::Pi(params, ty) = term;
-                let params = params.desugar(desugarer);
-                let ty = ty.desugar(desugarer);
-                desugarer.term(id, b::Pi(params, ty).into())
+                let b::App(params) = params.desugar(desugarer);
+                let mut ty = ty.desugar(desugarer);
+                for param in params.into_iter().rev() {
+                    match param {
+                        | b::CoPatternItem::Pat(pat) => {
+                            let span = pat.span(desugarer);
+                            let id = Alloc::alloc(desugarer, span);
+                            ty = desugarer.term(id, b::Pi(pat, ty).into())
+                        }
+                        | b::CoPatternItem::Dtor(_dtor) => {
+                            unimplemented!("handle dtor in pi type error")
+                        }
+                    }
+                }
+                ty
             }
             | Tm::Arrow(term) => {
                 let t::Arrow(params, ty) = term;
@@ -360,18 +389,27 @@ impl Desugar for t::TermId {
                 let hole = desugarer.pat(hole, b::Hole.into());
                 let ann = Alloc::alloc(desugarer, span.clone());
                 let ann = desugarer.pat(ann, b::Ann { tm: hole, ty: params }.into());
-                // ann -> copat
-                let copat = Alloc::alloc(desugarer, span);
-                let copat = desugarer.copat(copat, ann.into());
-                // copat & ty -> pi
+                // ann & ty -> pi
                 let ty = ty.desugar(desugarer);
-                desugarer.term(id, b::Pi(copat, ty).into())
+                desugarer.term(id, b::Pi(ann, ty).into())
             }
             | Tm::Forall(term) => {
                 let t::Forall(params, ty) = term;
-                let params = params.desugar(desugarer);
-                let ty = ty.desugar(desugarer);
-                let forall = desugarer.term(id, b::Pi(params, ty).into());
+                let b::App(params) = params.desugar(desugarer);
+                let mut ty = ty.desugar(desugarer);
+                for param in params.into_iter().rev() {
+                    match param {
+                        | b::CoPatternItem::Pat(pat) => {
+                            let span = pat.span(desugarer);
+                            let id = Alloc::alloc(desugarer, span);
+                            ty = desugarer.term(id, b::Pi(pat, ty).into())
+                        }
+                        | b::CoPatternItem::Dtor(_dtor) => {
+                            unimplemented!("handle dtor in forall type error")
+                        }
+                    }
+                }
+                let forall = ty;
                 // forall -> ann
                 let span = forall.span(desugarer);
                 let ann = Alloc::alloc(desugarer, span.clone());
@@ -380,9 +418,21 @@ impl Desugar for t::TermId {
             }
             | Tm::Sigma(term) => {
                 let t::Sigma(params, ty) = term;
-                let params = params.desugar(desugarer);
-                let ty = ty.desugar(desugarer);
-                desugarer.term(id, b::Sigma(params, ty).into())
+                let b::App(params) = params.desugar(desugarer);
+                let mut ty = ty.desugar(desugarer);
+                for param in params.into_iter().rev() {
+                    match param {
+                        | b::CoPatternItem::Pat(pat) => {
+                            let span = pat.span(desugarer);
+                            let id = Alloc::alloc(desugarer, span);
+                            ty = desugarer.term(id, b::Sigma(pat, ty).into())
+                        }
+                        | b::CoPatternItem::Dtor(_dtor) => {
+                            unimplemented!("handle dtor in sigma type error")
+                        }
+                    }
+                }
+                ty
             }
             | Tm::Prod(term) => {
                 let t::Prod(terms) = term;
@@ -395,21 +445,30 @@ impl Desugar for t::TermId {
                     let hole = desugarer.pat(hole, b::Hole.into());
                     let ann = Alloc::alloc(desugarer, span.clone());
                     let ann = desugarer.pat(ann, b::Ann { tm: hole, ty: term }.into());
-                    // ann -> copat
-                    let copat = Alloc::alloc(desugarer, span.clone());
-                    let copat = desugarer.copat(copat, ann.into());
-                    // copat & sigma -> sigma
+                    // ann & sigma -> sigma
                     let span = out.span(desugarer);
                     let sigma = Alloc::alloc(desugarer, span);
-                    out = desugarer.term(sigma, b::Sigma(copat, out).into());
+                    out = desugarer.term(sigma, b::Sigma(ann, out).into());
                 }
                 out
             }
             | Tm::Exists(term) => {
                 let t::Exists(params, ty) = term;
-                let params = params.desugar(desugarer);
-                let ty = ty.desugar(desugarer);
-                let exists = desugarer.term(id, b::Sigma(params, ty).into());
+                let b::App(params) = params.desugar(desugarer);
+                let mut ty = ty.desugar(desugarer);
+                for param in params.into_iter().rev() {
+                    match param {
+                        | b::CoPatternItem::Pat(pat) => {
+                            let span = pat.span(desugarer);
+                            let id = Alloc::alloc(desugarer, span);
+                            ty = desugarer.term(id, b::Sigma(pat, ty).into())
+                        }
+                        | b::CoPatternItem::Dtor(_dtor) => {
+                            unimplemented!("handle dtor in exists type error")
+                        }
+                    }
+                }
+                let exists = ty;
                 // exists -> ann
                 let span = exists.span(desugarer);
                 let ann = Alloc::alloc(desugarer, span.clone());
@@ -503,9 +562,31 @@ impl Desugar for t::TermId {
                 let arms = arms
                     .into_iter()
                     .map(|t::CoMatcher { params, tail }| {
-                        let params = params.desugar(desugarer);
-                        let tail = tail.desugar(desugarer);
-                        b::CoMatcher { params, tail }
+                        let b::App(params) = params.desugar(desugarer);
+                        let mut tail = tail.desugar(desugarer);
+                        let mut iter = params.into_iter();
+                        let Some(b::CoPatternItem::Dtor(dtor)) = iter.next() else {
+                            unimplemented!("handle error where no dtor in comatch params")
+                        };
+                        for param in iter.rev() {
+                            match param {
+                                | b::CoPatternItem::Pat(pat) => {
+                                    let span = pat.span(desugarer);
+                                    let id = Alloc::alloc(desugarer, span);
+                                    tail = desugarer.term(id, b::Abs(pat, tail).into())
+                                }
+                                | b::CoPatternItem::Dtor(dtor) => {
+                                    let span = tail.span(desugarer);
+                                    let id = Alloc::alloc(desugarer, span);
+                                    tail = desugarer.term(
+                                        id,
+                                        b::CoMatch { arms: vec![b::CoMatcher { dtor, tail }] }
+                                            .into(),
+                                    )
+                                }
+                            }
+                        }
+                        b::CoMatcher { dtor, tail }
                     })
                     .collect();
                 desugarer.term(id, b::CoMatch { arms }.into())
@@ -539,12 +620,25 @@ impl Desugar for t::GenBind<t::TermId> {
         // params
         let params = params.map(|params| params.desugar(desugarer));
         // params? & bindee -> abs term binding
-        let mut binding = if let Some(params) = params {
-            let span = binder.span(desugarer);
-            let binding = Alloc::alloc(desugarer, span);
-            desugarer.term(binding, b::Abs(params, bindee).into())
-        } else {
-            bindee
+        let mut binding = bindee;
+        if let Some(b::App(params)) = params {
+            for param in params.into_iter().rev() {
+                match param {
+                    | b::CoPatternItem::Pat(pat) => {
+                        let span = pat.span(desugarer);
+                        let id = Alloc::alloc(desugarer, span);
+                        binding = desugarer.term(id, b::Abs(pat, binding).into())
+                    }
+                    | b::CoPatternItem::Dtor(dtor) => {
+                        let span = binding.span(desugarer);
+                        let id = Alloc::alloc(desugarer, span);
+                        binding = desugarer.term(
+                            id,
+                            b::CoMatch { arms: vec![b::CoMatcher { dtor, tail: binding }] }.into(),
+                        )
+                    }
+                }
+            }
         };
         // rec?
         if rec {
@@ -742,26 +836,6 @@ mod impls {
             desugarer.pat(id, pat)
         }
     }
-    impl DeepClone for b::CoPatId {
-        fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
-            let span = self.span(desugarer);
-            let copat = desugarer.bitter.copats[*self].clone();
-            let copat = match &copat {
-                | b::CoPattern::Pat(pat) => {
-                    let pat = pat.deep_clone(desugarer);
-                    pat.into()
-                }
-                | b::CoPattern::Dtor(name) => name.clone().into(),
-                | b::CoPattern::App(copat) => {
-                    let b::App(copats) = copat;
-                    let copats = copats.deep_clone(desugarer);
-                    b::App(copats).into()
-                }
-            };
-            let id = Alloc::alloc(desugarer, span);
-            desugarer.copat(id, copat)
-        }
-    }
     impl DeepClone for b::TermId {
         fn deep_clone(&self, desugarer: &mut Desugarer) -> Self {
             let span = self.span(desugarer);
@@ -911,10 +985,10 @@ mod impls {
                     let b::CoMatch { arms } = term;
                     let arms = arms
                         .into_iter()
-                        .map(|b::CoMatcher { params, tail }| {
-                            let params = params.deep_clone(desugarer);
+                        .map(|b::CoMatcher { dtor, tail }| {
+                            let dtor = dtor.clone();
                             let tail = tail.deep_clone(desugarer);
-                            b::CoMatcher { params, tail }
+                            b::CoMatcher { dtor, tail }
                         })
                         .collect();
                     b::CoMatch { arms }.into()
@@ -955,10 +1029,6 @@ mod impls {
         }
         pub fn pat(&mut self, id: b::PatId, pat: b::Pattern) -> b::PatId {
             self.bitter.pats.insert(id, pat);
-            id
-        }
-        pub fn copat(&mut self, id: b::CoPatId, copat: b::CoPattern) -> b::CoPatId {
-            self.bitter.copats.insert(id, copat);
             id
         }
         pub fn term(&mut self, id: b::TermId, term: b::Term<b::NameRef<b::VarName>>) -> b::TermId {

@@ -7,6 +7,8 @@ pub extern Ret (A : VType) : CType end
 pub alias U (B : CType) = Thunk B end
 pub alias F (A : VType) = Ret A end
 
+pub extern OS : CType end
+
 /// the identity functions
 
 pub def id : Thunk(forall (A : VType) . A -> Ret A) = {

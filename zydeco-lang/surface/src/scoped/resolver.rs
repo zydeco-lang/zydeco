@@ -73,7 +73,6 @@ pub struct Resolver {
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
-    pub copats: ArenaAssoc<CoPatId, CoPattern>,
     pub terms: ArenaAssoc<TermId, Term<DefId>>,
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
@@ -101,7 +100,6 @@ impl Resolver {
 
             defs,
             pats,
-            copats,
             terms,
             decls,
 
@@ -116,7 +114,6 @@ impl Resolver {
 
                 defs,
                 pats,
-                copats,
                 terms,
                 decls,
 
@@ -308,8 +305,8 @@ impl Resolve for DeclId {
                 if let Some(ty) = ty {
                     let () = ty.resolve(resolver, (local.clone(), global))?;
                 }
-                if let Some(params) = params {
-                    let _ = params.resolve(resolver, (local.clone(), global))?;
+                for param in params {
+                    let _ = param.resolve(resolver, (local.clone(), global))?;
                 }
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
             }
@@ -371,30 +368,6 @@ impl Resolve for PatId {
         };
         // no id changed, reuse old inner pat structure
         resolver.pats.insert(*self, pat);
-        Ok(local)
-    }
-}
-impl Resolve for CoPatId {
-    type Out = Local;
-    type Lookup<'a> = (Local, &'a Global);
-    fn resolve<'f>(
-        &self, resolver: &mut Resolver, (mut local, global): Self::Lookup<'f>,
-    ) -> Result<Self::Out> {
-        let copat = resolver.bitter.copats[*self].clone();
-        let local = match &copat {
-            | CoPattern::Pat(pat) => pat.resolve(resolver, (local, global))?,
-            | CoPattern::Dtor(_dtor) => local,
-            | CoPattern::App(copat) => {
-                let App(args) = copat;
-                for arg in args {
-                    // can be dependent on the previous binders
-                    local = arg.resolve(resolver, (local, global))?;
-                }
-                local
-            }
-        };
-        // no id changed, reuse old inner copat structure
-        resolver.copats.insert(*self, copat);
         Ok(local)
     }
 }
@@ -552,9 +525,7 @@ impl Resolve for TermId {
             | Term::CoMatch(term) => {
                 let CoMatch { arms } = &term;
                 for arm in arms {
-                    let mut local = local.clone();
-                    let CoMatcher { params, tail } = arm;
-                    local = params.resolve(resolver, (local.clone(), global))?;
+                    let CoMatcher { dtor: _, tail } = arm;
                     let () = tail.resolve(resolver, (local.clone(), global))?;
                 }
                 term.into()

@@ -45,19 +45,6 @@ impl Ugly for PatId {
     }
 }
 
-impl Ugly for CoPatId {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let copat = &f.arena.copats[*self];
-        match copat {
-            | CoPattern::Pat(c) => s += &c.ugly(f),
-            | CoPattern::Dtor(c) => s += &c.ugly(f),
-            | CoPattern::App(c) => s += &c.ugly(f),
-        }
-        s
-    }
-}
-
 impl Ugly for TermId {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
@@ -259,7 +246,7 @@ where
     }
 }
 
-impl Ugly for Abs<CoPatId, TermId> {
+impl Ugly for Abs<PatId, TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Abs(p, t) = self;
@@ -420,9 +407,9 @@ impl Ugly for CoMatch {
         let mut s = String::new();
         let CoMatch { arms } = self;
         s += "comatch";
-        for CoMatcher { params, tail } in arms {
+        for CoMatcher { dtor, tail } in arms {
             s += " | ";
-            s += &params.ugly(f);
+            s += &dtor.ugly(f);
             s += " -> ";
             s += &tail.ugly(f);
         }

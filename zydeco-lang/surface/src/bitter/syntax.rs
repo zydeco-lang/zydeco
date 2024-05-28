@@ -43,10 +43,9 @@ pub enum Pattern {
 }
 
 #[derive(From, Clone, Debug)]
-pub enum CoPattern {
+pub enum CoPatternItem {
     Pat(PatId),
     Dtor(DtorName),
-    App(App<CoPatId>),
 }
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -57,11 +56,11 @@ pub struct Rec(pub PatId, pub TermId);
 
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
-pub struct Pi(pub CoPatId, pub TermId);
+pub struct Pi(pub PatId, pub TermId);
 
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
-pub struct Sigma(pub CoPatId, pub TermId);
+pub struct Sigma(pub PatId, pub TermId);
 
 /// `ret a` has type `Ret A`
 #[derive(Clone, Debug)]
@@ -129,7 +128,7 @@ pub struct CoMatch {
 }
 #[derive(Clone, Debug)]
 pub struct CoMatcher {
-    pub params: CoPatId,
+    pub dtor: DtorName,
     pub tail: TermId,
 }
 
@@ -142,7 +141,7 @@ pub enum Term<Ref> {
     #[from(ignore)]
     Var(Ref),
     Paren(Paren<TermId>),
-    Abs(Abs<CoPatId, TermId>),
+    Abs(Abs<PatId, TermId>),
     App(App<TermId>),
     Rec(Rec),
     Pi(Pi),
@@ -178,7 +177,7 @@ pub struct Alias {
 pub struct Extern {
     pub comp: bool,
     pub binder: PatId,
-    pub params: Option<CoPatId>,
+    pub params: Vec<PatId>,
     pub ty: Option<TermId>,
 }
 
@@ -231,7 +230,6 @@ impl AddAssign for TopLevel {
 pub struct Arena {
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
-    pub copats: ArenaAssoc<CoPatId, CoPattern>,
     pub terms: ArenaAssoc<TermId, Term<NameRef<VarName>>>,
     pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }

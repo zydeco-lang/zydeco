@@ -53,7 +53,8 @@ impl Annotated for su::Declaration {
                 tycker.scoped.terms[*bindee].annotated(tycker)
             }
             | Decl::Extern(su::Extern { comp: _, binder, params, ty }) => {
-                assert!(params.is_none());
+                // Todo: implement this
+                assert!(params.is_empty());
                 let _ = binder;
                 if let Some(ty) = ty {
                     Some(*ty)
