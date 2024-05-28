@@ -6,5 +6,6 @@ pub mod surface_syntax {
 }
 
 pub mod syntax;
-pub mod tycker;
+pub mod elab;
+pub mod tyck;
 pub mod err;

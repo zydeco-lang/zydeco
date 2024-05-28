@@ -9,30 +9,23 @@ use zydeco_utils::{
 };
 
 pub type DeclId = sc::DeclId;
+pub type DefId = sc::DefId;
+pub type PatId = sc::PatId;
+pub type CoPatId = sc::CoPatId;
+// TermId is unsorted, while we've got the following:
 new_key_type! {
-    pub struct PatId;
-    pub struct CoPatId;
     pub struct KindId;
     pub struct TypeId;
-    pub struct TermId;
+    pub struct ValueId;
+    pub struct CompuId;
 }
-
-/* --------------------------------- Pattern -------------------------------- */
-
-#[derive(From, Clone, Debug)]
-pub enum Pattern {
-    Ann(Ann<PatId, TermId>),
-    Hole(Hole),
-    Var(DefId),
-    Ctor(Ctor<PatId>),
-    Paren(Paren<PatId>),
-}
-
-#[derive(From, Clone, Debug)]
-pub enum CoPattern {
-    Pat(PatId),
-    Dtor(DtorName),
-    App(App<CoPatId>),
+/// the sort of a term which is unsorted
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
+pub enum TermSort {
+    Kind(KindId),
+    Type(TypeId),
+    Value(ValueId),
+    Compu(CompuId),
 }
 
 /* ---------------------------------- Kind ---------------------------------- */
@@ -52,9 +45,9 @@ pub enum Kind {
 /* ---------------------------------- Type ---------------------------------- */
 
 #[derive(From, Clone, Debug)]
-pub enum CoPatternType {
+pub enum TypePattern {
+    Ann(Ann<PatId, KindId>),
     Var(DefId),
-    Ann(Ann<CoPatId, KindId>),
 }
 
 /// `pi (x: A) -> B`
@@ -79,6 +72,7 @@ pub struct CoData {
 
 #[derive(From, Clone, Debug)]
 pub enum Type {
+    Sealed(Sealed<TermId>),
     Ann(Ann<TypeId, KindId>),
     Hole(Hole),
     Var(DefId),
@@ -90,28 +84,50 @@ pub enum Type {
     CoData(CoData),
 }
 
-/* ---------------------------------- Term ---------------------------------- */
+/* ---------------------------------- Value --------------------------------- */
+
+#[derive(From, Clone, Debug)]
+pub enum Value {
+    Ann(Ann<ValueId, TypeId>),
+    Hole(Hole),
+    Var(DefId),
+    Paren(Paren<ValueId>),
+    Thunk(Thunk<CompuId>),
+    Ctor(Ctor<ValueId>),
+    Lit(Literal),
+}
+
+#[derive(From, Clone, Debug)]
+pub enum ValuePattern {
+    Ann(Ann<PatId, TermId>),
+    Hole(Hole),
+    Var(DefId),
+    Ctor(Ctor<PatId>),
+    Paren(Paren<PatId>),
+}
+
+/* ------------------------------- Computation ------------------------------ */
 
 /// `rec (x: A) -> b`
 #[derive(Clone, Debug)]
-pub struct Rec(pub PatId, pub TermId);
+pub struct Rec(pub PatId, pub CompuId);
 
 /// `ret a` has type `Ret A`
 #[derive(Clone, Debug)]
-pub struct Return(pub TermId);
+pub struct Return(pub ValueId);
 /// `do x <- b; ...`
 #[derive(Clone, Debug)]
 pub struct Bind {
     pub binder: PatId,
-    pub bindee: TermId,
-    pub tail: TermId,
+    pub bindee: CompuId,
+    pub tail: CompuId,
 }
 /// `let x = a in ...`
 #[derive(Clone, Debug)]
 pub struct PureBind {
     pub binder: PatId,
-    pub bindee: TermId,
-    pub tail: TermId,
+    pub bindee: ValueId,
+    pub tail: CompuId,
 }
 
 // /// `use let x = a in ...`
@@ -124,13 +140,13 @@ pub struct PureBind {
 /// `match a | C_1 p -> b_1 | ... end`
 #[derive(Clone, Debug)]
 pub struct Match {
-    pub scrut: TermId,
+    pub scrut: ValueId,
     pub arms: Vec<Matcher>,
 }
 #[derive(Clone, Debug)]
 pub struct Matcher {
     pub binder: PatId,
-    pub tail: TermId,
+    pub tail: CompuId,
 }
 
 /// `comatch | .d_1 -> b_1 | ... end`
@@ -141,29 +157,24 @@ pub struct CoMatch {
 #[derive(Clone, Debug)]
 pub struct CoMatcher {
     pub params: CoPatId,
-    pub tail: TermId,
+    pub tail: CompuId,
 }
 
 #[derive(From, Clone, Debug)]
-pub enum Term {
-    Ann(Ann<TermId, TypeId>),
+pub enum Computation {
+    Ann(Ann<CompuId, TypeId>),
     Hole(Hole),
-    Var(DefId),
-    Paren(Paren<TermId>),
-    Abs(Abs<CoPatId, TermId>),
-    App(App<TermId>),
+    Abs(Abs<CoPatId, CompuId>),
+    App(App<CompuId>),
     Rec(Rec),
-    Thunk(Thunk<TermId>),
-    Force(Force<TermId>),
+    Force(Force<ValueId>),
     Ret(Return),
     Do(Bind),
     Let(PureBind),
     // UseLet(UseBind),
-    Ctor(Ctor<TermId>),
     Match(Match),
     CoMatch(CoMatch),
-    Dtor(Dtor<TermId>),
-    Lit(Literal),
+    Dtor(Dtor<ValueId>),
 }
 
 /* -------------------------------- TopLevel -------------------------------- */
@@ -199,7 +210,7 @@ pub struct Extern {
 // }
 
 #[derive(Clone, Debug)]
-pub struct Main(pub TermId);
+pub struct Main(pub CompuId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
@@ -215,12 +226,18 @@ pub enum Declaration {
 
 #[derive(Debug)]
 pub struct StaticArena {
+    /// sorted terms
+    pub sorts: ArenaAssoc<TermId, TermSort>,
+    /// ... and back
+    pub unsorts: ArenaAssoc<TermSort, TermId>,
     /// arena for kinds
     pub kinds: ArenaSparse<KindId, Kind>,
     /// arena for types
     pub types: ArenaSparse<TypeId, Type>,
-    /// marks if a type is sealed
-    pub sealed: ArenaAssoc<TypeId, ()>,
-    /// copattern types
-    pub copatys: ArenaSparse<CoPatId, CoPatternType>,
+    // /// copattern types
+    // pub copatys: ArenaSparse<CoPatId, CoPatternType>,
+    /// arena for values
+    pub values: ArenaSparse<ValueId, Value>,
+    /// arena for computations
+    pub compus: ArenaSparse<CompuId, Computation>,
 }

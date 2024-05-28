@@ -51,10 +51,6 @@ pub enum CoPattern {
 
 /* ---------------------------------- Term ---------------------------------- */
 
-/// sealed term which is abstract, only eq to itself during tyck
-#[derive(Clone, Debug)]
-pub struct Sealed(pub TermId);
-
 /// `rec (x: A) -> b`
 #[derive(Clone, Debug)]
 pub struct Rec(pub PatId, pub TermId);
@@ -140,7 +136,7 @@ pub struct CoMatcher {
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
     Internal(Internal),
-    Sealed(Sealed),
+    Sealed(Sealed<TermId>),
     Ann(Ann<TermId, TermId>),
     Hole(Hole),
     #[from(ignore)]

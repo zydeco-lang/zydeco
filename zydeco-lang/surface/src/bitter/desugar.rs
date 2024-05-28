@@ -768,7 +768,7 @@ mod impls {
             let term = desugarer.bitter.terms[*self].clone();
             let term = match &term {
                 | b::Term::Internal(term) => {
-                    use zydeco_syntax::Internal;
+                    use crate::syntax::Internal;
                     match term {
                         | Internal::VType => {
                             return desugarer.vtype(span);

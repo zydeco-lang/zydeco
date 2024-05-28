@@ -8,6 +8,17 @@ pub struct NameDef<T>(pub T);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct NameRef<T>(pub bool, pub Vec<VarName>, pub T);
 
+/* -------------------------------- Primitive ------------------------------- */
+
+#[derive(Clone, Debug)]
+pub enum Internal {
+    VType,
+    CType,
+    Thunk,
+    Ret,
+    OS,
+}
+
 /* ----------------------------------- Use ---------------------------------- */
 
 /// `..`

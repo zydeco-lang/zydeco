@@ -1,17 +1,6 @@
 mod impls;
 use derive_more::From;
 
-/* -------------------------------- Primitive ------------------------------- */
-
-#[derive(Clone, Debug)]
-pub enum Internal {
-    VType,
-    CType,
-    Thunk,
-    Ret,
-    OS,
-}
-
 /* --------------------------------- Binder --------------------------------- */
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -51,6 +40,10 @@ pub struct Arrow<S, T>(pub S, pub T);
 /// a * b shaped product
 #[derive(Clone, Debug)]
 pub struct Prod<T>(pub Vec<T>);
+
+/// sealed term which is abstract, only eq to itself during tyck
+#[derive(Clone, Debug)]
+pub struct Sealed<T>(pub T);
 
 /* --------------------------------- Common --------------------------------- */
 
