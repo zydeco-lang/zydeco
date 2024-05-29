@@ -1,5 +1,10 @@
 use std::ops::AddAssign;
 
+/// An option wrapper that can be set once and then read many times.
+///
+/// `init` meaning the cell is empty and we're inserting the value
+///
+/// `get` meaning the cell is not empty and we're reading the value
 pub struct SingCell<T> {
     cell: Option<T>,
 }
@@ -8,12 +13,15 @@ impl<T> SingCell<T> {
     pub fn new() -> Self {
         Self { cell: None }
     }
+    /// Initialize the cell if it is empty, and return a reference to the value.
     pub fn init_or_get(&mut self, init: impl FnOnce() -> T) -> &T {
         if self.cell.is_none() {
             self.cell = Some(init())
         }
         self.cell.as_ref().unwrap()
     }
+    /// Initialize the cell if it is empty, and return a reference to the value.
+    /// If the cell is not empty, return an error.
     pub fn init_or_else<E>(
         &mut self, init: impl FnOnce() -> T, err: impl FnOnce(&T) -> E,
     ) -> Result<&T, E> {
@@ -25,13 +33,15 @@ impl<T> SingCell<T> {
             | Some(t) => Err(err(t)),
         }
     }
-    pub fn once_or_else<E>(&self, err: impl FnOnce() -> E) -> Result<&T, E> {
+    /// Get the value if it is not empty, otherwise return an error.
+    pub fn get_or_else<E>(&self, err: impl FnOnce() -> E) -> Result<&T, E> {
         match &self.cell {
             | None => Err(err()),
             | Some(t) => Ok(t),
         }
     }
-    pub fn unwrap(&self) -> &T {
+    /// Get the value if it is not empty, otherwise panic.
+    pub fn get(&self) -> &T {
         self.cell.as_ref().unwrap()
     }
 }

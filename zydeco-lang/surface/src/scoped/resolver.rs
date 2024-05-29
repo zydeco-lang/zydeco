@@ -65,7 +65,7 @@ impl Binders for PatId {
 pub struct Resolver {
     pub spans: SpanArena,
     pub bitter: Arena,
-    pub prim_term: PrimTerm,
+    pub prim_term: PrimTerms,
     pub prim_def: PrimDef,
     /// all internal definitions mapped to a corresponding def
     pub internal_to_def: ArenaAssoc<TermId, DefId>,
@@ -235,7 +235,7 @@ impl Resolve for TopLevel {
                     resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }
                 | Declaration::Extern(decl) => {
-                    let Extern { binder, params: _, ty: _ } = decl;
+                    let Extern { binder, ty: _ } = decl;
                     let binders = binder.binders(&resolver.bitter);
                     // check if it's a primitive and (later in terms) update the internal_to_def
                     'out: {
@@ -413,13 +413,10 @@ impl Resolve for DeclId {
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
             }
             | Declaration::Extern(decl) => {
-                let Extern { binder, params, ty } = decl;
+                let Extern { binder, ty } = decl;
                 // no more bindee, but we still need to resolve the binders just for the type mentioned
                 if let Some(ty) = ty {
                     let () = ty.resolve(resolver, (local.clone(), global))?;
-                }
-                for param in params {
-                    let _ = param.resolve(resolver, (local.clone(), global))?;
                 }
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
             }

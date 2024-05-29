@@ -184,7 +184,6 @@ pub struct Alias {
 #[derive(Clone, Debug)]
 pub struct Extern {
     pub binder: PatId,
-    pub params: Vec<PatId>,
     pub ty: Option<TermId>,
 }
 
@@ -247,8 +246,17 @@ pub type SpanArena = ArenaGen<Span, DefId, PatId, TrivId, TermId, DeclId>;
 
 /* -------------------------------- Primitive ------------------------------- */
 
+/// Primitive Terms
+/// 
+/// Collects those terms that are `Internal` within the bitter syntax.
+/// Will be used to guide the name resolution of those internal terms.
+/// The whole point of this is to avoid references introduced by our desugaring
+/// being captured by user name accidentally.
+/// 
+/// To add a new primitive term, add a field here and follow instructions at
+/// `crate::scoped::syntax::PrimDef`
 #[derive(Default, AddAssign)]
-pub struct PrimTerm {
+pub struct PrimTerms {
     /// VType kind
     pub vtype: MultiCell<TermId>,
     /// CType kind

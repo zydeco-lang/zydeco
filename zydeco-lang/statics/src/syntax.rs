@@ -1,5 +1,7 @@
 pub use zydeco_syntax::*;
+pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
+use crate::err::*;
 use crate::surface_syntax as sc;
 use derive_more::From;
 use indexmap::IndexMap;
@@ -30,6 +32,27 @@ pub enum TermId {
     Type(TypeId),
     Value(ValueId),
     Compu(CompuId),
+}
+/// and here, a very useful dispatcher for all terms that can show up at annotation sites
+/// A dispatcher for all terms.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum AnnId {
+    Kind(KindId),
+    Type(TypeId),
+}
+impl AnnId {
+    pub fn as_kind(self) -> Result<KindId> {
+        match self {
+            | AnnId::Kind(k) => Ok(k),
+            | _ => panic!("Expected a kind"),
+        }
+    }
+    pub fn as_type(self) -> Result<TypeId> {
+        match self {
+            | AnnId::Type(t) => Ok(t),
+            | _ => panic!("Expected a type"),
+        }
+    }
 }
 pub type DeclId = sc::DeclId;
 /// A dispatcher for all entities.
@@ -278,13 +301,16 @@ pub struct StaticsArena {
     pub vpats: ArenaSparse<VPatId, ValuePattern>,
     pub values: ArenaSparse<ValueId, Value>,
     pub compus: ArenaSparse<CompuId, Computation>,
+    pub decls: ArenaAssoc<DeclId, Declaration>,
 
     // unsorted to sorted bijective maps
     pub pats: ArenaBijective<sc::PatId, PatId>,
     pub terms: ArenaBijective<sc::TermId, TermId>,
 
-    /// the type of defs
-    pub type_of_defs: ArenaAssoc<DefId, TermId>,
+    /// the type of defs; "context"
+    pub type_of_defs: ArenaAssoc<DefId, AnnId>,
+    /// the term of defs; "environment"
+    pub term_of_defs: ArenaAssoc<DefId, TermId>,
     // Todo: equivalence-class type arena (or not)
 }
 
@@ -297,11 +323,13 @@ impl StaticsArena {
             vpats: ArenaSparse::new(alloc.alloc()),
             values: ArenaSparse::new(alloc.alloc()),
             compus: ArenaSparse::new(alloc.alloc()),
+            decls: ArenaAssoc::new(),
 
             pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),
 
             type_of_defs: ArenaAssoc::new(),
+            term_of_defs: ArenaAssoc::new(),
         }
     }
 }

@@ -67,6 +67,14 @@ pub struct ScopedArena {
 
 /* -------------------------------- Primitive ------------------------------- */
 
+/// Primitive definitions
+///
+/// Collects the primitive definitions from the surface syntax.
+/// To add a new primitive form:
+/// 1. Add a new field to this struct.
+/// 2. Check if the form can be introduced during desugaring, e.g. annotations.
+///    If so, add it to `crate::bitter::syntax::PrimTerms` too.
+/// 3. Implement the `check` method to ensure all fields are filled.
 #[derive(Default)]
 pub struct PrimDef {
     pub vtype: SingCell<DefId>,
@@ -87,17 +95,17 @@ mod impls {
     use crate::scoped::err::*;
     impl PrimDef {
         pub fn check(&self) -> Result<()> {
-            self.vtype.once_or_else(|| ResolveError::MissingPrim("VType"))?;
-            self.ctype.once_or_else(|| ResolveError::MissingPrim("CType"))?;
-            self.thunk.once_or_else(|| ResolveError::MissingPrim("Thunk"))?;
-            self.ret.once_or_else(|| ResolveError::MissingPrim("Ret"))?;
-            self.unit.once_or_else(|| ResolveError::MissingPrim("Unit"))?;
-            self.int.once_or_else(|| ResolveError::MissingPrim("Int"))?;
-            self.char.once_or_else(|| ResolveError::MissingPrim("Char"))?;
-            self.string.once_or_else(|| ResolveError::MissingPrim("String"))?;
-            self.os.once_or_else(|| ResolveError::MissingPrim("OS"))?;
-            self.monad.once_or_else(|| ResolveError::MissingPrim("Monad"))?;
-            self.algebra.once_or_else(|| ResolveError::MissingPrim("Algebra"))?;
+            self.vtype.get_or_else(|| ResolveError::MissingPrim("VType"))?;
+            self.ctype.get_or_else(|| ResolveError::MissingPrim("CType"))?;
+            self.thunk.get_or_else(|| ResolveError::MissingPrim("Thunk"))?;
+            self.ret.get_or_else(|| ResolveError::MissingPrim("Ret"))?;
+            self.unit.get_or_else(|| ResolveError::MissingPrim("Unit"))?;
+            self.int.get_or_else(|| ResolveError::MissingPrim("Int"))?;
+            self.char.get_or_else(|| ResolveError::MissingPrim("Char"))?;
+            self.string.get_or_else(|| ResolveError::MissingPrim("String"))?;
+            self.os.get_or_else(|| ResolveError::MissingPrim("OS"))?;
+            self.monad.get_or_else(|| ResolveError::MissingPrim("Monad"))?;
+            self.algebra.get_or_else(|| ResolveError::MissingPrim("Algebra"))?;
             Ok(())
         }
     }

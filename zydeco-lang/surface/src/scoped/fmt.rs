@@ -554,14 +554,10 @@ impl Ugly for Alias {
 impl Ugly for Extern {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Extern { binder, params, ty } = self;
+        let Extern { binder, ty } = self;
         s += "extern ";
         s += &binder.ugly(f);
-        for param in params {
-            s += " ";
-            s += &param.ugly(f);
-        }
-        for ty in ty {
+        if let Some(ty) = ty {
             s += " : ";
             s += &ty.ugly(f);
         }

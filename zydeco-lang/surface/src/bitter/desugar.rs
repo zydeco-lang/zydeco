@@ -15,13 +15,13 @@ pub struct Desugarer {
     pub textual: t::Arena,
     pub bspans: b::SpanArena,
     pub bitter: b::Arena,
-    pub prim: b::PrimTerm,
+    pub prim: b::PrimTerms,
 }
 
 pub struct DesugarOut {
     pub spans: b::SpanArena,
     pub arena: b::Arena,
-    pub prim: b::PrimTerm,
+    pub prim: b::PrimTerms,
     pub top: b::TopLevel,
 }
 
@@ -178,23 +178,28 @@ impl Desugar for t::DeclId {
                 let t::Extern(t::GenBind { rec: _, comp, binder, params, ty, bindee: () }) = decl;
                 assert!(!comp);
                 let binder = binder.desugar(desugarer);
-                let params = if let Some(params) = params {
-                    let b::Appli(items) = params.desugar(desugarer);
-                    let mut res = Vec::new();
-                    for item in items {
-                        match item {
-                            | b::CoPatternItem::Pat(pat) => res.push(pat),
-                            | b::CoPatternItem::Dtor(_) => {
-                                unimplemented!("Dtor in extern params")
+                let ty = if let Some(ty) = ty {
+                    let mut ty = ty.desugar(desugarer);
+                    if let Some(params) = params {
+                        let b::Appli(items) = params.desugar(desugarer);
+                        for item in items {
+                            match item {
+                                | b::CoPatternItem::Pat(pat) => {
+                                    let span = pat.span(desugarer);
+                                    let id = Alloc::alloc(desugarer, span);
+                                    ty = desugarer.term(id, b::Pi(pat, ty).into())
+                                }
+                                | b::CoPatternItem::Dtor(_) => {
+                                    unimplemented!("Dtor in extern params")
+                                }
                             }
                         }
-                    }
-                    res
+                    };
+                    Some(ty)
                 } else {
-                    Vec::new()
+                    None
                 };
-                let ty = ty.map(|ty| ty.desugar(desugarer));
-                b::Extern { binder, params, ty }.into()
+                b::Extern { binder, ty }.into()
             }
             // Decl::Layer(decl) => {
             //     let t::Layer { name, uses, top } = decl;

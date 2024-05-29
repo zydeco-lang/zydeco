@@ -124,7 +124,7 @@ impl Package {
                 sources: HashMap::new(),
                 spans: b::SpanArena::new(&mut alloc),
                 arena: b::Arena::default(),
-                prim_term: b::PrimTerm::default(),
+                prim_term: b::PrimTerms::default(),
                 top: b::TopLevel(Vec::new()),
             },
             files,
@@ -272,7 +272,7 @@ impl FileParsed {
             textual,
             bspans,
             bitter: b::Arena::default(),
-            prim: b::PrimTerm::default(),
+            prim: b::PrimTerms::default(),
         };
         let DesugarOut { spans, arena, prim: prim_term, top } = desugarer.run(top);
         FileBitter { path, source, spans, arena, prim_term, top }
@@ -284,7 +284,7 @@ pub struct FileBitter {
     pub source: String,
     pub spans: b::SpanArena,
     pub arena: b::Arena,
-    pub prim_term: b::PrimTerm,
+    pub prim_term: b::PrimTerms,
     pub top: b::TopLevel,
 }
 
@@ -307,7 +307,7 @@ pub struct PackageStew {
     pub sources: HashMap<PathBuf, String>,
     pub spans: b::SpanArena,
     pub arena: b::Arena,
-    pub prim_term: b::PrimTerm,
+    pub prim_term: b::PrimTerms,
     pub top: b::TopLevel,
 }
 

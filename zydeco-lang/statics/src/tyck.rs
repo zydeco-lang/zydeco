@@ -1,7 +1,8 @@
 use crate::err::*;
 use crate::surface_syntax::{self as su, PrimDef, ScopedArena, SpanArena};
 use crate::syntax::{self as ss, StaticsArena};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use zydeco_utils::arena::ArenaAccess;
 
 pub struct Tycker {
     pub spans: SpanArena,
@@ -26,6 +27,72 @@ impl Tycker {
             }
         }
         Ok(())
+    }
+}
+
+impl Tycker {
+    pub fn vtype(&mut self) -> ss::KindId {
+        let ss::TermId::Kind(kd) = self.statics.term_of_defs[self.prim.vtype.get()] else {
+            unreachable!()
+        };
+        kd
+    }
+    pub fn ctype(&mut self) -> ss::KindId {
+        let ss::TermId::Kind(kd) = self.statics.term_of_defs[self.prim.ctype.get()] else {
+            unreachable!()
+        };
+        kd
+    }
+    pub fn register_prim_ty(
+        &mut self, def: ss::DefId, prim: ss::Type, syn_kd: Option<su::TermId>,
+    ) -> Result<()> {
+        let kd = syn_kd.unwrap().tyck(self, Action::syn(()))?.as_kind()?;
+        let ty = self.statics.types.alloc(prim.into());
+        self.statics.type_of_defs.insert(def, kd.into());
+        self.statics.term_of_defs.insert(def, ty.into());
+        Ok(())
+    }
+    pub fn thunk(&mut self) -> ss::TypeId {
+        let ss::TermId::Type(ty) = self.statics.term_of_defs[self.prim.thunk.get()] else {
+            unreachable!()
+        };
+        ty
+    }
+    pub fn ret(&mut self) -> ss::TypeId {
+        let ss::TermId::Type(ty) = self.statics.term_of_defs[self.prim.ret.get()] else {
+            unreachable!()
+        };
+        ty
+    }
+    pub fn unit(&mut self) -> ss::TypeId {
+        let ss::TermId::Type(ty) = self.statics.term_of_defs[self.prim.unit.get()] else {
+            unreachable!()
+        };
+        ty
+    }
+    pub fn int(&mut self) -> ss::TypeId {
+        let ss::TermId::Type(ty) = self.statics.term_of_defs[self.prim.int.get()] else {
+            unreachable!()
+        };
+        ty
+    }
+    pub fn char(&mut self) -> ss::TypeId {
+        let ss::TermId::Type(ty) = self.statics.term_of_defs[self.prim.char.get()] else {
+            unreachable!()
+        };
+        ty
+    }
+    pub fn string(&mut self) -> ss::TypeId {
+        let ss::TermId::Type(ty) = self.statics.term_of_defs[self.prim.string.get()] else {
+            unreachable!()
+        };
+        ty
+    }
+    pub fn os(&mut self) -> ss::TypeId {
+        let ss::TermId::Type(ty) = self.statics.term_of_defs[self.prim.os.get()] else {
+            unreachable!()
+        };
+        ty
     }
 }
 
@@ -84,15 +151,10 @@ impl SyntacticallyAnnotated for su::Declaration {
                 let _ = binder;
                 bindee.syntactically_annotated(tycker)
             }
-            | Decl::Extern(su::Extern { binder, params, ty }) => {
-                // Todo: implement this
-                assert!(params.is_empty());
+            | Decl::Extern(su::Extern { binder, ty }) => {
                 let _ = binder;
-                if let Some(ty) = ty {
-                    Some(*ty)
-                } else {
-                    None
-                }
+                // add params to pi
+                *ty
             }
             | Decl::Main(su::Main(_term)) => None,
         }
@@ -114,7 +176,7 @@ impl SyntacticallyAnnotated for su::TermId {
             }
             | Tm::Abs(term) => {
                 let su::Abs(param, body) = term;
-                // Todo: add param to pi
+                // add param to pi
                 let span = tycker.spans.terms[body].clone();
                 let pi = tycker.spans.terms.alloc(span);
                 let body = body.syntactically_annotated(tycker)?;
@@ -167,50 +229,79 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                 match tycker.scoped.decls[id].clone() {
                     | Decl::Alias(decl) => {
                         let su::Alias { binder, bindee } = decl;
-                        todo!()
+                        // we need to get the annotation for the sake of self referencing type definitions
+                        let syn_ann = bindee.syntactically_annotated(tycker);
+                        if let Some(syn_ann) = syn_ann {
+                            // try analyzing the bindee after synthesizing the type
+                            let ann = syn_ann.tyck(tycker, Action::syn(()))?;
+                            let _ = match ann {
+                                | ss::AnnId::Kind(kd) => {
+                                    // the binder is a type, register it before analyzing the bindee
+                                    let ann = binder.tyck(tycker, Action::ana((), kd.into()))?;
+                                    bindee.tyck(tycker, Action::ana((), ann))?
+                                }
+                                | ss::AnnId::Type(ty) => {
+                                    // the binder is a value, directly analyze the bindee
+                                    let ann = bindee.tyck(tycker, Action::ana((), ty.into()))?;
+                                    // and then register the binder as a value
+                                    binder.tyck(tycker, Action::ana((), ann))?
+                                }
+                            };
+                            Ok(())
+                        } else {
+                            // synthesize the bindee
+                            let ann = bindee.tyck(tycker, Action::syn(()))?;
+                            binder.tyck(tycker, Action::ana((), ann))?;
+                            Ok(())
+                        }
                     }
-                    | Decl::Extern(_decl) => {
-                        let (internal, _def) = &tycker.scoped.exts[id];
-                        match internal {
-                            | su::Internal::VType => {
-                                let _ = tycker.statics.kinds.alloc(ss::VType.into());
+                    | Decl::Extern(decl) => {
+                        let su::Extern { binder, ty } = decl;
+                        let internal_or = tycker.scoped.exts.get(id).cloned();
+                        match internal_or {
+                            | Some((internal, def)) => {
+                                match internal {
+                                    | su::Internal::VType => {
+                                        let kd = tycker.statics.kinds.alloc(ss::VType.into());
+                                        // no type_of_defs for VType since it's the largest universe level we can get
+                                        tycker.statics.term_of_defs.insert(def, kd.into());
+                                    }
+                                    | su::Internal::CType => {
+                                        let kd = tycker.statics.kinds.alloc(ss::CType.into());
+                                        // no type_of_defs for CType since it's the largest universe level we can get
+                                        tycker.statics.term_of_defs.insert(def, kd.into());
+                                    }
+                                    | su::Internal::Thunk => {
+                                        tycker.register_prim_ty(def, ss::ThunkTy.into(), ty)?
+                                    }
+                                    | su::Internal::Ret => {
+                                        tycker.register_prim_ty(def, ss::RetTy.into(), ty)?
+                                    }
+                                    | su::Internal::Unit => {
+                                        tycker.register_prim_ty(def, ss::UnitTy.into(), ty)?
+                                    }
+                                    | su::Internal::Int => {
+                                        tycker.register_prim_ty(def, ss::IntTy.into(), ty)?
+                                    }
+                                    | su::Internal::Char => {
+                                        tycker.register_prim_ty(def, ss::CharTy.into(), ty)?
+                                    }
+                                    | su::Internal::String => {
+                                        tycker.register_prim_ty(def, ss::StringTy.into(), ty)?
+                                    }
+                                    | su::Internal::OS => {
+                                        tycker.register_prim_ty(def, ss::OSTy.into(), ty)?
+                                    }
+                                    | su::Internal::Monad | su::Internal::Algebra => {
+                                        unreachable!()
+                                    }
+                                }
                             }
-                            | su::Internal::CType => {
-                                let _ = tycker.statics.kinds.alloc(ss::CType.into());
-                            }
-                            | su::Internal::Thunk => {
-                                let _ = tycker.statics.types.alloc(ss::ThunkTy.into());
-                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
-                            }
-                            | su::Internal::Ret => {
-                                let _ = tycker.statics.types.alloc(ss::RetTy.into());
-                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
-                            }
-                            | su::Internal::Unit => {
-                                let _ = tycker.statics.types.alloc(ss::UnitTy.into());
-                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
-                            }
-                            | su::Internal::Int => {
-                                let _ = tycker.statics.types.alloc(ss::IntTy.into());
-                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
-                            }
-                            | su::Internal::Char => {
-                                let _ = tycker.statics.types.alloc(ss::CharTy.into());
-                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
-                            }
-                            | su::Internal::String => {
-                                let _ = tycker.statics.types.alloc(ss::StringTy.into());
-                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
-                            }
-                            | su::Internal::OS => {
-                                let _ = tycker.statics.types.alloc(ss::OSTy.into());
-                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
-                            }
-                            | su::Internal::Monad | su::Internal::Algebra => {
-                                unreachable!()
+                            | None => {
+                                todo!()
                             }
                         }
-                        todo!()
+                        Ok(())
                     }
                     | Decl::Main(decl) => {
                         let su::Main(term) = decl;
@@ -224,6 +315,26 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                 // mutually recursive declarations must..
                 // 1. all be types, and
                 // 2. all have kind annotations
+                let mut syn_anns = HashMap::new();
+                for id in decls {
+                    let decl = tycker.scoped.decls[id].clone();
+                    use su::Declaration as Decl;
+                    match decl {
+                        | Decl::Alias(decl) => {
+                            let su::Alias { binder: _, bindee } = decl;
+                            syn_anns.insert(
+                                id,
+                                bindee.syntactically_annotated(tycker).ok_or_else(|| {
+                                    let span = tycker.spans.decls[id].clone();
+                                    TyckError::MissingAnnotation(span)
+                                })?,
+                            );
+                        }
+                        | Decl::Extern(_) | Decl::Main(_) => {
+                            unreachable!()
+                        }
+                    }
+                }
                 todo!()
             }
         }
@@ -246,9 +357,9 @@ impl Tyck for su::DefId {
 }
 
 impl Tyck for su::PatId {
-    type Out = ss::PatId;
-    type Mode = Mode<(), su::PatId, ss::PatId>;
-    type Action = SelfAction<ss::PatId>;
+    type Out = ss::AnnId;
+    type Mode = Mode<(), su::PatId, ss::AnnId>;
+    type Action = SelfAction<ss::AnnId>;
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<Self::Out> {
         todo!()
@@ -288,9 +399,9 @@ impl Tyck for su::PatId {
 }
 
 impl Tyck for su::TermId {
-    type Out = ss::TermId;
-    type Mode = Mode<(), su::TermId, ss::TermId>;
-    type Action = Action<(), (), ss::TermId>;
+    type Out = ss::AnnId;
+    type Mode = Mode<(), su::TermId, ss::AnnId>;
+    type Action = Action<(), (), ss::AnnId>;
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<Self::Out> {
         todo!()
