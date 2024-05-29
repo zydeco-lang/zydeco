@@ -1,5 +1,10 @@
 use crate::scoped::{err::*, syntax::*};
-use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::Kosaraju};
+use zydeco_utils::{
+    arena::*,
+    cells::{MultiCell, SingCell},
+    deps::DepGraph,
+    scc::Kosaraju,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {
@@ -75,6 +80,7 @@ pub struct Resolver {
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
     pub users: ArenaForth<DefId, TermId>,
+    pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
     pub deps: DepGraph<DeclId>,
 }
 
@@ -104,6 +110,7 @@ impl Resolver {
             decls,
 
             users,
+            exts,
             deps,
         } = self;
         let top = Kosaraju::new(&deps).run();
@@ -121,6 +128,7 @@ impl Resolver {
                 decls,
 
                 users,
+                exts,
                 deps,
                 top,
             },
@@ -146,18 +154,25 @@ impl Resolver {
         Ok(())
     }
     fn alloc_prim(
-        span: &SpanArena, mc: &mut SingCell<DefId>, def: DefId, name: &'static str,
+        spans: &SpanArena, sc: &mut SingCell<DefId>, mc: &MultiCell<TermId>,
+        exts: &mut ArenaAssoc<DeclId, (Internal, DefId)>,
+        internal_to_def: &mut ArenaAssoc<TermId, DefId>, decl: &DeclId, def: &DefId,
+        name: &'static str, internal: Internal,
     ) -> Result<DefId> {
-        mc.init_or_else(
-            || def,
-            |id| {
-                ResolveError::DuplicatePrimitive(
-                    span.defs[&def].clone().make(VarName(name.into())),
-                    span.defs[id].clone().make(VarName(name.into())),
-                )
-            },
-        )
-        .cloned()
+        let prim = sc
+            .init_or_else(
+                || *def,
+                |id| {
+                    ResolveError::DuplicatePrimitive(
+                        spans.defs[def].clone().make(VarName(name.into())),
+                        spans.defs[id].clone().make(VarName(name.into())),
+                    )
+                },
+            )
+            .cloned()?;
+        exts.insert(*decl, (internal, prim));
+        internal_to_def.extend(mc.all().into_iter().map(|term| (*term, prim)));
+        Ok(prim)
     }
 }
 
@@ -189,37 +204,31 @@ impl Resolve for TopLevel {
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("Monad".into())) {
-                            let monad = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.monad,
-                                *def,
+                                &resolver.prim_term.monad,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "Monad",
+                                Internal::Monad,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver
-                                    .prim_term
-                                    .monad
-                                    .all()
-                                    .into_iter()
-                                    .map(|term| (*term, monad)),
-                            );
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("Algebra".into())) {
-                            let algebra = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.algebra,
-                                *def,
+                                &resolver.prim_term.algebra,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "Algebra",
+                                Internal::Algebra,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver
-                                    .prim_term
-                                    .algebra
-                                    .all()
-                                    .into_iter()
-                                    .map(|term| (*term, algebra)),
-                            );
                             break 'out;
                         }
                     }
@@ -234,131 +243,129 @@ impl Resolve for TopLevel {
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("VType".into())) {
-                            let vtype = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.vtype,
-                                *def,
+                                &resolver.prim_term.vtype,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "VType",
+                                Internal::VType,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver
-                                    .prim_term
-                                    .vtype
-                                    .all()
-                                    .into_iter()
-                                    .map(|term| (*term, vtype)),
-                            );
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("CType".into())) {
-                            let ctype = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.ctype,
-                                *def,
+                                &resolver.prim_term.ctype,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "CType",
+                                Internal::CType,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver
-                                    .prim_term
-                                    .ctype
-                                    .all()
-                                    .into_iter()
-                                    .map(|term| (*term, ctype)),
-                            );
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("Thunk".into())) {
-                            let thunk = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.thunk,
-                                *def,
+                                &resolver.prim_term.thunk,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "Thunk",
+                                Internal::Thunk,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver
-                                    .prim_term
-                                    .thunk
-                                    .all()
-                                    .into_iter()
-                                    .map(|term| (*term, thunk)),
-                            );
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("Ret".into())) {
-                            let ret = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.ret,
-                                *def,
+                                &resolver.prim_term.ret,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "Ret",
+                                Internal::Ret,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver.prim_term.ret.all().into_iter().map(|term| (*term, ret)),
-                            );
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("Unit".into())) {
-                            let unit = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.unit,
-                                *def,
+                                &resolver.prim_term.unit,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "Unit",
+                                Internal::Unit,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver.prim_term.unit.all().into_iter().map(|term| (*term, unit)),
-                            );
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("Int".into())) {
-                            let int = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.int,
-                                *def,
+                                &resolver.prim_term.int,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "Int",
+                                Internal::Int,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver.prim_term.int.all().into_iter().map(|term| (*term, int)),
-                            );
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("Char".into())) {
-                            let char = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.char,
-                                *def,
+                                &resolver.prim_term.char,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "Char",
+                                Internal::Char,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver.prim_term.char.all().into_iter().map(|term| (*term, char)),
-                            );
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("String".into())) {
-                            let string = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.string,
-                                *def,
+                                &resolver.prim_term.string,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "String",
+                                Internal::String,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver
-                                    .prim_term
-                                    .string
-                                    .all()
-                                    .into_iter()
-                                    .map(|term| (*term, string)),
-                            );
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("OS".into())) {
-                            let os = Resolver::alloc_prim(
+                            Resolver::alloc_prim(
                                 &resolver.spans,
                                 &mut resolver.prim_def.os,
-                                *def,
+                                &resolver.prim_term.os,
+                                &mut resolver.exts,
+                                &mut resolver.internal_to_def,
+                                id,
+                                def,
                                 "OS",
+                                Internal::OS,
                             )?;
-                            resolver.internal_to_def.extend(
-                                resolver.prim_term.os.all().into_iter().map(|term| (*term, os)),
-                            );
                             break 'out;
                         }
                         Err(ResolveError::UndefinedPrimitive({
@@ -585,7 +592,7 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::Ret(term) => {
-                let Return(body) = &term;
+                let Ret(body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }

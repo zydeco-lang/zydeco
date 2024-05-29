@@ -16,7 +16,13 @@ pub enum Internal {
     CType,
     Thunk,
     Ret,
+    Unit,
+    Int,
+    Char,
+    String,
     OS,
+    Monad,
+    Algebra,
 }
 
 /* ------------------------------- Structural ------------------------------- */

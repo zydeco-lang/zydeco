@@ -82,7 +82,7 @@ pub struct Exists(pub CoPatId, pub TermId);
 
 /// `ret a` has type `Ret A`
 #[derive(Clone, Debug)]
-pub struct Return(pub TermId);
+pub struct Ret(pub TermId);
 /// `do x <- b; ...`
 #[derive(Clone, Debug)]
 pub struct Bind {
@@ -167,7 +167,7 @@ pub enum Term {
     Prod(Prod<TermId>),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),
-    Ret(Return),
+    Ret(Ret),
     Do(Bind),
     Let(PureBind),
     // UseLet(UseBind),

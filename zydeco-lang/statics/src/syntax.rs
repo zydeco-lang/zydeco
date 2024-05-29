@@ -52,7 +52,7 @@ pub struct VType;
 #[derive(Clone, Debug)]
 pub struct CType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, From)]
 pub enum Kind {
     VType(VType),
     CType(CType),
@@ -67,6 +67,34 @@ pub enum TypePattern {
     Hole(Hole),
     Var(DefId),
 }
+
+/// `U`
+#[derive(Clone, Debug)]
+pub struct ThunkTy;
+
+/// `F`
+#[derive(Clone, Debug)]
+pub struct RetTy;
+
+/// `Unit`
+#[derive(Clone, Debug)]
+pub struct UnitTy;
+
+/// `Int`
+#[derive(Clone, Debug)]
+pub struct IntTy;
+
+/// `Char`
+#[derive(Clone, Debug)]
+pub struct CharTy;
+
+/// `String`
+#[derive(Clone, Debug)]
+pub struct StringTy;
+
+/// `OS`
+#[derive(Clone, Debug)]
+pub struct OSTy;
 
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
@@ -95,6 +123,14 @@ pub enum Type {
     Hole(Hole),
     Var(DefId),
     Abs(Abs<TPatId, TypeId>),
+    App(App<TypeId, TypeId>),
+    Thunk(ThunkTy),
+    Ret(RetTy),
+    Unit(UnitTy),
+    Int(IntTy),
+    Char(CharTy),
+    String(StringTy),
+    OS(OSTy),
     Arrow(Arrow<TypeId>),
     Forall(Forall),
     Prod(Prod<TypeId>),

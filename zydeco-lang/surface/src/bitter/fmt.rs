@@ -109,7 +109,13 @@ impl Ugly for Internal {
             | Internal::CType => s += "CType",
             | Internal::Thunk => s += "Thunk",
             | Internal::Ret => s += "Ret",
-            | Internal::OS => s += "Os",
+            | Internal::Unit => s += "Unit",
+            | Internal::Int => s += "Int",
+            | Internal::Char => s += "Char",
+            | Internal::String => s += "String",
+            | Internal::OS => s += "OS",
+            | Internal::Monad => s += "Monad",
+            | Internal::Algebra => s += "Algebra",
         }
         s
     }
@@ -329,10 +335,10 @@ impl Ugly for Force<TermId> {
     }
 }
 
-impl Ugly for Return {
+impl Ugly for Ret {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Return(t) = self;
+        let Ret(t) = self;
         s += "ret ";
         s += &t.ugly(f);
         s

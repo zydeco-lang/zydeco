@@ -169,8 +169,47 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                         let su::Alias { binder, bindee } = decl;
                         todo!()
                     }
-                    | Decl::Extern(decl) => {
-                        let su::Extern { binder, params, ty } = decl;
+                    | Decl::Extern(_decl) => {
+                        let (internal, _def) = &tycker.scoped.exts[id];
+                        match internal {
+                            | su::Internal::VType => {
+                                let _ = tycker.statics.kinds.alloc(ss::VType.into());
+                            }
+                            | su::Internal::CType => {
+                                let _ = tycker.statics.kinds.alloc(ss::CType.into());
+                            }
+                            | su::Internal::Thunk => {
+                                let _ = tycker.statics.types.alloc(ss::ThunkTy.into());
+                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
+                            }
+                            | su::Internal::Ret => {
+                                let _ = tycker.statics.types.alloc(ss::RetTy.into());
+                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
+                            }
+                            | su::Internal::Unit => {
+                                let _ = tycker.statics.types.alloc(ss::UnitTy.into());
+                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
+                            }
+                            | su::Internal::Int => {
+                                let _ = tycker.statics.types.alloc(ss::IntTy.into());
+                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
+                            }
+                            | su::Internal::Char => {
+                                let _ = tycker.statics.types.alloc(ss::CharTy.into());
+                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
+                            }
+                            | su::Internal::String => {
+                                let _ = tycker.statics.types.alloc(ss::StringTy.into());
+                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
+                            }
+                            | su::Internal::OS => {
+                                let _ = tycker.statics.types.alloc(ss::OSTy.into());
+                                // let _ = tycker.statics.type_of_defs.insert(*def, CType -> VType);
+                            }
+                            | su::Internal::Monad | su::Internal::Algebra => {
+                                unreachable!()
+                            }
+                        }
                         todo!()
                     }
                     | Decl::Main(decl) => {

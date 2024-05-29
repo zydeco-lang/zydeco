@@ -52,10 +52,40 @@ impl Desugarer {
         let term = self.term(term, b::Internal::Ret.into());
         *self.prim.ret.extend_one(term)
     }
+    fn unit(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal::Unit.into());
+        *self.prim.unit.extend_one(term)
+    }
+    fn int(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal::Int.into());
+        *self.prim.int.extend_one(term)
+    }
+    fn char(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal::Char.into());
+        *self.prim.char.extend_one(term)
+    }
+    fn string(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal::String.into());
+        *self.prim.string.extend_one(term)
+    }
     fn os(&mut self, span: Span) -> b::TermId {
         let term = Alloc::alloc(self, span);
         let term = self.term(term, b::Internal::OS.into());
         *self.prim.os.extend_one(term)
+    }
+    fn monad(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal::Monad.into());
+        *self.prim.monad.extend_one(term)
+    }
+    fn algebra(&mut self, span: Span) -> b::TermId {
+        let term = Alloc::alloc(self, span);
+        let term = self.term(term, b::Internal::Algebra.into());
+        *self.prim.algebra.extend_one(term)
     }
 }
 
@@ -553,10 +583,10 @@ impl Desugar for t::TermId {
                 desugarer.term(id, b::Force(term).into())
             }
             | Tm::Ret(term) => {
-                let t::Return(body) = term;
+                let t::Ret(body) = term;
                 let body = body.desugar(desugarer);
                 // body -> tm
-                let tm = desugarer.term(id, b::Return(body).into());
+                let tm = desugarer.term(id, b::Ret(body).into());
                 // ret & hole -> ty
                 let span = self.span(desugarer);
                 let ret = desugarer.ret(span.clone());
@@ -904,8 +934,26 @@ mod impls {
                         | Internal::Ret => {
                             return desugarer.ret(span);
                         }
+                        | Internal::Unit => {
+                            return desugarer.unit(span);
+                        }
+                        | Internal::Int => {
+                            return desugarer.int(span);
+                        }
+                        | Internal::Char => {
+                            return desugarer.char(span);
+                        }
+                        | Internal::String => {
+                            return desugarer.string(span);
+                        }
                         | Internal::OS => {
                             return desugarer.os(span);
+                        }
+                        | Internal::Monad => {
+                            return desugarer.monad(span);
+                        }
+                        | Internal::Algebra => {
+                            return desugarer.algebra(span);
                         }
                     }
                 }
@@ -971,9 +1019,9 @@ mod impls {
                     b::Force(term).into()
                 }
                 | b::Term::Ret(term) => {
-                    let b::Return(term) = term;
+                    let b::Ret(term) = term;
                     let term = term.deep_clone(desugarer);
-                    b::Return(term).into()
+                    b::Ret(term).into()
                 }
                 | b::Term::Do(term) => {
                     let b::Bind { binder, bindee, tail } = term;

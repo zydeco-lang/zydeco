@@ -358,10 +358,10 @@ impl Ugly for Force<TermId> {
     }
 }
 
-impl Ugly for Return {
+impl Ugly for Ret {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Return(t) = self;
+        let Ret(t) = self;
         s += "ret ";
         s += &t.ugly(f);
         s

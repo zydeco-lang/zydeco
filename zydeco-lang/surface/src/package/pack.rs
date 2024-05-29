@@ -331,6 +331,7 @@ impl PackageStew {
             decls: ArenaAssoc::default(),
 
             users: ArenaForth::default(),
+            exts: ArenaAssoc::default(),
             deps: DepGraph::default(),
         };
         let ResolveOut { spans, prim, arena } =

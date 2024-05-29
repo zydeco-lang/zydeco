@@ -57,6 +57,8 @@ pub struct ScopedArena {
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
+    /// externs to defs
+    pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
     /// dependency graph of the top level declarations
     pub deps: DepGraph<DeclId>,
     /// scc graph of the top level declarations

@@ -343,7 +343,7 @@ TermAtom: Term = {
     <NameRef<VarName>> => <>.into(),
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermAtomId> => Force(<>).into(),
-    "ret" <TermAtomId> => Return(<>).into(),
+    "ret" <TermAtomId> => Ret(<>).into(),
     // constructor
     <name:CtorName> <args:TermAtomId> => {
         Ctor(name, args).into()
