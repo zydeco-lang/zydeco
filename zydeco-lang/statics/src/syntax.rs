@@ -232,27 +232,24 @@ pub enum Declaration {
 /* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Debug)]
-pub struct StaticArena {
-    /// arena for kinds
+pub struct StaticsArena {
+    // arenas
     pub kinds: ArenaSparse<KindId, Kind>,
-    /// arena for type patterns
     pub tpats: ArenaSparse<TPatId, TypePattern>,
-    /// arena for types
     pub types: ArenaSparse<TypeId, Type>,
-    /// arena for value patterns
     pub vpats: ArenaSparse<VPatId, ValuePattern>,
-    /// arena for values
     pub values: ArenaSparse<ValueId, Value>,
-    /// arena for computations
     pub compus: ArenaSparse<CompuId, Computation>,
 
-    /// sorted patterns
+    // unsorted to sorted bijective maps
     pub pats: ArenaBijective<sc::PatId, PatId>,
-    /// sorted terms
     pub terms: ArenaBijective<sc::TermId, TermId>,
+
+    /// the type of defs
+    pub type_of_defs: ArenaAssoc<DefId, TermId>,
 }
 
-impl StaticArena {
+impl StaticsArena {
     pub fn new(alloc: &mut GlobalAlloc) -> Self {
         Self {
             kinds: ArenaSparse::new(alloc.alloc()),
@@ -264,6 +261,8 @@ impl StaticArena {
 
             pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),
+
+            type_of_defs: ArenaAssoc::new(),
         }
     }
 }
