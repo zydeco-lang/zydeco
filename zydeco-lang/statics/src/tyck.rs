@@ -1,4 +1,5 @@
 use crate::err::*;
+use crate::lub::*;
 use crate::surface_syntax::{self as su, PrimDef, ScopedArena, SpanArena};
 use crate::syntax::{self as ss, StaticsArena};
 use std::collections::{HashMap, HashSet};
@@ -43,7 +44,7 @@ impl Tycker {
         &mut self, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
     ) -> Result<()> {
         let kd = syn_kd.tyck_out(self, Action::syn())?.as_kind();
-        let ty = self.statics.types.alloc(prim.into());
+        let ty = Alloc::alloc(self, prim);
         self.statics.type_of_defs.insert(def, kd.into());
         self.statics.defs.insert(def, ty.into());
         Ok(())
@@ -255,12 +256,12 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                 let syn_kd = ty.unwrap();
                                 match internal {
                                     | su::Internal::VType => {
-                                        let kd = tycker.statics.kinds.alloc(ss::VType.into());
+                                        let kd = Alloc::alloc(tycker, ss::VType);
                                         // no type_of_defs for VType since it's the largest universe level we can get
                                         tycker.statics.defs.insert(def, kd.into());
                                     }
                                     | su::Internal::CType => {
-                                        let kd = tycker.statics.kinds.alloc(ss::CType.into());
+                                        let kd = Alloc::alloc(tycker, ss::CType);
                                         // no type_of_defs for CType since it's the largest universe level we can get
                                         tycker.statics.defs.insert(def, kd.into());
                                     }
@@ -486,6 +487,44 @@ impl Tyck for su::TermId {
             | Tm::Lit(term) => {
                 todo!()
             }
+        }
+    }
+}
+
+pub(crate) use impls::*;
+mod impls {
+    use super::*;
+
+    pub(crate) trait Alloc<T> {
+        fn alloc(tycker: &mut Tycker, val: Self) -> T;
+    }
+
+    impl Alloc<ss::KindId> for ss::Kind {
+        fn alloc(tycker: &mut Tycker, val: Self) -> ss::KindId {
+            let kind = tycker.statics.kinds.alloc(val);
+            kind
+        }
+    }
+    impl Alloc<ss::KindId> for ss::VType {
+        fn alloc(tycker: &mut Tycker, val: Self) -> ss::KindId {
+            Alloc::alloc(tycker, ss::Kind::from(val))
+        }
+    }
+    impl Alloc<ss::KindId> for ss::CType {
+        fn alloc(tycker: &mut Tycker, val: Self) -> ss::KindId {
+            Alloc::alloc(tycker, ss::Kind::from(val))
+        }
+    }
+    impl Alloc<ss::KindId> for ss::Arrow<ss::KindId> {
+        fn alloc(tycker: &mut Tycker, val: Self) -> ss::KindId {
+            Alloc::alloc(tycker, ss::Kind::from(val))
+        }
+    }
+
+    impl Alloc<ss::TypeId> for ss::Type {
+        fn alloc(tycker: &mut Tycker, val: Self) -> ss::TypeId {
+            let ty = tycker.statics.types.alloc(val.into());
+            ty
         }
     }
 }

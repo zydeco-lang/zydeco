@@ -208,7 +208,7 @@ pub struct CoData {
 
 #[derive(From, Clone, Debug)]
 pub enum Type {
-    Sealed(Sealed<sc::TermId>),
+    Sealed(Sealed<TypeId>),
     Ann(Ann<TypeId, KindId>),
     Hole(Hole),
     Var(DefId),
