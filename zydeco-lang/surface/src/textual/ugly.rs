@@ -223,13 +223,13 @@ where
     }
 }
 
-impl<T> Ugly for App<T>
+impl<T> Ugly for Appli<T>
 where
     T: Ugly,
 {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let App(ts) = self;
+        let Appli(ts) = self;
         s += "(";
         s += &ts.iter().map(|t| t.ugly(f)).collect::<Vec<_>>().join(" ");
         s += ")";

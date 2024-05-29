@@ -150,7 +150,7 @@ Uses: Uses = <SepByDelim<"(", ",", <UsePath>, ")">> => Uses(<>);
 //* ------------------------------- Structural ------------------------------- */
 
 Paren<T>: Paren<T> = SepByDelim<"(", ",", <T>, ")"> => Paren(<>);
-App<T>: App<T> = <T*> => App(<>);
+App<T>: App<T> = <T*> => Appli(<>);
 Ann<Tm, Ty>: Ann<Tm, Ty> = <tm:Tm> ":" <ty:Ty> => {
     Ann { tm, ty, }
 };
@@ -181,9 +181,8 @@ CoPatId: CoPatId = <CoPatternGen<CoPattern>>;
 CoPattern: CoPattern = {
     <CoPatternAtom>,
     <x:CoPatId> <y:CoPatternAtomId> => {
-        App(vec![x, y]).into()
+        Appli(vec![x, y]).into()
     },
-    // <CoPatternAtomId*> => App(c).into(),
 };
 
 #[inline]
@@ -327,7 +326,7 @@ TermApp: Term = {
     <TermAtom>,
     // application
     <term:TermAppId> <arg:TermAtomId> => {
-        App(vec![term, arg]).into()
+        Appli(vec![term, arg]).into()
     },
     // destructor
     <term:TermAppId> <name:DtorName> => {

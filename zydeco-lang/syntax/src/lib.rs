@@ -12,10 +12,6 @@ pub struct DtorName(pub String);
 
 /* ------------------------------- Structural ------------------------------- */
 
-/// `(...)` as paren-shaped container
-#[derive(Clone, Debug)]
-pub struct Paren<T>(pub Vec<T>);
-
 /// `(...: t)` for analyze mode motivator
 #[derive(Clone, Debug)]
 pub struct Ann<Tm, Ty> {
@@ -31,11 +27,19 @@ pub struct Hole;
 pub struct Abs<S, T>(pub S, pub T);
 /// `e1 e2` shaped application
 #[derive(Clone, Debug)]
-pub struct App<T>(pub Vec<T>);
+pub struct App<S, T>(pub S, pub T);
 
 /// a -> b shaped arrow
 #[derive(Clone, Debug)]
 pub struct Arrow<T>(pub T, pub T);
+
+/// `()` as unit
+#[derive(Clone, Debug)]
+pub struct Unit;
+
+/// `(...)` as paren-shaped container
+#[derive(Clone, Debug)]
+pub struct Cons<S, T>(pub S, pub T);
 
 /// a * b shaped product
 #[derive(Clone, Debug)]

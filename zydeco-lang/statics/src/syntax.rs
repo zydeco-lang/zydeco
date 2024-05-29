@@ -111,7 +111,8 @@ pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<VPatId>),
-    Paren(Paren<VPatId>),
+    VCons(Cons<VPatId, VPatId>),
+    TCons(Cons<TPatId, VPatId>),
 }
 
 #[derive(From, Clone, Debug)]
@@ -119,7 +120,8 @@ pub enum Value {
     Ann(Ann<ValueId, TypeId>),
     Hole(Hole),
     Var(DefId),
-    Paren(Paren<ValueId>),
+    VCons(Cons<ValueId, ValueId>),
+    TCons(Cons<TypeId, ValueId>),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<ValueId>),
     Lit(Literal),
@@ -184,7 +186,7 @@ pub enum Computation {
     Ann(Ann<CompuId, TypeId>),
     Hole(Hole),
     Abs(Abs<VPatId, CompuId>),
-    App(App<CompuId>),
+    App(App<CompuId, ValueId>),
     Rec(Rec),
     Force(Force<ValueId>),
     Ret(Return),

@@ -46,7 +46,7 @@ pub enum Pattern {
 pub enum CoPattern {
     Pat(PatId),
     Dtor(DtorName),
-    App(App<CoPatId>),
+    App(Appli<CoPatId>),
 }
 
 /* ---------------------------------- Term ---------------------------------- */
@@ -157,7 +157,7 @@ pub enum Term {
     Var(NameRef<VarName>),
     Paren(Paren<TermId>),
     Abs(Abs<CoPatId, TermId>),
-    App(App<TermId>),
+    App(Appli<TermId>),
     Rec(Rec),
     Pi(Pi),
     Forall(Forall),

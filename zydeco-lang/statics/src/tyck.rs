@@ -113,7 +113,8 @@ impl SyntacticallyAnnotated for su::Term<su::DefId> {
             }
             | Tm::Var(_)
             | Tm::Hole(_)
-            | Tm::Paren(_)
+            | Tm::Unit(_)
+            | Tm::Cons(_)
             | Tm::Abs(_)
             | Tm::App(_)
             | Tm::Rec(_)
@@ -170,10 +171,11 @@ impl Tyck for su::DefId {
     type Action = ();
     
     fn tyck(&self, _tycker: &mut Tycker, (): Self::Action) -> Result<Self::Out> {
-        Ok(())
+        todo!()
     }
 
     fn tyck_step(&self, _tycker: &mut Tycker, (): Self::Action) -> Result<Self::Mode> {
+        // Fixme: nonsense right now
         Ok(())
     }
 }
@@ -190,6 +192,7 @@ impl Tyck for su::PatId {
     fn tyck_step(
         &self, tycker: &mut Tycker, Action { ctx: (), target: (), switch }: Self::Action,
     ) -> Result<Self::Mode> {
+        // Fixme: nonsense right now
         let pat = tycker.scoped.pats[self].clone();
         use su::Pattern as Pat;
         match pat {
@@ -206,11 +209,13 @@ impl Tyck for su::PatId {
                 let su::Ctor(_ctor, tail) = pat;
                 tail.tyck(tycker, Action::switch((), switch))?;
             }
-            | Pat::Paren(pat) => {
-                let su::Paren(pats) = pat;
-                for pat in pats {
-                    pat.tyck(tycker, Action::switch((), switch))?;
-                }
+            | Pat::Unit(pat) => {
+                let su::Unit = pat;
+            }
+            | Pat::Cons(pat) => {
+                let su::Cons(a, b) = pat;
+                a.tyck(tycker, Action::switch((), switch))?;
+                b.tyck(tycker, Action::switch((), switch))?;
             }
         }
         todo!()
@@ -229,6 +234,7 @@ impl Tyck for su::TermId {
     fn tyck_step(
         &self, tycker: &mut Tycker, Action { ctx, target, switch }: Self::Action,
     ) -> Result<Self::Mode> {
+        // Fixme: nonsense right now
         let term = tycker.scoped.terms[self].clone();
         use su::Term as Tm;
         match term {
@@ -245,7 +251,10 @@ impl Tyck for su::TermId {
             | Tm::Var(term) => {
                 todo!()
             }
-            | Tm::Paren(term) => {
+            | Tm::Unit(term) => {
+                todo!()
+            }
+            | Tm::Cons(term) => {
                 todo!()
             }
             | Tm::Abs(term) => {

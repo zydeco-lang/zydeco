@@ -7,7 +7,24 @@ pub extern Ret (A : VType) : CType end
 pub alias U (B : CType) = Thunk B end
 pub alias F (A : VType) = Ret A end
 
+pub extern Int : VType end
+pub extern Char : VType end
+pub extern String : VType end
 pub extern OS : CType end
+
+// The interface for monads
+codata Monad (M: VType -> CType) where
+  | .return : forall (A: VType) .
+    A -> M A
+  | .bind : forall (A: VType) (A': VType) .
+    Thunk (M A) -> Thunk (A -> M A') -> M A'
+end
+
+// The interface for the algebra
+codata Algebra (M: VType -> CType) (R: CType) where
+  | .bindA : forall (A: VType) .
+    Thunk (M A) -> Thunk (A -> R) -> R
+end
 
 /// the identity functions
 

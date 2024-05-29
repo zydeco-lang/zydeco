@@ -42,12 +42,15 @@ impl Binders for PatId {
                 let Ctor(_ctor, args) = pat;
                 args.binders(arena)
             }
-            | Pattern::Paren(pat) => {
-                let Paren(pats) = pat;
+            | Pattern::Unit(pat) => {
+                let Unit = pat;
+                im::HashMap::new()
+            }
+            | Pattern::Cons(pat) => {
+                let Cons(a, b) = pat;
                 let mut res = im::HashMap::new();
-                for binder in pats {
-                    res = res.union(binder.binders(arena));
-                }
+                res = res.union(a.binders(arena));
+                res = res.union(b.binders(arena));
                 res
             }
         }
@@ -156,21 +159,6 @@ impl Resolver {
         )
         .cloned()
     }
-    fn alloc_vtype(&mut self, vtype: DefId) -> Result<DefId> {
-        Self::alloc_prim(&self.spans, &mut self.prim_def.vtype, vtype, "VType")
-    }
-    fn alloc_ctype(&mut self, ctype: DefId) -> Result<DefId> {
-        Self::alloc_prim(&self.spans, &mut self.prim_def.ctype, ctype, "CType")
-    }
-    fn alloc_thunk(&mut self, thunk: DefId) -> Result<DefId> {
-        Self::alloc_prim(&self.spans, &mut self.prim_def.thunk, thunk, "Thunk")
-    }
-    fn alloc_ret(&mut self, ret: DefId) -> Result<DefId> {
-        Self::alloc_prim(&self.spans, &mut self.prim_def.ret, ret, "Ret")
-    }
-    fn alloc_os(&mut self, os: DefId) -> Result<DefId> {
-        Self::alloc_prim(&self.spans, &mut self.prim_def.os, os, "OS")
-    }
 }
 
 pub trait Resolve {
@@ -186,25 +174,75 @@ impl Resolve for TopLevel {
         let TopLevel(decls) = self;
         // collect all top-level binders and ...
         // 1. check for duplicates
-        // 2. update primitives to term_to_def
+        // 2. update primitives to internal_to_def
         for id in decls {
             let Modifiers { public: _, inner } = &resolver.bitter.decls[id];
             match inner {
                 | Declaration::Alias(decl) => {
                     let Alias { binder, bindee: _ } = decl;
-                    resolver.check_duplicate_and_update_global(
-                        id,
-                        binder.binders(&resolver.bitter),
-                        &mut global,
-                    )?;
+                    let binders = binder.binders(&resolver.bitter);
+                    // check if it's a primitive and (later in terms) update the internal_to_def
+                    // Note: currently this is a bit hacky; we should really have a marker of some sort
+                    // maybe macros can help?
+                    if binders.len() == 1 {
+                        if let Some(def) = binders.get(&VarName("Unit".into())) {
+                            let unit = Resolver::alloc_prim(
+                                &resolver.spans,
+                                &mut resolver.prim_def.unit,
+                                *def,
+                                "Unit",
+                            )?;
+                            resolver.internal_to_def.extend(
+                                resolver.prim_term.unit.all().into_iter().map(|term| (*term, unit)),
+                            );
+                        }
+                        if let Some(def) = binders.get(&VarName("Monad".into())) {
+                            let monad = Resolver::alloc_prim(
+                                &resolver.spans,
+                                &mut resolver.prim_def.monad,
+                                *def,
+                                "Monad",
+                            )?;
+                            resolver.internal_to_def.extend(
+                                resolver
+                                    .prim_term
+                                    .monad
+                                    .all()
+                                    .into_iter()
+                                    .map(|term| (*term, monad)),
+                            );
+                        }
+                        if let Some(def) = binders.get(&VarName("Algebra".into())) {
+                            let algebra = Resolver::alloc_prim(
+                                &resolver.spans,
+                                &mut resolver.prim_def.algebra,
+                                *def,
+                                "Algebra",
+                            )?;
+                            resolver.internal_to_def.extend(
+                                resolver
+                                    .prim_term
+                                    .algebra
+                                    .all()
+                                    .into_iter()
+                                    .map(|term| (*term, algebra)),
+                            );
+                        }
+                    }
+                    resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }
                 | Declaration::Extern(decl) => {
                     let Extern { comp: _, binder, params: _, ty: _ } = decl;
                     let binders = binder.binders(&resolver.bitter);
-                    // check if it's a primitive and (later in terms) update the term_to_def
+                    // check if it's a primitive and (later in terms) update the internal_to_def
                     if binders.len() == 1 {
                         if let Some(def) = binders.get(&VarName("VType".into())) {
-                            let vtype = resolver.alloc_vtype(*def)?;
+                            let vtype = Resolver::alloc_prim(
+                                &resolver.spans,
+                                &mut resolver.prim_def.vtype,
+                                *def,
+                                "VType",
+                            )?;
                             resolver.internal_to_def.extend(
                                 resolver
                                     .prim_term
@@ -215,7 +253,12 @@ impl Resolve for TopLevel {
                             );
                         }
                         if let Some(def) = binders.get(&VarName("CType".into())) {
-                            let ctype = resolver.alloc_ctype(*def)?;
+                            let ctype = Resolver::alloc_prim(
+                                &resolver.spans,
+                                &mut resolver.prim_def.ctype,
+                                *def,
+                                "CType",
+                            )?;
                             resolver.internal_to_def.extend(
                                 resolver
                                     .prim_term
@@ -226,7 +269,12 @@ impl Resolve for TopLevel {
                             );
                         }
                         if let Some(def) = binders.get(&VarName("Thunk".into())) {
-                            let thunk = resolver.alloc_thunk(*def)?;
+                            let thunk = Resolver::alloc_prim(
+                                &resolver.spans,
+                                &mut resolver.prim_def.thunk,
+                                *def,
+                                "Thunk",
+                            )?;
                             resolver.internal_to_def.extend(
                                 resolver
                                     .prim_term
@@ -237,13 +285,23 @@ impl Resolve for TopLevel {
                             );
                         }
                         if let Some(def) = binders.get(&VarName("Ret".into())) {
-                            let ret = resolver.alloc_ret(*def)?;
+                            let ret = Resolver::alloc_prim(
+                                &resolver.spans,
+                                &mut resolver.prim_def.ret,
+                                *def,
+                                "Ret",
+                            )?;
                             resolver.internal_to_def.extend(
                                 resolver.prim_term.ret.all().into_iter().map(|term| (*term, ret)),
                             );
                         }
                         if let Some(def) = binders.get(&VarName("OS".into())) {
-                            let os = resolver.alloc_os(*def)?;
+                            let os = Resolver::alloc_prim(
+                                &resolver.spans,
+                                &mut resolver.prim_def.os,
+                                *def,
+                                "OS",
+                            )?;
                             resolver.internal_to_def.extend(
                                 resolver.prim_term.os.all().into_iter().map(|term| (*term, os)),
                             );
@@ -346,12 +404,15 @@ impl Resolve for PatId {
                 let Ctor(_ctor, args) = pat;
                 args.resolve(resolver, (local, global))?
             }
-            | Pattern::Paren(pat) => {
-                let Paren(inner) = pat;
-                for binder in inner {
-                    // can be dependent on the previous binders
-                    local = binder.resolve(resolver, (local, global))?;
-                }
+            | Pattern::Unit(pat) => {
+                let Unit = pat;
+                local
+            }
+            | Pattern::Cons(pat) => {
+                let Cons(a, b) = pat;
+                // can be dependent on the previous binders
+                local = a.resolve(resolver, (local, global))?;
+                local = b.resolve(resolver, (local, global))?;
                 local
             }
         };
@@ -369,7 +430,7 @@ impl Resolve for TermId {
         let term = resolver.bitter.terms[self].clone();
         let res: Term<DefId> = match term {
             | Term::Internal(_) => {
-                // internal terms should be resolved by looking up term_to_def
+                // internal terms should be resolved by looking up internal_to_def
                 // which has already been updated by primitives when collecting top level
                 let def = resolver.internal_to_def[self];
                 // now the only thing left is to add the dependency
@@ -414,11 +475,14 @@ impl Resolve for TermId {
                 let span = &resolver.spans.terms[self];
                 Err(ResolveError::UnboundVar(span.make(var.clone())))?
             }
-            | Term::Paren(term) => {
-                let Paren(terms) = &term;
-                for term in terms {
-                    let () = term.resolve(resolver, (local.clone(), global))?;
-                }
+            | Term::Unit(term) => {
+                let Unit = &term;
+                term.into()
+            }
+            | Term::Cons(term) => {
+                let Cons(a, b) = &term;
+                let () = a.resolve(resolver, (local.clone(), global))?;
+                let () = b.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
             | Term::Abs(term) => {
@@ -428,10 +492,9 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::App(term) => {
-                let App(terms) = &term;
-                for term in terms {
-                    let () = term.resolve(resolver, (local.clone(), global))?;
-                }
+                let App(a, b) = &term;
+                let () = a.resolve(resolver, (local.clone(), global))?;
+                let () = b.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
             | Term::Rec(term) => {

@@ -72,6 +72,9 @@ pub struct PrimDef {
     pub thunk: SingCell<DefId>,
     pub ret: SingCell<DefId>,
     pub os: SingCell<DefId>,
+    pub unit: SingCell<DefId>,
+    pub monad: SingCell<DefId>,
+    pub algebra: SingCell<DefId>,
 }
 
 mod impls {
@@ -84,6 +87,9 @@ mod impls {
             self.thunk.once_or_else(|| ResolveError::MissingPrim("Thunk"))?;
             self.ret.once_or_else(|| ResolveError::MissingPrim("Ret"))?;
             self.os.once_or_else(|| ResolveError::MissingPrim("OS"))?;
+            self.unit.once_or_else(|| ResolveError::MissingPrim("Unit"))?;
+            self.monad.once_or_else(|| ResolveError::MissingPrim("Monad"))?;
+            self.algebra.once_or_else(|| ResolveError::MissingPrim("Algebra"))?;
             Ok(())
         }
     }

@@ -39,7 +39,8 @@ impl Ugly for PatId {
             | Pattern::Hole(p) => s += &p.ugly(f),
             | Pattern::Var(p) => s += &p.ugly(f),
             | Pattern::Ctor(p) => s += &p.ugly(f),
-            | Pattern::Paren(p) => s += &p.ugly(f),
+            | Pattern::Unit(p) => s += &p.ugly(f),
+            | Pattern::Cons(p) => s += &p.ugly(f),
         }
         s
     }
@@ -55,7 +56,8 @@ impl Ugly for TermId {
             | Term::Ann(t) => s += &t.ugly(f),
             | Term::Hole(t) => s += &t.ugly(f),
             | Term::Var(t) => s += &t.ugly(f),
-            | Term::Paren(t) => s += &t.ugly(f),
+            | Term::Unit(t) => s += &t.ugly(f),
+            | Term::Cons(t) => s += &t.ugly(f),
             | Term::Abs(t) => s += &t.ugly(f),
             | Term::App(t) => s += &t.ugly(f),
             | Term::Rec(t) => s += &t.ugly(f),
@@ -204,15 +206,24 @@ where
     }
 }
 
-impl<T> Ugly for Paren<T>
+impl Ugly for Unit {
+    fn ugly(&self, _f: &Formatter) -> String {
+        "()".to_string()
+    }
+}
+
+impl<S, T> Ugly for Cons<S, T>
 where
+    S: Ugly,
     T: Ugly,
 {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Paren(ts) = self;
+        let Cons(a, b) = self;
         s += "(";
-        s += &ts.iter().map(|t| t.ugly(f)).collect::<Vec<_>>().join(",");
+        s += &a.ugly(f);
+        s += ", ";
+        s += &b.ugly(f);
         s += ")";
         s
     }
@@ -232,15 +243,18 @@ where
     }
 }
 
-impl<T> Ugly for App<T>
+impl<S, T> Ugly for App<S, T>
 where
+    S: Ugly,
     T: Ugly,
 {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let App(ts) = self;
+        let App(a, b) = self;
         s += "(";
-        s += &ts.iter().map(|t| t.ugly(f)).collect::<Vec<_>>().join(" ");
+        s += &a.ugly(f);
+        s += " ";
+        s += &b.ugly(f);
         s += ")";
         s
     }

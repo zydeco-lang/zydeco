@@ -45,7 +45,8 @@ pub enum Pattern {
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<PatId>),
-    Paren(Paren<PatId>),
+    Unit(Unit),
+    Cons(Cons<PatId, PatId>),
 }
 
 #[derive(From, Clone, Debug)]
@@ -146,9 +147,10 @@ pub enum Term<Ref> {
     Hole(Hole),
     #[from(ignore)]
     Var(Ref),
-    Paren(Paren<TermId>),
+    Unit(Unit),
+    Cons(Cons<TermId, TermId>),
     Abs(Abs<PatId, TermId>),
-    App(App<TermId>),
+    App(App<TermId, TermId>),
     Rec(Rec),
     Pi(Pi),
     // Arrow(Arrow),
@@ -258,4 +260,10 @@ pub struct PrimTerm {
     pub ret: MultiCell<TermId>,
     /// OS type
     pub os: MultiCell<TermId>,
+    /// Unit type
+    pub unit: MultiCell<TermId>,
+    /// Monad type
+    pub monad: MultiCell<TermId>,
+    /// Algebra type
+    pub algebra: MultiCell<TermId>,
 }

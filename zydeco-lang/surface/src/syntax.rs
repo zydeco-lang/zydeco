@@ -19,6 +19,16 @@ pub enum Internal {
     OS,
 }
 
+/* ------------------------------- Structural ------------------------------- */
+
+/// `e1 e2` shaped application
+#[derive(Clone, Debug)]
+pub struct Appli<T>(pub Vec<T>);
+
+/// `(...)` as paren-shaped container
+#[derive(Clone, Debug)]
+pub struct Paren<T>(pub Vec<T>);
+
 /* ----------------------------------- Use ---------------------------------- */
 
 /// `..`
