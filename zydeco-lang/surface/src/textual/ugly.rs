@@ -273,9 +273,8 @@ impl Ugly for Pi {
     }
 }
 
-impl<S, T> Ugly for Arrow<S, T>
+impl<T> Ugly for Arrow<T>
 where
-    S: Ugly,
     T: Ugly,
 {
     fn ugly(&self, f: &Formatter) -> String {

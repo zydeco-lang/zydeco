@@ -1,4 +1,4 @@
-pub use crate::surface_syntax::*;
+pub use zydeco_syntax::*;
 
 use crate::surface_syntax as sc;
 use derive_more::From;
@@ -10,18 +10,17 @@ use zydeco_utils::{
 
 pub type DeclId = sc::DeclId;
 pub type DefId = sc::DefId;
-pub type PatId = sc::PatId;
-pub type CoPatId = sc::CoPatId;
 // TermId is unsorted, while we've got the following:
 new_key_type! {
     pub struct KindId;
+    pub struct TPatId;
     pub struct TypeId;
+    pub struct VPatId;
     pub struct ValueId;
     pub struct CompuId;
 }
-/// the sort of a term which is unsorted
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
-pub enum TermSort {
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum SortedId {
     Kind(KindId),
     Type(TypeId),
     Value(ValueId),
@@ -39,24 +38,25 @@ pub struct CType;
 pub enum Kind {
     VType(VType),
     CType(CType),
-    Arrow(Arrow<KindId, KindId>),
+    Arrow(Arrow<KindId>),
 }
 
 /* ---------------------------------- Type ---------------------------------- */
 
 #[derive(From, Clone, Debug)]
 pub enum TypePattern {
-    Ann(Ann<PatId, KindId>),
+    Ann(Ann<TPatId, KindId>),
+    Hole(Hole),
     Var(DefId),
 }
 
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
-pub struct Pi(pub CoPatId, pub TypeId);
+pub struct Forall(pub TPatId, pub TypeId);
 
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
-pub struct Sigma(pub CoPatId, pub TypeId);
+pub struct Exists(pub TPatId, pub TypeId);
 
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug)]
@@ -72,19 +72,29 @@ pub struct CoData {
 
 #[derive(From, Clone, Debug)]
 pub enum Type {
-    Sealed(Sealed<TermId>),
+    Sealed(Sealed<sc::TermId>),
     Ann(Ann<TypeId, KindId>),
     Hole(Hole),
     Var(DefId),
-    Abs(Abs<CoPatId, TypeId>),
-    // Arrow(Arrow<TypeId, TypeId>),
-    Pi(Pi),
-    Sigma(Sigma),
+    Abs(Abs<TPatId, TypeId>),
+    Arrow(Arrow<TypeId>),
+    Forall(Forall),
+    Prod(Prod<TypeId>),
+    Exists(Exists),
     Data(Data),
     CoData(CoData),
 }
 
 /* ---------------------------------- Value --------------------------------- */
+
+#[derive(From, Clone, Debug)]
+pub enum ValuePattern {
+    Ann(Ann<VPatId, sc::TermId>),
+    Hole(Hole),
+    Var(DefId),
+    Ctor(Ctor<VPatId>),
+    Paren(Paren<VPatId>),
+}
 
 #[derive(From, Clone, Debug)]
 pub enum Value {
@@ -97,20 +107,11 @@ pub enum Value {
     Lit(Literal),
 }
 
-#[derive(From, Clone, Debug)]
-pub enum ValuePattern {
-    Ann(Ann<PatId, TermId>),
-    Hole(Hole),
-    Var(DefId),
-    Ctor(Ctor<PatId>),
-    Paren(Paren<PatId>),
-}
-
 /* ------------------------------- Computation ------------------------------ */
 
 /// `rec (x: A) -> b`
 #[derive(Clone, Debug)]
-pub struct Rec(pub PatId, pub CompuId);
+pub struct Rec(pub VPatId, pub CompuId);
 
 /// `ret a` has type `Ret A`
 #[derive(Clone, Debug)]
@@ -118,14 +119,14 @@ pub struct Return(pub ValueId);
 /// `do x <- b; ...`
 #[derive(Clone, Debug)]
 pub struct Bind {
-    pub binder: PatId,
+    pub binder: VPatId,
     pub bindee: CompuId,
     pub tail: CompuId,
 }
 /// `let x = a in ...`
 #[derive(Clone, Debug)]
 pub struct PureBind {
-    pub binder: PatId,
+    pub binder: VPatId,
     pub bindee: ValueId,
     pub tail: CompuId,
 }
@@ -134,7 +135,7 @@ pub struct PureBind {
 // #[derive(Clone, Debug)]
 // pub struct UseBind {
 //     pub uses: UsePath,
-//     pub tail: TermId,
+//     pub tail: sc::TermId,
 // }
 
 /// `match a | C_1 p -> b_1 | ... end`
@@ -145,7 +146,7 @@ pub struct Match {
 }
 #[derive(Clone, Debug)]
 pub struct Matcher {
-    pub binder: PatId,
+    pub binder: VPatId,
     pub tail: CompuId,
 }
 
@@ -156,7 +157,7 @@ pub struct CoMatch {
 }
 #[derive(Clone, Debug)]
 pub struct CoMatcher {
-    pub params: CoPatId,
+    pub params: VPatId,
     pub tail: CompuId,
 }
 
@@ -164,7 +165,7 @@ pub struct CoMatcher {
 pub enum Computation {
     Ann(Ann<CompuId, TypeId>),
     Hole(Hole),
-    Abs(Abs<CoPatId, CompuId>),
+    Abs(Abs<VPatId, CompuId>),
     App(App<CompuId>),
     Rec(Rec),
     Force(Force<ValueId>),
@@ -180,45 +181,33 @@ pub enum Computation {
 /* -------------------------------- TopLevel -------------------------------- */
 
 #[derive(Clone, Debug)]
-pub struct Alias {
-    pub binder: PatId,
-    pub bindee: TermId,
+pub struct TAlias {
+    pub binder: TPatId,
+    pub bindee: TypeId,
+}
+
+#[derive(Clone, Debug)]
+pub struct VAlias {
+    pub binder: VPatId,
+    pub bindee: ValueId,
 }
 
 #[derive(Clone, Debug)]
 pub struct Extern {
     pub comp: bool,
-    pub binder: PatId,
-    pub params: Option<CoPatId>,
-    pub ty: Option<TermId>,
+    pub binder: VPatId,
+    pub params: Option<VPatId>,
+    pub ty: Option<sc::TermId>,
 }
-
-// #[derive(Clone, Debug)]
-// pub struct Layer {
-//     pub name: Option<NameRef<VarName>>,
-//     pub uses: Vec<Modifiers<UsePath>>,
-//     pub top: TopLevel,
-// }
-
-// #[derive(From, Clone, Debug)]
-// pub struct UseDef(pub UsePath);
-
-// #[derive(Clone, Debug)]
-// pub struct UseBlock {
-//     pub uses: UsePath,
-//     pub top: TopLevel,
-// }
 
 #[derive(Clone, Debug)]
 pub struct Main(pub CompuId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
-    Alias(Alias),
+    TAlias(TAlias),
+    VAlias(VAlias),
     Extern(Extern),
-    // Layer(Layer),
-    // UseDef(UseDef),
-    // UseBlock(UseBlock),
     Main(Main),
 }
 
@@ -227,15 +216,13 @@ pub enum Declaration {
 #[derive(Debug)]
 pub struct StaticArena {
     /// sorted terms
-    pub sorts: ArenaAssoc<TermId, TermSort>,
+    pub sorts: ArenaAssoc<sc::TermId, SortedId>,
     /// ... and back
-    pub unsorts: ArenaAssoc<TermSort, TermId>,
+    pub unsorts: ArenaAssoc<SortedId, sc::TermId>,
     /// arena for kinds
     pub kinds: ArenaSparse<KindId, Kind>,
     /// arena for types
     pub types: ArenaSparse<TypeId, Type>,
-    // /// copattern types
-    // pub copatys: ArenaSparse<CoPatId, CoPatternType>,
     /// arena for values
     pub values: ArenaSparse<ValueId, Value>,
     /// arena for computations

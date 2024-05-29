@@ -3,7 +3,29 @@ use std::{
     ops::{Index, IndexMut},
 };
 
+/* ---------------------------------- Index --------------------------------- */
+
 pub use crate::new_key_type;
+
+pub unsafe trait IndexLike: Clone + Copy + Eq + std::hash::Hash {
+    type Meta;
+    fn new(meta: Self::Meta, idx: usize) -> Self;
+    fn index(&self) -> usize;
+}
+
+#[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct TrivId<Meta = usize>(std::marker::PhantomData<Meta>);
+unsafe impl<Meta: Eq + std::hash::Hash + std::marker::Copy> IndexLike for TrivId<Meta> {
+    type Meta = Meta;
+    fn new(_: Self::Meta, _idx: usize) -> Self {
+        TrivId(Default::default())
+    }
+    fn index(&self) -> usize {
+        unreachable!()
+    }
+}
+
+/* -------------------------------- Allocator ------------------------------- */
 
 #[derive(Debug)]
 pub struct IndexAlloc<Meta>(Meta, usize);
@@ -22,11 +44,32 @@ impl<Meta: Copy> Iterator for IndexAlloc<Meta> {
     }
 }
 
-pub unsafe trait IndexLike: Clone + Copy + Eq + std::hash::Hash {
-    type Meta;
-    fn new(meta: Self::Meta, idx: usize) -> Self;
-    fn index(&self) -> usize;
+pub struct GlobalAlloc(IndexAlloc<()>);
+impl GlobalAlloc {
+    pub fn new() -> Self {
+        GlobalAlloc(IndexAlloc((), 0))
+    }
+    pub fn alloc(&mut self) -> IndexAlloc<usize> {
+        IndexAlloc(self.0.next().unwrap().1, 0)
+    }
 }
+
+/* ---------------------------------- Arena --------------------------------- */
+
+pub trait ArenaAccess<Id, T, Meta>: Index<Id, Output = T> + IndexMut<Id, Output = T> {
+    fn get(&self, id: Id) -> Option<&T>;
+    fn get_mut(&mut self, id: Id) -> Option<&mut T>;
+}
+
+// pub trait ArenaBidirectional<'t, P, Q> {
+//     type RightView<'a: 't>;
+//     type LeftView<'b: 't>;
+//     fn forth(&self, p: &P) -> Self::RightView<'t>;
+//     fn back(&self, q: &Q) -> Self::LeftView<'t>;
+// }
+
+pub struct Forth<'a, T>(pub &'a T);
+pub struct Back<'a, T>(pub &'a T);
 
 #[derive(Debug)]
 pub struct ArenaDense<Id, T, Meta = usize> {
@@ -47,25 +90,25 @@ pub struct ArenaAssoc<Id, T> {
     map: HashMap<Id, T>,
 }
 
+/// A bidirectional multi-single-map.
 #[derive(Debug, Clone)]
 pub struct ArenaForth<P, Q> {
     forward: ArenaAssoc<P, Vec<Q>>,
     backward: ArenaAssoc<Q, P>,
 }
 
-pub trait ArenaAccess<Id, T, Meta>: Index<Id, Output = T> + IndexMut<Id, Output = T> {
-    fn get(&self, id: Id) -> Option<&T>;
-    fn get_mut(&mut self, id: Id) -> Option<&mut T>;
+/// A bidirectional bijective map.
+#[derive(Debug, Clone)]
+pub struct ArenaBijective<P, Q> {
+    forward: ArenaAssoc<P, Q>,
+    backward: ArenaAssoc<Q, P>,
 }
 
-pub struct GlobalAlloc(IndexAlloc<()>);
-impl GlobalAlloc {
-    pub fn new() -> Self {
-        GlobalAlloc(IndexAlloc((), 0))
-    }
-    pub fn alloc(&mut self) -> IndexAlloc<usize> {
-        IndexAlloc(self.0.next().unwrap().1, 0)
-    }
+/// A bidirectional multi-map.
+#[derive(Debug, Clone)]
+pub struct ArenaBipartite<P, Q> {
+    forward: ArenaAssoc<P, Vec<Q>>,
+    backward: ArenaAssoc<Q, Vec<P>>,
 }
 
 mod impls {
@@ -366,14 +409,41 @@ mod impls {
         }
     }
 
+    impl<'a, P, Q> Index<&P> for Forth<'a, ArenaForth<P, Q>>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Output = [Q];
+        fn index(&self, p: &P) -> &Self::Output {
+            let Forth(arena) = self;
+            arena.forth(p)
+        }
+    }
+
+    impl<'a, P, Q> Index<&Q> for Back<'a, ArenaForth<P, Q>>
+    where
+        Q: Eq + Hash + Clone,
+    {
+        type Output = P;
+        fn index(&self, q: &Q) -> &Self::Output {
+            let Back(arena) = self;
+            arena.back(q).unwrap()
+        }
+    }
+
     impl<P, Q> ArenaForth<P, Q>
     where
         P: Eq + Hash + Clone,
-        Q: Eq + Hash + Clone,
     {
         pub fn forth(&self, p: &P) -> &[Q] {
             self.forward.get(p).map(|q| q.as_slice()).unwrap_or_default()
         }
+    }
+
+    impl<P, Q> ArenaForth<P, Q>
+    where
+        Q: Eq + Hash + Clone,
+    {
         pub fn back(&self, q: &Q) -> Option<&P> {
             self.backward.get(q)
         }
@@ -421,6 +491,246 @@ mod impls {
         Q: Eq + Hash + Clone,
     {
         fn add_assign(&mut self, rhs: ArenaForth<P, Q>) {
+            self.extend(rhs);
+        }
+    }
+
+    /* ----------------------------- ArenaBijective ----------------------------- */
+
+    impl<P, Q> ArenaBijective<P, Q> {
+        pub fn new() -> Self {
+            ArenaBijective { forward: ArenaAssoc::new(), backward: ArenaAssoc::new() }
+        }
+    }
+
+    impl<P, Q> Default for ArenaBijective<P, Q> {
+        fn default() -> Self {
+            Self { forward: Default::default(), backward: Default::default() }
+        }
+    }
+
+    impl<P, Q> ArenaBijective<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        pub fn insert(&mut self, p: P, q: Q) {
+            self.forward.insert(p.clone(), q.clone());
+            self.backward.insert(q, p);
+        }
+    }
+
+    impl<P, Q> Index<&P> for ArenaBijective<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Output = Q;
+        fn index(&self, p: &P) -> &Self::Output {
+            self.forward.get(p).unwrap()
+        }
+    }
+
+    impl<'a, P, Q> Index<&P> for Forth<'a, ArenaBijective<P, Q>>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Output = Q;
+        fn index(&self, p: &P) -> &Self::Output {
+            let Forth(arena) = self;
+            arena.forth(p)
+        }
+    }
+
+    impl<'a, P, Q> Index<&Q> for Back<'a, ArenaBijective<P, Q>>
+    where
+        Q: Eq + Hash + Clone,
+    {
+        type Output = P;
+        fn index(&self, q: &Q) -> &Self::Output {
+            let Back(arena) = self;
+            arena.back(q).unwrap()
+        }
+    }
+
+    impl<P, Q> ArenaBijective<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        pub fn forth(&self, p: &P) -> &Q {
+            self.forward.get(p).unwrap()
+        }
+    }
+
+    impl<P, Q> ArenaBijective<P, Q>
+    where
+        Q: Eq + Hash + Clone,
+    {
+        pub fn back(&self, q: &Q) -> Option<&P> {
+            self.backward.get(q)
+        }
+    }
+
+    impl<P, Q> IntoIterator for ArenaBijective<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Item = (P, Q);
+        type IntoIter = std::collections::hash_map::IntoIter<P, Q>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.forward.map.into_iter()
+        }
+    }
+
+    impl<'a, P, Q> IntoIterator for &'a ArenaBijective<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Item = (&'a P, &'a Q);
+        type IntoIter = std::collections::hash_map::Iter<'a, P, Q>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.forward.map.iter()
+        }
+    }
+
+    impl<P, Q> Extend<(P, Q)> for ArenaBijective<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        fn extend<I: IntoIterator<Item = (P, Q)>>(&mut self, iter: I) {
+            for (p, q) in iter {
+                self.insert(p, q);
+            }
+        }
+    }
+
+    impl<P, Q> AddAssign for ArenaBijective<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        fn add_assign(&mut self, rhs: ArenaBijective<P, Q>) {
+            self.extend(rhs);
+        }
+    }
+
+    /* ----------------------------- ArenaBipartite ----------------------------- */
+
+    impl<P, Q> ArenaBipartite<P, Q> {
+        pub fn new() -> Self {
+            ArenaBipartite { forward: ArenaAssoc::new(), backward: ArenaAssoc::new() }
+        }
+    }
+
+    impl<P, Q> Default for ArenaBipartite<P, Q> {
+        fn default() -> Self {
+            Self { forward: Default::default(), backward: Default::default() }
+        }
+    }
+
+    impl<P, Q> ArenaBipartite<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        pub fn insert(&mut self, p: P, q: Q) {
+            self.forward.map.entry(p.clone()).or_insert_with(Vec::new).push(q.clone());
+            self.backward.map.entry(q).or_insert_with(Vec::new).push(p);
+        }
+    }
+
+    impl<P, Q> Index<&P> for ArenaBipartite<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Output = [Q];
+        fn index(&self, p: &P) -> &Self::Output {
+            self.forward.get(p).map(|q| q.as_slice()).unwrap_or_default()
+        }
+    }
+
+    impl<'a, P, Q> Index<&P> for Forth<'a, ArenaBipartite<P, Q>>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Output = [Q];
+        fn index(&self, p: &P) -> &Self::Output {
+            let Forth(arena) = self;
+            arena.forth(p)
+        }
+    }
+
+    impl<'a, P, Q> Index<&Q> for Back<'a, ArenaBipartite<P, Q>>
+    where
+        Q: Eq + Hash + Clone,
+    {
+        type Output = [P];
+        fn index(&self, q: &Q) -> &Self::Output {
+            let Back(arena) = self;
+            arena.back(q)
+        }
+    }
+
+    impl<P, Q> ArenaBipartite<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        pub fn forth(&self, p: &P) -> &[Q] {
+            self.forward.get(p).map(|q| q.as_slice()).unwrap_or_default()
+        }
+    }
+
+    impl<P, Q> ArenaBipartite<P, Q>
+    where
+        Q: Eq + Hash + Clone,
+    {
+        pub fn back(&self, q: &Q) -> &[P] {
+            self.backward.get(q).map(|p| p.as_slice()).unwrap_or_default()
+        }
+    }
+
+    impl<P, Q> IntoIterator for ArenaBipartite<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Item = (P, Vec<Q>);
+        type IntoIter = std::collections::hash_map::IntoIter<P, Vec<Q>>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.forward.map.into_iter()
+        }
+    }
+
+    impl<'a, P, Q> IntoIterator for &'a ArenaBipartite<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Item = (&'a P, &'a Vec<Q>);
+        type IntoIter = std::collections::hash_map::Iter<'a, P, Vec<Q>>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.forward.map.iter()
+        }
+    }
+
+    impl<P, Q> Extend<(P, Vec<Q>)> for ArenaBipartite<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        fn extend<I: IntoIterator<Item = (P, Vec<Q>)>>(&mut self, iter: I) {
+            for (p, qs) in iter {
+                for q in qs {
+                    self.insert(p.clone(), q);
+                }
+            }
+        }
+    }
+
+    impl<P, Q> AddAssign for ArenaBipartite<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        fn add_assign(&mut self, rhs: ArenaBipartite<P, Q>) {
             self.extend(rhs);
         }
     }

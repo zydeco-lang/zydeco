@@ -73,123 +73,125 @@ impl Desugar for t::TopLevel {
     type Out = b::TopLevel;
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
         let t::TopLevel(decls) = self;
-        let mut decls_new = Vec::new();
-        for decl in decls {
-            let Modifiers { public, inner } = desugarer.textual.decls[&decl].clone();
-            use t::Declaration as Decl;
-            let inner = match inner {
-                | Decl::DataDef(decl) => {
-                    let t::DataDef { name, params, def: body } = decl;
-                    let span = name.span(desugarer);
-                    // name -> pat
-                    let name = name.desugar(desugarer);
-                    let pat = Alloc::alloc(desugarer, span.clone());
-                    let pat = desugarer.pat(pat, name.into());
-                    // body -> term
-                    let body = span.make(body).desugar(desugarer);
-                    // params & body -> abs term
-                    let params = params.desugar(desugarer);
-                    let mut abs = body;
-                    for param in params.into_iter().rev() {
-                        let next = Alloc::alloc(desugarer, span.clone());
-                        abs = desugarer.term(next, b::Abs(param, abs).into());
-                    }
-                    // abs -> sealed
-                    let sealed = Alloc::alloc(desugarer, span.clone());
-                    let sealed = desugarer.term(sealed, b::Sealed(abs).into());
-                    // pat & sealed -> alias
-                    b::Alias { binder: pat, bindee: sealed }.into()
+        b::TopLevel(decls.into_iter().map(|decl| decl.desugar(desugarer)).collect())
+    }
+}
+
+impl Desugar for t::DeclId {
+    type Out = b::DeclId;
+    fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
+        let Modifiers { public, inner } = desugarer.textual.decls[&self].clone();
+        use t::Declaration as Decl;
+        let inner = match inner {
+            | Decl::DataDef(decl) => {
+                let t::DataDef { name, params, def: body } = decl;
+                let span = name.span(desugarer);
+                // name -> pat
+                let name = name.desugar(desugarer);
+                let pat = Alloc::alloc(desugarer, span.clone());
+                let pat = desugarer.pat(pat, name.into());
+                // body -> term
+                let body = span.make(body).desugar(desugarer);
+                // params & body -> abs term
+                let params = params.desugar(desugarer);
+                let mut abs = body;
+                for param in params.into_iter().rev() {
+                    let next = Alloc::alloc(desugarer, span.clone());
+                    abs = desugarer.term(next, b::Abs(param, abs).into());
                 }
-                | Decl::CoDataDef(decl) => {
-                    let t::CoDataDef { name, params, def: body } = decl;
-                    let span = name.span(desugarer);
-                    // name -> pat
-                    let name = name.desugar(desugarer);
-                    let pat = Alloc::alloc(desugarer, span.clone());
-                    let pat = desugarer.pat(pat, name.into());
-                    // body -> term
-                    let body = span.make(body).desugar(desugarer);
-                    // params & body -> abs term
-                    let params = params.desugar(desugarer);
-                    let mut abs = body;
-                    for param in params.into_iter().rev() {
-                        let next = Alloc::alloc(desugarer, span.clone());
-                        abs = desugarer.term(next, b::Abs(param, abs).into());
-                    }
-                    // abs -> sealed
-                    let sealed = Alloc::alloc(desugarer, span.clone());
-                    let sealed = desugarer.term(sealed, b::Sealed(abs).into());
-                    // pat & sealed -> alias
-                    b::Alias { binder: pat, bindee: sealed }.into()
+                // abs -> sealed
+                let sealed = Alloc::alloc(desugarer, span.clone());
+                let sealed = desugarer.term(sealed, b::Sealed(abs).into());
+                // pat & sealed -> alias
+                b::Alias { binder: pat, bindee: sealed }.into()
+            }
+            | Decl::CoDataDef(decl) => {
+                let t::CoDataDef { name, params, def: body } = decl;
+                let span = name.span(desugarer);
+                // name -> pat
+                let name = name.desugar(desugarer);
+                let pat = Alloc::alloc(desugarer, span.clone());
+                let pat = desugarer.pat(pat, name.into());
+                // body -> term
+                let body = span.make(body).desugar(desugarer);
+                // params & body -> abs term
+                let params = params.desugar(desugarer);
+                let mut abs = body;
+                for param in params.into_iter().rev() {
+                    let next = Alloc::alloc(desugarer, span.clone());
+                    abs = desugarer.term(next, b::Abs(param, abs).into());
                 }
-                | Decl::Define(decl) => {
-                    let t::Define(genbind) = decl;
-                    let (pat, term) = genbind.desugar(desugarer);
-                    // sealed
-                    let span = pat.span(desugarer);
-                    let sealed = Alloc::alloc(desugarer, span);
-                    let sealed = desugarer.term(sealed, b::Sealed(term).into());
-                    // pat & sealed -> alias
-                    b::Alias { binder: pat, bindee: sealed }.into()
-                }
-                | Decl::Alias(decl) => {
-                    let t::Alias(genbind) = decl;
-                    let (pat, term) = genbind.desugar(desugarer);
-                    // pat & term -> alias
-                    b::Alias { binder: pat, bindee: term }.into()
-                }
-                | Decl::Extern(decl) => {
-                    // Todo: error on rec
-                    let t::Extern(t::GenBind { rec: _, comp, binder, params, ty, bindee: () }) =
-                        decl;
-                    let binder = binder.desugar(desugarer);
-                    let params = if let Some(params) = params {
-                        let b::App(items) = params.desugar(desugarer);
-                        let mut res = Vec::new();
-                        for item in items {
-                            match item {
-                                | b::CoPatternItem::Pat(pat) => res.push(pat),
-                                | b::CoPatternItem::Dtor(_) => {
-                                    unimplemented!("Dtor in extern params")
-                                }
+                // abs -> sealed
+                let sealed = Alloc::alloc(desugarer, span.clone());
+                let sealed = desugarer.term(sealed, b::Sealed(abs).into());
+                // pat & sealed -> alias
+                b::Alias { binder: pat, bindee: sealed }.into()
+            }
+            | Decl::Define(decl) => {
+                let t::Define(genbind) = decl;
+                let (pat, term) = genbind.desugar(desugarer);
+                // sealed
+                let span = pat.span(desugarer);
+                let sealed = Alloc::alloc(desugarer, span);
+                let sealed = desugarer.term(sealed, b::Sealed(term).into());
+                // pat & sealed -> alias
+                b::Alias { binder: pat, bindee: sealed }.into()
+            }
+            | Decl::Alias(decl) => {
+                let t::Alias(genbind) = decl;
+                let (pat, term) = genbind.desugar(desugarer);
+                // pat & term -> alias
+                b::Alias { binder: pat, bindee: term }.into()
+            }
+            | Decl::Extern(decl) => {
+                // Todo: error on rec
+                let t::Extern(t::GenBind { rec: _, comp, binder, params, ty, bindee: () }) = decl;
+                let binder = binder.desugar(desugarer);
+                let params = if let Some(params) = params {
+                    let b::App(items) = params.desugar(desugarer);
+                    let mut res = Vec::new();
+                    for item in items {
+                        match item {
+                            | b::CoPatternItem::Pat(pat) => res.push(pat),
+                            | b::CoPatternItem::Dtor(_) => {
+                                unimplemented!("Dtor in extern params")
                             }
                         }
-                        res
-                    } else {
-                        Vec::new()
-                    };
-                    let ty = ty.map(|ty| ty.desugar(desugarer));
-                    b::Extern { comp, binder, params, ty }.into()
-                }
-                // Decl::Layer(decl) => {
-                //     let t::Layer { name, uses, top } = decl;
-                //     let top = top.desugar(desugarer);
-                //     let uses = uses
-                //         .into_iter()
-                //         .map(|Modifiers { public, inner }| Modifiers { public, inner })
-                //         .collect();
-                //     b::Layer { name, uses, top }.into()
-                // }
-                // Decl::UseDef(decl) => {
-                //     let t::UseDef(uses) = decl;
-                //     b::UseDef(uses).into()
-                // }
-                // Decl::UseBlock(decl) => {
-                //     let t::UseBlock { uses, top } = decl;
-                //     let top = top.desugar(desugarer);
-                //     b::UseBlock { uses, top }.into()
-                // }
-                | Decl::Main(decl) => {
-                    let t::Main(term) = decl;
-                    let term = term.desugar(desugarer);
-                    b::Main(term).into()
-                }
-            };
-            let span = decl.span(desugarer);
-            let decl = Alloc::alloc(desugarer, span);
-            decls_new.push(desugarer.decl(decl, Modifiers { public, inner }))
-        }
-        b::TopLevel(decls_new)
+                    }
+                    res
+                } else {
+                    Vec::new()
+                };
+                let ty = ty.map(|ty| ty.desugar(desugarer));
+                b::Extern { comp, binder, params, ty }.into()
+            }
+            // Decl::Layer(decl) => {
+            //     let t::Layer { name, uses, top } = decl;
+            //     let top = top.desugar(desugarer);
+            //     let uses = uses
+            //         .into_iter()
+            //         .map(|Modifiers { public, inner }| Modifiers { public, inner })
+            //         .collect();
+            //     b::Layer { name, uses, top }.into()
+            // }
+            // Decl::UseDef(decl) => {
+            //     let t::UseDef(uses) = decl;
+            //     b::UseDef(uses).into()
+            // }
+            // Decl::UseBlock(decl) => {
+            //     let t::UseBlock { uses, top } = decl;
+            //     let top = top.desugar(desugarer);
+            //     b::UseBlock { uses, top }.into()
+            // }
+            | Decl::Main(decl) => {
+                let t::Main(term) = decl;
+                let term = term.desugar(desugarer);
+                b::Main(term).into()
+            }
+        };
+        let span = self.span(desugarer);
+        let decl = Alloc::alloc(desugarer, span);
+        desugarer.decl(decl, Modifiers { public, inner })
     }
 }
 
@@ -743,11 +745,6 @@ mod impls {
             desugarer.bspans.pats[self].clone()
         }
     }
-    impl Spanned for b::CoPatId {
-        fn span(&self, desugarer: &mut Desugarer) -> Span {
-            desugarer.bspans.copats[self].clone()
-        }
-    }
     impl Spanned for b::TermId {
         fn span(&self, desugarer: &mut Desugarer) -> Span {
             desugarer.bspans.terms[self].clone()
@@ -771,11 +768,6 @@ mod impls {
     impl Alloc for b::PatId {
         fn alloc(desugarer: &mut Desugarer, span: Span) -> Self {
             desugarer.bspans.pats.alloc(span)
-        }
-    }
-    impl Alloc for b::CoPatId {
-        fn alloc(desugarer: &mut Desugarer, span: Span) -> Self {
-            desugarer.bspans.copats.alloc(span)
         }
     }
     impl Alloc for b::TermId {

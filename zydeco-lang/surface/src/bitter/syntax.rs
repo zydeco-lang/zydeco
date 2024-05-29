@@ -13,15 +13,21 @@ pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 new_key_type! {
     pub struct DefId;
     pub struct PatId;
-    pub struct CoPatId;
     pub struct TermId;
     pub struct DeclId;
 }
 impl DefPtr for DefId {}
 impl PatPtr for PatId {}
-impl CoPatPtr for CoPatId {}
 impl TermPtr for TermId {}
 impl DeclPtr for DeclId {}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum EntityId {
+    Def(DefId),
+    Pat(PatId),
+    Term(TermId),
+    Decl(DeclId),
+}
 
 /* --------------------------------- Binder --------------------------------- */
 
@@ -234,7 +240,7 @@ pub struct Arena {
     pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
-pub type SpanArena = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
+pub type SpanArena = ArenaGen<Span, DefId, PatId, TrivId, TermId, DeclId>;
 
 /* -------------------------------- Primitive ------------------------------- */
 

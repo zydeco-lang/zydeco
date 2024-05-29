@@ -35,7 +35,7 @@ pub struct App<T>(pub Vec<T>);
 
 /// a -> b shaped arrow
 #[derive(Clone, Debug)]
-pub struct Arrow<S, T>(pub S, pub T);
+pub struct Arrow<T>(pub T, pub T);
 
 /// a * b shaped product
 #[derive(Clone, Debug)]

@@ -5,7 +5,6 @@ pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use derive_more::From;
-use std::fmt::Debug;
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -21,6 +20,15 @@ impl PatPtr for PatId {}
 impl CoPatPtr for CoPatId {}
 impl TermPtr for TermId {}
 impl DeclPtr for DeclId {}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum EntityId {
+    Def(DefId),
+    Pat(PatId),
+    CoPat(CoPatId),
+    Term(TermId),
+    Decl(DeclId),
+}
 
 /* --------------------------------- Pattern -------------------------------- */
 
@@ -152,7 +160,7 @@ pub enum Term {
     Rec(Rec),
     Pi(Pi),
     Forall(Forall),
-    Arrow(Arrow<TermId, TermId>),
+    Arrow(Arrow<TermId>),
     Sigma(Sigma),
     Exists(Exists),
     Prod(Prod<TermId>),
