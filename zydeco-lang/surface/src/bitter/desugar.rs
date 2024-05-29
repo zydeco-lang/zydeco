@@ -312,7 +312,18 @@ impl Desugar for t::TermId {
             | Tm::Var(name) => desugarer.term(id, b::Term::Var(name)),
             | Tm::Paren(term) => {
                 let t::Paren(terms) = term;
-                let terms = terms.desugar(desugarer);
+                let mut iter = terms.into_iter();
+                let mut terms = Vec::new();
+                // merge the first nested paren
+                if let Some(head) = iter.next() {
+                    if let Tm::Paren(term) = desugarer.lookup_term(head) {
+                        let t::Paren(inner) = term;
+                        terms.extend(inner.into_iter().map(|term| term.desugar(desugarer)));
+                    } else {
+                        terms.push(head.desugar(desugarer))
+                    }
+                }
+                terms.extend(iter.map(|term| term.desugar(desugarer)));
                 // if there is only one term like `(t)`, remove the redundant paren
                 if terms.len() == 1 {
                     terms.into_iter().next().unwrap()
@@ -347,6 +358,7 @@ impl Desugar for t::TermId {
                 let t::App(terms) = term;
                 let mut iter = terms.into_iter();
                 let mut terms = Vec::new();
+                // merge the first nested app
                 if let Some(head) = iter.next() {
                     if let Tm::App(term) = desugarer.lookup_term(head) {
                         let t::App(inner) = term;
@@ -383,17 +395,17 @@ impl Desugar for t::TermId {
                 ty
             }
             | Tm::Arrow(term) => {
-                let t::Arrow(params, ty) = term;
-                // params -> ann = (hole: params)
-                let params = params.desugar(desugarer);
-                let span = params.span(desugarer);
+                let t::Arrow(ty_in, ty_out) = term;
+                // ty_in -> ann = (hole: ty_in)
+                let ty_in = ty_in.desugar(desugarer);
+                let span = ty_in.span(desugarer);
                 let hole = Alloc::alloc(desugarer, span.clone());
                 let hole = desugarer.pat(hole, b::Hole.into());
                 let ann = Alloc::alloc(desugarer, span.clone());
-                let ann = desugarer.pat(ann, b::Ann { tm: hole, ty: params }.into());
-                // ann & ty -> pi
-                let ty = ty.desugar(desugarer);
-                desugarer.term(id, b::Pi(ann, ty).into())
+                let ann = desugarer.pat(ann, b::Ann { tm: hole, ty: ty_in }.into());
+                // ann & ty_out -> pi
+                let ty_out = ty_out.desugar(desugarer);
+                desugarer.term(id, b::Pi(ann, ty_out).into())
             }
             | Tm::Forall(term) => {
                 let t::Forall(params, ty) = term;
@@ -437,22 +449,17 @@ impl Desugar for t::TermId {
                 ty
             }
             | Tm::Prod(term) => {
-                let t::Prod(terms) = term;
-                let mut terms = terms.desugar(desugarer);
-                let mut out = terms.pop().unwrap();
-                while let Some(term) = terms.pop() {
-                    // term -> ann = (hole: pat)
-                    let span = term.span(desugarer);
-                    let hole = Alloc::alloc(desugarer, span.clone());
-                    let hole = desugarer.pat(hole, b::Hole.into());
-                    let ann = Alloc::alloc(desugarer, span.clone());
-                    let ann = desugarer.pat(ann, b::Ann { tm: hole, ty: term }.into());
-                    // ann & sigma -> sigma
-                    let span = out.span(desugarer);
-                    let sigma = Alloc::alloc(desugarer, span);
-                    out = desugarer.term(sigma, b::Sigma(ann, out).into());
-                }
-                out
+                let t::Prod(ty_l, ty_r) = term;
+                // ty_l -> ann = (hole: ty_l)
+                let ty_l = ty_l.desugar(desugarer);
+                let span = ty_l.span(desugarer);
+                let hole = Alloc::alloc(desugarer, span.clone());
+                let hole = desugarer.pat(hole, b::Hole.into());
+                let ann = Alloc::alloc(desugarer, span.clone());
+                let ann = desugarer.pat(ann, b::Ann { tm: hole, ty: ty_l }.into());
+                // ann & ty_r -> sigma
+                let ty_r = ty_r.desugar(desugarer);
+                desugarer.term(id, b::Sigma(ann, ty_r).into())
             }
             | Tm::Exists(term) => {
                 let t::Exists(params, ty) = term;

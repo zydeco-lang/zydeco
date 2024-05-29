@@ -316,8 +316,8 @@ TermLeftId: TermId = <TermGen<TermLeft>>;
 TermLeft: Term = {
     <TermApp>,
     // product
-    <ty_in:TermLeftId> "*" <ty_out:TermAppId> => {
-        Prod(vec![ty_in, ty_out]).into()
+    <ty_l:TermLeftId> "*" <ty_r:TermAppId> => {
+        Prod(ty_l, ty_r).into()
     },
 };
 

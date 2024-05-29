@@ -247,6 +247,7 @@ pub struct StaticsArena {
 
     /// the type of defs
     pub type_of_defs: ArenaAssoc<DefId, TermId>,
+    // Todo: equivalence-class type arena (or not)
 }
 
 impl StaticsArena {

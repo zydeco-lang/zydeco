@@ -39,7 +39,7 @@ pub struct Arrow<T>(pub T, pub T);
 
 /// a * b shaped product
 #[derive(Clone, Debug)]
-pub struct Prod<T>(pub Vec<T>);
+pub struct Prod<T>(pub T, pub T);
 
 /// sealed term which is abstract, only eq to itself during tyck
 #[derive(Clone, Debug)]

@@ -317,8 +317,10 @@ where
 {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Prod(ts) = self;
-        s += &ts.iter().map(|t| t.ugly(f)).collect::<Vec<_>>().join(" * ");
+        let Prod(t1, r2) = self;
+        s += &t1.ugly(f);
+        s += " * ";
+        s += &r2.ugly(f);
         s
     }
 }
