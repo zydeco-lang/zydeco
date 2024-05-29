@@ -21,7 +21,7 @@ use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
 use zydeco_utils::{
-    arena::{ArenaAssoc, ArenaSparse, GlobalAlloc, IndexAlloc},
+    arena::*,
     deps::DepGraph,
     span::{FileInfo, LocationCtx},
 };
@@ -176,8 +176,19 @@ impl Package {
             }
             println!("<<< [{}]", self.name);
         }
-
-        // sorting
+        // Debug: print the user map
+        // if cfg!(debug_assertions) {
+        //     use crate::scoped::fmt::*;
+        //     println!(">>> [{}]", self.name);
+        //     for (def, users) in &pack.arena.users {
+        //         println!(
+        //             "\t{:?} -> {:?}",
+        //             pack.arena.defs[def].ugly(&Formatter::new(&pack.arena)),
+        //             users.len()
+        //         );
+        //     }
+        //     println!("<<< [{}]", self.name);
+        // }
 
         // type-checking
 
@@ -301,7 +312,7 @@ pub struct PackageStew {
 }
 
 impl PackageStew {
-    pub fn resolve(self, alloc: IndexAlloc<usize>) -> Result<PackageScoped> {
+    pub fn resolve(self, _alloc: IndexAlloc<usize>) -> Result<PackageScoped> {
         let PackageStew { sources, spans, arena: bitter, prim_term, top } = self;
         let resolver = Resolver {
             spans,
@@ -310,14 +321,16 @@ impl PackageStew {
             prim_def: sc::PrimDef::default(),
             internal_to_def: ArenaAssoc::default(),
 
-            ctxs: ArenaSparse::new(alloc),
-            term_under_ctx: ArenaAssoc::default(),
+            // ctxs: ArenaSparse::new(alloc),
+            // term_under_ctx: ArenaAssoc::default(),
 
+            //
             defs: ArenaAssoc::default(),
             pats: ArenaAssoc::default(),
             terms: ArenaAssoc::default(),
             decls: ArenaAssoc::default(),
 
+            users: ArenaForth::default(),
             deps: DepGraph::default(),
         };
         let ResolveOut { spans, prim, arena } =

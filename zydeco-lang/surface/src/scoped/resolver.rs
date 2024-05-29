@@ -1,10 +1,5 @@
 use crate::scoped::{err::*, syntax::*};
-use zydeco_utils::{
-    arena::{ArenaAssoc, ArenaSparse},
-    cells::SingCell,
-    deps::DepGraph,
-    scc::Kosaraju,
-};
+use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::Kosaraju};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {
@@ -67,8 +62,8 @@ pub struct Resolver {
     /// all internal definitions mapped to a corresponding def
     pub internal_to_def: ArenaAssoc<TermId, DefId>,
 
-    pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
-    pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
+    // pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
+    // pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
 
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
@@ -76,6 +71,7 @@ pub struct Resolver {
     pub terms: ArenaAssoc<TermId, Term<DefId>>,
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
+    pub users: ArenaForth<DefId, TermId>,
     pub deps: DepGraph<DeclId>,
 }
 
@@ -95,30 +91,35 @@ impl Resolver {
             prim_def: prim,
             internal_to_def: _,
 
-            ctxs,
-            term_under_ctx,
+            // ctxs,
+            // term_under_ctx,
 
+            //
             defs,
             pats,
             terms,
             decls,
 
+            users,
             deps,
         } = self;
+        let top = Kosaraju::new(&deps).run();
         Ok(ResolveOut {
             spans,
             prim,
             arena: ScopedArena {
-                ctxs,
-                term_under_ctx,
+                // ctxs,
+                // term_under_ctx,
 
+                //
                 defs,
                 pats,
                 terms,
                 decls,
 
-                top: Kosaraju::new(&deps).run(),
+                users,
                 deps,
+                top,
             },
         })
     }
@@ -398,12 +399,14 @@ impl Resolve for TermId {
                 if let Some(def) = local.var_to_def.get(var.leaf()) {
                     // if found, we're done
                     resolver.terms.insert(*self, Term::Var(*def));
+                    resolver.users.insert(*def, *self);
                     return Ok(());
                 }
                 // otherwise, try to find the variable globally
                 if let Some(def) = global.var_to_def.get(var.leaf()) {
                     // if found, also add dependency
                     resolver.terms.insert(*self, Term::Var(*def));
+                    resolver.users.insert(*def, *self);
                     resolver.deps.add(local.under, [global.under_map[def]]);
                     return Ok(());
                 }

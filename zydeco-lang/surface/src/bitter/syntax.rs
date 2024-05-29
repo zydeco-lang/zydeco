@@ -240,6 +240,8 @@ pub struct Arena {
     pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
+// Fixme: keep a bidirectional map instead of duplicating the spans
+// Fixme: unify allocation for all entities
 pub type SpanArena = ArenaGen<Span, DefId, PatId, TrivId, TermId, DeclId>;
 
 /* -------------------------------- Primitive ------------------------------- */

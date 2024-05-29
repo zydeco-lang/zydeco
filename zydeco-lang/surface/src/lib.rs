@@ -21,6 +21,7 @@ pub mod arena {
 
     pub use general::*;
     pub use identifier::*;
+    pub use folder::*;
     pub use zydeco_utils::arena::*;
 }
 

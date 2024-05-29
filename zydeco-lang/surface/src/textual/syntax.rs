@@ -21,6 +21,7 @@ impl CoPatPtr for CoPatId {}
 impl TermPtr for TermId {}
 impl DeclPtr for DeclId {}
 
+/// An entity dispatcher.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum EntityId {
     Def(DefId),
@@ -256,6 +257,7 @@ pub struct Arena {
     pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
+// Fixme: unify allocation for all entities
 pub type SpanArena = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
 
 /* --------------------------------- Parser --------------------------------- */

@@ -2,7 +2,6 @@ use crate::err::*;
 use crate::surface_syntax::{self as su, PrimDef, ScopedArena, SpanArena};
 use crate::syntax as so;
 use std::collections::HashSet;
-use zydeco_utils::arena::ArenaAssoc;
 
 pub struct Tycker {
     pub spans: SpanArena,

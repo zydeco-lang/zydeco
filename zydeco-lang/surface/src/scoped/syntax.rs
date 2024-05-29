@@ -1,8 +1,7 @@
-use std::ops::Add;
-
 pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
 
+use std::ops::Add;
 use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
 
 /* --------------------------------- Context -------------------------------- */
@@ -43,12 +42,12 @@ where
 
 #[derive(Debug)]
 pub struct ScopedArena {
-    /// arena for contexts (WIP)
-    // Note: not implemented yet
-    pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
-    /// context for every term (WIP)
-    // Note: not implemented yet
-    pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
+    // /// arena for contexts (WIP)
+    // // Todo: not implemented yet
+    // pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
+    // /// context for every term (WIP)
+    // // Todo: not implemented yet
+    // pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
 
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
@@ -56,6 +55,8 @@ pub struct ScopedArena {
     pub terms: ArenaAssoc<TermId, Term<DefId>>,
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
+    /// def user map
+    pub users: ArenaForth<DefId, TermId>,
     /// dependency graph of the top level declarations
     pub deps: DepGraph<DeclId>,
     /// scc graph of the top level declarations

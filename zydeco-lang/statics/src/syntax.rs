@@ -3,14 +3,10 @@ pub use zydeco_syntax::*;
 use crate::surface_syntax as sc;
 use derive_more::From;
 use indexmap::IndexMap;
-use zydeco_utils::{
-    arena::{ArenaAssoc, ArenaSparse},
-    new_key_type,
-};
+use zydeco_utils::{arena::*, new_key_type};
 
-pub type DeclId = sc::DeclId;
 pub type DefId = sc::DefId;
-// TermId is unsorted, while we've got the following:
+// PatId and TermId are unsorted, so we've got the following:
 new_key_type! {
     pub struct KindId;
     pub struct TPatId;
@@ -19,12 +15,34 @@ new_key_type! {
     pub struct ValueId;
     pub struct CompuId;
 }
+// .. and here we have them defined as dispatchers
+/// A dispatcher for all patterns.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
-pub enum SortedId {
+pub enum PatId {
+    Type(TPatId),
+    Value(VPatId),
+}
+// .. and here too
+/// A dispatcher for all terms.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum TermId {
     Kind(KindId),
     Type(TypeId),
     Value(ValueId),
     Compu(CompuId),
+}
+pub type DeclId = sc::DeclId;
+/// A dispatcher for all entities.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum EntityId {
+    Def(DefId),
+    Kind(KindId),
+    TPat(TPatId),
+    Type(TypeId),
+    VPat(VPatId),
+    Value(ValueId),
+    Compu(CompuId),
+    Decl(DeclId),
 }
 
 /* ---------------------------------- Kind ---------------------------------- */
@@ -215,16 +233,37 @@ pub enum Declaration {
 
 #[derive(Debug)]
 pub struct StaticArena {
-    /// sorted terms
-    pub sorts: ArenaAssoc<sc::TermId, SortedId>,
-    /// ... and back
-    pub unsorts: ArenaAssoc<SortedId, sc::TermId>,
     /// arena for kinds
     pub kinds: ArenaSparse<KindId, Kind>,
+    /// arena for type patterns
+    pub tpats: ArenaSparse<TPatId, TypePattern>,
     /// arena for types
     pub types: ArenaSparse<TypeId, Type>,
+    /// arena for value patterns
+    pub vpats: ArenaSparse<VPatId, ValuePattern>,
     /// arena for values
     pub values: ArenaSparse<ValueId, Value>,
     /// arena for computations
     pub compus: ArenaSparse<CompuId, Computation>,
+
+    /// sorted patterns
+    pub pats: ArenaBijective<sc::PatId, PatId>,
+    /// sorted terms
+    pub terms: ArenaBijective<sc::TermId, TermId>,
+}
+
+impl StaticArena {
+    pub fn new(alloc: &mut GlobalAlloc) -> Self {
+        Self {
+            kinds: ArenaSparse::new(alloc.alloc()),
+            tpats: ArenaSparse::new(alloc.alloc()),
+            types: ArenaSparse::new(alloc.alloc()),
+            vpats: ArenaSparse::new(alloc.alloc()),
+            values: ArenaSparse::new(alloc.alloc()),
+            compus: ArenaSparse::new(alloc.alloc()),
+
+            pats: ArenaBijective::new(),
+            terms: ArenaBijective::new(),
+        }
+    }
 }
