@@ -7,8 +7,8 @@ pub enum ResolveError {
     UnboundVar(Sp<NameRef<VarName>>),
     #[error("Duplicate definition: {0} and {1}")]
     DuplicateDefinition(Sp<VarName>, Sp<VarName>),
-    // #[error("Ambiguous annotation on binder: {0}")]
-    // AmbiguousBinderAnnotation(Sp<VarName>),
+    #[error("Undefined primitive: {0}")]
+    UndefinedPrimitive(Sp<VarName>),
     #[error("Duplicate primitive: {0} and {1}")]
     DuplicatePrimitive(Sp<VarName>, Sp<VarName>),
     #[error("Missing primitive: {0}")]

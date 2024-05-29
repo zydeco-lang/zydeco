@@ -258,10 +258,16 @@ pub struct PrimTerm {
     pub thunk: MultiCell<TermId>,
     /// Ret type
     pub ret: MultiCell<TermId>,
-    /// OS type
-    pub os: MultiCell<TermId>,
     /// Unit type
     pub unit: MultiCell<TermId>,
+    /// Int type
+    pub int: MultiCell<TermId>,
+    /// Char type
+    pub char: MultiCell<TermId>,
+    /// String type
+    pub string: MultiCell<TermId>,
+    /// OS type
+    pub os: MultiCell<TermId>,
     /// Monad type
     pub monad: MultiCell<TermId>,
     /// Algebra type

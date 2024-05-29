@@ -71,8 +71,11 @@ pub struct PrimDef {
     pub ctype: SingCell<DefId>,
     pub thunk: SingCell<DefId>,
     pub ret: SingCell<DefId>,
-    pub os: SingCell<DefId>,
     pub unit: SingCell<DefId>,
+    pub int: SingCell<DefId>,
+    pub char: SingCell<DefId>,
+    pub string: SingCell<DefId>,
+    pub os: SingCell<DefId>,
     pub monad: SingCell<DefId>,
     pub algebra: SingCell<DefId>,
 }
@@ -86,8 +89,11 @@ mod impls {
             self.ctype.once_or_else(|| ResolveError::MissingPrim("CType"))?;
             self.thunk.once_or_else(|| ResolveError::MissingPrim("Thunk"))?;
             self.ret.once_or_else(|| ResolveError::MissingPrim("Ret"))?;
-            self.os.once_or_else(|| ResolveError::MissingPrim("OS"))?;
             self.unit.once_or_else(|| ResolveError::MissingPrim("Unit"))?;
+            self.int.once_or_else(|| ResolveError::MissingPrim("Int"))?;
+            self.char.once_or_else(|| ResolveError::MissingPrim("Char"))?;
+            self.string.once_or_else(|| ResolveError::MissingPrim("String"))?;
+            self.os.once_or_else(|| ResolveError::MissingPrim("OS"))?;
             self.monad.once_or_else(|| ResolveError::MissingPrim("Monad"))?;
             self.algebra.once_or_else(|| ResolveError::MissingPrim("Algebra"))?;
             Ok(())
