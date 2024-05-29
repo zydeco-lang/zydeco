@@ -146,6 +146,7 @@ impl Desugar for t::DeclId {
             | Decl::Extern(decl) => {
                 // Todo: error on rec
                 let t::Extern(t::GenBind { rec: _, comp, binder, params, ty, bindee: () }) = decl;
+                assert!(!comp);
                 let binder = binder.desugar(desugarer);
                 let params = if let Some(params) = params {
                     let b::Appli(items) = params.desugar(desugarer);
@@ -163,7 +164,7 @@ impl Desugar for t::DeclId {
                     Vec::new()
                 };
                 let ty = ty.map(|ty| ty.desugar(desugarer));
-                b::Extern { comp, binder, params, ty }.into()
+                b::Extern { binder, params, ty }.into()
             }
             // Decl::Layer(decl) => {
             //     let t::Layer { name, uses, top } = decl;
@@ -186,7 +187,12 @@ impl Desugar for t::DeclId {
             | Decl::Main(decl) => {
                 let t::Main(term) = decl;
                 let term = term.desugar(desugarer);
-                b::Main(term).into()
+                // term -> ann
+                let span = self.span(desugarer);
+                let os = desugarer.os(span.clone());
+                let ann = Alloc::alloc(desugarer, span.clone());
+                let ann = desugarer.term(ann, b::Ann { tm: term, ty: os }.into());
+                b::Main(ann).into()
             }
         };
         let span = self.span(desugarer);

@@ -74,17 +74,17 @@ impl<Ctx, Ty> Action<Ctx, (), Ty> {
 }
 
 pub trait SyntacticallyAnnotated {
-    fn syntactically_annotated(&self, tycker: &Tycker) -> Option<su::TermId>;
+    fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId>;
 }
 impl SyntacticallyAnnotated for su::Declaration {
-    fn syntactically_annotated(&self, tycker: &Tycker) -> Option<su::TermId> {
+    fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId> {
         use su::Declaration as Decl;
         match self {
             | Decl::Alias(su::Alias { binder, bindee }) => {
                 let _ = binder;
-                tycker.scoped.terms[bindee].syntactically_annotated(tycker)
+                bindee.syntactically_annotated(tycker)
             }
-            | Decl::Extern(su::Extern { comp: _, binder, params, ty }) => {
+            | Decl::Extern(su::Extern { binder, params, ty }) => {
                 // Todo: implement this
                 assert!(params.is_empty());
                 let _ = binder;
@@ -98,24 +98,33 @@ impl SyntacticallyAnnotated for su::Declaration {
         }
     }
 }
-impl SyntacticallyAnnotated for su::Term<su::DefId> {
-    fn syntactically_annotated(&self, tycker: &Tycker) -> Option<su::TermId> {
+impl SyntacticallyAnnotated for su::TermId {
+    fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId> {
+        let term = tycker.scoped.terms[self].clone();
         use su::Term as Tm;
-        match self {
+        match &term {
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;
-                tycker.scoped.terms[term].syntactically_annotated(tycker)
+                term.syntactically_annotated(tycker)
             }
             | Tm::Ann(term) => {
                 let su::Ann { tm: _, ty } = term;
                 Some(*ty)
             }
+            | Tm::Abs(term) => {
+                let su::Abs(param, body) = term;
+                // Todo: add param to pi
+                let span = tycker.spans.terms[body].clone();
+                let pi = tycker.spans.terms.alloc(span);
+                let body = body.syntactically_annotated(tycker)?;
+                tycker.scoped.terms.insert(pi, su::Pi(*param, body).into());
+                Some(pi)
+            }
             | Tm::Var(_)
             | Tm::Hole(_)
             | Tm::Unit(_)
             | Tm::Cons(_)
-            | Tm::Abs(_)
             | Tm::App(_)
             | Tm::Rec(_)
             | Tm::Pi(_)
@@ -141,9 +150,9 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
     type Out = ();
     type Mode = ();
     type Action = ();
-    
+
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<Self::Out> {
-        todo!()
+        self.tyck_step(tycker, action)
     }
 
     fn tyck_step(&self, tycker: &mut Tycker, (): Self::Action) -> Result<Self::Mode> {
@@ -153,7 +162,24 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
             | 0 => unreachable!(),
             | 1 => {
                 // just synthesize
-                todo!()
+                let id = decls.iter().next().unwrap();
+                use su::Declaration as Decl;
+                match tycker.scoped.decls[id].clone() {
+                    | Decl::Alias(decl) => {
+                        let su::Alias { binder, bindee } = decl;
+                        todo!()
+                    }
+                    | Decl::Extern(decl) => {
+                        let su::Extern { binder, params, ty } = decl;
+                        todo!()
+                    }
+                    | Decl::Main(decl) => {
+                        let su::Main(term) = decl;
+                        let _ty = term.tyck(tycker, Action::syn(()))?;
+                        // Todo: check that ty is OS
+                        Ok(())
+                    }
+                }
             }
             | _ => {
                 // mutually recursive declarations must..
@@ -169,7 +195,7 @@ impl Tyck for su::DefId {
     type Out = ();
     type Mode = ();
     type Action = ();
-    
+
     fn tyck(&self, _tycker: &mut Tycker, (): Self::Action) -> Result<Self::Out> {
         todo!()
     }

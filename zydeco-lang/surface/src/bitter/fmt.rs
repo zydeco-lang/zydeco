@@ -551,11 +551,8 @@ impl Ugly for Alias {
 impl Ugly for Extern {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Extern { comp, binder, params, ty } = self;
+        let Extern { binder, params, ty } = self;
         s += "extern ";
-        if *comp {
-            s += "! ";
-        }
         s += &binder.ugly(f);
         for param in params {
             s += " ";

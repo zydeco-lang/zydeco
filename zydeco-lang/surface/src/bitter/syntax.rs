@@ -183,7 +183,6 @@ pub struct Alias {
 
 #[derive(Clone, Debug)]
 pub struct Extern {
-    pub comp: bool,
     pub binder: PatId,
     pub params: Vec<PatId>,
     pub ty: Option<TermId>,

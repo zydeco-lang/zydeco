@@ -226,7 +226,7 @@ impl Resolve for TopLevel {
                     resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }
                 | Declaration::Extern(decl) => {
-                    let Extern { comp: _, binder, params: _, ty: _ } = decl;
+                    let Extern { binder, params: _, ty: _ } = decl;
                     let binders = binder.binders(&resolver.bitter);
                     // check if it's a primitive and (later in terms) update the internal_to_def
                     'out: {
@@ -406,7 +406,7 @@ impl Resolve for DeclId {
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
             }
             | Declaration::Extern(decl) => {
-                let Extern { comp: _, binder, params, ty } = decl;
+                let Extern { binder, params, ty } = decl;
                 // no more bindee, but we still need to resolve the binders just for the type mentioned
                 if let Some(ty) = ty {
                     let () = ty.resolve(resolver, (local.clone(), global))?;
