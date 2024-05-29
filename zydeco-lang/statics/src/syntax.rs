@@ -1,7 +1,6 @@
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
-use crate::err::*;
 use crate::surface_syntax as sc;
 use derive_more::From;
 use indexmap::IndexMap;
@@ -34,25 +33,11 @@ pub enum TermId {
     Compu(CompuId),
 }
 /// and here, a very useful dispatcher for all terms that can show up at annotation sites
-/// A dispatcher for all terms.
+/// A dispatcher for all annotations.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum AnnId {
     Kind(KindId),
     Type(TypeId),
-}
-impl AnnId {
-    pub fn as_kind(self) -> Result<KindId> {
-        match self {
-            | AnnId::Kind(k) => Ok(k),
-            | _ => panic!("Expected a kind"),
-        }
-    }
-    pub fn as_type(self) -> Result<TypeId> {
-        match self {
-            | AnnId::Type(t) => Ok(t),
-            | _ => panic!("Expected a type"),
-        }
-    }
 }
 pub type DeclId = sc::DeclId;
 /// A dispatcher for all entities.
@@ -66,6 +51,88 @@ pub enum EntityId {
     Value(ValueId),
     Compu(CompuId),
     Decl(DeclId),
+}
+
+mod impls_identifiers {
+    use super::*;
+
+    impl TermId {
+        pub fn as_kind(self) -> KindId {
+            match self {
+                | TermId::Kind(k) => k,
+                | _ => panic!("Expected a kind"),
+            }
+        }
+        pub fn try_as_kind(self) -> Option<KindId> {
+            match self {
+                | TermId::Kind(k) => Some(k),
+                | _ => None,
+            }
+        }
+        pub fn as_type(self) -> TypeId {
+            match self {
+                | TermId::Type(t) => t,
+                | _ => panic!("Expected a type"),
+            }
+        }
+        pub fn try_as_type(self) -> Option<TypeId> {
+            match self {
+                | TermId::Type(t) => Some(t),
+                | _ => None,
+            }
+        }
+        pub fn as_value(self) -> ValueId {
+            match self {
+                | TermId::Value(v) => v,
+                | _ => panic!("Expected a value"),
+            }
+        }
+        pub fn try_as_value(self) -> Option<ValueId> {
+            match self {
+                | TermId::Value(v) => Some(v),
+                | _ => None,
+            }
+        }
+        pub fn as_compu(self) -> CompuId {
+            match self {
+                | TermId::Compu(c) => c,
+                | _ => panic!("Expected a computation"),
+            }
+        }
+        pub fn try_as_compu(self) -> Option<CompuId> {
+            match self {
+                | TermId::Compu(c) => Some(c),
+                | _ => None,
+            }
+        }
+    }
+
+    impl AnnId {
+        pub fn as_kind(self) -> KindId {
+            match self {
+                | AnnId::Kind(k) => k,
+                | _ => panic!("Expected a kind"),
+            }
+        }
+        pub fn try_as_kind(self) -> Option<KindId> {
+            match self {
+                | AnnId::Kind(k) => Some(k),
+                | _ => None,
+            }
+        }
+        pub fn as_type(self) -> TypeId {
+            match self {
+                | AnnId::Type(t) => t,
+                | _ => panic!("Expected a type"),
+            }
+        }
+        pub fn try_as_type(self) -> Option<TypeId> {
+            match self {
+                | AnnId::Type(t) => Some(t),
+                | _ => None,
+            }
+        }
+    }
 }
 
 /* ---------------------------------- Kind ---------------------------------- */
@@ -309,8 +376,10 @@ pub struct StaticsArena {
 
     /// the type of defs; "context"
     pub type_of_defs: ArenaAssoc<DefId, AnnId>,
-    /// the term of defs; "environment"
-    pub term_of_defs: ArenaAssoc<DefId, TermId>,
+    /// the term of defs; "environment"; internal type defs won't inhabit here
+    pub defs: ArenaAssoc<DefId, TermId>,
+    /// the type of terms; "annotation"
+    pub type_of_terms: ArenaAssoc<TermId, AnnId>,
     // Todo: equivalence-class type arena (or not)
 }
 
@@ -329,7 +398,8 @@ impl StaticsArena {
             terms: ArenaBijective::new(),
 
             type_of_defs: ArenaAssoc::new(),
-            term_of_defs: ArenaAssoc::new(),
+            defs: ArenaAssoc::new(),
+            type_of_terms: ArenaAssoc::new(),
         }
     }
 }
