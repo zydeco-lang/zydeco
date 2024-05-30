@@ -284,7 +284,7 @@ impl Desugar for t::PatId {
                 let pats = pats.desugar(desugarer);
                 match pats.len() {
                     // if there is no pat like `()`, replace it with `unit`
-                    | 0 => desugarer.pat(id, b::Unit.into()),
+                    | 0 => desugarer.pat(id, b::Triv.into()),
                     // if there is only one pat like `(p)`, remove the redundant paren
                     | 1 => pats.into_iter().next().unwrap(),
                     // otherwise, re-expand the paren into cons
@@ -379,7 +379,7 @@ impl Desugar for t::TermId {
                 terms.extend(iter.map(|term| term.desugar(desugarer)));
                 match terms.len() {
                     // if there is no term like `()`, replace it with `unit`
-                    | 0 => desugarer.term(id, b::Unit.into()),
+                    | 0 => desugarer.term(id, b::Triv.into()),
                     // if there is only one term like `(t)`, remove the redundant paren
                     | 1 => terms.into_iter().next().unwrap(),
                     // otherwise, re-expand the paren into cons
@@ -390,7 +390,7 @@ impl Desugar for t::TermId {
                             let span = term.span(desugarer);
                             let id = Alloc::alloc(desugarer, span);
                             let id = desugarer.term(id, body);
-                            body = b::Cons(term, id).into()
+                            body = b::Cons(id, term).into()
                         }
                         desugarer.term(id, body)
                     }
@@ -446,7 +446,7 @@ impl Desugar for t::TermId {
                             let span = term.span(desugarer);
                             let id = Alloc::alloc(desugarer, span);
                             let id = desugarer.term(id, body);
-                            body = b::App(term, id).into()
+                            body = b::App(id, term).into()
                         }
                         desugarer.term(id, body)
                     }
@@ -907,7 +907,7 @@ mod impls {
                     let pat = pat.deep_clone(desugarer);
                     b::Ctor(name.clone(), pat).into()
                 }
-                | b::Pattern::Unit(_pat) => b::Unit.into(),
+                | b::Pattern::Triv(_pat) => b::Triv.into(),
                 | b::Pattern::Cons(pat) => {
                     let b::Cons(a, b) = pat;
                     let a = a.deep_clone(desugarer);
@@ -976,7 +976,7 @@ mod impls {
                 }
                 | b::Term::Hole(_term) => b::Hole.into(),
                 | b::Term::Var(name) => b::Term::Var(name.clone()),
-                | b::Term::Unit(_term) => b::Unit.into(),
+                | b::Term::Triv(_term) => b::Triv.into(),
                 | b::Term::Cons(term) => {
                     let b::Cons(a, b) = term;
                     let a = a.deep_clone(desugarer);

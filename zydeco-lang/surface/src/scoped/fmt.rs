@@ -39,7 +39,7 @@ impl Ugly for PatId {
             | Pattern::Hole(p) => s += &p.ugly(f),
             | Pattern::Var(p) => s += &p.ugly(f),
             | Pattern::Ctor(p) => s += &p.ugly(f),
-            | Pattern::Unit(p) => s += &p.ugly(f),
+            | Pattern::Triv(p) => s += &p.ugly(f),
             | Pattern::Cons(p) => s += &p.ugly(f),
         }
         s
@@ -56,7 +56,7 @@ impl Ugly for TermId {
             | Term::Ann(t) => s += &t.ugly(f),
             | Term::Hole(t) => s += &t.ugly(f),
             | Term::Var(t) => s += &t.ugly(f),
-            | Term::Unit(t) => s += &t.ugly(f),
+            | Term::Triv(t) => s += &t.ugly(f),
             | Term::Cons(t) => s += &t.ugly(f),
             | Term::Abs(t) => s += &t.ugly(f),
             | Term::App(t) => s += &t.ugly(f),
@@ -194,10 +194,7 @@ impl Ugly for DtorName {
     }
 }
 
-impl<T> Ugly for Ctor<T>
-where
-    T: Ugly,
-{
+impl Ugly for Ctor<TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Ctor(name, tail) = self;
@@ -209,7 +206,18 @@ where
     }
 }
 
-impl Ugly for Unit {
+impl Ugly for Ctor<PatId> {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        let Ctor(name, tail) = self;
+        s += &name.ugly(f);
+        s += " ";
+        s += &tail.ugly(f);
+        s
+    }
+}
+
+impl Ugly for Triv {
     fn ugly(&self, _f: &Formatter) -> String {
         "()".to_string()
     }

@@ -33,9 +33,9 @@ pub struct App<S, T>(pub S, pub T);
 #[derive(Clone, Debug)]
 pub struct Arrow<T>(pub T, pub T);
 
-/// `()` as unit
+/// `()` as unit type
 #[derive(Clone, Debug)]
-pub struct Unit;
+pub struct Triv;
 
 /// `(...)` as paren-shaped container
 #[derive(Clone, Debug)]

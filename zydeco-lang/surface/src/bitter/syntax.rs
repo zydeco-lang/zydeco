@@ -45,7 +45,7 @@ pub enum Pattern {
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<PatId>),
-    Unit(Unit),
+    Triv(Triv),
     Cons(Cons<PatId, PatId>),
 }
 
@@ -125,7 +125,7 @@ pub enum Term<Ref> {
     Hole(Hole),
     #[from(ignore)]
     Var(Ref),
-    Unit(Unit),
+    Triv(Triv),
     Cons(Cons<TermId, TermId>),
     Abs(Abs<PatId, TermId>),
     App(App<TermId, TermId>),

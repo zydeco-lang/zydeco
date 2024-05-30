@@ -43,7 +43,7 @@ end
 /// the Pair type
 
 pub data Pair (A : VType) (A' : VType) where
-  | +Cons(A, A')
+  | +Cons : A * A'
 end
 
 pub def ! pair (A : VType) (A' : VType) (x : A) (y : A') : Ret (Pair A A') = 
@@ -53,22 +53,22 @@ end
 /// the Option type
 
 pub data Option (A : VType) where
-  | +None()
-  | +Some(A)
+  | +None : Unit
+  | +Some : A
 end
 
 /// the Either type
 
 pub data Either (E : VType) (A : VType) where
-  | +Left(E)
-  | +Right(A)
+  | +Left : E
+  | +Right : A
 end
 
 /// the Bool type
 
 pub data Bool where
-  | +True()
-  | +False()
+  | +True : Unit
+  | +False : Unit
 end
 
 pub def true : Bool = +True() end
@@ -157,8 +157,8 @@ pub def if~ : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -
 /// the Nat type
 
 pub data Nat where
-  | +Z()
-  | +S(Nat)
+  | +Z : Unit
+  | +S : Nat
 end
 
 pub def rec ! iter (A : VType) (n : Nat) (x : A) (f : U (A -> F A)) : F A =

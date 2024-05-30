@@ -47,8 +47,8 @@ impl Binders for PatId {
                 let Ctor(_ctor, args) = pat;
                 args.binders(arena)
             }
-            | Pattern::Unit(pat) => {
-                let Unit = pat;
+            | Pattern::Triv(pat) => {
+                let Triv = pat;
                 im::HashMap::new()
             }
             | Pattern::Cons(pat) => {
@@ -446,8 +446,8 @@ impl Resolve for PatId {
                 let Ctor(_ctor, args) = pat;
                 args.resolve(resolver, (local, global))?
             }
-            | Pattern::Unit(pat) => {
-                let Unit = pat;
+            | Pattern::Triv(pat) => {
+                let Triv = pat;
                 local
             }
             | Pattern::Cons(pat) => {
@@ -517,8 +517,8 @@ impl Resolve for TermId {
                 let span = &resolver.spans.terms[self];
                 Err(ResolveError::UnboundVar(span.make(var.clone())))?
             }
-            | Term::Unit(term) => {
-                let Unit = &term;
+            | Term::Triv(term) => {
+                let Triv = &term;
                 term.into()
             }
             | Term::Cons(term) => {

@@ -206,7 +206,7 @@ GenBindNull: GenBind<()> = GenBind<()>;
 Data: Data = <DataArm*> => Data { arms: <> };
 #[inline]
 DataArm: DataArm = {
-    "|" <name:CtorName> <param:TermId> => {
+    "|" <name:CtorName> ":" <param:TermId> => {
         DataArm { name, param }
     },
 };

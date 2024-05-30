@@ -176,7 +176,7 @@ impl SyntacticallyAnnotated for su::TermId {
             }
             | Tm::Var(_)
             | Tm::Hole(_)
-            | Tm::Unit(_)
+            | Tm::Triv(_)
             | Tm::Cons(_)
             | Tm::App(_)
             | Tm::Rec(_)
@@ -390,8 +390,8 @@ impl Tyck for su::PatId {
                 let su::Ctor(_ctor, tail) = pat;
                 tail.tyck(tycker, Action::switch(switch))?;
             }
-            | Pat::Unit(pat) => {
-                let su::Unit = pat;
+            | Pat::Triv(pat) => {
+                let su::Triv = pat;
             }
             | Pat::Cons(pat) => {
                 let su::Cons(a, b) = pat;
@@ -433,7 +433,7 @@ impl Tyck for su::TermId {
             | Tm::Var(term) => {
                 todo!()
             }
-            | Tm::Unit(term) => {
+            | Tm::Triv(term) => {
                 todo!()
             }
             | Tm::Cons(term) => {
