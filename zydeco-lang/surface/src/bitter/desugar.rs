@@ -133,7 +133,7 @@ impl Desugar for t::DeclId {
                 let sealed = Alloc::alloc(desugarer, span.clone());
                 let sealed = desugarer.term(sealed, b::Sealed(abs).into());
                 // pat & sealed -> alias
-                b::Alias { binder: pat, bindee: sealed }.into()
+                b::AliasBody { binder: pat, bindee: sealed }.into()
             }
             | Decl::CoDataDef(decl) => {
                 let t::CoDataDef { name, params, def: body } = decl;
@@ -155,7 +155,7 @@ impl Desugar for t::DeclId {
                 let sealed = Alloc::alloc(desugarer, span.clone());
                 let sealed = desugarer.term(sealed, b::Sealed(abs).into());
                 // pat & sealed -> alias
-                b::Alias { binder: pat, bindee: sealed }.into()
+                b::AliasBody { binder: pat, bindee: sealed }.into()
             }
             | Decl::Define(decl) => {
                 let t::Define(GenBind { rec, comp, binder, params, ty, bindee }) = decl;
@@ -167,7 +167,7 @@ impl Desugar for t::DeclId {
                     let sealed = Alloc::alloc(desugarer, span);
                     let sealed = desugarer.term(sealed, b::Sealed(term).into());
                     // pat & sealed -> alias
-                    b::Alias { binder: pat, bindee: sealed }.into()
+                    b::AliasBody { binder: pat, bindee: sealed }.into()
                 } else {
                     assert!(external);
                     assert!(!comp);
@@ -193,14 +193,14 @@ impl Desugar for t::DeclId {
                     } else {
                         None
                     };
-                    b::Extern { binder, ty }.into()
+                    b::AliasHead { binder, ty }.into()
                 }
             }
             | Decl::Alias(decl) => {
                 let t::Alias(genbind) = decl;
                 let (pat, term) = genbind.desugar(desugarer);
                 // pat & term -> alias
-                b::Alias { binder: pat, bindee: term }.into()
+                b::AliasBody { binder: pat, bindee: term }.into()
             }
             // Decl::Layer(decl) => {
             //     let t::Layer { name, uses, top } = decl;

@@ -89,7 +89,7 @@ pub struct ResolveOut {
 
 impl Resolver {
     pub fn run(mut self, top: &TopLevel) -> Result<ResolveOut> {
-        top.resolve(&mut self, Global::default())?;
+        top.resolve(&mut self, ())?;
         let Resolver {
             spans,
             bitter: _,
@@ -112,6 +112,204 @@ impl Resolver {
             prim,
             arena: ScopedArena { defs, pats, terms, decls, users, exts, deps, top },
         })
+    }
+}
+
+impl Resolver {
+    fn collect_global_binders(&mut self, decls: &[DeclId], mut global: Global) -> Result<Global> {
+        for id in decls {
+            let Modifiers { public: _, external, inner } = &self.bitter.decls[id];
+            match inner {
+                | Declaration::AliasBody(decl) => {
+                    let AliasBody { binder, bindee: _ } = decl;
+                    let binders = binder.binders(&self.bitter);
+                    // check if it's a primitive and (later in terms) update the internal_to_def
+                    // Note: currently this is a bit hacky; we should really have a marker of some sort
+                    // maybe macros can help?
+                    'out: {
+                        if binders.len() != 1 {
+                            break 'out;
+                        }
+                        if !external {
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("Monad".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.monad,
+                                &self.prim_term.monad,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "Monad",
+                                Internal::Monad,
+                            )?;
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("Algebra".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.algebra,
+                                &self.prim_term.algebra,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "Algebra",
+                                Internal::Algebra,
+                            )?;
+                            break 'out;
+                        }
+                    }
+                    self.check_duplicate_and_update_global(id, binders, &mut global)?;
+                }
+                | Declaration::AliasHead(decl) => {
+                    let AliasHead { binder, ty: _ } = decl;
+                    let binders = binder.binders(&self.bitter);
+                    // check if it's a primitive and (later in terms) update the internal_to_def
+                    'out: {
+                        if binders.len() != 1 {
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("VType".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.vtype,
+                                &self.prim_term.vtype,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "VType",
+                                Internal::VType,
+                            )?;
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("CType".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.ctype,
+                                &self.prim_term.ctype,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "CType",
+                                Internal::CType,
+                            )?;
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("Thunk".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.thunk,
+                                &self.prim_term.thunk,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "Thunk",
+                                Internal::Thunk,
+                            )?;
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("Ret".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.ret,
+                                &self.prim_term.ret,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "Ret",
+                                Internal::Ret,
+                            )?;
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("Unit".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.unit,
+                                &self.prim_term.unit,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "Unit",
+                                Internal::Unit,
+                            )?;
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("Int".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.int,
+                                &self.prim_term.int,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "Int",
+                                Internal::Int,
+                            )?;
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("Char".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.char,
+                                &self.prim_term.char,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "Char",
+                                Internal::Char,
+                            )?;
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("String".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.string,
+                                &self.prim_term.string,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "String",
+                                Internal::String,
+                            )?;
+                            break 'out;
+                        }
+                        if let Some(def) = binders.get(&VarName("OS".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &mut self.prim_def.os,
+                                &self.prim_term.os,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                id,
+                                def,
+                                "OS",
+                                Internal::OS,
+                            )?;
+                            break 'out;
+                        }
+                        // Note: the rest may be valid, but we don't know yet; no error is given here
+                        // Err(ResolveError::UndefinedPrimitive({
+                        //     let (name, def) = binders.iter().next().unwrap();
+                        //     self.spans.defs[def].clone().make(name.clone())
+                        // }))?
+                    }
+                    self.check_duplicate_and_update_global(id, binders, &mut global)?;
+                }
+                | Declaration::Main(_) => {}
+            }
+        }
+        Ok(global)
     }
     fn check_duplicate_and_update_global(
         &self, under: &DeclId, binders: im::HashMap<VarName, DefId>, global: &mut Global,
@@ -163,204 +361,13 @@ pub trait Resolve {
 
 impl Resolve for TopLevel {
     type Out = ();
-    type Lookup<'a> = Global;
-    fn resolve(&self, resolver: &mut Resolver, mut global: Self::Lookup<'_>) -> Result<Self::Out> {
+    type Lookup<'a> = ();
+    fn resolve(&self, resolver: &mut Resolver, global: Self::Lookup<'_>) -> Result<Self::Out> {
         let TopLevel(decls) = self;
         // collect all top-level binders and ...
         // 1. check for duplicates
         // 2. update primitives to internal_to_def
-        for id in decls {
-            let Modifiers { public: _, external, inner } = &resolver.bitter.decls[id];
-            match inner {
-                | Declaration::Alias(decl) => {
-                    let Alias { binder, bindee: _ } = decl;
-                    let binders = binder.binders(&resolver.bitter);
-                    // check if it's a primitive and (later in terms) update the internal_to_def
-                    // Note: currently this is a bit hacky; we should really have a marker of some sort
-                    // maybe macros can help?
-                    'out: {
-                        if binders.len() != 1 {
-                            break 'out;
-                        }
-                        if ! external {
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("Monad".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.monad,
-                                &resolver.prim_term.monad,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "Monad",
-                                Internal::Monad,
-                            )?;
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("Algebra".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.algebra,
-                                &resolver.prim_term.algebra,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "Algebra",
-                                Internal::Algebra,
-                            )?;
-                            break 'out;
-                        }
-                    }
-                    resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
-                }
-                | Declaration::Extern(decl) => {
-                    let Extern { binder, ty: _ } = decl;
-                    let binders = binder.binders(&resolver.bitter);
-                    // check if it's a primitive and (later in terms) update the internal_to_def
-                    'out: {
-                        if binders.len() != 1 {
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("VType".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.vtype,
-                                &resolver.prim_term.vtype,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "VType",
-                                Internal::VType,
-                            )?;
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("CType".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.ctype,
-                                &resolver.prim_term.ctype,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "CType",
-                                Internal::CType,
-                            )?;
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("Thunk".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.thunk,
-                                &resolver.prim_term.thunk,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "Thunk",
-                                Internal::Thunk,
-                            )?;
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("Ret".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.ret,
-                                &resolver.prim_term.ret,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "Ret",
-                                Internal::Ret,
-                            )?;
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("Unit".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.unit,
-                                &resolver.prim_term.unit,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "Unit",
-                                Internal::Unit,
-                            )?;
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("Int".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.int,
-                                &resolver.prim_term.int,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "Int",
-                                Internal::Int,
-                            )?;
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("Char".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.char,
-                                &resolver.prim_term.char,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "Char",
-                                Internal::Char,
-                            )?;
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("String".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.string,
-                                &resolver.prim_term.string,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "String",
-                                Internal::String,
-                            )?;
-                            break 'out;
-                        }
-                        if let Some(def) = binders.get(&VarName("OS".into())) {
-                            Resolver::alloc_prim(
-                                &resolver.spans,
-                                &mut resolver.prim_def.os,
-                                &resolver.prim_term.os,
-                                &mut resolver.exts,
-                                &mut resolver.internal_to_def,
-                                id,
-                                def,
-                                "OS",
-                                Internal::OS,
-                            )?;
-                            break 'out;
-                        }
-                        // Note: the rest may be valid, but we don't know yet; no error is given here
-                        // Err(ResolveError::UndefinedPrimitive({
-                        //     let (name, def) = binders.iter().next().unwrap();
-                        //     resolver.spans.defs[def].clone().make(name.clone())
-                        // }))?
-                    }
-                    resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
-                }
-                | Declaration::Main(_) => {}
-            }
-        }
+        let global = resolver.collect_global_binders(decls, Global::default())?;
         // within each term (when we also count types as terms),
         // we introduce local binders.
         // since we'll resolve variables in the order of
@@ -387,16 +394,16 @@ impl Resolve for DeclId {
         let local = Local { under: *self, ..Local::default() };
         let Modifiers { public: _, external: _, inner } = decl;
         match inner.clone() {
-            | Declaration::Alias(decl) => {
-                let Alias { binder, bindee } = decl;
+            | Declaration::AliasBody(decl) => {
+                let AliasBody { binder, bindee } = decl;
                 // resolve bindee first
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 // and then binder, though we don't need the context yielded by binder
                 // since it's global and has been collected already
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
             }
-            | Declaration::Extern(decl) => {
-                let Extern { binder, ty } = decl;
+            | Declaration::AliasHead(decl) => {
+                let AliasHead { binder, ty } = decl;
                 // no more bindee, but we still need to resolve the binders just for the type mentioned
                 if let Some(ty) = ty {
                     let () = ty.resolve(resolver, (local.clone(), global))?;

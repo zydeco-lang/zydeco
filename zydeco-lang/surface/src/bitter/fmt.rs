@@ -93,8 +93,8 @@ impl Ugly for DeclId {
         }
         use Declaration as Decl;
         match inner {
-            | Decl::Alias(d) => s += &d.ugly(f),
-            | Decl::Extern(d) => s += &d.ugly(f),
+            | Decl::AliasBody(d) => s += &d.ugly(f),
+            | Decl::AliasHead(d) => s += &d.ugly(f),
             // Decl::Layer(d) => s += &d.ugly(f),
             // Decl::UseDef(d) => s += &d.ugly(f),
             // Decl::UseBlock(d) => s += &d.ugly(f),
@@ -552,10 +552,10 @@ impl Ugly for Literal {
 //     }
 // }
 
-impl Ugly for Alias {
+impl Ugly for AliasBody {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Alias { binder, bindee } = self;
+        let AliasBody { binder, bindee } = self;
         s += "alias ";
         s += &binder.ugly(f);
         s += " = ";
@@ -565,10 +565,10 @@ impl Ugly for Alias {
     }
 }
 
-impl Ugly for Extern {
+impl Ugly for AliasHead {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Extern { binder, ty } = self;
+        let AliasHead { binder, ty } = self;
         s += "extern ";
         s += &binder.ugly(f);
         if let Some(ty) = ty {

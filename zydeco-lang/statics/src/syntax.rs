@@ -344,19 +344,19 @@ pub enum Computation {
 /* -------------------------------- TopLevel -------------------------------- */
 
 #[derive(Clone, Debug)]
-pub struct TAlias {
+pub struct TAliasBody {
     pub binder: TPatId,
     pub bindee: TypeId,
 }
 
 #[derive(Clone, Debug)]
-pub struct VAlias {
+pub struct VAliasBody {
     pub binder: VPatId,
     pub bindee: ValueId,
 }
 
 #[derive(Clone, Debug)]
-pub struct Extern {
+pub struct AliasHead {
     pub comp: bool,
     pub binder: VPatId,
     pub params: Option<VPatId>,
@@ -368,9 +368,9 @@ pub struct Main(pub CompuId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
-    TAlias(TAlias),
-    VAlias(VAlias),
-    Extern(Extern),
+    TAliasBody(TAliasBody),
+    VAliasBody(VAliasBody),
+    AliasHead(AliasHead),
     Main(Main),
 }
 

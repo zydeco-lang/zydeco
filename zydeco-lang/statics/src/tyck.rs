@@ -138,11 +138,11 @@ impl SyntacticallyAnnotated for su::Declaration {
     fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId> {
         use su::Declaration as Decl;
         match self {
-            | Decl::Alias(su::Alias { binder, bindee }) => {
+            | Decl::AliasBody(su::AliasBody { binder, bindee }) => {
                 let _ = binder;
                 bindee.syntactically_annotated(tycker)
             }
-            | Decl::Extern(su::Extern { binder, ty }) => {
+            | Decl::AliasHead(su::AliasHead { binder, ty }) => {
                 let _ = binder;
                 // add params to pi
                 *ty
@@ -220,8 +220,8 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                 let id = decls.iter().next().unwrap();
                 use su::Declaration as Decl;
                 match tycker.scoped.decls[id].clone() {
-                    | Decl::Alias(decl) => {
-                        let su::Alias { binder, bindee } = decl;
+                    | Decl::AliasBody(decl) => {
+                        let su::AliasBody { binder, bindee } = decl;
                         // we need to get the annotation for the sake of self referencing type definitions
                         let syn_ann = bindee.syntactically_annotated(tycker);
                         if let Some(syn_ann) = syn_ann {
@@ -248,8 +248,8 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                             Ok(())
                         }
                     }
-                    | Decl::Extern(decl) => {
-                        let su::Extern { binder, ty } = decl;
+                    | Decl::AliasHead(decl) => {
+                        let su::AliasHead { binder, ty } = decl;
                         let internal_or = tycker.scoped.exts.get(id).cloned();
                         match internal_or {
                             | Some((internal, def)) => {
@@ -323,8 +323,8 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                     let decl = tycker.scoped.decls[id].clone();
                     use su::Declaration as Decl;
                     match decl {
-                        | Decl::Alias(decl) => {
-                            let su::Alias { binder: _, bindee } = decl;
+                        | Decl::AliasBody(decl) => {
+                            let su::AliasBody { binder: _, bindee } = decl;
                             let syn_ann =
                                 bindee.syntactically_annotated(tycker).ok_or_else(|| {
                                     let span = tycker.spans.decls[id].clone();
@@ -333,7 +333,7 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                             let ann = syn_ann.tyck_ann(tycker, Action::syn())?;
                             anns.insert(id, ann);
                         }
-                        | Decl::Extern(_) | Decl::Main(_) => {
+                        | Decl::AliasHead(_) | Decl::Main(_) => {
                             unreachable!()
                         }
                     }

@@ -154,13 +154,13 @@ pub enum Term<Ref> {
 /* -------------------------------- TopLevel -------------------------------- */
 
 #[derive(Clone, Debug)]
-pub struct Alias {
+pub struct AliasBody {
     pub binder: PatId,
     pub bindee: TermId,
 }
 
 #[derive(Clone, Debug)]
-pub struct Extern {
+pub struct AliasHead {
     pub binder: PatId,
     pub ty: Option<TermId>,
 }
@@ -186,8 +186,8 @@ pub struct Main(pub TermId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
-    Alias(Alias),
-    Extern(Extern),
+    AliasBody(AliasBody),
+    AliasHead(AliasHead),
     // Layer(Layer),
     // UseDef(UseDef),
     // UseBlock(UseBlock),
