@@ -611,7 +611,7 @@ impl Desugar for t::TermId {
                 desugarer.term(id, b::Bind { binder, bindee, tail }.into())
             }
             | Tm::Let(term) => {
-                let t::PureBind { binding, tail } = term;
+                let t::GenPureBind { binding, tail } = term;
                 let (binder, bindee) = binding.desugar(desugarer);
                 let tail = tail.desugar(desugarer);
                 desugarer.term(id, b::PureBind { binder, bindee, tail }.into())

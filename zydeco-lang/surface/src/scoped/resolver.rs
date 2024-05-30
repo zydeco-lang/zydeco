@@ -110,17 +110,7 @@ impl Resolver {
         Ok(ResolveOut {
             spans,
             prim,
-            arena: ScopedArena {
-                defs,
-                pats,
-                terms,
-                decls,
-
-                users,
-                exts,
-                deps,
-                top,
-            },
+            arena: ScopedArena { defs, pats, terms, decls, users, exts, deps, top },
         })
     }
     fn check_duplicate_and_update_global(

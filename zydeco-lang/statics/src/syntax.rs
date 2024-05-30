@@ -299,35 +299,6 @@ pub enum Value {
 
 /* ------------------------------- Computation ------------------------------ */
 
-/// `rec (x: A) -> b`
-#[derive(Clone, Debug)]
-pub struct Rec(pub VPatId, pub CompuId);
-
-/// `ret a` has type `Ret A`
-#[derive(Clone, Debug)]
-pub struct Return(pub ValueId);
-/// `do x <- b; ...`
-#[derive(Clone, Debug)]
-pub struct Bind {
-    pub binder: VPatId,
-    pub bindee: CompuId,
-    pub tail: CompuId,
-}
-/// `let x = a in ...`
-#[derive(Clone, Debug)]
-pub struct PureBind {
-    pub binder: VPatId,
-    pub bindee: ValueId,
-    pub tail: CompuId,
-}
-
-// /// `use let x = a in ...`
-// #[derive(Clone, Debug)]
-// pub struct UseBind {
-//     pub uses: UsePath,
-//     pub tail: sc::TermId,
-// }
-
 /// `match a | C_1 p -> b_1 | ... end`
 #[derive(Clone, Debug)]
 pub struct Match {
@@ -357,11 +328,11 @@ pub enum Computation {
     Hole(Hole),
     Abs(Abs<VPatId, CompuId>),
     App(App<CompuId, ValueId>),
-    Rec(Rec),
+    Rec(Rec<VPatId, CompuId>),
     Force(Force<ValueId>),
-    Ret(Return),
-    Do(Bind),
-    Let(PureBind),
+    Ret(Ret<ValueId>),
+    Do(Bind<VPatId, CompuId, CompuId>),
+    Let(PureBind<VPatId, ValueId, CompuId>),
     // UseLet(UseBind),
     Match(Match),
     CoMatch(CoMatch),

@@ -58,6 +58,28 @@ pub struct Thunk<Tm>(pub Tm);
 #[derive(Clone, Debug)]
 pub struct Force<Tm>(pub Tm);
 
+/// `ret a` has type `Ret A`
+#[derive(Clone, Debug)]
+pub struct Ret<Tm>(pub Tm);
+/// `do x <- b; ...`
+#[derive(Clone, Debug)]
+pub struct Bind<Br, Be, Tail> {
+    pub binder: Br,
+    pub bindee: Be,
+    pub tail: Tail,
+}
+/// `let x = a in ...`
+#[derive(Clone, Debug)]
+pub struct PureBind<Br, Be, Tail> {
+    pub binder: Br,
+    pub bindee: Be,
+    pub tail: Tail,
+}
+
+/// `rec (x: A) -> b`
+#[derive(Clone, Debug)]
+pub struct Rec<P, Tm>(pub P, pub Tm);
+
 /// `C(a_1, ...)`
 #[derive(Clone, Debug)]
 pub struct Ctor<Tail>(pub CtorName, pub Tail);

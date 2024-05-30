@@ -62,10 +62,6 @@ pub struct GenBind<Bindee> {
     pub bindee: Bindee,
 }
 
-/// `rec (x: A) -> b`
-#[derive(Clone, Debug)]
-pub struct Rec(pub PatId, pub TermId);
-
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
 pub struct Pi(pub CoPatId, pub TermId);
@@ -80,19 +76,9 @@ pub struct Sigma(pub CoPatId, pub TermId);
 #[derive(Clone, Debug)]
 pub struct Exists(pub CoPatId, pub TermId);
 
-/// `ret a` has type `Ret A`
-#[derive(Clone, Debug)]
-pub struct Ret(pub TermId);
-/// `do x <- b; ...`
-#[derive(Clone, Debug)]
-pub struct Bind {
-    pub binder: PatId,
-    pub bindee: TermId,
-    pub tail: TermId,
-}
 /// `let x = a in ...`
 #[derive(Clone, Debug)]
-pub struct PureBind {
+pub struct GenPureBind {
     pub binding: GenBind<TermId>,
     pub tail: TermId,
 }
@@ -158,7 +144,7 @@ pub enum Term {
     Paren(Paren<TermId>),
     Abs(Abs<CoPatId, TermId>),
     App(Appli<TermId>),
-    Rec(Rec),
+    Rec(Rec<PatId, TermId>),
     Pi(Pi),
     Forall(Forall),
     Arrow(Arrow<TermId>),
@@ -167,9 +153,9 @@ pub enum Term {
     Prod(Prod<TermId>),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),
-    Ret(Ret),
-    Do(Bind),
-    Let(PureBind),
+    Ret(Ret<TermId>),
+    Do(Bind<PatId, TermId, TermId>),
+    Let(GenPureBind),
     // UseLet(UseBind),
     Data(Data),
     CoData(CoData),

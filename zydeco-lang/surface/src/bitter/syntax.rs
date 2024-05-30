@@ -57,10 +57,6 @@ pub enum CoPatternItem {
 
 /* ---------------------------------- Term ---------------------------------- */
 
-/// `rec (x: A) -> b`
-#[derive(Clone, Debug)]
-pub struct Rec(pub PatId, pub TermId);
-
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
 pub struct Pi(pub PatId, pub TermId);
@@ -68,24 +64,6 @@ pub struct Pi(pub PatId, pub TermId);
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Sigma(pub PatId, pub TermId);
-
-/// `ret a` has type `Ret A`
-#[derive(Clone, Debug)]
-pub struct Ret(pub TermId);
-/// `do x <- b; ...`
-#[derive(Clone, Debug)]
-pub struct Bind {
-    pub binder: PatId,
-    pub bindee: TermId,
-    pub tail: TermId,
-}
-/// `let x = a in ...`
-#[derive(Clone, Debug)]
-pub struct PureBind {
-    pub binder: PatId,
-    pub bindee: TermId,
-    pub tail: TermId,
-}
 
 // /// `use let x = a in ...`
 // #[derive(Clone, Debug)]
@@ -151,7 +129,7 @@ pub enum Term<Ref> {
     Cons(Cons<TermId, TermId>),
     Abs(Abs<PatId, TermId>),
     App(App<TermId, TermId>),
-    Rec(Rec),
+    Rec(Rec<PatId, TermId>),
     Pi(Pi),
     // Arrow(Arrow),
     // Forall(Forall),
@@ -160,9 +138,9 @@ pub enum Term<Ref> {
     // Exists(Exists),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),
-    Ret(Ret),
-    Do(Bind),
-    Let(PureBind),
+    Ret(Ret<TermId>),
+    Do(Bind<PatId, TermId, TermId>),
+    Let(PureBind<PatId, TermId, TermId>),
     // UseLet(UseBind),
     Data(Data),
     CoData(CoData),

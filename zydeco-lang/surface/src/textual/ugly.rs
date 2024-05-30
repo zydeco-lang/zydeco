@@ -249,7 +249,7 @@ impl Ugly for Abs<CoPatId, TermId> {
     }
 }
 
-impl Ugly for Rec {
+impl Ugly for Rec<PatId, TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Rec(p, t) = self;
@@ -358,7 +358,7 @@ impl Ugly for Force<TermId> {
     }
 }
 
-impl Ugly for Ret {
+impl Ugly for Ret<TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Ret(t) = self;
@@ -368,7 +368,7 @@ impl Ugly for Ret {
     }
 }
 
-impl Ugly for Bind {
+impl Ugly for Bind<PatId, TermId, TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Bind { binder, bindee, tail } = self;
@@ -382,10 +382,10 @@ impl Ugly for Bind {
     }
 }
 
-impl Ugly for PureBind {
+impl Ugly for GenPureBind {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let PureBind { binding, tail } = self;
+        let GenPureBind { binding, tail } = self;
         s += "let ";
         s += &binding.ugly(f);
         s += " in ";

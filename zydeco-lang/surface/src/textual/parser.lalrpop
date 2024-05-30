@@ -265,7 +265,7 @@ Term: Term = {
         Bind { binder, bindee, tail }.into()
     },
     // pure bind
-    "let" <binding:GenBindTerm> "in" <tail:TermId> => PureBind {
+    "let" <binding:GenBindTerm> "in" <tail:TermId> => GenPureBind {
         binding, tail
     }.into(),
     // // use bind
