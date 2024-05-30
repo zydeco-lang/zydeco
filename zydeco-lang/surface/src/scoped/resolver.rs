@@ -347,10 +347,11 @@ impl Resolve for TopLevel {
                             )?;
                             break 'out;
                         }
-                        Err(ResolveError::UndefinedPrimitive({
-                            let (name, def) = binders.iter().next().unwrap();
-                            resolver.spans.defs[def].clone().make(name.clone())
-                        }))?
+                        // Note: the rest may be valid, but we don't know yet; no error is given here
+                        // Err(ResolveError::UndefinedPrimitive({
+                        //     let (name, def) = binders.iter().next().unwrap();
+                        //     resolver.spans.defs[def].clone().make(name.clone())
+                        // }))?
                     }
                     resolver.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }

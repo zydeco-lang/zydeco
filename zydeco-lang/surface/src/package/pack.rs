@@ -154,24 +154,18 @@ impl Package {
                     .collect::<Vec<_>>();
                 println!("\tscc[{}]", cnt);
                 for victims in grouped_victims {
-                    println!(
-                        "\t\t{:?}",
-                        victims
-                            .iter()
-                            .map(|decl| {
-                                let decl = &pack.arena.decls[decl];
-                                match decl {
-                                    | sc::Declaration::Alias(sc::Alias { binder, .. }) => {
-                                        binder.ugly(&Formatter::new(&pack.arena))
-                                    }
-                                    | sc::Declaration::Extern(sc::Extern { binder, .. }) => {
-                                        binder.ugly(&Formatter::new(&pack.arena))
-                                    }
-                                    | sc::Declaration::Main(_) => "$main".into(),
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                    );
+                    for victim in &victims {
+                        println!("\t\t| {}", {
+                            let mut s = victim.ugly(&Formatter::new(&pack.arena));
+                            let budget = 80;
+                            if s.len() > budget {
+                                s.truncate(budget - 3);
+                                s.push_str("...");
+                            }
+                            s
+                        });
+                    }
+                    println!("\t\t+");
                     scc.release(victims);
                 }
                 cnt += 1;

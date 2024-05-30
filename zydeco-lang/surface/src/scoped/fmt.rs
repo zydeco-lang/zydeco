@@ -25,8 +25,11 @@ impl Ugly for TopLevel {
 
 impl Ugly for DefId {
     fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
         let name = &f.arena.defs[self];
-        name.ugly(f)
+        s += &name.ugly(f);
+        s += &self.concise();
+        s
     }
 }
 
@@ -158,25 +161,6 @@ impl Ugly for VarName {
     fn ugly(&self, _f: &Formatter) -> String {
         let VarName(name) = self;
         name.clone()
-    }
-}
-
-impl<T> Ugly for NameRef<T>
-where
-    T: Ugly,
-{
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let NameRef(root, path, name) = self;
-        if *root {
-            s += "root/";
-        }
-        for p in path {
-            s += &p.ugly(f);
-            s += "/";
-        }
-        s += &name.ugly(f);
-        s
     }
 }
 
@@ -455,96 +439,6 @@ impl Ugly for Literal {
         s
     }
 }
-
-// impl Ugly for UseBind {
-//     fn ugly(&self, f: &Formatter) -> String {
-//         let mut s = String::new();
-//         let UseBind { uses, tail } = self;
-//         s += "use ";
-//         s += &uses.ugly(f);
-//         s += " in ";
-//         s += &tail.ugly(f);
-//         s
-//     }
-// }
-
-impl Ugly for UsePath {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let UsePath(u) = self;
-        s += &u.ugly(f);
-        s
-    }
-}
-
-impl Ugly for UseEnum {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        match self {
-            | UseEnum::Name(n) => s += &n.ugly(f),
-            | UseEnum::Alias(UseAlias(binder, origin)) => {
-                s += &binder.ugly(f);
-                s += " = ";
-                s += &origin.ugly(f);
-            }
-            | UseEnum::All(UseAll) => {
-                s += "..";
-            }
-            | UseEnum::Cluster(Uses(u)) => {
-                s += "( ";
-                s += &u.iter().map(|u| u.ugly(f)).collect::<Vec<_>>().join(", ");
-                s += " )";
-            }
-        }
-        s
-    }
-}
-
-// impl Ugly for UseDef {
-//     fn ugly(&self, f: &Formatter) -> String {
-//         let mut s = String::new();
-//         let UseDef(u) = self;
-//         s += "use ";
-//         s += &u.ugly(f);
-//         s += " end";
-//         s
-//     }
-// }
-
-// impl Ugly for UseBlock {
-//     fn ugly(&self, f: &Formatter) -> String {
-//         let mut s = String::new();
-//         let UseBlock { uses, top } = self;
-//         s += "use ";
-//         s += &uses.ugly(f);
-//         s += " where\n";
-//         s += &top.ugly(f);
-//         s += "\nend";
-//         s
-//     }
-// }
-
-// impl Ugly for Layer {
-//     fn ugly(&self, f: &Formatter) -> String {
-//         let mut s = String::new();
-//         let Layer { name, uses, top } = self;
-//         if let Some(name) = name {
-//             s += "layer ";
-//             s += &name.ugly(f);
-//         }
-//         for Modifiers { public, inner } in uses {
-//             if *public {
-//                 s += " pub";
-//             }
-//             s += " use ";
-//             s += &inner.ugly(f);
-//         }
-//         s += " where\n";
-//         s += &top.ugly(f);
-//         s += "\nend";
-//         s
-//     }
-// }
 
 impl Ugly for Alias {
     fn ugly(&self, f: &Formatter) -> String {

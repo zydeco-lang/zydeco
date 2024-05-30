@@ -471,37 +471,37 @@ impl Ugly for Literal {
 //     }
 // }
 
-impl Ugly for UsePath {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let UsePath(u) = self;
-        s += &u.ugly(f);
-        s
-    }
-}
+// impl Ugly for UsePath {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let UsePath(u) = self;
+//         s += &u.ugly(f);
+//         s
+//     }
+// }
 
-impl Ugly for UseEnum {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        match self {
-            | UseEnum::Name(n) => s += &n.ugly(f),
-            | UseEnum::Alias(UseAlias(binder, origin)) => {
-                s += &binder.ugly(f);
-                s += " = ";
-                s += &origin.ugly(f);
-            }
-            | UseEnum::All(UseAll) => {
-                s += "..";
-            }
-            | UseEnum::Cluster(Uses(u)) => {
-                s += "( ";
-                s += &u.iter().map(|u| u.ugly(f)).collect::<Vec<_>>().join(", ");
-                s += " )";
-            }
-        }
-        s
-    }
-}
+// impl Ugly for UseEnum {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         match self {
+//             | UseEnum::Name(n) => s += &n.ugly(f),
+//             | UseEnum::Alias(UseAlias(binder, origin)) => {
+//                 s += &binder.ugly(f);
+//                 s += " = ";
+//                 s += &origin.ugly(f);
+//             }
+//             | UseEnum::All(UseAll) => {
+//                 s += "..";
+//             }
+//             | UseEnum::Cluster(Uses(u)) => {
+//                 s += "( ";
+//                 s += &u.iter().map(|u| u.ugly(f)).collect::<Vec<_>>().join(", ");
+//                 s += " )";
+//             }
+//         }
+//         s
+//     }
+// }
 
 // impl Ugly for UseDef {
 //     fn ugly(&self, f: &Formatter) -> String {
