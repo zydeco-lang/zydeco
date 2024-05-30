@@ -7,6 +7,8 @@ pub enum TyckError {
     MissingAnnotation(Span),
     #[error("Kind mismatch")]
     KindMismatch,
+    #[error("Type mismatch")]
+    TypeMismatch,
 }
 
 pub type Result<T> = std::result::Result<T, TyckError>;

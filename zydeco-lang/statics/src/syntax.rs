@@ -158,7 +158,7 @@ pub enum TypePattern {
     Var(DefId),
 }
 
-/// an abstract type that should never be reached; must be sealed before use
+/// an abstract type
 #[derive(Clone, Debug)]
 pub struct Abstract;
 
@@ -213,12 +213,11 @@ pub struct CoData {
 #[derive(From, Clone, Debug)]
 pub enum Type {
     Sealed(Sealed<TypeId>),
-    Ann(Ann<TypeId, KindId>),
     Hole(Hole),
-    Abst(Abstract),
     Var(DefId),
     Abs(Abs<TPatId, TypeId>),
     App(App<TypeId, TypeId>),
+    Abst(Abstract),
     Thunk(ThunkTy),
     Ret(RetTy),
     Unit(UnitTy),

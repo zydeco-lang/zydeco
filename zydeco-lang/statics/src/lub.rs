@@ -112,13 +112,19 @@ impl Lub for &TypeId {
         let lhs = tycker.statics.types[self].clone();
         let rhs = tycker.statics.types[other].clone();
         match (lhs, rhs) {
-            | (Type::Sealed(_), Type::Sealed(_)) => todo!(),
-            | (Type::Ann(_), Type::Ann(_)) => todo!(),
-            | (Type::Hole(_), Type::Hole(_)) => todo!(),
-            | (Type::Abst(_), Type::Abst(_)) => todo!(),
+            | (Type::Sealed(_), Type::Sealed(_)) => {
+                if self == other {
+                    Ok(*self)
+                } else {
+                    Err(TyckError::TypeMismatch)?
+                }
+            }
+            | (Type::Sealed(_), _) | (_, Type::Sealed(_)) => Err(TyckError::TypeMismatch)?,
+            | (Type::Hole(_), _) => Ok(*other),
             | (Type::Var(_), Type::Var(_)) => todo!(),
             | (Type::Abs(_), Type::Abs(_)) => todo!(),
             | (Type::App(_), Type::App(_)) => todo!(),
+            | (Type::Abst(_), _) | (_, Type::Abst(_)) => todo!(),
             | (Type::Thunk(_), Type::Thunk(_)) => todo!(),
             | (Type::Ret(_), Type::Ret(_)) => todo!(),
             | (Type::Unit(_), Type::Unit(_)) => todo!(),
@@ -134,6 +140,5 @@ impl Lub for &TypeId {
             | (Type::CoData(_), Type::CoData(_)) => todo!(),
             | _ => todo!(),
         }
-        todo!()
     }
 }

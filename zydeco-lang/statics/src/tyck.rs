@@ -533,11 +533,6 @@ mod impls {
             Alloc::alloc(tycker, ss::Type::from(val))
         }
     }
-    impl Alloc<ss::TypeId> for ss::Ann<ss::TypeId, ss::KindId> {
-        fn alloc(tycker: &mut Tycker, val: Self) -> ss::TypeId {
-            Alloc::alloc(tycker, ss::Type::from(val))
-        }
-    }
     impl Alloc<ss::TypeId> for ss::Hole {
         fn alloc(tycker: &mut Tycker, val: Self) -> ss::TypeId {
             Alloc::alloc(tycker, ss::Type::from(val))
