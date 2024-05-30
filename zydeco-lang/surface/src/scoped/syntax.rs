@@ -21,10 +21,10 @@ where
     pub fn new() -> Self {
         Self { defs: im::HashMap::new() }
     }
-    pub fn extended(self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
-        let mut res = self;
-        res.defs.extend(iter);
-        res
+    pub fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
+        let Context { mut defs } = self.clone();
+        defs.extend(iter);
+        Self { defs }
     }
 }
 impl<T> Add for Context<T>
@@ -32,9 +32,10 @@ where
     T: Clone,
 {
     type Output = Self;
-    fn add(mut self, other: Self) -> Self {
-        self.defs.extend(other.defs);
-        self
+    fn add(self, other: Self) -> Self {
+        let Context { mut defs } = self;
+        defs.extend(other.defs);
+        Self { defs }
     }
 }
 

@@ -107,7 +107,7 @@ pub struct Task<In, Ann> {
 }
 
 pub struct Action<In, Ann> {
-    pub target: In,
+    pub input: In,
     pub switch: Switch<Ann>,
 }
 
@@ -119,15 +119,15 @@ pub enum Switch<Ann> {
 
 type SelfAction<Ty> = Action<(), Ty>;
 
-impl<Ty> Action<(), Ty> {
+impl<Ty> SelfAction<Ty> {
     pub fn syn() -> Self {
-        Self { target: (), switch: Switch::Syn }
+        Self { input: (), switch: Switch::Syn }
     }
     pub fn ana(ty: Ty) -> Self {
-        Self { target: (), switch: Switch::Ana(ty) }
+        Self { input: (), switch: Switch::Ana(ty) }
     }
     pub fn switch(switch: Switch<Ty>) -> Action<(), Ty> {
-        Action { target: (), switch }
+        Action { input: (), switch }
     }
 }
 
@@ -202,11 +202,12 @@ pub struct SccDeclarations<'decl>(pub &'decl HashSet<su::DeclId>);
 impl<'decl> Tyck for SccDeclarations<'decl> {
     type Out = ();
     type Ann = ();
-    type Mode = ((), ());
+    type Mode = ();
     type Action = ();
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<(Self::Out, Self::Ann)> {
-        self.tyck_step(tycker, action)
+        self.tyck_step(tycker, action)?;
+        Ok(((), ()))
     }
 
     fn tyck_step(&self, tycker: &mut Tycker, (): Self::Action) -> Result<Self::Mode> {
@@ -239,12 +240,12 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                     let _ = binder.tyck(tycker, Action::ana(ann))?;
                                 }
                             };
-                            Ok(((), ()))
+                            Ok(())
                         } else {
                             // synthesize the bindee
                             let ann = bindee.tyck_ann(tycker, Action::syn())?;
                             binder.tyck(tycker, Action::ana(ann))?;
-                            Ok(((), ()))
+                            Ok(())
                         }
                     }
                     | Decl::Extern(decl) => {
@@ -302,14 +303,14 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                 let _ = binder.tyck(tycker, Action::ana(ty.into()))?;
                             }
                         }
-                        Ok(((), ()))
+                        Ok(())
                     }
                     | Decl::Main(decl) => {
                         let su::Main(term) = decl;
                         let ty = term.tyck_ann(tycker, Action::syn())?.as_type();
                         // Todo: check that ty is OS, waiting for lub
                         Lub::lub(&ty, &tycker.os(), tycker, Debruijn::new())?;
-                        Ok(((), ()))
+                        Ok(())
                     }
                 }
             }
@@ -329,7 +330,8 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                     let span = tycker.spans.decls[id].clone();
                                     TyckError::MissingAnnotation(span)
                                 })?;
-                            anns.insert(id, syn_ann.tyck_out(tycker, Action::syn())?);
+                            let ann = syn_ann.tyck_ann(tycker, Action::syn())?;
+                            anns.insert(id, ann);
                         }
                         | Decl::Extern(_) | Decl::Main(_) => {
                             unreachable!()
@@ -369,7 +371,7 @@ impl Tyck for su::PatId {
     }
 
     fn tyck_step(
-        &self, tycker: &mut Tycker, Action { target: (), switch }: Self::Action,
+        &self, tycker: &mut Tycker, Action { input: (), switch }: Self::Action,
     ) -> Result<Self::Mode> {
         // Fixme: nonsense right now
         let pat = tycker.scoped.pats[self].clone();
@@ -412,7 +414,7 @@ impl Tyck for su::TermId {
     }
 
     fn tyck_step(
-        &self, tycker: &mut Tycker, Action { target, switch }: Self::Action,
+        &self, tycker: &mut Tycker, Action { input: target, switch }: Self::Action,
     ) -> Result<Self::Mode> {
         // Fixme: nonsense right now
         let term = tycker.scoped.terms[self].clone();
