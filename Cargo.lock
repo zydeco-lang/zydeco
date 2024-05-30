@@ -2606,6 +2606,7 @@ version = "0.2.0"
 dependencies = [
  "derive-where",
  "derive_more",
+ "im",
  "indexmap",
  "thiserror",
  "zydeco-derive",

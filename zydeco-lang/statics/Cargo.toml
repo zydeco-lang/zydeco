@@ -11,16 +11,13 @@ readme = { workspace = true }
 description = "statics for zydeco"
 
 [dependencies]
-# codespan-reporting = "0.11"
-# slotmap = { version = "1", features = ["serde"] }
-# im = "15"
-# unindent = "0.2"
 zydeco-utils = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
 derive_more = { workspace = true }
 derive-where = { workspace = true }
+im = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
 

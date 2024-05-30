@@ -151,7 +151,7 @@ pub def if : Thunk(forall (B : CType) . Bool -> Thunk B -> Thunk B -> B) = {
 pub def if~ : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -> B) = {
   fn B b thn els ->
     do b <- ! b;
-    ! if @(B) b thn els
+    ! if B b thn els
 } end
 
 /// the Nat type
@@ -165,7 +165,43 @@ pub def rec ! iter (A : VType) (n : Nat) (x : A) (f : U (A -> F A)) : F A =
   match n
   | +Z() -> ret x
   | +S(n') ->
-    do x' <- ! iter @(A) n' x f;
+    do x' <- ! iter A n' x f;
     ! f x'
+  end
+end
+
+
+
+
+
+
+codata IO (A: VType) where
+  | .run : Thunk (A -> OS) -> OS
+end
+
+// Algebra IO OS exists
+def ! alg_io : Algebra IO OS =
+  comatch
+  | .bindA A m k -> ! m .run k
+  end
+end
+
+// Algebra Ret R always exists
+def ! alg_ret (R: CType): Algebra Ret R =
+  comatch
+  | .bindA A m k ->
+    do a <- ! m; ! k a
+  end
+end
+
+// Algebra M (M V) always exists for M: Monad
+def ! alg_mo
+  (M: VType -> CType)
+  (V: VType)
+  (mo: Thunk (Monad M))
+: Algebra M (M V) =
+  comatch
+  | .bindA A m k ->
+    ! mo .bind A V m k
   end
 end

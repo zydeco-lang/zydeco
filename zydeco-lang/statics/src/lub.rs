@@ -1,4 +1,5 @@
 use crate::err::*;
+use crate::surface_syntax as su;
 use crate::syntax::*;
 use crate::tyck::*;
 
@@ -49,17 +50,90 @@ impl Lub for &KindId {
     }
 }
 
+// struct Debruijn {
+//     defs: im::HashMap<DefId, usize>,
+// }
+// impl Debruijn {
+//     fn new() -> Self {
+//         Self { defs: im::HashMap::new() }
+//     }
+//     fn extend_one(&self, def: DefId) -> Self {
+//         let len = self.defs.len();
+//         let mut defs = self.defs.clone();
+//         let res = defs.insert(def, len);
+//         assert!(res.is_none());
+//         Self { defs }
+//     }
+//     fn lookup(&self, def: DefId) -> Option<usize> {
+//         self.defs.get(&def).copied()
+//     }
+// }
+
+pub struct Debruijn {
+    lhs: su::Context<TypeId>,
+    rhs: su::Context<TypeId>,
+}
+impl Debruijn {
+    pub fn new() -> Self {
+        Self { lhs: su::Context::new(), rhs: su::Context::new() }
+    }
+    pub fn extend_one(&self, tycker: &mut Tycker, lhs_def: DefId, rhs_def: DefId) -> Self {
+        let mut lhs = self.lhs.clone();
+        let mut rhs = self.rhs.clone();
+        let abst = Alloc::alloc(tycker, Abstract);
+        let sealed = Alloc::alloc(tycker, Sealed(abst));
+        {
+            let res = lhs.defs.insert(lhs_def, sealed);
+            assert!(res.is_none());
+        }
+        {
+            let res = rhs.defs.insert(rhs_def, sealed);
+            assert!(res.is_none());
+        }
+        Self { lhs, rhs }
+    }
+    pub fn lookup(&self, lhs_def: DefId, rhs_def: DefId) -> Option<TypeId> {
+        let lhs = self.lhs.defs.get(&lhs_def).copied();
+        let rhs = self.rhs.defs.get(&rhs_def).copied();
+        match (lhs, rhs) {
+            | (Some(lhs), Some(rhs)) if lhs == rhs => Some(lhs),
+            | _ => None,
+        }
+    }
+}
+
 impl Lub for &TypeId {
     /// We need to remember the definitions introduced by both sides.
     // Todo..
-    type Ctx = ();
+    type Ctx = Debruijn;
     type Out = TypeId;
 
     fn lub(self, other: Self, tycker: &mut Tycker, ctx: Self::Ctx) -> Result<Self::Out> {
         let lhs = tycker.statics.types[self].clone();
         let rhs = tycker.statics.types[other].clone();
-        // match (lhs, rhs) {
-        // }
+        match (lhs, rhs) {
+            | (Type::Sealed(_), Type::Sealed(_)) => todo!(),
+            | (Type::Ann(_), Type::Ann(_)) => todo!(),
+            | (Type::Hole(_), Type::Hole(_)) => todo!(),
+            | (Type::Abst(_), Type::Abst(_)) => todo!(),
+            | (Type::Var(_), Type::Var(_)) => todo!(),
+            | (Type::Abs(_), Type::Abs(_)) => todo!(),
+            | (Type::App(_), Type::App(_)) => todo!(),
+            | (Type::Thunk(_), Type::Thunk(_)) => todo!(),
+            | (Type::Ret(_), Type::Ret(_)) => todo!(),
+            | (Type::Unit(_), Type::Unit(_)) => todo!(),
+            | (Type::Int(_), Type::Int(_)) => todo!(),
+            | (Type::Char(_), Type::Char(_)) => todo!(),
+            | (Type::String(_), Type::String(_)) => todo!(),
+            | (Type::OS(_), Type::OS(_)) => todo!(),
+            | (Type::Arrow(_), Type::Arrow(_)) => todo!(),
+            | (Type::Forall(_), Type::Forall(_)) => todo!(),
+            | (Type::Prod(_), Type::Prod(_)) => todo!(),
+            | (Type::Exists(_), Type::Exists(_)) => todo!(),
+            | (Type::Data(_), Type::Data(_)) => todo!(),
+            | (Type::CoData(_), Type::CoData(_)) => todo!(),
+            | _ => todo!(),
+        }
         todo!()
     }
 }

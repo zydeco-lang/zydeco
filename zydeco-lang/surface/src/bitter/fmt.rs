@@ -243,7 +243,7 @@ where
         let mut s = String::new();
         let Dtor(head, name) = self;
         s += &head.ugly(f);
-        s += ".";
+        s += " ";
         s += &name.ugly(f);
         s
     }

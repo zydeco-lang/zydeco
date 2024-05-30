@@ -112,9 +112,10 @@ impl Package {
             files.into_iter().map(|f| f.desugar(b::SpanArena::new(&mut alloc))).collect::<Vec<_>>();
         // Debug: print the desugared package
         if cfg!(debug_assertions) {
+            use crate::bitter::fmt::*;
+            println!();
             for file in &files {
                 println!(">>> [{}]", file.path.display());
-                use crate::bitter::fmt::*;
                 println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
                 println!("<<< [{}]", file.path.display());
             }
@@ -138,6 +139,7 @@ impl Package {
         // Debug: print the in-package dependencies
         if cfg!(debug_assertions) {
             use crate::scoped::fmt::*;
+            println!();
             println!(">>> [{}]", self.name);
             let mut scc = pack.arena.top.clone();
             let mut cnt = 0;

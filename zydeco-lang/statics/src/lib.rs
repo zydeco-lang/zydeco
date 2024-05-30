@@ -7,8 +7,10 @@ pub mod surface_syntax {
 
 pub mod syntax;
 pub mod lub;
+pub mod norm;
 pub mod tyck;
 pub mod err;
 
 pub use lub::*;
+pub use norm::*;
 pub use tyck::*;

@@ -114,14 +114,8 @@ MixedId: String = { <"UpperId"> => <>.into(), <"LowerId"> => <>.into(), };
 
 #[inline]
 VarName: VarName = <MixedId> => VarName(<>);
-CtorName: CtorName = {
-    <"CtorId"> => CtorName(<>.into()),
-    "pack" => CtorName(String::from("pack")),
-};
-DtorName: DtorName = {
-    <"DtorId"> => DtorName(<>.into()),
-    "@" => DtorName(String::from("@")),
-};
+CtorName: CtorName = <"CtorId"> => CtorName(<>.into());
+DtorName: DtorName = <"DtorId"> => DtorName(<>.into());
 
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
 PathSeg: VarName = {
