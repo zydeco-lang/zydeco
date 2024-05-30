@@ -377,9 +377,8 @@ DeclId: DeclId = <DeclarationGen<Modifiers<Declaration>>>;
 Declaration: Declaration = {
     <DataDef> => <>.into(),
     <CoDataDef> => <>.into(),
-    "define" <GenBindTerm> "end" => Define(<>).into(),
+    "define" <GenBind<("=" <TermId>)?>> "end" => Define(<>).into(),
     "alias" <GenBindTerm> "end" => Alias(<>).into(),
-    "extern" <GenBindNull> "end" => Extern(<>).into(),
     // "layer" <name:(<NameRef<VarName>>)?>
     //     <uses:(<UseLayer>)*>
     // <top:("where" <TopLevel>)> "end" => Layer {
@@ -393,8 +392,9 @@ Declaration: Declaration = {
 };
 
 Modifiers<T>: Modifiers<T> = {
-    <public:"pub"?> <inner:T> => Modifiers {
+    <public:"pub"?> <external:"extern"?> <inner:T> => Modifiers {
         public: public.is_some(),
+        external: external.is_some(),
         inner,
     },
 };

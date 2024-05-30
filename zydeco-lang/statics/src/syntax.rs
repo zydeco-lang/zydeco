@@ -6,6 +6,8 @@ use derive_more::From;
 use indexmap::IndexMap;
 use zydeco_utils::{arena::*, new_key_type};
 
+/* ------------------------------- Identifier ------------------------------- */
+
 pub type DefId = sc::DefId;
 // PatId and TermId are unsorted, so we've got the following:
 new_key_type! {

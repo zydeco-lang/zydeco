@@ -170,7 +170,7 @@ impl Resolve for TopLevel {
         // 1. check for duplicates
         // 2. update primitives to internal_to_def
         for id in decls {
-            let Modifiers { public: _, inner } = &resolver.bitter.decls[id];
+            let Modifiers { public: _, external, inner } = &resolver.bitter.decls[id];
             match inner {
                 | Declaration::Alias(decl) => {
                     let Alias { binder, bindee: _ } = decl;
@@ -180,6 +180,9 @@ impl Resolve for TopLevel {
                     // maybe macros can help?
                     'out: {
                         if binders.len() != 1 {
+                            break 'out;
+                        }
+                        if ! external {
                             break 'out;
                         }
                         if let Some(def) = binders.get(&VarName("Monad".into())) {
@@ -382,7 +385,7 @@ impl Resolve for DeclId {
         resolver.deps.add(*self, []);
         let decl = resolver.bitter.decls[self].clone();
         let local = Local { under: *self, ..Local::default() };
-        let Modifiers { public: _, inner } = decl;
+        let Modifiers { public: _, external: _, inner } = decl;
         match inner.clone() {
             | Declaration::Alias(decl) => {
                 let Alias { binder, bindee } = decl;

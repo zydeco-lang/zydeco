@@ -1,7 +1,7 @@
 use crate::{
-    bitter::syntax::{self as b},
+    bitter::syntax as b,
     syntax::*,
-    textual::syntax::{self as t},
+    textual::syntax::{self as t, GenBind},
 };
 use zydeco_utils::span::Span;
 
@@ -110,7 +110,7 @@ impl Desugar for t::TopLevel {
 impl Desugar for t::DeclId {
     type Out = b::DeclId;
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
-        let Modifiers { public, inner } = desugarer.textual.decls[&self].clone();
+        let Modifiers { public, external, inner } = desugarer.textual.decls[&self].clone();
         use t::Declaration as Decl;
         let inner = match inner {
             | Decl::DataDef(decl) => {
@@ -158,48 +158,49 @@ impl Desugar for t::DeclId {
                 b::Alias { binder: pat, bindee: sealed }.into()
             }
             | Decl::Define(decl) => {
-                let t::Define(genbind) = decl;
-                let (pat, term) = genbind.desugar(desugarer);
-                // sealed
-                let span = pat.span(desugarer);
-                let sealed = Alloc::alloc(desugarer, span);
-                let sealed = desugarer.term(sealed, b::Sealed(term).into());
-                // pat & sealed -> alias
-                b::Alias { binder: pat, bindee: sealed }.into()
+                let t::Define(GenBind { rec, comp, binder, params, ty, bindee }) = decl;
+                if let Some(bindee) = bindee {
+                    let (pat, term) =
+                        t::GenBind { rec, comp, binder, params, ty, bindee }.desugar(desugarer);
+                    // sealed
+                    let span = pat.span(desugarer);
+                    let sealed = Alloc::alloc(desugarer, span);
+                    let sealed = desugarer.term(sealed, b::Sealed(term).into());
+                    // pat & sealed -> alias
+                    b::Alias { binder: pat, bindee: sealed }.into()
+                } else {
+                    assert!(external);
+                    assert!(!comp);
+                    let binder = binder.desugar(desugarer);
+                    let ty = if let Some(ty) = ty {
+                        let mut ty = ty.desugar(desugarer);
+                        if let Some(params) = params {
+                            let b::Appli(items) = params.desugar(desugarer);
+                            for item in items {
+                                match item {
+                                    | b::CoPatternItem::Pat(pat) => {
+                                        let span = pat.span(desugarer);
+                                        let id = Alloc::alloc(desugarer, span);
+                                        ty = desugarer.term(id, b::Pi(pat, ty).into())
+                                    }
+                                    | b::CoPatternItem::Dtor(_) => {
+                                        unimplemented!("Dtor in extern params")
+                                    }
+                                }
+                            }
+                        };
+                        Some(ty)
+                    } else {
+                        None
+                    };
+                    b::Extern { binder, ty }.into()
+                }
             }
             | Decl::Alias(decl) => {
                 let t::Alias(genbind) = decl;
                 let (pat, term) = genbind.desugar(desugarer);
                 // pat & term -> alias
                 b::Alias { binder: pat, bindee: term }.into()
-            }
-            | Decl::Extern(decl) => {
-                // Todo: error on rec
-                let t::Extern(t::GenBind { rec: _, comp, binder, params, ty, bindee: () }) = decl;
-                assert!(!comp);
-                let binder = binder.desugar(desugarer);
-                let ty = if let Some(ty) = ty {
-                    let mut ty = ty.desugar(desugarer);
-                    if let Some(params) = params {
-                        let b::Appli(items) = params.desugar(desugarer);
-                        for item in items {
-                            match item {
-                                | b::CoPatternItem::Pat(pat) => {
-                                    let span = pat.span(desugarer);
-                                    let id = Alloc::alloc(desugarer, span);
-                                    ty = desugarer.term(id, b::Pi(pat, ty).into())
-                                }
-                                | b::CoPatternItem::Dtor(_) => {
-                                    unimplemented!("Dtor in extern params")
-                                }
-                            }
-                        }
-                    };
-                    Some(ty)
-                } else {
-                    None
-                };
-                b::Extern { binder, ty }.into()
             }
             // Decl::Layer(decl) => {
             //     let t::Layer { name, uses, top } = decl;
@@ -232,7 +233,7 @@ impl Desugar for t::DeclId {
         };
         let span = self.span(desugarer);
         let decl = Alloc::alloc(desugarer, span);
-        desugarer.decl(decl, Modifiers { public, inner })
+        desugarer.decl(decl, Modifiers { public, external, inner })
     }
 }
 

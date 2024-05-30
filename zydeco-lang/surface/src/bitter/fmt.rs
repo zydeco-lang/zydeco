@@ -83,10 +83,13 @@ impl Ugly for TermId {
 
 impl Ugly for DeclId {
     fn ugly(&self, f: &Formatter) -> String {
-        let Modifiers { public, inner } = &f.arena.decls[self];
+        let Modifiers { public, external, inner } = &f.arena.decls[self];
         let mut s = String::new();
         if *public {
             s += "pub ";
+        }
+        if *external {
+            s += "extern ";
         }
         use Declaration as Decl;
         match inner {

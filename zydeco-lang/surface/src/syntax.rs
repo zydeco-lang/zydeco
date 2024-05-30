@@ -64,6 +64,7 @@ pub struct Uses(pub Vec<UsePath>);
 #[derive(Clone, Debug)]
 pub struct Modifiers<T> {
     pub public: bool,
+    pub external: bool,
     pub inner: T,
 }
 impl<T> Modifiers<T> {
@@ -71,8 +72,8 @@ impl<T> Modifiers<T> {
     where
         F: FnOnce(&T) -> Result<U, E>,
     {
-        let Modifiers { public, inner } = self;
-        Ok(Modifiers { public: *public, inner: f(inner)? })
+        let Modifiers { public, external, inner } = self;
+        Ok(Modifiers { public: *public, external: *external, inner: f(inner)? })
     }
 }
 

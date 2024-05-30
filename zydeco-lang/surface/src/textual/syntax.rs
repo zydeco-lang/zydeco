@@ -183,13 +183,10 @@ pub struct CoDataDef {
 }
 
 #[derive(Clone, Debug)]
-pub struct Define(pub GenBind<TermId>);
+pub struct Define(pub GenBind<Option<TermId>>);
 
 #[derive(Clone, Debug)]
 pub struct Alias(pub GenBind<TermId>);
-
-#[derive(Clone, Debug)]
-pub struct Extern(pub GenBind<()>);
 
 #[derive(Clone, Debug)]
 pub struct Layer {
@@ -216,7 +213,6 @@ pub enum Declaration {
     CoDataDef(CoDataDef),
     Define(Define),
     Alias(Alias),
-    Extern(Extern),
     // Layer(Layer),
     // UseDef(UseDef),
     // UseBlock(UseBlock),

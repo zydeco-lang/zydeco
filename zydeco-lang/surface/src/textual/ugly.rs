@@ -21,10 +21,13 @@ impl Ugly for TopLevel {
         s += &decls
             .iter()
             .map(|decl| {
-                let Modifiers { public, inner } = &f.arena.decls[decl];
+                let Modifiers { public, external, inner } = &f.arena.decls[decl];
                 let mut s = String::new();
                 if *public {
                     s += "pub ";
+                }
+                if *external {
+                    s += "extern ";
                 }
                 use Declaration as Decl;
                 match inner {
@@ -32,7 +35,6 @@ impl Ugly for TopLevel {
                     | Decl::CoDataDef(d) => s += &d.ugly(f),
                     | Decl::Define(d) => s += &d.ugly(f),
                     | Decl::Alias(d) => s += &d.ugly(f),
-                    | Decl::Extern(d) => s += &d.ugly(f),
                     // Decl::Layer(d) => s += &d.ugly(f),
                     // Decl::UseDef(d) => s += &d.ugly(f),
                     // Decl::UseBlock(d) => s += &d.ugly(f),
@@ -419,10 +421,10 @@ impl Ugly for GenBind<TermId> {
     }
 }
 
-impl Ugly for GenBind<()> {
+impl Ugly for GenBind<Option<TermId>> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let GenBind { rec, comp, binder, params, ty, bindee: () } = self;
+        let GenBind { rec, comp, binder, params, ty, bindee } = self;
         if *rec {
             s += "rec ";
         }
@@ -437,6 +439,10 @@ impl Ugly for GenBind<()> {
         if let Some(ty) = ty {
             s += " : ";
             s += &ty.ugly(f);
+        }
+        if let Some(bindee) = bindee {
+            s += " = ";
+            s += &bindee.ugly(f);
         }
         s
     }
@@ -592,27 +598,30 @@ impl Ugly for UseDef {
 //     }
 // }
 
-impl Ugly for Layer {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let Layer { name, uses, top } = self;
-        if let Some(name) = name {
-            s += "layer ";
-            s += &name.ugly(f);
-        }
-        for Modifiers { public, inner } in uses {
-            if *public {
-                s += " pub";
-            }
-            s += " use ";
-            s += &inner.ugly(f);
-        }
-        s += " where\n";
-        s += &top.ugly(f);
-        s += "\nend";
-        s
-    }
-}
+// impl Ugly for Layer {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let Layer { name, uses, top } = self;
+//         if let Some(name) = name {
+//             s += "layer ";
+//             s += &name.ugly(f);
+//         }
+//         for Modifiers { public, external, inner } in uses {
+//             if *public {
+//                 s += " pub";
+//             }
+//             if *external {
+//                 s += " extern";
+//             }
+//             s += " use ";
+//             s += &inner.ugly(f);
+//         }
+//         s += " where\n";
+//         s += &top.ugly(f);
+//         s += "\nend";
+//         s
+//     }
+// }
 
 impl Ugly for Define {
     fn ugly(&self, f: &Formatter) -> String {
@@ -630,17 +639,6 @@ impl Ugly for Alias {
         let mut s = String::new();
         let Alias(b) = self;
         s += "alias ";
-        s += &b.ugly(f);
-        s += " end";
-        s
-    }
-}
-
-impl Ugly for Extern {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let Extern(b) = self;
-        s += "extern ";
         s += &b.ugly(f);
         s += " end";
         s
