@@ -60,7 +60,7 @@ pub struct Uses(pub Vec<UsePath>);
 
 /* -------------------------------- TopLevel -------------------------------- */
 
-// Todo: turn extern into a modifier / use macro to declare externs
+// Note: use macro to declare externs?
 #[derive(Clone, Debug)]
 pub struct Modifiers<T> {
     pub public: bool,

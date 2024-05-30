@@ -82,6 +82,7 @@ impl Tycker {
 }
 
 pub trait Tyck {
+    type In;
     type Out;
     type Ann;
     type Mode;
@@ -200,6 +201,7 @@ impl SyntacticallyAnnotated for su::TermId {
 
 pub struct SccDeclarations<'decl>(pub &'decl HashSet<su::DeclId>);
 impl<'decl> Tyck for SccDeclarations<'decl> {
+    type In = ();
     type Out = ();
     type Ann = ();
     type Mode = ();
@@ -253,7 +255,7 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                         let internal_or = tycker.scoped.exts.get(id).cloned();
                         match internal_or {
                             | Some((internal, def)) => {
-                                // the extern is a internal type
+                                // the alias head is a internal type
                                 let syn_kd = ty.unwrap();
                                 match internal {
                                     | su::Internal::VType => {
@@ -293,7 +295,7 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                 }
                             }
                             | None => {
-                                // the extern is a primitive value that needs to be linked later
+                                // the alias head is a primitive value that needs to be linked later
                                 let Some(ty) = ty else {
                                     Err(TyckError::MissingAnnotation(
                                         tycker.spans.decls[id].clone(),
@@ -345,6 +347,7 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
 }
 
 impl Tyck for su::DefId {
+    type In = ();
     type Out = ();
     type Ann = ();
     type Mode = ();
@@ -361,9 +364,10 @@ impl Tyck for su::DefId {
 }
 
 impl Tyck for su::PatId {
+    type In = Self;
     type Out = ss::PatId;
     type Ann = ss::AnnId;
-    type Mode = Mode<Self, Self::Out, Self::Ann>;
+    type Mode = Mode<Self::In, Self::Out, Self::Ann>;
     type Action = SelfAction<Self::Ann>;
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<(Self::Out, Self::Ann)> {
@@ -404,9 +408,10 @@ impl Tyck for su::PatId {
 }
 
 impl Tyck for su::TermId {
+    type In = (ss::Context<ss::AnnId>, Self);
     type Out = ss::TermId;
     type Ann = ss::AnnId;
-    type Mode = Mode<Self, Self::Out, Self::Ann>;
+    type Mode = Mode<Self::In, Self::Out, Self::Ann>;
     type Action = Action<(), Self::Ann>;
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<(Self::Out, Self::Ann)> {
@@ -414,7 +419,7 @@ impl Tyck for su::TermId {
     }
 
     fn tyck_step(
-        &self, tycker: &mut Tycker, Action { input: target, switch }: Self::Action,
+        &self, tycker: &mut Tycker, Action { input, switch }: Self::Action,
     ) -> Result<Self::Mode> {
         // Fixme: nonsense right now
         let term = tycker.scoped.terms[self].clone();
