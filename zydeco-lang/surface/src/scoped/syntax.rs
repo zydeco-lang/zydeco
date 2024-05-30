@@ -1,55 +1,12 @@
 pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
 
-use std::ops::Add;
 use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
-
-/* --------------------------------- Context -------------------------------- */
-
-new_key_type! {
-    pub struct CtxtId;
-}
-
-#[derive(Clone, Debug)]
-pub struct Context<T> {
-    pub defs: im::HashMap<DefId, T>,
-}
-impl<T> Context<T>
-where
-    T: Clone,
-{
-    pub fn new() -> Self {
-        Self { defs: im::HashMap::new() }
-    }
-    pub fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
-        let Context { mut defs } = self.clone();
-        defs.extend(iter);
-        Self { defs }
-    }
-}
-impl<T> Add for Context<T>
-where
-    T: Clone,
-{
-    type Output = Self;
-    fn add(self, other: Self) -> Self {
-        let Context { mut defs } = self;
-        defs.extend(other.defs);
-        Self { defs }
-    }
-}
 
 /* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Debug)]
 pub struct ScopedArena {
-    // /// arena for contexts (WIP)
-    // // Todo: not implemented yet
-    // pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
-    // /// context for every term (WIP)
-    // // Todo: not implemented yet
-    // pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
-
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,

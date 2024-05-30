@@ -1,5 +1,4 @@
 use crate::err::*;
-use crate::surface_syntax as su;
 use crate::syntax::*;
 use crate::tyck::*;
 
@@ -70,12 +69,12 @@ impl Lub for &KindId {
 // }
 
 pub struct Debruijn {
-    lhs: su::Context<TypeId>,
-    rhs: su::Context<TypeId>,
+    lhs: Context<TypeId>,
+    rhs: Context<TypeId>,
 }
 impl Debruijn {
     pub fn new() -> Self {
-        Self { lhs: su::Context::new(), rhs: su::Context::new() }
+        Self { lhs: Context::new(), rhs: Context::new() }
     }
     pub fn extend_one(&self, tycker: &mut Tycker, lhs_def: DefId, rhs_def: DefId) -> Self {
         let mut lhs = self.lhs.clone();

@@ -70,9 +70,6 @@ pub struct Resolver {
     /// all internal definitions mapped to a corresponding def
     pub internal_to_def: ArenaAssoc<TermId, DefId>,
 
-    // pub ctxs: ArenaSparse<CtxtId, Context<DefId>>,
-    // pub term_under_ctx: ArenaAssoc<TermId, CtxtId>,
-
     // arenas
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
@@ -100,10 +97,6 @@ impl Resolver {
             prim_def: prim,
             internal_to_def: _,
 
-            // ctxs,
-            // term_under_ctx,
-
-            //
             defs,
             pats,
             terms,
@@ -118,10 +111,6 @@ impl Resolver {
             spans,
             prim,
             arena: ScopedArena {
-                // ctxs,
-                // term_under_ctx,
-
-                //
                 defs,
                 pats,
                 terms,
