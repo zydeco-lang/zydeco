@@ -259,7 +259,7 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                 let Some(ty) = ty else {
                                     Err(TyckError::MissingAnnotation(
                                         // tycker.spans.decls[id].clone(),
-                                        todo!()
+                                        todo!(),
                                     ))?
                                 };
                                 let ty = ty.tyck_ann(tycker, Action::syn(ctx.clone()))?.as_type();

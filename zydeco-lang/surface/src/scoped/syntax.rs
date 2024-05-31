@@ -1,6 +1,6 @@
-pub use crate::textual::syntax::SpanArena;
 pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
+pub use crate::textual::syntax::SpanArena;
 
 use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
 

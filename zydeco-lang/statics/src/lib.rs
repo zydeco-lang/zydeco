@@ -14,8 +14,9 @@ pub mod err;
 
 pub(crate) use surface_syntax as su;
 pub(crate) use syntax as ss;
-pub use syntactic::*;
+
+pub use err::*;
 pub use lub::*;
 pub use norm::*;
+pub use syntactic::*;
 pub use tyck::*;
-pub use err::*;

@@ -64,6 +64,10 @@ pub mod textual {
         // pub use super::pretty::*;
     }
 
+    pub use err::*;
+    pub use lexer::*;
+    pub use parser::*;
+
     #[cfg(test)]
     mod tests;
 }
@@ -73,9 +77,14 @@ pub mod textual {
 /// Angostura
 pub mod bitter {
     pub mod syntax;
+    pub mod alloc;
     pub mod desugar;
     // pub mod err;
     pub mod fmt;
+
+    pub use alloc::*;
+    pub use desugar::*;
+    // pub use err::*;
 }
 
 /// name resolution;
@@ -85,4 +94,7 @@ pub mod scoped {
     pub mod resolver;
     pub mod err;
     pub mod fmt;
+
+    pub use err::*;
+    pub use resolver::*;
 }

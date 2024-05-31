@@ -2,20 +2,9 @@
 
 use super::err::{Result, SurfaceError};
 use crate::{
-    bitter::{
-        desugar::{DesugarOut, Desugarer},
-        syntax as b,
-    },
-    scoped::{
-        resolver::{ResolveOut, Resolver},
-        syntax as sc,
-    },
-    textual::{
-        err::ParseError,
-        lexer::{Lexer, Tok},
-        parser::TopLevelParser,
-        syntax as t,
-    },
+    bitter::{syntax as b, DesugarOut, Desugarer},
+    scoped::{syntax as sc, ResolveOut, Resolver},
+    textual::{syntax as t, Lexer, ParseError, Tok, TopLevelParser},
 };
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};

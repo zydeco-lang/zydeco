@@ -1,5 +1,5 @@
 use crate::{
-    bitter::syntax as b,
+    bitter::{alloc::Alloc, syntax as b},
     syntax::*,
     textual::syntax::{self as t, GenBind},
 };
@@ -71,36 +71,6 @@ impl Desugarer {
     fn algebra(&mut self) -> b::TermId {
         let term = Alloc::alloc(self, b::Internal::Algebra.into());
         *self.prim.algebra.extend_one(term)
-    }
-}
-
-pub trait Alloc {
-    type Entity;
-    fn alloc(desugarer: &mut Desugarer, entity: Self::Entity) -> Self;
-}
-
-impl Alloc for b::DefId {
-    type Entity = b::VarName;
-    fn alloc(desugarer: &mut Desugarer, entity: Self::Entity) -> Self {
-        desugarer.bitter.defs.alloc(entity)
-    }
-}
-impl Alloc for b::PatId {
-    type Entity = b::Pattern;
-    fn alloc(desugarer: &mut Desugarer, entity: Self::Entity) -> Self {
-        desugarer.bitter.pats.alloc(entity)
-    }
-}
-impl Alloc for b::TermId {
-    type Entity = b::Term<b::NameRef<b::VarName>>;
-    fn alloc(desugarer: &mut Desugarer, entity: Self::Entity) -> Self {
-        desugarer.bitter.terms.alloc(entity)
-    }
-}
-impl Alloc for b::DeclId {
-    type Entity = b::Modifiers<b::Declaration>;
-    fn alloc(desugarer: &mut Desugarer, entity: Self::Entity) -> Self {
-        desugarer.bitter.decls.alloc(entity)
     }
 }
 
