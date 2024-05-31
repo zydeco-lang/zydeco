@@ -16,12 +16,8 @@ new_key_type! {
     pub struct TermId;
     pub struct DeclId;
 }
-impl DefPtr for DefId {}
-impl PatPtr for PatId {}
-impl TermPtr for TermId {}
-impl DeclPtr for DeclId {}
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+#[derive(From, Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum EntityId {
     Def(DefId),
     Pat(PatId),
@@ -210,17 +206,30 @@ impl AddAssign for TopLevel {
 
 /* ---------------------------------- Arena --------------------------------- */
 
-#[derive(Default, Debug, AddAssign)]
+#[derive(Debug, AddAssign)]
 pub struct Arena {
-    pub defs: ArenaAssoc<DefId, VarName>,
-    pub pats: ArenaAssoc<PatId, Pattern>,
-    pub terms: ArenaAssoc<TermId, Term<NameRef<VarName>>>,
-    pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
+    // arenas
+    pub defs: ArenaSparse<DefId, VarName>,
+    pub pats: ArenaSparse<PatId, Pattern>,
+    pub terms: ArenaSparse<TermId, Term<NameRef<VarName>>>,
+    pub decls: ArenaSparse<DeclId, Modifiers<Declaration>>,
+
+    // entity maps from textural syntax
+    pub entities: ArenaForth<t::EntityId, EntityId>,
 }
 
-// Fixme: keep a bidirectional map instead of duplicating the spans
-// Fixme: unify allocation for all entities
-pub type SpanArena = ArenaGen<Span, DefId, PatId, TrivId, TermId, DeclId>;
+impl Arena {
+    pub fn new(alloc: &mut GlobalAlloc) -> Self {
+        Arena {
+            defs: ArenaSparse::new(alloc.alloc()),
+            pats: ArenaSparse::new(alloc.alloc()),
+            terms: ArenaSparse::new(alloc.alloc()),
+            decls: ArenaSparse::new(alloc.alloc()),
+
+            entities: ArenaForth::new(),
+        }
+    }
+}
 
 /* -------------------------------- Primitive ------------------------------- */
 

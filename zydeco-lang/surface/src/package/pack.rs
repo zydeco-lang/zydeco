@@ -94,7 +94,7 @@ impl Package {
         // Todo: parallelize w/ rayon (?)
         let files = files
             .into_iter()
-            .map(|f| f.parse(t::Parser::new(&mut alloc)))
+            .map(|f| f.parse(t::Parser::new(alloc.alloc())))
             .collect::<Result<Vec<_>>>()?;
         // Debug: print the parsed files
         if cfg!(debug_assertions) {
@@ -109,7 +109,7 @@ impl Package {
         // desugaring
         // Todo: parallelize w/ rayon (?)
         let files =
-            files.into_iter().map(|f| f.desugar(b::SpanArena::new(&mut alloc))).collect::<Vec<_>>();
+            files.into_iter().map(|f| f.desugar(b::Arena::new(&mut alloc))).collect::<Vec<_>>();
         // Debug: print the desugared package
         if cfg!(debug_assertions) {
             use crate::bitter::fmt::*;
@@ -123,8 +123,8 @@ impl Package {
         let pack = FileBitter::merge(
             PackageStew {
                 sources: HashMap::new(),
-                spans: b::SpanArena::new(&mut alloc),
-                arena: b::Arena::default(),
+                spans: t::SpanArena::new(alloc.alloc()),
+                arena: b::Arena::new(&mut alloc),
                 prim_term: b::PrimTerms::default(),
                 top: b::TopLevel(Vec::new()),
             },
@@ -261,24 +261,18 @@ pub struct FileParsed {
 }
 
 impl FileParsed {
-    pub fn desugar(self, bspans: b::SpanArena) -> FileBitter {
-        let FileParsed { path, source, spans: tspans, arena: textual, top } = self;
-        let desugarer = Desugarer {
-            tspans,
-            textual,
-            bspans,
-            bitter: b::Arena::default(),
-            prim: b::PrimTerms::default(),
-        };
-        let DesugarOut { spans, arena, prim: prim_term, top } = desugarer.run(top);
-        FileBitter { path, source, spans, arena, prim_term, top }
+    pub fn desugar(self, bitter: b::Arena) -> FileBitter {
+        let FileParsed { path, source, spans, arena: textual, top } = self;
+        let desugarer = Desugarer { textual, bitter, prim: b::PrimTerms::default() };
+        let DesugarOut { arena, prim: prim_term, top } = desugarer.run(top);
+        FileBitter { spans, path, source, arena, prim_term, top }
     }
 }
 
 pub struct FileBitter {
     pub path: PathBuf,
     pub source: String,
-    pub spans: b::SpanArena,
+    pub spans: t::SpanArena,
     pub arena: b::Arena,
     pub prim_term: b::PrimTerms,
     pub top: b::TopLevel,
@@ -301,7 +295,7 @@ impl FileBitter {
 
 pub struct PackageStew {
     pub sources: HashMap<PathBuf, String>,
-    pub spans: b::SpanArena,
+    pub spans: t::SpanArena,
     pub arena: b::Arena,
     pub prim_term: b::PrimTerms,
     pub top: b::TopLevel,
@@ -338,7 +332,7 @@ impl PackageStew {
 
 pub struct PackageScoped {
     pub sources: HashMap<PathBuf, String>,
-    pub spans: sc::SpanArena,
+    pub spans: t::SpanArena,
     pub prim: sc::PrimDef,
     pub arena: sc::ScopedArena,
 }

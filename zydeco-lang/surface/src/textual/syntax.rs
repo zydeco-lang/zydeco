@@ -14,21 +14,67 @@ new_key_type! {
     pub struct CoPatId;
     pub struct TermId;
     pub struct DeclId;
-}
-impl DefPtr for DefId {}
-impl PatPtr for PatId {}
-impl CoPatPtr for CoPatId {}
-impl TermPtr for TermId {}
-impl DeclPtr for DeclId {}
 
-/// An entity dispatcher.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
-pub enum EntityId {
-    Def(DefId),
-    Pat(PatId),
-    CoPat(CoPatId),
-    Term(TermId),
-    Decl(DeclId),
+    pub struct EntityId;
+}
+
+mod identifier_impls {
+    use super::*;
+    impl From<DefId> for EntityId {
+        fn from(DefId(meta, idx): DefId) -> Self {
+            EntityId::new(meta, idx)
+        }
+    }
+    impl Into<DefId> for EntityId {
+        fn into(self) -> DefId {
+            let EntityId(meta, idx) = self;
+            DefId::new(meta, idx)
+        }
+    }
+    impl From<PatId> for EntityId {
+        fn from(PatId(meta, idx): PatId) -> Self {
+            EntityId::new(meta, idx)
+        }
+    }
+    impl Into<PatId> for EntityId {
+        fn into(self) -> PatId {
+            let EntityId(meta, idx) = self;
+            PatId::new(meta, idx)
+        }
+    }
+    impl From<CoPatId> for EntityId {
+        fn from(CoPatId(meta, idx): CoPatId) -> Self {
+            EntityId::new(meta, idx)
+        }
+    }
+    impl Into<CoPatId> for EntityId {
+        fn into(self) -> CoPatId {
+            let EntityId(meta, idx) = self;
+            CoPatId::new(meta, idx)
+        }
+    }
+    impl From<TermId> for EntityId {
+        fn from(TermId(meta, idx): TermId) -> Self {
+            EntityId::new(meta, idx)
+        }
+    }
+    impl Into<TermId> for EntityId {
+        fn into(self) -> TermId {
+            let EntityId(meta, idx) = self;
+            TermId::new(meta, idx)
+        }
+    }
+    impl From<DeclId> for EntityId {
+        fn from(DeclId(meta, idx): DeclId) -> Self {
+            EntityId::new(meta, idx)
+        }
+    }
+    impl Into<DeclId> for EntityId {
+        fn into(self) -> DeclId {
+            let EntityId(meta, idx) = self;
+            DeclId::new(meta, idx)
+        }
+    }
 }
 
 /* --------------------------------- Pattern -------------------------------- */
@@ -239,8 +285,7 @@ pub struct Arena {
     pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
-// Fixme: unify allocation for all entities
-pub type SpanArena = ArenaGen<Span, DefId, PatId, CoPatId, TermId, DeclId>;
+pub type SpanArena = ArenaSparse<EntityId, Span>;
 
 /* --------------------------------- Parser --------------------------------- */
 
@@ -250,31 +295,31 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(alloc: &mut GlobalAlloc) -> Self {
-        Self { spans: SpanArena::new(alloc), arena: Arena::default() }
+    pub fn new(allocator: IndexAlloc<usize>) -> Self {
+        Self { spans: ArenaSparse::new(allocator), arena: Arena::default() }
     }
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
-        let id = self.spans.defs.alloc(def.info);
+        let id = self.spans.alloc(def.info).into();
         self.arena.defs.insert(id, def.inner);
         id
     }
     pub fn pat(&mut self, pat: Sp<Pattern>) -> PatId {
-        let id = self.spans.pats.alloc(pat.info);
+        let id = self.spans.alloc(pat.info).into();
         self.arena.pats.insert(id, pat.inner);
         id
     }
     pub fn copat(&mut self, copat: Sp<CoPattern>) -> CoPatId {
-        let id = self.spans.copats.alloc(copat.info);
+        let id = self.spans.alloc(copat.info).into();
         self.arena.copats.insert(id, copat.inner);
         id
     }
     pub fn term(&mut self, term: Sp<Term>) -> TermId {
-        let id = self.spans.terms.alloc(term.info);
+        let id = self.spans.alloc(term.info).into();
         self.arena.terms.insert(id, term.inner);
         id
     }
     pub fn decl(&mut self, decl: Sp<Modifiers<Declaration>>) -> DeclId {
-        let id = self.spans.decls.alloc(decl.info);
+        let id = self.spans.alloc(decl.info).into();
         self.arena.decls.insert(id, decl.inner);
         id
     }

@@ -136,6 +136,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("Monad".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.monad,
                                 &self.prim_term.monad,
                                 &mut self.exts,
@@ -150,6 +151,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("Algebra".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.algebra,
                                 &self.prim_term.algebra,
                                 &mut self.exts,
@@ -175,6 +177,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("VType".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.vtype,
                                 &self.prim_term.vtype,
                                 &mut self.exts,
@@ -189,6 +192,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("CType".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.ctype,
                                 &self.prim_term.ctype,
                                 &mut self.exts,
@@ -203,6 +207,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("Thunk".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.thunk,
                                 &self.prim_term.thunk,
                                 &mut self.exts,
@@ -217,6 +222,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("Ret".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.ret,
                                 &self.prim_term.ret,
                                 &mut self.exts,
@@ -231,6 +237,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("Unit".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.unit,
                                 &self.prim_term.unit,
                                 &mut self.exts,
@@ -245,6 +252,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("Int".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.int,
                                 &self.prim_term.int,
                                 &mut self.exts,
@@ -259,6 +267,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("Char".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.char,
                                 &self.prim_term.char,
                                 &mut self.exts,
@@ -273,6 +282,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("String".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.string,
                                 &self.prim_term.string,
                                 &mut self.exts,
@@ -287,6 +297,7 @@ impl Resolver {
                         if let Some(def) = binders.get(&VarName("OS".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
+                                &self.bitter.entities,
                                 &mut self.prim_def.os,
                                 &self.prim_term.os,
                                 &mut self.exts,
@@ -316,8 +327,10 @@ impl Resolver {
     ) -> Result<()> {
         for (name, def) in binders.iter() {
             if let Some(prev) = global.var_to_def.get(name) {
-                let span1 = &self.spans.defs[prev];
-                let span2 = &self.spans.defs[def];
+                let prev = self.bitter.entities.back(&(*prev).into()).unwrap();
+                let def = self.bitter.entities.back(&(*def).into()).unwrap();
+                let span1 = &self.spans[prev];
+                let span2 = &self.spans[def];
                 Err(ResolveError::DuplicateDefinition(
                     span1.make(name.clone()),
                     span2.make(name.clone()),
@@ -331,7 +344,8 @@ impl Resolver {
         Ok(())
     }
     fn alloc_prim(
-        spans: &SpanArena, sc: &mut SingCell<DefId>, mc: &MultiCell<TermId>,
+        spans: &SpanArena, entities: &ArenaForth<crate::textual::syntax::EntityId, EntityId>,
+        sc: &mut SingCell<DefId>, mc: &MultiCell<TermId>,
         exts: &mut ArenaAssoc<DeclId, (Internal, DefId)>,
         internal_to_def: &mut ArenaAssoc<TermId, DefId>, decl: &DeclId, def: &DefId,
         name: &'static str, internal: Internal,
@@ -340,9 +354,13 @@ impl Resolver {
             .init_or_else(
                 || *def,
                 |id| {
+                    let def = entities.back(&(*id).into()).unwrap();
+                    let span1 = &spans[def];
+                    let id = entities.back(&(*id).into()).unwrap();
+                    let span2 = &spans[id];
                     ResolveError::DuplicatePrimitive(
-                        spans.defs[def].clone().make(VarName(name.into())),
-                        spans.defs[id].clone().make(VarName(name.into())),
+                        span1.clone().make(VarName(name.into())),
+                        span2.clone().make(VarName(name.into())),
                     )
                 },
             )
@@ -362,7 +380,7 @@ pub trait Resolve {
 impl Resolve for TopLevel {
     type Out = ();
     type Lookup<'a> = ();
-    fn resolve(&self, resolver: &mut Resolver, global: Self::Lookup<'_>) -> Result<Self::Out> {
+    fn resolve(&self, resolver: &mut Resolver, (): Self::Lookup<'_>) -> Result<Self::Out> {
         let TopLevel(decls) = self;
         // collect all top-level binders and ...
         // 1. check for duplicates
@@ -525,7 +543,8 @@ impl Resolve for TermId {
                     return Ok(());
                 }
                 // if not found, report an error
-                let span = &resolver.spans.terms[self];
+                let term = resolver.bitter.entities.back(&(*self).into()).unwrap();
+                let span = &resolver.spans[term];
                 Err(ResolveError::UnboundVar(span.make(var.clone())))?
             }
             | Term::Triv(term) => {

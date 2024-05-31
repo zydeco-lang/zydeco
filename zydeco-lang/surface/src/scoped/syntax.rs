@@ -1,3 +1,4 @@
+pub use crate::textual::syntax::SpanArena;
 pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
 

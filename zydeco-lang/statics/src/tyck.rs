@@ -258,7 +258,8 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                 // the alias head is a primitive value that needs to be linked later
                                 let Some(ty) = ty else {
                                     Err(TyckError::MissingAnnotation(
-                                        tycker.spans.decls[id].clone(),
+                                        // tycker.spans.decls[id].clone(),
+                                        todo!()
                                     ))?
                                 };
                                 let ty = ty.tyck_ann(tycker, Action::syn(ctx.clone()))?.as_type();
@@ -287,7 +288,8 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                             let su::AliasBody { binder: _, bindee } = decl;
                             let syn_ann =
                                 bindee.syntactically_annotated(tycker).ok_or_else(|| {
-                                    let span = tycker.spans.decls[id].clone();
+                                    // let span = tycker.spans.decls[id].clone();
+                                    let span = todo!();
                                     TyckError::MissingAnnotation(span)
                                 })?;
                             let ann = syn_ann.tyck_ann(tycker, Action::syn(ctx.clone()))?;

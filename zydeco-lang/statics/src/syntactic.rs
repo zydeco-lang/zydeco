@@ -37,11 +37,13 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::Abs(term) => {
                 let su::Abs(param, body) = term;
                 // add param to pi
-                let span = tycker.spans.terms[body].clone();
-                let pi = tycker.spans.terms.alloc(span);
+                // let span = tycker.spans.terms[body].clone();
+                // let pi = tycker.spans.terms.alloc(span);
                 let body = body.syntactically_annotated(tycker)?;
-                tycker.scoped.terms.insert(pi, su::Pi(*param, body).into());
-                Some(pi)
+                // use zydeco_surface::bitter::desugar::Alloc;
+                let _pi: su::Term<su::DefId> = su::Pi(*param, body).into();
+                // Some(pi)
+                todo!()
             }
             | Tm::Var(_)
             | Tm::Hole(_)
