@@ -7,16 +7,15 @@ pub mod surface_syntax {
 
 pub mod syntax;
 pub mod syntactic;
+pub use syntactic::*;
 pub mod lub;
+pub use lub::*;
 pub mod norm;
+pub use norm::*;
 pub mod tyck;
+pub use tyck::*;
 pub mod err;
+pub use err::*;
 
 pub(crate) use surface_syntax as su;
 pub(crate) use syntax as ss;
-
-pub use err::*;
-pub use lub::*;
-pub use norm::*;
-pub use syntactic::*;
-pub use tyck::*;

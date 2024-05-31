@@ -3,7 +3,7 @@
 pub mod err;
 
 pub use err::*;
-pub use zydeco_surface::package::*;
+pub use zydeco_surface::package::pack::{Dependency, Package};
 
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{

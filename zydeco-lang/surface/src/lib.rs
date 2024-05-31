@@ -4,10 +4,10 @@
 /// the topmost compilation pipeline led by a package configuration
 pub mod package {
     pub mod pack;
+    pub use pack::*;
     pub mod conf;
     pub mod err;
-
-    pub use pack::*;
+    pub use err::*;
 
     #[cfg(test)]
     mod tests;
@@ -26,13 +26,16 @@ pub mod syntax;
 pub mod textual {
     pub mod syntax;
     pub mod lexer;
+    pub use lexer::*;
     #[allow(clippy::all)]
     pub mod parser {
         lalrpop_util::lalrpop_mod!(parser_impl, "/textual/parser.rs");
         pub use parser_impl::*;
     }
+    pub use parser::*;
     pub mod escape;
     pub mod err;
+    pub use err::*;
 
     /// a formatter built on top of the textual syntax;
     /// introduces the ugly syntax;
@@ -43,23 +46,12 @@ pub mod textual {
     // /// introduces the pretty syntax;
     // /// outputs a pretty-printed surface syntax
     // mod pretty {
-    //     pub mod syntax {
-    //         pub struct NonBreak(pub String);
-    //         pub struct MorallyNonBreak(pub Vec<NonBreak>);
-    //         pub struct SoftBreak(pub Vec<MorallyNonBreak>);
-    //         pub struct HardBreak(pub Vec<SoftBreak>);
-    //         pub struct ParagraphBreak(pub Vec<HardBreak>);
-    //     }
     // }
 
     pub mod fmt {
         pub use super::ugly::*;
         // pub use super::pretty::*;
     }
-
-    pub use err::*;
-    pub use lexer::*;
-    pub use parser::*;
 
     #[cfg(test)]
     mod tests;
@@ -71,23 +63,23 @@ pub mod textual {
 pub mod bitter {
     pub mod syntax;
     pub mod alloc;
-    pub mod desugar;
-    // pub mod err;
-    pub mod fmt;
-
     pub use alloc::*;
+    pub mod desugar;
     pub use desugar::*;
+    // pub mod err;
     // pub use err::*;
+    pub mod fmt;
 }
 
 /// name resolution;
 /// introduces the bound syntax (ABT);
 pub mod scoped {
     pub mod syntax;
+    pub mod binders;
+    pub use binders::*;
     pub mod resolver;
-    pub mod err;
-    pub mod fmt;
-
-    pub use err::*;
     pub use resolver::*;
+    pub mod err;
+    pub use err::*;
+    pub mod fmt;
 }
