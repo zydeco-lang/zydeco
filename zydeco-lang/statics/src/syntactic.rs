@@ -13,7 +13,6 @@ impl SyntacticallyAnnotated for su::Declaration {
             }
             | Decl::AliasHead(su::AliasHead { binder, ty }) => {
                 let _ = binder;
-                // add params to pi
                 *ty
             }
             | Decl::Main(su::Main(_term)) => None,

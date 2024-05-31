@@ -356,11 +356,9 @@ pub struct VAliasBody {
 }
 
 #[derive(Clone, Debug)]
-pub struct AliasHead {
-    pub comp: bool,
+pub struct VAliasHead {
     pub binder: VPatId,
-    pub params: Option<VPatId>,
-    pub ty: Option<sc::TermId>,
+    pub ty: TypeId,
 }
 
 #[derive(Clone, Debug)]
@@ -370,7 +368,7 @@ pub struct Main(pub CompuId);
 pub enum Declaration {
     TAliasBody(TAliasBody),
     VAliasBody(VAliasBody),
-    AliasHead(AliasHead),
+    VAliasHead(VAliasHead),
     Main(Main),
 }
 
