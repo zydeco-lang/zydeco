@@ -1,4 +1,5 @@
 use crate::scoped::{syntax::*, *};
+use crate::textual::syntax as t;
 use zydeco_utils::{arena::*, deps::DepGraph, scc::Kosaraju};
 
 #[derive(Clone, Debug, Default)]
@@ -29,6 +30,7 @@ pub struct Resolver {
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub terms: ArenaAssoc<TermId, Term<DefId>>,
     pub decls: ArenaAssoc<DeclId, Declaration>,
+    pub textual: ArenaForth<t::EntityId, EntityId>,
 
     pub users: ArenaForth<DefId, TermId>,
     pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
@@ -55,6 +57,7 @@ impl Resolver {
             pats,
             terms,
             decls,
+            textual,
 
             users,
             exts,
@@ -64,7 +67,7 @@ impl Resolver {
         Ok(ResolveOut {
             spans,
             prim,
-            arena: ScopedArena { defs, pats, terms, decls, users, exts, deps, top },
+            arena: ScopedArena { defs, pats, terms, decls, textual, users, exts, deps, top },
         })
     }
 }
@@ -241,7 +244,7 @@ impl Resolve for TermId {
                     return Ok(());
                 }
                 // if not found, report an error
-                let term = resolver.bitter.entities.back(&(*self).into()).unwrap();
+                let term = resolver.bitter.textual.back(&(*self).into()).unwrap();
                 let span = &resolver.spans[term];
                 Err(ResolveError::UnboundVar(span.make(var.clone())))?
             }

@@ -12,7 +12,7 @@ impl Alloc for b::DefId {
     type Prev = t::EntityId;
     fn alloc(desugarer: &mut Desugarer, entity: Self::Entity, prev: Self::Prev) -> Self {
         let curr = desugarer.bitter.defs.alloc(entity);
-        desugarer.bitter.entities.insert(prev, curr.into());
+        desugarer.bitter.textual.insert(prev, curr.into());
         curr
     }
 }
@@ -21,7 +21,7 @@ impl Alloc for b::PatId {
     type Prev = t::EntityId;
     fn alloc(desugarer: &mut Desugarer, entity: Self::Entity, prev: Self::Prev) -> Self {
         let curr = desugarer.bitter.pats.alloc(entity);
-        desugarer.bitter.entities.insert(prev, curr.into());
+        desugarer.bitter.textual.insert(prev, curr.into());
         curr
     }
 }
@@ -30,7 +30,7 @@ impl Alloc for b::TermId {
     type Prev = t::EntityId;
     fn alloc(desugarer: &mut Desugarer, entity: Self::Entity, prev: Self::Prev) -> Self {
         let curr = desugarer.bitter.terms.alloc(entity);
-        desugarer.bitter.entities.insert(prev, curr.into());
+        desugarer.bitter.textual.insert(prev, curr.into());
         curr
     }
 }
@@ -39,7 +39,7 @@ impl Alloc for b::DeclId {
     type Prev = t::EntityId;
     fn alloc(desugarer: &mut Desugarer, entity: Self::Entity, prev: Self::Prev) -> Self {
         let curr = desugarer.bitter.decls.alloc(entity);
-        desugarer.bitter.entities.insert(prev, curr.into());
+        desugarer.bitter.textual.insert(prev, curr.into());
         curr
     }
 }

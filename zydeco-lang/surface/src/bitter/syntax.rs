@@ -214,8 +214,8 @@ pub struct Arena {
     pub terms: ArenaSparse<TermId, Term<NameRef<VarName>>>,
     pub decls: ArenaSparse<DeclId, Modifiers<Declaration>>,
 
-    // entity maps from textural syntax
-    pub entities: ArenaForth<t::EntityId, EntityId>,
+    /// entity maps from textural syntax
+    pub textual: ArenaForth<t::EntityId, EntityId>,
 }
 
 impl Arena {
@@ -226,7 +226,7 @@ impl Arena {
             terms: ArenaSparse::new(alloc.alloc()),
             decls: ArenaSparse::new(alloc.alloc()),
 
-            entities: ArenaForth::new(),
+            textual: ArenaForth::new(),
         }
     }
 }

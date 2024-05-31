@@ -2,6 +2,7 @@ pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
 pub use crate::textual::syntax::SpanArena;
 
+use crate::textual::syntax as t;
 use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
 
 /* ---------------------------------- Arena --------------------------------- */
@@ -13,6 +14,8 @@ pub struct ScopedArena {
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub terms: ArenaAssoc<TermId, Term<DefId>>,
     pub decls: ArenaAssoc<DeclId, Declaration>,
+    /// entity maps from textural syntax
+    pub textual: ArenaForth<t::EntityId, EntityId>,
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,

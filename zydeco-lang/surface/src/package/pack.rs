@@ -300,14 +300,11 @@ impl PackageStew {
             prim_def: sc::PrimDef::default(),
             internal_to_def: ArenaAssoc::default(),
 
-            // ctxs: ArenaSparse::new(alloc),
-            // term_under_ctx: ArenaAssoc::default(),
-
-            //
             defs: ArenaAssoc::default(),
             pats: ArenaAssoc::default(),
             terms: ArenaAssoc::default(),
             decls: ArenaAssoc::default(),
+            textual: ArenaForth::default(),
 
             users: ArenaForth::default(),
             exts: ArenaAssoc::default(),
