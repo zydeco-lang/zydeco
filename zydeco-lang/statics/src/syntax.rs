@@ -396,7 +396,7 @@ pub struct StaticsArena {
     /// the term of defs; "environment"; internal type defs won't inhabit here
     pub defs: ArenaAssoc<DefId, TermId>,
     /// the type of terms; "annotation"
-    pub type_of_terms: ArenaAssoc<TermId, AnnId>,
+    pub type_of_terms: ArenaAssoc<TermId, (Context<AnnId>, AnnId)>,
     // Todo: equivalence-class type arena (or not)
 }
 

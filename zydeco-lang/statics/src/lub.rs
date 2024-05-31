@@ -1,6 +1,4 @@
-use crate::err::*;
-use crate::syntax::*;
-use crate::tyck::*;
+use crate::{syntax::*, *};
 
 /// A type that can be joined with another type, producing their least upper bound.
 /// T \/ T ?~~> T'

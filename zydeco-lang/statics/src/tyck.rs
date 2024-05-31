@@ -1,7 +1,8 @@
-use crate::err::*;
-use crate::lub::*;
-use crate::surface_syntax::{self as su, PrimDef, ScopedArena, SpanArena};
-use crate::syntax::{self as ss, StaticsArena};
+use crate::{
+    surface_syntax::{PrimDef, ScopedArena, SpanArena},
+    syntax::{Context, StaticsArena},
+    *,
+};
 use std::collections::{HashMap, HashSet};
 use zydeco_utils::arena::ArenaAccess;
 
@@ -15,6 +16,7 @@ pub struct Tycker {
 impl Tycker {
     pub fn run(mut self) -> Result<()> {
         let mut top = self.scoped.top.clone();
+        let mut ctx = Context::new();
         loop {
             let groups = top.top();
             // if no more groups are at the top, we're done
@@ -23,7 +25,7 @@ impl Tycker {
             }
             for group in groups {
                 // each group should be type checked on its own
-                SccDeclarations(&group).tyck(&mut self, ())?;
+                SccDeclarations(&group).tyck(&mut self, Action::syn(ctx.clone()))?;
                 top.release(group);
             }
         }
@@ -41,9 +43,9 @@ impl Tycker {
         kd
     }
     pub fn register_prim_ty(
-        &mut self, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
+        &mut self, ctx: Context<ss::AnnId>, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
     ) -> Result<()> {
-        let kd = syn_kd.tyck_out(self, Action::syn())?.as_kind();
+        let kd = syn_kd.tyck_out(self, Action::syn(ctx))?.as_kind();
         let ty = Alloc::alloc(self, prim);
         self.statics.type_of_defs.insert(def, kd.into());
         self.statics.defs.insert(def, ty.into());
@@ -82,7 +84,7 @@ impl Tycker {
 }
 
 pub trait Tyck {
-    type In;
+    type Ctx;
     type Out;
     type Ann;
     type Mode;
@@ -97,17 +99,18 @@ pub trait Tyck {
     fn tyck_step(&self, tycker: &mut Tycker, action: Self::Action) -> Result<Self::Mode>;
 }
 
-pub enum Mode<In, Out, Ann> {
-    Task(Task<In, Ann>),
+pub enum Mode<Ctx, In, Out, Ann> {
+    Task(Task<Ctx, In, Ann>),
     Done(Out, Ann),
 }
 
-pub struct Task<In, Ann> {
-    pub deps: Vec<Action<In, Ann>>,
+pub struct Task<Ctx, In, Ann> {
+    pub deps: Vec<Action<Ctx, In, Ann>>,
     pub kont: In,
 }
 
-pub struct Action<In, Ann> {
+pub struct Action<Ctx, In, Ann> {
+    pub ctx: Ctx,
     pub input: In,
     pub switch: Switch<Ann>,
 }
@@ -118,101 +121,37 @@ pub enum Switch<Ann> {
     Ana(Ann),
 }
 
-type SelfAction<Ty> = Action<(), Ty>;
+type SelfAction<Ctx, Ty> = Action<Ctx, (), Ty>;
 
-impl<Ty> SelfAction<Ty> {
-    pub fn syn() -> Self {
-        Self { input: (), switch: Switch::Syn }
+impl<Ctx, Ann> SelfAction<Ctx, Ann> {
+    pub fn syn(ctx: Ctx) -> Self {
+        Self { ctx, input: (), switch: Switch::Syn }
     }
-    pub fn ana(ty: Ty) -> Self {
-        Self { input: (), switch: Switch::Ana(ty) }
+    pub fn ana(ctx: Ctx, ann: Ann) -> Self {
+        Self { ctx, input: (), switch: Switch::Ana(ann) }
     }
-    pub fn switch(switch: Switch<Ty>) -> Action<(), Ty> {
-        Action { input: (), switch }
-    }
-}
-
-pub trait SyntacticallyAnnotated {
-    fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId>;
-}
-impl SyntacticallyAnnotated for su::Declaration {
-    fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId> {
-        use su::Declaration as Decl;
-        match self {
-            | Decl::AliasBody(su::AliasBody { binder, bindee }) => {
-                let _ = binder;
-                bindee.syntactically_annotated(tycker)
-            }
-            | Decl::AliasHead(su::AliasHead { binder, ty }) => {
-                let _ = binder;
-                // add params to pi
-                *ty
-            }
-            | Decl::Main(su::Main(_term)) => None,
-        }
-    }
-}
-impl SyntacticallyAnnotated for su::TermId {
-    fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId> {
-        let term = tycker.scoped.terms[self].clone();
-        use su::Term as Tm;
-        match &term {
-            | Tm::Internal(_) => unreachable!(),
-            | Tm::Sealed(term) => {
-                let su::Sealed(term) = term;
-                term.syntactically_annotated(tycker)
-            }
-            | Tm::Ann(term) => {
-                let su::Ann { tm: _, ty } = term;
-                Some(*ty)
-            }
-            | Tm::Abs(term) => {
-                let su::Abs(param, body) = term;
-                // add param to pi
-                let span = tycker.spans.terms[body].clone();
-                let pi = tycker.spans.terms.alloc(span);
-                let body = body.syntactically_annotated(tycker)?;
-                tycker.scoped.terms.insert(pi, su::Pi(*param, body).into());
-                Some(pi)
-            }
-            | Tm::Var(_)
-            | Tm::Hole(_)
-            | Tm::Triv(_)
-            | Tm::Cons(_)
-            | Tm::App(_)
-            | Tm::Rec(_)
-            | Tm::Pi(_)
-            | Tm::Sigma(_)
-            | Tm::Thunk(_)
-            | Tm::Force(_)
-            | Tm::Ret(_)
-            | Tm::Do(_)
-            | Tm::Let(_)
-            | Tm::Data(_)
-            | Tm::CoData(_)
-            | Tm::Ctor(_)
-            | Tm::Match(_)
-            | Tm::CoMatch(_)
-            | Tm::Dtor(_)
-            | Tm::Lit(_) => None,
-        }
+    pub fn switch(ctx: Ctx, switch: Switch<Ann>) -> Self {
+        Action { ctx, input: (), switch }
     }
 }
 
 pub struct SccDeclarations<'decl>(pub &'decl HashSet<su::DeclId>);
 impl<'decl> Tyck for SccDeclarations<'decl> {
-    type In = ();
+    type Ctx = Context<ss::AnnId>;
     type Out = ();
+    // type Out = Context<ss::AnnId>;
     type Ann = ();
-    type Mode = ();
-    type Action = ();
+    type Mode = Mode<Self::Ctx, Self, Self::Out, Self::Ann>;
+    type Action = SelfAction<Self::Ctx, Self::Ann>;
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<(Self::Out, Self::Ann)> {
-        self.tyck_step(tycker, action)?;
+        let mode = self.tyck_step(tycker, action)?;
         Ok(((), ()))
     }
 
-    fn tyck_step(&self, tycker: &mut Tycker, (): Self::Action) -> Result<Self::Mode> {
+    fn tyck_step(
+        &self, tycker: &mut Tycker, Action { ctx, input: (), switch }: Self::Action,
+    ) -> Result<Self::Mode> {
         let SccDeclarations(decls) = self;
         let decls: &HashSet<_> = decls;
         match decls.len() {
@@ -228,26 +167,26 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                         let syn_ann = bindee.syntactically_annotated(tycker);
                         if let Some(syn_ann) = syn_ann {
                             // try analyzing the bindee after synthesizing the type
-                            let ann = syn_ann.tyck_ann(tycker, Action::syn())?;
+                            let ann = syn_ann.tyck_ann(tycker, Action::syn(ctx.clone()))?;
                             let _ = match ann {
                                 | ss::AnnId::Kind(kd) => {
                                     // the binder is a type, register it before analyzing the bindee
-                                    let ann = binder.tyck_ann(tycker, Action::ana(kd.into()))?;
-                                    let _ = bindee.tyck(tycker, Action::ana(ann))?;
+                                    let ann = binder
+                                        .tyck_ann(tycker, Action::ana(ctx.clone(), kd.into()))?;
+                                    let _ = bindee.tyck(tycker, Action::ana(ctx, ann))?;
                                 }
                                 | ss::AnnId::Type(ty) => {
                                     // the binder is a value, directly analyze the bindee
-                                    let ann = bindee.tyck_ann(tycker, Action::ana(ty.into()))?;
+                                    let ann = bindee
+                                        .tyck_ann(tycker, Action::ana(ctx.clone(), ty.into()))?;
                                     // and then register the binder as a value
-                                    let _ = binder.tyck(tycker, Action::ana(ann))?;
+                                    let _ = binder.tyck(tycker, Action::ana(ctx, ann))?;
                                 }
                             };
-                            Ok(())
                         } else {
                             // synthesize the bindee
-                            let ann = bindee.tyck_ann(tycker, Action::syn())?;
-                            binder.tyck(tycker, Action::ana(ann))?;
-                            Ok(())
+                            let ann = bindee.tyck_ann(tycker, Action::syn(ctx.clone()))?;
+                            binder.tyck(tycker, Action::ana(ctx, ann))?;
                         }
                     }
                     | Decl::AliasHead(decl) => {
@@ -268,27 +207,48 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                         // no type_of_defs for CType since it's the largest universe level we can get
                                         tycker.statics.defs.insert(def, kd.into());
                                     }
-                                    | su::Internal::Thunk => {
-                                        tycker.register_prim_ty(def, ss::ThunkTy.into(), syn_kd)?
-                                    }
-                                    | su::Internal::Ret => {
-                                        tycker.register_prim_ty(def, ss::RetTy.into(), syn_kd)?
-                                    }
-                                    | su::Internal::Unit => {
-                                        tycker.register_prim_ty(def, ss::UnitTy.into(), syn_kd)?
-                                    }
-                                    | su::Internal::Int => {
-                                        tycker.register_prim_ty(def, ss::IntTy.into(), syn_kd)?
-                                    }
-                                    | su::Internal::Char => {
-                                        tycker.register_prim_ty(def, ss::CharTy.into(), syn_kd)?
-                                    }
-                                    | su::Internal::String => {
-                                        tycker.register_prim_ty(def, ss::StringTy.into(), syn_kd)?
-                                    }
-                                    | su::Internal::OS => {
-                                        tycker.register_prim_ty(def, ss::OSTy.into(), syn_kd)?
-                                    }
+                                    | su::Internal::Thunk => tycker.register_prim_ty(
+                                        ctx,
+                                        def,
+                                        ss::ThunkTy.into(),
+                                        syn_kd,
+                                    )?,
+                                    | su::Internal::Ret => tycker.register_prim_ty(
+                                        ctx,
+                                        def,
+                                        ss::RetTy.into(),
+                                        syn_kd,
+                                    )?,
+                                    | su::Internal::Unit => tycker.register_prim_ty(
+                                        ctx,
+                                        def,
+                                        ss::UnitTy.into(),
+                                        syn_kd,
+                                    )?,
+                                    | su::Internal::Int => tycker.register_prim_ty(
+                                        ctx,
+                                        def,
+                                        ss::IntTy.into(),
+                                        syn_kd,
+                                    )?,
+                                    | su::Internal::Char => tycker.register_prim_ty(
+                                        ctx,
+                                        def,
+                                        ss::CharTy.into(),
+                                        syn_kd,
+                                    )?,
+                                    | su::Internal::String => tycker.register_prim_ty(
+                                        ctx,
+                                        def,
+                                        ss::StringTy.into(),
+                                        syn_kd,
+                                    )?,
+                                    | su::Internal::OS => tycker.register_prim_ty(
+                                        ctx,
+                                        def,
+                                        ss::OSTy.into(),
+                                        syn_kd,
+                                    )?,
                                     | su::Internal::Monad | su::Internal::Algebra => {
                                         unreachable!()
                                     }
@@ -301,18 +261,16 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                         tycker.spans.decls[id].clone(),
                                     ))?
                                 };
-                                let ty = ty.tyck_ann(tycker, Action::syn())?.as_type();
-                                let _ = binder.tyck(tycker, Action::ana(ty.into()))?;
+                                let ty = ty.tyck_ann(tycker, Action::syn(ctx.clone()))?.as_type();
+                                let _ = binder.tyck(tycker, Action::ana(ctx, ty.into()))?;
                             }
                         }
-                        Ok(())
                     }
                     | Decl::Main(decl) => {
                         let su::Main(term) = decl;
-                        let ty = term.tyck_ann(tycker, Action::syn())?.as_type();
+                        let ty = term.tyck_ann(tycker, Action::syn(ctx))?.as_type();
                         // Todo: check that ty is OS, waiting for lub
                         Lub::lub(&ty, &tycker.os(), tycker, Debruijn::new())?;
-                        Ok(())
                     }
                 }
             }
@@ -332,7 +290,7 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                     let span = tycker.spans.decls[id].clone();
                                     TyckError::MissingAnnotation(span)
                                 })?;
-                            let ann = syn_ann.tyck_ann(tycker, Action::syn())?;
+                            let ann = syn_ann.tyck_ann(tycker, Action::syn(ctx.clone()))?;
                             anns.insert(id, ann);
                         }
                         | Decl::AliasHead(_) | Decl::Main(_) => {
@@ -343,11 +301,12 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                 todo!()
             }
         }
+        Ok(Mode::Done((), ()))
     }
 }
 
 impl Tyck for su::DefId {
-    type In = ();
+    type Ctx = ();
     type Out = ();
     type Ann = ();
     type Mode = ();
@@ -364,18 +323,18 @@ impl Tyck for su::DefId {
 }
 
 impl Tyck for su::PatId {
-    type In = Self;
+    type Ctx = Context<ss::AnnId>;
     type Out = ss::PatId;
     type Ann = ss::AnnId;
-    type Mode = Mode<Self::In, Self::Out, Self::Ann>;
-    type Action = SelfAction<Self::Ann>;
+    type Mode = Mode<Self::Ctx, Self, Self::Out, Self::Ann>;
+    type Action = SelfAction<Self::Ctx, Self::Ann>;
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<(Self::Out, Self::Ann)> {
         todo!()
     }
 
     fn tyck_step(
-        &self, tycker: &mut Tycker, Action { input: (), switch }: Self::Action,
+        &self, tycker: &mut Tycker, Action { ctx, input: (), switch }: Self::Action,
     ) -> Result<Self::Mode> {
         // Fixme: nonsense right now
         let pat = tycker.scoped.pats[self].clone();
@@ -383,8 +342,8 @@ impl Tyck for su::PatId {
         match pat {
             | Pat::Ann(pat) => {
                 let su::Ann { tm, ty } = pat;
-                tm.tyck(tycker, Action::switch(switch))?;
-                ty.tyck(tycker, Action::syn())?;
+                tm.tyck(tycker, Action::switch(ctx.clone(), switch))?;
+                ty.tyck(tycker, Action::syn(ctx))?;
             }
             | Pat::Hole(pat) => {
                 let su::Hole = pat;
@@ -392,15 +351,15 @@ impl Tyck for su::PatId {
             | Pat::Var(_def) => {}
             | Pat::Ctor(pat) => {
                 let su::Ctor(_ctor, tail) = pat;
-                tail.tyck(tycker, Action::switch(switch))?;
+                tail.tyck(tycker, Action::switch(ctx, switch))?;
             }
             | Pat::Triv(pat) => {
                 let su::Triv = pat;
             }
             | Pat::Cons(pat) => {
                 let su::Cons(a, b) = pat;
-                a.tyck(tycker, Action::switch(switch))?;
-                b.tyck(tycker, Action::switch(switch))?;
+                a.tyck(tycker, Action::switch(ctx.clone(), switch.clone()))?;
+                b.tyck(tycker, Action::switch(ctx, switch))?;
             }
         }
         todo!()
@@ -408,18 +367,18 @@ impl Tyck for su::PatId {
 }
 
 impl Tyck for su::TermId {
-    type In = (ss::Context<ss::AnnId>, Self);
+    type Ctx = Context<ss::AnnId>;
     type Out = ss::TermId;
     type Ann = ss::AnnId;
-    type Mode = Mode<Self::In, Self::Out, Self::Ann>;
-    type Action = Action<(), Self::Ann>;
+    type Mode = Mode<Self::Ctx, Self, Self::Out, Self::Ann>;
+    type Action = SelfAction<Self::Ctx, Self::Ann>;
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<(Self::Out, Self::Ann)> {
         todo!()
     }
 
     fn tyck_step(
-        &self, tycker: &mut Tycker, Action { input, switch }: Self::Action,
+        &self, tycker: &mut Tycker, Action { ctx, input, switch }: Self::Action,
     ) -> Result<Self::Mode> {
         // Fixme: nonsense right now
         let term = tycker.scoped.terms[self].clone();

@@ -1,7 +1,4 @@
-use crate::err::*;
-use crate::surface_syntax as su;
-use crate::syntax::*;
-use crate::tyck::*;
+use crate::{syntax::*, *};
 
 pub trait Normalize {
     type Ctx;
