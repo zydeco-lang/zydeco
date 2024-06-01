@@ -1,4 +1,4 @@
-use super::*;
+use crate::*;
 
 pub trait Alloc<T> {
     fn alloc(tycker: &mut Tycker, val: Self) -> T;

@@ -1,51 +1,49 @@
-use super::{ss::Context, *};
+use crate::*;
 
 impl Tycker {
-    pub fn vtype(&mut self) -> ss::KindId {
-        let ss::TermId::Kind(kd) = self.statics.defs[self.prim.vtype.get()] else { unreachable!() };
+    pub fn vtype(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::KindId {
+        let ss::TermId::Kind(kd) = ctx[self.prim.vtype.get()].out else { unreachable!() };
         kd
     }
-    pub fn ctype(&mut self) -> ss::KindId {
-        let ss::TermId::Kind(kd) = self.statics.defs[self.prim.ctype.get()] else { unreachable!() };
+    pub fn ctype(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::KindId {
+        let ss::TermId::Kind(kd) = ctx[self.prim.ctype.get()].out else { unreachable!() };
         kd
     }
     pub fn register_prim_ty(
-        &mut self, ctx: Context<ss::AnnId>, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
-    ) -> Result<()> {
-        let kd = syn_kd.tyck_out(self, ByAction::syn(ctx))?.as_kind();
+        &mut self, mut ctx: ss::Context<ss::CtxItem>, def: ss::DefId, prim: ss::Type,
+        syn_kd: su::TermId,
+    ) -> Result<ss::Context<ss::CtxItem>> {
+        let kd = syn_kd.tyck_out(self, ByAction::syn(ctx.clone()))?.as_kind();
         let ty = Alloc::alloc(self, prim);
-        self.statics.type_of_defs.insert(def, kd.into());
-        self.statics.defs.insert(def, ty.into());
-        Ok(())
+        ctx += ss::CtxExtend(def, ty.into(), kd.into());
+        Ok(ctx)
     }
-    pub fn thunk(&mut self) -> ss::TypeId {
-        let ss::TermId::Type(ty) = self.statics.defs[self.prim.thunk.get()] else { unreachable!() };
+    pub fn thunk(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
+        let ss::TermId::Type(ty) = ctx[self.prim.thunk.get()].out else { unreachable!() };
         ty
     }
-    pub fn ret(&mut self) -> ss::TypeId {
-        let ss::TermId::Type(ty) = self.statics.defs[self.prim.ret.get()] else { unreachable!() };
+    pub fn ret(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
+        let ss::TermId::Type(ty) = ctx[self.prim.ret.get()].out else { unreachable!() };
         ty
     }
-    pub fn unit(&mut self) -> ss::TypeId {
-        let ss::TermId::Type(ty) = self.statics.defs[self.prim.unit.get()] else { unreachable!() };
+    pub fn unit(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
+        let ss::TermId::Type(ty) = ctx[self.prim.unit.get()].out else { unreachable!() };
         ty
     }
-    pub fn int(&mut self) -> ss::TypeId {
-        let ss::TermId::Type(ty) = self.statics.defs[self.prim.int.get()] else { unreachable!() };
+    pub fn int(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
+        let ss::TermId::Type(ty) = ctx[self.prim.int.get()].out else { unreachable!() };
         ty
     }
-    pub fn char(&mut self) -> ss::TypeId {
-        let ss::TermId::Type(ty) = self.statics.defs[self.prim.char.get()] else { unreachable!() };
+    pub fn char(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
+        let ss::TermId::Type(ty) = ctx[self.prim.char.get()].out else { unreachable!() };
         ty
     }
-    pub fn string(&mut self) -> ss::TypeId {
-        let ss::TermId::Type(ty) = self.statics.defs[self.prim.string.get()] else {
-            unreachable!()
-        };
+    pub fn string(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
+        let ss::TermId::Type(ty) = ctx[self.prim.string.get()].out else { unreachable!() };
         ty
     }
-    pub fn os(&mut self) -> ss::TypeId {
-        let ss::TermId::Type(ty) = self.statics.defs[self.prim.os.get()] else { unreachable!() };
+    pub fn os(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
+        let ss::TermId::Type(ty) = ctx[self.prim.os.get()].out else { unreachable!() };
         ty
     }
 }

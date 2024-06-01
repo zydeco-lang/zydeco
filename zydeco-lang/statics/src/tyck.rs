@@ -1,6 +1,6 @@
 use crate::{
     surface_syntax::{PrimDef, ScopedArena, SpanArena},
-    syntax::{Context, StaticsArena},
+    syntax::{Context, CtxExtend, CtxItem, StaticsArena},
     *,
 };
 use std::collections::{HashMap, HashSet};
@@ -84,9 +84,8 @@ impl<Ctx, Ann> ByAction<Ctx, Ann> {
 
 pub struct SccDeclarations<'decl>(pub &'decl HashSet<su::DeclId>);
 impl<'decl> Tyck for SccDeclarations<'decl> {
-    type Ctx = Context<ss::AnnId>;
+    type Ctx = Context<CtxItem>;
     type Out = Self::Ctx;
-    // type Out = Context<ss::AnnId>;
     type Ann = ();
     type Mode = Mode<Self::Ctx, Self, Self::Out, Self::Ann>;
     type Action = ByAction<Self::Ctx, Self::Ann>;
@@ -100,7 +99,7 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
     }
 
     fn tyck_step(
-        &self, tycker: &mut Tycker, ByAction { ctx, switch: _ }: Self::Action,
+        &self, tycker: &mut Tycker, ByAction { mut ctx, switch: _ }: Self::Action,
     ) -> Result<Self::Mode> {
         let SccDeclarations(decls) = self;
         let decls: &HashSet<_> = decls;
@@ -150,55 +149,71 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                     | su::Internal::VType => {
                                         let kd = Alloc::alloc(tycker, ss::VType);
                                         // no type_of_defs for VType since it's the largest universe level we can get
-                                        tycker.statics.defs.insert(def, kd.into());
+                                        // Note: the annotation is wrong but we should never use it
+                                        ctx += CtxExtend(def, kd.into(), kd.into());
                                     }
                                     | su::Internal::CType => {
                                         let kd = Alloc::alloc(tycker, ss::CType);
                                         // no type_of_defs for CType since it's the largest universe level we can get
-                                        tycker.statics.defs.insert(def, kd.into());
+                                        // Note: the annotation is wrong but we should never use it
+                                        ctx += CtxExtend(def, kd.into(), kd.into());
                                     }
-                                    | su::Internal::Thunk => tycker.register_prim_ty(
-                                        ctx.clone(),
-                                        def,
-                                        ss::ThunkTy.into(),
-                                        syn_kd,
-                                    )?,
-                                    | su::Internal::Ret => tycker.register_prim_ty(
-                                        ctx.clone(),
-                                        def,
-                                        ss::RetTy.into(),
-                                        syn_kd,
-                                    )?,
-                                    | su::Internal::Unit => tycker.register_prim_ty(
-                                        ctx.clone(),
-                                        def,
-                                        ss::UnitTy.into(),
-                                        syn_kd,
-                                    )?,
-                                    | su::Internal::Int => tycker.register_prim_ty(
-                                        ctx.clone(),
-                                        def,
-                                        ss::IntTy.into(),
-                                        syn_kd,
-                                    )?,
-                                    | su::Internal::Char => tycker.register_prim_ty(
-                                        ctx.clone(),
-                                        def,
-                                        ss::CharTy.into(),
-                                        syn_kd,
-                                    )?,
-                                    | su::Internal::String => tycker.register_prim_ty(
-                                        ctx.clone(),
-                                        def,
-                                        ss::StringTy.into(),
-                                        syn_kd,
-                                    )?,
-                                    | su::Internal::OS => tycker.register_prim_ty(
-                                        ctx.clone(),
-                                        def,
-                                        ss::OSTy.into(),
-                                        syn_kd,
-                                    )?,
+                                    | su::Internal::Thunk => {
+                                        ctx = tycker.register_prim_ty(
+                                            ctx.clone(),
+                                            def,
+                                            ss::ThunkTy.into(),
+                                            syn_kd,
+                                        )?
+                                    }
+                                    | su::Internal::Ret => {
+                                        ctx = tycker.register_prim_ty(
+                                            ctx.clone(),
+                                            def,
+                                            ss::RetTy.into(),
+                                            syn_kd,
+                                        )?
+                                    }
+                                    | su::Internal::Unit => {
+                                        ctx = tycker.register_prim_ty(
+                                            ctx.clone(),
+                                            def,
+                                            ss::UnitTy.into(),
+                                            syn_kd,
+                                        )?
+                                    }
+                                    | su::Internal::Int => {
+                                        ctx = tycker.register_prim_ty(
+                                            ctx.clone(),
+                                            def,
+                                            ss::IntTy.into(),
+                                            syn_kd,
+                                        )?
+                                    }
+                                    | su::Internal::Char => {
+                                        ctx = tycker.register_prim_ty(
+                                            ctx.clone(),
+                                            def,
+                                            ss::CharTy.into(),
+                                            syn_kd,
+                                        )?
+                                    }
+                                    | su::Internal::String => {
+                                        ctx = tycker.register_prim_ty(
+                                            ctx.clone(),
+                                            def,
+                                            ss::StringTy.into(),
+                                            syn_kd,
+                                        )?
+                                    }
+                                    | su::Internal::OS => {
+                                        ctx = tycker.register_prim_ty(
+                                            ctx.clone(),
+                                            def,
+                                            ss::OSTy.into(),
+                                            syn_kd,
+                                        )?
+                                    }
                                     | su::Internal::Monad | su::Internal::Algebra => {
                                         unreachable!()
                                     }
@@ -217,7 +232,7 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                         let su::Main(term) = decl;
                         let ty = term.tyck_ann(tycker, ByAction::syn(ctx.clone()))?.as_type();
                         // Todo: check that ty is OS, waiting for lub
-                        Lub::lub(&ty, &tycker.os(), tycker, Debruijn::new())?;
+                        Lub::lub(&ty, &tycker.os(ctx.clone()), tycker, Debruijn::new())?;
                     }
                 }
             }
@@ -258,18 +273,17 @@ impl Tyck for su::DefId {
     type Action = ();
 
     fn tyck(&self, _tycker: &mut Tycker, (): Self::Action) -> Result<(Self::Out, Self::Ann)> {
-        todo!()
+        Ok(((), ()))
     }
 
     fn tyck_step(&self, _tycker: &mut Tycker, (): Self::Action) -> Result<Self::Mode> {
-        // Fixme: nonsense right now
         Ok(())
     }
 }
 
 impl Tyck for su::PatId {
-    type Ctx = Context<ss::AnnId>;
-    type Out = ss::PatId;
+    type Ctx = Context<CtxItem>;
+    type Out = (Self::Ctx, ss::PatId);
     type Ann = ss::AnnId;
     type Mode = Mode<Self::Ctx, Self, Self::Out, Self::Ann>;
     type Action = ByAction<Self::Ctx, Self::Ann>;
@@ -281,14 +295,21 @@ impl Tyck for su::PatId {
     fn tyck_step(
         &self, tycker: &mut Tycker, ByAction { ctx, switch }: Self::Action,
     ) -> Result<Self::Mode> {
-        // Fixme: nonsense right now
         let pat = tycker.scoped.pats[self].clone();
         use su::Pattern as Pat;
         match pat {
             | Pat::Ann(pat) => {
                 let su::Ann { tm, ty } = pat;
-                tm.tyck(tycker, ByAction::switch(ctx.clone(), switch))?;
-                ty.tyck(tycker, ByAction::syn(ctx))?;
+                match switch {
+                    | Switch::Syn => {
+                        let ty = ty
+                            .tyck_out(tycker, ByAction::syn(ctx.clone()))?
+                            .as_ann_or_err(|| TyckError::SortMismatch)?;
+
+                        let ctx = tm.tyck(tycker, ByAction::ana(ctx.clone(), ty))?;
+                    }
+                    | Switch::Ana(ann) => todo!(),
+                }
             }
             | Pat::Hole(pat) => {
                 let su::Hole = pat;
@@ -312,7 +333,7 @@ impl Tyck for su::PatId {
 }
 
 impl Tyck for su::TermId {
-    type Ctx = Context<ss::AnnId>;
+    type Ctx = Context<CtxItem>;
     type Out = ss::TermId;
     type Ann = ss::AnnId;
     type Mode = Mode<Self::Ctx, Self, Self::Out, Self::Ann>;

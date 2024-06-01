@@ -57,6 +57,7 @@ pub enum EntityId {
 
 mod impls_identifiers {
     use super::*;
+    use crate::err::*;
 
     impl TermId {
         pub fn as_kind(self) -> KindId {
@@ -71,6 +72,12 @@ mod impls_identifiers {
                 | _ => None,
             }
         }
+        pub fn as_kind_or_err(self, f: impl FnOnce() -> TyckError) -> Result<KindId> {
+            match self {
+                | TermId::Kind(k) => Ok(k),
+                | _ => Err(f()),
+            }
+        }
         pub fn as_type(self) -> TypeId {
             match self {
                 | TermId::Type(t) => t,
@@ -81,6 +88,33 @@ mod impls_identifiers {
             match self {
                 | TermId::Type(t) => Some(t),
                 | _ => None,
+            }
+        }
+        pub fn as_type_or_err(self, f: impl FnOnce() -> TyckError) -> Result<TypeId> {
+            match self {
+                | TermId::Type(t) => Ok(t),
+                | _ => Err(f()),
+            }
+        }
+        pub fn as_ann(self) -> AnnId {
+            match self {
+                | TermId::Type(t) => AnnId::Type(t),
+                | TermId::Kind(k) => AnnId::Kind(k),
+                | _ => panic!("Expected an annotation"),
+            }
+        }
+        pub fn try_as_ann(self) -> Option<AnnId> {
+            match self {
+                | TermId::Type(t) => Some(AnnId::Type(t)),
+                | TermId::Kind(k) => Some(AnnId::Kind(k)),
+                | _ => None,
+            }
+        }
+        pub fn as_ann_or_err(self, f: impl FnOnce() -> TyckError) -> Result<AnnId> {
+            match self {
+                | TermId::Type(t) => Ok(AnnId::Type(t)),
+                | TermId::Kind(k) => Ok(AnnId::Kind(k)),
+                | _ => Err(f()),
             }
         }
         pub fn as_value(self) -> ValueId {
@@ -95,6 +129,12 @@ mod impls_identifiers {
                 | _ => None,
             }
         }
+        pub fn as_value_or_err(self, f: impl FnOnce() -> TyckError) -> Result<ValueId> {
+            match self {
+                | TermId::Value(v) => Ok(v),
+                | _ => Err(f()),
+            }
+        }
         pub fn as_compu(self) -> CompuId {
             match self {
                 | TermId::Compu(c) => c,
@@ -105,6 +145,12 @@ mod impls_identifiers {
             match self {
                 | TermId::Compu(c) => Some(c),
                 | _ => None,
+            }
+        }
+        pub fn as_compu_or_err(self, f: impl FnOnce() -> TyckError) -> Result<CompuId> {
+            match self {
+                | TermId::Compu(c) => Ok(c),
+                | _ => Err(f()),
             }
         }
     }
@@ -148,9 +194,19 @@ pub struct Context<T> {
     pub defs: im::HashMap<DefId, T>,
 }
 
+#[derive(Clone, Debug)]
+pub struct CtxItem {
+    pub out: TermId,
+    pub ann: AnnId,
+}
+
+/// def, out, ann
+#[derive(Clone, Debug)]
+pub struct CtxExtend(pub DefId, pub TermId, pub AnnId);
+
 mod impls_context {
     use super::*;
-    use std::ops::Add;
+    use std::ops::{Add, AddAssign, Index};
     impl<T> Context<T>
     where
         T: Clone,
@@ -173,6 +229,34 @@ mod impls_context {
             let Context { mut defs } = self;
             defs.extend(other.defs);
             Self { defs }
+        }
+    }
+    impl<T> AddAssign<(DefId, T)> for Context<T>
+    where
+        T: Clone,
+    {
+        fn add_assign(&mut self, (def, t): (DefId, T)) {
+            let Self { defs } = self;
+            let mut defs = defs.clone();
+            defs.insert(def, t);
+            *self = Self { defs };
+        }
+    }
+    impl AddAssign<CtxExtend> for Context<CtxItem> {
+        fn add_assign(&mut self, CtxExtend(def, out, ann): CtxExtend) {
+            let Self { defs } = self;
+            let mut defs = defs.clone();
+            defs.insert(def, CtxItem { out, ann });
+            *self = Self { defs };
+        }
+    }
+    impl<T> Index<&DefId> for Context<T>
+    where
+        T: Clone,
+    {
+        type Output = T;
+        fn index(&self, def: &DefId) -> &T {
+            &self.defs[def]
         }
     }
 }
@@ -389,10 +473,10 @@ pub struct StaticsArena {
     pub pats: ArenaBijective<sc::PatId, PatId>,
     pub terms: ArenaBijective<sc::TermId, TermId>,
 
-    /// the type of defs; "context"
-    pub type_of_defs: ArenaAssoc<DefId, AnnId>,
-    /// the term of defs; "environment"; internal type defs won't inhabit here
-    pub defs: ArenaAssoc<DefId, TermId>,
+    // /// the type of defs; "context"
+    // pub type_of_defs: ArenaAssoc<DefId, AnnId>,
+    // /// the term of defs; "environment"; internal type defs won't inhabit here
+    // pub defs: ArenaAssoc<DefId, TermId>,
     /// the type of terms; "annotation"
     pub type_of_terms: ArenaAssoc<TermId, (Context<AnnId>, AnnId)>,
     // Todo: equivalence-class type arena (or not)
@@ -412,8 +496,8 @@ impl StaticsArena {
             pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),
 
-            type_of_defs: ArenaAssoc::new(),
-            defs: ArenaAssoc::new(),
+            // type_of_defs: ArenaAssoc::new(),
+            // defs: ArenaAssoc::new(),
             type_of_terms: ArenaAssoc::new(),
         }
     }

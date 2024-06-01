@@ -5,6 +5,8 @@ use thiserror::Error;
 pub enum TyckError {
     #[error("Missing annotation")]
     MissingAnnotation,
+    #[error("Sort mismatch")]
+    SortMismatch,
     #[error("Kind mismatch")]
     KindMismatch,
     #[error("Type mismatch")]
