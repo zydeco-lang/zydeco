@@ -6,6 +6,9 @@ pub mod surface_syntax {
 }
 
 pub mod syntax;
+pub mod prims;
+pub mod alloc;
+pub use alloc::*;
 pub mod syntactic;
 pub use syntactic::*;
 pub mod lub;

@@ -457,7 +457,7 @@ impl Ugly for AliasHead {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let AliasHead { binder, ty } = self;
-        s += "extern ";
+        s += "def ";
         s += &binder.ugly(f);
         if let Some(ty) = ty {
             s += " : ";
