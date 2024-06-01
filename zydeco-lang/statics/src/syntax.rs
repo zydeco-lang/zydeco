@@ -473,12 +473,8 @@ pub struct StaticsArena {
     pub pats: ArenaBijective<sc::PatId, PatId>,
     pub terms: ArenaBijective<sc::TermId, TermId>,
 
-    // /// the type of defs; "context"
-    // pub type_of_defs: ArenaAssoc<DefId, AnnId>,
-    // /// the term of defs; "environment"; internal type defs won't inhabit here
-    // pub defs: ArenaAssoc<DefId, TermId>,
-    /// the type of terms; "annotation"
-    pub type_of_terms: ArenaAssoc<TermId, (Context<AnnId>, AnnId)>,
+    /// the type of terms under the context it's type checked; "annotation"
+    pub type_of_terms_under_ctx: ArenaAssoc<TermId, (Context<CtxItem>, AnnId)>,
     // Todo: equivalence-class type arena (or not)
 }
 
@@ -496,9 +492,7 @@ impl StaticsArena {
             pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),
 
-            // type_of_defs: ArenaAssoc::new(),
-            // defs: ArenaAssoc::new(),
-            type_of_terms: ArenaAssoc::new(),
+            type_of_terms_under_ctx: ArenaAssoc::new(),
         }
     }
 }

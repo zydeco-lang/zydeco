@@ -1,5 +1,5 @@
-use crate::scoped::{syntax::*, *};
 use crate::arena::*;
+use crate::scoped::{syntax::*, *};
 use zydeco_utils::cells::{MultiCell, SingCell};
 
 pub trait Binders {
