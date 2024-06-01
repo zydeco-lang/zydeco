@@ -59,6 +59,33 @@ mod impls_identifiers {
     use super::*;
     use crate::err::*;
 
+    impl PatId {
+        pub fn as_type(self) -> TPatId {
+            match self {
+                | PatId::Type(t) => t,
+                | _ => panic!("Expected a type pattern"),
+            }
+        }
+        pub fn as_type_or_err(self, f: impl FnOnce() -> TyckError) -> Result<TPatId> {
+            match self {
+                | PatId::Type(t) => Ok(t),
+                | _ => Err(f()),
+            }
+        }
+        pub fn as_value(self) -> VPatId {
+            match self {
+                | PatId::Value(v) => v,
+                | _ => panic!("Expected a value pattern"),
+            }
+        }
+        pub fn as_value_or_err(self, f: impl FnOnce() -> TyckError) -> Result<VPatId> {
+            match self {
+                | PatId::Value(v) => Ok(v),
+                | _ => Err(f()),
+            }
+        }
+    }
+
     impl TermId {
         pub fn as_kind(self) -> KindId {
             match self {
@@ -370,6 +397,7 @@ pub enum Value {
     Var(DefId),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<ValueId>),
+    Triv(Triv),
     VCons(Cons<ValueId, ValueId>),
     TCons(Cons<TypeId, ValueId>),
     Lit(Literal),
@@ -468,6 +496,7 @@ pub struct StaticsArena {
     /// the type of terms under the context it's type checked; "annotation"
     pub type_of_terms_under_ctx: ArenaAssoc<TermId, (Context<CtxItem>, AnnId)>,
     // Todo: equivalence-class type arena (or not)
+    // Todo: hole arena for pats and terms
 }
 
 impl StaticsArena {

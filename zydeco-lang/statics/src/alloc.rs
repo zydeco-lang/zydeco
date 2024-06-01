@@ -229,6 +229,11 @@ impl Alloc<ValueId> for Ctor<ValueId> {
         Alloc::alloc(tycker, Value::from(val))
     }
 }
+impl Alloc<ValueId> for Triv {
+    fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
+        Alloc::alloc(tycker, Value::from(val))
+    }
+}
 impl Alloc<ValueId> for Cons<ValueId, ValueId> {
     fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
         Alloc::alloc(tycker, Value::from(val))
