@@ -200,7 +200,11 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
 
 impl Tyck for su::PatId {
     type Ctx = Context<CtxItem>;
+    /// the output of a pattern tyck is the context it introduces and the new pattern itself
     type Out = (Self::Ctx, ss::PatId);
+    /// the annotation ("type") of a pattern is a pair of:
+    /// 1. an optional term in case we have a type variable inside the pattern that needs to be registered
+    /// 2. an annotation (of sort type or kind)
     type Ann = (Option<ss::TermId>, ss::AnnId);
     type Mode = Mode<Self::Ctx, Self, Self::Out, Self::Ann>;
     type Action = ByAction<Self::Ctx, Self::Ann>;
@@ -217,6 +221,7 @@ impl Tyck for su::PatId {
         &self, tycker: &mut Tycker, ByAction { mut ctx, switch }: Self::Action,
     ) -> Result<Self::Mode> {
         let pat = tycker.scoped.pats[self].clone();
+        use ss::Type as Ty;
         use su::Pattern as Pat;
         match pat {
             | Pat::Ann(pat) => {
@@ -336,7 +341,7 @@ impl Tyck for su::PatId {
                         | ss::AnnId::Type(ann) => {
                             let ann = tycker.statics.types[&ann].clone();
                             match ann {
-                                | ss::Type::Prod(ty) => {
+                                | Ty::Prod(ty) => {
                                     let ss::Prod(a_ty, b_ty) = ty;
                                     let ((ctx, a), (_, a_ty)) = a.tyck(
                                         tycker,
@@ -352,27 +357,27 @@ impl Tyck for su::PatId {
                                     let ann = Alloc::alloc(tycker, ss::Prod(a_ty, b_ty));
                                     Ok(Mode::Done((ctx, pat.into()), (term, ann.into())))
                                 }
-                                | ss::Type::Exists(ty) => {
+                                | Ty::Exists(ty) => {
                                     let ss::Exists(binder, body) = ty;
                                     todo!()
                                 }
-                                | ss::Type::Hole(_) => Err(TyckError::MissingAnnotation)?,
-                                | ss::Type::Sealed(_)
-                                | ss::Type::Var(_)
-                                | ss::Type::Abs(_)
-                                | ss::Type::App(_)
-                                | ss::Type::Abst(_)
-                                | ss::Type::Thunk(_)
-                                | ss::Type::Ret(_)
-                                | ss::Type::Unit(_)
-                                | ss::Type::Int(_)
-                                | ss::Type::Char(_)
-                                | ss::Type::String(_)
-                                | ss::Type::OS(_)
-                                | ss::Type::Arrow(_)
-                                | ss::Type::Forall(_)
-                                | ss::Type::Data(_)
-                                | ss::Type::CoData(_) => Err(TyckError::TypeMismatch)?,
+                                | Ty::Hole(_) => Err(TyckError::MissingAnnotation)?,
+                                | Ty::Sealed(_)
+                                | Ty::Var(_)
+                                | Ty::Abs(_)
+                                | Ty::App(_)
+                                | Ty::Abst(_)
+                                | Ty::Thunk(_)
+                                | Ty::Ret(_)
+                                | Ty::Unit(_)
+                                | Ty::Int(_)
+                                | Ty::Char(_)
+                                | Ty::String(_)
+                                | Ty::OS(_)
+                                | Ty::Arrow(_)
+                                | Ty::Forall(_)
+                                | Ty::Data(_)
+                                | Ty::CoData(_) => Err(TyckError::TypeMismatch)?,
                             }
                         }
                     },
@@ -402,6 +407,7 @@ impl Tyck for su::TermId {
     ) -> Result<Self::Mode> {
         // Fixme: nonsense right now
         let term = tycker.scoped.terms[self].clone();
+        use ss::Type as Ty;
         use su::Term as Tm;
         match term {
             | Tm::Internal(_) => unreachable!(),
@@ -474,25 +480,25 @@ impl Tyck for su::TermId {
                         let ty = ann.as_type_or_err(|| TyckError::SortMismatch)?;
                         let ty = tycker.statics.types[&ty].clone();
                         match ty {
-                            | syntax::Type::Prod(_) => todo!(),
-                            | syntax::Type::Exists(_) => todo!(),
-                            | syntax::Type::Hole(_) => todo!(),
-                            | syntax::Type::Sealed(_)
-                            | syntax::Type::Var(_)
-                            | syntax::Type::Abs(_)
-                            | syntax::Type::App(_)
-                            | syntax::Type::Abst(_)
-                            | syntax::Type::Thunk(_)
-                            | syntax::Type::Ret(_)
-                            | syntax::Type::Unit(_)
-                            | syntax::Type::Int(_)
-                            | syntax::Type::Char(_)
-                            | syntax::Type::String(_)
-                            | syntax::Type::OS(_)
-                            | syntax::Type::Arrow(_)
-                            | syntax::Type::Forall(_)
-                            | syntax::Type::Data(_)
-                            | syntax::Type::CoData(_) => Err(TyckError::TypeMismatch)?,
+                            | Ty::Prod(_) => todo!(),
+                            | Ty::Exists(_) => todo!(),
+                            | Ty::Hole(_) => todo!(),
+                            | Ty::Sealed(_)
+                            | Ty::Var(_)
+                            | Ty::Abs(_)
+                            | Ty::App(_)
+                            | Ty::Abst(_)
+                            | Ty::Thunk(_)
+                            | Ty::Ret(_)
+                            | Ty::Unit(_)
+                            | Ty::Int(_)
+                            | Ty::Char(_)
+                            | Ty::String(_)
+                            | Ty::OS(_)
+                            | Ty::Arrow(_)
+                            | Ty::Forall(_)
+                            | Ty::Data(_)
+                            | Ty::CoData(_) => Err(TyckError::TypeMismatch)?,
                         }
                     }
                 }
@@ -515,6 +521,13 @@ impl Tyck for su::TermId {
             }
             | Tm::Sigma(term) => {
                 let su::Sigma(binder, body) = term;
+                match switch {
+                    | Switch::Syn => {
+                        let ((ctx, binder), (_, ann)) =
+                            binder.tyck(tycker, ByAction::syn(ctx.clone()))?;
+                    }
+                    | Switch::Ana(_) => todo!(),
+                }
                 todo!()
             }
             | Tm::Thunk(term) => {

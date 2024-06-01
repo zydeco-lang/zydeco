@@ -90,11 +90,18 @@ pub struct ArenaAssoc<Id, T> {
     map: HashMap<Id, T>,
 }
 
-/// A bidirectional multi-single-map.
+/// A bidirectional single-to-multi-map.
 #[derive(Debug, Clone)]
 pub struct ArenaForth<P, Q> {
     forward: ArenaAssoc<P, Vec<Q>>,
     backward: ArenaAssoc<Q, P>,
+}
+
+/// A bidirectional multi-to-single-map.
+#[derive(Debug, Clone)]
+pub struct ArenaBack<P, Q> {
+    forward: ArenaAssoc<P, Q>,
+    backward: ArenaAssoc<Q, Vec<P>>,
 }
 
 /// A bidirectional bijective map.
@@ -491,6 +498,125 @@ mod impls {
         Q: Eq + Hash + Clone,
     {
         fn add_assign(&mut self, rhs: ArenaForth<P, Q>) {
+            self.extend(rhs);
+        }
+    }
+
+    /* -------------------------------- ArenaBack ------------------------------- */
+
+    impl<P, Q> ArenaBack<P, Q> {
+        pub fn new() -> Self {
+            ArenaBack { forward: ArenaAssoc::new(), backward: ArenaAssoc::new() }
+        }
+    }
+
+    impl<P, Q> Default for ArenaBack<P, Q> {
+        fn default() -> Self {
+            Self { forward: Default::default(), backward: Default::default() }
+        }
+    }
+
+    impl<P, Q> ArenaBack<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        pub fn insert(&mut self, p: P, q: Q) {
+            self.forward.insert(p.clone(), q.clone());
+            self.backward.map.entry(q).or_insert_with(Vec::new).push(p);
+        }
+    }
+
+    impl<P, Q> Index<&P> for ArenaBack<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Output = Q;
+        fn index(&self, p: &P) -> &Self::Output {
+            &self.forward[p]
+        }
+    }
+
+    impl<'a, P, Q> Index<&P> for Forth<'a, ArenaBack<P, Q>>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Output = Q;
+        fn index(&self, p: &P) -> &Self::Output {
+            let Forth(arena) = self;
+            arena.forth(p)
+        }
+    }
+
+    impl<'a, P, Q> Index<&Q> for Back<'a, ArenaBack<P, Q>>
+    where
+        Q: Eq + Hash + Clone,
+    {
+        type Output = [P];
+        fn index(&self, q: &Q) -> &Self::Output {
+            let Back(arena) = self;
+            arena.back(q).unwrap()
+        }
+    }
+
+    impl<P, Q> ArenaBack<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        pub fn forth(&self, p: &P) -> &Q {
+            self.forward.get(p).unwrap()
+        }
+    }
+
+    impl<P, Q> ArenaBack<P, Q>
+    where
+        Q: Eq + Hash + Clone,
+    {
+        pub fn back(&self, q: &Q) -> Option<&[P]> {
+            self.backward.get(q).map(|p| p.as_slice())
+        }
+    }
+
+    impl<P, Q> IntoIterator for ArenaBack<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Item = (P, Q);
+        type IntoIter = std::collections::hash_map::IntoIter<P, Q>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.forward.map.into_iter()
+        }
+    }
+
+    impl<'a, P, Q> IntoIterator for &'a ArenaBack<P, Q>
+    where
+        P: Eq + Hash + Clone,
+    {
+        type Item = (&'a P, &'a Q);
+        type IntoIter = std::collections::hash_map::Iter<'a, P, Q>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.forward.map.iter()
+        }
+    }
+
+    impl<P, Q> Extend<(P, Q)> for ArenaBack<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        fn extend<I: IntoIterator<Item = (P, Q)>>(&mut self, iter: I) {
+            for (p, q) in iter {
+                self.insert(p, q);
+            }
+        }
+    }
+
+    impl<P, Q> AddAssign for ArenaBack<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        fn add_assign(&mut self, rhs: ArenaBack<P, Q>) {
             self.extend(rhs);
         }
     }
