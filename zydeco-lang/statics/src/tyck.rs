@@ -120,22 +120,30 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                             let _ = match ann {
                                 | ss::AnnId::Kind(kd) => {
                                     // the binder is a type, register it before analyzing the bindee
-                                    let ann = binder
-                                        .tyck_ann(tycker, ByAction::ana(ctx.clone(), kd.into()))?;
+                                    let (None, ann) = binder.tyck_ann(
+                                        tycker,
+                                        ByAction::ana(ctx.clone(), (None, kd.into())),
+                                    )?
+                                    else {
+                                        unreachable!()
+                                    };
                                     let _ = bindee.tyck(tycker, ByAction::ana(ctx.clone(), ann))?;
                                 }
                                 | ss::AnnId::Type(ty) => {
                                     // the binder is a value, directly analyze the bindee
-                                    let ann = bindee
-                                        .tyck_ann(tycker, ByAction::ana(ctx.clone(), ty.into()))?;
+                                    let (bindee, ann) = bindee
+                                        .tyck(tycker, ByAction::ana(ctx.clone(), ty.into()))?;
                                     // and then register the binder as a value
-                                    let _ = binder.tyck(tycker, ByAction::ana(ctx.clone(), ann))?;
+                                    let _ = binder.tyck(
+                                        tycker,
+                                        ByAction::ana(ctx.clone(), (Some(bindee), ann)),
+                                    )?;
                                 }
                             };
                         } else {
                             // synthesize the bindee
-                            let ann = bindee.tyck_ann(tycker, ByAction::syn(ctx.clone()))?;
-                            binder.tyck(tycker, ByAction::ana(ctx.clone(), ann))?;
+                            let (out, ann) = bindee.tyck(tycker, ByAction::syn(ctx.clone()))?;
+                            binder.tyck(tycker, ByAction::ana(ctx.clone(), (Some(out), ann)))?;
                         }
                     }
                     | Decl::AliasHead(decl) => {
@@ -144,8 +152,7 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                     | Decl::Main(decl) => {
                         let su::Main(term) = decl;
                         let ty = term.tyck_ann(tycker, ByAction::syn(ctx.clone()))?.as_type();
-                        // Todo: check that ty is OS, waiting for lub
-                        Lub::lub(&ty, &tycker.os(ctx.clone()), tycker, Debruijn::new())?;
+                        Lub::lub(&ty, &tycker.os(ctx.clone()), tycker, ctx.clone())?;
                     }
                 }
             }
@@ -153,60 +160,61 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                 // mutually recursive declarations must..
                 // 1. all be types, and
                 // 2. all have kind annotations
-                let mut anns = HashMap::new();
                 for id in decls {
                     let decl = tycker.scoped.decls[id].clone();
                     use su::Declaration as Decl;
                     match decl {
                         | Decl::AliasBody(decl) => {
-                            let su::AliasBody { binder: _, bindee } = decl;
+                            let su::AliasBody { binder, bindee } = decl;
                             let syn_ann = bindee
                                 .syntactically_annotated(tycker)
                                 .ok_or_else(|| TyckError::MissingAnnotation)?;
                             let ann = syn_ann.tyck_ann(tycker, ByAction::syn(ctx.clone()))?;
-                            anns.insert(id, ann);
+                            let (next_ctx, _pat) = binder
+                                .tyck_out(tycker, ByAction::ana(ctx.clone(), (None, ann.into())))?;
+                            ctx = next_ctx;
                         }
                         | Decl::AliasHead(_) | Decl::Main(_) => {
                             unreachable!()
                         }
                     }
                 }
-                todo!()
+                for id in decls {
+                    let decl = tycker.scoped.decls[id].clone();
+                    use su::Declaration as Decl;
+                    match decl {
+                        | Decl::AliasBody(decl) => {
+                            let su::AliasBody { binder: _, bindee } = decl;
+                            let _ = bindee.tyck(tycker, ByAction::syn(ctx.clone()))?;
+                        }
+                        | Decl::AliasHead(_) | Decl::Main(_) => {
+                            unreachable!()
+                        }
+                    }
+                }
             }
         }
         Ok(Mode::Done(ctx, ()))
     }
 }
 
-impl Tyck for su::DefId {
-    type Ctx = ();
-    type Out = ();
-    type Ann = ();
-    type Mode = ();
-    type Action = ();
-
-    fn tyck(&self, _tycker: &mut Tycker, (): Self::Action) -> Result<(Self::Out, Self::Ann)> {
-        Ok(((), ()))
-    }
-
-    fn tyck_step(&self, _tycker: &mut Tycker, (): Self::Action) -> Result<Self::Mode> {
-        Ok(())
-    }
-}
-
 impl Tyck for su::PatId {
     type Ctx = Context<CtxItem>;
     type Out = (Self::Ctx, ss::PatId);
-    type Ann = ss::AnnId;
+    type Ann = (Option<ss::TermId>, ss::AnnId);
     type Mode = Mode<Self::Ctx, Self, Self::Out, Self::Ann>;
     type Action = ByAction<Self::Ctx, Self::Ann>;
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<(Self::Out, Self::Ann)> {
-        todo!()
+        let mode = self.tyck_step(tycker, action)?;
+        match mode {
+            | Mode::Task(_) => unimplemented!(),
+            | Mode::Done(out, ann) => Ok((out, ann)),
+        }
     }
 
     fn tyck_step(
-        &self, tycker: &mut Tycker, ByAction { ctx, switch }: Self::Action,
+        &self, tycker: &mut Tycker, ByAction { mut ctx, switch }: Self::Action,
     ) -> Result<Self::Mode> {
         let pat = tycker.scoped.pats[self].clone();
         use su::Pattern as Pat;
@@ -218,30 +226,112 @@ impl Tyck for su::PatId {
                         let ty = ty
                             .tyck_out(tycker, ByAction::syn(ctx.clone()))?
                             .as_ann_or_err(|| TyckError::SortMismatch)?;
-
-                        let ctx = tm.tyck(tycker, ByAction::ana(ctx.clone(), ty))?;
+                        let (ctx, pat) =
+                            tm.tyck_out(tycker, ByAction::ana(ctx.clone(), (None, ty)))?;
+                        Ok(Mode::Done((ctx, pat), (None, ty)))
                     }
-                    | Switch::Ana(ann) => todo!(),
+                    | Switch::Ana((term, ann)) => {
+                        let ty = ty
+                            .tyck_out(tycker, ByAction::syn(ctx.clone()))?
+                            .as_ann_or_err(|| TyckError::SortMismatch)?;
+                        let ty = Lub::lub(&ty, &ann, tycker, ctx.clone())?;
+                        let out = tm.tyck_out(tycker, ByAction::ana(ctx.clone(), (term, ty)))?;
+                        Ok(Mode::Done(out, (term, ty)))
+                    }
                 }
             }
             | Pat::Hole(pat) => {
                 let su::Hole = pat;
+                match switch {
+                    | Switch::Syn => Err(TyckError::MissingAnnotation)?,
+                    | Switch::Ana((term, ann)) => match ann {
+                        | ss::AnnId::Kind(_) => {
+                            let pat: ss::TPatId = Alloc::alloc(tycker, ss::Hole);
+                            Ok(Mode::Done((ctx, pat.into()), (term, ann)))
+                        }
+                        | ss::AnnId::Type(_) => {
+                            let pat: ss::VPatId = Alloc::alloc(tycker, ss::Hole);
+                            Ok(Mode::Done((ctx, pat.into()), (term, ann)))
+                        }
+                    },
+                }
             }
-            | Pat::Var(_def) => {}
+            | Pat::Var(def) => match switch {
+                | Switch::Syn => Err(TyckError::MissingAnnotation)?,
+                | Switch::Ana((term, ann)) => match ann {
+                    | ss::AnnId::Kind(_) => {
+                        let pat: ss::TPatId = Alloc::alloc(tycker, ss::Hole);
+                        ctx += CtxExtend(def, term, ann);
+                        Ok(Mode::Done((ctx, pat.into()), (term, ann)))
+                    }
+                    | ss::AnnId::Type(_) => {
+                        let pat: ss::VPatId = Alloc::alloc(tycker, ss::Hole);
+                        ctx += CtxExtend(def, term, ann);
+                        Ok(Mode::Done((ctx, pat.into()), (term, ann)))
+                    }
+                },
+            },
             | Pat::Ctor(pat) => {
-                let su::Ctor(_ctor, tail) = pat;
-                tail.tyck(tycker, ByAction::switch(ctx, switch))?;
+                let su::Ctor(ctor, tail) = pat;
+                match switch {
+                    | Switch::Syn => Err(TyckError::MissingAnnotation)?,
+                    | Switch::Ana((_term, ann)) => {
+                        let ty = ann.as_type_or_err(|| TyckError::SortMismatch)?;
+                        let ty_arm = tycker.statics.types[&ty]
+                            .as_data_or_err(|| TyckError::TypeMismatch)?
+                            .arms
+                            .get(&ctor)
+                            .ok_or_else(|| TyckError::MissingDataArm(ctor.clone()))?;
+                        let (ctx, tail) =
+                            tail.tyck_out(tycker, ByAction::ana(ctx, (None, (*ty_arm).into())))?;
+                        match tail {
+                            | ss::PatId::Type(_) => Err(TyckError::SortMismatch)?,
+                            | ss::PatId::Value(tail) => {
+                                let pat: ss::VPatId = Alloc::alloc(tycker, ss::Ctor(ctor, tail));
+                                Ok(Mode::Done((ctx, pat.into()), (None, ann)))
+                            }
+                        }
+                    }
+                }
             }
             | Pat::Triv(pat) => {
                 let su::Triv = pat;
+                match switch {
+                    | Switch::Syn => {
+                        let unit = tycker.unit(ctx.clone());
+                        let pat: ss::VPatId = Alloc::alloc(tycker, ss::Triv);
+                        Ok(Mode::Done((ctx, pat.into()), (None, unit.into())))
+                    }
+                    | Switch::Ana((term, ann)) => match ann {
+                        | ss::AnnId::Kind(_) => Err(TyckError::SortMismatch)?,
+                        | ss::AnnId::Type(ann) => {
+                            let unit = tycker.unit(ctx.clone());
+                            let ty = Lub::lub(&unit, &ann, tycker, ctx.clone())?;
+                            let pat: ss::VPatId = Alloc::alloc(tycker, ss::Triv);
+                            Ok(Mode::Done((ctx, pat.into()), (term, ty.into())))
+                        }
+                    },
+                }
             }
             | Pat::Cons(pat) => {
                 let su::Cons(a, b) = pat;
-                a.tyck(tycker, ByAction::switch(ctx.clone(), switch.clone()))?;
-                b.tyck(tycker, ByAction::switch(ctx, switch))?;
+                match switch {
+                    | Switch::Syn => Err(TyckError::MissingAnnotation)?,
+                    | Switch::Ana((term, ann)) => {
+                        match ann {
+                            | ss::AnnId::Kind(_) => Err(TyckError::SortMismatch)?,
+                            | ss::AnnId::Type(ann) => {
+                                todo!()
+                            }
+                        }
+                        // let (ctx, a) = a.tyck_out(tycker, ByAction::syn(ctx.clone()))?;
+                        // let (ctx, b) = b.tyck_out(tycker, ByAction::syn(ctx))?;
+                        // let pat: ss::TPatId = Alloc::alloc(tycker, ss::Cons(a, b));
+                        // Ok(Mode::Done((ctx, pat.into()), (None, tycker.unit(ctx).into())))
+                    }
+                }
             }
         }
-        todo!()
     }
 }
 
@@ -253,7 +343,11 @@ impl Tyck for su::TermId {
     type Action = ByAction<Self::Ctx, Self::Ann>;
 
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<(Self::Out, Self::Ann)> {
-        todo!()
+        let mode = self.tyck_step(tycker, action)?;
+        match mode {
+            | Mode::Task(_) => unimplemented!(),
+            | Mode::Done(out, ann) => Ok((out, ann)),
+        }
     }
 
     fn tyck_step(
@@ -265,7 +359,16 @@ impl Tyck for su::TermId {
         match term {
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
-                todo!()
+                let su::Sealed(term) = term;
+                let (out, ann) = term.tyck(tycker, ByAction::switch(ctx.clone(), switch))?;
+                match ann {
+                    | ss::AnnId::Kind(_) => {
+                        let out = out.as_type_or_err(|| TyckError::SortMismatch)?;
+                        let sealed = Alloc::alloc(tycker, ss::Sealed(out));
+                        Ok(Mode::Done(sealed.into(), ann))
+                    }
+                    | ss::AnnId::Type(_) => Ok(Mode::Done(out, ann)),
+                }
             }
             | Tm::Ann(term) => {
                 let su::Ann { tm, ty } = term;
@@ -279,68 +382,89 @@ impl Tyck for su::TermId {
                 }
             }
             | Tm::Hole(term) => {
+                let su::Hole = term;
                 todo!()
             }
-            | Tm::Var(term) => {
+            | Tm::Var(def) => {
                 todo!()
             }
             | Tm::Triv(term) => {
+                let su::Triv = term;
                 todo!()
             }
             | Tm::Cons(term) => {
+                let su::Cons(a, b) = term;
                 todo!()
             }
             | Tm::Abs(term) => {
+                let su::Abs(binder, body) = term;
                 todo!()
             }
             | Tm::App(term) => {
+                let su::App(f, a) = term;
                 todo!()
             }
             | Tm::Rec(term) => {
+                let su::Rec(binder, body) = term;
                 todo!()
             }
             | Tm::Pi(term) => {
+                let su::Pi(binder, body) = term;
                 todo!()
             }
             | Tm::Sigma(term) => {
+                let su::Sigma(binder, body) = term;
                 todo!()
             }
             | Tm::Thunk(term) => {
+                let su::Thunk(term) = term;
                 todo!()
             }
             | Tm::Force(term) => {
+                let su::Force(term) = term;
                 todo!()
             }
             | Tm::Ret(term) => {
+                let su::Ret(term) = term;
                 todo!()
             }
             | Tm::Do(term) => {
+                let su::Bind { binder, bindee, tail } = term;
                 todo!()
             }
             | Tm::Let(term) => {
+                let su::PureBind { binder, bindee, tail } = term;
                 todo!()
             }
             | Tm::Data(term) => {
+                let su::Data { arms } = term;
                 todo!()
             }
             | Tm::CoData(term) => {
+                let su::CoData { arms } = term;
                 todo!()
             }
             | Tm::Ctor(term) => {
+                let su::Ctor(ctor, tail) = term;
                 todo!()
             }
             | Tm::Match(term) => {
+                let su::Match { scrut, arms } = term;
                 todo!()
             }
             | Tm::CoMatch(term) => {
+                let su::CoMatch { arms } = term;
                 todo!()
             }
             | Tm::Dtor(term) => {
+                let su::Dtor(body, dtor) = term;
                 todo!()
             }
-            | Tm::Lit(term) => {
-                todo!()
-            }
+            | Tm::Lit(term) => match term {
+                | su::Literal::Int(_) => todo!(),
+                | su::Literal::String(_) => todo!(),
+                | su::Literal::Char(_) => todo!(),
+            },
         }
     }
 }

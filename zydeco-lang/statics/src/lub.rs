@@ -66,46 +66,13 @@ impl Lub for &KindId {
 //     }
 // }
 
-pub struct Debruijn {
-    lhs: Context<TypeId>,
-    rhs: Context<TypeId>,
-}
-impl Debruijn {
-    pub fn new() -> Self {
-        Self { lhs: Context::new(), rhs: Context::new() }
-    }
-    pub fn extend_one(&self, tycker: &mut Tycker, lhs_def: DefId, rhs_def: DefId) -> Self {
-        let mut lhs = self.lhs.clone();
-        let mut rhs = self.rhs.clone();
-        let abst = Alloc::alloc(tycker, Abstract);
-        let sealed = Alloc::alloc(tycker, Sealed(abst));
-        {
-            let res = lhs.defs.insert(lhs_def, sealed);
-            assert!(res.is_none());
-        }
-        {
-            let res = rhs.defs.insert(rhs_def, sealed);
-            assert!(res.is_none());
-        }
-        Self { lhs, rhs }
-    }
-    pub fn lookup(&self, lhs_def: DefId, rhs_def: DefId) -> Option<TypeId> {
-        let lhs = self.lhs.defs.get(&lhs_def).copied();
-        let rhs = self.rhs.defs.get(&rhs_def).copied();
-        match (lhs, rhs) {
-            | (Some(lhs), Some(rhs)) if lhs == rhs => Some(lhs),
-            | _ => None,
-        }
-    }
-}
-
 impl Lub for &TypeId {
     /// We need to remember the definitions introduced by both sides.
     // Todo..
-    type Ctx = Debruijn;
+    type Ctx = Context<CtxItem>;
     type Out = TypeId;
 
-    fn lub(self, other: Self, tycker: &mut Tycker, ctx: Self::Ctx) -> Result<Self::Out> {
+    fn lub(self, other: Self, tycker: &mut Tycker, _ctx: Self::Ctx) -> Result<Self::Out> {
         let lhs = tycker.statics.types[self].clone();
         let rhs = tycker.statics.types[other].clone();
         match (lhs, rhs) {
@@ -136,6 +103,26 @@ impl Lub for &TypeId {
             | (Type::Data(_), Type::Data(_)) => todo!(),
             | (Type::CoData(_), Type::CoData(_)) => todo!(),
             | _ => todo!(),
+        }
+    }
+}
+
+impl Lub for &AnnId {
+    type Ctx = Context<CtxItem>;
+    type Out = AnnId;
+
+    fn lub(self, other: Self, tycker: &mut Tycker, ctx: Self::Ctx) -> Result<Self::Out> {
+        match (self, other) {
+            | (AnnId::Kind(lhs), AnnId::Kind(rhs)) => {
+                let kd = lhs.lub(rhs, tycker, ())?;
+                Ok(kd.into())
+            }
+            | (AnnId::Type(lhs), AnnId::Type(rhs)) => {
+                let ty = lhs.lub(rhs, tycker, ctx)?;
+                Ok(ty.into())
+            }
+            | (AnnId::Kind(_), AnnId::Type(_)) => Err(TyckError::SortMismatch),
+            | (AnnId::Type(_), AnnId::Kind(_)) => Err(TyckError::SortMismatch),
         }
     }
 }

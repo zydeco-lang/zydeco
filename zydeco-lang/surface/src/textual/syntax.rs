@@ -18,7 +18,7 @@ new_key_type! {
     pub struct EntityId;
 }
 
-mod identifier_impls {
+mod impls_identifier {
     use super::*;
     impl From<DefId> for EntityId {
         fn from(DefId(meta, idx): DefId) -> Self {

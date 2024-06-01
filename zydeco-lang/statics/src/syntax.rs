@@ -66,12 +66,6 @@ mod impls_identifiers {
                 | _ => panic!("Expected a kind"),
             }
         }
-        pub fn try_as_kind(self) -> Option<KindId> {
-            match self {
-                | TermId::Kind(k) => Some(k),
-                | _ => None,
-            }
-        }
         pub fn as_kind_or_err(self, f: impl FnOnce() -> TyckError) -> Result<KindId> {
             match self {
                 | TermId::Kind(k) => Ok(k),
@@ -82,12 +76,6 @@ mod impls_identifiers {
             match self {
                 | TermId::Type(t) => t,
                 | _ => panic!("Expected a type"),
-            }
-        }
-        pub fn try_as_type(self) -> Option<TypeId> {
-            match self {
-                | TermId::Type(t) => Some(t),
-                | _ => None,
             }
         }
         pub fn as_type_or_err(self, f: impl FnOnce() -> TyckError) -> Result<TypeId> {
@@ -103,13 +91,6 @@ mod impls_identifiers {
                 | _ => panic!("Expected an annotation"),
             }
         }
-        pub fn try_as_ann(self) -> Option<AnnId> {
-            match self {
-                | TermId::Type(t) => Some(AnnId::Type(t)),
-                | TermId::Kind(k) => Some(AnnId::Kind(k)),
-                | _ => None,
-            }
-        }
         pub fn as_ann_or_err(self, f: impl FnOnce() -> TyckError) -> Result<AnnId> {
             match self {
                 | TermId::Type(t) => Ok(AnnId::Type(t)),
@@ -123,12 +104,6 @@ mod impls_identifiers {
                 | _ => panic!("Expected a value"),
             }
         }
-        pub fn try_as_value(self) -> Option<ValueId> {
-            match self {
-                | TermId::Value(v) => Some(v),
-                | _ => None,
-            }
-        }
         pub fn as_value_or_err(self, f: impl FnOnce() -> TyckError) -> Result<ValueId> {
             match self {
                 | TermId::Value(v) => Ok(v),
@@ -139,12 +114,6 @@ mod impls_identifiers {
             match self {
                 | TermId::Compu(c) => c,
                 | _ => panic!("Expected a computation"),
-            }
-        }
-        pub fn try_as_compu(self) -> Option<CompuId> {
-            match self {
-                | TermId::Compu(c) => Some(c),
-                | _ => None,
             }
         }
         pub fn as_compu_or_err(self, f: impl FnOnce() -> TyckError) -> Result<CompuId> {
@@ -162,10 +131,10 @@ mod impls_identifiers {
                 | _ => panic!("Expected a kind"),
             }
         }
-        pub fn try_as_kind(self) -> Option<KindId> {
+        pub fn as_kind_or_err(self, f: impl FnOnce() -> TyckError) -> Result<KindId> {
             match self {
-                | AnnId::Kind(k) => Some(k),
-                | _ => None,
+                | AnnId::Kind(k) => Ok(k),
+                | _ => Err(f()),
             }
         }
         pub fn as_type(self) -> TypeId {
@@ -174,20 +143,16 @@ mod impls_identifiers {
                 | _ => panic!("Expected a type"),
             }
         }
-        pub fn try_as_type(self) -> Option<TypeId> {
+        pub fn as_type_or_err(self, f: impl FnOnce() -> TyckError) -> Result<TypeId> {
             match self {
-                | AnnId::Type(t) => Some(t),
-                | _ => None,
+                | AnnId::Type(t) => Ok(t),
+                | _ => Err(f()),
             }
         }
     }
 }
 
 /* --------------------------------- Context -------------------------------- */
-
-new_key_type! {
-    pub struct CtxtId;
-}
 
 #[derive(Clone, Debug)]
 pub struct Context<T> {
@@ -196,13 +161,13 @@ pub struct Context<T> {
 
 #[derive(Clone, Debug)]
 pub struct CtxItem {
-    pub out: TermId,
+    pub out: Option<TermId>,
     pub ann: AnnId,
 }
 
 /// def, out, ann
 #[derive(Clone, Debug)]
-pub struct CtxExtend(pub DefId, pub TermId, pub AnnId);
+pub struct CtxExtend(pub DefId, pub Option<TermId>, pub AnnId);
 
 mod impls_context {
     use super::*;
@@ -257,6 +222,12 @@ mod impls_context {
         type Output = T;
         fn index(&self, def: &DefId) -> &T {
             &self.defs[def]
+        }
+    }
+
+    impl CtxExtend {
+        pub fn out_ann(def: DefId, out: TermId, ann: AnnId) -> Self {
+            Self(def, Some(out), ann)
         }
     }
 }
@@ -359,14 +330,35 @@ pub enum Type {
     CoData(CoData),
 }
 
+mod impls_types {
+    use super::*;
+    use crate::err::*;
+
+    impl Type {
+        pub fn as_data_or_err(&self, f: impl FnOnce() -> TyckError) -> Result<&Data> {
+            match self {
+                | Type::Data(data) => Ok(data),
+                | _ => Err(f()),
+            }
+        }
+        pub fn as_codata_or_err(&self, f: impl FnOnce() -> TyckError) -> Result<&CoData> {
+            match self {
+                | Type::CoData(codata) => Ok(codata),
+                | _ => Err(f()),
+            }
+        }
+    }
+}
+
 /* ---------------------------------- Value --------------------------------- */
 
 #[derive(From, Clone, Debug)]
 pub enum ValuePattern {
-    Ann(Ann<VPatId, sc::TermId>),
+    // Ann(Ann<VPatId, TypeId>),
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<VPatId>),
+    Triv(Triv),
     VCons(Cons<VPatId, VPatId>),
     TCons(Cons<TPatId, VPatId>),
 }
@@ -376,10 +368,10 @@ pub enum Value {
     Ann(Ann<ValueId, TypeId>),
     Hole(Hole),
     Var(DefId),
-    VCons(Cons<ValueId, ValueId>),
-    TCons(Cons<TypeId, ValueId>),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<ValueId>),
+    VCons(Cons<ValueId, ValueId>),
+    TCons(Cons<TypeId, ValueId>),
     Lit(Literal),
 }
 

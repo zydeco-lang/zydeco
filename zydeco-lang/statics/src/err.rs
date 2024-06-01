@@ -1,4 +1,4 @@
-// use crate::syntax::*;
+use crate::syntax::*;
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
@@ -11,6 +11,8 @@ pub enum TyckError {
     KindMismatch,
     #[error("Type mismatch")]
     TypeMismatch,
+    #[error("Missing data arm: {0:?}")]
+    MissingDataArm(CtorName),
 }
 
 pub type Result<T> = std::result::Result<T, TyckError>;
