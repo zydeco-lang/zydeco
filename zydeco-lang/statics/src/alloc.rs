@@ -204,16 +204,16 @@ impl Alloc<ValueId> for Value {
         val
     }
 }
-impl Alloc<ValueId> for Ann<ValueId, TypeId> {
-    fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
-        Alloc::alloc(tycker, Value::from(val))
-    }
-}
-impl Alloc<ValueId> for Hole {
-    fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
-        Alloc::alloc(tycker, Value::from(val))
-    }
-}
+// impl Alloc<ValueId> for Ann<ValueId, TypeId> {
+//     fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
+//         Alloc::alloc(tycker, Value::from(val))
+//     }
+// }
+// impl Alloc<ValueId> for Hole {
+//     fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
+//         Alloc::alloc(tycker, Value::from(val))
+//     }
+// }
 impl Alloc<ValueId> for DefId {
     fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
         Alloc::alloc(tycker, Value::from(val))

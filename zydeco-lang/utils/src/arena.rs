@@ -90,14 +90,14 @@ pub struct ArenaAssoc<Id, T> {
     map: HashMap<Id, T>,
 }
 
-/// A bidirectional single-to-multi-map.
+/// A bidirectional single-to-multi-map; a "widen" map.
 #[derive(Debug, Clone)]
 pub struct ArenaForth<P, Q> {
     forward: ArenaAssoc<P, Vec<Q>>,
     backward: ArenaAssoc<Q, P>,
 }
 
-/// A bidirectional multi-to-single-map.
+/// A bidirectional multi-to-single-map; a "narrowing" map.
 #[derive(Debug, Clone)]
 pub struct ArenaBack<P, Q> {
     forward: ArenaAssoc<P, Q>,

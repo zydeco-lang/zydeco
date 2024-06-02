@@ -42,18 +42,18 @@ pub enum AnnId {
     Type(TypeId),
 }
 pub type DeclId = sc::DeclId;
-/// A dispatcher for all entities.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
-pub enum EntityId {
-    Def(DefId),
-    Kind(KindId),
-    TPat(TPatId),
-    Type(TypeId),
-    VPat(VPatId),
-    Value(ValueId),
-    Compu(CompuId),
-    Decl(DeclId),
-}
+// /// A dispatcher for all entities.
+// #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+// pub enum EntityId {
+//     Def(DefId),
+//     Kind(KindId),
+//     TPat(TPatId),
+//     Type(TypeId),
+//     VPat(VPatId),
+//     Value(ValueId),
+//     Compu(CompuId),
+//     Decl(DeclId),
+// }
 
 mod impls_identifiers {
     use super::*;
@@ -336,6 +336,7 @@ pub struct CoData {
 
 #[derive(From, Clone, Debug)]
 pub enum Type {
+    // Todo: remove it
     Sealed(Sealed<TypeId>),
     Hole(Hole),
     Var(DefId),
@@ -392,8 +393,8 @@ pub enum ValuePattern {
 
 #[derive(From, Clone, Debug)]
 pub enum Value {
-    Ann(Ann<ValueId, TypeId>),
-    Hole(Hole),
+    // Ann(Ann<ValueId, TypeId>),
+    // Hole(Hole),
     Var(DefId),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<ValueId>),
@@ -430,8 +431,8 @@ pub struct CoMatcher {
 
 #[derive(From, Clone, Debug)]
 pub enum Computation {
-    Ann(Ann<CompuId, TypeId>),
-    Hole(Hole),
+    // Ann(Ann<CompuId, TypeId>),
+    // Hole(Hole),
     Abs(Abs<VPatId, CompuId>),
     App(App<CompuId, ValueId>),
     Rec(Rec<VPatId, CompuId>),
@@ -490,8 +491,8 @@ pub struct StaticsArena {
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
     // unsorted to sorted bijective maps
-    pub pats: ArenaBijective<sc::PatId, PatId>,
-    pub terms: ArenaBijective<sc::TermId, TermId>,
+    pub pats: ArenaBack<sc::PatId, PatId>,
+    pub terms: ArenaBack<sc::TermId, TermId>,
 
     /// the type of terms under the context it's type checked; "annotation"
     pub type_of_terms_under_ctx: ArenaAssoc<TermId, (Context<CtxItem>, AnnId)>,
@@ -510,8 +511,8 @@ impl StaticsArena {
             compus: ArenaSparse::new(alloc.alloc()),
             decls: ArenaAssoc::new(),
 
-            pats: ArenaBijective::new(),
-            terms: ArenaBijective::new(),
+            pats: ArenaBack::new(),
+            terms: ArenaBack::new(),
 
             type_of_terms_under_ctx: ArenaAssoc::new(),
         }
