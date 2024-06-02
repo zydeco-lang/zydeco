@@ -277,7 +277,7 @@ pub enum Kind {
 
 #[derive(From, Clone, Debug)]
 pub enum TypePattern {
-    Ann(Ann<TPatId, KindId>),
+    // Ann(Ann<TPatId, KindId>),
     Hole(Hole),
     Var(DefId),
 }
@@ -338,7 +338,8 @@ pub struct CoData {
 pub enum Type {
     // Todo: remove it
     Sealed(Sealed<TypeId>),
-    Hole(Hole),
+    // Ann(Ann<TypeId, KindId>),
+    // Hole(Hole),
     Var(DefId),
     Abs(Abs<TPatId, TypeId>),
     App(App<TypeId, TypeId>),
@@ -394,7 +395,7 @@ pub enum ValuePattern {
 #[derive(From, Clone, Debug)]
 pub enum Value {
     // Ann(Ann<ValueId, TypeId>),
-    // Hole(Hole),
+    Hole(Hole),
     Var(DefId),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<ValueId>),
@@ -440,7 +441,6 @@ pub enum Computation {
     Ret(Ret<ValueId>),
     Do(Bind<VPatId, CompuId, CompuId>),
     Let(PureBind<VPatId, ValueId, CompuId>),
-    // UseLet(UseBind),
     Match(Match),
     CoMatch(CoMatch),
     Dtor(Dtor<ValueId>),

@@ -361,7 +361,7 @@ impl Tyck for su::PatId {
                                     let ss::Exists(binder, body) = ty;
                                     todo!()
                                 }
-                                | Ty::Hole(_) => Err(TyckError::MissingAnnotation)?,
+                                // | Ty::Hole(_) => Err(TyckError::MissingAnnotation)?,
                                 | Ty::Sealed(_)
                                 | Ty::Var(_)
                                 | Ty::Abs(_)
@@ -482,7 +482,7 @@ impl Tyck for su::TermId {
                         match ty {
                             | Ty::Prod(_) => todo!(),
                             | Ty::Exists(_) => todo!(),
-                            | Ty::Hole(_) => todo!(),
+                            // | Ty::Hole(_) => todo!(),
                             | Ty::Sealed(_)
                             | Ty::Var(_)
                             | Ty::Abs(_)

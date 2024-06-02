@@ -84,7 +84,7 @@ impl Lub for &TypeId {
                 }
             }
             | (Type::Sealed(_), _) | (_, Type::Sealed(_)) => Err(TyckError::TypeMismatch)?,
-            | (Type::Hole(_), _) => Ok(*other),
+            // | (Type::Hole(_), _) => Ok(*other),
             | (Type::Var(_), Type::Var(_)) => todo!(),
             | (Type::Abs(_), Type::Abs(_)) => todo!(),
             | (Type::App(_), Type::App(_)) => todo!(),

@@ -13,7 +13,7 @@ impl Normalize for &TypeId {
     fn normalize(self, tycker: &mut Tycker, ctx: Self::Ctx) -> Result<Self::Out> {
         let ty = tycker.statics.types[self].clone();
         match ty {
-            | Type::Hole(_)
+            // | Type::Hole(_)
             | Type::Abst(_)
             | Type::Thunk(_)
             | Type::Ret(_)

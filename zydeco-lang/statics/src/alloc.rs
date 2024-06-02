@@ -36,11 +36,11 @@ impl Alloc<TPatId> for TypePattern {
         tpat
     }
 }
-impl Alloc<TPatId> for Ann<TPatId, KindId> {
-    fn alloc(tycker: &mut Tycker, val: Self) -> TPatId {
-        Alloc::alloc(tycker, TypePattern::from(val))
-    }
-}
+// impl Alloc<TPatId> for Ann<TPatId, KindId> {
+//     fn alloc(tycker: &mut Tycker, val: Self) -> TPatId {
+//         Alloc::alloc(tycker, TypePattern::from(val))
+//     }
+// }
 impl Alloc<TPatId> for Hole {
     fn alloc(tycker: &mut Tycker, val: Self) -> TPatId {
         Alloc::alloc(tycker, TypePattern::from(val))
@@ -63,11 +63,16 @@ impl Alloc<TypeId> for Sealed<TypeId> {
         Alloc::alloc(tycker, Type::from(val))
     }
 }
-impl Alloc<TypeId> for Hole {
-    fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
-        Alloc::alloc(tycker, Type::from(val))
-    }
-}
+// impl Alloc<TypeId> for Ann<TypeId, KindId> {
+//     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
+//         Alloc::alloc(tycker, Type::from(val))
+//     }
+// }
+// impl Alloc<TypeId> for Hole {
+//     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
+//         Alloc::alloc(tycker, Type::from(val))
+//     }
+// }
 impl Alloc<TypeId> for Abstract {
     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
         Alloc::alloc(tycker, Type::from(val))
@@ -209,11 +214,11 @@ impl Alloc<ValueId> for Value {
 //         Alloc::alloc(tycker, Value::from(val))
 //     }
 // }
-// impl Alloc<ValueId> for Hole {
-//     fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
-//         Alloc::alloc(tycker, Value::from(val))
-//     }
-// }
+impl Alloc<ValueId> for Hole {
+    fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
+        Alloc::alloc(tycker, Value::from(val))
+    }
+}
 impl Alloc<ValueId> for DefId {
     fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
         Alloc::alloc(tycker, Value::from(val))
@@ -247,5 +252,62 @@ impl Alloc<ValueId> for Cons<TypeId, ValueId> {
 impl Alloc<ValueId> for Literal {
     fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
         Alloc::alloc(tycker, Value::from(val))
+    }
+}
+
+impl Alloc<CompuId> for Computation {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        let compu = tycker.statics.compus.alloc(val);
+        compu
+    }
+}
+impl Alloc<CompuId> for Abs<VPatId, CompuId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for App<CompuId, ValueId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for Rec<VPatId, CompuId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for Force<ValueId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for Ret<ValueId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for Bind<VPatId, CompuId, CompuId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for PureBind<VPatId, ValueId, CompuId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for Match {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for CoMatch {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for Dtor<ValueId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
     }
 }
