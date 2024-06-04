@@ -55,6 +55,12 @@ pub type DeclId = sc::DeclId;
 //     Decl(DeclId),
 // }
 
+new_key_type! {
+    /// Identifier for abstract types, including type holes, sealed types,
+    /// and type instantiations for forall and exist.
+    pub struct AbstId;
+}
+
 mod impls_identifiers {
     use super::*;
     use crate::err::*;
@@ -343,7 +349,7 @@ pub enum Type {
     Var(DefId),
     Abs(Abs<TPatId, TypeId>),
     App(App<TypeId, TypeId>),
-    Abst(Abstract),
+    Abst(AbstId),
     Thunk(ThunkTy),
     Ret(RetTy),
     Unit(UnitTy),
@@ -498,6 +504,8 @@ pub struct StaticsArena {
     pub type_of_terms_under_ctx: ArenaAssoc<TermId, (Context<CtxItem>, AnnId)>,
     // Todo: equivalence-class type arena (or not)
     // Todo: hole arena for pats and terms
+    pub absts: ArenaDense<AbstId, ()>,
+    pub terms_of_absts: ArenaAssoc<AbstId, TermId>,
 }
 
 impl StaticsArena {
@@ -515,6 +523,8 @@ impl StaticsArena {
             terms: ArenaBack::new(),
 
             type_of_terms_under_ctx: ArenaAssoc::new(),
+            absts: ArenaDense::new(alloc.alloc()),
+            terms_of_absts: ArenaAssoc::new(),
         }
     }
 }

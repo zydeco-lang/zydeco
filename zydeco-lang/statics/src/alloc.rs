@@ -73,7 +73,7 @@ impl Alloc<TypeId> for Sealed<TypeId> {
 //         Alloc::alloc(tycker, Type::from(val))
 //     }
 // }
-impl Alloc<TypeId> for Abstract {
+impl Alloc<TypeId> for AbstId {
     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
         Alloc::alloc(tycker, Type::from(val))
     }

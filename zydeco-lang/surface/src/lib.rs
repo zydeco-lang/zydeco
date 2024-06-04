@@ -64,6 +64,8 @@ pub mod bitter {
     pub mod syntax;
     pub mod alloc;
     pub use alloc::*;
+    pub mod clone;
+    pub use clone::*;
     pub mod desugar;
     pub use desugar::*;
     // pub mod err;
