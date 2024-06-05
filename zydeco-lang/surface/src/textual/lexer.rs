@@ -53,6 +53,10 @@ pub enum Tok<'input> {
     Do,
     #[token("ret")]
     Ret,
+    #[token("with")]
+    With,
+    #[token("import")]
+    Import,
     #[token("begin")]
     Begin,
     #[token("fn")]
@@ -71,10 +75,6 @@ pub enum Tok<'input> {
     Sigma,
     #[token("exists")]
     Exists,
-    #[token("@")]
-    At,
-    #[token("pack")]
-    Pack,
 
     #[regex(r"[\+-]?[0-9]+")]
     IntLit(&'input str),
@@ -153,6 +153,8 @@ impl<'input> Display for Tok<'input> {
             | Tok::Do => write!(f, "do"),
             | Tok::Ret => write!(f, "ret"),
             | Tok::Begin => write!(f, "begin"),
+            | Tok::With => write!(f, "with"),
+            | Tok::Import => write!(f, "import"),
             | Tok::Fn => write!(f, "fn"),
             | Tok::Pi => write!(f, "pi"),
             | Tok::Rec => write!(f, "rec"),
@@ -161,8 +163,6 @@ impl<'input> Display for Tok<'input> {
             | Tok::Forall => write!(f, "forall"),
             | Tok::Sigma => write!(f, "sigma"),
             | Tok::Exists => write!(f, "exists"),
-            | Tok::At => write!(f, "@"),
-            | Tok::Pack => write!(f, "pack"),
             | Tok::IntLit(s) => write!(f, "IntLit({})", s),
             | Tok::StrLit(s) => write!(f, "StrLit({})", s),
             | Tok::CharLit(s) => write!(f, "CharLit({})", s),

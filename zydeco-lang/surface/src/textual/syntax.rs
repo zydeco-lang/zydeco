@@ -129,12 +129,12 @@ pub struct GenPureBind {
     pub tail: TermId,
 }
 
-/// `use let x = a in ...`
-#[derive(Clone, Debug)]
-pub struct UseBind {
-    pub uses: UsePath,
-    pub tail: TermId,
-}
+// /// `use let x = a in ...`
+// #[derive(Clone, Debug)]
+// pub struct UseBind {
+//     pub uses: UsePath,
+//     pub tail: TermId,
+// }
 
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug)]
@@ -182,6 +182,21 @@ pub struct CoMatcher {
     pub tail: TermId,
 }
 
+/// `import f = V`
+#[derive(Clone, Debug)]
+pub struct Import {
+    pub binder: PatId,
+    pub body: TermId,
+}
+
+/// `with T import f = V begin M end`
+#[derive(Clone, Debug)]
+pub struct WithBlock {
+    pub monad_ty: TermId,
+    pub imports: Vec<Import>,
+    pub body: TermId,
+}
+
 #[derive(From, Clone, Debug)]
 pub enum Term {
     Ann(Ann<TermId, TermId>),
@@ -209,6 +224,7 @@ pub enum Term {
     Match(Match),
     CoMatch(CoMatch),
     Dtor(Dtor<TermId>),
+    WithBlock(WithBlock),
     Lit(Literal),
 }
 

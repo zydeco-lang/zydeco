@@ -231,6 +231,20 @@ impl DeepClone for b::TermId {
                 let name = name.clone();
                 b::Dtor(term, name).into()
             }
+            | b::Term::WithBlock(term) => {
+                let b::WithBlock { monad_ty, imports, body } = term;
+                let monad_ty = monad_ty.deep_clone(desugarer);
+                let imports = imports
+                    .into_iter()
+                    .map(|b::Import { binder: name, body: def }| {
+                        let name = name.clone();
+                        let def = def.deep_clone(desugarer);
+                        b::Import { binder: name, body: def }
+                    })
+                    .collect();
+                let body = body.deep_clone(desugarer);
+                b::WithBlock { monad_ty, imports, body }.into()
+            }
             | b::Term::Lit(term) => term.clone().into(),
         };
         Alloc::alloc(desugarer, term, prev)

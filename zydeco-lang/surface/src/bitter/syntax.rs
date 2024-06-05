@@ -113,6 +113,21 @@ pub struct CoMatcher {
     pub tail: TermId,
 }
 
+/// `import f = V`
+#[derive(Clone, Debug)]
+pub struct Import {
+    pub binder: PatId,
+    pub body: TermId,
+}
+
+/// `with T import f = V begin M end`
+#[derive(Clone, Debug)]
+pub struct WithBlock {
+    pub monad_ty: TermId,
+    pub imports: Vec<Import>,
+    pub body: TermId,
+}
+
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
     Internal(Internal),
@@ -144,6 +159,7 @@ pub enum Term<Ref> {
     Match(Match),
     CoMatch(CoMatch),
     Dtor(Dtor<TermId>),
+    WithBlock(WithBlock),
     Lit(Literal),
 }
 

@@ -63,6 +63,7 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::Match(_)
             | Tm::CoMatch(_)
             | Tm::Dtor(_)
+            | Tm::WithBlock(_)
             | Tm::Lit(_) => None,
         }
     }

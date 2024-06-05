@@ -571,6 +571,17 @@ impl Desugar for t::TermId {
                 let term = term.desugar(desugarer);
                 Alloc::alloc(desugarer, b::Dtor(term, name).into(), self.into())
             }
+            | Tm::WithBlock(term) => {
+                let t::WithBlock { monad_ty, imports, body } = term;
+                let monad_ty = monad_ty.desugar(desugarer);
+                let imports = imports.desugar(desugarer);
+                let body = body.desugar(desugarer);
+                Alloc::alloc(
+                    desugarer,
+                    b::WithBlock { monad_ty, imports, body }.into(),
+                    self.into(),
+                )
+            }
             | Tm::Lit(term) => Alloc::alloc(desugarer, term.into(), self.into()),
         }
     }
@@ -660,6 +671,17 @@ impl Desugar for (t::CoData, t::EntityId) {
         let ctype = desugarer.ctype(prev);
         Alloc::alloc(desugarer, b::Ann { tm: codata, ty: ctype }.into(), prev)
     }
+}
+
+impl Desugar for t::Import {
+    type Out = b::Import;
+    fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
+        let t::Import { binder: name, body: def } = self;
+        let name = name.desugar(desugarer);
+        let def = def.desugar(desugarer);
+        b::Import { binder: name, body: def }
+    }
+
 }
 
 mod impls {

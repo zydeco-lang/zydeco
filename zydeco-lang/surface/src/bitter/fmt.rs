@@ -75,6 +75,7 @@ impl Ugly for TermId {
             | Term::Match(t) => s += &t.ugly(f),
             | Term::CoMatch(t) => s += &t.ugly(f),
             | Term::Dtor(t) => s += &t.ugly(f),
+            | Term::WithBlock(t) => s += &t.ugly(f),
             | Term::Lit(t) => s += &t.ugly(f),
         }
         s
@@ -444,6 +445,35 @@ impl Ugly for CoMatch {
             s += " -> ";
             s += &tail.ugly(f);
         }
+        s += " end";
+        s
+    }
+}
+
+impl Ugly for Import {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        let Import { binder, body } = self;
+        s += "import ";
+        s += &binder.ugly(f);
+        s += " = ";
+        s += &body.ugly(f);
+        s
+    }
+}
+
+impl Ugly for WithBlock {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        let WithBlock { monad_ty, imports, body  } = self;
+        s += "with ";
+        s += &monad_ty.ugly(f);
+        for import in imports {
+            s += " ";
+            s += &import.ugly(f);
+        }
+        s += " begin ";
+        s += &body.ugly(f);
         s += " end";
         s
     }

@@ -113,6 +113,7 @@ impl Ugly for TermId {
             | Term::Match(t) => s += &t.ugly(f),
             | Term::CoMatch(t) => s += &t.ugly(f),
             | Term::Dtor(t) => s += &t.ugly(f),
+            | Term::WithBlock(t) => s += &t.ugly(f),
             | Term::Lit(t) => s += &t.ugly(f),
         }
         s
@@ -517,6 +518,35 @@ impl Ugly for CoMatch {
     }
 }
 
+impl Ugly for Import {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        let Import { binder, body  } = self;
+        s += "import ";
+        s += &binder.ugly(f);
+        s += " = ";
+        s += &body.ugly(f);
+        s
+    }
+}
+
+impl Ugly for WithBlock {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        let WithBlock { monad_ty, imports, body } = self;
+        s += "with ";
+        s += &monad_ty.ugly(f);
+        for import in imports {
+            s += " ";
+            s += &import.ugly(f);
+        }
+        s += " begin ";
+        s += &body.ugly(f);
+        s += " end";
+        s
+    }
+}
+
 impl Ugly for Literal {
     fn ugly(&self, _f: &Formatter) -> String {
         let mut s = String::new();
@@ -530,60 +560,60 @@ impl Ugly for Literal {
     }
 }
 
-impl Ugly for UseBind {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let UseBind { uses, tail } = self;
-        s += "use ";
-        s += &uses.ugly(f);
-        s += " in ";
-        s += &tail.ugly(f);
-        s
-    }
-}
+// impl Ugly for UseBind {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let UseBind { uses, tail } = self;
+//         s += "use ";
+//         s += &uses.ugly(f);
+//         s += " in ";
+//         s += &tail.ugly(f);
+//         s
+//     }
+// }
 
-impl Ugly for UsePath {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let UsePath(u) = self;
-        s += &u.ugly(f);
-        s
-    }
-}
+// impl Ugly for UsePath {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let UsePath(u) = self;
+//         s += &u.ugly(f);
+//         s
+//     }
+// }
 
-impl Ugly for UseEnum {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        match self {
-            | UseEnum::Name(n) => s += &n.ugly(f),
-            | UseEnum::Alias(UseAlias(binder, origin)) => {
-                s += &binder.ugly(f);
-                s += " = ";
-                s += &origin.ugly(f);
-            }
-            | UseEnum::All(UseAll) => {
-                s += "..";
-            }
-            | UseEnum::Cluster(Uses(u)) => {
-                s += "( ";
-                s += &u.iter().map(|u| u.ugly(f)).collect::<Vec<_>>().join(", ");
-                s += " )";
-            }
-        }
-        s
-    }
-}
+// impl Ugly for UseEnum {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         match self {
+//             | UseEnum::Name(n) => s += &n.ugly(f),
+//             | UseEnum::Alias(UseAlias(binder, origin)) => {
+//                 s += &binder.ugly(f);
+//                 s += " = ";
+//                 s += &origin.ugly(f);
+//             }
+//             | UseEnum::All(UseAll) => {
+//                 s += "..";
+//             }
+//             | UseEnum::Cluster(Uses(u)) => {
+//                 s += "( ";
+//                 s += &u.iter().map(|u| u.ugly(f)).collect::<Vec<_>>().join(", ");
+//                 s += " )";
+//             }
+//         }
+//         s
+//     }
+// }
 
-impl Ugly for UseDef {
-    fn ugly(&self, f: &Formatter) -> String {
-        let mut s = String::new();
-        let UseDef(u) = self;
-        s += "use ";
-        s += &u.ugly(f);
-        s += " end";
-        s
-    }
-}
+// impl Ugly for UseDef {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let mut s = String::new();
+//         let UseDef(u) = self;
+//         s += "use ";
+//         s += &u.ugly(f);
+//         s += " end";
+//         s
+//     }
+// }
 
 // impl Ugly for UseBlock {
 //     fn ugly(&self, f: &Formatter) -> String {

@@ -362,6 +362,20 @@ impl Resolve for TermId {
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
+            | Term::WithBlock(term) => {
+                let WithBlock { monad_ty, imports, body } = &term;
+                let () = monad_ty.resolve(resolver, (local.clone(), global))?;
+                for import in imports {
+                    let Import { binder: _, body: def } = import;
+                    let () = def.resolve(resolver, (local.clone(), global))?;
+                }
+                for import in imports {
+                    let Import { binder, body: _ } = import;
+                    local = binder.resolve(resolver, (local.clone(), global))?;
+                }
+                let () = body.resolve(resolver, (local, global))?;
+                term.into()
+            }
             | Term::Lit(term) => term.into(),
         };
         // save the new term structure

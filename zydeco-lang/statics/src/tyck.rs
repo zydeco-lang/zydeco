@@ -574,6 +574,10 @@ impl Tyck for su::TermId {
                 let su::Dtor(body, dtor) = term;
                 todo!()
             }
+            | Tm::WithBlock(term) => {
+                let su::WithBlock { monad_ty, imports, body  } = term;
+                todo!()
+            }
             | Tm::Lit(term) => match term {
                 | su::Literal::Int(_) => todo!(),
                 | su::Literal::String(_) => todo!(),

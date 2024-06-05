@@ -36,6 +36,9 @@ extern {
         "in" => Tok::In,
         "do" => Tok::Do,
         "ret" => Tok::Ret,
+        "with" => Tok::With,
+        "import" => Tok::Import,
+        "begin" => Tok::Begin,
         "fn" => Tok::Fn,
         "pi" => Tok::Pi,
         "rec" => Tok::Rec,
@@ -44,8 +47,6 @@ extern {
         "forall" => Tok::Forall,
         "exists" => Tok::Exists,
         "sigma" => Tok::Sigma,
-        "@" => Tok::At,
-        "pack" => Tok::Pack,
 
         "IntLit" => Tok::IntLit(<&'input str>),
         "StrLit" => Tok::StrLit(<&'input str>),
@@ -229,6 +230,18 @@ CoMatcher: CoMatcher = {
     },
 };
 
+Import: Import = {
+    "import" <binder:PatId> "=" <body:TermId> => Import {
+        binder, body
+    },
+};
+WithBlock: WithBlock = {
+    "with" <monad_ty:TermId> <imports:Import*>
+    "begin" <body:TermId> "end" => WithBlock {
+        monad_ty, imports, body
+    },
+};
+
 #[inline]
 TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
 
@@ -278,9 +291,12 @@ Term: Term = {
     "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {
         scrut, arms
     }.into(),
+    // comatch
     "comatch" <arms:(<CoMatcher>)*> "end" => CoMatch {
         arms
     }.into(),
+    // with block
+    <WithBlock> => <>.into(),
 };
 
 #[inline]

@@ -184,7 +184,11 @@ pub extern def exit : Thunk(Int -> OS) end
 
 
 main
-  ! exit 0
+  with IO
+    import exit = exit
+  begin
+    ! exit 0
+  end
 end
 
 
