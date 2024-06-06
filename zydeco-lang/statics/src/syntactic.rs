@@ -1,5 +1,38 @@
 use crate::*;
 
+pub trait SyntacticallyUsed {
+    fn syntactically_used(&self, tycker: &mut Tycker) -> bool;
+}
+impl SyntacticallyUsed for su::PatId {
+    fn syntactically_used(&self, tycker: &mut Tycker) -> bool {
+        let pat = tycker.scoped.pats[self].clone();
+        use su::Pattern as Pat;
+        match pat {
+            | Pat::Ann(pat) => {
+                let su::Ann { tm, ty: _ } = pat;
+                tm.syntactically_used(tycker)
+            }
+            | Pat::Hole(pat) => {
+                let su::Hole = pat;
+                false
+            }
+            | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),
+            | Pat::Ctor(pat) => {
+                let su::Ctor(_ctor, pat) = pat;
+                pat.syntactically_used(tycker)
+            }
+            | Pat::Triv(pat) => {
+                let su::Triv = pat;
+                false
+            }
+            | Pat::Cons(pat) => {
+                let su::Cons(pat1, pat2) = pat;
+                pat1.syntactically_used(tycker) || pat2.syntactically_used(tycker)
+            }
+        }
+    }
+}
+
 pub trait SyntacticallyAnnotated {
     fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId>;
 }
@@ -23,7 +56,7 @@ impl SyntacticallyAnnotated for su::TermId {
     fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId> {
         let term = tycker.scoped.terms[self].clone();
         use su::Term as Tm;
-        match &term {
+        match term {
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;
@@ -31,19 +64,9 @@ impl SyntacticallyAnnotated for su::TermId {
             }
             | Tm::Ann(term) => {
                 let su::Ann { tm: _, ty } = term;
-                Some(*ty)
+                Some(ty)
             }
-            | Tm::Abs(term) => {
-                let su::Abs(param, body) = term;
-                // add param to pi
-                // let span = tycker.spans.terms[body].clone();
-                // let pi = tycker.spans.terms.alloc(span);
-                let body = body.syntactically_annotated(tycker)?;
-                // use zydeco_surface::bitter::desugar::Alloc;
-                let _pi: su::Term<su::DefId> = su::Pi(*param, body).into();
-                // Some(pi)
-                todo!()
-            }
+            | Tm::Abs(_)
             | Tm::Var(_)
             | Tm::Hole(_)
             | Tm::Triv(_)

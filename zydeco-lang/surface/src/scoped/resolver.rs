@@ -48,7 +48,7 @@ impl Resolver {
         top.resolve(&mut self, ())?;
         let Resolver {
             spans,
-            bitter: _,
+            bitter,
             prim_term: _,
             prim_def: prim,
             internal_to_def: _,
@@ -63,6 +63,10 @@ impl Resolver {
             exts,
             deps,
         } = self;
+        let defs = bitter.defs.map_id(|id| defs[&id].clone());
+        let pats = bitter.pats.map_id(|id| pats[&id].clone());
+        let terms = bitter.terms.map_id(|id| terms[&id].clone());
+        let decls = bitter.decls.map_id(|id| decls[&id].clone());
         let top = Kosaraju::new(&deps).run();
         Ok(ResolveOut {
             spans,

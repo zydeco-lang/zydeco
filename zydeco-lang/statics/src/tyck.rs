@@ -112,9 +112,18 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                 match tycker.scoped.decls[id].clone() {
                     | Decl::AliasBody(decl) => {
                         let su::AliasBody { binder, bindee } = decl;
-                        // we need to get the annotation for the sake of self referencing type definitions
-                        let syn_ann = bindee.syntactically_annotated(tycker);
-                        if let Some(syn_ann) = syn_ann {
+                        let self_ref = tycker
+                            .scoped
+                            .deps
+                            .query(id)
+                            .into_iter()
+                            .collect::<HashSet<_>>()
+                            .contains(id);
+                        if self_ref {
+                            // the type definition is self referencing, need to get the annotation
+                            let Some(syn_ann) = bindee.syntactically_annotated(tycker) else {
+                                Err(TyckError::MissingAnnotation)?
+                            };
                             // try analyzing the bindee after synthesizing the type
                             let ann = syn_ann.tyck_ann(tycker, ByAction::syn(ctx.clone()))?;
                             let _ = match ann {
@@ -129,21 +138,16 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                                     };
                                     let _ = bindee.tyck(tycker, ByAction::ana(ctx.clone(), ann))?;
                                 }
-                                | ss::AnnId::Type(ty) => {
-                                    // the binder is a value, directly analyze the bindee
-                                    let (bindee, ann) = bindee
-                                        .tyck(tycker, ByAction::ana(ctx.clone(), ty.into()))?;
-                                    // and then register the binder as a value
-                                    let _ = binder.tyck(
-                                        tycker,
-                                        ByAction::ana(ctx.clone(), (Some(bindee), ann)),
-                                    )?;
+                                | ss::AnnId::Type(_) => {
+                                    // the decl should be a type, but the bindee is a value
+                                    Err(TyckError::SortMismatch)?
                                 }
                             };
                         } else {
                             // synthesize the bindee
                             let (out, ann) = bindee.tyck(tycker, ByAction::syn(ctx.clone()))?;
-                            binder.tyck(tycker, ByAction::ana(ctx.clone(), (Some(out), ann)))?;
+                            let _ = binder
+                                .tyck(tycker, ByAction::ana(ctx.clone(), (Some(out), ann)))?;
                         }
                     }
                     | Decl::AliasHead(decl) => {
@@ -184,8 +188,12 @@ impl<'decl> Tyck for SccDeclarations<'decl> {
                     use su::Declaration as Decl;
                     match decl {
                         | Decl::AliasBody(decl) => {
-                            let su::AliasBody { binder: _, bindee } = decl;
-                            let _ = bindee.tyck(tycker, ByAction::syn(ctx.clone()))?;
+                            let su::AliasBody { binder, bindee } = decl;
+                            let (out, ann) = bindee.tyck(tycker, ByAction::syn(ctx.clone()))?;
+                            // register the type definitions after ensuring that they are all types
+                            // Todo: make it a separate function and avoid runtime re-insert error
+                            let _ = binder
+                                .tyck(tycker, ByAction::ana(ctx.clone(), (Some(out), ann)))?;
                         }
                         | Decl::AliasHead(_) | Decl::Main(_) => {
                             unreachable!()
@@ -505,7 +513,24 @@ impl Tyck for su::TermId {
             }
             | Tm::Abs(term) => {
                 let su::Abs(binder, body) = term;
-                todo!()
+                // three cases:
+                // 1. type -> type function (f-omega)
+                // 2. type -> term function (f)
+                // 3. term -> term function (lc)
+                match switch {
+                    Switch::Syn => {
+                        let ((ctx, binder), (_, ann)) =
+                            binder.tyck(tycker, ByAction::syn(ctx.clone()))?;
+                        let (body, body_ty) =
+                            body.tyck(tycker, ByAction::syn(ctx.clone()))?;
+                        // let body_ty = body_ty.as_type_or_err(|| TyckError::SortMismatch)?;
+                        // let ty = Alloc::alloc(tycker, ss::Arrow(ann.into(), body_ty));
+                        // let term: ss::ValueId = Alloc::alloc(tycker, ss::Abs(binder, body));
+                        // Ok(Mode::Done(term.into(), ty.into()))
+                        todo!()
+                    }
+                    Switch::Ana(ann) => todo!(),
+                }
             }
             | Tm::App(term) => {
                 let su::App(f, a) = term;
@@ -575,7 +600,7 @@ impl Tyck for su::TermId {
                 todo!()
             }
             | Tm::WithBlock(term) => {
-                let su::WithBlock { monad_ty, imports, body  } = term;
+                let su::WithBlock { monad_ty, imports, body } = term;
                 todo!()
             }
             | Tm::Lit(term) => match term {

@@ -10,10 +10,10 @@ use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
 #[derive(Debug)]
 pub struct ScopedArena {
     // arenas
-    pub defs: ArenaAssoc<DefId, VarName>,
-    pub pats: ArenaAssoc<PatId, Pattern>,
-    pub terms: ArenaAssoc<TermId, Term<DefId>>,
-    pub decls: ArenaAssoc<DeclId, Declaration>,
+    pub defs: ArenaSparse<DefId, VarName>,
+    pub pats: ArenaSparse<PatId, Pattern>,
+    pub terms: ArenaSparse<TermId, Term<DefId>>,
+    pub decls: ArenaSparse<DeclId, Declaration>,
     /// entity maps from textural syntax
     pub textual: ArenaForth<t::EntityId, EntityId>,
 

@@ -332,6 +332,7 @@ impl Desugar for t::TermId {
                         }
                     }
                 }
+                // Todo: annotate
                 tail
             }
             | Tm::App(term) => {

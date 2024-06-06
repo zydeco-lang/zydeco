@@ -293,6 +293,28 @@ mod impls {
         }
     }
 
+    impl<Id, T, Meta> ArenaSparse<Id, T, Meta>
+    where
+        Meta: Copy,
+        Id: IndexLike<Meta = Meta> + Eq + Hash,
+    {
+        pub fn map_id<U>(self, f: impl Fn(Id) -> U) -> ArenaSparse<Id, U, Meta> {
+            let Self { allocator, map, _marker } = self;
+            let map = map.into_iter().map(|(id, _val)| (id, f(id))).collect();
+            ArenaSparse { allocator, map, _marker }
+        }
+        pub fn map_value<U>(self, f: impl Fn(T) -> U) -> ArenaSparse<Id, U, Meta> {
+            let Self { allocator, map, _marker } = self;
+            let map = map.into_iter().map(|(id, val)| (id, f(val))).collect();
+            ArenaSparse { allocator, map, _marker }
+        }
+        pub fn map<U>(self, f: impl Fn(Id, T) -> U) -> ArenaSparse<Id, U, Meta> {
+            let Self { allocator, map, _marker } = self;
+            let map = map.into_iter().map(|(id, val)| (id, f(id, val))).collect();
+            ArenaSparse { allocator, map, _marker }
+        }
+    }
+
     /* ------------------------------- ArenaAssoc ------------------------------- */
 
     impl<Id, T> ArenaAssoc<Id, T> {
