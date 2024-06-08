@@ -317,23 +317,35 @@ impl Desugar for t::TermId {
             | Tm::Abs(term) => {
                 let t::Abs(params, tail) = term;
                 let b::Appli(params) = params.desugar(desugarer);
-                let mut tail = tail.desugar(desugarer);
+                let (mut tail, mut annotation) =
+                    if let Tm::Ann(t::Ann { tm, ty }) = desugarer.lookup_term(tail) {
+                        (tm.desugar(desugarer), ty.desugar(desugarer))
+                    } else {
+                        let hole = Alloc::alloc(desugarer, b::Hole.into(), self.into());
+                        (tail.desugar(desugarer), hole)
+                    };
                 for param in params.into_iter().rev() {
                     match param {
                         | b::CoPatternItem::Pat(pat) => {
-                            tail = Alloc::alloc(desugarer, b::Abs(pat, tail).into(), self.into())
+                            tail = Alloc::alloc(desugarer, b::Abs(pat, tail).into(), self.into());
+                            let pat_ty = pat.deep_clone(desugarer);
+                            annotation = Alloc::alloc(
+                                desugarer,
+                                b::Pi(pat_ty, annotation).into(),
+                                self.into(),
+                            );
                         }
                         | b::CoPatternItem::Dtor(dtor) => {
                             tail = Alloc::alloc(
                                 desugarer,
                                 b::CoMatch { arms: vec![b::CoMatcher { dtor, tail }] }.into(),
                                 self.into(),
-                            )
+                            );
+                            annotation = Alloc::alloc(desugarer, b::Hole.into(), self.into());
                         }
                     }
                 }
-                // Todo: annotate
-                tail
+                Alloc::alloc(desugarer, b::Ann { tm: tail, ty: annotation }.into(), self.into())
             }
             | Tm::App(term) => {
                 let t::Appli(terms) = term;
@@ -682,7 +694,6 @@ impl Desugar for t::Import {
         let def = def.desugar(desugarer);
         b::Import { binder: name, body: def }
     }
-
 }
 
 mod impls {
