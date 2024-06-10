@@ -2,57 +2,57 @@ use crate::*;
 use zydeco_utils::arena::ArenaAccess;
 
 impl Tycker {
-    pub fn vtype(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::KindId {
-        let Some(ss::TermId::Kind(kd)) = ctx[self.prim.vtype.get()].out else { unreachable!() };
+    pub fn vtype(&mut self, env: &ss::Context<ss::AnnId>) -> ss::KindId {
+        let ss::AnnId::Kind(kd) = env[self.prim.vtype.get()] else { unreachable!() };
         kd
     }
-    pub fn ctype(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::KindId {
-        let Some(ss::TermId::Kind(kd)) = ctx[self.prim.ctype.get()].out else { unreachable!() };
+    pub fn ctype(&mut self, env: &ss::Context<ss::AnnId>) -> ss::KindId {
+        let ss::AnnId::Kind(kd) = env[self.prim.ctype.get()] else { unreachable!() };
         kd
     }
-    pub fn thunk(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
-        let Some(ss::TermId::Type(ty)) = ctx[self.prim.thunk.get()].out else { unreachable!() };
+    pub fn thunk(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+        let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
         ty
     }
-    pub fn ret(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
-        let Some(ss::TermId::Type(ty)) = ctx[self.prim.ret.get()].out else { unreachable!() };
+    pub fn ret(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+        let ss::AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
         ty
     }
-    pub fn unit(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
-        let Some(ss::TermId::Type(ty)) = ctx[self.prim.unit.get()].out else { unreachable!() };
+    pub fn unit(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+        let ss::AnnId::Type(ty) = env[self.prim.unit.get()] else { unreachable!() };
         ty
     }
-    pub fn int(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
-        let Some(ss::TermId::Type(ty)) = ctx[self.prim.int.get()].out else { unreachable!() };
+    pub fn int(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+        let ss::AnnId::Type(ty) = env[self.prim.int.get()] else { unreachable!() };
         ty
     }
-    pub fn char(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
-        let Some(ss::TermId::Type(ty)) = ctx[self.prim.char.get()].out else { unreachable!() };
+    pub fn char(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+        let ss::AnnId::Type(ty) = env[self.prim.char.get()] else { unreachable!() };
         ty
     }
-    pub fn string(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
-        let Some(ss::TermId::Type(ty)) = ctx[self.prim.string.get()].out else { unreachable!() };
+    pub fn string(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+        let ss::AnnId::Type(ty) = env[self.prim.string.get()] else { unreachable!() };
         ty
     }
-    pub fn os(&mut self, ctx: ss::Context<ss::CtxItem>) -> ss::TypeId {
-        let Some(ss::TermId::Type(ty)) = ctx[self.prim.os.get()].out else { unreachable!() };
+    pub fn os(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+        let ss::AnnId::Type(ty) = env[self.prim.os.get()] else { unreachable!() };
         ty
     }
 }
 
 impl Tycker {
     pub fn register_prim_ty(
-        &mut self, mut ctx: ss::Context<ss::CtxItem>, def: ss::DefId, prim: ss::Type,
-        syn_kd: su::TermId,
-    ) -> Result<ss::Context<ss::CtxItem>> {
-        let kd = syn_kd.tyck_out(self, ByAction::syn(ctx.clone()))?.as_kind();
+        &mut self, mut ctx: TopCtx, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
+    ) -> Result<TopCtx> {
+        let kd = ctx.as_env(syn_kd).tyck(self, ByAction::syn(ctx.as_ctx()))?.as_ann().as_kind();
         let ty = Alloc::alloc(self, prim);
-        ctx += ss::CtxExtend::out_ann(def, ty.into(), kd.into());
+        ctx.term_ctx += (def, kd.into());
+        ctx.type_env += (def, ty.into());
         Ok(ctx)
     }
     pub fn register_prim_decl(
-        &mut self, decl: su::AliasHead, id: &su::DeclId, mut ctx: ss::Context<ss::CtxItem>,
-    ) -> Result<ss::Context<ss::CtxItem>> {
+        &mut self, decl: su::AliasHead, id: &su::DeclId, mut ctx: TopCtx,
+    ) -> Result<TopCtx> {
         let su::AliasHead { binder, ty } = decl;
         let internal_or = self.scoped.exts.get(id).cloned();
         match internal_or {
@@ -61,43 +61,41 @@ impl Tycker {
                 match internal {
                     | su::Internal::VType => {
                         let kd = Alloc::alloc(self, ss::VType);
-                        // no type_of_defs for VType since it's the largest universe level we can get
-                        // Note: the annotation itself is wrong but we should never use it
-                        ctx += ss::CtxExtend::out_ann(def, kd.into(), kd.into());
+                        ctx.term_ctx += (def, ss::AnnId::Set);
+                        ctx.type_env += (def, kd.into());
                     }
                     | su::Internal::CType => {
                         let kd = Alloc::alloc(self, ss::CType);
-                        // no type_of_defs for CType since it's the largest universe level we can get
-                        // Note: the annotation itself is wrong but we should never use it
-                        ctx += ss::CtxExtend::out_ann(def, kd.into(), kd.into());
+                        ctx.term_ctx += (def, ss::AnnId::Set);
+                        ctx.type_env += (def, kd.into());
                     }
                     | su::Internal::Thunk => {
                         let kd = ty.unwrap();
-                        ctx = self.register_prim_ty(ctx.clone(), def, ss::ThunkTy.into(), kd)?
+                        ctx = self.register_prim_ty(ctx, def, ss::ThunkTy.into(), kd)?
                     }
                     | su::Internal::Ret => {
                         let kd = ty.unwrap();
-                        ctx = self.register_prim_ty(ctx.clone(), def, ss::RetTy.into(), kd)?
+                        ctx = self.register_prim_ty(ctx, def, ss::RetTy.into(), kd)?
                     }
                     | su::Internal::Unit => {
                         let kd = ty.unwrap();
-                        ctx = self.register_prim_ty(ctx.clone(), def, ss::UnitTy.into(), kd)?
+                        ctx = self.register_prim_ty(ctx, def, ss::UnitTy.into(), kd)?
                     }
                     | su::Internal::Int => {
                         let kd = ty.unwrap();
-                        ctx = self.register_prim_ty(ctx.clone(), def, ss::IntTy.into(), kd)?
+                        ctx = self.register_prim_ty(ctx, def, ss::IntTy.into(), kd)?
                     }
                     | su::Internal::Char => {
                         let kd = ty.unwrap();
-                        ctx = self.register_prim_ty(ctx.clone(), def, ss::CharTy.into(), kd)?
+                        ctx = self.register_prim_ty(ctx, def, ss::CharTy.into(), kd)?
                     }
                     | su::Internal::String => {
                         let kd = ty.unwrap();
-                        ctx = self.register_prim_ty(ctx.clone(), def, ss::StringTy.into(), kd)?
+                        ctx = self.register_prim_ty(ctx, def, ss::StringTy.into(), kd)?
                     }
                     | su::Internal::OS => {
                         let kd = ty.unwrap();
-                        ctx = self.register_prim_ty(ctx.clone(), def, ss::OSTy.into(), kd)?
+                        ctx = self.register_prim_ty(ctx, def, ss::OSTy.into(), kd)?
                     }
                     | su::Internal::Monad | su::Internal::Algebra => {
                         unreachable!()
@@ -107,8 +105,8 @@ impl Tycker {
             | None => {
                 // the alias head is a primitive value that needs to be linked later
                 let Some(ty) = ty else { Err(TyckError::MissingAnnotation)? };
-                let ty = ty.tyck_ann(self, ByAction::syn(ctx.clone()))?.as_type();
-                let _ = binder.tyck(self, ByAction::ana(ctx.clone(), (None, ty.into())))?;
+                let ty = ctx.as_env(ty).tyck(self, ByAction::syn(ctx.as_ctx()))?.as_ann().as_type();
+                let _ = ctx.as_env(binder).tyck(self, ByAction::ana(ctx.as_ctx(), ty.into()))?;
             }
         }
         Ok(ctx)

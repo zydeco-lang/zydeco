@@ -58,11 +58,11 @@ impl Alloc<TypeId> for Type {
         ty
     }
 }
-impl Alloc<TypeId> for Sealed<TypeId> {
-    fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
-        Alloc::alloc(tycker, Type::from(val))
-    }
-}
+// impl Alloc<TypeId> for Sealed<TypeId> {
+//     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
+//         Alloc::alloc(tycker, Type::from(val))
+//     }
+// }
 // impl Alloc<TypeId> for Ann<TypeId, KindId> {
 //     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
 //         Alloc::alloc(tycker, Type::from(val))

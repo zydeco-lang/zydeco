@@ -22,13 +22,6 @@ impl Normalize for &TypeId {
             | Type::Char(_)
             | Type::String(_)
             | Type::OS(_) => Ok(*self),
-            | Type::Sealed(_ty) => {
-                // let Sealed(ty) = ty;
-                // let ty = ty.normalize(tycker, ctx)?;
-                // let sealed = Alloc::alloc(tycker, Sealed(ty));
-                // Ok(sealed)
-                Ok(*self)
-            }
             | Type::Var(def) => {
                 let ann = ctx[&def].ann;
                 let ty = ann.as_type();

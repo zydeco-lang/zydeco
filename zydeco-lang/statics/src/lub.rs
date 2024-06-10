@@ -69,25 +69,24 @@ impl Lub for &KindId {
 impl Lub for &TypeId {
     /// We need to remember the definitions introduced by both sides.
     // Todo..
-    type Ctx = Context<CtxItem>;
+    type Ctx = Context<ss::AnnId>;
     type Out = TypeId;
 
     fn lub(self, other: Self, tycker: &mut Tycker, _ctx: Self::Ctx) -> Result<Self::Out> {
         let lhs = tycker.statics.types[self].clone();
         let rhs = tycker.statics.types[other].clone();
         match (lhs, rhs) {
-            | (Type::Sealed(_), Type::Sealed(_)) => {
-                if self == other {
+            // | (Type::Hole(_), _) => Ok(*other),
+            | (Type::Var(_), Type::Var(_)) => todo!(),
+            | (Type::Abs(_), Type::Abs(_)) => todo!(),
+            | (Type::App(_), Type::App(_)) => todo!(),
+            | (Type::Abst(lhs), Type::Abst(rhs)) => {
+                if lhs == rhs {
                     Ok(*self)
                 } else {
                     Err(TyckError::TypeMismatch)?
                 }
             }
-            | (Type::Sealed(_), _) | (_, Type::Sealed(_)) => Err(TyckError::TypeMismatch)?,
-            // | (Type::Hole(_), _) => Ok(*other),
-            | (Type::Var(_), Type::Var(_)) => todo!(),
-            | (Type::Abs(_), Type::Abs(_)) => todo!(),
-            | (Type::App(_), Type::App(_)) => todo!(),
             | (Type::Abst(_), _) | (_, Type::Abst(_)) => todo!(),
             | (Type::Thunk(_), Type::Thunk(_)) => todo!(),
             | (Type::Ret(_), Type::Ret(_)) => todo!(),
@@ -108,21 +107,22 @@ impl Lub for &TypeId {
 }
 
 impl Lub for &AnnId {
-    type Ctx = Context<CtxItem>;
+    type Ctx = Context<ss::AnnId>;
     type Out = AnnId;
 
     fn lub(self, other: Self, tycker: &mut Tycker, ctx: Self::Ctx) -> Result<Self::Out> {
         match (self, other) {
+            | (AnnId::Set, AnnId::Set) => Ok(AnnId::Set),
+            | (AnnId::Set, _) | (_, AnnId::Set) => Err(TyckError::SortMismatch),
             | (AnnId::Kind(lhs), AnnId::Kind(rhs)) => {
                 let kd = lhs.lub(rhs, tycker, ())?;
                 Ok(kd.into())
             }
+            | (AnnId::Kind(_), _) | (_, AnnId::Kind(_)) => Err(TyckError::SortMismatch),
             | (AnnId::Type(lhs), AnnId::Type(rhs)) => {
                 let ty = lhs.lub(rhs, tycker, ctx)?;
                 Ok(ty.into())
             }
-            | (AnnId::Kind(_), AnnId::Type(_)) => Err(TyckError::SortMismatch),
-            | (AnnId::Type(_), AnnId::Kind(_)) => Err(TyckError::SortMismatch),
         }
     }
 }

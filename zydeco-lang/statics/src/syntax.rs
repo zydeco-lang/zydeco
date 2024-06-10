@@ -1,14 +1,15 @@
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
-use crate::surface_syntax as sc;
+use crate::surface_syntax as su;
 use derive_more::From;
 use indexmap::IndexMap;
+use std::collections::HashSet;
 use zydeco_utils::{arena::*, new_key_type};
 
 /* ------------------------------- Identifier ------------------------------- */
 
-pub type DefId = sc::DefId;
+pub type DefId = su::DefId;
 // PatId and TermId are unsorted, so we've got the following:
 new_key_type! {
     pub struct KindId;
@@ -38,10 +39,24 @@ pub enum TermId {
 /// A dispatcher for all annotations.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum AnnId {
+    Set,
     Kind(KindId),
     Type(TypeId),
 }
-pub type DeclId = sc::DeclId;
+/// and there are times when we need a proper pair of annotated things
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum PatAnnId {
+    Type(TPatId, KindId),
+    Value(VPatId, TypeId),
+}
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
+pub enum TermAnnId {
+    Kind(KindId),
+    Type(TypeId, KindId),
+    Value(ValueId, TypeId),
+    Compu(CompuId, TypeId),
+}
+pub type DeclId = su::DeclId;
 // /// A dispatcher for all entities.
 // #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 // pub enum EntityId {
@@ -64,24 +79,13 @@ new_key_type! {
 mod impls_identifiers {
     use super::*;
     use crate::err::*;
+    use crate::*;
 
     impl PatId {
-        pub fn as_type(self) -> TPatId {
-            match self {
-                | PatId::Type(t) => t,
-                | _ => panic!("Expected a type pattern"),
-            }
-        }
         pub fn as_type_or_err(self, f: impl FnOnce() -> TyckError) -> Result<TPatId> {
             match self {
                 | PatId::Type(t) => Ok(t),
                 | _ => Err(f()),
-            }
-        }
-        pub fn as_value(self) -> VPatId {
-            match self {
-                | PatId::Value(v) => v,
-                | _ => panic!("Expected a value pattern"),
             }
         }
         pub fn as_value_or_err(self, f: impl FnOnce() -> TyckError) -> Result<VPatId> {
@@ -93,35 +97,16 @@ mod impls_identifiers {
     }
 
     impl TermId {
-        pub fn as_kind(self) -> KindId {
-            match self {
-                | TermId::Kind(k) => k,
-                | _ => panic!("Expected a kind"),
-            }
-        }
         pub fn as_kind_or_err(self, f: impl FnOnce() -> TyckError) -> Result<KindId> {
             match self {
                 | TermId::Kind(k) => Ok(k),
                 | _ => Err(f()),
             }
         }
-        pub fn as_type(self) -> TypeId {
-            match self {
-                | TermId::Type(t) => t,
-                | _ => panic!("Expected a type"),
-            }
-        }
         pub fn as_type_or_err(self, f: impl FnOnce() -> TyckError) -> Result<TypeId> {
             match self {
                 | TermId::Type(t) => Ok(t),
                 | _ => Err(f()),
-            }
-        }
-        pub fn as_ann(self) -> AnnId {
-            match self {
-                | TermId::Type(t) => AnnId::Type(t),
-                | TermId::Kind(k) => AnnId::Kind(k),
-                | _ => panic!("Expected an annotation"),
             }
         }
         pub fn as_ann_or_err(self, f: impl FnOnce() -> TyckError) -> Result<AnnId> {
@@ -131,22 +116,10 @@ mod impls_identifiers {
                 | _ => Err(f()),
             }
         }
-        pub fn as_value(self) -> ValueId {
-            match self {
-                | TermId::Value(v) => v,
-                | _ => panic!("Expected a value"),
-            }
-        }
         pub fn as_value_or_err(self, f: impl FnOnce() -> TyckError) -> Result<ValueId> {
             match self {
                 | TermId::Value(v) => Ok(v),
                 | _ => Err(f()),
-            }
-        }
-        pub fn as_compu(self) -> CompuId {
-            match self {
-                | TermId::Compu(c) => c,
-                | _ => panic!("Expected a computation"),
             }
         }
         pub fn as_compu_or_err(self, f: impl FnOnce() -> TyckError) -> Result<CompuId> {
@@ -180,6 +153,74 @@ mod impls_identifiers {
             match self {
                 | AnnId::Type(t) => Ok(t),
                 | _ => Err(f()),
+            }
+        }
+    }
+
+    impl PatAnnId {
+        pub fn as_pat(self) -> PatId {
+            match self {
+                | PatAnnId::Type(t, _) => t.into(),
+                | PatAnnId::Value(v, _) => v.into(),
+            }
+        }
+        pub fn as_ann(self) -> AnnId {
+            match self {
+                | PatAnnId::Type(_, ann) => ann.into(),
+                | PatAnnId::Value(_, ann) => ann.into(),
+            }
+        }
+        pub fn mk_hole(tycker: &mut Tycker, ann: AnnId) -> Self {
+            match ann {
+                | ss::AnnId::Set => unreachable!(),
+                | ss::AnnId::Kind(kd) => {
+                    let tm = Alloc::alloc(tycker, Hole);
+                    PatAnnId::Type(tm, kd)
+                }
+                | ss::AnnId::Type(ty) => {
+                    let tm = Alloc::alloc(tycker, Hole);
+                    PatAnnId::Value(tm, ty)
+                }
+            }
+        }
+        pub fn mk_var(tycker: &mut Tycker, def: DefId, ann: AnnId) -> Self {
+            match ann {
+                | ss::AnnId::Set => unreachable!(),
+                | ss::AnnId::Kind(kd) => {
+                    let tm = Alloc::alloc(tycker, def);
+                    PatAnnId::Type(tm, kd)
+                }
+                | ss::AnnId::Type(ty) => {
+                    let tm = Alloc::alloc(tycker, def);
+                    PatAnnId::Value(tm, ty)
+                }
+            }
+        }
+    }
+
+    impl TermAnnId {
+        pub fn as_term(self) -> TermId {
+            match self {
+                | TermAnnId::Kind(k) => k.into(),
+                | TermAnnId::Type(t, _) => t.into(),
+                | TermAnnId::Value(v, _) => v.into(),
+                | TermAnnId::Compu(c, _) => c.into(),
+            }
+        }
+        pub fn as_term_static_or_err(self, f: impl FnOnce() -> TyckError) -> Result<AnnId> {
+            match self.as_term() {
+                | TermId::Kind(k) => Ok(AnnId::Kind(k)),
+                | TermId::Type(t) => Ok(AnnId::Type(t)),
+                | TermId::Value(_) => Err(f()),
+                | TermId::Compu(_) => Err(f()),
+            }
+        }
+        pub fn as_ann(self) -> AnnId {
+            match self {
+                | TermAnnId::Kind(_) => AnnId::Set,
+                | TermAnnId::Type(_, ann) => ann.into(),
+                | TermAnnId::Value(_, ann) => ann.into(),
+                | TermAnnId::Compu(_, ann) => ann.into(),
             }
         }
     }
@@ -343,7 +384,6 @@ pub struct CoData {
 #[derive(From, Clone, Debug)]
 pub enum Type {
     // Todo: remove it
-    Sealed(Sealed<TypeId>),
     // Ann(Ann<TypeId, KindId>),
     // Hole(Hole),
     Var(DefId),
@@ -454,6 +494,8 @@ pub enum Computation {
 
 /* -------------------------------- TopLevel -------------------------------- */
 
+pub struct SccDeclarations<'decl>(pub &'decl HashSet<su::DeclId>);
+
 #[derive(Clone, Debug)]
 pub struct TAliasBody {
     pub binder: TPatId,
@@ -497,15 +539,15 @@ pub struct StaticsArena {
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
     // unsorted to sorted bijective maps
-    pub pats: ArenaBack<sc::PatId, PatId>,
-    pub terms: ArenaBack<sc::TermId, TermId>,
+    pub pats: ArenaBack<su::PatId, PatId>,
+    pub terms: ArenaBack<su::TermId, TermId>,
 
     /// the type of terms under the context it's type checked; "annotation"
-    pub type_of_terms_under_ctx: ArenaAssoc<TermId, (Context<CtxItem>, AnnId)>,
-    // Todo: equivalence-class type arena (or not)
-    // Todo: hole arena for pats and terms
+    pub annotations: ArenaAssoc<TermId, (Context<AnnId>, AnnId)>,
+    /// arena for abstract types
     pub absts: ArenaDense<AbstId, ()>,
-    pub terms_of_absts: ArenaAssoc<AbstId, TermId>,
+    /// the abstract types generated from sealed
+    pub seals: ArenaAssoc<AbstId, TypeId>,
 }
 
 impl StaticsArena {
@@ -522,9 +564,9 @@ impl StaticsArena {
             pats: ArenaBack::new(),
             terms: ArenaBack::new(),
 
-            type_of_terms_under_ctx: ArenaAssoc::new(),
+            annotations: ArenaAssoc::new(),
             absts: ArenaDense::new(alloc.alloc()),
-            terms_of_absts: ArenaAssoc::new(),
+            seals: ArenaAssoc::new(),
         }
     }
 }
