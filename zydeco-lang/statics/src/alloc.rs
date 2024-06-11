@@ -73,12 +73,12 @@ impl Alloc<TypeId> for Type {
 //         Alloc::alloc(tycker, Type::from(val))
 //     }
 // }
-impl Alloc<TypeId> for AbstId {
+impl Alloc<TypeId> for DefId {
     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
         Alloc::alloc(tycker, Type::from(val))
     }
 }
-impl Alloc<TypeId> for DefId {
+impl Alloc<TypeId> for AbstId {
     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
         Alloc::alloc(tycker, Type::from(val))
     }
@@ -306,7 +306,7 @@ impl Alloc<CompuId> for CoMatch {
         Alloc::alloc(tycker, Computation::from(val))
     }
 }
-impl Alloc<CompuId> for Dtor<ValueId> {
+impl Alloc<CompuId> for Dtor<CompuId> {
     fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
         Alloc::alloc(tycker, Computation::from(val))
     }

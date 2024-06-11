@@ -3,7 +3,12 @@ use crate::{
     syntax::{AnnId, Context, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
     *,
 };
-use std::collections::{HashMap, HashSet};
+use indexmap::IndexMap;
+use std::{
+    collections::{HashMap, HashSet},
+    f32::consts::E,
+};
+use zydeco_surface::textual::syntax::Term;
 use zydeco_utils::arena::ArenaAccess;
 
 pub struct Tycker {
@@ -406,17 +411,351 @@ impl Tyck for SEnv<su::TermId> {
                 }
             }
             | Tm::Sigma(_) => todo!(),
-            | Tm::Thunk(_) => todo!(),
-            | Tm::Force(_) => todo!(),
-            | Tm::Ret(_) => todo!(),
-            | Tm::Do(_) => todo!(),
-            | Tm::Let(_) => todo!(),
-            | Tm::Data(_) => todo!(),
-            | Tm::CoData(_) => todo!(),
-            | Tm::Ctor(_) => todo!(),
-            | Tm::Match(_) => todo!(),
-            | Tm::CoMatch(_) => todo!(),
-            | Tm::Dtor(_) => todo!(),
+            | Tm::Thunk(term) => {
+                let ByAction { ctx, switch } = action;
+                let su::Thunk(body) = term;
+                let Switch::Ana(ana) = switch else { Err(TyckError::MissingAnnotation)? };
+                let AnnId::Type(ana_ty) = ana else { Err(TyckError::SortMismatch)? };
+                let thunk_app_hole = tycker.thunk_app_hole(&self.env);
+                let ty = Lub::lub(&ana_ty, &thunk_app_hole, tycker, ctx.clone())?;
+                let ss::Type::App(thunk_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
+                    unreachable!()
+                };
+                let ss::App(_thunk_ty, body_ty) = thunk_app_body_ty;
+                let body_out_ann =
+                    self.mk(body).tyck(tycker, ByAction::ana(ctx, body_ty.into()))?;
+                let (body_out, body_ty) = match body_out_ann {
+                    | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Value(_, _) => {
+                        Err(TyckError::SortMismatch)?
+                    }
+                    | TermAnnId::Compu(body_out, body_ty) => (body_out, body_ty),
+                };
+                let thunk = Alloc::alloc(tycker, ss::Thunk(body_out));
+                let thunk_app_body_ty = {
+                    let thunk_ty = tycker.thunk(&self.env);
+                    Alloc::alloc(tycker, ss::App(thunk_ty, body_ty))
+                };
+                Ok(TermAnnId::Value(thunk, thunk_app_body_ty))
+            }
+            | Tm::Force(term) => {
+                let ByAction { ctx, switch } = action;
+                let su::Force(body) = term;
+                let (body, body_ty) = match switch {
+                    | Switch::Syn => {
+                        // if syn, then ana the body with thunk_app_hole
+                        let thunk_app_hole = tycker.thunk_app_hole(&self.env);
+                        let body_out_ann = self
+                            .mk(body)
+                            .tyck(tycker, ByAction::ana(ctx.clone(), thunk_app_hole.into()))?;
+                        let (body_out, body_ty) = match body_out_ann {
+                            | TermAnnId::Kind(_)
+                            | TermAnnId::Type(_, _)
+                            | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
+                            | TermAnnId::Value(body_out, body_ty) => (body_out, body_ty),
+                        };
+                        (body_out, body_ty)
+                    }
+                    | Switch::Ana(_) => {
+                        // if ana, then ana the body with the body_ty
+                        todo!()
+                    }
+                };
+                let force = Alloc::alloc(tycker, ss::Force(body));
+                let force_ty = {
+                    let ss::Type::App(thunk_app_body_ty) =
+                        tycker.statics.types[&body_ty].to_owned()
+                    else {
+                        unreachable!()
+                    };
+                    let ss::App(_thunk_ty, force_ty) = thunk_app_body_ty;
+                    force_ty
+                };
+                Ok(TermAnnId::Compu(force, force_ty))
+            }
+            | Tm::Ret(term) => {
+                let su::Ret(body) = term;
+                let ByAction { ctx, switch } = action;
+                let Switch::Ana(ana) = switch else { Err(TyckError::MissingAnnotation)? };
+                let AnnId::Type(ana_ty) = ana else { Err(TyckError::SortMismatch)? };
+                let ret_app_hole = tycker.ret_app_hole(&self.env);
+                let ty = Lub::lub(&ana_ty, &ret_app_hole, tycker, ctx.clone())?;
+                let ss::Type::App(ret_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
+                    unreachable!()
+                };
+                let ss::App(_ret_ty, body_ty) = ret_app_body_ty;
+                let body_out_ann =
+                    self.mk(body).tyck(tycker, ByAction::ana(ctx, body_ty.into()))?;
+                let (body_out, body_ty) = match body_out_ann {
+                    | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
+                        Err(TyckError::SortMismatch)?
+                    }
+                    | TermAnnId::Value(body_out, body_ty) => (body_out, body_ty),
+                };
+                let ret = Alloc::alloc(tycker, ss::Ret(body_out));
+                let ret_app_body_ty = {
+                    let ret_ty = tycker.ret(&self.env);
+                    Alloc::alloc(tycker, ss::App(ret_ty, body_ty))
+                };
+                Ok(TermAnnId::Compu(ret, ret_app_body_ty))
+            }
+            | Tm::Do(term) => {
+                let su::Bind { binder, bindee, tail } = term;
+                let ByAction { ctx, switch } = action;
+                // first, ana bindee with ret_app_hole, and we get a compu that should be ret_app_body_ty
+                let (bindee_out, bindee_ty) = {
+                    let ret_app_hole = tycker.ret_app_hole(&self.env);
+                    let bindee_out_ann = self
+                        .mk(bindee)
+                        .tyck(tycker, ByAction::ana(ctx.clone(), ret_app_hole.into()))?;
+                    match bindee_out_ann {
+                        | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Value(_, _) => {
+                            Err(TyckError::SortMismatch)?
+                        }
+                        | TermAnnId::Compu(bindee_out, bindee_ty) => (bindee_out, bindee_ty),
+                    }
+                };
+                // then we get the binder_ty from bindee_ty and ana binder with it
+                let ss::Type::App(ret_app_binder_ty) = tycker.statics.types[&bindee_ty].to_owned()
+                else {
+                    unreachable!()
+                };
+                let ss::App(_ret_ty, binder_ty) = ret_app_binder_ty;
+                let (binder_out_ann, ctx) =
+                    self.mk(binder).tyck(tycker, ByAction::ana(ctx, binder_ty.into()))?;
+                let PatAnnId::Value(binder_out, _binder_ty) = binder_out_ann else {
+                    unreachable!()
+                };
+                // finally, we tyck the tail
+                let (tail_out, tail_ty) = {
+                    let tail_out_ann = self.mk(tail).tyck(tycker, ByAction::switch(ctx, switch))?;
+                    match tail_out_ann {
+                        | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Value(_, _) => {
+                            Err(TyckError::SortMismatch)?
+                        }
+                        | TermAnnId::Compu(tail_out, tail_ty) => (tail_out, tail_ty),
+                    }
+                };
+                let bind = Alloc::alloc(
+                    tycker,
+                    ss::Bind { binder: binder_out, bindee: bindee_out, tail: tail_out },
+                );
+                let bind_ty = tail_ty;
+                Ok(TermAnnId::Compu(bind, bind_ty))
+            }
+            | Tm::Let(term) => {
+                let su::PureBind { binder, bindee, tail } = term;
+                let ByAction { ctx, switch } = action;
+                // first, synthesize bindee
+                let (bindee_out, bindee_ty) = {
+                    let bindee_out_ann =
+                        self.mk(bindee).tyck(tycker, ByAction::syn(ctx.clone()))?;
+                    match bindee_out_ann {
+                        | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
+                            Err(TyckError::SortMismatch)?
+                        }
+                        | TermAnnId::Value(bindee_out, bindee_ty) => (bindee_out, bindee_ty),
+                    }
+                };
+                // then, ana binder with bindee_ty
+                let (binder_out_ann, ctx) =
+                    self.mk(binder).tyck(tycker, ByAction::ana(ctx, bindee_ty.into()))?;
+                let PatAnnId::Value(binder_out, _binder_ty) = binder_out_ann else {
+                    unreachable!()
+                };
+                // finally, we tyck the tail
+                let (tail_out, tail_ty) = {
+                    let tail_out_ann = self.mk(tail).tyck(tycker, ByAction::switch(ctx, switch))?;
+                    match tail_out_ann {
+                        | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Value(_, _) => {
+                            Err(TyckError::SortMismatch)?
+                        }
+                        | TermAnnId::Compu(tail_out, tail_ty) => (tail_out, tail_ty),
+                    }
+                };
+                let bind = Alloc::alloc(
+                    tycker,
+                    ss::PureBind { binder: binder_out, bindee: bindee_out, tail: tail_out },
+                );
+                let bind_ty = tail_ty;
+                Ok(TermAnnId::Compu(bind, bind_ty))
+            }
+            | Tm::Data(term) => {
+                let ByAction { ctx, switch } = action;
+                let su::Data { arms } = term;
+                let vtype = tycker.vtype(&self.env);
+                let vtype = match switch {
+                    | Switch::Syn => vtype,
+                    | Switch::Ana(ann) => {
+                        let AnnId::Kind(ann_kd) = ann else { Err(TyckError::SortMismatch)? };
+                        Lub::lub(&vtype, &ann_kd, tycker, ())?
+                    }
+                };
+                let mut arms_new: IndexMap<_, _> = IndexMap::new();
+                for su::DataArm { name, param } in arms {
+                    let param =
+                        self.mk(param).tyck(tycker, ByAction::ana(ctx.clone(), vtype.into()))?;
+                    let TermAnnId::Type(ty, _kd) = param else { Err(TyckError::SortMismatch)? };
+                    arms_new.insert(name, ty);
+                }
+                let data = ss::Data { arms: arms_new };
+                let data = Alloc::alloc(tycker, data);
+                Ok(TermAnnId::Type(data, vtype))
+            }
+            | Tm::CoData(term) => {
+                let ByAction { ctx, switch } = action;
+                let su::CoData { arms } = term;
+                let ctype = tycker.ctype(&self.env);
+                let ctype = match switch {
+                    | Switch::Syn => ctype,
+                    | Switch::Ana(ann) => {
+                        let AnnId::Kind(ann_kd) = ann else { Err(TyckError::SortMismatch)? };
+                        Lub::lub(&ctype, &ann_kd, tycker, ())?
+                    }
+                };
+                let mut arms_new: IndexMap<_, _> = IndexMap::new();
+                for su::CoDataArm { name, out } in arms {
+                    let out =
+                        self.mk(out).tyck(tycker, ByAction::ana(ctx.clone(), ctype.into()))?;
+                    let TermAnnId::Type(ty, _kd) = out else { Err(TyckError::SortMismatch)? };
+                    arms_new.insert(name, ty);
+                }
+                let codata = ss::CoData { arms: arms_new };
+                let codata = Alloc::alloc(tycker, codata);
+                Ok(TermAnnId::Type(codata, ctype))
+            }
+            | Tm::Ctor(term) => {
+                let ByAction { ctx, switch } = action;
+                let su::Ctor(ctor, arg) = term;
+                // Fixme: match in let-else is not supported??
+                let ana_ty = match switch {
+                    | Switch::Syn => Err(TyckError::MissingAnnotation)?,
+                    | Switch::Ana(ann) => ann,
+                };
+                let AnnId::Type(ana_ty) = ana_ty else { Err(TyckError::SortMismatch)? };
+                let ss::Type::Data(ty) = &tycker.statics.types[&ana_ty] else {
+                    Err(TyckError::TypeMismatch)?
+                };
+                let ss::Data { arms } = ty;
+                let arg_ty = arms
+                    .get(&ctor)
+                    .ok_or_else(|| TyckError::MissingDataArm(ctor.clone()))?
+                    .to_owned();
+                let arg_out_ann = self.mk(arg).tyck(tycker, ByAction::ana(ctx, arg_ty.into()))?;
+                let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
+                let ctor = Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), arg));
+                Ok(TermAnnId::Value(ctor, ana_ty))
+            }
+            | Tm::Match(term) => {
+                let ByAction { ctx, switch } = action;
+                let su::Match { scrut, arms } = term;
+                let scrut_out_ann = self.mk(scrut).tyck(tycker, ByAction::syn(ctx.clone()))?;
+                let (scrut, scrut_ty_id) = match scrut_out_ann {
+                    | TermAnnId::Value(scrut, ty) => (scrut, ty),
+                    | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
+                        Err(TyckError::SortMismatch)?
+                    }
+                };
+                let mut matchers = Vec::new();
+                let mut arms_ty = Vec::new();
+                for su::Matcher { binder, tail } in arms {
+                    let (binder_out_ann, ctx) = self
+                        .mk(binder)
+                        .tyck(tycker, ByAction::ana(ctx.clone(), scrut_ty_id.into()))?;
+                    let PatAnnId::Value(binder, _ty) = binder_out_ann else {
+                        Err(TyckError::SortMismatch)?
+                    };
+                    match switch {
+                        | Switch::Syn => {
+                            let tail_out_ann =
+                                self.mk(tail).tyck(tycker, ByAction::syn(ctx.clone()))?;
+                            let TermAnnId::Compu(tail, ty) = tail_out_ann else {
+                                Err(TyckError::SortMismatch)?
+                            };
+                            matchers.push(ss::Matcher { binder, tail });
+                            arms_ty.push(ty);
+                        }
+                        | Switch::Ana(ana_ty) => {
+                            let tail_out_ann = self
+                                .mk(tail)
+                                .tyck(tycker, ByAction::ana(ctx.clone(), ana_ty.into()))?;
+                            let TermAnnId::Compu(tail, ty) = tail_out_ann else {
+                                Err(TyckError::SortMismatch)?
+                            };
+                            matchers.push(ss::Matcher { binder, tail });
+                            arms_ty.push(ty);
+                        }
+                    }
+                }
+                let whole_term = Alloc::alloc(tycker, ss::Match { scrut, arms: matchers });
+                if arms_ty.is_empty() {
+                    todo!()
+                }
+                // make sure that each arm has the same type
+                let mut iter = arms_ty.into_iter();
+                let mut res = iter.next().unwrap();
+                for ty in iter {
+                    res = Lub::lub(&res, &ty, tycker, ctx.clone())?;
+                }
+                let whole_ty = res;
+                Ok(TermAnnId::Compu(whole_term, whole_ty))
+            }
+            | Tm::CoMatch(term) => {
+                let ByAction { ctx, switch } = action;
+                let su::CoMatch { arms: comatchers } = term;
+                let ana_ty = match switch {
+                    | Switch::Syn => Err(TyckError::MissingAnnotation)?,
+                    | Switch::Ana(ana) => match ana {
+                        | AnnId::Set | AnnId::Kind(_) => Err(TyckError::SortMismatch)?,
+                        | AnnId::Type(ana_ty) => ana_ty,
+                    },
+                };
+                let ss::Type::CoData(ty) = &tycker.statics.types[&ana_ty] else {
+                    Err(TyckError::TypeMismatch)?
+                };
+                let ss::CoData { mut arms } = ty.clone();
+                let mut comatchers_new = Vec::new();
+                for su::CoMatcher { dtor, tail } in comatchers {
+                    let arm_ty = arms
+                        .swap_remove(&dtor)
+                        .ok_or_else(|| TyckError::MissingCoDataArm(dtor.clone()))?;
+                    let tail_out_ann =
+                        self.mk(tail).tyck(tycker, ByAction::ana(ctx.clone(), arm_ty.into()))?;
+                    let TermAnnId::Compu(tail, _ty) = tail_out_ann else {
+                        Err(TyckError::SortMismatch)?
+                    };
+                    comatchers_new.push(ss::CoMatcher { dtor, tail });
+                }
+                if !arms.is_empty() {
+                    Err(TyckError::NonExhaustiveCoDataArms(arms))?
+                }
+                let whole_term = Alloc::alloc(tycker, ss::CoMatch { arms: comatchers_new });
+                Ok(TermAnnId::Compu(whole_term, ana_ty))
+            }
+            | Tm::Dtor(term) => {
+                let ByAction { ctx, switch } = action;
+                let su::Dtor(body, dtor) = term;
+                let body_out_ann = self.mk(body).tyck(tycker, ByAction::syn(ctx.clone()))?;
+                let TermAnnId::Compu(body, ty_body) = body_out_ann else {
+                    Err(TyckError::SortMismatch)?
+                };
+                let ss::Type::CoData(ty) = &tycker.statics.types[&ty_body] else {
+                    Err(TyckError::TypeMismatch)?
+                };
+                let ss::CoData { arms } = ty;
+                let whole_ty = arms
+                    .get(&dtor)
+                    .ok_or_else(|| TyckError::MissingCoDataArm(dtor.clone()))?
+                    .to_owned();
+                let whole = Alloc::alloc(tycker, ss::Dtor(body, dtor));
+                match switch {
+                    | Switch::Syn => Ok(TermAnnId::Compu(whole, whole_ty)),
+                    | Switch::Ana(ana) => {
+                        let AnnId::Type(ana_ty) = ana else { Err(TyckError::SortMismatch)? };
+                        let whole_ty = Lub::lub(&whole_ty, &ana_ty, tycker, ctx)?;
+                        Ok(TermAnnId::Compu(whole, whole_ty))
+                    }
+                }
+            }
             | Tm::WithBlock(_) => todo!(),
             | Tm::Lit(lit) => {
                 fn check_again_ty(

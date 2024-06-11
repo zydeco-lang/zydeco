@@ -14,9 +14,23 @@ impl Tycker {
         let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
         ty
     }
+    pub fn thunk_app_hole(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+        let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
+        let hole = self.statics.absts.alloc(());
+        let hole = Alloc::alloc(self, hole);
+        let app = Alloc::alloc(self, ss::App(ty, hole));
+        app
+    }
     pub fn ret(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
         ty
+    }
+    pub fn ret_app_hole(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+        let ss::AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
+        let hole = self.statics.absts.alloc(());
+        let hole = Alloc::alloc(self, hole);
+        let app = Alloc::alloc(self, ss::App(ty, hole));
+        app
     }
     pub fn unit(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.unit.get()] else { unreachable!() };

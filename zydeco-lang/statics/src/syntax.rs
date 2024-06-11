@@ -329,10 +329,6 @@ pub enum TypePattern {
     Var(DefId),
 }
 
-/// an abstract type
-#[derive(Clone, Debug)]
-pub struct Abstract;
-
 /// `U`
 #[derive(Clone, Debug)]
 pub struct ThunkTy;
@@ -387,9 +383,9 @@ pub enum Type {
     // Ann(Ann<TypeId, KindId>),
     // Hole(Hole),
     Var(DefId),
+    Abst(AbstId),
     Abs(Abs<TPatId, TypeId>),
     App(App<TypeId, TypeId>),
-    Abst(AbstId),
     Thunk(ThunkTy),
     Ret(RetTy),
     Unit(UnitTy),
@@ -472,7 +468,7 @@ pub struct CoMatch {
 }
 #[derive(Clone, Debug)]
 pub struct CoMatcher {
-    pub params: VPatId,
+    pub dtor: DtorName,
     pub tail: CompuId,
 }
 
@@ -489,7 +485,7 @@ pub enum Computation {
     Let(PureBind<VPatId, ValueId, CompuId>),
     Match(Match),
     CoMatch(CoMatch),
-    Dtor(Dtor<ValueId>),
+    Dtor(Dtor<CompuId>),
 }
 
 /* -------------------------------- TopLevel -------------------------------- */
