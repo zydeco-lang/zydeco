@@ -3,7 +3,6 @@ pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use crate::surface_syntax as su;
 use derive_more::From;
-use indexmap::IndexMap;
 use std::collections::HashSet;
 use zydeco_utils::{arena::*, new_key_type};
 
@@ -71,9 +70,17 @@ pub type DeclId = su::DeclId;
 // }
 
 new_key_type! {
-    /// Identifier for abstract types, including type holes, sealed types,
-    /// and type instantiations for forall and exist.
+    /// Identifier for abstract types, including:
+    /// 1. sealed types, and
+    /// 2. type instantiations for forall and exists.
     pub struct AbstId;
+
+    /// Identifier for hole-filling targets with context constraints.
+    pub struct FillId;
+
+    // Identifier for data and codata definitions.
+    pub struct DataId;
+    pub struct CoDataId;
 }
 
 mod impls_identifiers {
@@ -366,15 +373,17 @@ pub struct Forall(pub TPatId, pub TypeId);
 pub struct Exists(pub TPatId, pub TypeId);
 
 /// data | C_1 ty | ... end
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Data {
-    pub arms: IndexMap<CtorName, TypeId>,
+    // Fixme: define correct behavior for hash and eq to deduplicate
+    pub arms: im::HashMap<CtorName, TypeId>,
 }
 
 /// `codata | .d_1 cp : ty | ... end`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CoData {
-    pub arms: IndexMap<DtorName, TypeId>,
+    // Fixme: define correct behavior for hash and eq to deduplicate
+    pub arms: im::HashMap<DtorName, TypeId>,
 }
 
 #[derive(From, Clone, Debug)]
@@ -384,6 +393,7 @@ pub enum Type {
     // Hole(Hole),
     Var(DefId),
     Abst(AbstId),
+    Fill(FillId),
     Abs(Abs<TPatId, TypeId>),
     App(App<TypeId, TypeId>),
     Thunk(ThunkTy),
@@ -397,28 +407,15 @@ pub enum Type {
     Forall(Forall),
     Prod(Prod<TypeId>),
     Exists(Exists),
-    Data(Data),
-    CoData(CoData),
+    Data(DataId),
+    CoData(CoDataId),
 }
 
 mod impls_types {
     use super::*;
-    use crate::err::*;
+    // use crate::err::*;
 
-    impl Type {
-        pub fn as_data_or_err(&self, f: impl FnOnce() -> TyckError) -> Result<&Data> {
-            match self {
-                | Type::Data(data) => Ok(data),
-                | _ => Err(f()),
-            }
-        }
-        pub fn as_codata_or_err(&self, f: impl FnOnce() -> TyckError) -> Result<&CoData> {
-            match self {
-                | Type::CoData(codata) => Ok(codata),
-                | _ => Err(f()),
-            }
-        }
-    }
+    impl Type {}
 }
 
 /* ---------------------------------- Value --------------------------------- */
@@ -538,12 +535,32 @@ pub struct StaticsArena {
     pub pats: ArenaBack<su::PatId, PatId>,
     pub terms: ArenaBack<su::TermId, TermId>,
 
-    /// the type of terms under the context it's type checked; "annotation"
-    pub annotations: ArenaAssoc<TermId, (Context<AnnId>, AnnId)>,
+    // the type of terms under the context it's type checked; "annotation"
+    /// kind annotations for types
+    pub annotations_type: ArenaAssoc<TypeId, (Context<AnnId>, KindId)>,
+    /// type annotations for values
+    pub annotations_value: ArenaAssoc<ValueId, (Context<AnnId>, TypeId)>,
+    /// type annotations for computations
+    pub annotations_compu: ArenaAssoc<CompuId, (Context<AnnId>, TypeId)>,
+
     /// arena for abstract types
     pub absts: ArenaDense<AbstId, ()>,
     /// the abstract types generated from sealed
     pub seals: ArenaAssoc<AbstId, TypeId>,
+    /// arena for filling context-constrained holes
+    pub fills: ArenaDense<FillId, Context<AnnId>>,
+    /// arena for `data` definitions
+    pub defs_data: ArenaDense<DataId, im::Vector<(CtorName, TypeId)>>,
+    /// arena for `data` hashmap
+    pub tbls_data: ArenaAssoc<DataId, Data>,
+    /// arena for `data` equivalence classes
+    pub eqs_data: ArenaAssoc<Data, DataId>,
+    /// arena for `codata` definitions
+    pub defs_codata: ArenaDense<CoDataId, im::Vector<(DtorName, TypeId)>>,
+    /// arena for `codata` hashmap
+    pub tbls_codata: ArenaAssoc<CoDataId, CoData>,
+    /// arena for `codata` equivalence classes
+    pub eqs_codata: ArenaAssoc<CoData, CoDataId>,
 }
 
 impl StaticsArena {
@@ -560,9 +577,19 @@ impl StaticsArena {
             pats: ArenaBack::new(),
             terms: ArenaBack::new(),
 
-            annotations: ArenaAssoc::new(),
+            annotations_type: ArenaAssoc::new(),
+            annotations_value: ArenaAssoc::new(),
+            annotations_compu: ArenaAssoc::new(),
+
             absts: ArenaDense::new(alloc.alloc()),
             seals: ArenaAssoc::new(),
+            fills: ArenaDense::new(alloc.alloc()),
+            defs_data: ArenaDense::new(alloc.alloc()),
+            tbls_data: ArenaAssoc::new(),
+            eqs_data: ArenaAssoc::new(),
+            defs_codata: ArenaDense::new(alloc.alloc()),
+            tbls_codata: ArenaAssoc::new(),
+            eqs_codata: ArenaAssoc::new(),
         }
     }
 }

@@ -148,12 +148,12 @@ impl Alloc<TypeId> for Exists {
         Alloc::alloc(tycker, Type::from(val))
     }
 }
-impl Alloc<TypeId> for Data {
+impl Alloc<TypeId> for DataId {
     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
         Alloc::alloc(tycker, Type::from(val))
     }
 }
-impl Alloc<TypeId> for CoData {
+impl Alloc<TypeId> for CoDataId {
     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
         Alloc::alloc(tycker, Type::from(val))
     }

@@ -1,5 +1,4 @@
 use crate::syntax::*;
-use indexmap::IndexMap;
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
@@ -17,7 +16,9 @@ pub enum TyckError {
     #[error("Missing codata arm: {0:?}")]
     MissingCoDataArm(DtorName),
     #[error("Non-exhaustive data arms: {0:?}")]
-    NonExhaustiveCoDataArms(IndexMap<DtorName, TypeId>)
+    NonExhaustiveCoDataArms(im::HashMap<DtorName, TypeId>),
+    #[error("{0}")]
+    Expressivity(&'static str),
 }
 
 pub type Result<T> = std::result::Result<T, TyckError>;

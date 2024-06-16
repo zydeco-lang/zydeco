@@ -15,6 +15,7 @@ impl Normalize for &TypeId {
         match ty {
             // | Type::Hole(_)
             | Type::Abst(_)
+            | Type::Fill(_)
             | Type::Thunk(_)
             | Type::Ret(_)
             | Type::Unit(_)

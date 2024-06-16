@@ -32,6 +32,48 @@ impl SyntacticallyUsed for su::PatId {
         }
     }
 }
+impl SyntacticallyUsed for ss::TPatId {
+    fn syntactically_used(&self, tycker: &mut Tycker) -> bool {
+        let pat = tycker.statics.tpats[self].clone();
+        use ss::TypePattern as Pat;
+        match pat {
+            | Pat::Hole(pat) => {
+                let ss::Hole = pat;
+                false
+            }
+            | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),
+        }
+    }
+}
+impl SyntacticallyUsed for ss::VPatId {
+    fn syntactically_used(&self, tycker: &mut Tycker) -> bool {
+        let pat = tycker.statics.vpats[self].clone();
+        use ss::ValuePattern as Pat;
+        match pat {
+            | Pat::Hole(pat) => {
+                let ss::Hole = pat;
+                false
+            }
+            | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),
+            | Pat::Ctor(pat) => {
+                let ss::Ctor(_ctor, pat) = pat;
+                pat.syntactically_used(tycker)
+            }
+            | Pat::Triv(pat) => {
+                let ss::Triv = pat;
+                false
+            }
+            | Pat::VCons(pat) => {
+                let ss::Cons(pat1, pat2) = pat;
+                pat1.syntactically_used(tycker) || pat2.syntactically_used(tycker)
+            }
+            | Pat::TCons(pat) => {
+                let ss::Cons(pat1, pat2) = pat;
+                pat1.syntactically_used(tycker) || pat2.syntactically_used(tycker)
+            }
+        }
+    }
+}
 
 pub trait SyntacticallyAnnotated {
     fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId>;
