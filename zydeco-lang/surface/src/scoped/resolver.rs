@@ -367,8 +367,10 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::WithBlock(term) => {
-                let WithBlock { monad_ty, imports, body } = &term;
-                let () = monad_ty.resolve(resolver, (local.clone(), global))?;
+                let WithBlock { structs, imports, body } = &term;
+                for struct_ in structs {
+                    let () = struct_.resolve(resolver, (local.clone(), global))?;
+                }
                 for import in imports {
                     let Import { binder: _, body: def } = import;
                     let () = def.resolve(resolver, (local.clone(), global))?;

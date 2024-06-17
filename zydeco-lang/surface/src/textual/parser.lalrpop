@@ -236,9 +236,9 @@ Import: Import = {
     },
 };
 WithBlock: WithBlock = {
-    "with" <monad_ty:TermId> <imports:Import*>
+    <structs:("with" <TermId>)*> <imports:Import*>
     "begin" <body:TermId> "end" => WithBlock {
-        monad_ty, imports, body
+        structs, imports, body
     },
 };
 

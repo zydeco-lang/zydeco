@@ -7,7 +7,7 @@ pub trait Normalize {
 }
 
 impl Normalize for &TypeId {
-    type Ctx = Context<CtxItem>;
+    type Ctx = Context<AnnId>;
     type Out = TypeId;
 
     fn normalize(self, tycker: &mut Tycker, ctx: Self::Ctx) -> Result<Self::Out> {
@@ -24,7 +24,7 @@ impl Normalize for &TypeId {
             | Type::String(_)
             | Type::OS(_) => Ok(*self),
             | Type::Var(def) => {
-                let ann = ctx[&def].ann;
+                let ann = ctx[&def];
                 let ty = ann.as_type();
                 ty.normalize(tycker, ctx)
             }

@@ -192,7 +192,7 @@ pub struct Import {
 /// `with T import f = V begin M end`
 #[derive(Clone, Debug)]
 pub struct WithBlock {
-    pub monad_ty: TermId,
+    pub structs: Vec<TermId>,
     pub imports: Vec<Import>,
     pub body: TermId,
 }

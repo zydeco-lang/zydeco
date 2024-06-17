@@ -585,13 +585,13 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Dtor(term, name).into(), self.into())
             }
             | Tm::WithBlock(term) => {
-                let t::WithBlock { monad_ty, imports, body } = term;
-                let monad_ty = monad_ty.desugar(desugarer);
+                let t::WithBlock { structs, imports, body } = term;
+                let monad_ty = structs.desugar(desugarer);
                 let imports = imports.desugar(desugarer);
                 let body = body.desugar(desugarer);
                 Alloc::alloc(
                     desugarer,
-                    b::WithBlock { monad_ty, imports, body }.into(),
+                    b::WithBlock { structs: monad_ty, imports, body }.into(),
                     self.into(),
                 )
             }

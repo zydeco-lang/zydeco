@@ -533,9 +533,11 @@ impl Ugly for Import {
 impl Ugly for WithBlock {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let WithBlock { monad_ty, imports, body } = self;
-        s += "with ";
-        s += &monad_ty.ugly(f);
+        let WithBlock { structs, imports, body } = self;
+        for struct_ in structs {
+            s += "with ";
+            s += &struct_.ugly(f);
+        }
         for import in imports {
             s += " ";
             s += &import.ugly(f);

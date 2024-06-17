@@ -232,7 +232,7 @@ impl DeepClone for b::TermId {
                 b::Dtor(term, name).into()
             }
             | b::Term::WithBlock(term) => {
-                let b::WithBlock { monad_ty, imports, body } = term;
+                let b::WithBlock { structs: monad_ty, imports, body } = term;
                 let monad_ty = monad_ty.deep_clone(desugarer);
                 let imports = imports
                     .into_iter()
@@ -243,7 +243,7 @@ impl DeepClone for b::TermId {
                     })
                     .collect();
                 let body = body.deep_clone(desugarer);
-                b::WithBlock { monad_ty, imports, body }.into()
+                b::WithBlock { structs: monad_ty, imports, body }.into()
             }
             | b::Term::Lit(term) => term.clone().into(),
         };

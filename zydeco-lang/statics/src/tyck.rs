@@ -425,17 +425,16 @@ impl Tyck for SEnv<su::TermId> {
                 let tm_out_ann = self.mk(tm).tyck(tycker, ByAction::ana(ctx, ann))?;
                 Ok(tm_out_ann)
             }
-            | Tm::Hole(_) => todo!(),
-            // | Tm::Hole(term) => {
-            //     let su::Hole = term;
-            //     let ByAction { ctx, switch } = action;
-            //     let _ = match switch {
-            //         Switch::Syn => todo!(),
-            //         Switch::Ana(ana) => todo!(),
-            //     };
-            //     // we can only deduce type holes
-            //     todo!()
-            // }
+            | Tm::Hole(term) => {
+                let su::Hole = term;
+                let ByAction { ctx, switch } = action;
+                let _ = match switch {
+                    Switch::Syn => todo!(),
+                    Switch::Ana(ana) => todo!(),
+                };
+                // we can only deduce type holes
+                todo!()
+            }
             | Tm::Var(def) => {
                 let ByAction { ctx, switch } = action;
                 let ann = {

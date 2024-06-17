@@ -74,10 +74,8 @@ new_key_type! {
     /// 1. sealed types, and
     /// 2. type instantiations for forall and exists.
     pub struct AbstId;
-
     /// Identifier for hole-filling targets with context constraints.
     pub struct FillId;
-
     // Identifier for data and codata definitions.
     pub struct DataId;
     pub struct CoDataId;
@@ -240,16 +238,6 @@ pub struct Context<T> {
     pub defs: im::HashMap<DefId, T>,
 }
 
-#[derive(Clone, Debug)]
-pub struct CtxItem {
-    pub out: Option<TermId>,
-    pub ann: AnnId,
-}
-
-/// def, out, ann
-#[derive(Clone, Debug)]
-pub struct CtxExtend(pub DefId, pub Option<TermId>, pub AnnId);
-
 mod impls_context {
     use super::*;
     use std::ops::{Add, AddAssign, Index};
@@ -288,14 +276,6 @@ mod impls_context {
             *self = Self { defs };
         }
     }
-    impl AddAssign<CtxExtend> for Context<CtxItem> {
-        fn add_assign(&mut self, CtxExtend(def, out, ann): CtxExtend) {
-            let Self { defs } = self;
-            let mut defs = defs.clone();
-            defs.insert(def, CtxItem { out, ann });
-            *self = Self { defs };
-        }
-    }
     impl<T> Index<&DefId> for Context<T>
     where
         T: Clone,
@@ -303,12 +283,6 @@ mod impls_context {
         type Output = T;
         fn index(&self, def: &DefId) -> &T {
             &self.defs[def]
-        }
-    }
-
-    impl CtxExtend {
-        pub fn out_ann(def: DefId, out: TermId, ann: AnnId) -> Self {
-            Self(def, Some(out), ann)
         }
     }
 }
@@ -549,6 +523,8 @@ pub struct StaticsArena {
     pub seals: ArenaAssoc<AbstId, TypeId>,
     /// arena for filling context-constrained holes
     pub fills: ArenaDense<FillId, Context<AnnId>>,
+    /// arena for the solutions of fillings
+    pub solus: ArenaAssoc<FillId, TypeId>,
     /// arena for `data` definitions
     pub defs_data: ArenaDense<DataId, im::Vector<(CtorName, TypeId)>>,
     /// arena for `data` hashmap
@@ -584,6 +560,7 @@ impl StaticsArena {
             absts: ArenaDense::new(alloc.alloc()),
             seals: ArenaAssoc::new(),
             fills: ArenaDense::new(alloc.alloc()),
+            solus: ArenaAssoc::new(),
             defs_data: ArenaDense::new(alloc.alloc()),
             tbls_data: ArenaAssoc::new(),
             eqs_data: ArenaAssoc::new(),
