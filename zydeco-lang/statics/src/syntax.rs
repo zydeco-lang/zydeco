@@ -407,7 +407,6 @@ pub enum ValuePattern {
 
 #[derive(From, Clone, Debug)]
 pub enum Value {
-    // Ann(Ann<ValueId, TypeId>),
     Hole(Hole),
     Var(DefId),
     Thunk(Thunk<CompuId>),
@@ -445,8 +444,7 @@ pub struct CoMatcher {
 
 #[derive(From, Clone, Debug)]
 pub enum Computation {
-    // Ann(Ann<CompuId, TypeId>),
-    // Hole(Hole),
+    Hole(Hole),
     Abs(Abs<VPatId, CompuId>),
     App(App<CompuId, ValueId>),
     Rec(Rec<VPatId, CompuId>),

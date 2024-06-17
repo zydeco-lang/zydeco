@@ -83,6 +83,11 @@ impl Alloc<TypeId> for AbstId {
         Alloc::alloc(tycker, Type::from(val))
     }
 }
+impl Alloc<TypeId> for FillId {
+    fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
+        Alloc::alloc(tycker, Type::from(val))
+    }
+}
 impl Alloc<TypeId> for Abs<TPatId, TypeId> {
     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
         Alloc::alloc(tycker, Type::from(val))
@@ -167,11 +172,6 @@ impl Alloc<VPatId> for ValuePattern {
         vpat
     }
 }
-// impl Alloc<VPatId> for Ann<VPatId, TypeId> {
-//     fn alloc(tycker: &mut Tycker, val: Self) -> VPatId {
-//         Alloc::alloc(tycker, ValuePattern::from(val))
-//     }
-// }
 impl Alloc<VPatId> for Hole {
     fn alloc(tycker: &mut Tycker, val: Self) -> VPatId {
         Alloc::alloc(tycker, ValuePattern::from(val))
@@ -209,11 +209,6 @@ impl Alloc<ValueId> for Value {
         val
     }
 }
-// impl Alloc<ValueId> for Ann<ValueId, TypeId> {
-//     fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
-//         Alloc::alloc(tycker, Value::from(val))
-//     }
-// }
 impl Alloc<ValueId> for Hole {
     fn alloc(tycker: &mut Tycker, val: Self) -> ValueId {
         Alloc::alloc(tycker, Value::from(val))
@@ -259,6 +254,11 @@ impl Alloc<CompuId> for Computation {
     fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
         let compu = tycker.statics.compus.alloc(val);
         compu
+    }
+}
+impl Alloc<CompuId> for Hole {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
     }
 }
 impl Alloc<CompuId> for Abs<VPatId, CompuId> {

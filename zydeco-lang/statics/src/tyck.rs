@@ -428,12 +428,37 @@ impl Tyck for SEnv<su::TermId> {
             | Tm::Hole(term) => {
                 let su::Hole = term;
                 let ByAction { ctx, switch } = action;
-                let _ = match switch {
-                    Switch::Syn => todo!(),
-                    Switch::Ana(ana) => todo!(),
-                };
-                // we can only deduce type holes
-                todo!()
+                match switch {
+                    | Switch::Syn => Err(TyckError::MissingAnnotation)?,
+                    | Switch::Ana(AnnId::Set) => {
+                        // can't deduce kind for now
+                        Err(TyckError::SortMismatch)?
+                    }
+                    | Switch::Ana(AnnId::Kind(kd)) => {
+                        // a type hole, with a specific kind in mind
+                        let fill = tycker.statics.fills.alloc(ctx.to_owned());
+                        let fill = Alloc::alloc(tycker, fill);
+                        Ok(TermAnnId::Type(fill, kd))
+                    }
+                    | Switch::Ana(AnnId::Type(ty)) => {
+                        // a hole in either value or computation; like undefined in Haskell
+                        let (_ctx, kd) = &tycker.statics.annotations_type[&ty];
+                        let kd = tycker.statics.kinds[kd].to_owned();
+                        match kd {
+                            | syntax::Kind::VType(ss::VType) => {
+                                let hole = Alloc::alloc(tycker, ss::Hole);
+                                Ok(TermAnnId::Value(hole, ty))
+                            }
+                            | syntax::Kind::CType(ss::CType) => {
+                                let hole = Alloc::alloc(tycker, ss::Hole);
+                                Ok(TermAnnId::Compu(hole, ty))
+                            }
+                            | syntax::Kind::Arrow(_) => {
+                                unreachable!()
+                            }
+                        }
+                    }
+                }
             }
             | Tm::Var(def) => {
                 let ByAction { ctx, switch } = action;
