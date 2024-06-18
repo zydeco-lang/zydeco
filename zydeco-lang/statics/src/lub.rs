@@ -3,24 +3,21 @@ use crate::{syntax::*, *};
 /// A type that can be joined with another type, producing their least upper bound.
 /// T \/ T ?~~> T'
 pub trait Lub<Rhs = Self> {
-    type Ctx;
     type Out;
-    fn lub(self, other: Rhs, tycker: &mut Tycker, ctx: Self::Ctx) -> Result<Self::Out>;
+    fn lub(self, other: Rhs, tycker: &mut Tycker) -> Result<Self::Out>;
 }
 
 impl Lub for () {
-    type Ctx = ();
     type Out = ();
-    fn lub(self, (): Self, _tycker: &mut Tycker, (): Self::Ctx) -> Result<Self::Out> {
+    fn lub(self, (): Self, _tycker: &mut Tycker) -> Result<Self::Out> {
         Ok(())
     }
 }
 
 impl Lub for &KindId {
-    type Ctx = ();
     type Out = KindId;
 
-    fn lub(self, other: Self, tycker: &mut Tycker, ctx: Self::Ctx) -> Result<Self::Out> {
+    fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         let lhs = tycker.statics.kinds[self].clone();
         let rhs = tycker.statics.kinds[other].clone();
         match (lhs, rhs) {
@@ -35,8 +32,8 @@ impl Lub for &KindId {
             | (Kind::Arrow(lhs), Kind::Arrow(rhs)) => {
                 let Arrow(lin, lout) = lhs;
                 let Arrow(rin, rout) = rhs;
-                let kd_in = lin.lub(&rin, tycker, ctx)?;
-                let kd_out = lout.lub(&rout, tycker, ctx)?;
+                let kd_in = lin.lub(&rin, tycker)?;
+                let kd_out = lout.lub(&rout, tycker)?;
                 let kd = Alloc::alloc(tycker, Arrow(kd_in, kd_out));
                 Ok(kd)
             }
@@ -69,10 +66,9 @@ impl Lub for &KindId {
 impl Lub for &TypeId {
     /// We need to remember the definitions introduced by both sides.
     // Todo..
-    type Ctx = Context<ss::AnnId>;
     type Out = TypeId;
 
-    fn lub(self, other: Self, tycker: &mut Tycker, _ctx: Self::Ctx) -> Result<Self::Out> {
+    fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         let lhs = tycker.statics.types[self].clone();
         let rhs = tycker.statics.types[other].clone();
         match (lhs, rhs) {
@@ -107,20 +103,19 @@ impl Lub for &TypeId {
 }
 
 impl Lub for &AnnId {
-    type Ctx = Context<ss::AnnId>;
     type Out = AnnId;
 
-    fn lub(self, other: Self, tycker: &mut Tycker, ctx: Self::Ctx) -> Result<Self::Out> {
+    fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         match (self, other) {
             | (AnnId::Set, AnnId::Set) => Ok(AnnId::Set),
             | (AnnId::Set, _) | (_, AnnId::Set) => Err(TyckError::SortMismatch),
             | (AnnId::Kind(lhs), AnnId::Kind(rhs)) => {
-                let kd = lhs.lub(rhs, tycker, ())?;
+                let kd = lhs.lub(rhs, tycker)?;
                 Ok(kd.into())
             }
             | (AnnId::Kind(_), _) | (_, AnnId::Kind(_)) => Err(TyckError::SortMismatch),
             | (AnnId::Type(lhs), AnnId::Type(rhs)) => {
-                let ty = lhs.lub(rhs, tycker, ctx)?;
+                let ty = lhs.lub(rhs, tycker)?;
                 Ok(ty.into())
             }
         }

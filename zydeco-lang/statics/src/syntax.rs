@@ -455,19 +455,21 @@ pub struct StaticsArena {
     pub terms: ArenaBack<su::TermId, TermId>,
 
     // the type of terms under the context it's type checked; "annotation"
+    /// annotations for variable definitions
+    pub annotations_var: ArenaAssoc<DefId, AnnId>,
     /// kind annotations for types
-    pub annotations_type: ArenaAssoc<TypeId, (Context<AnnId>, KindId)>,
+    pub annotations_type: ArenaAssoc<TypeId, KindId>,
     /// type annotations for values
-    pub annotations_value: ArenaAssoc<ValueId, (Context<AnnId>, TypeId)>,
+    pub annotations_value: ArenaAssoc<ValueId, TypeId>,
     /// type annotations for computations
-    pub annotations_compu: ArenaAssoc<CompuId, (Context<AnnId>, TypeId)>,
+    pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
 
     /// arena for abstract types
     pub absts: ArenaDense<AbstId, ()>,
     /// the abstract types generated from sealed
     pub seals: ArenaAssoc<AbstId, TypeId>,
     /// arena for filling context-constrained holes
-    pub fills: ArenaDense<FillId, Context<AnnId>>,
+    pub fills: ArenaDense<FillId, Context<()>>,
     /// arena for the solutions of fillings
     pub solus: ArenaAssoc<FillId, TypeId>,
     /// arena for `data` definitions
@@ -498,6 +500,7 @@ impl StaticsArena {
             pats: ArenaBack::new(),
             terms: ArenaBack::new(),
 
+            annotations_var: ArenaAssoc::new(),
             annotations_type: ArenaAssoc::new(),
             annotations_value: ArenaAssoc::new(),
             annotations_compu: ArenaAssoc::new(),

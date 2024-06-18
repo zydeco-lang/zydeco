@@ -27,6 +27,10 @@ pub enum TyckError {
     MultipleAlgebras,
     #[error("Neither monad nor algebra")]
     NeitherMonadNorAlgebra,
+    #[error("Missing monad")]
+    MissingMonad,
+    #[error("Missing algebra")]
+    MissingAlgebra,
 }
 
 pub type Result<T> = std::result::Result<T, TyckError>;

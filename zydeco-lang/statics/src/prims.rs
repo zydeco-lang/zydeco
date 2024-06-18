@@ -58,7 +58,7 @@ impl Tycker {
     pub fn register_prim_ty(
         &mut self, mut ctx: TopCtx, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
     ) -> Result<TopCtx> {
-        let kd = ctx.as_env(syn_kd).tyck(self, ByAction::syn(ctx.as_ctx()))?.as_ann().as_kind();
+        let kd = ctx.as_env(syn_kd).tyck(self, ByAction::syn())?.as_ann().as_kind();
         let ty = Alloc::alloc(self, prim);
         ctx.term_ctx += (def, kd.into());
         ctx.type_env += (def, ty.into());
@@ -119,8 +119,8 @@ impl Tycker {
             | None => {
                 // the alias head is a primitive value that needs to be linked later
                 let Some(ty) = ty else { Err(TyckError::MissingAnnotation)? };
-                let ty = ctx.as_env(ty).tyck(self, ByAction::syn(ctx.as_ctx()))?.as_ann().as_type();
-                let _ = ctx.as_env(binder).tyck(self, ByAction::ana(ctx.as_ctx(), ty.into()))?;
+                let ty = ctx.as_env(ty).tyck(self, ByAction::syn())?.as_ann().as_type();
+                let _ = ctx.as_env(binder).tyck(self, ByAction::ana(ty.into()))?;
             }
         }
         Ok(ctx)

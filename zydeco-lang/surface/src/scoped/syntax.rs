@@ -23,6 +23,11 @@ mod impls_context {
         pub fn new() -> Self {
             Self { defs: im::HashMap::new() }
         }
+        pub fn singleton(def: DefId, t: T) -> Self {
+            let mut defs = im::HashMap::new();
+            defs.insert(def, t);
+            Self { defs }
+        }
         pub fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
             let Context { mut defs } = self.clone();
             defs.extend(iter);
