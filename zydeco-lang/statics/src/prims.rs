@@ -126,3 +126,53 @@ impl Tycker {
         Ok(ctx)
     }
 }
+
+pub enum MonadOrAlgebra {
+    Monad(ss::TypeId),
+    Algebra(ss::TypeId, ss::TypeId),
+}
+
+impl Tycker {
+    pub fn monad_or_algebra(
+        &self, env: &ss::Context<ss::AnnId>, ty: ss::TypeId,
+    ) -> Option<MonadOrAlgebra> {
+        match self.statics.types.get(&ty).clone()? {
+            | ss::Type::App(ss::App(head, ty_1)) => match self.statics.types.get(&head).clone()? {
+                | ss::Type::Abst(mo) => {
+                    // check if mo is monad
+                    let ss::AnnId::Type(id) = env[self.prim.algebra.get()] else { unreachable!() };
+                    let ss::Type::Abst(mo_real) = self.statics.types.get(&id).clone()? else {
+                        unreachable!()
+                    };
+                    if mo == mo_real {
+                        Some(MonadOrAlgebra::Monad(*ty_1))
+                    } else {
+                        None
+                    }
+                }
+                | ss::Type::App(ss::App(head, ty_0)) => {
+                    match self.statics.types.get(&head).clone()? {
+                        | ss::Type::Abst(alg) => {
+                            // check if alg is algebra
+                            let ss::AnnId::Type(id) = env[self.prim.algebra.get()] else {
+                                unreachable!()
+                            };
+                            let ss::Type::Abst(alg_real) = self.statics.types.get(&id).clone()?
+                            else {
+                                unreachable!()
+                            };
+                            if alg == alg_real {
+                                Some(MonadOrAlgebra::Algebra(*ty_0, *ty_1))
+                            } else {
+                                None
+                            }
+                        }
+                        | _ => None,
+                    }
+                }
+                | _ => None,
+            },
+            | _ => None,
+        }
+    }
+}

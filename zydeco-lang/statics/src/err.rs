@@ -1,6 +1,8 @@
 use crate::syntax::*;
 use thiserror::Error;
 
+// Todo: writer monad instead of error monad
+
 #[derive(Error, Debug, Clone)]
 pub enum TyckError {
     #[error("Missing annotation")]
@@ -19,6 +21,12 @@ pub enum TyckError {
     NonExhaustiveCoDataArms(im::HashMap<DtorName, TypeId>),
     #[error("{0}")]
     Expressivity(&'static str),
+    #[error("Multiple monad implementations")]
+    MultipleMonads,
+    #[error("Multiple algebra implementations")]
+    MultipleAlgebras,
+    #[error("Neither monad nor algebra")]
+    NeitherMonadNorAlgebra,
 }
 
 pub type Result<T> = std::result::Result<T, TyckError>;

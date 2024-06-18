@@ -659,7 +659,7 @@ impl Ugly for Define {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Define(b) = self;
-        s += "define ";
+        s += "def ";
         s += &b.ugly(f);
         s += " end";
         s

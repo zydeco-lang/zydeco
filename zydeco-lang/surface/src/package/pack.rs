@@ -146,7 +146,8 @@ impl Package {
                     for victim in &victims {
                         println!("\t\t| {}", {
                             let mut s = victim.ugly(&Formatter::new(&pack.arena));
-                            let budget = 80;
+                            // let budget = 80;
+                            let budget = usize::MAX;
                             if s.len() > budget {
                                 s.truncate(budget - 3);
                                 s.push_str("...");
