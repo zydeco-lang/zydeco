@@ -63,10 +63,10 @@ impl Resolver {
             exts,
             deps,
         } = self;
-        let defs = bitter.defs.map_id(|id| defs[&id].clone());
-        let pats = bitter.pats.map_id(|id| pats[&id].clone());
-        let terms = bitter.terms.map_id(|id| terms[&id].clone());
-        let decls = bitter.decls.map_id(|id| decls[&id].clone());
+        let defs = bitter.defs.filter_map_id(|id| defs.get(&id).cloned());
+        let pats = bitter.pats.filter_map_id(|id| pats.get(&id).cloned());
+        let terms = bitter.terms.filter_map_id(|id| terms.get(&id).cloned());
+        let decls = bitter.decls.filter_map_id(|id| decls.get(&id).cloned());
         let top = Kosaraju::new(&deps).run();
         Ok(ResolveOut {
             spans,
