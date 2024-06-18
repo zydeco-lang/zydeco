@@ -3,7 +3,68 @@ pub use crate::syntax::*;
 pub use crate::textual::syntax::SpanArena;
 
 use crate::textual::syntax as t;
+use std::collections::HashSet;
 use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
+
+/* --------------------------------- Context -------------------------------- */
+
+#[derive(Clone, Debug)]
+pub struct Context<T> {
+    pub defs: im::HashMap<DefId, T>,
+}
+
+mod impls_context {
+    use super::*;
+    use std::ops::{Add, AddAssign, Index};
+    impl<T> Context<T>
+    where
+        T: Clone,
+    {
+        pub fn new() -> Self {
+            Self { defs: im::HashMap::new() }
+        }
+        pub fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
+            let Context { mut defs } = self.clone();
+            defs.extend(iter);
+            Self { defs }
+        }
+    }
+    impl<T> Add for Context<T>
+    where
+        T: Clone,
+    {
+        type Output = Self;
+        fn add(self, other: Self) -> Self {
+            let Context { mut defs } = self;
+            defs.extend(other.defs);
+            Self { defs }
+        }
+    }
+    impl<T> AddAssign<(DefId, T)> for Context<T>
+    where
+        T: Clone,
+    {
+        fn add_assign(&mut self, (def, t): (DefId, T)) {
+            let Self { defs } = self;
+            let mut defs = defs.clone();
+            defs.insert(def, t);
+            *self = Self { defs };
+        }
+    }
+    impl<T> Index<&DefId> for Context<T>
+    where
+        T: Clone,
+    {
+        type Output = T;
+        fn index(&self, def: &DefId) -> &T {
+            &self.defs[def]
+        }
+    }
+}
+
+/* -------------------------------- TopLevel -------------------------------- */
+
+pub struct SccDeclarations<'decl>(pub &'decl HashSet<DeclId>);
 
 /* ---------------------------------- Arena --------------------------------- */
 
@@ -19,6 +80,8 @@ pub struct ScopedArena {
 
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
+    /// contexts upon terms
+    pub ctxs: ArenaAssoc<TermId, Context<()>>,
     /// externs to defs
     pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
     /// dependency graph of the top level declarations

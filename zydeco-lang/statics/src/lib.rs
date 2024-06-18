@@ -11,6 +11,8 @@ pub mod alloc;
 pub use alloc::*;
 pub mod syntactic;
 pub use syntactic::*;
+pub mod tpat;
+pub use tpat::*;
 pub mod lub;
 pub use lub::*;
 pub mod norm;

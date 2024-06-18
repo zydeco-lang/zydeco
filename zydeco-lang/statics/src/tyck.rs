@@ -499,7 +499,67 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 }
             }
-            | Tm::Cons(_) => todo!(),
+            | Tm::Cons(term) => {
+                let su::Cons(a, b) = term;
+                match switch {
+                    | Switch::Syn => {
+                        let a_out_ann = self.mk(a).tyck(tycker, ByAction::syn(ctx.clone()))?;
+                        let b_out_ann = self.mk(b).tyck(tycker, ByAction::syn(ctx))?;
+                        let (a_out, a_ty) = match a_out_ann {
+                            | TermAnnId::Value(a_out, a_ty) => (a_out, a_ty),
+                            | TermAnnId::Kind(_)
+                            | TermAnnId::Type(_, _)
+                            | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
+                        };
+                        let (b_out, b_ty) = match b_out_ann {
+                            | TermAnnId::Value(b_out, b_ty) => (b_out, b_ty),
+                            | TermAnnId::Kind(_)
+                            | TermAnnId::Type(_, _)
+                            | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
+                        };
+                        let cons = Alloc::alloc(tycker, ss::Cons(a_out, b_out));
+                        let prod = Alloc::alloc(tycker, ss::Prod(a_ty, b_ty));
+                        Ok(TermAnnId::Value(cons, prod))
+                    }
+                    | Switch::Ana(ana) => {
+                        let ana_ty = match ana {
+                            | AnnId::Set | AnnId::Kind(_) => Err(TyckError::SortMismatch)?,
+                            | AnnId::Type(ty) => ty,
+                        };
+                        match tycker.statics.types[&ana_ty].to_owned() {
+                            | ss::Type::Prod(ty) => {
+                                let ss::Prod(ty_a, ty_b) = ty;
+                                let a_out_ann = self
+                                    .mk(a)
+                                    .tyck(tycker, ByAction::ana(ctx.clone(), ty_a.into()))?;
+                                let b_out_ann =
+                                    self.mk(b).tyck(tycker, ByAction::ana(ctx, ty_b.into()))?;
+                                let (a_out, a_ty) = match a_out_ann {
+                                    | TermAnnId::Value(a_out, a_ty) => (a_out, a_ty),
+                                    | TermAnnId::Kind(_)
+                                    | TermAnnId::Type(_, _)
+                                    | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
+                                };
+                                let (b_out, b_ty) = match b_out_ann {
+                                    | TermAnnId::Value(b_out, b_ty) => (b_out, b_ty),
+                                    | TermAnnId::Kind(_)
+                                    | TermAnnId::Type(_, _)
+                                    | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
+                                };
+                                let cons = Alloc::alloc(tycker, ss::Cons(a_out, b_out));
+                                let prod = Alloc::alloc(tycker, ss::Prod(a_ty, b_ty));
+                                Ok(TermAnnId::Value(cons, prod))
+                            }
+                            | ss::Type::Exists(ty) => {
+                                let ss::Exists(tpat, body) = ty;
+
+                                todo!()
+                            }
+                            | _ => Err(TyckError::TypeMismatch)?,
+                        }
+                    }
+                }
+            }
             | Tm::Abs(_) => todo!(),
             | Tm::App(_) => todo!(),
             | Tm::Rec(term) => {
@@ -1137,7 +1197,7 @@ impl Tyck for SEnv<su::TermId> {
                         | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
                             Err(TyckError::SortMismatch)?
                         }
-                        | TermAnnId::Value(body, ty) => (body, ty)
+                        | TermAnnId::Value(body, ty) => (body, ty),
                     };
                     todo!()
                 }

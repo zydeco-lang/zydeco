@@ -162,6 +162,26 @@ impl Package {
             }
             println!("<<< [{}]", self.name);
         }
+        // Debug: print the contexts upon terms
+        // if cfg!(debug_assertions) {
+        //     use crate::scoped::fmt::*;
+        //     println!(">>> [{}]", self.name);
+        //     for (term, ctx) in &pack.arena.ctxs {
+        //         print!(
+        //             "\t{} |-> [",
+        //             term.ugly(&Formatter::new(&pack.arena)),
+        //         );
+        //         for (def, _) in ctx.defs.iter() {
+        //             print!(
+        //                 "{}, ",
+        //                 def.ugly(&Formatter::new(&pack.arena)),
+        //             );
+        //         }
+        //         print!("]");
+        //         println!()
+        //     }
+        //     println!("<<< [{}]", self.name);
+        // }
         // Debug: print the user map
         // if cfg!(debug_assertions) {
         //     use crate::scoped::fmt::*;
