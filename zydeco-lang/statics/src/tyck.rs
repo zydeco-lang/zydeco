@@ -16,7 +16,7 @@ pub struct Tycker {
 impl Tycker {
     pub fn run(mut self) -> Result<()> {
         let mut scc = self.scoped.top.clone();
-        let mut ctx = TopCtx::new();
+        let mut ctx = SEnv::new(());
         loop {
             let groups = scc.top();
             // if no more groups are at the top, we're done
@@ -61,23 +61,6 @@ impl<Ann> ByAction<Ann> {
     }
 }
 
-pub struct TopCtx {
-    pub term_ctx: Context<AnnId>,
-    // Fixme: should be ordered
-    pub type_env: Context<AnnId>,
-}
-impl TopCtx {
-    pub fn new() -> Self {
-        Self { term_ctx: Context::new(), type_env: Context::new() }
-    }
-    pub fn as_env<T>(&self, inner: T) -> SEnv<T> {
-        SEnv { env: self.type_env.clone(), inner }
-    }
-    pub fn as_ctx(&self) -> Context<AnnId> {
-        self.term_ctx.clone()
-    }
-}
-
 /// substituting types for type variables;
 /// S for substitution / statics
 /// PLEASE NOTE: when performing substitution, the environment should be applied one by one
@@ -98,11 +81,11 @@ impl<T> SEnv<T> {
 }
 
 impl<'decl> SccDeclarations<'decl> {
-    pub fn tyck(&self, tycker: &mut Tycker, mut ctx: TopCtx) -> Result<TopCtx> {
+    pub fn tyck(&self, tycker: &mut Tycker, mut env: SEnv<()>) -> Result<SEnv<()>> {
         let SccDeclarations(decls) = self;
         use su::Declaration as Decl;
         match decls.len() {
-            | 0 => Ok(ctx),
+            | 0 => Ok(env),
             | 1 => {
                 let id = decls.iter().next().unwrap();
                 match tycker.scoped.decls[id].clone() {
@@ -115,65 +98,61 @@ impl<'decl> SccDeclarations<'decl> {
                             .collect::<HashSet<_>>()
                             .contains(id);
                         if self_ref {
-                            Self::tyck_scc_refs([id].into_iter(), tycker, ctx)
+                            Self::tyck_scc_refs([id].into_iter(), tycker, env)
                         } else {
-                            Self::tyck_uni_ref(id, tycker, ctx)
+                            Self::tyck_uni_ref(id, tycker, env)
                         }
                     }
                     | Decl::AliasHead(decl) => {
-                        ctx = tycker.register_prim_decl(decl, id, ctx)?;
-                        Ok(ctx)
+                        env = tycker.register_prim_decl(decl, id, env)?;
+                        Ok(env)
                     }
                     | Decl::Main(decl) => {
                         let su::Main(term) = decl;
-                        let os = tycker.os(&ctx.type_env);
-                        let out_ann = ctx.as_env(term).tyck(tycker, ByAction::ana(os.into()))?;
+                        let os = tycker.os(&env.env);
+                        let out_ann = env.mk(term).tyck(tycker, ByAction::ana(os.into()))?;
                         let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                         tycker.statics.decls.insert(*id, ss::Main(body).into());
-                        Ok(ctx)
+                        Ok(env)
                     }
                 }
             }
-            | _ => Self::tyck_scc_refs(decls.into_iter(), tycker, ctx),
+            | _ => Self::tyck_scc_refs(decls.into_iter(), tycker, env),
         }
     }
-    fn tyck_uni_ref(id: &su::DeclId, tycker: &mut Tycker, mut ctx: TopCtx) -> Result<TopCtx> {
+    fn tyck_uni_ref(id: &su::DeclId, tycker: &mut Tycker, mut env: SEnv<()>) -> Result<SEnv<()>> {
         let su::Declaration::AliasBody(decl) = tycker.scoped.decls[id].clone() else {
             unreachable!()
         };
         let su::AliasBody { binder, bindee } = decl;
         // synthesize the bindee
-        let out_ann = ctx.as_env(bindee).tyck(tycker, ByAction::syn())?;
+        let out_ann = env.mk(bindee).tyck(tycker, ByAction::syn())?;
         match out_ann {
             | TermAnnId::Kind(_) => unreachable!(),
             | TermAnnId::Type(ty, kd) => {
                 let bindee = ty;
-                let (binder, term_ctx) =
-                    ctx.as_env(binder).tyck(tycker, ByAction::ana(kd.into()))?;
-                ctx.term_ctx = term_ctx;
+                let (binder, _ctx) = env.mk(binder).tyck(tycker, ByAction::ana(kd.into()))?;
                 let PatAnnId::Type(binder, _kd) = binder else { unreachable!() };
                 // add the type into the environment
-                let SEnv { env, inner: () } =
-                    ctx.as_env(binder).tyck_assign(tycker, ByAction::syn(), ty)?;
-                ctx.type_env = env;
+                let SEnv { env: new_env, inner: () } =
+                    env.mk(binder).tyck_assign(tycker, ByAction::syn(), ty)?;
+                env.env = new_env;
                 tycker.statics.decls.insert(*id, ss::TAliasBody { binder, bindee }.into());
-                Ok(ctx)
+                Ok(env)
             }
             | TermAnnId::Value(bindee, ty) => {
-                let (binder, term_ctx) =
-                    ctx.as_env(binder).tyck(tycker, ByAction::ana(ty.into()))?;
-                ctx.term_ctx = term_ctx;
+                let (binder, _ctx) = env.mk(binder).tyck(tycker, ByAction::ana(ty.into()))?;
                 let PatAnnId::Value(binder, _) = binder else { unreachable!() };
                 // since it's not a value, don't add the type into the environment
                 tycker.statics.decls.insert(*id, ss::VAliasBody { binder, bindee }.into());
-                Ok(ctx)
+                Ok(env)
             }
             | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
         }
     }
     fn tyck_scc_refs<'f>(
-        decls: impl Iterator<Item = &'f su::DeclId>, tycker: &mut Tycker, mut ctx: TopCtx,
-    ) -> Result<TopCtx> {
+        decls: impl Iterator<Item = &'f su::DeclId>, tycker: &mut Tycker, mut env: SEnv<()>,
+    ) -> Result<SEnv<()>> {
         let decls = decls.collect::<Vec<_>>();
         let mut binder_map = HashMap::new();
         for id in decls.iter() {
@@ -186,7 +165,7 @@ impl<'decl> SccDeclarations<'decl> {
                 Err(TyckError::MissingAnnotation)?
             };
             // try synthesizing the type
-            let ann = ctx.as_env(syn_ann).tyck(tycker, ByAction::syn())?;
+            let ann = env.mk(syn_ann).tyck(tycker, ByAction::syn())?;
             // the binder should be a type; register it before analyzing the bindee
             let kd = match ann {
                 | TermAnnId::Kind(kd) => kd,
@@ -194,8 +173,7 @@ impl<'decl> SccDeclarations<'decl> {
                     Err(TyckError::SortMismatch)?
                 }
             };
-            let (binder, ctx_new) = ctx.as_env(binder).tyck(tycker, ByAction::ana(kd.into()))?;
-            ctx.term_ctx = ctx_new;
+            let (binder, _ctx) = env.mk(binder).tyck(tycker, ByAction::ana(kd.into()))?;
             let binder = match binder {
                 | PatAnnId::Type(binder, _kd) => binder,
                 | PatAnnId::Value(_, _) => unreachable!(),
@@ -208,7 +186,7 @@ impl<'decl> SccDeclarations<'decl> {
                 | _ => unreachable!(),
             };
             let binder = binder_map[id];
-            let bindee = ctx.as_env(bindee).tyck(tycker, ByAction::syn())?;
+            let bindee = env.mk(bindee).tyck(tycker, ByAction::syn())?;
             let bindee = match bindee {
                 | TermAnnId::Type(bindee, _) => bindee,
                 | TermAnnId::Kind(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
@@ -216,11 +194,11 @@ impl<'decl> SccDeclarations<'decl> {
                 }
             };
             // add the type into the environment
-            let SEnv { env, inner: () } =
-                ctx.as_env(binder).tyck_assign(tycker, ByAction::syn(), bindee)?;
-            ctx.type_env = env;
+            let SEnv { env: new_env, inner: () } =
+                env.mk(binder).tyck_assign(tycker, ByAction::syn(), bindee)?;
+            env.env = new_env;
         }
-        Ok(ctx)
+        Ok(env)
     }
 }
 

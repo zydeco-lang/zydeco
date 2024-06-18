@@ -56,17 +56,17 @@ impl Tycker {
 
 impl Tycker {
     pub fn register_prim_ty(
-        &mut self, mut ctx: TopCtx, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
-    ) -> Result<TopCtx> {
-        let kd = ctx.as_env(syn_kd).tyck(self, ByAction::syn())?.as_ann().as_kind();
+        &mut self, mut env: SEnv<()>, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
+    ) -> Result<SEnv<()>> {
+        let kd = env.mk(syn_kd).tyck(self, ByAction::syn())?.as_ann().as_kind();
         let ty = Alloc::alloc(self, prim);
-        ctx.term_ctx += (def, kd.into());
-        ctx.type_env += (def, ty.into());
-        Ok(ctx)
+        self.statics.annotations_var.insert(def, kd.into());
+        env.env += (def, ty.into());
+        Ok(env)
     }
     pub fn register_prim_decl(
-        &mut self, decl: su::AliasHead, id: &su::DeclId, mut ctx: TopCtx,
-    ) -> Result<TopCtx> {
+        &mut self, decl: su::AliasHead, id: &su::DeclId, mut ctx: SEnv<()>,
+    ) -> Result<SEnv<()>> {
         let su::AliasHead { binder, ty } = decl;
         let internal_or = self.scoped.exts.get(id).cloned();
         match internal_or {
@@ -75,13 +75,13 @@ impl Tycker {
                 match internal {
                     | su::Internal::VType => {
                         let kd = Alloc::alloc(self, ss::VType);
-                        ctx.term_ctx += (def, ss::AnnId::Set);
-                        ctx.type_env += (def, kd.into());
+                        self.statics.annotations_var.insert(def, ss::AnnId::Set);
+                        ctx.env += (def, kd.into());
                     }
                     | su::Internal::CType => {
                         let kd = Alloc::alloc(self, ss::CType);
-                        ctx.term_ctx += (def, ss::AnnId::Set);
-                        ctx.type_env += (def, kd.into());
+                        self.statics.annotations_var.insert(def, ss::AnnId::Set);
+                        ctx.env += (def, kd.into());
                     }
                     | su::Internal::Thunk => {
                         let kd = ty.unwrap();
@@ -119,8 +119,8 @@ impl Tycker {
             | None => {
                 // the alias head is a primitive value that needs to be linked later
                 let Some(ty) = ty else { Err(TyckError::MissingAnnotation)? };
-                let ty = ctx.as_env(ty).tyck(self, ByAction::syn())?.as_ann().as_type();
-                let _ = ctx.as_env(binder).tyck(self, ByAction::ana(ty.into()))?;
+                let ty = ctx.mk(ty).tyck(self, ByAction::syn())?.as_ann().as_type();
+                let _ = ctx.mk(binder).tyck(self, ByAction::ana(ty.into()))?;
             }
         }
         Ok(ctx)
