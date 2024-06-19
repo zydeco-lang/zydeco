@@ -14,7 +14,7 @@ pub use utils::*;
 pub mod lub;
 pub use lub::*;
 pub mod subst;
-pub use subst::*;
+// pub use subst::*;
 pub mod tyck;
 pub use tyck::*;
 pub mod err;

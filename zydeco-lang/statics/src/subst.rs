@@ -97,10 +97,54 @@ impl TypeId {
                 }
             }
             | Type::Data(data) => {
-                todo!()
+                let arms = tycker.statics.datas.defs[&data].clone();
+                let mut unchanged = true;
+                let arms_ = arms
+                    .into_iter()
+                    .map(|(ctor, ty)| {
+                        let ty_ = ty.subst(tycker, var, with)?;
+                        if ty == ty_ {
+                            Ok((ctor, ty))
+                        } else {
+                            unchanged = false;
+                            Ok((ctor, ty_))
+                        }
+                    })
+                    .collect::<Result<im::Vector<_>>>()?;
+                if unchanged {
+                    Ok(*self)
+                } else {
+                    let d = Data { arms: arms_.iter().cloned().collect() };
+                    let data_ = tycker.statics.datas.defs.alloc(arms_);
+                    tycker.statics.datas.tbls.insert(data_, d.to_owned());
+                    tycker.statics.datas.eqs.insert(d, data_);
+                    Ok(Alloc::alloc(tycker, data_))
+                }
             }
             | Type::CoData(coda) => {
-                todo!()
+                let arms = tycker.statics.codatas.defs[&coda].clone();
+                let mut unchanged = true;
+                let arms_ = arms
+                    .into_iter()
+                    .map(|(dtor, ty)| {
+                        let ty_ = ty.subst(tycker, var, with)?;
+                        if ty == ty_ {
+                            Ok((dtor, ty))
+                        } else {
+                            unchanged = false;
+                            Ok((dtor, ty_))
+                        }
+                    })
+                    .collect::<Result<im::Vector<_>>>()?;
+                if unchanged {
+                    Ok(*self)
+                } else {
+                    let d = CoData { arms: arms_.iter().cloned().collect() };
+                    let coda_ = tycker.statics.codatas.defs.alloc(arms_);
+                    tycker.statics.codatas.tbls.insert(coda_, d.to_owned());
+                    tycker.statics.codatas.eqs.insert(d, coda_);
+                    Ok(Alloc::alloc(tycker, coda_))
+                }
             }
         }
     }

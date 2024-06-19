@@ -266,7 +266,7 @@ impl Tyck for SEnv<su::PatId> {
                     let ss::Type::Data(data_id) = &tycker.statics.types[&ann_ty] else {
                         Err(TyckError::TypeMismatch)?
                     };
-                    let ss::Data { arms } = &tycker.statics.tbls_data[data_id];
+                    let ss::Data { arms } = &tycker.statics.datas.tbls[data_id];
                     let su::Ctor(ctor, args) = pat;
                     let arm_ty =
                         arms.get(&ctor).ok_or_else(|| TyckError::MissingDataArm(ctor.clone()))?;
@@ -959,14 +959,14 @@ impl Tyck for SEnv<su::TermId> {
                 }
                 let arms_tbl = arms_vec.iter().cloned().collect();
                 let data = ss::Data { arms: arms_tbl };
-                let id = if let Some(id) = tycker.statics.eqs_data.get(&data) {
+                let id = if let Some(id) = tycker.statics.datas.eqs.get(&data) {
                     // if the data is already registered, just return the DataId
                     *id
                 } else {
                     // else, register the data
-                    let id = tycker.statics.defs_data.alloc(arms_vec);
-                    tycker.statics.tbls_data.insert(id, data.clone());
-                    tycker.statics.eqs_data.insert(data, id);
+                    let id = tycker.statics.datas.defs.alloc(arms_vec);
+                    tycker.statics.datas.tbls.insert(id, data.clone());
+                    tycker.statics.datas.eqs.insert(data, id);
                     id
                 };
                 let data = Alloc::alloc(tycker, id);
@@ -990,14 +990,14 @@ impl Tyck for SEnv<su::TermId> {
                 }
                 let arms_tbl = arms_vec.iter().cloned().collect();
                 let codata = ss::CoData { arms: arms_tbl };
-                let id = if let Some(id) = tycker.statics.eqs_codata.get(&codata) {
+                let id = if let Some(id) = tycker.statics.codatas.eqs.get(&codata) {
                     // if the codata is already registered, just return the CoDataId
                     *id
                 } else {
                     // else, register the codata
-                    let id = tycker.statics.defs_codata.alloc(arms_vec);
-                    tycker.statics.tbls_codata.insert(id, codata.clone());
-                    tycker.statics.eqs_codata.insert(codata, id);
+                    let id = tycker.statics.codatas.defs.alloc(arms_vec);
+                    tycker.statics.codatas.tbls.insert(id, codata.clone());
+                    tycker.statics.codatas.eqs.insert(codata, id);
                     id
                 };
                 let codata = Alloc::alloc(tycker, id);
@@ -1014,7 +1014,7 @@ impl Tyck for SEnv<su::TermId> {
                 let ss::Type::Data(data_id) = &tycker.statics.types[&ana_ty] else {
                     Err(TyckError::TypeMismatch)?
                 };
-                let ss::Data { arms } = &tycker.statics.tbls_data[data_id];
+                let ss::Data { arms } = &tycker.statics.datas.tbls[data_id];
                 let arg_ty = arms
                     .get(&ctor)
                     .ok_or_else(|| TyckError::MissingDataArm(ctor.clone()))?
@@ -1086,7 +1086,7 @@ impl Tyck for SEnv<su::TermId> {
                 let ss::Type::CoData(codata_id) = &tycker.statics.types[&ana_ty] else {
                     Err(TyckError::TypeMismatch)?
                 };
-                let ss::CoData { mut arms } = tycker.statics.tbls_codata[codata_id].clone();
+                let ss::CoData { mut arms } = tycker.statics.codatas.tbls[codata_id].clone();
                 let mut comatchers_new = Vec::new();
                 for su::CoMatcher { dtor, tail } in comatchers {
                     let arm_ty = arms
@@ -1113,7 +1113,7 @@ impl Tyck for SEnv<su::TermId> {
                 let ss::Type::CoData(codata_id) = &tycker.statics.types[&ty_body] else {
                     Err(TyckError::TypeMismatch)?
                 };
-                let ss::CoData { arms } = &tycker.statics.tbls_codata[codata_id];
+                let ss::CoData { arms } = &tycker.statics.codatas.tbls[codata_id];
                 let whole_ty = arms
                     .get(&dtor)
                     .ok_or_else(|| TyckError::MissingCoDataArm(dtor.clone()))?

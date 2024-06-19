@@ -439,6 +439,17 @@ pub enum Declaration {
 
 /* ---------------------------------- Arena --------------------------------- */
 
+/// Structurally shared arena for `data` and `codata` definitions.
+#[derive(Debug)]
+pub struct StructArena<Id, Definition, Query> {
+    /// arena for definitions
+    pub defs: ArenaDense<Id, Definition>,
+    /// arena for hashmap
+    pub tbls: ArenaAssoc<Id, Query>,
+    /// arena for equivalence classes
+    pub eqs: ArenaAssoc<Query, Id>,
+}
+
 #[derive(Debug)]
 pub struct StaticsArena {
     // arenas
@@ -472,18 +483,10 @@ pub struct StaticsArena {
     pub fills: ArenaDense<FillId, su::TermId>,
     /// arena for the solutions of fillings
     pub solus: ArenaAssoc<FillId, TypeId>,
-    /// arena for `data` definitions
-    pub defs_data: ArenaDense<DataId, im::Vector<(CtorName, TypeId)>>,
-    /// arena for `data` hashmap
-    pub tbls_data: ArenaAssoc<DataId, Data>,
-    /// arena for `data` equivalence classes
-    pub eqs_data: ArenaAssoc<Data, DataId>,
-    /// arena for `codata` definitions
-    pub defs_codata: ArenaDense<CoDataId, im::Vector<(DtorName, TypeId)>>,
-    /// arena for `codata` hashmap
-    pub tbls_codata: ArenaAssoc<CoDataId, CoData>,
-    /// arena for `codata` equivalence classes
-    pub eqs_codata: ArenaAssoc<CoData, CoDataId>,
+    /// arena for `data`
+    pub datas: StructArena<DataId, im::Vector<(CtorName, TypeId)>, Data>,
+    /// arena for `codata`
+    pub codatas: StructArena<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
 }
 
 impl StaticsArena {
@@ -509,12 +512,16 @@ impl StaticsArena {
             seals: ArenaAssoc::new(),
             fills: ArenaDense::new(alloc.alloc()),
             solus: ArenaAssoc::new(),
-            defs_data: ArenaDense::new(alloc.alloc()),
-            tbls_data: ArenaAssoc::new(),
-            eqs_data: ArenaAssoc::new(),
-            defs_codata: ArenaDense::new(alloc.alloc()),
-            tbls_codata: ArenaAssoc::new(),
-            eqs_codata: ArenaAssoc::new(),
+            datas: StructArena {
+                defs: ArenaDense::new(alloc.alloc()),
+                tbls: ArenaAssoc::new(),
+                eqs: ArenaAssoc::new(),
+            },
+            codatas: StructArena {
+                defs: ArenaDense::new(alloc.alloc()),
+                tbls: ArenaAssoc::new(),
+                eqs: ArenaAssoc::new(),
+            },
         }
     }
 }
