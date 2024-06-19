@@ -4,9 +4,10 @@ use ss::*;
 impl Tycker {
     pub fn extract_tpat(&mut self, tpat: TPatId) -> (Option<DefId>, KindId) {
         match self.statics.tpats[&tpat].clone() {
-            | TypePattern::Hole(Hole) => todo!(),
-            | TypePattern::Var(_def) => {
-                todo!()
+            | TypePattern::Hole(Ann { tm: Hole, ty: kd }) => (None, kd),
+            | TypePattern::Var(def) => {
+                let AnnId::Kind(kd) = self.statics.annotations_var[&def] else { unreachable!() };
+                (Some(def), kd)
             }
         }
     }
@@ -50,7 +51,7 @@ impl SyntacticallyUsed for ss::TPatId {
         use ss::TypePattern as Pat;
         match pat {
             | Pat::Hole(pat) => {
-                let ss::Hole = pat;
+                let ss::Ann { tm: ss::Hole, ty: _ } = pat;
                 false
             }
             | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),

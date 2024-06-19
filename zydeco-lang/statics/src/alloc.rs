@@ -41,7 +41,7 @@ impl Alloc<TPatId> for TypePattern {
 //         Alloc::alloc(tycker, TypePattern::from(val))
 //     }
 // }
-impl Alloc<TPatId> for Hole {
+impl Alloc<TPatId> for Ann<Hole, KindId> {
     fn alloc(tycker: &mut Tycker, val: Self) -> TPatId {
         Alloc::alloc(tycker, TypePattern::from(val))
     }

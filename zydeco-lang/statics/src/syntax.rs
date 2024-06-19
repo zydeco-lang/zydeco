@@ -178,7 +178,7 @@ mod impls_identifiers {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, Hole);
+                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty: kd });
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
@@ -253,7 +253,7 @@ pub enum Kind {
 #[derive(From, Clone, Debug)]
 pub enum TypePattern {
     // Ann(Ann<TPatId, KindId>),
-    Hole(Hole),
+    Hole(Ann<Hole, KindId>),
     Var(DefId),
 }
 
@@ -468,8 +468,8 @@ pub struct StaticsArena {
     pub absts: ArenaDense<AbstId, ()>,
     /// the abstract types generated from sealed
     pub seals: ArenaAssoc<AbstId, TypeId>,
-    /// arena for filling context-constrained holes
-    pub fills: ArenaDense<FillId, Context<()>>,
+    /// arena for filling context-constrained holes; the TermId is the site
+    pub fills: ArenaDense<FillId, su::TermId>,
     /// arena for the solutions of fillings
     pub solus: ArenaAssoc<FillId, TypeId>,
     /// arena for `data` definitions

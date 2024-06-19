@@ -14,9 +14,9 @@ impl Tycker {
         let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
         ty
     }
-    pub fn thunk_app_hole(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+    pub fn thunk_app_hole(&mut self, env: &ss::Context<ss::AnnId>, site: su::TermId) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
-        let hole = self.statics.absts.alloc(());
+        let hole = self.statics.fills.alloc(site);
         let hole = Alloc::alloc(self, hole);
         let app = Alloc::alloc(self, ss::App(ty, hole));
         app
@@ -25,9 +25,9 @@ impl Tycker {
         let ss::AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
         ty
     }
-    pub fn ret_app_hole(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+    pub fn ret_app_hole(&mut self, env: &ss::Context<ss::AnnId>, site: su::TermId) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
-        let hole = self.statics.absts.alloc(());
+        let hole = self.statics.fills.alloc(site);
         let hole = Alloc::alloc(self, hole);
         let app = Alloc::alloc(self, ss::App(ty, hole));
         app
@@ -58,7 +58,7 @@ impl Tycker {
     pub fn register_prim_ty(
         &mut self, mut env: SEnv<()>, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
     ) -> Result<SEnv<()>> {
-        let kd = env.mk(syn_kd).tyck(self, ByAction::syn())?.as_ann().as_kind();
+        let kd = env.mk(syn_kd).tyck(self, Action::syn())?.as_ann().as_kind();
         let ty = Alloc::alloc(self, prim);
         self.statics.annotations_var.insert(def, kd.into());
         env.env += (def, ty.into());
@@ -119,8 +119,8 @@ impl Tycker {
             | None => {
                 // the alias head is a primitive value that needs to be linked later
                 let Some(ty) = ty else { Err(TyckError::MissingAnnotation)? };
-                let ty = ctx.mk(ty).tyck(self, ByAction::syn())?.as_ann().as_type();
-                let _ = ctx.mk(binder).tyck(self, ByAction::ana(ty.into()))?;
+                let ty = ctx.mk(ty).tyck(self, Action::syn())?.as_ann().as_type();
+                let _ = ctx.mk(binder).tyck(self, Action::ana(ty.into()))?;
             }
         }
         Ok(ctx)

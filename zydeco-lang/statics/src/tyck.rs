@@ -39,7 +39,7 @@ pub trait Tyck {
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<Self::Out>;
 }
 
-pub struct ByAction<Ann> {
+pub struct Action<Ann> {
     pub switch: Switch<Ann>,
 }
 
@@ -49,7 +49,7 @@ pub enum Switch<Ann> {
     Ana(Ann),
 }
 
-impl<Ann> ByAction<Ann> {
+impl<Ann> Action<Ann> {
     pub fn syn() -> Self {
         Self { switch: Switch::Syn }
     }
@@ -57,7 +57,7 @@ impl<Ann> ByAction<Ann> {
         Self { switch: Switch::Ana(ann) }
     }
     pub fn switch(switch: Switch<Ann>) -> Self {
-        ByAction { switch }
+        Action { switch }
     }
 }
 
@@ -110,7 +110,7 @@ impl<'decl> SccDeclarations<'decl> {
                     | Decl::Main(decl) => {
                         let su::Main(term) = decl;
                         let os = tycker.os(&env.env);
-                        let out_ann = env.mk(term).tyck(tycker, ByAction::ana(os.into()))?;
+                        let out_ann = env.mk(term).tyck(tycker, Action::ana(os.into()))?;
                         let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                         tycker.statics.decls.insert(*id, ss::Main(body).into());
                         Ok(env)
@@ -126,22 +126,22 @@ impl<'decl> SccDeclarations<'decl> {
         };
         let su::AliasBody { binder, bindee } = decl;
         // synthesize the bindee
-        let out_ann = env.mk(bindee).tyck(tycker, ByAction::syn())?;
+        let out_ann = env.mk(bindee).tyck(tycker, Action::syn())?;
         match out_ann {
             | TermAnnId::Kind(_) => unreachable!(),
             | TermAnnId::Type(ty, kd) => {
                 let bindee = ty;
-                let (binder, _ctx) = env.mk(binder).tyck(tycker, ByAction::ana(kd.into()))?;
+                let (binder, _ctx) = env.mk(binder).tyck(tycker, Action::ana(kd.into()))?;
                 let PatAnnId::Type(binder, _kd) = binder else { unreachable!() };
                 // add the type into the environment
                 let SEnv { env: new_env, inner: () } =
-                    env.mk(binder).tyck_assign(tycker, ByAction::syn(), ty)?;
+                    env.mk(binder).tyck_assign(tycker, Action::syn(), ty)?;
                 env.env = new_env;
                 tycker.statics.decls.insert(*id, ss::TAliasBody { binder, bindee }.into());
                 Ok(env)
             }
             | TermAnnId::Value(bindee, ty) => {
-                let (binder, _ctx) = env.mk(binder).tyck(tycker, ByAction::ana(ty.into()))?;
+                let (binder, _ctx) = env.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
                 let PatAnnId::Value(binder, _) = binder else { unreachable!() };
                 // since it's not a value, don't add the type into the environment
                 tycker.statics.decls.insert(*id, ss::VAliasBody { binder, bindee }.into());
@@ -165,7 +165,7 @@ impl<'decl> SccDeclarations<'decl> {
                 Err(TyckError::MissingAnnotation)?
             };
             // try synthesizing the type
-            let ann = env.mk(syn_ann).tyck(tycker, ByAction::syn())?;
+            let ann = env.mk(syn_ann).tyck(tycker, Action::syn())?;
             // the binder should be a type; register it before analyzing the bindee
             let kd = match ann {
                 | TermAnnId::Kind(kd) => kd,
@@ -173,7 +173,7 @@ impl<'decl> SccDeclarations<'decl> {
                     Err(TyckError::SortMismatch)?
                 }
             };
-            let (binder, _ctx) = env.mk(binder).tyck(tycker, ByAction::ana(kd.into()))?;
+            let (binder, _ctx) = env.mk(binder).tyck(tycker, Action::ana(kd.into()))?;
             let binder = match binder {
                 | PatAnnId::Type(binder, _kd) => binder,
                 | PatAnnId::Value(_, _) => unreachable!(),
@@ -186,7 +186,7 @@ impl<'decl> SccDeclarations<'decl> {
                 | _ => unreachable!(),
             };
             let binder = binder_map[id];
-            let bindee = env.mk(bindee).tyck(tycker, ByAction::syn())?;
+            let bindee = env.mk(bindee).tyck(tycker, Action::syn())?;
             let bindee = match bindee {
                 | TermAnnId::Type(bindee, _) => bindee,
                 | TermAnnId::Kind(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
@@ -195,7 +195,7 @@ impl<'decl> SccDeclarations<'decl> {
             };
             // add the type into the environment
             let SEnv { env: new_env, inner: () } =
-                env.mk(binder).tyck_assign(tycker, ByAction::syn(), bindee)?;
+                env.mk(binder).tyck_assign(tycker, Action::syn(), bindee)?;
             env.env = new_env;
         }
         Ok(env)
@@ -204,25 +204,25 @@ impl<'decl> SccDeclarations<'decl> {
 
 impl Tyck for SEnv<su::PatId> {
     type Out = (PatAnnId, Context<AnnId>);
-    type Action = ByAction<AnnId>;
+    type Action = Action<AnnId>;
 
-    fn tyck(&self, tycker: &mut Tycker, ByAction { switch }: Self::Action) -> Result<Self::Out> {
+    fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> Result<Self::Out> {
         use su::Pattern as Pat;
         match tycker.scoped.pats[&self.inner].clone() {
             | Pat::Ann(pat) => {
                 let su::Ann { tm, ty } = pat;
-                let ty_out_ann = self.mk(ty).tyck(tycker, ByAction::syn())?;
+                let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
                 // Fixme: is it true?
                 let _ty_ty = ty_out_ann.as_ann();
                 let ty_tm = ty_out_ann.as_term_static_or_err(|| TyckError::SortMismatch)?;
                 match switch {
                     | Switch::Syn => {
-                        let pat_ctx = self.mk(tm).tyck(tycker, ByAction::ana(ty_tm))?;
+                        let pat_ctx = self.mk(tm).tyck(tycker, Action::ana(ty_tm))?;
                         Ok(pat_ctx)
                     }
                     | Switch::Ana(ty_ana) => {
                         let ty = Lub::lub(&ty_tm, &ty_ana, tycker)?;
-                        let pat_ctx = self.mk(tm).tyck(tycker, ByAction::ana(ty))?;
+                        let pat_ctx = self.mk(tm).tyck(tycker, Action::ana(ty))?;
                         Ok(pat_ctx)
                     }
                 }
@@ -271,7 +271,7 @@ impl Tyck for SEnv<su::PatId> {
                     let arm_ty =
                         arms.get(&ctor).ok_or_else(|| TyckError::MissingDataArm(ctor.clone()))?;
                     let (args_out_ann, ctx) =
-                        self.mk(args).tyck(tycker, ByAction::ana(arm_ty.to_owned().into()))?;
+                        self.mk(args).tyck(tycker, Action::ana(arm_ty.to_owned().into()))?;
                     let PatAnnId::Value(args, _) = args_out_ann else { unreachable!() };
                     let pat = Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), args));
                     Ok((PatAnnId::Value(pat, ann_ty), ctx))
@@ -300,9 +300,9 @@ impl Tyck for SEnv<su::PatId> {
                             | syntax::Type::Prod(ty) => {
                                 let ss::Prod(ty_a, ty_b) = ty;
                                 let (a_out_ann, a_ctx) =
-                                    self.mk(a).tyck(tycker, ByAction::ana(ty_a.into()))?;
+                                    self.mk(a).tyck(tycker, Action::ana(ty_a.into()))?;
                                 let (b_out_ann, b_ctx) =
-                                    self.mk(b).tyck(tycker, ByAction::ana(ty_b.into()))?;
+                                    self.mk(b).tyck(tycker, Action::ana(ty_b.into()))?;
                                 let PatAnnId::Value(a_out, a_ann) = a_out_ann else {
                                     unreachable!()
                                 };
@@ -326,7 +326,7 @@ impl Tyck for SEnv<su::PatId> {
 
 impl SEnv<ss::TPatId> {
     pub fn tyck_assign(
-        &self, tycker: &mut Tycker, ByAction { switch: _ }: ByAction<AnnId>, assignee: ss::TypeId,
+        &self, tycker: &mut Tycker, Action { switch: _ }: Action<AnnId>, assignee: ss::TypeId,
     ) -> Result<SEnv<()>> {
         let pat = tycker.statics.tpats[&self.inner].to_owned();
         match pat {
@@ -353,15 +353,15 @@ impl SEnv<ss::TPatId> {
 
 impl Tyck for SEnv<su::TermId> {
     type Out = TermAnnId;
-    type Action = ByAction<AnnId>;
+    type Action = Action<AnnId>;
 
-    fn tyck(&self, tycker: &mut Tycker, ByAction { switch }: Self::Action) -> Result<Self::Out> {
+    fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> Result<Self::Out> {
         use su::Term as Tm;
         match tycker.scoped.terms[&self.inner].to_owned() {
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(body) => {
                 let su::Sealed(body) = body;
-                let out_ann = self.mk(body).tyck(tycker, ByAction { switch })?;
+                let out_ann = self.mk(body).tyck(tycker, Action { switch })?;
                 match out_ann {
                     | TermAnnId::Kind(_) => unreachable!(),
                     | TermAnnId::Type(ty, kd) => {
@@ -375,7 +375,7 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Ann(term) => {
                 let su::Ann { tm, ty } = term;
-                let ty_out_ann = self.mk(ty).tyck(tycker, ByAction::syn())?;
+                let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
                 let ty_ann = match ty_out_ann {
                     | TermAnnId::Kind(kd) => kd.into(),
                     | TermAnnId::Type(ty, _kd) => ty.into(),
@@ -390,7 +390,7 @@ impl Tyck for SEnv<su::TermId> {
                         ty.into()
                     }
                 };
-                let tm_out_ann = self.mk(tm).tyck(tycker, ByAction::ana(ann))?;
+                let tm_out_ann = self.mk(tm).tyck(tycker, Action::ana(ann))?;
                 Ok(tm_out_ann)
             }
             | Tm::Hole(term) => {
@@ -404,7 +404,7 @@ impl Tyck for SEnv<su::TermId> {
                     | Switch::Ana(AnnId::Kind(kd)) => {
                         // a type hole, with a specific kind in mind
                         let fill =
-                            tycker.statics.fills.alloc(tycker.scoped.ctxs[&self.inner].clone());
+                            tycker.statics.fills.alloc(self.inner);
                         let fill = Alloc::alloc(tycker, fill);
                         Ok(TermAnnId::Type(fill, kd))
                     }
@@ -472,8 +472,8 @@ impl Tyck for SEnv<su::TermId> {
                 let su::Cons(a, b) = term;
                 match switch {
                     | Switch::Syn => {
-                        let a_out_ann = self.mk(a).tyck(tycker, ByAction::syn())?;
-                        let b_out_ann = self.mk(b).tyck(tycker, ByAction::syn())?;
+                        let a_out_ann = self.mk(a).tyck(tycker, Action::syn())?;
+                        let b_out_ann = self.mk(b).tyck(tycker, Action::syn())?;
                         let (a_out, a_ty) = match a_out_ann {
                             | TermAnnId::Value(a_out, a_ty) => (a_out, a_ty),
                             | TermAnnId::Kind(_)
@@ -499,9 +499,9 @@ impl Tyck for SEnv<su::TermId> {
                             | ss::Type::Prod(ty) => {
                                 let ss::Prod(ty_a, ty_b) = ty;
                                 let a_out_ann =
-                                    self.mk(a).tyck(tycker, ByAction::ana(ty_a.into()))?;
+                                    self.mk(a).tyck(tycker, Action::ana(ty_a.into()))?;
                                 let b_out_ann =
-                                    self.mk(b).tyck(tycker, ByAction::ana(ty_b.into()))?;
+                                    self.mk(b).tyck(tycker, Action::ana(ty_b.into()))?;
                                 let (a_out, a_ty) = match a_out_ann {
                                     | TermAnnId::Value(a_out, a_ty) => (a_out, a_ty),
                                     | TermAnnId::Kind(_)
@@ -520,7 +520,6 @@ impl Tyck for SEnv<su::TermId> {
                             }
                             | ss::Type::Exists(ty) => {
                                 let ss::Exists(tpat, body) = ty;
-
                                 todo!()
                             }
                             | _ => Err(TyckError::TypeMismatch)?,
@@ -532,7 +531,7 @@ impl Tyck for SEnv<su::TermId> {
             | Tm::App(_) => todo!(),
             | Tm::Rec(term) => {
                 let su::Rec(pat, body) = term;
-                let (binder, _ctx) = self.mk(pat).tyck(tycker, ByAction::switch(switch))?;
+                let (binder, _ctx) = self.mk(pat).tyck(tycker, Action::switch(switch))?;
                 let (binder, binder_ty) = match binder {
                     | PatAnnId::Type(_, _) => Err(TyckError::SortMismatch)?,
                     | PatAnnId::Value(binder, binder_ty) => {
@@ -545,7 +544,7 @@ impl Tyck for SEnv<su::TermId> {
                         (binder, body_ty)
                     }
                 };
-                let body_out_ann = self.mk(body).tyck(tycker, ByAction::ana(binder_ty.into()))?;
+                let body_out_ann = self.mk(body).tyck(tycker, Action::ana(binder_ty.into()))?;
                 let (body_out, rec_ty) = match body_out_ann {
                     | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Value(_, _) => {
                         Err(TyckError::SortMismatch)?
@@ -559,10 +558,10 @@ impl Tyck for SEnv<su::TermId> {
                 let su::Pi(binder, body) = term;
                 match switch {
                     | Switch::Syn => {
-                        let (binder, _ctx) = self.mk(binder).tyck(tycker, ByAction::syn())?;
+                        let (binder, _ctx) = self.mk(binder).tyck(tycker, Action::syn())?;
                         match binder {
                             | PatAnnId::Type(tpat, kd_1) => {
-                                let body = self.mk(body).tyck(tycker, ByAction::syn())?;
+                                let body = self.mk(body).tyck(tycker, Action::syn())?;
                                 match body {
                                     | TermAnnId::Kind(kd_2) => {
                                         // kind arrow; no tpat should be used
@@ -597,7 +596,7 @@ impl Tyck for SEnv<su::TermId> {
                                 // kd_1 should be of vtype
                                 let vtype = tycker.vtype(&self.env);
                                 Lub::lub(&vtype, &kd_1, tycker)?;
-                                let ty_2 = self.mk(body).tyck(tycker, ByAction::syn())?;
+                                let ty_2 = self.mk(body).tyck(tycker, Action::syn())?;
                                 let (ty_2, kd_2) = match ty_2 {
                                     | TermAnnId::Type(ty_2, kd_2) => (ty_2, kd_2),
                                     | TermAnnId::Kind(_)
@@ -623,14 +622,14 @@ impl Tyck for SEnv<su::TermId> {
                                     // could be forall or type arrow
                                     // synthesize the binder
                                     let (binder, _ctx) =
-                                        self.mk(binder).tyck(tycker, ByAction::syn())?;
+                                        self.mk(binder).tyck(tycker, Action::syn())?;
                                     match binder {
                                         | PatAnnId::Type(tpat, _kd_1) => {
                                             // forall
                                             let ctype = tycker.ctype(&self.env);
                                             let ty_2 = self
                                                 .mk(body)
-                                                .tyck(tycker, ByAction::ana(ctype.into()))?;
+                                                .tyck(tycker, Action::ana(ctype.into()))?;
                                             let ty_2 = match ty_2 {
                                                 | TermAnnId::Type(ty_2, _ctype) => ty_2,
                                                 | TermAnnId::Kind(_)
@@ -659,7 +658,7 @@ impl Tyck for SEnv<su::TermId> {
                                             let ctype = tycker.ctype(&self.env);
                                             let ty_2 = self
                                                 .mk(body)
-                                                .tyck(tycker, ByAction::ana(ctype.into()))?;
+                                                .tyck(tycker, Action::ana(ctype.into()))?;
                                             let (ty_2, _ctype) = match ty_2 {
                                                 | TermAnnId::Type(ty_2, kd_2) => (ty_2, kd_2),
                                                 | TermAnnId::Kind(_)
@@ -679,7 +678,7 @@ impl Tyck for SEnv<su::TermId> {
                                     let ss::Arrow(kd_1, kd_2) = kd_arr;
                                     // ana binder with kd_1
                                     let (binder, _ctx) =
-                                        self.mk(binder).tyck(tycker, ByAction::ana(kd_1.into()))?;
+                                        self.mk(binder).tyck(tycker, Action::ana(kd_1.into()))?;
                                     let (tpat, kd_1) = match binder {
                                         | PatAnnId::Type(tpat, kd_1) => (tpat, kd_1),
                                         | PatAnnId::Value(_, _) => Err(TyckError::SortMismatch)?,
@@ -691,7 +690,7 @@ impl Tyck for SEnv<su::TermId> {
                                     }
                                     // ana body with kd_2
                                     let body =
-                                        self.mk(body).tyck(tycker, ByAction::ana(kd_2.into()))?;
+                                        self.mk(body).tyck(tycker, Action::ana(kd_2.into()))?;
                                     let kd_2 = match body {
                                         | TermAnnId::Kind(kd_2) => kd_2,
                                         | TermAnnId::Type(_, _)
@@ -712,11 +711,11 @@ impl Tyck for SEnv<su::TermId> {
                 match switch {
                     | Switch::Syn => {
                         // either a prod or an exists
-                        let (binder, _ctx) = self.mk(binder).tyck(tycker, ByAction::syn())?;
+                        let (binder, _ctx) = self.mk(binder).tyck(tycker, Action::syn())?;
                         match binder {
                             | PatAnnId::Type(tpat, _kd) => {
                                 // exists
-                                let body = self.mk(body).tyck(tycker, ByAction::syn())?;
+                                let body = self.mk(body).tyck(tycker, Action::syn())?;
                                 let (body_ty, body_kd) = match body {
                                     | TermAnnId::Type(ty, kd) => (ty, kd),
                                     | TermAnnId::Kind(_)
@@ -740,7 +739,7 @@ impl Tyck for SEnv<su::TermId> {
                                 let kd_1 = tycker.statics.annotations_type[&ty_1].to_owned();
                                 let vtype = tycker.vtype(&self.env);
                                 Lub::lub(&vtype, &kd_1, tycker)?;
-                                let ty_2 = self.mk(body).tyck(tycker, ByAction::syn())?;
+                                let ty_2 = self.mk(body).tyck(tycker, Action::syn())?;
                                 let (ty_2, kd_2) = match ty_2 {
                                     | TermAnnId::Type(ty_2, kd_2) => (ty_2, kd_2),
                                     | TermAnnId::Kind(_)
@@ -760,7 +759,7 @@ impl Tyck for SEnv<su::TermId> {
                             // prod or exists; should be of vtype
                             Lub::lub(&vtype, &kd, tycker)?;
                             // just analyze the whole thing
-                            self.tyck(tycker, ByAction::ana(vtype.into()))
+                            self.tyck(tycker, Action::ana(vtype.into()))
                         }
                         | AnnId::Set | AnnId::Type(_) => Err(TyckError::SortMismatch)?,
                     },
@@ -770,13 +769,13 @@ impl Tyck for SEnv<su::TermId> {
                 let su::Thunk(body) = term;
                 let Switch::Ana(ana) = switch else { Err(TyckError::MissingAnnotation)? };
                 let AnnId::Type(ana_ty) = ana else { Err(TyckError::SortMismatch)? };
-                let thunk_app_hole = tycker.thunk_app_hole(&self.env);
+                let thunk_app_hole = tycker.thunk_app_hole(&self.env, body);
                 let ty = Lub::lub(&ana_ty, &thunk_app_hole, tycker)?;
                 let ss::Type::App(thunk_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
                     unreachable!()
                 };
                 let ss::App(_thunk_ty, body_ty) = thunk_app_body_ty;
-                let body_out_ann = self.mk(body).tyck(tycker, ByAction::ana(body_ty.into()))?;
+                let body_out_ann = self.mk(body).tyck(tycker, Action::ana(body_ty.into()))?;
                 let (body_out, body_ty) = match body_out_ann {
                     | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Value(_, _) => {
                         Err(TyckError::SortMismatch)?
@@ -792,24 +791,38 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Force(term) => {
                 let su::Force(body) = term;
-                let (body, body_ty) = match switch {
-                    | Switch::Syn => {
-                        // if syn, then ana the body with thunk_app_hole
-                        let thunk_app_hole = tycker.thunk_app_hole(&self.env);
-                        let body_out_ann =
-                            self.mk(body).tyck(tycker, ByAction::ana(thunk_app_hole.into()))?;
-                        let (body_out, body_ty) = match body_out_ann {
-                            | TermAnnId::Kind(_)
-                            | TermAnnId::Type(_, _)
-                            | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
-                            | TermAnnId::Value(body_out, body_ty) => (body_out, body_ty),
-                        };
-                        (body_out, body_ty)
+                let body_ty = {
+                    match switch {
+                        | Switch::Syn => {
+                            // if syn, then ana the body with thunk_app_hole
+                            let thunk_app_hole = tycker.thunk_app_hole(&self.env, body);
+                            thunk_app_hole
+                        }
+                        | Switch::Ana(ana) => {
+                            let ana_ty = match ana {
+                                | AnnId::Set | AnnId::Kind(_) => Err(TyckError::SortMismatch)?,
+                                | AnnId::Type(ty) => ty,
+                            };
+                            // check ana_ty is computation type
+                            let ctype = tycker.ctype(&self.env);
+                            let ana_ty_kd = tycker.statics.annotations_type[&ana_ty].to_owned();
+                            Lub::lub(&ctype, &ana_ty_kd, tycker)?;
+                            // if ana, then ana the body with thunked body_ty
+                            let thunk_ty = tycker.thunk(&self.env);
+                            let app = Alloc::alloc(tycker, ss::App(thunk_ty, ana_ty));
+                            app
+                        }
                     }
-                    | Switch::Ana(_) => {
-                        // if ana, then ana the body with the body_ty
-                        todo!()
-                    }
+                };
+                let (body, body_ty) = {
+                    let body_out_ann = self.mk(body).tyck(tycker, Action::ana(body_ty.into()))?;
+                    let (body_out, body_ty) = match body_out_ann {
+                        | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
+                            Err(TyckError::SortMismatch)?
+                        }
+                        | TermAnnId::Value(body_out, body_ty) => (body_out, body_ty),
+                    };
+                    (body_out, body_ty)
                 };
                 let force = Alloc::alloc(tycker, ss::Force(body));
                 let force_ty = {
@@ -827,13 +840,13 @@ impl Tyck for SEnv<su::TermId> {
                 let su::Ret(body) = term;
                 let Switch::Ana(ana) = switch else { Err(TyckError::MissingAnnotation)? };
                 let AnnId::Type(ana_ty) = ana else { Err(TyckError::SortMismatch)? };
-                let ret_app_hole = tycker.ret_app_hole(&self.env);
+                let ret_app_hole = tycker.ret_app_hole(&self.env, self.inner);
                 let ty = Lub::lub(&ana_ty, &ret_app_hole, tycker)?;
                 let ss::Type::App(ret_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
                     unreachable!()
                 };
                 let ss::App(_ret_ty, body_ty) = ret_app_body_ty;
-                let body_out_ann = self.mk(body).tyck(tycker, ByAction::ana(body_ty.into()))?;
+                let body_out_ann = self.mk(body).tyck(tycker, Action::ana(body_ty.into()))?;
                 let (body_out, body_ty) = match body_out_ann {
                     | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
                         Err(TyckError::SortMismatch)?
@@ -851,9 +864,9 @@ impl Tyck for SEnv<su::TermId> {
                 let su::Bind { binder, bindee, tail } = term;
                 // first, ana bindee with ret_app_hole, and we get a compu that should be ret_app_body_ty
                 let (bindee_out, bindee_ty) = {
-                    let ret_app_hole = tycker.ret_app_hole(&self.env);
+                    let ret_app_hole = tycker.ret_app_hole(&self.env, bindee);
                     let bindee_out_ann =
-                        self.mk(bindee).tyck(tycker, ByAction::ana(ret_app_hole.into()))?;
+                        self.mk(bindee).tyck(tycker, Action::ana(ret_app_hole.into()))?;
                     match bindee_out_ann {
                         | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Value(_, _) => {
                             Err(TyckError::SortMismatch)?
@@ -868,13 +881,13 @@ impl Tyck for SEnv<su::TermId> {
                 };
                 let ss::App(_ret_ty, binder_ty) = ret_app_binder_ty;
                 let (binder_out_ann, _ctx) =
-                    self.mk(binder).tyck(tycker, ByAction::ana(binder_ty.into()))?;
+                    self.mk(binder).tyck(tycker, Action::ana(binder_ty.into()))?;
                 let PatAnnId::Value(binder_out, _binder_ty) = binder_out_ann else {
                     unreachable!()
                 };
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
-                    let tail_out_ann = self.mk(tail).tyck(tycker, ByAction::switch(switch))?;
+                    let tail_out_ann = self.mk(tail).tyck(tycker, Action::switch(switch))?;
                     match tail_out_ann {
                         | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Value(_, _) => {
                             Err(TyckError::SortMismatch)?
@@ -893,7 +906,7 @@ impl Tyck for SEnv<su::TermId> {
                 let su::PureBind { binder, bindee, tail } = term;
                 // first, synthesize bindee
                 let (bindee_out, bindee_ty) = {
-                    let bindee_out_ann = self.mk(bindee).tyck(tycker, ByAction::syn())?;
+                    let bindee_out_ann = self.mk(bindee).tyck(tycker, Action::syn())?;
                     match bindee_out_ann {
                         | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
                             Err(TyckError::SortMismatch)?
@@ -903,13 +916,13 @@ impl Tyck for SEnv<su::TermId> {
                 };
                 // then, ana binder with bindee_ty
                 let (binder_out_ann, _ctx) =
-                    self.mk(binder).tyck(tycker, ByAction::ana(bindee_ty.into()))?;
+                    self.mk(binder).tyck(tycker, Action::ana(bindee_ty.into()))?;
                 let PatAnnId::Value(binder_out, _binder_ty) = binder_out_ann else {
                     unreachable!()
                 };
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
-                    let tail_out_ann = self.mk(tail).tyck(tycker, ByAction::switch(switch))?;
+                    let tail_out_ann = self.mk(tail).tyck(tycker, Action::switch(switch))?;
                     match tail_out_ann {
                         | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Value(_, _) => {
                             Err(TyckError::SortMismatch)?
@@ -936,7 +949,7 @@ impl Tyck for SEnv<su::TermId> {
                 };
                 let mut arms_vec = im::Vector::new();
                 for su::DataArm { name, param } in arms {
-                    let param = self.mk(param).tyck(tycker, ByAction::ana(vtype.into()))?;
+                    let param = self.mk(param).tyck(tycker, Action::ana(vtype.into()))?;
                     let TermAnnId::Type(ty, _kd) = param else { Err(TyckError::SortMismatch)? };
                     arms_vec.push_back((name, ty));
                 }
@@ -967,7 +980,7 @@ impl Tyck for SEnv<su::TermId> {
                 };
                 let mut arms_vec = im::Vector::new();
                 for su::CoDataArm { name, out } in arms {
-                    let out = self.mk(out).tyck(tycker, ByAction::ana(ctype.into()))?;
+                    let out = self.mk(out).tyck(tycker, Action::ana(ctype.into()))?;
                     let TermAnnId::Type(ty, _kd) = out else { Err(TyckError::SortMismatch)? };
                     arms_vec.push_back((name, ty));
                 }
@@ -1002,14 +1015,14 @@ impl Tyck for SEnv<su::TermId> {
                     .get(&ctor)
                     .ok_or_else(|| TyckError::MissingDataArm(ctor.clone()))?
                     .to_owned();
-                let arg_out_ann = self.mk(arg).tyck(tycker, ByAction::ana(arg_ty.into()))?;
+                let arg_out_ann = self.mk(arg).tyck(tycker, Action::ana(arg_ty.into()))?;
                 let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
                 let ctor = Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), arg));
                 Ok(TermAnnId::Value(ctor, ana_ty))
             }
             | Tm::Match(term) => {
                 let su::Match { scrut, arms } = term;
-                let scrut_out_ann = self.mk(scrut).tyck(tycker, ByAction::syn())?;
+                let scrut_out_ann = self.mk(scrut).tyck(tycker, Action::syn())?;
                 let (scrut, scrut_ty_id) = match scrut_out_ann {
                     | TermAnnId::Value(scrut, ty) => (scrut, ty),
                     | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
@@ -1020,13 +1033,13 @@ impl Tyck for SEnv<su::TermId> {
                 let mut arms_ty = Vec::new();
                 for su::Matcher { binder, tail } in arms {
                     let (binder_out_ann, _ctx) =
-                        self.mk(binder).tyck(tycker, ByAction::ana(scrut_ty_id.into()))?;
+                        self.mk(binder).tyck(tycker, Action::ana(scrut_ty_id.into()))?;
                     let PatAnnId::Value(binder, _ty) = binder_out_ann else {
                         Err(TyckError::SortMismatch)?
                     };
                     match switch {
                         | Switch::Syn => {
-                            let tail_out_ann = self.mk(tail).tyck(tycker, ByAction::syn())?;
+                            let tail_out_ann = self.mk(tail).tyck(tycker, Action::syn())?;
                             let TermAnnId::Compu(tail, ty) = tail_out_ann else {
                                 Err(TyckError::SortMismatch)?
                             };
@@ -1035,7 +1048,7 @@ impl Tyck for SEnv<su::TermId> {
                         }
                         | Switch::Ana(ana_ty) => {
                             let tail_out_ann =
-                                self.mk(tail).tyck(tycker, ByAction::ana(ana_ty.into()))?;
+                                self.mk(tail).tyck(tycker, Action::ana(ana_ty.into()))?;
                             let TermAnnId::Compu(tail, ty) = tail_out_ann else {
                                 Err(TyckError::SortMismatch)?
                             };
@@ -1075,7 +1088,7 @@ impl Tyck for SEnv<su::TermId> {
                     let arm_ty = arms
                         .remove(&dtor)
                         .ok_or_else(|| TyckError::MissingCoDataArm(dtor.clone()))?;
-                    let tail_out_ann = self.mk(tail).tyck(tycker, ByAction::ana(arm_ty.into()))?;
+                    let tail_out_ann = self.mk(tail).tyck(tycker, Action::ana(arm_ty.into()))?;
                     let TermAnnId::Compu(tail, _ty) = tail_out_ann else {
                         Err(TyckError::SortMismatch)?
                     };
@@ -1089,7 +1102,7 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Dtor(term) => {
                 let su::Dtor(body, dtor) = term;
-                let body_out_ann = self.mk(body).tyck(tycker, ByAction::syn())?;
+                let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
                 let TermAnnId::Compu(body, ty_body) = body_out_ann else {
                     Err(TyckError::SortMismatch)?
                 };
@@ -1116,7 +1129,7 @@ impl Tyck for SEnv<su::TermId> {
                 let mut mo = None;
                 let mut alg = None;
                 for struct_ in structs {
-                    let struct_out_ann = self.mk(struct_).tyck(tycker, ByAction::syn())?;
+                    let struct_out_ann = self.mk(struct_).tyck(tycker, Action::syn())?;
                     match struct_out_ann {
                         | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
                             Err(TyckError::SortMismatch)?
@@ -1145,7 +1158,7 @@ impl Tyck for SEnv<su::TermId> {
                 let (alg, alg_ty_mo_arg, alg_ty_carrier_arg) =
                     alg.ok_or_else(|| TyckError::MissingAlgebra)?;
                 for su::Import { binder, body } in imports {
-                    let body_out_ann = self.mk(body).tyck(tycker, ByAction::syn())?;
+                    let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
                     let (body, ty) = match body_out_ann {
                         | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
                             Err(TyckError::SortMismatch)?
