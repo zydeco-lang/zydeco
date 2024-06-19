@@ -172,7 +172,7 @@ impl Alloc<VPatId> for ValuePattern {
         vpat
     }
 }
-impl Alloc<VPatId> for Hole {
+impl Alloc<VPatId> for Ann<Hole, TypeId> {
     fn alloc(tycker: &mut Tycker, val: Self) -> VPatId {
         Alloc::alloc(tycker, ValuePattern::from(val))
     }

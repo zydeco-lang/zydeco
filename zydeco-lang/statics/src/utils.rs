@@ -64,7 +64,7 @@ impl SyntacticallyUsed for ss::VPatId {
         use ss::ValuePattern as Pat;
         match pat {
             | Pat::Hole(pat) => {
-                let ss::Hole = pat;
+                let ss::Ann { tm: ss::Hole, ty: _ } = pat;
                 false
             }
             | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),

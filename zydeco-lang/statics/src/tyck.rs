@@ -16,7 +16,7 @@ pub struct Tycker {
 impl Tycker {
     pub fn run(mut self) -> Result<()> {
         let mut scc = self.scoped.top.clone();
-        let mut ctx = SEnv::new(());
+        let mut env = SEnv::new(());
         loop {
             let groups = scc.top();
             // if no more groups are at the top, we're done
@@ -25,7 +25,7 @@ impl Tycker {
             }
             for group in groups {
                 // each group should be type checked on its own
-                ctx = SccDeclarations(&group).tyck(&mut self, ctx)?;
+                env = SccDeclarations(&group).tyck(&mut self, env)?;
                 scc.release(group);
             }
         }
@@ -314,7 +314,11 @@ impl Tyck for SEnv<su::PatId> {
                                 let ctx = a_ctx + b_ctx;
                                 Ok((PatAnnId::Value(pat, ann), ctx))
                             }
-                            | syntax::Type::Exists(_) => todo!(),
+                            | syntax::Type::Exists(ty) => {
+                                let ss::Exists(tpat, ty_body) = ty;
+                                let (def, kd) = tycker.extract_tpat(tpat);
+                                todo!()
+                            }
                             | _ => Err(TyckError::TypeMismatch)?,
                         }
                     }

@@ -182,7 +182,7 @@ mod impls_identifiers {
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, Hole);
+                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty });
                     PatAnnId::Value(tm, ty)
                 }
             }
@@ -344,7 +344,7 @@ mod impls_types {
 #[derive(From, Clone, Debug)]
 pub enum ValuePattern {
     // Ann(Ann<VPatId, TypeId>),
-    Hole(Hole),
+    Hole(Ann<Hole, TypeId>),
     Var(DefId),
     Ctor(Ctor<VPatId>),
     Triv(Triv),
