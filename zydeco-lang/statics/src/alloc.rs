@@ -271,6 +271,16 @@ impl Alloc<CompuId> for App<CompuId, ValueId> {
         Alloc::alloc(tycker, Computation::from(val))
     }
 }
+impl Alloc<CompuId> for Abs<TPatId, CompuId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
+impl Alloc<CompuId> for App<CompuId, TypeId> {
+    fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
+        Alloc::alloc(tycker, Computation::from(val))
+    }
+}
 impl Alloc<CompuId> for Rec<VPatId, CompuId> {
     fn alloc(tycker: &mut Tycker, val: Self) -> CompuId {
         Alloc::alloc(tycker, Computation::from(val))

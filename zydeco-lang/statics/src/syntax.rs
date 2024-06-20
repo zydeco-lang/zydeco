@@ -392,8 +392,10 @@ pub struct CoMatcher {
 #[derive(From, Clone, Debug)]
 pub enum Computation {
     Hole(Hole),
-    Abs(Abs<VPatId, CompuId>),
-    App(App<CompuId, ValueId>),
+    VAbs(Abs<VPatId, CompuId>),
+    VApp(App<CompuId, ValueId>),
+    TAbs(Abs<TPatId, CompuId>),
+    TApp(App<CompuId, TypeId>),
     Rec(Rec<VPatId, CompuId>),
     Force(Force<ValueId>),
     Ret(Ret<ValueId>),
