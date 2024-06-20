@@ -477,7 +477,7 @@ pub struct StaticsArena {
 
     /// arena for abstract types
     pub absts: ArenaDense<AbstId, ()>,
-    /// the abstract types generated from sealed
+    /// the abstract types generated from sealed types
     pub seals: ArenaAssoc<AbstId, TypeId>,
     /// arena for filling context-constrained holes; the TermId is the site
     pub fills: ArenaDense<FillId, su::TermId>,

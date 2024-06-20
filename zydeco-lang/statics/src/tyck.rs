@@ -317,7 +317,30 @@ impl Tyck for SEnv<su::PatId> {
                             | syntax::Type::Exists(ty) => {
                                 let ss::Exists(tpat, ty_body) = ty;
                                 let (def, kd) = tycker.extract_tpat(tpat);
-                                todo!()
+                                let (a_out_ann, a_ctx) =
+                                    self.mk(a).tyck(tycker, Action::ana(kd.into()))?;
+                                let (a_out, _a_kd) = match a_out_ann {
+                                    | PatAnnId::Type(tpat, kd) => (tpat, kd),
+                                    | PatAnnId::Value(_, _) => unreachable!(),
+                                };
+                                let (a_def, _a_kd) = tycker.extract_tpat(a_out);
+                                let ty_body_subst = if let (Some(def), Some(a_def)) = (def, a_def) {
+                                    let a_def_ty = Alloc::alloc(tycker, a_def);
+                                    ty_body.subst(tycker, def, a_def_ty)?
+                                } else {
+                                    ty_body
+                                };
+                                let (b_out_ann, b_ctx) =
+                                    self.mk(b).tyck(tycker, Action::ana(ty_body_subst.into()))?;
+                                match b_out_ann {
+                                    | PatAnnId::Value(b_out, _b_ann) => {
+                                        let pat = Alloc::alloc(tycker, ss::Cons(a_out, b_out));
+                                        let ann = Alloc::alloc(tycker, ss::Exists(tpat, ty_body));
+                                        let ctx = a_ctx + b_ctx;
+                                        Ok((PatAnnId::Value(pat, ann), ctx))
+                                    }
+                                    | PatAnnId::Type(_, _) => unreachable!(),
+                                }
                             }
                             | _ => Err(TyckError::TypeMismatch)?,
                         }
@@ -407,8 +430,7 @@ impl Tyck for SEnv<su::TermId> {
                     }
                     | Switch::Ana(AnnId::Kind(kd)) => {
                         // a type hole, with a specific kind in mind
-                        let fill =
-                            tycker.statics.fills.alloc(self.inner);
+                        let fill = tycker.statics.fills.alloc(self.inner);
                         let fill = Alloc::alloc(tycker, fill);
                         Ok(TermAnnId::Type(fill, kd))
                     }
@@ -523,8 +545,30 @@ impl Tyck for SEnv<su::TermId> {
                                 Ok(TermAnnId::Value(cons, prod))
                             }
                             | ss::Type::Exists(ty) => {
-                                let ss::Exists(tpat, body) = ty;
-                                todo!()
+                                let ss::Exists(tpat, body_ty) = ty;
+                                let (def, kd) = tycker.extract_tpat(tpat);
+                                let a_out_ann = self.mk(a).tyck(tycker, Action::ana(kd.into()))?;
+                                let (a_ty, _a_kd) = match a_out_ann {
+                                    | TermAnnId::Kind(_)
+                                    | TermAnnId::Value(_, _)
+                                    | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
+                                    | TermAnnId::Type(ty, kd) => (ty, kd),
+                                };
+                                let body_ty_subst = if let Some(def) = def {
+                                    body_ty.subst(tycker, def, a_ty)?
+                                } else {
+                                    body_ty
+                                };
+                                let b_out_ann =
+                                    self.mk(b).tyck(tycker, Action::ana(body_ty_subst.into()))?;
+                                let (val, _) = match b_out_ann {
+                                    | TermAnnId::Value(val, _) => (val, ()),
+                                    | TermAnnId::Kind(_)
+                                    | TermAnnId::Type(_, _)
+                                    | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
+                                };
+                                let cons = Alloc::alloc(tycker, ss::Cons(a_ty, val));
+                                Ok(TermAnnId::Value(cons, body_ty))
                             }
                             | _ => Err(TyckError::TypeMismatch)?,
                         }
