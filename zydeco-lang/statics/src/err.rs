@@ -23,14 +23,10 @@ pub enum TyckError {
     Expressivity(&'static str),
     #[error("Multiple monad implementations")]
     MultipleMonads,
-    #[error("Multiple algebra implementations")]
-    MultipleAlgebras,
     #[error("Neither monad nor algebra")]
     NeitherMonadNorAlgebra,
     #[error("Missing monad")]
     MissingMonad,
-    #[error("Missing algebra")]
-    MissingAlgebra,
 }
 
 pub type Result<T> = std::result::Result<T, TyckError>;

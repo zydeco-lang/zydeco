@@ -1302,7 +1302,15 @@ impl Tyck for SEnv<su::TermId> {
                 }
                 let whole_term = Alloc::alloc(tycker, ss::Match { scrut, arms: matchers });
                 if arms_ty.is_empty() {
-                    todo!()
+                    match switch {
+                        | Switch::Syn => Err(TyckError::MissingAnnotation)?,
+                        | Switch::Ana(ana_ty) => match ana_ty {
+                            | AnnId::Set | AnnId::Kind(_) => Err(TyckError::SortMismatch)?,
+                            | AnnId::Type(ana_ty) => {
+                                return Ok(TermAnnId::Compu(whole_term, ana_ty))
+                            }
+                        },
+                    }
                 }
                 // make sure that each arm has the same type
                 let mut iter = arms_ty.into_iter();
@@ -1370,7 +1378,7 @@ impl Tyck for SEnv<su::TermId> {
             | Tm::WithBlock(term) => {
                 let su::WithBlock { structs, imports, body } = term;
                 let mut mo = None;
-                let mut alg = None;
+                let mut alg = Vec::new();
                 for struct_ in structs {
                     let struct_out_ann = self.mk(struct_).tyck(tycker, Action::syn())?;
                     match struct_out_ann {
@@ -1387,10 +1395,7 @@ impl Tyck for SEnv<su::TermId> {
                                     mo = Some((val, m));
                                 }
                                 | Some(Algebra(m, c)) => {
-                                    if alg.is_some() {
-                                        Err(TyckError::MultipleAlgebras)?
-                                    }
-                                    alg = Some((val, m, c));
+                                    alg.push((val, m, c));
                                 }
                                 | None => Err(TyckError::NeitherMonadNorAlgebra)?,
                             }
@@ -1398,8 +1403,7 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 }
                 let (mo, mo_ty_arg) = mo.ok_or_else(|| TyckError::MissingMonad)?;
-                let (alg, alg_ty_mo_arg, alg_ty_carrier_arg) =
-                    alg.ok_or_else(|| TyckError::MissingAlgebra)?;
+                // let (alg, alg_ty_mo_arg, alg_ty_carrier_arg) = alg.ok_or_else(|| TyckError::MissingAlgebra)?;
                 for su::Import { binder, body } in imports {
                     let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
                     let (body, ty) = match body_out_ann {
