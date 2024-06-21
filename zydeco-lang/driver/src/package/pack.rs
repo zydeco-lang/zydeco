@@ -1,14 +1,15 @@
 //! The package notation of zydeco.
 
 use super::err::{Result, SurfaceError};
+use sculptor::{FileIO, SerdeStr, ShaSnap};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
+use zydeco_statics::{syntax::StaticsArena, Tycker};
 use zydeco_surface::{
     bitter::{syntax as b, DesugarOut, Desugarer},
     scoped::{syntax as sc, ResolveOut, Resolver},
     textual::{syntax as t, Lexer, ParseError, Tok, TopLevelParser},
 };
-use sculptor::{FileIO, SerdeStr, ShaSnap};
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
 use zydeco_utils::{
     arena::*,
     deps::DepGraph,
@@ -197,7 +198,9 @@ impl Package {
         // }
 
         // type-checking
-        // let 
+        let PackageScoped { sources, spans, prim, arena: scoped } = pack;
+        let tycker = Tycker { spans, prim, scoped, statics: StaticsArena::new(&mut alloc) };
+        tycker.run().unwrap();
 
         Ok(())
     }

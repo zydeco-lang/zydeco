@@ -355,6 +355,19 @@ mod impls {
         pub fn insert(&mut self, id: Id, val: T) {
             let None = self.map.insert(id, val) else { panic!("duplicate key") };
         }
+        pub fn insert_or_else<E>(
+            &mut self, id: Id, val: T, f: impl FnOnce(T, T) -> Result<T, E>,
+        ) -> Result<(), E> {
+            match self.map.remove(&id) {
+                | Some(old) => {
+                    self.map.insert(id, f(old, val)?);
+                }
+                | None => {
+                    self.map.insert(id, val);
+                }
+            }
+            Ok(())
+        }
     }
 
     impl<Id, T> Index<&Id> for ArenaAssoc<Id, T>

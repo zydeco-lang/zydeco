@@ -15,6 +15,7 @@ zydeco-utils = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
+zydeco-statics = { workspace = true }
 derive_more = { workspace = true }
 derive-where = { workspace = true }
 thiserror = { workspace = true }

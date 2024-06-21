@@ -28,6 +28,9 @@ mod impls_context {
             defs.insert(def, t);
             Self { defs }
         }
+        pub fn get(&self, def: &DefId) -> Option<&T> {
+            self.defs.get(def)
+        }
         pub fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
             let Context { mut defs } = self.clone();
             defs.extend(iter);
