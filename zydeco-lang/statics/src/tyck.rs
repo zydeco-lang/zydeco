@@ -1412,7 +1412,8 @@ impl Tyck for SEnv<su::TermId> {
                         }
                         | TermAnnId::Value(body, ty) => (body, ty),
                     };
-                    todo!()
+                    println!("import {:?} : {:?}", binder, ty);
+                    // todo!()
                 }
                 todo!()
             }
