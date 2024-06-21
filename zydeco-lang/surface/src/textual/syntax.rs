@@ -267,8 +267,16 @@ pub struct UseDef(pub UsePath);
 //     pub top: TopLevel,
 // }
 
+// Todo: Add a way to specify the expected output of the execution
 #[derive(Clone, Debug)]
-pub struct Main(pub TermId);
+pub enum ExecType {
+    Main,
+    Test,
+    Fail,
+}
+
+#[derive(Clone, Debug)]
+pub struct Exec(pub TermId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
@@ -279,7 +287,7 @@ pub enum Declaration {
     // Layer(Layer),
     // UseDef(UseDef),
     // UseBlock(UseBlock),
-    Main(Main),
+    Exec(Exec),
 }
 
 #[derive(From, Clone, Debug)]

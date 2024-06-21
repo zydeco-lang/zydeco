@@ -194,7 +194,7 @@ pub struct AliasHead {
 // }
 
 #[derive(Clone, Debug)]
-pub struct Main(pub TermId);
+pub struct Exec(pub TermId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
@@ -203,7 +203,7 @@ pub enum Declaration {
     // Layer(Layer),
     // UseDef(UseDef),
     // UseBlock(UseBlock),
-    Main(Main),
+    Exec(Exec),
 }
 
 #[derive(From, Clone, Debug)]

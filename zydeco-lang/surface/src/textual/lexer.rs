@@ -44,7 +44,7 @@ pub enum Tok<'input> {
     #[token("extern")]
     Extern,
     #[token("main")]
-    Main,
+    Exec,
     #[token("let")]
     Let,
     #[token("in")]
@@ -147,7 +147,7 @@ impl<'input> Display for Tok<'input> {
             | Tok::Alias => write!(f, "alias"),
             | Tok::Define => write!(f, "define"),
             | Tok::Extern => write!(f, "extern"),
-            | Tok::Main => write!(f, "main"),
+            | Tok::Exec => write!(f, "main"),
             | Tok::Let => write!(f, "let"),
             | Tok::In => write!(f, "in"),
             | Tok::Do => write!(f, "do"),

@@ -153,13 +153,13 @@ impl Desugar for t::DeclId {
             //     let top = top.desugar(desugarer);
             //     b::UseBlock { uses, top }.into()
             // }
-            | Decl::Main(decl) => {
-                let t::Main(term) = decl;
+            | Decl::Exec(decl) => {
+                let t::Exec(term) = decl;
                 let term = term.desugar(desugarer);
                 // term -> ann
                 let os = desugarer.os(self.into());
                 let ann = Alloc::alloc(desugarer, b::Ann { tm: term, ty: os }.into(), self.into());
-                b::Main(ann).into()
+                b::Exec(ann).into()
             }
         };
         Alloc::alloc(desugarer, Modifiers { public, external, inner }, self.into())

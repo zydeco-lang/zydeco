@@ -99,7 +99,7 @@ impl Ugly for DeclId {
             // Decl::Layer(d) => s += &d.ugly(f),
             // Decl::UseDef(d) => s += &d.ugly(f),
             // Decl::UseBlock(d) => s += &d.ugly(f),
-            | Decl::Main(d) => s += &d.ugly(f),
+            | Decl::Exec(d) => s += &d.ugly(f),
         }
         s
     }
@@ -612,10 +612,10 @@ impl Ugly for AliasHead {
     }
 }
 
-impl Ugly for Main {
+impl Ugly for Exec {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Main(m) = self;
+        let Exec(m) = self;
         s += "main ";
         s += &m.ugly(f);
         s += " end";

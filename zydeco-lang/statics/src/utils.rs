@@ -103,7 +103,7 @@ impl SyntacticallyAnnotated for su::Declaration {
                 let _ = binder;
                 *ty
             }
-            | Decl::Main(su::Main(_term)) => None,
+            | Decl::Exec(su::Exec(_term)) => None,
         }
     }
 }

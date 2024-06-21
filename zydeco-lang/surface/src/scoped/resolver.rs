@@ -150,8 +150,8 @@ impl Resolve for DeclId {
                 }
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
             }
-            | Declaration::Main(decl) => {
-                let Main(term) = decl;
+            | Declaration::Exec(decl) => {
+                let Exec(term) = decl;
                 let () = term.resolve(resolver, (local.clone(), global))?;
             }
         };
@@ -453,7 +453,7 @@ impl Collect for SccDeclarations<'_> {
                         | Declaration::AliasHead(_) => {
                             unreachable!()
                         }
-                        | Declaration::Main(_) => {
+                        | Declaration::Exec(_) => {
                             unreachable!()
                         }
                     }
@@ -473,8 +473,8 @@ impl Collect for SccDeclarations<'_> {
                             }
                             ctx = binder.collect(collector, ctx)?;
                         }
-                        | Declaration::Main(decl) => {
-                            let Main(term) = decl;
+                        | Declaration::Exec(decl) => {
+                            let Exec(term) = decl;
                             let () = term.collect(collector, ctx.to_owned())?;
                         }
                     }
@@ -490,7 +490,7 @@ impl Collect for SccDeclarations<'_> {
                             let AliasBody { binder, bindee: _ } = decl;
                             ctx = binder.collect(collector, ctx)?;
                         }
-                        | Declaration::AliasHead(_) | Declaration::Main(_) => {
+                        | Declaration::AliasHead(_) | Declaration::Exec(_) => {
                             unreachable!()
                         }
                     }
@@ -502,7 +502,7 @@ impl Collect for SccDeclarations<'_> {
                             let AliasBody { binder: _, bindee } = decl;
                             let () = bindee.collect(collector, ctx.to_owned())?;
                         }
-                        | Declaration::AliasHead(_) | Declaration::Main(_) => {
+                        | Declaration::AliasHead(_) | Declaration::Exec(_) => {
                             unreachable!()
                         }
                     }

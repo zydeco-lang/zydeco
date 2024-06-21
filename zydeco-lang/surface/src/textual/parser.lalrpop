@@ -31,7 +31,7 @@ extern {
         "alias" => Tok::Alias,
         "define" => Tok::Define,
         "extern" => Tok::Extern,
-        "main" => Tok::Main,
+        "main" => Tok::Exec,
         "let" => Tok::Let,
         "in" => Tok::In,
         "do" => Tok::Do,
@@ -404,7 +404,7 @@ Declaration: Declaration = {
     // "use" <uses:UsePath> "where" <top:TopLevel> "end" => UseBlock {
     //     uses, top
     // }.into(),
-    "main" <TermId> "end" => Main(<>).into(),
+    "main" <TermId> "end" => Exec(<>).into(),
 };
 
 Modifiers<T>: Modifiers<T> = {

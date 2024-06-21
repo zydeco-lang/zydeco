@@ -247,7 +247,7 @@ impl Resolver {
                     }
                     self.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }
-                | Declaration::Main(_) => {}
+                | Declaration::Exec(_) => {}
             }
         }
         Ok(global)

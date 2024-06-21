@@ -107,12 +107,12 @@ impl<'decl> SccDeclarations<'decl> {
                         env = tycker.register_prim_decl(decl, id, env)?;
                         Ok(env)
                     }
-                    | Decl::Main(decl) => {
-                        let su::Main(term) = decl;
+                    | Decl::Exec(decl) => {
+                        let su::Exec(term) = decl;
                         let os = tycker.os(&env.env);
                         let out_ann = env.mk(term).tyck(tycker, Action::ana(os.into()))?;
                         let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
-                        tycker.statics.decls.insert(*id, ss::Main(body).into());
+                        tycker.statics.decls.insert(*id, ss::Exec(body).into());
                         Ok(env)
                     }
                 }

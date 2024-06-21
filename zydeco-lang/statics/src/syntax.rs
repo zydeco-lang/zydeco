@@ -429,14 +429,14 @@ pub struct VAliasHead {
 }
 
 #[derive(Clone, Debug)]
-pub struct Main(pub CompuId);
+pub struct Exec(pub CompuId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
     TAliasBody(TAliasBody),
     VAliasBody(VAliasBody),
     VAliasHead(VAliasHead),
-    Main(Main),
+    Exec(Exec),
 }
 
 /* ---------------------------------- Arena --------------------------------- */
