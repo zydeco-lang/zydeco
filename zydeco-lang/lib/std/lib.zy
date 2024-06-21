@@ -20,7 +20,7 @@ pub extern def Char : VType end
 pub extern def String : VType end
 pub extern def OS : CType end
 
-// interface for monads and algebras
+/// interface for monads and algebras
 pub extern codata Monad (M: VType -> CType) where
   | .return : forall (A: VType) .
     A -> M A
@@ -30,6 +30,14 @@ end
 pub extern codata Algebra (M: VType -> CType) (R: CType) where
   | .bindA : forall (A: VType) .
     Thunk (M A) -> Thunk (A -> R) -> R
+end
+
+/// monad transformers
+codata MonadTrans (T: (VType -> CType) -> VType -> CType) where
+  | .monad : forall (M: VType -> CType) .
+    Thunk (Monad M) -> Monad (T M)
+  | .lift : forall (M: VType -> CType) (A: VType) .
+    Thunk (Monad M) -> Thunk (M A) -> T M A
 end
 
 /// identity functions
