@@ -689,10 +689,11 @@ impl Desugar for (t::CoData, t::EntityId) {
 impl Desugar for t::Import {
     type Out = b::Import;
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
-        let t::Import { binder: name, body: def } = self;
-        let name = name.desugar(desugarer);
-        let def = def.desugar(desugarer);
-        b::Import { binder: name, body: def }
+        let t::Import { binder, ty, body } = self;
+        let binder = binder.desugar(desugarer);
+        let ty = ty.desugar(desugarer);
+        let body = body.desugar(desugarer);
+        b::Import { binder, ty, body }
     }
 }
 

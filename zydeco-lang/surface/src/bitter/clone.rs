@@ -236,10 +236,11 @@ impl DeepClone for b::TermId {
                 let monad_ty = monad_ty.deep_clone(desugarer);
                 let imports = imports
                     .into_iter()
-                    .map(|b::Import { binder: name, body: def }| {
-                        let name = name.clone();
-                        let def = def.deep_clone(desugarer);
-                        b::Import { binder: name, body: def }
+                    .map(|b::Import { binder, ty, body }| {
+                        let binder = binder.clone();
+                        let ty = ty.deep_clone(desugarer);
+                        let body = body.deep_clone(desugarer);
+                        b::Import { binder, ty, body }
                     })
                     .collect();
                 let body = body.deep_clone(desugarer);

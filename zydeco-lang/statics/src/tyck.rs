@@ -1403,18 +1403,34 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 }
                 let (mo, mo_ty_arg) = mo.ok_or_else(|| TyckError::MissingMonad)?;
+                println!("monad {:?} : Monad {:?}", mo, mo_ty_arg);
+                for (alg, alg_ty_mo_arg, alg_ty_carrier_arg) in alg {
+                    println!("algebra {:?} : Algebra {:?} {:?}", alg, alg_ty_mo_arg, alg_ty_carrier_arg);
+                }
                 // let (alg, alg_ty_mo_arg, alg_ty_carrier_arg) = alg.ok_or_else(|| TyckError::MissingAlgebra)?;
-                for su::Import { binder, body } in imports {
+                for su::Import { binder, ty, body } in imports {
                     let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
-                    let (body, ty) = match body_out_ann {
+                    let (body, body_ty) = match body_out_ann {
                         | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
                             Err(TyckError::SortMismatch)?
                         }
-                        | TermAnnId::Value(body, ty) => (body, ty),
+                        | TermAnnId::Value(body, body_ty) => (body, body_ty),
                     };
-                    println!("import {:?} : {:?}", binder, ty);
+                    let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
+                    let (ty, kd) = match ty_out_ann {
+                        | TermAnnId::Type(ty, kd) => (ty, kd),
+                        | TermAnnId::Kind(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                            Err(TyckError::SortMismatch)?
+                        }
+                    };
+                    // kind must be vtype
+                    let vtype = tycker.vtype(&self.env);
+                    Lub::lub(&vtype, &kd, tycker)?;
+                    // check that ty and body_ty are compatible
+                    println!("import {:?} : {:?} = {:?} : {:?}", binder, ty, body, body_ty);
                     // todo!()
                 }
+                println!("body {:?}", body);
                 todo!()
             }
             | Tm::Lit(lit) => {

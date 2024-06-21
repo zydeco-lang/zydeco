@@ -389,11 +389,12 @@ impl Resolve for TermId {
                     let () = struct_.resolve(resolver, (local.clone(), global))?;
                 }
                 for import in imports {
-                    let Import { binder: _, body: def } = import;
-                    let () = def.resolve(resolver, (local.clone(), global))?;
+                    let Import { binder: _, ty, body } = import;
+                    let () = ty.resolve(resolver, (local.clone(), global))?;
+                    let () = body.resolve(resolver, (local.clone(), global))?;
                 }
                 for import in imports {
-                    let Import { binder, body: _ } = import;
+                    let Import { binder, ty: _, body: _ } = import;
                     local = binder.resolve(resolver, (local.clone(), global))?;
                 }
                 let () = body.resolve(resolver, (local, global))?;
@@ -664,10 +665,11 @@ impl Collect for TermId {
                 for struct_ in structs {
                     let () = struct_.collect(collector, ctx.to_owned())?;
                 }
-                for Import { binder: _, body: def } in &imports {
-                    let () = def.collect(collector, ctx.to_owned())?;
+                for Import { binder: _, ty, body } in &imports {
+                    let () = ty.collect(collector, ctx.to_owned())?;
+                    let () = body.collect(collector, ctx.to_owned())?;
                 }
-                for Import { binder, body: _ } in &imports {
+                for Import { binder, ty: _, body: _ } in &imports {
                     ctx = binder.collect(collector, ctx.to_owned())?;
                 }
                 let () = body.collect(collector, ctx)?;

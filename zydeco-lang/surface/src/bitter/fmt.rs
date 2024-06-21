@@ -453,9 +453,11 @@ impl Ugly for CoMatch {
 impl Ugly for Import {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Import { binder, body } = self;
+        let Import { binder, ty, body } = self;
         s += "import ";
         s += &binder.ugly(f);
+        s += " : ";
+        s += &ty.ugly(f);
         s += " = ";
         s += &body.ugly(f);
         s

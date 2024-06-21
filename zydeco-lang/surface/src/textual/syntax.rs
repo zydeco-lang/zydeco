@@ -186,7 +186,7 @@ pub struct CoMatcher {
 #[derive(Clone, Debug)]
 pub struct Import {
     pub binder: PatId,
-    // pub ty: TermId,
+    pub ty: TermId,
     pub body: TermId,
 }
 

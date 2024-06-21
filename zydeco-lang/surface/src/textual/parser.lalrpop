@@ -231,8 +231,8 @@ CoMatcher: CoMatcher = {
 };
 
 Import: Import = {
-    "import" <binder:PatId> "=" <body:TermId> => Import {
-        binder, body
+    "import" <binder:PatId> ":" <ty:TermId> "=" <body:TermId> => Import {
+        binder, ty, body
     },
 };
 WithBlock: WithBlock = {
