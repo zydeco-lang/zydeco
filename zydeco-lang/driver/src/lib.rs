@@ -2,8 +2,20 @@
 
 pub mod err;
 
+/// the topmost compilation pipeline led by a package configuration
+pub mod package {
+    pub mod pack;
+    pub use pack::*;
+    pub mod conf;
+    pub mod err;
+    pub use err::*;
+
+    #[cfg(test)]
+    mod tests;
+}
+
 pub use err::*;
-pub use zydeco_surface::package::pack::{Dependency, Package};
+pub use package::pack::{Dependency, Package};
 
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{

@@ -1,7 +1,7 @@
 //! The package notation of zydeco.
 
 use super::err::{Result, SurfaceError};
-use crate::{
+use zydeco_surface::{
     bitter::{syntax as b, DesugarOut, Desugarer},
     scoped::{syntax as sc, ResolveOut, Resolver},
     textual::{syntax as t, Lexer, ParseError, Tok, TopLevelParser},
@@ -89,7 +89,7 @@ impl Package {
         if cfg!(debug_assertions) {
             for file in &files {
                 println!(">>> [{}]", file.path.display());
-                use crate::textual::fmt::*;
+                use zydeco_surface::textual::fmt::*;
                 println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
                 println!("<<< [{}]", file.path.display());
             }
@@ -101,7 +101,7 @@ impl Package {
             files.into_iter().map(|f| f.desugar(b::Arena::new(&mut alloc))).collect::<Vec<_>>();
         // Debug: print the desugared package
         if cfg!(debug_assertions) {
-            use crate::bitter::fmt::*;
+            use zydeco_surface::bitter::fmt::*;
             println!();
             for file in &files {
                 println!(">>> [{}]", file.path.display());
@@ -127,7 +127,7 @@ impl Package {
         let pack = pack.resolve(alloc.alloc())?;
         // Debug: print the in-package dependencies
         if cfg!(debug_assertions) {
-            use crate::scoped::fmt::*;
+            use zydeco_surface::scoped::fmt::*;
             println!();
             println!(">>> [{}]", self.name);
             let mut scc = pack.arena.top.clone();

@@ -1,18 +1,6 @@
 #![allow(clippy::style)]
 #![allow(clippy::useless_format)]
 
-/// the topmost compilation pipeline led by a package configuration
-pub mod package {
-    pub mod pack;
-    pub use pack::*;
-    pub mod conf;
-    pub mod err;
-    pub use err::*;
-
-    #[cfg(test)]
-    mod tests;
-}
-
 /// defines the GenArena and the id types for all the structures
 pub mod arena {
     pub use zydeco_utils::arena::*;

@@ -18,6 +18,10 @@ zydeco-surface = { workspace = true }
 derive_more = { workspace = true }
 derive-where = { workspace = true }
 thiserror = { workspace = true }
+sculptor = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+logos = { workspace = true }
 
 [lib]
 doctest = false
