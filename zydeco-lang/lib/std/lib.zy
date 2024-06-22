@@ -32,7 +32,7 @@ pub extern codata Algebra (M: VType -> CType) (R: CType) where
     Thunk (M A) -> Thunk (A -> R) -> R
 end
 
-/// monad transformers
+/// interface for monad transformers
 codata MonadTrans (T: (VType -> CType) -> VType -> CType) where
   | .monad : forall (M: VType -> CType) .
     Thunk (Monad M) -> Monad (T M)
@@ -191,7 +191,7 @@ pub data List (A : VType) where
   | +Cons : A * List A
 end
 
-pub def fn match_list (A: VType) (B : CType) (xs: List A) : U B -> U(A -> List A -> B) -> B =
+pub def ! match_list (A: VType) (B : CType) (xs: List A) : U B -> U(A -> List A -> B) -> B =
   fn knil kcons ->
     match xs
     | +Nil() -> ! knil
@@ -209,14 +209,14 @@ pub def rec foldl : forall (A : VType) (R : VType) . List A -> Thunk(A -> R -> R
     end
 end
 
-pub def rec fn reverse (A : VType) (xs : List A) : Ret(List A) =
+pub def rec ! reverse (A : VType) (xs : List A) : Ret(List A) =
   ! foldl A (List A)
           xs
           {fn x xs -> ret +Cons(x, xs)}
           +Nil()
 end
 
-def rec fn get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
+def rec ! get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
   match xs
   | +Nil() -> ret +None()
   | +Cons(hd, tl) ->
@@ -227,7 +227,7 @@ def rec fn get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
   end
 end
 
-pub def fn get_element (A : VType) (xs : List A) (index : Int) : F(Option A) =
+pub def ! get_element (A : VType) (xs : List A) (index : Int) : F(Option A) =
   ! get_rec A xs index
 end
 
@@ -243,17 +243,17 @@ pub codata LList (A : VType) where
 end
 
 
-pub def fn nil (A : VType) : LList A =
+pub def ! nil (A : VType) : LList A =
   comatch | .run -> ret +Nil() end
 end
 
-pub def fn cons (A : VType) (hd : A) (tl : U (LList A)) : LList A =
+pub def ! cons (A : VType) (hd : A) (tl : U (LList A)) : LList A =
   comatch
   | .run -> ret +Cons(hd, tl)
   end
 end
 
-pub def fn match_ll (A: VType) (R : CType) (xs : U(LList A)) (knil : U R) (kcons : U(A -> U(LList A) -> R)) : R =
+pub def ! match_ll (A: VType) (R : CType) (xs : U(LList A)) (knil : U R) (kcons : U(A -> U(LList A) -> R)) : R =
   do v <- ! xs .run;
   match v
   | +Nil()       -> ! knil
@@ -261,7 +261,7 @@ pub def fn match_ll (A: VType) (R : CType) (xs : U(LList A)) (knil : U R) (kcons
   end
 end
 
-pub def rec fn foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
+pub def rec ! foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
   do xsv <- ! xs .run;
   match xsv
   | +Nil() -> ! b
@@ -269,7 +269,7 @@ pub def rec fn foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U
   end
 end
 
-pub def rec fn foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
+pub def rec ! foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
   do xsv <- ! xs .run;
   match xsv
   | +Nil() -> ret acc
@@ -284,7 +284,7 @@ pub def rec fn foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) 
   end
 end
 
-pub def fn foldl' (A : VType) (R : VType) (f : U(A -> R -> F R)) (acc: R) (xs : U(LList A)) : F R =
+pub def ! foldl' (A : VType) (R : VType) (f : U(A -> R -> F R)) (acc: R) (xs : U(LList A)) : F R =
   ! foldr A (R -> F R) xs
     { fn x -> ret x }
     { fn x k acc ->
@@ -294,7 +294,7 @@ pub def fn foldl' (A : VType) (R : VType) (f : U(A -> R -> F R)) (acc: R) (xs : 
     acc
 end
 
-pub def fn take (A: VType) (n : Int) (xs : U(LList A)) : LList A =
+pub def ! take (A: VType) (n : Int) (xs : U(LList A)) : LList A =
   ! foldr A (Int -> LList A) xs
           { fn _ -> ! nil A }
           { fn x take_xs n ->
@@ -308,13 +308,13 @@ pub def fn take (A: VType) (n : Int) (xs : U(LList A)) : LList A =
           n
 end
 
-pub def rec fn forever (A : VType) (x : A) : LList A =
+pub def rec ! forever (A : VType) (x : A) : LList A =
   comatch
   | .run -> ret +Cons(x, { ! forever A x })
   end
 end
 
-pub def fn head (A : VType) (xs : U(LList A)) : F(Option A) =
+pub def ! head (A : VType) (xs : U(LList A)) : F(Option A) =
   do xs' <- ! xs .run;
   match xs'
   | +Nil() -> ret +None()
@@ -322,7 +322,7 @@ pub def fn head (A : VType) (xs : U(LList A)) : F(Option A) =
   end
 end
 
-pub def fn is_empty (A : VType) (xs : U(LList A)) : F Bool =
+pub def ! is_empty (A : VType) (xs : U(LList A)) : F Bool =
   do xs' <- ! xs .run;
   match xs'
   | +Nil() -> ret +True()
@@ -330,23 +330,23 @@ pub def fn is_empty (A : VType) (xs : U(LList A)) : F Bool =
   end
 end
 
-pub def fn append (A : VType) (xs : U(LList A)) (ys : U(LList A)) : LList A =
+pub def ! append (A : VType) (xs : U(LList A)) (ys : U(LList A)) : LList A =
   ! foldr A (LList A) xs ys {fn x b -> ! cons A x b}
 end
 
-pub def rec fn bind (A : VType) (A' : VType) (xs : U(LList A)) (f : U(A -> LList A')) : LList A' =
+pub def rec ! bind (A : VType) (A' : VType) (xs : U(LList A)) (f : U(A -> LList A')) : LList A' =
   ! foldr A (LList A') xs {! nil (A')} {fn x b -> ! append (A') {! f x} b}
 end
 
-pub def fn squash (A : VType) (xs : U(LList (U(LList A)))) : LList A =
+pub def ! squash (A : VType) (xs : U(LList (U(LList A)))) : LList A =
   ! bind (U(LList A)) A xs {fn x -> ! x}
 end
 
-pub def fn singleton_list (A : VType) (x : A) : LList A =
+pub def ! singleton_list (A : VType) (x : A) : LList A =
   ! cons A x {! nil A}
 end
 
-pub def fn map (A : VType) (R : VType) (f : U(A -> F(R))) (xs : U(LList A)) : LList R =
+pub def ! map (A : VType) (R : VType) (f : U(A -> F(R))) (xs : U(LList A)) : LList R =
   ! foldr A (LList R) xs {! nil R} {
     fn x b ->
       do x <- ! f x;
@@ -354,7 +354,7 @@ pub def fn map (A : VType) (R : VType) (f : U(A -> F(R))) (xs : U(LList A)) : LL
   }
 end
 
-pub def fn filterMap (A: VType) (A' : VType) (f : U(A -> F(Option A'))) (xs : U(LList A)) : LList A' =
+pub def ! filterMap (A: VType) (A' : VType) (f : U(A -> F(Option A'))) (xs : U(LList A)) : LList A' =
   ! foldr A (LList A') xs {! nil (A')} {
     fn x l ->
       do o <- ! f x;
@@ -365,7 +365,7 @@ pub def fn filterMap (A: VType) (A' : VType) (f : U(A -> F(Option A'))) (xs : U(
   }
 end
 
-pub def fn filter (A : VType) (f : U(A -> F Bool)) : U(LList A) -> LList A =
+pub def ! filter (A : VType) (f : U(A -> F Bool)) : U(LList A) -> LList A =
   ! filterMap A A { fn x ->
     ! if~ (Ret(Option A))
           { ! f x }
@@ -374,7 +374,7 @@ pub def fn filter (A : VType) (f : U(A -> F Bool)) : U(LList A) -> LList A =
   }
 end
 
-pub def rec fn print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
+pub def rec ! print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
   do xs' <- ! xs .run;
   match xs'
   | +Nil() -> ! write_str "\n" next
@@ -385,13 +385,13 @@ pub def rec fn print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A))
   end
 end
 
-pub def fn length (A : VType) (xs : U(LList A)) : F(Int) =
+pub def ! length (A : VType) (xs : U(LList A)) : F(Int) =
   ! foldr A (F Int) xs {ret 0} {fn x b -> do b' <- !b; ! add b' 1}
 end
 
 pub alias Cmp (A : VType) = U(A -> A -> F(Bool)) end
 
-pub def rec fn min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+pub def rec ! min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
   do xs' <- ! xs .run;
   match xs'
   | +Nil() -> ret +None()
@@ -414,7 +414,7 @@ pub def rec fn min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (
   end
 end
 
-pub def rec fn max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+pub def rec ! max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
   do xs' <- ! xs .run;
   match xs'
   | +Nil() -> ret +None()
@@ -437,14 +437,14 @@ pub def rec fn max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (
   end
 end
 
-pub def fn ll_to_list (A : VType) (xs : U(LList A)) : Ret (List A) =
+pub def ! ll_to_list (A : VType) (xs : U(LList A)) : Ret (List A) =
   do sx <- !foldl' A (List A) {fn x xs -> ret +Cons(x,xs)}
                   +Nil()
                   xs;
   ! reverse A sx
 end
 
-pub def rec fn repeat (A : VType) (x : A) (n : Int) : LList A =
+pub def rec ! repeat (A : VType) (x : A) (n : Int) : LList A =
   ! if~ (LList A) {! int_eq 0 n} {
     ! nil A
   } {
@@ -453,7 +453,7 @@ pub def rec fn repeat (A : VType) (x : A) (n : Int) : LList A =
   }
 end
 
-pub def rec fn range (left : Int) (right : Int) : LList Int =
+pub def rec ! range (left : Int) (right : Int) : LList Int =
   ! if~ (LList Int) {! int_eq left right} {
     ! nil (Int)
   } {
@@ -462,15 +462,15 @@ pub def rec fn range (left : Int) (right : Int) : LList Int =
   }
 end
 
-pub def rec fn any (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
+pub def rec ! any (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
   ! foldr A (F Bool) xs {ret +False()} {fn x b -> do b' <- ! b; do x <- ! f x; ! or b' x}
 end
 
-pub def rec fn all (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
+pub def rec ! all (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
   ! foldr A (F Bool) xs {ret +True()} {fn x b -> do b' <- ! b; do x <- ! f x; ! and b' x}
 end
 
-pub def fn map2 (A : VType) (A' : VType) (R : VType) (f : U(A -> A' -> F(R))) (xs : U(LList A)) (ys : U(LList A')) : LList R =
+pub def ! map2 (A : VType) (A' : VType) (R : VType) (f : U(A -> A' -> F(R))) (xs : U(LList A)) (ys : U(LList A')) : LList R =
   ! foldr A (LList R) xs {! nil R} {
     fn x acc ->
       ! foldr (A') (LList R) ys acc {
@@ -481,11 +481,11 @@ pub def fn map2 (A : VType) (A' : VType) (R : VType) (f : U(A -> A' -> F(R))) (x
   }
 end
 
-pub def fn cart_prod (A : VType) (A' : VType) (xs : U(LList A)) (ys : U(LList A')) : LList (Pair A A') =
+pub def ! cart_prod (A : VType) (A' : VType) (xs : U(LList A)) (ys : U(LList A')) : LList (Pair A A') =
   ! map2 A (A') (Pair A A') {! pair A (A')} xs ys
 end
 
-pub def fn str_to_list (s : String) : LList Char =
+pub def ! str_to_list (s : String) : LList Char =
   do sz <- ! str_length s;
   let indexes = {! range 0 sz} in
   ! foldr (Int) (LList Char) indexes {! nil (Char)} {
@@ -507,11 +507,11 @@ pub extern def int_eq : Thunk(Int -> Int -> Ret Bool) end
 pub extern def int_lt : Thunk(Int -> Int -> Ret Bool) end
 pub extern def int_gt : Thunk(Int -> Int -> Ret Bool) end
 
-pub def fn int_le (x: Int) (y: Int) : Ret Bool =
+pub def ! int_le (x: Int) (y: Int) : Ret Bool =
   ! not~ { ! int_gt x y }
 end
 
-pub def fn int_max : Int -> Int -> Ret Int =
+pub def ! int_max : Int -> Int -> Ret Int =
   fn x y ->
     do b <- ! int_gt x y;
     match b
@@ -520,7 +520,7 @@ pub def fn int_max : Int -> Int -> Ret Int =
     end
 end
 
-pub def fn int_min : Int -> Int -> Ret Int =
+pub def ! int_min : Int -> Int -> Ret Int =
   fn x y ->
     do b <- ! int_lt x y;
     match b
@@ -545,7 +545,7 @@ pub def char_eq: Thunk(Char -> Char -> Ret Bool) = {
     ! str_eq c c'
 } end
 
-pub def rec fn str_split_by (str : String) (sep : Char) : LList String =
+pub def rec ! str_split_by (str : String) (sep : Char) : LList String =
   do res <- ! str_split_once str sep;
   match res
   | +None() -> ! singleton_list String str
@@ -562,7 +562,7 @@ pub def rec fn str_split_by (str : String) (sep : Char) : LList String =
   end
 end
 
-pub def rec fn str_slice (str : String) (left : Int) (right : Int) : F String =
+pub def rec ! str_slice (str : String) (left : Int) (right : Int) : F String =
   do cond <- ! int_lt left right;
   ! if (F String) cond {
     do c <- ! str_index str left;
@@ -635,23 +635,23 @@ pub data Avl (A : VType) where
   | +Node : Avl A * A * Int * Avl A
 end
 
-pub def fn leaf (A : VType) : F(Avl A) =
+pub def ! leaf (A : VType) : F(Avl A) =
   ret +Leaf()
 end
 
-pub def fn singleton (A : VType) (x : A) : F(Avl A) =
+pub def ! singleton (A : VType) (x : A) : F(Avl A) =
   do lf <- ! leaf A;
   ret +Node(+Leaf(), x, 1, +Leaf())
 end
 
-pub def fn height (A : VType) (tree : Avl A) : F(Int) =
+pub def ! height (A : VType) (tree : Avl A) : F(Int) =
   match tree
   | +Leaf() -> ret 0
   | +Node(l, n, h, r) -> ret h
   end
 end
 
-pub def fn fix_height (A : VType) (tree : Avl A) : F(Avl A) =
+pub def ! fix_height (A : VType) (tree : Avl A) : F(Avl A) =
   match tree
   | +Leaf() -> ret +Leaf()
   | +Node(l, n, h, r) ->
@@ -663,7 +663,7 @@ pub def fn fix_height (A : VType) (tree : Avl A) : F(Avl A) =
   end
 end
 
-pub def fn balance_factor (A : VType) (tree : Avl A) : F(Int) =
+pub def ! balance_factor (A : VType) (tree : Avl A) : F(Int) =
   match tree
   | +Leaf() -> ret 0
   | +Node(l, n, h, r) ->
@@ -673,21 +673,21 @@ pub def fn balance_factor (A : VType) (tree : Avl A) : F(Int) =
   end
 end
 
-pub def fn left (A : VType) (tree : Avl A) : F(Avl A) =
+pub def ! left (A : VType) (tree : Avl A) : F(Avl A) =
   match tree
   | +Leaf() -> ret +Leaf()
   | +Node(l, n, h, r) -> ret l
   end
 end
 
-pub def fn right (A : VType) (tree : Avl A) : F(Avl A) =
+pub def ! right (A : VType) (tree : Avl A) : F(Avl A) =
   match tree
   | +Leaf() -> ret +Leaf()
   | +Node(l, n, h, r) -> ret r
   end
 end
 
-pub def rec fn min_element (A : VType) (tree : Avl A) (cmp : Cmp A) : F(Option A) =
+pub def rec ! min_element (A : VType) (tree : Avl A) (cmp : Cmp A) : F(Option A) =
   match tree
   | +Leaf() -> ret +None()
   | +Node(l, n, h, r) ->
@@ -699,7 +699,7 @@ pub def rec fn min_element (A : VType) (tree : Avl A) (cmp : Cmp A) : F(Option A
   end
 end
 
-pub def fn rotate_right (A : VType) (tree : Avl A) : F(Avl A) =
+pub def ! rotate_right (A : VType) (tree : Avl A) : F(Avl A) =
   match tree
   | +Leaf() -> ret +Leaf()
   | +Node(l, n, h, r) ->
@@ -712,7 +712,7 @@ pub def fn rotate_right (A : VType) (tree : Avl A) : F(Avl A) =
   end
 end
 
-pub def fn rotate_left (A : VType) (tree : Avl A) : F(Avl A) =
+pub def ! rotate_left (A : VType) (tree : Avl A) : F(Avl A) =
   match tree
   | +Leaf() -> ret +Leaf()
   | +Node(l, n, h, r) ->
@@ -725,7 +725,7 @@ pub def fn rotate_left (A : VType) (tree : Avl A) : F(Avl A) =
   end
 end
 
-pub def fn balance (A : VType) (tree : Avl A) : F(Avl A) =
+pub def ! balance (A : VType) (tree : Avl A) : F(Avl A) =
   match tree
   | +Leaf() -> ret +Leaf()
   | +Node(l, n, h, r) ->
@@ -763,7 +763,7 @@ pub def fn balance (A : VType) (tree : Avl A) : F(Avl A) =
   end
 end
 
-pub def rec fn insert (A : VType) (x : A) (tree : Avl A) (cmp : Cmp A) : F(Avl A) =
+pub def rec ! insert (A : VType) (x : A) (tree : Avl A) (cmp : Cmp A) : F(Avl A) =
   match tree
   | +Leaf() -> ! singleton A x
   | +Node(l, n, h, r) ->
@@ -781,7 +781,7 @@ pub def rec fn insert (A : VType) (x : A) (tree : Avl A) (cmp : Cmp A) : F(Avl A
   end
 end
 
-pub def rec fn search (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Option A) =
+pub def rec ! search (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Option A) =
   match tree
   | +Leaf() -> ret +None()
   | +Node(l, n, h, r) ->
@@ -798,7 +798,7 @@ pub def rec fn search (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_l
   end
 end
 
-pub def rec fn change (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Avl A) =
+pub def rec ! change (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Avl A) =
   match tree
   | +Leaf() -> ret tree
   | +Node(l, n, h, r) ->
@@ -820,7 +820,7 @@ pub def rec fn change (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_l
   end
 end
 
-pub def rec fn delete (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Avl A) =
+pub def rec ! delete (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Avl A) =
   match tree
   | +Leaf() -> ret tree
   | +Node(l, n, h, r) ->
@@ -859,7 +859,7 @@ pub def rec fn delete (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_l
   end
 end
 
-pub def rec fn equal (A : VType) (tree1 : Avl A) (tree2 : Avl A) (cmp_eq : Cmp A) : F(Bool) =
+pub def rec ! equal (A : VType) (tree1 : Avl A) (tree2 : Avl A) (cmp_eq : Cmp A) : F(Bool) =
   match tree1
   | +Leaf() ->
     match tree2
@@ -882,7 +882,7 @@ pub def rec fn equal (A : VType) (tree1 : Avl A) (tree2 : Avl A) (cmp_eq : Cmp A
   end
 end
 
-pub def rec fn pre_traversal (A : VType) (tree : Avl A) (fmt : U(A -> F(String))) (next : U OS) : OS =
+pub def rec ! pre_traversal (A : VType) (tree : Avl A) (fmt : U(A -> F(String))) (next : U OS) : OS =
   match tree
   | +Leaf() -> ! next
   | +Node(left, v, h, right) ->
@@ -902,7 +902,7 @@ data Hash (K : VType) (V : VType) where
   | +Hash : Avl (Pair K V) * Cmp (Pair K V) * Cmp (Pair K V) * Cmp (Pair K V)
 end
 
-pub def fn hash_new (K : VType) (V : VType) (insert_key_cmp : Cmp K) (search_key_cmp : Cmp K) (equal_value_cmp : Cmp V) : F(Hash K V) =
+pub def ! hash_new (K : VType) (V : VType) (insert_key_cmp : Cmp K) (search_key_cmp : Cmp K) (equal_value_cmp : Cmp V) : F(Hash K V) =
   do body <- ! leaf (Pair K V);
   ret +Hash(body, {
     fn p1 p2 ->
@@ -934,7 +934,7 @@ pub def fn hash_new (K : VType) (V : VType) (insert_key_cmp : Cmp K) (search_key
   })
 end
 
-pub def fn hash_insert (K : VType) (V : VType) (k : K) (v : V) (tree : Hash K V) : F(Hash K V) =
+pub def ! hash_insert (K : VType) (V : VType) (k : K) (v : V) (tree : Hash K V) : F(Hash K V) =
   match tree
   | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
     do body' <- ! insert (Pair K V) +Cons(k,v) body insert_cmp;
@@ -943,7 +943,7 @@ pub def fn hash_insert (K : VType) (V : VType) (k : K) (v : V) (tree : Hash K V)
 end
 
 # in search, a default value for v is needed, because the type of v is unknown
-pub def fn hash_search (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Option V) =
+pub def ! hash_search (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Option V) =
   match hash
   | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
     do res <- ! search (Pair K V) +Cons(k, default) body search_cmp insert_cmp;
@@ -957,7 +957,7 @@ pub def fn hash_search (K : VType) (V : VType) (k : K) (default : V) (hash : Has
   end
 end
 
-pub def fn hash_delete (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Hash K V) =
+pub def ! hash_delete (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Hash K V) =
   match hash
   | +Hash(body, insert_cmp, search_cmp, equal_cmp) -> 
     do body' <- ! delete (Pair K V) +Cons(k, default) body search_cmp insert_cmp;
@@ -965,7 +965,7 @@ pub def fn hash_delete (K : VType) (V : VType) (k : K) (default : V) (hash : Has
   end
 end
 
-pub def fn hash_change (K : VType) (V : VType) (k : K) (v : V) (hash : Hash K V) : F(Hash K V) =
+pub def ! hash_change (K : VType) (V : VType) (k : K) (v : V) (hash : Hash K V) : F(Hash K V) =
   match hash
   | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
     do body' <- ! change (Pair K V) +Cons(k, v) body search_cmp insert_cmp;
@@ -973,7 +973,7 @@ pub def fn hash_change (K : VType) (V : VType) (k : K) (v : V) (hash : Hash K V)
   end
 end
 
-pub def fn hash_equal (K : VType) (V : VType) (hash1 : Hash K V) (hash2 : Hash K V) : F(Bool) =
+pub def ! hash_equal (K : VType) (V : VType) (hash1 : Hash K V) (hash2 : Hash K V) : F(Bool) =
   match hash1
   | +Hash(body1, insert_cmp1, search_cmp1, v_cmp1) ->
     match hash2

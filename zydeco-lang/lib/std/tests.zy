@@ -1,0 +1,76 @@
+// Monad transformers
+// Two flavors of exception monad transformers are presented,
+// one for the monad that uses `Ret` in its type signature,
+// and the other uses CPS (`Kont`).
+
+codata Exn (E: VType) (A: VType) where
+  | .done : Ret (Either E A)
+end
+
+def ! mexn (E: VType) : Monad (Exn E) =
+  comatch
+  | .return A a .done -> ret +Right(a)
+  | .bind A A' m f ->
+    do e <- ! m .done;
+    match e
+    | +Right(a) -> ! f a
+    | +Left(e) -> fn .done ->
+      ret +Left(e)
+    end
+  end
+end
+
+def ! _ (E: VType) (M: VType -> CType) (mo: Monad M) : _ =
+  with mo
+  begin
+    ! mexn
+  end
+end
+
+// Change `Ret` in Exn to `M`
+codata ExnT (E: VType) (M: VType -> CType) (A: VType) where
+  | .done : M (Either E A)
+end
+
+def ! mtexn (E: VType) : MonadTrans (ExnT E) =
+  comatch
+  | .monad M mo ->
+    comatch
+    | .return A a -> fn .done ->
+      ! mo .return (Either E A) +Right(a)
+    | .bind A A' m f -> fn .done ->
+      ! mo .bind (Either E A) (Either E A') { ! m .done }
+      { fn a? ->
+          match a?
+          | +Left(e) -> ! mo .return (Either E A') +Left(e)
+          | +Right(a) -> ! f a .done
+          end }
+    end
+  | .lift M A mo m -> fn .done ->
+    ! mo .bind A (Either E A) m
+    { fn a ->
+      ! mo .return (Either E A) +Right(a) }
+  end
+end
+
+
+// Add the algebra for the output type of the continuation $R$
+codata ExnKT (E: VType) (R: CType) (M: VType -> CType) (A: VType) where
+  | .run : Thunk (Algebra M R) -> Thunk (E -> R) -> Thunk (A -> R) -> R
+end
+
+def ! mtexnk (E: VType) (R: CType) : MonadTrans (ExnKT E R) =
+  comatch
+  | .monad M mo ->
+    comatch
+    | .return A a -> fn .run alg -> fn ke ka ->
+      ! ka a
+    | .bind A A' m f -> fn .run alg -> fn ke ka' ->
+      ! m .run alg ke { fn a ->
+        ! f a .run alg ke ka'
+      }
+    end
+  | .lift M A mo m -> fn .run alg -> fn ke ka ->
+    ! alg .bindA A m ka
+  end
+end

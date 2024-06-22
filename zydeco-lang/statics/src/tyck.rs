@@ -251,7 +251,7 @@ impl Tyck for SEnv<su::PatId> {
                         Ok(pat_ctx)
                     }
                     | Switch::Ana(ty_ana) => {
-                        let ty = Lub::lub(&ty_tm, &ty_ana, tycker)?;
+                        let ty = Lub::lub(ty_tm, ty_ana, tycker)?;
                         let pat_ctx = self.mk(tm).tyck(tycker, Action::ana(ty))?;
                         Ok(pat_ctx)
                     }
@@ -315,7 +315,7 @@ impl Tyck for SEnv<su::PatId> {
                     | Switch::Syn => Ok((PatAnnId::Value(triv, ann), Context::new())),
                     | Switch::Ana(ana) => {
                         let AnnId::Type(ana) = ana else { Err(TyckError::SortMismatch)? };
-                        let ann = Lub::lub(&ann, &ana, tycker)?;
+                        let ann = Lub::lub(ann, ana, tycker)?;
                         Ok((PatAnnId::Value(triv, ann), Context::new()))
                     }
                 }
@@ -399,7 +399,7 @@ impl SEnv<ss::TPatId> {
                 };
                 // def_kd should correctly be the type of assignee
                 let assignee_kd = { tycker.statics.annotations_type[&assignee].to_owned() };
-                Lub::lub(&def_kd, &assignee_kd, tycker)?;
+                Lub::lub(def_kd, assignee_kd, tycker)?;
                 let mut env = self.env.clone();
                 env += (def, assignee.into());
                 Ok(SEnv { env, inner: () })
@@ -448,10 +448,7 @@ impl Tyck for SEnv<su::TermId> {
                 };
                 let ann = match switch {
                     | Switch::Syn => ty_ann,
-                    | Switch::Ana(ty_ana) => {
-                        let ty = Lub::lub(&ty_ann, &ty_ana, tycker)?;
-                        ty.into()
-                    }
+                    | Switch::Ana(ty_ana) => Lub::lub(ty_ann, ty_ana, tycker)?,
                 };
                 let tm_out_ann = self.mk(tm).tyck(tycker, Action::ana(ann))?;
                 tm_out_ann
@@ -496,7 +493,7 @@ impl Tyck for SEnv<su::TermId> {
                         | Switch::Syn => tycker.statics.annotations_var[&def],
                         | Switch::Ana(ana) => {
                             let ann = tycker.statics.annotations_var[&def];
-                            Lub::lub(&ann, &ana, tycker)?
+                            Lub::lub(ann, ana, tycker)?
                         }
                     }
                 };
@@ -530,7 +527,7 @@ impl Tyck for SEnv<su::TermId> {
                     | Switch::Syn => TermAnnId::Value(triv, unit),
                     | Switch::Ana(ana) => {
                         let AnnId::Type(ana) = ana else { Err(TyckError::SortMismatch)? };
-                        let unit = Lub::lub(&unit, &ana, tycker)?;
+                        let unit = Lub::lub(unit, ana, tycker)?;
                         TermAnnId::Value(triv, unit)
                     }
                 }
@@ -787,7 +784,7 @@ impl Tyck for SEnv<su::TermId> {
                             match switch {
                                 | Switch::Syn => kd_out,
                                 | Switch::Ana(ana) => match ana {
-                                    | AnnId::Kind(kd_ana) => Lub::lub(&kd_out, &kd_ana, tycker)?,
+                                    | AnnId::Kind(kd_ana) => Lub::lub(kd_out, kd_ana, tycker)?,
                                     | AnnId::Set | AnnId::Type(_) => Err(TyckError::SortMismatch)?,
                                 },
                             }
@@ -831,7 +828,7 @@ impl Tyck for SEnv<su::TermId> {
                                         | Switch::Syn => ty_out,
                                         | Switch::Ana(ana) => match ana {
                                             | AnnId::Type(ty_ana) => {
-                                                Lub::lub(&ty_out, &ty_ana, tycker)?
+                                                Lub::lub(ty_out, ty_ana, tycker)?
                                             }
                                             | AnnId::Set | AnnId::Kind(_) => {
                                                 Err(TyckError::SortMismatch)?
@@ -913,7 +910,7 @@ impl Tyck for SEnv<su::TermId> {
                                     | TermAnnId::Type(ty_2, kd_2) => {
                                         // forall; kd_2 should be ctype
                                         let ctype = tycker.ctype(&self.env);
-                                        Lub::lub(&ctype, &kd_2, tycker)?;
+                                        Lub::lub(ctype, kd_2, tycker)?;
                                         let forall = Alloc::alloc(tycker, ss::Forall(tpat, ty_2));
                                         let kd = tycker.ctype(&self.env);
                                         TermAnnId::Type(forall, kd)
@@ -932,7 +929,7 @@ impl Tyck for SEnv<su::TermId> {
                                 let kd_1 = tycker.statics.annotations_type[&ty_1].to_owned();
                                 // kd_1 should be of vtype
                                 let vtype = tycker.vtype(&self.env);
-                                Lub::lub(&vtype, &kd_1, tycker)?;
+                                Lub::lub(vtype, kd_1, tycker)?;
                                 let ty_2 = self.mk(body).tyck(tycker, Action::syn())?;
                                 let (ty_2, kd_2) = match ty_2 {
                                     | TermAnnId::Type(ty_2, kd_2) => (ty_2, kd_2),
@@ -942,7 +939,7 @@ impl Tyck for SEnv<su::TermId> {
                                 };
                                 // kd_2 should be of ctype
                                 let ctype = tycker.ctype(&self.env);
-                                Lub::lub(&ctype, &kd_2, tycker)?;
+                                Lub::lub(ctype, kd_2, tycker)?;
                                 let arr = Alloc::alloc(tycker, ss::Arrow(ty_1, ty_2));
                                 let kd = Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2));
                                 TermAnnId::Type(arr, kd)
@@ -990,7 +987,7 @@ impl Tyck for SEnv<su::TermId> {
                                                 tycker.statics.annotations_type[&ty_1].to_owned();
                                             // kd_1 should be of vtype
                                             let vtype = tycker.vtype(&self.env);
-                                            Lub::lub(&vtype, &kd_1, tycker)?;
+                                            Lub::lub(vtype, kd_1, tycker)?;
                                             // synthesize the body as ty_2, which should be of ctype
                                             let ctype = tycker.ctype(&self.env);
                                             let ty_2 = self
@@ -1061,7 +1058,7 @@ impl Tyck for SEnv<su::TermId> {
                                 };
                                 // body_kd should be of vtype
                                 let vtype = tycker.vtype(&self.env);
-                                Lub::lub(&vtype, &body_kd, tycker)?;
+                                Lub::lub(vtype, body_kd, tycker)?;
                                 let exists = Alloc::alloc(tycker, ss::Exists(tpat, body_ty));
                                 TermAnnId::Type(exists, vtype)
                             }
@@ -1075,7 +1072,7 @@ impl Tyck for SEnv<su::TermId> {
                                 // ty should be of vtype
                                 let kd_1 = tycker.statics.annotations_type[&ty_1].to_owned();
                                 let vtype = tycker.vtype(&self.env);
-                                Lub::lub(&vtype, &kd_1, tycker)?;
+                                Lub::lub(vtype, kd_1, tycker)?;
                                 let ty_2 = self.mk(body).tyck(tycker, Action::syn())?;
                                 let (ty_2, kd_2) = match ty_2 {
                                     | TermAnnId::Type(ty_2, kd_2) => (ty_2, kd_2),
@@ -1084,7 +1081,7 @@ impl Tyck for SEnv<su::TermId> {
                                     | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
                                 };
                                 // kd_2 should be of vtype
-                                Lub::lub(&vtype, &kd_2, tycker)?;
+                                Lub::lub(vtype, kd_2, tycker)?;
                                 let prod = Alloc::alloc(tycker, ss::Prod(ty_1, ty_2));
                                 TermAnnId::Type(prod, vtype.into())
                             }
@@ -1094,7 +1091,7 @@ impl Tyck for SEnv<su::TermId> {
                         | AnnId::Kind(kd) => {
                             let vtype = tycker.vtype(&self.env);
                             // prod or exists; should be of vtype
-                            Lub::lub(&vtype, &kd, tycker)?;
+                            Lub::lub(vtype, kd, tycker)?;
                             // just synthesize the whole thing
                             self.tyck(tycker, Action::syn())?
                         }
@@ -1104,10 +1101,13 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Thunk(term) => {
                 let su::Thunk(body) = term;
-                let Switch::Ana(ana) = switch else { Err(TyckError::MissingAnnotation)? };
+                let ana = match switch {
+                    | Switch::Syn => tycker.thunk_app_hole(&self.env, self.inner).into(),
+                    | Switch::Ana(ana) => ana,
+                };
                 let AnnId::Type(ana_ty) = ana else { Err(TyckError::SortMismatch)? };
                 let thunk_app_hole = tycker.thunk_app_hole(&self.env, body);
-                let ty = Lub::lub(&ana_ty, &thunk_app_hole, tycker)?;
+                let ty = Lub::lub(ana_ty, thunk_app_hole, tycker)?;
                 let ss::Type::App(thunk_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
                     unreachable!()
                 };
@@ -1143,7 +1143,7 @@ impl Tyck for SEnv<su::TermId> {
                             // check ana_ty is computation type
                             let ctype = tycker.ctype(&self.env);
                             let ana_ty_kd = tycker.statics.annotations_type[&ana_ty].to_owned();
-                            Lub::lub(&ctype, &ana_ty_kd, tycker)?;
+                            Lub::lub(ctype, ana_ty_kd, tycker)?;
                             // if ana, then ana the body with thunked body_ty
                             let thunk_ty = tycker.thunk(&self.env);
                             let app = Alloc::alloc(tycker, ss::App(thunk_ty, ana_ty));
@@ -1175,10 +1175,13 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Ret(term) => {
                 let su::Ret(body) = term;
-                let Switch::Ana(ana) = switch else { Err(TyckError::MissingAnnotation)? };
+                let ana = match switch {
+                    | Switch::Syn => tycker.ret_app_hole(&self.env, self.inner).into(),
+                    | Switch::Ana(ana) => ana,
+                };
                 let AnnId::Type(ana_ty) = ana else { Err(TyckError::SortMismatch)? };
                 let ret_app_hole = tycker.ret_app_hole(&self.env, self.inner);
-                let ty = Lub::lub(&ana_ty, &ret_app_hole, tycker)?;
+                let ty = Lub::lub(ana_ty, ret_app_hole, tycker)?;
                 let ss::Type::App(ret_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
                     unreachable!()
                 };
@@ -1281,7 +1284,7 @@ impl Tyck for SEnv<su::TermId> {
                     | Switch::Syn => vtype,
                     | Switch::Ana(ann) => {
                         let AnnId::Kind(ann_kd) = ann else { Err(TyckError::SortMismatch)? };
-                        Lub::lub(&vtype, &ann_kd, tycker)?
+                        Lub::lub(vtype, ann_kd, tycker)?
                     }
                 };
                 let mut arms_vec = im::Vector::new();
@@ -1312,7 +1315,7 @@ impl Tyck for SEnv<su::TermId> {
                     | Switch::Syn => ctype,
                     | Switch::Ana(ann) => {
                         let AnnId::Kind(ann_kd) = ann else { Err(TyckError::SortMismatch)? };
-                        Lub::lub(&ctype, &ann_kd, tycker)?
+                        Lub::lub(ctype, ann_kd, tycker)?
                     }
                 };
                 let mut arms_vec = im::Vector::new();
@@ -1409,7 +1412,7 @@ impl Tyck for SEnv<su::TermId> {
                     let mut iter = arms_ty.into_iter();
                     let mut res = iter.next().unwrap();
                     for ty in iter {
-                        res = Lub::lub(&res, &ty, tycker)?;
+                        res = Lub::lub(res, ty, tycker)?;
                     }
                     let whole_ty = res;
                     TermAnnId::Compu(whole_term, whole_ty)
@@ -1464,7 +1467,7 @@ impl Tyck for SEnv<su::TermId> {
                     | Switch::Syn => TermAnnId::Compu(whole, whole_ty),
                     | Switch::Ana(ana) => {
                         let AnnId::Type(ana_ty) = ana else { Err(TyckError::SortMismatch)? };
-                        let whole_ty = Lub::lub(&whole_ty, &ana_ty, tycker)?;
+                        let whole_ty = Lub::lub(whole_ty, ana_ty, tycker)?;
                         TermAnnId::Compu(whole, whole_ty)
                     }
                 }
@@ -1522,7 +1525,7 @@ impl Tyck for SEnv<su::TermId> {
                     };
                     // kind must be vtype
                     let vtype = tycker.vtype(&self.env);
-                    Lub::lub(&vtype, &kd, tycker)?;
+                    Lub::lub(vtype, kd, tycker)?;
                     // check that ty and body_ty are compatible
                     println!("import {:?} : {:?} = {:?} : {:?}", binder, ty, body, body_ty);
                     // todo!()
@@ -1538,7 +1541,7 @@ impl Tyck for SEnv<su::TermId> {
                         | Switch::Syn => Ok(ty),
                         | Switch::Ana(ann) => {
                             let AnnId::Type(ann_ty) = ann else { Err(TyckError::SortMismatch)? };
-                            let ty = Lub::lub(&ty, &ann_ty, tycker)?;
+                            let ty = Lub::lub(ty, ann_ty, tycker)?;
                             Ok(ty)
                         }
                     }
