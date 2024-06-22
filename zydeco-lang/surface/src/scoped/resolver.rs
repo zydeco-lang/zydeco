@@ -30,7 +30,6 @@ pub struct Resolver {
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub terms: ArenaAssoc<TermId, Term<DefId>>,
     pub decls: ArenaAssoc<DeclId, Declaration>,
-    pub textual: ArenaForth<t::EntityId, EntityId>,
 
     pub users: ArenaForth<DefId, TermId>,
     pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
@@ -70,7 +69,6 @@ impl Resolver {
             pats,
             terms,
             decls,
-            textual,
 
             users,
             exts,
@@ -80,6 +78,7 @@ impl Resolver {
         let pats = bitter.pats.filter_map_id(|id| pats.get(&id).cloned());
         let terms = bitter.terms.filter_map_id(|id| terms.get(&id).cloned());
         let decls = bitter.decls.filter_map_id(|id| decls.get(&id).cloned());
+        let textual = bitter.textual;
         let ctxs = ArenaAssoc::default();
         let top = Kosaraju::new(&deps).run();
         let mut collector = Collector { defs, pats, terms, decls, textual, users, ctxs, deps, top };

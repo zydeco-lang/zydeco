@@ -11,10 +11,12 @@ pub struct Tycker {
     pub prim: PrimDef,
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
+    /// call stack for debugging tycker and error tracking
+    pub call_stack: Vec<TyckTask>,
 }
 
 impl Tycker {
-    pub fn run(mut self) -> Result<()> {
+    pub fn run(&mut self) -> Result<()> {
         let mut scc = self.scoped.top.clone();
         let mut env = SEnv::new(());
         loop {
@@ -25,7 +27,7 @@ impl Tycker {
             }
             for group in groups {
                 // each group should be type checked on its own
-                env = SccDeclarations(&group).tyck(&mut self, env)?;
+                env = SccDeclarations(&group).tyck(self, env)?;
                 scc.release(group);
             }
         }
@@ -39,14 +41,24 @@ pub trait Tyck {
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> Result<Self::Out>;
 }
 
-pub struct Action<Ann> {
-    pub switch: Switch<Ann>,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum Switch<Ann> {
     Syn,
     Ana(Ann),
+}
+
+#[derive(Debug)]
+pub enum TyckTask {
+    DeclHead(su::DeclId),
+    DeclUni(su::DeclId),
+    DeclScc(Vec<su::DeclId>),
+    Pat(su::PatId, Switch<AnnId>),
+    Term(su::TermId, Switch<AnnId>),
+    // Todo: Lub
+}
+
+pub struct Action<Ann> {
+    pub switch: Switch<Ann>,
 }
 
 impl<Ann> Action<Ann> {
@@ -104,15 +116,15 @@ impl<'decl> SccDeclarations<'decl> {
                         }
                     }
                     | Decl::AliasHead(decl) => {
-                        // Debug:
                         {
-                            use zydeco_surface::scoped::fmt::*;
-                            println!(
-                                "tycking extern decl: {}",
-                                id.ugly(&Formatter::new(&tycker.scoped))
-                            );
+                            // administrative
+                            tycker.call_stack.push(TyckTask::DeclHead(*id));
                         }
                         env = tycker.register_prim_decl(decl, id, env)?;
+                        {
+                            // administrative
+                            tycker.call_stack.pop();
+                        }
                         Ok(env)
                     }
                     | Decl::Exec(decl) => {
@@ -129,10 +141,9 @@ impl<'decl> SccDeclarations<'decl> {
         }
     }
     fn tyck_uni_ref(id: &su::DeclId, tycker: &mut Tycker, mut env: SEnv<()>) -> Result<SEnv<()>> {
-        // Debug:
         {
-            use zydeco_surface::scoped::fmt::*;
-            println!("tycking uni decl: {}", id.ugly(&Formatter::new(&tycker.scoped)));
+            // administrative
+            tycker.call_stack.push(TyckTask::DeclUni(*id));
         }
 
         let su::Declaration::AliasBody(decl) = tycker.scoped.decls[id].clone() else {
@@ -141,7 +152,7 @@ impl<'decl> SccDeclarations<'decl> {
         let su::AliasBody { binder, bindee } = decl;
         // synthesize the bindee
         let out_ann = env.mk(bindee).tyck(tycker, Action::syn())?;
-        match out_ann {
+        let env = match out_ann {
             | TermAnnId::Kind(_) => unreachable!(),
             | TermAnnId::Type(ty, kd) => {
                 let bindee = ty;
@@ -152,30 +163,32 @@ impl<'decl> SccDeclarations<'decl> {
                     env.mk(binder).tyck_assign(tycker, Action::syn(), ty)?;
                 env.env = new_env;
                 tycker.statics.decls.insert(*id, ss::TAliasBody { binder, bindee }.into());
-                Ok(env)
+                env
             }
             | TermAnnId::Value(bindee, ty) => {
                 let (binder, _ctx) = env.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
                 let PatAnnId::Value(binder, _) = binder else { unreachable!() };
                 // since it's not a value, don't add the type into the environment
                 tycker.statics.decls.insert(*id, ss::VAliasBody { binder, bindee }.into());
-                Ok(env)
+                env
             }
             | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
+        };
+
+        {
+            // administrative
+            tycker.call_stack.pop();
         }
+        Ok(env)
     }
     fn tyck_scc_refs<'f>(
         decls: impl Iterator<Item = &'f su::DeclId>, tycker: &mut Tycker, mut env: SEnv<()>,
     ) -> Result<SEnv<()>> {
         let decls = decls.collect::<Vec<_>>();
 
-        // Debug:
         {
-            use zydeco_surface::scoped::fmt::*;
-            println!("tycking scc decls:");
-            for id in decls.iter() {
-                println!("\t{}", id.ugly(&Formatter::new(&tycker.scoped)));
-            }
+            // administrative
+            tycker.call_stack.push(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
         }
 
         let mut binder_map = HashMap::new();
@@ -222,6 +235,11 @@ impl<'decl> SccDeclarations<'decl> {
                 env.mk(binder).tyck_assign(tycker, Action::syn(), bindee)?;
             env.env = new_env;
         }
+
+        {
+            // administrative
+            tycker.call_stack.pop();
+        }
         Ok(env)
     }
 }
@@ -231,14 +249,13 @@ impl Tyck for SEnv<su::PatId> {
     type Action = Action<AnnId>;
 
     fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> Result<Self::Out> {
-        // Debug:
         {
-            use zydeco_surface::scoped::fmt::*;
-            println!("tycking pat: {}", self.inner.ugly(&Formatter::new(&tycker.scoped)));
+            // administrative
+            tycker.call_stack.push(TyckTask::Pat(self.inner, switch));
         }
 
         use su::Pattern as Pat;
-        match tycker.scoped.pats[&self.inner].clone() {
+        let pat_ctx = match tycker.scoped.pats[&self.inner].clone() {
             | Pat::Ann(pat) => {
                 let su::Ann { tm, ty } = pat;
                 let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
@@ -248,12 +265,12 @@ impl Tyck for SEnv<su::PatId> {
                 match switch {
                     | Switch::Syn => {
                         let pat_ctx = self.mk(tm).tyck(tycker, Action::ana(ty_tm))?;
-                        Ok(pat_ctx)
+                        pat_ctx
                     }
                     | Switch::Ana(ty_ana) => {
                         let ty = Lub::lub(ty_tm, ty_ana, tycker)?;
                         let pat_ctx = self.mk(tm).tyck(tycker, Action::ana(ty))?;
-                        Ok(pat_ctx)
+                        pat_ctx
                     }
                 }
             }
@@ -263,7 +280,7 @@ impl Tyck for SEnv<su::PatId> {
                     | Switch::Syn => Err(TyckError::MissingAnnotation)?,
                     | Switch::Ana(ann) => {
                         let pat = PatAnnId::mk_hole(tycker, ann);
-                        Ok((pat, Context::new()))
+                        (pat, Context::new())
                     }
                 }
             }
@@ -274,19 +291,16 @@ impl Tyck for SEnv<su::PatId> {
                         | AnnId::Set => unreachable!(),
                         | AnnId::Kind(kd) => kd.into(),
                         | AnnId::Type(ty) => {
+                            let vtype = tycker.vtype(&self.env);
                             let kd = tycker.statics.annotations_type[&ty].to_owned();
-                            match tycker.statics.kinds[&kd].to_owned() {
-                                | ss::Kind::VType(ss::VType) => ty.into(),
-                                | ss::Kind::CType(_) | ss::Kind::Arrow(_) => {
-                                    Err(TyckError::KindMismatch)?
-                                }
-                            }
+                            let kd = Lub::lub(vtype, kd, tycker)?;
+                            kd.into()
                         }
                     };
                     tycker.statics.annotations_var.insert(def, ann);
                     let var = PatAnnId::mk_var(tycker, def, ann);
                     let ctx = Context::singleton(def, ann);
-                    Ok((var, ctx))
+                    (var, ctx)
                 }
             },
             | Pat::Ctor(pat) => match switch {
@@ -304,7 +318,7 @@ impl Tyck for SEnv<su::PatId> {
                         self.mk(args).tyck(tycker, Action::ana(arm_ty.to_owned().into()))?;
                     let PatAnnId::Value(args, _) = args_out_ann else { unreachable!() };
                     let pat = Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), args));
-                    Ok((PatAnnId::Value(pat, ann_ty), ctx))
+                    (PatAnnId::Value(pat, ann_ty), ctx)
                 }
             },
             | Pat::Triv(pat) => {
@@ -312,11 +326,11 @@ impl Tyck for SEnv<su::PatId> {
                 let triv = Alloc::alloc(tycker, ss::Triv);
                 let ann = Alloc::alloc(tycker, ss::UnitTy);
                 match switch {
-                    | Switch::Syn => Ok((PatAnnId::Value(triv, ann), Context::new())),
+                    | Switch::Syn => (PatAnnId::Value(triv, ann), Context::new()),
                     | Switch::Ana(ana) => {
                         let AnnId::Type(ana) = ana else { Err(TyckError::SortMismatch)? };
                         let ann = Lub::lub(ann, ana, tycker)?;
-                        Ok((PatAnnId::Value(triv, ann), Context::new()))
+                        (PatAnnId::Value(triv, ann), Context::new())
                     }
                 }
             }
@@ -342,7 +356,7 @@ impl Tyck for SEnv<su::PatId> {
                                 let pat = Alloc::alloc(tycker, ss::Cons(a_out, b_out));
                                 let ann = Alloc::alloc(tycker, ss::Prod(a_ann, b_ann));
                                 let ctx = a_ctx + b_ctx;
-                                Ok((PatAnnId::Value(pat, ann), ctx))
+                                (PatAnnId::Value(pat, ann), ctx)
                             }
                             | syntax::Type::Exists(ty) => {
                                 let ss::Exists(tpat, ty_body) = ty;
@@ -367,7 +381,7 @@ impl Tyck for SEnv<su::PatId> {
                                         let pat = Alloc::alloc(tycker, ss::Cons(a_out, b_out));
                                         let ann = Alloc::alloc(tycker, ss::Exists(tpat, ty_body));
                                         let ctx = a_ctx + b_ctx;
-                                        Ok((PatAnnId::Value(pat, ann), ctx))
+                                        (PatAnnId::Value(pat, ann), ctx)
                                     }
                                     | PatAnnId::Type(_, _) => unreachable!(),
                                 }
@@ -377,7 +391,13 @@ impl Tyck for SEnv<su::PatId> {
                     }
                 }
             }
+        };
+
+        {
+            // administrative
+            tycker.call_stack.pop();
         }
+        Ok(pat_ctx)
     }
 }
 
@@ -413,10 +433,9 @@ impl Tyck for SEnv<su::TermId> {
     type Action = Action<AnnId>;
 
     fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> Result<Self::Out> {
-        // Debug:
         {
-            use zydeco_surface::scoped::fmt::*;
-            println!("tycking term: {}", self.inner.ugly(&Formatter::new(&tycker.scoped)));
+            // administrative
+            tycker.call_stack.push(TyckTask::Term(self.inner, switch));
         }
 
         use su::Term as Tm;
@@ -456,7 +475,14 @@ impl Tyck for SEnv<su::TermId> {
             | Tm::Hole(term) => {
                 let su::Hole = term;
                 match switch {
-                    | Switch::Syn => Err(TyckError::MissingAnnotation)?,
+                    | Switch::Syn => {
+                        // a type hole, with a specific kind in mind
+                        let ann = tycker.statics.fills.alloc(self.inner);
+                        let ann = Alloc::alloc(tycker, ss::Kind::from(ann));
+                        let fill = tycker.statics.fills.alloc(self.inner);
+                        let fill = Alloc::alloc(tycker, fill);
+                        TermAnnId::Type(fill, ann)
+                    }
                     | Switch::Ana(AnnId::Set) => {
                         // can't deduce kind for now
                         Err(TyckError::SortMismatch)?
@@ -472,15 +498,21 @@ impl Tyck for SEnv<su::TermId> {
                         let kd = &tycker.statics.annotations_type[&ty];
                         let kd = tycker.statics.kinds[kd].to_owned();
                         match kd {
-                            | syntax::Kind::VType(ss::VType) => {
+                            | ss::Kind::Fill(ann) => {
+                                let ann = Alloc::alloc(tycker, ss::Kind::from(ann));
+                                let fill = tycker.statics.fills.alloc(self.inner);
+                                let fill = Alloc::alloc(tycker, fill);
+                                TermAnnId::Type(fill, ann)
+                            }
+                            | ss::Kind::VType(ss::VType) => {
                                 let hole = Alloc::alloc(tycker, ss::Hole);
                                 TermAnnId::Value(hole, ty)
                             }
-                            | syntax::Kind::CType(ss::CType) => {
+                            | ss::Kind::CType(ss::CType) => {
                                 let hole = Alloc::alloc(tycker, ss::Hole);
                                 TermAnnId::Compu(hole, ty)
                             }
-                            | syntax::Kind::Arrow(_) => {
+                            | ss::Kind::Arrow(_) => {
                                 unreachable!()
                             }
                         }
@@ -951,6 +983,22 @@ impl Tyck for SEnv<su::TermId> {
                         | AnnId::Kind(kd) => {
                             let kd = tycker.statics.kinds[&kd].to_owned();
                             match kd {
+                                | ss::Kind::Fill(fill) => {
+                                    let out_ann = self.tyck(tycker, Action::syn())?;
+                                    match out_ann {
+                                        | TermAnnId::Type(ty, kd) => {
+                                            tycker.statics.solus.insert_or_else(
+                                                fill,
+                                                kd.into(),
+                                                |old, new| panic!("{:?} = {:?}", old, new),
+                                            )?;
+                                            TermAnnId::Type(ty, kd)
+                                        }
+                                        | TermAnnId::Kind(_)
+                                        | TermAnnId::Value(_, _)
+                                        | TermAnnId::Compu(_, _) => Err(TyckError::SortMismatch)?,
+                                    }
+                                }
                                 | ss::Kind::VType(_) => Err(TyckError::KindMismatch)?,
                                 | ss::Kind::CType(ss::CType) => {
                                     // could be forall or type arrow
@@ -1586,6 +1634,69 @@ impl Tyck for SEnv<su::TermId> {
         // Debug:
         // println!("kinds: {:#?}", tycker.statics.kinds);
         // println!("types: {:#?}", tycker.statics.types);
+        {
+            // administrative
+            tycker.call_stack.pop();
+        }
         Ok(out_ann)
+    }
+}
+
+pub struct TyckCallStack<'arena> {
+    pub spans: &'arena SpanArena,
+    pub scoped: &'arena ScopedArena,
+    pub stack: Vec<TyckTask>,
+}
+
+impl std::fmt::Display for TyckCallStack<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use zydeco_surface::scoped::fmt::*;
+        let budget = 80;
+        // let budget = usize::MAX;
+        let truncated = |mut s: String| {
+            if s.len() > budget {
+                s.truncate(budget - 3);
+                s.push_str("...");
+            }
+            s
+        };
+
+        for task in self.stack.iter() {
+            match task {
+                | TyckTask::DeclHead(decl) => {
+                    let prev = self.scoped.textual.back(&((*decl).into())).unwrap();
+                    writeln!(f, "\t- when tycking external declaration ({}):", self.spans[prev])?;
+                    writeln!(f, "\t\t{}", truncated(decl.ugly(&Formatter::new(&self.scoped))))?;
+                }
+                | TyckTask::DeclUni(decl) => {
+                    let prev = self.scoped.textual.back(&((*decl).into())).unwrap();
+                    writeln!(f, "\t- when tycking single declaration ({}):", self.spans[prev])?;
+                    writeln!(f, "\t\t{}", truncated(decl.ugly(&Formatter::new(&self.scoped))))?;
+                }
+                | TyckTask::DeclScc(decls) => {
+                    writeln!(f, "\t- when tycking scc declarations:")?;
+                    for decl in decls.iter() {
+                        let prev = self.scoped.textual.back(&((*decl).into())).unwrap();
+                        writeln!(
+                            f,
+                            "\t\t({})\n\t\t{}",
+                            self.spans[prev],
+                            truncated(decl.ugly(&Formatter::new(&self.scoped)))
+                        )?;
+                    }
+                }
+                | TyckTask::Pat(pat, _) => {
+                    let prev = self.scoped.textual.back(&((*pat).into())).unwrap();
+                    writeln!(f, "\t- when tycking pattern ({}):", self.spans[prev])?;
+                    writeln!(f, "\t\t{}", truncated(pat.ugly(&Formatter::new(&self.scoped))))?;
+                }
+                | TyckTask::Term(term, _) => {
+                    let prev = self.scoped.textual.back(&((*term).into())).unwrap();
+                    writeln!(f, "\t- when tycking term ({}):", self.spans[prev])?;
+                    writeln!(f, "\t\t{}", truncated(term.ugly(&Formatter::new(&self.scoped))))?;
+                }
+            }
+        }
+        Ok(())
     }
 }

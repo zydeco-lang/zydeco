@@ -21,7 +21,15 @@ impl Lub for KindId {
     fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         let lhs = tycker.statics.kinds[&self].clone();
         let rhs = tycker.statics.kinds[&other].clone();
+        fn fill_kd(tycker: &mut Tycker, fill: FillId, kd: KindId) -> Result<KindId> {
+            tycker.statics.solus.insert_or_else(fill, kd.into(), |_old, _new| {
+                Err(TyckError::KindMismatch)? // Todo: deal with fill
+            })?;
+            Ok(kd)
+        }
         match (lhs, rhs) {
+            | (_, Kind::Fill(rhs)) => fill_kd(tycker, rhs, self),
+            | (Kind::Fill(lhs), _) => fill_kd(tycker, lhs, other),
             | (Kind::VType(VType), Kind::VType(VType)) => {
                 let kd = Alloc::alloc(tycker, VType);
                 Ok(kd)
@@ -70,7 +78,7 @@ impl Debruijn {
         let lhs = tycker.statics.types[&lhs_id].clone();
         let rhs = tycker.statics.types[&rhs_id].clone();
         fn fill_ty(tycker: &mut Tycker, fill: FillId, ty: TypeId) -> Result<TypeId> {
-            tycker.statics.solus.insert_or_else(fill, ty, |_old, _new| {
+            tycker.statics.solus.insert_or_else(fill, ty.into(), |_old, _new| {
                 Err(TyckError::TypeMismatch)? // Todo: deal with fill
             })?;
             Ok(ty)

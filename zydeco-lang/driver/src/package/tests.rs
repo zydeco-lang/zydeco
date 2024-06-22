@@ -7,5 +7,11 @@ fn test_std() {
         .canonicalize()
         .unwrap();
     let proj = super::pack::Package::new(dir).unwrap();
-    proj.run().unwrap();
+    match proj.run() {
+        | Ok(_) => {}
+        | Err(err) => {
+            eprintln!("{}", err);
+            panic!("Error running project");
+        }
+    }
 }

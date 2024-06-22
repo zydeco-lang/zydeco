@@ -1,10 +1,10 @@
 //! The package notation of zydeco.
 
-use super::err::{Result, SurfaceError};
+use super::err::{Result, ZydecoError};
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
-use zydeco_statics::{syntax::StaticsArena, Tycker};
+use zydeco_statics::{syntax::StaticsArena, TyckCallStack, Tycker};
 use zydeco_surface::{
     bitter::{syntax as b, DesugarOut, Desugarer},
     scoped::{syntax as sc, ResolveOut, Resolver},
@@ -62,11 +62,11 @@ impl Package {
         Ok(Self {
             path: path
                 .parent()
-                .ok_or_else(|| SurfaceError::PackageFileNotFound(path.clone()))?
+                .ok_or_else(|| ZydecoError::PackageFileNotFound(path.clone()))?
                 .to_path_buf(),
             ..FileIO::new(path.clone()).load().map_err(|e| match e.kind() {
-                | io::ErrorKind::NotFound => SurfaceError::PackageFileNotFound(path),
-                | _ => SurfaceError::PackageFileInvalid(path, e),
+                | io::ErrorKind::NotFound => ZydecoError::PackageFileNotFound(path),
+                | _ => ZydecoError::PackageFileInvalid(path, e),
             })?
         })
     }
@@ -199,8 +199,27 @@ impl Package {
 
         // type-checking
         let PackageScoped { sources, spans, prim, arena: scoped } = pack;
-        let tycker = Tycker { spans, prim, scoped, statics: StaticsArena::new(&mut alloc) };
-        tycker.run().unwrap();
+        let mut tycker = Tycker {
+            spans,
+            prim,
+            scoped,
+            statics: StaticsArena::new(&mut alloc),
+            call_stack: Vec::new(),
+        };
+        match tycker.run() {
+            | Ok(()) => {}
+            | Err(err) => {
+                Err(ZydecoError::TyckError(
+                    err.to_string(),
+                    TyckCallStack {
+                        spans: &tycker.spans,
+                        scoped: &tycker.scoped,
+                        stack: tycker.call_stack,
+                    }
+                    .to_string(),
+                ))?;
+            }
+        }
 
         Ok(())
     }
@@ -217,11 +236,11 @@ impl File {
         let path = self.path;
         let source = std::fs::read_to_string(&path).map_err(|_| {
             let path = path.clone();
-            SurfaceError::SrcFileNotFound(path)
+            ZydecoError::SrcFileNotFound(path)
         })?;
         let mut s = String::new();
         for t in Tok::lexer(&source) {
-            s += &format!("{}", t.map_err(|()| SurfaceError::LexerError)?);
+            s += &format!("{}", t.map_err(|()| ZydecoError::LexerError)?);
         }
         let info = FileInfo::new(source.as_str(), Rc::new(path));
         Ok(FileLoaded { info, source, hash: s.snap() })
@@ -245,7 +264,7 @@ impl FileLoaded {
             hashes.insert(
                 file.info
                     .canonicalize()
-                    .map_err(|_| SurfaceError::CanonicalizationError(file.info.display_path()))?,
+                    .map_err(|_| ZydecoError::CanonicalizationError(file.info.display_path()))?,
                 file.hash.clone(),
             );
         }
@@ -258,7 +277,7 @@ impl FileLoaded {
         let top = TopLevelParser::new()
             .parse(&source, &LocationCtx::File(info.clone()), &mut parser, Lexer::new(&source))
             .map_err(|error| {
-                SurfaceError::ParseError(ParseError { error, file_info: &info }.to_string())
+                ZydecoError::ParseError(ParseError { error, file_info: &info }.to_string())
             })?;
 
         let t::Parser { spans, arena } = parser;
@@ -329,14 +348,13 @@ impl PackageStew {
             pats: ArenaAssoc::default(),
             terms: ArenaAssoc::default(),
             decls: ArenaAssoc::default(),
-            textual: ArenaForth::default(),
 
             users: ArenaForth::default(),
             exts: ArenaAssoc::default(),
             deps: DepGraph::default(),
         };
         let ResolveOut { spans, prim, arena } =
-            resolver.run(&top).map_err(|err| SurfaceError::ResolveError(err.to_string()))?;
+            resolver.run(&top).map_err(|err| ZydecoError::ResolveError(err.to_string()))?;
         Ok(PackageScoped { sources, spans, prim, arena })
     }
 }

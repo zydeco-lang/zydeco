@@ -243,6 +243,7 @@ pub struct CType;
 
 #[derive(Debug, Clone, From)]
 pub enum Kind {
+    Fill(FillId),
     VType(VType),
     CType(CType),
     Arrow(Arrow<KindId>),
@@ -484,7 +485,7 @@ pub struct StaticsArena {
     /// arena for filling context-constrained holes; the TermId is the site
     pub fills: ArenaDense<FillId, su::TermId>,
     /// arena for the solutions of fillings
-    pub solus: ArenaAssoc<FillId, TypeId>,
+    pub solus: ArenaAssoc<FillId, AnnId>,
     /// arena for `data`
     pub datas: StructArena<DataId, im::Vector<(CtorName, TypeId)>, Data>,
     /// arena for `codata`
