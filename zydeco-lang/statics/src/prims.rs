@@ -16,9 +16,11 @@ impl Tycker {
     }
     pub fn thunk_app_hole(&mut self, env: &ss::Context<ss::AnnId>, site: su::TermId) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
-        let hole = self.statics.fills.alloc(site);
-        let hole = Alloc::alloc(self, hole);
-        let app = Alloc::alloc(self, ss::App(ty, hole));
+        let fill = self.statics.fills.alloc(site);
+        let ctype = self.ctype(env);
+        let hole = Alloc::alloc(self, fill, ctype);
+        let vtype = self.vtype(env);
+        let app = Alloc::alloc(self, ss::App(ty, hole), vtype);
         app
     }
     pub fn ret(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
@@ -27,9 +29,11 @@ impl Tycker {
     }
     pub fn ret_app_hole(&mut self, env: &ss::Context<ss::AnnId>, site: su::TermId) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
-        let hole = self.statics.fills.alloc(site);
-        let hole = Alloc::alloc(self, hole);
-        let app = Alloc::alloc(self, ss::App(ty, hole));
+        let fill = self.statics.fills.alloc(site);
+        let vtype = self.vtype(env);
+        let hole = Alloc::alloc(self, fill, vtype);
+        let ctype = self.ctype(env);
+        let app = Alloc::alloc(self, ss::App(ty, hole), ctype);
         app
     }
     pub fn unit(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
@@ -59,7 +63,7 @@ impl Tycker {
         &mut self, mut env: SEnv<()>, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
     ) -> ResultKont<SEnv<()>> {
         let kd = env.mk(syn_kd).tyck(self, Action::syn())?.as_term_static().as_kind();
-        let ty = Alloc::alloc(self, prim);
+        let ty = Alloc::alloc(self, prim, kd);
         self.statics.annotations_var.insert(def, kd.into());
         env.env += (def, ty.into());
         Ok(env)
@@ -74,12 +78,12 @@ impl Tycker {
                 // the alias head is a internal type; unless it's VType or CType
                 match internal {
                     | su::Internal::VType => {
-                        let kd = Alloc::alloc(self, ss::VType);
+                        let kd = Alloc::alloc(self, ss::VType, ());
                         self.statics.annotations_var.insert(def, ss::AnnId::Set);
                         env.env += (def, kd.into());
                     }
                     | su::Internal::CType => {
-                        let kd = Alloc::alloc(self, ss::CType);
+                        let kd = Alloc::alloc(self, ss::CType, ());
                         self.statics.annotations_var.insert(def, ss::AnnId::Set);
                         env.env += (def, kd.into());
                     }

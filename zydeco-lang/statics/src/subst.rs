@@ -3,6 +3,7 @@ use ss::*;
 
 impl TypeId {
     pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> ResultKont<TypeId> {
+        let kd = tycker.statics.annotations_type[self].clone();
         let ty = tycker.statics.types[self].clone();
         match ty {
             | Type::Var(def) => {
@@ -26,7 +27,7 @@ impl TypeId {
                 if ty == ty_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Abs(tpat, ty_)))
+                    Ok(Alloc::alloc(tycker, Abs(tpat, ty_), kd))
                 }
             }
             | Type::App(app) => {
@@ -36,7 +37,7 @@ impl TypeId {
                 if ty1 == ty1_ && ty2 == ty2_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, App(ty1_, ty2_)))
+                    Ok(Alloc::alloc(tycker, App(ty1_, ty2_), kd))
                 }
             }
             | Type::Thunk(_)
@@ -53,7 +54,7 @@ impl TypeId {
                 if ty1 == ty1_ && ty2 == ty2_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Arrow(ty1_, ty2_)))
+                    Ok(Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd))
                 }
             }
             | Type::Forall(forall) => {
@@ -68,7 +69,7 @@ impl TypeId {
                 if ty == ty_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Forall(tpat, ty_)))
+                    Ok(Alloc::alloc(tycker, Forall(tpat, ty_), kd))
                 }
             }
             | Type::Prod(prod) => {
@@ -78,7 +79,7 @@ impl TypeId {
                 if ty1 == ty1_ && ty2 == ty2_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Prod(ty1_, ty2_)))
+                    Ok(Alloc::alloc(tycker, Prod(ty1_, ty2_), kd))
                 }
             }
             | Type::Exists(exists) => {
@@ -93,7 +94,7 @@ impl TypeId {
                 if ty == ty_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Exists(tpat, ty_)))
+                    Ok(Alloc::alloc(tycker, Exists(tpat, ty_), kd))
                 }
             }
             | Type::Data(data) => {
@@ -118,7 +119,7 @@ impl TypeId {
                     let data_ = tycker.statics.datas.defs.alloc(arms_);
                     tycker.statics.datas.tbls.insert(data_, d.to_owned());
                     tycker.statics.datas.eqs.insert(d, data_);
-                    Ok(Alloc::alloc(tycker, data_))
+                    Ok(Alloc::alloc(tycker, data_, kd))
                 }
             }
             | Type::CoData(coda) => {
@@ -143,7 +144,7 @@ impl TypeId {
                     let coda_ = tycker.statics.codatas.defs.alloc(arms_);
                     tycker.statics.codatas.tbls.insert(coda_, d.to_owned());
                     tycker.statics.codatas.eqs.insert(d, coda_);
-                    Ok(Alloc::alloc(tycker, coda_))
+                    Ok(Alloc::alloc(tycker, coda_, kd))
                 }
             }
         }

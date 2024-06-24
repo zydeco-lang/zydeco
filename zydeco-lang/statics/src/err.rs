@@ -40,8 +40,8 @@ pub struct TyckErrorEntry {
 impl Tycker {
     pub fn error_output(&self, TyckErrorEntry { error, blame, stack }: TyckErrorEntry) -> String {
         use zydeco_surface::scoped::fmt::*;
-        // let budget = 80;
-        let budget = usize::MAX;
+        let budget = 80;
+        // let budget = usize::MAX;
         let truncated = |mut s: String| {
             if s.len() > budget {
                 s.truncate(budget - 3);

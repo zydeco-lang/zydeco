@@ -207,6 +207,7 @@ impl Package {
                 for err in tycker.errors.to_vec() {
                     s += &format!("{}\n", tycker.error_output(err));
                 }
+                s += &format!("Total: {} errors\n", tycker.errors.len());
                 Err(ZydecoError::TyckErrors(s))?;
             }
         }

@@ -178,11 +178,11 @@ mod impls_identifiers {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty: kd });
+                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty: kd }, kd);
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty });
+                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty }, ty);
                     PatAnnId::Value(tm, ty)
                 }
             }
@@ -191,11 +191,11 @@ mod impls_identifiers {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, def);
+                    let tm = Alloc::alloc(tycker, def, kd);
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, def);
+                    let tm = Alloc::alloc(tycker, def, ty);
                     PatAnnId::Value(tm, ty)
                 }
             }
