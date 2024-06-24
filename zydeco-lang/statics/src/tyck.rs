@@ -42,8 +42,17 @@ impl Tycker {
             }
             for group in groups {
                 // each group should be type checked on its own
-                env = SccDeclarations(&group).tyck(self, env)?;
-                scc.release(group);
+                match SccDeclarations(&group).tyck(self, env.mk(())) {
+                    | Ok(new_env) => {
+                        // move on
+                        env = new_env;
+                        scc.release(group);
+                    }
+                    | Err(()) => {
+                        // mark all decls in the group and those that depend on them unreachable
+                        scc.obliviate(group);
+                    }
+                }
             }
         }
         Ok(())
@@ -1860,76 +1869,3 @@ impl Tyck for SEnv<su::TermId> {
         Ok(out_ann)
     }
 }
-
-// pub struct TyckCallStack<'arena> {
-//     pub spans: &'arena SpanArena,
-//     pub scoped: &'arena ScopedArena,
-//     pub stack: im::Vector<TyckTask>,
-// }
-// impl<'arena> TyckCallStack<'arena> {
-//     pub fn new(tycker: &'arena Tycker) -> Self {
-//         let Tycker { spans, scoped, stack: call_stack, .. } = tycker;
-//         Self { spans, scoped, stack: call_stack.clone() }
-//     }
-// }
-
-// impl std::fmt::Display for TyckCallStack<'_> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         use zydeco_surface::scoped::fmt::*;
-//         let budget = 80;
-//         // let budget = usize::MAX;
-//         let truncated = |mut s: String| {
-//             if s.len() > budget {
-//                 s.truncate(budget - 3);
-//                 s.push_str("...");
-//             }
-//             s
-//         };
-
-//         for task in self.stack.iter() {
-//             match task {
-//                 | TyckTask::DeclHead(decl) => {
-//                     let prev = self.scoped.textual.back(&((*decl).into())).unwrap();
-//                     writeln!(f, "\t- when tycking external declaration ({}):", self.spans[prev])?;
-//                     writeln!(f, "\t\t{}", truncated(decl.ugly(&Formatter::new(&self.scoped))))?;
-//                 }
-//                 | TyckTask::DeclUni(decl) => {
-//                     let prev = self.scoped.textual.back(&((*decl).into())).unwrap();
-//                     writeln!(f, "\t- when tycking single declaration ({}):", self.spans[prev])?;
-//                     writeln!(f, "\t\t{}", truncated(decl.ugly(&Formatter::new(&self.scoped))))?;
-//                 }
-//                 | TyckTask::DeclScc(decls) => {
-//                     writeln!(f, "\t- when tycking scc declarations:")?;
-//                     for decl in decls.iter() {
-//                         let prev = self.scoped.textual.back(&((*decl).into())).unwrap();
-//                         writeln!(
-//                             f,
-//                             "\t\t({})\n\t\t{}",
-//                             self.spans[prev],
-//                             truncated(decl.ugly(&Formatter::new(&self.scoped)))
-//                         )?;
-//                     }
-//                 }
-//                 | TyckTask::Exec(exec) => {
-//                     let prev = self.scoped.textual.back(&((*exec).into())).unwrap();
-//                     writeln!(f, "\t- when tycking execution ({}):", self.spans[prev])?;
-//                     writeln!(f, "\t\t{}", truncated(exec.ugly(&Formatter::new(&self.scoped))))?;
-//                 }
-//                 | TyckTask::Pat(pat, _) => {
-//                     let prev = self.scoped.textual.back(&((*pat).into())).unwrap();
-//                     writeln!(f, "\t- when tycking pattern ({}):", self.spans[prev])?;
-//                     writeln!(f, "\t\t{}", truncated(pat.ugly(&Formatter::new(&self.scoped))))?;
-//                 }
-//                 | TyckTask::Term(term, _) => {
-//                     let prev = self.scoped.textual.back(&((*term).into())).unwrap();
-//                     writeln!(f, "\t- when tycking term ({}):", self.spans[prev])?;
-//                     writeln!(f, "\t\t{}", truncated(term.ugly(&Formatter::new(&self.scoped))))?;
-//                 }
-//                 | TyckTask::Lub(_, _) => {
-//                     writeln!(f, "\t- when computing least upper bound")?;
-//                 }
-//             }
-//         }
-//         Ok(())
-//     }
-// }

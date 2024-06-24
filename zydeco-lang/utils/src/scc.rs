@@ -212,6 +212,64 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         }
         // println!("<<<");
     }
+    pub fn obliviate(&mut self, ids: impl IntoIterator<Item = Id>) {
+        let ids = ids.into_iter().collect::<HashSet<_>>();
+        // initial frontier is all sccs that contain the ids
+        let mut frontier = ids.iter().map(|id| self.belongs[id]).collect::<Vec<_>>();
+        let mut victims = HashSet::new();
+        while let Some(scc_id) = frontier.pop() {
+            if victims.insert(scc_id) {
+                // if scc_id is not in the victims, extend the frontier
+                frontier.extend(self.srcs.query(&scc_id));
+            }
+            // else, scc_id is already in the victims, just go on
+        }
+        // with victims converged, remove them from deps and srcs
+        for scc_id in &victims {
+            self.srcs.map = self
+                .srcs
+                .map
+                .iter()
+                .filter_map(|(id, scc)| {
+                    if scc_id == id {
+                        None
+                    } else {
+                        Some((
+                            id.to_owned(),
+                            scc.into_iter().filter(|x| !victims.contains(x)).cloned().collect(),
+                        ))
+                    }
+                })
+                .collect();
+            self.deps.map = self
+                .deps
+                .map
+                .iter()
+                .filter_map(|(id, scc)| {
+                    if scc_id == id {
+                        None
+                    } else {
+                        Some((
+                            id.to_owned(),
+                            scc.into_iter().filter(|x| !victims.contains(x)).cloned().collect(),
+                        ))
+                    }
+                })
+                .collect();
+        }
+        // let Some(scc) = self.strongs.remove(&scc_id) else { unreachable!() };
+        // in the end, remove the victims from the strongs and roots
+        let mut ids = HashSet::new();
+        for scc_id in &victims {
+            if let Some(s) = self.strongs.remove(scc_id) {
+                ids.extend(s);
+            }
+            self.roots.remove(scc_id);
+        }
+        for id in ids {
+            self.belongs.remove(&id);
+        }
+    }
 }
 
 #[cfg(test)]

@@ -75,6 +75,17 @@ impl Alloc<TypeId> for Type {
 // }
 impl Alloc<TypeId> for DefId {
     fn alloc(tycker: &mut Tycker, val: Self) -> TypeId {
+        // let ty = Alloc::alloc(tycker, Type::from(val));
+        // let ann = tycker.statics.annotations_var[&val].as_kind();
+        // tycker
+        //     .statics
+        //     .annotations_type
+        //     .insert_or_else(ty, ann, |_old, new| {
+        //         let res: std::result::Result<KindId, ()> = Ok(new);
+        //         res
+        //     })
+        //     .unwrap();
+        // ty
         Alloc::alloc(tycker, Type::from(val))
     }
 }
