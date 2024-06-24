@@ -1,4 +1,4 @@
-use crate::syntax::*;
+use crate::{syntax::*, *};
 use thiserror::Error;
 
 // Todo: writer monad instead of error monad
@@ -30,5 +30,11 @@ pub enum TyckError {
 }
 
 // Todo: make error non-local; capture the tyck call stack; dump env and relavent arena if needed
+pub struct TyckErrorEntry {
+    pub(crate) error: TyckError,
+    pub(crate) blame: &'static std::panic::Location<'static>,
+    pub(crate) stack: im::Vector<TyckTask>,
+}
 
 pub type Result<T> = std::result::Result<T, TyckError>;
+pub type ResultKont<T> = std::result::Result<T, ()>;

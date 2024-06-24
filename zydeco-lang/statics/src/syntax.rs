@@ -236,12 +236,12 @@ pub use su::Context;
 
 /* ---------------------------------- Kind ---------------------------------- */
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct VType;
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CType;
 
-#[derive(Debug, Clone, From)]
+#[derive(Debug, Clone, From, Hash, PartialEq, Eq)]
 pub enum Kind {
     Fill(FillId),
     VType(VType),

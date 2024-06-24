@@ -92,6 +92,8 @@ pub struct ScopedArena {
     pub ctxs: ArenaAssoc<TermId, Context<()>>,
     /// externs to defs
     pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
+    /// non-self-referencing declarations
+    pub unis: ArenaAssoc<DeclId, ()>,
     /// dependency graph of the top level declarations
     pub deps: DepGraph<DeclId>,
     /// scc graph of the top level declarations

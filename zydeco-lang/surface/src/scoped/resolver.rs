@@ -45,6 +45,7 @@ pub struct Collector {
 
     pub users: ArenaForth<DefId, TermId>,
     pub ctxs: ArenaAssoc<TermId, Context<()>>,
+    pub unis: ArenaAssoc<DeclId, ()>,
     pub deps: DepGraph<DeclId>,
     pub top: SccGraph<DeclId>,
 }
@@ -80,14 +81,26 @@ impl Resolver {
         let decls = bitter.decls.filter_map_id(|id| decls.get(&id).cloned());
         let textual = bitter.textual;
         let ctxs = ArenaAssoc::default();
+        let unis = ArenaAssoc::default();
         let top = Kosaraju::new(&deps).run();
-        let mut collector = Collector { defs, pats, terms, decls, textual, users, ctxs, deps, top };
-        collector.run()?;
-        let Collector { defs, pats, terms, decls, textual, users, ctxs, deps, top } = collector;
+        let Collector { defs, pats, terms, decls, textual, users, ctxs, unis, deps, top } =
+            Collector { defs, pats, terms, decls, textual, users, ctxs, unis, deps, top }.run()?;
         Ok(ResolveOut {
             spans,
             prim,
-            arena: ScopedArena { defs, pats, terms, decls, textual, users, ctxs, exts, deps, top },
+            arena: ScopedArena {
+                defs,
+                pats,
+                terms,
+                decls,
+                textual,
+                users,
+                ctxs,
+                exts,
+                unis,
+                deps,
+                top,
+            },
         })
     }
 }
@@ -408,7 +421,7 @@ impl Resolve for TermId {
 }
 
 impl Collector {
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(mut self) -> Result<Self> {
         let mut scc = self.top.clone();
         let mut ctx = Context::new();
         loop {
@@ -417,11 +430,11 @@ impl Collector {
                 break;
             }
             for group in groups {
-                ctx = SccDeclarations(&group).collect(self, ctx.clone())?;
+                ctx = SccDeclarations(&group).collect(&mut self, ctx.clone())?;
                 scc.release(group)
             }
         }
-        Ok(())
+        Ok(self)
     }
 }
 
@@ -458,6 +471,8 @@ impl Collect for SccDeclarations<'_> {
                         }
                     }
                 } else {
+                    // add the declaration to unis
+                    collector.unis.insert(*id, ());
                     // collect context for bindee before collecting for the binder
                     let decl = collector.decls[id].clone();
                     match decl {

@@ -13,63 +13,63 @@ pub struct DtorName(pub String);
 /* ------------------------------- Structural ------------------------------- */
 
 /// `(...: t)` for analyze mode motivator
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Ann<Tm, Ty> {
     pub tm: Tm,
     pub ty: Ty,
 }
 /// `_` for synthesize mode motivator
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Hole;
 
 /// any binding structure
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Abs<S, T>(pub S, pub T);
 /// `e1 e2` shaped application
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct App<S, T>(pub S, pub T);
 
 /// a -> b shaped arrow
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Arrow<T>(pub T, pub T);
 
 /// `()` as unit type
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Triv;
 
 /// `(...)` as paren-shaped container
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Cons<S, T>(pub S, pub T);
 
 /// a * b shaped product
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Prod<T>(pub T, pub T);
 
 /// sealed term which is abstract, only eq to itself during tyck
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Sealed<T>(pub T);
 
 /* --------------------------------- Common --------------------------------- */
 
 /// `{ b }` has type `Thunk B`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Thunk<Tm>(pub Tm);
 /// `! a` has type `B` where `A = Thunk B`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Force<Tm>(pub Tm);
 
 /// `ret a` has type `Ret A`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Ret<Tm>(pub Tm);
 /// `do x <- b; ...`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Bind<Br, Be, Tail> {
     pub binder: Br,
     pub bindee: Be,
     pub tail: Tail,
 }
 /// `let x = a in ...`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PureBind<Br, Be, Tail> {
     pub binder: Br,
     pub bindee: Be,
@@ -77,19 +77,19 @@ pub struct PureBind<Br, Be, Tail> {
 }
 
 /// `rec (x: A) -> b`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Rec<P, Tm>(pub P, pub Tm);
 
 /// `C(a_1, ...)`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Ctor<Tail>(pub CtorName, pub Tail);
 
 /// `b .d_i`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Dtor<Head>(pub Head, pub DtorName);
 
 /// literals in term
-#[derive(From, Clone, Debug)]
+#[derive(From, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
     String(String),

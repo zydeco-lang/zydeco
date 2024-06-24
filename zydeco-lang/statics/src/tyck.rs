@@ -3,8 +3,8 @@ use crate::{
     syntax::{AnnId, Context, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
     *,
 };
-use std::collections::{HashMap, HashSet};
-use zydeco_utils::arena::ArenaAccess;
+use std::collections::HashMap;
+use zydeco_utils::arena::{ArenaAccess, GlobalAlloc};
 
 pub struct Tycker {
     pub spans: SpanArena,
@@ -12,11 +12,24 @@ pub struct Tycker {
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
     /// call stack for debugging tycker and error tracking
-    pub call_stack: im::Vector<TyckTask>,
+    pub stack: im::Vector<TyckTask>,
     // Todo: add a writer monad for error handling
+    pub errors: Vec<TyckErrorEntry>,
 }
 
 impl Tycker {
+    pub fn new(
+        spans: SpanArena, prim: PrimDef, scoped: ScopedArena, alloc: &mut GlobalAlloc,
+    ) -> Self {
+        Self {
+            spans,
+            prim,
+            scoped,
+            statics: StaticsArena::new(alloc),
+            stack: im::Vector::new(),
+            errors: Vec::new(),
+        }
+    }
     pub fn run(&mut self) -> Result<()> {
         let mut scc = self.scoped.top.clone();
         // Todo: tycker should be able to continue on non-dependent errors
@@ -37,6 +50,16 @@ impl Tycker {
     }
 }
 
+impl Tycker {
+    pub(crate) fn err(
+        &mut self, error: TyckError, blame: &'static std::panic::Location<'static>,
+    ) -> ResultKont<()> {
+        let stack = self.stack.clone();
+        self.errors.push(TyckErrorEntry { error, blame, stack });
+        Err(())
+    }
+}
+
 pub trait Tyck {
     type Out;
     type Action;
@@ -54,9 +77,10 @@ pub enum TyckTask {
     DeclHead(su::DeclId),
     DeclUni(su::DeclId),
     DeclScc(Vec<su::DeclId>),
+    Exec(su::DeclId),
     Pat(su::PatId, Switch<AnnId>),
     Term(su::TermId, Switch<AnnId>),
-    // Todo: Lub
+    Lub(AnnId, AnnId),
 }
 
 pub struct Action<Ann> {
@@ -104,37 +128,39 @@ impl<'decl> SccDeclarations<'decl> {
                 let id = decls.iter().next().unwrap();
                 match tycker.scoped.decls[id].clone() {
                     | Decl::AliasBody(_) => {
-                        let self_ref = tycker
-                            .scoped
-                            .deps
-                            .query(id)
-                            .into_iter()
-                            .collect::<HashSet<_>>()
-                            .contains(id);
-                        if self_ref {
-                            Self::tyck_scc_refs([id].into_iter(), tycker, env)
-                        } else {
+                        let uni = tycker.scoped.unis.get(id).is_some();
+                        if uni {
                             Self::tyck_uni_ref(id, tycker, env)
+                        } else {
+                            Self::tyck_scc_refs([id].into_iter(), tycker, env)
                         }
                     }
                     | Decl::AliasHead(decl) => {
                         {
                             // administrative
-                            tycker.call_stack.push_back(TyckTask::DeclHead(*id));
+                            tycker.stack.push_back(TyckTask::DeclHead(*id));
                         }
                         env = tycker.register_prim_decl(decl, id, env)?;
                         {
                             // administrative
-                            tycker.call_stack.pop_back();
+                            tycker.stack.pop_back();
                         }
                         Ok(env)
                     }
                     | Decl::Exec(decl) => {
+                        {
+                            // administrative
+                            tycker.stack.push_back(TyckTask::Exec(*id));
+                        }
                         let su::Exec(term) = decl;
                         let os = tycker.os(&env.env);
                         let out_ann = env.mk(term).tyck(tycker, Action::ana(os.into()))?;
                         let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                         tycker.statics.decls.insert(*id, ss::Exec(body).into());
+                        {
+                            // administrative
+                            tycker.stack.pop_back();
+                        }
                         Ok(env)
                     }
                 }
@@ -145,7 +171,7 @@ impl<'decl> SccDeclarations<'decl> {
     fn tyck_uni_ref(id: &su::DeclId, tycker: &mut Tycker, mut env: SEnv<()>) -> Result<SEnv<()>> {
         {
             // administrative
-            tycker.call_stack.push_back(TyckTask::DeclUni(*id));
+            tycker.stack.push_back(TyckTask::DeclUni(*id));
         }
 
         let su::Declaration::AliasBody(decl) = tycker.scoped.decls[id].clone() else {
@@ -179,7 +205,7 @@ impl<'decl> SccDeclarations<'decl> {
 
         {
             // administrative
-            tycker.call_stack.pop_back();
+            tycker.stack.pop_back();
         }
         Ok(env)
     }
@@ -190,9 +216,7 @@ impl<'decl> SccDeclarations<'decl> {
 
         {
             // administrative
-            tycker
-                .call_stack
-                .push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
+            tycker.stack.push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
         }
 
         let mut binder_map = HashMap::new();
@@ -242,7 +266,7 @@ impl<'decl> SccDeclarations<'decl> {
 
         {
             // administrative
-            tycker.call_stack.pop_back();
+            tycker.stack.pop_back();
         }
         Ok(env)
     }
@@ -255,7 +279,7 @@ impl Tyck for SEnv<su::PatId> {
     fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> Result<Self::Out> {
         {
             // administrative
-            tycker.call_stack.push_back(TyckTask::Pat(self.inner, switch));
+            tycker.stack.push_back(TyckTask::Pat(self.inner, switch));
         }
 
         use su::Pattern as Pat;
@@ -399,7 +423,7 @@ impl Tyck for SEnv<su::PatId> {
 
         {
             // administrative
-            tycker.call_stack.pop_back();
+            tycker.stack.pop_back();
         }
         Ok(pat_ctx)
     }
@@ -440,7 +464,7 @@ impl Tyck for SEnv<su::TermId> {
     fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> Result<Self::Out> {
         {
             // administrative
-            tycker.call_stack.push_back(TyckTask::Term(self.inner, switch));
+            tycker.stack.push_back(TyckTask::Term(self.inner, switch));
         }
 
         use su::Term as Tm;
@@ -1642,7 +1666,7 @@ impl Tyck for SEnv<su::TermId> {
 
         {
             // administrative
-            tycker.call_stack.pop_back();
+            tycker.stack.pop_back();
         }
         Ok(out_ann)
     }
@@ -1655,7 +1679,7 @@ pub struct TyckCallStack<'arena> {
 }
 impl<'arena> TyckCallStack<'arena> {
     pub fn new(tycker: &'arena Tycker) -> Self {
-        let Tycker { spans, scoped, call_stack, .. } = tycker;
+        let Tycker { spans, scoped, stack: call_stack, .. } = tycker;
         Self { spans, scoped, stack: call_stack.clone() }
     }
 }
@@ -1697,6 +1721,11 @@ impl std::fmt::Display for TyckCallStack<'_> {
                         )?;
                     }
                 }
+                | TyckTask::Exec(exec) => {
+                    let prev = self.scoped.textual.back(&((*exec).into())).unwrap();
+                    writeln!(f, "\t- when tycking execution ({}):", self.spans[prev])?;
+                    writeln!(f, "\t\t{}", truncated(exec.ugly(&Formatter::new(&self.scoped))))?;
+                }
                 | TyckTask::Pat(pat, _) => {
                     let prev = self.scoped.textual.back(&((*pat).into())).unwrap();
                     writeln!(f, "\t- when tycking pattern ({}):", self.spans[prev])?;
@@ -1706,6 +1735,9 @@ impl std::fmt::Display for TyckCallStack<'_> {
                     let prev = self.scoped.textual.back(&((*term).into())).unwrap();
                     writeln!(f, "\t- when tycking term ({}):", self.spans[prev])?;
                     writeln!(f, "\t\t{}", truncated(term.ugly(&Formatter::new(&self.scoped))))?;
+                }
+                | TyckTask::Lub(_, _) => {
+                    writeln!(f, "\t- when computing least upper bound")?;
                 }
             }
         }

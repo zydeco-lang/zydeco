@@ -199,13 +199,7 @@ impl Package {
 
         // type-checking
         let PackageScoped { sources: _, spans, prim, arena: scoped } = pack;
-        let mut tycker = Tycker {
-            spans,
-            prim,
-            scoped,
-            statics: StaticsArena::new(&mut alloc),
-            call_stack: Default::default(),
-        };
+        let mut tycker = Tycker::new(spans, prim, scoped, &mut alloc);
         match tycker.run() {
             | Ok(()) => {}
             | Err(err) => {
