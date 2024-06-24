@@ -1642,7 +1642,7 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 };
                 // Todo: unroll abstract types
-                let scrut_ty_unroll = scrut_ty;
+                let scrut_ty_unroll = scrut_ty.unroll(tycker)?;
                 let mut matchers = Vec::new();
                 let mut arms_ty = Vec::new();
                 for su::Matcher { binder, tail } in arms {

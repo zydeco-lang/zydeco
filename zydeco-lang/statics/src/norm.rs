@@ -1,5 +1,5 @@
-use crate::*;
-use ss::*;
+use crate::{syntax::*, *};
+use zydeco_utils::arena::ArenaAccess;
 
 impl TypeId {
     pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> ResultKont<TypeId> {
@@ -148,5 +148,49 @@ impl TypeId {
                 }
             }
         }
+    }
+}
+
+impl TypeId {
+    pub fn unroll(self, tycker: &mut Tycker) -> ResultKont<TypeId> {
+        let kd = tycker.statics.annotations_type[&self].clone();
+        let res = match tycker.statics.types[&self].to_owned() {
+            | Type::Abst(abst) => {
+                match tycker.statics.seals.get(&abst) {
+                    | Some(ty) => {
+                        ty.unroll(tycker)?
+                    }
+                    | None => self,
+                }
+            }
+            | Type::App(ty) => {
+                // congruence rule
+                let App(ty1, ty2) = ty;
+                let ty1_ = ty1.unroll(tycker)?;
+                let ty2_ = ty2.unroll(tycker)?;
+                if ty1 == ty1_ && ty2 == ty2_ {
+                    self
+                } else {
+                    Alloc::alloc(tycker, App(ty1_, ty2_), kd)
+                }
+            }
+            | Type::Fill(_) // unchanged because terms with unfilled types can't be matched against
+            | Type::Var(_) // unchanged because type-variable-typed terms are abstract
+            | Type::Abs(_) // unchanged because type-abstration-typed terms are ill-formed
+            | Type::Thunk(_)
+            | Type::Ret(_)
+            | Type::Unit(_)
+            | Type::Int(_)
+            | Type::Char(_)
+            | Type::String(_)
+            | Type::OS(_) => self,
+            | Type::Arrow(_) 
+            | Type::Forall(_) 
+            | Type::Prod(_) 
+            | Type::Exists(_) => self,
+            | Type::Data(_) 
+            | Type::CoData(_) => self
+        };
+        Ok(res)
     }
 }
