@@ -2,7 +2,7 @@ use crate::*;
 use ss::*;
 
 impl TypeId {
-    pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> Result<TypeId> {
+    pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> ResultKont<TypeId> {
         let ty = tycker.statics.types[self].clone();
         match ty {
             | Type::Var(def) => {
@@ -110,7 +110,7 @@ impl TypeId {
                             Ok((ctor, ty_))
                         }
                     })
-                    .collect::<Result<im::Vector<_>>>()?;
+                    .collect::<ResultKont<im::Vector<_>>>()?;
                 if unchanged {
                     Ok(*self)
                 } else {
@@ -135,7 +135,7 @@ impl TypeId {
                             Ok((dtor, ty_))
                         }
                     })
-                    .collect::<Result<im::Vector<_>>>()?;
+                    .collect::<ResultKont<im::Vector<_>>>()?;
                 if unchanged {
                     Ok(*self)
                 } else {

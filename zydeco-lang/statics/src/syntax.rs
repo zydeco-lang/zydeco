@@ -211,12 +211,11 @@ mod impls_identifiers {
                 | TermAnnId::Compu(c, _) => c.into(),
             }
         }
-        pub fn as_term_static_or_err(self, f: impl FnOnce() -> TyckError) -> Result<AnnId> {
+        pub fn as_term_static(self) -> AnnId {
             match self.as_term() {
-                | TermId::Kind(k) => Ok(AnnId::Kind(k)),
-                | TermId::Type(t) => Ok(AnnId::Type(t)),
-                | TermId::Value(_) => Err(f()),
-                | TermId::Compu(_) => Err(f()),
+                | TermId::Kind(k) => AnnId::Kind(k),
+                | TermId::Type(t) => AnnId::Type(t),
+                | TermId::Value(_) | TermId::Compu(_) => unreachable!(),
             }
         }
         pub fn as_ann(self) -> AnnId {

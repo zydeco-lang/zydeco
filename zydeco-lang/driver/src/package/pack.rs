@@ -4,7 +4,7 @@ use super::err::{Result, ZydecoError};
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
-use zydeco_statics::{syntax::StaticsArena, TyckCallStack, Tycker};
+use zydeco_statics::Tycker;
 use zydeco_surface::{
     bitter::{syntax as b, DesugarOut, Desugarer},
     scoped::{syntax as sc, ResolveOut, Resolver},
@@ -202,11 +202,12 @@ impl Package {
         let mut tycker = Tycker::new(spans, prim, scoped, &mut alloc);
         match tycker.run() {
             | Ok(()) => {}
-            | Err(err) => {
-                Err(ZydecoError::TyckError(
-                    err.to_string(),
-                    TyckCallStack::new(&tycker).to_string(),
-                ))?;
+            | Err(()) => {
+                let mut s = String::new();
+                for err in tycker.errors.to_vec() {
+                    s += &format!("{}\n", tycker.error_output(err));
+                }
+                Err(ZydecoError::TyckErrors(s))?;
             }
         }
 

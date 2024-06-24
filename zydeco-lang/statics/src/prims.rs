@@ -57,12 +57,8 @@ impl Tycker {
 impl Tycker {
     pub fn register_prim_ty(
         &mut self, mut env: SEnv<()>, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
-    ) -> Result<SEnv<()>> {
-        let kd = env
-            .mk(syn_kd)
-            .tyck(self, Action::syn())?
-            .as_term_static_or_err(|| unreachable!())?
-            .as_kind();
+    ) -> ResultKont<SEnv<()>> {
+        let kd = env.mk(syn_kd).tyck(self, Action::syn())?.as_term_static().as_kind();
         let ty = Alloc::alloc(self, prim);
         self.statics.annotations_var.insert(def, kd.into());
         env.env += (def, ty.into());
@@ -70,7 +66,7 @@ impl Tycker {
     }
     pub fn register_prim_decl(
         &mut self, decl: su::AliasHead, id: &su::DeclId, mut env: SEnv<()>,
-    ) -> Result<SEnv<()>> {
+    ) -> ResultKont<SEnv<()>> {
         let su::AliasHead { binder, ty } = decl;
         let internal_or = self.scoped.exts.get(id).cloned();
         match internal_or {
@@ -122,12 +118,10 @@ impl Tycker {
             }
             | None => {
                 // the alias head is a primitive value that needs to be linked later
-                let Some(ty) = ty else { Err(TyckError::MissingAnnotation)? };
-                let ty = env
-                    .mk(ty)
-                    .tyck(self, Action::syn())?
-                    .as_term_static_or_err(|| unreachable!())?
-                    .as_type();
+                let Some(ty) = ty else {
+                    self.err(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                };
+                let ty = env.mk(ty).tyck(self, Action::syn())?.as_term_static().as_type();
                 let _ = env.mk(binder).tyck(self, Action::ana(ty.into()))?;
             }
         }

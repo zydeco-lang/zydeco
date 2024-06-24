@@ -368,6 +368,12 @@ mod impls {
             }
             Ok(())
         }
+        pub fn insert_or_replace(&mut self, id: Id, val: T) -> Option<T> {
+            self.map.insert(id, val)
+        }
+        pub fn remove(&mut self, id: &Id) -> Option<T> {
+            self.map.remove(id)
+        }
     }
 
     impl<Id, T> Index<&Id> for ArenaAssoc<Id, T>

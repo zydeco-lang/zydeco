@@ -17,8 +17,8 @@ pub enum ZydecoError {
     ParseError(String),
     #[error("Resolve error:\n\t{0}")]
     ResolveError(String),
-    #[error("Tyck error:\n\t{0}\n{1}")]
-    TyckError(String, String),
+    #[error("Tyck error:\n{0}")]
+    TyckErrors(String),
 }
 
 pub type Result<T> = std::result::Result<T, ZydecoError>;
