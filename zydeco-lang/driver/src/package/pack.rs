@@ -203,9 +203,14 @@ impl Package {
         match tycker.run() {
             | Ok(()) => {}
             | Err(()) => {
-                let mut s = String::new();
+                use std::collections::BTreeSet;
+                let mut bs = BTreeSet::new();
                 for err in tycker.errors.to_vec() {
-                    s += &format!("{}\n", tycker.error_output(err));
+                    bs.insert(format!("{}\n", tycker.error_output(err)));
+                }
+                let mut s = String::new();
+                for b in bs {
+                    s += &b;
                 }
                 s += &format!("Total: {} errors\n", tycker.errors.len());
                 Err(ZydecoError::TyckErrors(s))?;

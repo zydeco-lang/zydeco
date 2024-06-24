@@ -51,6 +51,7 @@ impl Tycker {
                     | Err(()) => {
                         // mark all decls in the group and those that depend on them unreachable
                         scc.obliviate(group);
+                        self.stack.clear();
                     }
                 }
             }
@@ -305,8 +306,7 @@ impl Tyck for SEnv<su::PatId> {
                 let su::Ann { tm, ty } = pat;
                 let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
                 // Fixme: is it true?
-                let _ty_ty = ty_out_ann.as_ann();
-                let ty_tm = match ty_out_ann {
+                let ty_tm: AnnId = match ty_out_ann {
                     | TermAnnId::Kind(kd) => kd.into(),
                     | TermAnnId::Type(ty, _) => ty.into(),
                     | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
@@ -352,8 +352,8 @@ impl Tyck for SEnv<su::PatId> {
                     | AnnId::Type(ty) => {
                         let vtype = tycker.vtype(&self.env);
                         let kd = tycker.statics.annotations_type[&ty].to_owned();
-                        let kd = Lub::lub(vtype, kd, tycker)?;
-                        kd.into()
+                        Lub::lub(vtype, kd, tycker)?;
+                        ty.into()
                     }
                 };
                 tycker.statics.annotations_var.insert(def, ann);
@@ -1114,6 +1114,7 @@ impl Tyck for SEnv<su::TermId> {
                                 }
                             }
                             | PatAnnId::Value(vpat, ty_1) => {
+                                // type arrow; vpat should not be used
                                 if vpat.syntactically_used(tycker) {
                                     tycker.err(
                                         TyckError::Expressivity(
@@ -1139,9 +1140,8 @@ impl Tyck for SEnv<su::TermId> {
                                 // kd_2 should be of ctype
                                 let ctype = tycker.ctype(&self.env);
                                 Lub::lub(ctype, kd_2, tycker)?;
-                                let kd = Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2), ());
-                                let arr = Alloc::alloc(tycker, ss::Arrow(ty_1, ty_2), kd);
-                                TermAnnId::Type(arr, kd)
+                                let arr = Alloc::alloc(tycker, ss::Arrow(ty_1, ty_2), ctype);
+                                TermAnnId::Type(arr, ctype)
                             }
                         }
                     }
@@ -1150,8 +1150,7 @@ impl Tyck for SEnv<su::TermId> {
                             tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
                         | AnnId::Kind(kd) => {
-                            let kd = tycker.statics.kinds[&kd].to_owned();
-                            match kd {
+                            match tycker.statics.kinds[&kd].to_owned() {
                                 | ss::Kind::Fill(fill) => {
                                     let out_ann = self.tyck(tycker, Action::syn())?;
                                     match out_ann {
@@ -1851,7 +1850,7 @@ impl Tyck for SEnv<su::TermId> {
                 todo!()
             }
             | Tm::Lit(lit) => {
-                fn check_again_ty(
+                fn check_against_ty(
                     tycker: &mut Tycker, switch: Switch<AnnId>, ty: ss::TypeId,
                 ) -> ResultKont<ss::TypeId> {
                     match switch {
@@ -1870,17 +1869,17 @@ impl Tyck for SEnv<su::TermId> {
                 let (lit, ty) = match lit {
                     | Lit::Int(i) => {
                         let ty = tycker.int(&self.env);
-                        let ty = check_again_ty(tycker, switch, ty)?;
+                        let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Int(i), ty)
                     }
                     | Lit::String(s) => {
                         let ty = tycker.string(&self.env);
-                        let ty = check_again_ty(tycker, switch, ty)?;
+                        let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::String(s), ty)
                     }
                     | Lit::Char(c) => {
                         let ty = tycker.char(&self.env);
-                        let ty = check_again_ty(tycker, switch, ty)?;
+                        let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Char(c), ty)
                     }
                 };

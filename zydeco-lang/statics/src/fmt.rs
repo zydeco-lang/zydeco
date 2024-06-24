@@ -76,6 +76,21 @@ impl Ugly for TypeId {
     }
 }
 
+impl Ugly for VPatId {
+    fn ugly(&self, f: &Formatter) -> String {
+        let vpat = &f.statics.vpats[self];
+        use ValuePattern as VPat;
+        match vpat {
+            | VPat::Hole(vpat) => vpat.ugly(f),
+            | VPat::Var(vpat) => vpat.ugly(f),
+            | VPat::Ctor(vpat) => vpat.ugly(f),
+            | VPat::Triv(vpat) => vpat.ugly(f),
+            | VPat::VCons(vpat) => vpat.ugly(f),
+            | VPat::TCons(vpat) => vpat.ugly(f),
+        }
+    }
+}
+
 impl Ugly for AnnId {
     fn ugly(&self, f: &Formatter) -> String {
         match self {
