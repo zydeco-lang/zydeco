@@ -324,27 +324,30 @@ impl Tyck for SEnv<su::PatId> {
                     }
                 }
             }
-            | Pat::Var(def) => match switch {
-                | Switch::Syn => {
-                    tycker.err(TyckError::MissingAnnotation, std::panic::Location::caller())?
-                }
-                | Switch::Ana(ann) => {
-                    let ann = match ann {
-                        | AnnId::Set => unreachable!(),
-                        | AnnId::Kind(kd) => kd.into(),
-                        | AnnId::Type(ty) => {
-                            let vtype = tycker.vtype(&self.env);
-                            let kd = tycker.statics.annotations_type[&ty].to_owned();
-                            let kd = Lub::lub(vtype, kd, tycker)?;
-                            kd.into()
-                        }
-                    };
-                    tycker.statics.annotations_var.insert(def, ann);
-                    let var = PatAnnId::mk_var(tycker, def, ann);
-                    let ctx = Context::singleton(def, ann);
-                    (var, ctx)
-                }
-            },
+            | Pat::Var(def) => {
+                let ann = match switch {
+                    | Switch::Syn => match tycker.statics.annotations_var.get(&def) {
+                        | Some(ann) => ann.to_owned(),
+                        | None => tycker
+                            .err(TyckError::MissingAnnotation, std::panic::Location::caller())?,
+                    },
+                    | Switch::Ana(ann) => ann,
+                };
+                let ann = match ann {
+                    | AnnId::Set => unreachable!(),
+                    | AnnId::Kind(kd) => kd.into(),
+                    | AnnId::Type(ty) => {
+                        let vtype = tycker.vtype(&self.env);
+                        let kd = tycker.statics.annotations_type[&ty].to_owned();
+                        let kd = Lub::lub(vtype, kd, tycker)?;
+                        kd.into()
+                    }
+                };
+                tycker.statics.annotations_var.insert(def, ann);
+                let var = PatAnnId::mk_var(tycker, def, ann);
+                let ctx = Context::singleton(def, ann);
+                (var, ctx)
+            }
             | Pat::Ctor(pat) => match switch {
                 | Switch::Syn => {
                     tycker.err(TyckError::MissingAnnotation, std::panic::Location::caller())?

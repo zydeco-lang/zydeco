@@ -19,6 +19,7 @@ pub mod tyck;
 pub use tyck::*;
 pub mod err;
 pub use err::*;
+pub mod fmt;
 
 pub(crate) use surface_syntax as su;
 pub(crate) use syntax as ss;

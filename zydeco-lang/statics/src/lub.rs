@@ -294,10 +294,10 @@ impl Lub for AnnId {
     type Out = AnnId;
 
     fn lub(self, other: Self, tycker: &mut Tycker) -> ResultKont<Self::Out> {
-        {
-            // administrative
-            tycker.stack.push_back(TyckTask::Lub(self, other));
-        }
+        // {
+        //     // administrative
+        //     tycker.stack.push_back(TyckTask::Lub(self, other));
+        // }
         let res = match (self, other) {
             | (AnnId::Set, AnnId::Set) => AnnId::Set,
             | (AnnId::Set, _) | (_, AnnId::Set) => {
@@ -315,10 +315,10 @@ impl Lub for AnnId {
                 ty.into()
             }
         };
-        {
-            // administrative
-            tycker.stack.pop_back();
-        }
+        // {
+        //     // administrative
+        //     tycker.stack.pop_back();
+        // }
         Ok(res)
     }
 }

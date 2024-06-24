@@ -40,8 +40,8 @@ pub struct TyckErrorEntry {
 impl Tycker {
     pub fn error_output(&self, TyckErrorEntry { error, blame, stack }: TyckErrorEntry) -> String {
         use zydeco_surface::scoped::fmt::*;
-        let budget = 80;
-        // let budget = usize::MAX;
+        // let budget = 80;
+        let budget = usize::MAX;
         let truncated = |mut s: String| {
             if s.len() > budget {
                 s.truncate(budget - 3);
@@ -51,7 +51,6 @@ impl Tycker {
         };
 
         let mut s = String::new();
-        s += &format!("Error: {}\n", error);
         s += &format!("Blame: {}\n", blame);
         for task in stack.iter() {
             match task {
@@ -82,21 +81,59 @@ impl Tycker {
                     s += &format!("\t- when tycking execution ({}):\n", self.spans[prev]);
                     s += &format!("\t\t{}\n", truncated(exec.ugly(&Formatter::new(&self.scoped))));
                 }
-                | TyckTask::Pat(pat, _) => {
+                | TyckTask::Pat(pat, switch) => {
                     let prev = self.scoped.textual.back(&((*pat).into())).unwrap();
                     s += &format!("\t- when tycking pattern ({}):\n", self.spans[prev]);
-                    s += &format!("\t\t{}\n", truncated(pat.ugly(&Formatter::new(&self.scoped))));
+                    s +=
+                        &format!("\t\t>> {}\n", truncated(pat.ugly(&Formatter::new(&self.scoped))));
+                    match switch {
+                        | Switch::Syn => {
+                            s += "\t\t<< (syn)\n";
+                        }
+                        | Switch::Ana(ann) => {
+                            use crate::fmt::*;
+                            s += &format!(
+                                "\t\t<< (ana) {}\n",
+                                truncated(ann.ugly(&Formatter::new(&self.scoped, &self.statics)))
+                            );
+                        }
+                    }
                 }
-                | TyckTask::Term(term, _) => {
+                | TyckTask::Term(term, switch) => {
                     let prev = self.scoped.textual.back(&((*term).into())).unwrap();
                     s += &format!("\t- when tycking term ({}):\n", self.spans[prev]);
-                    s += &format!("\t\t{}\n", truncated(term.ugly(&Formatter::new(&self.scoped))));
+                    s += &format!(
+                        "\t\t>> {}\n",
+                        truncated(term.ugly(&Formatter::new(&self.scoped)))
+                    );
+                    match switch {
+                        | Switch::Syn => {
+                            s += "\t\t<< (syn)\n";
+                        }
+                        | Switch::Ana(ann) => {
+                            use crate::fmt::*;
+                            s += &format!(
+                                "\t\t<< (ana) {}\n",
+                                truncated(ann.ugly(&Formatter::new(&self.scoped, &self.statics)))
+                            );
+                        }
+                    }
                 }
-                | TyckTask::Lub(_, _) => {
-                    s += "\t- when computing least upper bound\n";
+                | TyckTask::Lub(lhs, rhs) => {
+                    use crate::fmt::*;
+                    s += "\t- when computing least upper bound:\n";
+                    s += &format!(
+                        "\t\t>> {}\n",
+                        truncated(lhs.ugly(&Formatter::new(&self.scoped, &self.statics)))
+                    );
+                    s += &format!(
+                        "\t\t>> {}\n",
+                        truncated(rhs.ugly(&Formatter::new(&self.scoped, &self.statics)))
+                    );
                 }
             }
         }
+        s += &format!("Error: {}\n", error);
         s
     }
 }
