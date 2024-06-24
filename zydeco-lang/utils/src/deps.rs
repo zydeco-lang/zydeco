@@ -70,15 +70,15 @@ impl<Id: Hash + Eq + Clone> SrcGraph<Id> {
     pub fn new() -> Self {
         Self { map: HashMap::new() }
     }
-    /// add more dependencies to a node
-    pub fn add(&mut self, id: Id, deps: impl IntoIterator<Item = Id>) {
-        if let Some(ds) = self.map.get_mut(&id) {
-            ds.extend(deps);
+    /// add more sources to a node
+    pub fn add(&mut self, id: Id, srcs: impl IntoIterator<Item = Id>) {
+        if let Some(ss) = self.map.get_mut(&id) {
+            ss.extend(srcs);
         } else {
-            self.map.insert(id, deps.into_iter().collect());
+            self.map.insert(id, srcs.into_iter().collect());
         }
     }
-    /// query the dependencies of a node
+    /// query the sources of a node
     pub fn query(&self, id: &Id) -> Vec<Id> {
         self.map.get(id).map(|s| s.iter().cloned().collect::<Vec<_>>()).unwrap_or_default()
     }
@@ -86,10 +86,10 @@ impl<Id: Hash + Eq + Clone> SrcGraph<Id> {
     pub fn roots(&self) -> HashSet<Id> {
         let mut roots = self.map.keys().cloned().collect::<HashSet<_>>();
         for (_, src) in &self.map {
-            // for s in src {
-            //     roots.remove(s);
-            // }
-            roots = roots.difference(src).cloned().collect();
+            for s in src {
+                roots.remove(s);
+            }
+            // roots = roots.difference(src).cloned().collect();
         }
         roots
     }

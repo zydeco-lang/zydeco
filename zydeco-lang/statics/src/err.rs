@@ -29,4 +29,6 @@ pub enum TyckError {
     MissingMonad,
 }
 
+// Todo: make error non-local; capture the tyck call stack; dump env and relavent arena if needed
+
 pub type Result<T> = std::result::Result<T, TyckError>;

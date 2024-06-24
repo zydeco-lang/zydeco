@@ -12,12 +12,14 @@ pub struct Tycker {
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
     /// call stack for debugging tycker and error tracking
-    pub call_stack: Vec<TyckTask>,
+    pub call_stack: im::Vector<TyckTask>,
+    // Todo: add a writer monad for error handling
 }
 
 impl Tycker {
     pub fn run(&mut self) -> Result<()> {
         let mut scc = self.scoped.top.clone();
+        // Todo: tycker should be able to continue on non-dependent errors
         let mut env = SEnv::new(());
         loop {
             let groups = scc.top();
@@ -47,7 +49,7 @@ pub enum Switch<Ann> {
     Ana(Ann),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum TyckTask {
     DeclHead(su::DeclId),
     DeclUni(su::DeclId),
@@ -118,12 +120,12 @@ impl<'decl> SccDeclarations<'decl> {
                     | Decl::AliasHead(decl) => {
                         {
                             // administrative
-                            tycker.call_stack.push(TyckTask::DeclHead(*id));
+                            tycker.call_stack.push_back(TyckTask::DeclHead(*id));
                         }
                         env = tycker.register_prim_decl(decl, id, env)?;
                         {
                             // administrative
-                            tycker.call_stack.pop();
+                            tycker.call_stack.pop_back();
                         }
                         Ok(env)
                     }
@@ -143,7 +145,7 @@ impl<'decl> SccDeclarations<'decl> {
     fn tyck_uni_ref(id: &su::DeclId, tycker: &mut Tycker, mut env: SEnv<()>) -> Result<SEnv<()>> {
         {
             // administrative
-            tycker.call_stack.push(TyckTask::DeclUni(*id));
+            tycker.call_stack.push_back(TyckTask::DeclUni(*id));
         }
 
         let su::Declaration::AliasBody(decl) = tycker.scoped.decls[id].clone() else {
@@ -177,7 +179,7 @@ impl<'decl> SccDeclarations<'decl> {
 
         {
             // administrative
-            tycker.call_stack.pop();
+            tycker.call_stack.pop_back();
         }
         Ok(env)
     }
@@ -188,7 +190,9 @@ impl<'decl> SccDeclarations<'decl> {
 
         {
             // administrative
-            tycker.call_stack.push(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
+            tycker
+                .call_stack
+                .push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
         }
 
         let mut binder_map = HashMap::new();
@@ -238,7 +242,7 @@ impl<'decl> SccDeclarations<'decl> {
 
         {
             // administrative
-            tycker.call_stack.pop();
+            tycker.call_stack.pop_back();
         }
         Ok(env)
     }
@@ -251,7 +255,7 @@ impl Tyck for SEnv<su::PatId> {
     fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> Result<Self::Out> {
         {
             // administrative
-            tycker.call_stack.push(TyckTask::Pat(self.inner, switch));
+            tycker.call_stack.push_back(TyckTask::Pat(self.inner, switch));
         }
 
         use su::Pattern as Pat;
@@ -395,7 +399,7 @@ impl Tyck for SEnv<su::PatId> {
 
         {
             // administrative
-            tycker.call_stack.pop();
+            tycker.call_stack.pop_back();
         }
         Ok(pat_ctx)
     }
@@ -405,10 +409,11 @@ impl SEnv<ss::TPatId> {
     pub fn tyck_assign(
         &self, tycker: &mut Tycker, Action { switch: _ }: Action<AnnId>, assignee: ss::TypeId,
     ) -> Result<SEnv<()>> {
+        use ss::TypePattern as TPat;
         let pat = tycker.statics.tpats[&self.inner].to_owned();
         match pat {
-            | ss::TypePattern::Hole(_) => Ok(self.mk(())),
-            | ss::TypePattern::Var(def) => {
+            | TPat::Hole(_) => Ok(self.mk(())),
+            | TPat::Var(def) => {
                 // defensive programming: def should be in ctx and should be a kind;
                 let def_kd = {
                     let ann = tycker.statics.annotations_var[&def];
@@ -435,7 +440,7 @@ impl Tyck for SEnv<su::TermId> {
     fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> Result<Self::Out> {
         {
             // administrative
-            tycker.call_stack.push(TyckTask::Term(self.inner, switch));
+            tycker.call_stack.push_back(TyckTask::Term(self.inner, switch));
         }
 
         use su::Term as Tm;
@@ -1411,17 +1416,19 @@ impl Tyck for SEnv<su::TermId> {
             | Tm::Match(term) => {
                 let su::Match { scrut, arms } = term;
                 let scrut_out_ann = self.mk(scrut).tyck(tycker, Action::syn())?;
-                let (scrut, scrut_ty_id) = match scrut_out_ann {
+                let (scrut, scrut_ty) = match scrut_out_ann {
                     | TermAnnId::Value(scrut, ty) => (scrut, ty),
                     | TermAnnId::Kind(_) | TermAnnId::Type(_, _) | TermAnnId::Compu(_, _) => {
                         Err(TyckError::SortMismatch)?
                     }
                 };
+                // Todo: unroll abstract types
+                let scrut_ty_unroll = scrut_ty;
                 let mut matchers = Vec::new();
                 let mut arms_ty = Vec::new();
                 for su::Matcher { binder, tail } in arms {
                     let (binder_out_ann, _ctx) =
-                        self.mk(binder).tyck(tycker, Action::ana(scrut_ty_id.into()))?;
+                        self.mk(binder).tyck(tycker, Action::ana(scrut_ty_unroll.into()))?;
                     // Todo: consider exists
                     let PatAnnId::Value(binder, _ty) = binder_out_ann else {
                         Err(TyckError::SortMismatch)?
@@ -1447,6 +1454,7 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 }
                 let whole_term = Alloc::alloc(tycker, ss::Match { scrut, arms: matchers });
+                // Note: use hole
                 if arms_ty.is_empty() {
                     match switch {
                         | Switch::Syn => Err(TyckError::MissingAnnotation)?,
@@ -1631,12 +1639,10 @@ impl Tyck for SEnv<su::TermId> {
                 tycker.statics.annotations_compu.insert(compu, ty);
             }
         }
-        // Debug:
-        // println!("kinds: {:#?}", tycker.statics.kinds);
-        // println!("types: {:#?}", tycker.statics.types);
+
         {
             // administrative
-            tycker.call_stack.pop();
+            tycker.call_stack.pop_back();
         }
         Ok(out_ann)
     }
@@ -1645,7 +1651,13 @@ impl Tyck for SEnv<su::TermId> {
 pub struct TyckCallStack<'arena> {
     pub spans: &'arena SpanArena,
     pub scoped: &'arena ScopedArena,
-    pub stack: Vec<TyckTask>,
+    pub stack: im::Vector<TyckTask>,
+}
+impl<'arena> TyckCallStack<'arena> {
+    pub fn new(tycker: &'arena Tycker) -> Self {
+        let Tycker { spans, scoped, call_stack, .. } = tycker;
+        Self { spans, scoped, stack: call_stack.clone() }
+    }
 }
 
 impl std::fmt::Display for TyckCallStack<'_> {

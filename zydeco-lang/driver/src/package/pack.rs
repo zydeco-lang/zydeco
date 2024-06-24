@@ -198,25 +198,20 @@ impl Package {
         // }
 
         // type-checking
-        let PackageScoped { sources, spans, prim, arena: scoped } = pack;
+        let PackageScoped { sources: _, spans, prim, arena: scoped } = pack;
         let mut tycker = Tycker {
             spans,
             prim,
             scoped,
             statics: StaticsArena::new(&mut alloc),
-            call_stack: Vec::new(),
+            call_stack: Default::default(),
         };
         match tycker.run() {
             | Ok(()) => {}
             | Err(err) => {
                 Err(ZydecoError::TyckError(
                     err.to_string(),
-                    TyckCallStack {
-                        spans: &tycker.spans,
-                        scoped: &tycker.scoped,
-                        stack: tycker.call_stack,
-                    }
-                    .to_string(),
+                    TyckCallStack::new(&tycker).to_string(),
                 ))?;
             }
         }
