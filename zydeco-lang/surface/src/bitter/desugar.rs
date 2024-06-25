@@ -619,13 +619,12 @@ impl Desugar for t::GenBind<t::TermId> {
         let prev = bindee.into();
         // binder
         let binder = binder.desugar(desugarer);
-        // bindee & ty -> ann
         let bindee = bindee.desugar(desugarer);
+        // ty -> ann
         let ty = ty.map(|ty| ty.desugar(desugarer));
-        let bindee = if let Some(ty) = ty {
-            Alloc::alloc(desugarer, b::Ann { tm: bindee, ty }.into(), prev)
-        } else {
-            bindee
+        let mut ann = match ty {
+            | Some(ty) => ty,
+            | None => Alloc::alloc(desugarer, b::Hole.into(), prev),
         };
         // params
         let params = params.map(|params| params.desugar(desugarer));
@@ -635,14 +634,17 @@ impl Desugar for t::GenBind<t::TermId> {
             for param in params.into_iter().rev() {
                 match param {
                     | b::CoPatternItem::Pat(pat) => {
-                        binding = Alloc::alloc(desugarer, b::Abs(pat, binding).into(), prev)
+                        binding = Alloc::alloc(desugarer, b::Abs(pat, binding).into(), prev);
+                        let tpat = pat.deep_clone(desugarer);
+                        ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), prev);
                     }
                     | b::CoPatternItem::Dtor(dtor) => {
                         binding = Alloc::alloc(
                             desugarer,
                             b::CoMatch { arms: vec![b::CoMatcher { dtor, tail: binding }] }.into(),
                             prev,
-                        )
+                        );
+                        ann = Alloc::alloc(desugarer, b::Hole.into(), prev);
                     }
                 }
             }
@@ -655,8 +657,12 @@ impl Desugar for t::GenBind<t::TermId> {
         // add thunk?
         if rec || comp {
             binding = Alloc::alloc(desugarer, b::Thunk(binding).into(), prev);
+            let thunk = desugarer.thunk(prev);
+            ann = Alloc::alloc(desugarer, b::App(thunk, ann).into(), prev);
         }
-        (binder, binding)
+        // binding & ann -> anno
+        let anno = Alloc::alloc(desugarer, b::Ann { tm: binding, ty: ann }.into(), prev);
+        (binder, anno)
     }
 }
 

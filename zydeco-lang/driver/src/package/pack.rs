@@ -206,7 +206,7 @@ impl Package {
                 use std::collections::BTreeSet;
                 let mut bs = BTreeSet::new();
                 for err in tycker.errors.to_vec() {
-                    bs.insert(format!("{}\n", tycker.error_output(err)));
+                    bs.insert(format!("{}\n", tycker.error_entry_output(err)));
                 }
                 let mut s = String::new();
                 for b in bs {

@@ -1,31 +1,18 @@
 use crate::{syntax::*, *};
-use thiserror::Error;
 
-// Todo: writer monad instead of error monad
-
-#[derive(Error, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub enum TyckError {
-    #[error("Missing annotation")]
     MissingAnnotation,
-    #[error("Sort mismatch")]
     SortMismatch,
-    #[error("Kind mismatch")]
     KindMismatch,
-    #[error("Type mismatch")]
-    TypeMismatch,
-    #[error("Missing data arm: {0:?}")]
+    TypeMismatch { expected: TypeId, found: TypeId },
+    TypeExpected { expected: String, found: TypeId },
     MissingDataArm(CtorName),
-    #[error("Missing codata arm: {0:?}")]
     MissingCoDataArm(DtorName),
-    #[error("Non-exhaustive data arms: {0:?}")]
     NonExhaustiveCoDataArms(im::HashMap<DtorName, TypeId>),
-    #[error("{0}")]
     Expressivity(&'static str),
-    #[error("Multiple monad implementations")]
     MultipleMonads,
-    #[error("Neither monad nor algebra")]
     NeitherMonadNorAlgebra,
-    #[error("Missing monad")]
     MissingMonad,
 }
 
@@ -38,7 +25,41 @@ pub struct TyckErrorEntry {
 }
 
 impl Tycker {
-    pub fn error_output(&self, TyckErrorEntry { error, blame, stack }: TyckErrorEntry) -> String {
+    fn error_output(&self, error: TyckError) -> String {
+        match error {
+            | TyckError::MissingAnnotation => format!("Missing annotation"),
+            | TyckError::SortMismatch => format!("Sort mismatch"),
+            | TyckError::KindMismatch => format!("Kind mismatch"),
+            | TyckError::TypeMismatch { expected, found } => {
+                use crate::fmt::*;
+                format!(
+                    "Type mismatch: expected `{}`, found `{}`",
+                    expected.ugly(&Formatter::new(&self.scoped, &self.statics)),
+                    found.ugly(&Formatter::new(&self.scoped, &self.statics))
+                )
+            }
+            | TyckError::TypeExpected { expected, found } => {
+                use crate::fmt::*;
+                format!(
+                    "Type expected: {}, found `{}`",
+                    expected,
+                    found.ugly(&Formatter::new(&self.scoped, &self.statics))
+                )
+            }
+            | TyckError::MissingDataArm(ctor) => format!("Missing data arm: {:?}", ctor),
+            | TyckError::MissingCoDataArm(dtor) => format!("Missing codata arm: {:?}", dtor),
+            | TyckError::NonExhaustiveCoDataArms(arms) => {
+                format!("Non-exhaustive data arms: {:?}", arms)
+            }
+            | TyckError::Expressivity(s) => format!("{}", s),
+            | TyckError::MultipleMonads => format!("Multiple monad implementations"),
+            | TyckError::NeitherMonadNorAlgebra => format!("Neither monad nor algebra"),
+            | TyckError::MissingMonad => format!("Missing monad"),
+        }
+    }
+    pub fn error_entry_output(
+        &self, TyckErrorEntry { error, blame, stack }: TyckErrorEntry,
+    ) -> String {
         use zydeco_surface::scoped::fmt::*;
         // let budget = 80;
         let budget = usize::MAX;
@@ -133,7 +154,7 @@ impl Tycker {
                 }
             }
         }
-        s += &format!("Error: {}\n", error);
+        s += &format!("Error: {}\n", self.error_output(error));
         s
     }
 }

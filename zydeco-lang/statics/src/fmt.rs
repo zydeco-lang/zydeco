@@ -31,7 +31,7 @@ impl Ugly for KindId {
         let kd = &f.statics.kinds[self];
         match kd {
             | Kind::Fill(fill) => {
-                format!("[fill {}]", fill.concise())
+                format!("[fill-kd {}]", fill.concise())
             }
             | Kind::VType(VType) => "VType".to_string(),
             | Kind::CType(CType) => "CType".to_string(),
@@ -56,7 +56,9 @@ impl Ugly for TypeId {
         match ty {
             | Type::Var(def) => def.ugly(f),
             | Type::Abst(abst) => abst.ugly(f),
-            | Type::Fill(fill) => fill.ugly(f),
+            | Type::Fill(fill) => {
+                format!("[fill-ty {}]", fill.concise())
+            }
             | Type::Abs(ty) => ty.ugly(f),
             | Type::App(ty) => ty.ugly(f),
             | Type::Thunk(ThunkTy) => format!("Thunk"),
@@ -113,13 +115,6 @@ impl Ugly for AbstId {
                 format!("[abst {}]", self.concise())
             }
         }
-    }
-}
-
-impl Ugly for FillId {
-    fn ugly(&self, _f: &Formatter) -> String {
-        // let site = &f.statics.fills[self];
-        format!("[fill {}]", self.concise())
     }
 }
 

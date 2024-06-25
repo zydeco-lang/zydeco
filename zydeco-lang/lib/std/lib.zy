@@ -4,8 +4,8 @@ pub extern def CType end
 /// Thunk and Ret
 pub extern def Thunk (B : CType) : VType end
 pub extern def Ret (A : VType) : CType end
-pub alias U (B : CType) = Thunk B end
-pub alias F (A : VType) = Ret A end
+pub alias U = Thunk end
+pub alias F = Ret end
 
 /// primitive base types
 

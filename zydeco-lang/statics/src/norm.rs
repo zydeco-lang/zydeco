@@ -2,28 +2,31 @@ use crate::{syntax::*, *};
 use zydeco_utils::arena::ArenaAccess;
 
 impl TypeId {
-    pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> ResultKont<TypeId> {
+    pub fn subst_env(&self, tycker: &mut Tycker, env: &Context<AnnId>) -> ResultKont<TypeId> {
         let kd = tycker.statics.annotations_type[self].clone();
         let ty = tycker.statics.types[self].clone();
         match ty {
-            | Type::Var(def) => {
-                if def == var {
-                    Ok(with)
-                } else {
-                    Ok(*self)
-                }
-            }
+            | Type::Var(def) => match env.get(&def) {
+                | Some(ann) => match ann {
+                    | AnnId::Set | AnnId::Kind(_) => {
+                        tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                    | AnnId::Type(with) => Ok(*with),
+                },
+                | None => Ok(*self),
+            },
             | Type::Abst(_) => Ok(*self),
-            | Type::Fill(_) => unreachable!(),
+            // Todo: figure out what to do
+            | Type::Fill(_) => Ok(*self),
             | Type::Abs(abs) => {
                 let Abs(tpat, ty) = abs;
                 let (def, _) = tycker.extract_tpat(tpat);
                 if let Some(def) = def {
-                    if def == var {
+                    if let Some(_with) = env.get(&def) {
                         unreachable!()
                     }
                 }
-                let ty_ = ty.subst(tycker, var, with)?;
+                let ty_ = ty.subst_env(tycker, env)?;
                 if ty == ty_ {
                     Ok(*self)
                 } else {
@@ -32,8 +35,8 @@ impl TypeId {
             }
             | Type::App(app) => {
                 let App(ty1, ty2) = app;
-                let ty1_ = ty1.subst(tycker, var, with)?;
-                let ty2_ = ty2.subst(tycker, var, with)?;
+                let ty1_ = ty1.subst_env(tycker, env)?;
+                let ty2_ = ty2.subst_env(tycker, env)?;
                 if ty1 == ty1_ && ty2 == ty2_ {
                     Ok(*self)
                 } else {
@@ -49,8 +52,8 @@ impl TypeId {
             | Type::OS(_) => Ok(*self),
             | Type::Arrow(arr) => {
                 let Arrow(ty1, ty2) = arr;
-                let ty1_ = ty1.subst(tycker, var, with)?;
-                let ty2_ = ty2.subst(tycker, var, with)?;
+                let ty1_ = ty1.subst_env(tycker, env)?;
+                let ty2_ = ty2.subst_env(tycker, env)?;
                 if ty1 == ty1_ && ty2 == ty2_ {
                     Ok(*self)
                 } else {
@@ -61,11 +64,11 @@ impl TypeId {
                 let Forall(tpat, ty) = forall;
                 let (def, _) = tycker.extract_tpat(tpat);
                 if let Some(def) = def {
-                    if def == var {
+                    if let Some(_with) = env.get(&def) {
                         unreachable!()
                     }
                 }
-                let ty_ = ty.subst(tycker, var, with)?;
+                let ty_ = ty.subst_env(tycker, env)?;
                 if ty == ty_ {
                     Ok(*self)
                 } else {
@@ -74,8 +77,8 @@ impl TypeId {
             }
             | Type::Prod(prod) => {
                 let Prod(ty1, ty2) = prod;
-                let ty1_ = ty1.subst(tycker, var, with)?;
-                let ty2_ = ty2.subst(tycker, var, with)?;
+                let ty1_ = ty1.subst_env(tycker, env)?;
+                let ty2_ = ty2.subst_env(tycker, env)?;
                 if ty1 == ty1_ && ty2 == ty2_ {
                     Ok(*self)
                 } else {
@@ -86,11 +89,11 @@ impl TypeId {
                 let Exists(tpat, ty) = exists;
                 let (def, _) = tycker.extract_tpat(tpat);
                 if let Some(def) = def {
-                    if def == var {
+                    if let Some(_with) = env.get(&def) {
                         unreachable!()
                     }
                 }
-                let ty_ = ty.subst(tycker, var, with)?;
+                let ty_ = ty.subst_env(tycker, env)?;
                 if ty == ty_ {
                     Ok(*self)
                 } else {
@@ -103,7 +106,7 @@ impl TypeId {
                 let arms_ = arms
                     .into_iter()
                     .map(|(ctor, ty)| {
-                        let ty_ = ty.subst(tycker, var, with)?;
+                        let ty_ = ty.subst_env(tycker, env)?;
                         if ty == ty_ {
                             Ok((ctor, ty))
                         } else {
@@ -117,8 +120,8 @@ impl TypeId {
                 } else {
                     let d = Data { arms: arms_.iter().cloned().collect() };
                     let data_ = tycker.statics.datas.defs.alloc(arms_);
-                    tycker.statics.datas.tbls.insert(data_, d.to_owned());
-                    tycker.statics.datas.eqs.insert(d, data_);
+                    tycker.statics.datas.tbls.insert_or_replace(data_, d.to_owned());
+                    tycker.statics.datas.eqs.insert_or_replace(d, data_);
                     Ok(Alloc::alloc(tycker, data_, kd))
                 }
             }
@@ -128,7 +131,7 @@ impl TypeId {
                 let arms_ = arms
                     .into_iter()
                     .map(|(dtor, ty)| {
-                        let ty_ = ty.subst(tycker, var, with)?;
+                        let ty_ = ty.subst_env(tycker, env)?;
                         if ty == ty_ {
                             Ok((dtor, ty))
                         } else {
@@ -142,12 +145,15 @@ impl TypeId {
                 } else {
                     let d = CoData { arms: arms_.iter().cloned().collect() };
                     let coda_ = tycker.statics.codatas.defs.alloc(arms_);
-                    tycker.statics.codatas.tbls.insert(coda_, d.to_owned());
-                    tycker.statics.codatas.eqs.insert(d, coda_);
+                    tycker.statics.codatas.tbls.insert_or_replace(coda_, d.to_owned());
+                    tycker.statics.codatas.eqs.insert_or_replace(d, coda_);
                     Ok(Alloc::alloc(tycker, coda_, kd))
                 }
             }
         }
+    }
+    pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> ResultKont<TypeId> {
+        self.subst_env(tycker, &Context::singleton(var, with.into()))
     }
 }
 
@@ -167,12 +173,11 @@ impl TypeId {
                 // congruence rule
                 let App(ty1, ty2) = ty;
                 let ty1_ = ty1.unroll(tycker)?;
-                let ty2_ = ty2.unroll(tycker)?;
-                // Todo: normalize
-                if ty1 == ty1_ && ty2 == ty2_ {
+                if ty1 == ty1_ {
                     self
                 } else {
-                    Alloc::alloc(tycker, App(ty1_, ty2_), kd)
+                    let app = Alloc::alloc(tycker, App(ty1_, ty2), kd);
+                    app.normalize(tycker, kd)?
                 }
             }
             | Type::Fill(_) // unchanged because terms with unfilled types can't be matched against
@@ -185,16 +190,61 @@ impl TypeId {
             | Type::Char(_)
             | Type::String(_)
             | Type::OS(_) => self,
-            | Type::Arrow(_) 
-            | Type::Forall(_) 
-            | Type::Prod(_) 
+            | Type::Arrow(_)
+            | Type::Forall(_)
+            | Type::Prod(_)
             | Type::Exists(_) => self,
-            | Type::Data(_) 
+            | Type::Data(_)
             | Type::CoData(_) => self
         };
         Ok(res)
     }
 }
 
-// Todo: normalize
-
+impl TypeId {
+    pub fn normalize(self, tycker: &mut Tycker, kd: KindId) -> ResultKont<TypeId> {
+        let res = match tycker.statics.types[&self].to_owned() {
+            | Type::App(app) => {
+                let App(ty1, ty2) = app;
+                ty1.normalize_app(tycker, ty2, kd)?
+            }
+            | Type::Var(_)
+            | Type::Abst(_)
+            | Type::Fill(_)
+            | Type::Abs(_)
+            | Type::Thunk(_)
+            | Type::Ret(_)
+            | Type::Unit(_)
+            | Type::Int(_)
+            | Type::Char(_)
+            | Type::String(_)
+            | Type::OS(_)
+            | Type::Arrow(_)
+            | Type::Forall(_)
+            | Type::Prod(_)
+            | Type::Exists(_)
+            | Type::Data(_)
+            | Type::CoData(_) => self,
+        };
+        Ok(res)
+    }
+    pub fn normalize_app(
+        self, tycker: &mut Tycker, a_ty: TypeId, kd: KindId,
+    ) -> ResultKont<TypeId> {
+        let res = match tycker.statics.types[&self].to_owned() {
+            | ss::Type::Abs(abs) => {
+                // if f_ty is an abstraction, apply it
+                let ss::Abs(binder, body_ty) = abs;
+                let (def, _) = tycker.extract_tpat(binder);
+                let body_ty_subst =
+                    if let Some(def) = def { body_ty.subst(tycker, def, a_ty)? } else { body_ty };
+                body_ty_subst
+            }
+            | _ => {
+                // else, the app is already normalized
+                Alloc::alloc(tycker, ss::App(self, a_ty), kd)
+            }
+        };
+        Ok(res)
+    }
+}
