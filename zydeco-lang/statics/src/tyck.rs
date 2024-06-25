@@ -525,6 +525,48 @@ impl Tyck for SEnv<su::TermId> {
             tycker.stack.push_back(TyckTask::Term(self.inner, switch));
         }
 
+        // check if we're analyzing against an unfilled type
+        match switch {
+            | Switch::Syn => {}
+            | Switch::Ana(ana) => match ana {
+                | AnnId::Set => {}
+                | AnnId::Kind(kd) => match tycker.statics.kinds[&kd].to_owned() {
+                    | ss::Kind::Fill(fill) => match self.tyck(tycker, Action::syn())? {
+                        | TermAnnId::Type(ty, kd) => {
+                            tycker.statics.solus.insert(fill, kd.into());
+                            // administrative
+                            tycker.stack.pop_back();
+                            return Ok(TermAnnId::Type(ty, kd));
+                        }
+                        | TermAnnId::Kind(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                            tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
+                        }
+                    },
+                    | _ => {}
+                },
+                | AnnId::Type(ty) => match tycker.statics.types[&ty].to_owned() {
+                    | ss::Type::Fill(fill) => match self.tyck(tycker, Action::syn())? {
+                        | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
+                            tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
+                        }
+                        | TermAnnId::Value(v, _) => {
+                            tycker.statics.solus.insert(fill, ty.into());
+                            // administrative
+                            tycker.stack.pop_back();
+                            return Ok(TermAnnId::Value(v, ty));
+                        }
+                        | TermAnnId::Compu(c, ty) => {
+                            tycker.statics.solus.insert(fill, ty.into());
+                            // administrative
+                            tycker.stack.pop_back();
+                            return Ok(TermAnnId::Compu(c, ty));
+                        }
+                    },
+                    | _ => {}
+                },
+            },
+        }
+
         use su::Term as Tm;
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
             | Tm::Internal(_) => unreachable!(),
@@ -1616,7 +1658,8 @@ impl Tyck for SEnv<su::TermId> {
                 let AnnId::Type(ana_ty) = ana_ty else {
                     tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
-                let ss::Type::Data(data_id) = &tycker.statics.types[&ana_ty] else {
+                let ana_ty_unroll = ana_ty.unroll(tycker)?;
+                let ss::Type::Data(data_id) = &tycker.statics.types[&ana_ty_unroll] else {
                     tycker.err(TyckError::TypeMismatch, std::panic::Location::caller())?
                 };
                 let ss::Data { arms } = &tycker.statics.datas.tbls[data_id];

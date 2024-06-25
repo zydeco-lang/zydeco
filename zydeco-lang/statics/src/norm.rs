@@ -168,6 +168,7 @@ impl TypeId {
                 let App(ty1, ty2) = ty;
                 let ty1_ = ty1.unroll(tycker)?;
                 let ty2_ = ty2.unroll(tycker)?;
+                // Todo: normalize
                 if ty1 == ty1_ && ty2 == ty2_ {
                     self
                 } else {
@@ -194,3 +195,6 @@ impl TypeId {
         Ok(res)
     }
 }
+
+// Todo: normalize
+
