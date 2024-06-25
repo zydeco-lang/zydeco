@@ -64,13 +64,19 @@ impl Desugar for t::DeclId {
                 // params & body -> abs term
                 let params = params.desugar(desugarer);
                 let mut abs = body;
+                let mut ann = desugarer.vtype(self.into());
                 for param in params.into_iter().rev() {
                     abs = Alloc::alloc(desugarer, b::Abs(param, abs).into(), self.into());
+                    let tpat = param.deep_clone(desugarer);
+                    ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), self.into());
                 }
                 // abs -> sealed
                 let sealed = Alloc::alloc(desugarer, b::Sealed(abs).into(), self.into());
+                // sealed & ann -> anno
+                let anno =
+                    Alloc::alloc(desugarer, b::Ann { tm: sealed, ty: ann }.into(), self.into());
                 // pat & sealed -> alias
-                b::AliasBody { binder: pat, bindee: sealed }.into()
+                b::AliasBody { binder: pat, bindee: anno }.into()
             }
             | Decl::CoDataDef(decl) => {
                 let t::CoDataDef { name, params, def: body } = decl;
@@ -82,13 +88,19 @@ impl Desugar for t::DeclId {
                 // params & body -> abs term
                 let params = params.desugar(desugarer);
                 let mut abs = body;
+                let mut ann = desugarer.ctype(self.into());
                 for param in params.into_iter().rev() {
                     abs = Alloc::alloc(desugarer, b::Abs(param, abs).into(), self.into());
+                    let tpat = param.deep_clone(desugarer);
+                    ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), self.into());
                 }
                 // abs -> sealed
                 let sealed = Alloc::alloc(desugarer, b::Sealed(abs).into(), self.into());
+                // sealed & ann -> anno
+                let anno =
+                    Alloc::alloc(desugarer, b::Ann { tm: sealed, ty: ann }.into(), self.into());
                 // pat & sealed -> alias
-                b::AliasBody { binder: pat, bindee: sealed }.into()
+                b::AliasBody { binder: pat, bindee: anno }.into()
             }
             | Decl::Define(decl) => {
                 let t::Define(GenBind { rec, comp, binder, params, ty, bindee }) = decl;

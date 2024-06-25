@@ -356,7 +356,7 @@ impl Tyck for SEnv<su::PatId> {
                         ty.into()
                     }
                 };
-                tycker.statics.annotations_var.insert(def, ann);
+                tycker.statics.annotations_var.insert_or_replace(def, ann);
                 let var = PatAnnId::mk_var(tycker, def, ann);
                 let ctx = Context::singleton(def, ann);
                 (var, ctx)

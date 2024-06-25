@@ -1,0 +1,355 @@
+
+/// AvlTree
+    
+pub data Avl (A : VType) where
+  | +Leaf : Unit
+  | +Node : Avl A * A * Int * Avl A
+end
+
+pub def ! leaf (A : VType) : F(Avl A) =
+  ret +Leaf()
+end
+
+pub def ! singleton (A : VType) (x : A) : F(Avl A) =
+  do lf <- ! leaf A;
+  ret +Node(+Leaf(), x, 1, +Leaf())
+end
+
+pub def ! height (A : VType) (tree : Avl A) : F(Int) =
+  match tree
+  | +Leaf() -> ret 0
+  | +Node(l, n, h, r) -> ret h
+  end
+end
+
+pub def ! fix_height (A : VType) (tree : Avl A) : F(Avl A) =
+  match tree
+  | +Leaf() -> ret +Leaf()
+  | +Node(l, n, h, r) ->
+    do hl <- ! height A l;
+    do hr <- ! height A r;
+    do h' <- ! int_max hl hr;
+    do h' <- ! add h' 1;
+    ret +Node(l, n, h', r)
+  end
+end
+
+pub def ! balance_factor (A : VType) (tree : Avl A) : F(Int) =
+  match tree
+  | +Leaf() -> ret 0
+  | +Node(l, n, h, r) ->
+    do hl <- ! height A l;
+    do hr <- ! height A r;
+    ! sub hl hr
+  end
+end
+
+pub def ! left (A : VType) (tree : Avl A) : F(Avl A) =
+  match tree
+  | +Leaf() -> ret +Leaf()
+  | +Node(l, n, h, r) -> ret l
+  end
+end
+
+pub def ! right (A : VType) (tree : Avl A) : F(Avl A) =
+  match tree
+  | +Leaf() -> ret +Leaf()
+  | +Node(l, n, h, r) -> ret r
+  end
+end
+
+pub def rec ! min_element (A : VType) (tree : Avl A) (cmp : Cmp A) : F(Option A) =
+  match tree
+  | +Leaf() -> ret +None()
+  | +Node(l, n, h, r) ->
+    do l' <- ! min_element A l cmp;
+    match l'
+    | +Some(x) -> ret +Some(x)
+    | +None() -> ret +Some(n)
+    end
+  end
+end
+
+pub def ! rotate_right (A : VType) (tree : Avl A) : F(Avl A) =
+  match tree
+  | +Leaf() -> ret +Leaf()
+  | +Node(l, n, h, r) ->
+    match l
+    | +Leaf() -> ret +Leaf()
+    | +Node(ll, ln, lh, lr) ->
+      do n_tree <- ! fix_height A +Node(lr, n, h, r);
+      ! fix_height A +Node(ll, ln, lh, n_tree)
+    end
+  end
+end
+
+pub def ! rotate_left (A : VType) (tree : Avl A) : F(Avl A) =
+  match tree
+  | +Leaf() -> ret +Leaf()
+  | +Node(l, n, h, r) ->
+    match r
+    | +Leaf() -> ret +Leaf()
+    | +Node(rl, rn, rh, rr) ->
+      do n_tree <- ! fix_height A +Node(l, n, h, rl);
+      ! fix_height A +Node(n_tree, rn, rh, rr)
+    end
+  end
+end
+
+pub def ! balance (A : VType) (tree : Avl A) : F(Avl A) =
+  match tree
+  | +Leaf() -> ret +Leaf()
+  | +Node(l, n, h, r) ->
+    do bf <- ! balance_factor A tree;
+    do g_1 <- ! int_gt bf 1;
+    match g_1
+    | +True() ->
+      do l_bf <- ! balance_factor A l;
+      do l_0 <- ! int_lt l_bf 0;
+      match l_0
+      | +True() -> 
+        do l_tree' <- ! rotate_left A l;
+        do n_h <- ! height A tree;
+        ! rotate_right A +Node(l_tree', n, n_h, r)
+      | +False() ->
+        ! rotate_right A tree
+      end
+    | +False() ->
+      do l_m1 <- ! int_lt bf -1;
+      match l_m1
+      | +True() ->
+        do r_bf <- ! balance_factor A r;
+        do g_0 <- ! int_gt r_bf 0;
+        match g_0
+        | +True() -> 
+          do r_tree' <- ! rotate_right A r;
+          do n_h <- ! height A tree;
+          ! rotate_left A +Node(l, n, n_h, r_tree')
+        | +False() ->
+          ! rotate_left A tree
+        end
+      | +False() -> ret tree
+      end
+    end
+  end
+end
+
+pub def rec ! insert (A : VType) (x : A) (tree : Avl A) (cmp : Cmp A) : F(Avl A) =
+  match tree
+  | +Leaf() -> ! singleton A x
+  | +Node(l, n, h, r) ->
+    do b <- ! cmp x n;
+    match b
+    | +True() ->
+      do l' <- ! insert A x l cmp;
+      do n_tree <- ! fix_height A +Node(l', n, h, r);
+      ! balance A n_tree
+    | +False() ->
+      do r' <- ! insert A x r cmp;
+      do n_tree <- ! fix_height A +Node(l, n, h, r');
+      ! balance A n_tree
+    end
+  end
+end
+
+pub def rec ! search (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Option A) =
+  match tree
+  | +Leaf() -> ret +None()
+  | +Node(l, n, h, r) ->
+    do b <- ! cmp_eq x n;
+    match b
+    | +True() -> ret +Some(n)
+    | +False() ->
+      do b <- ! cmp_lt x n;
+      match b
+      | +True() -> ! search A x l cmp_eq cmp_lt
+      | +False() -> ! search A x r cmp_eq cmp_lt
+      end
+    end
+  end
+end
+
+pub def rec ! change (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Avl A) =
+  match tree
+  | +Leaf() -> ret tree
+  | +Node(l, n, h, r) ->
+    do b <- ! cmp_eq x n;
+    match b
+    | +True() ->
+      ret +Node(l, x, h, r)
+    | +False() ->
+      do b <- ! cmp_lt x n;
+      match b
+      | +True() ->
+        do l' <- ! change A x l cmp_eq cmp_lt;
+        ret +Node(l', n, h, r)
+      | +False() ->
+        do r' <- ! change A x r cmp_eq cmp_lt;
+        ret +Node(l, n, h, r')
+      end
+    end
+  end
+end
+
+pub def rec ! delete (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : F(Avl A) =
+  match tree
+  | +Leaf() -> ret tree
+  | +Node(l, n, h, r) ->
+    do b <- ! cmp_eq x n;
+    match b
+    | +True() ->
+      match l
+      | +Leaf() -> ret r
+      | +Node(ll, ln, lh, lr) ->
+        match r
+        | +Leaf() -> ret l
+        | +Node(rl, rn, rh, rr) ->
+          do right_min <- ! min_element A r cmp_lt;
+          match right_min
+          | +None() -> ret l
+          | +Some(m) ->
+            do r' <- ! delete A m r cmp_eq cmp_lt;
+            do n_tree <- ! fix_height A +Node(l, m, h, r');
+            ! balance A n_tree
+          end
+        end
+      end
+    | +False() ->
+      do bl <- ! cmp_lt x n;
+      match bl
+      | +True() ->
+        do l' <- ! delete A x l cmp_eq cmp_lt;
+        do n_tree <- ! fix_height A +Node(l', n, h, r);
+        ! balance A n_tree
+      | +False() ->
+        do r' <- ! delete A x r cmp_eq cmp_lt;
+        do n_tree <- ! fix_height A +Node(l, n, h, r');
+        ! balance A n_tree
+      end
+    end
+  end
+end
+
+pub def rec ! equal (A : VType) (tree1 : Avl A) (tree2 : Avl A) (cmp_eq : Cmp A) : F(Bool) =
+  match tree1
+  | +Leaf() ->
+    match tree2
+    | +Leaf() -> ret +True()
+    | +Node(_, _, _, _) -> ret +False()
+    end
+  | +Node(l1, n1, h1, r1) ->
+    match tree2
+    | +Leaf() -> ret +False()
+    | +Node(l2, n2, h2, r2) ->
+      do b3 <- ! cmp_eq n1 n2;
+      match b3
+      | +True() ->
+        do b1 <- ! equal A l1 l2 cmp_eq;
+        do b2 <- ! equal A r1 r2 cmp_eq;
+        ! and b1 b2
+      | +False() -> ret +False()
+      end
+    end
+  end
+end
+
+pub def rec ! pre_traversal (A : VType) (tree : Avl A) (fmt : U(A -> F(String))) (next : U OS) : OS =
+  match tree
+  | +Leaf() -> ! next
+  | +Node(left, v, h, right) ->
+    do r1 <- ! fmt v;
+    do r2 <- ! str_append r1 " h:";
+    do r3 <- ! int_to_str h;
+    do res <- ! str_append r2 r3;
+    ! write_line res {
+      ! pre_traversal A left fmt {
+        ! pre_traversal A right fmt {! next}}}
+  end
+end
+
+/// Hash
+
+data Hash (K : VType) (V : VType) where
+  | +Hash : Avl (Pair K V) * Cmp (Pair K V) * Cmp (Pair K V) * Cmp (Pair K V)
+end
+
+pub def ! hash_new (K : VType) (V : VType) (insert_key_cmp : Cmp K) (search_key_cmp : Cmp K) (equal_value_cmp : Cmp V) : F(Hash K V) =
+  do body <- ! leaf (Pair K V);
+  ret +Hash(body, {
+    fn p1 p2 ->
+      match p1
+      | +Cons(k1, v1) ->
+        match p2
+        | +Cons(k2, v2) -> ! insert_key_cmp k1 k2
+        end
+      end
+  }, {
+    fn p1 p2 -> 
+      match p1
+      | +Cons(k1, v1) ->
+        match p2
+        | +Cons(k2, v2) -> ! search_key_cmp k1 k2
+        end
+      end
+  }, {
+    fn p1 p2 ->
+      match p1
+      | +Cons(k1, v1) ->
+        match p2
+        | +Cons(k2, v2) ->
+          do b1 <- ! equal_value_cmp v1 v2;
+          do b2 <- ! search_key_cmp k1 k2;
+          ! and b1 b2
+        end
+      end
+  })
+end
+
+pub def ! hash_insert (K : VType) (V : VType) (k : K) (v : V) (tree : Hash K V) : F(Hash K V) =
+  match tree
+  | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
+    do body' <- ! insert (Pair K V) +Cons(k,v) body insert_cmp;
+    ret +Hash(body', insert_cmp, search_cmp, equal_cmp)
+  end
+end
+
+# in search, a default value for v is needed, because the type of v is unknown
+pub def ! hash_search (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Option V) =
+  match hash
+  | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
+    do res <- ! search (Pair K V) +Cons(k, default) body search_cmp insert_cmp;
+    match res
+    | +None() -> ret +None()
+    | +Some(p) ->
+      match p
+      | +Cons(k, v) -> ret +Some(v)
+      end
+    end
+  end
+end
+
+pub def ! hash_delete (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : F(Hash K V) =
+  match hash
+  | +Hash(body, insert_cmp, search_cmp, equal_cmp) -> 
+    do body' <- ! delete (Pair K V) +Cons(k, default) body search_cmp insert_cmp;
+    ret +Hash(body', insert_cmp, search_cmp, equal_cmp)
+  end
+end
+
+pub def ! hash_change (K : VType) (V : VType) (k : K) (v : V) (hash : Hash K V) : F(Hash K V) =
+  match hash
+  | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->
+    do body' <- ! change (Pair K V) +Cons(k, v) body search_cmp insert_cmp;
+    ret +Hash(body', insert_cmp, search_cmp, equal_cmp)
+  end
+end
+
+pub def ! hash_equal (K : VType) (V : VType) (hash1 : Hash K V) (hash2 : Hash K V) : F(Bool) =
+  match hash1
+  | +Hash(body1, insert_cmp1, search_cmp1, v_cmp1) ->
+    match hash2
+    | +Hash(body2, insert_cmp2, search_cmp2, v_cmp2) ->
+      ! equal (Pair K V) body1 body2 v_cmp1
+    end
+  end
+end

@@ -3,6 +3,7 @@ name = "Std"
 srcs = [
     "lib.zy",
     "tests.zy",
+    # "avl.zy",
 ]
 deps = []
 
