@@ -1,0 +1,26 @@
+codata FnRet (A : VType) where
+  | .arg : A -> Ret A
+end
+
+codata FnOpt (A : VType) where
+  | .one : A -> Ret A
+  | .zero : Ret A
+end
+
+main
+  let fn_int : Thunk(FnRet Int) = {
+    comatch
+    | .arg i -> ret i
+    end
+  } in
+
+  let fn_opt_int : Thunk(FnOpt Int) = {
+    comatch
+    | .one i -> ! fn_int .arg i
+    | .zero -> ! fn_int .arg 0
+    end
+  } in
+
+  do x <- ! fn_opt_int .zero;
+  ! exit x
+end

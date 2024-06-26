@@ -211,3 +211,24 @@ impl<'source> Iterator for Lexer<'source> {
         }
     }
 }
+
+pub struct HashLexer<'source> {
+    inner: SpannedIter<'source, Tok<'source>>,
+}
+
+impl<'source> HashLexer<'source> {
+    pub fn new(source: &'source str) -> Self {
+        Self { inner: Tok::lexer(&source).spanned() }
+    }
+}
+
+impl<'source> Iterator for HashLexer<'source> {
+    type Item = (usize, Result<Tok<'source>, ()>, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.next() {
+            | Some((tok, range)) => Some((range.start, tok, range.end)),
+            | _ => None,
+        }
+    }
+}

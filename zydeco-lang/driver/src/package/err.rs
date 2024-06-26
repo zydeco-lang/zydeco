@@ -9,10 +9,10 @@ pub enum ZydecoError {
     PackageFileInvalid(PathBuf, std::io::Error),
     #[error("Source file not found: `{}`", .0.display())]
     SrcFileNotFound(PathBuf),
-    #[error("Error while canonicalizing src file path: `{}`", .0)]
+    #[error("Error while canonicalizing src file path: `{0}`")]
     CanonicalizationError(String),
-    #[error("Lexer error: failed to run lexer")]
-    LexerError,
+    #[error("Lexer error:\n\t{0}")]
+    LexerError(String),
     #[error("Parse error:\n\t{0}")]
     ParseError(String),
     #[error("Resolve error:\n\t{0}")]

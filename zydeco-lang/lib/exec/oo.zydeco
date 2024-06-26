@@ -1,0 +1,34 @@
+# We can do good old object-oriented programming in here
+# e.g. define a Counter that can incr and project out Int or String
+codata Counter where
+| .num : Ret Int
+| .incr : Int -> Counter
+| .fmt : Ret String
+end
+
+# We can use `this` (or `self`) as in normal OO languages
+def mk_counter : Thunk(Int -> Counter) = {
+  rec mk_counter ->
+  fn n -> rec this ->
+  comatch
+  | .num -> ret n
+  | .incr -> fn i ->
+    do j <- ! this .num;
+    do n <- ! add i j;
+    ! mk_counter n
+  | .fmt ->
+    do n <- ! this .num;
+    ! int_to_str n
+  end
+} end
+
+main
+  let counter_42: Thunk(Counter) = {
+    ! mk_counter 42
+  } in
+  do s <- ! counter_42 .fmt;
+  ! write_line s {
+    do n <- ! counter_42 .incr -42 .num;
+    ! exit n
+  }
+end

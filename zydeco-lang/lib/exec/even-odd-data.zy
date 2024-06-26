@@ -1,0 +1,32 @@
+data OddEven where | +OddEven(Thunk (Nat -> Ret(Bool)), Thunk (Nat -> Ret(Bool))) end
+
+main
+  let rec fp: Ret OddEven =
+    ret +OddEven({
+      do fp <- !fp;
+      match fp | +OddEven(odd, even) -> (fn (x: Nat) -> (
+        match x
+        | +Z() -> ret +False()
+        | +S(x) -> !even x
+        end
+      )) end
+    }, {
+      do fp <- !fp;
+      match fp | +OddEven(odd, even) -> (fn (x: Nat) -> (
+        match x
+        | +Z() -> ret +True()
+        | +S(x) -> !odd x
+        end
+      )) end
+    })
+  in
+  do odd <- (
+    do fp <- !fp;
+    match fp | +OddEven(odd, even) -> ret { !odd } end
+  );
+  do b <- !odd +S(+S(+S(+Z())));
+  match b
+  | +True() -> ! exit 0
+  | +False() -> ! exit 1
+  end
+end

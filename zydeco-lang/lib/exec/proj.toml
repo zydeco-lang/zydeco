@@ -1,0 +1,42 @@
+name = "ExecTests"
+
+srcs = [
+    "../std/lib.zy",
+    "../std/avl.zy",
+    "abort.zy",
+    "add.zy",
+    "algtrans.zy",
+    "cbpv-do.zy",
+    "cbpv-monadic.zy",
+    "cbpv.zy",
+    "cbv.zy",
+    "choice.zy",
+    "defunctionalization.zydeco",
+    "deterministic-pushdown-automaton.zydeco",
+    "even-odd-codata.zy",
+    "even-odd-data.zy",
+    "even-old-rec.zy",
+    "exists.zy",
+    "fn-opt.zy",
+    "forall.zy",
+    "hash.zy",
+    "ifz.zy",
+    "interpreter.zydeco",
+    "interpreter_new.zydeco",
+    "list.zydeco",
+    "listm.zydeco",
+    "malt.zy",
+    "motrans.zy",
+    "num.zy",
+    "oo.zydeco",
+    "partial-annotation.zy",
+    "regex.zy",
+    "ret.zydeco",
+    "trans.zy",
+    "unit.zy",
+    "varidic.zy",
+    "Y.zydeco",
+]
+deps = []
+
+std = "NoStd"

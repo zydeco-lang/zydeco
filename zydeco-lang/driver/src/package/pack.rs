@@ -8,12 +8,12 @@ use zydeco_statics::Tycker;
 use zydeco_surface::{
     bitter::{syntax as b, DesugarOut, Desugarer},
     scoped::{syntax as sc, ResolveOut, Resolver},
-    textual::{syntax as t, Lexer, ParseError, Tok, TopLevelParser},
+    textual::{syntax as t, HashLexer, Lexer, ParseError, TopLevelParser},
 };
 use zydeco_utils::{
     arena::*,
     deps::DepGraph,
-    span::{FileInfo, LocationCtx},
+    span::{FileInfo, LocationCtx, Span},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -242,18 +242,23 @@ pub struct File {
 
 impl File {
     pub fn load(self) -> Result<FileLoaded> {
-        use logos::Logos;
-
         let path = self.path;
         let source = std::fs::read_to_string(&path).map_err(|_| {
             let path = path.clone();
             ZydecoError::SrcFileNotFound(path)
         })?;
-        let mut s = String::new();
-        for t in Tok::lexer(&source) {
-            s += &format!("{}", t.map_err(|()| ZydecoError::LexerError)?);
-        }
         let info = FileInfo::new(source.as_str(), Rc::new(path));
+        let mut s = String::new();
+        for (l, t, r) in HashLexer::new(&source) {
+            s += &format!(
+                "{}",
+                t.map_err(|()| {
+                    let span = Span::new(l, r);
+                    span.set_info(&info);
+                    ZydecoError::LexerError(format!("{}", span))
+                })?
+            );
+        }
         Ok(FileLoaded { info, source, hash: s.snap() })
     }
 }
