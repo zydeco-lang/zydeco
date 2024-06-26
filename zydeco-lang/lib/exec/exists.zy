@@ -1,5 +1,5 @@
 data Seal (X : VType) (A : VType) where
-| +Seal(Thunk(A -> Ret X), Thunk(X -> Ret A))
+| +Seal : Thunk(A -> Ret X) * Thunk(X -> Ret A)
 end
 
 def nat : exists (X : VType) . Seal X Int = pack(
@@ -11,7 +11,7 @@ def nat : exists (X : VType) . Seal X Int = pack(
 
 main
   match nat
-  | pack(Nat, seal) ->
+  | (Nat, seal) ->
     match seal
     | +Seal(of, to) ->
       do n <- ! of 0;

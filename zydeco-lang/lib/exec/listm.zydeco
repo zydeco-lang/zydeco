@@ -1,6 +1,6 @@
 data List~ (A : VType) where
-  | +Nil()
-  | +Cons(A, U(F(List~ A)))
+  | +Nil : Unit
+  | +Cons : A * U(F(List~ A))
 end
 
 def rec fn foldr (A : VType) (B : CType) (ll : U(F(List~ A))) (f : U(A -> U(B) -> B)) (b : U(B)) : B =

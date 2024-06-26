@@ -1,4 +1,4 @@
-data OddEven where | +OddEven(Thunk (Nat -> Ret(Bool)), Thunk (Nat -> Ret(Bool))) end
+data OddEven where | +OddEven : Thunk (Nat -> Ret(Bool)) * Thunk (Nat -> Ret(Bool)) end
 
 main
   let rec fp: Ret OddEven =

@@ -3,41 +3,41 @@
 # As it is a CBPV language, our syntax distinguishes between values
 # and computations
 data SynVal where
-  | +Var(String)
-  | +True()
-  | +False()
-  | +ThunkV(SynComp)
+  | +Var : String
+  | +True : Unit
+  | +False : Unit
+  | +ThunkV : SynComp
 end
 
 data SynComp where
-  | +If(SynVal, SynComp, SynComp)
-  | +Force(SynVal)
-  | +Lam(String, SynComp)
-  | +App(SynComp, SynVal)
-  | +Return(SynVal)
-  | +Bind(SynComp, String, SynComp)
+  | +If : SynVal * SynComp * SynComp
+  | +Force : SynVal
+  | +Lam : String * SynComp
+  | +App : SynComp * SynVal
+  | +Return : SynVal
+  | +Bind : SynComp * String * SynComp
 end
 
 # Environments are implemented as association lists.
 data Env where
-  | +Empty()
-  | +Cons(String, SemVal, Env)
+  | +Empty : Unit
+  | +Cons : String * SemVal * Env
 end
 
 # The interpreter works with semantic values, which do not include
 # variables. We use closures in the interpreter to implement semantic
 # thunks.
 data SemVal where
-  | +True()
-  | +False()
-  | +ThunkV(Thunk(SemComp))
+  | +True : Unit
+  | +False : Unit
+  | +ThunkV : Thunk(SemComp)
 end
 
 # The "final answer" of the interpreter is either the final value or
 # an error.
 data Answer (A : VType) where
-  | +Ok(A)
-  | +Err()
+  | +Ok : A
+  | +Err : Unit
 end
 
 # The semantics of computations are Zydeco computations which satisfy

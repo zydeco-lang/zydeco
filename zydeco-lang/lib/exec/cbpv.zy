@@ -6,13 +6,9 @@ codata MonadErrPrint (M: VType -> CType) where
   | .print  : String -> M Unit
 end
 
-codata Algebra (M: VType -> CType) (B: CType) where
-  | .bindA : forall (A: VType) . U (M A) -> U (A -> B) -> B
-end
-
 data Exception where
-  | +TypeError()
-  | +FreeVariable()
+  | +TypeError : Unit
+  | +FreeVariable : Unit
 end
 
 // Continuation-based error monad
@@ -44,8 +40,8 @@ def fn mexn : MonadErrPrint MExnOS =
 end
 
 data EnvT where
-  | +Empty()
-  | +Extend(String, Value, EnvT)
+  | +Empty : Unit
+  | +Extend : String * Value * EnvT
 end
 
 codata EnvO where
@@ -71,8 +67,8 @@ def rec fn envo (env: EnvT) : EnvO =
 end
 
 data Value where
-  | +Bool(Bool)
-  | +Thunk(U (Compu))
+  | +Bool : Bool
+  | +Thunk : U Compu
 end
 
 codata Compu where
@@ -100,18 +96,18 @@ def rec fn malg : Algebra MExnOS Compu =
 end
 
 data SValue where
-  | +Var(String)
-  | +Bool(Bool)
-  | +Thunk(SCompu)
+  | +Var : String
+  | +Bool : Bool
+  | +Thunk : SCompu
 end
 
 data SCompu where
-  | +Lam(String, SCompu)
-  | +App(SCompu, SValue)
-  | +Ret(SValue)
-  | +Bind(SCompu, String, SCompu)
-  | +Force(SValue)
-  | +If(SValue, SCompu, SCompu)
+  | +Lam : String * SCompu
+  | +App : SCompu * SValue
+  | +Ret : SValue
+  | +Bind : SCompu * String * SCompu
+  | +Force : SValue
+  | +If : SValue * SCompu * SCompu
 end
 
 codata Interp where

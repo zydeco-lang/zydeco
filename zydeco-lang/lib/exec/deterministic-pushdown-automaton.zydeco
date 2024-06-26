@@ -1,16 +1,16 @@
 data Tok where
-  | +LParen()
-  | +RParen()
+  | +LParen : Unit
+  | +RParen : Unit
 end
 
 data LList' (A : VType) where
-  | +Nil()
-  | +Cons(A, Thunk(Ret(LList' A)))
+  | +Nil : Unit
+  | +Cons : A * Thunk(Ret(LList' A))
 end
 
 data ParenCounterState where
-  | +Ok()
-  | +Reject()
+  | +Ok : Unit
+  | +Reject : Unit
 end
 
 codata ParenCounterStk where

@@ -4,12 +4,12 @@ codata Monad (M: VType -> CType) where
 end
 
 data Exception where
-  | +TypeError()
-  | +FreeVariable()
+  | +TypeError : Unit
+  | +FreeVariable : Unit
 end
 
 data State where
-  | +State(Int, String)
+  | +State : Int * String
 end
 
 alias Kont' (A: VType) =
@@ -96,8 +96,8 @@ def fn mexn : Monad Mo =
 end
 
 data EnvT where
-  | +Empty()
-  | +Extend(String, Value, EnvT)
+  | +Empty : Unit
+  | +Extend : String * Value * EnvT
 end
 
 codata EnvO where
@@ -123,16 +123,16 @@ def rec fn envo (env: EnvT) : EnvO =
 end
 
 data Value where
-  | +Bool(Bool)
-  | +Lam(U EnvO, String, Term)
+  | +Bool : Bool
+  | +Lam : U EnvO * String * Term
 end
 
 data Term where
-  | +Var(String)
-  | +Lam(String, Term)
-  | +App(Term, Term)
-  | +Bool(Bool)
-  | +If(Term, Term, Term)
+  | +Var : String
+  | +Lam : String * Term
+  | +App : Term * Term
+  | +Bool : Bool
+  | +If : Term * Term * Term
 end
 
 def rec fn interp (env: U EnvO) (t: Term) : Mo Value =

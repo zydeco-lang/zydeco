@@ -1,8 +1,3 @@
-codata Monad (M: VType -> CType) where
-  | .return : forall (A: VType) . A -> M A
-  | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
-end
-
 /* Exception implementations... */
 
 codata ExnK (E: VType) (A: VType) where

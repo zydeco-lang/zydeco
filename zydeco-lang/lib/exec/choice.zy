@@ -1,16 +1,16 @@
 data Tree (A : VType) where
-  | +Fork(Tree A, Tree A)
-  | +Final(A)
+  | +Fork : Tree A * Tree A
+  | +Final : A
 end
 
 data Choice (B : CType) where
-  | +L(U B)
-  | +R(U B)
+  | +L : U B
+  | +R : U B
 end
 
 data Path (A : VType) where
-  | +Nil()
-  | +Cons(A, Path A)
+  | +Nil : Unit
+  | +Cons : A * Path A
 end
 
 def beep : Choice (U OS -> OS) =

@@ -37,7 +37,7 @@ def rec fn printl (xs: List String) (kont: U OS) : OS =
   match xs
   | +Nil() -> ! kont
   | +Cons(x, xs) ->
-    do ! write_line x;
+    do~ ! write_line x;
     ! printl xs kont
   end
 end
@@ -49,7 +49,7 @@ def rec fn printv: Varidic String (U OS -> OS) =
 end
 
 main
-  do ! l (String) (U OS -> OS) { ! r (String) (U OS -> OS) printl } (+Cons("hello", +Cons("world", +Nil())));
-  do ! r (String) (U OS -> OS) { ! l (String) (U OS -> OS) printv } .more "hello" .more "world" .done;
+  do~ ! l (String) (U OS -> OS) { ! r (String) (U OS -> OS) printl } (+Cons("hello", +Cons("world", +Nil())));
+  do~ ! r (String) (U OS -> OS) { ! l (String) (U OS -> OS) printv } .more "hello" .more "world" .done;
   ! exit 0
 end

@@ -58,10 +58,10 @@ end
 main
   // the user can pick any monad and algebra implementation;
   // the type checker will tell us which is which
-  with monad-optos, alg-optos import
+  with monad-optos with alg-optos
     // we can import (translate) values from the outside world
-    raise = { ! monad-err-optos .fail (Int) }
-    alt = { ! monad-alt-optos .alt (Int) }
+    import raise : _ = { ! monad-err-optos .fail (Int) }
+    import alt : _ = { ! monad-alt-optos .alt (Int) }
   begin
     // we see two optos'es and we want to run them one by one,
     // and see if any succeeds

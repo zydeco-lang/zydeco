@@ -1,8 +1,8 @@
 data Syn where
-  | +Str(String)
-  | +Concat(Syn, Syn)
-  | +Kleene(Syn)
-  | +Choose(Syn, Syn)
+  | +Str : String
+  | +Concat : Syn * Syn
+  | +Kleene : Syn
+  | +Choose : Syn * Syn
 end
 
 codata Matcher where
