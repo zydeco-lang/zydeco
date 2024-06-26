@@ -108,8 +108,9 @@ impl Ugly for AbstId {
         let () = &f.statics.absts[self];
         let sealed = &f.statics.seals.get(self);
         match sealed {
-            | Some(ty) => {
-                format!("[sealed {}]", ty.ugly(f))
+            | Some(_ty) => {
+                format!("[sealed {}]", self.concise())
+                // format!("[sealed ({}) {}]", self.concise(), ty.ugly(f))
             }
             | None => {
                 format!("[abst {}]", self.concise())

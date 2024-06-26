@@ -331,21 +331,22 @@ impl Desugar for t::TermId {
                 let b::Appli(params) = params.desugar(desugarer);
                 let (mut tail, mut annotation) =
                     if let Tm::Ann(t::Ann { tm, ty }) = desugarer.lookup_term(tail) {
-                        (tm.desugar(desugarer), ty.desugar(desugarer))
+                        (tm.desugar(desugarer), Some(ty.desugar(desugarer)))
                     } else {
-                        let hole = Alloc::alloc(desugarer, b::Hole.into(), self.into());
-                        (tail.desugar(desugarer), hole)
+                        (tail.desugar(desugarer), None)
                     };
                 for param in params.into_iter().rev() {
                     match param {
                         | b::CoPatternItem::Pat(pat) => {
                             tail = Alloc::alloc(desugarer, b::Abs(pat, tail).into(), self.into());
                             let pat_ty = pat.deep_clone(desugarer);
-                            annotation = Alloc::alloc(
-                                desugarer,
-                                b::Pi(pat_ty, annotation).into(),
-                                self.into(),
-                            );
+                            if let Some(ref mut annotation) = &mut annotation {
+                                *annotation = Alloc::alloc(
+                                    desugarer,
+                                    b::Pi(pat_ty, *annotation).into(),
+                                    self.into(),
+                                );
+                            }
                         }
                         | b::CoPatternItem::Dtor(dtor) => {
                             tail = Alloc::alloc(
@@ -353,11 +354,15 @@ impl Desugar for t::TermId {
                                 b::CoMatch { arms: vec![b::CoMatcher { dtor, tail }] }.into(),
                                 self.into(),
                             );
-                            annotation = Alloc::alloc(desugarer, b::Hole.into(), self.into());
+                            annotation = None;
                         }
                     }
                 }
-                Alloc::alloc(desugarer, b::Ann { tm: tail, ty: annotation }.into(), self.into())
+                if let Some(annotation) = annotation {
+                    Alloc::alloc(desugarer, b::Ann { tm: tail, ty: annotation }.into(), self.into())
+                } else {
+                    tail
+                }
             }
             | Tm::App(term) => {
                 let t::Appli(terms) = term;

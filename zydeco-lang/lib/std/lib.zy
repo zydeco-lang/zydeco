@@ -389,7 +389,7 @@ pub def ! length (A : VType) (xs : U(LList A)) : F(Int) =
   ! foldr A (F Int) xs {ret 0} {fn x b -> do b' <- !b; ! add b' 1}
 end
 
-pub alias Cmp (A : VType) = U(A -> A -> F(Bool)) end
+pub alias Cmp (A : VType) : VType = U(A -> A -> F(Bool)) end
 
 pub def rec ! min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
   do xs' <- ! xs .run;
