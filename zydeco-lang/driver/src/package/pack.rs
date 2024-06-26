@@ -86,30 +86,30 @@ impl Package {
             .into_iter()
             .map(|f| f.parse(t::Parser::new(alloc.alloc())))
             .collect::<Result<Vec<_>>>()?;
-        // Debug: print the parsed files
-        if cfg!(debug_assertions) {
-            for file in &files {
-                println!(">>> [{}]", file.path.display());
-                use zydeco_surface::textual::fmt::*;
-                println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
-                println!("<<< [{}]", file.path.display());
-            }
-        }
+        // // Debug: print the parsed files
+        // if cfg!(debug_assertions) {
+        //     for file in &files {
+        //         println!(">>> [{}] parsed", file.path.display());
+        //         use zydeco_surface::textual::fmt::*;
+        //         println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
+        //         println!("<<< [{}]", file.path.display());
+        //     }
+        // }
 
         // desugaring
         // Todo: parallelize w/ rayon (?)
         let files =
             files.into_iter().map(|f| f.desugar(b::Arena::new(&mut alloc))).collect::<Vec<_>>();
-        // Debug: print the desugared package
-        if cfg!(debug_assertions) {
-            use zydeco_surface::bitter::fmt::*;
-            println!();
-            for file in &files {
-                println!(">>> [{}]", file.path.display());
-                println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
-                println!("<<< [{}]", file.path.display());
-            }
-        }
+        // // Debug: print the desugared package
+        // if cfg!(debug_assertions) {
+        //     use zydeco_surface::bitter::fmt::*;
+        //     println!();
+        //     for file in &files {
+        //         println!(">>> [{}] desugared", file.path.display());
+        //         println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
+        //         println!("<<< [{}]", file.path.display());
+        //     }
+        // }
         let pack = FileBitter::merge(
             PackageStew {
                 sources: HashMap::new(),
@@ -130,7 +130,7 @@ impl Package {
         if cfg!(debug_assertions) {
             use zydeco_surface::scoped::fmt::*;
             println!();
-            println!(">>> [{}]", self.name);
+            println!(">>> [{}] scoped", self.name);
             let mut scc = pack.arena.top.clone();
             let mut cnt = 0;
             loop {
@@ -166,7 +166,7 @@ impl Package {
         // Debug: print the contexts upon terms
         // if cfg!(debug_assertions) {
         //     use crate::scoped::fmt::*;
-        //     println!(">>> [{}]", self.name);
+        //     println!(">>> [{}] contexts", self.name);
         //     for (term, ctx) in &pack.arena.ctxs {
         //         print!(
         //             "\t{} |-> [",
@@ -213,6 +213,19 @@ impl Package {
                     s += &b;
                 }
                 s += &format!("Total: {} errors\n", tycker.errors.len());
+                // Debug: print the sealed types arena
+                if cfg!(debug_assertions) {
+                    use zydeco_statics::fmt::*;
+                    println!(">>> [{}] sealed types arena", self.name);
+                    for (abst, ty) in tycker.statics.seals.clone().into_iter() {
+                        println!(
+                            "{} := {}",
+                            abst.concise(),
+                            ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                        );
+                    }
+                    println!("<<< [{}]", self.name);
+                }
                 Err(ZydecoError::TyckErrors(s))?;
             }
         }
