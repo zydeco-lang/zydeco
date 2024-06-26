@@ -839,7 +839,7 @@ impl Tyck for SEnv<su::TermId> {
                                     }
                                     | TermAnnId::Compu(compu, body_ty) => {
                                         // a type-polymorphic function
-                                        let ctype = tycker.vtype(&self.env);
+                                        let ctype = tycker.ctype(&self.env);
                                         let ann = Alloc::alloc(
                                             &mut tycker.statics,
                                             ss::Forall(tpat, body_ty),
@@ -989,7 +989,9 @@ impl Tyck for SEnv<su::TermId> {
                                         }
                                         let body_out_ann = SEnv { env, inner: body }
                                             .tyck(tycker, Action::ana(ty_body_subst.into()))?;
-                                        let (body_out, body_ty) = body_out_ann.try_as_compu(
+                                        // throwing _body_ty away because it has been substituted
+                                        // Todo: reuse _body_ty by substituting abst back
+                                        let (body_out, _body_ty) = body_out_ann.try_as_compu(
                                             tycker,
                                             TyckError::SortMismatch,
                                             std::panic::Location::caller(),
@@ -997,7 +999,7 @@ impl Tyck for SEnv<su::TermId> {
                                         let ctype = tycker.ctype(&self.env);
                                         let ann = Alloc::alloc(
                                             &mut tycker.statics,
-                                            ss::Forall(tpat, body_ty),
+                                            ss::Forall(tpat, ty_body),
                                             ctype,
                                         );
                                         let abs = Alloc::alloc(

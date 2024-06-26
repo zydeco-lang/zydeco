@@ -148,11 +148,22 @@ impl Tycker {
     pub fn monad_or_algebra(
         &self, env: &ss::Env<ss::AnnId>, ty: ss::TypeId,
     ) -> Option<MonadOrAlgebra> {
-        match self.statics.types.get(&ty).clone()? {
+        let ty = match self.statics.types.get(&ty)? {
+            | ss::Type::App(ty) => {
+                let ss::App(head, body) = ty;
+                match self.statics.types.get(&head).clone()? {
+                    | ss::Type::Thunk(_) => {}
+                    | _ => None?,
+                }
+                body
+            }
+            | _ => None?,
+        };
+        match self.statics.types.get(&ty)? {
             | ss::Type::App(ss::App(head, ty_1)) => match self.statics.types.get(&head).clone()? {
                 | ss::Type::Abst(mo) => {
                     // check if mo is monad
-                    let ss::AnnId::Type(id) = env[self.prim.algebra.get()] else { unreachable!() };
+                    let ss::AnnId::Type(id) = env[self.prim.monad.get()] else { unreachable!() };
                     let ss::Type::Abst(mo_real) = self.statics.types.get(&id).clone()? else {
                         unreachable!()
                     };

@@ -20,12 +20,12 @@ def ! mexn (E: VType) : Monad (Exn E) =
   end
 end
 
-def ! _ (E: VType) (M: VType -> CType) (mo: Monad M) : _ =
-  with mo
-  begin
-    ! mexn
-  end
-end
+// def ! _ (E: VType) (M: VType -> CType) (mo: U (Monad M)) : _ =
+//   with mo
+//   begin
+//     ! mexn
+//   end
+// end
 
 // Change `Ret` in Exn to `M`
 codata ExnT (E: VType) (M: VType -> CType) (A: VType) where
