@@ -18,6 +18,7 @@ use zydeco_utils::{
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Dependency {
+    #[serde(rename = "local")]
     Local(PathBuf),
 }
 
@@ -39,6 +40,8 @@ pub struct Package {
     pub srcs: Vec<PathBuf>,
     #[serde(default)]
     pub deps: Vec<Dependency>,
+    #[serde(default)]
+    pub bins: Vec<PathBuf>,
     #[serde(default)]
     pub std: UseStd,
 }
@@ -71,7 +74,7 @@ impl Package {
         })
     }
     pub fn run(&self) -> Result<()> {
-        let Package { path, name: _, srcs, deps: _, std: _ } = self;
+        let Package { path, name: _, srcs, deps: _, bins: _, std: _ } = self;
         // Todo: deal with std and deps
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
         // Todo: parallelize w/ rayon (?)

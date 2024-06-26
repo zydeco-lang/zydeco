@@ -3,6 +3,9 @@ name = "ExecTests"
 srcs = [
     "../std/lib.zy",
     "../std/avl.zy",
+]
+deps = []
+bins = [
     "abort.zy",
     "add.zy",
     "algtrans.zy",
@@ -35,6 +38,5 @@ srcs = [
     "varidic.zy",
     "Y.zydeco",
 ]
-deps = []
 
 std = "NoStd"
