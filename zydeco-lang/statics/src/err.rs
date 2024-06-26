@@ -3,6 +3,7 @@ use crate::{syntax::*, *};
 #[derive(Debug, Clone)]
 pub enum TyckError {
     MissingAnnotation,
+    MissingSeal,
     SortMismatch,
     KindMismatch,
     TypeMismatch { expected: TypeId, found: TypeId },
@@ -28,6 +29,7 @@ impl Tycker {
     fn error_output(&self, error: TyckError) -> String {
         match error {
             | TyckError::MissingAnnotation => format!("Missing annotation"),
+            | TyckError::MissingSeal => format!("Missing seal"),
             | TyckError::SortMismatch => format!("Sort mismatch"),
             | TyckError::KindMismatch => format!("Kind mismatch"),
             | TyckError::TypeMismatch { expected, found } => {

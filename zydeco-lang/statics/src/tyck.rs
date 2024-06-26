@@ -238,10 +238,15 @@ impl<'decl> SccDeclarations<'decl> {
         }
 
         let mut binder_map = HashMap::new();
+        let mut abst_map = HashMap::new();
         for id in decls.iter() {
             let su::AliasBody { binder, bindee } = match tycker.scoped.decls[id].clone() {
                 | su::Declaration::AliasBody(decl) => decl,
                 | _ => unreachable!(),
+            };
+            // the bindee must be sealed
+            let Some(bindee) = bindee.syntactically_sealed(tycker) else {
+                tycker.err(TyckError::MissingSeal, std::panic::Location::caller())?
             };
             // the type definition is self referencing, need to get the annotation
             let Some(syn_ann) = bindee.syntactically_annotated(tycker) else {
@@ -258,6 +263,14 @@ impl<'decl> SccDeclarations<'decl> {
                 | PatAnnId::Value(_, _) => unreachable!(),
             };
             binder_map.insert(*id, binder);
+            // register the def with abstract type
+            let (def, kd) = tycker.extract_tpat(binder);
+            if let Some(def) = def {
+                let abst = tycker.statics.absts.alloc(());
+                let abst_ty = Alloc::alloc(&mut tycker.statics, abst, kd);
+                env.env += (def, abst_ty.into());
+                abst_map.insert(*id, (abst, kd));
+            }
         }
         for id in decls {
             let su::AliasBody { binder: _, bindee } = match tycker.scoped.decls[id].clone() {
@@ -265,15 +278,23 @@ impl<'decl> SccDeclarations<'decl> {
                 | _ => unreachable!(),
             };
             let binder = binder_map[id];
+            // remove seal
+            let Some(bindee) = bindee.syntactically_sealed(tycker) else { unreachable!() };
             let bindee = env.mk(bindee).tyck(tycker, Action::syn())?;
             let (bindee, _kd) = bindee.try_as_type(
                 tycker,
                 TyckError::SortMismatch,
                 std::panic::Location::caller(),
             )?;
+            // subst vars in bindee
+            let bindee_subst = bindee.subst_env(tycker, &env.env)?;
+            // add the types to the seal arena
+            let (abst, kd) = abst_map[id];
+            tycker.statics.seals.insert(abst, bindee_subst);
+            let abst_ty = Alloc::alloc(&mut tycker.statics, abst, kd);
             // add the type into the environment
             let SEnv { env: new_env, inner: () } =
-                env.mk(binder).tyck_assign(tycker, Action::syn(), bindee)?;
+                env.mk(binder).tyck_assign(tycker, Action::syn(), abst_ty)?;
             env.env = new_env;
         }
 
@@ -1729,7 +1750,6 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                // Todo: unroll abstract types
                 let scrut_ty_unroll = scrut_ty.unroll(tycker)?.subst_env(tycker, &self.env)?;
                 let mut matchers = Vec::new();
                 let mut arms_ty = Vec::new();

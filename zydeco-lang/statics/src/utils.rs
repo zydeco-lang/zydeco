@@ -146,3 +146,44 @@ impl SyntacticallyAnnotated for su::TermId {
         }
     }
 }
+
+pub trait SyntacticallySealed {
+    fn syntactically_sealed(&self, tycker: &mut Tycker) -> Option<su::TermId>;
+}
+
+impl SyntacticallySealed for su::TermId {
+    fn syntactically_sealed(&self, tycker: &mut Tycker) -> Option<surface_syntax::TermId> {
+        let term = tycker.scoped.terms[self].clone();
+        use surface_syntax::Term as Tm;
+        match term {
+            | Tm::Internal(_) => unreachable!(),
+            | Tm::Sealed(term) => {
+                let su::Sealed(term) = term;
+                Some(term)
+            }
+            | Tm::Ann(_)
+            | Tm::Hole(_)
+            | Tm::Var(_)
+            | Tm::Triv(_)
+            | Tm::Cons(_)
+            | Tm::Abs(_)
+            | Tm::App(_)
+            | Tm::Rec(_)
+            | Tm::Pi(_)
+            | Tm::Sigma(_)
+            | Tm::Thunk(_)
+            | Tm::Force(_)
+            | Tm::Ret(_)
+            | Tm::Do(_)
+            | Tm::Let(_)
+            | Tm::Data(_)
+            | Tm::CoData(_)
+            | Tm::Ctor(_)
+            | Tm::Match(_)
+            | Tm::CoMatch(_)
+            | Tm::Dtor(_)
+            | Tm::WithBlock(_)
+            | Tm::Lit(_) => None,
+        }
+    }
+}

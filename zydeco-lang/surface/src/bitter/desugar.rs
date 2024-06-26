@@ -70,13 +70,13 @@ impl Desugar for t::DeclId {
                     let tpat = param.deep_clone(desugarer);
                     ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), self.into());
                 }
-                // abs -> sealed
-                let sealed = Alloc::alloc(desugarer, b::Sealed(abs).into(), self.into());
-                // sealed & ann -> anno
+                // abs & ann -> anno
                 let anno =
-                    Alloc::alloc(desugarer, b::Ann { tm: sealed, ty: ann }.into(), self.into());
+                    Alloc::alloc(desugarer, b::Ann { tm: abs, ty: ann }.into(), self.into());
+                // anno -> sealed
+                let sealed = Alloc::alloc(desugarer, b::Sealed(anno).into(), self.into());
                 // pat & sealed -> alias
-                b::AliasBody { binder: pat, bindee: anno }.into()
+                b::AliasBody { binder: pat, bindee: sealed }.into()
             }
             | Decl::CoDataDef(decl) => {
                 let t::CoDataDef { name, params, def: body } = decl;
@@ -94,13 +94,13 @@ impl Desugar for t::DeclId {
                     let tpat = param.deep_clone(desugarer);
                     ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), self.into());
                 }
-                // abs -> sealed
-                let sealed = Alloc::alloc(desugarer, b::Sealed(abs).into(), self.into());
-                // sealed & ann -> anno
+                // abs & ann -> anno
                 let anno =
-                    Alloc::alloc(desugarer, b::Ann { tm: sealed, ty: ann }.into(), self.into());
+                    Alloc::alloc(desugarer, b::Ann { tm: abs, ty: ann }.into(), self.into());
+                // anno -> sealed
+                let sealed = Alloc::alloc(desugarer, b::Sealed(anno).into(), self.into());
                 // pat & sealed -> alias
-                b::AliasBody { binder: pat, bindee: anno }.into()
+                b::AliasBody { binder: pat, bindee: sealed }.into()
             }
             | Decl::Define(decl) => {
                 let t::Define(GenBind { rec, comp, binder, params, ty, bindee }) = decl;

@@ -92,9 +92,6 @@ impl DeepClone for b::TermId {
             }
             | b::Term::Sealed(_term) => {
                 unreachable!()
-                // let b::Sealed(term) = term;
-                // let term = term.deep_clone(desugarer);
-                // b::Sealed(term).into()
             }
             | b::Term::Ann(term) => {
                 let b::Ann { tm, ty } = term;
