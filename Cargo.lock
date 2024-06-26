@@ -2590,6 +2590,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zydeco-dynamics"
+version = "0.2.0"
+dependencies = [
+ "derive-where",
+ "derive_more",
+ "im",
+ "indexmap",
+ "thiserror",
+ "zydeco-derive",
+ "zydeco-statics",
+ "zydeco-surface",
+ "zydeco-syntax",
+ "zydeco-utils",
+]
+
+[[package]]
 name = "zydeco-lang"
 version = "0.2.0"
 dependencies = [

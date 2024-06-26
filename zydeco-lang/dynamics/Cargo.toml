@@ -1,0 +1,26 @@
+[package]
+name = "zydeco-dynamics"
+version = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+# homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+description = "dynamics for zydeco"
+
+[dependencies]
+zydeco-utils = { workspace = true }
+zydeco-derive = { workspace = true }
+zydeco-syntax = { workspace = true }
+zydeco-surface = { workspace = true }
+zydeco-statics = { workspace = true }
+derive_more = { workspace = true }
+derive-where = { workspace = true }
+im = { workspace = true }
+indexmap = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+doctest = false

@@ -7,6 +7,7 @@ members = [
     "zydeco-lang/syntax",
     "zydeco-lang/surface",
     "zydeco-lang/statics",
+    "zydeco-lang/dynamics",
     "zydeco-lang/driver",
     "cli",
     "web",
@@ -30,6 +31,7 @@ zydeco-derive = { path = "zydeco-lang/derive" }
 zydeco-syntax = { path = "zydeco-lang/syntax" }
 zydeco-surface = { path = "zydeco-lang/surface" }
 zydeco-statics = { path = "zydeco-lang/statics" }
+zydeco-dynamics = { path = "zydeco-lang/dynamics" }
 # meta
 syn = "2.0"
 quote = "1.0"
