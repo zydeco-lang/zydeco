@@ -71,8 +71,7 @@ impl Desugar for t::DeclId {
                     ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), self.into());
                 }
                 // abs & ann -> anno
-                let anno =
-                    Alloc::alloc(desugarer, b::Ann { tm: abs, ty: ann }.into(), self.into());
+                let anno = Alloc::alloc(desugarer, b::Ann { tm: abs, ty: ann }.into(), self.into());
                 // anno -> sealed
                 let sealed = Alloc::alloc(desugarer, b::Sealed(anno).into(), self.into());
                 // pat & sealed -> alias
@@ -95,8 +94,7 @@ impl Desugar for t::DeclId {
                     ann = Alloc::alloc(desugarer, b::Pi(tpat, ann).into(), self.into());
                 }
                 // abs & ann -> anno
-                let anno =
-                    Alloc::alloc(desugarer, b::Ann { tm: abs, ty: ann }.into(), self.into());
+                let anno = Alloc::alloc(desugarer, b::Ann { tm: abs, ty: ann }.into(), self.into());
                 // anno -> sealed
                 let sealed = Alloc::alloc(desugarer, b::Sealed(anno).into(), self.into());
                 // pat & sealed -> alias
@@ -225,8 +223,12 @@ impl Desugar for t::PatId {
                     | 1 => pats.into_iter().next().unwrap(),
                     // otherwise, re-expand the paren into cons
                     | _ => {
-                        let mut iter = pats.into_iter();
-                        let mut body = b::Cons(iter.next().unwrap(), iter.next().unwrap()).into();
+                        // re-expand from right to left, like:
+                        // (p1, (p2, (p3, p4)))
+                        let mut iter = pats.into_iter().rev();
+                        let snd = iter.next().unwrap();
+                        let fst = iter.next().unwrap();
+                        let mut body = b::Cons(fst, snd).into();
                         for pat in iter {
                             let id = Alloc::alloc(desugarer, body, self.into());
                             body = b::Cons(pat, id).into()
@@ -316,11 +318,15 @@ impl Desugar for t::TermId {
                     | 1 => terms.into_iter().next().unwrap(),
                     // otherwise, re-expand the paren into cons
                     | _ => {
-                        let mut iter = terms.into_iter();
-                        let mut body = b::Cons(iter.next().unwrap(), iter.next().unwrap()).into();
+                        // re-expand from right to left, like:
+                        // (t1, (t2, (t3, t4)))
+                        let mut iter = terms.into_iter().rev();
+                        let snd = iter.next().unwrap();
+                        let fst = iter.next().unwrap();
+                        let mut body = b::Cons(fst, snd).into();
                         for term in iter {
                             let id = Alloc::alloc(desugarer, body, self.into());
-                            body = b::Cons(id, term).into()
+                            body = b::Cons(term, id).into()
                         }
                         Alloc::alloc(desugarer, body, self.into())
                     }

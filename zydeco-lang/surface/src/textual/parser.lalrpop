@@ -248,7 +248,7 @@ TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
 #[inline]
 TermId: TermId = <TermGen<Term>>;
 Term: Term = {
-    <TermRight>,
+    <TermArrow>,
     // abstraction
     "fn" <params:CoPatId> "->" <term:TermId> => {
         Abs(params, term)
@@ -258,15 +258,15 @@ Term: Term = {
         Pi(params, term)
     }.into(),
     // forall
-    "forall" <params:CoPatId> "." <ty:TermRightId> => {
+    "forall" <params:CoPatId> "." <ty:TermArrowId> => {
         Forall(params, ty)
     }.into(),
     // sigma
-    "sigma" <params:CoPatId> "." <ty:TermRightId> => {
+    "sigma" <params:CoPatId> "." <ty:TermArrowId> => {
         Sigma(params, ty)
     }.into(),
     // exists
-    "exists" <params:CoPatId> "." <ty:TermRightId> => {
+    "exists" <params:CoPatId> "." <ty:TermArrowId> => {
         Exists(params, ty)
     }.into(),
     // recursion
@@ -311,21 +311,21 @@ TermParenId: TermId = <TermGen<TermParen>>;
 TermParen: Term = <Paren<TermAnnId>> => <>.into();
 
 #[inline]
-TermRightId: TermId = <TermGen<TermRight>>;
-TermRight: Term = {
-    <TermLeft>,
+TermArrowId: TermId = <TermGen<TermArrow>>;
+TermArrow: Term = {
+    <TermProd>,
     // arrow
-    <ty_in:TermLeftId> "->" <ty_out:TermRightId> => {
+    <ty_in:TermProdId> "->" <ty_out:TermArrowId> => {
         Arrow(ty_in, ty_out).into()
     },
 };
 
 #[inline]
-TermLeftId: TermId = <TermGen<TermLeft>>;
-TermLeft: Term = {
+TermProdId: TermId = <TermGen<TermProd>>;
+TermProd: Term = {
     <TermApp>,
     // product
-    <ty_l:TermLeftId> "*" <ty_r:TermAppId> => {
+    <ty_l:TermAppId> "*" <ty_r:TermProdId> => {
         Prod(ty_l, ty_r).into()
     },
 };

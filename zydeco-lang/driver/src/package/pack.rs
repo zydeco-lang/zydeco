@@ -126,44 +126,44 @@ impl Package {
 
         // resolving
         let pack = pack.resolve(alloc.alloc())?;
-        // Debug: print the in-package dependencies
-        if cfg!(debug_assertions) {
-            use zydeco_surface::scoped::fmt::*;
-            println!();
-            println!(">>> [{}] scoped", self.name);
-            let mut scc = pack.arena.top.clone();
-            let mut cnt = 0;
-            loop {
-                let roots = scc.top();
-                if roots.is_empty() {
-                    break;
-                }
-                let grouped_victims = roots
-                    .into_iter()
-                    .map(|s| s.into_iter().collect::<Vec<_>>())
-                    .collect::<Vec<_>>();
-                println!("\tscc[{}]", cnt);
-                for victims in grouped_victims {
-                    for victim in &victims {
-                        println!("\t\t| {}", {
-                            let mut s = victim.ugly(&Formatter::new(&pack.arena));
-                            // let budget = 80;
-                            let budget = usize::MAX;
-                            if s.len() > budget {
-                                s.truncate(budget - 3);
-                                s.push_str("...");
-                            }
-                            s
-                        });
-                    }
-                    println!("\t\t+");
-                    scc.release(victims);
-                }
-                cnt += 1;
-            }
-            println!("<<< [{}]", self.name);
-        }
-        // Debug: print the contexts upon terms
+        // // Debug: print the in-package dependencies
+        // if cfg!(debug_assertions) {
+        //     use zydeco_surface::scoped::fmt::*;
+        //     println!();
+        //     println!(">>> [{}] scoped", self.name);
+        //     let mut scc = pack.arena.top.clone();
+        //     let mut cnt = 0;
+        //     loop {
+        //         let roots = scc.top();
+        //         if roots.is_empty() {
+        //             break;
+        //         }
+        //         let grouped_victims = roots
+        //             .into_iter()
+        //             .map(|s| s.into_iter().collect::<Vec<_>>())
+        //             .collect::<Vec<_>>();
+        //         println!("\tscc[{}]", cnt);
+        //         for victims in grouped_victims {
+        //             for victim in &victims {
+        //                 println!("\t\t| {}", {
+        //                     let mut s = victim.ugly(&Formatter::new(&pack.arena));
+        //                     // let budget = 80;
+        //                     let budget = usize::MAX;
+        //                     if s.len() > budget {
+        //                         s.truncate(budget - 3);
+        //                         s.push_str("...");
+        //                     }
+        //                     s
+        //                 });
+        //             }
+        //             println!("\t\t+");
+        //             scc.release(victims);
+        //         }
+        //         cnt += 1;
+        //     }
+        //     println!("<<< [{}]", self.name);
+        // }
+        // // Debug: print the contexts upon terms
         // if cfg!(debug_assertions) {
         //     use crate::scoped::fmt::*;
         //     println!(">>> [{}] contexts", self.name);
@@ -183,7 +183,7 @@ impl Package {
         //     }
         //     println!("<<< [{}]", self.name);
         // }
-        // Debug: print the user map
+        // // Debug: print the user map
         // if cfg!(debug_assertions) {
         //     use crate::scoped::fmt::*;
         //     println!(">>> [{}]", self.name);
@@ -203,7 +203,7 @@ impl Package {
         match tycker.run() {
             | Ok(()) => {}
             | Err(()) => {
-                use std::collections::BTreeSet;
+                use std::collections::{BTreeMap, BTreeSet};
                 let mut bs = BTreeSet::new();
                 for err in tycker.errors.to_vec() {
                     bs.insert(format!("{}\n", tycker.error_entry_output(err)));
@@ -217,7 +217,9 @@ impl Package {
                 if cfg!(debug_assertions) {
                     use zydeco_statics::fmt::*;
                     println!(">>> [{}] sealed types arena", self.name);
-                    for (abst, ty) in tycker.statics.seals.clone().into_iter() {
+                    for (abst, ty) in
+                        tycker.statics.seals.clone().into_iter().collect::<BTreeMap<_, _>>()
+                    {
                         println!(
                             "{} := {}",
                             abst.concise(),

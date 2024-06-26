@@ -201,7 +201,7 @@ where
 {
     fn ugly(&self, f: &Formatter) -> String {
         let App(s, t) = self;
-        format!("{} {}", s.ugly(f), t.ugly(f))
+        format!("({} {})", s.ugly(f), t.ugly(f))
     }
 }
 
@@ -228,7 +228,7 @@ where
 {
     fn ugly(&self, f: &Formatter) -> String {
         let Cons(s, t) = self;
-        format!("({} {})", s.ugly(f), t.ugly(f))
+        format!("({}, {})", s.ugly(f), t.ugly(f))
     }
 }
 
@@ -238,7 +238,7 @@ where
 {
     fn ugly(&self, f: &Formatter) -> String {
         let Prod(s, t) = self;
-        format!("{} * {}", s.ugly(f), t.ugly(f))
+        format!("({} * {})", s.ugly(f), t.ugly(f))
     }
 }
 
