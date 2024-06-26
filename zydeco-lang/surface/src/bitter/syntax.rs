@@ -178,6 +178,12 @@ pub struct AliasHead {
     pub ty: Option<TermId>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Module {
+    pub name: Option<NameRef<VarName>>,
+    pub top: TopLevel,
+}
+
 // #[derive(Clone, Debug)]
 // pub struct Layer {
 //     pub name: Option<NameRef<VarName>>,
@@ -201,6 +207,7 @@ pub struct Exec(pub TermId);
 pub enum Declaration {
     AliasBody(AliasBody),
     AliasHead(AliasHead),
+    Module(Module),
     // Layer(Layer),
     // UseDef(UseDef),
     // UseBlock(UseBlock),

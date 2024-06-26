@@ -395,6 +395,10 @@ Declaration: Declaration = {
     <CoDataDef> => <>.into(),
     "define" <GenBind<("=" <TermId>)?>> "end" => Define(<>).into(),
     "alias" <GenBindTerm> "end" => Alias(<>).into(),
+    "module" <name:(<NameRef<VarName>>)?>
+    <top:("where" <TopLevel>)> "end" => Module {
+        name, top
+    }.into(),
     // "layer" <name:(<NameRef<VarName>>)?>
     //     <uses:(<UseLayer>)*>
     // <top:("where" <TopLevel>)> "end" => Layer {

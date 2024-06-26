@@ -252,6 +252,12 @@ pub struct Define(pub GenBind<Option<TermId>>);
 pub struct Alias(pub GenBind<TermId>);
 
 #[derive(Clone, Debug)]
+pub struct Module {
+    pub name: Option<NameRef<VarName>>,
+    pub top: TopLevel,
+}
+
+#[derive(Clone, Debug)]
 pub struct Layer {
     pub name: Option<NameRef<VarName>>,
     pub uses: Vec<Modifiers<UsePath>>,
@@ -284,6 +290,7 @@ pub enum Declaration {
     CoDataDef(CoDataDef),
     Define(Define),
     Alias(Alias),
+    Module(Module),
     // Layer(Layer),
     // UseDef(UseDef),
     // UseBlock(UseBlock),

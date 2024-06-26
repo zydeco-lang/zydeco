@@ -93,6 +93,7 @@ impl Ugly for DeclId {
         match decl {
             | Decl::AliasBody(d) => s += &d.ugly(f),
             | Decl::AliasHead(d) => s += &d.ugly(f),
+            | Declaration::Module(_) => unreachable!(),
             // Decl::Layer(d) => s += &d.ugly(f),
             // Decl::UseDef(d) => s += &d.ugly(f),
             // Decl::UseBlock(d) => s += &d.ugly(f),

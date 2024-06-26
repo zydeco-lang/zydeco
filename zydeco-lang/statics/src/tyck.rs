@@ -161,6 +161,7 @@ impl<'decl> SccDeclarations<'decl> {
                         }
                         Ok(env)
                     }
+                    | Decl::Module(_) => unreachable!(),
                     | Decl::Exec(decl) => {
                         {
                             // administrative

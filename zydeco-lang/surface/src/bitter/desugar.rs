@@ -44,7 +44,19 @@ impl Desugar for t::TopLevel {
     type Out = b::TopLevel;
     fn desugar(self, desugarer: &mut Desugarer) -> Self::Out {
         let t::TopLevel(decls) = self;
-        b::TopLevel(decls.into_iter().map(|decl| decl.desugar(desugarer)).collect())
+        // b::TopLevel(decls.into_iter().map(|decl| decl.desugar(desugarer)).collect())
+        let mut decls_ = Vec::new();
+        for decl in decls {
+            let decl = decl.desugar(desugarer);
+            match &desugarer.bitter.decls[&decl] {
+                | Modifiers { public: _, external: _, inner: b::Declaration::Module(module) } => {
+                    let b::Module { name: _, top: b::TopLevel(decls) } = module;
+                    decls_.extend(decls)
+                }
+                | _ => decls_.push(decl),
+            }
+        }
+        b::TopLevel(decls_)
     }
 }
 
@@ -144,6 +156,11 @@ impl Desugar for t::DeclId {
                 let (pat, term) = genbind.desugar(desugarer);
                 // pat & term -> alias
                 b::AliasBody { binder: pat, bindee: term }.into()
+            }
+            | Decl::Module(decl) => {
+                let t::Module { name, top } = decl;
+                let top = top.desugar(desugarer);
+                b::Module { name, top }.into()
             }
             // Decl::Layer(decl) => {
             //     let t::Layer { name, uses, top } = decl;

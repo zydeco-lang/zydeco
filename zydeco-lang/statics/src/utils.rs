@@ -103,6 +103,7 @@ impl SyntacticallyAnnotated for su::Declaration {
                 let _ = binder;
                 *ty
             }
+            | Decl::Module(_) => unreachable!(),
             | Decl::Exec(su::Exec(_term)) => None,
         }
     }

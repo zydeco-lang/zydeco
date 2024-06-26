@@ -35,6 +35,7 @@ impl Ugly for TopLevel {
                     | Decl::CoDataDef(d) => s += &d.ugly(f),
                     | Decl::Define(d) => s += &d.ugly(f),
                     | Decl::Alias(d) => s += &d.ugly(f),
+                    | Decl::Module(d) => s += &d.ugly(f),
                     // Decl::Layer(d) => s += &d.ugly(f),
                     // Decl::UseDef(d) => s += &d.ugly(f),
                     // Decl::UseBlock(d) => s += &d.ugly(f),
@@ -631,6 +632,22 @@ impl Ugly for Literal {
 //         s
 //     }
 // }
+
+impl Ugly for Module {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        let Module { name, top } = self;
+        s += "module";
+        if let Some(name) = name {
+            s += " ";
+            s += &name.ugly(f);
+        }
+        s += " where\n";
+        s += &top.ugly(f);
+        s += "\nend";
+        s
+    }
+}
 
 // impl Ugly for Layer {
 //     fn ugly(&self, f: &Formatter) -> String {
