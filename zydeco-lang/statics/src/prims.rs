@@ -62,7 +62,10 @@ impl Tycker {
     pub fn register_prim_ty(
         &mut self, mut env: SEnv<()>, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
     ) -> ResultKont<SEnv<()>> {
-        let kd = env.mk(syn_kd).tyck(self, Action::syn())?.as_term_static().as_kind();
+        let kd = match env.mk(syn_kd).tyck(self, Action::syn())?.as_term_static() {
+            | ss::AnnId::Kind(kd) => kd,
+            | ss::AnnId::Set | ss::AnnId::Type(_) => unreachable!(),
+        };
         let ty = Alloc::alloc(&mut self.statics, prim, kd);
         self.statics.annotations_var.insert(def, kd.into());
         env.env += (def, ty.into());
@@ -125,7 +128,10 @@ impl Tycker {
                 let Some(ty) = ty else {
                     self.err(TyckError::MissingAnnotation, std::panic::Location::caller())?
                 };
-                let ty = env.mk(ty).tyck(self, Action::syn())?.as_term_static().as_type();
+                let ty = match env.mk(ty).tyck(self, Action::syn())?.as_term_static() {
+                    | ss::AnnId::Type(ty) => ty,
+                    | ss::AnnId::Set | ss::AnnId::Kind(_) => unreachable!(),
+                };
                 let _ = env.mk(binder).tyck(self, Action::ana(ty.into()))?;
             }
         }

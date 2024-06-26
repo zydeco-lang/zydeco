@@ -82,98 +82,9 @@ new_key_type! {
 
 mod impls_identifiers {
     use super::*;
-    use crate::err::*;
     use crate::*;
 
-    impl PatId {
-        pub fn as_type_or_err(self, f: impl FnOnce() -> TyckError) -> Result<TPatId> {
-            match self {
-                | PatId::Type(t) => Ok(t),
-                | _ => Err(f()),
-            }
-        }
-        pub fn as_value_or_err(self, f: impl FnOnce() -> TyckError) -> Result<VPatId> {
-            match self {
-                | PatId::Value(v) => Ok(v),
-                | _ => Err(f()),
-            }
-        }
-    }
-
-    impl TermId {
-        pub fn as_kind_or_err(self, f: impl FnOnce() -> TyckError) -> Result<KindId> {
-            match self {
-                | TermId::Kind(k) => Ok(k),
-                | _ => Err(f()),
-            }
-        }
-        pub fn as_type_or_err(self, f: impl FnOnce() -> TyckError) -> Result<TypeId> {
-            match self {
-                | TermId::Type(t) => Ok(t),
-                | _ => Err(f()),
-            }
-        }
-        pub fn as_ann_or_err(self, f: impl FnOnce() -> TyckError) -> Result<AnnId> {
-            match self {
-                | TermId::Type(t) => Ok(AnnId::Type(t)),
-                | TermId::Kind(k) => Ok(AnnId::Kind(k)),
-                | _ => Err(f()),
-            }
-        }
-        pub fn as_value_or_err(self, f: impl FnOnce() -> TyckError) -> Result<ValueId> {
-            match self {
-                | TermId::Value(v) => Ok(v),
-                | _ => Err(f()),
-            }
-        }
-        pub fn as_compu_or_err(self, f: impl FnOnce() -> TyckError) -> Result<CompuId> {
-            match self {
-                | TermId::Compu(c) => Ok(c),
-                | _ => Err(f()),
-            }
-        }
-    }
-
-    impl AnnId {
-        pub fn as_kind(self) -> KindId {
-            match self {
-                | AnnId::Kind(k) => k,
-                | _ => panic!("Expected a kind"),
-            }
-        }
-        pub fn as_kind_or_err(self, f: impl FnOnce() -> TyckError) -> Result<KindId> {
-            match self {
-                | AnnId::Kind(k) => Ok(k),
-                | _ => Err(f()),
-            }
-        }
-        pub fn as_type(self) -> TypeId {
-            match self {
-                | AnnId::Type(t) => t,
-                | _ => panic!("Expected a type"),
-            }
-        }
-        pub fn as_type_or_err(self, f: impl FnOnce() -> TyckError) -> Result<TypeId> {
-            match self {
-                | AnnId::Type(t) => Ok(t),
-                | _ => Err(f()),
-            }
-        }
-    }
-
     impl PatAnnId {
-        pub fn as_pat(self) -> PatId {
-            match self {
-                | PatAnnId::Type(t, _) => t.into(),
-                | PatAnnId::Value(v, _) => v.into(),
-            }
-        }
-        pub fn as_ann(self) -> AnnId {
-            match self {
-                | PatAnnId::Type(_, ann) => ann.into(),
-                | PatAnnId::Value(_, ann) => ann.into(),
-            }
-        }
         pub fn mk_hole(statics: &mut StaticsArena, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
@@ -203,27 +114,11 @@ mod impls_identifiers {
     }
 
     impl TermAnnId {
-        pub fn as_term(self) -> TermId {
-            match self {
-                | TermAnnId::Kind(k) => k.into(),
-                | TermAnnId::Type(t, _) => t.into(),
-                | TermAnnId::Value(v, _) => v.into(),
-                | TermAnnId::Compu(c, _) => c.into(),
-            }
-        }
         pub fn as_term_static(self) -> AnnId {
-            match self.as_term() {
-                | TermId::Kind(k) => AnnId::Kind(k),
-                | TermId::Type(t) => AnnId::Type(t),
-                | TermId::Value(_) | TermId::Compu(_) => unreachable!(),
-            }
-        }
-        pub fn as_ann(self) -> AnnId {
             match self {
-                | TermAnnId::Kind(_) => AnnId::Set,
-                | TermAnnId::Type(_, ann) => ann.into(),
-                | TermAnnId::Value(_, ann) => ann.into(),
-                | TermAnnId::Compu(_, ann) => ann.into(),
+                | TermAnnId::Kind(k) => AnnId::Kind(k),
+                | TermAnnId::Type(t, _) => AnnId::Type(t),
+                | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => unreachable!(),
             }
         }
     }
