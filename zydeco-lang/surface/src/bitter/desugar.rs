@@ -418,6 +418,15 @@ impl Desugar for t::TermId {
                     }
                 }
             }
+            | Tm::KontCall(term) => {
+                let t::KontCall { body, tail } = term;
+                let body = body.desugar(desugarer);
+                let tail = tail.desugar(desugarer);
+                // tail -> thunk
+                let thunk = Alloc::alloc(desugarer, b::Thunk(tail).into(), self.into());
+                // body & thunk -> app
+                Alloc::alloc(desugarer, b::App(body, thunk).into(), self.into())
+            }
             | Tm::Rec(term) => {
                 let t::Rec(pat, term) = term;
                 let pat = pat.desugar(desugarer);

@@ -51,6 +51,8 @@ pub enum Tok<'input> {
     In,
     #[token("do")]
     Do,
+    #[token("do~")]
+    DoTilde,
     #[token("ret")]
     Ret,
     #[token("with")]
@@ -151,6 +153,7 @@ impl<'input> Display for Tok<'input> {
             | Tok::Let => write!(f, "let"),
             | Tok::In => write!(f, "in"),
             | Tok::Do => write!(f, "do"),
+            | Tok::DoTilde => write!(f, "do~"),
             | Tok::Ret => write!(f, "ret"),
             | Tok::Begin => write!(f, "begin"),
             | Tok::With => write!(f, "with"),

@@ -108,6 +108,13 @@ pub struct GenBind<Bindee> {
     pub bindee: Bindee,
 }
 
+/// `do M ; N`
+#[derive(Clone, Debug)]
+pub struct KontCall {
+    pub body: TermId,
+    pub tail: TermId,
+}
+
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
 pub struct Pi(pub CoPatId, pub TermId);
@@ -206,6 +213,7 @@ pub enum Term {
     Paren(Paren<TermId>),
     Abs(Abs<CoPatId, TermId>),
     App(Appli<TermId>),
+    KontCall(KontCall),
     Rec(Rec<PatId, TermId>),
     Pi(Pi),
     Forall(Forall),

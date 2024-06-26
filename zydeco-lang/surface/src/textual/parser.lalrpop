@@ -35,6 +35,7 @@ extern {
         "let" => Tok::Let,
         "in" => Tok::In,
         "do" => Tok::Do,
+        "do~" => Tok::DoTilde,
         "ret" => Tok::Ret,
         "with" => Tok::With,
         "import" => Tok::Import,
@@ -273,10 +274,14 @@ Term: Term = {
     "rec" <binder:PatId> "->" <term:TermId> => {
         Rec(binder, term)
     }.into(),
+    // kont call
+    "do~" <body:TermId> ";" <tail:TermId> => KontCall {
+        body, tail
+    }.into(),
     // bind
-    "do" <binder:PatId> "<-" <bindee:TermId> ";" <tail:TermId> => {
-        Bind { binder, bindee, tail }.into()
-    },
+    "do" <binder:PatId> "<-" <bindee:TermId> ";" <tail:TermId> => Bind {
+        binder, bindee, tail
+    }.into(),
     // pure bind
     "let" <binding:GenBindTerm> "in" <tail:TermId> => GenPureBind {
         binding, tail
