@@ -49,6 +49,7 @@ pub enum PatAnnId {
 }
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum TermAnnId {
+    Hole,
     Kind(KindId),
     Type(TypeId, KindId),
     Value(ValueId, TypeId),
@@ -118,7 +119,57 @@ mod impls_identifiers {
             match self {
                 | TermAnnId::Kind(k) => AnnId::Kind(k),
                 | TermAnnId::Type(t, _) => AnnId::Type(t),
-                | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => unreachable!(),
+                | TermAnnId::Hole | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                    unreachable!()
+                }
+            }
+        }
+        pub fn try_as_kind(
+            self, tycker: &mut Tycker, err: TyckError,
+            blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<KindId> {
+            match self {
+                | TermAnnId::Kind(kd) => Ok(kd),
+                | TermAnnId::Hole
+                | TermAnnId::Type(_, _)
+                | TermAnnId::Value(_, _)
+                | TermAnnId::Compu(_, _) => tycker.err(err, blame),
+            }
+        }
+        pub fn try_as_type(
+            self, tycker: &mut Tycker, err: TyckError,
+            blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<(TypeId, KindId)> {
+            match self {
+                | TermAnnId::Type(ty, kd) => Ok((ty, kd)),
+                | TermAnnId::Hole
+                | TermAnnId::Kind(_)
+                | TermAnnId::Value(_, _)
+                | TermAnnId::Compu(_, _) => tycker.err(err, blame),
+            }
+        }
+        pub fn try_as_value(
+            self, tycker: &mut Tycker, err: TyckError,
+            blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<(ValueId, TypeId)> {
+            match self {
+                | TermAnnId::Value(val, ty) => Ok((val, ty)),
+                | TermAnnId::Hole
+                | TermAnnId::Kind(_)
+                | TermAnnId::Type(_, _)
+                | TermAnnId::Compu(_, _) => tycker.err(err, blame),
+            }
+        }
+        pub fn try_as_compu(
+            self, tycker: &mut Tycker, err: TyckError,
+            blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<(CompuId, TypeId)> {
+            match self {
+                | TermAnnId::Compu(com, ty) => Ok((com, ty)),
+                | TermAnnId::Hole
+                | TermAnnId::Kind(_)
+                | TermAnnId::Type(_, _)
+                | TermAnnId::Value(_, _) => tycker.err(err, blame),
             }
         }
     }
