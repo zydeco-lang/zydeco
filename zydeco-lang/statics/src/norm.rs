@@ -2,7 +2,7 @@ use crate::{syntax::*, *};
 use zydeco_utils::arena::ArenaAccess;
 
 impl TypeId {
-    pub fn subst_env(&self, tycker: &mut Tycker, env: &Context<AnnId>) -> ResultKont<TypeId> {
+    pub fn subst_env(&self, tycker: &mut Tycker, env: &Env<AnnId>) -> ResultKont<TypeId> {
         let kd = tycker.statics.annotations_type[self].clone();
         let ty = tycker.statics.types[self].clone();
         match ty {
@@ -30,7 +30,7 @@ impl TypeId {
                 if ty == ty_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Abs(tpat, ty_), kd))
+                    Ok(Alloc::alloc(&mut tycker.statics, Abs(tpat, ty_), kd))
                 }
             }
             | Type::App(app) => {
@@ -40,7 +40,7 @@ impl TypeId {
                 if ty1 == ty1_ && ty2 == ty2_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, App(ty1_, ty2_), kd))
+                    Ok(Alloc::alloc(&mut tycker.statics, App(ty1_, ty2_), kd))
                 }
             }
             | Type::Thunk(_)
@@ -57,7 +57,7 @@ impl TypeId {
                 if ty1 == ty1_ && ty2 == ty2_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd))
+                    Ok(Alloc::alloc(&mut tycker.statics, Arrow(ty1_, ty2_), kd))
                 }
             }
             | Type::Forall(forall) => {
@@ -72,7 +72,7 @@ impl TypeId {
                 if ty == ty_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Forall(tpat, ty_), kd))
+                    Ok(Alloc::alloc(&mut tycker.statics, Forall(tpat, ty_), kd))
                 }
             }
             | Type::Prod(prod) => {
@@ -82,7 +82,7 @@ impl TypeId {
                 if ty1 == ty1_ && ty2 == ty2_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Prod(ty1_, ty2_), kd))
+                    Ok(Alloc::alloc(&mut tycker.statics, Prod(ty1_, ty2_), kd))
                 }
             }
             | Type::Exists(exists) => {
@@ -97,7 +97,7 @@ impl TypeId {
                 if ty == ty_ {
                     Ok(*self)
                 } else {
-                    Ok(Alloc::alloc(tycker, Exists(tpat, ty_), kd))
+                    Ok(Alloc::alloc(&mut tycker.statics, Exists(tpat, ty_), kd))
                 }
             }
             | Type::Data(data) => {
@@ -122,7 +122,7 @@ impl TypeId {
                     let data_ = tycker.statics.datas.defs.alloc(arms_);
                     tycker.statics.datas.tbls.insert_or_replace(data_, d.to_owned());
                     tycker.statics.datas.eqs.insert_or_replace(d, data_);
-                    Ok(Alloc::alloc(tycker, data_, kd))
+                    Ok(Alloc::alloc(&mut tycker.statics, data_, kd))
                 }
             }
             | Type::CoData(coda) => {
@@ -147,13 +147,13 @@ impl TypeId {
                     let coda_ = tycker.statics.codatas.defs.alloc(arms_);
                     tycker.statics.codatas.tbls.insert_or_replace(coda_, d.to_owned());
                     tycker.statics.codatas.eqs.insert_or_replace(d, coda_);
-                    Ok(Alloc::alloc(tycker, coda_, kd))
+                    Ok(Alloc::alloc(&mut tycker.statics, coda_, kd))
                 }
             }
         }
     }
     pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> ResultKont<TypeId> {
-        self.subst_env(tycker, &Context::singleton(var, with.into()))
+        self.subst_env(tycker, &Env::singleton(var, with.into()))
     }
 }
 
@@ -176,7 +176,7 @@ impl TypeId {
                 if ty1 == ty1_ {
                     self
                 } else {
-                    let app = Alloc::alloc(tycker, App(ty1_, ty2), kd);
+                    let app = Alloc::alloc(&mut tycker.statics, App(ty1_, ty2), kd);
                     app.normalize(tycker, kd)?
                 }
             }
@@ -242,7 +242,7 @@ impl TypeId {
             }
             | _ => {
                 // else, the app is already normalized
-                Alloc::alloc(tycker, ss::App(self, a_ty), kd)
+                Alloc::alloc(&mut tycker.statics, ss::App(self, a_ty), kd)
             }
         };
         Ok(res)

@@ -2,57 +2,57 @@ use crate::*;
 use zydeco_utils::arena::ArenaAccess;
 
 impl Tycker {
-    pub fn vtype(&mut self, env: &ss::Context<ss::AnnId>) -> ss::KindId {
+    pub fn vtype(&mut self, env: &ss::Env<ss::AnnId>) -> ss::KindId {
         let ss::AnnId::Kind(kd) = env[self.prim.vtype.get()] else { unreachable!() };
         kd
     }
-    pub fn ctype(&mut self, env: &ss::Context<ss::AnnId>) -> ss::KindId {
+    pub fn ctype(&mut self, env: &ss::Env<ss::AnnId>) -> ss::KindId {
         let ss::AnnId::Kind(kd) = env[self.prim.ctype.get()] else { unreachable!() };
         kd
     }
-    pub fn thunk(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+    pub fn thunk(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
         ty
     }
-    pub fn thunk_app_hole(&mut self, env: &ss::Context<ss::AnnId>, site: su::TermId) -> ss::TypeId {
+    pub fn thunk_app_hole(&mut self, env: &ss::Env<ss::AnnId>, site: su::TermId) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
         let fill = self.statics.fills.alloc(site);
         let ctype = self.ctype(env);
-        let hole = Alloc::alloc(self, fill, ctype);
+        let hole = Alloc::alloc(&mut self.statics, fill, ctype);
         let vtype = self.vtype(env);
-        let app = Alloc::alloc(self, ss::App(ty, hole), vtype);
+        let app = Alloc::alloc(&mut self.statics, ss::App(ty, hole), vtype);
         app
     }
-    pub fn ret(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+    pub fn ret(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
         ty
     }
-    pub fn ret_app_hole(&mut self, env: &ss::Context<ss::AnnId>, site: su::TermId) -> ss::TypeId {
+    pub fn ret_app_hole(&mut self, env: &ss::Env<ss::AnnId>, site: su::TermId) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
         let fill = self.statics.fills.alloc(site);
         let vtype = self.vtype(env);
-        let hole = Alloc::alloc(self, fill, vtype);
+        let hole = Alloc::alloc(&mut self.statics, fill, vtype);
         let ctype = self.ctype(env);
-        let app = Alloc::alloc(self, ss::App(ty, hole), ctype);
+        let app = Alloc::alloc(&mut self.statics, ss::App(ty, hole), ctype);
         app
     }
-    pub fn unit(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+    pub fn unit(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.unit.get()] else { unreachable!() };
         ty
     }
-    pub fn int(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+    pub fn int(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.int.get()] else { unreachable!() };
         ty
     }
-    pub fn char(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+    pub fn char(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.char.get()] else { unreachable!() };
         ty
     }
-    pub fn string(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+    pub fn string(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.string.get()] else { unreachable!() };
         ty
     }
-    pub fn os(&mut self, env: &ss::Context<ss::AnnId>) -> ss::TypeId {
+    pub fn os(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.os.get()] else { unreachable!() };
         ty
     }
@@ -63,7 +63,7 @@ impl Tycker {
         &mut self, mut env: SEnv<()>, def: ss::DefId, prim: ss::Type, syn_kd: su::TermId,
     ) -> ResultKont<SEnv<()>> {
         let kd = env.mk(syn_kd).tyck(self, Action::syn())?.as_term_static().as_kind();
-        let ty = Alloc::alloc(self, prim, kd);
+        let ty = Alloc::alloc(&mut self.statics, prim, kd);
         self.statics.annotations_var.insert(def, kd.into());
         env.env += (def, ty.into());
         Ok(env)
@@ -78,12 +78,12 @@ impl Tycker {
                 // the alias head is a internal type; unless it's VType or CType
                 match internal {
                     | su::Internal::VType => {
-                        let kd = Alloc::alloc(self, ss::VType, ());
+                        let kd = Alloc::alloc(&mut self.statics, ss::VType, ());
                         self.statics.annotations_var.insert(def, ss::AnnId::Set);
                         env.env += (def, kd.into());
                     }
                     | su::Internal::CType => {
-                        let kd = Alloc::alloc(self, ss::CType, ());
+                        let kd = Alloc::alloc(&mut self.statics, ss::CType, ());
                         self.statics.annotations_var.insert(def, ss::AnnId::Set);
                         env.env += (def, kd.into());
                     }
@@ -140,7 +140,7 @@ pub enum MonadOrAlgebra {
 
 impl Tycker {
     pub fn monad_or_algebra(
-        &self, env: &ss::Context<ss::AnnId>, ty: ss::TypeId,
+        &self, env: &ss::Env<ss::AnnId>, ty: ss::TypeId,
     ) -> Option<MonadOrAlgebra> {
         match self.statics.types.get(&ty).clone()? {
             | ss::Type::App(ss::App(head, ty_1)) => match self.statics.types.get(&head).clone()? {

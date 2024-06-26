@@ -174,28 +174,28 @@ mod impls_identifiers {
                 | PatAnnId::Value(_, ann) => ann.into(),
             }
         }
-        pub fn mk_hole(tycker: &mut Tycker, ann: AnnId) -> Self {
+        pub fn mk_hole(statics: &mut StaticsArena, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty: kd }, kd);
+                    let tm = Alloc::alloc(statics, Ann { tm: Hole, ty: kd }, kd);
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty }, ty);
+                    let tm = Alloc::alloc(statics, Ann { tm: Hole, ty }, ty);
                     PatAnnId::Value(tm, ty)
                 }
             }
         }
-        pub fn mk_var(tycker: &mut Tycker, def: DefId, ann: AnnId) -> Self {
+        pub fn mk_var(statics: &mut StaticsArena, def: DefId, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, def, kd);
+                    let tm = Alloc::alloc(statics, def, kd);
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, def, ty);
+                    let tm = Alloc::alloc(statics, def, ty);
                     PatAnnId::Value(tm, ty)
                 }
             }
@@ -232,6 +232,70 @@ mod impls_identifiers {
 /* --------------------------------- Context -------------------------------- */
 
 pub use su::Context;
+
+/* ------------------------------- Environment ------------------------------ */
+
+#[derive(Clone, Debug)]
+pub struct Env<T> {
+    pub defs: im::HashMap<DefId, T>,
+}
+
+mod impls_env {
+    use super::*;
+    use std::ops::{Add, AddAssign, Index};
+    impl<T> Env<T>
+    where
+        T: Clone,
+    {
+        pub fn new() -> Self {
+            Self { defs: im::HashMap::new() }
+        }
+        pub fn singleton(def: DefId, t: T) -> Self {
+            let mut defs = im::HashMap::new();
+            defs.insert(def, t);
+            Self { defs }
+        }
+        pub fn get(&self, def: &DefId) -> Option<&T> {
+            self.defs.get(def)
+        }
+        pub fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
+            let Env { mut defs } = self.clone();
+            defs.extend(iter);
+            Self { defs }
+        }
+    }
+    impl<T> Add for Env<T>
+    where
+        T: Clone,
+    {
+        type Output = Self;
+        fn add(self, other: Self) -> Self {
+            let Env { mut defs } = self;
+            defs.extend(other.defs);
+            Self { defs }
+        }
+    }
+    impl<T> AddAssign<(DefId, T)> for Env<T>
+    where
+        T: Clone,
+    {
+        fn add_assign(&mut self, (def, t): (DefId, T)) {
+            let Self { defs } = self;
+            let mut defs = defs.clone();
+            defs.insert(def, t);
+            *self = Self { defs };
+        }
+    }
+    impl<T> Index<&DefId> for Env<T>
+    where
+        T: Clone,
+    {
+        type Output = T;
+        fn index(&self, def: &DefId) -> &T {
+            &self.defs[def]
+        }
+    }
+}
 
 /* ---------------------------------- Kind ---------------------------------- */
 

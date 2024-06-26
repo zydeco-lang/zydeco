@@ -1,16 +1,16 @@
-use crate::{syntax::*, *};
+use crate::syntax::*;
 
 pub trait Alloc<T> {
     type Ann;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> T;
+    fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> T;
 }
 
 /* ---------------------------------- Kind ---------------------------------- */
 
 impl Alloc<KindId> for Kind {
     type Ann = ();
-    fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
-        tycker.statics.kinds.alloc(val)
+    fn alloc(statics: &mut StaticsArena, val: Self, (): Self::Ann) -> KindId {
+        statics.kinds.alloc(val)
     }
 }
 macro_rules! AllocKind {
@@ -18,8 +18,8 @@ macro_rules! AllocKind {
         $(
             impl Alloc<KindId> for $t {
                 type Ann = ();
-                fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
-                    Alloc::alloc(tycker, Kind::from(val), ())
+                fn alloc(statics: &mut StaticsArena, val: Self, (): Self::Ann) -> KindId {
+                    Alloc::alloc(statics, Kind::from(val), ())
                 }
             }
         )*
@@ -35,8 +35,8 @@ AllocKind! {
 
 impl Alloc<TPatId> for TypePattern {
     type Ann = KindId;
-    fn alloc(tycker: &mut Tycker, val: Self, _ann: Self::Ann) -> TPatId {
-        let tpat = tycker.statics.tpats.alloc(val);
+    fn alloc(statics: &mut StaticsArena, val: Self, _ann: Self::Ann) -> TPatId {
+        let tpat = statics.tpats.alloc(val);
         tpat
     }
 }
@@ -45,8 +45,8 @@ macro_rules! AllocTypePattern {
         $(
             impl Alloc<TPatId> for $t {
                 type Ann = KindId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> TPatId {
-                    Alloc::alloc(tycker, TypePattern::from(val), ann)
+                fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> TPatId {
+                    Alloc::alloc(statics, TypePattern::from(val), ann)
                 }
             }
         )*
@@ -59,10 +59,9 @@ AllocTypePattern! {
 
 impl Alloc<TypeId> for Type {
     type Ann = KindId;
-    fn alloc(tycker: &mut Tycker, val: Self, kd: Self::Ann) -> TypeId {
-        let ty = tycker.statics.types.alloc(val.into());
-        tycker
-            .statics
+    fn alloc(statics: &mut StaticsArena, val: Self, kd: Self::Ann) -> TypeId {
+        let ty = statics.types.alloc(val.into());
+        statics
             .annotations_type
             .insert_or_else(ty, kd, |_old, _new| {
                 // println!("duplicate keys: {:?} = {:?}, {:?}", ty, _old, _new);
@@ -79,8 +78,8 @@ macro_rules! AllocType {
         $(
             impl Alloc<TypeId> for $t {
                 type Ann = KindId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> TypeId {
-                    Alloc::alloc(tycker, Type::from(val), ann)
+                fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> TypeId {
+                    Alloc::alloc(statics, Type::from(val), ann)
                 }
             }
         )*
@@ -111,8 +110,8 @@ AllocType! {
 
 impl Alloc<VPatId> for ValuePattern {
     type Ann = TypeId;
-    fn alloc(tycker: &mut Tycker, val: Self, _ann: Self::Ann) -> VPatId {
-        let vpat = tycker.statics.vpats.alloc(val);
+    fn alloc(statics: &mut StaticsArena, val: Self, _ann: Self::Ann) -> VPatId {
+        let vpat = statics.vpats.alloc(val);
         vpat
     }
 }
@@ -121,8 +120,8 @@ macro_rules! AllocValuePattern {
         $(
             impl Alloc<VPatId> for $t {
                 type Ann = TypeId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> VPatId {
-                    Alloc::alloc(tycker, ValuePattern::from(val), ann)
+                fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> VPatId {
+                    Alloc::alloc(statics, ValuePattern::from(val), ann)
                 }
             }
         )*
@@ -139,9 +138,9 @@ AllocValuePattern! {
 
 impl Alloc<ValueId> for Value {
     type Ann = TypeId;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> ValueId {
-        let value = tycker.statics.values.alloc(val);
-        tycker.statics.annotations_value.insert(value, ann);
+    fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> ValueId {
+        let value = statics.values.alloc(val);
+        statics.annotations_value.insert(value, ann);
         value
     }
 }
@@ -150,8 +149,8 @@ macro_rules! AllocValue {
         $(
             impl Alloc<ValueId> for $t {
                 type Ann = TypeId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> ValueId {
-                    Alloc::alloc(tycker, Value::from(val), ann)
+                fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> ValueId {
+                    Alloc::alloc(statics, Value::from(val), ann)
                 }
             }
         )*
@@ -170,9 +169,9 @@ AllocValue! {
 
 impl Alloc<CompuId> for Computation {
     type Ann = TypeId;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> CompuId {
-        let compu = tycker.statics.compus.alloc(val);
-        tycker.statics.annotations_compu.insert(compu, ann);
+    fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> CompuId {
+        let compu = statics.compus.alloc(val);
+        statics.annotations_compu.insert(compu, ann);
         compu
     }
 }
@@ -181,8 +180,8 @@ macro_rules! AllocComputation {
         $(
             impl Alloc<CompuId> for $t {
                 type Ann = TypeId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> CompuId {
-                    Alloc::alloc(tycker, Computation::from(val), ann)
+                fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> CompuId {
+                    Alloc::alloc(statics, Computation::from(val), ann)
                 }
             }
         )*
