@@ -8,7 +8,7 @@ deps = []
 bins = [
     "abort.zy",
     "add.zy",
-    # "algtrans.zy",
+    "algtrans.zy",
     "cbpv-monadic.zy",
     "cbpv.zy",
     "cbv.zy",

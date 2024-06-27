@@ -95,6 +95,12 @@ mod impls_identifiers {
     }
 
     impl PatAnnId {
+        pub fn as_pat(self) -> PatId {
+            match self {
+                | PatAnnId::Type(pat, _) => PatId::Type(pat),
+                | PatAnnId::Value(pat, _) => PatId::Value(pat),
+            }
+        }
         pub fn mk_hole(statics: &mut StaticsArena, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
@@ -124,6 +130,16 @@ mod impls_identifiers {
     }
 
     impl TermAnnId {
+        pub fn as_term(self) -> Option<TermId> {
+            let res = match self {
+                | TermAnnId::Kind(k) => TermId::Kind(k),
+                | TermAnnId::Type(t, _) => TermId::Type(t),
+                | TermAnnId::Value(v, _) => TermId::Value(v),
+                | TermAnnId::Compu(c, _) => TermId::Compu(c),
+                | TermAnnId::Hole => None?,
+            };
+            Some(res)
+        }
         pub fn as_term_static(self) -> AnnId {
             match self {
                 | TermAnnId::Kind(k) => AnnId::Kind(k),
@@ -482,9 +498,9 @@ pub struct StaticsArena {
     pub compus: ArenaSparse<CompuId, Computation>,
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
-    // unsorted to sorted bijective maps
-    pub pats: ArenaBack<su::PatId, PatId>,
-    pub terms: ArenaBack<su::TermId, TermId>,
+    // untyped to typed bijective maps
+    pub pats: ArenaBijective<su::PatId, PatId>,
+    pub terms: ArenaBijective<su::TermId, TermId>,
 
     // the type of terms under the context it's type checked; "annotation"
     /// annotations for variable definitions
@@ -521,8 +537,8 @@ impl StaticsArena {
             compus: ArenaSparse::new(alloc.alloc()),
             decls: ArenaAssoc::new(),
 
-            pats: ArenaBack::new(),
-            terms: ArenaBack::new(),
+            pats: ArenaBijective::new(),
+            terms: ArenaBijective::new(),
 
             annotations_var: ArenaAssoc::new(),
             annotations_type: ArenaAssoc::new(),

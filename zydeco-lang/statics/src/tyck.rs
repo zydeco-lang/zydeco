@@ -522,6 +522,9 @@ impl Tyck for SEnv<su::PatId> {
             }
         };
 
+        // maintain back mapping
+        tycker.statics.pats.insert(self.inner, pat_ctx.0.as_pat());
+
         {
             // administrative
             tycker.stack.pop_back();
@@ -2015,6 +2018,12 @@ impl Tyck for SEnv<su::TermId> {
                 TermAnnId::Value(lit, ty)
             }
         };
+
+        // maintain back mapping
+        if let Some(out_ann) = out_ann.as_term() {
+            // println!("inserting {:?} -> {:?}", self.inner, out_ann);
+            tycker.statics.terms.insert(self.inner, out_ann)
+        }
 
         {
             // administrative

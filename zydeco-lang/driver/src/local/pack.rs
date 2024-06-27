@@ -136,7 +136,7 @@ impl LocalPackage {
         // Todo: ...
 
         // resolving
-        let pack = pack.resolve(alloc.alloc())?;
+        let pack = pack.resolve(alloc.alloc())?.check();
         // // Debug: print the in-package dependencies
         // if cfg!(debug_assertions) {
         //     use zydeco_surface::scoped::fmt::*;
@@ -383,4 +383,97 @@ pub struct PackageScoped {
     pub spans: t::SpanArena,
     pub prim: sc::PrimDef,
     pub arena: sc::ScopedArena,
+}
+
+impl PackageScoped {
+    pub fn check(self) -> Self {
+        let PackageScoped { sources, spans, prim, arena } = self;
+        use std::collections::HashSet;
+
+        // check for duplicate term ids
+        let mut ids = HashSet::new();
+        for (id, _term) in &arena.terms {
+            let res = ids.insert(id);
+            assert!(res, "duplicate term id: {:?}", id);
+        }
+        let mut rm = |id: &sc::TermId| {
+            let res = ids.remove(id);
+            assert!(res, "missing term id: {:?}", id);
+        };
+        for (_id, term) in &arena.terms {
+            use sc::Term as Tm;
+            match term {
+                | Tm::Internal(_) => unreachable!(),
+                | Tm::Sealed(sc::Sealed(body)) => {
+                    rm(body);
+                }
+                | Tm::Ann(sc::Ann { tm, ty }) => {
+                    rm(tm);
+                    rm(ty);
+                }
+                | Tm::Hole(sc::Hole) => {}
+                | Tm::Var(_def) => {}
+                | Tm::Triv(sc::Triv) => {}
+                | Tm::Cons(sc::Cons(a, b)) => {
+                    rm(a);
+                    rm(b);
+                }
+                | Tm::Abs(sc::Abs(_binder, body)) => {
+                    rm(body);
+                }
+                | Tm::App(sc::App(f, a)) => {
+                    rm(f);
+                    rm(a);
+                }
+                | Tm::Rec(sc::Rec(_binder, body)) => {
+                    rm(body);
+                }
+                | Tm::Pi(sc::Pi(_binder, body)) => {
+                    rm(body);
+                }
+                | Tm::Sigma(sc::Sigma(_binder, body)) => {
+                    rm(body);
+                }
+                | Tm::Thunk(sc::Thunk(body)) => {
+                    rm(body);
+                }
+                | Tm::Force(sc::Force(body)) => {
+                    rm(body);
+                }
+                | Tm::Ret(sc::Ret(body)) => {
+                    rm(body);
+                }
+                | Tm::Do(sc::Bind { binder: _, bindee, tail }) => {
+                    rm(bindee);
+                    rm(tail);
+                }
+                | Tm::Let(sc::PureBind { binder: _, bindee, tail }) => {
+                    rm(bindee);
+                    rm(tail);
+                }
+                | Tm::Data(_) => {}
+                | Tm::CoData(_) => {}
+                | Tm::Ctor(sc::Ctor(_ctor, body)) => {
+                    rm(body);
+                }
+                | Tm::Match(sc::Match { scrut, arms }) => {
+                    rm(scrut);
+                    for sc::Matcher { binder: _, tail } in arms {
+                        rm(tail);
+                    }
+                }
+                | Tm::CoMatch(sc::CoMatch { arms }) => {
+                    for sc::CoMatcher { dtor: _, tail } in arms {
+                        rm(tail);
+                    }
+                }
+                | Tm::Dtor(sc::Dtor(body, _dtor)) => {
+                    rm(body);
+                }
+                | Tm::WithBlock(_) => {}
+                | Tm::Lit(_) => {}
+            }
+        }
+        PackageScoped { sources, spans, prim, arena }
+    }
 }

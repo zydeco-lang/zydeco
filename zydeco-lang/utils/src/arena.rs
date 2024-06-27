@@ -353,7 +353,8 @@ mod impls {
         Id: Eq + Hash,
     {
         pub fn insert(&mut self, id: Id, val: T) {
-            let None = self.map.insert(id, val) else { panic!("duplicate key") };
+            let None = self.map.insert(id, val) else { return };
+            // let None = self.map.insert(id, val) else { panic!("duplicate key") };
         }
         pub fn replace(&mut self, id: Id, val: T) -> T {
             let Some(val) = self.map.insert(id, val) else { panic!("key not found") };
