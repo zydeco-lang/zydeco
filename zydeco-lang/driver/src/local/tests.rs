@@ -6,7 +6,7 @@ fn test_std() {
         .join("../lib/std/proj.toml")
         .canonicalize()
         .unwrap();
-    let proj = super::pack::Package::new(dir).unwrap();
+    let proj = super::pack::LocalPackage::new(dir).unwrap();
     match proj.run() {
         | Ok(_) => {}
         | Err(err) => {

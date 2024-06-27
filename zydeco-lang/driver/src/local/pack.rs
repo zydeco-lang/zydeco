@@ -1,6 +1,6 @@
 //! The package notation of zydeco.
 
-use super::err::{Result, ZydecoError};
+use super::err::{PackageError, Result};
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
@@ -13,7 +13,7 @@ use zydeco_surface::{
 use zydeco_utils::{
     arena::*,
     deps::DepGraph,
-    span::{FileInfo, LocationCtx, Span},
+    span::{FileInfo, LocationCtx},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -32,7 +32,7 @@ pub enum UseStd {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct Package {
+pub struct LocalPackage {
     #[serde(skip)]
     pub path: PathBuf,
     pub name: String,
@@ -46,7 +46,7 @@ pub struct Package {
     pub std: UseStd,
 }
 
-impl SerdeStr for Package {
+impl SerdeStr for LocalPackage {
     fn de_from_str(s: &str) -> io::Result<Self>
     where
         Self: Sized,
@@ -59,22 +59,22 @@ impl SerdeStr for Package {
     }
 }
 
-impl Package {
+impl LocalPackage {
     pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
         let path = path.into();
         Ok(Self {
             path: path
                 .parent()
-                .ok_or_else(|| ZydecoError::PackageFileNotFound(path.clone()))?
+                .ok_or_else(|| PackageError::PackageFileNotFound(path.clone()))?
                 .to_path_buf(),
             ..FileIO::new(path.clone()).load().map_err(|e| match e.kind() {
-                | io::ErrorKind::NotFound => ZydecoError::PackageFileNotFound(path),
-                | _ => ZydecoError::PackageFileInvalid(path, e),
+                | io::ErrorKind::NotFound => PackageError::PackageFileNotFound(path),
+                | _ => PackageError::PackageFileInvalid(path, e),
             })?
         })
     }
     pub fn run(&self) -> Result<()> {
-        let Package { path, name: _, srcs, deps: _, bins: _, std: _ } = self;
+        let LocalPackage { path, name: _, srcs, deps: _, bins: _, std: _ } = self;
         // Todo: deal with std and deps
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
         // Todo: parallelize w/ rayon (?)
@@ -231,7 +231,7 @@ impl Package {
                     }
                     println!("<<< [{}]", self.name);
                 }
-                Err(ZydecoError::TyckErrors(s))?;
+                Err(PackageError::TyckErrors(s))?;
             }
         }
 
@@ -248,20 +248,12 @@ impl File {
         let path = self.path;
         let source = std::fs::read_to_string(&path).map_err(|_| {
             let path = path.clone();
-            ZydecoError::SrcFileNotFound(path)
+            PackageError::SrcFileNotFound(path)
         })?;
         let info = FileInfo::new(source.as_str(), Rc::new(path));
-        let mut s = String::new();
-        for (l, t, r) in HashLexer::new(&source) {
-            s += &format!(
-                "{}",
-                t.map_err(|()| {
-                    let span = Span::new(l, r);
-                    span.set_info(&info);
-                    ZydecoError::LexerError(format!("{}", span))
-                })?
-            );
-        }
+        let s = HashLexer::new(&source)
+            .hash_string(&info)
+            .map_err(|span| PackageError::LexerError(span))?;
         Ok(FileLoaded { info, source, hash: s.snap() })
     }
 }
@@ -283,7 +275,7 @@ impl FileLoaded {
             hashes.insert(
                 file.info
                     .canonicalize()
-                    .map_err(|_| ZydecoError::CanonicalizationError(file.info.display_path()))?,
+                    .map_err(|_| PackageError::CanonicalizationError(file.info.display_path()))?,
                 file.hash.clone(),
             );
         }
@@ -296,7 +288,7 @@ impl FileLoaded {
         let top = TopLevelParser::new()
             .parse(&source, &LocationCtx::File(info.clone()), &mut parser, Lexer::new(&source))
             .map_err(|error| {
-                ZydecoError::ParseError(ParseError { error, file_info: &info }.to_string())
+                PackageError::ParseError(ParseError { error, file_info: &info }.to_string())
             })?;
 
         let t::Parser { spans, arena } = parser;
@@ -373,7 +365,7 @@ impl PackageStew {
             deps: DepGraph::default(),
         };
         let ResolveOut { spans, prim, arena } =
-            resolver.run(&top).map_err(|err| ZydecoError::ResolveError(err.to_string()))?;
+            resolver.run(&top).map_err(|err| PackageError::ResolveError(err.to_string()))?;
         Ok(PackageScoped { sources, spans, prim, arena })
     }
 }

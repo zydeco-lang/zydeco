@@ -4,7 +4,7 @@ fn main() {
         // .join("../lib/std/proj.toml")
         .canonicalize()
         .unwrap();
-    let proj = zydeco_driver::package::pack::Package::new(dir).unwrap();
+    let proj = zydeco_driver::local::pack::LocalPackage::new(dir).unwrap();
     match proj.run() {
         | Ok(_) => {}
         | Err(err) => {

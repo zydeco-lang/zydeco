@@ -1,12 +1,12 @@
 //! A minimal build system for the zydeco language.
 
+pub mod conf;
 pub mod err;
 
 /// the topmost compilation pipeline led by a package configuration
-pub mod package {
+pub mod local {
     pub mod pack;
     pub use pack::*;
-    pub mod conf;
     pub mod err;
     pub use err::*;
 
@@ -15,8 +15,9 @@ pub mod package {
 }
 
 pub use err::*;
-pub use package::pack::{Dependency, Package};
+pub use local::pack::{Dependency, LocalPackage};
 
+use derive_more::From;
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{
     arena::{new_key_type, ArenaDense},
@@ -25,6 +26,21 @@ use zydeco_utils::{
 
 new_key_type! {
     pub struct PackId<()>;
+}
+
+#[derive(From)]
+pub enum Package {
+    Local(LocalPackage),
+    Repl(String),
+}
+
+impl Package {
+    pub fn deps(&self) -> &[Dependency] {
+        match self {
+            | Package::Local(pack) => &pack.deps,
+            | Package::Repl(_) => &[],
+        }
+    }
 }
 
 pub struct BuildSystem {
@@ -45,9 +61,9 @@ impl BuildSystem {
     pub fn new() -> Self {
         Self { packages: ArenaDense::default(), seen: HashMap::new(), depends_on: DepGraph::new() }
     }
-    pub fn run(mut self, path: impl Into<PathBuf>) -> Result<()> {
+    pub fn add_local_package(&mut self, path: impl Into<PathBuf>) -> Result<()> {
         // add all dependent packages to the build system
-        let pack = Package::new(path)?;
+        let pack = LocalPackage::new(path)?;
         let mut stack = vec![self.add(pack)?];
         while let Some(id) = stack.pop() {
             let deps = self.probe(id)?;
@@ -55,13 +71,16 @@ impl BuildSystem {
         }
         Ok(())
     }
+    pub fn add_local_file(&mut self, _path: impl Into<PathBuf>) -> Result<()> {
+        todo!()
+    }
 }
 
 impl BuildSystem {
     /// add a package to the build system
-    pub fn add(&mut self, pack: Package) -> Result<PackId> {
+    pub fn add(&mut self, pack: LocalPackage) -> Result<PackId> {
         let path = pack.path.clone().canonicalize()?;
-        let pack_id = self.packages.alloc(pack);
+        let pack_id = self.packages.alloc(pack.into());
         self.seen.insert(path, pack_id);
         Ok(pack_id)
     }
@@ -70,7 +89,7 @@ impl BuildSystem {
         let pack = &self.packages[&id];
         let mut deps_old = Vec::new();
         let mut deps_new = Vec::new();
-        for dep in &pack.deps {
+        for dep in pack.deps() {
             match dep {
                 | Dependency::Local(path) => {
                     let path = path.canonicalize()?;
@@ -85,7 +104,7 @@ impl BuildSystem {
         let deps_new = deps_new
             .into_iter()
             .map(|path| {
-                let pack = Package::new(path)?;
+                let pack = LocalPackage::new(path)?;
                 self.add(pack)
             })
             .collect::<Result<Vec<_>>>()?;

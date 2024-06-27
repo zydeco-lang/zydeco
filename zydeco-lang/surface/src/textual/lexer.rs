@@ -223,6 +223,20 @@ impl<'source> HashLexer<'source> {
     pub fn new(source: &'source str) -> Self {
         Self { inner: Tok::lexer(&source).spanned() }
     }
+    pub fn hash_string(self, info: &zydeco_utils::span::FileInfo) -> Result<String, String> {
+        let mut h = String::new();
+        for (l, t, r) in self {
+            h += &format!(
+                "{}",
+                t.map_err(|()| {
+                    let span = zydeco_utils::span::Span::new(l, r);
+                    span.set_info(&info);
+                    format!("{}", span)
+                })?
+            );
+        }
+        Ok(h)
+    }
 }
 
 impl<'source> Iterator for HashLexer<'source> {

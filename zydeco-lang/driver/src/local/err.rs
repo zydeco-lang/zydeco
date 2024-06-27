@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum ZydecoError {
+pub enum PackageError {
     #[error("Package file not found: `{}`", .0.display())]
     PackageFileNotFound(PathBuf),
     #[error("Package file at `{}` invalid: {}", .0.display(), .1)]
@@ -21,4 +21,4 @@ pub enum ZydecoError {
     TyckErrors(String),
 }
 
-pub type Result<T> = std::result::Result<T, ZydecoError>;
+pub type Result<T> = std::result::Result<T, PackageError>;
