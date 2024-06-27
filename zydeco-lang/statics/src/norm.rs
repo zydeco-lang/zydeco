@@ -120,8 +120,9 @@ impl TypeId {
                 } else {
                     let d = Data { arms: arms_.iter().cloned().collect() };
                     let data_ = tycker.statics.datas.defs.alloc(arms_);
-                    tycker.statics.datas.tbls.insert_or_replace(data_, d.to_owned());
-                    tycker.statics.datas.eqs.insert_or_replace(d, data_);
+                    // Todo: deal with the case where the data type is already in the table
+                    let _ = tycker.statics.datas.tbls.insert_or_replace(data_, d.to_owned());
+                    let _ = tycker.statics.datas.eqs.insert_or_replace(d, data_);
                     Ok(Alloc::alloc(&mut tycker.statics, data_, kd))
                 }
             }
@@ -145,8 +146,9 @@ impl TypeId {
                 } else {
                     let d = CoData { arms: arms_.iter().cloned().collect() };
                     let coda_ = tycker.statics.codatas.defs.alloc(arms_);
-                    tycker.statics.codatas.tbls.insert_or_replace(coda_, d.to_owned());
-                    tycker.statics.codatas.eqs.insert_or_replace(d, coda_);
+                    // Todo: deal with the case where the codata type is already in the table
+                    let _ = tycker.statics.codatas.tbls.insert_or_replace(coda_, d.to_owned());
+                    let _ = tycker.statics.codatas.eqs.insert_or_replace(d, coda_);
                     Ok(Alloc::alloc(&mut tycker.statics, coda_, kd))
                 }
             }
@@ -246,5 +248,15 @@ impl TypeId {
             }
         };
         Ok(res)
+    }
+}
+
+impl Tycker {
+    pub fn fill(&mut self, fill: FillId, mut ann: AnnId) -> ResultKont<AnnId> {
+        if let Some(ann_) = self.statics.solus.insert_or_get(fill, ann) {
+            ann = Lub::lub(ann, ann_, self)?;
+            self.statics.solus.replace(fill, ann);
+        }
+        Ok(ann)
     }
 }

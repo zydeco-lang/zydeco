@@ -85,6 +85,15 @@ mod impls_identifiers {
     use super::*;
     use crate::*;
 
+    impl AnnId {
+        pub fn as_type(self) -> TypeId {
+            match self {
+                | AnnId::Type(ty) => ty,
+                | _ => unreachable!(),
+            }
+        }
+    }
+
     impl PatAnnId {
         pub fn mk_hole(statics: &mut StaticsArena, ann: AnnId) -> Self {
             match ann {

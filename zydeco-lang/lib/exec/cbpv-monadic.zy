@@ -100,7 +100,7 @@ module MExnOS where
       comatch
       | .run ka _ ->
         do~ ! write_line s;
-        ! ka +Unit()
+        ! ka ()
       end
     end
   end
@@ -722,7 +722,7 @@ def rec fn interp (env: U EnvO) : Interp =
               do~ ! traceo items .print;
               do~ ! write_str "Continue? ";
               do~ ! read_line; fn _ ->
-              ! ka +Unit()
+              ! ka ()
             end
           } in
           do~ ! mexn .bind (Unit) (Value) mp; fn _ ->

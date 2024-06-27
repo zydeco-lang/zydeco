@@ -373,7 +373,10 @@ impl Tyck for SEnv<su::PatId> {
                         ty.into()
                     }
                 };
-                tycker.statics.annotations_var.insert_or_replace(def, ann);
+                if let Some(ann_) = tycker.statics.annotations_var.insert_or_get(def, ann) {
+                    let ann = Lub::lub(ann_, ann, tycker)?;
+                    tycker.statics.annotations_var.replace(def, ann);
+                }
                 let var = PatAnnId::mk_var(&mut tycker.statics, def, ann);
                 let ctx = Context::singleton(def, ann);
                 (var, ctx)
@@ -593,14 +596,14 @@ impl Tyck for SEnv<su::TermId> {
                     },
                     | AnnId::Type(ty) => match tycker.statics.types[&ty].to_owned() {
                         | ss::Type::Fill(fill) => match self.tyck(tycker, Action::syn())? {
-                            | TermAnnId::Value(v, _) => {
-                                tycker.statics.solus.insert(fill, ty.into());
+                            | TermAnnId::Value(v, ty) => {
+                                let ty = tycker.fill(fill, ty.into())?.as_type();
                                 // administrative
                                 tycker.stack.pop_back();
                                 return Ok(TermAnnId::Value(v, ty));
                             }
                             | TermAnnId::Compu(c, ty) => {
-                                tycker.statics.solus.insert(fill, ty.into());
+                                let ty = tycker.fill(fill, ty.into())?.as_type();
                                 // administrative
                                 tycker.stack.pop_back();
                                 return Ok(TermAnnId::Compu(c, ty));

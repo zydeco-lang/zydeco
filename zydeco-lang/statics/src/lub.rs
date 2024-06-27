@@ -110,9 +110,8 @@ impl Debruijn {
                     }
                     | AnnId::Type(old) => {
                         let ty = Lub::lub(old, ty, tycker)?;
-                        // Todo: insert or lub
-                        tycker.statics.solus.insert(fill, ty.into());
-                        Ok(ty)
+                        let ty_ = tycker.fill(fill, ty.into())?.as_type();
+                        Ok(ty_)
                     }
                 },
                 | None => {
