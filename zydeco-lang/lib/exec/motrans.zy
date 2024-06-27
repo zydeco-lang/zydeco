@@ -1,3 +1,59 @@
+codata Exn (E: VType) (A: VType) where
+  | .done : Ret (Either E A)
+end
+
+def fn mexn (E: VType) : Monad (Exn E) =
+  comatch
+  | .return A a .done ->
+    ret +Right(a)
+  | .bind A A' m f .done ->
+    do a? <- ! m .done;
+    match a?
+    | +Left(e) -> ret +Left(e)
+    | +Right(a) -> ! f a .done
+    end
+  end
+end
+
+codata ExnT (E: VType) (M: VType -> CType) (A: VType) where
+  | .done : M (Either E A)
+end
+
+def fn mexnt (E: VType) (M: VType -> CType) (mo: U (Monad M)) : Monad (ExnT E M) =
+  comatch
+  | .return A a .done ->
+    ! mo .return (Either E A) +Right(a)
+  | .bind A A' m f .done ->
+    do~ ! mo .bind (Either E A) (Either E A') { ! m .done }; fn a? ->
+    match a?
+    | +Left(e) -> ! mo .return (Either E A') +Left(e)
+    | +Right(a) -> ! f a .done
+    end
+  end
+end
+
+def fn mexnt' (E: VType) (M: VType -> CType) (mo: U (Monad M)) : Monad (ExnT E M) =
+  with mo
+  begin
+    ! mexn E
+  end
+end
+
+def fn mt-exnt (E: VType) : MonadTrans (ExnT E) =
+  comatch
+  | .monad M mo -> ! mexnt E M mo
+  | .lift M A mo m -> fn .done ->
+    // do~ ! mo .bind A (Either E A) m; fn a ->
+    // ! mo .return (Either E A) +Right(a)
+    with mo
+      import m : Thunk (Ret A) = m
+    begin
+      do a <- ! m;
+      ret (+Right(a) : Either E A)
+    end
+  end
+end
+
 codata ExnK (E: VType) (A: VType) where
   | .run : forall (R: CType) .
     Thunk (E -> R) -> Thunk (A -> R) -> R
@@ -10,18 +66,50 @@ def fn mexnk (E: VType) : Monad (ExnK E) =
     ! ka a
   | .bind A A' m f ->
     fn .run R ke ka ->
-    ! m .run (R) ke
-    { fn a -> ! f a .run (R) ke ka }
+    do~ ! m .run R ke; fn a ->
+    ! f a .run R ke ka
+  end
+end
+
+codata ExnKT (E: VType) (M: VType -> CType) (A: VType) where
+  | .run : forall (R: CType) . Thunk (Algebra M R) ->
+    Thunk (E -> R) -> Thunk (A -> R) -> R
+end
+
+def fn mexnkt (E: VType) (M: VType -> CType) (mo: U (Monad M)) : Monad (ExnKT E M) =
+  comatch
+  | .return A a ->
+    fn .run R alg ke ka ->
+    ! ka a
+  | .bind A A' m f ->
+    fn .run R alg ke ka' ->
+    do~ ! m .run R alg ke; fn a ->
+    ! f a .run R alg ke ka'
+  end
+end
+
+def fn mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
+  comatch
+  | .monad M mo -> ! mexnkt E M mo
+  | .lift M A mo m -> fn .run R alg ke ka ->
+    with mo with alg
+      import m : Thunk (Ret A) = m
+      import ka : Thunk (A -> R) = ka
+    begin
+      do a <- ! m;
+      ! ka a
+    end
   end
 end
 
 main
-  let e = {
-    with { ! mexnk (String) } begin
-      do x <- ret 0;
-      ret x
-    end
-  } in
-  ! e .run (OS) { fn e -> ! panic e } { fn a -> ! exit a }
+  // let e = {
+  //   with { ! mexnk (String) } begin
+  //     do x <- ret 0;
+  //     ret x
+  //   end
+  // } in
+  // ! e .run (OS) { fn e -> ! panic e } { fn a -> ! exit a }
+  ! exit 0
 end
 

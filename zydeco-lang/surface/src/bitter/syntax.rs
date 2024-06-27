@@ -113,7 +113,7 @@ pub struct CoMatcher {
     pub tail: TermId,
 }
 
-/// `import f = V`
+/// `import f : B = V`
 #[derive(Clone, Debug)]
 pub struct Import {
     pub binder: PatId,
@@ -121,7 +121,7 @@ pub struct Import {
     pub body: TermId,
 }
 
-/// `with T import f = V begin M end`
+/// `with mo import f : B = V begin M end`
 #[derive(Clone, Debug)]
 pub struct WithBlock {
     pub structs: Vec<TermId>,

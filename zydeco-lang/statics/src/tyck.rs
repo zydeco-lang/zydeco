@@ -1942,7 +1942,7 @@ impl Tyck for SEnv<su::TermId> {
             | Tm::WithBlock(term) => {
                 let su::WithBlock { structs, imports, body } = term;
                 let mut mo = None;
-                let mut alg = Vec::new();
+                let mut algs = Vec::new();
                 for struct_ in structs {
                     let struct_out_ann = self.mk(struct_).tyck(tycker, Action::syn())?;
                     let (val, ty) = struct_out_ann.try_as_value(
@@ -1962,7 +1962,7 @@ impl Tyck for SEnv<su::TermId> {
                             mo = Some((val, m));
                         }
                         | Some(Algebra(m, c)) => {
-                            alg.push((val, m, c));
+                            algs.push((val, m, c));
                         }
                         | None => tycker.err(
                             TyckError::NeitherMonadNorAlgebra,
@@ -1976,14 +1976,18 @@ impl Tyck for SEnv<su::TermId> {
                         tycker.err(TyckError::MissingMonad, std::panic::Location::caller())?
                     }
                 };
-                println!("monad {:?} : Monad {:?}", mo, mo_ty_arg);
-                for (alg, alg_ty_mo_arg, alg_ty_carrier_arg) in alg {
-                    println!(
-                        "algebra {:?} : Algebra {:?} {:?}",
-                        alg, alg_ty_mo_arg, alg_ty_carrier_arg
-                    );
+                // println!("monad {:?} : Monad {:?}", mo, mo_ty_arg);
+                for (alg, alg_ty_mo_arg, alg_ty_carrier_arg) in &algs {
+                    // println!(
+                    //     "algebra {:?} : Algebra {:?} {:?}",
+                    //     alg, alg_ty_mo_arg, alg_ty_carrier_arg
+                    // );
+                    let _ = alg;
+                    let _ = alg_ty_mo_arg;
+                    let _ = alg_ty_carrier_arg;
                 }
                 // let (alg, alg_ty_mo_arg, alg_ty_carrier_arg) = alg.ok_or_else(|| TyckError::MissingAlgebra)?;
+                let mut imports_ = Vec::new();
                 for su::Import { binder, ty, body } in imports {
                     let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
                     let (body, body_ty) = body_out_ann.try_as_value(
@@ -2001,11 +2005,47 @@ impl Tyck for SEnv<su::TermId> {
                     let vtype = tycker.vtype(&self.env);
                     Lub::lub(vtype, kd, tycker)?;
                     // check that ty and body_ty are compatible
-                    println!("import {:?} : {:?} = {:?} : {:?}", binder, ty, body, body_ty);
-                    // todo!()
+                    let ty_lift = ty.lift(tycker, mo_ty_arg)?;
+                    Lub::lub(ty_lift, body_ty, tycker)?;
+                    let (binder_out_ann, _ctx) =
+                        self.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
+                    let (binder, _ty) = match binder_out_ann {
+                        | PatAnnId::Type(_, _) => {
+                            tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
+                        }
+                        | PatAnnId::Value(binder, ty) => (binder, ty),
+                    };
+                    // println!("import {:?} : {:?} = {:?} : {:?}", binder, ty, body, body_ty);
+                    imports_.push(ss::Import { binder, ty, body })
                 }
-                println!("body {:?}", body);
-                todo!()
+                // println!("body {:?}", body);
+                // change all return types to the monad type
+                let (body, body_ty) = self.mk(body).tyck(tycker, Action::syn())?.try_as_compu(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+                // Todo: check against ana switch if needed
+                let body_ty_lift = body_ty.lift(tycker, mo_ty_arg)?;
+                let with_block = Alloc::alloc(
+                    &mut tycker.statics,
+                    ss::WithBlock {
+                        monad: mo,
+                        algebras: algs.into_iter().map(|(alg, _, _)| alg).collect(),
+                        imports: imports_,
+                        body,
+                    },
+                    body_ty_lift,
+                );
+                // {
+                //     // print body_ty_lift
+                //     use crate::fmt::*;
+                //     println!(
+                //         "body_ty_lift: {}",
+                //         body_ty_lift.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                //     );
+                // }
+                TermAnnId::Compu(with_block, body_ty_lift)
             }
             | Tm::Lit(lit) => {
                 fn check_against_ty(

@@ -424,6 +424,23 @@ pub struct CoMatcher {
     pub tail: CompuId,
 }
 
+/// `import f = V`
+#[derive(Clone, Debug)]
+pub struct Import {
+    pub binder: VPatId,
+    pub ty: TypeId,
+    pub body: ValueId,
+}
+
+/// `with mo import f : B = V begin M end`
+#[derive(Clone, Debug)]
+pub struct WithBlock {
+    pub monad: ValueId,
+    pub algebras: Vec<ValueId>,
+    pub imports: Vec<Import>,
+    pub body: CompuId,
+}
+
 #[derive(From, Clone, Debug)]
 pub enum Computation {
     Hole(Hole),
@@ -439,6 +456,7 @@ pub enum Computation {
     Match(Match),
     CoMatch(CoMatch),
     Dtor(Dtor<CompuId>),
+    WithBlock(WithBlock),
 }
 
 /* -------------------------------- TopLevel -------------------------------- */

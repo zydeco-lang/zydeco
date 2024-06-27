@@ -201,4 +201,5 @@ AllocComputation! {
     Match
     CoMatch
     Dtor<CompuId>
+    WithBlock
 }
