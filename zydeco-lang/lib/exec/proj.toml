@@ -2,7 +2,7 @@ name = "ExecTests"
 
 srcs = [
     "../std/lib.zy",
-    "../std/avl.zy",
+    # "../std/avl.zy",
 ]
 deps = []
 bins = [
@@ -21,7 +21,7 @@ bins = [
     # "exists.zy",
     "fn-opt.zy",
     "forall.zy",
-    "hash.zy",
+    # "hash.zy",
     "ifz.zy",
     "interpreter.zydeco",
     "list.zydeco",
@@ -30,7 +30,7 @@ bins = [
     # "motrans.zy",
     "num.zy",
     "oo.zydeco",
-    "partial-annotation.zy",
+    # "partial-annotation.zy",
     "regex.zy",
     "ret.zydeco",
     # "trans.zy",

@@ -32,7 +32,6 @@ impl Tycker {
     }
     pub fn run(&mut self) -> ResultKont<()> {
         let mut scc = self.scoped.top.clone();
-        // Todo: tycker should be able to continue on non-dependent errors
         let mut env = SEnv::new(());
         loop {
             let groups = scc.top();
@@ -56,11 +55,39 @@ impl Tycker {
                 }
             }
         }
-        if self.errors.is_empty() {
-            Ok(())
-        } else {
-            Err(())
+        if !self.errors.is_empty() {
+            Err(())?
         }
+        // fill all holes with solutions
+        let mut types = Vec::new();
+        for (id, ty) in &self.statics.types {
+            types.push((*id, ty.to_owned()));
+        }
+        for (id, ty) in types {
+            use ss::Type as Ty;
+            match ty {
+                | Ty::Fill(fill) => match self.statics.solus.get(&fill) {
+                    | Some(ann) => match ann {
+                        | AnnId::Set | AnnId::Kind(_) => {
+                            let _: ResultKont<()> =
+                                self.err(TyckError::SortMismatch, std::panic::Location::caller());
+                        }
+                        | AnnId::Type(ty) => {
+                            self.statics.types.replace(id, self.statics.types[ty].to_owned());
+                        }
+                    },
+                    | None => {
+                        let _: ResultKont<()> = self
+                            .err(TyckError::MissingSolution(fill), std::panic::Location::caller());
+                    }
+                },
+                | _ => {}
+            }
+        }
+        if !self.errors.is_empty() {
+            Err(())?
+        }
+        Ok(())
     }
 }
 

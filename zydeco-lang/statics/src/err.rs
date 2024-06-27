@@ -4,6 +4,7 @@ use crate::{syntax::*, *};
 pub enum TyckError {
     MissingAnnotation,
     MissingSeal,
+    MissingSolution(FillId),
     SortMismatch,
     KindMismatch,
     TypeMismatch { expected: TypeId, found: TypeId },
@@ -30,6 +31,16 @@ impl Tycker {
         match error {
             | TyckError::MissingAnnotation => format!("Missing annotation"),
             | TyckError::MissingSeal => format!("Missing seal"),
+            | TyckError::MissingSolution(fill) => {
+                use zydeco_surface::scoped::fmt::*;
+                let site = self.statics.fills[&fill];
+                let prev = self.scoped.textual.back(&(site.into())).unwrap();
+                format!(
+                    "Missing solution for {} ({})",
+                    site.ugly(&Formatter::new(&self.scoped)),
+                    self.spans[prev]
+                )
+            }
             | TyckError::SortMismatch => format!("Sort mismatch"),
             | TyckError::KindMismatch => format!("Kind mismatch"),
             | TyckError::TypeMismatch { expected, found } => {
