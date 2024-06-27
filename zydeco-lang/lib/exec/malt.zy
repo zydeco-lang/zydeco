@@ -1,14 +1,5 @@
-codata Monad (M: VType -> CType) where
-  | .return : forall (A: VType) . A -> M A
-  | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
-end
-
 codata MonadErr (M: VType -> CType) where
   | .fail : forall (A: VType) . M A
-end
-
-codata Algebra (M: VType -> CType) (B: CType) where
-  | .bindA : forall (A: VType) . U (M A) -> U (A -> B) -> B
 end
 
 // a maybe monad with the carrier of OS

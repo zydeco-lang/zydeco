@@ -64,7 +64,7 @@ def rec fn mstate_statek (S: VType) : MonadState S (StateK S) =
     ! k s s
   | .put s' ->
     fn .run R s k ->
-    ! k +Unit() s'
+    ! k () s'
   end
 end
 

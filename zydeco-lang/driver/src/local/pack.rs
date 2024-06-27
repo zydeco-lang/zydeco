@@ -74,7 +74,15 @@ impl LocalPackage {
         })
     }
     pub fn run(&self) -> Result<()> {
-        let LocalPackage { path, name: _, srcs, deps: _, bins: _, std: _ } = self;
+        let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
+        for bin in bins {
+            Self::run_srcs(name, path, srcs.iter().chain([bin]))?
+        }
+        Ok(())
+    }
+    fn run_srcs<'f>(
+        name: &str, path: &std::path::Path, srcs: impl Iterator<Item = &'f PathBuf>,
+    ) -> Result<()> {
         // Todo: deal with std and deps
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
         // Todo: parallelize w/ rayon (?)
@@ -133,7 +141,7 @@ impl LocalPackage {
         // if cfg!(debug_assertions) {
         //     use zydeco_surface::scoped::fmt::*;
         //     println!();
-        //     println!(">>> [{}] scoped", self.name);
+        //     println!(">>> [{}] scoped", name);
         //     let mut scc = pack.arena.top.clone();
         //     let mut cnt = 0;
         //     loop {
@@ -164,12 +172,12 @@ impl LocalPackage {
         //         }
         //         cnt += 1;
         //     }
-        //     println!("<<< [{}]", self.name);
+        //     println!("<<< [{}]", name);
         // }
         // // Debug: print the contexts upon terms
         // if cfg!(debug_assertions) {
         //     use crate::scoped::fmt::*;
-        //     println!(">>> [{}] contexts", self.name);
+        //     println!(">>> [{}] contexts", name);
         //     for (term, ctx) in &pack.arena.ctxs {
         //         print!(
         //             "\t{} |-> [",
@@ -184,12 +192,12 @@ impl LocalPackage {
         //         print!("]");
         //         println!()
         //     }
-        //     println!("<<< [{}]", self.name);
+        //     println!("<<< [{}]", name);
         // }
         // // Debug: print the user map
         // if cfg!(debug_assertions) {
         //     use crate::scoped::fmt::*;
-        //     println!(">>> [{}]", self.name);
+        //     println!(">>> [{}]", name);
         //     for (def, users) in &pack.arena.users {
         //         println!(
         //             "\t{:?} -> {:?}",
@@ -197,7 +205,7 @@ impl LocalPackage {
         //             users.len()
         //         );
         //     }
-        //     println!("<<< [{}]", self.name);
+        //     println!("<<< [{}]", name);
         // }
 
         // type-checking
@@ -219,7 +227,7 @@ impl LocalPackage {
                 // Debug: print the sealed types arena
                 if cfg!(debug_assertions) {
                     use zydeco_statics::fmt::*;
-                    println!(">>> [{}] sealed types arena", self.name);
+                    println!(">>> [{}] sealed types arena", name);
                     for (abst, ty) in
                         tycker.statics.seals.clone().into_iter().collect::<BTreeMap<_, _>>()
                     {
@@ -229,7 +237,7 @@ impl LocalPackage {
                             ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
                         );
                     }
-                    println!("<<< [{}]", self.name);
+                    println!("<<< [{}]", name);
                 }
                 Err(PackageError::TyckErrors(s))?;
             }

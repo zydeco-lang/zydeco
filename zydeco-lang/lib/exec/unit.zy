@@ -1,7 +1,8 @@
 # Unit defined in std.zydeco
 
 main
-  let v: Unit = +Unit() in
-  do x <- !unit_to_str v;
-  !write_line x {!exit 0}
+  let v: Unit = () in
+  do x <- ! unit_to_str v;
+  do~ ! write_line x;
+  ! exit 0
 end

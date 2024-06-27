@@ -34,7 +34,7 @@ def fn mexn : MonadErrPrint MExnOS =
   | .print s ->
     comatch
     | .run -> fn ka _ ->
-      ! write_line s { ! ka +Unit() }
+      ! write_line s { ! ka () }
     end
   end
 end

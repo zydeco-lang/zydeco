@@ -2,7 +2,7 @@ data Seal (X : VType) (A : VType) where
 | +Seal : Thunk(A -> Ret X) * Thunk(X -> Ret A)
 end
 
-def nat : exists (X : VType) . Seal X Int = pack(
+def nat : exists (X : VType) . Seal X Int = (
   Int, +Seal(
     { ! id (Int) },
     { ! id (Int) },

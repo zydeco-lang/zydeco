@@ -20,7 +20,7 @@ end
 
 alias ParenCounterTrans = ParenCounterState -> ParenCounterStk end
 
-def rec fn foldr
+def rec fn paren_foldr
   (ll : Thunk(Ret(LList' Tok)))
   (step : Thunk(Tok -> Thunk(ParenCounterTrans) -> ParenCounterTrans))
   (final : Thunk(ParenCounterTrans))
@@ -28,7 +28,7 @@ def rec fn foldr
   do l <- ! ll;
   match l
   | +Nil()      -> ! final
-  | +Cons(c, k) -> ! step c { ! foldr k step final }
+  | +Cons(c, k) -> ! step c { ! paren_foldr k step final }
   end
 end
 
@@ -66,7 +66,7 @@ end
 
 def fn demonstrate (s: String) (expect: Bool) (toks: Thunk(Ret(LList' Tok))) (t : Thunk(OS)) : OS =
   do s' <- ! str_append "The following parens are balanced? "  s;
-  do b <- ! foldr toks paren_counter_step accept_or_not (+Ok() : ParenCounterState) .none;
+  do b <- ! paren_foldr toks paren_counter_step accept_or_not (+Ok() : ParenCounterState) .none;
   do pass <- ! bool_eq expect b;
   match pass
   | +True() -> (
