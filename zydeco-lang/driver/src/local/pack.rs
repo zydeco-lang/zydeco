@@ -246,6 +246,34 @@ impl LocalPackage {
 
         let Tycker { spans: _, prim: _, scoped, statics, stack: _, errors: _ } = tycker;
         let dynamics = Linker { scoped, statics }.run();
+        // Debug: print the variable definitions in dynamics
+        if cfg!(debug_assertions) {
+            use std::collections::BTreeMap;
+            println!(">>> [{}] dynamic defs", name);
+            let mut defs = BTreeMap::new();
+            for (def, decl) in &dynamics.defs {
+                defs.insert(def, decl.clone());
+            }
+            for (def, zydeco_syntax::VarName(name)) in defs {
+                // use zydeco_dynamics::fmt::*;
+                println!("{:?} := {}", def, name);
+            }
+            println!("<<< [{}]", name);
+        }
+        // Debug: print the definitions in dynamics
+        if cfg!(debug_assertions) {
+            use std::collections::BTreeMap;
+            println!(">>> [{}] dynamics decls", name);
+            let mut decls = BTreeMap::new();
+            for (def, decl) in &dynamics.decls {
+                decls.insert(def, decl.clone());
+            }
+            for (_, decl) in decls {
+                use zydeco_dynamics::fmt::*;
+                println!("{}", decl.ugly(&Formatter::new(&dynamics)),);
+            }
+            println!("<<< [{}]", name);
+        }
 
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();

@@ -132,7 +132,12 @@ impl Tycker {
                     | ss::AnnId::Type(ty) => ty,
                     | ss::AnnId::Set | ss::AnnId::Kind(_) => unreachable!(),
                 };
-                let _ = env.mk(binder).tyck(self, Action::ana(ty.into()))?;
+                let (pat_out_ann, _ctx) = env.mk(binder).tyck(self, Action::ana(ty.into()))?;
+                let binder = match pat_out_ann {
+                    | ss::PatAnnId::Type(_, _) => unreachable!(),
+                    | ss::PatAnnId::Value(vpat, _) => vpat,
+                };
+                self.statics.decls.insert(id.clone(), ss::VAliasHead { binder, ty }.into());
             }
         }
         Ok(env)

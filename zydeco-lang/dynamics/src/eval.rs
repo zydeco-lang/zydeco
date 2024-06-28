@@ -32,6 +32,7 @@ impl<'rt> Runtime<'rt> {
         let mut scc = arena.top.clone();
         let mut konts = Vec::new();
         loop {
+            println!("{:?}", scc);
             let groups = scc.top();
             // if no more groups are at the top, we're done
             if groups.is_empty() {
@@ -71,6 +72,14 @@ impl<'rt> Eval<'rt> for Declaration {
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         match self {
             | Declaration::VAliasBody(VAliasBody { binder, bindee }) => {
+                match binder.as_ref() {
+                    | ValuePattern::Var(binder) => {
+                        println!("{:?}", binder);
+                    }
+                    | _ => {
+                        println!("{:?}", binder);
+                    }
+                }
                 let bindee = bindee.as_ref().clone().eval(runtime);
                 let () =
                     (binder, bindee).eval(runtime).expect("pattern match failed in definition");
@@ -92,6 +101,7 @@ impl<'rt> Eval<'rt> for (RcVPat, SemValue) {
         match vpat.as_ref() {
             | VPat::Hole(Hole) => {}
             | VPat::Var(def) => {
+                println!("<== {:?}", def);
                 runtime.env += (*def, sem);
             }
             | VPat::Ctor(Ctor(ctor, vpat)) => match sem {
@@ -148,6 +158,7 @@ impl<'rt> Eval<'rt> for Value {
                 panic!("Hole in value")
             }
             | Value::Var(var) => {
+                println!("==> {:?}", var);
                 Step::Done(runtime.env.get(&var).expect("variable does not exist").clone())
             }
             | Value::Thunk(Thunk(body)) => {
@@ -217,12 +228,11 @@ impl<'rt> Eval<'rt> for Computation {
                 Step::Step(bindee.as_ref().clone())
             }
             | Computation::Rec(Rec(vpat, body)) => {
-                let () = (
-                    vpat,
-                    SemValue::Thunk(EnvThunk { body: body.clone(), env: runtime.env.clone() }),
-                )
-                    .eval(runtime)
-                    .expect("pattern match failed in rec");
+                let thunk = SemValue::Thunk(EnvThunk {
+                    body: std::rc::Rc::new(Rec(vpat.clone(), body.clone()).into()),
+                    env: runtime.env.clone(),
+                });
+                let () = (vpat, thunk).eval(runtime).expect("pattern match failed in rec");
                 Step::Step(body.as_ref().clone())
             }
             | Computation::Match(Match { scrut, arms }) => {

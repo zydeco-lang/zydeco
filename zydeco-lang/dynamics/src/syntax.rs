@@ -6,7 +6,7 @@ use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_utils::{arena::*, deps::DepGraph, scc::SccGraph};
+use zydeco_utils::{arena::*, scc::SccGraph};
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -90,10 +90,6 @@ pub struct DynamicsArena {
     // arenas
     pub defs: ArenaSparse<DefId, VarName>,
     pub decls: ArenaSparse<DeclId, Declaration>,
-
-    /// dependency graph of the top level declarations
-    pub deps: DepGraph<DeclId>,
-    /// scc graph of the top level declarations
     pub top: SccGraph<DeclId>,
 }
 

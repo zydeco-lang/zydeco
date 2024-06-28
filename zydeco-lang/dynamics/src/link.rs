@@ -20,10 +20,17 @@ impl Linker {
     pub fn run(self) -> DynamicsArena {
         let Linker { scoped, statics } = self;
         let defs = scoped.defs;
-        let decls = scoped.decls.filter_map_id(|id| id.link((&statics, &defs)));
-        let deps = scoped.deps;
-        let top = scoped.top;
-        DynamicsArena { defs, decls, deps, top }
+        let mut top = scoped.top;
+        let mut invalid = Vec::new();
+        let decls = scoped.decls.filter_map_id_mut(|id| match id.link((&statics, &defs)) {
+            | Some(decl) => Some(decl),
+            | None => {
+                invalid.push(id);
+                None
+            }
+        });
+        top.release(invalid);
+        DynamicsArena { defs, decls, top }
     }
 }
 
@@ -53,6 +60,7 @@ impl Link for ss::DeclId {
                     }
                 };
                 let name = defs[def].as_str();
+                println!("builtin: {}", name);
                 let bindee = {
                     let prim = BUILTINS[name].to_owned().into();
                     let thunk = Thunk(Rc::new(prim)).into();
