@@ -9,6 +9,7 @@ The [zydeco repo](https://github.com/zydeco-lang/zydeco) is where current zydeco
 ## Build and Release
 
 ```bash
+npm run compile
 vsce package
 vsce publish
 ```
