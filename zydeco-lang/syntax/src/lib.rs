@@ -115,6 +115,7 @@ pub struct Dtor<Head>(pub Head, pub DtorName);
 #[derive(From, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Literal {
     Int(i64),
-    String(String),
+    // Note: for real dude?
+    String(Vec<char>),
     Char(char),
 }

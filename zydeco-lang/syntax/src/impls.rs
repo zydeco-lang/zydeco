@@ -7,3 +7,10 @@ impl fmt::Display for VarName {
         write!(f, "{}", name)
     }
 }
+
+impl VarName {
+    pub fn as_str(&self) -> &str {
+        let VarName(name) = self;
+        name
+    }
+}

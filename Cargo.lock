@@ -2593,10 +2593,10 @@ dependencies = [
 name = "zydeco-dynamics"
 version = "0.2.0"
 dependencies = [
- "derive-where",
  "derive_more",
  "im",
- "indexmap",
+ "once_cell",
+ "rand",
  "thiserror",
  "zydeco-derive",
  "zydeco-statics",

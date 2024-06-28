@@ -105,7 +105,7 @@ Char: char = <"CharLit"> => escape::apply_char_escapes(<>);
 
 Literal: Literal = {
     <Int> => <>.into(),
-    <String> => <>.into(),
+    <String> => <>.chars().collect::<Vec<_>>().into(),
     <Char> => <>.into(),
 };
 

@@ -17,10 +17,10 @@ zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 derive_more = { workspace = true }
-derive-where = { workspace = true }
 im = { workspace = true }
-indexmap = { workspace = true }
+once_cell = { workspace = true }
 thiserror = { workspace = true }
+rand = { workspace = true }
 
 [lib]
 doctest = false

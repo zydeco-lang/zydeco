@@ -6,6 +6,8 @@ pub mod statics_syntax {
 }
 
 pub mod syntax;
+pub mod builtin;
+mod impls;
 pub mod link;
 pub mod eval;
 pub mod fmt;

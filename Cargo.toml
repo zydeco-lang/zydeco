@@ -25,6 +25,7 @@ license = "MIT"
 readme = "README.md"
 
 [workspace.dependencies]
+# zydeco
 zydeco-lang = { path = "zydeco-lang" }
 zydeco-utils = { path = "zydeco-lang/utils" }
 zydeco-derive = { path = "zydeco-lang/derive" }
@@ -46,6 +47,7 @@ rand = "0.8"
 sequence_trie = "0.3"
 im = "15"
 indexmap = "2.2"
+phf = "0.11"
 # serialization
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
