@@ -643,7 +643,12 @@ impl Tyck for SEnv<su::TermId> {
                                     .err(TyckError::SortMismatch, std::panic::Location::caller())?
                             }
                         },
-                        | _ => switch = Switch::Ana(ty.subst_env(tycker, &self.env)?.into()),
+                        | _ => {
+                            let kd = tycker.statics.annotations_type[&ty].to_owned();
+                            switch = Switch::Ana(
+                                ty.subst_env(tycker, &self.env)?.normalize(tycker, kd)?.into(),
+                            )
+                        }
                     },
                 }
             }

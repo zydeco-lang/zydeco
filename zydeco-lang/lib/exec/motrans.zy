@@ -1,33 +1,33 @@
-codata Exn (E: VType) (A: VType) where
-  | .done : Ret (Either E A)
+alias Exn (E: VType) (A: VType) : CType =
+  Ret (Either E A)
 end
 
 def fn mexn (E: VType) : Monad (Exn E) =
   comatch
-  | .return A a .done ->
+  | .return A a ->
     ret +Right(a)
-  | .bind A A' m f .done ->
-    do a? <- ! m .done;
+  | .bind A A' m f ->
+    do a? <- ! m;
     match a?
     | +Left(e) -> ret +Left(e)
-    | +Right(a) -> ! f a .done
+    | +Right(a) -> ! f a
     end
   end
 end
 
-codata ExnT (E: VType) (M: VType -> CType) (A: VType) where
-  | .done : M (Either E A)
+alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
+  M (Either E A)
 end
 
 def fn mexnt (E: VType) (M: VType -> CType) (mo: U (Monad M)) : Monad (ExnT E M) =
   comatch
-  | .return A a .done ->
+  | .return A a ->
     ! mo .return (Either E A) +Right(a)
-  | .bind A A' m f .done ->
-    do~ ! mo .bind (Either E A) (Either E A') { ! m .done }; fn a? ->
+  | .bind A A' m f ->
+    do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
     match a?
     | +Left(e) -> ! mo .return (Either E A') +Left(e)
-    | +Right(a) -> ! f a .done
+    | +Right(a) -> ! f a
     end
   end
 end
@@ -42,7 +42,7 @@ end
 def fn mt-exnt (E: VType) : MonadTrans (ExnT E) =
   comatch
   | .monad M mo -> ! mexnt E M mo
-  | .lift M A mo m -> fn .done ->
+  | .lift M A mo m ->
     // do~ ! mo .bind A (Either E A) m; fn a ->
     // ! mo .return (Either E A) +Right(a)
     with mo
