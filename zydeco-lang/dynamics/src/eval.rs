@@ -237,7 +237,9 @@ impl<'rt> Eval<'rt> for Computation {
             }
             | Computation::Match(Match { scrut, arms }) => {
                 let scrut = scrut.as_ref().clone().eval(runtime);
+                let mut binders = Vec::new();
                 for Matcher { binder, tail } in arms {
+                    binders.push(binder.clone());
                     match (binder.to_owned(), scrut.clone()).eval(runtime) {
                         | Ok(()) => return Step::Step(tail.as_ref().clone()),
                         | Err(()) => {}

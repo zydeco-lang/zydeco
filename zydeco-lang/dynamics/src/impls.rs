@@ -51,8 +51,8 @@ fn dtor(body: Rc<ZCompute>, dtor: &str) -> ZCompute {
 // /* Bool */
 fn bool(b: bool) -> ZValue {
     let b = match b {
-        | true => "True",
-        | false => "False",
+        | true => "+True",
+        | false => "+False",
     };
     ctor(b, vec![])
 }
@@ -130,16 +130,16 @@ pub fn str_split_once(
         | [ZValue::Literal(Literal::String(s)), ZValue::Literal(Literal::Char(p))] => {
             match s.into_iter().collect::<String>().split_once(p.to_owned()) {
                 | Some((a, b)) => ret(ctor(
-                    "Some",
+                    "+Some",
                     vec![mk_rc(ctor(
-                        "Cons",
+                        "+Cons",
                         vec![
                             mk_rc(Literal::String(a.chars().collect()).into()),
                             mk_rc(Literal::String(b.chars().collect()).into()),
                         ],
                     ))],
                 )),
-                | None => ret(ctor("None", vec![])),
+                | None => ret(ctor("+None", vec![])),
             }
         }
         | _ => unreachable!(""),
@@ -152,13 +152,13 @@ pub fn str_split_n(
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(s)), ZValue::Literal(Literal::Int(n))] => {
             if n.is_negative() {
-                return ret(ctor("None", vec![]));
+                return ret(ctor("+None", vec![]));
             }
             let (a, b) = s.split_at(*n as usize);
             ret(ctor(
-                "Some",
+                "+Some",
                 vec![mk_rc(ctor(
-                    "Cons",
+                    "+Cons",
                     vec![
                         mk_rc(Literal::String(a.to_owned()).into()),
                         mk_rc(Literal::String(b.to_owned()).into()),
@@ -277,10 +277,10 @@ pub fn read_line_as_int(
             match i {
                 | Some(i) => Ok(app(
                     mk_rc(Force(mk_rc(e.clone().into())).into()),
-                    ctor("Some", vec![mk_rc(Literal::Int(i).into())]),
+                    ctor("+Some", vec![mk_rc(Literal::Int(i).into())]),
                 )),
                 | None => {
-                    Ok(app(mk_rc(Force(mk_rc(e.clone().into())).into()), ctor("None", vec![])))
+                    Ok(app(mk_rc(Force(mk_rc(e.clone().into())).into()), ctor("+None", vec![])))
                 }
             }
         }
@@ -309,10 +309,10 @@ pub fn arg_list(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [k] => {
-            let mut z_arg_list = ctor("Nil", vec![]);
+            let mut z_arg_list = ctor("+Nil", vec![]);
             for arg in argv.iter().rev() {
                 z_arg_list = ctor(
-                    "Cons",
+                    "+Cons",
                     vec![mk_rc(Literal::String(arg.chars().collect()).into()), mk_rc(z_arg_list)],
                 );
             }
