@@ -1,3 +1,5 @@
+use zydeco_utils::arena::ArenaAccess;
+
 use crate::{statics_syntax::Env, syntax::*};
 use std::io::{BufRead, Write};
 
@@ -38,7 +40,12 @@ impl<'rt> Runtime<'rt> {
             for group in groups {
                 // each group should be type checked on its own
                 for decl in &group {
-                    let decl = arena.decls[decl].to_owned();
+                    let decl = {
+                        match arena.decls.get(decl) {
+                            | Some(decl) => decl.clone(),
+                            | None => continue,
+                        }
+                    };
                     let res = decl.eval(&mut self);
                     if let Some(kont) = res {
                         konts.push(kont);
@@ -65,7 +72,8 @@ impl<'rt> Eval<'rt> for Declaration {
         match self {
             | Declaration::VAliasBody(VAliasBody { binder, bindee }) => {
                 let bindee = bindee.as_ref().clone().eval(runtime);
-                let () = (binder, bindee).eval(runtime).expect("pattern match failed in definition");
+                let () =
+                    (binder, bindee).eval(runtime).expect("pattern match failed in definition");
                 Step::Done(None)
             }
             | Declaration::Exec(Exec(comp)) => {
@@ -255,26 +263,3 @@ impl<'rt> Eval<'rt> for Computation {
         }
     }
 }
-
-// impl<'rt> Eval<'rt> for Module {
-//     type Out = Module;
-
-//     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
-//         for (x, v) in self.define {
-//             let v = v.clone().eval(runtime);
-//             let env = runtime.env.update(x, v);
-//             runtime.env = env;
-//         }
-//         Step::Done(Module { name: self.name })
-//     }
-// }
-
-// impl<'rt> Eval<'rt> for Program {
-//     type Out = Program;
-
-//     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
-//         let module = self.module.eval(runtime);
-//         let prog_kont = self.entry.eval(runtime);
-//         Step::Done(Program { module, entry: prog_kont })
-//     }
-// }

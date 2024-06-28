@@ -3,7 +3,7 @@ use builtin::BUILTINS;
 use std::rc::Rc;
 use zydeco_statics::{surface_syntax::ScopedArena, syntax::StaticsArena};
 use zydeco_syntax::*;
-use zydeco_utils::arena::ArenaSparse;
+use zydeco_utils::arena::{ArenaAccess, ArenaSparse};
 
 pub trait Link {
     type Arena<'a>;
@@ -32,7 +32,7 @@ impl Link for ss::DeclId {
     type Out = Option<ds::Declaration>;
 
     fn link<'a>(&self, (statics, defs): Self::Arena<'a>) -> Self::Out {
-        let decl: &ss::Declaration = &statics.decls[&self];
+        let decl: &ss::Declaration = statics.decls.get(self)?;
         use ss::Declaration as Decl;
         let decl = match decl {
             | Decl::TAliasBody(_) => None?,

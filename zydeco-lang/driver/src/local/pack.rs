@@ -4,6 +4,7 @@ use super::err::{PackageError, Result};
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
+use zydeco_dynamics::{Linker, ProgKont, Runtime};
 use zydeco_statics::Tycker;
 use zydeco_surface::{
     bitter::{syntax as b, DesugarOut, Desugarer},
@@ -240,6 +241,19 @@ impl LocalPackage {
                     println!("<<< [{}]", name);
                 }
                 Err(PackageError::TyckErrors(s))?;
+            }
+        }
+
+        let Tycker { spans: _, prim: _, scoped, statics, stack: _, errors: _ } = tycker;
+        let dynamics = Linker { scoped, statics }.run();
+
+        let mut input = std::io::stdin().lock();
+        let mut output = std::io::stdout();
+        let kont = Runtime::new(&mut input, &mut output, &[]).run(dynamics);
+        match kont {
+            | ProgKont::Ret(v) => println!("ret: {:?}", v),
+            | ProgKont::ExitCode(code) => {
+                println!("exit: {}", code);
             }
         }
 

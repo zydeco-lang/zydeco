@@ -2583,6 +2583,7 @@ dependencies = [
  "thiserror",
  "toml",
  "zydeco-derive",
+ "zydeco-dynamics",
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
