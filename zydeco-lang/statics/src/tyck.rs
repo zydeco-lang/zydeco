@@ -1123,6 +1123,8 @@ impl Tyck for SEnv<su::TermId> {
                         TermAnnId::Type(body_ty_norm, kd_out)
                     }
                     | TermAnnId::Compu(f_out, f_ty) => {
+                        let f_kd = tycker.statics.annotations_type[&f_ty].to_owned();
+                        let f_ty = f_ty.normalize(tycker, f_kd)?;
                         // either a term-term application or a type-polymorphic term application
                         match tycker.statics.types[&f_ty].to_owned() {
                             | ss::Type::Arrow(ty) => {

@@ -19,29 +19,23 @@ alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
   M (Either E A)
 end
 
-def fn mexnt (E: VType) (M: VType -> CType) (mo: U (Monad M)) : Monad (ExnT E M) =
-  comatch
-  | .return A a ->
-    ! mo .return (Either E A) +Right(a)
-  | .bind A A' m f ->
-    do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
-    match a?
-    | +Left(e) -> ! mo .return (Either E A') +Left(e)
-    | +Right(a) -> ! f a
-    end
-  end
-end
-
-def fn mexnt' (E: VType) (M: VType -> CType) (mo: U (Monad M)) : Monad (ExnT E M) =
-  with mo
-  begin
-    ! mexn E
-  end
-end
-
 def fn mt-exnt (E: VType) : MonadTrans (ExnT E) =
   comatch
-  | .monad M mo -> ! mexnt E M mo
+  | .monad M mo ->
+    // comatch
+    // | .return A a ->
+    //   ! mo .return (Either E A) +Right(a)
+    // | .bind A A' m f ->
+    //   do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
+    //   match a?
+    //   | +Left(e) -> ! mo .return (Either E A') +Left(e)
+    //   | +Right(a) -> ! f a
+    //   end
+    // end
+    with mo
+    begin
+      ! mexn E
+    end
   | .lift M A mo m ->
     // do~ ! mo .bind A (Either E A) m; fn a ->
     // ! mo .return (Either E A) +Right(a)
@@ -74,21 +68,18 @@ alias ExnKT (E: VType) (M: VType -> CType) (A: VType) : CType =
   forall (R: CType) . Thunk (Algebra M R) -> Thunk (E -> R) -> Thunk (A -> R) -> R
 end
 
-def fn mexnkt (E: VType) (M: VType -> CType) (mo: U (Monad M)) : Monad (ExnKT E M) =
-  comatch
-  | .return A a ->
-    fn R alg ke ka ->
-    ! ka a
-  | .bind A A' m f ->
-    fn R alg ke ka' ->
-    do~ ! m R alg ke; fn a ->
-    ! f a R alg ke ka'
-  end
-end
-
 def fn mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
   comatch
-  | .monad M mo -> ! mexnkt E M mo
+  | .monad M mo ->
+    comatch
+    | .return A a ->
+      fn R alg ke ka ->
+      ! ka a
+    | .bind A A' m f ->
+      fn R alg ke ka' ->
+      do~ ! m R alg ke; fn a ->
+      ! f a R alg ke ka'
+    end
   | .lift M A mo m -> fn R alg ke ka ->
     with mo with alg
       import m : Thunk (Ret A) = m
@@ -101,13 +92,13 @@ def fn mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
 end
 
 main
-  // let e = {
-  //   with { ! mexnk (String) } begin
-  //     do x <- ret 0;
-  //     ret x
-  //   end
-  // } in
-  // ! e (OS) { fn e -> ! panic e } { fn a -> ! exit a }
-  ! exit 0
+  let e = {
+    with { ! mexnk String } begin
+      do x <- ret 0;
+      ret x
+    end
+  } in
+  ! e OS { fn e -> ! panic e } { fn a -> ! exit a }
+  // ! exit 0
 end
 
