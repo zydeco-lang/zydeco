@@ -14,7 +14,7 @@ pub enum TyckError {
     NonExhaustiveCoDataArms(im::HashMap<DtorName, TypeId>),
     Expressivity(&'static str),
     MultipleMonads,
-    NeitherMonadNorAlgebra,
+    NeitherMonadNorAlgebra(su::TermId),
     MissingMonad,
 }
 
@@ -66,7 +66,15 @@ impl Tycker {
             }
             | TyckError::Expressivity(s) => format!("{}", s),
             | TyckError::MultipleMonads => format!("Multiple monad implementations"),
-            | TyckError::NeitherMonadNorAlgebra => format!("Neither monad nor algebra"),
+            | TyckError::NeitherMonadNorAlgebra(term) => {
+                use zydeco_surface::scoped::fmt::*;
+                let span = self.spans[self.scoped.textual.back(&term.into()).unwrap()].to_owned();
+                format!(
+                    "Neither monad nor algebra: {} ({})",
+                    term.ugly(&Formatter::new(&self.scoped)),
+                    span
+                )
+            }
             | TyckError::MissingMonad => format!("Missing monad"),
         }
     }

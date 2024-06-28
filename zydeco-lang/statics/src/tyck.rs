@@ -145,7 +145,7 @@ impl<Ann> Action<Ann> {
 /// PLEASE NOTE: when performing substitution, the environment should be applied one by one
 pub struct SEnv<T> {
     /// the environment of type variables; should be applied from the first to the last
-    // Fixme: should be ordered
+    // Note: should be ordered?
     pub env: Env<AnnId>,
     pub inner: T,
 }
@@ -349,11 +349,14 @@ impl Tyck for SEnv<su::PatId> {
             | Pat::Ann(pat) => {
                 let su::Ann { tm, ty } = pat;
                 let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
-                // Fixme: is it true?
                 let ty_tm: AnnId = match ty_out_ann {
                     | TermAnnId::Kind(kd) => kd.into(),
                     | TermAnnId::Type(ty, _) => ty.into(),
-                    | TermAnnId::Hole | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                    | TermAnnId::Hole => {
+                        // Fixme: I forgor
+                        tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                    | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
                         tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 };
@@ -1747,7 +1750,6 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Ctor(term) => {
                 let su::Ctor(ctor, arg) = term;
-                // Fixme: match in let-else is not supported??
                 let ana_ty = match switch {
                     | Switch::Syn => {
                         tycker.err(TyckError::MissingAnnotation, std::panic::Location::caller())?
@@ -1970,7 +1972,7 @@ impl Tyck for SEnv<su::TermId> {
                             algs.push((val, m, c));
                         }
                         | None => tycker.err(
-                            TyckError::NeitherMonadNorAlgebra,
+                            TyckError::NeitherMonadNorAlgebra(struct_),
                             std::panic::Location::caller(),
                         )?,
                     }
@@ -1983,15 +1985,15 @@ impl Tyck for SEnv<su::TermId> {
                 };
                 // println!("monad {:?} : Monad {:?}", mo, mo_ty_arg);
                 for (alg, alg_ty_mo_arg, alg_ty_carrier_arg) in &algs {
+                    // check monad_arg type
+                    Lub::lub(mo_ty_arg, *alg_ty_mo_arg, tycker)?;
+                    let _ = alg;
+                    let _ = alg_ty_carrier_arg;
                     // println!(
                     //     "algebra {:?} : Algebra {:?} {:?}",
                     //     alg, alg_ty_mo_arg, alg_ty_carrier_arg
                     // );
-                    let _ = alg;
-                    let _ = alg_ty_mo_arg;
-                    let _ = alg_ty_carrier_arg;
                 }
-                // let (alg, alg_ty_mo_arg, alg_ty_carrier_arg) = alg.ok_or_else(|| TyckError::MissingAlgebra)?;
                 let mut imports_ = Vec::new();
                 for su::Import { binder, ty, body } in imports {
                     let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
@@ -2020,17 +2022,14 @@ impl Tyck for SEnv<su::TermId> {
                         }
                         | PatAnnId::Value(binder, ty) => (binder, ty),
                     };
-                    // println!("import {:?} : {:?} = {:?} : {:?}", binder, ty, body, body_ty);
                     imports_.push(ss::Import { binder, ty, body })
                 }
-                // println!("body {:?}", body);
                 // change all return types to the monad type
                 let (body, body_ty) = self.mk(body).tyck(tycker, Action::syn())?.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                // Todo: check against ana switch if needed
                 let body_ty_lift = body_ty.lift(tycker, mo_ty_arg)?;
                 let body_ty_lift = match switch {
                     | Switch::Syn => body_ty_lift,
