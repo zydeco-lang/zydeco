@@ -7,6 +7,9 @@ use std::{
 type ZValue = SemValue;
 type ZCompute = Computation;
 
+fn mk_box<T>(t: T) -> Box<T> {
+    Box::new(t)
+}
 #[inline]
 fn mk_rc<T>(t: T) -> Rc<T> {
     Rc::new(t)
@@ -21,21 +24,21 @@ fn app(body: Rc<ZCompute>, arg: ZValue) -> ZCompute {
 }
 fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
     let args = match args.len() {
-        | 0 => Box::new(Triv.into()),
-        | 1 => Box::new(args[0].as_ref().to_owned()),
+        | 0 => mk_box(Triv.into()),
+        | 1 => mk_box(args[0].as_ref().to_owned()),
         | _ => {
             // re-expand from right to left, like:
             // (t1, (t2, (t3, t4)))
             let mut iter = args.into_iter().rev();
             let snd = iter.next().unwrap().as_ref().to_owned();
             let fst = iter.next().unwrap().as_ref().to_owned();
-            let mut body: SemValue = Cons(Box::new(fst), Box::new(snd)).into();
+            let mut body: SemValue = Cons(mk_box(fst), mk_box(snd)).into();
             for term in iter {
                 let term = term.as_ref().to_owned();
                 let id = body.into();
-                body = Cons(Box::new(term), Box::new(id)).into()
+                body = Cons(mk_box(term), mk_box(id)).into()
             }
-            Box::new(body)
+            mk_box(body)
         }
     };
     Ctor(CtorName(ctor.to_string()), args).into()

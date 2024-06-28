@@ -116,7 +116,7 @@ pub enum SemValue {
 
 #[derive(Clone)]
 pub enum SemCompu {
-    Kont(RcCompu, Env<SemValue>, DefId),
+    Kont(RcCompu, Env<SemValue>, RcVPat),
     App(SemValue),
     Dtor(DtorName),
 }
@@ -127,4 +127,10 @@ pub struct Runtime<'rt> {
     pub args: &'rt [String],
     pub stack: im::Vector<SemCompu>,
     pub env: Env<SemValue>,
+}
+
+#[derive(Clone)]
+pub enum ProgKont {
+    Ret(SemValue),
+    ExitCode(i32),
 }
