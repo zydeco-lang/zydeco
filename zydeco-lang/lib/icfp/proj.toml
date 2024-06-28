@@ -1,0 +1,19 @@
+name = "Std"
+
+srcs = [
+    "../std/lib.zy",
+    # "../std/avl.zy",
+]
+deps = []
+bins = [
+    "abort.zydeco",
+    # "algebra.zydeco",
+    # "algtrans.zydeco",
+    # "echo_sum.zydeco",
+    "exn.zydeco",
+    "free.zydeco",
+    "monads.zydeco",
+    "transformers.zydeco",
+]
+
+std = "NoStd"

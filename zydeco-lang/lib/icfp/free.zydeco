@@ -1,0 +1,84 @@
+// The Free monad
+
+// The interface for monads
+// codata Monad (M: VType -> CType) where
+//   | .return : forall (A: VType) .
+//     A -> M A
+//   | .bind : forall (A: VType) (A': VType) .
+//     Thunk (M A) -> Thunk (A -> M A') -> M A'
+// end
+
+data Empty where end
+codata Kont (R: CType) (A: VType) where
+  | .run : Thunk (A -> R) -> R
+end
+
+
+// Types of handlers
+alias KRead (R: CType) : VType =
+  Thunk (Unit -> Kont R String)
+end
+
+alias KWrite (R: CType) : VType =
+  Thunk (String -> Kont R Unit)
+end
+
+alias KFail (E: VType) (R: CType) : VType =
+  Thunk (E -> Kont R Empty)
+end
+
+
+// A specific free monad with three handlers
+codata Free (A: VType) where
+  | .run : forall (R: CType) .
+    KRead R -> KWrite R -> KFail String R -> Kont R A
+end
+
+
+def fn mfree : Monad Free =
+  comatch
+  | .return A a ->
+    fn .run R read write fail ->
+    fn .run k -> ! k a
+  | .bind A A' m f ->
+    fn .run R read write fail ->
+    fn .run k' ->
+    ! m .run R read write fail
+    .run {
+      fn a ->
+      ! f a .run R read write fail
+      .run k'
+    }
+  end
+end
+
+
+// The interface for using Free
+def fn read (s: Unit) : Free String =
+  fn .run R read write fail -> ! read ()
+end
+
+def fn write (s: String) : Free Unit =
+  fn .run R read write fail -> ! write s
+end
+
+def fn fail (s: String) : Free Empty =
+  fn .run R read write fail -> ! fail s
+end
+
+def fn read_os (_: Unit) (k: Thunk (String -> OS)) : OS =
+  ! read_line k
+end
+
+def fn write_os (s: String) (k: Thunk (Unit -> OS)) : OS =
+  ! write_line s { ! k () }
+end
+
+def fn fail_os (s: String) (_: Thunk (Empty -> OS)) : OS =
+  ! panic s
+end
+
+
+main
+  ! exit 0
+end

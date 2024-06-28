@@ -31,3 +31,19 @@ fn exec() {
         }
     }
 }
+
+#[test]
+fn icfp() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../lib/icfp/proj.toml")
+        .canonicalize()
+        .unwrap();
+    let proj = super::pack::LocalPackage::new(dir).unwrap();
+    match proj.run() {
+        | Ok(_) => {}
+        | Err(err) => {
+            eprintln!("{}", err);
+            panic!("Error running project");
+        }
+    }
+}
