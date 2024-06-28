@@ -2032,6 +2032,15 @@ impl Tyck for SEnv<su::TermId> {
                 )?;
                 // Todo: check against ana switch if needed
                 let body_ty_lift = body_ty.lift(tycker, mo_ty_arg)?;
+                let body_ty_lift = match switch {
+                    | Switch::Syn => body_ty_lift,
+                    | Switch::Ana(ana) => match ana {
+                        | AnnId::Set | AnnId::Kind(_) => {
+                            tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
+                        }
+                        | AnnId::Type(ana_ty) => Lub::lub(body_ty_lift, ana_ty, tycker)?,
+                    },
+                };
                 let with_block = Alloc::alloc(
                     &mut tycker.statics,
                     ss::WithBlock {
