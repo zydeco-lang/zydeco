@@ -1,0 +1,25 @@
+def fn bind-arrow (M: VType -> CType) (B: CType) (alg: U (Algebra M B)) (A: VType) : Algebra M (A -> B) =
+  comatch
+  | .bindA A' m' f -> fn a ->
+    ! alg .bindA A' m' { fn a' -> ! f a' a }
+  end
+end
+
+codata With (B1: CType) (B2: CType) where
+  | .left: B1
+  | .right: B2
+end
+
+def fn bind_with (M: VType -> CType) (B1: CType) (B2: CType) (alg1: U (Algebra M B1)) (alg2: U (Algebra M B2)): Algebra M (With B1 B2) =
+  comatch
+  | .bindA -> fn A m f ->
+    comatch
+    | .left -> ! alg1 .bindA A m { fn a -> ! f a .left }
+    | .right -> ! alg2 .bindA A m { fn a -> ! f a .right }
+    end
+  end
+end
+
+main
+  ! exit 0
+end

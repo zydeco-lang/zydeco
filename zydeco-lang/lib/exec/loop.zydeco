@@ -1,0 +1,4 @@
+def rec loop : OS = ! (loop : U OS) end
+main
+  ! exit 0
+end

@@ -1,0 +1,21 @@
+codata OptionT (M : VType -> CType) (A : VType) where
+  | .trans: M (Option A)
+end
+
+codata Identity (A : VType) where
+| .identity: Ret A
+end
+alias Option' (A : VType) : CType = OptionT Identity A end
+
+main
+  let o : Thunk (Option' Int) = {
+    comatch
+    | .trans ->
+      comatch
+      | .identity ->
+        ret +Some(1)
+      end
+    end
+  } in
+  ! exit 0
+end
