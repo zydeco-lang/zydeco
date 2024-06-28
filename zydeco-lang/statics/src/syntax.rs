@@ -401,29 +401,6 @@ pub enum Value {
 
 /* ------------------------------- Computation ------------------------------ */
 
-/// `match a | C_1 p -> b_1 | ... end`
-#[derive(Clone, Debug)]
-pub struct Match {
-    pub scrut: ValueId,
-    pub arms: Vec<Matcher>,
-}
-#[derive(Clone, Debug)]
-pub struct Matcher {
-    pub binder: VPatId,
-    pub tail: CompuId,
-}
-
-/// `comatch | .d_1 -> b_1 | ... end`
-#[derive(Clone, Debug)]
-pub struct CoMatch {
-    pub arms: Vec<CoMatcher>,
-}
-#[derive(Clone, Debug)]
-pub struct CoMatcher {
-    pub dtor: DtorName,
-    pub tail: CompuId,
-}
-
 /// `import f = V`
 #[derive(Clone, Debug)]
 pub struct Import {
@@ -453,8 +430,8 @@ pub enum Computation {
     Ret(Ret<ValueId>),
     Do(Bind<VPatId, CompuId, CompuId>),
     Let(PureBind<VPatId, ValueId, CompuId>),
-    Match(Match),
-    CoMatch(CoMatch),
+    Match(Match<ValueId, VPatId, CompuId>),
+    CoMatch(CoMatch<CompuId>),
     Dtor(Dtor<CompuId>),
     WithBlock(WithBlock),
 }

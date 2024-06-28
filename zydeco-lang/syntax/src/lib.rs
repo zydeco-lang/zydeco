@@ -84,6 +84,29 @@ pub struct Rec<P, Tm>(pub P, pub Tm);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Ctor<Tail>(pub CtorName, pub Tail);
 
+/// `match a | p -> b_1 | ... end`
+#[derive(Clone, Debug)]
+pub struct Match<Sc, Br, Tail> {
+    pub scrut: Sc,
+    pub arms: Vec<Matcher<Br, Tail>>,
+}
+#[derive(Clone, Debug)]
+pub struct Matcher<Br, Tail> {
+    pub binder: Br,
+    pub tail: Tail,
+}
+
+/// `comatch | .d_1 -> b_1 | ... end`
+#[derive(Clone, Debug)]
+pub struct CoMatch<Tail> {
+    pub arms: Vec<CoMatcher<Tail>>,
+}
+#[derive(Clone, Debug)]
+pub struct CoMatcher<Tail> {
+    pub dtor: DtorName,
+    pub tail: Tail,
+}
+
 /// `b .d_i`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Dtor<Head>(pub Head, pub DtorName);

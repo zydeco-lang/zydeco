@@ -198,8 +198,8 @@ AllocComputation! {
     Ret<ValueId>
     Bind<VPatId, CompuId, CompuId>
     PureBind<VPatId, ValueId, CompuId>
-    Match
-    CoMatch
+    Match<ValueId, VPatId, CompuId>
+    CoMatch<CompuId>
     Dtor<CompuId>
     WithBlock
 }

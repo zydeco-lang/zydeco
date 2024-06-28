@@ -154,18 +154,6 @@ pub struct DataArm {
     pub param: TermId,
 }
 
-/// `match a | C_1 p -> b_1 | ... end`
-#[derive(Clone, Debug)]
-pub struct Match {
-    pub scrut: TermId,
-    pub arms: Vec<Matcher>,
-}
-#[derive(Clone, Debug)]
-pub struct Matcher {
-    pub binder: PatId,
-    pub tail: TermId,
-}
-
 /// `codata | .d_1 cp : ty | ... end`
 #[derive(Clone, Debug)]
 pub struct CoData {
@@ -230,7 +218,7 @@ pub enum Term {
     Data(Data),
     CoData(CoData),
     Ctor(Ctor<TermId>),
-    Match(Match),
+    Match(Match<TermId, PatId, TermId>),
     CoMatch(CoMatch),
     Dtor(Dtor<TermId>),
     WithBlock(WithBlock),

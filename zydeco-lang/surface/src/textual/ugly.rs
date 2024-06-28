@@ -499,7 +499,7 @@ impl Ugly for CoData {
     }
 }
 
-impl Ugly for Match {
+impl Ugly for Match<TermId, PatId, TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
         let Match { scrut, arms } = self;

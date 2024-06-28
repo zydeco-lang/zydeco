@@ -220,7 +220,7 @@ CoDataArm: CoDataArm = {
     },
 };
 
-Matcher: Matcher = {
+Matcher: Matcher<PatId, TermId> = {
     "|" <binder:PatId> "->" <tail:TermId> => Matcher {
         binder, tail
     },
