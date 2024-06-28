@@ -27,7 +27,7 @@ bins = [
     "list.zydeco",
     "listm.zydeco",
     # "malt.zy",
-    "motrans.zy",
+    # "motrans.zy",
     "num.zy",
     "oo.zydeco",
     # "partial-annotation.zy",
