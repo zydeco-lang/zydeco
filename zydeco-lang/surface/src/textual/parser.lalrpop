@@ -225,8 +225,8 @@ Matcher: Matcher<PatId, TermId> = {
         binder, tail
     },
 };
-CoMatcher: CoMatcher = {
-    "|" <params:CoPatId> "->" <tail:TermId> => CoMatcher {
+CoMatcher: CoMatcherParam = {
+    "|" <params:CoPatId> "->" <tail:TermId> => CoMatcherParam {
         params, tail
     },
 };
@@ -297,7 +297,7 @@ Term: Term = {
         scrut, arms
     }.into(),
     // comatch
-    "comatch" <arms:(<CoMatcher>)*> "end" => CoMatch {
+    "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {
         arms
     }.into(),
     // with block

@@ -67,14 +67,21 @@ pub enum Computation {
 /* -------------------------------- Semantic -------------------------------- */
 
 #[derive(Clone)]
-pub struct EThunk {
+pub struct EnvThunk {
     pub body: RcCompu,
     pub env: Env<SemValue>,
 }
 
 #[derive(From, Clone)]
 pub enum SemValue {
-    Thunk(EThunk),
+    Thunk(EnvThunk),
     Ctor(Ctor<RcSemVal>),
     Literal(Literal),
+}
+
+#[derive(Clone)]
+pub enum SemCompu {
+    Kont(RcCompu, Env<RcSemVal>, DefId),
+    App(RcSemVal),
+    Dtor(DtorName),
 }

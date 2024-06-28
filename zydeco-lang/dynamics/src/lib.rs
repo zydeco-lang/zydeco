@@ -8,6 +8,7 @@ pub mod statics_syntax {
 pub mod syntax;
 pub mod link;
 pub mod eval;
+pub mod fmt;
 
-// pub(crate) use statics_syntax as ss;
-// pub(crate) use syntax as ds;
+pub(crate) use statics_syntax as ss;
+pub(crate) use syntax as ds;

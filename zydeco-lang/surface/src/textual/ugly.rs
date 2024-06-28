@@ -516,12 +516,12 @@ impl Ugly for Match<TermId, PatId, TermId> {
     }
 }
 
-impl Ugly for CoMatch {
+impl Ugly for CoMatchParam {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let CoMatch { arms } = self;
+        let CoMatchParam { arms } = self;
         s += "comatch";
-        for CoMatcher { params, tail } in arms {
+        for CoMatcherParam { params, tail } in arms {
             s += " | ";
             s += &params.ugly(f);
             s += " -> ";

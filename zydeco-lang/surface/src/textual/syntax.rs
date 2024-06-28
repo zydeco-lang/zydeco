@@ -168,11 +168,11 @@ pub struct CoDataArm {
 
 /// `comatch | .d_1 -> b_1 | ... end`
 #[derive(Clone, Debug)]
-pub struct CoMatch {
-    pub arms: Vec<CoMatcher>,
+pub struct CoMatchParam {
+    pub arms: Vec<CoMatcherParam>,
 }
 #[derive(Clone, Debug)]
-pub struct CoMatcher {
+pub struct CoMatcherParam {
     pub params: CoPatId,
     pub tail: TermId,
 }
@@ -219,7 +219,7 @@ pub enum Term {
     CoData(CoData),
     Ctor(Ctor<TermId>),
     Match(Match<TermId, PatId, TermId>),
-    CoMatch(CoMatch),
+    CoMatch(CoMatchParam),
     Dtor(Dtor<TermId>),
     WithBlock(WithBlock),
     Lit(Literal),

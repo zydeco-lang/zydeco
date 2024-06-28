@@ -594,10 +594,10 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Match { scrut, arms }.into(), self.into())
             }
             | Tm::CoMatch(term) => {
-                let t::CoMatch { arms } = term;
+                let t::CoMatchParam { arms } = term;
                 let arms = arms
                     .into_iter()
-                    .map(|t::CoMatcher { params, tail }| {
+                    .map(|t::CoMatcherParam { params, tail }| {
                         let b::Appli(params) = params.desugar(desugarer);
                         let mut tail = tail.desugar(desugarer);
                         let mut iter = params.into_iter();
