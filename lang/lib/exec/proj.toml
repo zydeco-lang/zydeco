@@ -21,7 +21,7 @@ bins = [
     "even-odd-codata.zy",
     "even-odd-data.zy",
     "even-old-rec.zy",
-    # "exists.zy",
+    "exists.zy",
     "explosion.zy",
     "fn-opt.zy",
     "forall.zy",

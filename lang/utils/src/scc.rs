@@ -184,7 +184,7 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         let mut top = Vec::new();
         for root in &self.roots {
             let Some(scc) = &self.strongs.get(root) else {
-                eprintln!("invalid scc id: {:?}", root);
+                // eprintln!("invalid scc id: {:?}", root);
                 continue;
             };
             top.push(scc.iter().cloned().collect());

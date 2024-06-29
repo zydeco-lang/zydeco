@@ -318,7 +318,9 @@ mod impls {
             let map = map.into_iter().filter_map(|(id, _val)| f(id).map(|val| (id, val))).collect();
             ArenaSparse { allocator, map, _marker }
         }
-        pub fn filter_map_id_mut<U>(self, mut f: impl FnMut(Id) -> Option<U>) -> ArenaSparse<Id, U, Meta> {
+        pub fn filter_map_id_mut<U>(
+            self, mut f: impl FnMut(Id) -> Option<U>,
+        ) -> ArenaSparse<Id, U, Meta> {
             let Self { allocator, map, _marker } = self;
             let map = map.into_iter().filter_map(|(id, _val)| f(id).map(|val| (id, val))).collect();
             ArenaSparse { allocator, map, _marker }

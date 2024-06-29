@@ -93,6 +93,45 @@ impl Ugly for VPatId {
     }
 }
 
+impl Ugly for ValueId {
+    fn ugly(&self, f: &Formatter) -> String {
+        let value = &f.statics.values[self];
+        match value {
+            | Value::Hole(value) => value.ugly(f),
+            | Value::Var(value) => value.ugly(f),
+            | Value::Thunk(value) => value.ugly(f),
+            | Value::Ctor(value) => value.ugly(f),
+            | Value::Triv(value) => value.ugly(f),
+            | Value::VCons(value) => value.ugly(f),
+            | Value::TCons(value) => value.ugly(f),
+            | Value::Lit(value) => value.ugly(f),
+        }
+    }
+}
+
+impl Ugly for CompuId {
+    fn ugly(&self, f: &Formatter) -> String {
+        let compu = &f.statics.compus[self];
+        use Computation as Compu;
+        match compu {
+            | Compu::Hole(compu) => compu.ugly(f),
+            | Compu::VAbs(compu) => compu.ugly(f),
+            | Compu::VApp(compu) => compu.ugly(f),
+            | Compu::TAbs(compu) => compu.ugly(f),
+            | Compu::TApp(compu) => compu.ugly(f),
+            | Compu::Rec(compu) => compu.ugly(f),
+            | Compu::Force(compu) => compu.ugly(f),
+            | Compu::Ret(compu) => compu.ugly(f),
+            | Compu::Do(compu) => compu.ugly(f),
+            | Compu::Let(compu) => compu.ugly(f),
+            | Compu::Match(compu) => compu.ugly(f),
+            | Compu::CoMatch(compu) => compu.ugly(f),
+            | Compu::Dtor(compu) => compu.ugly(f),
+            | Compu::WithBlock(compu) => compu.ugly(f),
+        }
+    }
+}
+
 impl Ugly for AnnId {
     fn ugly(&self, f: &Formatter) -> String {
         match self {
@@ -361,5 +400,87 @@ impl Ugly for Exists {
     fn ugly(&self, f: &Formatter) -> String {
         let Exists(tpat, ty) = self;
         format!("(exists {} . {})", tpat.ugly(f), ty.ugly(f))
+    }
+}
+
+impl<Sc, Br, Tail> Ugly for Match<Sc, Br, Tail>
+where
+    Sc: Ugly,
+    Br: Ugly,
+    Tail: Ugly,
+{
+    fn ugly(&self, f: &Formatter) -> String {
+        let Match { scrut, arms } = self;
+        let mut s = String::new();
+        s += &format!("match {}", scrut.ugly(f));
+        for Matcher { binder, tail } in arms.iter() {
+            s += &format!(" | {} -> {}", binder.ugly(f), tail.ugly(f));
+        }
+        s += &format!(" end");
+        s
+    }
+}
+
+impl<Tail> Ugly for CoMatch<Tail>
+where
+    Tail: Ugly,
+{
+    fn ugly(&self, f: &Formatter) -> String {
+        let CoMatch { arms } = self;
+        let mut s = String::new();
+        s += &format!("comatch");
+        for CoMatcher { dtor, tail } in arms.iter() {
+            s += &format!(" | {} -> {}", dtor.ugly(f), tail.ugly(f));
+        }
+        s += &format!(" end");
+        s
+    }
+}
+
+impl Ugly for Import {
+    fn ugly(&self, f: &Formatter) -> String {
+        let Import { binder, ty, body } = self;
+        format!("import {} : {} = {} ", binder.ugly(f), ty.ugly(f), body.ugly(f))
+    }
+}
+
+impl Ugly for WithBlock {
+    fn ugly(&self, f: &Formatter) -> String {
+        let WithBlock { monad, algebras, imports, body } = self;
+        let mut s = String::new();
+        s += &format!("with {} ", monad.ugly(f));
+        for algebra in algebras.iter() {
+            s += &format!("with {} ", algebra.ugly(f));
+        }
+        for import in imports.iter() {
+            s += &import.ugly(f);
+        }
+        s += &format!("begin {} end", body.ugly(f));
+        s
+    }
+}
+
+impl Ugly for DeclId {
+    fn ugly(&self, f: &Formatter) -> String {
+        let decl = &f.statics.decls[self];
+        use Declaration as Decl;
+        match decl {
+            | Decl::TAliasBody(decl) => {
+                let TAliasBody { binder, bindee } = decl;
+                format!("type {} = {} end", binder.ugly(f), bindee.ugly(f))
+            }
+            | Decl::VAliasBody(decl) => {
+                let VAliasBody { binder, bindee } = decl;
+                format!("val {} = {} end", binder.ugly(f), bindee.ugly(f))
+            }
+            | Decl::VAliasHead(decl) => {
+                let VAliasHead { binder, ty } = decl;
+                format!("extern {} : {} end", binder.ugly(f), ty.ugly(f))
+            }
+            | Decl::Exec(decl) => {
+                let Exec(compu) = decl;
+                format!("exec {} end", compu.ugly(f))
+            }
+        }
     }
 }

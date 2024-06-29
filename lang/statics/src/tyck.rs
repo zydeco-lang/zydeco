@@ -249,6 +249,12 @@ impl<'decl> SccDeclarations<'decl> {
             }
         };
 
+        // // Debug: print
+        // {
+        //     use crate::fmt::*;
+        //     println!("{}", id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)));
+        // }
+
         {
             // administrative
             tycker.stack.pop_back();
@@ -505,6 +511,7 @@ impl Tyck for SEnv<su::PatId> {
                                     | PatAnnId::Value(_, _) => unreachable!(),
                                 };
                                 let (a_def, _a_kd) = tycker.extract_tpat(a_out);
+                                let mut env = self.env.clone();
                                 let ty_body_subst = if let (Some(def), Some(a_def)) = (def, a_def) {
                                     let kd = match tycker.statics.annotations_var[&def] {
                                         | AnnId::Kind(kd) => kd,
@@ -513,13 +520,15 @@ impl Tyck for SEnv<su::PatId> {
                                             std::panic::Location::caller(),
                                         )?,
                                     };
-                                    let a_def_ty = Alloc::alloc(&mut tycker.statics, a_def, kd);
-                                    ty_body.subst(tycker, def, a_def_ty)?
+                                    let abst = tycker.statics.absts.alloc(());
+                                    let abst_ty = Alloc::alloc(&mut tycker.statics, abst, kd);
+                                    env += (a_def, abst_ty.into());
+                                    ty_body.subst(tycker, def, abst_ty)?
                                 } else {
                                     ty_body
                                 };
-                                let (b_out_ann, b_ctx) =
-                                    self.mk(b).tyck(tycker, Action::ana(ty_body_subst.into()))?;
+                                let (b_out_ann, b_ctx) = SEnv { env, inner: b }
+                                    .tyck(tycker, Action::ana(ty_body_subst.into()))?;
                                 match b_out_ann {
                                     | PatAnnId::Value(b_out, _b_ann) => {
                                         let vtype = tycker.vtype(&self.env);
@@ -656,6 +665,29 @@ impl Tyck for SEnv<su::TermId> {
                 }
             }
         }
+
+        // // Debug: print
+        // {
+        //     use zydeco_surface::scoped::fmt::*;
+        //     let prev = tycker.scoped.textual.back(&(self.inner.into())).unwrap();
+        //     println!(
+        //         "{} @ ({})",
+        //         self.inner.ugly(&Formatter::new(&tycker.scoped)),
+        //         tycker.spans[prev]
+        //     );
+        //     match switch {
+        //         | Switch::Syn => {
+        //             println!("\t>> (syn)")
+        //         }
+        //         | Switch::Ana(ana) => {
+        //             use crate::fmt::*;
+        //             println!(
+        //                 "\t>> (ana: {})",
+        //                 ana.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+        //             )
+        //         }
+        //     }
+        // }
 
         use su::Term as Tm;
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
@@ -794,12 +826,18 @@ impl Tyck for SEnv<su::TermId> {
                     | Switch::Syn => {
                         let a_out_ann = self.mk(a).tyck(tycker, Action::syn())?;
                         let b_out_ann = self.mk(b).tyck(tycker, Action::syn())?;
-                        // Todo: consider exists
-                        let (a_out, a_ty) = a_out_ann.try_as_value(
-                            tycker,
-                            TyckError::SortMismatch,
-                            std::panic::Location::caller(),
-                        )?;
+                        // `a` can be a value, but to be a type needs annotation
+                        let (a_out, a_ty) = match a_out_ann {
+                            | TermAnnId::Value(a_out, a_ty) => (a_out, a_ty),
+                            | TermAnnId::Type(_, _) => tycker.err(
+                                TyckError::MissingAnnotation,
+                                std::panic::Location::caller(),
+                            )?,
+                            | TermAnnId::Hole | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
+                                tycker
+                                    .err(TyckError::SortMismatch, std::panic::Location::caller())?
+                            }
+                        };
                         let (b_out, b_ty) = b_out_ann.try_as_value(
                             tycker,
                             TyckError::SortMismatch,
@@ -863,7 +901,7 @@ impl Tyck for SEnv<su::TermId> {
                                 )?;
                                 let cons =
                                     Alloc::alloc(&mut tycker.statics, ss::Cons(a_ty, val), body_ty);
-                                TermAnnId::Value(cons, body_ty)
+                                TermAnnId::Value(cons, ana_ty)
                             }
                             | _ => tycker.err(
                                 TyckError::TypeExpected {
@@ -1793,13 +1831,29 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
+                // // Debug: print
+                // {
+                //     use crate::fmt::*;
+                //     println!(
+                //         "scrut = {} : {}",
+                //         scrut.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                //         scrut_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                //     );
+                // }
                 let scrut_ty_unroll = scrut_ty.unroll(tycker)?.subst_env(tycker, &self.env)?;
+                // // Debug: print
+                // {
+                //     use crate::fmt::*;
+                //     println!(
+                //         "scrut_ty_unroll: {}",
+                //         scrut_ty_unroll.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                //     );
+                // }
                 let mut matchers = Vec::new();
                 let mut arms_ty = Vec::new();
                 for su::Matcher { binder, tail } in arms {
                     let (binder_out_ann, _ctx) =
                         self.mk(binder).tyck(tycker, Action::ana(scrut_ty_unroll.into()))?;
-                    // Todo: consider exists
                     let PatAnnId::Value(binder, _ty) = binder_out_ann else {
                         tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
                     };
