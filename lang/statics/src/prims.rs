@@ -126,7 +126,7 @@ impl Tycker {
             | None => {
                 // the alias head is a primitive value that needs to be linked later
                 let Some(ty) = ty else {
-                    self.errk(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                    self.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
                 };
                 let ty = match env.mk(ty).tyck(self, Action::syn())?.as_term_static() {
                     | ss::AnnId::Type(ty) => ty,

@@ -2,14 +2,18 @@ use crate::{syntax::*, *};
 use zydeco_utils::arena::ArenaAccess;
 
 impl TypeId {
-    pub fn subst_env(&self, tycker: &mut Tycker, env: &Env<AnnId>) -> ResultKont<TypeId> {
+    pub fn subst_env_k(&self, tycker: &mut Tycker, env: &Env<AnnId>) -> ResultKont<TypeId> {
+        let res = self.subst_env(tycker, env);
+        tycker.err_p_to_k(res)
+    }
+    pub fn subst_env(&self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[self].clone();
         let ty = tycker.statics.types[self].clone();
         let ty = match ty {
             | Type::Var(def) => match env.get(&def) {
                 | Some(ann) => match ann {
                     | AnnId::Set | AnnId::Kind(_) => {
-                        tycker.errk(TyckError::SortMismatch, std::panic::Location::caller())?
+                        tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                     | AnnId::Type(with) => *with,
                 },
@@ -114,7 +118,7 @@ impl TypeId {
                             Ok((ctor, ty_))
                         }
                     })
-                    .collect::<ResultKont<im::Vector<_>>>()?;
+                    .collect::<Result<im::Vector<_>>>()?;
                 if unchanged {
                     *self
                 } else {
@@ -140,7 +144,7 @@ impl TypeId {
                             Ok((dtor, ty_))
                         }
                     })
-                    .collect::<ResultKont<im::Vector<_>>>()?;
+                    .collect::<Result<im::Vector<_>>>()?;
                 if unchanged {
                     *self
                 } else {
@@ -157,7 +161,11 @@ impl TypeId {
         let ty = ty.normalize(tycker, kd)?;
         Ok(ty)
     }
-    pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> ResultKont<TypeId> {
+    pub fn subst_k(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> ResultKont<TypeId> {
+        let res = self.subst(tycker, var, with);
+        tycker.err_p_to_k(res)
+    }
+    pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> Result<TypeId> {
         self.subst_env(tycker, &Env::singleton(var, with.into()))
     }
 }
@@ -182,7 +190,7 @@ impl TypeId {
                     self
                 } else {
                     let app = Alloc::alloc(&mut tycker.statics, App(ty1_, ty2), kd);
-                    app.normalize(tycker, kd)?
+                    app.normalize_k(tycker, kd)?
                 }
             }
             | Type::Fill(_) // unchanged because terms with unfilled types can't be matched against
@@ -207,7 +215,11 @@ impl TypeId {
 }
 
 impl TypeId {
-    pub fn normalize(self, tycker: &mut Tycker, kd: KindId) -> ResultKont<TypeId> {
+    pub fn normalize_k(self, tycker: &mut Tycker, kd: KindId) -> ResultKont<TypeId> {
+        let res = self.normalize(tycker, kd);
+        tycker.err_p_to_k(res)
+    }
+    pub fn normalize(self, tycker: &mut Tycker, kd: KindId) -> Result<TypeId> {
         let res = match tycker.statics.types[&self].to_owned() {
             | Type::App(app) => {
                 let App(ty1, ty2) = app;
@@ -235,35 +247,39 @@ impl TypeId {
         };
         Ok(res)
     }
-    pub fn weak_head_normalize(self, tycker: &mut Tycker, kd: KindId) -> ResultKont<TypeId> {
-        let res = match tycker.statics.types[&self].to_owned() {
-            | Type::App(app) => {
-                let App(ty1, ty2) = app;
-                ty1.normalize_app(tycker, ty2, kd)?
-            }
-            | Type::Var(_)
-            | Type::Abst(_)
-            | Type::Fill(_)
-            | Type::Abs(_)
-            | Type::Thunk(_)
-            | Type::Ret(_)
-            | Type::Unit(_)
-            | Type::Int(_)
-            | Type::Char(_)
-            | Type::String(_)
-            | Type::OS(_)
-            | Type::Arrow(_)
-            | Type::Forall(_)
-            | Type::Prod(_)
-            | Type::Exists(_)
-            | Type::Data(_)
-            | Type::CoData(_) => self,
-        };
-        Ok(res)
-    }
-    pub fn normalize_app(
+    // pub fn weak_head_normalize_k(self, tycker: &mut Tycker, kd: KindId) -> ResultKont<TypeId> {
+    //     let res = match tycker.statics.types[&self].to_owned() {
+    //         | Type::App(app) => {
+    //             let App(ty1, ty2) = app;
+    //             ty1.normalize_app_k(tycker, ty2, kd)?
+    //         }
+    //         | Type::Var(_)
+    //         | Type::Abst(_)
+    //         | Type::Fill(_)
+    //         | Type::Abs(_)
+    //         | Type::Thunk(_)
+    //         | Type::Ret(_)
+    //         | Type::Unit(_)
+    //         | Type::Int(_)
+    //         | Type::Char(_)
+    //         | Type::String(_)
+    //         | Type::OS(_)
+    //         | Type::Arrow(_)
+    //         | Type::Forall(_)
+    //         | Type::Prod(_)
+    //         | Type::Exists(_)
+    //         | Type::Data(_)
+    //         | Type::CoData(_) => self,
+    //     };
+    //     Ok(res)
+    // }
+    pub fn normalize_app_k(
         self, tycker: &mut Tycker, a_ty: TypeId, kd: KindId,
     ) -> ResultKont<TypeId> {
+        let res = self.normalize_app(tycker, a_ty, kd);
+        tycker.err_p_to_k(res)
+    }
+    pub fn normalize_app(self, tycker: &mut Tycker, a_ty: TypeId, kd: KindId) -> Result<TypeId> {
         let res = match tycker.statics.types[&self].to_owned() {
             | ss::Type::Abs(abs) => {
                 // if f_ty is an abstraction, apply it
@@ -283,7 +299,11 @@ impl TypeId {
 }
 
 impl Tycker {
-    pub fn fill(&mut self, fill: FillId, mut ann: AnnId) -> ResultKont<AnnId> {
+    pub fn fill_k(&mut self, fill: FillId, ann: AnnId) -> ResultKont<AnnId> {
+        let res = self.fill(fill, ann);
+        self.err_p_to_k(res)
+    }
+    pub fn fill(&mut self, fill: FillId, mut ann: AnnId) -> Result<AnnId> {
         if let Some(ann_) = self.statics.solus.insert_or_get(fill, ann) {
             ann = Lub::lub(ann, ann_, self)?;
             self.statics.solus.replace(fill, ann);

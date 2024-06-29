@@ -158,7 +158,7 @@ mod impls_identifiers {
                 | TermAnnId::Hole
                 | TermAnnId::Type(_, _)
                 | TermAnnId::Value(_, _)
-                | TermAnnId::Compu(_, _) => tycker.errk(err, blame),
+                | TermAnnId::Compu(_, _) => tycker.err_k(err, blame),
             }
         }
         pub fn try_as_type(
@@ -170,7 +170,7 @@ mod impls_identifiers {
                 | TermAnnId::Hole
                 | TermAnnId::Kind(_)
                 | TermAnnId::Value(_, _)
-                | TermAnnId::Compu(_, _) => tycker.errk(err, blame),
+                | TermAnnId::Compu(_, _) => tycker.err_k(err, blame),
             }
         }
         pub fn try_as_value(
@@ -182,7 +182,7 @@ mod impls_identifiers {
                 | TermAnnId::Hole
                 | TermAnnId::Kind(_)
                 | TermAnnId::Type(_, _)
-                | TermAnnId::Compu(_, _) => tycker.errk(err, blame),
+                | TermAnnId::Compu(_, _) => tycker.err_k(err, blame),
             }
         }
         pub fn try_as_compu(
@@ -194,7 +194,7 @@ mod impls_identifiers {
                 | TermAnnId::Hole
                 | TermAnnId::Kind(_)
                 | TermAnnId::Type(_, _)
-                | TermAnnId::Value(_, _) => tycker.errk(err, blame),
+                | TermAnnId::Value(_, _) => tycker.err_k(err, blame),
             }
         }
     }
