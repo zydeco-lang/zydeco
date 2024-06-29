@@ -1,14 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
-    "zydeco-lang",
-    "zydeco-lang/utils",
-    "zydeco-lang/derive",
-    "zydeco-lang/syntax",
-    "zydeco-lang/surface",
-    "zydeco-lang/statics",
-    "zydeco-lang/dynamics",
-    "zydeco-lang/driver",
+    "lang",
+    "lang/utils",
+    "lang/derive",
+    "lang/syntax",
+    "lang/surface",
+    "lang/statics",
+    "lang/dynamics",
+    "lang/driver",
     "cli",
     "web",
     "editor/zls",
@@ -26,13 +26,13 @@ readme = "README.md"
 
 [workspace.dependencies]
 # zydeco
-zydeco-lang = { path = "zydeco-lang" }
-zydeco-utils = { path = "zydeco-lang/utils" }
-zydeco-derive = { path = "zydeco-lang/derive" }
-zydeco-syntax = { path = "zydeco-lang/syntax" }
-zydeco-surface = { path = "zydeco-lang/surface" }
-zydeco-statics = { path = "zydeco-lang/statics" }
-zydeco-dynamics = { path = "zydeco-lang/dynamics" }
+zydeco-lang = { path = "lang" }
+zydeco-utils = { path = "lang/utils" }
+zydeco-derive = { path = "lang/derive" }
+zydeco-syntax = { path = "lang/syntax" }
+zydeco-surface = { path = "lang/surface" }
+zydeco-statics = { path = "lang/statics" }
+zydeco-dynamics = { path = "lang/dynamics" }
 # meta
 syn = "2.0"
 quote = "1.0"
