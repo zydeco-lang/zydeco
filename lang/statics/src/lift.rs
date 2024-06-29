@@ -67,7 +67,39 @@ impl TypeId {
                     Alloc::alloc(&mut tycker.statics, Type::Exists(Exists(tpat, body_)), ann)
                 }
             }
+            // Hack: go inside and generate new data and codata?
             | Type::Data(_) | Type::CoData(_) => *self,
+        };
+        Ok(res)
+    }
+}
+
+impl TypeId {
+    /// try to generate the algebra of a type given certain type implementations
+    pub fn algebra(
+        &self, tycker: &mut Tycker, mo: ValueId, algs: Vec<ValueId>,
+    ) -> ResultKont<CompuId> {
+        let ty = tycker.statics.types[self].to_owned();
+        let res = match ty {
+            | Type::Var(_) | Type::Fill(_) => {
+                // Fixme: really?
+                unreachable!()
+            }
+            | Type::Abst(_) => todo!(),
+            | Type::Abs(_) => todo!(),
+            | Type::App(_) => todo!(),
+            | Type::Thunk(_)
+            | Type::Ret(_)
+            | Type::Unit(_)
+            | Type::Int(_)
+            | Type::Char(_)
+            | Type::String(_) => unreachable!(),
+            | Type::OS(_) => todo!(),
+            | Type::Arrow(_) => todo!(),
+            | Type::Forall(_) => todo!(),
+            | Type::Prod(_) | Type::Exists(_) => unreachable!(),
+            | Type::Data(_) => todo!(),
+            | Type::CoData(_) => todo!(),
         };
         Ok(res)
     }
