@@ -11,7 +11,7 @@ pub def ! leaf (A : VType) : F(Avl A) =
 end
 
 pub def ! singleton (A : VType) (x : A) : F(Avl A) =
-  do lf <- ! leaf A;
+  do lf <- (! leaf A : F(Avl A));
   ret +Node(+Leaf(), x, 1, +Leaf())
 end
 
@@ -274,7 +274,7 @@ data Hash (K : VType) (V : VType) where
 end
 
 pub def ! hash_new (K : VType) (V : VType) (insert_key_cmp : Cmp K) (search_key_cmp : Cmp K) (equal_value_cmp : Cmp V) : F(Hash K V) =
-  do body <- ! leaf (Pair K V);
+  do body <- (! leaf (Pair K V) : F(Avl (Pair K V)));
   ret +Hash(body, {
     fn p1 p2 ->
       match p1
