@@ -139,6 +139,7 @@ pub enum TyckTask {
     Pat(su::PatId, Switch<AnnId>),
     Term(su::TermId, Switch<AnnId>),
     Lub(AnnId, AnnId),
+    Algebra(ss::TypeId),
 }
 
 pub struct Action<Ann> {

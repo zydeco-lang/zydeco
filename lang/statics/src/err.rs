@@ -16,6 +16,7 @@ pub enum TyckError {
     MultipleMonads,
     NeitherMonadNorAlgebra(su::TermId),
     MissingMonad,
+    AlgebraGenerationFailure,
 }
 
 #[derive(Clone)]
@@ -76,6 +77,7 @@ impl Tycker {
                 )
             }
             | TyckError::MissingMonad => format!("Missing monad"),
+            | TyckError::AlgebraGenerationFailure => format!("Cannot generate algebra for this type"),
         }
     }
     pub fn error_entry_output(
@@ -171,6 +173,14 @@ impl Tycker {
                     s += &format!(
                         "\t\t>> {}\n",
                         truncated(rhs.ugly(&Formatter::new(&self.scoped, &self.statics)))
+                    );
+                }
+                | TyckTask::Algebra(ty) => {
+                    use crate::fmt::*;
+                    s += &format!("\t- when generating algebra:\n");
+                    s += &format!(
+                        "\t\t{}\n",
+                        truncated(ty.ugly(&Formatter::new(&self.scoped, &self.statics)))
                     );
                 }
             }

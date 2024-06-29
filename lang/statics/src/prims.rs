@@ -14,6 +14,11 @@ impl Tycker {
         let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
         ty
     }
+    pub fn thunk_app(&mut self, env: &ss::Env<ss::AnnId>, arg: ss::TypeId) -> ss::TypeId {
+        let thunk = self.thunk(env);
+        let vtype = self.vtype(env);
+        Alloc::alloc(&mut self.statics, ss::App(thunk, arg), vtype)
+    }
     pub fn thunk_app_hole(&mut self, env: &ss::Env<ss::AnnId>, site: su::TermId) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
         let fill = self.statics.fills.alloc(site);
@@ -55,6 +60,18 @@ impl Tycker {
     pub fn os(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.os.get()] else { unreachable!() };
         ty
+    }
+    /// generates `Algebra M R` where:
+    /// 1. M is `mo` of kind `VType -> CType`
+    /// 2. R is `carrier` of kind `CType`
+    pub fn algebra_mo_carrier(
+        &mut self, env: &ss::Env<ss::AnnId>, mo: ss::TypeId, carrier: ss::TypeId,
+    ) -> ss::TypeId {
+        let ss::AnnId::Type(algebra) = env[self.prim.algebra.get()] else { unreachable!() };
+        let ctype = self.ctype(env);
+        let algebra_mo_kd = Alloc::alloc(&mut self.statics, ss::Arrow(ctype, ctype), ());
+        let algebra_mo = Alloc::alloc(&mut self.statics, ss::App(algebra, mo), algebra_mo_kd);
+        Alloc::alloc(&mut self.statics, ss::App(algebra_mo, carrier), ctype)
     }
 }
 

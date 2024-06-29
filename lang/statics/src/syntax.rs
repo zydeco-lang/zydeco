@@ -92,6 +92,12 @@ mod impls_identifiers {
                 | _ => unreachable!(),
             }
         }
+        pub fn as_kind(self) -> KindId {
+            match self {
+                | AnnId::Kind(kd) => kd,
+                | _ => unreachable!(),
+            }
+        }
     }
 
     impl PatAnnId {

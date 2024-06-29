@@ -5,8 +5,10 @@ use derive_more::From;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct VarName(pub String);
+/// `+C`, including the plus
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CtorName(pub String);
+/// `.dtor`, including the dot
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DtorName(pub String);
 
