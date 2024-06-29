@@ -180,5 +180,5 @@ impl Tycker {
     }
 }
 
-pub type Result<T> = std::result::Result<T, TyckError>;
+pub type Result<T> = std::result::Result<T, TyckErrorEntry>;
 pub type ResultKont<T> = std::result::Result<T, ()>;

@@ -9,7 +9,7 @@ impl TypeId {
             | Type::Var(def) => match env.get(&def) {
                 | Some(ann) => match ann {
                     | AnnId::Set | AnnId::Kind(_) => {
-                        tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
+                        tycker.errk(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                     | AnnId::Type(with) => *with,
                 },
