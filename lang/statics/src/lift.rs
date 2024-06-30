@@ -585,7 +585,7 @@ impl SEnv<TypeId> {
                 tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
             }
             | Type::Data(_) => unreachable!(),
-            | Type::CoData(codata) => {
+            | Type::CoData(_codata) => {
                 // let arms = tycker.statics.codatas.defs[&codata].to_owned();
                 // let mut arms_ = Vec::new();
 

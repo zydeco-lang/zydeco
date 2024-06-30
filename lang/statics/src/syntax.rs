@@ -521,6 +521,8 @@ pub struct StaticsArena {
     pub absts: ArenaDense<AbstId, ()>,
     /// the abstract types generated from sealed types
     pub seals: ArenaAssoc<AbstId, TypeId>,
+    /// name hints for abstract types
+    pub abst_hints: ArenaAssoc<AbstId, DefId>,
     /// arena for filling context-constrained holes; the TermId is the site
     pub fills: ArenaDense<FillId, su::TermId>,
     /// arena for the solutions of fillings
@@ -554,6 +556,7 @@ impl StaticsArena {
 
             absts: ArenaDense::new(alloc.alloc()),
             seals: ArenaAssoc::new(),
+            abst_hints: ArenaAssoc::new(),
             fills: ArenaDense::new(alloc.alloc()),
             solus: ArenaAssoc::new(),
             datas: StructArena {

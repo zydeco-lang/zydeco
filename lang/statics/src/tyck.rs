@@ -327,6 +327,7 @@ impl<'decl> SccDeclarations<'decl> {
             let (def, kd) = tycker.extract_tpat(binder);
             if let Some(def) = def {
                 let abst = tycker.statics.absts.alloc(());
+                tycker.statics.abst_hints.insert(abst, def);
                 let abst_ty = Alloc::alloc(&mut tycker.statics, abst, kd);
                 env.env += (def, abst_ty.into());
                 abst_map.insert(*id, (abst, kd));
@@ -502,7 +503,7 @@ impl Tyck for SEnv<su::PatId> {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         };
                         match tycker.statics.types[&ann_ty].to_owned() {
-                            | syntax::Type::Prod(ty) => {
+                            | ss::Type::Prod(ty) => {
                                 let ss::Prod(ty_a, ty_b) = ty;
                                 let (a_out_ann, a_ctx) =
                                     self.mk(a).tyck(tycker, Action::ana(ty_a.into()))?;
@@ -525,7 +526,7 @@ impl Tyck for SEnv<su::PatId> {
                                 let ctx = a_ctx + b_ctx;
                                 (PatAnnId::Value(pat, ann), ctx)
                             }
-                            | syntax::Type::Exists(ty) => {
+                            | ss::Type::Exists(ty) => {
                                 let ss::Exists(tpat, ty_body) = ty;
                                 let (def, kd) = tycker.extract_tpat(tpat);
                                 let (a_out_ann, a_ctx) =
@@ -545,6 +546,7 @@ impl Tyck for SEnv<su::PatId> {
                                         )?,
                                     };
                                     let abst = tycker.statics.absts.alloc(());
+                                    tycker.statics.abst_hints.insert(abst, a_def);
                                     let abst_ty = Alloc::alloc(&mut tycker.statics, abst, kd);
                                     env += (a_def, abst_ty.into());
                                     ty_body.subst_k(tycker, def, abst_ty)?
@@ -725,6 +727,7 @@ impl Tyck for SEnv<su::TermId> {
                     | TermAnnId::Kind(_) => unreachable!(),
                     | TermAnnId::Type(ty, kd) => {
                         let abst = tycker.statics.absts.alloc(());
+                        // Todo: abst hint
                         tycker.statics.seals.insert(abst, ty);
                         let out = Alloc::alloc(&mut tycker.statics, abst, kd);
                         TermAnnId::Type(out, kd)
@@ -1105,6 +1108,9 @@ impl Tyck for SEnv<su::TermId> {
                                         };
                                         let (def_binder, binder_kd) = tycker.extract_tpat(binder);
                                         let abst = tycker.statics.absts.alloc(());
+                                        if let Some(def) = def_binder {
+                                            tycker.statics.abst_hints.insert(abst, def);
+                                        }
                                         let abst =
                                             Alloc::alloc(&mut tycker.statics, abst, binder_kd);
                                         let ty_body_subst = if let Some(def) = def {

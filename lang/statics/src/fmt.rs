@@ -146,13 +146,17 @@ impl Ugly for AbstId {
     fn ugly(&self, f: &Formatter) -> String {
         let () = &f.statics.absts[self];
         let sealed = &f.statics.seals.get(self);
+        let hint = match f.statics.abst_hints.get(self) {
+            | Some(hint) => hint.ugly(f),
+            | None => "".to_string(),
+        };
         match sealed {
             | Some(_ty) => {
-                format!("[sealed {}]", self.concise())
+                format!("{}[sealed {}]", hint, self.concise())
                 // format!("[sealed ({}) {}]", self.concise(), ty.ugly(f))
             }
             | None => {
-                format!("[abst {}]", self.concise())
+                format!("{}[abst {}]", hint, self.concise())
             }
         }
     }
