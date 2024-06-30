@@ -285,11 +285,29 @@ impl Debruijn {
                 std::panic::Location::caller(),
             )?,
             | (Type::Data(lhs), Type::Data(rhs)) => {
-                if lhs != rhs {
+                // if lhs != rhs {
+                //     tycker.err(
+                //         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                //         std::panic::Location::caller(),
+                //     )?
+                // }
+                let Data { arms: lhs_tbl } = tycker.statics.datas.tbls[&lhs].to_owned();
+                let Data { arms: rhs_tbl } = tycker.statics.datas.tbls[&rhs].to_owned();
+                if lhs_tbl.len() != rhs_tbl.len() {
                     tycker.err(
                         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                         std::panic::Location::caller(),
                     )?
+                }
+                for (ctor, lhs) in lhs_tbl {
+                    if let Some(rhs) = rhs_tbl.get(&ctor).cloned() {
+                        self.to_owned().lub(lhs, rhs, tycker)?;
+                    } else {
+                        tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?
+                    }
                 }
                 lhs_id
             }
@@ -298,11 +316,29 @@ impl Debruijn {
                 std::panic::Location::caller(),
             )?,
             | (Type::CoData(lhs), Type::CoData(rhs)) => {
-                if lhs != rhs {
+                // if lhs != rhs {
+                //     tycker.err(
+                //         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                //         std::panic::Location::caller(),
+                //     )?
+                // }
+                let CoData { arms: lhs_tbl } = tycker.statics.codatas.tbls[&lhs].to_owned();
+                let CoData { arms: rhs_tbl } = tycker.statics.codatas.tbls[&rhs].to_owned();
+                if lhs_tbl.len() != rhs_tbl.len() {
                     tycker.err(
                         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                         std::panic::Location::caller(),
                     )?
+                }
+                for (dtor, lhs) in lhs_tbl {
+                    if let Some(rhs) = rhs_tbl.get(&dtor).cloned() {
+                        self.to_owned().lub(lhs, rhs, tycker)?;
+                    } else {
+                        tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?
+                    }
                 }
                 lhs_id
             }

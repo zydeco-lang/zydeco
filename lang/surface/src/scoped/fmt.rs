@@ -450,12 +450,13 @@ impl Ugly for WithBlock {
         for struct_ in structs {
             s += "with ";
             s += &struct_.ugly(f);
+            s += " ";
         }
         for import in imports {
-            s += " ";
             s += &import.ugly(f);
+            s += " ";
         }
-        s += " begin ";
+        s += "begin ";
         s += &body.ugly(f);
         s += " end";
         s

@@ -248,6 +248,10 @@ impl<'decl> SccDeclarations<'decl> {
             unreachable!()
         };
         let su::AliasBody { binder, bindee } = decl;
+        let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
+            | Some(bindee) => (bindee, true),
+            | None => (bindee, false),
+        };
         // synthesize the bindee
         let out_ann = env.mk(bindee).tyck(tycker, Action::syn())?;
         let env = match out_ann {
@@ -256,6 +260,19 @@ impl<'decl> SccDeclarations<'decl> {
                 let bindee = ty;
                 let (binder, _ctx) = env.mk(binder).tyck(tycker, Action::ana(kd.into()))?;
                 let PatAnnId::Type(binder, _kd) = binder else { unreachable!() };
+
+                // seal the type if needed
+                let bindee = if is_sealed {
+                    let abst = tycker.statics.absts.alloc(());
+                    if let (Some(def), _kd) = tycker.extract_tpat(binder) {
+                        tycker.statics.abst_hints.insert(abst, def);
+                    }
+                    tycker.statics.seals.insert(abst, ty);
+                    Alloc::alloc(&mut tycker.statics, abst, kd)
+                } else {
+                    bindee
+                };
+
                 // add the type into the environment
                 let SEnv { env: new_env, inner: () } =
                     env.mk(binder).tyck_assign(tycker, Action::syn(), ty)?;
@@ -720,21 +737,7 @@ impl Tyck for SEnv<su::TermId> {
         use su::Term as Tm;
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
             | Tm::Internal(_) => unreachable!(),
-            | Tm::Sealed(body) => {
-                let su::Sealed(body) = body;
-                let out_ann = self.mk(body).tyck(tycker, Action { switch })?;
-                match out_ann {
-                    | TermAnnId::Kind(_) => unreachable!(),
-                    | TermAnnId::Type(ty, kd) => {
-                        let abst = tycker.statics.absts.alloc(());
-                        // Todo: abst hint
-                        tycker.statics.seals.insert(abst, ty);
-                        let out = Alloc::alloc(&mut tycker.statics, abst, kd);
-                        TermAnnId::Type(out, kd)
-                    }
-                    | TermAnnId::Hole | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => out_ann,
-                }
-            }
+            | Tm::Sealed(_) => unreachable!(),
             | Tm::Ann(term) => {
                 let su::Ann { tm, ty } = term;
                 // if the ty is a hole, we should go synthesize

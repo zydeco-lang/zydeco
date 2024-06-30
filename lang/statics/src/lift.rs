@@ -100,7 +100,7 @@ impl SEnv<TypeId> {
         // if so, just return the corresponding algebra
         for (alg, _mo_ty, carrier_ty) in algs.iter().cloned() {
             let carrier_ty = carrier_ty;
-            if carrier_ty == self.inner {
+            if Lub::lub(carrier_ty, self.inner, tycker).is_ok() {
                 let force_alg = {
                     let ann = tycker.algebra_mo_carrier(&self.env, mo_ty, carrier_ty);
                     Alloc::alloc(&mut tycker.statics, Force(alg), ann)

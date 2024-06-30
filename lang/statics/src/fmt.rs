@@ -147,7 +147,10 @@ impl Ugly for AbstId {
         let () = &f.statics.absts[self];
         let sealed = &f.statics.seals.get(self);
         let hint = match f.statics.abst_hints.get(self) {
-            | Some(hint) => hint.ugly(f),
+            | Some(hint) => {
+                let hint = &f.scoped.defs[hint];
+                hint.ugly(f)
+            }
             | None => "".to_string(),
         };
         match sealed {
