@@ -275,7 +275,7 @@ impl<'decl> SccDeclarations<'decl> {
 
                 // add the type into the environment
                 let SEnv { env: new_env, inner: () } =
-                    env.mk(binder).tyck_assign(tycker, Action::syn(), ty)?;
+                    env.mk(binder).tyck_assign(tycker, Action::syn(), bindee)?;
                 env.env = new_env;
                 tycker.statics.decls.insert(*id, ss::TAliasBody { binder, bindee }.into());
                 env
