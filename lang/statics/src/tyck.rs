@@ -2103,7 +2103,7 @@ impl Tyck for SEnv<su::TermId> {
                     let vtype = tycker.vtype(&self.env);
                     Lub::lub_k(vtype, kd, tycker)?;
                     // check that ty and body_ty are compatible
-                    let ty_lift = ty.lift(tycker, mo_ty)?;
+                    let ty_lift = self.mk(ty).lift(tycker, mo_ty)?;
                     Lub::lub_k(ty_lift, body_ty, tycker)?;
                     let (binder_out_ann, _ctx) =
                         self.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
@@ -2121,7 +2121,7 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let body_ty_lift = body_ty.lift(tycker, mo_ty)?;
+                let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
                 let body_ty_lift = match switch {
                     | Switch::Syn => body_ty_lift,
                     | Switch::Ana(ana) => match ana {
@@ -2142,7 +2142,7 @@ impl Tyck for SEnv<su::TermId> {
                 //     body_ty_lift,
                 // );
                 // TermAnnId::Compu(with_block, body_ty_lift)
-                let body_lift = body.lift(tycker, (mo, mo_ty), algs)?;
+                let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), algs)?;
                 TermAnnId::Compu(body_lift, body_ty_lift)
             }
             | Tm::Lit(lit) => {
