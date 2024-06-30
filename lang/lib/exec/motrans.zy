@@ -32,9 +32,24 @@ def fn mt-exnt (E: VType) : MonadTrans (ExnT E) =
     //   | +Right(a) -> ! f a
     //   end
     // end
+
+    // with mo
+    // begin
+    //   ! mexn E
+    // end
+
     with mo
     begin
-      ! mexn E
+      (comatch
+      | .return A a ->
+        ret +Right(a)
+      | .bind A A' m f ->
+        do a? <- ! m;
+        match a?
+        | +Left(e) -> ret +Left(e)
+        | +Right(a) -> ! f a
+        end
+      end : Monad (Exn E))
     end
   | .lift M A mo m ->
     // do~ ! mo .bind A (Either E A) m; fn a ->
