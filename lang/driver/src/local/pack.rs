@@ -177,7 +177,7 @@ impl LocalPackage {
         // }
         // // Debug: print the contexts upon terms
         // if cfg!(debug_assertions) {
-        //     use crate::scoped::fmt::*;
+        //     use zydeco_surface::scoped::fmt::*;
         //     println!(">>> [{}] contexts", name);
         //     for (term, ctx) in &pack.arena.ctxs {
         //         print!(
@@ -197,7 +197,7 @@ impl LocalPackage {
         // }
         // // Debug: print the user map
         // if cfg!(debug_assertions) {
-        //     use crate::scoped::fmt::*;
+        //     use zydeco_surface::scoped::fmt::*;
         //     println!(">>> [{}]", name);
         //     for (def, users) in &pack.arena.users {
         //         println!(

@@ -225,6 +225,16 @@ impl<'decl> SccDeclarations<'decl> {
                         let out_ann = env.mk(term).tyck(tycker, Action::ana(os.into()))?;
                         let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                         tycker.statics.decls.insert(*id, ss::Exec(body).into());
+
+                        // Debug: print
+                        {
+                            use crate::fmt::*;
+                            println!(
+                                "{}",
+                                id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                            );
+                        }
+
                         {
                             // administrative
                             tycker.stack.pop_back();
@@ -292,11 +302,11 @@ impl<'decl> SccDeclarations<'decl> {
             }
         };
 
-        // // Debug: print
-        // {
-        //     use crate::fmt::*;
-        //     println!("{}", id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)));
-        // }
+        // Debug: print
+        {
+            use crate::fmt::*;
+            println!("{}", id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)));
+        }
 
         {
             // administrative
@@ -2083,7 +2093,15 @@ impl Tyck for SEnv<su::TermId> {
                         tycker.err_k(TyckError::MissingMonad, std::panic::Location::caller())?
                     }
                 };
-                // println!("monad {:?} : Monad {:?}", mo, mo_ty);
+                // // Debug: print
+                // {
+                //     use crate::fmt::*;
+                //     println!("monad {} : Monad {}", mo.ugly(
+                //         &Formatter::new(&tycker.scoped, &tycker.statics)
+                //     ), mo_ty.ugly(
+                //         &Formatter::new(&tycker.scoped, &tycker.statics)
+                //     ));
+                // }
                 for (alg, alg_ty_mo_arg, alg_ty_carrier_arg) in &algs {
                     // check monad_arg type
                     Lub::lub_k(mo_ty, *alg_ty_mo_arg, tycker)?;
@@ -2095,7 +2113,9 @@ impl Tyck for SEnv<su::TermId> {
                     // );
                 }
                 let mut imports_ = Vec::new();
+                let mut import_subs = Vec::new();
                 for su::Import { binder, ty, body } in imports {
+                    // preserve the old body for later inlining
                     let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
                     let (body, body_ty) = body_out_ann.try_as_value(
                         tycker,
@@ -2122,7 +2142,8 @@ impl Tyck for SEnv<su::TermId> {
                         }
                         | PatAnnId::Value(binder, ty) => (binder, ty),
                     };
-                    imports_.push(ss::Import { binder, ty, body })
+                    imports_.push(ss::Import { binder, ty, body });
+                    import_subs.push((binder, body));
                 }
                 // change all return types to the monad type
                 let (body, body_ty) = self.mk(body).tyck(tycker, Action::syn())?.try_as_compu(
@@ -2151,6 +2172,34 @@ impl Tyck for SEnv<su::TermId> {
                 //     body_ty_lift,
                 // );
                 // TermAnnId::Compu(with_block, body_ty_lift)
+
+                // perform inlining
+                for (binder, body) in import_subs {
+                    use ss::ValuePattern as VPat;
+                    let def = match tycker.statics.vpats[&binder].to_owned() {
+                        | VPat::Var(def) => def,
+                        | VPat::Hole(_)
+                        | VPat::Ctor(_)
+                        | VPat::Triv(_)
+                        | VPat::VCons(_)
+                        | VPat::TCons(_) => unreachable!(),
+                    };
+                    let users = tycker.scoped.users[&def].to_owned();
+                    for user in users {
+                        let body = tycker.statics.values[&body].to_owned();
+                        let user = match tycker.statics.terms.forth(&user).to_owned() {
+                            | ss::TermId::Value(user) => user,
+                            | ss::TermId::Kind(_) | ss::TermId::Type(_) | ss::TermId::Compu(_) => {
+                                unreachable!()
+                            }
+                        };
+                        let Some(user) = tycker.statics.values.get_mut(&user) else {
+                            unreachable!()
+                        };
+                        *user = body;
+                    }
+                }
+
                 let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), algs)?;
                 TermAnnId::Compu(body_lift, body_ty_lift)
             }
