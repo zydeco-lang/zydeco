@@ -78,6 +78,9 @@ impl SEnv<TypeId> {
 
 impl SEnv<TypeId> {
     /// try to generate the algebra of a type given certain type implementations
+    /// the first result is the algebra computation,
+    /// the second result is the monad type of the algebra,
+    /// and the third result is the carrier type of the algebra
     pub fn algebra(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
         algs: Vec<(ValueId, TypeId, TypeId)>,
@@ -121,7 +124,11 @@ impl SEnv<TypeId> {
             | Type::Var(_) | Type::Fill(_) | Type::Abs(_) => {
                 tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
             }
-            | Type::Abst(_) => todo!(),
+            | Type::Abst(_) => {
+                // Hack: unseal and check (?), a type level eta expansion
+                // Todo: generate the algebra for codata
+                todo!()
+            }
             | Type::App(_) => {
                 let (f_ty, a_tys) = self.inner.application_normal_form_k(tycker)?;
                 match tycker.statics.types[&f_ty].to_owned() {
@@ -578,8 +585,30 @@ impl SEnv<TypeId> {
                 tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
             }
             | Type::Data(_) => unreachable!(),
-            | Type::CoData(_) => {
-                // Todo: generate the algebra for codata
+            | Type::CoData(codata) => {
+                // let arms = tycker.statics.codatas.defs[&codata].to_owned();
+                // let mut arms_ = Vec::new();
+
+                // for (dtor, ty) in arms {
+                //     let (algebra, _mo_ty, carrier_ty) =
+                //         self.mk(ty).algebra(tycker, (mo, mo_ty), algs.to_owned())?;
+
+                //     todo!()
+                // }
+
+                // let whole_body =
+                //     Alloc::alloc(&mut tycker.statics, CoMatch { arms: arms_ }, self.inner);
+                // let tail = todo!();
+                // let algebra_ty = tycker.algebra_mo_carrier(&self.env, mo_ty, self.inner);
+                // (
+                //     Alloc::alloc(
+                //         &mut tycker.statics,
+                //         CoMatch { arms: vec![CoMatcher { dtor: dtor_binda, tail }] },
+                //         algebra_ty,
+                //     ),
+                //     mo_ty,
+                //     self.inner,
+                // )
                 todo!()
             }
         };
@@ -771,7 +800,51 @@ impl SEnv<CompuId> {
                 whole_body
             }
             | Compu::Do(compu) => {
-                todo!()
+                let Bind { binder, bindee, tail } = compu;
+                let bind_compu_ty = tycker.statics.annotations_compu[&self.inner];
+                let binder_ = self.mk(binder).lift(tycker, (mo, mo_ty), algs.to_owned())?;
+                let binder_ty = tycker.statics.annotations_vpat[&binder_];
+                let tail_ = self.mk(tail).lift(tycker, (mo, mo_ty), algs.to_owned())?;
+                let tail_ty = tycker.statics.annotations_compu[&tail_];
+                let (thunked_function_ty, thunked_function) = {
+                    let function_ty =
+                        Alloc::alloc(&mut tycker.statics, Arrow(binder_ty, tail_ty), ctype);
+                    let function =
+                        Alloc::alloc(&mut tycker.statics, Abs(binder_, tail_), function_ty);
+                    let thunked_function_ty = tycker.thunk_app(&self.env, function_ty);
+                    let thunked_function =
+                        Alloc::alloc(&mut tycker.statics, Thunk(function), thunked_function_ty);
+                    (thunked_function_ty, thunked_function)
+                };
+                let (algebra, _mo_ty, carrier_ty) =
+                    self.mk(bind_compu_ty).algebra(tycker, (mo, mo_ty), algs.to_owned())?;
+                let dtor_binda = DtorName(".bindA".to_string());
+                let binda_ty = gen_alg_binda_forall(&self.env, tycker, mo_ty, carrier_ty);
+                let binda = Alloc::alloc(
+                    &mut tycker.statics,
+                    Dtor(algebra, dtor_binda.to_owned()),
+                    binda_ty,
+                );
+                let binda_v_ty =
+                    gen_alg_binda_body(&self.env, tycker, mo_ty, binder_ty, carrier_ty);
+                let binda_v = Alloc::alloc(&mut tycker.statics, App(binda, binder_ty), binda_v_ty);
+                let bindee_ = self.mk(bindee).lift(tycker, (mo, mo_ty), algs)?;
+                let bindee_ty = tycker.statics.annotations_compu[&bindee];
+                let thunked_bindee_ty = tycker.thunk_app(&self.env, bindee_ty);
+                let thunked_bindee =
+                    Alloc::alloc(&mut tycker.statics, Thunk(bindee_), thunked_bindee_ty);
+                let binda_v_thunked_bindee_ty =
+                    Alloc::alloc(&mut tycker.statics, Arrow(thunked_function_ty, tail_ty), ctype);
+                let binda_v_thunked_bindee = Alloc::alloc(
+                    &mut tycker.statics,
+                    App(binda_v, thunked_bindee),
+                    binda_v_thunked_bindee_ty,
+                );
+                Alloc::alloc(
+                    &mut tycker.statics,
+                    App(binda_v_thunked_bindee, thunked_function),
+                    tail_ty,
+                )
             }
             | Compu::Let(compu) => {
                 let PureBind { binder, bindee, tail } = compu;

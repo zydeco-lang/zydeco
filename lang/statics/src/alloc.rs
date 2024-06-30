@@ -35,8 +35,9 @@ AllocKind! {
 
 impl Alloc<TPatId> for TypePattern {
     type Ann = KindId;
-    fn alloc(statics: &mut StaticsArena, val: Self, _ann: Self::Ann) -> TPatId {
+    fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> TPatId {
         let tpat = statics.tpats.alloc(val);
+        statics.annotations_tpat.insert(tpat, ann);
         tpat
     }
 }
@@ -110,8 +111,9 @@ AllocType! {
 
 impl Alloc<VPatId> for ValuePattern {
     type Ann = TypeId;
-    fn alloc(statics: &mut StaticsArena, val: Self, _ann: Self::Ann) -> VPatId {
+    fn alloc(statics: &mut StaticsArena, val: Self, ann: Self::Ann) -> VPatId {
         let vpat = statics.vpats.alloc(val);
+        statics.annotations_vpat.insert(vpat, ann);
         vpat
     }
 }

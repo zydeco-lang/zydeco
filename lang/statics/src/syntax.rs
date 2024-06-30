@@ -506,8 +506,12 @@ pub struct StaticsArena {
     // the type of terms under the context it's type checked; "annotation"
     /// annotations for variable definitions
     pub annotations_var: ArenaAssoc<DefId, AnnId>,
+    /// kind annotations for type patterns
+    pub annotations_tpat: ArenaAssoc<TPatId, KindId>,
     /// kind annotations for types
     pub annotations_type: ArenaAssoc<TypeId, KindId>,
+    /// type annotations for value patterns
+    pub annotations_vpat: ArenaAssoc<VPatId, TypeId>,
     /// type annotations for values
     pub annotations_value: ArenaAssoc<ValueId, TypeId>,
     /// type annotations for computations
@@ -542,7 +546,9 @@ impl StaticsArena {
             terms: ArenaBijective::new(),
 
             annotations_var: ArenaAssoc::new(),
+            annotations_tpat: ArenaAssoc::new(),
             annotations_type: ArenaAssoc::new(),
+            annotations_vpat: ArenaAssoc::new(),
             annotations_value: ArenaAssoc::new(),
             annotations_compu: ArenaAssoc::new(),
 
