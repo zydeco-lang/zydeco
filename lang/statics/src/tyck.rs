@@ -17,6 +17,14 @@ pub struct Tycker {
     pub errors: Vec<TyckErrorEntry>,
 }
 
+// Todo: generalize the administrative guards using "with" pattern
+// by placing the body of tyck function into a closure,
+// and the with function can do all administrative work before and after calling the function
+
+// Todo: the error stack can keep a return point (like the depth of the stack) before recoverable calls
+// so that we don't need to maintain the count of push and pops manually;
+// instead, we can just pop until the return point
+
 impl Tycker {
     pub fn new(
         spans: SpanArena, prim: PrimDef, scoped: ScopedArena, alloc: &mut GlobalAlloc,

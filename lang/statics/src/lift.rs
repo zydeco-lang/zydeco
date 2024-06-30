@@ -90,12 +90,55 @@ impl SEnv<TypeId> {
             let normalized = self.inner.normalize_k(tycker, kd)?;
             tycker.statics.types[&normalized].to_owned()
         };
+        let vtype = tycker.vtype(&self.env);
+        let ctype = tycker.ctype(&self.env);
         // first check if ty is among the carriers of algebras
         // if so, just return the corresponding algebra
         // todo!()
 
         // helper functions
-        fn gen_forall_body(
+        fn gen_mo_forall_body(
+            env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId, a_prime_ty: TypeId,
+        ) -> TypeId {
+            // Thunk (M A) -> Thunk (A -> M A') -> M A'
+            // where M is the monad type `mo_ty`
+            let ctype = tycker.ctype(env);
+            let m_a = Alloc::alloc(&mut tycker.statics, App(mo_ty, a_ty), ctype);
+            let thunk_m_a = tycker.thunk_app(env, m_a);
+            let m_a_prime = Alloc::alloc(&mut tycker.statics, App(mo_ty, a_prime_ty), ctype);
+            let a_arr_m_a_prime = Alloc::alloc(&mut tycker.statics, Arrow(a_ty, m_a_prime), ctype);
+            let thunk_a_arr_m_a_prime = tycker.thunk_app(env, a_arr_m_a_prime);
+            let latter_arr =
+                Alloc::alloc(&mut tycker.statics, Arrow(thunk_a_arr_m_a_prime, m_a_prime), ctype);
+            Alloc::alloc(&mut tycker.statics, Arrow(thunk_m_a, latter_arr), ctype)
+        }
+        fn gen_mo_forall(
+            env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId,
+        ) -> TypeId {
+            // forall (A': VType) . Thunk (M A) -> Thunk (A -> M A') -> M A'
+            // where M is the monad type `mo_ty`
+            let vtype = tycker.vtype(env);
+            let ctype = tycker.ctype(env);
+            let tvar_a_prime = tycker.scoped.defs.alloc(VarName("A'".to_string()));
+            tycker.statics.annotations_var.insert(tvar_a_prime, vtype.into());
+            let tpat_a_prime = Alloc::alloc(&mut tycker.statics, tvar_a_prime, vtype);
+            let ty_a_prime = Alloc::alloc(&mut tycker.statics, tvar_a_prime, vtype);
+            let forall_body = gen_mo_forall_body(env, tycker, mo_ty, a_ty, ty_a_prime);
+            Alloc::alloc(&mut tycker.statics, Forall(tpat_a_prime, forall_body), ctype)
+        }
+        fn gen_mo_forall_forall(env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId) -> TypeId {
+            // forall (A: VType) . forall (A': VType) . Thunk (M A) -> Thunk (A -> M A') -> M A'
+            // where M is the monad type `mo_ty`
+            let vtype = tycker.vtype(env);
+            let ctype = tycker.ctype(env);
+            let tvar_a = tycker.scoped.defs.alloc(VarName("A".to_string()));
+            tycker.statics.annotations_var.insert(tvar_a, vtype.into());
+            let tpat_a = Alloc::alloc(&mut tycker.statics, tvar_a, vtype);
+            let ty_a = Alloc::alloc(&mut tycker.statics, tvar_a, vtype);
+            let forall_body = gen_mo_forall(env, tycker, mo_ty, ty_a);
+            Alloc::alloc(&mut tycker.statics, Forall(tpat_a, forall_body), ctype)
+        }
+        fn gen_alg_forall_body(
             env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId, carrier_ty: TypeId,
         ) -> TypeId {
             // Thunk (M A) -> Thunk (A -> R) -> R
@@ -109,7 +152,7 @@ impl SEnv<TypeId> {
                 Alloc::alloc(&mut tycker.statics, Arrow(thunk_a_arr_carrier, carrier_ty), ctype);
             Alloc::alloc(&mut tycker.statics, Arrow(thunk_m_a, latter_arr), ctype)
         }
-        fn gen_forall(
+        fn gen_alg_forall(
             env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, carrier_ty: TypeId,
         ) -> TypeId {
             // forall (A: VType) . Thunk (M A) -> Thunk (A -> R) -> R
@@ -118,11 +161,12 @@ impl SEnv<TypeId> {
             let ctype = tycker.ctype(env);
             let tvar_a = tycker.scoped.defs.alloc(VarName("A".to_string()));
             tycker.statics.annotations_var.insert(tvar_a, vtype.into());
-            let tpat = Alloc::alloc(&mut tycker.statics, tvar_a, vtype);
+            let tpat_a = Alloc::alloc(&mut tycker.statics, tvar_a, vtype);
             let ty_a = Alloc::alloc(&mut tycker.statics, tvar_a, vtype);
-            let forall_body = gen_forall_body(env, tycker, mo_ty, ty_a, carrier_ty);
-            Alloc::alloc(&mut tycker.statics, Forall(tpat, forall_body), ctype)
+            let forall_body = gen_alg_forall_body(env, tycker, mo_ty, ty_a, carrier_ty);
+            Alloc::alloc(&mut tycker.statics, Forall(tpat_a, forall_body), ctype)
         }
+        let dtor_bind = DtorName(".bind".to_string());
         let dtor_binda = DtorName(".bindA".to_string());
 
         // if it's not directly the carrier of any algebra, then try to generate the algebra
@@ -131,18 +175,160 @@ impl SEnv<TypeId> {
                 tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
             }
             | Type::Abst(_) => todo!(),
-            | Type::App(app_ty) => {
-                let App(f, a) = app_ty;
-                match tycker.statics.types[&f].to_owned() {
-                    | Type::App(_) => todo!(),
+            | Type::App(_) => {
+                let (f_ty, a_tys) = self.inner.application_normal_form_k(tycker)?;
+                match tycker.statics.types[&f_ty].to_owned() {
+                    | Type::Ret(RetTy) => {
+                        assert!(a_tys.len() == 1, "Ret should have exactly one argument");
+                        let ty_a = a_tys.into_iter().next().unwrap();
+
+                        // M A
+                        let mo_a_ty = Alloc::alloc(&mut tycker.statics, App(mo_ty, ty_a), ctype);
+
+                        // what we want to generate is:
+                        // ```
+                        // comatch
+                        //   | .bindA -> fn A' m' f' ->
+                        //   ! mo .bind A' A m' f'
+                        // end
+                        // ```
+
+                        // A'
+                        let tvar_a_prime = tycker.scoped.defs.alloc(VarName("A'".to_string()));
+                        tycker.statics.annotations_var.insert(tvar_a_prime, vtype.into());
+                        let tpat_a_prime = Alloc::alloc(&mut tycker.statics, tvar_a_prime, vtype);
+                        let ty_a_prime = Alloc::alloc(&mut tycker.statics, tvar_a_prime, vtype);
+
+                        // m'
+                        let var_m_prime = tycker.scoped.defs.alloc(VarName("m'".to_string()));
+                        let m_prime_ty = {
+                            let ty_mo_a_prime =
+                                Alloc::alloc(&mut tycker.statics, App(mo_ty, ty_a_prime), ctype);
+                            tycker.thunk_app(&self.env, ty_mo_a_prime)
+                        };
+                        tycker.statics.annotations_var.insert(var_m_prime, m_prime_ty.into());
+                        let vpat_m_prime: VPatId =
+                            Alloc::alloc(&mut tycker.statics, var_m_prime, m_prime_ty);
+                        let val_m_prime: ValueId =
+                            Alloc::alloc(&mut tycker.statics, var_m_prime, m_prime_ty);
+
+                        // f'
+                        let var_f_prime = tycker.scoped.defs.alloc(VarName("f'".to_string()));
+                        let f_prime_ty = {
+                            let arrs = Alloc::alloc(
+                                &mut tycker.statics,
+                                Arrow(ty_a_prime, mo_a_ty),
+                                ctype,
+                            );
+                            tycker.thunk_app(&self.env, arrs)
+                        };
+                        tycker.statics.annotations_var.insert(var_f_prime, f_prime_ty.into());
+                        let vpat_f_prime: VPatId =
+                            Alloc::alloc(&mut tycker.statics, var_f_prime, f_prime_ty);
+                        let val_f_prime: ValueId =
+                            Alloc::alloc(&mut tycker.statics, var_f_prime, f_prime_ty);
+
+                        // tail = `fn A' m' f' -> ! mo .bind A' A m' f'`
+
+                        let whole_body = {
+                            let monad_ty = tycker.monad_mo(&self.env, mo_ty);
+                            let force_mo = Alloc::alloc(&mut tycker.statics, Force(mo), monad_ty);
+
+                            let force_mo_bind_ty = gen_mo_forall_forall(&self.env, tycker, mo_ty);
+                            let force_mo_bind = Alloc::alloc(
+                                &mut tycker.statics,
+                                Dtor(force_mo, dtor_bind.to_owned()),
+                                force_mo_bind_ty,
+                            );
+
+                            let force_mo_bind_a_prime_ty =
+                                gen_mo_forall(&self.env, tycker, mo_ty, ty_a_prime);
+                            let force_mo_bind_a_prime = Alloc::alloc(
+                                &mut tycker.statics,
+                                App(force_mo_bind, ty_a_prime),
+                                force_mo_bind_a_prime_ty,
+                            );
+
+                            let force_mo_bind_a_prime_a_ty =
+                                gen_mo_forall_body(&self.env, tycker, mo_ty, ty_a_prime, ty_a);
+                            let force_mo_bind_a_prime_a = Alloc::alloc(
+                                &mut tycker.statics,
+                                App(force_mo_bind_a_prime, ty_a),
+                                force_mo_bind_a_prime_a_ty,
+                            );
+                            let force_mo_bind_a_prime_a_m_prime_ty = {
+                                // Thunk (A' -> M A) -> M A
+                                let a_prime_arr_mo_a = Alloc::alloc(
+                                    &mut tycker.statics,
+                                    Arrow(ty_a_prime, mo_a_ty),
+                                    ctype,
+                                );
+                                let thunk_a_prime_arr_mo_a =
+                                    tycker.thunk_app(&self.env, a_prime_arr_mo_a);
+                                Alloc::alloc(
+                                    &mut tycker.statics,
+                                    Arrow(thunk_a_prime_arr_mo_a, mo_a_ty),
+                                    ctype,
+                                )
+                            };
+                            let force_mo_bind_a_prime_a_m_prime = Alloc::alloc(
+                                &mut tycker.statics,
+                                App(force_mo_bind_a_prime_a, val_m_prime),
+                                force_mo_bind_a_prime_a_m_prime_ty,
+                            );
+                            Alloc::alloc(
+                                &mut tycker.statics,
+                                App(force_mo_bind_a_prime_a_m_prime, val_f_prime),
+                                mo_a_ty,
+                            )
+                        };
+
+                        let fn_f_prime_ty =
+                            Alloc::alloc(&mut tycker.statics, Arrow(f_prime_ty, mo_a_ty), ctype);
+                        let fn_f_prime = Alloc::alloc(
+                            &mut tycker.statics,
+                            Abs(vpat_f_prime, whole_body),
+                            fn_f_prime_ty,
+                        );
+
+                        let fn_m_prime_f_prime_ty = Alloc::alloc(
+                            &mut tycker.statics,
+                            Arrow(m_prime_ty, fn_f_prime_ty),
+                            ctype,
+                        );
+                        let fn_m_prime_f_prime = Alloc::alloc(
+                            &mut tycker.statics,
+                            Abs(vpat_m_prime, fn_f_prime),
+                            fn_m_prime_f_prime_ty,
+                        );
+
+                        // a final touch with fn A'
+                        let ann = Alloc::alloc(
+                            &mut tycker.statics,
+                            Forall(tpat_a_prime, fn_m_prime_f_prime_ty),
+                            ctype,
+                        );
+                        let tail = Alloc::alloc(
+                            &mut tycker.statics,
+                            Abs(tpat_a_prime, fn_m_prime_f_prime),
+                            ann,
+                        );
+
+                        let algebra_ty = tycker.algebra_mo_carrier(&self.env, mo_ty, mo_a_ty);
+                        (
+                            Alloc::alloc(
+                                &mut tycker.statics,
+                                CoMatch { arms: vec![CoMatcher { dtor: dtor_binda, tail }] },
+                                algebra_ty,
+                            ),
+                            mo_ty,
+                            mo_a_ty,
+                        )
+                    }
                     | Type::Var(_) => todo!(),
                     | Type::Abst(_) => todo!(),
-                    | Type::Fill(_) => todo!(),
-                    | Type::Ret(_) => todo!(),
-                    | Type::CoData(_) => todo!(),
                     | _ => unreachable!(),
-                };
-                todo!()
+                }
             }
             | Type::Thunk(_)
             | Type::Ret(_)
@@ -155,8 +341,6 @@ impl SEnv<TypeId> {
             }
             | Type::Arrow(arr_ty) => {
                 let Arrow(a_ty, b_ty) = arr_ty;
-                let vtype = tycker.vtype(&self.env);
-                let ctype = tycker.ctype(&self.env);
                 // A -> B
                 let a_arr_b = self.inner;
 
@@ -204,13 +388,14 @@ impl SEnv<TypeId> {
                 let val_a: ValueId = Alloc::alloc(&mut tycker.statics, var_a, a_ty);
 
                 // tail = `fn A' m' f a -> ! alg .bindA A' m' { fn a' -> ! f a' a }`
+
                 let (b_algebra, _mo_ty, _b) = self.mk(b_ty).algebra(tycker, (mo, mo_ty), algs)?;
                 let b_algebra_binda = {
-                    let ann = gen_forall(&self.env, tycker, mo_ty, b_ty);
+                    let ann = gen_alg_forall(&self.env, tycker, mo_ty, b_ty);
                     Alloc::alloc(&mut tycker.statics, Dtor(b_algebra, dtor_binda.to_owned()), ann)
                 };
                 let b_algebra_binda_a_prime = {
-                    let ann = gen_forall_body(&self.env, tycker, mo_ty, ty_a_prime, b_ty);
+                    let ann = gen_alg_forall_body(&self.env, tycker, mo_ty, ty_a_prime, b_ty);
                     Alloc::alloc(&mut tycker.statics, App(b_algebra_binda, ty_a_prime), ann)
                 };
                 let b_algebra_binda_a_prime_m_prime = {
@@ -296,8 +481,6 @@ impl SEnv<TypeId> {
             }
             | Type::Forall(arr_ty) => {
                 let Forall(a_ty, b_ty) = arr_ty;
-                let vtype = tycker.vtype(&self.env);
-                let ctype = tycker.ctype(&self.env);
                 // A -> B
                 let a_arr_b = self.inner;
 
@@ -348,11 +531,11 @@ impl SEnv<TypeId> {
                 // tail = `fn A' m' f A -> ! alg .bindA A' m' { fn a' -> ! f a' A }`
                 let (b_algebra, _mo_ty, _b) = self.mk(b_ty).algebra(tycker, (mo, mo_ty), algs)?;
                 let b_algebra_binda = {
-                    let ann = gen_forall(&self.env, tycker, mo_ty, b_ty);
+                    let ann = gen_alg_forall(&self.env, tycker, mo_ty, b_ty);
                     Alloc::alloc(&mut tycker.statics, Dtor(b_algebra, dtor_binda.to_owned()), ann)
                 };
                 let b_algebra_binda_a_prime = {
-                    let ann = gen_forall_body(&self.env, tycker, mo_ty, ty_a_prime, b_ty);
+                    let ann = gen_alg_forall_body(&self.env, tycker, mo_ty, ty_a_prime, b_ty);
                     Alloc::alloc(&mut tycker.statics, App(b_algebra_binda, ty_a_prime), ann)
                 };
                 let b_algebra_binda_a_prime_m_prime = {

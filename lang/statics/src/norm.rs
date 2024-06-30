@@ -311,3 +311,40 @@ impl Tycker {
         Ok(ann)
     }
 }
+
+impl TypeId {
+    pub fn application_normal_form_k(&self, tycker: &mut Tycker) -> ResultKont<(TypeId, Vec<TypeId>)> {
+        let res = self.application_normal_form(tycker);
+        tycker.err_p_to_k(res)
+    }
+    pub fn application_normal_form(&self, tycker: &mut Tycker) -> Result<(TypeId, Vec<TypeId>)> {
+        let ty = self.normalize(tycker, tycker.statics.annotations_type[self].to_owned())?;
+        let res = match tycker.statics.types[&ty].to_owned() {
+            | Type::App(app_ty) => {
+                let App(f_ty, a_ty) = app_ty;
+                let (f_ty, mut a_tys) = f_ty.application_normal_form(tycker)?;
+                let a_ty = a_ty.normalize(tycker, tycker.statics.annotations_type[&a_ty].clone())?;
+                a_tys.push(a_ty);
+                (f_ty, a_tys)
+            }
+            | Type::Var(_)
+            | Type::Abst(_)
+            | Type::Fill(_)
+            | Type::Abs(_)
+            | Type::Thunk(_)
+            | Type::Ret(_)
+            | Type::Unit(_)
+            | Type::Int(_)
+            | Type::Char(_)
+            | Type::String(_)
+            | Type::OS(_)
+            | Type::Arrow(_)
+            | Type::Forall(_)
+            | Type::Prod(_)
+            | Type::Exists(_)
+            | Type::Data(_)
+            | Type::CoData(_) => (ty, Vec::new()),
+        };
+        Ok(res)
+    }
+}

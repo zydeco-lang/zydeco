@@ -61,6 +61,13 @@ impl Tycker {
         let ss::AnnId::Type(ty) = env[self.prim.os.get()] else { unreachable!() };
         ty
     }
+    /// generates `Monad M` where:
+    /// 1. M is `mo` of kind `VType -> CType`
+    pub fn monad_mo(&mut self, env: &ss::Env<ss::AnnId>, mo: ss::TypeId) -> ss::TypeId {
+        let ss::AnnId::Type(monad) = env[self.prim.monad.get()] else { unreachable!() };
+        let ctype = self.ctype(env);
+        Alloc::alloc(&mut self.statics, ss::App(monad, mo), ctype)
+    }
     /// generates `Algebra M R` where:
     /// 1. M is `mo` of kind `VType -> CType`
     /// 2. R is `carrier` of kind `CType`
