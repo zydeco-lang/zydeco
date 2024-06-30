@@ -90,13 +90,27 @@ impl SEnv<TypeId> {
             let normalized = self.inner.normalize_k(tycker, kd)?;
             tycker.statics.types[&normalized].to_owned()
         };
-        let vtype = tycker.vtype(&self.env);
-        let ctype = tycker.ctype(&self.env);
+
         // first check if ty is among the carriers of algebras
         // if so, just return the corresponding algebra
-        // todo!()
+        for (alg, _mo_ty, carrier_ty) in algs.iter().cloned() {
+            let carrier_ty = carrier_ty;
+            if carrier_ty == self.inner {
+                let force_alg = {
+                    let ann = tycker.algebra_mo_carrier(&self.env, mo_ty, carrier_ty);
+                    Alloc::alloc(&mut tycker.statics, Force(alg), ann)
+                };
+                // administrative
+                {
+                    tycker.stack.pop_back();
+                }
+                return Ok((force_alg, mo_ty, carrier_ty));
+            }
+        }
 
         // helper functions
+        let vtype = tycker.vtype(&self.env);
+        let ctype = tycker.ctype(&self.env);
         fn gen_mo_forall_body(
             env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId, a_prime_ty: TypeId,
         ) -> TypeId {
@@ -325,8 +339,14 @@ impl SEnv<TypeId> {
                             mo_a_ty,
                         )
                     }
-                    | Type::Var(_) => todo!(),
-                    | Type::Abst(_) => todo!(),
+                    | Type::Abst(_) => {
+                        // Hack: unseal and check (?), a type level eta expansion
+                        todo!()
+                    }
+                    | Type::Var(_) => tycker.err_k(
+                        TyckError::AlgebraGenerationFailure,
+                        std::panic::Location::caller(),
+                    )?,
                     | _ => unreachable!(),
                 }
             }
