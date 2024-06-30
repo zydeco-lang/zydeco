@@ -2068,16 +2068,16 @@ impl Tyck for SEnv<su::TermId> {
                         )?,
                     }
                 }
-                let (mo, mo_ty_arg) = match mo {
+                let (mo, mo_ty) = match mo {
                     | Some(moo) => moo,
                     | None => {
                         tycker.err_k(TyckError::MissingMonad, std::panic::Location::caller())?
                     }
                 };
-                // println!("monad {:?} : Monad {:?}", mo, mo_ty_arg);
+                // println!("monad {:?} : Monad {:?}", mo, mo_ty);
                 for (alg, alg_ty_mo_arg, alg_ty_carrier_arg) in &algs {
                     // check monad_arg type
-                    Lub::lub_k(mo_ty_arg, *alg_ty_mo_arg, tycker)?;
+                    Lub::lub_k(mo_ty, *alg_ty_mo_arg, tycker)?;
                     let _ = alg;
                     let _ = alg_ty_carrier_arg;
                     // println!(
@@ -2103,7 +2103,7 @@ impl Tyck for SEnv<su::TermId> {
                     let vtype = tycker.vtype(&self.env);
                     Lub::lub_k(vtype, kd, tycker)?;
                     // check that ty and body_ty are compatible
-                    let ty_lift = ty.lift(tycker, mo_ty_arg)?;
+                    let ty_lift = ty.lift(tycker, mo_ty)?;
                     Lub::lub_k(ty_lift, body_ty, tycker)?;
                     let (binder_out_ann, _ctx) =
                         self.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
@@ -2121,7 +2121,7 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let body_ty_lift = body_ty.lift(tycker, mo_ty_arg)?;
+                let body_ty_lift = body_ty.lift(tycker, mo_ty)?;
                 let body_ty_lift = match switch {
                     | Switch::Syn => body_ty_lift,
                     | Switch::Ana(ana) => match ana {
@@ -2131,25 +2131,19 @@ impl Tyck for SEnv<su::TermId> {
                         | AnnId::Type(ana_ty) => Lub::lub_k(body_ty_lift, ana_ty, tycker)?,
                     },
                 };
-                let with_block = Alloc::alloc(
-                    &mut tycker.statics,
-                    ss::WithBlock {
-                        monad: mo,
-                        algebras: algs.into_iter().map(|(alg, _, _)| alg).collect(),
-                        imports: imports_,
-                        body,
-                    },
-                    body_ty_lift,
-                );
-                // {
-                //     // print body_ty_lift
-                //     use crate::fmt::*;
-                //     println!(
-                //         "body_ty_lift: {}",
-                //         body_ty_lift.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                //     );
-                // }
-                TermAnnId::Compu(with_block, body_ty_lift)
+                // let with_block = Alloc::alloc(
+                //     &mut tycker.statics,
+                //     ss::WithBlock {
+                //         monad: mo,
+                //         algebras: algs.into_iter().map(|(alg, _, _)| alg).collect(),
+                //         imports: imports_,
+                //         body,
+                //     },
+                //     body_ty_lift,
+                // );
+                // TermAnnId::Compu(with_block, body_ty_lift)
+                let body_lift = body.lift(tycker, (mo, mo_ty), algs)?;
+                TermAnnId::Compu(body_lift, body_ty_lift)
             }
             | Tm::Lit(lit) => {
                 fn check_against_ty(
