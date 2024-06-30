@@ -72,6 +72,8 @@ impl SEnv<TypeId> {
             // Hack: go inside and generate new data and codata?
             | Type::Data(_) | Type::CoData(_) => self.inner,
         };
+        let kd = tycker.statics.annotations_type[&res];
+        let res = res.normalize_k(tycker, kd)?;
         Ok(res)
     }
 }

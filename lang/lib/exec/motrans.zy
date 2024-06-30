@@ -34,6 +34,7 @@ def fn mt-exnt (E: VType) : MonadTrans (ExnT E) =
     // end
 
     // with mo
+    //   inline mexn
     // begin
     //   ! mexn E
     // end
@@ -108,8 +109,15 @@ end
 
 main
   let e = {
-    with { ! mexnk String } begin
-      do x <- ret 0;
+    let fn add_exn (a: Int) (b: Int) : ExnK String Int =
+      do c <- ! add a b;
+      ! mexnk String .return Int c
+    in
+    with { ! mexnk String }
+      import add_ : Thunk (Int -> Int -> Ret Int) = (add_exn : Thunk (Int -> Int -> ExnK String Int))
+    begin
+      do x <- ! add_ 1 -1;
+      do x <- ret x;
       ret x
     end
   } in
