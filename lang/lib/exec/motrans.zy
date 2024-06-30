@@ -41,6 +41,7 @@ def fn mt-exnt (E: VType) : MonadTrans (ExnT E) =
 
     with mo
     begin
+      // we need to manually inline mexn for now
       (comatch
       | .return A a ->
         ret +Right(a)
@@ -114,6 +115,7 @@ main
       ! mexnk String .return Int c
     in
     with { ! mexnk String }
+      // need inlining
       import add_ : Thunk (Int -> Int -> Ret Int) = (add_exn : Thunk (Int -> Int -> ExnK String Int))
     begin
       do x <- ! add_ 1 -1;
