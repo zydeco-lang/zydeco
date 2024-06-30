@@ -341,6 +341,7 @@ impl SEnv<TypeId> {
                     }
                     | Type::Abst(_) => {
                         // Hack: unseal and check (?), a type level eta expansion
+                        // Todo: generate the algebra for codata
                         todo!()
                     }
                     | Type::Var(_) => tycker.err_k(
@@ -643,13 +644,131 @@ impl SEnv<TypeId> {
                 tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
             }
             | Type::Data(_) => unreachable!(),
-            | Type::CoData(_) => todo!(),
+            | Type::CoData(_) => {
+                // Todo: generate the algebra for codata
+                todo!()
+            }
         };
 
         // administrative
         {
             tycker.stack.pop_back();
         }
+        Ok(res)
+    }
+}
+
+impl VPatId {
+    pub fn lift(
+        &self, _tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
+        algs: Vec<(ValueId, TypeId, TypeId)>,
+    ) -> ResultKont<VPatId> {
+        let res = *self;
+        Ok(res)
+    }
+}
+
+impl ValueId {
+    pub fn lift(
+        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
+        algs: Vec<(ValueId, TypeId, TypeId)>,
+    ) -> ResultKont<ValueId> {
+        let ty = tycker.statics.annotations_value[self];
+        let res = match tycker.statics.values[self].to_owned() {
+            | Value::Hole(_) | Value::Var(_) | Value::Triv(_) | Value::Lit(_) => *self,
+            | Value::Thunk(value) => {
+                let Thunk(compu) = value;
+                let compu_ = compu.lift(tycker, (mo, mo_ty), algs)?;
+                if compu == compu_ {
+                    *self
+                } else {
+                    let ty_ = ty.lift(tycker, mo_ty)?;
+                    Alloc::alloc(&mut tycker.statics, Thunk(compu_), ty_)
+                }
+            }
+            | Value::Ctor(value) => {
+                let Ctor(ctor, value) = value;
+                let value_ = value.lift(tycker, (mo, mo_ty), algs)?;
+                if value == value_ {
+                    *self
+                } else {
+                    let ty_ = ty.lift(tycker, mo_ty)?;
+                    Alloc::alloc(&mut tycker.statics, Ctor(ctor, value_), ty_)
+                }
+            }
+            | Value::VCons(value) => {
+                let Cons(a, b) = value;
+                let a_ = a.lift(tycker, (mo, mo_ty), algs.clone())?;
+                let b_ = b.lift(tycker, (mo, mo_ty), algs)?;
+                if a == a_ && b == b_ {
+                    *self
+                } else {
+                    let ty_ = ty.lift(tycker, mo_ty)?;
+                    Alloc::alloc(&mut tycker.statics, Cons(a_, b_), ty_)
+                }
+            }
+            | Value::TCons(value) => {
+                let Cons(a, b) = value;
+                let a_ = a.lift(tycker, mo_ty)?;
+                let b_ = b.lift(tycker, (mo, mo_ty), algs)?;
+                if a == a_ && b == b_ {
+                    *self
+                } else {
+                    let ty_ = ty.lift(tycker, mo_ty)?;
+                    Alloc::alloc(&mut tycker.statics, Cons(a_, b_), ty_)
+                }
+            }
+        };
+        Ok(res)
+    }
+}
+
+impl CompuId {
+    pub fn lift(
+        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
+        algs: Vec<(ValueId, TypeId, TypeId)>,
+    ) -> ResultKont<CompuId> {
+        use Computation as Compu;
+        let res = match tycker.statics.compus[self].to_owned() {
+            | Compu::Hole(_) => *self,
+            | Compu::VAbs(compu) => {
+                todo!()
+            }
+            | Compu::VApp(compu) => {
+                todo!()
+            }
+            | Compu::TAbs(compu) => {
+                todo!()
+            }
+            | Compu::TApp(compu) => {
+                todo!()
+            }
+            | Compu::Rec(compu) => {
+                todo!()
+            }
+            | Compu::Force(compu) => {
+                todo!()
+            }
+            | Compu::Ret(compu) => {
+                todo!()
+            }
+            | Compu::Do(compu) => {
+                todo!()
+            }
+            | Compu::Let(compu) => {
+                todo!()
+            }
+            | Compu::Match(compu) => {
+                todo!()
+            }
+            | Compu::CoMatch(compu) => {
+                todo!()
+            }
+            | Compu::Dtor(compu) => {
+                todo!()
+            }
+            | Compu::WithBlock(_) => unreachable!(),
+        };
         Ok(res)
     }
 }
