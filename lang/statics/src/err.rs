@@ -14,7 +14,7 @@ pub enum TyckError {
     NonExhaustiveCoDataArms(im::HashMap<DtorName, TypeId>),
     Expressivity(&'static str),
     MultipleMonads,
-    NeitherMonadNorAlgebra(su::TermId),
+    NeitherMonadNorAlgebra(su::TermId, TypeId),
     MissingMonad,
     AlgebraGenerationFailure,
 }
@@ -67,17 +67,25 @@ impl Tycker {
             }
             | TyckError::Expressivity(s) => format!("{}", s),
             | TyckError::MultipleMonads => format!("Multiple monad implementations"),
-            | TyckError::NeitherMonadNorAlgebra(term) => {
-                use zydeco_surface::scoped::fmt::*;
+            | TyckError::NeitherMonadNorAlgebra(term, ty) => {
                 let span = self.spans[self.scoped.textual.back(&term.into()).unwrap()].to_owned();
                 format!(
-                    "Neither monad nor algebra: {} ({})",
-                    term.ugly(&Formatter::new(&self.scoped)),
+                    "Neither monad nor algebra: ({} : {}) ({})",
+                    {
+                        use zydeco_surface::scoped::fmt::*;
+                        term.ugly(&Formatter::new(&self.scoped))
+                    },
+                    {
+                        use crate::fmt::*;
+                        ty.ugly(&Formatter::new(&self.scoped, &self.statics))
+                    },
                     span
                 )
             }
             | TyckError::MissingMonad => format!("Missing monad"),
-            | TyckError::AlgebraGenerationFailure => format!("Cannot generate algebra for this type"),
+            | TyckError::AlgebraGenerationFailure => {
+                format!("Cannot generate algebra for this type")
+            }
         }
     }
     pub fn error_entry_output(

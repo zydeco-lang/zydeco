@@ -2072,7 +2072,7 @@ impl Tyck for SEnv<su::TermId> {
                             algs.push((val, m, c));
                         }
                         | None => tycker.err_k(
-                            TyckError::NeitherMonadNorAlgebra(struct_),
+                            TyckError::NeitherMonadNorAlgebra(struct_, ty),
                             std::panic::Location::caller(),
                         )?,
                     }
