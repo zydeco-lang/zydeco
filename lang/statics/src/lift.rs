@@ -742,15 +742,15 @@ impl SEnv<CompuId> {
                 }
             }
             | Compu::TApp(compu) => {
-                let App(compu, ty) = compu;
+                let App(compu, ty_a) = compu;
                 let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs.to_owned())?;
-                let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
-                if compu == compu_ && ty == ty_ {
+                let ty_a_ = self.mk(ty_a).lift(tycker, mo_ty)?;
+                if compu == compu_ && ty_a == ty_a_ {
                     self.inner
                 } else {
                     let ty = tycker.statics.annotations_compu[&self.inner];
                     let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
-                    Alloc::alloc(&mut tycker.statics, App(compu_, ty_), ty_)
+                    Alloc::alloc(&mut tycker.statics, App(compu_, ty_a_), ty_)
                 }
             }
             | Compu::Rec(compu) => {
