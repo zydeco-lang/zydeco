@@ -76,12 +76,17 @@ module Core where
   end
 end
 
+module String where
+  pub extern def str_length : Thunk(String -> Ret Int) end
+  pub extern def str_append : Thunk(String -> String -> Ret String) end
+  pub extern def str_eq : Thunk(String -> String -> Ret Bool) end
+  pub extern def str_index : Thunk(String -> Int -> Ret Char) end
+end
+
 module OS where
   pub extern def write_str : Thunk(String -> Thunk(OS) -> OS) end
   pub extern def read_line : Thunk(Thunk(String -> OS) -> OS) end
   pub extern def read_line_as_int : Thunk(Thunk(Option Int -> OS) -> OS) end
-  pub extern def read_till_eof : Thunk(Thunk(String -> OS) -> OS) end
-  pub extern def arg_list : Thunk(Thunk(List String -> OS) -> OS) end
   pub extern def random_int : Thunk(Thunk(Int -> OS) -> OS) end
   pub extern def exit : Thunk(Int -> OS) end
 
@@ -89,18 +94,6 @@ module OS where
     fn (s: String) (k: Thunk(OS)) ->
       do s <- ! str_append s "\n";
       ! write_str s k
-  } end
-
-  pub def write_int : Thunk(Int -> Thunk(OS) -> OS) = {
-    fn (i: Int) (k: Thunk(OS)) ->
-      do s <- ! int_to_str i;
-      ! write_str s k
-  } end
-
-  pub def write_int_line : Thunk(Int -> Thunk(OS) -> OS) = {
-    fn (i: Int) (k: Thunk(OS)) ->
-      do s <- ! int_to_str i;
-      ! write_line s k
   } end
 
   pub def panic : Thunk(String -> OS) = {

@@ -452,12 +452,8 @@ module Arith where
 end
 
 module String where
-  pub extern def str_length : Thunk(String -> Ret Int) end
-  pub extern def str_append : Thunk(String -> String -> Ret String) end
   pub extern def str_split_once : Thunk(String -> Char -> Ret (Option (Pair String String))) end
   pub extern def str_split_n : Thunk(String -> Int -> Ret (Option (Pair String String))) end
-  pub extern def str_eq : Thunk(String -> String -> Ret Bool) end
-  pub extern def str_index : Thunk(String -> Int -> Ret Char) end
 
   pub def char_eq: Thunk(Char -> Char -> Ret Bool) = {
     fn (c: Char) (c': Char) ->
@@ -514,4 +510,21 @@ module String where
   pub extern def char_to_str : Thunk(Char -> Ret String) end
   pub extern def char_to_int : Thunk(Char -> Ret Int) end
   pub extern def str_to_int : Thunk(String -> Ret Int) end
+end
+
+module OS where
+  pub extern def read_till_eof : Thunk(Thunk(String -> OS) -> OS) end
+  pub extern def arg_list : Thunk(Thunk(List String -> OS) -> OS) end
+
+  pub def write_int : Thunk(Int -> Thunk(OS) -> OS) = {
+    fn (i: Int) (k: Thunk(OS)) ->
+      do s <- ! int_to_str i;
+      ! write_str s k
+  } end
+
+  pub def write_int_line : Thunk(Int -> Thunk(OS) -> OS) = {
+    fn (i: Int) (k: Thunk(OS)) ->
+      do s <- ! int_to_str i;
+      ! write_line s k
+  } end
 end
