@@ -1,8 +1,8 @@
 name = "Std"
 
 srcs = [
-    "lib.zy",
-    "tests.zy",
+    "core.zy",
+    "data.zy",
     "avl.zy",
 ]
 deps = []

@@ -1,8 +1,13 @@
+// Monad transformers
+// Two flavors of exception monad transformers are presented,
+// one for the monad that uses `Ret` in its type signature,
+// and the other uses CPS (`Kont`).
+
 alias Exn (E: VType) (A: VType) : CType =
   Ret (Either E A)
 end
 
-def fn mexn (E: VType) : Monad (Exn E) =
+def fn mo-exn (E: VType) : Monad (Exn E) =
   comatch
   | .return A a ->
     ret +Right(a)
@@ -15,6 +20,7 @@ def fn mexn (E: VType) : Monad (Exn E) =
   end
 end
 
+// Change `Ret` in Exn to `M`
 alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
   M (Either E A)
 end
@@ -34,14 +40,14 @@ def fn mt-exnt (E: VType) : MonadTrans (ExnT E) =
     // end
 
     // with mo
-    //   inline mexn
+    //   inline mo-exn
     // begin
-    //   ! mexn E
+    //   ! mo-exn E
     // end
 
     with mo
     begin
-      // we need to manually inline mexn for now
+      // we need to manually inline mo-exn for now
       (comatch
       | .return A a ->
         ret +Right(a)
@@ -65,11 +71,12 @@ def fn mt-exnt (E: VType) : MonadTrans (ExnT E) =
   end
 end
 
+// Add the algebra for the output type of the continuation $R$
 alias ExnK (E: VType) (A: VType) : CType =
   forall (R: CType) . Thunk (E -> R) -> Thunk (A -> R) -> R
 end
 
-def fn mexnk (E: VType) : Monad (ExnK E) =
+def fn mo-exnk (E: VType) : Monad (ExnK E) =
   comatch
   | .return A a ->
     fn R ke ka ->
@@ -112,9 +119,9 @@ main
   let e = {
     let fn add_exn (a: Int) (b: Int) : ExnK String Int =
       do c <- ! add a b;
-      ! mexnk String .return Int c
+      ! mo-exnk String .return Int c
     in
-    with { ! mexnk String }
+    with { ! mo-exnk String }
       // need inlining
       import add_ : Thunk (Int -> Int -> Ret Int) = (add_exn : Thunk (Int -> Int -> ExnK String Int))
     begin

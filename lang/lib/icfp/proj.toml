@@ -1,7 +1,8 @@
 name = "Std"
 
 srcs = [
-    "../std/lib.zy",
+    "../std/core.zy",
+    "../std/data.zy",
     # "../std/avl.zy",
 ]
 deps = []

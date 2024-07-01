@@ -51,8 +51,8 @@ main
   // the type checker will tell us which is which
   with monad-optos with alg-optos
     // we can import (translate) values from the outside world
-    import raise : _ = { ! monad-err-optos .fail (Int) }
-    import alt : _ = { ! monad-alt-optos .alt (Int) }
+    import raise : U (Ret Int) = { ! monad-err-optos .fail Int }
+    import alt : U (U (Ret Int) -> U (Ret Int) -> Ret Int) = { ! monad-alt-optos .alt Int }
   begin
     // we see two optos'es and we want to run them one by one,
     // and see if any succeeds
