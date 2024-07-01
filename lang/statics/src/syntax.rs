@@ -293,7 +293,6 @@ pub enum Kind {
 
 #[derive(From, Clone, Debug)]
 pub enum TypePattern {
-    // Ann(Ann<TPatId, KindId>),
     Hole(Ann<Hole, KindId>),
     Var(DefId),
 }
@@ -350,9 +349,6 @@ pub struct CoData {
 
 #[derive(From, Clone, Debug)]
 pub enum Type {
-    // Todo: remove it
-    // Ann(Ann<TypeId, KindId>),
-    // Hole(Hole),
     Var(DefId),
     Abst(AbstId),
     Fill(FillId),
@@ -384,7 +380,6 @@ mod impls_types {
 
 #[derive(From, Clone, Debug)]
 pub enum ValuePattern {
-    // Ann(Ann<VPatId, TypeId>),
     Hole(Ann<Hole, TypeId>),
     Var(DefId),
     Ctor(Ctor<VPatId>),

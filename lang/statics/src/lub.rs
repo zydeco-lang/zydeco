@@ -356,10 +356,10 @@ impl Debruijn {
 }
 
 impl Lub for TypeId {
-    /// We need to remember the definitions introduced by both sides.
-    // Todo..
     type Out = TypeId;
-
+    
+    /// We need to remember the definitions introduced by both sides.
+    /// We did this by using Debruijn.
     fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         Debruijn::new().lub(self, other, tycker)
     }

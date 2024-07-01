@@ -25,6 +25,9 @@ pub struct Tycker {
 // so that we don't need to maintain the count of push and pops manually;
 // instead, we can just pop until the return point
 
+// Todo: use async to cut all tycker functions into small segments (returning futures)
+// and achieve better concurrency
+
 impl Tycker {
     pub fn new(
         spans: SpanArena, prim: PrimDef, scoped: ScopedArena, alloc: &mut GlobalAlloc,

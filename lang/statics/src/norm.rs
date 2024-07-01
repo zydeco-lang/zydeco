@@ -104,8 +104,8 @@ impl TypeId {
                     Alloc::alloc(&mut tycker.statics, Exists(tpat, ty_), kd)
                 }
             }
-            | Type::Data(data) => {
-                let arms = tycker.statics.datas.defs[&data].clone();
+            | Type::Data(id) => {
+                let arms = tycker.statics.datas.defs[&id].clone();
                 let mut unchanged = true;
                 let arms_ = arms
                     .into_iter()
@@ -122,16 +122,13 @@ impl TypeId {
                 if unchanged {
                     *self
                 } else {
-                    let d = Data { arms: arms_.iter().cloned().collect() };
-                    let data_ = tycker.statics.datas.defs.alloc(arms_);
-                    // Todo: deal with the case where the data type is already in the table
-                    let _ = tycker.statics.datas.tbls.insert_or_replace(data_, d.to_owned());
-                    let _ = tycker.statics.datas.eqs.insert_or_replace(d, data_);
-                    Alloc::alloc(&mut tycker.statics, data_, kd)
+                    let data_ = Data { arms: arms_.iter().cloned().collect() };
+                    let id_ = tycker.statics.datas.lookup_or_alloc(arms_, data_);
+                    Alloc::alloc(&mut tycker.statics, id_, kd)
                 }
             }
-            | Type::CoData(coda) => {
-                let arms = tycker.statics.codatas.defs[&coda].clone();
+            | Type::CoData(id) => {
+                let arms = tycker.statics.codatas.defs[&id].clone();
                 let mut unchanged = true;
                 let arms_ = arms
                     .into_iter()
@@ -148,12 +145,9 @@ impl TypeId {
                 if unchanged {
                     *self
                 } else {
-                    let d = CoData { arms: arms_.iter().cloned().collect() };
-                    let coda_ = tycker.statics.codatas.defs.alloc(arms_);
-                    // Todo: deal with the case where the codata type is already in the table
-                    let _ = tycker.statics.codatas.tbls.insert_or_replace(coda_, d.to_owned());
-                    let _ = tycker.statics.codatas.eqs.insert_or_replace(d, coda_);
-                    Alloc::alloc(&mut tycker.statics, coda_, kd)
+                    let codata_ = CoData { arms: arms_.iter().cloned().collect() };
+                    let id_ = tycker.statics.codatas.lookup_or_alloc(arms_, codata_);
+                    Alloc::alloc(&mut tycker.statics, id_, kd)
                 }
             }
         };
