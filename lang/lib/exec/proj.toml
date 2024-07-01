@@ -43,7 +43,7 @@ bins = [
     "num.zy",
     "oo.zydeco",
     "optiont.zy",
-    # "partial-annotation.zy",
+    "partial-annotation.zy",
     "regex.zy",
     "ret.zydeco",
     "trans.zy",
