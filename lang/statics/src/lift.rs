@@ -69,8 +69,28 @@ impl SEnv<TypeId> {
                     Alloc::alloc(&mut tycker.statics, Type::Exists(Exists(tpat, body_)), ann)
                 }
             }
-            // Hack: go inside and generate new data and codata?
-            | Type::Data(_) | Type::CoData(_) => self.inner,
+            | Type::Data(id) => {
+                let mut arms_vec = im::Vector::new();
+                for (ctor, ty) in tycker.statics.datas.defs[&id].to_owned() {
+                    let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
+                    arms_vec.push_back((ctor, ty_));
+                }
+                let arms_tbl = arms_vec.iter().cloned().collect();
+                let data = Data { arms: arms_tbl };
+                let id_ = tycker.statics.datas.lookup_or_alloc(arms_vec, data);
+                Alloc::alloc(&mut tycker.statics, id_, ann)
+            }
+            | Type::CoData(id) => {
+                let mut arms_vec = im::Vector::new();
+                for (dtor, ty) in tycker.statics.codatas.defs[&id].to_owned() {
+                    let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
+                    arms_vec.push_back((dtor, ty_));
+                }
+                let arms_tbl = arms_vec.iter().cloned().collect();
+                let codata = CoData { arms: arms_tbl };
+                let id_ = tycker.statics.codatas.lookup_or_alloc(arms_vec, codata);
+                Alloc::alloc(&mut tycker.statics, id_, ann)
+            }
         };
         let kd = tycker.statics.annotations_type[&res];
         let res = res.normalize_k(tycker, kd)?;

@@ -1791,16 +1791,7 @@ impl Tyck for SEnv<su::TermId> {
                 }
                 let arms_tbl = arms_vec.iter().cloned().collect();
                 let data = ss::Data { arms: arms_tbl };
-                let id = if let Some(id) = tycker.statics.datas.eqs.get(&data) {
-                    // if the data is already registered, just return the DataId
-                    *id
-                } else {
-                    // else, register the data
-                    let id = tycker.statics.datas.defs.alloc(arms_vec);
-                    tycker.statics.datas.tbls.insert(id, data.clone());
-                    tycker.statics.datas.eqs.insert(data, id);
-                    id
-                };
+                let id = tycker.statics.datas.lookup_or_alloc(arms_vec, data);
                 let data = Alloc::alloc(&mut tycker.statics, id, vtype);
                 TermAnnId::Type(data, vtype)
             }
@@ -1826,16 +1817,7 @@ impl Tyck for SEnv<su::TermId> {
                 }
                 let arms_tbl = arms_vec.iter().cloned().collect();
                 let codata = ss::CoData { arms: arms_tbl };
-                let id = if let Some(id) = tycker.statics.codatas.eqs.get(&codata) {
-                    // if the codata is already registered, just return the CoDataId
-                    *id
-                } else {
-                    // else, register the codata
-                    let id = tycker.statics.codatas.defs.alloc(arms_vec);
-                    tycker.statics.codatas.tbls.insert(id, codata.clone());
-                    tycker.statics.codatas.eqs.insert(codata, id);
-                    id
-                };
+                let id = tycker.statics.codatas.lookup_or_alloc(arms_vec, codata);
                 let codata = Alloc::alloc(&mut tycker.statics, id, ctype);
                 TermAnnId::Type(codata, ctype)
             }

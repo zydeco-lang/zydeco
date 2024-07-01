@@ -487,6 +487,31 @@ pub struct StructArena<Id, Definition, Query> {
     /// arena for equivalence classes
     pub eqs: ArenaAssoc<Query, Id>,
 }
+impl<Id, Definition, Query> StructArena<Id, Definition, Query>
+where
+    Id: IndexLike<Meta = usize>,
+    Query: Clone + Eq + std::hash::Hash,
+{
+    pub fn new(alloc: &mut GlobalAlloc) -> Self {
+        Self {
+            defs: ArenaDense::new(alloc.alloc()),
+            tbls: ArenaAssoc::new(),
+            eqs: ArenaAssoc::new(),
+        }
+    }
+    pub fn lookup_or_alloc(&mut self, def: Definition, query: Query) -> Id {
+        if let Some(id) = self.eqs.get(&query) {
+            // if the query is already registered, just return the DataId
+            *id
+        } else {
+            // else, register the query
+            let id = self.defs.alloc(def);
+            self.tbls.insert(id, query.clone());
+            self.eqs.insert(query, id);
+            id
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct StaticsArena {
@@ -559,16 +584,8 @@ impl StaticsArena {
             abst_hints: ArenaAssoc::new(),
             fills: ArenaDense::new(alloc.alloc()),
             solus: ArenaAssoc::new(),
-            datas: StructArena {
-                defs: ArenaDense::new(alloc.alloc()),
-                tbls: ArenaAssoc::new(),
-                eqs: ArenaAssoc::new(),
-            },
-            codatas: StructArena {
-                defs: ArenaDense::new(alloc.alloc()),
-                tbls: ArenaAssoc::new(),
-                eqs: ArenaAssoc::new(),
-            },
+            datas: StructArena::new(alloc),
+            codatas: StructArena::new(alloc),
         }
     }
 }
