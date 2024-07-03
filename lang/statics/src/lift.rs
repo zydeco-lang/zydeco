@@ -2,22 +2,38 @@ use crate::{syntax::*, *};
 
 impl SEnv<KindId> {
     /// generate the algebra type for a kind by algebra passing style for higher order contravariant kinds
+    /// for value type `A`, return `A` itself, which is a value type;
+    /// for computation type `B`, return `Algebra M B`, which is a computation type;
+    /// for arrows, ...
     pub fn algebra(&self, tycker: &mut Tycker, mo_ty: TypeId, ty: TypeId) -> ResultKont<TypeId> {
+        let ctype = tycker.ctype(&self.env);
         let res = match tycker.statics.kinds[&self.inner].to_owned() {
             | Kind::Fill(_) => unreachable!(),
             | Kind::VType(VType) => ty,
             | Kind::CType(CType) => tycker.algebra_mo_carrier(&self.env, mo_ty, ty),
-            | Kind::Arrow(Arrow(a, b)) => {
-                // let Some((tpat, body)) = ty.destruct_abs(tycker) else { unreachable!() };
-                // let (_, a_kd) = tycker.extract_tpat(tpat);
-                // let a_ = self.mk(a).algebra(tycker, mo_ty, ty)?;
-                // // let a_ = match tycker.statics.kinds[&a] {
-                // //     | Kind::Fill(_) => todo!(),
-                // //     | Kind::VType(_) => todo!(),
-                // //     | Kind::CType(_) => todo!(),
-                // //     | Kind::Arrow(_) => todo!(),
-                // // };
-                todo!()
+            | Kind::Arrow(Arrow(a_kd, b_kd)) => {
+                let Some((tpat, body)) = ty.destruct_abs(tycker) else { unreachable!() };
+                let (tvar_a, _kd) = tpat.destruct_def(tycker);
+                let ty_a: TypeId = Alloc::alloc(tycker, tvar_a, a_kd);
+                let alg_a = self.mk(a_kd).algebra(tycker, mo_ty, ty_a)?;
+                // check the kind of `alg_a`
+                let alg_a_kd = tycker.statics.annotations_type[&alg_a].to_owned();
+                match tycker.statics.kinds[&alg_a_kd] {
+                    | Kind::Fill(_) | Kind::Arrow(_) => unreachable!(),
+                    | Kind::VType(VType) => self.mk(b_kd).algebra(tycker, mo_ty, body)?,
+                    | Kind::CType(CType) => {
+                        let thunk_alg_a = tycker.thunk_app(&self.env, alg_a);
+                        let alg_b = self.mk(b_kd).algebra(tycker, mo_ty, body)?;
+                        let alg_b_kd = tycker.statics.annotations_type[&alg_b].to_owned();
+                        match tycker.statics.kinds[&alg_b_kd] {
+                            | Kind::Fill(_) | Kind::Arrow(_) => unreachable!(),
+                            | Kind::VType(VType) => alg_b,
+                            | Kind::CType(CType) => {
+                                Alloc::alloc(tycker, Arrow(thunk_alg_a, alg_b), ctype)
+                            }
+                        }
+                    }
+                }
             }
         };
         Ok(res)
@@ -185,38 +201,35 @@ impl SEnv<TypeId> {
                         // what we want to generate is:
                         // ```
                         // comatch
-                        //   | .bindA -> fn A' m' f' ->
-                        //   ! mo .bind A' A m' f'
+                        //   | .bindA -> fn X m f ->
+                        //   ! mo .bind X A m f
                         // end
                         // ```
 
-                        // A'
-                        let tvar_a_prime =
-                            Alloc::alloc(tycker, VarName("A'".to_string()), vtype.into());
-                        let tpat_a_prime = Alloc::alloc(tycker, tvar_a_prime, vtype);
-                        let ty_a_prime = Alloc::alloc(tycker, tvar_a_prime, vtype);
+                        // X
+                        let tvar_x = Alloc::alloc(tycker, VarName("X".to_string()), vtype.into());
+                        let tpat_x = Alloc::alloc(tycker, tvar_x, vtype);
+                        let ty_x = Alloc::alloc(tycker, tvar_x, vtype);
 
-                        // m'
-                        let m_prime_ty = {
-                            let ty_mo_a_prime = Alloc::alloc(tycker, App(mo_ty, ty_a_prime), ctype);
-                            tycker.thunk_app(&self.env, ty_mo_a_prime)
+                        // m
+                        let m_ty = {
+                            let ty_mo_x = Alloc::alloc(tycker, App(mo_ty, ty_x), ctype);
+                            tycker.thunk_app(&self.env, ty_mo_x)
                         };
-                        let var_m_prime =
-                            Alloc::alloc(tycker, VarName("m'".to_string()), m_prime_ty.into());
-                        let vpat_m_prime: VPatId = Alloc::alloc(tycker, var_m_prime, m_prime_ty);
-                        let val_m_prime: ValueId = Alloc::alloc(tycker, var_m_prime, m_prime_ty);
+                        let var_m = Alloc::alloc(tycker, VarName("m".to_string()), m_ty.into());
+                        let vpat_m: VPatId = Alloc::alloc(tycker, var_m, m_ty);
+                        let val_m: ValueId = Alloc::alloc(tycker, var_m, m_ty);
 
-                        // f'
-                        let f_prime_ty = {
-                            let arrs = Alloc::alloc(tycker, Arrow(ty_a_prime, mo_a_ty), ctype);
+                        // f
+                        let f_ty = {
+                            let arrs = Alloc::alloc(tycker, Arrow(ty_x, mo_a_ty), ctype);
                             tycker.thunk_app(&self.env, arrs)
                         };
-                        let var_f_prime =
-                            Alloc::alloc(tycker, VarName("f'".to_string()), f_prime_ty.into());
-                        let vpat_f_prime: VPatId = Alloc::alloc(tycker, var_f_prime, f_prime_ty);
-                        let val_f_prime: ValueId = Alloc::alloc(tycker, var_f_prime, f_prime_ty);
+                        let var_f = Alloc::alloc(tycker, VarName("f".to_string()), f_ty.into());
+                        let vpat_f: VPatId = Alloc::alloc(tycker, var_f, f_ty);
+                        let val_f: ValueId = Alloc::alloc(tycker, var_f, f_ty);
 
-                        // tail = `fn A' m' f' -> ! mo .bind A' A m' f'`
+                        // tail = `fn X m f -> ! mo .bind X A m f`
 
                         let whole_body = {
                             let monad_ty = tycker.monad_mo(&self.env, mo_ty);
@@ -230,60 +243,41 @@ impl SEnv<TypeId> {
                                 force_mo_bind_ty,
                             );
 
-                            let force_mo_bind_a_prime_ty =
-                                gen_mo_bind_forall(&self.env, tycker, mo_ty, ty_a_prime);
-                            let force_mo_bind_a_prime = Alloc::alloc(
-                                tycker,
-                                App(force_mo_bind, ty_a_prime),
-                                force_mo_bind_a_prime_ty,
-                            );
+                            let force_mo_bind_x_ty =
+                                gen_mo_bind_forall(&self.env, tycker, mo_ty, ty_x);
+                            let force_mo_bind_x =
+                                Alloc::alloc(tycker, App(force_mo_bind, ty_x), force_mo_bind_x_ty);
 
-                            let force_mo_bind_a_prime_a_ty =
-                                gen_mo_bind_body(&self.env, tycker, mo_ty, ty_a_prime, ty_a);
-                            let force_mo_bind_a_prime_a = Alloc::alloc(
+                            let force_mo_bind_x_a_ty =
+                                gen_mo_bind_body(&self.env, tycker, mo_ty, ty_x, ty_a);
+                            let force_mo_bind_x_a = Alloc::alloc(
                                 tycker,
-                                App(force_mo_bind_a_prime, ty_a),
-                                force_mo_bind_a_prime_a_ty,
+                                App(force_mo_bind_x, ty_a),
+                                force_mo_bind_x_a_ty,
                             );
-                            let force_mo_bind_a_prime_a_m_prime_ty = {
-                                // Thunk (A' -> M A) -> M A
-                                let a_prime_arr_mo_a =
-                                    Alloc::alloc(tycker, Arrow(ty_a_prime, mo_a_ty), ctype);
-                                let thunk_a_prime_arr_mo_a =
-                                    tycker.thunk_app(&self.env, a_prime_arr_mo_a);
-                                Alloc::alloc(tycker, Arrow(thunk_a_prime_arr_mo_a, mo_a_ty), ctype)
+                            let force_mo_bind_x_a_m_ty = {
+                                // Thunk (X -> M A) -> M A
+                                let x_arr_mo_a = Alloc::alloc(tycker, Arrow(ty_x, mo_a_ty), ctype);
+                                let thunk_x_arr_mo_a = tycker.thunk_app(&self.env, x_arr_mo_a);
+                                Alloc::alloc(tycker, Arrow(thunk_x_arr_mo_a, mo_a_ty), ctype)
                             };
-                            let force_mo_bind_a_prime_a_m_prime = Alloc::alloc(
+                            let force_mo_bind_x_a_m = Alloc::alloc(
                                 tycker,
-                                App(force_mo_bind_a_prime_a, val_m_prime),
-                                force_mo_bind_a_prime_a_m_prime_ty,
+                                App(force_mo_bind_x_a, val_m),
+                                force_mo_bind_x_a_m_ty,
                             );
-                            Alloc::alloc(
-                                tycker,
-                                App(force_mo_bind_a_prime_a_m_prime, val_f_prime),
-                                mo_a_ty,
-                            )
+                            Alloc::alloc(tycker, App(force_mo_bind_x_a_m, val_f), mo_a_ty)
                         };
 
-                        let fn_f_prime_ty = Alloc::alloc(tycker, Arrow(f_prime_ty, mo_a_ty), ctype);
-                        let fn_f_prime =
-                            Alloc::alloc(tycker, Abs(vpat_f_prime, whole_body), fn_f_prime_ty);
+                        let fn_f_ty = Alloc::alloc(tycker, Arrow(f_ty, mo_a_ty), ctype);
+                        let fn_f = Alloc::alloc(tycker, Abs(vpat_f, whole_body), fn_f_ty);
 
-                        let fn_m_prime_f_prime_ty =
-                            Alloc::alloc(tycker, Arrow(m_prime_ty, fn_f_prime_ty), ctype);
-                        let fn_m_prime_f_prime = Alloc::alloc(
-                            tycker,
-                            Abs(vpat_m_prime, fn_f_prime),
-                            fn_m_prime_f_prime_ty,
-                        );
+                        let fn_m_f_ty = Alloc::alloc(tycker, Arrow(m_ty, fn_f_ty), ctype);
+                        let fn_m_f = Alloc::alloc(tycker, Abs(vpat_m, fn_f), fn_m_f_ty);
 
-                        // a final touch with fn A'
-                        let ann = Alloc::alloc(
-                            tycker,
-                            Forall(tpat_a_prime, fn_m_prime_f_prime_ty),
-                            ctype,
-                        );
-                        let tail = Alloc::alloc(tycker, Abs(tpat_a_prime, fn_m_prime_f_prime), ann);
+                        // a final touch with fn X
+                        let ann = Alloc::alloc(tycker, Forall(tpat_x, fn_m_f_ty), ctype);
+                        let tail = Alloc::alloc(tycker, Abs(tpat_x, fn_m_f), ann);
 
                         let algebra_ty = tycker.algebra_mo_carrier(&self.env, mo_ty, mo_a_ty);
                         Alloc::alloc(
@@ -363,14 +357,11 @@ impl SEnv<TypeId> {
                                 Alloc::alloc(tycker, Arrow(ty_x, a_arr_b), ctype);
 
                             let force_f = Alloc::alloc(tycker, Force(val_f), ty_x_arr_a_arr_b);
-
                             let force_f_x = Alloc::alloc(tycker, App(force_f, val_x), a_arr_b);
-
                             let force_f_x_a = Alloc::alloc(tycker, App(force_f_x, val_a), b_ty);
 
                             // X -> B
                             let ty_x_arr_b = Alloc::alloc(tycker, Arrow(ty_x, b_ty), ctype);
-
                             let function =
                                 Alloc::alloc(tycker, Abs(vpat_x, force_f_x_a), ty_x_arr_b);
 

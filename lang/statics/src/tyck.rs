@@ -1491,11 +1491,7 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let thunk_app_body_ty = {
-                    let vtype = tycker.vtype(&self.env);
-                    let thunk_ty = tycker.thunk(&self.env);
-                    Alloc::alloc(tycker, ss::App(thunk_ty, body_ty), vtype)
-                };
+                let thunk_app_body_ty = tycker.thunk_app(&self.env, body_ty);
                 let thunk = Alloc::alloc(tycker, ss::Thunk(body_out), thunk_app_body_ty);
                 TermAnnId::Value(thunk, thunk_app_body_ty)
             }
@@ -1521,9 +1517,7 @@ impl Tyck for SEnv<su::TermId> {
                             let ana_ty_kd = tycker.statics.annotations_type[&ana_ty].to_owned();
                             Lub::lub_k(ctype, ana_ty_kd, tycker)?;
                             // if ana, then ana the body with thunked body_ty
-                            let thunk_ty = tycker.thunk(&self.env);
-                            let app = Alloc::alloc(tycker, ss::App(thunk_ty, ana_ty), ctype);
-                            app
+                            tycker.thunk_app(&self.env, ana_ty)
                         }
                     }
                 };
