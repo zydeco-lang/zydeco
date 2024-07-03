@@ -25,48 +25,50 @@ alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
   M (Either E A)
 end
 
+def ! mo-exnt (E: VType) (M: VType -> CType)
+  (mo: Thunk (Monad M))
+: Monad (ExnT E M) =
+  // correct anwser:
+  //
+  // comatch
+  // | .return A a ->
+  //   ! mo .return (Either E A) +Right(a)
+  // | .bind A A' m f ->
+  //   do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
+  //   match a?
+  //   | +Left(e) -> ! mo .return (Either E A') +Left(e)
+  //   | +Right(a) -> ! f a
+  //   end
+  // end
+
+  with mo
+  begin
+    // we need to manually inline mo-exn for now
+    (comatch
+    | .return A a ->
+      ret +Right(a)
+    | .bind A A' m f ->
+      do a? <- ! m;
+      match a?
+      | +Left(e) -> ret +Left(e)
+      | +Right(a) -> ! f a
+      end
+    end : Monad (Exn E))
+  end
+end
+
 def fn mt-exnt (E: VType) : MonadTrans (ExnT E) =
   comatch
-  | .monad M mo ->
-    // comatch
-    // | .return A a ->
-    //   ! mo .return (Either E A) +Right(a)
-    // | .bind A A' m f ->
-    //   do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
-    //   match a?
-    //   | +Left(e) -> ! mo .return (Either E A') +Left(e)
-    //   | +Right(a) -> ! f a
-    //   end
-    // end
-
-    // with mo
-    //   inline mo-exn
-    // begin
-    //   ! mo-exn E
-    // end
-
-    with mo
-    begin
-      // we need to manually inline mo-exn for now
-      (comatch
-      | .return A a ->
-        ret +Right(a)
-      | .bind A A' m f ->
-        do a? <- ! m;
-        match a?
-        | +Left(e) -> ret +Left(e)
-        | +Right(a) -> ! f a
-        end
-      end : Monad (Exn E))
-    end
+  | .monad M mo -> ! mo-exnt E M mo
   | .lift M A mo m ->
     // do~ ! mo .bind A (Either E A) m; fn a ->
     // ! mo .return (Either E A) +Right(a)
     with mo
       import m : Thunk (Ret A) = m
+      import mo-exnt-return : Thunk (forall (A: VType) . A -> Exn E A) = { ! mo-exnt E M mo .return }
     begin
       do a <- ! m;
-      ret (+Right(a) : Either E A)
+      ! mo-exnt-return A a
     end
   end
 end
@@ -92,18 +94,23 @@ alias ExnKT (E: VType) (M: VType -> CType) (A: VType) : CType =
   forall (R: CType) . Thunk (Algebra M R) -> Thunk (E -> R) -> Thunk (A -> R) -> R
 end
 
+def ! mo-exnkt (E: VType) (M: VType -> CType)
+  (mo: Thunk (Monad M))
+: Monad (ExnKT E M) =
+  comatch
+  | .return A a ->
+    fn R alg ke ka ->
+    ! ka a
+  | .bind A A' m f ->
+    fn R alg ke ka' ->
+    do~ ! m R alg ke; fn a ->
+    ! f a R alg ke ka'
+  end
+end
+
 def fn mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
   comatch
-  | .monad M mo ->
-    comatch
-    | .return A a ->
-      fn R alg ke ka ->
-      ! ka a
-    | .bind A A' m f ->
-      fn R alg ke ka' ->
-      do~ ! m R alg ke; fn a ->
-      ! f a R alg ke ka'
-    end
+  | .monad M mo -> ! mo-exnkt E M mo
   | .lift M A mo m -> fn R alg ke ka ->
     with mo with alg
       import m : Thunk (Ret A) = m
@@ -114,6 +121,41 @@ def fn mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
     end
   end
 end
+
+// // State Monad implementations...
+
+// codata StateK (S: VType) (A: VType) where
+//   | .run : forall (R: CType) .
+//     S -> Thunk (A -> S -> R) -> R
+// end
+
+// def fn mstatek (S: VType) : Monad (StateK S) =
+//   comatch
+//   | .return A a ->
+//     fn .run R s k ->
+//     ! k a s
+//   | .bind A A' m f ->
+//     fn .run R s k ->
+//     ! m .run R s
+//     { fn a s' -> ! f a .run R s' k }
+//   end
+// end
+
+// codata MonadState (S: VType) (M: VType -> CType) where
+//   | .get : M S
+//   | .put : S -> M Unit
+// end
+
+// def rec fn mstate_statek (S: VType) : MonadState S (StateK S) =
+//   comatch
+//   | .get ->
+//     fn .run R s k ->
+//     ! k s s
+//   | .put s' ->
+//     fn .run R s k ->
+//     ! k () s'
+//   end
+// end
 
 main
   let e = {

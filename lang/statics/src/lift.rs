@@ -77,6 +77,7 @@
 //! `Sig(K)` is defined in [SEnv<KindId>::signature].
 
 use crate::{syntax::*, *};
+use zydeco_utils::arena::ArenaAccess;
 
 impl SEnv<KindId> {
     /// generate the type of algebra (signature) for a kind by algebra passing style for higher order contravariant kinds
@@ -349,7 +350,12 @@ impl SEnv<TypeId> {
                 }
                 | Type::Abst(abst) => {
                     // Hack: unseal and check (?), a type level eta expansion
-                    let unsealed = tycker.statics.seals[&abst].to_owned();
+                    let Some(unsealed) = tycker.statics.seals.get(&abst).cloned() else {
+                        tycker.err_k(
+                            TyckError::AlgebraGenerationFailure,
+                            std::panic::Location::caller(),
+                        )?
+                    };
                     let applied = unsealed.normalize_apps_k(tycker, args)?;
                     self.mk(applied).algebra(tycker, (mo, mo_ty), algs)?
                 }

@@ -239,14 +239,14 @@ impl<'decl> SccDeclarations<'decl> {
                         let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                         tycker.statics.decls.insert(*id, ss::Exec(body).into());
 
-                        // Debug: print
-                        {
-                            use crate::fmt::*;
-                            println!(
-                                "{}",
-                                id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                            );
-                        }
+                        // // Debug: print
+                        // {
+                        //     use crate::fmt::*;
+                        //     println!(
+                        //         "{}",
+                        //         id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                        //     );
+                        // }
 
                         {
                             // administrative
@@ -315,11 +315,11 @@ impl<'decl> SccDeclarations<'decl> {
             }
         };
 
-        // Debug: print
-        {
-            use crate::fmt::*;
-            println!("{}", id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)));
-        }
+        // // Debug: print
+        // {
+        //     use crate::fmt::*;
+        //     println!("{}", id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)));
+        // }
 
         {
             // administrative
@@ -1162,6 +1162,18 @@ impl Tyck for SEnv<su::TermId> {
                                         },
                                     }
                                 };
+                                // // Debug: print
+                                // {
+                                //     use crate::fmt::*;
+                                //     println!(
+                                //         "Applying\n\t{}\nwith\n\t{}\ngetting\n\t{}\n\n",
+                                //         f_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                                //         _a_ty
+                                //             .ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                                //         ty_out
+                                //             .ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                                //     );
+                                // }
                                 let app = Alloc::alloc(tycker, ss::App(f_out, a_out), ty_out);
                                 TermAnnId::Compu(app, ty_out)
                             }
@@ -1180,7 +1192,32 @@ impl Tyck for SEnv<su::TermId> {
                                 } else {
                                     ty_body
                                 };
-                                let app = Alloc::alloc(tycker, ss::App(f_out, a_ty), body_ty_subst);
+                                // // Debug: print
+                                // {
+                                //     use crate::fmt::*;
+                                //     println!(
+                                //         "Substituting\n\t{}\nwith\n\t{}\ngetting\n\t{}\n\n",
+                                //         f_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                                //         a_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                                //         body_ty_subst
+                                //             .ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                                //     );
+                                // }
+                                let ty_out = {
+                                    match switch {
+                                        | Switch::Syn => body_ty_subst,
+                                        | Switch::Ana(ana) => match ana {
+                                            | AnnId::Type(ty_ana) => {
+                                                Lub::lub_k(body_ty_subst, ty_ana, tycker)?
+                                            }
+                                            | AnnId::Set | AnnId::Kind(_) => tycker.err_k(
+                                                TyckError::SortMismatch,
+                                                std::panic::Location::caller(),
+                                            )?,
+                                        },
+                                    }
+                                };
+                                let app = Alloc::alloc(tycker, ss::App(f_out, a_ty), ty_out);
                                 TermAnnId::Compu(app, body_ty_subst)
                             }
                             | _ => tycker.err_k(
