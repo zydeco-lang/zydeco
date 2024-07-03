@@ -183,11 +183,38 @@ impl Tycker {
                         truncated(rhs.ugly(&Formatter::new(&self.scoped, &self.statics)))
                     );
                 }
+                | TyckTask::Lift(term) => {
+                    use crate::fmt::*;
+                    match term {
+                        | TermId::Kind(_) => unreachable!(),
+                        | TermId::Type(ty) => {
+                            s += "\t- when lifting type:\n";
+                            s += &format!(
+                                "\t\t>> {}\n",
+                                truncated(ty.ugly(&Formatter::new(&self.scoped, &self.statics)))
+                            );
+                        }
+                        | TermId::Value(value) => {
+                            s += "\t- when lifting value:\n";
+                            s += &format!(
+                                "\t\t>> {}\n",
+                                truncated(value.ugly(&Formatter::new(&self.scoped, &self.statics)))
+                            );
+                        }
+                        | TermId::Compu(compu) => {
+                            s += "\t- when lifting computation:\n";
+                            s += &format!(
+                                "\t\t>> {}\n",
+                                truncated(compu.ugly(&Formatter::new(&self.scoped, &self.statics)))
+                            );
+                        }
+                    }
+                }
                 | TyckTask::Algebra(ty) => {
                     use crate::fmt::*;
                     s += &format!("\t- when generating algebra:\n");
                     s += &format!(
-                        "\t\t{}\n",
+                        "\t\t>> {}\n",
                         truncated(ty.ugly(&Formatter::new(&self.scoped, &self.statics)))
                     );
                 }

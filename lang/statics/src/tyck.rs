@@ -154,7 +154,8 @@ pub enum TyckTask {
     Pat(su::PatId, Switch<AnnId>),
     Term(su::TermId, Switch<AnnId>),
     Lub(AnnId, AnnId),
-    Algebra(ss::TypeId),
+    Lift(ss::TermId),
+    Algebra(ss::AnnId),
 }
 
 pub struct Action<Ann> {
@@ -1943,6 +1944,8 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::WithBlock(term) => {
                 let su::WithBlock { structs, imports, body } = term;
+
+                // first we collect all the monad and algebra instances given
                 let mut mo = None;
                 let mut algs = Vec::new();
                 for struct_ in structs {
@@ -1997,10 +2000,11 @@ impl Tyck for SEnv<su::TermId> {
                     //     alg, alg_ty_mo_arg, alg_ty_carrier_arg
                     // );
                 }
-                let mut imports_ = Vec::new();
+
+                // then we deal with the imports
+                // let mut imports_ = Vec::new();
                 let mut import_subs = Vec::new();
                 for su::Import { binder, ty, body } in imports {
-                    // preserve the old body for later inlining
                     let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
                     let (body, body_ty) = body_out_ann.try_as_value(
                         tycker,
@@ -2025,15 +2029,42 @@ impl Tyck for SEnv<su::TermId> {
                         TyckError::SortMismatch,
                         std::panic::Location::caller(),
                     )?;
-                    imports_.push(ss::Import { binder, ty, body });
+                    // imports_.push(ss::Import { binder, ty, body });
                     import_subs.push((binder, body));
                 }
-                // change all return types to the monad type
+
+                // then we tyck the body
                 let (body, body_ty) = self.mk(body).tyck(tycker, Action::syn())?.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
+                // Hack: make sure that the body is synthesizable
+                let body_ty = {
+                    let mut body_ty = body_ty;
+                    while let ss::Type::Fill(fill) = tycker.statics.types[&body_ty].to_owned() {
+                        match tycker.statics.solus.get(&fill) {
+                            | Some(ty) => body_ty = ty.as_type(),
+                            | None => tycker.err_k(
+                                TyckError::Expressivity("the with body must be synthesizable"),
+                                std::panic::Location::caller(),
+                            )?,
+                        }
+                    }
+                    body_ty
+                };
+
+                // Debug: print
+                {
+                    use crate::fmt::*;
+                    println!(
+                        "body = {} : {}",
+                        body.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                        body_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                    );
+                }
+
+                // and then lift it, performing algebra translation on type level
                 let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
                 let body_ty_lift = match switch {
                     | Switch::Syn => body_ty_lift,
@@ -2083,6 +2114,7 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 }
 
+                // finally, we perform algebra translation on term level
                 let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), algs)?;
                 TermAnnId::Compu(body_lift, body_ty_lift)
             }

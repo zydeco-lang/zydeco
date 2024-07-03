@@ -110,6 +110,18 @@ impl SEnv<TypeId> {
     /// 1. replacing `Ret`s with some `T` as the monad type
     /// 2. algebra passing style for higher order contravariant types like forall and exists quantifiers
     pub fn lift(&self, tycker: &mut Tycker, mo_ty: TypeId) -> ResultKont<TypeId> {
+        // administrative
+        {
+            tycker.stack.push_back(TyckTask::Lift(self.inner.into()))
+        }
+        let res = self.lift_inner(tycker, mo_ty);
+        // administrative
+        {
+            tycker.stack.pop_back();
+        }
+        res
+    }
+    pub fn lift_inner(&self, tycker: &mut Tycker, mo_ty: TypeId) -> ResultKont<TypeId> {
         let ann = tycker.statics.annotations_type[&self.inner];
         let res = match tycker.statics.types[&self.inner].to_owned() {
             | Type::Var(_) | Type::Abst(_) | Type::Fill(_) => self.inner,
@@ -209,7 +221,7 @@ impl SEnv<TypeId> {
     ) -> ResultKont<CompuId> {
         // administrative
         {
-            tycker.stack.push_back(TyckTask::Algebra(self.inner))
+            tycker.stack.push_back(TyckTask::Algebra(self.inner.into()))
         }
         let res = self.algebra_inner(tycker, (mo, mo_ty), algs);
         // administrative
@@ -456,14 +468,20 @@ impl SEnv<TypeId> {
                 },
             )?,
 
-            | Type::Forall(forall_ty) => {
-                let Forall(tpat_y, b_ty) = forall_ty;
-                let (tvar_y, _kd) = tpat_y.destruct_def(tycker);
-                let ty_y: TypeId = Alloc::alloc(tycker, tvar_y, vtype);
-                let _ = b_ty;
-                let _ = ty_y;
-                todo!()
-            }
+            | Type::Forall(forall_ty) => gen_algebra_template(
+                &self.env,
+                tycker,
+                mo_ty,
+                self.inner,
+                |env, tycker, AlgebraBodyArgs { ty_x, val_m, val_f }| {
+                    let Forall(tpat_y, b_ty) = forall_ty;
+                    let (tvar_y, _kd) = tpat_y.destruct_def(tycker);
+                    let ty_y: TypeId = Alloc::alloc(tycker, tvar_y, vtype);
+                    let _ = b_ty;
+                    let _ = ty_y;
+                    todo!()
+                },
+            )?,
             | Type::Prod(_) | Type::Exists(_) | Type::Data(_) => {
                 // vtype, dealt with above
                 unreachable!()

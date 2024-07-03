@@ -192,6 +192,7 @@ pub enum MonadOrAlgebra {
 }
 
 impl Tycker {
+    /// If ty is `Thunk (Monad M)` or `Thunk (Algebra M R)`, returns `Some(Monad(M))` or `Some(Algebra(M, R))` respectively.
     pub fn monad_or_algebra(&self, env: &Env<AnnId>, ty: TypeId) -> Option<MonadOrAlgebra> {
         let ty = match self.statics.types.get(&ty)? {
             | Type::App(ty) => {

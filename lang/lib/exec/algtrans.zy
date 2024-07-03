@@ -1,5 +1,54 @@
-// def ! =
+alias Exn (E: VType) (A: VType) : CType =
+  Ret (Either E A)
+end
 
+def ! mo-exn (E: VType) : Monad (Exn E) =
+  comatch
+  | .return A a ->
+    ret +Right(a)
+  | .bind A A' m f ->
+    do a? <- ! m;
+    match a?
+    | +Left(e) -> ret +Left(e)
+    | +Right(a) -> ! f a
+    end
+  end
+end
+
+// test algebra generation for ret and bind
+def ! mo-return (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
+  with mo
+  begin
+    do a <- ret 1;
+    ret a
+  end
+end
+
+// test algebra generation for thunk
+def ! mo-thunk (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
+  with mo
+  begin
+    do _ <- ret 1;
+    ! { ret 1 }
+  end
+end
+
+// test algebra generation for thunk at argument position
+def ! mo-thunk-arg (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
+  with mo
+  begin
+    do _ <- ret 1;
+    (fn (x: Thunk _) -> ! x) { ret 1 }
+  end
+end
+
+// // test algebra generation for forall
+// def ! mo-id (E: VType) (mo: U (Monad (Exn E))) : forall (X: VType) . X -> Exn E X =
+//   with mo
+//   begin
+//     do _ <- ret 1;
+//     fn (X: VType) (a: X) -> ret a
+//   end
 // end
 
 main
