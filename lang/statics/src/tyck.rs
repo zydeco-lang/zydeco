@@ -1,6 +1,6 @@
 use crate::{
     surface_syntax::{PrimDef, ScopedArena, SpanArena},
-    syntax::{AnnId, Context, Env, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
+    syntax::{AnnId, Env, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
     *,
 };
 use std::collections::HashMap;
@@ -277,7 +277,7 @@ impl<'decl> SccDeclarations<'decl> {
             | TermAnnId::Hole | TermAnnId::Kind(_) => unreachable!(),
             | TermAnnId::Type(ty, kd) => {
                 let bindee = ty;
-                let (binder, _ctx) = env.mk(binder).tyck(tycker, Action::ana(kd.into()))?;
+                let binder = env.mk(binder).tyck(tycker, Action::ana(kd.into()))?;
                 let (binder, _kd) = binder.as_type();
 
                 // seal the type if needed
@@ -300,7 +300,7 @@ impl<'decl> SccDeclarations<'decl> {
                 env
             }
             | TermAnnId::Value(bindee, ty) => {
-                let (binder, _ctx) = env.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
+                let binder = env.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
                 let (binder, _) = binder.as_value();
                 // since it's not a value, don't add the type into the environment
                 tycker.statics.decls.insert(*id, ss::VAliasBody { binder, bindee }.into());
@@ -353,7 +353,7 @@ impl<'decl> SccDeclarations<'decl> {
             // the binder should be a type; register it before analyzing the bindee
             let kd =
                 ann.try_as_kind(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
-            let (binder, _ctx) = env.mk(binder).tyck(tycker, Action::ana(kd.into()))?;
+            let binder = env.mk(binder).tyck(tycker, Action::ana(kd.into()))?;
             let (binder, _kd) = binder.as_type();
             binder_map.insert(*id, binder);
             // register the def with abstract type
@@ -401,7 +401,7 @@ impl<'decl> SccDeclarations<'decl> {
 }
 
 impl Tyck for SEnv<su::PatId> {
-    type Out = (PatAnnId, Context<AnnId>);
+    type Out = PatAnnId;
     type Action = Action<AnnId>;
 
     fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> ResultKont<Self::Out> {
@@ -443,10 +443,7 @@ impl Tyck for SEnv<su::PatId> {
                 match switch {
                     | Switch::Syn => tycker
                         .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
-                    | Switch::Ana(ann) => {
-                        let pat = PatAnnId::mk_hole(tycker, ann);
-                        (pat, Context::new())
-                    }
+                    | Switch::Ana(ann) => PatAnnId::mk_hole(tycker, ann),
                 }
             }
             | Pat::Var(def) => {
@@ -472,9 +469,7 @@ impl Tyck for SEnv<su::PatId> {
                     let ann = Lub::lub_k(ann_, ann, tycker)?;
                     tycker.statics.annotations_var.replace(def, ann);
                 }
-                let var = PatAnnId::mk_var(tycker, def, ann);
-                let ctx = Context::singleton(def, ann);
-                (var, ctx)
+                PatAnnId::mk_var(tycker, def, ann)
             }
             | Pat::Ctor(pat) => match switch {
                 | Switch::Syn => {
@@ -503,11 +498,11 @@ impl Tyck for SEnv<su::PatId> {
                             std::panic::Location::caller(),
                         )?,
                     };
-                    let (args_out_ann, ctx) =
+                    let args_out_ann =
                         self.mk(args).tyck(tycker, Action::ana(arm_ty.to_owned().into()))?;
                     let (args, _) = args_out_ann.as_value();
                     let pat = Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), args), ann_ty);
-                    (PatAnnId::Value(pat, ann_ty), ctx)
+                    PatAnnId::Value(pat, ann_ty)
                 }
             },
             | Pat::Triv(pat) => {
@@ -515,13 +510,13 @@ impl Tyck for SEnv<su::PatId> {
                 let ann = tycker.unit(&self.env);
                 let triv = Alloc::alloc(tycker, ss::Triv, ann);
                 match switch {
-                    | Switch::Syn => (PatAnnId::Value(triv, ann), Context::new()),
+                    | Switch::Syn => PatAnnId::Value(triv, ann),
                     | Switch::Ana(ana) => {
                         let AnnId::Type(ana) = ana else {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         };
                         let ann = Lub::lub_k(ann, ana, tycker)?;
-                        (PatAnnId::Value(triv, ann), Context::new())
+                        PatAnnId::Value(triv, ann)
                     }
                 }
             }
@@ -537,23 +532,21 @@ impl Tyck for SEnv<su::PatId> {
                         match tycker.statics.types[&ann_ty].to_owned() {
                             | ss::Type::Prod(ty) => {
                                 let ss::Prod(ty_a, ty_b) = ty;
-                                let (a_out_ann, a_ctx) =
+                                let a_out_ann =
                                     self.mk(a).tyck(tycker, Action::ana(ty_a.into()))?;
-                                let (b_out_ann, b_ctx) =
+                                let b_out_ann =
                                     self.mk(b).tyck(tycker, Action::ana(ty_b.into()))?;
                                 let (a_out, a_ann) = a_out_ann.as_value();
                                 let (b_out, b_ann) = b_out_ann.as_value();
                                 let vtype = tycker.vtype(&self.env);
                                 let ann = Alloc::alloc(tycker, ss::Prod(a_ann, b_ann), vtype);
                                 let pat = Alloc::alloc(tycker, ss::Cons(a_out, b_out), ann);
-                                let ctx = a_ctx + b_ctx;
-                                (PatAnnId::Value(pat, ann), ctx)
+                                PatAnnId::Value(pat, ann)
                             }
                             | ss::Type::Exists(ty) => {
                                 let ss::Exists(tpat, ty_body) = ty;
                                 let (def, kd) = tpat.destruct(tycker);
-                                let (a_out_ann, a_ctx) =
-                                    self.mk(a).tyck(tycker, Action::ana(kd.into()))?;
+                                let a_out_ann = self.mk(a).tyck(tycker, Action::ana(kd.into()))?;
                                 let (a_out, _a_kd) = a_out_ann.as_type();
                                 let (a_def, _a_kd) = a_out.destruct(tycker);
                                 let mut env = self.env.clone();
@@ -573,15 +566,13 @@ impl Tyck for SEnv<su::PatId> {
                                 } else {
                                     ty_body
                                 };
-                                let (b_out_ann, b_ctx) = SEnv { env, inner: b }
+                                let b_out_ann = SEnv { env, inner: b }
                                     .tyck(tycker, Action::ana(ty_body_subst.into()))?;
                                 let (b_out, _b_ann) = b_out_ann.as_value();
                                 let vtype = tycker.vtype(&self.env);
-                                let ann =
-                                    Alloc::alloc(tycker, ss::Exists(tpat, ty_body), vtype);
+                                let ann = Alloc::alloc(tycker, ss::Exists(tpat, ty_body), vtype);
                                 let pat = Alloc::alloc(tycker, ss::Cons(a_out, b_out), ann);
-                                let ctx = a_ctx + b_ctx;
-                                (PatAnnId::Value(pat, ann), ctx)
+                                PatAnnId::Value(pat, ann)
                             }
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {
@@ -597,7 +588,7 @@ impl Tyck for SEnv<su::PatId> {
         };
 
         // maintain back mapping
-        tycker.statics.pats.insert(self.inner, pat_ctx.0.as_pat());
+        tycker.statics.pats.insert(self.inner, pat_ctx.as_pat());
 
         {
             // administrative
@@ -941,7 +932,7 @@ impl Tyck for SEnv<su::TermId> {
                 let su::Abs(pat, body) = term;
                 match switch {
                     | Switch::Syn => {
-                        let (pat_out_ann, _ctx) = self.mk(pat).tyck(tycker, Action::syn())?;
+                        let pat_out_ann = self.mk(pat).tyck(tycker, Action::syn())?;
                         match pat_out_ann {
                             | PatAnnId::Type(tpat, kd) => {
                                 // could be either type-polymorphic function or type function
@@ -999,8 +990,7 @@ impl Tyck for SEnv<su::TermId> {
                                     )?
                                 };
                                 let ss::Arrow(kd_1, kd_2) = kd_arr;
-                                let (binder, _ctx) =
-                                    self.mk(pat).tyck(tycker, Action::ana(kd_1.into()))?;
+                                let binder = self.mk(pat).tyck(tycker, Action::ana(kd_1.into()))?;
                                 let (binder, binder_kd) = binder.try_as_type(
                                     tycker,
                                     TyckError::SortMismatch,
@@ -1023,7 +1013,7 @@ impl Tyck for SEnv<su::TermId> {
                                     | ss::Type::Arrow(ty) => {
                                         // a term-term function
                                         let ss::Arrow(ty_1, ty_2) = ty;
-                                        let (binder, _ctx) =
+                                        let binder =
                                             self.mk(pat).tyck(tycker, Action::ana(ty_1.into()))?;
                                         let (binder, binder_ty) = binder.try_as_value(
                                             tycker,
@@ -1050,7 +1040,7 @@ impl Tyck for SEnv<su::TermId> {
                                     | ss::Type::Forall(ty) => {
                                         let ss::Forall(tpat, ty_body) = ty;
                                         let (def, kd) = tpat.destruct(tycker);
-                                        let (binder, _ctx) =
+                                        let binder =
                                             self.mk(pat).tyck(tycker, Action::ana(kd.into()))?;
                                         let (binder, _binder_kd) = binder.try_as_type(
                                             tycker,
@@ -1202,7 +1192,7 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Rec(term) => {
                 let su::Rec(pat, body) = term;
-                let (binder, _ctx) = {
+                let binder = {
                     let switch = {
                         match switch {
                             | Switch::Ana(AnnId::Type(ty)) => {
@@ -1241,8 +1231,8 @@ impl Tyck for SEnv<su::TermId> {
                 let su::Pi(binder, body) = term;
                 match switch {
                     | Switch::Syn => {
-                        let (binder, _ctx) = self.mk(binder).tyck(tycker, Action::syn())?;
-                        match binder {
+                        let binder_out_ann = self.mk(binder).tyck(tycker, Action::syn())?;
+                        match binder_out_ann {
                             | PatAnnId::Type(tpat, kd_1) => {
                                 let body = self.mk(body).tyck(tycker, Action::syn())?;
                                 match body {
@@ -1330,9 +1320,9 @@ impl Tyck for SEnv<su::TermId> {
                                 | ss::Kind::CType(ss::CType) => {
                                     // could be forall or type arrow
                                     // synthesize the binder
-                                    let (binder, _ctx) =
+                                    let binder_out_ann =
                                         self.mk(binder).tyck(tycker, Action::syn())?;
-                                    match binder {
+                                    match binder_out_ann {
                                         | PatAnnId::Type(tpat, _kd_1) => {
                                             // forall
                                             let ctype = tycker.ctype(&self.env);
@@ -1384,9 +1374,9 @@ impl Tyck for SEnv<su::TermId> {
                                     // kind arrow
                                     let ss::Arrow(kd_1, kd_2) = kd_arr;
                                     // ana binder with kd_1
-                                    let (binder, _ctx) =
+                                    let binder_out_ann =
                                         self.mk(binder).tyck(tycker, Action::ana(kd_1.into()))?;
-                                    let (tpat, kd_1) = binder.try_as_type(
+                                    let (tpat, kd_1) = binder_out_ann.try_as_type(
                                         tycker,
                                         TyckError::SortMismatch,
                                         std::panic::Location::caller(),
@@ -1423,8 +1413,8 @@ impl Tyck for SEnv<su::TermId> {
                 match switch {
                     | Switch::Syn => {
                         // either a prod or an exists
-                        let (binder, _ctx) = self.mk(binder).tyck(tycker, Action::syn())?;
-                        match binder {
+                        let binder_out_ann = self.mk(binder).tyck(tycker, Action::syn())?;
+                        match binder_out_ann {
                             | PatAnnId::Type(tpat, _kd) => {
                                 // exists
                                 let body = self.mk(body).tyck(tycker, Action::syn())?;
@@ -1606,8 +1596,7 @@ impl Tyck for SEnv<su::TermId> {
                     unreachable!()
                 };
                 let ss::App(_ret_ty, binder_ty) = ret_app_binder_ty;
-                let (binder_out_ann, _ctx) =
-                    self.mk(binder).tyck(tycker, Action::ana(binder_ty.into()))?;
+                let binder_out_ann = self.mk(binder).tyck(tycker, Action::ana(binder_ty.into()))?;
                 let (binder_out, _binder_ty) = binder_out_ann.as_value();
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
@@ -1638,8 +1627,7 @@ impl Tyck for SEnv<su::TermId> {
                     )?
                 };
                 // then, ana binder with bindee_ty
-                let (binder_out_ann, _ctx) =
-                    self.mk(binder).tyck(tycker, Action::ana(bindee_ty.into()))?;
+                let binder_out_ann = self.mk(binder).tyck(tycker, Action::ana(bindee_ty.into()))?;
                 let (binder_out, _binder_ty) = binder_out_ann.as_value();
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
@@ -1772,7 +1760,7 @@ impl Tyck for SEnv<su::TermId> {
                 let mut matchers = Vec::new();
                 let mut arms_ty = Vec::new();
                 for su::Matcher { binder, tail } in arms {
-                    let (binder_out_ann, _ctx) =
+                    let binder_out_ann =
                         self.mk(binder).tyck(tycker, Action::ana(scrut_ty_unroll.into()))?;
                     let (binder, _ty) = binder_out_ann.try_as_value(
                         tycker,
@@ -2000,8 +1988,7 @@ impl Tyck for SEnv<su::TermId> {
                     // check that ty and body_ty are compatible
                     let ty_lift = self.mk(ty).lift(tycker, mo_ty)?;
                     Lub::lub_k(ty_lift, body_ty, tycker)?;
-                    let (binder_out_ann, _ctx) =
-                        self.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
+                    let binder_out_ann = self.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
                     let (binder, _ty) = binder_out_ann.try_as_value(
                         tycker,
                         TyckError::SortMismatch,

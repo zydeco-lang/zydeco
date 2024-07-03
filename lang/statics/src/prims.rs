@@ -156,7 +156,7 @@ impl Tycker {
                     | ss::AnnId::Type(ty) => ty,
                     | ss::AnnId::Set | ss::AnnId::Kind(_) => unreachable!(),
                 };
-                let (pat_out_ann, _ctx) = env.mk(binder).tyck(self, Action::ana(ty.into()))?;
+                let pat_out_ann = env.mk(binder).tyck(self, Action::ana(ty.into()))?;
                 let binder = match pat_out_ann {
                     | ss::PatAnnId::Type(_, _) => unreachable!(),
                     | ss::PatAnnId::Value(vpat, _) => vpat,
