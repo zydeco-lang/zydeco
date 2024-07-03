@@ -108,7 +108,7 @@ pub struct ScopedArena {
 /// To add a new primitive form:
 /// 1. Add a new field to this struct.
 /// 2. Check if the form can be introduced during desugaring, e.g. annotations.
-///    If so, add it to `crate::bitter::syntax::PrimTerms` too.
+///    If so, add it to [`crate::bitter::syntax::PrimTerms`] too.
 /// 3. Implement the `check` method to ensure all fields are filled.
 #[derive(Default)]
 pub struct PrimDef {
@@ -120,6 +120,7 @@ pub struct PrimDef {
     pub int: SingCell<DefId>,
     pub char: SingCell<DefId>,
     pub string: SingCell<DefId>,
+    pub top: SingCell<DefId>,
     pub os: SingCell<DefId>,
     pub monad: SingCell<DefId>,
     pub algebra: SingCell<DefId>,
@@ -138,6 +139,7 @@ mod impls {
             self.int.get_or_else(|| ResolveError::MissingPrim("Int"))?;
             self.char.get_or_else(|| ResolveError::MissingPrim("Char"))?;
             self.string.get_or_else(|| ResolveError::MissingPrim("String"))?;
+            self.top.get_or_else(|| ResolveError::MissingPrim("Top"))?;
             self.os.get_or_else(|| ResolveError::MissingPrim("OS"))?;
             self.monad.get_or_else(|| ResolveError::MissingPrim("Monad"))?;
             self.algebra.get_or_else(|| ResolveError::MissingPrim("Algebra"))?;

@@ -63,6 +63,21 @@ impl Resolver {
                         if !external {
                             break 'out;
                         }
+                        if let Some(def) = binders.get(&VarName("Top".into())) {
+                            Resolver::alloc_prim(
+                                &self.spans,
+                                &self.bitter.textual,
+                                &mut self.exts,
+                                &mut self.internal_to_def,
+                                &mut self.prim_def.top,
+                                &self.prim_term.top,
+                                id,
+                                def,
+                                "Top",
+                                Internal::Top,
+                            )?;
+                            break 'out;
+                        }
                         if let Some(def) = binders.get(&VarName("Monad".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,

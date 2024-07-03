@@ -57,6 +57,10 @@ impl Tycker {
         let AnnId::Type(ty) = env[self.prim.string.get()] else { unreachable!() };
         ty
     }
+    pub fn top(&mut self, env: &Env<AnnId>) -> TypeId {
+        let AnnId::Type(ty) = env[self.prim.top.get()] else { unreachable!() };
+        ty
+    }
     pub fn os(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.os.get()] else { unreachable!() };
         ty
@@ -140,7 +144,7 @@ impl Tycker {
                         let kd = ty.unwrap();
                         env = self.register_prim_ty(env, def, OSTy.into(), kd)?
                     }
-                    | su::Internal::Monad | su::Internal::Algebra => {
+                    | su::Internal::Top | su::Internal::Monad | su::Internal::Algebra => {
                         unreachable!()
                     }
                 }

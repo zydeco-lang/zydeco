@@ -242,7 +242,7 @@ impl Arena {
 /// being captured by user name accidentally.
 ///
 /// To add a new primitive term, add a field here and follow instructions at
-/// `crate::scoped::syntax::PrimDef`
+/// [`crate::scoped::syntax::PrimDef`]
 #[derive(Default, AddAssign)]
 pub struct PrimTerms {
     /// VType kind
@@ -261,6 +261,8 @@ pub struct PrimTerms {
     pub char: MultiCell<TermId>,
     /// String type
     pub string: MultiCell<TermId>,
+    /// Top type
+    pub top: MultiCell<TermId>,
     /// OS type
     pub os: MultiCell<TermId>,
     /// Monad type
