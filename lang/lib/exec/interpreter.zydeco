@@ -57,7 +57,7 @@ codata Interpreter where
   | .comp : SynComp -> Env -> SemComp
 end
 
-def fn sem_val_to_str (s : SemVal) : F String =
+def ! sem_val_to_str (s : SemVal) : F String =
   match s
   | +True() -> ret "true"
   | +False() -> ret "false"
@@ -65,7 +65,7 @@ def fn sem_val_to_str (s : SemVal) : F String =
   end
 end
 
-def rec fn lookup (x : String) (g : Env) : Ret(Answer SemVal) =
+def ! rec lookup (x : String) (g : Env) : Ret(Answer SemVal) =
   match g
   | +Empty() -> ret +Err()
   | +Cons(y,v,g) ->

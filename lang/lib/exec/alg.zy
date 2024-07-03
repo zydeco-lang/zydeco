@@ -1,4 +1,4 @@
-def fn bind_arrow
+def ! bind_arrow
   (M: VType -> CType)
   (A: VType)
   (B: CType) (alg: U (Algebra M B))
@@ -14,7 +14,7 @@ codata With (B1: CType) (B2: CType) where
   | .r: B2
 end
 
-def fn bind_with
+def ! bind_with
   (M: VType -> CType)
   (B1: CType) (alg1: U (Algebra M B1))
   (B2: CType) (alg2: U (Algebra M B2))
@@ -28,7 +28,7 @@ def fn bind_with
   end
 end
 
-def fn bind_ret
+def ! bind_ret
   (M: VType -> CType) (mo: U (Monad M))
   (A: VType)
 : Algebra M (M A) =
@@ -38,7 +38,7 @@ def fn bind_ret
   end
 end
 
-def fn bind_forall_ctype
+def ! bind_forall_ctype
   (M: VType -> CType)
   (S: CType -> CType) (algS: U (forall (Y: CType) . U (Algebra M Y) -> Algebra M (S Y)))
 : Algebra M (forall (Y: CType) . U (Algebra M Y) -> S Y) =
@@ -50,7 +50,7 @@ def fn bind_forall_ctype
   end
 end
 
-def fn bind_forall_ctype_constructor
+def ! bind_forall_ctype_constructor
   (M: VType -> CType)
   (S: (CType -> CType) -> CType)
   (algS: U (forall (F: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (F Z)) -> Algebra M (S F)))

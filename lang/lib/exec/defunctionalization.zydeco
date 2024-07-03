@@ -12,7 +12,7 @@ codata Summer' where
   | .add : Int -> Ret Int
 end
 
-def rec fn sumBad (xs : List Int) : Ret(Int) =
+def ! rec sumBad (xs : List Int) : Ret(Int) =
   match xs
   | +Nil() -> ret 0
   | +Cons(x, xs) ->
@@ -37,7 +37,7 @@ end
 
 # and changing the implementation as follows:
 
-def rec fn retSummer (n : Int) : Summer =
+def ! rec retSummer (n : Int) : Summer =
   comatch
   | .done -> ret n
   | .addN -> fn x ->
@@ -46,7 +46,7 @@ def rec fn retSummer (n : Int) : Summer =
   end
 end
 
-def rec fn sumOk (xs : List Int) : Summer =
+def ! rec sumOk (xs : List Int) : Summer =
   match xs
   | +Nil()       -> ! retSummer 0
   | +Cons(x, xs) -> ! sumOk xs .addN x
@@ -87,7 +87,7 @@ end
 # it to `z` and not increased the size of the stack(!)
 
 
-def rec fn sumBetter (xs : List Int) : Summer =
+def ! rec sumBetter (xs : List Int) : Summer =
   match xs
   | +Nil()     -> ! retSummer 0
   | +Cons(x, xs) ->
@@ -114,7 +114,7 @@ end
 # We can implement the .done method from before by pushing .add(0)
 # (using that it is the additive unit).
 
-def rec fn sumBest (xs : List Int) : Summer' =
+def ! rec sumBest (xs : List Int) : Summer' =
   match xs
   | +Nil() -> comatch
     | .add -> fn n -> ret n
@@ -127,7 +127,7 @@ def rec fn sumBest (xs : List Int) : Summer' =
   end
 end
 
-def fn sum (xs : List Int) : Ret Int =
+def ! sum (xs : List Int) : Ret Int =
   ! sumBest xs .add 0
 end
 

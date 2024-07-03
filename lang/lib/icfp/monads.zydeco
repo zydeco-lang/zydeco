@@ -25,7 +25,7 @@ codata Kont (R: CType) (A: VType) where
   | .run : Thunk (A -> R) -> R
 end
 
-def fn mkont (R: CType) : Monad (Kont R) =
+def ! mkont (R: CType) : Monad (Kont R) =
   comatch
   | .return A a -> fn .run k ->
     ! k a
@@ -41,7 +41,7 @@ codata PolyKont (A : VType) where
   | .bind : forall (R: CType) . Thunk (A -> R) -> R
 end
 
-def fn mpolykont : Monad PolyKont =
+def ! mpolykont : Monad PolyKont =
   comatch
   | .return A a -> fn .bind R k -> ! k a
   | .bind A A' m f -> fn .bind R k' ->
@@ -56,7 +56,7 @@ codata State (S: VType) (A: VType) where
     S -> Thunk (S -> A -> R) -> R
 end
 
-def fn mstate (S: VType) : Monad (State S) =
+def ! mstate (S: VType) : Monad (State S) =
   comatch
   | .return A a -> fn .run R s k ->
     ! k s a
@@ -65,7 +65,7 @@ def fn mstate (S: VType) : Monad (State S) =
   end
 end
 
-def fn mstate_state (S: VType) : MonadState S (State S) =
+def ! mstate_state (S: VType) : MonadState S (State S) =
   comatch
   | .get -> fn .run R s k ->
     ! k s s
@@ -76,7 +76,7 @@ end
 
 
 // The Ret monad
-def fn mret : Monad Ret =
+def ! mret : Monad Ret =
   comatch
   | .return A a -> ret a
   | .bind A A' m f ->
@@ -91,7 +91,7 @@ codata IO (A: VType) where
   | .run : Thunk (A -> OS) -> OS
 end
 
-def fn mio : Monad IO =
+def ! mio : Monad IO =
   comatch
   | .return A a -> fn .run k ->
     ! k a
@@ -100,7 +100,7 @@ def fn mio : Monad IO =
   end
 end
 
-def fn io : MonadIO IO =
+def ! io : MonadIO IO =
   comatch
   | .read -> fn .run ka ->
     ! read_line ka

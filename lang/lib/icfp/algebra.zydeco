@@ -14,7 +14,7 @@ codata IO (A: VType) where
 end
 
 // Algebra IO OS exists
-def fn alg_io : Algebra IO OS =
+def ! alg_io : Algebra IO OS =
   comatch
   | .bindA A m k -> ! m .run k
   end
@@ -22,7 +22,7 @@ end
 
 
 // Algebra Ret R always exists
-def fn alg_ret (R: CType): Algebra Ret R =
+def ! alg_ret (R: CType): Algebra Ret R =
   comatch
   | .bindA A m k ->
     do a <- ! m; ! k a
@@ -31,7 +31,7 @@ end
 
 
 // Algebra M (M V) always exists for M: Monad
-def fn alg_mo
+def ! alg_mo
   (M: VType -> CType)
   (V: VType)
   (mo: Thunk (Monad M))
@@ -44,7 +44,7 @@ end
 
 
 // Algebras can be defined on the arrow type
-def fn alg_arrow
+def ! alg_arrow
   (M: VType -> CType) (R: CType) (A: VType)
   (alg: Thunk (Algebra M R))
 : Algebra M (A -> R) =
@@ -61,7 +61,7 @@ codata With (L: CType) (R: CType) where
 end
 
 // Algebras can be defined on the with type
-def fn alg_with
+def ! alg_with
   (M: VType -> CType) (L: CType) (R: CType)
   (algl: Thunk (Algebra M L))
   (algr: Thunk (Algebra M R))
@@ -82,11 +82,11 @@ codata FnVar (A: VType) (B: CType) where
 end
 
 // Algebras can be defined on coinductive types like FnVar
-def rec fn alg_var (M: VType -> CType) (R: CType) (alg: Thunk (Algebra M R)) (V: VType)
+def ! rec alg_var (M: VType -> CType) (R: CType) (alg: Thunk (Algebra M R)) (V: VType)
                    : Algebra M (FnVar V R) =
   comatch
   | .bindA A m ka ->
-    let rec fn loop (ka: Thunk (A -> FnVar V R))
+    let ! rec loop (ka: Thunk (A -> FnVar V R))
     : FnVar V R =
       comatch
       | .more v -> ! loop { fn a -> ! ka a .more v }
@@ -119,7 +119,7 @@ codata MonadErr (E: VType) (M: VType -> CType) where
   | .fail : forall (A: VType) . E -> M A
 end
 
-def rec fn mexnde (E: VType) : Monad (ExnDe E) =
+def ! rec mexnde (E: VType) : Monad (ExnDe E) =
   comatch
   | .return -> fn A a ->
     comatch
@@ -132,7 +132,7 @@ def rec fn mexnde (E: VType) : Monad (ExnDe E) =
   end
 end
 
-def rec fn mexnde_err (E: VType) : MonadErr E (ExnDe E) =
+def ! rec mexnde_err (E: VType) : MonadErr E (ExnDe E) =
   comatch
   | .fail -> fn A e ->
     comatch
@@ -144,7 +144,7 @@ def rec fn mexnde_err (E: VType) : MonadErr E (ExnDe E) =
 end
 
 // Algebra on the defunctionalized exception type
-def fn alg_exn :
+def ! alg_exn :
   Algebra (ExnDe String) OS
 =
   comatch
@@ -158,7 +158,7 @@ def fn alg_exn :
 end
 
 // add_of errors if the sum >= 256 (8-bit overflow)
-def fn add_of (i: Int) (sum: Int) : ExnDe String Int =
+def ! add_of (i: Int) (sum: Int) : ExnDe String Int =
   do sum <- ! add i sum;
   ! if~ (ExnDe String Int) {
     ! int_lt sum 256

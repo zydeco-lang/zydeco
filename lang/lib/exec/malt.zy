@@ -7,7 +7,7 @@ codata OptOS (A: VType) where
   | .run : U (A -> OS) -> U OS -> OS
 end
 
-def fn monad-optos : Monad OptOS =
+def ! monad-optos : Monad OptOS =
   comatch
   | .return A a ->
     fn .run ka kn -> ! ka a
@@ -16,14 +16,14 @@ def fn monad-optos : Monad OptOS =
   end
 end
 
-def fn monad-err-optos : MonadErr OptOS =
+def ! monad-err-optos : MonadErr OptOS =
   comatch
   | .fail A ->
     fn .run ka kn -> ! kn
   end
 end
 
-def fn alg-optos : Algebra OptOS OS =
+def ! alg-optos : Algebra OptOS OS =
   comatch
   | .bindA A m f ->
     ! m .run
@@ -38,7 +38,7 @@ codata MonadAlt (M: VType -> CType) where
   | .alt : forall (A: VType) . U (M A) -> U (M A) -> M A
 end
 
-def fn monad-alt-optos : MonadAlt OptOS =
+def ! monad-alt-optos : MonadAlt OptOS =
   comatch
   | .alt A m1 m2 ->
     // if m1 fails, run m2

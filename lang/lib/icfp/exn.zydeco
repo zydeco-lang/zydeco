@@ -18,7 +18,7 @@ codata Exn (E: VType) (A: VType) where
   | .done : Ret (Either E A)
 end
 
-def fn mexn (E: VType) : Monad (Exn E) =
+def ! mexn (E: VType) : Monad (Exn E) =
   comatch
   | .return A a -> fn .done -> ret +Right(a)
   | .bind A A' m f ->
@@ -37,7 +37,7 @@ codata ExnK (E: VType) (A: VType) where
     Thunk (E -> R) -> Thunk (A -> R) -> R
 end
 
-def fn mexnk (E: VType) : Monad (ExnK E) =
+def ! mexnk (E: VType) : Monad (ExnK E) =
   comatch
   | .return A a ->
     fn .run R ke ka ->
@@ -59,7 +59,7 @@ codata ExnDe (E: VType) (A: VType) where
   | .done : Ret (Either E A)
 end
 
-def rec fn mexnde (E: VType) : Monad (ExnDe E) =
+def ! rec mexnde (E: VType) : Monad (ExnDe E) =
   comatch
   | .return -> fn A a ->
     comatch
@@ -72,7 +72,7 @@ def rec fn mexnde (E: VType) : Monad (ExnDe E) =
   end
 end
 
-def rec fn mexnde_err (E: VType) : MonadErr E (ExnDe E) =
+def ! rec mexnde_err (E: VType) : MonadErr E (ExnDe E) =
   comatch
   | .fail -> fn A e ->
     comatch
@@ -86,7 +86,7 @@ end
 
 // Proof of the violation of the monad laws of
 // the defunctionalized exception monad above
-def rec fn count_kont
+def ! rec count_kont
   (E: VType) (A: VType) (i: Int)
   (fi: Thunk (Int -> ExnDe E A))
 : ExnDe E A =
@@ -105,7 +105,7 @@ end
 
 alias ExnCounter = ExnDe Unit Int end
 
-def fn bench
+def ! bench
   (impl: Thunk (Thunk (ExnCounter) -> ExnCounter))
 : Ret Int =
   do i? <- ! impl {
@@ -119,7 +119,7 @@ def fn bench
 end
 
 // LHS and RHS of the associativity law
-def fn lhs
+def ! lhs
   (f: Thunk (Int -> ExnDe Unit Int))
   (g: Thunk (Int -> ExnDe Unit Int))
   (m: Thunk (ExnDe Unit Int))
@@ -128,7 +128,7 @@ def fn lhs
   { ! mexnde Unit .bind Int Int m f } g
 end
 
-def fn rhs
+def ! rhs
   (f: Thunk (Int -> ExnDe Unit Int))
   (g: Thunk (Int -> ExnDe Unit Int))
   (m: Thunk (ExnDe Unit Int))
@@ -139,7 +139,7 @@ end
 
 // Observable violation of the monad laws because the results are different
 main
-  let fn triv : Int -> ExnDe Unit Int =
+  let ! triv : Int -> ExnDe Unit Int =
     ! mexnde Unit .return Int
   in
 

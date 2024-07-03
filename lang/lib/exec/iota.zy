@@ -9,7 +9,7 @@ def rec iota : Int -> F(LList' Int) =
     ret +Cons(i, { ! iota i+1 })
 end
 
-def rec fn llist_foldr (ll: U(F(LList' Int))) (f: U(Int -> U OS -> OS)) (b: U OS) : OS =
+def ! rec llist_foldr (ll: U(F(LList' Int))) (f: U(Int -> U OS -> OS)) (b: U OS) : OS =
   do llv <- ! ll;
   match llv
   | +Nil() -> ! b
@@ -17,7 +17,7 @@ def rec fn llist_foldr (ll: U(F(LList' Int))) (f: U(Int -> U OS -> OS)) (b: U OS
   end
 end
 
-def fn loopy =
+def ! loopy =
   ! llist_foldr
   { ! iota 0 }
   { fn (x: Int) (b: U OS) ->

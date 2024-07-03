@@ -34,7 +34,7 @@ def str_chop_hd : U(String -> Int -> F String) = { fn (s: String) (i: Int) ->
   ! str_collect s i ""
 } end
 
-def fn str_eq_at (a: String) (b: String) (i: Int): F Bool =
+def ! str_eq_at (a: String) (b: String) (i: Int): F Bool =
   do ai <- ! str_index a i;
   do bi <- ! str_index b i;
   ! char_eq ai bi
@@ -103,7 +103,7 @@ def rec regex : Regex =
   end
 end
 
-def fn demo (syn: Syn) (str: String) (kont: Thunk OS): OS =
+def ! demo (syn: Syn) (str: String) (kont: Thunk OS): OS =
   do res <- ! regex .run str .bind syn;
   match res
   | +Some(s) ->

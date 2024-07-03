@@ -1,6 +1,6 @@
 alias Num = Int end
 
-def fn done (x : Num) : OS = ! exit x end
+def ! done (x : Num) : OS = ! exit x end
 main
   ! done 0
 end

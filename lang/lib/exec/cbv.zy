@@ -11,7 +11,7 @@ alias Kont' (A: VType) : CType =
   forall (R: CType) . U (A -> R) -> R
 end
 
-def fn kret (v: Value) : Kont' Value =
+def ! kret (v: Value) : Kont' Value =
   fn R k -> ! k v
 end
 
@@ -31,19 +31,19 @@ codata Mo (A: VType) where
   | .run: Mo' A
 end
 
-def fn mk_mexn (v: U (Mo' Value)) : Mo Value =
+def ! mk_mexn (v: U (Mo' Value)) : Mo Value =
   comatch
   | .run -> ! v
   end
 end
 
-// def fn stdin (k: U (String -> OS)) : Mo Value =
+// def ! stdin (k: U (String -> OS)) : Mo Value =
 //   ! mk_mexn { fn s ->
 //     ret +Cons(s, +Right())
 //   }
 // end
 
-def fn cnt (v: Value) : Mo Value =
+def ! cnt (v: Value) : Mo Value =
   ! mk_mexn { fn s ->
     match s
     | +State(c, o) ->
@@ -53,7 +53,7 @@ def fn cnt (v: Value) : Mo Value =
   }
 end
 
-def fn stdout (str: String) (v: Value) : Mo Value =
+def ! stdout (str: String) (v: Value) : Mo Value =
   ! mk_mexn { fn s ->
     match s
     | +State(c, o) ->
@@ -63,11 +63,11 @@ def fn stdout (str: String) (v: Value) : Mo Value =
   }
 end
 
-def fn raise (exn: Exception) : Mo Value =
+def ! raise (exn: Exception) : Mo Value =
   ! mk_mexn { fn s -> ret +Cons(s, +Left(exn)) }
 end
 
-def fn mexn : Monad Mo =
+def ! mexn : Monad Mo =
   comatch
   | .return -> fn A a ->
     comatch
@@ -100,7 +100,7 @@ codata EnvO where
   | .extend: String -> Value -> EnvO
 end
 
-def rec fn envo (env: EnvT) : EnvO =
+def ! rec envo (env: EnvT) : EnvO =
   comatch
   | .lookup x ->
     match env
@@ -130,7 +130,7 @@ data Term where
   | +If : Term * Term * Term
 end
 
-def rec fn interp (env: U EnvO) (t: Term) : Mo Value =
+def ! rec interp (env: U EnvO) (t: Term) : Mo Value =
   match t
   | +Var(x) ->
     do x? <- ! env .lookup x;

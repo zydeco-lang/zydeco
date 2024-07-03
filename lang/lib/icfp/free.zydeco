@@ -35,7 +35,7 @@ codata Free (A: VType) where
 end
 
 
-def fn mfree : Monad Free =
+def ! mfree : Monad Free =
   comatch
   | .return A a ->
     fn .run R read write fail ->
@@ -54,27 +54,27 @@ end
 
 
 // The interface for using Free
-def fn read (s: Unit) : Free String =
+def ! read (s: Unit) : Free String =
   fn .run R read write fail -> ! read ()
 end
 
-def fn write (s: String) : Free Unit =
+def ! write (s: String) : Free Unit =
   fn .run R read write fail -> ! write s
 end
 
-def fn fail (s: String) : Free Empty =
+def ! fail (s: String) : Free Empty =
   fn .run R read write fail -> ! fail s
 end
 
-def fn read_os (_: Unit) (k: Thunk (String -> OS)) : OS =
+def ! read_os (_: Unit) (k: Thunk (String -> OS)) : OS =
   ! read_line k
 end
 
-def fn write_os (s: String) (k: Thunk (Unit -> OS)) : OS =
+def ! write_os (s: String) (k: Thunk (Unit -> OS)) : OS =
   ! write_line s { ! k () }
 end
 
-def fn fail_os (s: String) (_: Thunk (Empty -> OS)) : OS =
+def ! fail_os (s: String) (_: Thunk (Empty -> OS)) : OS =
   ! panic s
 end
 

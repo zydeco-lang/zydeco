@@ -1,9 +1,9 @@
 main
   let zero: Nat = +Z() in
-  let fn suc (x: Nat): F Nat =
+  let ! suc (x: Nat): F Nat =
     ret (+S(x) : Nat)
   in
-  let fn ifz (z: Bool) (pred: U (Nat -> Ret Bool)) (x: Nat): Ret Bool =
+  let ! ifz (z: Bool) (pred: U (Nat -> Ret Bool)) (x: Nat): Ret Bool =
     match x
     | +Z() -> ret z
     | +S(x) -> !pred x
@@ -11,7 +11,7 @@ main
   in
   do one <- !suc zero;
   do two <- !suc one;
-  let fn ifz (x: Nat): F Bool =
+  let ! ifz (x: Nat): F Bool =
     !ifz false { fn (_: Nat) -> ret true } x
   in
   do two' <- !ifz two;

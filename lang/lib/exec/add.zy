@@ -9,7 +9,7 @@ main
       )
     )
   } in
-  let rec fn add' (x: Nat) (y: Nat): Ret(Nat) =
+  let ! rec add' (x: Nat) (y: Nat): Ret(Nat) =
     match x
     | +Z() -> ret y
     | +S(x) -> !add x +S(y)

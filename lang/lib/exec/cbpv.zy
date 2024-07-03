@@ -16,7 +16,7 @@ codata MExnOS (A: VType) where
   | .run : U (A -> OS) -> U (Exception -> OS) -> OS
 end
 
-def fn mexn : MonadErrPrint MExnOS =
+def ! mexn : MonadErrPrint MExnOS =
   comatch
   | .return -> fn A a ->
     comatch
@@ -49,7 +49,7 @@ codata EnvO where
   | .extend: String -> Value -> EnvO
 end
 
-def rec fn envo (env: EnvT) : EnvO =
+def ! rec envo (env: EnvT) : EnvO =
   comatch
   | .lookup x ->
     match env
@@ -76,14 +76,14 @@ codata Compu where
   | .bind: MExnOS Value
 end
 
-def fn abort (e: Exception) : Compu =
+def ! abort (e: Exception) : Compu =
   rec unwind -> comatch
   | .app _ -> ! unwind
   | .bind -> ! mexn .fail (Value) e
   end
 end
 
-def rec fn malg : Algebra MExnOS Compu =
+def ! rec malg : Algebra MExnOS Compu =
   comatch
   | .bindA -> fn A m f -> // m : U (MExnOS A), f: U (A -> Compu)
     comatch
@@ -115,7 +115,7 @@ codata Interp where
   | .compu: SCompu -> Compu
 end
 
-def rec fn interp (env: U EnvO) : Interp =
+def ! rec interp (env: U EnvO) : Interp =
   comatch
   | .value sv ->
     match sv
@@ -143,7 +143,7 @@ def rec fn interp (env: U EnvO) : Interp =
       let mv = { ! interp env .value sv } in
       ! malg .bindA (Value) mv { fn v -> ! interp env .compu sc .app v }
     | +Ret(sv) ->
-      let rec fn unwind (m: U (MExnOS Value)) : Compu =
+      let ! rec unwind (m: U (MExnOS Value)) : Compu =
         comatch
         | .app _ -> ! unwind { ! mexn .fail (Value) +TypeError() }
         | .bind -> ! m
@@ -181,13 +181,13 @@ end
 
 main
   let env : U EnvO = { ! envo +Empty() } in
-  let fn report (e: Exception) : OS =
+  let ! report (e: Exception) : OS =
     match e
     | +TypeError() -> ! panic "type error"
     | +FreeVariable() -> ! panic "free variable"
     end
   in
-  let fn value-eq (v1: Value) (v2: Value) (k: U OS) : OS =
+  let ! value-eq (v1: Value) (v2: Value) (k: U OS) : OS =
     let bool-value-panic = { ! panic "wrong bool value" } in
     let thunk-panic = { ! panic "thunks are not comparable" } in
     match v1
@@ -204,7 +204,7 @@ main
     | +Thunk(_) -> ! thunk-panic
     end
   in
-  let fn demo (term: SCompu) (ans: Value) (k: U OS): OS =
+  let ! demo (term: SCompu) (ans: Value) (k: U OS): OS =
     ! interp env .compu term .bind .run {
       fn v -> ! value-eq v ans k
     } report

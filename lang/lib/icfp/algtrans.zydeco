@@ -33,7 +33,7 @@ codata ExnT (E: VType) ((M, mo): MonadS) (A: VType) where
   | .done : M (Either E A)
 end
 
-def fn mtexn (E: VType) : MonadTrans (ExnT E) =
+def ! mtexn (E: VType) : MonadTrans (ExnT E) =
   comatch
   | .monad (M, mo) ->
     comatch
@@ -62,7 +62,7 @@ where
   | .run : forall ((R, alg): AlgebraS M) -> Thunk (E -> R) -> Thunk (A -> R) -> R
 end
 
-def fn mtexnk (E: VType) : MonadTrans (ExnKT E) =
+def ! mtexnk (E: VType) : MonadTrans (ExnKT E) =
   comatch
   | .monad (M, mo) ->
     comatch
