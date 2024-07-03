@@ -1,17 +1,17 @@
 def fn bind_arrow
   (M: VType -> CType)
-  (B: CType) (alg: U (Algebra M B))
   (A: VType)
+  (B: CType) (alg: U (Algebra M B))
 : Algebra M (A -> B) =
   comatch
-  | .bindA A' (m': U (M A')) (f: U (A' -> A -> B)) -> fn a ->
-    ! alg .bindA A' m' { fn a' -> ! f a' a }
+  | .bindA X (m: U (M X)) (f: U (X -> A -> B)) -> fn a ->
+    ! alg .bindA X m { fn x -> ! f x a }
   end
 end
 
 codata With (B1: CType) (B2: CType) where
-  | .left: B1
-  | .right: B2
+  | .l: B1
+  | .r: B2
 end
 
 def fn bind_with
@@ -20,10 +20,10 @@ def fn bind_with
   (B2: CType) (alg2: U (Algebra M B2))
 : Algebra M (With B1 B2) =
   comatch
-  | .bindA -> fn A (m: U (M A)) (f: U (A -> With B1 B2)) ->
+  | .bindA X (m: U (M X)) (f: U (X -> With B1 B2)) ->
     comatch
-    | .left -> ! alg1 .bindA A m { fn a -> ! f a .left }
-    | .right -> ! alg2 .bindA A m { fn a -> ! f a .right }
+    | .l -> ! alg1 .bindA X m { fn x -> ! f x .l }
+    | .r -> ! alg2 .bindA X m { fn x -> ! f x .r }
     end
   end
 end
@@ -33,18 +33,34 @@ def fn bind_ret
   (A: VType)
 : Algebra M (M A) =
   comatch
-  | .bindA -> fn A' m' f' ->
-    ! mo .bind A' A m' f'
+  | .bindA X m f ->
+    ! mo .bind X A m f
   end
 end
 
-def fn bind_forall
+def fn bind_forall_ctype
   (M: VType -> CType)
-  (B: CType -> CType) (algB: U (forall (R: CType) . U (Algebra M R) -> Algebra M (B R)))
-: Algebra M (forall (R: CType) . U (Algebra M R) -> B R) =
+  (B: CType -> CType) (algB: U (forall (Y: CType) . U (Algebra M Y) -> Algebra M (B Y)))
+: Algebra M (forall (Y: CType) . U (Algebra M Y) -> B Y) =
   comatch
-  | .bindA -> fn A (m: U (M A)) (f: U (A -> (forall (R: CType) . U (Algebra M R) -> B R))) -> fn R algR ->
-    ! algB R algR .bindA A m { fn a -> ! f a R algR }
+  | .bindA X (m: U (M X)) (f: U (X -> (forall (Y: CType) . U (Algebra M Y) -> B Y))) ->
+    comatch Y algY ->
+      ! algB Y algY .bindA X m { fn a -> ! f a Y algY }
+    end
+  end
+end
+
+def fn bind_forall_ctype_constructor
+  (M: VType -> CType)
+  (B: (CType -> CType) -> CType)
+  (algB: U (forall (Y: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (Y Z)) -> Algebra M (B Y)))
+: Algebra M (forall (Y: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (Y Z)) -> B Y) =
+  comatch
+  | .bindA X (m: U (M X))
+    (f: U (X -> (forall (Y: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (Y Z)) -> B Y))) ->
+    comatch Y Z algZYZ ->
+      ! algB Y Z algZYZ .bindA X m { fn a -> ! f a Y Z algZYZ }
+    end
   end
 end
 

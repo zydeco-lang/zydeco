@@ -254,6 +254,9 @@ Term: Term = {
     "fn" <params:CoPatId> "->" <term:TermId> => {
         Abs(params, term)
     }.into(),
+    "comatch" <params:CoPatId> "->" <term:TermId> "end" => {
+        Abs(params, term)
+    }.into(),
     // pi
     "pi" <params:CoPatId> "." <term:TermId> => {
         Pi(params, term)
