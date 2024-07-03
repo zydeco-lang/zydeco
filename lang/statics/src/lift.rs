@@ -222,7 +222,23 @@ impl SEnv<TypeId> {
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
         algs: Vec<(ValueId, TypeId, TypeId)>,
     ) -> ResultKont<CompuId> {
-        // first check if ty is among the carriers of algebras
+        // utils
+        let vtype = tycker.vtype(&self.env);
+        let ctype = tycker.ctype(&self.env);
+        let dtor_bind = DtorName(".bind".to_string());
+        let dtor_binda = DtorName(".bindA".to_string());
+
+        // first, for value types, just return the term of the trivial algebra Top
+        let kd = tycker.statics.annotations_type[&self.inner];
+        if Lub::lub(kd, vtype, tycker).is_ok() {
+            let top_compu = tycker.top_compu(&self.env);
+            return Ok(top_compu);
+        }
+
+        // and we only deal with computation types from now on
+        assert!(Lub::lub(kd, ctype, tycker).is_ok(), "kind mismatch");
+
+        // next, check if ty is among the carriers of algebras
         // if so, just return the corresponding algebra
         for (alg, _mo_ty, carrier_ty) in algs.iter().cloned() {
             let carrier_ty = carrier_ty;
@@ -234,12 +250,6 @@ impl SEnv<TypeId> {
                 return Ok(force_alg);
             }
         }
-
-        // utils
-        let vtype = tycker.vtype(&self.env);
-        let ctype = tycker.ctype(&self.env);
-        let dtor_bind = DtorName(".bind".to_string());
-        let dtor_binda = DtorName(".bindA".to_string());
 
         // if it's not directly the carrier of any algebra, then try to generate the algebra
 
@@ -360,14 +370,20 @@ impl SEnv<TypeId> {
                 let unsealed = tycker.statics.seals[&abst].to_owned();
                 self.mk(unsealed).algebra(tycker, (mo, mo_ty), algs)?
             }
-            | Type::App(_) => unreachable!(),
-            | Type::Thunk(_)
-            | Type::Ret(_)
-            | Type::Unit(_)
-            | Type::Int(_)
-            | Type::Char(_)
-            | Type::String(_) => unreachable!(),
+            | Type::App(_) => {
+                // app, dealt with above
+                unreachable!()
+            }
+            | Type::Unit(_) | Type::Int(_) | Type::Char(_) | Type::String(_) => {
+                // vtype, dealt with above
+                unreachable!()
+            }
+            | Type::Thunk(_) | Type::Ret(_) => {
+                // neither vtype nor ctype, dealt with above
+                unreachable!()
+            }
             | Type::OS(_) => {
+                // if an algebra is defined for OS, it should have been found above
                 tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
             }
             | Type::Arrow(Arrow(a_ty, b_ty)) => gen_algebra_template(
@@ -442,10 +458,10 @@ impl SEnv<TypeId> {
                 let _ = ty_y;
                 todo!()
             }
-            | Type::Prod(_) | Type::Exists(_) => {
-                tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
+            | Type::Prod(_) | Type::Exists(_) | Type::Data(_) => {
+                // vtype, dealt with above
+                unreachable!()
             }
-            | Type::Data(_) => unreachable!(),
             | Type::CoData(codata) => gen_algebra_template(
                 &self.env,
                 tycker,

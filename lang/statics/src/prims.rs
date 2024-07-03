@@ -91,6 +91,15 @@ impl Tycker {
     }
 }
 
+/* ---------------------------------- Term ---------------------------------- */
+impl Tycker {
+    pub fn top_compu(&mut self, env: &Env<AnnId>) -> CompuId {
+        let top = self.top(env);
+        let top_compu = Alloc::alloc(self, CoMatch { arms: Vec::new() }, top);
+        top_compu
+    }
+}
+
 impl Tycker {
     pub fn register_prim_ty(
         &mut self, mut env: SEnv<()>, def: DefId, prim: Type, syn_kd: su::TermId,
