@@ -290,6 +290,25 @@ impl TypeId {
         };
         Ok(res)
     }
+    pub fn normalize_apps_k(self, tycker: &mut Tycker, a_tys: Vec<TypeId>) -> ResultKont<TypeId> {
+        let res = self.normalize_apps(tycker, a_tys);
+        tycker.err_p_to_k(res)
+    }
+    pub fn normalize_apps(self, tycker: &mut Tycker, a_tys: Vec<TypeId>) -> Result<TypeId> {
+        let res = a_tys.into_iter().try_fold(self, |f_ty, a_ty| {
+            let abs_kd = tycker.statics.annotations_type[&f_ty].clone();
+            let kd = match tycker.statics.kinds[&abs_kd].to_owned() {
+                | Kind::Arrow(Arrow(arg_kd, body_kd)) => {
+                    let arg_kd_ = tycker.statics.annotations_type[&a_ty].clone();
+                    Lub::lub(arg_kd_, arg_kd, tycker)?;
+                    body_kd
+                }
+                | _ => tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?,
+            };
+            f_ty.normalize_app(tycker, a_ty, kd)
+        })?;
+        Ok(res)
+    }
 }
 
 impl Tycker {

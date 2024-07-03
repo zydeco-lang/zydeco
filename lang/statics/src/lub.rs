@@ -12,13 +12,6 @@ pub trait Lub<Rhs = Self>: Sized {
     }
 }
 
-impl Lub for () {
-    type Out = ();
-    fn lub(self, (): Self, _tycker: &mut Tycker) -> Result<Self::Out> {
-        Ok(())
-    }
-}
-
 impl Lub for KindId {
     type Out = KindId;
 
