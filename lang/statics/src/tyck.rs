@@ -70,6 +70,7 @@ impl Tycker {
             Err(())?
         }
         // fill all holes with solutions
+        // Todo: make it correct
         let mut types = Vec::new();
         for (id, ty) in &self.statics.types {
             types.push((*id, ty.to_owned()));
@@ -2040,6 +2041,7 @@ impl Tyck for SEnv<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
                 // Hack: make sure that the body is synthesizable
+                // Todo: fill in the holes before lifting
                 let body_ty = {
                     let mut body_ty = body_ty;
                     while let ss::Type::Fill(fill) = tycker.statics.types[&body_ty].to_owned() {

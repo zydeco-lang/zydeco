@@ -5,11 +5,12 @@ use std::collections::HashMap;
 /// T \/ T ?~~> T'
 pub trait Lub<Rhs = Self>: Sized {
     type Out;
-    fn lub(self, other: Rhs, tycker: &mut Tycker) -> Result<Self::Out>;
     fn lub_k(self, other: Rhs, tycker: &mut Tycker) -> ResultKont<Self::Out> {
         let res = self.lub(other, tycker);
         tycker.err_p_to_k(res)
     }
+    fn lub(self, other: Rhs, tycker: &mut Tycker) -> Result<Self::Out>;
+    fn lub_inner(self, other: Rhs, tycker: &mut Tycker) -> Result<Self::Out>;
 }
 
 impl Lub for KindId {
@@ -20,6 +21,14 @@ impl Lub for KindId {
             // administrative
             tycker.stack.push_back(TyckTask::Lub(self.into(), other.into()));
         }
+        let res = self.lub_inner(other, tycker);
+        {
+            // administrative
+            tycker.stack.pop_back();
+        }
+        res
+    }
+    fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         let lhs = tycker.statics.kinds[&self].clone();
         let rhs = tycker.statics.kinds[&other].clone();
         fn fill_kd(tycker: &mut Tycker, fill: FillId, kd: KindId) -> Result<KindId> {
@@ -63,10 +72,6 @@ impl Lub for KindId {
                 tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?
             }
         };
-        {
-            // administrative
-            tycker.stack.pop_back();
-        }
         Ok(res)
     }
 }
@@ -97,6 +102,14 @@ impl Debruijn {
             // administrative
             tycker.stack.push_back(TyckTask::Lub(lhs_id.into(), rhs_id.into()));
         }
+        let res = self.lub_inner(lhs_id, rhs_id, tycker);
+        {
+            // administrative
+            tycker.stack.pop_back();
+        }
+        res
+    }
+    fn lub_inner(self, lhs_id: TypeId, rhs_id: TypeId, tycker: &mut Tycker) -> Result<TypeId> {
         let lhs = tycker.statics.types[&lhs_id].clone();
         let rhs = tycker.statics.types[&rhs_id].clone();
         fn fill_ty(tycker: &mut Tycker, fill: FillId, ty: TypeId) -> Result<TypeId> {
@@ -340,10 +353,6 @@ impl Debruijn {
                 std::panic::Location::caller(),
             )?,
         };
-        {
-            // administrative
-            tycker.stack.pop_back();
-        }
         Ok(res)
     }
 }
@@ -354,6 +363,10 @@ impl Lub for TypeId {
     /// We need to remember the definitions introduced by both sides.
     /// We did this by using Debruijn.
     fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
+        let res = self.lub_inner(other, tycker);
+        res
+    }
+    fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         Debruijn::new().lub(self, other, tycker)
     }
 }
@@ -362,10 +375,9 @@ impl Lub for AnnId {
     type Out = AnnId;
 
     fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
-        // {
-        //     // administrative
-        //     tycker.stack.push_back(TyckTask::Lub(self, other));
-        // }
+        self.lub_inner(other, tycker)
+    }
+    fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         let res = match (self, other) {
             | (AnnId::Set, AnnId::Set) => AnnId::Set,
             | (AnnId::Set, _) | (_, AnnId::Set) => {
@@ -383,10 +395,6 @@ impl Lub for AnnId {
                 ty.into()
             }
         };
-        // {
-        //     // administrative
-        //     tycker.stack.pop_back();
-        // }
         Ok(res)
     }
 }

@@ -93,7 +93,7 @@ impl SEnv<KindId> {
             | Kind::Arrow(Arrow(a_kd, b_kd)) => {
                 let Some((tpat, body)) = ty.destruct_abs(tycker) else { unreachable!() };
                 let (tvar_a, _kd) = tpat.destruct_def(tycker);
-                assert!(Lub::lub(a_kd, _kd, tycker).is_ok(), "input kind mismatch");
+                assert!(Lub::lub_inner(a_kd, _kd, tycker).is_ok(), "input kind mismatch");
                 let ty_a = Alloc::alloc(tycker, tvar_a, a_kd);
                 let alg_a = self.mk(a_kd).signature(tycker, mo_ty, ty_a)?;
                 let thunk_alg_a = tycker.thunk_arg(&self.env, alg_a);
@@ -243,19 +243,19 @@ impl SEnv<TypeId> {
 
         // first, for value types, just return the term of the trivial algebra Top
         let kd = tycker.statics.annotations_type[&self.inner];
-        if Lub::lub(kd, vtype, tycker).is_ok() {
+        if Lub::lub_inner(kd, vtype, tycker).is_ok() {
             let top_compu = tycker.top_compu(&self.env);
             return Ok(top_compu);
         }
 
         // and we only deal with computation types from now on
-        assert!(Lub::lub(kd, ctype, tycker).is_ok(), "kind mismatch");
+        assert!(Lub::lub_inner(kd, ctype, tycker).is_ok(), "kind mismatch");
 
         // next, check if ty is among the carriers of algebras
         // if so, just return the corresponding algebra
         for (alg, _mo_ty, carrier_ty) in algs.iter().cloned() {
             let carrier_ty = carrier_ty;
-            if Lub::lub(carrier_ty, self.inner, tycker).is_ok() {
+            if Lub::lub_inner(carrier_ty, self.inner, tycker).is_ok() {
                 let force_alg = {
                     let ann = tycker.algebra_mo_carrier(&self.env, mo_ty, carrier_ty);
                     Alloc::alloc(tycker, Force(alg), ann)
