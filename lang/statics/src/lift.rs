@@ -307,44 +307,106 @@ impl SEnv<TypeId> {
             | Type::OS(_) => {
                 tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
             }
-            | Type::Arrow(arr_ty) => {
-                let Arrow(a_ty, b_ty) = arr_ty;
-                // A -> B
-                let a_arr_b = self.inner;
+            | Type::Arrow(Arrow(a_ty, b_ty)) => gen_algebra_template(
+                &self.env,
+                tycker,
+                mo_ty,
+                self.inner,
+                |env, tycker, AlgebraBodyArgs { ty_x, val_m, val_f }| {
+                    // what we want to generate is:
+                    // ```
+                    // comatch
+                    // | .bindA -> fn X m f a ->
+                    //   ! alg .bindA X m { fn x -> ! f x a }
+                    // end
+                    // ```
 
-                // what we want to generate is:
-                // ```
-                // comatch
-                // | .bindA -> fn X m f a ->
-                //   ! alg .bindA X m { fn x -> ! f x a }
-                // end
-                // ```
+                    let alg_b = SEnv::from((env, b_ty)).algebra(tycker, (mo, mo_ty), algs)?;
+                    let alg_binda = {
+                        let ann = gen_alg_binda_forall(&env, tycker, mo_ty, b_ty);
+                        Alloc::alloc(tycker, Dtor(alg_b, dtor_binda), ann)
+                    };
+                    let alg_binda_x = {
+                        let ann = gen_alg_binda_body(&env, tycker, mo_ty, ty_x, b_ty);
+                        Alloc::alloc(tycker, App(alg_binda, ty_x), ann)
+                    };
+                    let alg_binda_x_m = {
+                        // ann = Thunk (X -> B) -> B
+                        let ann = gen_alg_thunk_a_r_r(&env, tycker, ty_x, b_ty);
+                        Alloc::alloc(tycker, App(alg_binda_x, val_m), ann)
+                    };
 
-                gen_algebra_template(
-                    &self.env,
-                    tycker,
-                    mo_ty,
-                    a_arr_b,
-                    |env, tycker, AlgebraBodyArgs { ty_x, val_m, val_f }| {
-                        let alg_b = SEnv::from((env, b_ty)).algebra(tycker, (mo, mo_ty), algs)?;
+                    // a
+                    let var_a = Alloc::alloc(tycker, VarName("a".to_string()), a_ty.into());
+                    let vpat_a: VPatId = Alloc::alloc(tycker, var_a, a_ty);
+                    let val_a: ValueId = Alloc::alloc(tycker, var_a, a_ty);
+
+                    let thunk_kont = {
+                        // x
+                        let var_x = Alloc::alloc(tycker, VarName("x".to_string()), ty_x.into());
+                        let vpat_x: VPatId = Alloc::alloc(tycker, var_x, ty_x);
+                        let val_x: ValueId = Alloc::alloc(tycker, var_x, ty_x);
+
+                        // X -> A -> B
+                        let ty_x_arr_a_arr_b = Alloc::alloc(tycker, Arrow(ty_x, self.inner), ctype);
+
+                        let force_f = Alloc::alloc(tycker, Force(val_f), ty_x_arr_a_arr_b);
+                        let force_f_x = Alloc::alloc(tycker, App(force_f, val_x), self.inner);
+                        let force_f_x_a = Alloc::alloc(tycker, App(force_f_x, val_a), b_ty);
+
+                        // X -> B
+                        let ty_x_arr_b = Alloc::alloc(tycker, Arrow(ty_x, b_ty), ctype);
+                        let function = Alloc::alloc(tycker, Abs(vpat_x, force_f_x_a), ty_x_arr_b);
+
+                        let ann = tycker.thunk_app(&self.env, ty_x_arr_b);
+                        Alloc::alloc(tycker, Thunk(function), ann)
+                    };
+
+                    let body_ty = b_ty;
+                    let body = Alloc::alloc(tycker, App(alg_binda_x_m, thunk_kont), body_ty);
+
+                    // finally, finish by abstraction over `a`
+                    let fn_a_body = Alloc::alloc(tycker, Abs(vpat_a, body), self.inner);
+                    Ok(fn_a_body)
+                },
+            )?,
+
+            | Type::Forall(forall_ty) => {
+                let Forall(tpat_y, b_ty) = forall_ty;
+                let (tvar_y, _kd) = tpat_y.destruct_def(tycker);
+                let ty_y: TypeId = Alloc::alloc(tycker, tvar_y, vtype);
+                let _ = b_ty;
+                let _ = ty_y;
+                todo!()
+            }
+            | Type::Prod(_) | Type::Exists(_) => {
+                tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
+            }
+            | Type::Data(_) => unreachable!(),
+            | Type::CoData(codata) => gen_algebra_template(
+                &self.env,
+                tycker,
+                mo_ty,
+                self.inner,
+                |env, tycker, AlgebraBodyArgs { ty_x, val_m, val_f }| {
+                    let arms_ty = tycker.statics.codatas.defs[&codata].to_owned();
+                    let mut arms_compu = Vec::new();
+
+                    for (dtor, ty) in arms_ty {
+                        let alg = self.mk(ty).algebra(tycker, (mo, mo_ty), algs.to_owned())?;
                         let alg_binda = {
-                            let ann = gen_alg_binda_forall(&env, tycker, mo_ty, b_ty);
-                            Alloc::alloc(tycker, Dtor(alg_b, dtor_binda), ann)
+                            let ann = gen_alg_binda_forall(&env, tycker, mo_ty, ty);
+                            Alloc::alloc(tycker, Dtor(alg, dtor_binda.to_owned()), ann)
                         };
                         let alg_binda_x = {
-                            let ann = gen_alg_binda_body(&env, tycker, mo_ty, ty_x, b_ty);
+                            let ann = gen_alg_binda_body(&env, tycker, mo_ty, ty_x, ty);
                             Alloc::alloc(tycker, App(alg_binda, ty_x), ann)
                         };
                         let alg_binda_x_m = {
                             // ann = Thunk (X -> B) -> B
-                            let ann = gen_alg_thunk_a_r_r(&env, tycker, ty_x, b_ty);
+                            let ann = gen_alg_thunk_a_r_r(&env, tycker, ty_x, ty);
                             Alloc::alloc(tycker, App(alg_binda_x, val_m), ann)
                         };
-
-                        // a
-                        let var_a = Alloc::alloc(tycker, VarName("a".to_string()), a_ty.into());
-                        let vpat_a: VPatId = Alloc::alloc(tycker, var_a, a_ty);
-                        let val_a: ValueId = Alloc::alloc(tycker, var_a, a_ty);
 
                         let thunk_kont = {
                             // x
@@ -352,67 +414,35 @@ impl SEnv<TypeId> {
                             let vpat_x: VPatId = Alloc::alloc(tycker, var_x, ty_x);
                             let val_x: ValueId = Alloc::alloc(tycker, var_x, ty_x);
 
-                            // X -> A -> B
-                            let ty_x_arr_a_arr_b =
-                                Alloc::alloc(tycker, Arrow(ty_x, a_arr_b), ctype);
+                            // CoData
+                            let coda = self.inner;
+                            // X -> CoData
+                            let ty_x_arr_coda = Alloc::alloc(tycker, Arrow(ty_x, coda), ctype);
 
-                            let force_f = Alloc::alloc(tycker, Force(val_f), ty_x_arr_a_arr_b);
-                            let force_f_x = Alloc::alloc(tycker, App(force_f, val_x), a_arr_b);
-                            let force_f_x_a = Alloc::alloc(tycker, App(force_f_x, val_a), b_ty);
+                            let force_f = Alloc::alloc(tycker, Force(val_f), ty_x_arr_coda);
+                            let force_f_x = Alloc::alloc(tycker, App(force_f, val_x), coda);
+                            let force_f_x_dtor =
+                                Alloc::alloc(tycker, Dtor(force_f_x, dtor.to_owned()), ty);
 
                             // X -> B
-                            let ty_x_arr_b = Alloc::alloc(tycker, Arrow(ty_x, b_ty), ctype);
+                            let ty_x_arr_b = Alloc::alloc(tycker, Arrow(ty_x, ty), ctype);
                             let function =
-                                Alloc::alloc(tycker, Abs(vpat_x, force_f_x_a), ty_x_arr_b);
+                                Alloc::alloc(tycker, Abs(vpat_x, force_f_x_dtor), ty_x_arr_b);
 
                             let ann = tycker.thunk_app(&self.env, ty_x_arr_b);
                             Alloc::alloc(tycker, Thunk(function), ann)
                         };
 
-                        let body_ty = b_ty;
+                        let body_ty = ty;
                         let body = Alloc::alloc(tycker, App(alg_binda_x_m, thunk_kont), body_ty);
 
-                        // finally, finish by abstraction over `a`
-                        let fn_a_body_ty = Alloc::alloc(tycker, Arrow(a_ty, body_ty), ctype);
-                        let fn_a_body = Alloc::alloc(tycker, Abs(vpat_a, body), fn_a_body_ty);
-                        Ok(fn_a_body)
-                    },
-                )?
-            }
-            | Type::Forall(forall_ty) => {
-                let Forall(tpat_y, b_ty) = forall_ty;
-                todo!()
-            }
-            | Type::Prod(_) | Type::Exists(_) => {
-                tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
-            }
-            | Type::Data(_) => unreachable!(),
-            | Type::CoData(_codata) => {
-                // let arms = tycker.statics.codatas.defs[&codata].to_owned();
-                // let mut arms_ = Vec::new();
+                        arms_compu.push(CoMatcher { dtor, tail: body })
+                    }
 
-                // for (dtor, ty) in arms {
-                //     let (algebra, _mo_ty, carrier_ty) =
-                //         self.mk(ty).algebra(tycker, (mo, mo_ty), algs.to_owned())?;
-
-                //     todo!()
-                // }
-
-                // let whole_body =
-                //     Alloc::alloc(tycker, CoMatch { arms: arms_ }, self.inner);
-                // let tail = todo!();
-                // let algebra_ty = tycker.algebra_mo_carrier(&self.env, mo_ty, self.inner);
-                // (
-                //     Alloc::alloc(
-                //         &mut tycker.statics,
-                //         CoMatch { arms: vec![CoMatcher { dtor: dtor_binda, tail }] },
-                //         algebra_ty,
-                //     ),
-                //     mo_ty,
-                //     self.inner,
-                // )
-                todo!()
-            }
+                    let comatch = Alloc::alloc(tycker, CoMatch { arms: arms_compu }, self.inner);
+                    Ok(comatch)
+                },
+            )?,
         };
 
         // administrative
