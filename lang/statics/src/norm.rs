@@ -24,7 +24,7 @@ impl TypeId {
             | Type::Fill(_) => *self,
             | Type::Abs(abs) => {
                 let Abs(tpat, ty) = abs;
-                let (def, _) = tycker.extract_tpat(tpat);
+                let (def, _) = tpat.destruct(tycker);
                 if let Some(def) = def {
                     if let Some(_with) = env.get(&def) {
                         unreachable!()
@@ -34,7 +34,7 @@ impl TypeId {
                 if ty == ty_ {
                     *self
                 } else {
-                    Alloc::alloc(&mut tycker.statics, Abs(tpat, ty_), kd)
+                    Alloc::alloc(tycker, Abs(tpat, ty_), kd)
                 }
             }
             | Type::App(app) => {
@@ -44,7 +44,7 @@ impl TypeId {
                 if ty1 == ty1_ && ty2 == ty2_ {
                     *self
                 } else {
-                    Alloc::alloc(&mut tycker.statics, App(ty1_, ty2_), kd)
+                    Alloc::alloc(tycker, App(ty1_, ty2_), kd)
                 }
             }
             | Type::Thunk(_)
@@ -61,12 +61,12 @@ impl TypeId {
                 if ty1 == ty1_ && ty2 == ty2_ {
                     *self
                 } else {
-                    Alloc::alloc(&mut tycker.statics, Arrow(ty1_, ty2_), kd)
+                    Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd)
                 }
             }
             | Type::Forall(forall) => {
                 let Forall(tpat, ty) = forall;
-                let (def, _) = tycker.extract_tpat(tpat);
+                let (def, _) = tpat.destruct(tycker);
                 if let Some(def) = def {
                     if let Some(_with) = env.get(&def) {
                         unreachable!()
@@ -76,7 +76,7 @@ impl TypeId {
                 if ty == ty_ {
                     *self
                 } else {
-                    Alloc::alloc(&mut tycker.statics, Forall(tpat, ty_), kd)
+                    Alloc::alloc(tycker, Forall(tpat, ty_), kd)
                 }
             }
             | Type::Prod(prod) => {
@@ -86,12 +86,12 @@ impl TypeId {
                 if ty1 == ty1_ && ty2 == ty2_ {
                     *self
                 } else {
-                    Alloc::alloc(&mut tycker.statics, Prod(ty1_, ty2_), kd)
+                    Alloc::alloc(tycker, Prod(ty1_, ty2_), kd)
                 }
             }
             | Type::Exists(exists) => {
                 let Exists(tpat, ty) = exists;
-                let (def, _) = tycker.extract_tpat(tpat);
+                let (def, _) = tpat.destruct(tycker);
                 if let Some(def) = def {
                     if let Some(_with) = env.get(&def) {
                         unreachable!()
@@ -101,7 +101,7 @@ impl TypeId {
                 if ty == ty_ {
                     *self
                 } else {
-                    Alloc::alloc(&mut tycker.statics, Exists(tpat, ty_), kd)
+                    Alloc::alloc(tycker, Exists(tpat, ty_), kd)
                 }
             }
             | Type::Data(id) => {
@@ -124,7 +124,7 @@ impl TypeId {
                 } else {
                     let data_ = Data { arms: arms_.iter().cloned().collect() };
                     let id_ = tycker.statics.datas.lookup_or_alloc(arms_, data_);
-                    Alloc::alloc(&mut tycker.statics, id_, kd)
+                    Alloc::alloc(tycker, id_, kd)
                 }
             }
             | Type::CoData(id) => {
@@ -147,7 +147,7 @@ impl TypeId {
                 } else {
                     let codata_ = CoData { arms: arms_.iter().cloned().collect() };
                     let id_ = tycker.statics.codatas.lookup_or_alloc(arms_, codata_);
-                    Alloc::alloc(&mut tycker.statics, id_, kd)
+                    Alloc::alloc(tycker, id_, kd)
                 }
             }
         };
@@ -183,7 +183,7 @@ impl TypeId {
                 if ty1 == ty1_ {
                     self
                 } else {
-                    let app = Alloc::alloc(&mut tycker.statics, App(ty1_, ty2), kd);
+                    let app = Alloc::alloc(tycker, App(ty1_, ty2), kd);
                     app.normalize_k(tycker, kd)?
                 }
             }
@@ -278,14 +278,14 @@ impl TypeId {
             | ss::Type::Abs(abs) => {
                 // if f_ty is an abstraction, apply it
                 let ss::Abs(binder, body_ty) = abs;
-                let (def, _) = tycker.extract_tpat(binder);
+                let (def, _) = binder.destruct(tycker);
                 let body_ty_subst =
                     if let Some(def) = def { body_ty.subst(tycker, def, a_ty)? } else { body_ty };
                 body_ty_subst
             }
             | _ => {
                 // else, the app is already normalized
-                Alloc::alloc(&mut tycker.statics, ss::App(self, a_ty), kd)
+                Alloc::alloc(tycker, ss::App(self, a_ty), kd)
             }
         };
         Ok(res)
@@ -307,7 +307,9 @@ impl Tycker {
 }
 
 impl TypeId {
-    pub fn application_normal_form_k(&self, tycker: &mut Tycker) -> ResultKont<(TypeId, Vec<TypeId>)> {
+    pub fn application_normal_form_k(
+        &self, tycker: &mut Tycker,
+    ) -> ResultKont<(TypeId, Vec<TypeId>)> {
         let res = self.application_normal_form(tycker);
         tycker.err_p_to_k(res)
     }
@@ -317,7 +319,8 @@ impl TypeId {
             | Type::App(app_ty) => {
                 let App(f_ty, a_ty) = app_ty;
                 let (f_ty, mut a_tys) = f_ty.application_normal_form(tycker)?;
-                let a_ty = a_ty.normalize(tycker, tycker.statics.annotations_type[&a_ty].clone())?;
+                let a_ty =
+                    a_ty.normalize(tycker, tycker.statics.annotations_type[&a_ty].clone())?;
                 a_tys.push(a_ty);
                 (f_ty, a_tys)
             }

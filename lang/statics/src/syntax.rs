@@ -107,30 +107,60 @@ mod impls_identifiers {
                 | PatAnnId::Value(pat, _) => PatId::Value(pat),
             }
         }
-        pub fn mk_hole(statics: &mut StaticsArena, ann: AnnId) -> Self {
+        pub fn mk_hole(tycker: &mut Tycker, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(statics, Ann { tm: Hole, ty: kd }, kd);
+                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty: kd }, kd);
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(statics, Ann { tm: Hole, ty }, ty);
+                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty }, ty);
                     PatAnnId::Value(tm, ty)
                 }
             }
         }
-        pub fn mk_var(statics: &mut StaticsArena, def: DefId, ann: AnnId) -> Self {
+        pub fn mk_var(tycker: &mut Tycker, def: DefId, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(statics, def, kd);
+                    let tm = Alloc::alloc(tycker, def, kd);
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(statics, def, ty);
+                    let tm = Alloc::alloc(tycker, def, ty);
                     PatAnnId::Value(tm, ty)
                 }
+            }
+        }
+        pub fn as_type(self) -> (TPatId, KindId) {
+            match self {
+                | PatAnnId::Type(pat, kd) => (pat, kd),
+                | PatAnnId::Value(_, _) => unreachable!(),
+            }
+        }
+        pub fn as_value(self) -> (VPatId, TypeId) {
+            match self {
+                | PatAnnId::Value(pat, ty) => (pat, ty),
+                | PatAnnId::Type(_, _) => unreachable!(),
+            }
+        }
+        pub fn try_as_type(
+            self, tycker: &mut Tycker, err: TyckError,
+            blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<(TPatId, KindId)> {
+            match self {
+                | PatAnnId::Type(pat, kd) => Ok((pat, kd)),
+                | PatAnnId::Value(_, _) => tycker.err_k(err, blame),
+            }
+        }
+        pub fn try_as_value(
+            self, tycker: &mut Tycker, err: TyckError,
+            blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<(VPatId, TypeId)> {
+            match self {
+                | PatAnnId::Value(pat, ty) => Ok((pat, ty)),
+                | PatAnnId::Type(_, _) => tycker.err_k(err, blame),
             }
         }
     }

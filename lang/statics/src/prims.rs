@@ -17,15 +17,15 @@ impl Tycker {
     pub fn thunk_app(&mut self, env: &ss::Env<ss::AnnId>, arg: ss::TypeId) -> ss::TypeId {
         let thunk = self.thunk(env);
         let vtype = self.vtype(env);
-        Alloc::alloc(&mut self.statics, ss::App(thunk, arg), vtype)
+        Alloc::alloc(self, ss::App(thunk, arg), vtype)
     }
     pub fn thunk_app_hole(&mut self, env: &ss::Env<ss::AnnId>, site: su::TermId) -> ss::TypeId {
         let ss::AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
         let fill = self.statics.fills.alloc(site);
         let ctype = self.ctype(env);
-        let hole = Alloc::alloc(&mut self.statics, fill, ctype);
+        let hole = Alloc::alloc(self, fill, ctype);
         let vtype = self.vtype(env);
-        let app = Alloc::alloc(&mut self.statics, ss::App(ty, hole), vtype);
+        let app = Alloc::alloc(self, ss::App(ty, hole), vtype);
         app
     }
     pub fn ret(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
@@ -36,9 +36,9 @@ impl Tycker {
         let ss::AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
         let fill = self.statics.fills.alloc(site);
         let vtype = self.vtype(env);
-        let hole = Alloc::alloc(&mut self.statics, fill, vtype);
+        let hole = Alloc::alloc(self, fill, vtype);
         let ctype = self.ctype(env);
-        let app = Alloc::alloc(&mut self.statics, ss::App(ty, hole), ctype);
+        let app = Alloc::alloc(self, ss::App(ty, hole), ctype);
         app
     }
     pub fn unit(&mut self, env: &ss::Env<ss::AnnId>) -> ss::TypeId {
@@ -66,7 +66,7 @@ impl Tycker {
     pub fn monad_mo(&mut self, env: &ss::Env<ss::AnnId>, mo: ss::TypeId) -> ss::TypeId {
         let ss::AnnId::Type(monad) = env[self.prim.monad.get()] else { unreachable!() };
         let ctype = self.ctype(env);
-        Alloc::alloc(&mut self.statics, ss::App(monad, mo), ctype)
+        Alloc::alloc(self, ss::App(monad, mo), ctype)
     }
     /// generates `Algebra M R` where:
     /// 1. M is `mo` of kind `VType -> CType`
@@ -76,9 +76,9 @@ impl Tycker {
     ) -> ss::TypeId {
         let ss::AnnId::Type(algebra) = env[self.prim.algebra.get()] else { unreachable!() };
         let ctype = self.ctype(env);
-        let algebra_mo_kd = Alloc::alloc(&mut self.statics, ss::Arrow(ctype, ctype), ());
-        let algebra_mo = Alloc::alloc(&mut self.statics, ss::App(algebra, mo), algebra_mo_kd);
-        Alloc::alloc(&mut self.statics, ss::App(algebra_mo, carrier), ctype)
+        let algebra_mo_kd = Alloc::alloc(self, ss::Arrow(ctype, ctype), ());
+        let algebra_mo = Alloc::alloc(self, ss::App(algebra, mo), algebra_mo_kd);
+        Alloc::alloc(self, ss::App(algebra_mo, carrier), ctype)
     }
 }
 
@@ -90,7 +90,7 @@ impl Tycker {
             | ss::AnnId::Kind(kd) => kd,
             | ss::AnnId::Set | ss::AnnId::Type(_) => unreachable!(),
         };
-        let ty = Alloc::alloc(&mut self.statics, prim, kd);
+        let ty = Alloc::alloc(self, prim, kd);
         self.statics.annotations_var.insert(def, kd.into());
         env.env += (def, ty.into());
         Ok(env)
@@ -105,12 +105,12 @@ impl Tycker {
                 // the alias head is a internal type; unless it's VType or CType
                 match internal {
                     | su::Internal::VType => {
-                        let kd = Alloc::alloc(&mut self.statics, ss::VType, ());
+                        let kd = Alloc::alloc(self, ss::VType, ());
                         self.statics.annotations_var.insert(def, ss::AnnId::Set);
                         env.env += (def, kd.into());
                     }
                     | su::Internal::CType => {
-                        let kd = Alloc::alloc(&mut self.statics, ss::CType, ());
+                        let kd = Alloc::alloc(self, ss::CType, ());
                         self.statics.annotations_var.insert(def, ss::AnnId::Set);
                         env.env += (def, kd.into());
                     }

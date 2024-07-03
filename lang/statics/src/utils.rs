@@ -1,17 +1,4 @@
 use crate::*;
-use ss::*;
-
-impl Tycker {
-    pub fn extract_tpat(&mut self, tpat: TPatId) -> (Option<DefId>, KindId) {
-        match self.statics.tpats[&tpat].clone() {
-            | TypePattern::Hole(Ann { tm: Hole, ty: kd }) => (None, kd),
-            | TypePattern::Var(def) => {
-                let AnnId::Kind(kd) = self.statics.annotations_var[&def] else { unreachable!() };
-                (Some(def), kd)
-            }
-        }
-    }
-}
 
 pub trait SyntacticallyUsed {
     fn syntactically_used(&self, tycker: &mut Tycker) -> bool;

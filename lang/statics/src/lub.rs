@@ -51,11 +51,11 @@ impl Lub for KindId {
             | (_, Kind::Fill(rhs)) => fill_kd(tycker, rhs, self)?,
             | (Kind::Fill(lhs), _) => fill_kd(tycker, lhs, other)?,
             | (Kind::VType(VType), Kind::VType(VType)) => {
-                let kd = Alloc::alloc(&mut tycker.statics, VType, ());
+                let kd = Alloc::alloc(tycker, VType, ());
                 kd
             }
             | (Kind::CType(CType), Kind::CType(CType)) => {
-                let kd = Alloc::alloc(&mut tycker.statics, CType, ());
+                let kd = Alloc::alloc(tycker, CType, ());
                 kd
             }
             | (Kind::Arrow(lhs), Kind::Arrow(rhs)) => {
@@ -63,7 +63,7 @@ impl Lub for KindId {
                 let Arrow(rin, rout) = rhs;
                 let kd_in = lin.lub(rin, tycker)?;
                 let kd_out = lout.lub(rout, tycker)?;
-                let kd = Alloc::alloc(&mut tycker.statics, Arrow(kd_in, kd_out), ());
+                let kd = Alloc::alloc(tycker, Arrow(kd_in, kd_out), ());
                 kd
             }
             | (Kind::VType(_), _) | (Kind::CType(_), _) | (Kind::Arrow(_), _) => {
@@ -154,15 +154,15 @@ impl Debruijn {
                 std::panic::Location::caller(),
             )?,
             | (Type::Abs(Abs(lpat, lbody)), Type::Abs(Abs(rpat, rbody))) => {
-                let (ldef, lkd) = tycker.extract_tpat(lpat);
-                let (rdef, rkd) = tycker.extract_tpat(rpat);
+                let (ldef, lkd) = lpat.destruct(tycker);
+                let (rdef, rkd) = rpat.destruct(tycker);
                 let _kd = Lub::lub(lkd, rkd, tycker)?;
                 let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
                 if body == lbody {
                     lhs_id
                 } else {
                     let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let abs = Alloc::alloc(&mut tycker.statics, Abs(lpat, body), kd);
+                    let abs = Alloc::alloc(tycker, Abs(lpat, body), kd);
                     abs
                 }
             }
@@ -177,7 +177,7 @@ impl Debruijn {
                     lhs_id
                 } else {
                     let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let app = Alloc::alloc(&mut tycker.statics, App(f, a), kd);
+                    let app = Alloc::alloc(tycker, App(f, a), kd);
                     app.normalize(tycker, kd)?
                 }
             }
@@ -227,7 +227,7 @@ impl Debruijn {
                     lhs_id
                 } else {
                     let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let arrow = Alloc::alloc(&mut tycker.statics, Arrow(a, b), kd);
+                    let arrow = Alloc::alloc(tycker, Arrow(a, b), kd);
                     arrow
                 }
             }
@@ -236,15 +236,15 @@ impl Debruijn {
                 std::panic::Location::caller(),
             )?,
             | (Type::Forall(Forall(lpat, lbody)), Type::Forall(Forall(rpat, rbody))) => {
-                let (ldef, lkd) = tycker.extract_tpat(lpat);
-                let (rdef, rkd) = tycker.extract_tpat(rpat);
+                let (ldef, lkd) = lpat.destruct(tycker);
+                let (rdef, rkd) = rpat.destruct(tycker);
                 let _kd = Lub::lub(lkd, rkd, tycker)?;
                 let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
                 if body == lbody {
                     lhs_id
                 } else {
                     let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let forall = Alloc::alloc(&mut tycker.statics, Forall(lpat, body), kd);
+                    let forall = Alloc::alloc(tycker, Forall(lpat, body), kd);
                     forall
                 }
             }
@@ -259,7 +259,7 @@ impl Debruijn {
                     lhs_id
                 } else {
                     let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let prod = Alloc::alloc(&mut tycker.statics, Prod(a, b), kd);
+                    let prod = Alloc::alloc(tycker, Prod(a, b), kd);
                     prod
                 }
             }
@@ -268,15 +268,15 @@ impl Debruijn {
                 std::panic::Location::caller(),
             )?,
             | (Type::Exists(Exists(lpat, lbody)), Type::Exists(Exists(rpat, rbody))) => {
-                let (ldef, lkd) = tycker.extract_tpat(lpat);
-                let (rdef, rkd) = tycker.extract_tpat(rpat);
+                let (ldef, lkd) = lpat.destruct(tycker);
+                let (rdef, rkd) = rpat.destruct(tycker);
                 let _kd = Lub::lub(lkd, rkd, tycker)?;
                 let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
                 if body == lbody {
                     lhs_id
                 } else {
                     let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let exists = Alloc::alloc(&mut tycker.statics, Exists(lpat, body), kd);
+                    let exists = Alloc::alloc(tycker, Exists(lpat, body), kd);
                     exists
                 }
             }
@@ -357,7 +357,7 @@ impl Debruijn {
 
 impl Lub for TypeId {
     type Out = TypeId;
-    
+
     /// We need to remember the definitions introduced by both sides.
     /// We did this by using Debruijn.
     fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
