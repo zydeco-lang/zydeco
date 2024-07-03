@@ -1200,7 +1200,7 @@ impl Tyck for SEnv<su::TermId> {
                     let switch = {
                         match switch {
                             | Switch::Ana(AnnId::Type(ty)) => {
-                                let thunk_app_ty = tycker.thunk_app(&self.env, ty);
+                                let thunk_app_ty = tycker.thunk_arg(&self.env, ty);
                                 Switch::Ana(thunk_app_ty.into())
                             }
                             | _ => switch,
@@ -1477,13 +1477,13 @@ impl Tyck for SEnv<su::TermId> {
             | Tm::Thunk(term) => {
                 let su::Thunk(body) = term;
                 let ana = match switch {
-                    | Switch::Syn => tycker.thunk_app_hole(&self.env, self.inner).into(),
+                    | Switch::Syn => tycker.thunk_hole(&self.env, self.inner).into(),
                     | Switch::Ana(ana) => ana,
                 };
                 let AnnId::Type(ana_ty) = ana else {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
-                let thunk_app_hole = tycker.thunk_app_hole(&self.env, body);
+                let thunk_app_hole = tycker.thunk_hole(&self.env, body);
                 let ty = Lub::lub_k(ana_ty, thunk_app_hole, tycker)?;
                 let ss::Type::App(thunk_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
                     unreachable!()
@@ -1495,7 +1495,7 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let thunk_app_body_ty = tycker.thunk_app(&self.env, body_ty);
+                let thunk_app_body_ty = tycker.thunk_arg(&self.env, body_ty);
                 let thunk = Alloc::alloc(tycker, ss::Thunk(body_out), thunk_app_body_ty);
                 TermAnnId::Value(thunk, thunk_app_body_ty)
             }
@@ -1505,7 +1505,7 @@ impl Tyck for SEnv<su::TermId> {
                     match switch {
                         | Switch::Syn => {
                             // if syn, then ana the body with thunk_app_hole
-                            let thunk_app_hole = tycker.thunk_app_hole(&self.env, body);
+                            let thunk_app_hole = tycker.thunk_hole(&self.env, body);
                             thunk_app_hole
                         }
                         | Switch::Ana(ana) => {
@@ -1521,7 +1521,7 @@ impl Tyck for SEnv<su::TermId> {
                             let ana_ty_kd = tycker.statics.annotations_type[&ana_ty].to_owned();
                             Lub::lub_k(ctype, ana_ty_kd, tycker)?;
                             // if ana, then ana the body with thunked body_ty
-                            tycker.thunk_app(&self.env, ana_ty)
+                            tycker.thunk_arg(&self.env, ana_ty)
                         }
                     }
                 };
@@ -1549,13 +1549,13 @@ impl Tyck for SEnv<su::TermId> {
             | Tm::Ret(term) => {
                 let su::Ret(body) = term;
                 let ana = match switch {
-                    | Switch::Syn => tycker.ret_app_hole(&self.env, self.inner).into(),
+                    | Switch::Syn => tycker.ret_hole(&self.env, self.inner).into(),
                     | Switch::Ana(ana) => ana,
                 };
                 let AnnId::Type(ana_ty) = ana else {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
-                let ret_app_hole = tycker.ret_app_hole(&self.env, self.inner);
+                let ret_app_hole = tycker.ret_hole(&self.env, self.inner);
                 let ty = Lub::lub_k(ana_ty, ret_app_hole, tycker)?;
                 let ss::Type::App(ret_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
                     unreachable!()
@@ -1567,11 +1567,7 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let ret_app_body_ty = {
-                    let ret_ty = tycker.ret(&self.env);
-                    let ctype = tycker.ctype(&self.env);
-                    Alloc::alloc(tycker, ss::App(ret_ty, body_ty), ctype)
-                };
+                let ret_app_body_ty = tycker.ret_arg(&self.env, body_ty);
                 let ret = Alloc::alloc(tycker, ss::Ret(body_out), ret_app_body_ty);
                 TermAnnId::Compu(ret, ret_app_body_ty)
             }
@@ -1579,7 +1575,7 @@ impl Tyck for SEnv<su::TermId> {
                 let su::Bind { binder, bindee, tail } = term;
                 // first, ana bindee with ret_app_hole, and we get a compu that should be ret_app_body_ty
                 let (bindee_out, bindee_ty) = {
-                    let ret_app_hole = tycker.ret_app_hole(&self.env, bindee);
+                    let ret_app_hole = tycker.ret_hole(&self.env, bindee);
                     let bindee_out_ann =
                         self.mk(bindee).tyck(tycker, Action::ana(ret_app_hole.into()))?;
                     bindee_out_ann.try_as_compu(

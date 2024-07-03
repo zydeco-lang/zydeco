@@ -1,6 +1,7 @@
 use crate::{syntax::*, *};
 use zydeco_utils::arena::ArenaAccess;
 
+/* ---------------------------------- Kind ---------------------------------- */
 impl Tycker {
     pub fn vtype(&mut self, env: &Env<AnnId>) -> KindId {
         let AnnId::Kind(kd) = env[self.prim.vtype.get()] else { unreachable!() };
@@ -10,36 +11,42 @@ impl Tycker {
         let AnnId::Kind(kd) = env[self.prim.ctype.get()] else { unreachable!() };
         kd
     }
+}
+
+/* ---------------------------------- Type ---------------------------------- */
+impl Tycker {
     pub fn thunk(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
         ty
     }
-    pub fn thunk_app(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
+    /// generates `Thunk B`
+    pub fn thunk_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
         let thunk = self.thunk(env);
         let vtype = self.vtype(env);
         Alloc::alloc(self, App(thunk, arg), vtype)
     }
-    pub fn thunk_app_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
-        let AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
+    /// generates `Thunk _`
+    pub fn thunk_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
         let fill = self.statics.fills.alloc(site);
         let ctype = self.ctype(env);
         let hole = Alloc::alloc(self, fill, ctype);
-        let vtype = self.vtype(env);
-        let app = Alloc::alloc(self, App(ty, hole), vtype);
-        app
+        self.thunk_arg(env, hole)
     }
     pub fn ret(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
         ty
     }
-    pub fn ret_app_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
-        let AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
+    /// generates `Ret A`
+    pub fn ret_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
+        let ret = self.ret(env);
+        let ctype = self.ctype(env);
+        Alloc::alloc(self, App(ret, arg), ctype)
+    }
+    pub fn ret_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
         let fill = self.statics.fills.alloc(site);
         let vtype = self.vtype(env);
         let hole = Alloc::alloc(self, fill, vtype);
-        let ctype = self.ctype(env);
-        let app = Alloc::alloc(self, App(ty, hole), ctype);
-        app
+        self.ret_arg(env, hole)
     }
     pub fn unit(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.unit.get()] else { unreachable!() };
