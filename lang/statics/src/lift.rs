@@ -1,39 +1,106 @@
+//! The module describes algebra translation, a relative monad overloading mechanism in Zydeco, decomposed into four parts:
+//! 
+//! 1. The signature generation [`SEnv<KindId>::signature`] of a kind
+//! 2. The type translation [`SEnv<TypeId>::lift`] of a type and the monad type
+//! 3. The algebra generation [`SEnv<TypeId>::algebra`] of a type given the monad impl. as well as certain algebra impl.'s
+//! 4. The term translation [`SEnv<ValueId>::lift`] and [`SEnv<CompuId>::lift`] of a term given the monad impl. as well as certain algebra impl.'s
+//! 
+//! Most of the them are easy to follow, and they are documented function-wise. Browse through if you are interested.
+//! 
+//! The algebra generation is to my knowledge the most complex part of the four, especially the forall part.
+//! So here is the mechanism of forall algebra generation with examples.
+//!
+//! Base cases:
+//!
+//! ```zydeco
+//! AlgT(forall (Y: VType) . S Y) : Algebra M (forall (Y: VType) . U Top -> S Y)
+//! AlgT(forall (Y: CType) . S Y) : Algebra M (forall (Y: CType) . U (Algebra M Y) -> S Y)
+//! ```
+//!
+//! The first case, forall with a value type argument, has a trivial computation `Top` as its algebra.
+//! It will never get called, because value types have no algebra.
+//! However, we do need to construct and pass in the trivial algebra.
+//! The algebra generated is also trivial:
+//!
+//! ```zydeco
+//! comatch .bindA X m f ->
+//!   Alg(S Y) .bindA X m { fn x -> ! f x top }
+//! end
+//! ```
+//!
+//! where
+//!
+//! ```zydeco
+//! codata Top where end
+//! def top: U Top = { comatch end } end
+//! ```
+//!
+//! The second case, forall with a computation type argument, has a computation `Algebra M Y` as its algebra.
+//! The algebra generated for it is:
+//!
+//! ```zydeco
+//! comatch .bindA X m f -> fn Y algY ->
+//!   // Alg(S Y): Algebra M (S Y)
+//!   Alg(S Y) .bindA X m { fn x -> ! f x Y algY }
+//! end
+//! ```
+//!
+//! Here is an example where `S = Int -> Y`:
+//!
+//! ```zydeco
+//! Alg(forall (Y: CType) . Int -> Y) : Algebra M (forall (Y: CType) . U (Algebra M Y) -> Int -> Y)
+//! ```
+//!
+//! Given the implemtation of `Alg(Int -> Y)`:
+//!
+//! ```zydeco
+//! comatch .bindA X m f -> fn i ->
+//!   Alg(Y) .bindA X m { fn x -> ! f x i }
+//! end
+//! ```
+//!
+//! By instantiating `Alg(Y)` to be `algY`:
+//!
+//! ```zydeco
+//! comatch .bindA X m f -> fn Y algY ->
+//!   fn i -> ! algY .bindA X m { fn x -> ! f x Y algY i }
+//! end
+//! ```
+//!
+//! To be general, we can write the algebra generation for forall as:
+//!
+//! ```zydeco
+//! AlgT(forall (Y: K) . S Y) : Algebra M (forall (Y: VType) . U (Sig(K)) -> S Y)
+//! ```
+//!
+//! where the signature generation `Sig(K)` is the type of algebra given the kind `K`.
+//! `Sig(K)` is defined in [SEnv<KindId>::signature].
+
 use crate::{syntax::*, *};
 
 impl SEnv<KindId> {
-    /// generate the algebra type for a kind by algebra passing style for higher order contravariant kinds
-    /// for value type `A`, return `A` itself, which is a value type;
-    /// for computation type `B`, return `Algebra M B`, which is a computation type;
-    /// for arrows, ...
-    pub fn algebra(&self, tycker: &mut Tycker, mo_ty: TypeId, ty: TypeId) -> ResultKont<TypeId> {
+    /// generate the type of algebra (signature) for a kind by algebra passing style for higher order contravariant kinds
+    /// for value type `A`, return `Top`
+    /// for computation type `B`, return `Algebra M B`
+    /// for arrow `fn Y -> S`, return `Sig`
+    pub fn signature(&self, tycker: &mut Tycker, mo_ty: TypeId, ty: TypeId) -> ResultKont<TypeId> {
         let ctype = tycker.ctype(&self.env);
         let res = match tycker.statics.kinds[&self.inner].to_owned() {
             | Kind::Fill(_) => unreachable!(),
-            | Kind::VType(VType) => ty,
+            | Kind::VType(VType) => {
+                // Todo: insert `Top`
+                todo!()
+            }
             | Kind::CType(CType) => tycker.algebra_mo_carrier(&self.env, mo_ty, ty),
             | Kind::Arrow(Arrow(a_kd, b_kd)) => {
                 let Some((tpat, body)) = ty.destruct_abs(tycker) else { unreachable!() };
                 let (tvar_a, _kd) = tpat.destruct_def(tycker);
-                let ty_a: TypeId = Alloc::alloc(tycker, tvar_a, a_kd);
-                let alg_a = self.mk(a_kd).algebra(tycker, mo_ty, ty_a)?;
-                // check the kind of `alg_a`
-                let alg_a_kd = tycker.statics.annotations_type[&alg_a].to_owned();
-                match tycker.statics.kinds[&alg_a_kd] {
-                    | Kind::Fill(_) | Kind::Arrow(_) => unreachable!(),
-                    | Kind::VType(VType) => self.mk(b_kd).algebra(tycker, mo_ty, body)?,
-                    | Kind::CType(CType) => {
-                        let thunk_alg_a = tycker.thunk_app(&self.env, alg_a);
-                        let alg_b = self.mk(b_kd).algebra(tycker, mo_ty, body)?;
-                        let alg_b_kd = tycker.statics.annotations_type[&alg_b].to_owned();
-                        match tycker.statics.kinds[&alg_b_kd] {
-                            | Kind::Fill(_) | Kind::Arrow(_) => unreachable!(),
-                            | Kind::VType(VType) => alg_b,
-                            | Kind::CType(CType) => {
-                                Alloc::alloc(tycker, Arrow(thunk_alg_a, alg_b), ctype)
-                            }
-                        }
-                    }
-                }
+                assert!(Lub::lub(a_kd, _kd, tycker).is_ok(), "input kind mismatch");
+                let ty_a = Alloc::alloc(tycker, tvar_a, a_kd);
+                let alg_a = self.mk(a_kd).signature(tycker, mo_ty, ty_a)?;
+                let thunk_alg_a = tycker.thunk_app(&self.env, alg_a);
+                let alg_b = self.mk(b_kd).signature(tycker, mo_ty, body)?;
+                Alloc::alloc(tycker, Arrow(thunk_alg_a, alg_b), ctype)
             }
         };
         Ok(res)
@@ -471,6 +538,7 @@ impl SEnv<VPatId> {
 }
 
 impl SEnv<ValueId> {
+    /// Lift a value term by applying congruence rules. Boring.
     pub fn lift(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
         algs: Vec<(ValueId, TypeId, TypeId)>,
@@ -526,6 +594,10 @@ impl SEnv<ValueId> {
 }
 
 impl SEnv<CompuId> {
+    /// Lift a computation term by applying congruence rules, but reinterpret `ret` and `do`.
+    /// Slightly more interesting.
+    /// 
+    /// Reinterpret `ret` as monad return and `do` as its tail's algebra.
     pub fn lift(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
         algs: Vec<(ValueId, TypeId, TypeId)>,

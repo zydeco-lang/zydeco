@@ -40,26 +40,26 @@ end
 
 def fn bind_forall_ctype
   (M: VType -> CType)
-  (B: CType -> CType) (algB: U (forall (Y: CType) . U (Algebra M Y) -> Algebra M (B Y)))
-: Algebra M (forall (Y: CType) . U (Algebra M Y) -> B Y) =
+  (S: CType -> CType) (algS: U (forall (Y: CType) . U (Algebra M Y) -> Algebra M (S Y)))
+: Algebra M (forall (Y: CType) . U (Algebra M Y) -> S Y) =
   comatch
-  | .bindA X (m: U (M X)) (f: U (X -> (forall (Y: CType) . U (Algebra M Y) -> B Y))) ->
+  | .bindA X (m: U (M X)) (f: U (X -> (forall (Y: CType) . U (Algebra M Y) -> S Y))) ->
     comatch Y algY ->
-      ! algB Y algY .bindA X m { fn a -> ! f a Y algY }
+      ! algS Y algY .bindA X m { fn a -> ! f a Y algY }
     end
   end
 end
 
 def fn bind_forall_ctype_constructor
   (M: VType -> CType)
-  (B: (CType -> CType) -> CType)
-  (algB: U (forall (Y: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (Y Z)) -> Algebra M (B Y)))
-: Algebra M (forall (Y: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (Y Z)) -> B Y) =
+  (S: (CType -> CType) -> CType)
+  (algS: U (forall (F: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (F Z)) -> Algebra M (S F)))
+: Algebra M (forall (F: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (F Z)) -> S F) =
   comatch
   | .bindA X (m: U (M X))
-    (f: U (X -> (forall (Y: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (Y Z)) -> B Y))) ->
-    comatch Y Z algZYZ ->
-      ! algB Y Z algZYZ .bindA X m { fn a -> ! f a Y Z algZYZ }
+    (f: U (X -> (forall (F: CType -> CType) (Z: CType) . U (U (Algebra M Z) -> Algebra M (F Z)) -> S F))) ->
+    comatch F Z algZFZ ->
+      ! algS F Z algZFZ .bindA X m { fn a -> ! f a F Z algZFZ }
     end
   end
 end
