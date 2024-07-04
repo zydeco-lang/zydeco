@@ -283,71 +283,49 @@ impl SEnv<TypeId> {
         let (head, args) = self_ty.destruct_type_app_nf_k(tycker)?;
         if args.len() > 0 {
             let res = match tycker.statics.types[&head].to_owned() {
-                | Type::Ret(RetTy) => {
-                    assert!(args.len() == 1, "Ret should have exactly one argument");
-                    let ty_a = args.into_iter().next().unwrap();
+                | Type::Ret(RetTy) => gen_algebra_template(
+                    &self.env,
+                    tycker,
+                    mo_ty,
+                    self_ty,
+                    |env, tycker, AlgebraBodyArgs { ty_x, val_m, val_f }| {
+                        assert!(args.len() == 1, "Ret should have exactly one argument");
+                        let ty_a = args.into_iter().next().unwrap();
 
-                    // M A
-                    let mo_a_ty = Alloc::alloc(tycker, App(mo_ty, ty_a), ctype);
+                        // M A
+                        let mo_a_ty = Alloc::alloc(tycker, App(mo_ty, ty_a), ctype);
 
-                    // what we want to generate is:
-                    // ```
-                    // comatch
-                    //   | .bindA -> fn X m f ->
-                    //   ! mo .bind X A m f
-                    // end
-                    // ```
+                        // what we want to generate is:
+                        // ```
+                        // comatch
+                        //   | .bindA -> fn X m f ->
+                        //   ! mo .bind X A m f
+                        // end
+                        // ```
 
-                    // X
-                    let tvar_x = Alloc::alloc(tycker, VarName("X".to_string()), vtype.into());
-                    let tpat_x: TPatId = Alloc::alloc(tycker, tvar_x, vtype);
-                    let ty_x = Alloc::alloc(tycker, tvar_x, vtype);
-                    let abst_x = Alloc::alloc(tycker, tvar_x, vtype);
-                    let ty_abst_x = Alloc::alloc(tycker, abst_x, ctype);
+                        // whole_body = `! mo .bind X A m f`
 
-                    // m
-                    let m_ty = {
-                        let ty_mo_x = Alloc::alloc(tycker, App(mo_ty, ty_x), ctype);
-                        tycker.thunk_arg(&self.env, ty_mo_x)
-                    };
-                    let var_m = Alloc::alloc(tycker, VarName("m".to_string()), m_ty.into());
-                    let vpat_m: VPatId = Alloc::alloc(tycker, var_m, m_ty);
-                    let val_m: ValueId = Alloc::alloc(tycker, var_m, m_ty);
-
-                    // f
-                    let f_ty = {
-                        let arrs = Alloc::alloc(tycker, Arrow(ty_x, mo_a_ty), ctype);
-                        tycker.thunk_arg(&self.env, arrs)
-                    };
-                    let var_f = Alloc::alloc(tycker, VarName("f".to_string()), f_ty.into());
-                    let vpat_f: VPatId = Alloc::alloc(tycker, var_f, f_ty);
-                    let val_f: ValueId = Alloc::alloc(tycker, var_f, f_ty);
-
-                    // tail = `fn X m f -> ! mo .bind X A m f`
-
-                    let whole_body = {
-                        let monad_ty = tycker.monad_mo(&self.env, mo_ty);
+                        let monad_ty = tycker.monad_mo(env, mo_ty);
                         let force_mo = Alloc::alloc(tycker, Force(mo), monad_ty);
 
-                        let force_mo_bind_ty = gen_mo_bind_forall_forall(&self.env, tycker, mo_ty);
+                        let force_mo_bind_ty = gen_mo_bind_forall_forall(env, tycker, mo_ty);
                         let force_mo_bind = Alloc::alloc(
                             tycker,
                             Dtor(force_mo, dtor_bind.to_owned()),
                             force_mo_bind_ty,
                         );
 
-                        let force_mo_bind_x_ty = gen_mo_bind_forall(&self.env, tycker, mo_ty, ty_x);
+                        let force_mo_bind_x_ty = gen_mo_bind_forall(env, tycker, mo_ty, ty_x);
                         let force_mo_bind_x =
                             Alloc::alloc(tycker, App(force_mo_bind, ty_x), force_mo_bind_x_ty);
 
-                        let force_mo_bind_x_a_ty =
-                            gen_mo_bind_body(&self.env, tycker, mo_ty, ty_x, ty_a);
+                        let force_mo_bind_x_a_ty = gen_mo_bind_body(env, tycker, mo_ty, ty_x, ty_a);
                         let force_mo_bind_x_a =
                             Alloc::alloc(tycker, App(force_mo_bind_x, ty_a), force_mo_bind_x_a_ty);
                         let force_mo_bind_x_a_m_ty = {
                             // Thunk (X -> M A) -> M A
                             let x_arr_mo_a = Alloc::alloc(tycker, Arrow(ty_x, mo_a_ty), ctype);
-                            let thunk_x_arr_mo_a = tycker.thunk_arg(&self.env, x_arr_mo_a);
+                            let thunk_x_arr_mo_a = tycker.thunk_arg(env, x_arr_mo_a);
                             Alloc::alloc(tycker, Arrow(thunk_x_arr_mo_a, mo_a_ty), ctype)
                         };
                         let force_mo_bind_x_a_m = Alloc::alloc(
@@ -355,27 +333,11 @@ impl SEnv<TypeId> {
                             App(force_mo_bind_x_a, val_m),
                             force_mo_bind_x_a_m_ty,
                         );
-                        Alloc::alloc(tycker, App(force_mo_bind_x_a_m, val_f), mo_a_ty)
-                    };
-
-                    let fn_f_ty = Alloc::alloc(tycker, Arrow(f_ty, mo_a_ty), ctype);
-                    let fn_f = Alloc::alloc(tycker, Abs(vpat_f, whole_body), fn_f_ty);
-
-                    let fn_m_f_ty = Alloc::alloc(tycker, Arrow(m_ty, fn_f_ty), ctype);
-                    let fn_m_f = Alloc::alloc(tycker, Abs(vpat_m, fn_f), fn_m_f_ty);
-
-                    // a final touch with fn X
-                    let fn_m_f_ty_subst = fn_m_f_ty.subst_k(tycker, tvar_x, ty_abst_x)?;
-                    let ann = Alloc::alloc(tycker, Forall(abst_x, fn_m_f_ty_subst), ctype);
-                    let tail = Alloc::alloc(tycker, Abs(tpat_x, fn_m_f), ann);
-
-                    let algebra_ty = tycker.algebra_mo_carrier(&self.env, mo_ty, mo_a_ty);
-                    Alloc::alloc(
-                        tycker,
-                        CoMatch { arms: vec![CoMatcher { dtor: dtor_binda, tail }] },
-                        algebra_ty,
-                    )
-                }
+                        let whole_body =
+                            Alloc::alloc(tycker, App(force_mo_bind_x_a_m, val_f), mo_a_ty);
+                        Ok(whole_body)
+                    },
+                )?,
                 | Type::Abst(abst) => {
                     // Hack: unseal and check (?), a type level eta expansion
                     let Some(unsealed) = tycker.statics.seals.get(&abst).cloned() else {
@@ -908,10 +870,10 @@ fn gen_mo_bind_forall(
     let vtype = tycker.vtype(env);
     let ctype = tycker.ctype(env);
     let tvar_a_prime = Alloc::alloc(tycker, VarName("A'".to_string()), vtype.into());
-    let tpat_a_prime = Alloc::alloc(tycker, tvar_a_prime, vtype);
-    let ty_a_prime = Alloc::alloc(tycker, tvar_a_prime, vtype);
+    let abst_a_prime = Alloc::alloc(tycker, tvar_a_prime, vtype);
+    let ty_a_prime = Alloc::alloc(tycker, abst_a_prime, vtype);
     let forall_body = gen_mo_bind_body(env, tycker, mo_ty, a_ty, ty_a_prime);
-    Alloc::alloc(tycker, Forall(tpat_a_prime, forall_body), ctype)
+    Alloc::alloc(tycker, Forall(abst_a_prime, forall_body), ctype)
 }
 /// `forall (A: VType) . forall (A': VType) . Thunk (M A) -> Thunk (A -> M A') -> M A'`
 fn gen_mo_bind_forall_forall(env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId) -> TypeId {
@@ -920,10 +882,10 @@ fn gen_mo_bind_forall_forall(env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeI
     let vtype = tycker.vtype(env);
     let ctype = tycker.ctype(env);
     let tvar_a = Alloc::alloc(tycker, VarName("A".to_string()), vtype.into());
-    let tpat_a = Alloc::alloc(tycker, tvar_a, vtype);
-    let ty_a = Alloc::alloc(tycker, tvar_a, vtype);
+    let abst_a = Alloc::alloc(tycker, tvar_a, vtype);
+    let ty_a = Alloc::alloc(tycker, abst_a, vtype);
     let forall_body = gen_mo_bind_forall(env, tycker, mo_ty, ty_a);
-    Alloc::alloc(tycker, Forall(tpat_a, forall_body), ctype)
+    Alloc::alloc(tycker, Forall(abst_a, forall_body), ctype)
 }
 /// `Thunk (A -> R) -> R`
 fn gen_alg_thunk_a_r_r(
@@ -956,10 +918,10 @@ fn gen_alg_binda_forall(
     let vtype = tycker.vtype(env);
     let ctype = tycker.ctype(env);
     let tvar_a = Alloc::alloc(tycker, VarName("A".to_string()), vtype.into());
-    let tpat_a = Alloc::alloc(tycker, tvar_a, vtype);
-    let ty_a = Alloc::alloc(tycker, tvar_a, vtype);
+    let abst_a = Alloc::alloc(tycker, tvar_a, vtype);
+    let ty_a = Alloc::alloc(tycker, abst_a, vtype);
     let forall_body = gen_alg_binda_body(env, tycker, mo_ty, ty_a, carrier_ty);
-    Alloc::alloc(tycker, Forall(tpat_a, forall_body), ctype)
+    Alloc::alloc(tycker, Forall(abst_a, forall_body), ctype)
 }
 struct AlgebraBodyArgs {
     ty_x: TypeId,
