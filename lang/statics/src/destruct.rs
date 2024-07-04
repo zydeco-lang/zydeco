@@ -71,7 +71,24 @@ impl TypeId {
         };
         Ok(res)
     }
-    pub fn destruct_algebra(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
+    pub fn destruct_thunk_app(&self, tycker: &mut Tycker) -> Option<TypeId> {
+        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
+        let res = match tycker.statics.types[&f_ty].to_owned() {
+            | Type::Thunk(ThunkTy) => {
+                if a_tys.len() == 1 {
+                    let mut iter = a_tys.into_iter();
+                    iter.next()?
+                } else {
+                    None?
+                }
+            }
+            | _ => None?,
+        };
+        Some(res)
+    }
+    pub fn destruct_algebra(
+        &self, env: &Env<AnnId>, tycker: &mut Tycker,
+    ) -> Option<(TypeId, TypeId)> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         let res = match tycker.statics.types[&f_ty].to_owned() {
             | Type::Abst(abst) => {

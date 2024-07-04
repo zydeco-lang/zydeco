@@ -16,6 +16,36 @@ impl Alloc<DefId> for VarName {
     }
 }
 
+/* -------------------------------- Abstract -------------------------------- */
+
+impl Alloc<AbstId> for DefId {
+    type Ann = KindId;
+    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> AbstId {
+        let abst = tycker.statics.absts.alloc(());
+        tycker.statics.annotations_abst.insert(abst, ann);
+        tycker.statics.abst_hints.insert(abst, val);
+        abst
+    }
+}
+impl Alloc<AbstId> for Option<DefId> {
+    type Ann = KindId;
+    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> AbstId {
+        let abst = tycker.statics.absts.alloc(());
+        tycker.statics.annotations_abst.insert(abst, ann);
+        if let Some(def) = val {
+            tycker.statics.abst_hints.insert(abst, def);
+        }
+        abst
+    }
+}
+impl Alloc<AbstId> for TPatId {
+    type Ann = ();
+    fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> AbstId {
+        let (def, kd) = val.destruct(tycker);
+        Alloc::alloc(tycker, def, kd)
+    }
+}
+
 /* ---------------------------------- Kind ---------------------------------- */
 
 impl Alloc<KindId> for Kind {

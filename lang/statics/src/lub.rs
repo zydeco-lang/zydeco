@@ -1,4 +1,5 @@
 use crate::{syntax::*, *};
+use derive_more::From;
 use std::collections::HashMap;
 
 /// A type that can be joined with another type, producing their least upper bound.
@@ -76,26 +77,47 @@ impl Lub for KindId {
     }
 }
 
+#[derive(From, Clone, Copy, Hash, PartialEq, Eq, Debug)]
+pub enum BinderId {
+    Var(DefId),
+    Abst(AbstId),
+}
+
 #[derive(Clone)]
 struct Debruijn {
     level: usize,
-    lhs: HashMap<DefId, usize>,
-    rhs: HashMap<DefId, usize>,
+    lhs: HashMap<BinderId, usize>,
+    rhs: HashMap<BinderId, usize>,
 }
 
 impl Debruijn {
     fn new() -> Self {
         Self { level: 0, lhs: HashMap::new(), rhs: HashMap::new() }
     }
-    fn insert(mut self, lhs: Option<DefId>, rhs: Option<DefId>) -> Self {
+    fn insert<T>(mut self, lhs: Option<T>, rhs: Option<T>) -> Self
+    where
+        T: Into<BinderId>,
+    {
         if let Some(lhs) = lhs {
-            self.lhs.insert(lhs, self.level);
+            self.lhs.insert(lhs.into(), self.level);
         }
         if let Some(rhs) = rhs {
-            self.rhs.insert(rhs, self.level);
+            self.rhs.insert(rhs.into(), self.level);
         }
         self.level += 1;
         self
+    }
+    fn lookup_lhs<T>(&self, lhs: T) -> Option<usize>
+    where
+        T: Into<BinderId>,
+    {
+        self.lhs.get(&lhs.into()).cloned()
+    }
+    fn lookup_rhs<T>(&self, rhs: T) -> Option<usize>
+    where
+        T: Into<BinderId>,
+    {
+        self.rhs.get(&rhs.into()).cloned()
     }
     fn lub(self, lhs_id: TypeId, rhs_id: TypeId, tycker: &mut Tycker) -> Result<TypeId> {
         {
@@ -134,7 +156,7 @@ impl Debruijn {
             | (_, Type::Fill(rhs)) => fill_ty(tycker, rhs, lhs_id)?,
             | (Type::Fill(lhs), _) => fill_ty(tycker, lhs, rhs_id)?,
             | (Type::Var(lhs), Type::Var(rhs)) => {
-                if self.lhs[&lhs] != self.rhs[&rhs] {
+                if self.lookup_lhs(lhs) != self.lookup_rhs(rhs) {
                     tycker.err(
                         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                         std::panic::Location::caller(),
@@ -143,7 +165,7 @@ impl Debruijn {
                 lhs_id
             }
             | (Type::Abst(lhs), Type::Abst(rhs)) => {
-                if lhs != rhs {
+                if self.lookup_lhs(lhs) != self.lookup_rhs(rhs) {
                     tycker.err(
                         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                         std::panic::Location::caller(),
@@ -241,16 +263,16 @@ impl Debruijn {
                 TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                 std::panic::Location::caller(),
             )?,
-            | (Type::Forall(Forall(lpat, lbody)), Type::Forall(Forall(rpat, rbody))) => {
-                let (ldef, lkd) = lpat.destruct(tycker);
-                let (rdef, rkd) = rpat.destruct(tycker);
+            | (Type::Forall(Forall(labst, lbody)), Type::Forall(Forall(rabst, rbody))) => {
+                let lkd = tycker.statics.annotations_abst[&labst].to_owned();
+                let rkd = tycker.statics.annotations_abst[&rabst].to_owned();
                 let _kd = Lub::lub(lkd, rkd, tycker)?;
-                let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
+                let body = self.insert(Some(labst), Some(rabst)).lub(lbody, rbody, tycker)?;
                 if body == lbody {
                     lhs_id
                 } else {
                     let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let forall = Alloc::alloc(tycker, Forall(lpat, body), kd);
+                    let forall = Alloc::alloc(tycker, Forall(labst, body), kd);
                     forall
                 }
             }
@@ -273,16 +295,16 @@ impl Debruijn {
                 TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                 std::panic::Location::caller(),
             )?,
-            | (Type::Exists(Exists(lpat, lbody)), Type::Exists(Exists(rpat, rbody))) => {
-                let (ldef, lkd) = lpat.destruct(tycker);
-                let (rdef, rkd) = rpat.destruct(tycker);
+            | (Type::Exists(Exists(labst, lbody)), Type::Exists(Exists(rabst, rbody))) => {
+                let lkd = tycker.statics.annotations_abst[&labst].to_owned();
+                let rkd = tycker.statics.annotations_abst[&rabst].to_owned();
                 let _kd = Lub::lub(lkd, rkd, tycker)?;
-                let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
+                let body = self.insert(Some(labst), Some(rabst)).lub(lbody, rbody, tycker)?;
                 if body == lbody {
                     lhs_id
                 } else {
                     let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let exists = Alloc::alloc(tycker, Exists(lpat, body), kd);
+                    let exists = Alloc::alloc(tycker, Exists(labst, body), kd);
                     exists
                 }
             }

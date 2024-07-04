@@ -68,12 +68,6 @@ impl TypeId {
             }
             | Type::Forall(forall) => {
                 let Forall(tpat, ty) = forall;
-                let (def, _) = tpat.destruct(tycker);
-                if let Some(def) = def {
-                    if let Some(_with) = env.get(&def) {
-                        unreachable!()
-                    }
-                }
                 let ty_ = ty.subst_env(tycker, env)?;
                 if ty == ty_ {
                     *self
@@ -93,12 +87,6 @@ impl TypeId {
             }
             | Type::Exists(exists) => {
                 let Exists(tpat, ty) = exists;
-                let (def, _) = tpat.destruct(tycker);
-                if let Some(def) = def {
-                    if let Some(_with) = env.get(&def) {
-                        unreachable!()
-                    }
-                }
                 let ty_ = ty.subst_env(tycker, env)?;
                 if ty == ty_ {
                     *self
@@ -163,6 +151,145 @@ impl TypeId {
     }
     pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> Result<TypeId> {
         self.subst_env(tycker, &Env::singleton(var, with.into()))
+    }
+}
+
+impl TypeId {
+    pub fn subst_abst_k(
+        &self, tycker: &mut Tycker, assign: (AbstId, TypeId),
+    ) -> ResultKont<TypeId> {
+        let res = self.subst_abst(tycker, assign);
+        tycker.err_p_to_k(res)
+    }
+    pub fn subst_abst(&self, tycker: &mut Tycker, assign: (AbstId, TypeId)) -> Result<TypeId> {
+        let kd = tycker.statics.annotations_type[self].clone();
+        let ty = tycker.statics.types[self].clone();
+        let ty = match ty {
+            | Type::Var(_) => *self,
+            | Type::Abst(abst) => {
+                let (abst_, with) = assign;
+                if abst == abst_ {
+                    with
+                } else {
+                    *self
+                }
+            }
+            // Todo: figure out what to do
+            | Type::Fill(_) => *self,
+            | Type::Abs(abs) => {
+                let Abs(tpat, ty) = abs;
+                let ty_ = ty.subst_abst(tycker, assign)?;
+                if ty == ty_ {
+                    *self
+                } else {
+                    Alloc::alloc(tycker, Abs(tpat, ty_), kd)
+                }
+            }
+            | Type::App(app) => {
+                let App(ty1, ty2) = app;
+                let ty1_ = ty1.subst_abst(tycker, assign)?;
+                let ty2_ = ty2.subst_abst(tycker, assign)?;
+                if ty1 == ty1_ && ty2 == ty2_ {
+                    *self
+                } else {
+                    Alloc::alloc(tycker, App(ty1_, ty2_), kd)
+                }
+            }
+            | Type::Thunk(_)
+            | Type::Ret(_)
+            | Type::Unit(_)
+            | Type::Int(_)
+            | Type::Char(_)
+            | Type::String(_)
+            | Type::OS(_) => *self,
+            | Type::Arrow(arr) => {
+                let Arrow(ty1, ty2) = arr;
+                let ty1_ = ty1.subst_abst(tycker, assign)?;
+                let ty2_ = ty2.subst_abst(tycker, assign)?;
+                if ty1 == ty1_ && ty2 == ty2_ {
+                    *self
+                } else {
+                    Alloc::alloc(tycker, Arrow(ty1_, ty2_), kd)
+                }
+            }
+            | Type::Forall(forall) => {
+                let Forall(tpat, ty) = forall;
+                let ty_ = ty.subst_abst(tycker, assign)?;
+                if ty == ty_ {
+                    *self
+                } else {
+                    Alloc::alloc(tycker, Forall(tpat, ty_), kd)
+                }
+            }
+            | Type::Prod(prod) => {
+                let Prod(ty1, ty2) = prod;
+                let ty1_ = ty1.subst_abst(tycker, assign)?;
+                let ty2_ = ty2.subst_abst(tycker, assign)?;
+                if ty1 == ty1_ && ty2 == ty2_ {
+                    *self
+                } else {
+                    Alloc::alloc(tycker, Prod(ty1_, ty2_), kd)
+                }
+            }
+            | Type::Exists(exists) => {
+                let Exists(tpat, ty) = exists;
+                let ty_ = ty.subst_abst(tycker, assign)?;
+                if ty == ty_ {
+                    *self
+                } else {
+                    Alloc::alloc(tycker, Exists(tpat, ty_), kd)
+                }
+            }
+            | Type::Data(id) => {
+                let arms = tycker.statics.datas.defs[&id].clone();
+                let mut unchanged = true;
+                let arms_ = arms
+                    .into_iter()
+                    .map(|(ctor, ty)| {
+                        let ty_ = ty.subst_abst(tycker, assign)?;
+                        if ty == ty_ {
+                            Ok((ctor, ty))
+                        } else {
+                            unchanged = false;
+                            Ok((ctor, ty_))
+                        }
+                    })
+                    .collect::<Result<im::Vector<_>>>()?;
+                if unchanged {
+                    *self
+                } else {
+                    let data_ = Data { arms: arms_.iter().cloned().collect() };
+                    let id_ = tycker.statics.datas.lookup_or_alloc(arms_, data_);
+                    Alloc::alloc(tycker, id_, kd)
+                }
+            }
+            | Type::CoData(id) => {
+                let arms = tycker.statics.codatas.defs[&id].clone();
+                let mut unchanged = true;
+                let arms_ = arms
+                    .into_iter()
+                    .map(|(dtor, ty)| {
+                        let ty_ = ty.subst_abst(tycker, assign)?;
+                        if ty == ty_ {
+                            Ok((dtor, ty))
+                        } else {
+                            unchanged = false;
+                            Ok((dtor, ty_))
+                        }
+                    })
+                    .collect::<Result<im::Vector<_>>>()?;
+                if unchanged {
+                    *self
+                } else {
+                    let codata_ = CoData { arms: arms_.iter().cloned().collect() };
+                    let id_ = tycker.statics.codatas.lookup_or_alloc(arms_, codata_);
+                    Alloc::alloc(tycker, id_, kd)
+                }
+            }
+        };
+        let kd = tycker.statics.annotations_type[&ty].clone();
+        let ty = ty.normalize(tycker, kd)?;
+        Ok(ty)
     }
 }
 

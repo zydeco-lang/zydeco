@@ -263,9 +263,11 @@ impl SEnv<TypeId> {
         // next, check if ty is among the carriers of algebras
         // if so, just return the corresponding algebra
         for alg in algs.iter().cloned() {
-            let alg_ty = tycker.statics.annotations_value[&alg];
-            // let carrier_ty = todo!();
-            let (_mo_ty, carrier_ty) = alg_ty.destruct_algebra(&self.env, tycker).unwrap();
+            let thunked_alg_ty = tycker.statics.annotations_value[&alg];
+            let Some(alg_ty) = thunked_alg_ty.destruct_thunk_app(tycker) else { unreachable!() };
+            let Some((_mo_ty, carrier_ty)) = alg_ty.destruct_algebra(&self.env, tycker) else {
+                tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
+            };
             if Lub::lub_inner(carrier_ty, self_ty, tycker).is_ok() {
                 let force_alg = {
                     let ann = tycker.algebra_mo_carrier(&self.env, mo_ty, carrier_ty);
@@ -298,8 +300,10 @@ impl SEnv<TypeId> {
 
                     // X
                     let tvar_x = Alloc::alloc(tycker, VarName("X".to_string()), vtype.into());
-                    let tpat_x = Alloc::alloc(tycker, tvar_x, vtype);
+                    let tpat_x: TPatId = Alloc::alloc(tycker, tvar_x, vtype);
                     let ty_x = Alloc::alloc(tycker, tvar_x, vtype);
+                    let abst_x = Alloc::alloc(tycker, tvar_x, vtype);
+                    let ty_abst_x = Alloc::alloc(tycker, abst_x, ctype);
 
                     // m
                     let m_ty = {
@@ -361,7 +365,8 @@ impl SEnv<TypeId> {
                     let fn_m_f = Alloc::alloc(tycker, Abs(vpat_m, fn_f), fn_m_f_ty);
 
                     // a final touch with fn X
-                    let ann = Alloc::alloc(tycker, Forall(tpat_x, fn_m_f_ty), ctype);
+                    let fn_m_f_ty_subst = fn_m_f_ty.subst_k(tycker, tvar_x, ty_abst_x)?;
+                    let ann = Alloc::alloc(tycker, Forall(abst_x, fn_m_f_ty_subst), ctype);
                     let tail = Alloc::alloc(tycker, Abs(tpat_x, fn_m_f), ann);
 
                     let algebra_ty = tycker.algebra_mo_carrier(&self.env, mo_ty, mo_a_ty);
@@ -493,8 +498,8 @@ impl SEnv<TypeId> {
                     //   AlgT(S Y) .bindA X m { fn x -> ! f x Y strY }
                     // end
                     // ```
-                    let Forall(tpat, body_ty) = forall_ty;
-                    let (tvar, y_kd) = tpat.destruct_def(tycker);
+                    let Forall(abst, body_ty) = forall_ty;
+                    let y_kd = tycker.statics.annotations_abst[&abst];
 
                     // `Y`
                     let tvar_y = Alloc::alloc(tycker, VarName("Y".to_string()), y_kd.into());

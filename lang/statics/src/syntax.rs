@@ -357,11 +357,11 @@ pub struct OSTy;
 
 /// `pi (x: A) -> B`
 #[derive(Clone, Debug)]
-pub struct Forall(pub TPatId, pub TypeId);
+pub struct Forall(pub AbstId, pub TypeId);
 
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
-pub struct Exists(pub TPatId, pub TypeId);
+pub struct Exists(pub AbstId, pub TypeId);
 
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -553,20 +553,6 @@ pub struct StaticsArena {
     pub pats: ArenaBijective<su::PatId, PatId>,
     pub terms: ArenaBijective<su::TermId, TermId>,
 
-    // the type of terms under the context it's type checked; "annotation"
-    /// annotations for variable definitions
-    pub annotations_var: ArenaAssoc<DefId, AnnId>,
-    /// kind annotations for type patterns
-    pub annotations_tpat: ArenaAssoc<TPatId, KindId>,
-    /// kind annotations for types
-    pub annotations_type: ArenaAssoc<TypeId, KindId>,
-    /// type annotations for value patterns
-    pub annotations_vpat: ArenaAssoc<VPatId, TypeId>,
-    /// type annotations for values
-    pub annotations_value: ArenaAssoc<ValueId, TypeId>,
-    /// type annotations for computations
-    pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
-
     /// arena for abstract types
     pub absts: ArenaDense<AbstId, ()>,
     /// the abstract types generated from sealed types
@@ -581,6 +567,22 @@ pub struct StaticsArena {
     pub datas: StructArena<DataId, im::Vector<(CtorName, TypeId)>, Data>,
     /// arena for `codata`
     pub codatas: StructArena<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
+
+    // the type of terms under the context it's type checked; "annotation"
+    /// annotations for variable definitions
+    pub annotations_var: ArenaAssoc<DefId, AnnId>,
+    /// annotations for abstract types
+    pub annotations_abst: ArenaAssoc<AbstId, KindId>,
+    /// kind annotations for type patterns
+    pub annotations_tpat: ArenaAssoc<TPatId, KindId>,
+    /// kind annotations for types
+    pub annotations_type: ArenaAssoc<TypeId, KindId>,
+    /// type annotations for value patterns
+    pub annotations_vpat: ArenaAssoc<VPatId, TypeId>,
+    /// type annotations for values
+    pub annotations_value: ArenaAssoc<ValueId, TypeId>,
+    /// type annotations for computations
+    pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
 }
 
 impl StaticsArena {
@@ -597,13 +599,6 @@ impl StaticsArena {
             pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),
 
-            annotations_var: ArenaAssoc::new(),
-            annotations_tpat: ArenaAssoc::new(),
-            annotations_type: ArenaAssoc::new(),
-            annotations_vpat: ArenaAssoc::new(),
-            annotations_value: ArenaAssoc::new(),
-            annotations_compu: ArenaAssoc::new(),
-
             absts: ArenaDense::new(alloc.alloc()),
             seals: ArenaAssoc::new(),
             abst_hints: ArenaAssoc::new(),
@@ -611,6 +606,14 @@ impl StaticsArena {
             solus: ArenaAssoc::new(),
             datas: StructArena::new(alloc),
             codatas: StructArena::new(alloc),
+
+            annotations_var: ArenaAssoc::new(),
+            annotations_abst: ArenaAssoc::new(),
+            annotations_tpat: ArenaAssoc::new(),
+            annotations_type: ArenaAssoc::new(),
+            annotations_vpat: ArenaAssoc::new(),
+            annotations_value: ArenaAssoc::new(),
+            annotations_compu: ArenaAssoc::new(),
         }
     }
 }

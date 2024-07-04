@@ -68,8 +68,11 @@ impl SyntacticallyUsed for ss::VPatId {
                 pat1.syntactically_used(tycker) || pat2.syntactically_used(tycker)
             }
             | Pat::TCons(pat) => {
-                let ss::Cons(pat1, pat2) = pat;
-                pat1.syntactically_used(tycker) || pat2.syntactically_used(tycker)
+                let ss::Cons(_pat1, pat2) = pat;
+                // Hack: assuming that we don't care whether the abstracted type is used
+                //       well, technically, it's not syntactic but semantic,
+                //       so indeed not syntactically used
+                pat2.syntactically_used(tycker)
             }
         }
     }
