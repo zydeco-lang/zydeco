@@ -93,16 +93,49 @@ impl TypeId {
         let res = match tycker.statics.types[&f_ty].to_owned() {
             | Type::Abst(abst) => {
                 let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
-                let Type::Abst(mo_real) = tycker.statics.types.get(&id).cloned()? else {
+                let Type::Abst(alg_real) = tycker.statics.types.get(&id).cloned()? else {
                     unreachable!()
                 };
-                if abst != mo_real {
-                    return None;
+                if abst != alg_real {
+                    None?;
                 }
                 let mut iter = a_tys.into_iter();
                 (iter.next()?, iter.next()?)
             }
             | _ => None?,
+        };
+        Some(res)
+    }
+    pub fn destruct_structure(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<Structure> {
+        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
+        let res = 'out: {
+            match tycker.statics.types[&f_ty].to_owned() {
+                | Type::Abst(abst) => {
+                    let AnnId::Type(id) = env[tycker.prim.top.get()] else { unreachable!() };
+                    let Type::Abst(top_real) = tycker.statics.types.get(&id).cloned()? else {
+                        unreachable!()
+                    };
+                    let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
+                    let Type::Abst(alg_real) = tycker.statics.types.get(&id).cloned()? else {
+                        unreachable!()
+                    };
+
+                    if abst == top_real {
+                        assert!(a_tys.is_empty());
+                        break 'out Structure::Top;
+                    }
+
+                    if abst == alg_real {
+                        let mut iter = a_tys.into_iter();
+                        let mo_ty = iter.next()?;
+                        let carrier_ty = iter.next()?;
+                        break 'out Structure::Algebra(mo_ty, carrier_ty);
+                    }
+
+                    None?
+                }
+                | _ => None?,
+            }
         };
         Some(res)
     }

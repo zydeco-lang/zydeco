@@ -191,6 +191,12 @@ pub enum MonadOrAlgebra {
     Algebra(TypeId, TypeId),
 }
 
+pub enum Structure {
+    Top,
+    Algebra(TypeId, TypeId),
+    // Arrow(Box<Structure>, Box<Structure>),
+}
+
 impl Tycker {
     /// If ty is `Thunk (Monad M)` or `Thunk (Algebra M R)`, returns `Some(Monad(M))` or `Some(Algebra(M, R))` respectively.
     pub fn monad_or_algebra(&self, env: &Env<AnnId>, ty: TypeId) -> Option<MonadOrAlgebra> {

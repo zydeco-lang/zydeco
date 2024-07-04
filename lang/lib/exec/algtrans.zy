@@ -42,16 +42,29 @@ def ! mo-thunk-arg (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
   end
 end
 
-// // test algebra generation for forall
-// def ! mo-id (E: VType) (mo: U (Monad (Exn E))) : forall (X: VType) . X -> Exn E X =
-//   with mo
-//   begin
-//     do _ <- ret 1;
-//     fn (X: VType) (a: X) -> ret a
-//   end
-// end
+// test algebra generation for forall vtype
+def ! mo-forallv (E: VType) (mo: U (Monad (Exn E))) : forall (X: VType) . U Top -> X -> Exn E X =
+  with mo
+  begin
+    do _ <- ret 1;
+    fn (X: VType) (a: X) -> ret a
+  end
+end
+
+// test algebra generation for forall ctype
+def ! mo-forallc (E: VType) (mo: U (Monad (Exn E))) : forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X =
+  with mo
+  begin
+    do _ <- ret 1;
+    fn (X: CType) (a: U X) -> ! a
+  end
+end
 
 main
-  ! exit 0
+  do i? <- ! mo-forallv String { ! mo-exn String } Int { comatch end } 0;
+  match i?
+  | +Left(e) -> ! exit 1
+  | +Right(i) -> ! exit i
+  end
 end
 

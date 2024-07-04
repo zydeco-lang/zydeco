@@ -110,7 +110,7 @@ pub enum SemValue {
     Literal(Literal),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SemCompu {
     Kont(RcCompu, Env<SemValue>, RcVPat),
     App(SemValue),

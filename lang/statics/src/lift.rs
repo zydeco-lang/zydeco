@@ -170,9 +170,15 @@ impl SEnv<TypeId> {
                 }
             }
             | Type::Forall(ty) => {
-                let Forall(tpat, body) = ty;
+                let Forall(abst, body) = ty;
+                let kd = tycker.statics.annotations_abst[&abst];
+                let abst_ty = Alloc::alloc(tycker, abst, kd);
+                let sig = self.mk(kd).signature(tycker, mo_ty, abst_ty)?;
+                let thunk_sig = tycker.thunk_arg(&self.env, sig);
                 let body_ = self.mk(body).lift(tycker, mo_ty)?;
-                Alloc::alloc(tycker, Type::Forall(Forall(tpat, body_)), ann)
+                let ctype = tycker.ctype(&self.env);
+                let str_body_ = Alloc::alloc(tycker, Arrow(thunk_sig, body_), ctype);
+                Alloc::alloc(tycker, Type::Forall(Forall(abst, str_body_)), ann)
             }
             | Type::Prod(ty) => {
                 let Prod(a, b) = ty;
@@ -185,13 +191,15 @@ impl SEnv<TypeId> {
                 }
             }
             | Type::Exists(ty) => {
-                let Exists(tpat, body) = ty;
+                let Exists(abst, body) = ty;
+                let kd = tycker.statics.annotations_abst[&abst];
+                let abst_ty = Alloc::alloc(tycker, abst, kd);
+                let sig = self.mk(kd).signature(tycker, mo_ty, abst_ty)?;
+                let thunk_sig = tycker.thunk_arg(&self.env, sig);
                 let body_ = self.mk(body).lift(tycker, mo_ty)?;
-                if body == body_ {
-                    self.inner
-                } else {
-                    Alloc::alloc(tycker, Type::Exists(Exists(tpat, body_)), ann)
-                }
+                let vtype = tycker.vtype(&self.env);
+                let str_body_ = Alloc::alloc(tycker, Prod(thunk_sig, body_), vtype);
+                Alloc::alloc(tycker, Type::Exists(Exists(abst, str_body_)), ann)
             }
             | Type::Data(id) => {
                 let mut arms_vec = im::Vector::new();
@@ -265,15 +273,28 @@ impl SEnv<TypeId> {
         for alg in algs.iter().cloned() {
             let thunked_alg_ty = tycker.statics.annotations_value[&alg];
             let Some(alg_ty) = thunked_alg_ty.destruct_thunk_app(tycker) else { unreachable!() };
-            let Some((_mo_ty, carrier_ty)) = alg_ty.destruct_algebra(&self.env, tycker) else {
+            let Some(structure) = alg_ty.destruct_structure(&self.env, tycker) else {
+                // Debug: print
+                {
+                    use crate::fmt::*;
+                    println!(
+                        "alg_ty: {}",
+                        alg_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                    );
+                }
                 tycker.err_k(TyckError::AlgebraGenerationFailure, std::panic::Location::caller())?
             };
-            if Lub::lub_inner(carrier_ty, self_ty, tycker).is_ok() {
-                let force_alg = {
-                    let ann = tycker.algebra_mo_carrier(&self.env, mo_ty, carrier_ty);
-                    Alloc::alloc(tycker, Force(alg), ann)
-                };
-                return Ok(force_alg);
+            match structure {
+                | Structure::Top => {}
+                | Structure::Algebra(_mo_ty, carrier_ty) => {
+                    if Lub::lub_inner(carrier_ty, self_ty, tycker).is_ok() {
+                        let force_alg = {
+                            let ann = tycker.algebra_mo_carrier(&self.env, mo_ty, carrier_ty);
+                            Alloc::alloc(tycker, Force(alg), ann)
+                        };
+                        return Ok(force_alg);
+                    }
+                }
             }
         }
 
