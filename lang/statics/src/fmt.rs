@@ -31,7 +31,7 @@ impl Ugly for KindId {
         let kd = &f.statics.kinds[self];
         match kd {
             | Kind::Fill(fill) => {
-                format!("[fill-kd {}]", fill.concise())
+                format!("[fill-kd {}]", fill.concise_inner())
             }
             | Kind::VType(VType) => "VType".to_string(),
             | Kind::CType(CType) => "CType".to_string(),
@@ -57,7 +57,7 @@ impl Ugly for TypeId {
             | Type::Var(def) => def.ugly(f),
             | Type::Abst(abst) => abst.ugly(f),
             | Type::Fill(fill) => {
-                format!("[fill-ty {}]", fill.concise())
+                format!("[fill-ty {}]", fill.concise_inner())
             }
             | Type::Abs(ty) => ty.ugly(f),
             | Type::App(ty) => ty.ugly(f),
@@ -155,11 +155,11 @@ impl Ugly for AbstId {
         };
         match sealed {
             | Some(_ty) => {
-                format!("{}[sealed {}]", hint, self.concise())
-                // format!("[sealed ({}) {}]", self.concise(), ty.ugly(f))
+                format!("{}[sealed {}]", hint, self.concise_inner())
+                // format!("[sealed ({}) {}]", self.concise_inner(), ty.ugly(f))
             }
             | None => {
-                format!("{}[abst {}]", hint, self.concise())
+                format!("{}[abst {}]", hint, self.concise_inner())
             }
         }
     }

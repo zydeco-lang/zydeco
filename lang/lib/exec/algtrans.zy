@@ -15,6 +15,17 @@ def ! mo-exn (E: VType) : Monad (Exn E) =
   end
 end
 
+def ! alg-exn-os (E: VType) : Algebra (Exn E) OS =
+  comatch
+  | .bindA X m f ->
+    do a? <- ! m;
+    match a?
+    | +Left(e) -> ! panic "error"
+    | +Right(a) -> ! f a
+    end
+  end
+end
+
 // test algebra generation for ret and bind
 def ! mo-return (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
   with mo
@@ -51,20 +62,31 @@ def ! mo-forallv (E: VType) (mo: U (Monad (Exn E))) : forall (X: VType) . U Top 
   end
 end
 
+// run it
+def ! _mo-forallv : OS =
+  do i? <- ! mo-forallv String { ! mo-exn String } Int { comatch end } 0;
+  match i?
+  | +Left(e) -> ! panic "error"
+  | +Right(i) -> ! exit i
+  end
+end
+
 // test algebra generation for forall ctype
 def ! mo-forallc (E: VType) (mo: U (Monad (Exn E))) : forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X =
   with mo
   begin
     do _ <- ret 1;
-    fn (X: CType) (a: U X) -> ! a
+    fn (X: CType) (b: U X) -> ! b
   end
 end
 
+// run it
+def ! _mo-forallc : OS =
+  ! mo-forallc String { ! mo-exn String } OS { ! alg-exn-os String } { ! exit 0 }
+end
+
 main
-  do i? <- ! mo-forallv String { ! mo-exn String } Int { comatch end } 0;
-  match i?
-  | +Left(e) -> ! exit 1
-  | +Right(i) -> ! exit i
-  end
+  // ! _mo-forallv
+  ! _mo-forallc
 end
 
