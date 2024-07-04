@@ -15,23 +15,23 @@ def ! mo-exn (E: VType) : Monad (Exn E) =
   end
 end
 
-// // test algebra generation for ret and bind
-// def ! mo-return (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
-//   with mo
-//   begin
-//     do a <- ret 1;
-//     ret a
-//   end
-// end
+// test algebra generation for ret and bind
+def ! mo-return (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
+  with mo
+  begin
+    do a <- ret 1;
+    ret a
+  end
+end
 
-// // test algebra generation for thunk
-// def ! mo-thunk (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
-//   with mo
-//   begin
-//     do _ <- ret 1;
-//     ! { ret 1 }
-//   end
-// end
+// test algebra generation for thunk
+def ! mo-thunk (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
+  with mo
+  begin
+    do _ <- ret 1;
+    ! { ret 1 }
+  end
+end
 
 // test algebra generation for thunk at argument position
 def ! mo-thunk-arg (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =

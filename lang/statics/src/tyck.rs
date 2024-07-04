@@ -2043,22 +2043,22 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                // Hack: make sure that the body is synthesizable
+                // .. and solve the body_ty so that we don't have holes
                 let (body_ty, fills) = body_ty.solution_k(tycker)?;
                 if fills.len() > 0 {
                     tycker
                         .err_k(TyckError::MissingSolution(fills), std::panic::Location::caller())?
                 }
 
-                // Debug: print
-                {
-                    use crate::fmt::*;
-                    println!(
-                        "body = {} : {}",
-                        body.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                        body_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                    );
-                }
+                // // Debug: print
+                // {
+                //     use crate::fmt::*;
+                //     println!(
+                //         "body = {} : {}",
+                //         body.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                //         body_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                //     );
+                // }
 
                 // and then lift it, performing algebra translation on type level
                 let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
