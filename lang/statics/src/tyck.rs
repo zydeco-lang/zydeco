@@ -2001,6 +2001,7 @@ impl Tyck for SEnv<su::TermId> {
                     //     alg, alg_ty_mo_arg, alg_ty_carrier_arg
                     // );
                 }
+                let algs = algs.into_iter().map(|(alg, _, _)| (alg)).collect();
 
                 // then we deal with the imports
                 // let mut imports_ = Vec::new();

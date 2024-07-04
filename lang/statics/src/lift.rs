@@ -23,8 +23,8 @@
 //! The algebra generated is also trivial:
 //!
 //! ```zydeco
-//! comatch .bindA X m f ->
-//!   Alg(S Y) .bindA X m { fn x -> ! f x top }
+//! comatch .bindA X m f Y algY ->
+//!   AlgT(S Y) .bindA X m { fn x -> ! f x Y algY }
 //! end
 //! ```
 //!
@@ -35,31 +35,33 @@
 //! def top: U Top = { comatch end } end
 //! ```
 //!
+//! and `algY` is the trivial algebra `top`.
+//!
 //! The second case, forall with a computation type argument, has a computation `Algebra M Y` as its algebra.
 //! The algebra generated for it is:
 //!
 //! ```zydeco
 //! comatch .bindA X m f -> fn Y algY ->
-//!   // Alg(S Y): Algebra M (S Y)
-//!   Alg(S Y) .bindA X m { fn x -> ! f x Y algY }
+//!   // AlgT(S Y): Algebra M (S Y)
+//!   AlgT(S Y) .bindA X m { fn x -> ! f x Y algY }
 //! end
 //! ```
 //!
 //! Here is an example where `S = Int -> Y`:
 //!
 //! ```zydeco
-//! Alg(forall (Y: CType) . Int -> Y) : Algebra M (forall (Y: CType) . U (Algebra M Y) -> Int -> Y)
+//! AlgT(forall (Y: CType) . Int -> Y) : Algebra M (forall (Y: CType) . U (Algebra M Y) -> Int -> Y)
 //! ```
 //!
-//! Given the implemtation of `Alg(Int -> Y)`:
+//! Given the implemtation of `AlgT(Int -> Y)`:
 //!
 //! ```zydeco
 //! comatch .bindA X m f -> fn i ->
-//!   Alg(Y) .bindA X m { fn x -> ! f x i }
+//!   AlgT(Y) .bindA X m { fn x -> ! f x i }
 //! end
 //! ```
 //!
-//! By instantiating `Alg(Y)` to be `algY`:
+//! By instantiating `AlgT(Y)` to be `algY`:
 //!
 //! ```zydeco
 //! comatch .bindA X m f -> fn Y algY ->
@@ -75,6 +77,14 @@
 //!
 //! where the signature generation `Sig(K)` is the type of algebra given the kind `K`.
 //! `Sig(K)` is defined in [SEnv<KindId>::signature].
+//!
+//! The implementation would just be
+//!
+//! ```zydeco
+//! comatch .bindA X m f Y strY ->
+//!   AlgT(S Y) .bindA X m { fn x -> ! f x Y strY }
+//! end
+//! ```
 
 use crate::{syntax::*, *};
 use zydeco_utils::arena::ArenaAccess;
@@ -216,8 +226,7 @@ impl SEnv<TypeId> {
     /// generate the algebra of a type given certain type implementations
     /// returns an implementation of the algebra in the form of a computation term
     pub fn algebra(
-        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
-        algs: Vec<(ValueId, TypeId, TypeId)>,
+        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
     ) -> ResultKont<CompuId> {
         // administrative
         {
@@ -232,8 +241,7 @@ impl SEnv<TypeId> {
     }
 
     fn algebra_inner(
-        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
-        algs: Vec<(ValueId, TypeId, TypeId)>,
+        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
     ) -> ResultKont<CompuId> {
         // utils
         let vtype = tycker.vtype(&self.env);
@@ -253,8 +261,9 @@ impl SEnv<TypeId> {
 
         // next, check if ty is among the carriers of algebras
         // if so, just return the corresponding algebra
-        for (alg, _mo_ty, carrier_ty) in algs.iter().cloned() {
-            let carrier_ty = carrier_ty;
+        for alg in algs.iter().cloned() {
+            let alg_ty = tycker.statics.annotations_value[&alg];
+            let carrier_ty = todo!();
             if Lub::lub_inner(carrier_ty, self.inner, tycker).is_ok() {
                 let force_alg = {
                     let ann = tycker.algebra_mo_carrier(&self.env, mo_ty, carrier_ty);
@@ -474,11 +483,30 @@ impl SEnv<TypeId> {
                 mo_ty,
                 self.inner,
                 |env, tycker, AlgebraBodyArgs { ty_x, val_m, val_f }| {
-                    let Forall(tpat_y, b_ty) = forall_ty;
-                    let (tvar_y, _kd) = tpat_y.destruct_def(tycker);
-                    let ty_y: TypeId = Alloc::alloc(tycker, tvar_y, vtype);
-                    let _ = b_ty;
-                    let _ = ty_y;
+                    let mut algs = algs.clone();
+
+                    // what we want to generate is:
+                    // ```zydeco
+                    // comatch .bindA X m f Y strY ->
+                    //   AlgT(S Y) .bindA X m { fn x -> ! f x Y strY }
+                    // end
+                    // ```
+                    let Forall(tpat, body_ty) = forall_ty;
+                    let (tvar, y_kd) = tpat.destruct_def(tycker);
+
+                    // `Y`
+                    let tvar_y = Alloc::alloc(tycker, VarName("Y".to_string()), y_kd.into());
+                    let tpat_y: TPatId = Alloc::alloc(tycker, tvar_y, y_kd);
+                    let ty_y = Alloc::alloc(tycker, tvar_y, y_kd);
+
+                    // `strY` : Thunk Sig(Y)
+                    // `str` meaning "structure"
+                    let sig_y = self.mk(y_kd).signature(tycker, mo_ty, ty_y)?;
+                    let var_str_y = Alloc::alloc(tycker, VarName("strY".to_string()), sig_y.into());
+                    let vpat_str_y: VPatId = Alloc::alloc(tycker, var_str_y, sig_y);
+                    let val_str_y: ValueId = Alloc::alloc(tycker, var_str_y, sig_y);
+                    // add `strY` to the list of algebras
+                    algs.push(val_str_y);
                     todo!()
                 },
             )?,
@@ -561,8 +589,7 @@ impl SEnv<TPatId> {
 
 impl SEnv<VPatId> {
     pub fn lift(
-        &self, _tycker: &mut Tycker, (_mo, _mo_ty): (ValueId, TypeId),
-        _algs: Vec<(ValueId, TypeId, TypeId)>,
+        &self, _tycker: &mut Tycker, (_mo, _mo_ty): (ValueId, TypeId), _algs: Vec<ValueId>,
     ) -> ResultKont<VPatId> {
         let res = self.inner;
         Ok(res)
@@ -572,8 +599,7 @@ impl SEnv<VPatId> {
 impl SEnv<ValueId> {
     /// Lift a value term by applying congruence rules. Boring.
     pub fn lift(
-        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
-        algs: Vec<(ValueId, TypeId, TypeId)>,
+        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
     ) -> ResultKont<ValueId> {
         let ty = tycker.statics.annotations_value[&self.inner];
         let res = match tycker.statics.values[&self.inner].to_owned() {
@@ -631,8 +657,7 @@ impl SEnv<CompuId> {
     ///
     /// Reinterpret `ret` as monad return and `do` as its tail's algebra.
     pub fn lift(
-        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId),
-        algs: Vec<(ValueId, TypeId, TypeId)>,
+        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
     ) -> ResultKont<CompuId> {
         let ctype = tycker.ctype(&self.env);
 
