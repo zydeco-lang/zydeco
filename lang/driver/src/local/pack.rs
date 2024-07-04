@@ -302,7 +302,7 @@ impl LocalPackage {
 
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
-        let kont = Runtime::new(&mut input, &mut output, &[]).run(dynamics);
+        let kont = Runtime::new(&mut input, &mut output, &[], dynamics).run();
         match kont {
             | ProgKont::Ret(v) => println!("ret: {:?}", v),
             | ProgKont::ExitCode(code) => {

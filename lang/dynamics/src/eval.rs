@@ -25,11 +25,12 @@ pub enum Step<T, Out> {
 impl<'rt> Runtime<'rt> {
     pub fn new(
         input: &'rt mut dyn BufRead, output: &'rt mut dyn Write, args: &'rt [String],
+        arena: DynamicsArena,
     ) -> Self {
-        Runtime { input, output, args, stack: im::Vector::new(), env: Env::new() }
+        Runtime { input, output, args, stack: im::Vector::new(), env: Env::new(), arena }
     }
-    pub fn run(mut self, arena: DynamicsArena) -> ProgKont {
-        let mut scc = arena.top.clone();
+    pub fn run(mut self) -> ProgKont {
+        let mut scc = self.arena.top.clone();
         let mut konts = Vec::new();
         loop {
             // println!("{:?}", scc);
@@ -42,7 +43,7 @@ impl<'rt> Runtime<'rt> {
                 // each group should be type checked on its own
                 for decl in &group {
                     let decl = {
-                        match arena.decls.get(decl) {
+                        match self.arena.decls.get(decl) {
                             | Some(decl) => decl.clone(),
                             | None => continue,
                         }

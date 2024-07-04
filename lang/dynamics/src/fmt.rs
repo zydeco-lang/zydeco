@@ -48,14 +48,19 @@ impl Ugly for RcVPat {
 
 impl Ugly for RcValue {
     fn ugly(&self, f: &Formatter) -> String {
-        match self.as_ref() {
+        self.as_ref().ugly(f)
+    }
+}
+impl Ugly for Value {
+    fn ugly(&self, f: &Formatter) -> String {
+        match self {
             | Value::Hole(Hole) => "_".to_string(),
             | Value::Var(def) => def.ugly(f),
             | Value::Thunk(Thunk(body)) => {
                 format!("{{ {} }}", body.ugly(f))
             }
             | Value::Ctor(value) => value.ugly(f),
-            | Value::Triv(Triv) => "()".to_string(),
+            | Value::Triv(value) => value.ugly(f),
             | Value::VCons(value) => value.ugly(f),
             | Value::Lit(lit) => {
                 format!("{:?}", lit)
@@ -69,8 +74,13 @@ impl Ugly for RcValue {
 
 impl Ugly for RcCompu {
     fn ugly(&self, f: &Formatter) -> String {
+        self.as_ref().ugly(f)
+    }
+}
+impl Ugly for Computation {
+    fn ugly(&self, f: &Formatter) -> String {
         use Computation as Compu;
-        match self.as_ref() {
+        match self {
             | Compu::Hole(Hole) => "_".to_string(),
             | Compu::VAbs(Abs(param, body)) => {
                 format!("fn {} -> {}", param.ugly(f), body.ugly(f))
@@ -130,6 +140,51 @@ impl Ugly for RcCompu {
     }
 }
 
+impl Ugly for SemValue {
+    fn ugly(&self, f: &Formatter) -> String {
+        match self {
+            | SemValue::Thunk(v) => format!("{{ {} }}", v.ugly(f)),
+            | SemValue::Ctor(v) => v.ugly(f),
+            | SemValue::Triv(v) => v.ugly(f),
+            | SemValue::VCons(v) => v.ugly(f),
+            | SemValue::Literal(v) => format!("{:?}", v),
+        }
+    }
+}
+
+impl Ugly for SemCompu {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        match self {
+            | SemCompu::Kont(body, _env, vpat) => {
+                s += "kont ";
+                s += &body.ugly(f);
+                s += " ";
+                s += &vpat.ugly(f);
+            }
+            | SemCompu::App(arg) => {
+                s += "app ";
+                s += &arg.ugly(f);
+            }
+            | SemCompu::Dtor(dtor) => {
+                s += "dtor ";
+                let DtorName(name) = dtor;
+                s += name;
+            }
+        }
+        s
+    }
+}
+
+impl<T> Ugly for Box<T>
+where
+    T: Ugly,
+{
+    fn ugly(&self, f: &Formatter) -> String {
+        self.as_ref().ugly(f)
+    }
+}
+
 impl<T> Ugly for Ctor<T>
 where
     T: Ugly,
@@ -139,6 +194,12 @@ where
         let CtorName(name) = name;
         let args = args.ugly(f);
         format!("{} {}", name, args)
+    }
+}
+
+impl Ugly for Triv {
+    fn ugly(&self, _: &Formatter) -> String {
+        "()".to_string()
     }
 }
 
@@ -152,5 +213,11 @@ where
         let a = a.ugly(f);
         let b = b.ugly(f);
         format!("({}, {})", a, b)
+    }
+}
+
+impl Ugly for EnvThunk {
+    fn ugly(&self, f: &Formatter) -> String {
+        format!("[..]{{ {} }}", self.body.ugly(f))
     }
 }

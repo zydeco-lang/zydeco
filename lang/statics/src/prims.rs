@@ -194,7 +194,7 @@ pub enum MonadOrAlgebra {
 pub enum Structure {
     Top,
     Algebra(TypeId, TypeId),
-    // Arrow(Box<Structure>, Box<Structure>),
+    Arrow(Box<Structure>, Box<Structure>),
 }
 
 impl Tycker {

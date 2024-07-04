@@ -57,7 +57,7 @@ end
 def ! mo-forallv (E: VType) (mo: U (Monad (Exn E))) : forall (X: VType) . U Top -> X -> Exn E X =
   with mo
   begin
-    do _ <- ret 1;
+    do _ <- ret -1;
     fn (X: VType) (a: X) -> ret a
   end
 end
@@ -73,9 +73,16 @@ end
 
 // test algebra generation for forall ctype
 def ! mo-forallc (E: VType) (mo: U (Monad (Exn E))) : forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X =
+  // ( comatch .bindA X m f -> fn (Y: CType) (strY: U (Algebra _ Y)) ->
+  //   ( comatch .bindA X m f -> fn (a: U Y) ->
+  //     ! strY .bindA X m { fn x -> ! f x a }
+  //   end : Algebra (Exn E) (U Y -> Y)) .bindA X m { fn x -> ! f x Y strY }
+  // end : Algebra (Exn E) (forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X)) .bindA Int { ! mo .return Int -1 }
+  // { fn (_: Int) -> fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) -> ! b }
+
   with mo
   begin
-    do _ <- ret 1;
+    do _ <- ret -1;
     fn (X: CType) (b: U X) -> ! b
   end
 end

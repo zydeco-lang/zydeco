@@ -248,14 +248,14 @@ impl<'decl> SccDeclarations<'decl> {
                         let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                         tycker.statics.decls.insert(*id, ss::Exec(body).into());
 
-                        // // Debug: print
-                        // {
-                        //     use crate::fmt::*;
-                        //     println!(
-                        //         "{}",
-                        //         id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                        //     );
-                        // }
+                        // Debug: print
+                        {
+                            use crate::fmt::*;
+                            println!(
+                                "{}",
+                                id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                            );
+                        }
 
                         {
                             // administrative
@@ -324,11 +324,11 @@ impl<'decl> SccDeclarations<'decl> {
             }
         };
 
-        // // Debug: print
-        // {
-        //     use crate::fmt::*;
-        //     println!("{}", id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)));
-        // }
+        // Debug: print
+        {
+            use crate::fmt::*;
+            println!("{}", id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)));
+        }
 
         {
             // administrative

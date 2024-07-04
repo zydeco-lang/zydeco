@@ -295,6 +295,7 @@ impl SEnv<TypeId> {
                         return Ok(force_alg);
                     }
                 }
+                | Structure::Arrow(_, _) => unreachable!(),
             }
         }
 
@@ -756,27 +757,42 @@ impl SEnv<CompuId> {
             }
             | Compu::TAbs(compu) => {
                 let Abs(tpat, compu) = compu;
-                let tpat_ = self.mk(tpat).lift(tycker, mo_ty)?;
+                let forall_ty = tycker.statics.annotations_compu[&self.inner];
+                let Some((abst, ty_body)) = forall_ty.destruct_forall(tycker) else {
+                    unreachable!()
+                };
+
+                let y_kd = tycker.statics.annotations_abst[&abst];
+                let ty_y = Alloc::alloc(tycker, abst, y_kd);
+                let var_str = Alloc::alloc(tycker, VarName("str".to_string()), y_kd.into());
+                let vpat_str_ty_ = self.mk(y_kd).signature(tycker, mo_ty, ty_y)?;
+                let vpat_str_: VPatId = Alloc::alloc(tycker, var_str, vpat_str_ty_);
                 let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs)?;
-                if tpat == tpat_ && compu == compu_ {
-                    self.inner
-                } else {
-                    let ty = tycker.statics.annotations_compu[&self.inner];
-                    let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
-                    Alloc::alloc(tycker, Abs(tpat_, compu_), ty_)
-                }
+                let fn_str_compu_ = Alloc::alloc(tycker, Abs(vpat_str_, compu_), ty_body);
+
+                let tpat_ = self.mk(tpat).lift(tycker, mo_ty)?;
+                let ty_ = self.mk(forall_ty).lift(tycker, mo_ty)?;
+                Alloc::alloc(tycker, Abs(tpat_, fn_str_compu_), ty_)
             }
             | Compu::TApp(compu) => {
                 let App(compu, ty_a) = compu;
                 let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs.to_owned())?;
                 let ty_a_ = self.mk(ty_a).lift(tycker, mo_ty)?;
-                if compu == compu_ && ty_a == ty_a_ {
-                    self.inner
-                } else {
-                    let ty = tycker.statics.annotations_compu[&self.inner];
-                    let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
-                    Alloc::alloc(tycker, App(compu_, ty_a_), ty_)
-                }
+                // generate algebra given ty_a and pass in
+
+                let alg_a_ = self.mk(ty_a).algebra(tycker, (mo, mo_ty), algs)?;
+                let alg_a_ty_ = tycker.statics.annotations_compu[&alg_a_];
+                let thunk_alg_a_ty_ = tycker.thunk_arg(&self.env, alg_a_ty_);
+                let thunk_alg_a_ = Alloc::alloc(tycker, Thunk(alg_a_), thunk_alg_a_ty_);
+
+                let compu_alg_ty_ = {
+                    let Some((_a, b)) = ty_a_.destruct_arrow(tycker) else { unreachable!() };
+                    b
+                };
+                let compu_alg_ = Alloc::alloc(tycker, App(compu_, thunk_alg_a_), compu_alg_ty_);
+                let ty = tycker.statics.annotations_compu[&self.inner];
+                let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
+                Alloc::alloc(tycker, App(compu_alg_, ty_a_), ty_)
             }
             | Compu::Rec(compu) => {
                 let Rec(vpat, compu) = compu;

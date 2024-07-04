@@ -123,6 +123,7 @@ pub struct Runtime<'rt> {
     pub args: &'rt [String],
     pub stack: im::Vector<SemCompu>,
     pub env: Env<SemValue>,
+    pub arena: DynamicsArena,
 }
 
 #[derive(Clone)]

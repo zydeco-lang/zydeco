@@ -71,6 +71,16 @@ impl TypeId {
         };
         Ok(res)
     }
+    pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
+        let res = match tycker.statics.types[&self].to_owned() {
+            | Type::Arrow(ty) => {
+                let Arrow(from, to) = ty;
+                (from, to)
+            }
+            | _ => None?,
+        };
+        Some(res)
+    }
     pub fn destruct_thunk_app(&self, tycker: &mut Tycker) -> Option<TypeId> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         let res = match tycker.statics.types[&f_ty].to_owned() {
@@ -138,5 +148,11 @@ impl TypeId {
             }
         };
         Some(res)
+    }
+    pub fn destruct_forall(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
+        match tycker.statics.types.get(self)?.to_owned() {
+            | Type::Forall(Forall(abst, ty)) => Some((abst, ty)),
+            | _ => None,
+        }
     }
 }

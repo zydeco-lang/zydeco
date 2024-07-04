@@ -989,6 +989,9 @@ macro_rules! new_key_type {
             pub fn concise(&self) -> String {
                 format!("[{:?}#{:?}]", self.0, self.1)
             }
+            pub fn concise_inner(&self) -> String {
+                format!("{:?}#{:?}", self.0, self.1)
+            }
         }
 
         $crate::new_key_type!($($rest)*);
