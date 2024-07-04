@@ -12,7 +12,7 @@ def ! monad-optos : Monad OptOS =
   | .return A a ->
     fn .run ka kn -> ! ka a
   | .bind A A' m f ->
-    fn .run ka kn -> ! m .run { fn a -> ! f a .run ka kn } kn
+    fn .run ka' kn -> ! m .run { fn a -> ! f a .run ka' kn } kn
   end
 end
 

@@ -1,6 +1,6 @@
 codata Stack (A : VType) where
-  | .app : A -> Stack A
-  | .return : F(A)
+  | .app (a: A) : Stack A
+  | .return : Ret A
 end
 
 def ! rec abort (x: Int): Stack Int =
