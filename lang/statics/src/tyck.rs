@@ -81,6 +81,7 @@ impl Tycker {
                 | Ty::Fill(fill) => match self.statics.solus.get(&fill) {
                     | Some(ann) => match ann {
                         | AnnId::Set | AnnId::Kind(_) => {
+                            // keep running tycker even after unsuccesful solving hole
                             let _: ResultKont<()> =
                                 self.err_k(TyckError::SortMismatch, std::panic::Location::caller());
                         }
@@ -89,8 +90,9 @@ impl Tycker {
                         }
                     },
                     | None => {
+                        // keep running tycker even after unsuccesful solving hole
                         let _: ResultKont<()> = self.err_k(
-                            TyckError::MissingSolution(fill),
+                            TyckError::MissingSolution(vec![fill]),
                             std::panic::Location::caller(),
                         );
                     }
@@ -671,13 +673,13 @@ impl Tyck for SEnv<su::TermId> {
                     | AnnId::Type(ty) => match tycker.statics.types[&ty].to_owned() {
                         | ss::Type::Fill(fill) => match self.tyck(tycker, Action::syn())? {
                             | TermAnnId::Value(v, ty) => {
-                                let ty = tycker.fill_k(fill, ty.into())?.as_type();
+                                let ty = fill.fill_k(tycker, ty.into())?.as_type();
                                 // administrative
                                 tycker.stack.pop_back();
                                 return Ok(TermAnnId::Value(v, ty));
                             }
                             | TermAnnId::Compu(c, ty) => {
-                                let ty = tycker.fill_k(fill, ty.into())?.as_type();
+                                let ty = fill.fill_k(tycker, ty.into())?.as_type();
                                 // administrative
                                 tycker.stack.pop_back();
                                 return Ok(TermAnnId::Compu(c, ty));
@@ -2042,20 +2044,11 @@ impl Tyck for SEnv<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
                 // Hack: make sure that the body is synthesizable
-                // Todo: fill in the holes before lifting
-                let body_ty = {
-                    let mut body_ty = body_ty;
-                    while let ss::Type::Fill(fill) = tycker.statics.types[&body_ty].to_owned() {
-                        match tycker.statics.solus.get(&fill) {
-                            | Some(ty) => body_ty = ty.as_type(),
-                            | None => tycker.err_k(
-                                TyckError::Expressivity("the with body must be synthesizable"),
-                                std::panic::Location::caller(),
-                            )?,
-                        }
-                    }
-                    body_ty
-                };
+                let (body_ty, fills) = body_ty.solution_k(tycker)?;
+                if fills.len() > 0 {
+                    tycker
+                        .err_k(TyckError::MissingSolution(fills), std::panic::Location::caller())?
+                }
 
                 // Debug: print
                 {

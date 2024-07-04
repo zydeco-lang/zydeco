@@ -120,7 +120,7 @@ impl Debruijn {
                     }
                     | AnnId::Type(old) => {
                         let ty = Lub::lub(old, ty, tycker)?;
-                        let ty_ = tycker.fill(fill, ty.into())?.as_type();
+                        let ty_ = fill.fill(tycker, ty.into())?.as_type();
                         Ok(ty_)
                     }
                 },

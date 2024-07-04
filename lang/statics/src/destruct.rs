@@ -24,10 +24,69 @@ impl TPatId {
 }
 
 impl TypeId {
-    pub fn destruct_abs(&self, tycker: &mut Tycker) -> Option<(TPatId, TypeId)> {
+    pub fn destruct_fill(&self, tycker: &mut Tycker) -> Option<FillId> {
+        match tycker.statics.types.get(self)?.to_owned() {
+            | Type::Fill(fill) => Some(fill),
+            | _ => None,
+        }
+    }
+    pub fn destruct_type_abs(&self, tycker: &mut Tycker) -> Option<(TPatId, TypeId)> {
         match tycker.statics.types.get(self)?.to_owned() {
             | Type::Abs(Abs(tpat, ty)) => Some((tpat, ty)),
             | _ => None,
         }
+    }
+    pub fn destruct_type_app_nf_k(&self, tycker: &mut Tycker) -> ResultKont<(TypeId, Vec<TypeId>)> {
+        let res = self.destruct_type_app_nf(tycker);
+        tycker.err_p_to_k(res)
+    }
+    pub fn destruct_type_app_nf(&self, tycker: &mut Tycker) -> Result<(TypeId, Vec<TypeId>)> {
+        let ty = self.normalize(tycker, tycker.statics.annotations_type[self].to_owned())?;
+        let res = match tycker.statics.types[&ty].to_owned() {
+            | Type::App(app_ty) => {
+                let App(f_ty, a_ty) = app_ty;
+                let (f_ty, mut a_tys) = f_ty.destruct_type_app_nf(tycker)?;
+                let a_ty =
+                    a_ty.normalize(tycker, tycker.statics.annotations_type[&a_ty].clone())?;
+                a_tys.push(a_ty);
+                (f_ty, a_tys)
+            }
+            | Type::Var(_)
+            | Type::Abst(_)
+            | Type::Fill(_)
+            | Type::Abs(_)
+            | Type::Thunk(_)
+            | Type::Ret(_)
+            | Type::Unit(_)
+            | Type::Int(_)
+            | Type::Char(_)
+            | Type::String(_)
+            | Type::OS(_)
+            | Type::Arrow(_)
+            | Type::Forall(_)
+            | Type::Prod(_)
+            | Type::Exists(_)
+            | Type::Data(_)
+            | Type::CoData(_) => (ty, Vec::new()),
+        };
+        Ok(res)
+    }
+    pub fn destruct_algebra(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
+        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
+        let res = match tycker.statics.types[&f_ty].to_owned() {
+            | Type::Abst(abst) => {
+                let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
+                let Type::Abst(mo_real) = tycker.statics.types.get(&id).cloned()? else {
+                    unreachable!()
+                };
+                if abst != mo_real {
+                    return None;
+                }
+                let mut iter = a_tys.into_iter();
+                (iter.next()?, iter.next()?)
+            }
+            | _ => None?,
+        };
+        Some(res)
     }
 }

@@ -101,7 +101,7 @@ impl SEnv<KindId> {
             | Kind::VType(VType) => tycker.top(&self.env),
             | Kind::CType(CType) => tycker.algebra_mo_carrier(&self.env, mo_ty, ty),
             | Kind::Arrow(Arrow(a_kd, b_kd)) => {
-                let Some((tpat, body)) = ty.destruct_abs(tycker) else { unreachable!() };
+                let Some((tpat, body)) = ty.destruct_type_abs(tycker) else { unreachable!() };
                 let (tvar_a, _kd) = tpat.destruct_def(tycker);
                 assert!(Lub::lub_inner(a_kd, _kd, tycker).is_ok(), "input kind mismatch");
                 let ty_a = Alloc::alloc(tycker, tvar_a, a_kd);
@@ -248,9 +248,10 @@ impl SEnv<TypeId> {
         let ctype = tycker.ctype(&self.env);
         let dtor_bind = DtorName(".bind".to_string());
         let dtor_binda = DtorName(".bindA".to_string());
+        let self_ty = self.inner;
 
         // first, for value types, just return the term of the trivial algebra Top
-        let kd = tycker.statics.annotations_type[&self.inner];
+        let kd = tycker.statics.annotations_type[&self_ty];
         if Lub::lub_inner(kd, vtype, tycker).is_ok() {
             let top_compu = tycker.top_compu(&self.env);
             return Ok(top_compu);
@@ -263,8 +264,9 @@ impl SEnv<TypeId> {
         // if so, just return the corresponding algebra
         for alg in algs.iter().cloned() {
             let alg_ty = tycker.statics.annotations_value[&alg];
-            let carrier_ty = todo!();
-            if Lub::lub_inner(carrier_ty, self.inner, tycker).is_ok() {
+            // let carrier_ty = todo!();
+            let (_mo_ty, carrier_ty) = alg_ty.destruct_algebra(&self.env, tycker).unwrap();
+            if Lub::lub_inner(carrier_ty, self_ty, tycker).is_ok() {
                 let force_alg = {
                     let ann = tycker.algebra_mo_carrier(&self.env, mo_ty, carrier_ty);
                     Alloc::alloc(tycker, Force(alg), ann)
@@ -276,7 +278,7 @@ impl SEnv<TypeId> {
         // if it's not directly the carrier of any algebra, then try to generate the algebra
 
         // first, check for syntactic type applications
-        let (head, args) = self.inner.application_normal_form_k(tycker)?;
+        let (head, args) = self_ty.destruct_type_app_nf_k(tycker)?;
         if args.len() > 0 {
             let res = match tycker.statics.types[&head].to_owned() {
                 | Type::Ret(RetTy) => {
@@ -417,7 +419,7 @@ impl SEnv<TypeId> {
                 &self.env,
                 tycker,
                 mo_ty,
-                self.inner,
+                self_ty,
                 |env, tycker, AlgebraBodyArgs { ty_x, val_m, val_f }| {
                     // what we want to generate is:
                     // ```
@@ -454,10 +456,10 @@ impl SEnv<TypeId> {
                         let val_x: ValueId = Alloc::alloc(tycker, var_x, ty_x);
 
                         // X -> A -> B
-                        let ty_x_arr_a_arr_b = Alloc::alloc(tycker, Arrow(ty_x, self.inner), ctype);
+                        let ty_x_arr_a_arr_b = Alloc::alloc(tycker, Arrow(ty_x, self_ty), ctype);
 
                         let force_f = Alloc::alloc(tycker, Force(val_f), ty_x_arr_a_arr_b);
-                        let force_f_x = Alloc::alloc(tycker, App(force_f, val_x), self.inner);
+                        let force_f_x = Alloc::alloc(tycker, App(force_f, val_x), self_ty);
                         let force_f_x_a = Alloc::alloc(tycker, App(force_f_x, val_a), b_ty);
 
                         // X -> B
@@ -472,7 +474,7 @@ impl SEnv<TypeId> {
                     let body = Alloc::alloc(tycker, App(alg_binda_x_m, thunk_kont), body_ty);
 
                     // finally, finish by abstraction over `a`
-                    let fn_a_body = Alloc::alloc(tycker, Abs(vpat_a, body), self.inner);
+                    let fn_a_body = Alloc::alloc(tycker, Abs(vpat_a, body), self_ty);
                     Ok(fn_a_body)
                 },
             )?,
@@ -481,7 +483,7 @@ impl SEnv<TypeId> {
                 &self.env,
                 tycker,
                 mo_ty,
-                self.inner,
+                self_ty,
                 |env, tycker, AlgebraBodyArgs { ty_x, val_m, val_f }| {
                     let mut algs = algs.clone();
 
@@ -518,7 +520,7 @@ impl SEnv<TypeId> {
                 &self.env,
                 tycker,
                 mo_ty,
-                self.inner,
+                self_ty,
                 |env, tycker, AlgebraBodyArgs { ty_x, val_m, val_f }| {
                     let arms_ty = tycker.statics.codatas.defs[&codata].to_owned();
                     let mut arms_compu = Vec::new();
@@ -546,7 +548,7 @@ impl SEnv<TypeId> {
                             let val_x: ValueId = Alloc::alloc(tycker, var_x, ty_x);
 
                             // CoData
-                            let coda = self.inner;
+                            let coda = self_ty;
                             // X -> CoData
                             let ty_x_arr_coda = Alloc::alloc(tycker, Arrow(ty_x, coda), ctype);
 
@@ -570,7 +572,7 @@ impl SEnv<TypeId> {
                         arms_compu.push(CoMatcher { dtor, tail: body })
                     }
 
-                    let comatch = Alloc::alloc(tycker, CoMatch { arms: arms_compu }, self.inner);
+                    let comatch = Alloc::alloc(tycker, CoMatch { arms: arms_compu }, self_ty);
                     Ok(comatch)
                 },
             )?,
@@ -771,6 +773,11 @@ impl SEnv<CompuId> {
                         Alloc::alloc(tycker, Thunk(function), thunked_function_ty);
                     (thunked_function_ty, thunked_function)
                 };
+                let (bind_compu_ty, fills) = bind_compu_ty.solution_k(tycker)?;
+                if fills.len() > 0 {
+                    tycker
+                        .err_k(TyckError::MissingSolution(fills), std::panic::Location::caller())?;
+                }
                 let algebra =
                     self.mk(bind_compu_ty).algebra(tycker, (mo, mo_ty), algs.to_owned())?;
                 let carrier_ty = self.mk(bind_compu_ty).lift(tycker, mo_ty)?;
