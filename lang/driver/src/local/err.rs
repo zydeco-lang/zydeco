@@ -19,6 +19,8 @@ pub enum PackageError {
     ResolveError(String),
     #[error("Tyck error:\n{0}")]
     TyckErrors(String),
+    #[error("Test failed:\n{0}")]
+    TestFailed(String),
 }
 
 pub type Result<T> = std::result::Result<T, PackageError>;

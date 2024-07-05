@@ -77,7 +77,16 @@ impl LocalPackage {
     pub fn run(&self) -> Result<()> {
         let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
         for bin in bins {
-            Self::run_srcs(name, path, srcs.iter().chain([bin]))?
+            let name = format!("{}:{}", name, bin.file_stem().unwrap().to_str().unwrap());
+            Self::run_srcs(name.as_str(), path, srcs.iter().chain([bin]))?
+        }
+        Ok(())
+    }
+    pub fn test(&self) -> Result<()> {
+        let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
+        for bin in bins {
+            let name = format!("{}:{}", name, bin.file_stem().unwrap().to_str().unwrap());
+            Self::test_srcs(name.as_str(), path, srcs.iter().chain([bin]))?
         }
         Ok(())
     }
@@ -313,6 +322,90 @@ impl LocalPackage {
         let _ = name;
 
         Ok(())
+    }
+    fn test_srcs<'f>(
+        name: &str, path: &std::path::Path, srcs: impl Iterator<Item = &'f PathBuf>,
+    ) -> Result<()> {
+        // Todo: deal with std and deps
+        let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
+        // Todo: parallelize w/ rayon (?)
+        let files = files.into_iter().map(|f| f.load()).collect::<Result<Vec<_>>>()?;
+        let PackageHash { hashes: _ } = FileLoaded::merge(&files)?;
+        // Todo: check hashes
+
+        let mut alloc = GlobalAlloc::new();
+        // parsing
+        // Todo: parallelize w/ rayon (?)
+        let files = files
+            .into_iter()
+            .map(|f| f.parse(t::Parser::new(alloc.alloc())))
+            .collect::<Result<Vec<_>>>()?;
+
+        // desugaring
+        // Todo: parallelize w/ rayon (?)
+        let files =
+            files.into_iter().map(|f| f.desugar(b::Arena::new(&mut alloc))).collect::<Vec<_>>();
+        let pack = FileBitter::merge(
+            PackageStew {
+                sources: HashMap::new(),
+                spans: t::SpanArena::new(alloc.alloc()),
+                arena: b::Arena::new(&mut alloc),
+                prim_term: b::PrimTerms::default(),
+                top: b::TopLevel(Vec::new()),
+            },
+            files,
+        )?;
+
+        // adding package dependencies
+        // Todo: ...
+
+        // resolving
+        let pack = pack.resolve(alloc.alloc())?.check();
+
+        // type-checking
+        let PackageScoped { sources: _, spans, prim, arena: scoped } = pack;
+        let mut tycker = Tycker::new(spans, prim, scoped, &mut alloc);
+        match tycker.run() {
+            | Ok(()) => {}
+            | Err(()) => {
+                use std::collections::BTreeSet;
+                let mut bs = BTreeSet::new();
+                for err in tycker.errors.to_vec() {
+                    bs.insert(format!("{}\n", tycker.error_entry_output(err)));
+                }
+                let mut s = String::new();
+                for b in bs {
+                    s += &b;
+                }
+                s += &format!("Total: {} errors\n", tycker.errors.len());
+                Err(PackageError::TyckErrors(s))?;
+            }
+        }
+
+        let Tycker { spans: _, prim: _, scoped, statics, stack: _, errors: _ } = tycker;
+        let dynamics = Linker { scoped, statics }.run();
+
+        let mut input = std::io::empty();
+        let mut output = std::io::sink();
+        let kont = Runtime::new(&mut input, &mut output, &[], dynamics).run();
+
+        match kont {
+            | ProgKont::ExitCode(0) => {
+                // println!("test passed: {}", name);
+                let mut out = std::io::stdout();
+                use std::io::Write;
+                let _ = writeln!(out, "test passed: {}", name);
+                Ok(())
+            }
+            | ProgKont::ExitCode(code) => {
+                let err = format!("\t expected exit code 0, got {}", code);
+                Err(PackageError::TestFailed(err))
+            }
+            | ProgKont::Ret(v) => {
+                let err = format!("\t expected exit code 0, got a returned value: {:?}", v);
+                Err(PackageError::TestFailed(err))
+            }
+        }
     }
 }
 

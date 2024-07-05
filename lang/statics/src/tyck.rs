@@ -140,6 +140,7 @@ pub trait Tyck {
     type Out;
     type Action;
     fn tyck(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out>;
+    fn tyck_inner(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -426,7 +427,17 @@ impl Tyck for SEnv<su::PatId> {
             // administrative
             tycker.stack.push_back(TyckTask::Pat(self.inner, switch));
         }
+        let res = self.tyck_inner(tycker, Action { switch });
+        {
+            // administrative
+            tycker.stack.pop_back();
+        }
+        res
+    }
 
+    fn tyck_inner(
+        &self, tycker: &mut Tycker, Action { switch }: Self::Action,
+    ) -> ResultKont<Self::Out> {
         use su::Pattern as Pat;
         let pat_ctx = match tycker.scoped.pats[&self.inner].clone() {
             | Pat::Ann(pat) => {
@@ -595,10 +606,6 @@ impl Tyck for SEnv<su::PatId> {
         // maintain back mapping
         tycker.statics.pats.insert(self.inner, pat_ctx.as_pat());
 
-        {
-            // administrative
-            tycker.stack.pop_back();
-        }
         Ok(pat_ctx)
     }
 }
@@ -637,66 +644,64 @@ impl Tyck for SEnv<su::TermId> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
 
-    fn tyck(
-        &self, tycker: &mut Tycker, Action { mut switch }: Self::Action,
-    ) -> ResultKont<Self::Out> {
+    fn tyck(&self, tycker: &mut Tycker, Action { switch }: Self::Action) -> ResultKont<Self::Out> {
         {
             // administrative
             tycker.stack.push_back(TyckTask::Term(self.inner, switch));
         }
+        let res = self.tyck_inner(tycker, Action { switch });
+        {
+            // administrative
+            tycker.stack.pop_back();
+        }
+        res
+    }
 
+    fn tyck_inner(
+        &self, tycker: &mut Tycker, Action { mut switch }: Self::Action,
+    ) -> ResultKont<Self::Out> {
         // check if we're analyzing against an unfilled type
         match switch {
             | Switch::Syn => {}
-            | Switch::Ana(ana) => {
-                match ana {
-                    | AnnId::Set => {}
-                    | AnnId::Kind(kd) => match tycker.statics.kinds[&kd].to_owned() {
-                        | ss::Kind::Fill(fill) => match self.tyck(tycker, Action::syn())? {
-                            | TermAnnId::Type(ty, kd) => {
-                                tycker.statics.solus.insert(fill, kd.into());
-                                // administrative
-                                tycker.stack.pop_back();
-                                return Ok(TermAnnId::Type(ty, kd));
-                            }
-                            | TermAnnId::Hole
-                            | TermAnnId::Kind(_)
-                            | TermAnnId::Value(_, _)
-                            | TermAnnId::Compu(_, _) => tycker
-                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
-                        },
-                        | _ => {}
-                    },
-                    | AnnId::Type(ty) => match tycker.statics.types[&ty].to_owned() {
-                        | ss::Type::Fill(fill) => match self.tyck(tycker, Action::syn())? {
-                            | TermAnnId::Value(v, ty) => {
-                                let ty = fill.fill_k(tycker, ty.into())?.as_type();
-                                // administrative
-                                tycker.stack.pop_back();
-                                return Ok(TermAnnId::Value(v, ty));
-                            }
-                            | TermAnnId::Compu(c, ty) => {
-                                let ty = fill.fill_k(tycker, ty.into())?.as_type();
-                                // administrative
-                                tycker.stack.pop_back();
-                                return Ok(TermAnnId::Compu(c, ty));
-                            }
-                            | TermAnnId::Hole | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
-                                tycker.err_k(
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?
-                            }
-                        },
-                        | _ => {
-                            let kd = tycker.statics.annotations_type[&ty].to_owned();
-                            switch = Switch::Ana(
-                                ty.subst_env_k(tycker, &self.env)?.normalize_k(tycker, kd)?.into(),
-                            )
+            | Switch::Ana(ana) => match ana {
+                | AnnId::Set => {}
+                | AnnId::Kind(kd) => match tycker.statics.kinds[&kd].to_owned() {
+                    | ss::Kind::Fill(fill) => match self.tyck(tycker, Action::syn())? {
+                        | TermAnnId::Type(ty, kd) => {
+                            tycker.statics.solus.insert(fill, kd.into());
+                            return Ok(TermAnnId::Type(ty, kd));
+                        }
+                        | TermAnnId::Hole
+                        | TermAnnId::Kind(_)
+                        | TermAnnId::Value(_, _)
+                        | TermAnnId::Compu(_, _) => {
+                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
                     },
-                }
-            }
+                    | _ => {}
+                },
+                | AnnId::Type(ty) => match tycker.statics.types[&ty].to_owned() {
+                    | ss::Type::Fill(fill) => match self.tyck(tycker, Action::syn())? {
+                        | TermAnnId::Value(v, ty) => {
+                            let ty = fill.fill_k(tycker, ty.into())?.as_type();
+                            return Ok(TermAnnId::Value(v, ty));
+                        }
+                        | TermAnnId::Compu(c, ty) => {
+                            let ty = fill.fill_k(tycker, ty.into())?.as_type();
+                            return Ok(TermAnnId::Compu(c, ty));
+                        }
+                        | TermAnnId::Hole | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
+                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        }
+                    },
+                    | _ => {
+                        let kd = tycker.statics.annotations_type[&ty].to_owned();
+                        switch = Switch::Ana(
+                            ty.subst_env_k(tycker, &self.env)?.normalize_k(tycker, kd)?.into(),
+                        )
+                    }
+                },
+            },
         }
 
         // // Debug: print
@@ -732,8 +737,6 @@ impl Tyck for SEnv<su::TermId> {
                 match tycker.scoped.terms[&ty] {
                     | Tm::Hole(su::Hole) => {
                         let res = self.mk(tm).tyck(tycker, Action::switch(switch))?;
-                        // administrative
-                        tycker.stack.pop_back();
                         return Ok(res);
                     }
                     | _ => {}
@@ -2220,14 +2223,9 @@ impl Tyck for SEnv<su::TermId> {
 
         // maintain back mapping
         if let Some(out_ann) = out_ann.as_term() {
-            // println!("inserting {:?} -> {:?}", self.inner, out_ann);
             tycker.statics.terms.insert(self.inner, out_ann)
         }
 
-        {
-            // administrative
-            tycker.stack.pop_back();
-        }
         Ok(out_ann)
     }
 }

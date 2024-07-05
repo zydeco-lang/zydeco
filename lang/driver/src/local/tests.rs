@@ -7,7 +7,7 @@ fn std() {
         .canonicalize()
         .unwrap();
     let proj = super::pack::LocalPackage::new(dir).unwrap();
-    match proj.run() {
+    match proj.test() {
         | Ok(_) => {}
         | Err(err) => {
             eprintln!("{}", err);
@@ -23,7 +23,7 @@ fn exec() {
         .canonicalize()
         .unwrap();
     let proj = super::pack::LocalPackage::new(dir).unwrap();
-    match proj.run() {
+    match proj.test() {
         | Ok(_) => {}
         | Err(err) => {
             eprintln!("{}", err);
@@ -39,7 +39,7 @@ fn icfp() {
         .canonicalize()
         .unwrap();
     let proj = super::pack::LocalPackage::new(dir).unwrap();
-    match proj.run() {
+    match proj.test() {
         | Ok(_) => {}
         | Err(err) => {
             eprintln!("{}", err);
