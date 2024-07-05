@@ -19,7 +19,7 @@ pub enum PackageError {
     ResolveError(String),
     #[error("Tyck error:\n{0}")]
     TyckErrors(String),
-    #[error("Test failed:\n{0}")]
+    #[error("Test failed:\n\t{0}")]
     TestFailed(String),
 }
 

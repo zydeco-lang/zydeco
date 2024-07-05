@@ -77,7 +77,7 @@ impl LocalPackage {
     pub fn run(&self) -> Result<()> {
         let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
         for bin in bins {
-            let name = format!("{}:{}", name, bin.file_stem().unwrap().to_str().unwrap());
+            let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
             Self::run_srcs(name.as_str(), path, srcs.iter().chain([bin]))?
         }
         Ok(())
@@ -85,7 +85,7 @@ impl LocalPackage {
     pub fn test(&self) -> Result<()> {
         let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
         for bin in bins {
-            let name = format!("{}:{}", name, bin.file_stem().unwrap().to_str().unwrap());
+            let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
             Self::test_srcs(name.as_str(), path, srcs.iter().chain([bin]))?
         }
         Ok(())
@@ -394,15 +394,16 @@ impl LocalPackage {
                 // println!("test passed: {}", name);
                 let mut out = std::io::stdout();
                 use std::io::Write;
-                let _ = writeln!(out, "test passed: {}", name);
+                use colored::Colorize;
+                let _ = writeln!(out, "test {} ... {}", name, "ok".green());
                 Ok(())
             }
             | ProgKont::ExitCode(code) => {
-                let err = format!("\t expected exit code 0, got {}", code);
+                let err = format!("expected exit code 0, got {}", code);
                 Err(PackageError::TestFailed(err))
             }
             | ProgKont::Ret(v) => {
-                let err = format!("\t expected exit code 0, got a returned value: {:?}", v);
+                let err = format!("expected exit code 0, got a returned value: {:?}", v);
                 Err(PackageError::TestFailed(err))
             }
         }

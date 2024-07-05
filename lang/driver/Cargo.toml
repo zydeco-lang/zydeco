@@ -24,6 +24,7 @@ sculptor = { workspace = true }
 serde = { workspace = true }
 toml = { workspace = true }
 logos = { workspace = true }
+colored = { workspace = true }
 
 [lib]
 doctest = false
