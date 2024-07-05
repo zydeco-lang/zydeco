@@ -30,11 +30,26 @@ impl TypeId {
             | _ => None,
         }
     }
-    pub fn destruct_type_abs(&self, tycker: &mut Tycker) -> Option<(TPatId, TypeId)> {
-        match tycker.statics.types.get(self)?.to_owned() {
-            | Type::Abs(Abs(tpat, ty)) => Some((tpat, ty)),
-            | _ => None,
-        }
+    pub fn destruct_type_abs_nf(&self, tycker: &mut Tycker) -> Option<(TPatId, TypeId)> {
+        let res = match tycker.statics.types.get(self)?.to_owned() {
+            | Type::Abs(Abs(tpat, ty)) => (tpat, ty),
+            | Type::Abst(abst) => {
+                let kd = tycker.statics.annotations_abst[&abst].to_owned();
+                let abst_ty = Alloc::alloc(tycker, abst, kd.into());
+
+                let (kd_z, kd_body) = match tycker.statics.kinds[&kd].to_owned() {
+                    | Kind::Arrow(Arrow(kd_z, kd_body)) => (kd_z, kd_body),
+                    | Kind::Fill(_) | Kind::VType(_) | Kind::CType(_) => unreachable!(),
+                };
+                let tvar_z = Alloc::alloc(tycker, VarName("Z".to_owned()), kd_z.into());
+                let tpat_z: TPatId = Alloc::alloc(tycker, tvar_z, kd_z);
+                let ty_z: TypeId = Alloc::alloc(tycker, tvar_z, kd_z);
+                let z_app_abst = Alloc::alloc(tycker, App(abst_ty, ty_z), kd_body);
+                (tpat_z, z_app_abst)
+            }
+            | _ => None?,
+        };
+        Some(res)
     }
     pub fn destruct_type_app_nf_k(&self, tycker: &mut Tycker) -> ResultKont<(TypeId, Vec<TypeId>)> {
         let res = self.destruct_type_app_nf(tycker);

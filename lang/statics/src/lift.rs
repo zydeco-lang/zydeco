@@ -101,7 +101,9 @@ impl SEnv<KindId> {
             | Kind::VType(VType) => tycker.top(&self.env),
             | Kind::CType(CType) => tycker.algebra_mo_carrier(&self.env, mo_ty, ty),
             | Kind::Arrow(Arrow(a_kd, b_kd)) => {
-                let Some((tpat, body)) = ty.destruct_type_abs(tycker) else { unreachable!() };
+                let Some((tpat, body)) = ty.destruct_type_abs_nf(tycker) else {
+                    unreachable!()
+                };
                 let (tvar_a, _kd) = tpat.destruct_def(tycker);
                 assert!(Lub::lub_inner(a_kd, _kd, tycker).is_ok(), "input kind mismatch");
                 let ty_a = Alloc::alloc(tycker, tvar_a, a_kd);

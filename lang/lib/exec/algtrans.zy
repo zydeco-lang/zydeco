@@ -72,12 +72,15 @@ def ! _mo-forallv : OS =
 end
 
 // test algebra generation for forall ctype
-def ! mo-forallc (E: VType) (mo: U (Monad (Exn E))) : forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X =
+def ! mo-forallc (E: VType)
+  (mo: U (Monad (Exn E)))
+: forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X =
   // ( comatch .bindA X m f -> fn (Y: CType) (strY: U (Algebra _ Y)) ->
   //   ( comatch .bindA X m f -> fn (a: U Y) ->
   //     ! strY .bindA X m { fn x -> ! f x a }
   //   end : Algebra (Exn E) (U Y -> Y)) .bindA X m { fn x -> ! f x Y strY }
-  // end : Algebra (Exn E) (forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X)) .bindA Int { ! mo .return Int -1 }
+  // end : Algebra (Exn E) (forall (X: CType) . U (Algebra (Exn E) X) -> U X -> X))
+  // .bindA Int { ! mo .return Int -1 }
   // { fn (_: Int) -> fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) -> ! b }
 
   with mo
@@ -91,6 +94,41 @@ end
 def ! _mo-forallc : OS =
   ! mo-forallc String { ! mo-exn String } OS { ! alg-exn-os String } { ! exit 0 }
 end
+
+// alias IdCType (B: CType) : CType = B end
+
+// // test algebra generation for forall (ctype -> ctype)
+// def ! mo-forallcc (E: VType)
+//   (mo: U (Monad (Exn E)))
+// :
+//   forall (X: CType -> CType) .
+//   U (forall (Y: CType) . U (Algebra (Exn E) Y) -> Algebra (Exn E) (X Y)) ->
+//   (forall (Y: CType) .
+//   U (Algebra (Exn E) Y) -> U (X Y) -> (X Y))
+//   // forall (X: CType -> CType) .
+//   // U (forall (Y: CType) . U (Algebra (Exn E) Y) -> Algebra (Exn E) (X Y)) ->
+//   // (forall (Y: CType) .
+//   // U (Algebra (Exn E) Y) -> U (X Y) -> (X Y))
+// =
+//   with mo
+//   begin
+//     do _ <- ret -1;
+//     // forall (X: CType -> CType) (Y: CType) . U (X Y) -> X Y
+//     // 
+//     // |> Sig =
+//     // 
+//     // forall (X: CType -> CType) .
+//     //   U (forall (Y: CType) . U (Algebra M Y) -> Algebra M (X Y)) ->
+//     //     forall (Y: CType) . U (Algebra M Y) ->
+//     //       U (X Y) -> X Y
+//     fn (X: CType -> CType) (Y: CType) (b: U (X Y)) -> ! b
+//   end
+// end
+
+// // run it
+// def ! _mo-forallcc : OS =
+//   ! mo-forallcc String { ! mo-exn String } IdCType OS { ! alg-exn-os String } { ! exit 0 }
+// end
 
 main
   // ! _mo-forallv
