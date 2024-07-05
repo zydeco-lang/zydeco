@@ -159,6 +159,10 @@ pub enum TyckTask {
     Lub(AnnId, AnnId),
     Lift(ss::TermId),
     Algebra(ss::AnnId),
+    WithStruct(su::TermId),
+    WithImport(su::Import),
+    WithBody(su::TermId),
+    WithBodyLift(ss::CompuId),
 }
 
 pub struct Action<Ann> {
@@ -1975,6 +1979,10 @@ impl Tyck for SEnv<su::TermId> {
                 let mut mo = None;
                 let mut algs = Vec::new();
                 for struct_ in structs {
+                    {
+                        // administrative
+                        tycker.stack.push_back(TyckTask::WithStruct(struct_));
+                    }
                     let struct_out_ann = self.mk(struct_).tyck(tycker, Action::syn())?;
                     let (val, ty) = struct_out_ann.try_as_value(
                         tycker,
@@ -1999,6 +2007,10 @@ impl Tyck for SEnv<su::TermId> {
                             TyckError::NeitherMonadNorAlgebra(struct_, ty),
                             std::panic::Location::caller(),
                         )?,
+                    }
+                    {
+                        // administrative
+                        tycker.stack.pop_back();
                     }
                 }
                 let (mo, mo_ty) = match mo {
@@ -2032,6 +2044,14 @@ impl Tyck for SEnv<su::TermId> {
                 // let mut imports_ = Vec::new();
                 let mut import_subs = Vec::new();
                 for su::Import { binder, ty, body } in imports {
+                    {
+                        // administrative
+                        tycker.stack.push_back(TyckTask::WithImport(su::Import {
+                            binder,
+                            ty,
+                            body,
+                        }));
+                    }
                     let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
                     let (body, body_ty) = body_out_ann.try_as_value(
                         tycker,
@@ -2058,9 +2078,17 @@ impl Tyck for SEnv<su::TermId> {
                     )?;
                     // imports_.push(ss::Import { binder, ty, body });
                     import_subs.push((binder, body));
+                    {
+                        // administrative
+                        tycker.stack.pop_back();
+                    }
                 }
 
                 // then we tyck the body
+                {
+                    // administrative
+                    tycker.stack.push_back(TyckTask::WithBody(body));
+                }
                 let (body, body_ty) = self.mk(body).tyck(tycker, Action::syn())?.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,
@@ -2071,6 +2099,10 @@ impl Tyck for SEnv<su::TermId> {
                 if fills.len() > 0 {
                     tycker
                         .err_k(TyckError::MissingSolution(fills), std::panic::Location::caller())?
+                }
+                {
+                    // administrative
+                    tycker.stack.pop_back();
                 }
 
                 // // Debug: print
@@ -2084,6 +2116,10 @@ impl Tyck for SEnv<su::TermId> {
                 // }
 
                 // and then lift it, performing algebra translation on type level
+                {
+                    // administrative
+                    tycker.stack.push_back(TyckTask::WithBodyLift(body));
+                }
                 let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
                 let body_ty_lift = match switch {
                     | Switch::Syn => body_ty_lift,
@@ -2135,6 +2171,10 @@ impl Tyck for SEnv<su::TermId> {
 
                 // finally, we perform algebra translation on term level
                 let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), algs)?;
+                {
+                    // administrative
+                    tycker.stack.pop_back();
+                }
                 TermAnnId::Compu(body_lift, body_ty_lift)
             }
             | Tm::Lit(lit) => {

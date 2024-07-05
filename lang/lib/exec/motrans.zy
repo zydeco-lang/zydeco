@@ -65,10 +65,10 @@ def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
     // ! mo .return (Either E A) +Right(a)
     with mo
       import m : Thunk (Ret A) = m
-      import mo-exnt-return : Thunk (forall (A: VType) . A -> Exn E A) = { ! mo-exnt E M mo .return }
+      import mo-exnt-return : Thunk (A -> Exn E A) = { ! mo-exnt E M mo .return A }
     begin
       do a <- ! m;
-      ! mo-exnt-return A a
+      ! mo-exnt-return a
     end
   end
 end
@@ -97,14 +97,29 @@ end
 def ! mo-exnkt (E: VType) (M: VType -> CType)
   (mo: Thunk (Monad M))
 : Monad (ExnKT E M) =
-  comatch
-  | .return A a ->
-    fn R alg ke ka ->
-    ! ka a
-  | .bind A A' m f ->
-    fn R alg ke ka' ->
-    do~ ! m R alg ke; fn a ->
-    ! f a R alg ke ka'
+  // correct anwser:
+  //
+  // comatch
+  // | .return A a ->
+  //   fn R alg ke ka ->
+  //   ! ka a
+  // | .bind A A' m f ->
+  //   fn R alg ke ka' ->
+  //   do~ ! m R alg ke; fn a ->
+  //   ! f a R alg ke ka'
+  // end
+
+  with mo
+  begin
+    (comatch
+    | .return A a ->
+      fn R ke ka ->
+      ! ka a
+    | .bind A A' m f ->
+      fn R ke ka ->
+      do~ ! m R ke; fn a ->
+      ! f a R ke ka
+    end : Monad (ExnK E))
   end
 end
 
@@ -112,12 +127,19 @@ def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
   comatch
   | .monad M mo -> ! mo-exnkt E M mo
   | .lift M A mo m -> fn R alg ke ka ->
+    // with mo with alg
+    //   import m : Thunk (Ret A) = m
+    //   import ka : Thunk (A -> R) = ka
+    // begin
+    //   do a <- ! m;
+    //   ! ka a
+    // end
     with mo with alg
       import m : Thunk (Ret A) = m
-      import ka : Thunk (A -> R) = ka
+      import mo-exnkt-return : Thunk (A -> R) = { fn (a: A) -> ! mo-exnkt E M mo .return A a R alg ke ka }
     begin
       do a <- ! m;
-      ! ka a
+      ! mo-exnkt-return a
     end
   end
 end

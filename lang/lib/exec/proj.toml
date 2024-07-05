@@ -2,13 +2,13 @@ name = "ExecTests"
 
 srcs = [
     "../std/core.zy",
-    # "../std/data.zy",
+    "../std/data.zy",
     # "../std/avl.zy",
 ]
 deps = []
 bins = [
-    "algtrans.zy",
-    # "motrans.zy",
+    # "algtrans.zy",
+    "motrans.zy",
     # "alg.zy",
     # "malt.zy",
 ]

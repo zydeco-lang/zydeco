@@ -101,9 +101,7 @@ impl SEnv<KindId> {
             | Kind::VType(VType) => tycker.top(&self.env),
             | Kind::CType(CType) => tycker.algebra_mo_carrier(&self.env, mo_ty, ty),
             | Kind::Arrow(Arrow(a_kd, b_kd)) => {
-                let Some((tpat, body)) = ty.destruct_type_abs_nf(tycker) else {
-                    unreachable!()
-                };
+                let Some((tpat, body)) = ty.destruct_type_abs_nf(tycker) else { unreachable!() };
                 let (tvar_a, _kd) = tpat.destruct_def(tycker);
                 assert!(Lub::lub_inner(a_kd, _kd, tycker).is_ok(), "input kind mismatch");
                 let ty_a = Alloc::alloc(tycker, tvar_a, a_kd);
@@ -387,7 +385,12 @@ impl SEnv<TypeId> {
             }
             | Type::Abst(abst) => {
                 // Hack: unseal and check (?), a type level eta expansion
-                let unsealed = tycker.statics.seals[&abst].to_owned();
+                let Some(unsealed) = tycker.statics.seals.get(&abst).cloned() else {
+                    tycker.err_k(
+                        TyckError::AlgebraGenerationFailure,
+                        std::panic::Location::caller(),
+                    )?
+                };
                 self.mk(unsealed).algebra(tycker, (mo, mo_ty), algs)?
             }
             | Type::App(_) => {
@@ -779,22 +782,34 @@ impl SEnv<CompuId> {
             | Compu::TApp(compu) => {
                 let App(compu, ty_a) = compu;
                 let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs.to_owned())?;
+                let compu_ty_ = tycker.statics.annotations_compu[&compu_];
                 let ty_a_ = self.mk(ty_a).lift(tycker, mo_ty)?;
-                // generate algebra given ty_a and pass in
 
-                let alg_a_ = self.mk(ty_a).algebra(tycker, (mo, mo_ty), algs)?;
-                let alg_a_ty_ = tycker.statics.annotations_compu[&alg_a_];
-                let thunk_alg_a_ty_ = tycker.thunk_arg(&self.env, alg_a_ty_);
-                let thunk_alg_a_ = Alloc::alloc(tycker, Thunk(alg_a_), thunk_alg_a_ty_);
+                match compu_ty_.destruct_arrow(tycker) {
+                    | Some((_, compu_alg_ty_)) => {
+                        // generate algebra given ty_a and pass in
+                        let alg_a_ = self.mk(ty_a).algebra(tycker, (mo, mo_ty), algs)?;
+                        let alg_a_ty_ = tycker.statics.annotations_compu[&alg_a_];
+                        let thunk_alg_a_ty_ = tycker.thunk_arg(&self.env, alg_a_ty_);
+                        let thunk_alg_a_ = Alloc::alloc(tycker, Thunk(alg_a_), thunk_alg_a_ty_);
 
-                let compu_alg_ty_ = {
-                    let Some((_a, b)) = ty_a_.destruct_arrow(tycker) else { unreachable!() };
-                    b
-                };
-                let compu_alg_ = Alloc::alloc(tycker, App(compu_, thunk_alg_a_), compu_alg_ty_);
-                let ty = tycker.statics.annotations_compu[&self.inner];
-                let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
-                Alloc::alloc(tycker, App(compu_alg_, ty_a_), ty_)
+                        let compu_alg_ =
+                            Alloc::alloc(tycker, App(compu_, thunk_alg_a_), compu_alg_ty_);
+                        let ty = tycker.statics.annotations_compu[&self.inner];
+                        let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
+                        Alloc::alloc(tycker, App(compu_alg_, ty_a_), ty_)
+                    }
+                    | None => {
+                        // Hack: should keep track of the algebra instead of falling back
+                        if compu == compu_ && ty_a == ty_a_ {
+                            self.inner
+                        } else {
+                            let ty = tycker.statics.annotations_compu[&self.inner];
+                            let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
+                            Alloc::alloc(tycker, App(compu_, ty_a_), ty_)
+                        }
+                    }
+                }
             }
             | Compu::Rec(compu) => {
                 let Rec(vpat, compu) = compu;
