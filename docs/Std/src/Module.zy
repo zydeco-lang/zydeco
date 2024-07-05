@@ -1,3 +1,0 @@
-module Builtin end
-module Core end
-module Data end

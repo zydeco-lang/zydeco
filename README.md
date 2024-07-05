@@ -36,14 +36,16 @@ Run `zydeco --help` for further usage information.
 
 We now have a toy "literate zydeco" written in zydeco! Try it out by running
 ```bash
-cd docs/spell && ./build.sh
+cd docs/spell && make build
 ```
 and the product will show up right in the folder - which is also a series of guide to programming in zydeco.
 
-A legacy version of the tutorial lies [here](docs/tutorial/intro_to_zydeco.md). With system-F_ω, type parameter and type alias shipped in we'll update the tutorial shortly.
+A legacy version of the tutorial lies [here](docs/tutorial/intro_to_zydeco.md).
+With system-F_ω and type alias shipped in, ~~we'll update the tutorial shortly~~ the tutorial is briefly updated.
+If the previous `spell` guide goes too fast, then the short tutorial might be easier to understand.
 
 We will develop more introductory material on zydeco when we have
-implemented more features. For now, you can also choose to browse `zydeco-lang/tests/` for
+implemented more features. For now, you can also choose to browse `lang/lib/` for
 some example programs.
 
 To run all tests
@@ -74,7 +76,8 @@ cargo test --all
 
 - `lang/`: the library implementing the parser, type checker and
 interpreter for the Zydeco language.
-- `lang/tests/`: test cases and example code
+- `lang/lib/`: standard library and example code (also serving as test cases)
+- `lang/tests/`: legacy test cases and example code
 - `cli/` Command-line interface
 - `web/` Web interface
 

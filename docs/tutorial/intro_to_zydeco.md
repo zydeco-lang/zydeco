@@ -1,6 +1,6 @@
 # Intro to Zydeco
 ## Types
-Zydeco has two kinds of types: value type (`A`) and computation type (`B`). 
+Zydeco has two kinds (`VType` and `CType`) of types: value type (`A`) and computation type (`B`). 
 
 A value type classifies inert data and a computation type classifies programs that compute things.
 
@@ -123,15 +123,15 @@ We can define `union type` or `recursive type` as follows:
 ```
 # Non-recursive
 data Weather where
-  | +Sunny()
-  | +Rainy()
-  | +Windy()
+  | +Sunny : Unit
+  | +Rainy : Unit
+  | +Windy : Unit
 end
 
 # Recursive
 data ListInt where
-  | +NoInt()
-  | +Cons(Int, ListInt)
+  | +NoInt : Unit
+  | +Cons  : Int * ListInt
 end
 
 # Here's a function print every element in the ListInt seperated by a ' '
@@ -156,25 +156,32 @@ For example, when we try to calculate the sum of a list of number recursively, w
 ```
 # When adding a list of numbers, the process should be either finishing or keeping adding numbers
 codata Summer where
-  | .done()    : Ret(Int) 
-  | .addN(Int) : Summer
+  | .done : Ret Int
+  | .addN : Int -> Summer
 end
 
 # Since Summer includes the return type Ret(Int), it can be used directly instead of using the original return type.
-let rec retSummer : Int -> Summer =
+def rec retSummer : Int -> Summer =
   fn (n : Int) ->
     comatch
     | .done   -> ret n
     | .addN x ->
       do n' <- ! add n x;
       ! retSummer n'
-    end;
+    end
+end
 
-let rec sumOk : NumList -> Summer =
+def rec sumOk : NumList -> Summer =
   fn (xs : NumList) ->
     match xs
     | +Empty()     -> ! retSummer 0 # When none of the elements remains, add a zero(.done) at the end of stack
     | +Cons(x, xs) -> ! sumOk xs .addN x; # As we call sumOk recursively, the label of .addN x is appended at the end of stack until xs is empty
     end
+end
 ```
 
+## System F_ω
+
+We have `forall (Y: CType) . B` and `exists (Y: CType) . A` just as normal system F. The term level syntax for types are the same as terms. For example, `(fn (X: VType) -> ...) Int` introduces a forall-typed function which takes Int as an argument; `match (Int, ...) | (X, x) -> ... end` works similarly (though to actually use them, you'll need more type annotation).
+
+Besides base kinds, `K -> K` are also valid kinds, for example, type (constructor) `(fn (X: VType) -> Ret X)` as kind `VType -> CType`. The syntax for type level is the same as term level.
