@@ -4,34 +4,28 @@
 alias Ret' (A : VType) : CType = forall (R : CType) . Thunk(A -> R) -> R end
 
 def f : Thunk(forall (A : VType) . Thunk(Ret' A) -> Ret A) = {
-  fn A rr -> (
+  fn A rr ->
     ! rr (Ret A) { fn a -> ret a }
-  )
 } end
 
 def g : Thunk(forall (A : VType) . Thunk(Ret A) -> Ret' A) = {
-  fn A r -> (
-    fn R ar -> (
-      do a <- ! r;
-      ! ar a
-    )
-  )
+  fn A r R ar ->
+    do a <- ! r;
+    ! ar a
 } end
 
 def id_ret : Thunk(forall (A : VType) . Thunk(Ret A) -> Ret A) = {
-  fn A r -> (
-    ! f (A) { ! g (A) r }
-  )
+  fn A r ->
+    ! f A { ! g A r }
 } end
 
 def id_ret' : Thunk(forall (A : VType) . Thunk(Ret' A) -> Ret' A) = {
-  fn A rr -> (
-    ! g (A) { ! f (A) rr }
-  )
+  fn A rr ->
+    ! g A { ! f A rr }
 } end
 
 main
   let n = 0 in
-  do n <- ! id_ret (Int) { ret n };
-  ! id_ret' (Int) { fn R ar -> ! ar n } (OS) exit
+  do n <- ! id_ret Int { ret n };
+  ! id_ret' Int { fn R ar -> ! ar n } OS exit
 end
