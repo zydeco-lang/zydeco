@@ -44,7 +44,6 @@ def ! mo-exnt (E: VType) (M: VType -> CType)
   with mo
     inline mo-exn
   begin
-    // we need to manually inline mo-exn for now
     ! mo-exn E
   end
 end

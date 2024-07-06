@@ -403,7 +403,9 @@ impl Resolve for TermId {
                 }
                 for (def, term) in inlines {
                     let () = term.resolve(resolver, (local.clone(), global))?;
+                    // Hack: should be a pattern
                     let () = def.resolve(resolver, ())?;
+                    local.var_to_def.insert(resolver.bitter.defs[def].clone(), *def);
                 }
                 for import in imports {
                     let Import { binder: _, ty, body } = import;
