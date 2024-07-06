@@ -111,11 +111,11 @@ mod impls_identifiers {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty: kd }, kd);
+                    let tm = Alloc::alloc(tycker, Hole, kd);
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, Ann { tm: Hole, ty }, ty);
+                    let tm = Alloc::alloc(tycker, Hole, ty);
                     PatAnnId::Value(tm, ty)
                 }
             }
@@ -323,7 +323,7 @@ pub enum Kind {
 
 #[derive(From, Clone, Debug)]
 pub enum TypePattern {
-    Hole(Ann<Hole, KindId>),
+    Hole(Hole),
     Var(DefId),
 }
 
@@ -410,7 +410,7 @@ mod impls_types {
 
 #[derive(From, Clone, Debug)]
 pub enum ValuePattern {
-    Hole(Ann<Hole, TypeId>),
+    Hole(Hole),
     Var(DefId),
     Ctor(Ctor<VPatId>),
     Triv(Triv),
@@ -567,6 +567,8 @@ pub struct StaticsArena {
     pub datas: StructArena<DataId, im::Vector<(CtorName, TypeId)>, Data>,
     /// arena for `codata`
     pub codatas: StructArena<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
+    /// arena for inlinable definitions
+    pub inlinables: ArenaAssoc<DefId, ValueId>,
 
     // the type of terms under the context it's type checked; "annotation"
     /// annotations for variable definitions
@@ -606,6 +608,7 @@ impl StaticsArena {
             solus: ArenaAssoc::new(),
             datas: StructArena::new(alloc),
             codatas: StructArena::new(alloc),
+            inlinables: ArenaAssoc::new(),
 
             annotations_var: ArenaAssoc::new(),
             annotations_abst: ArenaAssoc::new(),

@@ -26,7 +26,7 @@ impl TypeId {
             | Type::Fill(_) => *self,
             | Type::Abs(abs) => {
                 let Abs(tpat, ty) = abs;
-                let (def, _) = tpat.destruct(tycker);
+                let (def, _) = tpat.try_destruct_def(tycker);
                 if let Some(def) = def {
                     if let Some(_with) = env.get(&def) {
                         unreachable!()
@@ -390,7 +390,7 @@ impl TypeId {
             | ss::Type::Abs(abs) => {
                 // if f_ty is an abstraction, apply it
                 let ss::Abs(binder, body_ty) = abs;
-                let (def, _) = binder.destruct(tycker);
+                let (def, _) = binder.try_destruct_def(tycker);
                 let body_ty_subst =
                     if let Some(def) = def { body_ty.subst(tycker, def, a_ty)? } else { body_ty };
                 body_ty_subst

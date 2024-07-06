@@ -2,17 +2,16 @@ use crate::{syntax::*, *};
 use zydeco_utils::arena::ArenaAccess;
 
 impl TPatId {
-    pub fn destruct(&self, tycker: &mut Tycker) -> (Option<DefId>, KindId) {
-        match tycker.statics.tpats[self].clone() {
-            | TypePattern::Hole(Ann { tm: Hole, ty: kd }) => (None, kd),
-            | TypePattern::Var(def) => {
-                let AnnId::Kind(kd) = tycker.statics.annotations_var[&def] else { unreachable!() };
-                (Some(def), kd)
-            }
+    pub fn try_destruct_def(&self, tycker: &mut Tycker) -> (Option<DefId>, KindId) {
+        use TypePattern as TPat;
+        let kd = tycker.statics.annotations_tpat[self].to_owned();
+        match tycker.statics.tpats[self].to_owned() {
+            | TPat::Hole(Hole) => (None, kd),
+            | TPat::Var(def) => (Some(def), kd),
         }
     }
     pub fn destruct_def(&self, tycker: &mut Tycker) -> (DefId, KindId) {
-        let (def, kd) = self.destruct(tycker);
+        let (def, kd) = self.try_destruct_def(tycker);
         match def {
             | Some(def) => (def, kd),
             | None => {
@@ -168,6 +167,23 @@ impl TypeId {
         match tycker.statics.types.get(self)?.to_owned() {
             | Type::Forall(Forall(abst, ty)) => Some((abst, ty)),
             | _ => None,
+        }
+    }
+}
+
+impl VPatId {
+    /// If the pattern is a variable definition, return the definition and its type;
+    /// otherwise, return the type of the pattern.
+    pub fn try_destruct_def(&self, tycker: &mut Tycker) -> (Option<DefId>, TypeId) {
+        use ValuePattern as VPat;
+        let ty = tycker.statics.annotations_vpat[self].to_owned();
+        match tycker.statics.vpats[self].to_owned() {
+            | VPat::Hole(Hole) => (None, ty),
+            | VPat::Var(def) => (Some(def), ty),
+            | VPat::Ctor(_) => (None, ty),
+            | VPat::Triv(_) => (None, ty),
+            | VPat::VCons(_) => (None, ty),
+            | VPat::TCons(_) => (None, ty),
         }
     }
 }

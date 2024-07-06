@@ -182,8 +182,8 @@ impl Debruijn {
                 std::panic::Location::caller(),
             )?,
             | (Type::Abs(Abs(lpat, lbody)), Type::Abs(Abs(rpat, rbody))) => {
-                let (ldef, lkd) = lpat.destruct(tycker);
-                let (rdef, rkd) = rpat.destruct(tycker);
+                let (ldef, lkd) = lpat.try_destruct_def(tycker);
+                let (rdef, rkd) = rpat.try_destruct_def(tycker);
                 let _kd = Lub::lub(lkd, rkd, tycker)?;
                 let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
                 if body == lbody {

@@ -38,7 +38,7 @@ impl SyntacticallyUsed for ss::TPatId {
         use ss::TypePattern as Pat;
         match pat {
             | Pat::Hole(pat) => {
-                let ss::Ann { tm: ss::Hole, ty: _ } = pat;
+                let ss::Hole = pat;
                 false
             }
             | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),
@@ -51,7 +51,7 @@ impl SyntacticallyUsed for ss::VPatId {
         use ss::ValuePattern as Pat;
         match pat {
             | Pat::Hole(pat) => {
-                let ss::Ann { tm: ss::Hole, ty: _ } = pat;
+                let ss::Hole = pat;
                 false
             }
             | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),

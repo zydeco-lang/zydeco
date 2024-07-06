@@ -301,7 +301,7 @@ impl<'decl> SccDeclarations<'decl> {
                 // seal the type if needed
                 let bindee = if is_sealed {
                     let abst = tycker.statics.absts.alloc(());
-                    if let (Some(def), _kd) = binder.destruct(tycker) {
+                    if let (Some(def), _kd) = binder.try_destruct_def(tycker) {
                         tycker.statics.abst_hints.insert(abst, def);
                     }
                     tycker.statics.seals.insert(abst, ty);
@@ -375,7 +375,7 @@ impl<'decl> SccDeclarations<'decl> {
             let (binder, _kd) = binder.as_type();
             binder_map.insert(*id, binder);
             // register the def with abstract type
-            let (def, kd) = binder.destruct(tycker);
+            let (def, kd) = binder.try_destruct_def(tycker);
             if let Some(def) = def {
                 let abst = tycker.statics.absts.alloc(());
                 tycker.statics.abst_hints.insert(abst, def);
@@ -577,7 +577,7 @@ impl Tyck for SEnv<su::PatId> {
                                 let a_out_ann = self.mk(a).tyck(tycker, Action::ana(kd.into()))?;
                                 let (a_out, _a_kd) = a_out_ann.as_type();
                                 let mut subst_vec = Vec::new();
-                                if let (Some(def), _kd) = a_out.destruct(tycker) {
+                                if let (Some(def), _kd) = a_out.try_destruct_def(tycker) {
                                     let ty_abst = Alloc::alloc(tycker, abst, kd.into());
                                     subst_vec.push((def, ty_abst.into()));
                                 }
@@ -943,7 +943,7 @@ impl Tyck for SEnv<su::TermId> {
                                 let abst = Alloc::alloc(tycker, tpat, ());
                                 let subst_vec = {
                                     let mut subst_vec = Vec::new();
-                                    if let (Some(def), kd) = tpat.destruct(tycker) {
+                                    if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
                                         let ty_abst = Alloc::alloc(tycker, abst, kd);
                                         subst_vec.push((def, ty_abst.into()));
                                     }
@@ -956,7 +956,7 @@ impl Tyck for SEnv<su::TermId> {
                                         // a type function
                                         let ann = Alloc::alloc(tycker, ss::Arrow(kd, body_kd), ());
                                         // recover abst in ty
-                                        let ty = if let (Some(def), _kd) = tpat.destruct(tycker) {
+                                        let ty = if let (Some(def), _kd) = tpat.try_destruct_def(tycker) {
                                             let def_ty = Alloc::alloc(tycker, def, kd);
                                             ty.subst_abst_k(tycker, (abst, def_ty))?
                                         } else {
@@ -1068,7 +1068,7 @@ impl Tyck for SEnv<su::TermId> {
                                             TyckError::SortMismatch,
                                             std::panic::Location::caller(),
                                         )?;
-                                        let (def_binder, binder_kd) = binder.destruct(tycker);
+                                        let (def_binder, binder_kd) = binder.try_destruct_def(tycker);
                                         let mut env = self.env.clone();
                                         if let Some(def) = def_binder {
                                             let abst_ty = Alloc::alloc(tycker, abst, binder_kd);
@@ -1282,7 +1282,7 @@ impl Tyck for SEnv<su::TermId> {
                                 let abst = Alloc::alloc(tycker, tpat, ());
                                 let subst_vec = {
                                     let mut subst_vec = Vec::new();
-                                    if let (Some(def), kd) = tpat.destruct(tycker) {
+                                    if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
                                         let ty_abst = Alloc::alloc(tycker, abst, kd);
                                         subst_vec.push((def, ty_abst.into()));
                                     }
@@ -1385,7 +1385,7 @@ impl Tyck for SEnv<su::TermId> {
                                             let abst = Alloc::alloc(tycker, tpat, ());
                                             let subst_vec = {
                                                 let mut subst_vec = Vec::new();
-                                                if let (Some(def), kd) = tpat.destruct(tycker) {
+                                                if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
                                                     let ty_abst = Alloc::alloc(tycker, abst, kd);
                                                     subst_vec.push((def, ty_abst.into()));
                                                 }
@@ -1485,7 +1485,7 @@ impl Tyck for SEnv<su::TermId> {
                                 let abst = Alloc::alloc(tycker, tpat, ());
                                 let subst_vec = {
                                     let mut subst_vec = Vec::new();
-                                    if let (Some(def), kd) = tpat.destruct(tycker) {
+                                    if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
                                         let ty_abst = Alloc::alloc(tycker, abst, kd);
                                         subst_vec.push((def, ty_abst.into()));
                                     }

@@ -41,7 +41,7 @@ impl Alloc<AbstId> for Option<DefId> {
 impl Alloc<AbstId> for TPatId {
     type Ann = ();
     fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> AbstId {
-        let (def, kd) = val.destruct(tycker);
+        let (def, kd) = val.try_destruct_def(tycker);
         Alloc::alloc(tycker, def, kd)
     }
 }
@@ -95,7 +95,7 @@ macro_rules! AllocTypePattern {
     };
 }
 AllocTypePattern! {
-    Ann<Hole, KindId>
+    Hole
     DefId
 }
 
@@ -172,7 +172,7 @@ macro_rules! AllocValuePattern {
     };
 }
 AllocValuePattern! {
-    Ann<Hole, TypeId>
+    Hole
     DefId
     Ctor<VPatId>
     Triv
