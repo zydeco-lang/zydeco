@@ -1998,7 +1998,7 @@ impl Tyck for SEnv<su::TermId> {
                 }
             }
             | Tm::WithBlock(term) => {
-                let su::WithBlock { structs, imports, body } = term;
+                let su::WithBlock { structs, inlines, imports, body } = term;
 
                 // first we collect all the monad and algebra instances given
                 let mut mo = None;
@@ -2064,6 +2064,30 @@ impl Tyck for SEnv<su::TermId> {
                     // );
                 }
                 let algs = algs.into_iter().map(|(alg, _, _)| (alg)).collect();
+
+                // then we deal with the inlines
+                let mut inline_subs = Vec::new();
+                for (def, term) in inlines {
+                    let term_out_ann = self.mk(term).tyck(tycker, Action::syn())?;
+                    let (val, ty) = term_out_ann.try_as_value(
+                        tycker,
+                        TyckError::SortMismatch,
+                        std::panic::Location::caller(),
+                    )?;
+                    let ss::Value::Var(rdef) = tycker.statics.values[&val].to_owned() else {
+                        unreachable!()
+                    };
+                    let Some(val) = tycker.statics.inlinables.get(&rdef).cloned() else {
+                        tycker
+                            .err_k(TyckError::NotInlinable(def), std::panic::Location::caller())?
+                    };
+                    let ann = ty.into();
+                    if let Some(ann_) = tycker.statics.annotations_var.insert_or_get(def, ann) {
+                        let ann = Lub::lub_k(ann_, ann, tycker)?;
+                        tycker.statics.annotations_var.replace(def, ann);
+                    }
+                    inline_subs.push((def, val));
+                }
 
                 // then we deal with the imports
                 // let mut imports_ = Vec::new();
@@ -2168,7 +2192,25 @@ impl Tyck for SEnv<su::TermId> {
                 // TermAnnId::Compu(with_block, body_ty_lift)
 
                 // perform inlining
-                for (binder, body) in import_subs {
+                for (def, bindee) in inline_subs {
+                    let users = tycker.scoped.users[&def].to_owned();
+                    for user in users {
+                        let val = tycker.statics.values[&bindee].to_owned();
+                        let user = match tycker.statics.terms.forth(&user).to_owned() {
+                            | ss::TermId::Value(user) => user,
+                            | ss::TermId::Kind(_) | ss::TermId::Type(_) | ss::TermId::Compu(_) => {
+                                unreachable!()
+                            }
+                        };
+                        let Some(user) = tycker.statics.values.get_mut(&user) else {
+                            unreachable!()
+                        };
+                        *user = val;
+                    }
+                }
+
+                // perform import inlining
+                for (binder, bindee) in import_subs {
                     use ss::ValuePattern as VPat;
                     let def = match tycker.statics.vpats[&binder].to_owned() {
                         | VPat::Var(def) => def,
@@ -2180,7 +2222,7 @@ impl Tyck for SEnv<su::TermId> {
                     };
                     let users = tycker.scoped.users[&def].to_owned();
                     for user in users {
-                        let body = tycker.statics.values[&body].to_owned();
+                        let body = tycker.statics.values[&bindee].to_owned();
                         let user = match tycker.statics.terms.forth(&user).to_owned() {
                             | ss::TermId::Value(user) => user,
                             | ss::TermId::Kind(_) | ss::TermId::Type(_) | ss::TermId::Compu(_) => {

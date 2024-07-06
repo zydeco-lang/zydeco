@@ -946,7 +946,7 @@ impl SEnv<CompuId> {
                     Alloc::alloc(tycker, Dtor(compu_, dtor), ty_)
                 }
             }
-            | Compu::WithBlock(_) => unreachable!(),
+            // | Compu::WithBlock(_) => unreachable!(),
         };
         Ok(res)
     }

@@ -127,7 +127,7 @@ impl Ugly for CompuId {
             | Compu::Match(compu) => compu.ugly(f),
             | Compu::CoMatch(compu) => compu.ugly(f),
             | Compu::Dtor(compu) => compu.ugly(f),
-            | Compu::WithBlock(compu) => compu.ugly(f),
+            // | Compu::WithBlock(compu) => compu.ugly(f),
         }
     }
 }
@@ -451,21 +451,21 @@ impl Ugly for Import {
     }
 }
 
-impl Ugly for WithBlock {
-    fn ugly(&self, f: &Formatter) -> String {
-        let WithBlock { monad, algebras, imports, body } = self;
-        let mut s = String::new();
-        s += &format!("with {} ", monad.ugly(f));
-        for algebra in algebras.iter() {
-            s += &format!("with {} ", algebra.ugly(f));
-        }
-        for import in imports.iter() {
-            s += &import.ugly(f);
-        }
-        s += &format!("begin {} end", body.ugly(f));
-        s
-    }
-}
+// impl Ugly for WithBlock {
+//     fn ugly(&self, f: &Formatter) -> String {
+//         let WithBlock { monad, algebras, imports, body } = self;
+//         let mut s = String::new();
+//         s += &format!("with {} ", monad.ugly(f));
+//         for algebra in algebras.iter() {
+//             s += &format!("with {} ", algebra.ugly(f));
+//         }
+//         for import in imports.iter() {
+//             s += &import.ugly(f);
+//         }
+//         s += &format!("begin {} end", body.ugly(f));
+//         s
+//     }
+// }
 
 impl Ugly for DeclId {
     fn ugly(&self, f: &Formatter) -> String {

@@ -440,14 +440,15 @@ pub struct Import {
     pub body: ValueId,
 }
 
-/// `with mo import f : B = V begin M end`
-#[derive(Clone, Debug)]
-pub struct WithBlock {
-    pub monad: ValueId,
-    pub algebras: Vec<ValueId>,
-    pub imports: Vec<Import>,
-    pub body: CompuId,
-}
+// /// `with mo inline x import f : B = V begin M end`
+// #[derive(Clone, Debug)]
+// pub struct WithBlock {
+//     pub monad: ValueId,
+//     pub algebras: Vec<ValueId>,
+//     pub inlines: Vec<DefId>,
+//     pub imports: Vec<Import>,
+//     pub body: CompuId,
+// }
 
 #[derive(From, Clone, Debug)]
 pub enum Computation {
@@ -464,7 +465,7 @@ pub enum Computation {
     Match(Match<ValueId, VPatId, CompuId>),
     CoMatch(CoMatch<CompuId>),
     Dtor(Dtor<CompuId>),
-    WithBlock(WithBlock),
+    // WithBlock(WithBlock),
 }
 
 /* -------------------------------- TopLevel -------------------------------- */

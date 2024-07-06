@@ -549,16 +549,22 @@ impl Ugly for Import {
 impl Ugly for WithBlock {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let WithBlock { structs, imports, body } = self;
+        let WithBlock { structs, inlines, imports, body } = self;
         for struct_ in structs {
             s += "with ";
             s += &struct_.ugly(f);
+            s += " ";
+        }
+        for inline in inlines {
+            s += "inline ";
+            s += &inline.ugly(f);
+            s += " ";
         }
         for import in imports {
-            s += " ";
             s += &import.ugly(f);
+            s += " ";
         }
-        s += " begin ";
+        s += "begin ";
         s += &body.ugly(f);
         s += " end";
         s

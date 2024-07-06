@@ -59,6 +59,8 @@ pub enum Tok<'input> {
     With,
     #[token("import")]
     Import,
+    #[token("inline")]
+    Inline,
     #[token("begin")]
     Begin,
     #[token("fn")]
@@ -158,6 +160,7 @@ impl<'input> Display for Tok<'input> {
             | Tok::Begin => write!(f, "begin"),
             | Tok::With => write!(f, "with"),
             | Tok::Import => write!(f, "import"),
+            | Tok::Inline => write!(f, "inline"),
             | Tok::Fn => write!(f, "fn"),
             | Tok::Pi => write!(f, "pi"),
             | Tok::Rec => write!(f, "rec"),

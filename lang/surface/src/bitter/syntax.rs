@@ -98,10 +98,11 @@ pub struct Import {
     pub body: TermId,
 }
 
-/// `with mo import f : B = V begin M end`
+/// `with mo inline x import f : B = V begin M end`
 #[derive(Clone, Debug)]
 pub struct WithBlock {
     pub structs: Vec<TermId>,
+    pub inlines: Vec<(DefId, TermId)>,
     pub imports: Vec<Import>,
     pub body: TermId,
 }

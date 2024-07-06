@@ -634,13 +634,25 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Dtor(term, name).into(), self.into())
             }
             | Tm::WithBlock(term) => {
-                let t::WithBlock { structs, imports, body } = term;
-                let monad_ty = structs.desugar(desugarer);
+                let t::WithBlock { structs, inlines, imports, body } = term;
+                let structs = structs.desugar(desugarer);
+                let mut inlines_ = Vec::new();
+                for inline in inlines {
+                    let def = inline;
+                    let name = desugarer.lookup_def(inline);
+                    let inline = inline.desugar(desugarer);
+                    let term = Alloc::alloc(
+                        desugarer,
+                        b::Term::Var(NameRef(false, vec![], name)),
+                        def.into(),
+                    );
+                    inlines_.push((inline, term))
+                }
                 let imports = imports.desugar(desugarer);
                 let body = body.desugar(desugarer);
                 Alloc::alloc(
                     desugarer,
-                    b::WithBlock { structs: monad_ty, imports, body }.into(),
+                    b::WithBlock { structs, inlines: inlines_, imports, body }.into(),
                     self.into(),
                 )
             }

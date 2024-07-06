@@ -42,18 +42,10 @@ def ! mo-exnt (E: VType) (M: VType -> CType)
   // end
 
   with mo
+    inline mo-exn
   begin
     // we need to manually inline mo-exn for now
-    (comatch
-    | .return A a ->
-      ret +Right(a)
-    | .bind A A' m f ->
-      do a? <- ! m;
-      match a?
-      | +Left(e) -> ret +Left(e)
-      | +Right(a) -> ! f a
-      end
-    end : Monad (Exn E))
+    ! mo-exn E
   end
 end
 
@@ -61,8 +53,6 @@ def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
   comatch
   | .monad M mo -> ! mo-exnt E M mo
   | .lift M A mo m ->
-    // do~ ! mo .bind A (Either E A) m; fn a ->
-    // ! mo .return (Either E A) +Right(a)
     with mo
       import m : Thunk (Ret A) = m
       import mo-exnt-return : Thunk (A -> Exn E A) = { ! mo-exnt E M mo .return A }
@@ -110,16 +100,9 @@ def ! mo-exnkt (E: VType) (M: VType -> CType)
   // end
 
   with mo
+    inline mo-exnk
   begin
-    (comatch
-    | .return A a ->
-      fn R ke ka ->
-      ! ka a
-    | .bind A A' m f ->
-      fn R ke ka ->
-      do~ ! m R ke; fn a ->
-      ! f a R ke ka
-    end : Monad (ExnK E))
+    ! mo-exnk E
   end
 end
 
@@ -157,11 +140,9 @@ def ! mo-returnt (M: VType -> CType)
   (mo: Thunk (Monad M))
 : Monad (ReturnT M) =
   with mo
+    inline mo-return
   begin
-    (comatch
-    | .return A a -> ret a
-    | .bind A A' m f -> do a <- ! m; ! f a
-    end : Monad Return)
+    ! mo-return
   end
 end
 
@@ -199,11 +180,9 @@ def ! mo-kontt (M: VType -> CType)
   (mo: Thunk (Monad M))
 : Monad (KontT M) =
   with mo
+    inline mo-kont
   begin
-    (comatch
-    | .return A a R k -> ! k a
-    | .bind A A' m f R k -> ! m R { fn a -> ! f a R k }
-    end : Monad Kont)
+    ! mo-kont
   end
 end
 
@@ -245,14 +224,9 @@ def ! mo-statekt (S: VType) (M: VType -> CType)
   (mo: Thunk (Monad M))
 : Monad (StateKT S M) =
   with mo
+    inline mo-statek
   begin
-    (comatch
-    | .return A a R s k ->
-      ! k a s
-    | .bind A A' m f R s k ->
-      ! m R s
-      { fn a s' -> ! f a R s' k }
-    end : Monad (StateK S))
+    ! mo-statek S
   end
 end
 
@@ -308,15 +282,9 @@ def ! mo-nondett (M: VType -> CType)
   (mo: Thunk (Monad M))
 : Monad (NonDetT M) =
   with mo
+    inline mo-nondet
   begin
-    (comatch
-    | .return A a ->
-      ret +Cons(a, +Nil())
-    | .bind A A' m f ->
-      do xs <- ! m;
-      ! foldl A (List A') xs
-      { fn x r -> do xs <- ! f x; ! reverse' A' xs r } +Nil()
-    end : Monad NonDet)
+    ! mo-nondet
   end
 end
 
@@ -341,8 +309,7 @@ main
       ! mo-exnk String .return Int c
     in
     with { ! mo-exnk String }
-      // need inlining
-      import add_ : Thunk (Int -> Int -> Ret Int) = (add_exn : Thunk (Int -> Int -> ExnK String Int))
+      import add_ : Thunk (Int -> Int -> Ret Int) = add_exn
     begin
       do x <- ! add_ 1 -1;
       do x <- ret x;

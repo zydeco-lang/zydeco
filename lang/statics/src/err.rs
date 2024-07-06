@@ -16,6 +16,7 @@ pub enum TyckError {
     MultipleMonads,
     NeitherMonadNorAlgebra(su::TermId, TypeId),
     MissingMonad,
+    NotInlinable(ss::DefId),
     AlgebraGenerationFailure,
 }
 
@@ -88,6 +89,17 @@ impl Tycker {
                 )
             }
             | TyckError::MissingMonad => format!("Missing monad"),
+            | TyckError::NotInlinable(def) => {
+                let span = self.spans[self.scoped.textual.back(&def.into()).unwrap()].to_owned();
+                format!(
+                    "Cannot inline definition: {} ({})",
+                    {
+                        use crate::fmt::*;
+                        def.ugly(&Formatter::new(&self.scoped, &self.statics))
+                    },
+                    span
+                )
+            }
             | TyckError::AlgebraGenerationFailure => {
                 format!("Cannot generate algebra for this type")
             }

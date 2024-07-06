@@ -39,6 +39,7 @@ extern {
         "ret" => Tok::Ret,
         "with" => Tok::With,
         "import" => Tok::Import,
+        "inline" => Tok::Inline,
         "begin" => Tok::Begin,
         "fn" => Tok::Fn,
         "pi" => Tok::Pi,
@@ -236,10 +237,13 @@ Import: Import = {
         binder, ty, body
     },
 };
+Inline: DefId = {
+    "inline" <DefId> => <>.into(),
+};
 WithBlock: WithBlock = {
-    <structs:("with" <TermId>)*> <imports:Import*>
+    <structs:("with" <TermId>)*> <inlines:Inline*> <imports:Import*>
     "begin" <body:TermId> "end" => WithBlock {
-        structs, imports, body
+        structs, inlines, imports, body
     },
 };
 

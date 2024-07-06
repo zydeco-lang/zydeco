@@ -397,9 +397,13 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::WithBlock(term) => {
-                let WithBlock { structs, imports, body } = &term;
+                let WithBlock { structs, inlines, imports, body } = &term;
                 for struct_ in structs {
                     let () = struct_.resolve(resolver, (local.clone(), global))?;
+                }
+                for (def, term) in inlines {
+                    let () = term.resolve(resolver, (local.clone(), global))?;
+                    let () = def.resolve(resolver, ())?;
                 }
                 for import in imports {
                     let Import { binder: _, ty, body } = import;
@@ -533,6 +537,13 @@ impl Collect for SccDeclarations<'_> {
     }
 }
 
+impl Collect for DefId {
+    type Out = Context<()>;
+    fn collect(&self, _collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
+        Ok(ctx.extended([(*self, ())]))
+    }
+}
+
 impl Collect for PatId {
     type Out = Context<()>;
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
@@ -547,7 +558,7 @@ impl Collect for PatId {
                 let Hole = pat;
                 ctx
             }
-            | Pattern::Var(def) => ctx.extended([(def, ())]),
+            | Pattern::Var(def) => def.collect(collector, ctx)?,
             | Pattern::Ctor(pat) => {
                 let Ctor(_ctor, args) = pat;
                 args.collect(collector, ctx)?
@@ -680,9 +691,13 @@ impl Collect for TermId {
             }
             | Term::WithBlock(term) => {
                 let mut ctx = ctx.to_owned();
-                let WithBlock { structs, imports, body } = term;
+                let WithBlock { structs, inlines, imports, body } = term;
                 for struct_ in structs {
                     let () = struct_.collect(collector, ctx.to_owned())?;
+                }
+                for (def, term) in inlines {
+                    let () = term.collect(collector, ctx.to_owned())?;
+                    ctx = def.collect(collector, ctx)?;
                 }
                 for Import { binder: _, ty, body } in &imports {
                     let () = ty.collect(collector, ctx.to_owned())?;
