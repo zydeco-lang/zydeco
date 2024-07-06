@@ -28,6 +28,9 @@ pub struct Tycker {
 // Todo: use async to cut all tycker functions into small segments (returning futures)
 // and achieve better concurrency
 
+// Todo: implement a better coverage checker
+// Todo: use hole solution to implement the confluence checker
+
 impl Tycker {
     pub fn new(
         spans: SpanArena, prim: PrimDef, scoped: ScopedArena, alloc: &mut GlobalAlloc,
@@ -69,8 +72,8 @@ impl Tycker {
         if !self.errors.is_empty() {
             Err(())?
         }
-        // fill all holes with solutions
-        // Todo: make it correct
+        // before we go, fill all holes with solutions
+        // Note: since all types are checked and solved, all holes are filled, no need for recursive filling
         let mut types = Vec::new();
         for (id, ty) in &self.statics.types {
             types.push((*id, ty.to_owned()));
@@ -322,6 +325,13 @@ impl<'decl> SccDeclarations<'decl> {
                 let (binder, _) = binder.as_value();
                 // since it's not a value, don't add the type into the environment
                 tycker.statics.decls.insert(*id, ss::VAliasBody { binder, bindee }.into());
+                // however, we can consider adding it to inlinables
+                match binder.try_destruct_def(tycker) {
+                    | (Some(def), _) => {
+                        tycker.statics.inlinables.insert(def, bindee);
+                    }
+                    | (None, _) => {}
+                }
                 env
             }
             | TermAnnId::Compu(_, _) => {
@@ -956,7 +966,9 @@ impl Tyck for SEnv<su::TermId> {
                                         // a type function
                                         let ann = Alloc::alloc(tycker, ss::Arrow(kd, body_kd), ());
                                         // recover abst in ty
-                                        let ty = if let (Some(def), _kd) = tpat.try_destruct_def(tycker) {
+                                        let ty = if let (Some(def), _kd) =
+                                            tpat.try_destruct_def(tycker)
+                                        {
                                             let def_ty = Alloc::alloc(tycker, def, kd);
                                             ty.subst_abst_k(tycker, (abst, def_ty))?
                                         } else {
@@ -1068,7 +1080,8 @@ impl Tyck for SEnv<su::TermId> {
                                             TyckError::SortMismatch,
                                             std::panic::Location::caller(),
                                         )?;
-                                        let (def_binder, binder_kd) = binder.try_destruct_def(tycker);
+                                        let (def_binder, binder_kd) =
+                                            binder.try_destruct_def(tycker);
                                         let mut env = self.env.clone();
                                         if let Some(def) = def_binder {
                                             let abst_ty = Alloc::alloc(tycker, abst, binder_kd);
@@ -1385,7 +1398,9 @@ impl Tyck for SEnv<su::TermId> {
                                             let abst = Alloc::alloc(tycker, tpat, ());
                                             let subst_vec = {
                                                 let mut subst_vec = Vec::new();
-                                                if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
+                                                if let (Some(def), kd) =
+                                                    tpat.try_destruct_def(tycker)
+                                                {
                                                     let ty_abst = Alloc::alloc(tycker, abst, kd);
                                                     subst_vec.push((def, ty_abst.into()));
                                                 }
@@ -1694,6 +1709,13 @@ impl Tyck for SEnv<su::TermId> {
                 // then, ana binder with bindee_ty
                 let binder_out_ann = self.mk(binder).tyck(tycker, Action::ana(bindee_ty.into()))?;
                 let (binder_out, _binder_ty) = binder_out_ann.as_value();
+                // consider adding it to the inlinables
+                match binder_out.try_destruct_def(tycker) {
+                    | (Some(def), _) => {
+                        tycker.statics.inlinables.insert(def, bindee_out);
+                    }
+                    | (None, _) => {}
+                }
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
                     let tail_out_ann = self.mk(tail).tyck(tycker, Action::switch(switch))?;
