@@ -119,21 +119,32 @@ module List where
       end
   end
 
-  pub def rec foldl : forall (A : VType) (R : VType) . List A -> Thunk(A -> R -> Ret R) -> R -> Ret R =
-    fn A R l step s ->
-      match l
-      | +Nil() -> ret s
-      | +Cons(x, xs) ->
-        do s' <- ! step x s;
-        ! foldl A R xs step s'
-      end
+  pub def ! rec foldl (A : VType) (R : VType) (xs: List A) (f: Thunk(A -> R -> Ret R)) (r: R) : Ret R =
+    match xs
+    | +Nil() -> ret r
+    | +Cons(x, xs) ->
+      do r' <- ! f x r;
+      ! foldl A R xs f r'
+    end
   end
 
-  pub def ! rec reverse (A : VType) (xs : List A) : Ret(List A) =
+  pub def ! rec foldl~ (A : VType) (R : CType) (xs: List A) (f: Thunk(A -> Thunk R -> R)) (r: Thunk R) : R =
+    match xs
+    | +Nil() -> ! r
+    | +Cons(x, xs) ->
+      ! foldl~ A R xs f { ! f x r }
+    end
+  end
+
+  pub def ! rec reverse (A : VType) (xs : List A) : Ret (List A) =
+    ! reverse' A xs +Nil()
+  end
+
+  pub def ! rec reverse' (A : VType) (xs : List A) (xs': List A) : Ret (List A) =
     ! foldl A (List A)
             xs
             {fn x xs -> ret +Cons(x, xs)}
-            +Nil()
+            xs'
   end
 
   def ! rec get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =

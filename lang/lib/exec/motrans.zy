@@ -73,7 +73,6 @@ def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
   end
 end
 
-// Add the algebra for the output type of the continuation $R$
 alias ExnK (E: VType) (A: VType) : CType =
   forall (R: CType) . Thunk (E -> R) -> Thunk (A -> R) -> R
 end
@@ -90,6 +89,7 @@ def ! mo-exnk (E: VType) : Monad (ExnK E) =
   end
 end
 
+// Pass the algebra of `R` to the continuation
 alias ExnKT (E: VType) (M: VType -> CType) (A: VType) : CType =
   forall (R: CType) . Thunk (Algebra M R) -> Thunk (E -> R) -> Thunk (A -> R) -> R
 end
@@ -126,61 +126,216 @@ end
 def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
   comatch
   | .monad M mo -> ! mo-exnkt E M mo
-  | .lift M A mo m -> fn R alg ke ka ->
-    // with mo with alg
-    //   import m : Thunk (Ret A) = m
-    //   import ka : Thunk (A -> R) = ka
-    // begin
-    //   do a <- ! m;
-    //   ! ka a
-    // end
+  | .lift M A mo m -> fn R alg ->
     (with mo with alg
       import m : Thunk (Ret A) = m
       import mo-exnkt-return : Thunk (A -> ExnK E A) = { ! mo-exnkt E M mo .return A }
     begin
       do a <- ! m;
       ! mo-exnkt-return a
-    end) R alg ke ka
+    end) R alg
   end
 end
 
-// // State Monad implementations...
+// In essence, we present two identity relative monads, namely Return and Kont.
 
-// codata StateK (S: VType) (A: VType) where
-//   | .run : forall (R: CType) .
-//     S -> Thunk (A -> S -> R) -> R
-// end
+// Return Monad is just the primitive `Ret`
+alias Return : VType -> CType = Ret end
 
-// def ! mstatek (S: VType) : Monad (StateK S) =
-//   comatch
-//   | .return A a ->
-//     fn .run R s k ->
-//     ! k a s
-//   | .bind A A' m f ->
-//     fn .run R s k ->
-//     ! m .run R s
-//     { fn a s' -> ! f a .run R s' k }
-//   end
-// end
+def ! mo-return : Monad Return =
+  comatch
+  | .return A a -> ret a
+  | .bind A A' m f -> do a <- ! m; ! f a
+  end
+end
+
+alias ReturnT (M: VType -> CType) : VType -> CType =
+  M
+end
+
+def ! mo-returnt (M: VType -> CType)
+  (mo: Thunk (Monad M))
+: Monad (ReturnT M) =
+  with mo
+  begin
+    (comatch
+    | .return A a -> ret a
+    | .bind A A' m f -> do a <- ! m; ! f a
+    end : Monad Return)
+  end
+end
+
+def ! mt-returnt : MonadTrans ReturnT =
+  comatch
+  | .monad M mo -> ! mo-returnt M mo
+  | .lift M A mo m ->
+    with mo
+      import m : Thunk (Ret A) = m
+      import mo-returnt-return : Thunk (A -> Return A) = { ! mo-returnt M mo .return A }
+    begin
+      do a <- ! m;
+      ! mo-returnt-return a
+    end
+  end
+end
+
+// Kontinuation Monad
+alias Kont (A: VType) : CType =
+  forall (R: CType) . Thunk (A -> R) -> R
+end
+
+def ! mo-kont : Monad Kont =
+  comatch
+  | .return A a R k -> ! k a
+  | .bind A A' m f R k -> ! m R { fn a -> ! f a R k }
+  end
+end
+
+alias KontT (M: VType -> CType) (A: VType) : CType =
+  forall (R: CType) . Thunk (Algebra M R) -> Thunk (A -> R) -> R
+end
+
+def ! mo-kontt (M: VType -> CType)
+  (mo: Thunk (Monad M))
+: Monad (KontT M) =
+  with mo
+  begin
+    (comatch
+    | .return A a R k -> ! k a
+    | .bind A A' m f R k -> ! m R { fn a -> ! f a R k }
+    end : Monad Kont)
+  end
+end
+
+def ! mt-kontt : MonadTrans KontT =
+  comatch
+  | .monad M mo -> ! mo-kontt M mo
+  | .lift M A mo m -> fn R alg ->
+    (with mo with alg
+      import m : Thunk (Ret A) = m
+      import mo-kontt-return : Thunk (A -> Kont A) = { ! mo-kontt M mo .return A }
+    begin
+      do a <- ! m;
+      ! mo-kontt-return a
+    end) R alg
+  end
+end
+
+// State Monad in CPS
+
+alias StateK (S: VType) (A: VType) : CType =
+  forall (R: CType) . S -> Thunk (A -> S -> R) -> R
+end
+
+def ! mo-statek (S: VType) : Monad (StateK S) =
+  comatch
+  | .return A a R s k ->
+    ! k a s
+  | .bind A A' m f R s k ->
+    ! m R s
+    { fn a s' -> ! f a R s' k }
+  end
+end
+
+alias StateKT (S: VType) (M: VType -> CType) (A: VType) : CType =
+  forall (R: CType) . Thunk (Algebra M R) -> S -> Thunk (A -> S -> R) -> R
+end
+
+def ! mo-statekt (S: VType) (M: VType -> CType)
+  (mo: Thunk (Monad M))
+: Monad (StateKT S M) =
+  with mo
+  begin
+    (comatch
+    | .return A a R s k ->
+      ! k a s
+    | .bind A A' m f R s k ->
+      ! m R s
+      { fn a s' -> ! f a R s' k }
+    end : Monad (StateK S))
+  end
+end
+
+def ! mt-statekt (S: VType) : MonadTrans (StateKT S) =
+  comatch
+  | .monad M mo -> ! mo-statekt S M mo
+  | .lift M A mo m -> fn R alg ->
+    (with mo with alg
+      import m : Thunk (Ret A) = m
+      import mo-statekt-return : Thunk (A -> StateK S A) = { ! mo-statekt S M mo .return A }
+    begin
+      do a <- ! m;
+      ! mo-statekt-return a
+    end) R alg
+  end
+end
 
 // codata MonadState (S: VType) (M: VType -> CType) where
 //   | .get : M S
 //   | .put : S -> M Unit
 // end
 
-// def ! rec mstate_statek (S: VType) : MonadState S (StateK S) =
+// def ! rec mstate-statek (S: VType) : MonadState S (StateK S) =
 //   comatch
-//   | .get ->
-//     fn .run R s k ->
+//   | .get R s k ->
 //     ! k s s
-//   | .put s' ->
-//     fn .run R s k ->
+//   | .put s' R _s k ->
 //     ! k () s'
 //   end
 // end
 
+// Non-deterministic Monad in Ret style
+alias NonDet (A: VType) : CType =
+  Ret (List A)
+end
+
+def ! mo-nondet : Monad NonDet =
+  comatch
+  | .return A a ->
+    ret +Cons(a, +Nil())
+  | .bind A A' m f ->
+    do xs <- ! m;
+    ! foldl A (List A') xs
+    { fn x r -> do xs <- ! f x; ! reverse' A' xs r } +Nil()
+  end
+end
+
+alias NonDetT (M: VType -> CType) (A: VType) : CType =
+  M (List A)
+end
+
+def ! mo-nondett (M: VType -> CType)
+  (mo: Thunk (Monad M))
+: Monad (NonDetT M) =
+  with mo
+  begin
+    (comatch
+    | .return A a ->
+      ret +Cons(a, +Nil())
+    | .bind A A' m f ->
+      do xs <- ! m;
+      ! foldl A (List A') xs
+      { fn x r -> do xs <- ! f x; ! reverse' A' xs r } +Nil()
+    end : Monad NonDet)
+  end
+end
+
+def ! mt-nondett : MonadTrans NonDetT =
+  comatch
+  | .monad M mo -> ! mo-nondett M mo
+  | .lift M A mo m ->
+    with mo
+      import m : Thunk (Ret A) = m
+      import mo-nondett-return : Thunk (A -> NonDet A) = { ! mo-nondett M mo .return A }
+    begin
+      do a <- ! m;
+      ! mo-nondett-return a
+    end
+  end
+end
+
 main
-  let e = {
+  let ! e =
     let ! add_exn (a: Int) (b: Int) : ExnK String Int =
       do c <- ! add a b;
       ! mo-exnk String .return Int c
@@ -193,8 +348,7 @@ main
       do x <- ret x;
       ret x
     end
-  } in
+  in
   ! e OS { fn e -> ! panic e } { fn a -> ! exit a }
-  // ! exit 0
 end
 
