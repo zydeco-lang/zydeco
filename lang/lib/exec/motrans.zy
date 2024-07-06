@@ -134,13 +134,13 @@ def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
     //   do a <- ! m;
     //   ! ka a
     // end
-    with mo with alg
+    (with mo with alg
       import m : Thunk (Ret A) = m
-      import mo-exnkt-return : Thunk (A -> R) = { fn (a: A) -> ! mo-exnkt E M mo .return A a R alg ke ka }
+      import mo-exnkt-return : Thunk (A -> ExnK E A) = { ! mo-exnkt E M mo .return A }
     begin
       do a <- ! m;
       ! mo-exnkt-return a
-    end
+    end) R alg ke ka
   end
 end
 

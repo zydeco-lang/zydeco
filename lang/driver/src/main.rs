@@ -1,7 +1,8 @@
 fn main() {
     let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         // .join("../lib/icfp/proj.toml")
-        .join("../lib/exec/proj.toml")
+        // .join("../lib/exec/proj.toml")
+        .join("../lib/exec/alg.toml")
         // .join("../lib/std/proj.toml")
         .canonicalize()
         .unwrap();

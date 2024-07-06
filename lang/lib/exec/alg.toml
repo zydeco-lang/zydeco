@@ -1,0 +1,12 @@
+name = "AlgTests"
+
+srcs = [
+    "../std/core.zy",
+    "../std/data.zy",
+]
+deps = []
+bins = [
+    "motrans.zy",
+]
+
+std = "NoStd"
