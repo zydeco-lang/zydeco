@@ -6,7 +6,9 @@ srcs = [
 ]
 deps = []
 bins = [
-    "motrans.zy",
+    # "alg.zy",
+    "algtrans.zy",
+    # "motrans.zy",
 ]
 
 std = "NoStd"

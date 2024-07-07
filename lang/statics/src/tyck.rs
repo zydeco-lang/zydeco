@@ -2125,6 +2125,17 @@ impl Tyck for SEnv<su::TermId> {
                         TyckError::SortMismatch,
                         std::panic::Location::caller(),
                     )?;
+                    // // Debug: print
+                    // {
+                    //     use crate::fmt::*;
+                    //     println!(
+                    //         "import {} : {} = {} : {}",
+                    //         binder.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                    //         ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                    //         body.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
+                    //         body_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                    //     );
+                    // }
                     // imports_.push(ss::Import { binder, ty, body });
                     import_subs.push((binder, body));
                     {
