@@ -307,7 +307,7 @@ main
       do c <- ! add a b;
       ! mo-exnk String .return Int c
     in
-    with { ! mo-exnk String }
+    with { ! mt-returnt .monad (ExnK String) { ! mo-exnk String } }
       import add_ : Thunk (Int -> Int -> Ret Int) = add_exn
     begin
       do x <- ! add_ 1 -1;

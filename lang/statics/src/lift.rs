@@ -174,11 +174,20 @@ impl SEnv<TypeId> {
                 let kd = tycker.statics.annotations_abst[&abst];
                 let abst_ty = Alloc::alloc(tycker, abst, kd);
                 let sig = self.mk(kd).signature(tycker, mo_ty, abst_ty)?;
-                let thunk_sig = tycker.thunk_arg(&self.env, sig);
-                let body_ = self.mk(body).lift(tycker, mo_ty)?;
-                let ctype = tycker.ctype(&self.env);
-                let str_body_ = Alloc::alloc(tycker, Arrow(thunk_sig, body_), ctype);
-                Alloc::alloc(tycker, Type::Forall(Forall(abst, str_body_)), ann)
+                // Hack: if the signature is a `Top`, then we don't need to generate the algebra
+                match sig.destruct_top(&self.env, tycker) {
+                    | Some(()) => {
+                        let body_ = self.mk(body).lift(tycker, mo_ty)?;
+                        Alloc::alloc(tycker, Type::Forall(Forall(abst, body_)), ann)
+                    }
+                    | None => {
+                        let thunk_sig = tycker.thunk_arg(&self.env, sig);
+                        let body_ = self.mk(body).lift(tycker, mo_ty)?;
+                        let ctype = tycker.ctype(&self.env);
+                        let str_body_ = Alloc::alloc(tycker, Arrow(thunk_sig, body_), ctype);
+                        Alloc::alloc(tycker, Type::Forall(Forall(abst, str_body_)), ann)
+                    }
+                }
             }
             | Type::Prod(ty) => {
                 let Prod(a, b) = ty;
@@ -266,7 +275,10 @@ impl SEnv<TypeId> {
         }
 
         // and we only deal with computation types from now on
-        assert!(Lub::lub_inner(kd, ctype, tycker).is_ok(), "kind mismatch");
+        assert!(Lub::lub_inner(kd, ctype, tycker).is_ok(), "kind mismatch: {}", {
+            use crate::fmt::*;
+            kd.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+        });
 
         // next, check if ty is among the carriers of algebras
         // if so, just return the corresponding algebra
@@ -673,6 +685,20 @@ impl SEnv<ValueId> {
     pub fn lift(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
     ) -> ResultKont<ValueId> {
+        // administrative
+        {
+            tycker.stack.push_back(TyckTask::Lift(self.inner.into()))
+        }
+        let res = self.lift_inner(tycker, (mo, mo_ty), algs);
+        // administrative
+        {
+            tycker.stack.pop_back();
+        }
+        res
+    }
+    pub fn lift_inner(
+        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
+    ) -> ResultKont<ValueId> {
         let ty = tycker.statics.annotations_value[&self.inner];
         let res = match tycker.statics.values[&self.inner].to_owned() {
             | Value::Hole(_) | Value::Var(_) | Value::Triv(_) | Value::Lit(_) => self.inner,
@@ -731,6 +757,20 @@ impl SEnv<CompuId> {
     pub fn lift(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
     ) -> ResultKont<CompuId> {
+        {
+            // administrative
+            tycker.stack.push_back(TyckTask::Lift(self.inner.into()))
+        }
+        let res = self.lift_inner(tycker, (mo, mo_ty), algs);
+        {
+            // administrative
+            tycker.stack.pop_back();
+        }
+        res
+    }
+    pub fn lift_inner(
+        &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
+    ) -> ResultKont<CompuId> {
         let ctype = tycker.ctype(&self.env);
 
         use Computation as Compu;
@@ -769,23 +809,39 @@ impl SEnv<CompuId> {
 
                 let y_kd = tycker.statics.annotations_abst[&abst];
                 let ty_y = Alloc::alloc(tycker, abst, y_kd);
-                let var_str = Alloc::alloc(tycker, VarName("str".to_string()), y_kd.into());
-                let vpat_str_ty_ = self.mk(y_kd).signature(tycker, mo_ty, ty_y)?;
-                let vpat_str_: VPatId = Alloc::alloc(tycker, var_str, vpat_str_ty_);
-                let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs)?;
-                let fn_str_compu_ = Alloc::alloc(tycker, Abs(vpat_str_, compu_), ty_body);
+                let str_ty_ = self.mk(y_kd).signature(tycker, mo_ty, ty_y)?;
+                // Hack: if str is `U Top`, then we dont pass in the algebra
+                let is_thunked_top = { str_ty_.destruct_top(&self.env, tycker).is_some() };
+                if is_thunked_top {
+                    let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs)?;
+                    let tpat_ = self.mk(tpat).lift(tycker, mo_ty)?;
+                    let ty_ = self.mk(forall_ty).lift(tycker, mo_ty)?;
+                    Alloc::alloc(tycker, Abs(tpat_, compu_), ty_)
+                } else {
+                    let var_str = Alloc::alloc(tycker, VarName("str".to_string()), y_kd.into());
+                    let thunked_str_ty = tycker.thunk_arg(&self.env, str_ty_);
+                    let vpat_str_: VPatId = Alloc::alloc(tycker, var_str, thunked_str_ty);
+                    let val_str_: ValueId = Alloc::alloc(tycker, var_str, thunked_str_ty);
+                    let mut algs = algs;
+                    algs.push(val_str_);
+                    let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs)?;
+                    let fn_str_compu_ = Alloc::alloc(tycker, Abs(vpat_str_, compu_), ty_body);
 
-                let tpat_ = self.mk(tpat).lift(tycker, mo_ty)?;
-                let ty_ = self.mk(forall_ty).lift(tycker, mo_ty)?;
-                Alloc::alloc(tycker, Abs(tpat_, fn_str_compu_), ty_)
+                    let tpat_ = self.mk(tpat).lift(tycker, mo_ty)?;
+                    let ty_ = self.mk(forall_ty).lift(tycker, mo_ty)?;
+                    Alloc::alloc(tycker, Abs(tpat_, fn_str_compu_), ty_)
+                }
             }
             | Compu::TApp(compu) => {
                 let App(compu, ty_a) = compu;
                 let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs.to_owned())?;
                 let compu_ty_ = tycker.statics.annotations_compu[&compu_];
+                let Some((_abst, compu_body_ty_)) = compu_ty_.destruct_forall(tycker) else {
+                    unreachable!()
+                };
                 let ty_a_ = self.mk(ty_a).lift(tycker, mo_ty)?;
 
-                match compu_ty_.destruct_arrow(tycker) {
+                match compu_body_ty_.destruct_arrow(tycker) {
                     | Some((_, compu_alg_ty_)) => {
                         // generate algebra given ty_a and pass in
                         let alg_a_ = self.mk(ty_a).algebra(tycker, (mo, mo_ty), algs)?;
@@ -793,6 +849,7 @@ impl SEnv<CompuId> {
                         let thunk_alg_a_ty_ = tycker.thunk_arg(&self.env, alg_a_ty_);
                         let thunk_alg_a_ = Alloc::alloc(tycker, Thunk(alg_a_), thunk_alg_a_ty_);
 
+                        // Fixme: wrong app order, not effecting runtime though
                         let compu_alg_ =
                             Alloc::alloc(tycker, App(compu_, thunk_alg_a_), compu_alg_ty_);
                         let ty = tycker.statics.annotations_compu[&self.inner];
@@ -800,6 +857,7 @@ impl SEnv<CompuId> {
                         Alloc::alloc(tycker, App(compu_alg_, ty_a_), ty_)
                     }
                     | None => {
+                        // Note: this should be `Top` which is deleted in forall type
                         // Hack: should keep track of the algebra instead of falling back
                         if compu == compu_ && ty_a == ty_a_ {
                             self.inner
@@ -945,8 +1003,7 @@ impl SEnv<CompuId> {
                     let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
                     Alloc::alloc(tycker, Dtor(compu_, dtor), ty_)
                 }
-            }
-            // | Compu::WithBlock(_) => unreachable!(),
+            } // | Compu::WithBlock(_) => unreachable!(),
         };
         Ok(res)
     }

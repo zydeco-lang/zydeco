@@ -54,7 +54,7 @@ def ! mo-thunk-arg (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
 end
 
 // test algebra generation for forall vtype
-def ! mo-forallv (E: VType) (mo: U (Monad (Exn E))) : forall (X: VType) . U Top -> X -> Exn E X =
+def ! mo-forallv (E: VType) (mo: U (Monad (Exn E))) : forall (X: VType) . X -> Exn E X =
   with mo
   begin
     do _ <- ret -1;
@@ -64,7 +64,7 @@ end
 
 // run it
 def ! _mo-forallv : OS =
-  do i? <- ! mo-forallv String { ! mo-exn String } Int { comatch end } 0;
+  do i? <- ! mo-forallv String { ! mo-exn String } Int 0;
   match i?
   | +Left(e) -> ! panic "error"
   | +Right(i) -> ! exit i
