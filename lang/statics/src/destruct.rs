@@ -85,11 +85,18 @@ impl TypeId {
         };
         Ok(res)
     }
-    pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
-        let res = match tycker.statics.types[&self].to_owned() {
-            | Type::Arrow(ty) => {
-                let Arrow(from, to) = ty;
-                (from, to)
+    pub fn destruct_top(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<()> {
+        let res = match tycker.statics.types.get(self)?.to_owned() {
+            | Type::Abst(abst) => {
+                let AnnId::Type(id) = env[tycker.prim.top.get()] else { unreachable!() };
+                let Type::Abst(top_real) = tycker.statics.types[&id].to_owned() else {
+                    unreachable!()
+                };
+                if abst == top_real {
+                    ()
+                } else {
+                    None?
+                }
             }
             | _ => None?,
         };
@@ -109,6 +116,22 @@ impl TypeId {
             | _ => None?,
         };
         Some(res)
+    }
+    pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
+        let res = match tycker.statics.types[&self].to_owned() {
+            | Type::Arrow(ty) => {
+                let Arrow(from, to) = ty;
+                (from, to)
+            }
+            | _ => None?,
+        };
+        Some(res)
+    }
+    pub fn destruct_forall(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
+        match tycker.statics.types.get(self)?.to_owned() {
+            | Type::Forall(Forall(abst, ty)) => Some((abst, ty)),
+            | _ => None,
+        }
     }
     pub fn destruct_algebra(
         &self, env: &Env<AnnId>, tycker: &mut Tycker,
@@ -162,12 +185,6 @@ impl TypeId {
             }
         };
         Some(res)
-    }
-    pub fn destruct_forall(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
-        match tycker.statics.types.get(self)?.to_owned() {
-            | Type::Forall(Forall(abst, ty)) => Some((abst, ty)),
-            | _ => None,
-        }
     }
 }
 

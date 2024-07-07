@@ -2209,7 +2209,14 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 }
 
-                // perform import inlining
+                // then the key part, perform algebra translation on term level
+                let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), algs)?;
+                {
+                    // administrative
+                    tycker.stack.pop_back();
+                }
+
+                // finally, perform import inlining
                 for (binder, bindee) in import_subs {
                     use ss::ValuePattern as VPat;
                     let def = match tycker.statics.vpats[&binder].to_owned() {
@@ -2236,12 +2243,6 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 }
 
-                // finally, we perform algebra translation on term level
-                let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), algs)?;
-                {
-                    // administrative
-                    tycker.stack.pop_back();
-                }
                 TermAnnId::Compu(body_lift, body_ty_lift)
             }
             | Tm::Lit(lit) => {
