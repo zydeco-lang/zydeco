@@ -17,10 +17,10 @@ pub enum LocationCtx {
 #[derive(Clone, Debug)]
 pub struct FileInfo {
     newlines: Vec<usize>,
-    path: Rc<PathBuf>,
+    path: Arc<PathBuf>,
 }
 impl FileInfo {
-    pub fn new(s: &str, path: Rc<PathBuf>) -> Self {
+    pub fn new(s: &str, path: Arc<PathBuf>) -> Self {
         let mut newlines = vec![0];
         for (i, c) in s.char_indices() {
             if c == '\n' {
@@ -69,7 +69,7 @@ impl FileInfo {
 pub struct Span {
     span1: (Cursor1, Cursor1),
     span2: OnceCell<(Cursor2, Cursor2)>,
-    path: OnceCell<Rc<PathBuf>>,
+    path: OnceCell<Arc<PathBuf>>,
 }
 
 impl Span {

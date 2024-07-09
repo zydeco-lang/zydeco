@@ -19,11 +19,11 @@ zydeco-statics = { workspace = true }
 zydeco-dynamics = { workspace = true }
 derive_more = { workspace = true }
 derive-where = { workspace = true }
+rayon = { workspace = true }
 thiserror = { workspace = true }
 sculptor = { workspace = true }
 serde = { workspace = true }
 toml = { workspace = true }
-logos = { workspace = true }
 colored = { workspace = true }
 
 [lib]

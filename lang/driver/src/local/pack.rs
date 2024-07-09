@@ -1,9 +1,10 @@
 //! The package notation of zydeco.
 
 use super::err::{PackageError, Result};
+use rayon::prelude::*;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io, path::PathBuf, rc::Rc};
+use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
 use zydeco_dynamics::{Linker, ProgKont, Runtime};
 use zydeco_statics::Tycker;
 use zydeco_surface::{
@@ -95,17 +96,19 @@ impl LocalPackage {
     ) -> Result<()> {
         // Todo: deal with std and deps
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
-        // Todo: parallelize w/ rayon (?)
-        let files = files.into_iter().map(|f| f.load()).collect::<Result<Vec<_>>>()?;
+        // parallelized w/ rayon
+        let files = files.into_par_iter().map(|f| f.load()).collect::<Result<Vec<_>>>()?;
         let PackageHash { hashes: _ } = FileLoaded::merge(&files)?;
         // Todo: check hashes
 
         let mut alloc = GlobalAlloc::new();
+        let allocs = (0..(files.len())).into_iter().map(|_| alloc.alloc()).collect::<Vec<_>>();
         // parsing
-        // Todo: parallelize w/ rayon (?)
+        // parallelized w/ rayon (?)
         let files = files
-            .into_iter()
-            .map(|f| f.parse(t::Parser::new(alloc.alloc())))
+            .into_par_iter()
+            .zip(allocs)
+            .map(|(f, alloc)| f.parse(t::Parser::new(alloc)))
             .collect::<Result<Vec<_>>>()?;
         // // Debug: print the parsed files
         // if cfg!(debug_assertions) {
@@ -393,8 +396,8 @@ impl LocalPackage {
             | ProgKont::ExitCode(0) => {
                 // println!("test passed: {}", name);
                 let mut out = std::io::stdout();
-                use std::io::Write;
                 use colored::Colorize;
+                use std::io::Write;
                 let _ = writeln!(out, "test {} ... {}", name, "ok".green());
                 Ok(())
             }
@@ -421,7 +424,7 @@ impl File {
             let path = path.clone();
             PackageError::SrcFileNotFound(path)
         })?;
-        let info = FileInfo::new(source.as_str(), Rc::new(path));
+        let info = FileInfo::new(source.as_str(), Arc::new(path));
         let s = HashLexer::new(&source)
             .hash_string(&info)
             .map_err(|span| PackageError::LexerError(span))?;

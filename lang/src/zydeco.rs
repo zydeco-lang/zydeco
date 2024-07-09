@@ -13,7 +13,7 @@ use crate::{
     utils::span::FileInfo,
 };
 pub use ds::ProgKont;
-use std::{path::PathBuf, rc::Rc};
+use std::{path::PathBuf, sync::Arc};
 
 pub struct Zydeco;
 
@@ -21,7 +21,7 @@ impl Zydeco {
     pub fn std() -> Result<Sp<ps::TopLevel>, String> {
         let source = include_str!("library/std.zydeco");
         let std_path: PathBuf = "zydeco-lang/src/library/std.zydeco".into();
-        let file_info = FileInfo::new(&source, Rc::new(std_path));
+        let file_info = FileInfo::new(&source, Arc::new(std_path));
         let ds = ZydecoParser::new()
             .parse(&source, Lexer::new(&source))
             .map_err(|e| format!("{}", ParseError(e, &file_info)))?
@@ -44,7 +44,7 @@ impl ZydecoFile {
         Ok(top)
     }
     pub fn parse_src(source: &str, path: PathBuf) -> Result<Sp<ps::TopLevel>, String> {
-        let file_info = FileInfo::new(source, Rc::new(path));
+        let file_info = FileInfo::new(source, Arc::new(path));
         let p = ZydecoParser::new()
             .parse(source, Lexer::new(source))
             .map_err(|e| format!("{}", ParseError(e, &file_info)))?
