@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
-use zydeco_dynamics::{Linker, ProgKont, Runtime};
+use zydeco_dynamics::{syntax as d, Linker, ProgKont, Runtime};
 use zydeco_statics::Tycker;
 use zydeco_surface::{
     bitter::{syntax as b, DesugarOut, Desugarer},
@@ -77,23 +77,38 @@ impl LocalPackage {
     }
     pub fn run(&self) -> Result<()> {
         let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
+        let alloc = ArcGlobalAlloc::new();
+        let stew = Self::parse_package(alloc.clone(), name.as_str(), path, srcs.iter())?;
         for bin in bins {
             let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
-            Self::run_srcs(name.as_str(), path, srcs.iter().chain([bin]))?
+            // adding package dependencies
+            // Todo: ...
+            let stew = stew.clone()
+                + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
+            let dynamics = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
+            Self::run_dynamics(dynamics)?;
         }
         Ok(())
     }
     pub fn test(&self) -> Result<()> {
         let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
+        let alloc = ArcGlobalAlloc::new();
+        let stew = Self::parse_package(alloc.clone(), name.as_str(), path, srcs.iter())?;
         for bin in bins {
             let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
-            Self::test_srcs(name.as_str(), path, srcs.iter().chain([bin]))?
+            // adding package dependencies
+            // Todo: ...
+            let stew = stew.clone()
+                + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
+            let dynamics = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
+            Self::test_dynamics(dynamics, name.as_str())?;
         }
         Ok(())
     }
-    fn run_srcs<'f>(
-        name: &str, path: &std::path::Path, srcs: impl Iterator<Item = &'f PathBuf>,
-    ) -> Result<()> {
+    fn parse_package<'f>(
+        alloc: ArcGlobalAlloc, name: &str, path: &std::path::Path,
+        srcs: impl Iterator<Item = &'f PathBuf>,
+    ) -> Result<PackageStew> {
         // Todo: deal with std and deps
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
         // parallelized w/ rayon
@@ -101,53 +116,53 @@ impl LocalPackage {
         let PackageHash { hashes: _ } = FileLoaded::merge(&files)?;
         // Todo: check hashes
 
-        let alloc = ArcGlobalAlloc::new();
-        // parsing
+        // parsing & desugaring
         // parallelized w/ rayon (?)
-        let files = files
+        let pack = files
             .into_par_iter()
-            .map(|f| f.parse(t::Parser::new(alloc.alloc())))
-            .collect::<Result<Vec<_>>>()?;
-        // // Debug: print the parsed files
-        // if cfg!(debug_assertions) {
-        //     for file in &files {
-        //         println!(">>> [{}] parsed", file.path.display());
-        //         use zydeco_surface::textual::fmt::*;
-        //         println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
-        //         println!("<<< [{}]", file.path.display());
-        //     }
-        // }
-
-        // desugaring
-        // parallelized w/ rayon (?)
-        let files = files
-            .into_par_iter()
-            .map(|f| f.desugar(b::Arena::new_arc(alloc.clone())))
-            .collect::<Result<Vec<_>>>()?;
-        // // Debug: print the desugared package
-        // if cfg!(debug_assertions) {
-        //     use zydeco_surface::bitter::fmt::*;
-        //     println!();
-        //     for file in &files {
-        //         println!(">>> [{}] desugared", file.path.display());
-        //         println!("{}", file.top.ugly(&Formatter::new(&file.arena)));
-        //         println!("<<< [{}]", file.path.display());
-        //     }
-        // }
-        let pack = FileBitter::merge(
-            PackageStew {
+            .map(|f| {
+                let f = f.parse(t::Parser::new(alloc.alloc()))?;
+                // // Debug: print the parsed files
+                // if cfg!(debug_assertions) {
+                //     println!(">>> [{}] parsed", f.path.display());
+                //     use zydeco_surface::textual::fmt::*;
+                //     println!("{}", f.top.ugly(&Formatter::new(&f.arena)));
+                //     println!("<<< [{}]", f.path.display());
+                // }
+                let f = f.desugar(b::Arena::new_arc(alloc.clone()))?;
+                // // Debug: print the desugared package
+                // if cfg!(debug_assertions) {
+                //     use zydeco_surface::bitter::fmt::*;
+                //     println!(">>> [{}] desugared", f.path.display());
+                //     println!("{}", f.top.ugly(&Formatter::new(&f.arena)));
+                //     println!("<<< [{}]", f.path.display());
+                // }
+                Ok(Some(f.into()))
+            })
+            .reduce(
+                || Ok(None),
+                |a, b| match (a?, b?) {
+                    | (Some(a), Some(b)) => Ok(Some(a + b)),
+                    | (Some(a), None) => Ok(Some(a)),
+                    | (None, Some(b)) => Ok(Some(b)),
+                    | (None, None) => Ok(None),
+                },
+            )?
+            .unwrap_or_else(|| PackageStew {
                 sources: HashMap::new(),
                 spans: t::SpanArena::new(alloc.alloc()),
                 arena: b::Arena::new_arc(alloc.clone()),
                 prim_term: b::PrimTerms::default(),
                 top: b::TopLevel(Vec::new()),
-            },
-            files,
-        )?;
+            });
 
-        // adding package dependencies
-        // Todo: ...
+        let _ = name;
 
+        Ok(pack)
+    }
+    fn compile_package<'f>(
+        alloc: ArcGlobalAlloc, name: &str, pack: PackageStew,
+    ) -> Result<d::DynamicsArena> {
         // resolving
         let pack = pack.resolve(alloc.alloc())?.check();
         // // Debug: print the in-package dependencies
@@ -312,6 +327,11 @@ impl LocalPackage {
         //     println!("<<< [{}]", name);
         // }
 
+        let _ = name;
+
+        Ok(dynamics)
+    }
+    fn run_dynamics(dynamics: d::DynamicsArena) -> Result<()> {
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
         let kont = Runtime::new(&mut input, &mut output, &[], dynamics).run();
@@ -321,75 +341,9 @@ impl LocalPackage {
                 println!("exit: {}", code);
             }
         }
-
-        let _ = name;
-
         Ok(())
     }
-    fn test_srcs<'f>(
-        name: &str, path: &std::path::Path, srcs: impl Iterator<Item = &'f PathBuf>,
-    ) -> Result<()> {
-        // Todo: deal with std and deps
-        let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
-        // Todo: parallelize w/ rayon (?)
-        let files = files.into_iter().map(|f| f.load()).collect::<Result<Vec<_>>>()?;
-        let PackageHash { hashes: _ } = FileLoaded::merge(&files)?;
-        // Todo: check hashes
-
-        let mut alloc = GlobalAlloc::new();
-        // parsing
-        // Todo: parallelize w/ rayon (?)
-        let files = files
-            .into_iter()
-            .map(|f| f.parse(t::Parser::new(alloc.alloc())))
-            .collect::<Result<Vec<_>>>()?;
-
-        // desugaring
-        // Todo: parallelize w/ rayon (?)
-        let files = files
-            .into_iter()
-            .map(|f| f.desugar(b::Arena::new(&mut alloc)))
-            .collect::<Result<Vec<_>>>()?;
-        let pack = FileBitter::merge(
-            PackageStew {
-                sources: HashMap::new(),
-                spans: t::SpanArena::new(alloc.alloc()),
-                arena: b::Arena::new(&mut alloc),
-                prim_term: b::PrimTerms::default(),
-                top: b::TopLevel(Vec::new()),
-            },
-            files,
-        )?;
-
-        // adding package dependencies
-        // Todo: ...
-
-        // resolving
-        let pack = pack.resolve(alloc.alloc())?.check();
-
-        // type-checking
-        let PackageScoped { sources: _, spans, prim, arena: scoped } = pack;
-        let mut tycker = Tycker::new(spans, prim, scoped, &mut alloc);
-        match tycker.run() {
-            | Ok(()) => {}
-            | Err(()) => {
-                use std::collections::BTreeSet;
-                let mut bs = BTreeSet::new();
-                for err in tycker.errors.to_vec() {
-                    bs.insert(format!("{}\n", tycker.error_entry_output(err)));
-                }
-                let mut s = String::new();
-                for b in bs {
-                    s += &b;
-                }
-                s += &format!("Total: {} errors\n", tycker.errors.len());
-                Err(PackageError::TyckErrors(s))?;
-            }
-        }
-
-        let Tycker { spans: _, prim: _, scoped, statics, stack: _, errors: _ } = tycker;
-        let dynamics = Linker { scoped, statics }.run();
-
+    fn test_dynamics<'f>(dynamics: d::DynamicsArena, name: &str) -> Result<()> {
         let mut input = std::io::empty();
         let mut output = std::io::sink();
         let kont = Runtime::new(&mut input, &mut output, &[], dynamics).run();
@@ -486,7 +440,7 @@ impl FileParsed {
         let desugarer = Desugarer { textual, bitter, prim: b::PrimTerms::default() };
         let DesugarOut { arena, prim: prim_term, top } =
             desugarer.run(top).map_err(|e| match e {})?;
-        Ok(FileBitter { spans, path, source, arena, prim_term, top })
+        Ok(FileBitter { path, source, spans, arena, prim_term, top })
     }
 }
 
@@ -499,21 +453,31 @@ pub struct FileBitter {
     pub top: b::TopLevel,
 }
 
-impl FileBitter {
-    pub fn merge(
-        mut stew: PackageStew, selves: impl IntoIterator<Item = Self>,
-    ) -> Result<PackageStew> {
-        for file in selves {
-            stew.sources.insert(file.path, file.source);
-            stew.spans += file.spans;
-            stew.arena += file.arena;
-            stew.prim_term += file.prim_term;
-            stew.top += file.top;
+impl From<FileBitter> for PackageStew {
+    fn from(FileBitter { path, source, spans, arena, prim_term, top }: FileBitter) -> Self {
+        PackageStew {
+            sources: [(path, source)].iter().cloned().collect(),
+            spans,
+            arena,
+            prim_term,
+            top,
         }
-        Ok(stew)
+    }
+}
+impl std::ops::Add for PackageStew {
+    type Output = Self;
+    fn add(mut self, rhs: Self) -> Self::Output {
+        let PackageStew { sources, spans, arena, prim_term, top } = rhs;
+        self.sources.extend(sources);
+        self.spans += spans;
+        self.arena += arena;
+        self.prim_term += prim_term;
+        self.top += top;
+        self
     }
 }
 
+#[derive(Clone)]
 pub struct PackageStew {
     pub sources: HashMap<PathBuf, String>,
     pub spans: t::SpanArena,

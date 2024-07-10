@@ -27,7 +27,7 @@ unsafe impl<Meta: Eq + std::hash::Hash + std::marker::Copy> IndexLike for TrivId
 
 /* -------------------------------- Allocator ------------------------------- */
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct IndexAlloc<Meta>(Meta, usize);
 impl IndexAlloc<()> {
     pub fn new() -> Self {
@@ -89,7 +89,7 @@ pub struct ArenaDense<Id, T, Meta = usize> {
     _marker: std::marker::PhantomData<Id>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ArenaSparse<Id, T, Meta = usize> {
     allocator: IndexAlloc<Meta>,
     map: HashMap<Id, T>,

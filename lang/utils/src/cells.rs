@@ -52,6 +52,7 @@ impl<T> Default for SingCell<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct MultiCell<T> {
     cells: Vec<T>,
 }

@@ -208,7 +208,7 @@ impl AddAssign for TopLevel {
 
 /* ---------------------------------- Arena --------------------------------- */
 
-#[derive(Debug, AddAssign)]
+#[derive(Clone, Debug, AddAssign)]
 pub struct Arena {
     // arenas
     pub defs: ArenaSparse<DefId, VarName>,
@@ -254,7 +254,7 @@ impl Arena {
 ///
 /// To add a new primitive term, add a field here and follow instructions at
 /// [`crate::scoped::syntax::PrimDef`]
-#[derive(Default, AddAssign)]
+#[derive(Clone, Default, AddAssign)]
 pub struct PrimTerms {
     /// VType kind
     pub vtype: MultiCell<TermId>,
