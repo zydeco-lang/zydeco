@@ -56,8 +56,8 @@ pub mod bitter {
     pub use clone::*;
     pub mod desugar;
     pub use desugar::*;
-    // pub mod err;
-    // pub use err::*;
+    pub mod err;
+    pub use err::*;
     pub mod fmt;
 }
 

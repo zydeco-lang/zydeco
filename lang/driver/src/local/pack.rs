@@ -122,8 +122,10 @@ impl LocalPackage {
 
         // desugaring
         // Todo: parallelize w/ rayon (?)
-        let files =
-            files.into_iter().map(|f| f.desugar(b::Arena::new(&mut alloc))).collect::<Vec<_>>();
+        let files = files
+            .into_iter()
+            .map(|f| f.desugar(b::Arena::new(&mut alloc)))
+            .collect::<Result<Vec<_>>>()?;
         // // Debug: print the desugared package
         // if cfg!(debug_assertions) {
         //     use zydeco_surface::bitter::fmt::*;
@@ -346,8 +348,10 @@ impl LocalPackage {
 
         // desugaring
         // Todo: parallelize w/ rayon (?)
-        let files =
-            files.into_iter().map(|f| f.desugar(b::Arena::new(&mut alloc))).collect::<Vec<_>>();
+        let files = files
+            .into_iter()
+            .map(|f| f.desugar(b::Arena::new(&mut alloc)))
+            .collect::<Result<Vec<_>>>()?;
         let pack = FileBitter::merge(
             PackageStew {
                 sources: HashMap::new(),
@@ -479,11 +483,12 @@ pub struct FileParsed {
 }
 
 impl FileParsed {
-    pub fn desugar(self, bitter: b::Arena) -> FileBitter {
+    pub fn desugar(self, bitter: b::Arena) -> Result<FileBitter> {
         let FileParsed { path, source, spans, arena: textual, top } = self;
         let desugarer = Desugarer { textual, bitter, prim: b::PrimTerms::default() };
-        let DesugarOut { arena, prim: prim_term, top } = desugarer.run(top);
-        FileBitter { spans, path, source, arena, prim_term, top }
+        let DesugarOut { arena, prim: prim_term, top } =
+            desugarer.run(top).map_err(|e| match e {})?;
+        Ok(FileBitter { spans, path, source, arena, prim_term, top })
     }
 }
 
