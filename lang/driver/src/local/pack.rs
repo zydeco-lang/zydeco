@@ -101,14 +101,12 @@ impl LocalPackage {
         let PackageHash { hashes: _ } = FileLoaded::merge(&files)?;
         // Todo: check hashes
 
-        let mut alloc = GlobalAlloc::new();
-        let allocs = (0..(files.len())).into_iter().map(|_| alloc.alloc()).collect::<Vec<_>>();
+        let alloc = ArcGlobalAlloc::new();
         // parsing
         // parallelized w/ rayon (?)
         let files = files
             .into_par_iter()
-            .zip(allocs)
-            .map(|(f, alloc)| f.parse(t::Parser::new(alloc)))
+            .map(|f| f.parse(t::Parser::new(alloc.alloc())))
             .collect::<Result<Vec<_>>>()?;
         // // Debug: print the parsed files
         // if cfg!(debug_assertions) {
@@ -121,10 +119,10 @@ impl LocalPackage {
         // }
 
         // desugaring
-        // Todo: parallelize w/ rayon (?)
+        // parallelized w/ rayon (?)
         let files = files
-            .into_iter()
-            .map(|f| f.desugar(b::Arena::new(&mut alloc)))
+            .into_par_iter()
+            .map(|f| f.desugar(b::Arena::new_arc(alloc.clone())))
             .collect::<Result<Vec<_>>>()?;
         // // Debug: print the desugared package
         // if cfg!(debug_assertions) {
@@ -140,7 +138,7 @@ impl LocalPackage {
             PackageStew {
                 sources: HashMap::new(),
                 spans: t::SpanArena::new(alloc.alloc()),
-                arena: b::Arena::new(&mut alloc),
+                arena: b::Arena::new_arc(alloc.clone()),
                 prim_term: b::PrimTerms::default(),
                 top: b::TopLevel(Vec::new()),
             },
@@ -225,7 +223,7 @@ impl LocalPackage {
 
         // type-checking
         let PackageScoped { sources: _, spans, prim, arena: scoped } = pack;
-        let mut tycker = Tycker::new(spans, prim, scoped, &mut alloc);
+        let mut tycker = Tycker::new_arc(spans, prim, scoped, alloc);
         match tycker.run() {
             | Ok(()) => {}
             | Err(()) => {

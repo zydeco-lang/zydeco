@@ -4,7 +4,7 @@ use crate::{
     *,
 };
 use std::collections::HashMap;
-use zydeco_utils::arena::{ArenaAccess, GlobalAlloc};
+use zydeco_utils::arena::{ArcGlobalAlloc, ArenaAccess, GlobalAlloc};
 
 pub struct Tycker {
     pub spans: SpanArena,
@@ -40,6 +40,18 @@ impl Tycker {
             prim,
             scoped,
             statics: StaticsArena::new(alloc),
+            stack: im::Vector::new(),
+            errors: Vec::new(),
+        }
+    }
+    pub fn new_arc(
+        spans: SpanArena, prim: PrimDef, scoped: ScopedArena, alloc: ArcGlobalAlloc,
+    ) -> Self {
+        Self {
+            spans,
+            prim,
+            scoped,
+            statics: StaticsArena::new_arc(alloc),
             stack: im::Vector::new(),
             errors: Vec::new(),
         }

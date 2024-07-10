@@ -231,6 +231,16 @@ impl Arena {
             textual: ArenaForth::new(),
         }
     }
+    pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
+        Arena {
+            defs: ArenaSparse::new(alloc.alloc()),
+            pats: ArenaSparse::new(alloc.alloc()),
+            terms: ArenaSparse::new(alloc.alloc()),
+            decls: ArenaSparse::new(alloc.alloc()),
+
+            textual: ArenaForth::new(),
+        }
+    }
 }
 
 /* -------------------------------- Primitive ------------------------------- */

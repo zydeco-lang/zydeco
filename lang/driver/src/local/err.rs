@@ -11,6 +11,8 @@ pub enum PackageError {
     SrcFileNotFound(PathBuf),
     #[error("Error while canonicalizing src file path: `{0}`")]
     CanonicalizationError(String),
+    #[error("Lock poisoned.")]
+    LockPoisoned,
     #[error("Lexer error:\n\t{0}")]
     LexerError(String),
     #[error("Parse error:\n\t{0}")]

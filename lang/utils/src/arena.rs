@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    ops::{Index, IndexMut},
+    ops::{Index, IndexMut}, sync::{Arc, Mutex},
 };
 
 /* ---------------------------------- Index --------------------------------- */
@@ -51,6 +51,17 @@ impl GlobalAlloc {
     }
     pub fn alloc(&mut self) -> IndexAlloc<usize> {
         IndexAlloc(self.0.next().unwrap().1, 0)
+    }
+}
+
+#[derive(Clone)]
+pub struct ArcGlobalAlloc(Arc<Mutex<GlobalAlloc>>);
+impl ArcGlobalAlloc {
+    pub fn new() -> Self {
+        ArcGlobalAlloc(Arc::new(Mutex::new(GlobalAlloc::new())))
+    }
+    pub fn alloc(&self) -> IndexAlloc<usize> {
+        self.0.lock().unwrap().alloc()
     }
 }
 

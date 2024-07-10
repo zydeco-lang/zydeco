@@ -525,6 +525,13 @@ where
             eqs: ArenaAssoc::new(),
         }
     }
+    pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
+        Self {
+            defs: ArenaDense::new(alloc.alloc()),
+            tbls: ArenaAssoc::new(),
+            eqs: ArenaAssoc::new(),
+        }
+    }
     pub fn lookup_or_alloc(&mut self, def: Definition, query: Query) -> Id {
         if let Some(id) = self.eqs.get(&query) {
             // if the query is already registered, just return the DataId
@@ -609,6 +616,37 @@ impl StaticsArena {
             solus: ArenaAssoc::new(),
             datas: StructArena::new(alloc),
             codatas: StructArena::new(alloc),
+            inlinables: ArenaAssoc::new(),
+
+            annotations_var: ArenaAssoc::new(),
+            annotations_abst: ArenaAssoc::new(),
+            annotations_tpat: ArenaAssoc::new(),
+            annotations_type: ArenaAssoc::new(),
+            annotations_vpat: ArenaAssoc::new(),
+            annotations_value: ArenaAssoc::new(),
+            annotations_compu: ArenaAssoc::new(),
+        }
+    }
+    pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
+        Self {
+            kinds: ArenaSparse::new(alloc.alloc()),
+            tpats: ArenaSparse::new(alloc.alloc()),
+            types: ArenaSparse::new(alloc.alloc()),
+            vpats: ArenaSparse::new(alloc.alloc()),
+            values: ArenaSparse::new(alloc.alloc()),
+            compus: ArenaSparse::new(alloc.alloc()),
+            decls: ArenaAssoc::new(),
+
+            pats: ArenaBijective::new(),
+            terms: ArenaBijective::new(),
+
+            absts: ArenaDense::new(alloc.alloc()),
+            seals: ArenaAssoc::new(),
+            abst_hints: ArenaAssoc::new(),
+            fills: ArenaDense::new(alloc.alloc()),
+            solus: ArenaAssoc::new(),
+            datas: StructArena::new_arc(alloc.clone()),
+            codatas: StructArena::new_arc(alloc),
             inlinables: ArenaAssoc::new(),
 
             annotations_var: ArenaAssoc::new(),
