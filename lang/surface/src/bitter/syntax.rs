@@ -2,7 +2,7 @@
 
 pub use crate::syntax::*;
 use crate::{arena::*, textual::syntax as t};
-use derive_more::{AddAssign, From};
+use derive_more::From;
 use std::ops::AddAssign;
 pub use zydeco_syntax::*;
 use zydeco_utils::cells::MultiCell;
@@ -208,7 +208,7 @@ impl AddAssign for TopLevel {
 
 /* ---------------------------------- Arena --------------------------------- */
 
-#[derive(Clone, Debug, AddAssign)]
+#[derive(Clone, Debug, derive_more::AddAssign)]
 pub struct Arena {
     // arenas
     pub defs: ArenaSparse<DefId, VarName>,
@@ -254,7 +254,7 @@ impl Arena {
 ///
 /// To add a new primitive term, add a field here and follow instructions at
 /// [`crate::scoped::syntax::PrimDef`]
-#[derive(Clone, Default, AddAssign)]
+#[derive(Clone, Default, derive_more::AddAssign)]
 pub struct PrimTerms {
     /// VType kind
     pub vtype: MultiCell<TermId>,

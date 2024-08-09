@@ -223,7 +223,6 @@ impl Link for ss::CompuId {
                 let dtor = dtor.to_owned();
                 Dtor(body, dtor).into()
             }
-            // | Compu::WithBlock(_) => unreachable!(),
         };
         Rc::new(compu)
     }

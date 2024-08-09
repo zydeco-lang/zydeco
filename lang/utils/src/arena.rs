@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
-    ops::{Index, IndexMut}, sync::{Arc, Mutex},
+    ops::{Index, IndexMut},
+    sync::{Arc, Mutex},
 };
 
 /* ---------------------------------- Index --------------------------------- */
