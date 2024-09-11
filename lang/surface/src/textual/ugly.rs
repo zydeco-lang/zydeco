@@ -116,6 +116,8 @@ impl Ugly for TermId {
             | Term::CoMatch(t) => s += &t.ugly(f),
             | Term::Dtor(t) => s += &t.ugly(f),
             | Term::WithBlock(t) => s += &t.ugly(f),
+            | Term::MBlock(t) => s += &t.ugly(f),
+            | Term::WBlock(t) => s += &t.ugly(f),
             | Term::Lit(t) => s += &t.ugly(f),
         }
         s
@@ -564,6 +566,34 @@ impl Ugly for WithBlock {
             s += &import.ugly(f);
             s += " ";
         }
+        s += "begin ";
+        s += &body.ugly(f);
+        s += " end";
+        s
+    }
+}
+
+impl Ugly for MBlock {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        let MBlock { mo, body } = self;
+        s += "with_mo ";
+        s += &mo.ugly(f);
+        s += " ";
+        s += "begin ";
+        s += &body.ugly(f);
+        s += " end";
+        s
+    }
+}
+
+impl Ugly for WBlock {
+    fn ugly(&self, f: &Formatter) -> String {
+        let mut s = String::new();
+        let WBlock { alg, body } = self;
+        s += "with_alg ";
+        s += &alg.ugly(f);
+        s += " ";
         s += "begin ";
         s += &body.ugly(f);
         s += " end";

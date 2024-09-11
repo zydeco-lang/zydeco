@@ -7,8 +7,14 @@ pub enum TyckError {
     MissingSolution(Vec<FillId>),
     SortMismatch,
     KindMismatch,
-    TypeMismatch { expected: TypeId, found: TypeId },
-    TypeExpected { expected: String, found: TypeId },
+    TypeMismatch {
+        expected: TypeId,
+        found: TypeId,
+    },
+    TypeExpected {
+        expected: String,
+        found: TypeId,
+    },
     MissingDataArm(CtorName),
     MissingCoDataArm(DtorName),
     NonExhaustiveCoDataArms(im::HashMap<DtorName, TypeId>),
@@ -18,6 +24,10 @@ pub enum TyckError {
     MissingMonad,
     NotInlinable(ss::DefId),
     AlgebraGenerationFailure,
+    MonadicContextMismatch {
+        defined: im::Vector<MonadicDelimiter>,
+        current: im::Vector<MonadicDelimiter>,
+    },
 }
 
 #[derive(Clone)]
@@ -102,6 +112,9 @@ impl Tycker {
             }
             | TyckError::AlgebraGenerationFailure => {
                 format!("Cannot generate algebra for this type")
+            }
+            | TyckError::MonadicContextMismatch { defined, current } => {
+                format!("Monadic context mismatch: expected `{:?}`, found `{:?}`", defined, current)
             }
         }
     }

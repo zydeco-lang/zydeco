@@ -254,6 +254,18 @@ impl DeepClone for b::TermId {
                 let body = body.deep_clone(desugarer);
                 b::WithBlock { structs, inlines, imports, body }.into()
             }
+            | b::Term::MBlock(term) => {
+                let b::MBlock { mo, body } = term;
+                let mo = mo.deep_clone(desugarer);
+                let body = body.deep_clone(desugarer);
+                b::MBlock { mo, body }.into()
+            }
+            | b::Term::WBlock(term) => {
+                let b::WBlock { alg, body } = term;
+                let alg = alg.deep_clone(desugarer);
+                let body = body.deep_clone(desugarer);
+                b::WBlock { alg, body }.into()
+            }
             | b::Term::Lit(term) => term.clone().into(),
         };
         Alloc::alloc(desugarer, term, prev)

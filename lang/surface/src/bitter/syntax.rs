@@ -107,6 +107,20 @@ pub struct WithBlock {
     pub body: TermId,
 }
 
+/// `with_mo mo begin M end`
+#[derive(Clone, Debug)]
+pub struct MBlock {
+    pub mo: TermId,
+    pub body: TermId,
+}
+
+/// `with_alg alg begin M end`
+#[derive(Clone, Debug)]
+pub struct WBlock {
+    pub alg: TermId,
+    pub body: TermId,
+}
+
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
     Internal(Internal),
@@ -139,6 +153,8 @@ pub enum Term<Ref> {
     CoMatch(CoMatch<TermId>),
     Dtor(Dtor<TermId>),
     WithBlock(WithBlock),
+    MBlock(MBlock),
+    WBlock(WBlock),
     Lit(Literal),
 }
 

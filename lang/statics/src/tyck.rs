@@ -1,5 +1,5 @@
 use crate::{
-    surface_syntax::{PrimDef, ScopedArena, SpanArena},
+    surface_syntax::{Context, PrimDef, ScopedArena, SpanArena},
     syntax::{AnnId, Env, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
     *,
 };
@@ -11,10 +11,22 @@ pub struct Tycker {
     pub prim: PrimDef,
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
+    /// monadic stack
+    pub mo_stack: im::Vector<MonadicDelimiter>,
+    /// monadic context
+    pub mo_ctx: Context<im::Vector<MonadicDelimiter>>,
     /// call stack for debugging tycker and error tracking
     pub stack: im::Vector<TyckTask>,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
+}
+
+/// a monadic delimiter for the monadic context and stack
+#[derive(Clone, Debug, PartialEq)]
+pub struct MonadicDelimiter {
+    pub site: su::TermId,
+    pub mo: ss::ValueId,
+    pub mo_ty: ss::TypeId,
 }
 
 // Todo: generalize the administrative guards using "with" pattern
@@ -40,6 +52,8 @@ impl Tycker {
             prim,
             scoped,
             statics: StaticsArena::new(alloc),
+            mo_stack: im::Vector::new(),
+            mo_ctx: Context::new(),
             stack: im::Vector::new(),
             errors: Vec::new(),
         }
@@ -52,6 +66,8 @@ impl Tycker {
             prim,
             scoped,
             statics: StaticsArena::new_arc(alloc),
+            mo_stack: im::Vector::new(),
+            mo_ctx: Context::new(),
             stack: im::Vector::new(),
             errors: Vec::new(),
         }
@@ -461,7 +477,7 @@ impl Tyck for SEnv<su::PatId> {
         &self, tycker: &mut Tycker, Action { switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
         use su::Pattern as Pat;
-        let pat_ctx = match tycker.scoped.pats[&self.inner].clone() {
+        let pat_ann = match tycker.scoped.pats[&self.inner].clone() {
             | Pat::Ann(pat) => {
                 let su::Ann { tm, ty } = pat;
                 let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
@@ -519,6 +535,10 @@ impl Tyck for SEnv<su::PatId> {
                     let ann = Lub::lub_k(ann_, ann, tycker)?;
                     tycker.statics.annotations_var.replace(def, ann);
                 }
+
+                // add the var into the monadic context
+                tycker.mo_ctx += (def, tycker.mo_stack.clone());
+
                 PatAnnId::mk_var(tycker, def, ann)
             }
             | Pat::Ctor(pat) => match switch {
@@ -626,9 +646,9 @@ impl Tyck for SEnv<su::PatId> {
         };
 
         // maintain back mapping
-        tycker.statics.pats.insert(self.inner, pat_ctx.as_pat());
+        tycker.statics.pats.insert(self.inner, pat_ann.as_pat());
 
-        Ok(pat_ctx)
+        Ok(pat_ann)
     }
 }
 
@@ -819,6 +839,18 @@ impl Tyck for SEnv<su::TermId> {
                 }
             }
             | Tm::Var(def) => {
+                // check if def is defined in the same monadic context
+                let Some(def_mo_ctx) = tycker.mo_ctx.get(&def) else { unreachable!() };
+                if def_mo_ctx != &tycker.mo_stack {
+                    tycker.err_k(
+                        TyckError::MonadicContextMismatch {
+                            defined: def_mo_ctx.clone(),
+                            current: tycker.mo_stack.clone(),
+                        },
+                        std::panic::Location::caller(),
+                    )?
+                }
+
                 let ann = {
                     match switch {
                         | Switch::Syn => tycker.statics.annotations_var[&def],
@@ -2267,6 +2299,48 @@ impl Tyck for SEnv<su::TermId> {
                 }
 
                 TermAnnId::Compu(body_lift, body_ty_lift)
+            }
+            | Tm::MBlock(term) => {
+                let su::MBlock { mo, body } = term;
+
+                // tyck the monad instance
+                let mo_out_ann = self.mk(mo).tyck(tycker, Action::syn())?;
+                let (mo, mo_ty) = mo_out_ann.try_as_value(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+
+                // add the monad instance to the stack
+                tycker.mo_stack.push_back(MonadicDelimiter { site: self.inner, mo, mo_ty });
+
+                // tyck the body
+                let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
+                let (body, body_ty) = body_out_ann.try_as_compu(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+
+                // Todo: lift the body
+
+                // remove the monad instance from the stack
+                tycker.mo_stack.pop_back();
+
+                todo!()
+            }
+            | Tm::WBlock(term) => {
+                let su::WBlock { alg, body } = term;
+
+                // tyck the algebra instance
+                let alg_out_ann = self.mk(alg).tyck(tycker, Action::syn())?;
+                let (alg, alg_ty) = alg_out_ann.try_as_value(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+                
+                todo!()
             }
             | Tm::Lit(lit) => {
                 fn check_against_ty(

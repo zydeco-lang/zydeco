@@ -432,24 +432,6 @@ pub enum Value {
 
 /* ------------------------------- Computation ------------------------------ */
 
-/// `import f = V`
-#[derive(Clone, Debug)]
-pub struct Import {
-    pub binder: VPatId,
-    pub ty: TypeId,
-    pub body: ValueId,
-}
-
-// /// `with mo inline x import f : B = V begin M end`
-// #[derive(Clone, Debug)]
-// pub struct WithBlock {
-//     pub monad: ValueId,
-//     pub algebras: Vec<ValueId>,
-//     pub inlines: Vec<DefId>,
-//     pub imports: Vec<Import>,
-//     pub body: CompuId,
-// }
-
 #[derive(From, Clone, Debug)]
 pub enum Computation {
     Hole(Hole),

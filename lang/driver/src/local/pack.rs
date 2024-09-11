@@ -296,7 +296,7 @@ impl LocalPackage {
             }
         }
 
-        let Tycker { spans: _, prim: _, scoped, statics, stack: _, errors: _ } = tycker;
+        let Tycker { spans: _, prim: _, scoped, statics, mo_ctx: _, mo_stack: _, stack: _, errors: _ } = tycker;
         let dynamics = Linker { scoped, statics }.run();
         // // Debug: print the variable definitions in dynamics
         // if cfg!(debug_assertions) {
@@ -604,6 +604,14 @@ impl PackageScoped {
                     rm(body);
                 }
                 | Tm::WithBlock(_) => {}
+                | Tm::MBlock(sc::MBlock { mo, body }) => {
+                    rm(mo);
+                    rm(body);
+                }
+                | Tm::WBlock(sc::WBlock { alg, body }) => {
+                    rm(alg);
+                    rm(body);
+                }
                 | Tm::Lit(_) => {}
             }
         }

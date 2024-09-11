@@ -133,6 +133,8 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::CoMatch(_)
             | Tm::Dtor(_)
             | Tm::WithBlock(_)
+            | Tm::MBlock(_)
+            | Tm::WBlock(_)
             | Tm::Lit(_) => None,
         }
     }
@@ -174,6 +176,8 @@ impl SyntacticallySealed for su::TermId {
             | Tm::CoMatch(_)
             | Tm::Dtor(_)
             | Tm::WithBlock(_)
+            | Tm::MBlock(_)
+            | Tm::WBlock(_)
             | Tm::Lit(_) => None,
         }
     }

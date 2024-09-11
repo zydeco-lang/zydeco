@@ -419,6 +419,18 @@ impl Resolve for TermId {
                 let () = body.resolve(resolver, (local, global))?;
                 term.into()
             }
+            | Term::MBlock(term) => {
+                let MBlock { mo, body } = term;
+                let () = mo.resolve(resolver, (local.clone(), global))?;
+                let () = body.resolve(resolver, (local.clone(), global))?;
+                term.into()
+            }
+            | Term::WBlock(term) => {
+                let WBlock { alg, body } = term;
+                let () = alg.resolve(resolver, (local.clone(), global))?;
+                let () = body.resolve(resolver, (local.clone(), global))?;
+                term.into()
+            }
             | Term::Lit(term) => term.into(),
         };
         // save the new term structure
@@ -708,6 +720,16 @@ impl Collect for TermId {
                 for Import { binder, ty: _, body: _ } in &imports {
                     ctx = binder.collect(collector, ctx.to_owned())?;
                 }
+                let () = body.collect(collector, ctx)?;
+            }
+            | Term::MBlock(term) => {
+                let MBlock { mo, body } = term;
+                let () = mo.collect(collector, ctx.to_owned())?;
+                let () = body.collect(collector, ctx)?;
+            }
+            | Term::WBlock(term) => {
+                let WBlock { alg, body } = term;
+                let () = alg.collect(collector, ctx.to_owned())?;
                 let () = body.collect(collector, ctx)?;
             }
             | Term::Lit(_lit) => {}

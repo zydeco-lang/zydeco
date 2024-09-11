@@ -676,6 +676,18 @@ impl Desugar for t::TermId {
                     self.into(),
                 )
             }
+            | Tm::MBlock(term) => {
+                let t::MBlock { mo, body } = term;
+                let mo = mo.desugar(desugarer)?;
+                let body = body.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::MBlock { mo, body }.into(), self.into())
+            }
+            | Tm::WBlock(term) => {
+                let t::WBlock { alg, body } = term;
+                let alg = alg.desugar(desugarer)?;
+                let body = body.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::WBlock { alg, body }.into(), self.into())
+            }
             | Tm::Lit(term) => Alloc::alloc(desugarer, term.into(), self.into()),
         };
         Ok(res)

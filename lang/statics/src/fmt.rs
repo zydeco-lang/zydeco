@@ -444,29 +444,6 @@ where
     }
 }
 
-impl Ugly for Import {
-    fn ugly(&self, f: &Formatter) -> String {
-        let Import { binder, ty, body } = self;
-        format!("import {} : {} = {} ", binder.ugly(f), ty.ugly(f), body.ugly(f))
-    }
-}
-
-// impl Ugly for WithBlock {
-//     fn ugly(&self, f: &Formatter) -> String {
-//         let WithBlock { monad, algebras, imports, body } = self;
-//         let mut s = String::new();
-//         s += &format!("with {} ", monad.ugly(f));
-//         for algebra in algebras.iter() {
-//             s += &format!("with {} ", algebra.ugly(f));
-//         }
-//         for import in imports.iter() {
-//             s += &import.ugly(f);
-//         }
-//         s += &format!("begin {} end", body.ugly(f));
-//         s
-//     }
-// }
-
 impl Ugly for DeclId {
     fn ugly(&self, f: &Formatter) -> String {
         let decl = &f.statics.decls[self];

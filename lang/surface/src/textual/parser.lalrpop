@@ -38,6 +38,8 @@ extern {
         "do~" => Tok::DoTilde,
         "ret" => Tok::Ret,
         "with" => Tok::With,
+        "with_mo" => Tok::WithMo,
+        "with_alg" => Tok::WithAlg,
         "import" => Tok::Import,
         "inline" => Tok::Inline,
         "begin" => Tok::Begin,
@@ -232,19 +234,25 @@ CoMatcher: CoMatcherParam = {
     },
 };
 
-Import: Import = {
-    "import" <binder:PatId> ":" <ty:TermId> "=" <body:TermId> => Import {
-        binder, ty, body
-    },
+// Import: Import = {
+//     "import" <binder:PatId> ":" <ty:TermId> "=" <body:TermId> => Import {
+//         binder, ty, body
+//     },
+// };
+// Inline: DefId = {
+//     "inline" <DefId> => <>.into(),
+// };
+// WithBlock: WithBlock = {
+//     <structs:("with" <TermId>)*> <inlines:Inline*> <imports:Import*>
+//     "begin" <body:TermId> "end" => WithBlock {
+//         structs, inlines, imports, body
+//     },
+// };
+WithMoBlock: MBlock = {
+    "with_mo" <mo:TermId> "begin" <body:TermId> "end" => MBlock { mo, body },
 };
-Inline: DefId = {
-    "inline" <DefId> => <>.into(),
-};
-WithBlock: WithBlock = {
-    <structs:("with" <TermId>)*> <inlines:Inline*> <imports:Import*>
-    "begin" <body:TermId> "end" => WithBlock {
-        structs, inlines, imports, body
-    },
+WithAlgBlock: WBlock = {
+    "with_alg" <alg:TermId> "begin" <body:TermId> "end" => WBlock { alg, body },
 };
 
 #[inline]
@@ -308,7 +316,9 @@ Term: Term = {
         arms
     }.into(),
     // with block
-    <WithBlock> => <>.into(),
+    // <WithBlock> => <>.into(),
+    <WithMoBlock> => <>.into(),
+    <WithAlgBlock> => <>.into(),
 };
 
 #[inline]

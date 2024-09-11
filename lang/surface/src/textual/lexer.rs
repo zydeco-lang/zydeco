@@ -57,6 +57,10 @@ pub enum Tok<'input> {
     Ret,
     #[token("with")]
     With,
+    #[token("with_mo")]
+    WithMo,
+    #[token("with_alg")]
+    WithAlg,
     #[token("import")]
     Import,
     #[token("inline")]
@@ -158,6 +162,8 @@ impl<'input> Display for Tok<'input> {
             | Tok::Ret => write!(f, "ret"),
             | Tok::Begin => write!(f, "begin"),
             | Tok::With => write!(f, "with"),
+            | Tok::WithMo => write!(f, "with_mo"),
+            | Tok::WithAlg => write!(f, "with_alg"),
             | Tok::Import => write!(f, "import"),
             | Tok::Inline => write!(f, "inline"),
             | Tok::Fn => write!(f, "fn"),
