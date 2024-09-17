@@ -13,23 +13,26 @@ export function activate(context: ExtensionContext): Promise<void> {
 }
 
 function startClient(context: ExtensionContext): Promise<void> {
-    const serverCommand = getServer();
-    const run = {
-        command: serverCommand,
-        options: { env: Object.assign({}, process.env, { RUST_BACKTRACE: "1" }) },
-    };
-    const serverOptions: ServerOptions = {
-        run,
-        debug: run,
-    };
+    // const serverCommand = getServer();
+    // const run = {
+    //     command: serverCommand,
+    //     options: { env: Object.assign({}, process.env, { RUST_BACKTRACE: "1" }) },
+    // };
+    // const serverOptions: ServerOptions = {
+    //     run,
+    //     debug: run,
+    // };
 
-    const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: "file", language: "zydeco" }],
-    };
+    // const clientOptions: LanguageClientOptions = {
+    //     documentSelector: [{ scheme: "file", language: "zydeco" }],
+    // };
 
-    client = new LanguageClient("zls", "Zydeco Language Server", serverOptions, clientOptions);
+    // client = new LanguageClient("zls", "Zydeco Language Server", serverOptions, clientOptions);
 
-    return client.start();
+    // return client.start();
+
+    // do nothing
+    return Promise.resolve();
 }
 
 function getServer(): string {
