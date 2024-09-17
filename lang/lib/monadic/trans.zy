@@ -1,0 +1,131 @@
+// Monad transformers
+// Two flavors of exception monad transformers are presented,
+// one for the monad that uses `Ret` in its type signature,
+// and the other uses CPS (`Kont`).
+
+alias Exn (E: VType) (A: VType) : CType =
+  Ret (Either E A)
+end
+
+def ! mo-exn (E: VType) : Monad (Exn E) =
+  comatch
+  | .return A a ->
+    ret +Right(a)
+  | .bind A A' m f ->
+    do a? <- ! m;
+    match a?
+    | +Left(e) -> ret +Left(e)
+    | +Right(a) -> ! f a
+    end
+  end
+end
+
+// Change `Ret` in Exn to `M`
+alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
+  M (Either E A)
+end
+
+def ! mo-exnt (E: VType) (M: VType -> CType)
+  (mo: Thunk (Monad M))
+: Monad (ExnT E M) =
+  // correct anwser:
+  //
+  // comatch
+  // | .return A a ->
+  //   ! mo .return (Either E A) +Right(a)
+  // | .bind A A' m f ->
+  //   do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
+  //   match a?
+  //   | +Left(e) -> ! mo .return (Either E A') +Left(e)
+  //   | +Right(a) -> ! f a
+  //   end
+  // end
+
+  use mo begin
+    // inlining `! mo-exn E`
+    comatch
+    | .return A a ->
+      ret +Right(a)
+    | .bind A A' m f ->
+      do a? <- ! m;
+      match a?
+      | +Left(e) -> ret +Left(e)
+      | +Right(a) -> ! f a
+      end
+    end
+  end
+end
+
+def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
+  comatch
+  | .monad M mo -> ! mo-exnt E M mo
+  | .lift M A mo m ->
+    use mo begin
+      do a <- ! (m: Thunk (Ret A));
+      (! mo-exnt E M mo .return A : A -> Exn E A) a
+    end
+  end
+end
+
+alias ExnK (E: VType) (A: VType) : CType =
+  forall (R: CType) . Thunk (E -> R) -> Thunk (A -> R) -> R
+end
+
+def ! mo-exnk (E: VType) : Monad (ExnK E) =
+  comatch
+  | .return A a ->
+    fn R ke ka ->
+    ! ka a
+  | .bind A A' m f ->
+    fn R ke ka ->
+    ! m R ke { fn a ->
+    ! f a R ke ka }
+  end
+end
+
+// Pass the algebra of `R` to the continuation
+alias ExnKT (E: VType) (M: VType -> CType) (A: VType) : CType =
+  forall (R: CType) . Thunk (Algebra M R) -> Thunk (E -> R) -> Thunk (A -> R) -> R
+end
+
+def ! mo-exnkt (E: VType) (M: VType -> CType)
+  (mo: Thunk (Monad M))
+: Monad (ExnKT E M) =
+  // correct anwser:
+  //
+  // comatch
+  // | .return A a ->
+  //   fn R alg ke ka ->
+  //   ! ka a
+  // | .bind A A' m f ->
+  //   fn R alg ke ka' ->
+  //   do~ ! m R alg ke; fn a ->
+  //   ! f a R alg ke ka'
+  // end
+
+  use mo begin
+    // inline mo-exnk E
+    comatch
+    | .return A a ->
+      fn R ke ka ->
+      ! ka a
+    | .bind A A' m f ->
+      fn R ke ka ->
+      ! m R ke { fn a ->
+      ! f a R ke ka }
+    end
+  end
+end
+
+def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
+  comatch
+  | .monad M mo -> ! mo-exnkt E M mo
+  | .lift M A mo m -> fn R alg ->
+    (use mo begin
+      do a <- ! (m : Thunk (Ret A));
+      embed alg begin
+        (! mo-exnkt E M mo .return A : A -> ExnK E A) a
+      end
+    end) R alg
+  end
+end
