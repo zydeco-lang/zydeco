@@ -2234,17 +2234,6 @@ impl Tyck for SEnv<su::TermId> {
                         | AnnId::Type(ana_ty) => Lub::lub_k(body_ty_lift, ana_ty, tycker)?,
                     },
                 };
-                // let with_block = Alloc::alloc(
-                //     &mut tycker.statics,
-                //     ss::WithBlock {
-                //         monad: mo,
-                //         algebras: algs.into_iter().map(|(alg, _, _)| alg).collect(),
-                //         imports: imports_,
-                //         body,
-                //     },
-                //     body_ty_lift,
-                // );
-                // TermAnnId::Compu(with_block, body_ty_lift)
 
                 // perform inlining
                 for (def, bindee) in inline_subs {
@@ -2311,6 +2300,12 @@ impl Tyck for SEnv<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
 
+                // mo_ty should be the type that implements monad
+                let mo_ty = match tycker.monad_or_algebra(&self.env, mo_ty) {
+                    | Some(MonadOrAlgebra::Monad(mo_ty)) => mo_ty,
+                    | _ => tycker.err_k(TyckError::MissingMonad, std::panic::Location::caller())?,
+                };
+
                 // add the monad instance to the stack
                 tycker.mo_stack.push_back(MonadicDelimiter { site: self.inner, mo, mo_ty });
 
@@ -2322,12 +2317,25 @@ impl Tyck for SEnv<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
 
-                // Todo: lift the body
-
                 // remove the monad instance from the stack
                 tycker.mo_stack.pop_back();
 
-                todo!()
+                // lift the body type
+                let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
+                let body_ty_lift = match switch {
+                    | Switch::Syn => body_ty_lift,
+                    | Switch::Ana(ana) => match ana {
+                        | AnnId::Set | AnnId::Kind(_) => {
+                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        }
+                        | AnnId::Type(ana_ty) => Lub::lub_k(body_ty_lift, ana_ty, tycker)?,
+                    },
+                };
+
+                // lift the body
+                let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), vec![])?;
+
+                TermAnnId::Compu(body_lift, body_ty_lift)
             }
             | Tm::WBlock(term) => {
                 let su::WBlock { alg, body } = term;
@@ -2339,7 +2347,13 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                
+
+                // get mo_ty and carrier_ty
+                let (mo_ty, carrier_ty) = match tycker.monad_or_algebra(&self.env, alg_ty) {
+                    | Some(MonadOrAlgebra::Algebra(mo_ty, carrier_ty)) => (mo_ty, carrier_ty),
+                    | _ => tycker.err_k(TyckError::MissingMonad, std::panic::Location::caller())?,
+                };
+
                 todo!()
             }
             | Tm::Lit(lit) => {

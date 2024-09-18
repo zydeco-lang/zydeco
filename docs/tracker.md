@@ -1,7 +1,7 @@
 ## Project Tracker
 
 1. Identify the features that we want
-   - polymorphic underlying monad
+   - polymorphic monad instance
    - user controlled lifting (reinterpret)
    - term and type reusing (import) (theory-side upgrade needed)
    - using terms within monadic block in their lifted form (unquote)

@@ -32,6 +32,8 @@ pub enum Tok<'input> {
     Root,
     #[token("use")]
     Use,
+    #[token("embed")]
+    Embed,
     #[token("data")]
     Data,
     #[token("codata")]
@@ -149,6 +151,7 @@ impl<'input> Display for Tok<'input> {
             | Tok::Layer => write!(f, "layer"),
             | Tok::Root => write!(f, "root"),
             | Tok::Use => write!(f, "use"),
+            | Tok::Embed => write!(f, "embed"),
             | Tok::Data => write!(f, "data"),
             | Tok::Codata => write!(f, "codata"),
             | Tok::Alias => write!(f, "alias"),

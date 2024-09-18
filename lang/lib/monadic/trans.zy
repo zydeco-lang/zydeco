@@ -62,6 +62,8 @@ def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
   | .lift M A mo m ->
     use mo begin
       do a <- ! (m: Thunk (Ret A));
+      let ! mo-exnt =
+      in
       (! mo-exnt E M mo .return A : A -> Exn E A) a
     end
   end

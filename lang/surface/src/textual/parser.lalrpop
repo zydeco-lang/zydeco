@@ -26,6 +26,7 @@ extern {
         "layer" => Tok::Layer,
         "root" => Tok::Root,
         "use" => Tok::Use,
+        "embed" => Tok::Embed,
         "data" => Tok::Data,
         "codata" => Tok::Codata,
         "alias" => Tok::Alias,
@@ -248,11 +249,11 @@ CoMatcher: CoMatcherParam = {
 //         structs, inlines, imports, body
 //     },
 // };
-WithMoBlock: MBlock = {
-    "with_mo" <mo:TermId> "begin" <body:TermId> "end" => MBlock { mo, body },
+MonadicBlock: MBlock = {
+    "use" <mo:TermId> "begin" <body:TermId> "end" => MBlock { mo, body },
 };
-WithAlgBlock: WBlock = {
-    "with_alg" <alg:TermId> "begin" <body:TermId> "end" => WBlock { alg, body },
+UnquoteBlock: WBlock = {
+    "embed" <alg:TermId> "begin" <body:TermId> "end" => WBlock { alg, body },
 };
 
 #[inline]
@@ -317,8 +318,8 @@ Term: Term = {
     }.into(),
     // with block
     // <WithBlock> => <>.into(),
-    <WithMoBlock> => <>.into(),
-    <WithAlgBlock> => <>.into(),
+    <MonadicBlock> => <>.into(),
+    <UnquoteBlock> => <>.into(),
 };
 
 #[inline]

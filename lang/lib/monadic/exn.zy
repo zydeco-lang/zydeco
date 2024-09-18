@@ -7,9 +7,18 @@ def ! eg-poly
 : OS =
   use mo begin
     do s <- ret "Hello, World!";
-    embed alg begin
-      ! write_line s { ! exit 0 }
-    end
+    let OS' = Alg OS alg in
+    let ! write_line' (s : String) (k : U OS') : OS' =
+      embed alg begin
+        ! write_line s k
+      end
+    in
+    let ! exit' (n : Int) : OS' =
+      embed alg begin
+        ! exit n
+      end
+    in
+    ! write_line' s { ! exit' 0 }
   end
 end
 
