@@ -33,7 +33,7 @@ module Builtin where
     | .bindA : forall (A: VType) .
       Thunk (M A) -> Thunk (A -> R) -> R
   end
-  pub extern codata Alg (M: VType -> CType) (B: CType) (alg: Thunk (Algebra M B)) end
+  pub extern def Alg end
 
   /// interface for monad transformers
   codata MonadTrans (T: (VType -> CType) -> VType -> CType) where

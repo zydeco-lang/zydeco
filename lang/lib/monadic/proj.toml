@@ -2,12 +2,13 @@ name = "Monadic"
 
 srcs = [
     "../std/core.zy",
-    "../std/data.zy",
+    # "../std/data.zy",
     # "../std/avl.zy",
 ]
 deps = []
 bins = [
-    "exn.zy",
+    "quote.zy"
+    # "exn.zy",
 ]
 
 std = "NoStd"

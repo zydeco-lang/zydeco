@@ -839,16 +839,21 @@ impl Tyck for SEnv<su::TermId> {
                 }
             }
             | Tm::Var(def) => {
-                // check if def is defined in the same monadic context
-                let Some(def_mo_ctx) = tycker.mo_ctx.get(&def) else { unreachable!() };
-                if def_mo_ctx != &tycker.mo_stack {
-                    tycker.err_k(
-                        TyckError::MonadicContextMismatch {
-                            defined: def_mo_ctx.clone(),
-                            current: tycker.mo_stack.clone(),
-                        },
-                        std::panic::Location::caller(),
-                    )?
+                // Todo: check if def is defined in the same monadic context
+                if let Some(def_mo_ctx) = tycker.mo_ctx.get(&def) {
+                    // if def_mo_ctx != &tycker.mo_stack {
+                    //     tycker.err_k(
+                    //         TyckError::MonadicContextMismatch {
+                    //             defined: def_mo_ctx.clone(),
+                    //             current: tycker.mo_stack.clone(),
+                    //         },
+                    //         std::panic::Location::caller(),
+                    //     )?
+                    // }
+                } else {
+                    // use zydeco_surface::scoped::fmt::*;
+                    // println!("{}", def.ugly(&Formatter::new(&tycker.scoped)));
+                    // panic!()
                 }
 
                 let ann = {
