@@ -7,7 +7,8 @@ srcs = [
 ]
 deps = []
 bins = [
-    "quote.zy"
+    "quote.zy",
+    "trans.zy",
     # "exn.zy",
 ]
 
