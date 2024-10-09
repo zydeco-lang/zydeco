@@ -18,6 +18,7 @@ bins = [
     "alg.zy",
     # "algtrans.zy",
     "alias.zy",
+    "backtrack.zydeco",
     "bigmac.zy",
     "cbv.zy",
     "cbpv.zy",

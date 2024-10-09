@@ -1,0 +1,87 @@
+codata Monoid (M: VType -> CType) where
+  | .empty : forall (A: VType) . M A
+  | .append : forall (A: VType) . U (M A) -> U (M A) -> M A
+end
+
+// codata Monad (M: VType -> CType) where
+//   | .return : forall (A: VType) . A -> M A
+//   | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
+// end
+
+codata MList (A: VType) where
+  | .done : Ret (List A)
+  // | .run : forall (R: CType) . U (U R -> A -> R) -> U R -> R
+end
+
+def ! mnlist: Monoid MList =
+  comatch
+  | .empty A -> fn .done -> ret +Nil()
+  | .append A m1 m2 -> fn .done ->
+    do xs <- ! m1 .done;
+    do ys <- ! m2 .done;
+    let ! rec loop (xs: List A) : Ret (List A) =
+      match xs
+      | +Nil() -> ret ys
+      | +Cons(x, xs) ->
+        do ys <- ! loop xs;
+        ret +Cons(x, ys)
+      end
+    in
+    ! loop xs
+  end
+end
+
+def ! mlist: Monad MList =
+  comatch
+  | .return A a -> fn .done -> ret +Cons(a, +Nil())
+  | .bind A A' m f ->
+    do xs <- ! m .done;
+    let ! rec loop (xs: List A) (g: U (U (MList A') -> MList A')) : MList A' =
+      match xs
+      | +Nil() -> ! g { ! mnlist .empty (A') }
+      | +Cons(x, xs) ->
+        do~ ! loop xs; fn ys ->
+        ! g { ! mnlist .append (A') { ! f x } ys }
+      end
+    in
+    ! loop xs { fn ys -> ! ys }
+  end
+end
+
+def ! choose (xs: List Int) : MList Int =
+  fn .done -> ret xs
+end
+
+def ! guard (b: Bool) : MList Unit =
+  ! if (MList Unit) b { ! mlist .return (Unit) () } { ! mnlist .empty (Unit) }
+end
+
+main
+  let demo = {
+    do~ ! mlist .bind (Int) (Pair Int Int) { ! choose +Cons(1, +Cons(2, +Nil())) }; fn x ->
+    do~ ! mlist .bind (Int) (Pair Int Int) { ! choose +Cons(3, +Cons(4, +Nil())) }; fn y ->
+    do~ ! mlist .bind (Unit) (Pair Int Int) {
+      do r <- ! add x y;
+      do b <- ! int_eq r 5;
+      ! guard b
+    }; fn _ ->
+    ! mlist .return (Pair Int Int) +Cons(x, y)
+  } in
+  do ps <- ! demo .done;
+  let ! rec print (ps: List (Pair Int Int)) (kont: U OS) : OS =
+    match ps
+    | +Nil() -> ! kont
+    | +Cons(p, ps) ->
+      match p
+      | +Cons(x, y) ->
+        do~ ! write_int x;
+        do~ ! write_str " + ";
+        do~ ! write_int y;
+        do~ ! write_line "";
+        ! print ps kont
+      end
+    end
+  in
+  do~ ! print ps;
+  ! exit 0
+end
