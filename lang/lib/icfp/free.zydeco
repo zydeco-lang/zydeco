@@ -1,6 +1,6 @@
 // The Free monad
 
-// The interface for monads
+// // The interface for monads
 // codata Monad (M: VType -> CType) where
 //   | .return : forall (A: VType) .
 //     A -> M A
@@ -54,7 +54,7 @@ end
 
 
 // The interface for using Free
-def ! read (s: Unit) : Free String =
+def ! read ((): Unit) : Free String =
   fn .run R read write fail -> ! read ()
 end
 
@@ -66,16 +66,16 @@ def ! fail (s: String) : Free Empty =
   fn .run R read write fail -> ! fail s
 end
 
-def ! read_os (_: Unit) (k: Thunk (String -> OS)) : OS =
-  ! read_line k
+def ! read_os ((): Unit) : Kont OS String =
+  fn .run k -> ! read_line k
 end
 
-def ! write_os (s: String) (k: Thunk (Unit -> OS)) : OS =
-  ! write_line s { ! k () }
+def ! write_os (s: String) : Kont OS Unit =
+  fn .run k -> ! write_line s { ! k () }
 end
 
-def ! fail_os (s: String) (_: Thunk (Empty -> OS)) : OS =
-  ! panic s
+def ! fail_os (s: String) : Kont OS Empty =
+  fn .run k -> ! panic s
 end
 
 
@@ -84,5 +84,5 @@ main
     do~ ! mfree .bind String Unit { ! read () }; fn s ->
     ! write s
   in
-  ! prog .run OS read_os write_os fail_os .run { ! halt }
+  ! prog .run OS read_os write_os fail_os .run { fn () -> ! exit 0 }
 end
