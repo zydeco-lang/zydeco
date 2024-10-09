@@ -80,5 +80,9 @@ end
 
 
 main
-  ! exit 0
+  let ! prog : Free Unit =
+    do~ ! mfree .bind String Unit { ! read () }; fn s ->
+    ! write s
+  in
+  ! prog .run OS read_os write_os fail_os .run { ! halt }
 end

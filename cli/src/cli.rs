@@ -34,10 +34,10 @@ pub enum Commands {
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
     },
-    /// Start a REPL
-    Repl {
-        /// Level of verbosity
-        #[arg(short, long, default_value_t = false)]
-        verbose: bool,
-    },
+    // /// Start a REPL
+    // Repl {
+    //     /// Level of verbosity
+    //     #[arg(short, long, default_value_t = false)]
+    //     verbose: bool,
+    // },
 }

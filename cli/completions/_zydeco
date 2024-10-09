@@ -47,14 +47,6 @@ _arguments "${_arguments_options[@]}" : \
 '*::files -- Path to the file to check:_files' \
 && ret=0
 ;;
-(repl)
-_arguments "${_arguments_options[@]}" : \
-'-v[Level of verbosity]' \
-'--verbose[Level of verbosity]' \
-'-h[Print help]' \
-'--help[Print help]' \
-&& ret=0
-;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_zydeco__help_commands" \
@@ -72,10 +64,6 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (check)
-_arguments "${_arguments_options[@]}" : \
-&& ret=0
-;;
-(repl)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -97,7 +85,6 @@ _zydeco_commands() {
     local commands; commands=(
 'run:Run a zydeco program' \
 'check:Check a zydeco program' \
-'repl:Start a REPL' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'zydeco commands' commands "$@"
@@ -112,7 +99,6 @@ _zydeco__help_commands() {
     local commands; commands=(
 'run:Run a zydeco program' \
 'check:Check a zydeco program' \
-'repl:Start a REPL' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'zydeco help commands' commands "$@"
@@ -127,20 +113,10 @@ _zydeco__help__help_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help help commands' commands "$@"
 }
-(( $+functions[_zydeco__help__repl_commands] )) ||
-_zydeco__help__repl_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco help repl commands' commands "$@"
-}
 (( $+functions[_zydeco__help__run_commands] )) ||
 _zydeco__help__run_commands() {
     local commands; commands=()
     _describe -t commands 'zydeco help run commands' commands "$@"
-}
-(( $+functions[_zydeco__repl_commands] )) ||
-_zydeco__repl_commands() {
-    local commands; commands=()
-    _describe -t commands 'zydeco repl commands' commands "$@"
 }
 (( $+functions[_zydeco__run_commands] )) ||
 _zydeco__run_commands() {

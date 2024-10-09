@@ -840,7 +840,7 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Var(def) => {
                 // Todo: check if def is defined in the same monadic context
-                if let Some(def_mo_ctx) = tycker.mo_ctx.get(&def) {
+                if let Some(_def_mo_ctx) = tycker.mo_ctx.get(&def) {
                     // if def_mo_ctx != &tycker.mo_stack {
                     //     tycker.err_k(
                     //         TyckError::MonadicContextMismatch {
@@ -2342,22 +2342,22 @@ impl Tyck for SEnv<su::TermId> {
 
                 TermAnnId::Compu(body_lift, body_ty_lift)
             }
-            | Tm::WBlock(term) => {
-                let su::WBlock { alg, body } = term;
+            | Tm::WBlock(_term) => {
+                // let su::WBlock { alg, body } = term;
 
-                // tyck the algebra instance
-                let alg_out_ann = self.mk(alg).tyck(tycker, Action::syn())?;
-                let (alg, alg_ty) = alg_out_ann.try_as_value(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
+                // // tyck the algebra instance
+                // let alg_out_ann = self.mk(alg).tyck(tycker, Action::syn())?;
+                // let (alg, alg_ty) = alg_out_ann.try_as_value(
+                //     tycker,
+                //     TyckError::SortMismatch,
+                //     std::panic::Location::caller(),
+                // )?;
 
-                // get mo_ty and carrier_ty
-                let (mo_ty, carrier_ty) = match tycker.monad_or_algebra(&self.env, alg_ty) {
-                    | Some(MonadOrAlgebra::Algebra(mo_ty, carrier_ty)) => (mo_ty, carrier_ty),
-                    | _ => tycker.err_k(TyckError::MissingMonad, std::panic::Location::caller())?,
-                };
+                // // get mo_ty and carrier_ty
+                // let (mo_ty, carrier_ty) = match tycker.monad_or_algebra(&self.env, alg_ty) {
+                //     | Some(MonadOrAlgebra::Algebra(mo_ty, carrier_ty)) => (mo_ty, carrier_ty),
+                //     | _ => tycker.err_k(TyckError::MissingMonad, std::panic::Location::caller())?,
+                // };
 
                 todo!()
             }

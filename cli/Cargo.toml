@@ -7,7 +7,8 @@ edition = "2021"
 
 [dependencies]
 clap = { workspace = true }
-zydeco-lang = { workspace = true }
+# zydeco-lang = { workspace = true }
+zydeco-driver = { workspace = true }
 
 [build-dependencies]
 clap = { workspace = true }

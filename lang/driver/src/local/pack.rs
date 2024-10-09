@@ -105,6 +105,13 @@ impl LocalPackage {
         }
         Ok(())
     }
+    pub fn run_files<'f>(name: &str, srcs: impl Iterator<Item = &'f PathBuf>) -> Result<()> {
+        let alloc = ArcGlobalAlloc::new();
+        let stew = Self::parse_package(alloc.clone(), name, &PathBuf::new(), srcs)?;
+        let dynamics = Self::compile_package(alloc.clone(), name, stew)?;
+        Self::run_dynamics(dynamics)?;
+        Ok(())
+    }
     fn parse_package<'f>(
         alloc: ArcGlobalAlloc, name: &str, path: &std::path::Path,
         srcs: impl Iterator<Item = &'f PathBuf>,
@@ -296,7 +303,16 @@ impl LocalPackage {
             }
         }
 
-        let Tycker { spans: _, prim: _, scoped, statics, mo_ctx: _, mo_stack: _, stack: _, errors: _ } = tycker;
+        let Tycker {
+            spans: _,
+            prim: _,
+            scoped,
+            statics,
+            mo_ctx: _,
+            mo_stack: _,
+            stack: _,
+            errors: _,
+        } = tycker;
         let dynamics = Linker { scoped, statics }.run();
         // // Debug: print the variable definitions in dynamics
         // if cfg!(debug_assertions) {
