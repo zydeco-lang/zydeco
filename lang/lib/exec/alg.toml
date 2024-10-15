@@ -7,8 +7,9 @@ srcs = [
 deps = []
 bins = [
     # "alg.zy",
-    "algtrans.zy",
+    # "algtrans.zy",
     # "motrans.zy",
+    "free.zy",
 ]
 
 std = "NoStd"
