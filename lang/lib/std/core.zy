@@ -2,10 +2,11 @@ module Builtin where
   /// VType and CType
   pub extern def VType end
   pub extern def CType end
-  /// Thunk and Ret
-  pub extern def Thunk (B : CType) : VType end
+  /// Thk and Ret
+  pub extern def Thk (B : CType) : VType end
   pub extern def Ret (A : VType) : CType end
-  pub alias U = Thunk end
+  pub alias Thunk = Thk end
+  pub alias U = Thk end
   pub alias F = Ret end
 
   /// primitive base types
@@ -45,6 +46,8 @@ module Builtin where
 end
 
 module Core where
+  pub data Empty where end
+
   pub data Option (A : VType) where
     | +None : Unit
     | +Some : A

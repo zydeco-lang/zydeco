@@ -114,7 +114,7 @@ pub struct ScopedArena {
 pub struct PrimDef {
     pub vtype: SingCell<DefId>,
     pub ctype: SingCell<DefId>,
-    pub thunk: SingCell<DefId>,
+    pub thk: SingCell<DefId>,
     pub ret: SingCell<DefId>,
     pub unit: SingCell<DefId>,
     pub int: SingCell<DefId>,
@@ -133,7 +133,7 @@ mod impls {
         pub fn check(&self) -> Result<()> {
             self.vtype.get_or_else(|| ResolveError::MissingPrim("VType"))?;
             self.ctype.get_or_else(|| ResolveError::MissingPrim("CType"))?;
-            self.thunk.get_or_else(|| ResolveError::MissingPrim("Thunk"))?;
+            self.thk.get_or_else(|| ResolveError::MissingPrim("Thk"))?;
             self.ret.get_or_else(|| ResolveError::MissingPrim("Ret"))?;
             self.unit.get_or_else(|| ResolveError::MissingPrim("Unit"))?;
             self.int.get_or_else(|| ResolveError::MissingPrim("Int"))?;

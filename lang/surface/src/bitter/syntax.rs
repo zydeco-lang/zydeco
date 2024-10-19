@@ -276,8 +276,8 @@ pub struct PrimTerms {
     pub vtype: MultiCell<TermId>,
     /// CType kind
     pub ctype: MultiCell<TermId>,
-    /// Thunk type
-    pub thunk: MultiCell<TermId>,
+    /// Thk type
+    pub thk: MultiCell<TermId>,
     /// Ret type
     pub ret: MultiCell<TermId>,
     /// Unit type

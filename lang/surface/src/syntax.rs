@@ -14,7 +14,7 @@ pub struct NameRef<T>(pub bool, pub Vec<VarName>, pub T);
 pub enum Internal {
     VType,
     CType,
-    Thunk,
+    Thk,
     Ret,
     Unit,
     Int,

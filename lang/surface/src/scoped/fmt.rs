@@ -111,7 +111,7 @@ impl Ugly for Internal {
         match self {
             | Internal::VType => s += "VType",
             | Internal::CType => s += "CType",
-            | Internal::Thunk => s += "Thunk",
+            | Internal::Thk => s += "Thk",
             | Internal::Ret => s += "Ret",
             | Internal::Unit => s += "Unit",
             | Internal::Int => s += "Int",

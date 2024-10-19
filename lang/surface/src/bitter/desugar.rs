@@ -849,8 +849,8 @@ mod impls {
             *self.prim.ctype.extend_one(term)
         }
         pub(crate) fn thunk(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Thunk.into(), prev);
-            *self.prim.thunk.extend_one(term)
+            let term = Alloc::alloc(self, b::Internal::Thk.into(), prev);
+            *self.prim.thk.extend_one(term)
         }
         pub(crate) fn ret(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::Ret.into(), prev);

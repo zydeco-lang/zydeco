@@ -6,8 +6,6 @@ data Err where
   | +Msg : String
 end
 
-data Empty where end
-
 codata Handlers (R: CType) (K: CType) where
   | .eff :
        U (String -> Kont R Bool) // print : String ~> Bool

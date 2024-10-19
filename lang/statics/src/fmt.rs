@@ -61,7 +61,7 @@ impl Ugly for TypeId {
             }
             | Type::Abs(ty) => ty.ugly(f),
             | Type::App(ty) => ty.ugly(f),
-            | Type::Thunk(ThunkTy) => format!("Thunk"),
+            | Type::Thunk(ThunkTy) => format!("Thk"),
             | Type::Ret(RetTy) => format!("Ret"),
             | Type::Unit(UnitTy) => format!("Unit"),
             | Type::Int(IntTy) => format!("Int"),

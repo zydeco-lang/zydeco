@@ -1,18 +1,8 @@
 // The Free monad
 
-// // The interface for monads
-// codata Monad (M: VType -> CType) where
-//   | .return : forall (A: VType) .
-//     A -> M A
-//   | .bind : forall (A: VType) (A': VType) .
-//     Thunk (M A) -> Thunk (A -> M A') -> M A'
-// end
-
-data Empty where end
 codata Kont (R: CType) (A: VType) where
   | .run : Thunk (A -> R) -> R
 end
-
 
 // Types of handlers
 alias KRead (R: CType) : VType =

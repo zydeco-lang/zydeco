@@ -149,18 +149,18 @@ impl Resolver {
                             )?;
                             break 'out;
                         }
-                        if let Some(def) = binders.get(&VarName("Thunk".into())) {
+                        if let Some(def) = binders.get(&VarName("Thk".into())) {
                             Resolver::alloc_prim(
                                 &self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                &mut self.prim_def.thunk,
-                                &self.prim_term.thunk,
+                                &mut self.prim_def.thk,
+                                &self.prim_term.thk,
                                 id,
                                 def,
-                                "Thunk",
-                                Internal::Thunk,
+                                "Thk",
+                                Internal::Thk,
                             )?;
                             break 'out;
                         }

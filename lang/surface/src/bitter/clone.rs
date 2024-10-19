@@ -61,7 +61,7 @@ impl DeepClone for b::TermId {
                     | Internal::CType => {
                         return desugarer.ctype(prev);
                     }
-                    | Internal::Thunk => {
+                    | Internal::Thk => {
                         return desugarer.thunk(prev);
                     }
                     | Internal::Ret => {

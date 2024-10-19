@@ -16,7 +16,7 @@ impl Tycker {
 /* ---------------------------------- Type ---------------------------------- */
 impl Tycker {
     pub fn thunk(&mut self, env: &Env<AnnId>) -> TypeId {
-        let AnnId::Type(ty) = env[self.prim.thunk.get()] else { unreachable!() };
+        let AnnId::Type(ty) = env[self.prim.thk.get()] else { unreachable!() };
         ty
     }
     /// generates `Thunk B`
@@ -132,7 +132,7 @@ impl Tycker {
                         self.statics.annotations_var.insert(def, AnnId::Set);
                         env.env += (def, kd.into());
                     }
-                    | su::Internal::Thunk => {
+                    | su::Internal::Thk => {
                         let kd = ty.unwrap();
                         env = self.register_prim_ty(env, def, ThunkTy.into(), kd)?
                     }
