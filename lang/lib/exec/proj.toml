@@ -35,6 +35,7 @@ bins = [
     "fn-opt.zy",
     "forall.zy",
     "free.zy",
+    "free'.zy",
     "hash.zy",
     "ifz.zy",
     "interpreter.zydeco",

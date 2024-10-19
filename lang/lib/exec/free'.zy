@@ -1,0 +1,80 @@
+alias Kont (R: CType) (A: VType) : CType =
+  U (A -> R) -> R
+end
+
+data Err where
+  | +Msg : String
+end
+
+data Empty where end
+
+codata Handlers (R: CType) (K: CType) where
+  | .eff :
+       U (String -> Kont R Bool) // print : String ~> Bool
+    -> U (Err -> Kont R Empty) // fail : Err ~> Empty
+    -> U (Unit -> Kont R Bool) // flip : Unit ~> Bool
+    -> K
+end
+
+codata Free (H: CType -> CType -> CType) (A: VType) where
+  | .run : forall (R: CType) . H R (Kont R A)
+end
+
+def ! mfree : Monad (Free Handlers) =
+  comatch
+  | .return A a ->
+    fn .run R -> fn .eff print fail flip k -> ! k a
+  | .bind A A' m f -> fn .run R -> fn .eff print fail flip k' ->
+    ! m .run (R) .eff print fail flip { fn a ->
+      ! f a .run (R) .eff print fail flip k'
+    }
+  end
+end
+
+def ! print (s: String) : Free Handlers Bool =
+  fn .run R -> fn .eff print fail flip -> ! print s
+end
+
+def ! fail (e: Err) : Free Handlers Empty =
+  fn .run R -> fn .eff print fail flip -> ! fail e
+end
+
+def ! flip : Free Handlers Bool =
+  fn .run R -> fn .eff print fail flip -> ! flip ()
+end
+
+def ! print-os (s: String) (k: U (Bool -> OS)) : OS =
+  do~ ! write_line s;
+  ! k +True()
+end
+
+def ! print-str (s: String) (k: U (Bool -> Ret String)) : Ret String =
+  do s' <- ! k +True();
+  ! str_append s s'
+end
+
+def ! fail-os (e: Err) (_: U (Empty -> OS)) : OS =
+  match e
+  | +Msg(s) -> ! panic s
+  end
+end
+
+def ! flip-os (_: Unit) (kb: U (Bool -> OS)) : OS =
+  do~ ! random_int; fn i ->
+  do b <- ! mod i 2;
+  ! if~ (OS) { ! int_eq b 0 } { ! kb +True() } { ! kb +False() }
+end
+
+main
+  let m = {
+    do~ ! mfree .bind Bool Unit { ! print "a" }; fn _ ->
+    do~ ! mfree .bind Bool Unit { ! print "b" }; fn _ ->
+    do~ ! mfree .bind Bool Unit { ! flip }; fn b ->
+    do~ ! mfree .bind Bool Unit {
+      ! if (Free Handlers Bool) b { ! print "+" } { ! print "-" }
+    }; fn _ ->
+    ! mfree .return Unit ()
+  } in
+  do~ ! m .run OS .eff print-os fail-os flip-os; fn _ ->
+  ! exit 0
+end
