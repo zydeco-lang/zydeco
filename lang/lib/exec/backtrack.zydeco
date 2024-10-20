@@ -19,7 +19,7 @@ def ! mnlist: Monoid MList =
   | .append A m1 m2 -> fn .done ->
     do xs <- ! m1 .done;
     do ys <- ! m2 .done;
-    let ! fix loop (xs: List A) : Ret (List A) =
+    let fix loop (xs: List A) : Ret (List A) =
       match xs
       | +Nil() -> ret ys
       | +Cons(x, xs) ->
@@ -36,7 +36,7 @@ def ! mlist: Monad MList =
   | .return A a -> fn .done -> ret +Cons(a, +Nil())
   | .bind A A' m f ->
     do xs <- ! m .done;
-    let ! fix loop (xs: List A) (g: U (U (MList A') -> MList A')) : MList A' =
+    let fix loop (xs: List A) (g: U (U (MList A') -> MList A')) : MList A' =
       match xs
       | +Nil() -> ! g { ! mnlist .empty (A') }
       | +Cons(x, xs) ->
@@ -68,7 +68,7 @@ main
     ! mlist .return (Pair Int Int) +Cons(x, y)
   } in
   do ps <- ! demo .done;
-  let ! fix print (ps: List (Pair Int Int)) (kont: U OS) : OS =
+  let fix print (ps: List (Pair Int Int)) (kont: U OS) : OS =
     match ps
     | +Nil() -> ! kont
     | +Cons(p, ps) ->

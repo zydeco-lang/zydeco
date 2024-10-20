@@ -6,7 +6,7 @@ end
 // A ->* B == List A -> B
 
 // restore
-def ! fix l (A: VType) (B: CType) (fv: U (Varidic A B)): List A -> B = fn xs ->
+def fix l (A: VType) (B: CType) (fv: U (Varidic A B)): List A -> B = fn xs ->
   match xs
   | +Nil() -> ! fv .done
   | +Cons(x, xs) -> ! l (A) (B) { ! fv .more x } xs
@@ -15,7 +15,7 @@ end
 
 // capture
 def ! r (A: VType) (B: CType) (fl: U (List A -> B)): Varidic A B =
-  let ! fix r (k: U (List A -> B)): Varidic A B =
+  let fix r (k: U (List A -> B)): Varidic A B =
     comatch
     | .more x -> ! r { fn xs -> ! k +Cons(x, xs) }
     | .done -> ! k +Nil()
@@ -33,7 +33,7 @@ end
 // forall fl: U (List A -> B)
 
 
-def ! fix printl (xs: List String) (kont: U OS) : OS =
+def fix printl (xs: List String) (kont: U OS) : OS =
   match xs
   | +Nil() -> ! kont
   | +Cons(x, xs) ->
@@ -44,7 +44,7 @@ end
 
 
 
-def ! fix printv: Varidic String (U OS -> OS) =
+def fix printv: Varidic String (U OS -> OS) =
   ! r (String) (U OS -> OS) printl
 end
 

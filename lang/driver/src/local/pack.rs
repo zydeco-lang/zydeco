@@ -453,9 +453,11 @@ pub struct FileParsed {
 impl FileParsed {
     pub fn desugar(self, bitter: b::Arena) -> Result<FileBitter> {
         let FileParsed { path, source, spans, arena: textual, top } = self;
-        let desugarer = Desugarer { textual, bitter, prim: b::PrimTerms::default() };
-        let DesugarOut { arena, prim: prim_term, top } =
-            desugarer.run(top).map_err(|e| match e {})?;
+        let desugarer = Desugarer { spans, textual, bitter, prim: b::PrimTerms::default() };
+        let DesugarOut { spans, arena, prim: prim_term, top } =
+            desugarer.run(top).map_err(|err| {
+                PackageError::DesugarError(err.to_string())
+            })?;
         Ok(FileBitter { path, source, spans, arena, prim_term, top })
     }
 }

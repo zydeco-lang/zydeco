@@ -17,6 +17,8 @@ pub enum PackageError {
     LexerError(String),
     #[error("Parse error:\n\t{0}")]
     ParseError(String),
+    #[error("Desugar error:\n\t{0}")]
+    DesugarError(String),
     #[error("Resolve error:\n\t{0}")]
     ResolveError(String),
     #[error("Tyck error:\n{0}")]

@@ -59,7 +59,7 @@ codata ExnDe (E: VType) (A: VType) where
   | .done : Ret (Either E A)
 end
 
-def ! fix mexnde (E: VType) : Monad (ExnDe E) =
+def fix mexnde (E: VType) : Monad (ExnDe E) =
   comatch
   | .return -> fn A a ->
     comatch
@@ -72,7 +72,7 @@ def ! fix mexnde (E: VType) : Monad (ExnDe E) =
   end
 end
 
-def ! fix mexnde_err (E: VType) : MonadErr E (ExnDe E) =
+def fix mexnde_err (E: VType) : MonadErr E (ExnDe E) =
   comatch
   | .fail -> fn A e ->
     comatch
@@ -86,7 +86,7 @@ end
 
 // Proof of the violation of the monad laws of
 // the defunctionalized exception monad above
-def ! fix count_kont
+def fix count_kont
   (E: VType) (A: VType) (i: Int)
   (fi: Thunk (Int -> ExnDe E A))
 : ExnDe E A =

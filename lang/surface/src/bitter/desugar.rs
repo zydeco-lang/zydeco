@@ -10,12 +10,14 @@ pub trait Desugar {
 }
 
 pub struct Desugarer {
+    pub spans: t::SpanArena,
     pub textual: t::Arena,
     pub bitter: b::Arena,
     pub prim: b::PrimTerms,
 }
 
 pub struct DesugarOut {
+    pub spans: t::SpanArena,
     pub arena: b::Arena,
     pub prim: b::PrimTerms,
     pub top: b::TopLevel,
@@ -25,8 +27,8 @@ impl Desugarer {
     pub fn run(self, top: t::TopLevel) -> Result<DesugarOut> {
         let mut desugarer = self;
         let top = top.desugar(&mut desugarer)?;
-        let Desugarer { bitter: arena, prim, .. } = desugarer;
-        Ok(DesugarOut { arena, prim, top })
+        let Desugarer { spans, bitter: arena, prim, .. } = desugarer;
+        Ok(DesugarOut { spans, arena, prim, top })
     }
 }
 
@@ -740,6 +742,11 @@ impl Desugar for t::GenBind<t::TermId> {
         };
         // fix?
         if fix {
+            if comp {
+                let binder_ = desugarer.bitter.textual.back(&binder.into()).unwrap();
+                let span = &desugarer.spans[binder_];
+                Err(DesugarError::CompWhileFix(span.make(binder)))?
+            }
             let binder = binder.deep_clone(desugarer);
             binding = Alloc::alloc(desugarer, b::Fix(binder, binding).into(), prev);
         }

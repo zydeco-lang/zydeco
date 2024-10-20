@@ -65,7 +65,7 @@ def ! sem_val_to_str (s : SemVal) : F String =
   end
 end
 
-def ! fix lookup (x : String) (g : Env) : Ret(Answer SemVal) =
+def fix lookup (x : String) (g : Env) : Ret(Answer SemVal) =
   match g
   | +Empty() -> ret +Err()
   | +Cons(y,v,g) ->

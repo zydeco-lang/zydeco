@@ -58,7 +58,7 @@ pub def ! right (A : VType) (tree : Avl A) : Ret (Avl A) =
   end
 end
 
-pub def ! fix min_element (A : VType) (tree : Avl A) (cmp : Cmp A) : Ret (Option A) =
+pub def fix min_element (A : VType) (tree : Avl A) (cmp : Cmp A) : Ret (Option A) =
   match tree
   | +Leaf() -> ret +None()
   | +Node(l, n, h, r) ->
@@ -134,7 +134,7 @@ pub def ! balance (A : VType) (tree : Avl A) : Ret (Avl A) =
   end
 end
 
-pub def ! fix insert (A : VType) (x : A) (tree : Avl A) (cmp : Cmp A) : Ret (Avl A) =
+pub def fix insert (A : VType) (x : A) (tree : Avl A) (cmp : Cmp A) : Ret (Avl A) =
   match tree
   | +Leaf() -> ! singleton A x
   | +Node(l, n, h, r) ->
@@ -152,7 +152,7 @@ pub def ! fix insert (A : VType) (x : A) (tree : Avl A) (cmp : Cmp A) : Ret (Avl
   end
 end
 
-pub def ! fix search (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : Ret (Option A) =
+pub def fix search (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : Ret (Option A) =
   match tree
   | +Leaf() -> ret +None()
   | +Node(l, n, h, r) ->
@@ -169,7 +169,7 @@ pub def ! fix search (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt
   end
 end
 
-pub def ! fix change (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : Ret (Avl A) =
+pub def fix change (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : Ret (Avl A) =
   match tree
   | +Leaf() -> ret tree
   | +Node(l, n, h, r) ->
@@ -191,7 +191,7 @@ pub def ! fix change (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt
   end
 end
 
-pub def ! fix delete (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : Ret (Avl A) =
+pub def fix delete (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt : Cmp A) : Ret (Avl A) =
   match tree
   | +Leaf() -> ret tree
   | +Node(l, n, h, r) ->
@@ -230,7 +230,7 @@ pub def ! fix delete (A : VType) (x : A) (tree : Avl A) (cmp_eq : Cmp A) (cmp_lt
   end
 end
 
-pub def ! fix equal (A : VType) (tree1 : Avl A) (tree2 : Avl A) (cmp_eq : Cmp A) : Ret (Bool) =
+pub def fix equal (A : VType) (tree1 : Avl A) (tree2 : Avl A) (cmp_eq : Cmp A) : Ret (Bool) =
   match tree1
   | +Leaf() ->
     match tree2
@@ -253,7 +253,7 @@ pub def ! fix equal (A : VType) (tree1 : Avl A) (tree2 : Avl A) (cmp_eq : Cmp A)
   end
 end
 
-pub def ! fix pre_traversal (A : VType) (tree : Avl A) (fmt : U(A -> Ret (String))) (next : U OS) : OS =
+pub def fix pre_traversal (A : VType) (tree : Avl A) (fmt : U(A -> Ret (String))) (next : U OS) : OS =
   match tree
   | +Leaf() -> ! next
   | +Node(left, v, h, right) ->

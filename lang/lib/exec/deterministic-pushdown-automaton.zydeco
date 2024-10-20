@@ -20,7 +20,7 @@ end
 
 alias ParenCounterTrans = ParenCounterState -> ParenCounterStk end
 
-def ! fix paren_foldr
+def fix paren_foldr
   (ll : Thunk(Ret(LList' Tok)))
   (step : Thunk(Tok -> Thunk(ParenCounterTrans) -> ParenCounterTrans))
   (final : Thunk(ParenCounterTrans))

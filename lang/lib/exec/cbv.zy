@@ -100,7 +100,7 @@ codata EnvO where
   | .extend: String -> Value -> EnvO
 end
 
-def ! fix envo (env: EnvT) : EnvO =
+def fix envo (env: EnvT) : EnvO =
   comatch
   | .lookup x ->
     match env
@@ -130,7 +130,7 @@ data Term where
   | +If : Term * Term * Term
 end
 
-def ! fix interp (env: U EnvO) (t: Term) : Mo Value =
+def fix interp (env: U EnvO) (t: Term) : Mo Value =
   match t
   | +Var(x) ->
     do x? <- ! env .lookup x;
