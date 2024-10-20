@@ -18,6 +18,9 @@
         ["(", ")"],
         ["\"", "\""],
         ["'", "'"],
+        ["begin", "end"],
+        ["match", "end"],
+        ["comatch", "end"],
     ],
     // symbols that can be used to surround a selection
     "surroundingPairs": [

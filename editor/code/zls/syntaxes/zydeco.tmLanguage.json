@@ -21,11 +21,11 @@
 				},
 				{
 					"name": "keyword.control.zydeco",
-					"match": "\\b(ret|forall|exists|pack)\\b"
+					"match": "\\b(ret|forall|pi|exists|sigma|pack)\\b"
 				},
 				{
 					"name": "keyword.other.zydeco",
-					"match": "\\b(pub|ext|extern|fn|rec)\\b"
+					"match": "\\b(pub|ext|extern|fn|rec|fix)\\b"
 				},
 				{
 					"name": "variable.other.enummember.zydeco",

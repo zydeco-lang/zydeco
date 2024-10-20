@@ -7,7 +7,7 @@ let client: LanguageClient | undefined = undefined;
 
 export function activate(context: ExtensionContext): Promise<void> {
     return startClient(context).catch((e) => {
-        window.showErrorMessage(`Failed to activate zls: ${e}`);
+        // window.showErrorMessage(`Failed to activate zls: ${e}`);
         throw e;
     });
 }
