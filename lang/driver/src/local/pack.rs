@@ -574,7 +574,7 @@ impl PackageScoped {
                     rm(f);
                     rm(a);
                 }
-                | Tm::Rec(sc::Rec(_binder, body)) => {
+                | Tm::Fix(sc::Fix(_binder, body)) => {
                     rm(body);
                 }
                 | Tm::Pi(sc::Pi(_binder, body)) => {

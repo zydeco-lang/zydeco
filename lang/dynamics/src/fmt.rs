@@ -88,8 +88,8 @@ impl Ugly for Computation {
             | Compu::VApp(App(body, arg)) => {
                 format!("({} {})", body.ugly(f), arg.ugly(f))
             }
-            | Compu::Rec(Rec(param, body)) => {
-                format!("rec {} -> {}", param.ugly(f), body.ugly(f))
+            | Compu::Fix(Fix(param, body)) => {
+                format!("fix {} -> {}", param.ugly(f), body.ugly(f))
             }
             | Compu::Force(Force(body)) => {
                 format!("! {}", body.ugly(f))

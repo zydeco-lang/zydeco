@@ -78,9 +78,9 @@ pub struct PureBind<Br, Be, Tail> {
     pub tail: Tail,
 }
 
-/// `rec (x: A) -> b`
+/// `fix (x: A) -> b`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Rec<P, Tm>(pub P, pub Tm);
+pub struct Fix<P, Tm>(pub P, pub Tm);
 
 /// `C(a_1, ...)`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

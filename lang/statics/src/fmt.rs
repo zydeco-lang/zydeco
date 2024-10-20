@@ -352,14 +352,14 @@ where
     }
 }
 
-impl<P, Tm> Ugly for Rec<P, Tm>
+impl<P, Tm> Ugly for Fix<P, Tm>
 where
     P: Ugly,
     Tm: Ugly,
 {
     fn ugly(&self, f: &Formatter) -> String {
-        let Rec(p, tm) = self;
-        format!("rec {} -> {}", p.ugly(f), tm.ugly(f))
+        let Fix(p, tm) = self;
+        format!("fix {} -> {}", p.ugly(f), tm.ugly(f))
     }
 }
 

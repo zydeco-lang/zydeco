@@ -73,8 +73,8 @@ pub enum Tok<'input> {
     Fn,
     #[token("pi")]
     Pi,
-    #[token("rec")]
-    Rec,
+    #[token("fix")]
+    Fix,
     #[token("match")]
     Match,
     #[token("comatch")]
@@ -171,7 +171,7 @@ impl<'input> Display for Tok<'input> {
             | Tok::Inline => write!(f, "inline"),
             | Tok::Fn => write!(f, "fn"),
             | Tok::Pi => write!(f, "pi"),
-            | Tok::Rec => write!(f, "rec"),
+            | Tok::Fix => write!(f, "fix"),
             | Tok::Match => write!(f, "match"),
             | Tok::Comatch => write!(f, "comatch"),
             | Tok::Forall => write!(f, "forall"),

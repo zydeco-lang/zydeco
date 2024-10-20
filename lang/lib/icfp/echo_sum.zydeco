@@ -5,7 +5,7 @@
 // If the input is not a number, the program exits.
 
 main
-  (rec (loop: Thunk (Int -> OS)) ->
+  (fix (loop: Thunk (Int -> OS)) ->
     fn sum ->
       ! read_line_as_int { fn i? ->
         match i?

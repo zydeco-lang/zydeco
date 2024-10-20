@@ -132,7 +132,7 @@ module MExnOS where
     end
   end
 
-  def ! rec malg : Algebra MExnOS Compu =
+  def ! fix malg : Algebra MExnOS Compu =
     comatch
     | .bindA A m f -> // m : U (MExnOS A), f: U (A -> Compu)
       comatch
@@ -146,10 +146,10 @@ module MExnOS where
     end
   end
 
-  def ! rec malg-err : AlgebraErr MExnOS Compu =
+  def ! fix malg-err : AlgebraErr MExnOS Compu =
     comatch
     | .failA e ->
-      rec unwind -> comatch
+      fix unwind -> comatch
       | .app _ -> ! unwind
       | .bind _ _ _ -> ! unwind
       | .os -> ! mexn-err .fail (Value) e
@@ -163,7 +163,7 @@ module Print where
     | .value : SValue -> U OS -> OS
     | .compu : SCompu -> U OS -> OS
   end
-  def ! rec print-scbpv : PrintSCbpv =
+  def ! fix print-scbpv : PrintSCbpv =
     comatch
     | .value sv kont ->
       match sv
@@ -211,7 +211,7 @@ module Print where
         do~ ! print-scbpv .value sv;
         ! kont
       | +Rec(x, sc) ->
-        do~ ! write_str "rec ";
+        do~ ! write_str "fix ";
         do~ ! write_str x;
         do~ ! write_str " -> ";
         do~ ! print-scbpv .compu sc;
@@ -243,7 +243,7 @@ module Print where
     | .value : Value -> U OS -> OS
     | .compu : U Compu -> U OS -> OS
   end
-  def ! rec print-cbpv: PrintCbpv =
+  def ! fix print-cbpv: PrintCbpv =
     comatch
     | .value v kont ->
       match v
@@ -281,7 +281,7 @@ module Env where
     | .print : U OS -> OS
   end
 
-  def ! rec envo (env: EnvT) : EnvO =
+  def ! fix envo (env: EnvT) : EnvO =
     comatch
     | .lookup x ->
       match env
@@ -297,7 +297,7 @@ module Env where
       ! envo +Extend(x, v, env)
     | .print k ->
       do~ ! write_line "[";
-      (rec (p : Thunk (EnvT -> OS)) -> fn env -> match env
+      (fix (p : Thunk (EnvT -> OS)) -> fn env -> match env
       | +Empty() -> ! write_line "]" k
       | +Extend(x, v, env') ->
         do~ ! write_str "  ";
@@ -436,7 +436,7 @@ module Parser where
     do len <- ! str_length w;
     ! mp-cnt String len {
       comatch | .run s i ->
-        let ! rec word_match (j: Int) =
+        let ! fix word_match (j: Int) =
           ! if~ (Ret Bool) { ! int_eq j len } {
             ret +True()
           } {
@@ -475,7 +475,7 @@ module Parser where
         { ret +None() }
     in
     comatch | .run s i ->
-      let ! rec var (v: String) (i: Int) =
+      let ! fix var (v: String) (i: Int) =
         do c <- ! str_index s i;
         do c? <- ! p_vc c;
         do i' <- ! add i 1;
@@ -504,7 +504,7 @@ module Parser where
     | .compu : M SCompu
   end
 
-  pub def ! rec p_cbpv : ParserCbpv Parser =
+  pub def ! fix p_cbpv : ParserCbpv Parser =
     with mp
       import mp-alt : U (MonadAlt Ret) = mp-alt
       import mexn-err : U (MonadErr Ret) = mexn-err
@@ -644,7 +644,7 @@ codata Interp where
   | .compu : SCompu -> Compu
 end
 
-def ! rec interp (env: U EnvO) : Interp =
+def ! fix interp (env: U EnvO) : Interp =
   comatch
   | .value sv ->
     match sv
@@ -712,7 +712,7 @@ def ! rec interp (env: U EnvO) : Interp =
       | +Thunk(_) -> ! malg-err .failA +TypeError()
       end
     | +Env(sc) -> 
-      let ! rec walk (items: List TraceItem): Compu =
+      let ! fix walk (items: List TraceItem): Compu =
         comatch
         | .app v ->
           ! walk +Cons(+App(v), items)
@@ -735,7 +735,7 @@ def ! rec interp (env: U EnvO) : Interp =
             end
           } in
           do~ ! mexn .bind (Unit) (Value) mp; fn _ ->
-          let ! rec cowalk (items: List TraceItem): Compu =
+          let ! fix cowalk (items: List TraceItem): Compu =
             match items
             | +Nil() -> ! interp env .compu sc
             | +Cons(item, items) ->

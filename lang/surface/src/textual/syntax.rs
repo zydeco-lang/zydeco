@@ -100,7 +100,7 @@ pub enum CoPattern {
 /// general binding structure
 #[derive(Clone, Debug)]
 pub struct GenBind<Bindee> {
-    pub rec: bool,
+    pub fix: bool,
     pub comp: bool,
     pub binder: PatId,
     pub params: Option<CoPatId>,
@@ -218,7 +218,7 @@ pub enum Term {
     Abs(Abs<CoPatId, TermId>),
     App(Appli<TermId>),
     KontCall(KontCall),
-    Rec(Rec<PatId, TermId>),
+    Rec(Fix<PatId, TermId>),
     Pi(Pi),
     Forall(Forall),
     Arrow(Arrow<TermId>),

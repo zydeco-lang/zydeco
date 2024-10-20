@@ -1297,8 +1297,8 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 }
             }
-            | Tm::Rec(term) => {
-                let su::Rec(pat, body) = term;
+            | Tm::Fix(term) => {
+                let su::Fix(pat, body) = term;
                 let binder = {
                     let switch = {
                         match switch {
@@ -1326,13 +1326,13 @@ impl Tyck for SEnv<su::TermId> {
                     (binder, body_ty)
                 };
                 let body_out_ann = self.mk(body).tyck(tycker, Action::ana(binder_ty.into()))?;
-                let (body_out, rec_ty) = body_out_ann.try_as_compu(
+                let (body_out, fix_ty) = body_out_ann.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let rec = Alloc::alloc(tycker, ss::Rec(binder, body_out), rec_ty);
-                TermAnnId::Compu(rec, rec_ty)
+                let fix = Alloc::alloc(tycker, ss::Fix(binder, body_out), fix_ty);
+                TermAnnId::Compu(fix, fix_ty)
             }
             | Tm::Pi(term) => {
                 let su::Pi(binder, body) = term;

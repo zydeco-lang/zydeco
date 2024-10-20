@@ -1,7 +1,7 @@
 main
-  let rec odd: Nat -> Ret(Bool) =
+  let fix odd: Nat -> Ret(Bool) =
     let even = {
-      rec (even: Thunk(Nat -> Ret(Bool))) -> (
+      fix (even: Thunk(Nat -> Ret(Bool))) -> (
         fn (x: Nat) -> (
           match x
           | +Z() -> ret +True()

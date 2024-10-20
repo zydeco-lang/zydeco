@@ -304,8 +304,8 @@ impl Resolve for TermId {
                 let () = b.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
-            | Term::Rec(term) => {
-                let Rec(pat, body) = &term;
+            | Term::Fix(term) => {
+                let Fix(pat, body) = &term;
                 local = pat.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local, global))?;
                 term.into()
@@ -629,8 +629,8 @@ impl Collect for TermId {
                 let () = a.collect(collector, ctx.to_owned())?;
                 let () = b.collect(collector, ctx)?;
             }
-            | Term::Rec(term) => {
-                let Rec(pat, body) = term;
+            | Term::Fix(term) => {
+                let Fix(pat, body) = term;
                 let ctx = pat.collect(collector, ctx)?;
                 let () = body.collect(collector, ctx)?;
             }

@@ -268,11 +268,11 @@ impl Ugly for KontCall {
     }
 }
 
-impl Ugly for Rec<PatId, TermId> {
+impl Ugly for Fix<PatId, TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Rec(p, t) = self;
-        s += "rec ";
+        let Fix(p, t) = self;
+        s += "fix ";
         s += &p.ugly(f);
         s += " -> ";
         s += &t.ugly(f);
@@ -416,9 +416,9 @@ impl Ugly for GenPureBind {
 impl Ugly for GenBind<TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let GenBind { rec, comp, binder, params, ty, bindee } = self;
-        if *rec {
-            s += "rec ";
+        let GenBind { fix, comp, binder, params, ty, bindee } = self;
+        if *fix {
+            s += "fix ";
         }
         if *comp {
             s += "! ";
@@ -441,9 +441,9 @@ impl Ugly for GenBind<TermId> {
 impl Ugly for GenBind<Option<TermId>> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let GenBind { rec, comp, binder, params, ty, bindee } = self;
-        if *rec {
-            s += "rec ";
+        let GenBind { fix, comp, binder, params, ty, bindee } = self;
+        if *fix {
+            s += "fix ";
         }
         if *comp {
             s += "! ";

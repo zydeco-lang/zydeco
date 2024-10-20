@@ -46,7 +46,7 @@ extern {
         "begin" => Tok::Begin,
         "fn" => Tok::Fn,
         "pi" => Tok::Pi,
-        "rec" => Tok::Rec,
+        "fix" => Tok::Fix,
         "match" => Tok::Match,
         "comatch" => Tok::Comatch,
         "forall" => Tok::Forall,
@@ -199,9 +199,9 @@ CoPatternAtom: CoPattern = {
 CompModifier: () = { "!" };
 
 GenBind<T>: GenBind<T> = {
-    <comp:CompModifier?> <rec:"rec"?> <binder:PatId> <params:CoPatId?>
+    <comp:CompModifier?> <fix:"fix"?> <binder:PatId> <params:CoPatId?>
     <ty:(":" <TermId>)?> <bindee:T> => GenBind {
-        rec: rec.is_some(),
+        fix: fix.is_some(),
         comp: comp.is_some(),
         binder, params, ty, bindee,
     }
@@ -286,9 +286,9 @@ Term: Term = {
     "exists" <params:CoPatId> "." <ty:TermArrowId> => {
         Exists(params, ty)
     }.into(),
-    // recursion
-    "rec" <binder:PatId> "->" <term:TermId> => {
-        Rec(binder, term)
+    // fixed point
+    "fix" <binder:PatId> "->" <term:TermId> => {
+        Fix(binder, term)
     }.into(),
     // kont call
     "do~" <body:TermId> ";" <tail:TermId> => KontCall {

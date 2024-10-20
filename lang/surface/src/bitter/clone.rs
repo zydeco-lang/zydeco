@@ -123,11 +123,11 @@ impl DeepClone for b::TermId {
                 let b = b.deep_clone(desugarer);
                 b::App(a, b).into()
             }
-            | b::Term::Rec(term) => {
-                let b::Rec(pat, term) = term;
+            | b::Term::Fix(term) => {
+                let b::Fix(pat, term) = term;
                 let pat = pat.deep_clone(desugarer);
                 let term = term.deep_clone(desugarer);
-                b::Rec(pat, term).into()
+                b::Fix(pat, term).into()
             }
             | b::Term::Pi(term) => {
                 let b::Pi(params, ty) = term;

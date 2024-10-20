@@ -870,7 +870,7 @@ impl SEnv<CompuId> {
                 }
             }
             | Compu::Rec(compu) => {
-                let Rec(vpat, compu) = compu;
+                let Fix(vpat, compu) = compu;
                 let vpat_ = self.mk(vpat).lift(tycker, (mo, mo_ty), algs.to_owned())?;
                 let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs)?;
                 if vpat == vpat_ && compu == compu_ {
@@ -878,7 +878,7 @@ impl SEnv<CompuId> {
                 } else {
                     let ty = tycker.statics.annotations_compu[&self.inner];
                     let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
-                    Alloc::alloc(tycker, Rec(vpat_, compu_), ty_)
+                    Alloc::alloc(tycker, Fix(vpat_, compu_), ty_)
                 }
             }
             | Compu::Force(compu) => {

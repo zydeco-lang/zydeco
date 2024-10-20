@@ -19,7 +19,7 @@ end
 
 def str_chop_hd : U(String -> Int -> F String) = { fn (s: String) (i: Int) ->
   do l <- ! str_length s;
-  let rec str_collect : String -> Int -> String -> Ret(String) = fn (s: String) (i: Int) (r: String) ->
+  let fix str_collect : String -> Int -> String -> Ret(String) = fn (s: String) (i: Int) (r: String) ->
     do continue? <- ! int_lt i l;
     match continue?
     | +False() -> ret r
@@ -41,7 +41,7 @@ def ! str_eq_at (a: String) (b: String) (i: Int): F Bool =
 end
 
 def str_match : U(String -> String -> F(Option String)) = {
-  let rec str_match : Int -> String -> String -> F(Option String) =
+  let fix str_match : Int -> String -> String -> F(Option String) =
     fn (i: Int) (s: String) (p: String) ->
       do s_len <- ! str_length s;
       do p_len <- ! str_length p;
@@ -68,7 +68,7 @@ def str_match : U(String -> String -> F(Option String)) = {
   ! str_match 0
 } end
 
-def rec regex : Regex = 
+def fix regex : Regex = 
   comatch
   | .run s ->
     comatch

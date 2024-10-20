@@ -133,7 +133,7 @@ pub enum Term<Ref> {
     Cons(Cons<TermId, TermId>),
     Abs(Abs<PatId, TermId>),
     App(App<TermId, TermId>),
-    Rec(Rec<PatId, TermId>),
+    Fix(Fix<PatId, TermId>),
     Pi(Pi),
     // Arrow(Arrow),
     // Forall(Forall),

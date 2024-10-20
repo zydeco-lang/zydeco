@@ -8,8 +8,8 @@ end
 
 # We can use `this` (or `self`) as in normal OO languages
 def mk_counter : Thunk(Int -> Counter) = {
-  rec mk_counter ->
-  fn n -> rec this ->
+  fix mk_counter ->
+  fn n -> fix this ->
   comatch
   | .num -> ret n
   | .incr -> fn i ->

@@ -228,12 +228,12 @@ impl<'rt> Eval<'rt> for Computation {
                 runtime.stack.push_back(SemCompu::Kont(tail, runtime.env.clone(), binder));
                 Step::Step(bindee.as_ref().clone())
             }
-            | Computation::Rec(Rec(vpat, body)) => {
+            | Computation::Fix(Fix(vpat, body)) => {
                 let thunk = SemValue::Thunk(EnvThunk {
-                    body: std::rc::Rc::new(Rec(vpat.clone(), body.clone()).into()),
+                    body: std::rc::Rc::new(Fix(vpat.clone(), body.clone()).into()),
                     env: runtime.env.clone(),
                 });
-                let () = (vpat, thunk).eval(runtime).expect("pattern match failed in rec");
+                let () = (vpat, thunk).eval(runtime).expect("pattern match failed in fix");
                 Step::Step(body.as_ref().clone())
             }
             | Computation::Match(Match { scrut, arms }) => {

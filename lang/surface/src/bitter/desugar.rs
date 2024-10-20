@@ -114,10 +114,10 @@ impl Desugar for t::DeclId {
                 b::AliasBody { binder: pat, bindee: sealed }.into()
             }
             | Decl::Define(decl) => {
-                let t::Define(GenBind { rec, comp, binder, params, ty, bindee }) = decl;
+                let t::Define(GenBind { fix, comp, binder, params, ty, bindee }) = decl;
                 if let Some(bindee) = bindee {
                     let (pat, term) =
-                        t::GenBind { rec, comp, binder, params, ty, bindee }.desugar(desugarer)?;
+                        t::GenBind { fix, comp, binder, params, ty, bindee }.desugar(desugarer)?;
                     // sealed
                     let sealed = Alloc::alloc(desugarer, b::Sealed(term).into(), self.into());
                     // pat & sealed -> alias
@@ -448,10 +448,10 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::App(body, thunk).into(), self.into())
             }
             | Tm::Rec(term) => {
-                let t::Rec(pat, term) = term;
+                let t::Fix(pat, term) = term;
                 let pat = pat.desugar(desugarer)?;
                 let term = term.desugar(desugarer)?;
-                Alloc::alloc(desugarer, b::Rec(pat, term).into(), self.into())
+                Alloc::alloc(desugarer, b::Fix(pat, term).into(), self.into())
             }
             | Tm::Pi(term) => {
                 let t::Pi(params, ty) = term;
@@ -697,7 +697,7 @@ impl Desugar for t::TermId {
 impl Desugar for t::GenBind<t::TermId> {
     type Out = (b::PatId, b::TermId);
     fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out> {
-        let t::GenBind { rec, comp, binder, params, ty, bindee } = self;
+        let t::GenBind { fix, comp, binder, params, ty, bindee } = self;
         let prev = bindee.into();
         // binder
         let binder = binder.desugar(desugarer)?;
@@ -738,13 +738,13 @@ impl Desugar for t::GenBind<t::TermId> {
                 }
             }
         };
-        // rec?
-        if rec {
+        // fix?
+        if fix {
             let binder = binder.deep_clone(desugarer);
-            binding = Alloc::alloc(desugarer, b::Rec(binder, binding).into(), prev);
+            binding = Alloc::alloc(desugarer, b::Fix(binder, binding).into(), prev);
         }
         // add thunk?
-        if rec || comp {
+        if fix || comp {
             binding = Alloc::alloc(desugarer, b::Thunk(binding).into(), prev);
             let thunk = desugarer.thunk(prev);
             ann = Alloc::alloc(desugarer, b::App(thunk, ann).into(), prev);

@@ -20,7 +20,7 @@ end
 
 alias ParenCounterTrans = ParenCounterState -> ParenCounterStk end
 
-def ! rec paren_foldr
+def ! fix paren_foldr
   (ll : Thunk(Ret(LList' Tok)))
   (step : Thunk(Tok -> Thunk(ParenCounterTrans) -> ParenCounterTrans))
   (final : Thunk(ParenCounterTrans))
@@ -32,7 +32,7 @@ def ! rec paren_foldr
   end
 end
 
-def rec reject : ParenCounterStk =
+def fix reject : ParenCounterStk =
   comatch
   | .none -> ret false
   | .some -> ! reject

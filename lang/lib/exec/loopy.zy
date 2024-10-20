@@ -6,14 +6,14 @@ data Self (B : VType) where
   | +Roll : Thunk(Self B -> Ret B)
 end
 
-def fix : Thunk (forall (B : CType) . Thunk(Thunk B -> B) -> B) = {
+def fix' : Thunk (forall (B : CType) . Thunk(Thunk B -> B) -> B) = {
   fn B f ->
   let prim : Thunk (Y B) = { comatch | .y x -> ! f { ! x .y x } end } in
   ! prim .y prim
 } end
 
 def ! m: OS =
-  ! fix OS { fn loop -> ! loop }
+  ! fix' OS { fn loop -> ! loop }
 end
 
 main

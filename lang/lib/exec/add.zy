@@ -1,6 +1,6 @@
 main
   let add = {
-    rec (add: Thunk(Nat -> Nat -> Ret(Nat))) -> (
+    fix (add: Thunk(Nat -> Nat -> Ret(Nat))) -> (
       fn (x: Nat) (y: Nat) -> (
         match x
         | +Z() -> ret y
@@ -9,7 +9,7 @@ main
       )
     )
   } in
-  let ! rec add' (x: Nat) (y: Nat): Ret(Nat) =
+  let ! fix add' (x: Nat) (y: Nat): Ret(Nat) =
     match x
     | +Z() -> ret y
     | +S(x) -> !add x +S(y)

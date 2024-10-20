@@ -49,7 +49,7 @@ codata EnvO where
   | .extend: String -> Value -> EnvO
 end
 
-def ! rec envo (env: EnvT) : EnvO =
+def ! fix envo (env: EnvT) : EnvO =
   comatch
   | .lookup x ->
     match env
@@ -77,13 +77,13 @@ codata Compu where
 end
 
 def ! abort (e: Exception) : Compu =
-  rec unwind -> comatch
+  fix unwind -> comatch
   | .app _ -> ! unwind
   | .bind -> ! mexn .fail (Value) e
   end
 end
 
-def ! rec malg : Algebra MExnOS Compu =
+def ! fix malg : Algebra MExnOS Compu =
   comatch
   | .bindA -> fn A m f -> // m : U (MExnOS A), f: U (A -> Compu)
     comatch
@@ -115,7 +115,7 @@ codata Interp where
   | .compu: SCompu -> Compu
 end
 
-def ! rec interp (env: U EnvO) : Interp =
+def ! fix interp (env: U EnvO) : Interp =
   comatch
   | .value sv ->
     match sv
@@ -143,7 +143,7 @@ def ! rec interp (env: U EnvO) : Interp =
       let mv = { ! interp env .value sv } in
       ! malg .bindA (Value) mv { fn v -> ! interp env .compu sc .app v }
     | +Ret(sv) ->
-      let ! rec unwind (m: U (MExnOS Value)) : Compu =
+      let ! fix unwind (m: U (MExnOS Value)) : Compu =
         comatch
         | .app _ -> ! unwind { ! mexn .fail (Value) +TypeError() }
         | .bind -> ! m

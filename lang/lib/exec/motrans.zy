@@ -248,7 +248,7 @@ end
 //   | .put : S -> M Unit
 // end
 
-// def ! rec mstate-statek (S: VType) : MonadState S (StateK S) =
+// def ! fix mstate-statek (S: VType) : MonadState S (StateK S) =
 //   comatch
 //   | .get R s k ->
 //     ! k s s

@@ -31,7 +31,7 @@ def path : Path (Choice (U OS -> OS)) =
   +Cons(beep, +Cons(boop, +Nil()))
 end
 
-def rec walk : Tree String -> Path (Choice (U OS -> OS)) -> OS = fn t p ->
+def fix walk : Tree String -> Path (Choice (U OS -> OS)) -> OS = fn t p ->
   match t
   | +Final(res) -> (
     match p

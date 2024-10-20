@@ -237,7 +237,7 @@ AllocComputation! {
     App<CompuId, ValueId>
     Abs<TPatId, CompuId>
     App<CompuId, TypeId>
-    Rec<VPatId, CompuId>
+    Fix<VPatId, CompuId>
     Force<ValueId>
     Ret<ValueId>
     Bind<VPatId, CompuId, CompuId>

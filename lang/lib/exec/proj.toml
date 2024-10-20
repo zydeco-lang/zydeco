@@ -29,7 +29,7 @@ bins = [
     "deterministic-pushdown-automaton.zydeco",
     "even-odd-codata.zy",
     "even-odd-data.zy",
-    "even-old-rec.zy",
+    "even-odd-fix.zy",
     "exists.zy",
     "explosion.zy",
     "fn-opt.zy",

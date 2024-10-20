@@ -60,7 +60,7 @@ impl Ugly for TermId {
             | Term::Cons(t) => s += &t.ugly(f),
             | Term::Abs(t) => s += &t.ugly(f),
             | Term::App(t) => s += &t.ugly(f),
-            | Term::Rec(t) => s += &t.ugly(f),
+            | Term::Fix(t) => s += &t.ugly(f),
             | Term::Pi(t) => s += &t.ugly(f),
             | Term::Sigma(t) => s += &t.ugly(f),
             | Term::Thunk(t) => s += &t.ugly(f),
@@ -294,11 +294,11 @@ impl Ugly for Abs<PatId, TermId> {
     }
 }
 
-impl Ugly for Rec<PatId, TermId> {
+impl Ugly for Fix<PatId, TermId> {
     fn ugly(&self, f: &Formatter) -> String {
         let mut s = String::new();
-        let Rec(p, t) = self;
-        s += "rec ";
+        let Fix(p, t) = self;
+        s += "fix ";
         s += &p.ugly(f);
         s += " -> ";
         s += &t.ugly(f);

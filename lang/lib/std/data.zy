@@ -100,7 +100,7 @@ module Bool where
 end
 
 module Nat where
-  pub def ! rec iter (A : VType) (n : Nat) (x : A) (f : U (A -> F A)) : F A =
+  pub def ! fix iter (A : VType) (n : Nat) (x : A) (f : U (A -> F A)) : F A =
     match n
     | +Z() -> ret x
     | +S(n') ->
@@ -119,7 +119,7 @@ module List where
       end
   end
 
-  pub def ! rec foldl (A : VType) (R : VType) (xs: List A) (f: Thunk(A -> R -> Ret R)) (r: R) : Ret R =
+  pub def ! fix foldl (A : VType) (R : VType) (xs: List A) (f: Thunk(A -> R -> Ret R)) (r: R) : Ret R =
     match xs
     | +Nil() -> ret r
     | +Cons(x, xs) ->
@@ -128,7 +128,7 @@ module List where
     end
   end
 
-  pub def ! rec foldl~ (A : VType) (R : CType) (xs: List A) (f: Thunk(A -> Thunk R -> R)) (r: Thunk R) : R =
+  pub def ! fix foldl~ (A : VType) (R : CType) (xs: List A) (f: Thunk(A -> Thunk R -> R)) (r: Thunk R) : R =
     match xs
     | +Nil() -> ! r
     | +Cons(x, xs) ->
@@ -136,18 +136,18 @@ module List where
     end
   end
 
-  pub def ! rec reverse (A : VType) (xs : List A) : Ret (List A) =
+  pub def ! fix reverse (A : VType) (xs : List A) : Ret (List A) =
     ! reverse' A xs +Nil()
   end
 
-  pub def ! rec reverse' (A : VType) (xs : List A) (xs': List A) : Ret (List A) =
+  pub def ! fix reverse' (A : VType) (xs : List A) (xs': List A) : Ret (List A) =
     ! foldl A (List A)
             xs
             {fn x xs -> ret +Cons(x, xs)}
             xs'
   end
 
-  def ! rec get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
+  def ! fix get_rec (A : VType) (xs : List A) (index : Int) : F(Option A) =
     match xs
     | +Nil() -> ret +None()
     | +Cons(hd, tl) ->
@@ -193,7 +193,7 @@ module LList where
     end
   end
 
-  pub def ! rec foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
+  pub def ! fix foldr (A : VType) (B : CType) (xs : U (LList A)) (b : U B) (f : U(A -> U B -> B)) : B =
     do xsv <- ! xs .run;
     match xsv
     | +Nil() -> ! b
@@ -201,7 +201,7 @@ module LList where
     end
   end
 
-  pub def ! rec foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
+  pub def ! fix foldl_break (A : VType) (R : VType) (xs : U (LList A)) (acc : R) (f : U (A -> R -> F R)) (cond : U (R -> F Bool)) : F R =
     do xsv <- ! xs .run;
     match xsv
     | +Nil() -> ret acc
@@ -240,7 +240,7 @@ module LList where
             n
   end
 
-  pub def ! rec forever (A : VType) (x : A) : LList A =
+  pub def ! fix forever (A : VType) (x : A) : LList A =
     comatch
     | .run -> ret +Cons(x, { ! forever A x })
     end
@@ -266,7 +266,7 @@ module LList where
     ! foldr A (LList A) xs ys {fn x b -> ! cons A x b}
   end
 
-  pub def ! rec bind (A : VType) (A' : VType) (xs : U(LList A)) (f : U(A -> LList A')) : LList A' =
+  pub def ! fix bind (A : VType) (A' : VType) (xs : U(LList A)) (f : U(A -> LList A')) : LList A' =
     ! foldr A (LList A') xs {! nil (A')} {fn x b -> ! append (A') {! f x} b}
   end
 
@@ -306,7 +306,7 @@ module LList where
     }
   end
 
-  pub def ! rec print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
+  pub def ! fix print_list (A : VType) (fmt : U(A -> F String)) (xs : U(LList A)) (next : U OS) : OS =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() -> ! write_str "\n" next
@@ -323,7 +323,7 @@ module LList where
 
   pub alias Cmp (A : VType) : VType = U(A -> A -> F(Bool)) end
 
-  pub def ! rec min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+  pub def ! fix min_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() -> ret +None()
@@ -346,7 +346,7 @@ module LList where
     end
   end
 
-  pub def ! rec max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
+  pub def ! fix max_list (A : VType) (cmp : Cmp A) (xs : U(LList A)) : F(Option (Pair A Int)) =
     do xs' <- ! xs .run;
     match xs'
     | +Nil() -> ret +None()
@@ -376,7 +376,7 @@ module LList where
     ! reverse A sx
   end
 
-  pub def ! rec repeat (A : VType) (x : A) (n : Int) : LList A =
+  pub def ! fix repeat (A : VType) (x : A) (n : Int) : LList A =
     ! if~ (LList A) {! int_eq 0 n} {
       ! nil A
     } {
@@ -385,7 +385,7 @@ module LList where
     }
   end
 
-  pub def ! rec range (left : Int) (right : Int) : LList Int =
+  pub def ! fix range (left : Int) (right : Int) : LList Int =
     ! if~ (LList Int) {! int_eq left right} {
       ! nil (Int)
     } {
@@ -394,11 +394,11 @@ module LList where
     }
   end
 
-  pub def ! rec any (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
+  pub def ! fix any (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
     ! foldr A (F Bool) xs {ret +False()} {fn x b -> do b' <- ! b; do x <- ! f x; ! or b' x}
   end
 
-  pub def ! rec all (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
+  pub def ! fix all (A : VType) (f : U(A -> F(Bool))) (xs : U(LList A)) : F(Bool) =
     ! foldr A (F Bool) xs {ret +True()} {fn x b -> do b' <- ! b; do x <- ! f x; ! and b' x}
   end
 
@@ -473,7 +473,7 @@ module String where
       ! str_eq c c'
   } end
 
-  pub def ! rec str_split_by (str : String) (sep : Char) : LList String =
+  pub def ! fix str_split_by (str : String) (sep : Char) : LList String =
     do res <- ! str_split_once str sep;
     match res
     | +None() -> ! singleton_list String str
@@ -490,7 +490,7 @@ module String where
     end
   end
 
-  pub def ! rec str_slice (str : String) (left : Int) (right : Int) : F String =
+  pub def ! fix str_slice (str : String) (left : Int) (right : Int) : F String =
     do cond <- ! int_lt left right;
     ! if (F String) cond {
       do c <- ! str_index str left;

@@ -1,7 +1,7 @@
 data OddEven where | +OddEven : Thunk (Nat -> Ret(Bool)) * Thunk (Nat -> Ret(Bool)) end
 
 main
-  let rec fp: Ret OddEven =
+  let fix fp: Ret OddEven =
     ret +OddEven({
       do fp <- !fp;
       match fp | +OddEven(odd, even) -> (fn (x: Nat) -> (

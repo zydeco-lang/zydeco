@@ -3,7 +3,7 @@ data List~ (A : VType) where
   | +Cons : A * U(F(List~ A))
 end
 
-def ! rec foldr~ (A : VType) (B : CType) (ll : U(F(List~ A))) (f : U(A -> U(B) -> B)) (b : U(B)) : B =
+def ! fix foldr~ (A : VType) (B : CType) (ll : U(F(List~ A))) (f : U(A -> U(B) -> B)) (b : U(B)) : B =
   do llv <- ! ll;
   match llv
   | +Nil() -> ! b
@@ -13,13 +13,13 @@ end
 
 ## List~ is actually coinductive type
 
-def rec loop : F(List~ Int) =
+def fix loop : F(List~ Int) =
   ret +Cons(0, loop)
 end
 
 ## Since it's coinductive, here's iota
 
-def ! rec iota (i : Int) : F(List~ Int) =
+def ! fix iota (i : Int) : F(List~ Int) =
   do i+1 <- ! add i 1;
   ret +Cons(i, { ! iota i+1 })
 end

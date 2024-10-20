@@ -7,7 +7,7 @@ end
 # under call-by-push-value - thanks to thunks, we are able to
 # preserve the intention of lazy evaluation in `x` above.
 
-def ! rec' (B : CType) (f: U(U B -> B)): F(U B) =
+def ! fix' (B : CType) (f: U(U B -> B)): F(U B) =
   let prim : U(Y B) = { comatch | .y -> fn x -> ! f { ! x .y x } end } in
   ret { ! prim .y(prim) }
 end
@@ -27,7 +27,7 @@ main
     end
   in
 
-  do fact <- ! rec' (Int -> F Int) fact;
+  do fact <- ! fix' (Int -> F Int) fact;
 
   # tests
   let ! demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =

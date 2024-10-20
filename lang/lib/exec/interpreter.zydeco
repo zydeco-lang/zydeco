@@ -65,7 +65,7 @@ def ! sem_val_to_str (s : SemVal) : F String =
   end
 end
 
-def ! rec lookup (x : String) (g : Env) : Ret(Answer SemVal) =
+def ! fix lookup (x : String) (g : Env) : Ret(Answer SemVal) =
   match g
   | +Empty() -> ret +Err()
   | +Cons(y,v,g) ->
@@ -77,14 +77,14 @@ def ! rec lookup (x : String) (g : Env) : Ret(Answer SemVal) =
   end
 end
 
-def rec error: SemComp =
+def fix error: SemComp =
   comatch
     | .app -> fn _ -> ! error
     | .bind -> ret +Err()
   end
 end
 
-def rec interp: Interpreter =
+def fix interp: Interpreter =
   comatch
     | .valu -> fn v g ->
       match v

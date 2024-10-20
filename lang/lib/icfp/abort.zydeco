@@ -20,7 +20,7 @@ end
 
 // Abort that takes the first argument and removes the rest
 def ! abort : forall (A: VType) . A -> FnVar A (Ret A) =
-  fn A -> fn x -> rec unwind ->
+  fn A -> fn x -> fix unwind ->
   comatch
   | .more _ -> ! unwind
   | .done -> ret x

@@ -3,13 +3,13 @@ data LList' (A : VType) where
   | +Cons(A, U(F(LList' A)))
 end
 
-def rec iota : Int -> F(LList' Int) =
+def fix iota : Int -> F(LList' Int) =
   fn (i: Int) ->
     do i+1 <- ! add i 1;
     ret +Cons(i, { ! iota i+1 })
 end
 
-def ! rec llist_foldr (ll: U(F(LList' Int))) (f: U(Int -> U OS -> OS)) (b: U OS) : OS =
+def ! fix llist_foldr (ll: U(F(LList' Int))) (f: U(Int -> U OS -> OS)) (b: U OS) : OS =
   do llv <- ! ll;
   match llv
   | +Nil() -> ! b

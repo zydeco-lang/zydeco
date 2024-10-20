@@ -4,7 +4,7 @@ codata OddEven where
 end
 
 main
-  let rec eo : OddEven =
+  let fix eo : OddEven =
     comatch
     | .even -> fn (n : Nat) -> match n
       | +Z()  -> ret +True()

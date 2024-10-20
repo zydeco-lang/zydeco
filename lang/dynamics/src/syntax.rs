@@ -56,7 +56,7 @@ pub enum Computation {
     Hole(Hole),
     VAbs(Abs<RcVPat, RcCompu>),
     VApp(App<RcCompu, RcValue>),
-    Rec(Rec<RcVPat, RcCompu>),
+    Fix(Fix<RcVPat, RcCompu>),
     Force(Force<RcValue>),
     Ret(Ret<RcValue>),
     Do(Bind<RcVPat, RcCompu, RcCompu>),

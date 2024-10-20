@@ -439,7 +439,7 @@ pub enum Computation {
     VApp(App<CompuId, ValueId>),
     TAbs(Abs<TPatId, CompuId>),
     TApp(App<CompuId, TypeId>),
-    Rec(Rec<VPatId, CompuId>),
+    Rec(Fix<VPatId, CompuId>),
     Force(Force<ValueId>),
     Ret(Ret<ValueId>),
     Do(Bind<VPatId, CompuId, CompuId>),
