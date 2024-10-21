@@ -12,6 +12,16 @@ pub mod local {
     mod tests;
 }
 
+pub mod compile {
+    pub mod pack;
+    pub mod err;
+}
+
+pub mod interp {
+    pub mod pack;
+    pub mod err;
+}
+
 pub use conf::Conf;
 pub use err::*;
 pub use local::pack::{Dependency, LocalPackage};

@@ -26,6 +26,7 @@ serde = { workspace = true }
 toml = { workspace = true }
 colored = { workspace = true }
 log = { workspace = true }
+env_logger = { workspace = true }
 
 [lib]
 doctest = false

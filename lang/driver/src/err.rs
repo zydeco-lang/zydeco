@@ -3,7 +3,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum BuildError {
     #[error("Package error: {0}")]
-    PackageError(#[from] crate::local::err::PackageError),
+    PackageError(#[from] crate::local::err::LocalError),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }

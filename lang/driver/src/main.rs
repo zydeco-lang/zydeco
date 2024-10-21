@@ -1,6 +1,8 @@
 use zydeco_driver::{BuildSystem, Package};
 
 fn main() {
+    env_logger::init();
+
     let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         // .join("../lib/icfp/proj.toml")
         // .join("../lib/exec/proj.toml")

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum PackageError {
+pub enum LocalError {
     #[error("Package file not found: `{}`", .0.display())]
     PackageFileNotFound(PathBuf),
     #[error("Package file at `{}` invalid: {}", .0.display(), .1)]
@@ -19,12 +19,10 @@ pub enum PackageError {
     ParseError(String),
     #[error("Desugar error:\n\t{0}")]
     DesugarError(String),
-    #[error("Resolve error:\n\t{0}")]
-    ResolveError(String),
-    #[error("Tyck error:\n{0}")]
-    TyckErrors(String),
-    #[error("Test failed:\n\t{0}")]
-    TestFailed(String),
+    #[error("{0}")]
+    CompileError(#[from] crate::compile::err::CompileError),
+    #[error("{0}")]
+    InterpError(#[from] crate::interp::err::InterpError),
 }
 
-pub type Result<T> = std::result::Result<T, PackageError>;
+pub type Result<T> = std::result::Result<T, LocalError>;

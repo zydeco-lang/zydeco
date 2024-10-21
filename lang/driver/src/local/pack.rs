@@ -1,20 +1,18 @@
 //! The package notation of zydeco.
 
-use super::err::{PackageError, Result};
+use super::err::{LocalError, Result};
+use crate::{compile::pack::*, interp::pack::*};
 use rayon::prelude::*;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
-use zydeco_dynamics::{syntax as d, Linker, ProgKont, Runtime};
-use zydeco_statics::Tycker;
+use zydeco_dynamics::syntax as d;
 use zydeco_surface::{
     bitter::{syntax as b, DesugarOut, Desugarer},
-    scoped::{syntax as sc, ResolveOut, Resolver},
     textual::{syntax as t, HashLexer, Lexer, ParseError, TopLevelParser},
 };
 use zydeco_utils::{
     arena::*,
-    deps::DepGraph,
     span::{FileInfo, LocationCtx},
 };
 
@@ -67,11 +65,11 @@ impl LocalPackage {
         Ok(Self {
             path: path
                 .parent()
-                .ok_or_else(|| PackageError::PackageFileNotFound(path.clone()))?
+                .ok_or_else(|| LocalError::PackageFileNotFound(path.clone()))?
                 .to_path_buf(),
             ..FileIO::new(path.clone()).load().map_err(|e| match e.kind() {
-                | io::ErrorKind::NotFound => PackageError::PackageFileNotFound(path),
-                | _ => PackageError::PackageFileInvalid(path, e),
+                | io::ErrorKind::NotFound => LocalError::PackageFileNotFound(path),
+                | _ => LocalError::PackageFileInvalid(path, e),
             })?
         })
     }
@@ -127,7 +125,7 @@ impl LocalPackage {
         // parallelized w/ rayon (?)
         let pack = files
             .into_par_iter()
-            .map(|f| {
+            .map(|f| -> Result<_> {
                 let f = f.parse(t::Parser::new(alloc.alloc()))?;
                 // // Debug: print the parsed files
                 // if cfg!(debug_assertions) {
@@ -167,221 +165,22 @@ impl LocalPackage {
 
         Ok(pack)
     }
-    fn compile_package<'f>(
+    fn compile_package(
         alloc: ArcGlobalAlloc, name: &str, pack: PackageStew,
     ) -> Result<d::DynamicsArena> {
         // resolving
-        let pack = pack.resolve(alloc.alloc())?.check();
-        // // Debug: print the in-package dependencies
-        // if cfg!(debug_assertions) {
-        //     use zydeco_surface::scoped::fmt::*;
-        //     println!();
-        //     println!(">>> [{}] scoped", name);
-        //     let mut scc = pack.arena.top.clone();
-        //     let mut cnt = 0;
-        //     loop {
-        //         let roots = scc.top();
-        //         if roots.is_empty() {
-        //             break;
-        //         }
-        //         let grouped_victims = roots
-        //             .into_iter()
-        //             .map(|s| s.into_iter().collect::<Vec<_>>())
-        //             .collect::<Vec<_>>();
-        //         println!("\tscc[{}]", cnt);
-        //         for victims in grouped_victims {
-        //             for victim in &victims {
-        //                 println!("\t\t| {}", {
-        //                     let mut s = victim.ugly(&Formatter::new(&pack.arena));
-        //                     // let budget = 80;
-        //                     let budget = usize::MAX;
-        //                     if s.len() > budget {
-        //                         s.truncate(budget - 3);
-        //                         s.push_str("...");
-        //                     }
-        //                     s
-        //                 });
-        //             }
-        //             println!("\t\t+");
-        //             scc.release(victims);
-        //         }
-        //         cnt += 1;
-        //     }
-        //     println!("<<< [{}]", name);
-        // }
-        // // Debug: print the contexts upon terms
-        // if cfg!(debug_assertions) {
-        //     use zydeco_surface::scoped::fmt::*;
-        //     println!(">>> [{}] contexts", name);
-        //     for (term, ctx) in &pack.arena.ctxs {
-        //         print!(
-        //             "\t{} |-> [",
-        //             term.ugly(&Formatter::new(&pack.arena)),
-        //         );
-        //         for (def, _) in ctx.defs.iter() {
-        //             print!(
-        //                 "{}, ",
-        //                 def.ugly(&Formatter::new(&pack.arena)),
-        //             );
-        //         }
-        //         print!("]");
-        //         println!()
-        //     }
-        //     println!("<<< [{}]", name);
-        // }
-        // // Debug: print the user map
-        // if cfg!(debug_assertions) {
-        //     use zydeco_surface::scoped::fmt::*;
-        //     println!(">>> [{}]", name);
-        //     for (def, users) in &pack.arena.users {
-        //         println!(
-        //             "\t{:?} -> {:?}",
-        //             pack.arena.defs[def].ugly(&Formatter::new(&pack.arena)),
-        //             users.len()
-        //         );
-        //     }
-        //     println!("<<< [{}]", name);
-        // }
-
-        // type-checking
-        let PackageScoped { sources: _, spans, prim, arena: scoped } = pack;
-        let mut tycker = Tycker::new_arc(spans, prim, scoped, alloc);
-        match tycker.run() {
-            | Ok(()) => {}
-            | Err(()) => {
-                use std::collections::BTreeSet;
-                let mut bs = BTreeSet::new();
-                for err in tycker.errors.to_vec() {
-                    bs.insert(format!("{}\n", tycker.error_entry_output(err)));
-                }
-                let mut s = String::new();
-                for b in bs {
-                    s += &b;
-                }
-                s += &format!("Total: {} errors\n", tycker.errors.len());
-
-                // // Debug: print the variable annotations
-                // if cfg!(debug_assertions) {
-                //     use std::collections::BTreeMap;
-                //     use zydeco_statics::fmt::*;
-                //     println!(">>> [{}] def annotations", name);
-                //     for (def, ann) in tycker
-                //         .statics
-                //         .annotations_var
-                //         .clone()
-                //         .into_iter()
-                //         .collect::<BTreeMap<_, _>>()
-                //     {
-                //         println!(
-                //             "{}{} := {}",
-                //             tycker.scoped.defs[&def],
-                //             def.concise(),
-                //             ann.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                //         );
-                //     }
-                //     println!("<<< [{}]", name);
-                // }
-
-                // // Debug: print the sealed types arena
-                // if cfg!(debug_assertions) {
-                //     use std::collections::BTreeMap;
-                //     use zydeco_statics::fmt::*;
-                //     println!(">>> [{}] sealed types arena", name);
-                //     for (abst, ty) in
-                //         tycker.statics.seals.clone().into_iter().collect::<BTreeMap<_, _>>()
-                //     {
-                //         println!(
-                //             "{} := {}",
-                //             abst.concise(),
-                //             ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                //         );
-                //     }
-                //     println!("<<< [{}]", name);
-                // }
-
-                Err(PackageError::TyckErrors(s))?;
-            }
-        }
-
-        let Tycker {
-            spans: _,
-            prim: _,
-            scoped,
-            statics,
-            mo_ctx: _,
-            mo_stack: _,
-            stack: _,
-            errors: _,
-        } = tycker;
-        let dynamics = Linker { scoped, statics }.run();
-        // // Debug: print the variable definitions in dynamics
-        // if cfg!(debug_assertions) {
-        //     use std::collections::BTreeMap;
-        //     println!(">>> [{}] dynamic defs", name);
-        //     let mut defs = BTreeMap::new();
-        //     for (def, decl) in &dynamics.defs {
-        //         defs.insert(def, decl.clone());
-        //     }
-        //     for (def, zydeco_syntax::VarName(name)) in defs {
-        //         // use zydeco_dynamics::fmt::*;
-        //         println!("{:?} := {}", def, name);
-        //     }
-        //     println!("<<< [{}]", name);
-        // }
-        // // Debug: print the definitions in dynamics
-        // if cfg!(debug_assertions) {
-        //     use std::collections::BTreeMap;
-        //     println!(">>> [{}] dynamics decls", name);
-        //     let mut decls = BTreeMap::new();
-        //     for (def, decl) in &dynamics.decls {
-        //         decls.insert(def, decl.clone());
-        //     }
-        //     for (_, decl) in decls {
-        //         use zydeco_dynamics::fmt::*;
-        //         println!("{}", decl.ugly(&Formatter::new(&dynamics)),);
-        //     }
-        //     println!("<<< [{}]", name);
-        // }
-
-        let _ = name;
-
+        let pack = pack.resolve(alloc.alloc())?.self_check(name);
+        // compiling
+        let dynamics = pack.compile(alloc, name)?;
         Ok(dynamics)
     }
     fn run_dynamics(dynamics: d::DynamicsArena) -> Result<()> {
-        let mut input = std::io::stdin().lock();
-        let mut output = std::io::stdout();
-        let kont = Runtime::new(&mut input, &mut output, &[], dynamics).run();
-        match kont {
-            | ProgKont::Ret(v) => println!("ret: {:?}", v),
-            | ProgKont::ExitCode(code) => {
-                println!("exit: {}", code);
-            }
-        }
+        let () = PackageRuntime { dynamics }.run()?;
         Ok(())
     }
-    fn test_dynamics<'f>(dynamics: d::DynamicsArena, name: &str) -> Result<()> {
-        let mut input = std::io::empty();
-        let mut output = std::io::sink();
-        let kont = Runtime::new(&mut input, &mut output, &[], dynamics).run();
-
-        match kont {
-            | ProgKont::ExitCode(0) => {
-                // println!("test passed: {}", name);
-                let mut out = std::io::stdout();
-                use colored::Colorize;
-                use std::io::Write;
-                let _ = writeln!(out, "test {} ... {}", name, "ok".green());
-                Ok(())
-            }
-            | ProgKont::ExitCode(code) => {
-                let err = format!("expected exit code 0, got {}", code);
-                Err(PackageError::TestFailed(err))
-            }
-            | ProgKont::Ret(v) => {
-                let err = format!("expected exit code 0, got a returned value: {:?}", v);
-                Err(PackageError::TestFailed(err))
-            }
-        }
+    fn test_dynamics(dynamics: d::DynamicsArena, name: &str) -> Result<()> {
+        let () = PackageRuntime { dynamics }.test(name)?;
+        Ok(())
     }
 }
 
@@ -394,12 +193,12 @@ impl File {
         let path = self.path;
         let source = std::fs::read_to_string(&path).map_err(|_| {
             let path = path.clone();
-            PackageError::SrcFileNotFound(path)
+            LocalError::SrcFileNotFound(path)
         })?;
         let info = FileInfo::new(source.as_str(), Arc::new(path));
         let s = HashLexer::new(&source)
             .hash_string(&info)
-            .map_err(|span| PackageError::LexerError(span))?;
+            .map_err(|span| LocalError::LexerError(span))?;
         Ok(FileLoaded { info, source, hash: s.snap() })
     }
 }
@@ -421,7 +220,7 @@ impl FileLoaded {
             hashes.insert(
                 file.info
                     .canonicalize()
-                    .map_err(|_| PackageError::CanonicalizationError(file.info.display_path()))?,
+                    .map_err(|_| LocalError::CanonicalizationError(file.info.display_path()))?,
                 file.hash.clone(),
             );
         }
@@ -434,7 +233,7 @@ impl FileLoaded {
         let top = TopLevelParser::new()
             .parse(&source, &LocationCtx::File(info.clone()), &mut parser, Lexer::new(&source))
             .map_err(|error| {
-                PackageError::ParseError(ParseError { error, file_info: &info }.to_string())
+                LocalError::ParseError(ParseError { error, file_info: &info }.to_string())
             })?;
 
         let t::Parser { spans, arena } = parser;
@@ -455,7 +254,7 @@ impl FileParsed {
         let FileParsed { path, source, spans, arena: textual, top } = self;
         let desugarer = Desugarer { spans, textual, bitter, prim: b::PrimTerms::default() };
         let DesugarOut { spans, arena, prim: prim_term, top } =
-            desugarer.run(top).map_err(|err| PackageError::DesugarError(err.to_string()))?;
+            desugarer.run(top).map_err(|err| LocalError::DesugarError(err.to_string()))?;
         Ok(FileBitter { path, source, spans, arena, prim_term, top })
     }
 }
@@ -478,159 +277,5 @@ impl From<FileBitter> for PackageStew {
             prim_term,
             top,
         }
-    }
-}
-impl std::ops::Add for PackageStew {
-    type Output = Self;
-    fn add(mut self, rhs: Self) -> Self::Output {
-        let PackageStew { sources, spans, arena, prim_term, top } = rhs;
-        self.sources.extend(sources);
-        self.spans += spans;
-        self.arena += arena;
-        self.prim_term += prim_term;
-        self.top += top;
-        self
-    }
-}
-
-#[derive(Clone)]
-pub struct PackageStew {
-    pub sources: HashMap<PathBuf, String>,
-    pub spans: t::SpanArena,
-    pub arena: b::Arena,
-    pub prim_term: b::PrimTerms,
-    pub top: b::TopLevel,
-}
-
-impl PackageStew {
-    pub fn resolve(self, _alloc: IndexAlloc<usize>) -> Result<PackageScoped> {
-        let PackageStew { sources, spans, arena: bitter, prim_term, top } = self;
-        let resolver = Resolver {
-            spans,
-            bitter,
-            prim_term,
-            prim_def: sc::PrimDef::default(),
-            internal_to_def: ArenaAssoc::default(),
-
-            defs: ArenaAssoc::default(),
-            pats: ArenaAssoc::default(),
-            terms: ArenaAssoc::default(),
-            decls: ArenaAssoc::default(),
-
-            users: ArenaForth::default(),
-            exts: ArenaAssoc::default(),
-            deps: DepGraph::default(),
-        };
-        let ResolveOut { spans, prim, arena } =
-            resolver.run(&top).map_err(|err| PackageError::ResolveError(err.to_string()))?;
-        Ok(PackageScoped { sources, spans, prim, arena })
-    }
-}
-
-pub struct PackageScoped {
-    pub sources: HashMap<PathBuf, String>,
-    pub spans: t::SpanArena,
-    pub prim: sc::PrimDef,
-    pub arena: sc::ScopedArena,
-}
-
-impl PackageScoped {
-    pub fn check(self) -> Self {
-        let PackageScoped { sources, spans, prim, arena } = self;
-        use std::collections::HashSet;
-
-        // check for duplicate term ids
-        let mut ids = HashSet::new();
-        for (id, _term) in &arena.terms {
-            let res = ids.insert(id);
-            assert!(res, "duplicate term id: {:?}", id);
-        }
-        let mut rm = |id: &sc::TermId| {
-            let res = ids.remove(id);
-            assert!(res, "missing term id: {:?}", id);
-        };
-        for (_id, term) in &arena.terms {
-            use sc::Term as Tm;
-            match term {
-                | Tm::Internal(_) => unreachable!(),
-                | Tm::Sealed(sc::Sealed(body)) => {
-                    rm(body);
-                }
-                | Tm::Ann(sc::Ann { tm, ty }) => {
-                    rm(tm);
-                    rm(ty);
-                }
-                | Tm::Hole(sc::Hole) => {}
-                | Tm::Var(_def) => {}
-                | Tm::Triv(sc::Triv) => {}
-                | Tm::Cons(sc::Cons(a, b)) => {
-                    rm(a);
-                    rm(b);
-                }
-                | Tm::Abs(sc::Abs(_binder, body)) => {
-                    rm(body);
-                }
-                | Tm::App(sc::App(f, a)) => {
-                    rm(f);
-                    rm(a);
-                }
-                | Tm::Fix(sc::Fix(_binder, body)) => {
-                    rm(body);
-                }
-                | Tm::Pi(sc::Pi(_binder, body)) => {
-                    rm(body);
-                }
-                | Tm::Sigma(sc::Sigma(_binder, body)) => {
-                    rm(body);
-                }
-                | Tm::Thunk(sc::Thunk(body)) => {
-                    rm(body);
-                }
-                | Tm::Force(sc::Force(body)) => {
-                    rm(body);
-                }
-                | Tm::Ret(sc::Ret(body)) => {
-                    rm(body);
-                }
-                | Tm::Do(sc::Bind { binder: _, bindee, tail }) => {
-                    rm(bindee);
-                    rm(tail);
-                }
-                | Tm::Let(sc::PureBind { binder: _, bindee, tail }) => {
-                    rm(bindee);
-                    rm(tail);
-                }
-                | Tm::Data(_) => {}
-                | Tm::CoData(_) => {}
-                | Tm::Ctor(sc::Ctor(_ctor, body)) => {
-                    rm(body);
-                }
-                | Tm::Match(sc::Match { scrut, arms }) => {
-                    rm(scrut);
-                    for sc::Matcher { binder: _, tail } in arms {
-                        rm(tail);
-                    }
-                }
-                | Tm::CoMatch(sc::CoMatch { arms }) => {
-                    for sc::CoMatcher { dtor: _, tail } in arms {
-                        rm(tail);
-                    }
-                }
-                | Tm::Dtor(sc::Dtor(body, _dtor)) => {
-                    rm(body);
-                }
-                | Tm::WithBlock(_) => {}
-                | Tm::MBlock(sc::MBlock { mo, body }) => {
-                    rm(mo);
-                    rm(body);
-                }
-                | Tm::WBlock(sc::WBlock { alg, body }) => {
-                    rm(alg);
-                    rm(body);
-                }
-                | Tm::Lit(_) => {}
-            }
-        }
-        PackageScoped { sources, spans, prim, arena }
     }
 }
