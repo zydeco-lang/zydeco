@@ -84,15 +84,15 @@ pub struct Forth<'a, T>(pub &'a T);
 pub struct Back<'a, T>(pub &'a T);
 
 #[derive(Debug)]
-pub struct ArenaDense<Id, T, Meta = usize> {
-    allocator: IndexAlloc<Meta>,
+pub struct ArenaDense<Id: IndexLike, T> {
+    allocator: IndexAlloc<Id::Meta>,
     vec: Vec<T>,
     _marker: std::marker::PhantomData<Id>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ArenaSparse<Id, T, Meta = usize> {
-    allocator: IndexAlloc<Meta>,
+pub struct ArenaSparse<Id: IndexLike, T> {
+    allocator: IndexAlloc<Id::Meta>,
     map: HashMap<Id, T>,
     _marker: std::marker::PhantomData<Id>,
 }
@@ -136,20 +136,21 @@ mod impls {
 
     /* ------------------------------- ArenaDense ------------------------------- */
 
-    impl<Id, T> Default for ArenaDense<Id, T, ()>
+    impl<Id, T, Meta> Default for ArenaDense<Id, T>
     where
-        Id: IndexLike<Meta = ()>,
+        Meta: Default,
+        Id: IndexLike<Meta = Meta>,
     {
         fn default() -> Self {
             Self {
-                allocator: IndexAlloc((), 0),
+                allocator: IndexAlloc(Default::default(), 0),
                 vec: Default::default(),
                 _marker: Default::default(),
             }
         }
     }
 
-    impl<Id, T, Meta> Index<&Id> for ArenaDense<Id, T, Meta>
+    impl<Id, T, Meta> Index<&Id> for ArenaDense<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta>,
@@ -159,7 +160,7 @@ mod impls {
             self.get(id).unwrap()
         }
     }
-    impl<Id, T, Meta> IndexMut<&Id> for ArenaDense<Id, T, Meta>
+    impl<Id, T, Meta> IndexMut<&Id> for ArenaDense<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta>,
@@ -169,7 +170,7 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> ArenaDense<Id, T, Meta>
+    impl<Id, T, Meta> ArenaDense<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta>,
@@ -184,7 +185,7 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> ArenaAccess<&Id, T, Meta> for ArenaDense<Id, T, Meta>
+    impl<Id, T, Meta> ArenaAccess<&Id, T, Meta> for ArenaDense<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta>,
@@ -199,7 +200,7 @@ mod impls {
 
     /* ------------------------------- ArenaSparse ------------------------------ */
 
-    impl<Id, T> Default for ArenaSparse<Id, T, ()>
+    impl<Id, T> Default for ArenaSparse<Id, T>
     where
         Id: IndexLike<Meta = ()> + Eq + Hash,
     {
@@ -212,7 +213,7 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> Index<&Id> for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> Index<&Id> for ArenaSparse<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + Hash,
@@ -223,7 +224,7 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> IndexMut<&Id> for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> IndexMut<&Id> for ArenaSparse<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + Hash,
@@ -233,7 +234,7 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> ArenaSparse<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + Hash,
@@ -249,7 +250,7 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> ArenaAccess<&Id, T, Meta> for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> ArenaAccess<&Id, T, Meta> for ArenaSparse<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + Hash,
@@ -262,7 +263,7 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> IntoIterator for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> IntoIterator for ArenaSparse<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + Hash,
@@ -273,7 +274,7 @@ mod impls {
             self.map.into_iter()
         }
     }
-    impl<'a, Id, T, Meta> IntoIterator for &'a ArenaSparse<Id, T, Meta>
+    impl<'a, Id, T, Meta> IntoIterator for &'a ArenaSparse<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + Hash,
@@ -285,7 +286,7 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> Extend<(Id, T)> for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> Extend<(Id, T)> for ArenaSparse<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + Hash,
@@ -295,54 +296,54 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> AddAssign for ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> AddAssign for ArenaSparse<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + Hash,
     {
-        fn add_assign(&mut self, rhs: ArenaSparse<Id, T, Meta>) {
+        fn add_assign(&mut self, rhs: ArenaSparse<Id, T>) {
             self.extend(rhs);
         }
     }
 
-    impl<Id, T, Meta> ArenaSparse<Id, T, Meta>
+    impl<Id, T, Meta> ArenaSparse<Id, T>
     where
         Meta: Copy,
         Id: IndexLike<Meta = Meta> + Eq + Hash,
     {
-        pub fn map_id<U>(self, f: impl Fn(Id) -> U) -> ArenaSparse<Id, U, Meta> {
+        pub fn map_id<U>(self, f: impl Fn(Id) -> U) -> ArenaSparse<Id, U> {
             let Self { allocator, map, _marker } = self;
             let map = map.into_iter().map(|(id, _val)| (id, f(id))).collect();
             ArenaSparse { allocator, map, _marker }
         }
-        pub fn map_value<U>(self, f: impl Fn(T) -> U) -> ArenaSparse<Id, U, Meta> {
+        pub fn map_value<U>(self, f: impl Fn(T) -> U) -> ArenaSparse<Id, U> {
             let Self { allocator, map, _marker } = self;
             let map = map.into_iter().map(|(id, val)| (id, f(val))).collect();
             ArenaSparse { allocator, map, _marker }
         }
-        pub fn map<U>(self, f: impl Fn(Id, T) -> U) -> ArenaSparse<Id, U, Meta> {
+        pub fn map<U>(self, f: impl Fn(Id, T) -> U) -> ArenaSparse<Id, U> {
             let Self { allocator, map, _marker } = self;
             let map = map.into_iter().map(|(id, val)| (id, f(id, val))).collect();
             ArenaSparse { allocator, map, _marker }
         }
-        pub fn filter_map_id<U>(self, f: impl Fn(Id) -> Option<U>) -> ArenaSparse<Id, U, Meta> {
+        pub fn filter_map_id<U>(self, f: impl Fn(Id) -> Option<U>) -> ArenaSparse<Id, U> {
             let Self { allocator, map, _marker } = self;
             let map = map.into_iter().filter_map(|(id, _val)| f(id).map(|val| (id, val))).collect();
             ArenaSparse { allocator, map, _marker }
         }
         pub fn filter_map_id_mut<U>(
             self, mut f: impl FnMut(Id) -> Option<U>,
-        ) -> ArenaSparse<Id, U, Meta> {
+        ) -> ArenaSparse<Id, U> {
             let Self { allocator, map, _marker } = self;
             let map = map.into_iter().filter_map(|(id, _val)| f(id).map(|val| (id, val))).collect();
             ArenaSparse { allocator, map, _marker }
         }
-        pub fn filter_map_value<U>(self, f: impl Fn(T) -> Option<U>) -> ArenaSparse<Id, U, Meta> {
+        pub fn filter_map_value<U>(self, f: impl Fn(T) -> Option<U>) -> ArenaSparse<Id, U> {
             let Self { allocator, map, _marker } = self;
             let map = map.into_iter().filter_map(|(id, val)| f(val).map(|val| (id, val))).collect();
             ArenaSparse { allocator, map, _marker }
         }
-        pub fn filter_map<U>(self, f: impl Fn(Id, T) -> Option<U>) -> ArenaSparse<Id, U, Meta> {
+        pub fn filter_map<U>(self, f: impl Fn(Id, T) -> Option<U>) -> ArenaSparse<Id, U> {
             let Self { allocator, map, _marker } = self;
             let map =
                 map.into_iter().filter_map(|(id, val)| f(id, val).map(|val| (id, val))).collect();

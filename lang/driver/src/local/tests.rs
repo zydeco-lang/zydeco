@@ -22,7 +22,6 @@ macro_rules! lib_proj_toml {
     };
 }
 
-
 lib_proj_toml!(std);
 lib_proj_toml!(exec);
 lib_proj_toml!(icfp);

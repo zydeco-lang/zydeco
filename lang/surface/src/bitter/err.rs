@@ -1,6 +1,6 @@
+use super::syntax as b;
 use thiserror::Error;
 use zydeco_utils::span::Sp;
-use super::syntax as b;
 
 #[derive(Error, Debug, Clone)]
 pub enum DesugarError {

@@ -487,7 +487,7 @@ pub enum Declaration {
 
 /// Structurally shared arena for `data` and `codata` definitions.
 #[derive(Debug)]
-pub struct StructArena<Id, Definition, Query> {
+pub struct StructArena<Id: IndexLike<Meta = usize>, Definition, Query> {
     /// arena for definitions
     pub defs: ArenaDense<Id, Definition>,
     /// arena for hashmap

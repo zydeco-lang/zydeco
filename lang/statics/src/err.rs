@@ -119,12 +119,14 @@ impl Tycker {
                 s += &format!("\n- defined in monadic context:");
                 for MonadicDelimiter { site: _, mo, mo_ty: _ } in defined {
                     use crate::fmt::*;
-                    s += &format!("\n\t- {}", mo.ugly(&Formatter::new(&self.scoped, &self.statics)));
+                    s +=
+                        &format!("\n\t- {}", mo.ugly(&Formatter::new(&self.scoped, &self.statics)));
                 }
                 s += &format!("\n- used in monadic context:");
                 for MonadicDelimiter { site: _, mo, mo_ty: _ } in current {
                     use crate::fmt::*;
-                    s += &format!("\n\t- {}", mo.ugly(&Formatter::new(&self.scoped, &self.statics)));
+                    s +=
+                        &format!("\n\t- {}", mo.ugly(&Formatter::new(&self.scoped, &self.statics)));
                 }
                 s
             }

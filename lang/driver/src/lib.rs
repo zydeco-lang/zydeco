@@ -6,18 +6,18 @@ pub mod err;
 /// the topmost compilation pipeline led by a package configuration
 pub mod local {
     pub mod pack;
-    pub use pack::*;
     pub mod err;
-    pub use err::*;
 
     #[cfg(test)]
     mod tests;
 }
 
+pub use conf::Conf;
 pub use err::*;
 pub use local::pack::{Dependency, LocalPackage};
 
 use derive_more::From;
+use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{
     arena::{new_key_type, ArenaDense},
@@ -44,8 +44,10 @@ impl Package {
 }
 
 pub struct BuildSystem {
+    /// configuration
+    pub conf: Conf,
     /// all the packages in the build system
-    pub packages: ArenaDense<PackId, Package, ()>,
+    pub packages: ArenaDense<PackId, Package>,
     /// a map from the canonicalized path of package file to the package id
     pub seen: HashMap<PathBuf, PackId>,
     pub depends_on: DepGraph<PackId>,
@@ -59,19 +61,37 @@ impl Default for BuildSystem {
 
 impl BuildSystem {
     pub fn new() -> Self {
-        Self { packages: ArenaDense::default(), seen: HashMap::new(), depends_on: DepGraph::new() }
+        let path = Conf::config_dir().join("zydeco.toml");
+        let file_conf = FileIO::new(path.clone());
+        let conf = file_conf.load().unwrap_or_else(|_| {
+            log::warn!("Using default configuration; suppose to find one at `{}`.", path.display());
+            let conf: Conf = Default::default();
+            file_conf.save(&conf).unwrap();
+            conf
+        });
+        let mut build_sys = Self {
+            conf,
+            packages: ArenaDense::default(),
+            seen: HashMap::new(),
+            depends_on: DepGraph::new(),
+        };
+        for path in build_sys.conf.default_packages.clone() {
+            build_sys.add_local_package(path.clone()).unwrap();
+        }
+        build_sys
     }
-    pub fn add_local_package(&mut self, path: impl Into<PathBuf>) -> Result<()> {
+    pub fn add_local_package(&mut self, path: impl Into<PathBuf>) -> Result<PackId> {
         // add all dependent packages to the build system
         let pack = LocalPackage::new(path)?;
-        let mut stack = vec![self.add(pack)?];
+        let pack_id = self.add(pack)?;
+        let mut stack = vec![pack_id];
         while let Some(id) = stack.pop() {
             let deps = self.probe(id)?;
             stack.extend(deps);
         }
-        Ok(())
+        Ok(pack_id)
     }
-    pub fn add_local_file(&mut self, _path: impl Into<PathBuf>) -> Result<()> {
+    pub fn run_local_file(&mut self, _path: impl Into<PathBuf>) -> Result<()> {
         todo!()
     }
 }
