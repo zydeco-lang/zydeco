@@ -96,7 +96,7 @@ impl Ugly for TermId {
             | Term::Abs(t) => s += &t.ugly(f),
             | Term::App(t) => s += &t.ugly(f),
             | Term::KontCall(t) => s += &t.ugly(f),
-            | Term::Rec(t) => s += &t.ugly(f),
+            | Term::Fix(t) => s += &t.ugly(f),
             | Term::Pi(t) => s += &t.ugly(f),
             | Term::Arrow(t) => s += &t.ugly(f),
             | Term::Forall(t) => s += &t.ugly(f),

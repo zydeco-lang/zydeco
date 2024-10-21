@@ -218,7 +218,7 @@ pub enum Term {
     Abs(Abs<CoPatId, TermId>),
     App(Appli<TermId>),
     KontCall(KontCall),
-    Rec(Fix<PatId, TermId>),
+    Fix(Fix<PatId, TermId>),
     Pi(Pi),
     Forall(Forall),
     Arrow(Arrow<TermId>),

@@ -449,7 +449,7 @@ impl Desugar for t::TermId {
                 // body & thunk -> app
                 Alloc::alloc(desugarer, b::App(body, thunk).into(), self.into())
             }
-            | Tm::Rec(term) => {
+            | Tm::Fix(term) => {
                 let t::Fix(pat, term) = term;
                 let pat = pat.desugar(desugarer)?;
                 let term = term.desugar(desugarer)?;

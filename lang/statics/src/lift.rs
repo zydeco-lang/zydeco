@@ -869,7 +869,7 @@ impl SEnv<CompuId> {
                     }
                 }
             }
-            | Compu::Rec(compu) => {
+            | Compu::Fix(compu) => {
                 let Fix(vpat, compu) = compu;
                 let vpat_ = self.mk(vpat).lift(tycker, (mo, mo_ty), algs.to_owned())?;
                 let compu_ = self.mk(compu).lift(tycker, (mo, mo_ty), algs)?;

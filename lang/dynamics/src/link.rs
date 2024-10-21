@@ -170,7 +170,7 @@ impl Link for ss::CompuId {
                 let body = body.link(statics);
                 body.as_ref().to_owned()
             }
-            | Compu::Rec(Fix(param, body)) => {
+            | Compu::Fix(Fix(param, body)) => {
                 let param = param.link(statics);
                 let body = body.link(statics);
                 Fix(param, body).into()

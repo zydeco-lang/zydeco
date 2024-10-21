@@ -119,7 +119,7 @@ impl Ugly for CompuId {
             | Compu::VApp(compu) => compu.ugly(f),
             | Compu::TAbs(compu) => compu.ugly(f),
             | Compu::TApp(compu) => compu.ugly(f),
-            | Compu::Rec(compu) => compu.ugly(f),
+            | Compu::Fix(compu) => compu.ugly(f),
             | Compu::Force(compu) => compu.ugly(f),
             | Compu::Ret(compu) => compu.ugly(f),
             | Compu::Do(compu) => compu.ugly(f),
