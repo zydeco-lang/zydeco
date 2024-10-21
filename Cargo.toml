@@ -61,8 +61,8 @@ unindent = "0.2"
 # parsing
 regex = "1"
 logos = "0.14"
-lalrpop = "0.21"
-lalrpop-util = "0.21"
+lalrpop = "0.22"
+lalrpop-util = "0.22"
 # cli
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
