@@ -42,7 +42,7 @@ module Bool where
   end
 
   /* lazy, short-circuiting (left to right) and */
-  pub def ! and~ : Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool) = fn b1~ b2~ ->
+  pub def ! and~ (b1~: Thunk (Ret Bool)) (b2~: Thunk (Ret Bool)) : Ret(Bool) =
     do b1 <- ! b1~;
     match b1
     | +True() -> ! b2~
@@ -76,27 +76,24 @@ module Bool where
     ! not a
   end
 
-  pub def bool_eq : Thunk(Bool -> Bool -> Ret(Bool)) = {
-    fn b b' ->
-      match b
-      | +True() -> ret b'
-      | +False() -> ! not b'
-      end
-  } end
+  pub def ! bool_eq (b: Bool) (b': Bool) : Ret Bool =
+    match b
+    | +True() -> ret b'
+    | +False() -> ! not b'
+    end
+  end
 
-  pub def if : Thunk(forall (B : CType) . Bool -> Thunk B -> Thunk B -> B) = {
-    fn B b thn els ->
-      match b
-      | +True()  -> ! thn
-      | +False() -> ! els
-      end
-  } end
+  pub def ! if (B : CType) (b: Bool) (thn: Thunk B) (els: Thunk B) : B =
+    match b
+    | +True()  -> ! thn
+    | +False() -> ! els
+    end
+  end
 
-  pub def if~ : Thunk(forall (B : CType) . Thunk(Ret Bool) -> Thunk B -> Thunk B -> B) = {
-    fn B b thn els ->
-      do b <- ! b;
-      ! if B b thn els
-  } end
+  pub def ! if~ (B : CType) (b: Thunk (Ret Bool)) (thn: Thunk B) (els: Thunk B) : B =
+    do b <- ! b;
+    ! if B b thn els
+  end
 end
 
 module Nat where
@@ -111,12 +108,11 @@ module Nat where
 end
 
 module List where
-  pub def ! match_list (A: VType) (B : CType) (xs: List A) : U B -> U(A -> List A -> B) -> B =
-    fn knil kcons ->
-      match xs
-      | +Nil() -> ! knil
-      | +Cons(x,xs) -> ! kcons x xs
-      end
+  pub def ! match_list (A: VType) (B : CType) (xs: List A) (knil: U B) (kcons: U (A -> List A -> B)) : B =
+    match xs
+    | +Nil() -> ! knil
+    | +Cons(x,xs) -> ! kcons x xs
+    end
   end
 
   pub def fix foldl (A : VType) (R : VType) (xs: List A) (f: Thunk(A -> R -> Ret R)) (r: R) : Ret R =
