@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "lang",
     "lang/utils",
     "lang/derive",
     "lang/syntax",
@@ -26,7 +25,6 @@ readme = "README.md"
 
 [workspace.dependencies]
 # zydeco
-zydeco-lang = { path = "lang" }
 zydeco-utils = { path = "lang/utils" }
 zydeco-derive = { path = "lang/derive" }
 zydeco-syntax = { path = "lang/syntax" }

@@ -2629,7 +2629,6 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber",
- "zydeco-lang",
 ]
 
 [[package]]
@@ -2684,22 +2683,6 @@ dependencies = [
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
- "zydeco-utils",
-]
-
-[[package]]
-name = "zydeco-lang"
-version = "0.2.0"
-dependencies = [
- "derive_more",
- "im",
- "lalrpop",
- "lalrpop-util",
- "logos",
- "rand",
- "regex",
- "thiserror",
- "zydeco-derive",
  "zydeco-utils",
 ]
 
