@@ -1,6 +1,6 @@
 //! The package notation of zydeco.
 
-use crate::{compile::pack::*, interp::pack::*, prelude::*, *};
+use crate::{check::pack::*, interp::pack::*, prelude::*, *};
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc};
@@ -115,7 +115,7 @@ mod _impl {
                 top,
             })
         }
-        pub fn compile_package(
+        pub fn check_package(
             alloc: ArcGlobalAlloc, name: &str, pack: PackageStew,
         ) -> Result<PackageChecked> {
             // resolving

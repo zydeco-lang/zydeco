@@ -1,7 +1,7 @@
 //! The toml-based local package.
 
 use super::err::{LocalError, Result};
-use crate::{compile::pack::*, prelude::*, *};
+use crate::{check::pack::*, prelude::*, *};
 use rayon::prelude::*;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};

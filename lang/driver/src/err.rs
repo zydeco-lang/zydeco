@@ -7,7 +7,7 @@ pub enum BuildError {
     #[error("{0}")]
     LocalError(#[from] crate::local::err::LocalError),
     #[error("{0}")]
-    CompileError(#[from] crate::compile::err::CompileError),
+    CompileError(#[from] crate::check::err::CompileError),
     #[error("{0}")]
     InterpError(#[from] crate::interp::err::InterpError),
     #[error("Duplicate package marked name: {0}")]

@@ -10,7 +10,7 @@ pub mod local {
     pub mod err;
 }
 
-pub mod compile {
+pub mod check {
     pub mod pack;
     pub mod err;
 }
@@ -37,7 +37,7 @@ pub use local::pack::LocalPackage;
 pub use package::{Dependency, Package};
 pub use zydeco_utils::arena::ArcGlobalAlloc;
 
-use crate::compile::pack::PackageStew;
+use crate::check::pack::PackageStew;
 use prelude::*;
 use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
@@ -186,7 +186,7 @@ impl BuildSystem {
         }
         let name = self.packages[&pack].name();
         let stew = stew.unwrap_or_else(|| PackageStew::new(alloc.clone()));
-        let checked = Package::compile_package(alloc.clone(), name.as_str(), stew)?;
+        let checked = Package::check_package(alloc.clone(), name.as_str(), stew)?;
         let dynamics = Package::link_dynamics(name.as_str(), checked)?;
         Ok(dynamics)
     }
