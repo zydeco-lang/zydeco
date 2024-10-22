@@ -1,12 +1,10 @@
-use std::path::PathBuf;
 use web_sys::HtmlTextAreaElement;
 use yew::prelude::*;
-use zydeco_lang::{dynamics::syntax as ds, prelude::*, zydeco::ZydecoFile};
 
 const EXAMPLE: &str = "
 let f = {
   fn (x: Int) -> ret x
-};
+} in
 ! f 3
 ";
 
@@ -45,18 +43,18 @@ fn ZydecoUI() -> Html {
     }
 }
 
-fn run(input: &str) -> Result<String, String> {
-    let p = ZydecoFile::parse_src(input, PathBuf::new())?;
-    let p = ZydecoFile::elab(p)?;
-    let ctx = ZydecoFile::tyck(p.clone())?;
-    let p = ZydecoFile::lift(p, ctx.clone())?;
-    let p = ZydecoFile::link(p.inner)?;
-    let p = ZydecoFile::eval_os(p, &[]);
-    let s = match p.entry {
-        | ds::ProgKont::Ret(v) => v.fmt(),
-        | ds::ProgKont::ExitCode(i) => format!("exit code: {}", i),
-    };
-    Ok(s)
+fn run(_input: &str) -> Result<String, String> {
+    // let p = ZydecoFile::parse_src(input, std::path::PathBuf::new())?;
+    // let p = ZydecoFile::elab(p)?;
+    // let ctx = ZydecoFile::tyck(p.clone())?;
+    // let p = ZydecoFile::lift(p, ctx.clone())?;
+    // let p = ZydecoFile::link(p.inner)?;
+    // let p = ZydecoFile::eval_os(p, &[]);
+    // let s = match p.entry {
+    //     | ds::ProgKont::Ret(v) => v.fmt(),
+    //     | ds::ProgKont::ExitCode(i) => format!("exit code: {}", i),
+    // };
+    Ok(String::new())
 }
 
 fn main() {

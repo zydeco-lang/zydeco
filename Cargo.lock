@@ -2347,7 +2347,7 @@ version = "0.1.0"
 dependencies = [
  "web-sys",
  "yew",
- "zydeco-lang",
+ "zydeco-driver",
 ]
 
 [[package]]
