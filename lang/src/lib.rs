@@ -55,10 +55,6 @@ pub mod dynamics {
     pub use eval::Eval;
 }
 
-pub mod backend {
-    pub mod cps;
-}
-
 pub mod utils {
     pub use zydeco_utils::*;
     pub mod fmt;
