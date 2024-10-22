@@ -2629,6 +2629,8 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber",
+ "zydeco-driver",
+ "zydeco-utils",
 ]
 
 [[package]]

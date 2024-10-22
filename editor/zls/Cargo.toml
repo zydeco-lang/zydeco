@@ -12,3 +12,5 @@ tower = "0.4.13"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 # zydeco-lang = { workspace = true }
+zydeco-driver = { workspace = true }
+zydeco-utils ={ workspace = true }
