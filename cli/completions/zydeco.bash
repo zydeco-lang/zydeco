@@ -121,12 +121,16 @@ _zydeco() {
             return 0
             ;;
         zydeco__run)
-            opts="-v -h --dry --verbose --help [FILE]... [ARGS]..."
+            opts="-v -h --bin --dry --verbose --help [FILE]... [ARGS]..."
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --bin)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;

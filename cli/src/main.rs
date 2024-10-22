@@ -5,12 +5,14 @@ use clap::Parser;
 //     zydeco::{ProgKont, ZydecoFile},
 // };
 use zydeco_cli::{Cli, Commands};
-use zydeco_driver::LocalPackage;
+use zydeco_driver::BuildSystem;
 
 fn main() -> Result<(), ()> {
     let res = match Cli::parse().command {
-        | Commands::Run { files, dry, verbose, args } => run_files(files, dry, verbose, args),
-        | Commands::Check { files, verbose } => run_files(files, true, verbose, vec![]),
+        | Commands::Run { files, bin, dry, verbose, args } => {
+            run_files(files, bin, dry, verbose, args)
+        }
+        | Commands::Check { files, verbose } => run_files(files, None, true, verbose, vec![]),
         // | Commands::Repl { .. } => Repl::launch(),
     };
     match res {
@@ -18,17 +20,45 @@ fn main() -> Result<(), ()> {
             std::process::exit(x);
         }
         | Err(e) => {
-            eprintln!("Error: {}", e);
+            eprintln!("{}", e);
             Ok(())
         }
     }
 }
 
 fn run_files(
-    paths: Vec<std::path::PathBuf>, _dry_run: bool, _verbose: bool, _args: Vec<String>,
+    paths: Vec<std::path::PathBuf>, bin: Option<String>, dry: bool, verbose: bool,
+    _args: Vec<String>,
 ) -> Result<i32, String> {
-    let () = LocalPackage::run_files(&format!("{}", paths[0].clone().display()), paths.iter())
-        .map_err(|e| e.to_string())?;
+    let mut build_sys = BuildSystem::new();
+    let mut packs = Vec::new();
+    let mut files = Vec::new();
+    for path in paths {
+        match path.extension() {
+            | Some(ext) if ext == "toml" => {
+                // package
+                let pack = build_sys.add_local_package(path).map_err(|e| e.to_string())?;
+                packs.push(pack);
+            }
+            | Some(_) | None => {
+                // single file
+                files.push(path);
+            }
+        }
+    }
+    if files.is_empty() {
+        for pack in packs {
+            build_sys.add_binary_in_package(pack).map_err(|e| e.to_string())?;
+        }
+    } else {
+        for file in files.iter() {
+            let pack = build_sys.add_orphan_file(file).map_err(|e| e.to_string())?;
+            build_sys.mark(pack).map_err(|e| e.to_string())?;
+        }
+    }
+    let pack = build_sys.pick_marked(bin).map_err(|e| e.to_string())?;
+    build_sys.run_pack(pack, dry, verbose).map_err(|e| e.to_string())?;
+
     Ok(0)
 
     // let title =

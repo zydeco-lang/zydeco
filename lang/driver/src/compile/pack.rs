@@ -29,6 +29,15 @@ impl std::ops::Add for PackageStew {
 }
 
 impl PackageStew {
+    pub fn new(alloc: ArcGlobalAlloc) -> Self {
+        PackageStew {
+            sources: HashMap::new(),
+            spans: t::SpanArena::new(alloc.alloc()),
+            arena: b::Arena::new_arc(alloc.clone()),
+            prim_term: b::PrimTerms::default(),
+            top: b::TopLevel(Vec::new()),
+        }
+    }
     pub fn resolve(self, _alloc: IndexAlloc<usize>) -> Result<PackageScoped> {
         let PackageStew { sources, spans, arena: bitter, prim_term, top } = self;
         let resolver = Resolver {

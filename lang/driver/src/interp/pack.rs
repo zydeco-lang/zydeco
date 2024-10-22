@@ -8,10 +8,13 @@ pub struct PackageRuntime {
 
 impl PackageRuntime {
     pub fn run(self) -> Result<()> {
+        self.run_with_args(&[])
+    }
+    pub fn run_with_args(self, args: &[String]) -> Result<()> {
         let PackageRuntime { dynamics } = self;
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
-        let kont = Runtime::new(&mut input, &mut output, &[], dynamics).run();
+        let kont = Runtime::new(&mut input, &mut output, args, dynamics).run();
         match kont {
             | ProgKont::Ret(v) => println!("ret: {:?}", v),
             | ProgKont::ExitCode(code) => {

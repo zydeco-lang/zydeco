@@ -1,5 +1,7 @@
 use std::{
     collections::HashMap,
+    hash::Hash,
+    ops::AddAssign,
     ops::{Index, IndexMut},
     sync::{Arc, Mutex},
 };
@@ -16,7 +18,7 @@ pub unsafe trait IndexLike: Clone + Copy + Eq + std::hash::Hash {
 
 #[derive(Copy, Clone, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct TrivId<Meta = usize>(std::marker::PhantomData<Meta>);
-unsafe impl<Meta: Eq + std::hash::Hash + std::marker::Copy> IndexLike for TrivId<Meta> {
+unsafe impl<Meta: Eq + Hash + Copy> IndexLike for TrivId<Meta> {
     type Meta = Meta;
     fn new(_: Self::Meta, _idx: usize) -> Self {
         TrivId(Default::default())
@@ -132,7 +134,6 @@ pub struct ArenaBipartite<P, Q> {
 
 mod impls {
     use super::*;
-    use std::{hash::Hash, ops::AddAssign};
 
     /* ------------------------------- ArenaDense ------------------------------- */
 
@@ -195,6 +196,46 @@ mod impls {
         }
         fn get_mut(&mut self, id: &Id) -> Option<&mut T> {
             self.vec.get_mut(id.index())
+        }
+    }
+
+    impl<Id, T, Meta> IntoIterator for ArenaDense<Id, T>
+    where
+        Meta: Copy,
+        Id: IndexLike<Meta = Meta>,
+    {
+        type Item = (Id, T);
+        type IntoIter = std::vec::IntoIter<(Id, T)>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.vec
+                .into_iter()
+                .enumerate()
+                .map(|(idx, val)| {
+                    let id = IndexLike::new(self.allocator.0, idx);
+                    (id, val)
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+        }
+    }
+
+    impl<'a, Id, T, Meta> IntoIterator for &'a ArenaDense<Id, T>
+    where
+        Meta: Copy,
+        Id: IndexLike<Meta = Meta>,
+    {
+        type Item = (Id, &'a T);
+        type IntoIter = std::vec::IntoIter<(Id, &'a T)>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.vec
+                .iter()
+                .enumerate()
+                .map(|(idx, val)| {
+                    let id = IndexLike::new(self.allocator.0, idx);
+                    (id, val)
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
         }
     }
 

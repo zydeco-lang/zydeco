@@ -29,6 +29,7 @@ complete -c zydeco -n "__fish_zydeco_needs_command" -s V -l version -d 'Print ve
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "run" -d 'Run a zydeco program'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "check" -d 'Check a zydeco program'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l bin -d 'Name of the binary' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l dry -d 'Dry run (don\'t execute)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s v -l verbose -d 'Level of verbosity'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s h -l help -d 'Print help'

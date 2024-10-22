@@ -10,6 +10,10 @@ pub enum BuildError {
     CompileError(#[from] crate::compile::err::CompileError),
     #[error("{0}")]
     InterpError(#[from] crate::interp::err::InterpError),
+    #[error("Duplicate package marked name: {0}")]
+    DuplicateMark(String),
+    #[error("Can't determine a suitable marked binary to run from: {0:#?}")]
+    AmbiguousMark(Vec<String>),
 }
 
 pub type Result<T> = std::result::Result<T, BuildError>;

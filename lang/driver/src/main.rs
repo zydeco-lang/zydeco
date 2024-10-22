@@ -1,4 +1,4 @@
-use zydeco_driver::{BuildSystem, Package};
+use zydeco_driver::*;
 
 fn main() {
     env_logger::init();
@@ -11,9 +11,8 @@ fn main() {
         .canonicalize()
         .unwrap();
     let mut build_sys = BuildSystem::new();
-    let pack_id = build_sys.add_local_package(dir).unwrap();
-    let Package::Local(pack) = &build_sys.packages[&pack_id] else { unreachable!() };
-    match pack.run() {
+    let pack = build_sys.add_local_package(dir).unwrap();
+    match build_sys.run_pack(pack, false, false) {
         | Ok(_) => {}
         | Err(err) => {
             eprintln!("{}", err);

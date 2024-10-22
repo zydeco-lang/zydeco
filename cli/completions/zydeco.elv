@@ -27,6 +27,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'zydeco;run'= {
+            cand --bin 'Name of the binary'
             cand --dry 'Dry run (don''t execute)'
             cand -v 'Level of verbosity'
             cand --verbose 'Level of verbosity'

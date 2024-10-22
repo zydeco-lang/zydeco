@@ -31,6 +31,7 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             break
         }
         'zydeco;run' {
+            [CompletionResult]::new('--bin', '--bin', [CompletionResultType]::ParameterName, 'Name of the binary')
             [CompletionResult]::new('--dry', '--dry', [CompletionResultType]::ParameterName, 'Dry run (don''t execute)')
             [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Level of verbosity')
             [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Level of verbosity')

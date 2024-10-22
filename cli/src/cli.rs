@@ -15,6 +15,9 @@ pub enum Commands {
         /// Path to the file to run
         #[arg(value_name = "FILE")]
         files: Vec<PathBuf>,
+        /// Name of the binary
+        #[arg(long)]
+        bin: Option<String>,
         /// Dry run (don't execute)
         #[arg(long, default_value_t = false)]
         dry: bool,

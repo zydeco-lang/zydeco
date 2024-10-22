@@ -1,7 +1,7 @@
 //! The toml-based local package.
 
 use super::err::{LocalError, Result};
-use crate::{compile::pack::*, interp::pack::*, prelude::*};
+use crate::{compile::pack::*, prelude::*, *};
 use rayon::prelude::*;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
@@ -14,12 +14,6 @@ use zydeco_utils::{
     arena::*,
     span::{FileInfo, LocationCtx},
 };
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Dependency {
-    #[serde(rename = "local")]
-    Local(PathBuf),
-}
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub enum UseStd {
@@ -155,13 +149,7 @@ impl LocalPackage {
                     | (None, None) => Ok(None),
                 },
             )?
-            .unwrap_or_else(|| PackageStew {
-                sources: HashMap::new(),
-                spans: t::SpanArena::new(alloc.alloc()),
-                arena: b::Arena::new_arc(alloc.clone()),
-                prim_term: b::PrimTerms::default(),
-                top: b::TopLevel(Vec::new()),
-            });
+            .unwrap_or_else(|| PackageStew::new(alloc));
 
         let _ = name;
 
@@ -256,7 +244,7 @@ pub struct FileBitter {
 impl From<FileBitter> for PackageStew {
     fn from(FileBitter { path, source, spans, arena, prim_term, top }: FileBitter) -> Self {
         PackageStew {
-            sources: [(path, source)].iter().cloned().collect(),
+            sources: [(path, source)].into_iter().collect(),
             spans,
             arena,
             prim_term,
