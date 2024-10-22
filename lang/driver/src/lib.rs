@@ -60,6 +60,7 @@ pub struct BuildSystem {
     pub packages: ArenaDense<PackId, Package>,
     /// a map from the canonicalized path of package file to the package id
     pub seen: HashMap<PathBuf, PackId>,
+    /// dependency graph, key depends on value
     pub depends_on: DepGraph<PackId>,
 }
 

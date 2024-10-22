@@ -83,7 +83,8 @@ impl LocalPackage {
             // Todo: ...
             let stew = stew.clone()
                 + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
-            let dynamics = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
+            let checked = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
+            let dynamics = Self::link_dynamics(name.as_str(), checked)?;
             Self::run_dynamics(dynamics)?;
         }
         Ok(())
@@ -98,7 +99,8 @@ impl LocalPackage {
             // Todo: ...
             let stew = stew.clone()
                 + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
-            let dynamics = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
+            let checked = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
+            let dynamics = Self::link_dynamics(name.as_str(), checked)?;
             Self::test_dynamics(dynamics, name.as_str())?;
         }
         Ok(())
@@ -106,7 +108,8 @@ impl LocalPackage {
     pub fn run_files<'f>(name: &str, srcs: impl Iterator<Item = &'f PathBuf>) -> Result<()> {
         let alloc = ArcGlobalAlloc::new();
         let stew = Self::parse_package(alloc.clone(), name, &PathBuf::new(), srcs)?;
-        let dynamics = Self::compile_package(alloc.clone(), name, stew)?;
+        let checked = Self::compile_package(alloc.clone(), name, stew)?;
+        let dynamics = Self::link_dynamics(name, checked)?;
         Self::run_dynamics(dynamics)?;
         Ok(())
     }
@@ -167,11 +170,16 @@ impl LocalPackage {
     }
     fn compile_package(
         alloc: ArcGlobalAlloc, name: &str, pack: PackageStew,
-    ) -> Result<d::DynamicsArena> {
+    ) -> Result<PackageChecked> {
         // resolving
         let pack = pack.resolve(alloc.alloc())?.self_check(name);
+        // tycking
+        let checked = pack.tyck(alloc, name)?;
+        Ok(checked)
+    }
+    fn link_dynamics(name: &str, pack: PackageChecked) -> Result<d::DynamicsArena> {
         // compiling
-        let dynamics = pack.compile(alloc, name)?;
+        let dynamics = pack.dynamics(name)?;
         Ok(dynamics)
     }
     fn run_dynamics(dynamics: d::DynamicsArena) -> Result<()> {

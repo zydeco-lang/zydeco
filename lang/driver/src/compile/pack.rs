@@ -1,7 +1,7 @@
 use super::err::{CompileError, Result};
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_dynamics::{syntax as d, Linker};
-use zydeco_statics::Tycker;
+use zydeco_statics::{syntax as ss, Tycker};
 use zydeco_surface::{
     bitter::syntax as b,
     scoped::{syntax as sc, ResolveOut, Resolver},
@@ -161,7 +161,6 @@ impl PackageScoped {
             }
         }
 
-        
         // // Debug: print the in-package dependencies
         // if cfg!(debug_assertions) {
         //     use zydeco_surface::scoped::fmt::*;
@@ -238,7 +237,7 @@ impl PackageScoped {
         PackageScoped { sources, spans, prim, arena }
     }
 
-    pub fn compile(self, alloc: ArcGlobalAlloc, name: &str) -> Result<d::DynamicsArena> {
+    pub fn tyck(self, alloc: ArcGlobalAlloc, name: &str) -> Result<PackageChecked> {
         // type-checking
         let PackageScoped { sources: _, spans, prim, arena: scoped } = self;
         let mut tycker = Tycker::new_arc(spans, prim, scoped, alloc);
@@ -299,6 +298,8 @@ impl PackageScoped {
             }
         }
 
+        let _ = name;
+
         let Tycker {
             spans: _,
             prim: _,
@@ -309,6 +310,18 @@ impl PackageScoped {
             stack: _,
             errors: _,
         } = tycker;
+        Ok(PackageChecked { scoped, statics })
+    }
+}
+
+pub struct PackageChecked {
+    pub scoped: sc::ScopedArena,
+    pub statics: ss::StaticsArena,
+}
+
+impl PackageChecked {
+    pub fn dynamics(self, name: &str) -> Result<d::DynamicsArena> {
+        let PackageChecked { scoped, statics } = self;
         let dynamics = Linker { scoped, statics }.run();
         // // Debug: print the variable definitions in dynamics
         // if cfg!(debug_assertions) {
