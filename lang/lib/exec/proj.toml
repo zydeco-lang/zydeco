@@ -1,11 +1,7 @@
-name = "ExecTests"
+name = "BatchTests"
 
-srcs = [
-    "../std/core.zy",
-    "../std/data.zy",
-    "../std/avl.zy",
-]
-deps = []
+srcs = []
+deps = [{ local = "../std/proj.toml" }]
 # bins = [
 #     # "algtrans.zy",
 #     "motrans.zy",
