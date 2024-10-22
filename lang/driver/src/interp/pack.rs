@@ -1,5 +1,6 @@
 use super::err::{InterpError, Result};
-use zydeco_dynamics::{syntax as d, ProgKont, Runtime};
+use crate::prelude::*;
+use zydeco_dynamics::{ProgKont, Runtime};
 
 pub struct PackageRuntime {
     pub dynamics: d::DynamicsArena,

@@ -19,10 +19,6 @@ pub enum LocalError {
     ParseError(String),
     #[error("Desugar error:\n\t{0}")]
     DesugarError(String),
-    #[error("{0}")]
-    CompileError(#[from] crate::compile::err::CompileError),
-    #[error("{0}")]
-    InterpError(#[from] crate::interp::err::InterpError),
 }
 
 pub type Result<T> = std::result::Result<T, LocalError>;

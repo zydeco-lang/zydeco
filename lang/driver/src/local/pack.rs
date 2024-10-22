@@ -1,15 +1,14 @@
-//! The package notation of zydeco.
+//! The toml-based local package.
 
 use super::err::{LocalError, Result};
-use crate::{compile::pack::*, interp::pack::*};
+use crate::{compile::pack::*, interp::pack::*, prelude::*};
 use rayon::prelude::*;
 use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
-use zydeco_dynamics::syntax as d;
 use zydeco_surface::{
-    bitter::{syntax as b, DesugarOut, Desugarer},
-    textual::{syntax as t, HashLexer, Lexer, ParseError, TopLevelParser},
+    bitter::{DesugarOut, Desugarer},
+    textual::{HashLexer, Lexer, ParseError, TopLevelParser},
 };
 use zydeco_utils::{
     arena::*,
@@ -73,47 +72,47 @@ impl LocalPackage {
             })?
         })
     }
-    pub fn run(&self) -> Result<()> {
-        let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
-        let alloc = ArcGlobalAlloc::new();
-        let stew = Self::parse_package(alloc.clone(), name.as_str(), path, srcs.iter())?;
-        for bin in bins {
-            let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
-            // adding package dependencies
-            // Todo: ...
-            let stew = stew.clone()
-                + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
-            let checked = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
-            let dynamics = Self::link_dynamics(name.as_str(), checked)?;
-            Self::run_dynamics(dynamics)?;
-        }
-        Ok(())
-    }
-    pub fn test(&self) -> Result<()> {
-        let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
-        let alloc = ArcGlobalAlloc::new();
-        let stew = Self::parse_package(alloc.clone(), name.as_str(), path, srcs.iter())?;
-        for bin in bins {
-            let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
-            // adding package dependencies
-            // Todo: ...
-            let stew = stew.clone()
-                + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
-            let checked = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
-            let dynamics = Self::link_dynamics(name.as_str(), checked)?;
-            Self::test_dynamics(dynamics, name.as_str())?;
-        }
-        Ok(())
-    }
-    pub fn run_files<'f>(name: &str, srcs: impl Iterator<Item = &'f PathBuf>) -> Result<()> {
-        let alloc = ArcGlobalAlloc::new();
-        let stew = Self::parse_package(alloc.clone(), name, &PathBuf::new(), srcs)?;
-        let checked = Self::compile_package(alloc.clone(), name, stew)?;
-        let dynamics = Self::link_dynamics(name, checked)?;
-        Self::run_dynamics(dynamics)?;
-        Ok(())
-    }
-    fn parse_package<'f>(
+    // pub fn run(&self) -> Result<()> {
+    //     let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
+    //     let alloc = ArcGlobalAlloc::new();
+    //     let stew = Self::parse_package(alloc.clone(), name.as_str(), path, srcs.iter())?;
+    //     for bin in bins {
+    //         let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
+    //         // adding package dependencies
+    //         // Todo: ...
+    //         let stew = stew.clone()
+    //             + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
+    //         let checked = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
+    //         let dynamics = Self::link_dynamics(name.as_str(), checked)?;
+    //         Self::run_dynamics(dynamics)?;
+    //     }
+    //     Ok(())
+    // }
+    // pub fn test(&self) -> Result<()> {
+    //     let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
+    //     let alloc = ArcGlobalAlloc::new();
+    //     let stew = Self::parse_package(alloc.clone(), name.as_str(), path, srcs.iter())?;
+    //     for bin in bins {
+    //         let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
+    //         // adding package dependencies
+    //         // Todo: ...
+    //         let stew = stew.clone()
+    //             + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
+    //         let checked = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
+    //         let dynamics = Self::link_dynamics(name.as_str(), checked)?;
+    //         Self::test_dynamics(dynamics, name.as_str())?;
+    //     }
+    //     Ok(())
+    // }
+    // pub fn run_files<'f>(name: &str, srcs: impl Iterator<Item = &'f PathBuf>) -> Result<()> {
+    //     let alloc = ArcGlobalAlloc::new();
+    //     let stew = Self::parse_package(alloc.clone(), name, &PathBuf::new(), srcs)?;
+    //     let checked = Self::compile_package(alloc.clone(), name, stew)?;
+    //     let dynamics = Self::link_dynamics(name, checked)?;
+    //     Self::run_dynamics(dynamics)?;
+    //     Ok(())
+    // }
+    pub fn parse_package<'f>(
         alloc: ArcGlobalAlloc, name: &str, path: &std::path::Path,
         srcs: impl Iterator<Item = &'f PathBuf>,
     ) -> Result<PackageStew> {
@@ -167,28 +166,6 @@ impl LocalPackage {
         let _ = name;
 
         Ok(pack)
-    }
-    fn compile_package(
-        alloc: ArcGlobalAlloc, name: &str, pack: PackageStew,
-    ) -> Result<PackageChecked> {
-        // resolving
-        let pack = pack.resolve(alloc.alloc())?.self_check(name);
-        // tycking
-        let checked = pack.tyck(alloc, name)?;
-        Ok(checked)
-    }
-    fn link_dynamics(name: &str, pack: PackageChecked) -> Result<d::DynamicsArena> {
-        // compiling
-        let dynamics = pack.dynamics(name)?;
-        Ok(dynamics)
-    }
-    fn run_dynamics(dynamics: d::DynamicsArena) -> Result<()> {
-        let () = PackageRuntime { dynamics }.run()?;
-        Ok(())
-    }
-    fn test_dynamics(dynamics: d::DynamicsArena, name: &str) -> Result<()> {
-        let () = PackageRuntime { dynamics }.test(name)?;
-        Ok(())
     }
 }
 

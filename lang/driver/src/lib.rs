@@ -2,6 +2,7 @@
 
 pub mod conf;
 pub mod err;
+pub mod package;
 
 /// the topmost compilation pipeline led by a package configuration
 pub mod local {
@@ -22,11 +23,19 @@ pub mod interp {
     pub mod err;
 }
 
-pub use conf::Conf;
-pub use err::*;
-pub use local::pack::{Dependency, LocalPackage};
+pub mod prelude {
+    pub use zydeco_dynamics::syntax as d;
+    pub use zydeco_statics::syntax as ss;
+    pub use zydeco_surface::bitter::syntax as b;
+    pub use zydeco_surface::scoped::syntax as sc;
+    pub use zydeco_surface::textual::syntax as t;
+}
 
-use derive_more::From;
+pub use conf::Conf;
+pub use err::{BuildError, Result};
+pub use local::pack::{Dependency, LocalPackage};
+pub use package::Package;
+
 use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{
@@ -36,21 +45,6 @@ use zydeco_utils::{
 
 new_key_type! {
     pub struct PackId<()>;
-}
-
-#[derive(From)]
-pub enum Package {
-    Local(LocalPackage),
-    Repl(String),
-}
-
-impl Package {
-    pub fn deps(&self) -> &[Dependency] {
-        match self {
-            | Package::Local(pack) => &pack.deps,
-            | Package::Repl(_) => &[],
-        }
-    }
 }
 
 pub struct BuildSystem {

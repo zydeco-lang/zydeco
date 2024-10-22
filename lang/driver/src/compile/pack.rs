@@ -1,12 +1,9 @@
 use super::err::{CompileError, Result};
+use crate::prelude::*;
 use std::{collections::HashMap, path::PathBuf};
-use zydeco_dynamics::{syntax as d, Linker};
-use zydeco_statics::{syntax as ss, Tycker};
-use zydeco_surface::{
-    bitter::syntax as b,
-    scoped::{syntax as sc, ResolveOut, Resolver},
-    textual::syntax as t,
-};
+use zydeco_dynamics::Linker;
+use zydeco_statics::Tycker;
+use zydeco_surface::scoped::{ResolveOut, Resolver};
 use zydeco_utils::{arena::*, deps::DepGraph};
 
 #[derive(Clone)]
