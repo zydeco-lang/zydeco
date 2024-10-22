@@ -23,7 +23,7 @@ impl PackageRuntime {
         }
         Ok(())
     }
-    pub fn test(self, name: &str) -> Result<()> {
+    pub fn test(self, name: &str, aloud: bool) -> Result<()> {
         let PackageRuntime { dynamics } = self;
         let mut input = std::io::empty();
         let mut output = std::io::sink();
@@ -31,11 +31,12 @@ impl PackageRuntime {
 
         match kont {
             | ProgKont::ExitCode(0) => {
-                // println!("test passed: {}", name);
-                let mut out = std::io::stdout();
-                use colored::Colorize;
-                use std::io::Write;
-                let _ = writeln!(out, "test {} ... {}", name, "ok".green());
+                if aloud {
+                    let mut out = std::io::stdout();
+                    use colored::Colorize;
+                    use std::io::Write;
+                    let _ = writeln!(out, "test {} ... {}", name, "ok".green());
+                }
                 Ok(())
             }
             | ProgKont::ExitCode(code) => {

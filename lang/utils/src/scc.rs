@@ -273,6 +273,35 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
             self.belongs.remove(&id);
         }
     }
+    pub fn keep_only(&mut self, ids: impl IntoIterator<Item = Id>) {
+        let mut keep_sccs = ids.into_iter().map(|id| self.belongs[&id]).collect::<HashSet<_>>();
+        // all frontiers have already been visited, but not their dependencies
+        let mut frontier_sccs: Vec<usize> = keep_sccs.iter().cloned().collect();
+        while let Some(scc_id) = frontier_sccs.pop() {
+            for next in self.deps.query(&scc_id) {
+                if keep_sccs.insert(next) {
+                    frontier_sccs.push(next);
+                }
+            }
+        }
+        let mut victims = HashSet::new();
+        for scc_id in self.strongs.keys().cloned().collect::<Vec<_>>() {
+            if !keep_sccs.contains(&scc_id) {
+                victims.insert(scc_id);
+            }
+        }
+        for scc_id in victims {
+            let ids = self.strongs.remove(&scc_id).unwrap();
+            for id in ids {
+                self.belongs.remove(&id);
+            }
+            let Some(next) = self.srcs.map.remove(&scc_id) else { continue };
+            for n in &next {
+                self.deps.map.get_mut(n).unwrap().remove(&scc_id);
+            }
+            self.roots.remove(&scc_id);
+        }
+    }
 }
 
 #[cfg(test)]

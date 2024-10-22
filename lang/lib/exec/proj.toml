@@ -53,7 +53,7 @@ bins = [
     "ret.zydeco",
     "trans.zy",
     "unit.zy",
-    "varidic.zy",
+    "variadic.zy",
     "Y.zydeco",
 ]
 

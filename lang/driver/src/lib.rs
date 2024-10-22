@@ -38,11 +38,13 @@ pub use package::{Dependency, Package};
 pub use zydeco_utils::arena::ArcGlobalAlloc;
 
 use crate::compile::pack::PackageStew;
+use prelude::*;
 use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{
     arena::{new_key_type, ArenaDense},
     deps::DepGraph,
+    scc::Kosaraju,
 };
 
 new_key_type! {
@@ -144,9 +146,49 @@ impl BuildSystem {
         }
     }
     pub fn run_pack(&self, pack: PackId, dry: bool, verbose: bool) -> Result<()> {
+        let dynamics = self.dynamics_pack(pack, verbose)?;
+        if dry {
+            return Ok(());
+        }
+        Package::run_dynamics(dynamics)
+    }
+    pub fn test_pack(&self, pack: PackId, dry: bool) -> Result<()> {
+        let name = self.packages[&pack].name();
+        let dynamics = self.dynamics_pack(pack, false)?;
+        if dry {
+            return Ok(());
+        }
+        Package::test_dynamics(dynamics, name.as_str(), false)
+    }
+    pub fn dynamics_pack(
+        &self, pack: PackId, _verbose: bool,
+    ) -> Result<d::DynamicsArena> {
         let alloc = ArcGlobalAlloc::new();
-        let package = &self.packages[&pack];
-        todo!()
+        let mut scc = Kosaraju::new(&self.depends_on).run();
+        scc.keep_only([pack]);
+        let mut stew = None;
+        loop {
+            let active = scc.top();
+            if active.is_empty() {
+                break;
+            }
+            for group in active {
+                for pack in group {
+                    let stew_ = self.packages[&pack].parse_package(alloc.clone())?;
+                    if let Some(s) = stew {
+                        stew = Some(s + stew_);
+                    } else {
+                        stew = Some(stew_);
+                    }
+                    scc.release([pack]);
+                }
+            }
+        }
+        let name = self.packages[&pack].name();
+        let stew = stew.unwrap_or_else(|| PackageStew::new(alloc.clone()));
+        let checked = Package::compile_package(alloc.clone(), name.as_str(), stew)?;
+        let dynamics = Package::link_dynamics(name.as_str(), checked)?;
+        Ok(dynamics)
     }
 }
 

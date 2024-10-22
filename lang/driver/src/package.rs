@@ -2,13 +2,11 @@
 
 use crate::{compile::pack::*, interp::pack::*, prelude::*, *};
 use derive_more::From;
-use rayon::prelude::*;
-use sculptor::{FileIO, SerdeStr, ShaSnap};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use zydeco_surface::{
     bitter::{DesugarOut, Desugarer},
-    textual::{HashLexer, Lexer, ParseError, TopLevelParser},
+    textual::{Lexer, ParseError, TopLevelParser},
 };
 use zydeco_utils::{
     arena::*,
@@ -65,20 +63,6 @@ mod _impl {
     use local::err::LocalError;
 
     impl Package {
-        // pub fn run(&self) -> Result<()> {
-        //     let alloc = ArcGlobalAlloc::new();
-        //     let pack = self.parse_package(alloc.clone())?;
-        //     let checked = Self::compile_package(alloc.clone(), "main", pack)?;
-        //     let dynamics = Self::link_dynamics("main", checked)?;
-        //     Self::run_dynamics(dynamics)
-        // }
-        // pub fn test(&self, name: &str) -> Result<()> {
-        //     let alloc = ArcGlobalAlloc::new();
-        //     let pack = self.parse_package(alloc.clone())?;
-        //     let checked = Self::compile_package(alloc.clone(), name, pack)?;
-        //     let dynamics = Self::link_dynamics(name, checked)?;
-        //     Self::test_dynamics(dynamics, name)
-        // }
         pub fn parse_package(&self, alloc: ArcGlobalAlloc) -> Result<PackageStew> {
             match self {
                 | Package::Local(LocalPackage { path, name, srcs, deps: _, bins: _, std: _ }) => {
@@ -88,31 +72,6 @@ mod _impl {
                         path,
                         srcs.iter(),
                     )?;
-                    // // adding package dependencies
-                    // for dep in deps {
-                    //     match dep {
-                    //         | Dependency::Local(path) => {
-                    //             stew = stew
-                    //                 + Package::Local(LocalPackage::new(path.as_path())?)
-                    //                     .parse_package(alloc.clone())?;
-                    //         }
-                    //     }
-                    // }
-                    // let stews = bins
-                    //     .into_iter()
-                    //     .map(|bin| {
-                    //         let name =
-                    //             format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
-                    //         let stew = stew.clone()
-                    //             + LocalPackage::parse_package(
-                    //                 alloc.clone(),
-                    //                 name.as_str(),
-                    //                 path,
-                    //                 [bin].into_iter(),
-                    //             )?;
-                    //         Ok(stew)
-                    //     })
-                    //     .collect::<Result<Vec<_>>>()?;
                     Ok(stew)
                 }
                 | Package::Binary(path) => {
@@ -174,8 +133,8 @@ mod _impl {
             let () = PackageRuntime { dynamics }.run()?;
             Ok(())
         }
-        pub fn test_dynamics(dynamics: d::DynamicsArena, name: &str) -> Result<()> {
-            let () = PackageRuntime { dynamics }.test(name)?;
+        pub fn test_dynamics(dynamics: d::DynamicsArena, name: &str, aloud: bool) -> Result<()> {
+            let () = PackageRuntime { dynamics }.test(name, aloud)?;
             Ok(())
         }
     }

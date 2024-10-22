@@ -66,51 +66,10 @@ impl LocalPackage {
             })?
         })
     }
-    // pub fn run(&self) -> Result<()> {
-    //     let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
-    //     let alloc = ArcGlobalAlloc::new();
-    //     let stew = Self::parse_package(alloc.clone(), name.as_str(), path, srcs.iter())?;
-    //     for bin in bins {
-    //         let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
-    //         // adding package dependencies
-    //         // Todo: ...
-    //         let stew = stew.clone()
-    //             + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
-    //         let checked = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
-    //         let dynamics = Self::link_dynamics(name.as_str(), checked)?;
-    //         Self::run_dynamics(dynamics)?;
-    //     }
-    //     Ok(())
-    // }
-    // pub fn test(&self) -> Result<()> {
-    //     let LocalPackage { path, name, srcs, deps: _, bins, std: _ } = self;
-    //     let alloc = ArcGlobalAlloc::new();
-    //     let stew = Self::parse_package(alloc.clone(), name.as_str(), path, srcs.iter())?;
-    //     for bin in bins {
-    //         let name = format!("{}/{}", name, bin.file_stem().unwrap().to_str().unwrap());
-    //         // adding package dependencies
-    //         // Todo: ...
-    //         let stew = stew.clone()
-    //             + Self::parse_package(alloc.clone(), name.as_str(), path, [bin].into_iter())?;
-    //         let checked = Self::compile_package(alloc.clone(), name.as_str(), stew)?;
-    //         let dynamics = Self::link_dynamics(name.as_str(), checked)?;
-    //         Self::test_dynamics(dynamics, name.as_str())?;
-    //     }
-    //     Ok(())
-    // }
-    // pub fn run_files<'f>(name: &str, srcs: impl Iterator<Item = &'f PathBuf>) -> Result<()> {
-    //     let alloc = ArcGlobalAlloc::new();
-    //     let stew = Self::parse_package(alloc.clone(), name, &PathBuf::new(), srcs)?;
-    //     let checked = Self::compile_package(alloc.clone(), name, stew)?;
-    //     let dynamics = Self::link_dynamics(name, checked)?;
-    //     Self::run_dynamics(dynamics)?;
-    //     Ok(())
-    // }
     pub fn parse_package<'f>(
         alloc: ArcGlobalAlloc, name: &str, path: &std::path::Path,
         srcs: impl Iterator<Item = &'f PathBuf>,
     ) -> Result<PackageStew> {
-        // Todo: deal with std and deps
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
         // parallelized w/ rayon
         let files = files.into_par_iter().map(|f| f.load()).collect::<Result<Vec<_>>>()?;
@@ -118,7 +77,7 @@ impl LocalPackage {
         // Todo: check hashes
 
         // parsing & desugaring
-        // parallelized w/ rayon (?)
+        // parallelized w/ rayon
         let pack = files
             .into_par_iter()
             .map(|f| -> Result<_> {

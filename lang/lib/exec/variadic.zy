@@ -1,12 +1,12 @@
-codata Varidic (A: VType) (B: CType) where
-  | .more : A -> Varidic A B
+codata Variadic (A: VType) (B: CType) where
+  | .more : A -> Variadic A B
   | .done : B
 end
 
 // A ->* B == List A -> B
 
 // restore
-def fix l (A: VType) (B: CType) (fv: U (Varidic A B)): List A -> B = fn xs ->
+def fix l (A: VType) (B: CType) (fv: U (Variadic A B)): List A -> B = fn xs ->
   match xs
   | +Nil() -> ! fv .done
   | +Cons(x, xs) -> ! l (A) (B) { ! fv .more x } xs
@@ -14,8 +14,8 @@ def fix l (A: VType) (B: CType) (fv: U (Varidic A B)): List A -> B = fn xs ->
 end
 
 // capture
-def ! r (A: VType) (B: CType) (fl: U (List A -> B)): Varidic A B =
-  let fix r (k: U (List A -> B)): Varidic A B =
+def ! r (A: VType) (B: CType) (fl: U (List A -> B)): Variadic A B =
+  let fix r (k: U (List A -> B)): Variadic A B =
     comatch
     | .more x -> ! r { fn xs -> ! k +Cons(x, xs) }
     | .done -> ! k +Nil()
@@ -27,7 +27,7 @@ end
 // continuation based mich wand
 
 // ! r (B) (A) { ! l (B) (A) fv } == fv
-// forall fv: U (Varidic A B)
+// forall fv: U (Variadic A B)
 
 // ! l (B) (A) { ! r (B) (A) fl } == fl
 // forall fl: U (List A -> B)
@@ -44,12 +44,12 @@ end
 
 
 
-def fix printv: Varidic String (U OS -> OS) =
-  ! r (String) (U OS -> OS) printl
+def fix printv: Variadic String (U OS -> OS) =
+  ! r String (U OS -> OS) printl
 end
 
 main
-  do~ ! l (String) (U OS -> OS) { ! r (String) (U OS -> OS) printl } (+Cons("hello", +Cons("world", +Nil())));
-  do~ ! r (String) (U OS -> OS) { ! l (String) (U OS -> OS) printv } .more "hello" .more "world" .done;
+  do~ ! l String (U OS -> OS) { ! r String (U OS -> OS) printl } (+Cons("hello", +Cons("world", +Nil())));
+  do~ ! r String (U OS -> OS) { ! l String (U OS -> OS) printv } .more "hello" .more "world" .done;
   ! exit 0
 end
