@@ -127,7 +127,7 @@ impl File {
             let path = path.clone();
             LocalError::SrcFileNotFound(path)
         })?;
-        let info = FileInfo::new(source.as_str(), Arc::new(path));
+        let info = FileInfo::new(source.as_str(), Some(Arc::new(path)));
         let s = HashLexer::new(&source)
             .hash_string(&info)
             .map_err(|span| LocalError::LexerError(span))?;
@@ -149,10 +149,11 @@ impl FileLoaded {
     pub fn merge<'a>(selves: impl IntoIterator<Item = &'a Self>) -> Result<PackageHash> {
         let mut hashes = HashMap::new();
         for file in selves {
+            let path = file.info.path();
             hashes.insert(
-                file.info
-                    .canonicalize()
-                    .map_err(|_| LocalError::CanonicalizationError(file.info.display_path()))?,
+                path.canonicalize().map_err(|_| {
+                    LocalError::CanonicalizationError(format!("{}", path.display()))
+                })?,
                 file.hash.clone(),
             );
         }

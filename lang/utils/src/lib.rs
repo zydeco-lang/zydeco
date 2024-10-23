@@ -9,16 +9,14 @@ pub mod span;
 pub mod never;
 pub mod monoid;
 pub mod wrappers;
-pub mod interval_tree;
 
 pub mod prelude {
     pub use crate::{
         arena::*,
         cells::{MultiCell, SingCell},
-        interval_tree::IntervalTree,
         monoid::Monoid,
         never::Never,
         rc,
-        span::{Sp, Span, SpanHolder, SpanView},
+        span::{Sp, Span},
     };
 }

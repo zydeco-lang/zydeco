@@ -2,7 +2,6 @@ use once_cell::unsync::OnceCell;
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
-    io,
     path::PathBuf,
     rc::Rc,
     sync::Arc,
@@ -17,10 +16,10 @@ pub enum LocationCtx {
 #[derive(Clone, Debug)]
 pub struct FileInfo {
     newlines: Vec<usize>,
-    path: Arc<PathBuf>,
+    path: Option<Arc<PathBuf>>,
 }
 impl FileInfo {
-    pub fn new(s: &str, path: Arc<PathBuf>) -> Self {
+    pub fn new(s: &str, path: Option<Arc<PathBuf>>) -> Self {
         let mut newlines = vec![0];
         for (i, c) in s.char_indices() {
             if c == '\n' {
@@ -55,13 +54,7 @@ impl FileInfo {
         }
     }
     pub fn path(&self) -> PathBuf {
-        self.path.to_path_buf()
-    }
-    pub fn canonicalize(&self) -> io::Result<PathBuf> {
-        self.path.canonicalize()
-    }
-    pub fn display_path(&self) -> String {
-        self.path.display().to_string()
+        self.path.as_ref().map(|p| p.to_path_buf()).unwrap_or_default()
     }
 }
 
@@ -69,7 +62,7 @@ impl FileInfo {
 pub struct Span {
     span1: (Cursor1, Cursor1),
     span2: OnceCell<(Cursor2, Cursor2)>,
-    path: OnceCell<Arc<PathBuf>>,
+    path: OnceCell<Option<Arc<PathBuf>>>,
 }
 
 impl Span {
@@ -121,7 +114,7 @@ impl Span {
 impl Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (l, r) = self.span1;
-        if let Some(path) = self.path.get() {
+        if let Some(Some(path)) = self.path.get() {
             write!(f, "{}", path.display())?;
             if let Some((l2, r2)) = self.span2.get() {
                 write!(f, ":{l2} - {r2}",)?;
@@ -152,87 +145,6 @@ impl Display for Cursor2 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Cursor2 { line, column } = self;
         write!(f, "{line}:{column}",)
-    }
-}
-
-pub trait SpanView {
-    fn span(&self) -> &Span;
-}
-impl<T: SpanView> SpanView for Rc<T> {
-    fn span(&self) -> &Span {
-        self.as_ref().span()
-    }
-}
-
-pub trait SpanHolder {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut Span) + Clone;
-    fn span_map<F>(self, f: F) -> Self
-    where
-        F: Fn(&mut Span) + Clone,
-        Self: Sized,
-    {
-        let mut s = self;
-        s.span_map_mut(f);
-        s
-    }
-}
-
-impl<T: SpanHolder> SpanHolder for Box<T> {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut Span) + Clone,
-    {
-        self.as_mut().span_map_mut(f)
-    }
-}
-
-impl<T: SpanHolder> SpanHolder for Option<T> {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut Span) + Clone,
-    {
-        if let Some(s) = self {
-            s.span_map_mut(f)
-        }
-    }
-}
-
-impl<T: SpanHolder> SpanHolder for Vec<T> {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut Span) + Clone,
-    {
-        for s in self {
-            s.span_map_mut(f.clone())
-        }
-    }
-}
-
-impl<S: SpanHolder, T: SpanHolder> SpanHolder for (S, T) {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut Span) + Clone,
-    {
-        self.0.span_map_mut(f.clone());
-        self.1.span_map_mut(f);
-    }
-}
-
-impl SpanHolder for bool {
-    fn span_map_mut<F>(&mut self, _f: F)
-    where
-        F: Fn(&mut Span) + Clone,
-    {
-    }
-}
-
-impl SpanHolder for String {
-    fn span_map_mut<F>(&mut self, _f: F)
-    where
-        F: Fn(&mut Span) + Clone,
-    {
     }
 }
 
@@ -324,40 +236,3 @@ impl<T: Display> Display for Sp<T> {
         write!(f, "{} ({})", self.inner, info)
     }
 }
-
-impl<T> SpanView for Sp<T> {
-    fn span(&self) -> &Span {
-        &self.info
-    }
-}
-
-impl<T: SpanHolder> SpanHolder for Sp<T> {
-    fn span_map_mut<F>(&mut self, f: F)
-    where
-        F: Fn(&mut Span) + Clone,
-    {
-        f(&mut self.info);
-        self.inner.span_map_mut(f);
-    }
-}
-
-// mod interval_forest {
-//     use super::*;
-//     use crate::interval_tree::IntervalTree;
-//     use std::collections::HashMap;
-
-//     pub struct SpanIntervalForest<T> {
-//         forest: HashMap<PathBuf, SpanIntervalTree<T>>,
-//     }
-
-//     pub struct SpanIntervalTree<T> {
-//         tree: IntervalTree<Cursor1>,
-//         item: HashMap<(Cursor1, Cursor1), T>,
-//     }
-
-//     impl<T> SpanIntervalForest<T> {
-
-//     }
-// }
-
-// pub use interval_forest::{SpanIntervalForest, SpanIntervalTree};

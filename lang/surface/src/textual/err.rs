@@ -14,13 +14,18 @@ impl Display for ParseError<'_> {
         match error {
             | User { ref error } => write!(f, "{error}"),
             | InvalidToken { ref location } => {
-                write!(f, "Invalid token at {}:{}", gen.display_path(), gen.trans_span2(*location))
+                write!(
+                    f,
+                    "Invalid token at {}:{}",
+                    gen.path().display(),
+                    gen.trans_span2(*location)
+                )
             }
             | UnrecognizedEof { ref location, ref expected } => {
                 write!(
                     f,
                     "Unrecognized EOF found at {}:{}{}",
-                    gen.display_path(),
+                    gen.path().display(),
                     gen.trans_span2(*location),
                     fmt_expected(expected)
                 )
@@ -29,7 +34,7 @@ impl Display for ParseError<'_> {
                 write!(
                     f,
                     "Unrecognized token `{token}` found at {}:{} - {}{}",
-                    gen.display_path(),
+                    gen.path().display(),
                     gen.trans_span2(*start),
                     gen.trans_span2(*end),
                     fmt_expected(expected)
@@ -39,7 +44,7 @@ impl Display for ParseError<'_> {
                 write!(
                     f,
                     "Extra token `{token}` found at {}:{} - {}",
-                    gen.display_path(),
+                    gen.path().display(),
                     gen.trans_span2(*start),
                     gen.trans_span2(*end),
                 )
