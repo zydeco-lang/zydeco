@@ -1,0 +1,12 @@
+name = "AlgTrans"
+
+srcs = []
+deps = [{ local = "../std/proj.toml" }]
+bins = [
+    "algtrans.zy",
+    "malt.zy",
+    "motrans.zy",
+    "cbpv-monadic-trans.zy",
+]
+
+std = "NoStd"

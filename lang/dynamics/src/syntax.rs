@@ -128,6 +128,7 @@ pub struct Runtime<'rt> {
 
 #[derive(Clone)]
 pub enum ProgKont {
+    Dry,
     Ret(SemValue),
     ExitCode(i32),
 }

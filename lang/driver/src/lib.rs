@@ -33,12 +33,13 @@ mod tests;
 
 pub use conf::Conf;
 pub use err::{BuildError, Result};
+use interp::pack::PackageRuntime;
 pub use local::pack::LocalPackage;
 pub use package::{Dependency, Package};
+pub use zydeco_dynamics::ProgKont;
 pub use zydeco_utils::arena::ArcGlobalAlloc;
 
 use crate::check::pack::PackageStew;
-use prelude::*;
 use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{
@@ -123,7 +124,7 @@ impl BuildSystem {
     }
     pub fn mark(&mut self, binpack: PackId) -> Result<String> {
         let name = self.packages[&binpack].name();
-        if !self.marked.contains_key(&name) {
+        if self.marked.contains_key(&name) {
             Err(BuildError::DuplicateMark(name.clone()))?
         } else {
             self.marked.insert(name.clone(), binpack);
@@ -145,24 +146,22 @@ impl BuildSystem {
             Err(BuildError::AmbiguousMark(self.marked.keys().cloned().collect()))?
         }
     }
-    pub fn run_pack(&self, pack: PackId, dry: bool, verbose: bool) -> Result<()> {
-        let dynamics = self.dynamics_pack(pack, verbose)?;
+    pub fn run_pack(&self, pack: PackId, dry: bool, verbose: bool) -> Result<ProgKont> {
+        let runtime = self.interp_pack(pack, verbose)?;
         if dry {
-            return Ok(());
+            return Ok(ProgKont::Dry);
         }
-        Package::run_dynamics(dynamics)
+        Ok(Package::run_interp(runtime))
     }
     pub fn test_pack(&self, pack: PackId, dry: bool) -> Result<()> {
         let name = self.packages[&pack].name();
-        let dynamics = self.dynamics_pack(pack, false)?;
+        let runtime = self.interp_pack(pack, false)?;
         if dry {
             return Ok(());
         }
-        Package::test_dynamics(dynamics, name.as_str(), false)
+        Package::test_interp(runtime, name.as_str(), false)
     }
-    pub fn dynamics_pack(
-        &self, pack: PackId, _verbose: bool,
-    ) -> Result<d::DynamicsArena> {
+    pub fn interp_pack(&self, pack: PackId, _verbose: bool) -> Result<PackageRuntime> {
         let alloc = ArcGlobalAlloc::new();
         let mut scc = Kosaraju::new(&self.depends_on).run();
         scc.keep_only([pack]);
@@ -187,8 +186,8 @@ impl BuildSystem {
         let name = self.packages[&pack].name();
         let stew = stew.unwrap_or_else(|| PackageStew::new(alloc.clone()));
         let checked = Package::check_package(alloc.clone(), name.as_str(), stew)?;
-        let dynamics = Package::link_dynamics(name.as_str(), checked)?;
-        Ok(dynamics)
+        let runtime = Package::link_interp(name.as_str(), checked)?;
+        Ok(runtime)
     }
 }
 

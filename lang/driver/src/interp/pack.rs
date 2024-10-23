@@ -7,21 +7,15 @@ pub struct PackageRuntime {
 }
 
 impl PackageRuntime {
-    pub fn run(self) -> Result<()> {
+    pub fn run(self) -> ProgKont {
         self.run_with_args(&[])
     }
-    pub fn run_with_args(self, args: &[String]) -> Result<()> {
+    pub fn run_with_args(self, args: &[String]) -> ProgKont {
         let PackageRuntime { dynamics } = self;
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
         let kont = Runtime::new(&mut input, &mut output, args, dynamics).run();
-        match kont {
-            | ProgKont::Ret(v) => println!("ret: {:?}", v),
-            | ProgKont::ExitCode(code) => {
-                println!("exit: {}", code);
-            }
-        }
-        Ok(())
+        kont
     }
     pub fn test(self, name: &str, aloud: bool) -> Result<()> {
         let PackageRuntime { dynamics } = self;
@@ -39,6 +33,7 @@ impl PackageRuntime {
                 }
                 Ok(())
             }
+            | ProgKont::Dry => Ok(()),
             | ProgKont::ExitCode(code) => {
                 let err = format!("expected exit code 0, got {}", code);
                 Err(InterpError::TestFailed(err))?

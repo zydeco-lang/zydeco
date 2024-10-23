@@ -6,9 +6,8 @@ use std::path::PathBuf;
 //         #[test]
 //         fn $proj() {
 //             let mut build_sys = BuildSystem::new();
-//             let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-//                 .join("../lib")
-//                 .join(stringify!($proj));
+//             let dir =
+//                 PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib").join(stringify!($proj));
 
 //             let local = dir.join("proj.toml").canonicalize().unwrap();
 //             let pack = build_sys.add_local_package(local).unwrap();
@@ -29,9 +28,8 @@ macro_rules! lib_proj_bin {
         #[test]
         fn $name() {
             let mut build_sys = BuildSystem::new();
-            let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../lib")
-                .join(stringify!($proj));
+            let dir =
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib").join(stringify!($proj));
 
             let local = dir.join("proj.toml").canonicalize().unwrap();
             build_sys.add_local_package(local).unwrap();

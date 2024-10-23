@@ -1,13 +1,18 @@
 [package]
 name = "zydeco-cli"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+# homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+description = "Command-line interface for the Zydeco programming language"
 
 [dependencies]
 clap = { workspace = true }
-# zydeco-lang = { workspace = true }
+env_logger = { workspace = true }
 zydeco-driver = { workspace = true }
 
 [build-dependencies]

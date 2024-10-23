@@ -4,6 +4,7 @@ use crate::{check::pack::*, interp::pack::*, prelude::*, *};
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc};
+use zydeco_dynamics::ProgKont;
 use zydeco_surface::{
     bitter::{DesugarOut, Desugarer},
     textual::{Lexer, ParseError, TopLevelParser},
@@ -76,21 +77,27 @@ mod _impl {
                 }
                 | Package::Binary(path) => {
                     let source = std::fs::read_to_string(path.as_path())?;
-                    Package::parse_source(alloc.clone(), source, path.clone())
+                    Package::parse_source(alloc.clone(), source, Some(path.to_owned()))
                 }
                 | Package::Repl(source) => {
-                    let path = PathBuf::new();
-                    Package::parse_source(alloc.clone(), source.clone(), path)
+                    Package::parse_source(alloc.clone(), source.clone(), None)
                 }
             }
         }
         pub fn parse_source(
-            alloc: ArcGlobalAlloc, source: String, path: PathBuf,
+            alloc: ArcGlobalAlloc, source: String, path: Option<PathBuf>,
         ) -> Result<PackageStew> {
             let mut parser = t::Parser::new(alloc.alloc());
+            let (loc, path) = match path {
+                | Some(path) => {
+                    let loc = LocationCtx::File(FileInfo::new(&source, Arc::new(path.clone())));
+                    (loc, path)
+                }
+                | None => (LocationCtx::Plain, PathBuf::new()),
+            };
 
             let top = TopLevelParser::new()
-                .parse(&source, &LocationCtx::Plain, &mut parser, Lexer::new(&source))
+                .parse(&source, &loc, &mut parser, Lexer::new(&source))
                 .map_err(|error| {
                     LocalError::ParseError(
                         ParseError {
@@ -124,17 +131,16 @@ mod _impl {
             let checked = pack.tyck(alloc, name)?;
             Ok(checked)
         }
-        pub fn link_dynamics(name: &str, pack: PackageChecked) -> Result<d::DynamicsArena> {
+        pub fn link_interp(name: &str, pack: PackageChecked) -> Result<PackageRuntime> {
             // compiling
             let dynamics = pack.dynamics(name)?;
-            Ok(dynamics)
+            Ok(PackageRuntime { dynamics })
         }
-        pub fn run_dynamics(dynamics: d::DynamicsArena) -> Result<()> {
-            let () = PackageRuntime { dynamics }.run()?;
-            Ok(())
+        pub fn run_interp(runtime: PackageRuntime) -> ProgKont {
+            runtime.run()
         }
-        pub fn test_dynamics(dynamics: d::DynamicsArena, name: &str, aloud: bool) -> Result<()> {
-            let () = PackageRuntime { dynamics }.test(name, aloud)?;
+        pub fn test_interp(runtime: PackageRuntime, name: &str, aloud: bool) -> Result<()> {
+            let () = runtime.test(name, aloud)?;
             Ok(())
         }
     }

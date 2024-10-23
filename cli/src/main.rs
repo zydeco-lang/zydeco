@@ -1,13 +1,11 @@
 use clap::Parser;
 // use zydeco_cli::{Cli, Commands, Repl};
-// use zydeco_lang::{
-//     prelude::*,
-//     zydeco::{ProgKont, ZydecoFile},
-// };
 use zydeco_cli::{Cli, Commands};
-use zydeco_driver::BuildSystem;
+use zydeco_driver::{BuildSystem, ProgKont};
 
 fn main() -> Result<(), ()> {
+    env_logger::init();
+
     let res = match Cli::parse().command {
         | Commands::Run { files, bin, dry, verbose, args } => {
             run_files(files, bin, dry, verbose, args)
@@ -57,48 +55,9 @@ fn run_files(
         }
     }
     let pack = build_sys.pick_marked(bin).map_err(|e| e.to_string())?;
-    build_sys.run_pack(pack, dry, verbose).map_err(|e| e.to_string())?;
-
-    Ok(0)
-
-    // let title =
-    //     &paths.iter().map(|path| format!("{}", path.display())).collect::<Vec<_>>().join(", ");
-    // // parse
-    // announce_phase(verbose, title, "parse");
-    // let m = ZydecoFile::parse(paths)?;
-    // let m = ZydecoFile::elab(m)?;
-    // if verbose {
-    //     println!("{}", m.fmt())
-    // }
-    // // type check
-    // announce_phase(verbose, title, "tyck");
-    // let ctx = ZydecoFile::tyck(m.clone())?;
-
-    // // if not dry run: lift, link and eval
-    // if !dry_run {
-    //     // lift (monad transformation)
-    //     announce_phase(verbose, title, "lift");
-    //     let m = ZydecoFile::lift(m, ctx.clone())?;
-    //     if verbose {
-    //         println!("{}", m.fmt())
-    //     }
-    //     // link
-    //     announce_phase(verbose, title, "link");
-    //     let sem_m = ZydecoFile::link(m.inner())?;
-    //     if verbose {
-    //         println!("{}", sem_m.fmt());
-    //     }
-    //     // eval
-    //     announce_phase(verbose, title, "eval");
-    //     let res = ZydecoFile::eval_os(sem_m, &args);
-    //     let ProgKont::ExitCode(x) = res.entry else { Err("Program did not exit".to_string())? };
-    //     return Ok(x);
-    // }
-    // Ok(0)
+    match build_sys.run_pack(pack, dry, verbose).map_err(|e| e.to_string())? {
+        | ProgKont::Dry => Ok(0),
+        | ProgKont::Ret(_) => unreachable!(),
+        | ProgKont::ExitCode(code) => Ok(code),
+    }
 }
-
-// fn announce_phase(verbose: bool, title: &str, phase: &str) {
-//     if verbose {
-//         println!("=== [{}] <{}>", title, phase)
-//     }
-// }
