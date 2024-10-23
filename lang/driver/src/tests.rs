@@ -1,10 +1,11 @@
-use crate::*;
-use std::path::PathBuf;
-
 macro_rules! lib_proj_bin {
     ($proj:ident, $name:ident, $binary:expr) => {
         #[test]
         fn $name() {
+            use crate::BuildSystem;
+            use std::path::PathBuf;
+
+            env_logger::init();
             let mut build_sys = BuildSystem::new();
             let dir =
                 PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib").join(stringify!($proj));
@@ -39,7 +40,6 @@ macro_rules! lib_proj_bin {
 }
 
 mod exec {
-    use super::*;
     lib_proj_bin!(exec, abort, "abort");
     lib_proj_bin!(exec, add, "add");
     lib_proj_bin!(exec, alg, "alg");
@@ -81,7 +81,6 @@ mod exec {
 }
 
 mod icfp {
-    use super::*;
     lib_proj_bin!(icfp, abort, "abort");
     // lib_proj_bin!(icfp, algebra, "algebra");
     // lib_proj_bin!(icfp, algtrans, "algtrans");
@@ -93,7 +92,6 @@ mod icfp {
 }
 
 mod monadic {
-    use super::*;
     lib_proj_bin!(monadic, quote, "quote");
     lib_proj_bin!(monadic, trans, "trans");
 }
