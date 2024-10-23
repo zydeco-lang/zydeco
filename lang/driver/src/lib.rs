@@ -75,6 +75,7 @@ impl Default for BuildSystem {
 impl BuildSystem {
     pub fn new() -> Self {
         let path = Conf::config_dir().join("zydeco.toml");
+        log::info!("Loading configuration from `{}`.", path.display());
         let file_conf = FileIO::new(path.clone());
         let conf = file_conf.load().unwrap_or_else(|_| {
             log::warn!("Using default configuration; suppose to find one at `{}`.", path.display());
@@ -95,20 +96,26 @@ impl BuildSystem {
         build_sys
     }
     pub fn add_local_package(&mut self, path: impl Into<PathBuf>) -> Result<PackId> {
-        let pack = LocalPackage::new(path)?;
-        let pack_id = self.add(pack)?;
+        let local = LocalPackage::new(path)?;
+        let pack = self.__add_path_indexed_package(local)?;
         // add all dependent packages to the build system
-        let mut stack = vec![pack_id];
+        let mut stack = vec![pack];
         while let Some(id) = stack.pop() {
-            let deps = self.probe(id)?;
+            let deps = self.__probe_path_indexed_package(id)?;
             stack.extend(deps);
         }
-        Ok(pack_id)
+        Ok(pack)
     }
     pub fn add_orphan_file(&mut self, path: impl Into<PathBuf>) -> Result<PackId> {
-        let pack = self.packages.alloc(Package::Binary(path.into()));
+        let path = path.into();
+        log::info!("Adding orphan file {}", path.display());
+
+        let pack = self.packages.alloc(Package::Binary(path));
         // assuming that all packages added before are dependencies
-        self.depends_on.add(pack, (&self.packages).into_iter().map(|(id, _)| id));
+        self.depends_on.add(
+            pack,
+            (&self.packages).into_iter().filter_map(|(id, _)| (id != pack).then_some(id)),
+        );
         Ok(pack)
     }
     pub fn add_binary_in_package(&mut self, pack: PackId) -> Result<HashMap<String, PackId>> {
@@ -173,6 +180,7 @@ impl BuildSystem {
             }
             for group in active {
                 for pack in group {
+                    log::info!("Interpreting {} [{:?}]", self.packages[&pack].name(), pack);
                     let stew_ = self.packages[&pack].parse_package(alloc.clone())?;
                     if let Some(s) = stew {
                         stew = Some(s + stew_);
@@ -193,14 +201,19 @@ impl BuildSystem {
 
 impl BuildSystem {
     /// add a package to the build system
-    fn add(&mut self, pack: LocalPackage) -> Result<PackId> {
+    fn __add_path_indexed_package(&mut self, pack: LocalPackage) -> Result<PackId> {
         let path = pack.path.clone().canonicalize()?;
+        log::info!("Adding local package: {}", path.display());
+        if let Some(id) = self.seen.get(&path) {
+            log::warn!("Package already added: {}", path.display());
+            return Ok(id.clone());
+        }
         let pack_id = self.packages.alloc(pack.into());
         self.seen.insert(path, pack_id);
         Ok(pack_id)
     }
     /// probe unseen dependencies of a package within one step and add them
-    fn probe(&mut self, id: PackId) -> Result<Vec<PackId>> {
+    fn __probe_path_indexed_package(&mut self, id: PackId) -> Result<Vec<PackId>> {
         let pack = &self.packages[&id];
         let mut deps_old = Vec::new();
         let mut deps_new = Vec::new();
@@ -220,7 +233,7 @@ impl BuildSystem {
             .into_iter()
             .map(|path| {
                 let pack = LocalPackage::new(path)?;
-                self.add(pack)
+                self.__add_path_indexed_package(pack)
             })
             .collect::<Result<Vec<_>>>()?;
         self.depends_on.add(id, deps_new.iter().cloned().chain(deps_old));
