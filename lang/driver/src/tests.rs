@@ -5,7 +5,7 @@ macro_rules! lib_proj_bin {
             use crate::BuildSystem;
             use std::path::PathBuf;
 
-            env_logger::init();
+            // env_logger::init();
             let mut build_sys = BuildSystem::new();
             let dir =
                 PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib").join(stringify!($proj));

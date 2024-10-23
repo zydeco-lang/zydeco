@@ -2,10 +2,6 @@ use crate::syntax::*;
 use zydeco_surface::scoped::syntax::ScopedArena;
 use zydeco_utils::arena::ArenaAccess;
 
-pub trait Ugly {
-    fn ugly(&self, f: &Formatter) -> String;
-}
-
 pub struct Formatter<'arena> {
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,
@@ -16,8 +12,8 @@ impl<'arena> Formatter<'arena> {
     }
 }
 
-impl Ugly for DefId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for DefId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         let name = &f.scoped.defs[self];
         s += &name.ugly(f);
@@ -26,8 +22,8 @@ impl Ugly for DefId {
     }
 }
 
-impl Ugly for KindId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for KindId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let kd = &f.statics.kinds[self];
         match kd {
             | Kind::Fill(fill) => {
@@ -40,8 +36,8 @@ impl Ugly for KindId {
     }
 }
 
-impl Ugly for TPatId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for TPatId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let tpat = &f.statics.tpats[self];
         match tpat {
             | TypePattern::Hole(tpat) => tpat.ugly(f),
@@ -50,8 +46,8 @@ impl Ugly for TPatId {
     }
 }
 
-impl Ugly for TypeId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let ty = &f.statics.types[self];
         match ty {
             | Type::Var(def) => def.ugly(f),
@@ -78,8 +74,8 @@ impl Ugly for TypeId {
     }
 }
 
-impl Ugly for VPatId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for VPatId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let vpat = &f.statics.vpats[self];
         use ValuePattern as VPat;
         match vpat {
@@ -93,8 +89,8 @@ impl Ugly for VPatId {
     }
 }
 
-impl Ugly for ValueId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for ValueId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let value = &f.statics.values[self];
         match value {
             | Value::Hole(value) => value.ugly(f),
@@ -109,8 +105,8 @@ impl Ugly for ValueId {
     }
 }
 
-impl Ugly for CompuId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for CompuId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let compu = &f.statics.compus[self];
         use Computation as Compu;
         match compu {
@@ -132,8 +128,8 @@ impl Ugly for CompuId {
     }
 }
 
-impl Ugly for AnnId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for AnnId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | AnnId::Set => "Set".to_string(),
             | AnnId::Kind(kd) => kd.ugly(f),
@@ -142,8 +138,8 @@ impl Ugly for AnnId {
     }
 }
 
-impl Ugly for AbstId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for AbstId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let () = &f.statics.absts[self];
         let sealed = &f.statics.seals.get(self);
         let hint = match f.statics.abst_hints.get(self) {
@@ -165,8 +161,8 @@ impl Ugly for AbstId {
     }
 }
 
-impl Ugly for DataId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for DataId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         s += &format!("data");
         let Data { arms } = &f.statics.datas.tbls[self];
@@ -178,8 +174,8 @@ impl Ugly for DataId {
     }
 }
 
-impl Ugly for CoDataId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for CoDataId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         s += &format!("codata");
         let CoData { arms } = &f.statics.codatas.tbls[self];
@@ -191,200 +187,200 @@ impl Ugly for CoDataId {
     }
 }
 
-impl Ugly for VarName {
-    fn ugly(&self, _f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for VarName {
+    fn ugly(&self, _f: &'a Formatter) -> String {
         let VarName(name) = self;
         name.clone()
     }
 }
 
-impl Ugly for CtorName {
-    fn ugly(&self, _f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for CtorName {
+    fn ugly(&self, _f: &'a Formatter) -> String {
         let CtorName(name) = self;
         name.clone()
     }
 }
 
-impl Ugly for DtorName {
-    fn ugly(&self, _f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for DtorName {
+    fn ugly(&self, _f: &'a Formatter) -> String {
         let DtorName(name) = self;
         name.clone()
     }
 }
 
-impl<S, T> Ugly for Ann<S, T>
+impl<'a, S, T> Ugly<'a, Formatter<'a>> for Ann<S, T>
 where
-    S: Ugly,
-    T: Ugly,
+    S: Ugly<'a, Formatter<'a>>,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Ann { tm, ty } = self;
         format!("({} : {})", tm.ugly(f), ty.ugly(f))
     }
 }
 
-impl Ugly for Hole {
-    fn ugly(&self, _f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for Hole {
+    fn ugly(&self, _f: &'a Formatter) -> String {
         "_".to_string()
     }
 }
 
-impl<S, T> Ugly for Abs<S, T>
+impl<'a, S, T> Ugly<'a, Formatter<'a>> for Abs<S, T>
 where
-    S: Ugly,
-    T: Ugly,
+    S: Ugly<'a, Formatter<'a>>,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Abs(s, t) = self;
         format!("fn {} -> {}", s.ugly(f), t.ugly(f))
     }
 }
 
-impl<S, T> Ugly for App<S, T>
+impl<'a, S, T> Ugly<'a, Formatter<'a>> for App<S, T>
 where
-    S: Ugly,
-    T: Ugly,
+    S: Ugly<'a, Formatter<'a>>,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let App(s, t) = self;
         format!("({} {})", s.ugly(f), t.ugly(f))
     }
 }
 
-impl<T> Ugly for Arrow<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Arrow<T>
 where
-    T: Ugly,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Arrow(s, t) = self;
         format!("({} -> {})", s.ugly(f), t.ugly(f))
     }
 }
 
-impl Ugly for Triv {
-    fn ugly(&self, _f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for Triv {
+    fn ugly(&self, _f: &'a Formatter) -> String {
         "()".to_string()
     }
 }
 
-impl<S, T> Ugly for Cons<S, T>
+impl<'a, S, T> Ugly<'a, Formatter<'a>> for Cons<S, T>
 where
-    S: Ugly,
-    T: Ugly,
+    S: Ugly<'a, Formatter<'a>>,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Cons(s, t) = self;
         format!("({}, {})", s.ugly(f), t.ugly(f))
     }
 }
 
-impl<T> Ugly for Prod<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Prod<T>
 where
-    T: Ugly,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Prod(s, t) = self;
         format!("({} * {})", s.ugly(f), t.ugly(f))
     }
 }
 
-impl<T> Ugly for Sealed<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Sealed<T>
 where
-    T: Ugly,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Sealed(t) = self;
         t.ugly(f)
     }
 }
 
-impl<T> Ugly for Thunk<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Thunk<T>
 where
-    T: Ugly,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Thunk(tm) = self;
         format!("{{ {} }}", tm.ugly(f))
     }
 }
 
-impl<T> Ugly for Force<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Force<T>
 where
-    T: Ugly,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Force(tm) = self;
         format!("! {}", tm.ugly(f))
     }
 }
 
-impl<T> Ugly for Ret<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Ret<T>
 where
-    T: Ugly,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Ret(t) = self;
         format!("ret {}", t.ugly(f))
     }
 }
 
-impl<Br, Be, Tail> Ugly for Bind<Br, Be, Tail>
+impl<'a, Br, Be, Tail> Ugly<'a, Formatter<'a>> for Bind<Br, Be, Tail>
 where
-    Br: Ugly,
-    Be: Ugly,
-    Tail: Ugly,
+    Br: Ugly<'a, Formatter<'a>>,
+    Be: Ugly<'a, Formatter<'a>>,
+    Tail: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Bind { binder, bindee, tail } = self;
         format!("do {} <- {}; {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
     }
 }
 
-impl<Br, Be, Tail> Ugly for PureBind<Br, Be, Tail>
+impl<'a, Br, Be, Tail> Ugly<'a, Formatter<'a>> for PureBind<Br, Be, Tail>
 where
-    Br: Ugly,
-    Be: Ugly,
-    Tail: Ugly,
+    Br: Ugly<'a, Formatter<'a>>,
+    Be: Ugly<'a, Formatter<'a>>,
+    Tail: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let PureBind { binder, bindee, tail } = self;
         format!("let {} = {}; {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
     }
 }
 
-impl<P, Tm> Ugly for Fix<P, Tm>
+impl<'a, P, Tm> Ugly<'a, Formatter<'a>> for Fix<P, Tm>
 where
-    P: Ugly,
-    Tm: Ugly,
+    P: Ugly<'a, Formatter<'a>>,
+    Tm: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Fix(p, tm) = self;
         format!("fix {} -> {}", p.ugly(f), tm.ugly(f))
     }
 }
 
-impl<Tail> Ugly for Ctor<Tail>
+impl<'a, Tail> Ugly<'a, Formatter<'a>> for Ctor<Tail>
 where
-    Tail: Ugly,
+    Tail: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Ctor(name, tail) = self;
         format!("{} {}", name.ugly(f), tail.ugly(f))
     }
 }
 
-impl<Tail> Ugly for Dtor<Tail>
+impl<'a, Tail> Ugly<'a, Formatter<'a>> for Dtor<Tail>
 where
-    Tail: Ugly,
+    Tail: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Dtor(name, tail) = self;
         format!("{} {}", name.ugly(f), tail.ugly(f))
     }
 }
 
-impl Ugly for Literal {
-    fn ugly(&self, _f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for Literal {
+    fn ugly(&self, _f: &'a Formatter) -> String {
         let mut s = String::new();
         match self {
             | Literal::Int(i) => s += &format!("{:?}", i),
@@ -396,27 +392,27 @@ impl Ugly for Literal {
     }
 }
 
-impl Ugly for Forall {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for Forall {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Forall(tpat, ty) = self;
         format!("(forall {} . {})", tpat.ugly(f), ty.ugly(f))
     }
 }
 
-impl Ugly for Exists {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for Exists {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Exists(tpat, ty) = self;
         format!("(exists {} . {})", tpat.ugly(f), ty.ugly(f))
     }
 }
 
-impl<Sc, Br, Tail> Ugly for Match<Sc, Br, Tail>
+impl<'a, Sc, Br, Tail> Ugly<'a, Formatter<'a>> for Match<Sc, Br, Tail>
 where
-    Sc: Ugly,
-    Br: Ugly,
-    Tail: Ugly,
+    Sc: Ugly<'a, Formatter<'a>>,
+    Br: Ugly<'a, Formatter<'a>>,
+    Tail: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Match { scrut, arms } = self;
         let mut s = String::new();
         s += &format!("match {}", scrut.ugly(f));
@@ -428,11 +424,11 @@ where
     }
 }
 
-impl<Tail> Ugly for CoMatch<Tail>
+impl<'a, Tail> Ugly<'a, Formatter<'a>> for CoMatch<Tail>
 where
-    Tail: Ugly,
+    Tail: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let CoMatch { arms } = self;
         let mut s = String::new();
         s += &format!("comatch");
@@ -444,8 +440,8 @@ where
     }
 }
 
-impl Ugly for DeclId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let decl = &f.statics.decls[self];
         use Declaration as Decl;
         match decl {

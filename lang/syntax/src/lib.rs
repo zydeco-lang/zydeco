@@ -1,3 +1,6 @@
+pub mod fmt;
+pub use fmt::*;
+
 mod impls;
 use derive_more::From;
 

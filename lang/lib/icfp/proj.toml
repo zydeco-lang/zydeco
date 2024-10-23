@@ -1,11 +1,9 @@
 name = "ICFP"
 
-srcs = [
-    "../std/core.zy",
-    "../std/data.zy",
-    # "../std/avl.zy",
+srcs = []
+deps = [
+    { local = "../std/data.toml" }
 ]
-deps = []
 bins = [
     "abort.zydeco",
     # "algebra.zydeco",
