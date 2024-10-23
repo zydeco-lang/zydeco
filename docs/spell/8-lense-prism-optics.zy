@@ -2,7 +2,9 @@
 
 // The following code is only a sketch of the idea.
 
-alias Lens (S : VType) (A : VType) = forall (Fun : VType -> CType) . Thunk (A -> Fun A) -> (S -> Fun S) end
+alias Lens (S : VType) (A : VType) : CType =
+  forall (Fun : VType -> CType) . Thunk (A -> Fun A) -> (S -> Fun S)
+end
 
 codata Identity (A : VType) where
 | .identity : Ret A
@@ -12,12 +14,12 @@ codata Const (A : VType) (B : VType) where
 | .const: Ret A
 end
 
-def fn over (S : VType) (A : VType) (lens : Thunk (Lens S A)) (f : Thunk (A -> Ret A)) (s : S) : Ret S =
-  (! lens @(Identity) { fn a -> comatch | .identity -> ! f a end } s) .identity
+def ! over (S : VType) (A : VType) (lens : Thunk (Lens S A)) (f : Thunk (A -> Ret A)) (s : S) : Ret S =
+  (! lens Identity { fn a -> fn .identity -> ! f a } s) .identity
 end
 
-def fn view (S : VType) (A : VType) (lens : Thunk (Lens S A)) (s : S) : Ret A =
-  (! lens @(Const A) { fn a -> comatch | .const -> ret a end } s) .const
+def ! view (S : VType) (A : VType) (lens : Thunk (Lens S A)) (s : S) : Ret A =
+  (! lens (Const A) { fn a -> fn .const -> ret a } s) .const
 end
 
 main

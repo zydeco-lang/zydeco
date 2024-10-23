@@ -12,7 +12,7 @@ end
 
 def even-odd : Thunk EvenOdd = {
   // Todo..
-  rec even-odd -> ! even-odd
+  fix even-odd -> ! even-odd
 } end
 
 def even : Thunk (Nat -> Ret Bool) = {
@@ -26,9 +26,9 @@ def odd : Thunk (Nat -> Ret Bool) = {
 } end
 
 main
-  let fn assert (b : Thunk (Ret Bool)) (b' : Bool) (kont : Thunk OS) =
+  let ! assert (b : Thunk (Ret Bool)) (b' : Bool) (kont : Thunk OS) =
     do b <- ! b;
-    ! if~ @(OS) { ! bool_eq b b' } { ! kont } { ! panic "failed test case >_<" }
+    ! if~ OS { ! bool_eq b b' } { ! kont } { ! panic "failed test case >_<" }
   in
   ! assert { ! even +S(+S(+Z())) } true {
   ! assert { ! odd +S(+S(+S(+Z()))) } true {

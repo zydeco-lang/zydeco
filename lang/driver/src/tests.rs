@@ -1,30 +1,8 @@
 use crate::*;
 use std::path::PathBuf;
 
-// macro_rules! lib_proj_toml {
-//     ($proj:ident) => {
-//         #[test]
-//         fn $proj() {
-//             let mut build_sys = BuildSystem::new();
-//             let dir =
-//                 PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib").join(stringify!($proj));
-
-//             let local = dir.join("proj.toml").canonicalize().unwrap();
-//             let pack = build_sys.add_local_package(local).unwrap();
-
-//             match build_sys.run_pack(pack, false, false) {
-//                 | Ok(_) => {}
-//                 | Err(err) => {
-//                     eprintln!("{}", err);
-//                     panic!("Error running project");
-//                 }
-//             }
-//         }
-//     };
-// }
-
 macro_rules! lib_proj_bin {
-    ($proj:ident,$name:ident,$binary:expr) => {
+    ($proj:ident, $name:ident, $binary:expr) => {
         #[test]
         fn $name() {
             let mut build_sys = BuildSystem::new();
@@ -59,11 +37,6 @@ macro_rules! lib_proj_bin {
         }
     };
 }
-
-// mod std_ {
-//     use super::*;
-//     lib_proj_toml!(std);
-// }
 
 mod exec {
     use super::*;
@@ -122,4 +95,5 @@ mod icfp {
 mod monadic {
     use super::*;
     lib_proj_bin!(monadic, quote, "quote");
+    lib_proj_bin!(monadic, trans, "trans");
 }

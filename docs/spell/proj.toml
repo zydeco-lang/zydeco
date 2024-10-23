@@ -1,0 +1,20 @@
+name = "Spell"
+
+srcs = []
+deps = [
+    { local = "../../lang/lib/std/proj.toml" }
+]
+bins = [
+    ".build.zy",
+    "0-toplevel.zy",
+    "1-thunk-ret.zy",
+    "2-data-codata.zy",
+    "3-object.zy",
+    "4-y-combinator.zy",
+    "5-mutual-rec.zy",
+    "6-cps.zy",
+    "7-call-by-need.zy",
+    "8-lense-prism-optics.zy",
+]
+
+std = "NoStd"

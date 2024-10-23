@@ -4,7 +4,7 @@
 // languages, we can cache the computation result of a pure thunk and reuse it
 // when asked next time ("sharing").
 
-extern data Ref (A : VType) end
+extern def Ref (A : VType) : VType end
 
 extern def ref : Thunk (forall (A : VType) . A -> Ret (Ref A)) end
 extern def get : Thunk (forall (A : VType) . Ref A -> Ret A) end
@@ -18,10 +18,10 @@ extern def set : Thunk (forall (A : VType) . Ref A -> A -> Ret Unit) end
 // Below is a naive implementation of call-by-need. All you need to change from
 // call-by-name is the semantics of a thunk.
 
-def fn cbneed-thunk (A : VType) (u~ : Thunk (Ret A)) : Ret (Thunk (Ret A)) =
-  do r <- ! ref @(Option A) +None();
+def ! cbneed-thunk (A : VType) (u~ : Thunk (Ret A)) : Ret (Thunk (Ret A)) =
+  do r <- ! ref (Option A) +None();
   ret {
-    do a? <- ! get @(Option A) r;
+    do a? <- ! get (Option A) r;
     match a?
     | +Some(a) ->
       // `a` is already cached
@@ -29,7 +29,7 @@ def fn cbneed-thunk (A : VType) (u~ : Thunk (Ret A)) : Ret (Thunk (Ret A)) =
     | +None() ->
       // only evaluate `u~` once
       do a <- ! u~;
-      do _ <- ! set @(Option A) r +Some(a);
+      do _ <- ! set (Option A) r +Some(a);
       ret a
     end
   }

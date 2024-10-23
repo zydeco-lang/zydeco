@@ -6,21 +6,21 @@
 // and project out either `Int` or `String`.
 
 codata Counter where
-| .num  : Ret Int
-| .incr : Int -> Counter
-| .fmt  : Ret String
+  | .num  : Ret Int
+  | .incr : Int -> Counter
+  | .fmt  : Ret String
 end
 
 // We can use `this` (or `self`) as in normal OO languages
 def mk_counter : Thunk(Int -> Counter) = {
-  rec mk_counter ->
-  fn n -> rec this ->
+  fix mk_counter ->
+  fn n -> fix this ->
   // Todo..
   ! this
 } end
 
 main
-  let counter_42: Thunk(Counter) = {
+  let counter_42: Thunk Counter = {
     ! mk_counter 42
   } in
   // Todo: uncomment the following lines

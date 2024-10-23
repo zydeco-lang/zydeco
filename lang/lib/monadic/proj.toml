@@ -1,15 +1,12 @@
 name = "Monadic"
 
-srcs = [
-    "../std/core.zy",
-    # "../std/data.zy",
-    # "../std/avl.zy",
+srcs = []
+deps = [
+    { local = "../std/core.toml" }
 ]
-deps = []
 bins = [
     "quote.zy",
     "trans.zy",
-    # "exn.zy",
 ]
 
 std = "NoStd"

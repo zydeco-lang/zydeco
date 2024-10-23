@@ -16,7 +16,7 @@ end
 // call-by-name has lazy semantics.
 
 alias FnInt = Int -> Ret Int end
-def rec' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
+def fix' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
   fn (f : Thunk (Thunk FnInt -> FnInt)) -> (
     // Todo..
     ret { fn x -> ret 3628800 }
@@ -33,7 +33,7 @@ def rec' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
 // The rest is just a test bench.
 main
   # good old factorial
-  let fn fact (f: U(Int -> F Int)) (n: Int): F Int =
+  let ! fact (f: U(Int -> F Int)) (n: Int): F Int =
     do is_zero <- ! int_eq n 0;
     match is_zero
     | +True() -> ret 1
@@ -46,10 +46,10 @@ main
     end
   in
 
-  do fact <- ! rec' fact;
+  do fact <- ! fix' fact;
 
   # tests
-  let fn demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
+  let ! demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
     do x <- ! fact input;
     do correct <- ! int_eq x expected;
     match correct

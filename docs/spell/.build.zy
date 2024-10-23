@@ -1,12 +1,12 @@
 alias GuardResult = Pair String Bool end
 
 // checks if line starts with "// " and remove it
-def fn guard (line : String) : Ret GuardResult =
-  let fn bind (b : Bool) (b~ : Thunk (Ret Bool)) : Ret Bool =
-    ! if @(Ret Bool) b b~ { ret b }
+def ! guard (line : String) : Ret GuardResult =
+  let ! bind (b : Bool) (b~ : Thunk (Ret Bool)) : Ret Bool =
+    ! if (Ret Bool) b b~ { ret b }
   in
   do l <- ! str_length line;
-  let ifp~ = { ! if~ @(Ret GuardResult) } in
+  let ifp~ = { ! if~ (Ret GuardResult) } in
   ! ifp~ { ! int_lt l 3 } {
     ret +Cons(line, false)
   } {
@@ -22,7 +22,7 @@ def fn guard (line : String) : Ret GuardResult =
         do b1 <- ! bind true { ! char_eq c1 '/' };
         do b2 <- ! bind b1 { ! char_eq c2 '/' };
         do b3 <- ! bind b2 { ! char_eq c3 ' ' };
-        ! if @(Ret GuardResult) b3 {
+        ! if (Ret GuardResult) b3 {
           ret +Cons(line', true)
         } {
           ret +Cons(line, false)
@@ -34,13 +34,13 @@ def fn guard (line : String) : Ret GuardResult =
   }
 end
 
-def fn str_empty? (s : String) : Ret Bool =
+def ! str_empty? (s : String) : Ret Bool =
   do l <- ! str_length s;
   ! int_eq l 0
 end
 
 main
-  let rec fn loop (rest : String) (code : Bool) : OS =
+  let fix loop (rest : String) (code : Bool) : OS =
     do p? <- ! str_split_once rest '\n';
     match p?
     | +Some(p) ->
@@ -49,14 +49,14 @@ main
         do p <- ! guard line;
         match p
         | +Cons(res, comment_head) ->
-          ! if~ @(OS) { ! not code } {
+          ! if~ OS { ! not code } {
             // normal mode:
             do empty? <- ! str_empty? res;
-            ! if @(OS) empty? {
+            ! if OS empty? {
               ! write_str "\n\n" {
               ! loop r code }
             } {
-              ! if @(OS) comment_head {
+              ! if OS comment_head {
                 // if starts with "// " then remove it and output the line
                 ! write_str res {
                 ! write_str " " {
@@ -71,11 +71,11 @@ main
           } {
             // code mode:
             do empty? <- ! str_empty? res;
-            ! if @(OS) empty? {
+            ! if OS empty? {
               ! write_str "\n" {
               ! loop r code }
             } {
-              ! if @(OS) comment_head {
+              ! if OS comment_head {
                 // if starts with "// " then output "```", remove, output and switch mode
                 ! write_str "```\n\n" {
                 ! write_str res {

@@ -59,8 +59,8 @@ def some-0~' : Thunk(Ret (Option Int)) = {
 
 // Exercise `data`: implement `foldl` for `List Int`.
 
-def foldl' : Thunk(Thunk (Int -> Int -> Ret Int) -> Int -> List Int -> Ret Int) = {
-  rec foldl' -> fn f -> fn acc -> fn xs -> (
+def foldl'' : Thunk(Thunk (Int -> Int -> Ret Int) -> Int -> List Int -> Ret Int) = {
+  fix foldl'' -> fn f -> fn acc -> fn xs -> (
     // Todo..
     ret 6
   )
@@ -68,12 +68,12 @@ def foldl' : Thunk(Thunk (Int -> Int -> Ret Int) -> Int -> List Int -> Ret Int) 
 
 // Exercise `codata`: implement `foldr` for `LList Int`.
 
-def foldr' : Thunk(
+def foldr'' : Thunk(
   Thunk (Int -> Thunk (Ret Int) -> Ret Int)
   -> Thunk (Ret Int) -> Thunk (LList Int)
   -> Ret Int
 ) = {
-  rec foldr' -> fn f -> fn base -> fn xs -> (
+  fix foldr'' -> fn f -> fn base -> fn xs -> (
     // Todo..
     ret 6
   )
@@ -96,26 +96,26 @@ end
 // get a taste of how parametric polymorphism (template functions in C++) work.
 
 main
-  let fn check_res (x : Int) (y : Int) (s : String) (kont : Thunk OS) : OS =
-    ! if~ @(OS) { ! int_eq x y } {
+  let ! check_res (x : Int) (y : Int) (s : String) (kont : Thunk OS) : OS =
+    ! if~ OS { ! int_eq x y } {
       ! kont
     } {
       do msg <- ! str_append s " is not correct";
       ! write_line msg { ! exit 1 }
     }
   in
-  let fn check (xs : List Int) (kont : Thunk OS) : OS =
-    do x <- ! foldl @(Int) @(Int) xs add 0;
-    do y <- ! foldl' add 0 xs;
-    ! check_res x y "foldl'" kont
+  let ! check (xs : List Int) (kont : Thunk OS) : OS =
+    do x <- ! foldl Int Int xs add 0;
+    do y <- ! foldl'' add 0 xs;
+    ! check_res x y "foldl''" kont
   in
-  let fn check~ (xs : Thunk (LList Int)) (kont : Thunk OS) : OS =
+  let ! check~ (xs : Thunk (LList Int)) (kont : Thunk OS) : OS =
     let add~ : Thunk (Int -> Thunk (Ret Int) -> Ret Int) = {
       fn x y~ -> do y <- ! y~; ! add x y
     } in
-    do x <- ! foldr @(Int) @(Ret Int) xs~ { ret 0 } add~;
-    do y <- ! foldr' add~ { ret 0 } xs~;
-    ! check_res x y "foldr'" kont
+    do x <- ! foldr Int (Ret Int) xs~ { ret 0 } add~;
+    do y <- ! foldr'' add~ { ret 0 } xs~;
+    ! check_res x y "foldr''" kont
   in
   ! check xs {
     ! check~ xs~ {
