@@ -2,6 +2,7 @@ use crate::syntax::*;
 use zydeco_surface::scoped::syntax::ScopedArena;
 use zydeco_utils::arena::ArenaAccess;
 
+pub use zydeco_syntax::Ugly;
 pub struct Formatter<'arena> {
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,

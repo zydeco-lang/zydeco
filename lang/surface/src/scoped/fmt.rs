@@ -1,5 +1,6 @@
 use crate::scoped::syntax::*;
 
+pub use zydeco_syntax::Ugly;
 pub struct Formatter<'arena> {
     // spans: SpanArenaTextual,
     arena: &'arena ScopedArena,

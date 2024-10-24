@@ -1,9 +1,6 @@
 use crate::syntax::*;
 
-pub trait Ugly {
-    fn ugly(&self, f: &Formatter) -> String;
-}
-
+pub use zydeco_syntax::Ugly;
 pub struct Formatter<'arena> {
     arena: &'arena DynamicsArena,
 }
@@ -13,8 +10,8 @@ impl<'arena> Formatter<'arena> {
     }
 }
 
-impl Ugly for Declaration {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for Declaration {
+    fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | Declaration::VAliasBody(VAliasBody { binder, bindee }) => {
                 format!("def {} = {} end", binder.ugly(f), bindee.ugly(f))
@@ -26,15 +23,15 @@ impl Ugly for Declaration {
     }
 }
 
-impl Ugly for DefId {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for DefId {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let VarName(name) = &f.arena.defs[self];
         format!("{}{}", name, self.concise())
     }
 }
 
-impl Ugly for RcVPat {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for RcVPat {
+    fn ugly(&self, f: &'a Formatter) -> String {
         use ValuePattern as VPat;
         match self.as_ref() {
             | VPat::Hole(Hole) => "_".to_string(),
@@ -46,13 +43,13 @@ impl Ugly for RcVPat {
     }
 }
 
-impl Ugly for RcValue {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for RcValue {
+    fn ugly(&self, f: &'a Formatter) -> String {
         self.as_ref().ugly(f)
     }
 }
-impl Ugly for Value {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for Value {
+    fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | Value::Hole(Hole) => "_".to_string(),
             | Value::Var(def) => def.ugly(f),
@@ -72,13 +69,13 @@ impl Ugly for Value {
     }
 }
 
-impl Ugly for RcCompu {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for RcCompu {
+    fn ugly(&self, f: &'a Formatter) -> String {
         self.as_ref().ugly(f)
     }
 }
-impl Ugly for Computation {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for Computation {
+    fn ugly(&self, f: &'a Formatter) -> String {
         use Computation as Compu;
         match self {
             | Compu::Hole(Hole) => "_".to_string(),
@@ -140,8 +137,8 @@ impl Ugly for Computation {
     }
 }
 
-impl Ugly for SemValue {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for SemValue {
+    fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | SemValue::Thunk(v) => format!("{{ {} }}", v.ugly(f)),
             | SemValue::Ctor(v) => v.ugly(f),
@@ -152,8 +149,8 @@ impl Ugly for SemValue {
     }
 }
 
-impl Ugly for SemCompu {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for SemCompu {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         match self {
             | SemCompu::Kont(body, _env, vpat) => {
@@ -176,20 +173,11 @@ impl Ugly for SemCompu {
     }
 }
 
-impl<T> Ugly for Box<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Ctor<T>
 where
-    T: Ugly,
+    T: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
-        self.as_ref().ugly(f)
-    }
-}
-
-impl<T> Ugly for Ctor<T>
-where
-    T: Ugly,
-{
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Ctor(name, args) = self;
         let CtorName(name) = name;
         let args = args.ugly(f);
@@ -197,18 +185,18 @@ where
     }
 }
 
-impl Ugly for Triv {
-    fn ugly(&self, _: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for Triv {
+    fn ugly(&self, _: &'a Formatter) -> String {
         "()".to_string()
     }
 }
 
-impl<A, B> Ugly for Cons<A, B>
+impl<'a, A, B> Ugly<'a, Formatter<'a>> for Cons<A, B>
 where
-    A: Ugly,
-    B: Ugly,
+    A: Ugly<'a, Formatter<'a>>,
+    B: Ugly<'a, Formatter<'a>>,
 {
-    fn ugly(&self, f: &Formatter) -> String {
+    fn ugly(&self, f: &'a Formatter) -> String {
         let Cons(a, b) = self;
         let a = a.ugly(f);
         let b = b.ugly(f);
@@ -216,8 +204,8 @@ where
     }
 }
 
-impl Ugly for EnvThunk {
-    fn ugly(&self, f: &Formatter) -> String {
+impl<'a> Ugly<'a, Formatter<'a>> for EnvThunk {
+    fn ugly(&self, f: &'a Formatter) -> String {
         format!("[..]{{ {} }}", self.body.ugly(f))
     }
 }

@@ -4,7 +4,7 @@ use crate::{
     *,
 };
 use std::collections::HashMap;
-use zydeco_utils::arena::{ArcGlobalAlloc, ArenaAccess, GlobalAlloc};
+use zydeco_utils::arena::{ArcGlobalAlloc, ArenaAccess};
 
 pub struct Tycker {
     pub spans: SpanArena,
@@ -15,14 +15,6 @@ pub struct Tycker {
     pub stack: im::Vector<TyckTask>,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
-}
-
-/// a monadic delimiter for the monadic context and stack
-#[derive(Clone, Debug, PartialEq)]
-pub struct MonadicDelimiter {
-    pub site: su::TermId,
-    pub mo: ss::ValueId,
-    pub mo_ty: ss::TypeId,
 }
 
 // Todo: generalize the administrative guards using "with" pattern
@@ -40,18 +32,6 @@ pub struct MonadicDelimiter {
 // Todo: use hole solution to implement the confluence checker
 
 impl Tycker {
-    pub fn new(
-        spans: SpanArena, prim: PrimDef, scoped: ScopedArena, alloc: &mut GlobalAlloc,
-    ) -> Self {
-        Self {
-            spans,
-            prim,
-            scoped,
-            statics: StaticsArena::new(alloc),
-            stack: im::Vector::new(),
-            errors: Vec::new(),
-        }
-    }
     pub fn new_arc(
         spans: SpanArena, prim: PrimDef, scoped: ScopedArena, alloc: ArcGlobalAlloc,
     ) -> Self {
@@ -96,7 +76,7 @@ impl Tycker {
         // Note: since all types are checked and solved, all holes are filled, no need for recursive filling
         let mut types = Vec::new();
         for (id, ty) in &self.statics.types {
-            types.push((*id, ty.to_owned()));
+            types.push((id.to_owned(), ty.to_owned()));
         }
         for (id, ty) in types {
             use ss::Type as Ty;
@@ -197,7 +177,7 @@ impl<Ann> Action<Ann> {
         Self { switch: Switch::Ana(ann) }
     }
     pub fn switch(switch: Switch<Ann>) -> Self {
-        Action { switch }
+        Self { switch }
     }
 }
 
@@ -251,7 +231,7 @@ impl<'decl> SccDeclarations<'decl> {
                     | Decl::AliasHead(decl) => {
                         {
                             // administrative
-                            tycker.stack.push_back(TyckTask::DeclHead(*id));
+                            tycker.stack.push_back(TyckTask::DeclHead(id.to_owned()));
                         }
                         env = tycker.register_prim_decl(decl, id, env)?;
                         {
@@ -264,13 +244,13 @@ impl<'decl> SccDeclarations<'decl> {
                     | Decl::Exec(decl) => {
                         {
                             // administrative
-                            tycker.stack.push_back(TyckTask::Exec(*id));
+                            tycker.stack.push_back(TyckTask::Exec(id.to_owned()));
                         }
                         let su::Exec(term) = decl;
                         let os = tycker.os(&env.env);
                         let out_ann = env.mk(term).tyck(tycker, Action::ana(os.into()))?;
                         let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
-                        tycker.statics.decls.insert(*id, ss::Exec(body).into());
+                        tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
 
                         // // Debug: print
                         // {
@@ -297,7 +277,7 @@ impl<'decl> SccDeclarations<'decl> {
     ) -> ResultKont<SEnv<()>> {
         {
             // administrative
-            tycker.stack.push_back(TyckTask::DeclUni(*id));
+            tycker.stack.push_back(TyckTask::DeclUni(id.to_owned()));
         }
 
         let su::Declaration::AliasBody(decl) = tycker.scoped.decls[id].clone() else {
@@ -333,14 +313,20 @@ impl<'decl> SccDeclarations<'decl> {
                 let SEnv { env: new_env, inner: () } =
                     env.mk(binder).tyck_assign(tycker, Action::syn(), bindee)?;
                 env.env = new_env;
-                tycker.statics.decls.insert(*id, ss::TAliasBody { binder, bindee }.into());
+                tycker
+                    .statics
+                    .decls
+                    .insert(id.to_owned(), ss::TAliasBody { binder, bindee }.into());
                 env
             }
             | TermAnnId::Value(bindee, ty) => {
                 let binder = env.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
                 let (binder, _) = binder.as_value();
                 // since it's not a value, don't add the type into the environment
-                tycker.statics.decls.insert(*id, ss::VAliasBody { binder, bindee }.into());
+                tycker
+                    .statics
+                    .decls
+                    .insert(id.to_owned(), ss::VAliasBody { binder, bindee }.into());
                 // however, we can consider adding it to inlinables
                 match binder.try_destruct_def(tycker) {
                     | (Some(def), _) => {
@@ -399,7 +385,7 @@ impl<'decl> SccDeclarations<'decl> {
                 ann.try_as_kind(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
             let binder = env.mk(binder).tyck(tycker, Action::ana(kd.into()))?;
             let (binder, _kd) = binder.as_type();
-            binder_map.insert(*id, binder);
+            binder_map.insert(id.to_owned(), binder);
             // register the def with abstract type
             let (def, kd) = binder.try_destruct_def(tycker);
             if let Some(def) = def {
@@ -407,7 +393,7 @@ impl<'decl> SccDeclarations<'decl> {
                 tycker.statics.abst_hints.insert(abst, def);
                 let abst_ty = Alloc::alloc(tycker, abst, kd);
                 env.env += (def, abst_ty.into());
-                abst_map.insert(*id, (abst, kd));
+                abst_map.insert(id.to_owned(), (abst, kd));
             }
         }
         for id in decls {
@@ -1750,6 +1736,35 @@ impl Tyck for SEnv<su::TermId> {
                 );
                 TermAnnId::Compu(bind, bind_ty)
             }
+            | Tm::MoBlock(term) => {
+                let su::MoBlock(body) = term;
+
+                // tyck the body
+                let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
+                let (_body, _body_ty) = body_out_ann.try_as_compu(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+
+                // // lift the body type
+                // let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
+                // let body_ty_lift = match switch {
+                //     | Switch::Syn => body_ty_lift,
+                //     | Switch::Ana(ana) => match ana {
+                //         | AnnId::Set | AnnId::Kind(_) => {
+                //             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                //         }
+                //         | AnnId::Type(ana_ty) => Lub::lub_k(body_ty_lift, ana_ty, tycker)?,
+                //     },
+                // };
+
+                // // lift the body
+                // let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), vec![])?;
+
+                // TermAnnId::Compu(body_lift, body_ty_lift)
+                todo!()
+            }
             | Tm::Data(term) => {
                 let su::Data { arms } = term;
                 let vtype = tycker.vtype(&self.env);
@@ -2013,35 +2028,6 @@ impl Tyck for SEnv<su::TermId> {
                         TermAnnId::Compu(whole, whole_ty)
                     }
                 }
-            }
-            | Tm::MoBlock(term) => {
-                let su::MoBlock(body) = term;
-
-                // tyck the body
-                let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
-                let (_body, _body_ty) = body_out_ann.try_as_compu(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
-
-                // // lift the body type
-                // let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
-                // let body_ty_lift = match switch {
-                //     | Switch::Syn => body_ty_lift,
-                //     | Switch::Ana(ana) => match ana {
-                //         | AnnId::Set | AnnId::Kind(_) => {
-                //             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                //         }
-                //         | AnnId::Type(ana_ty) => Lub::lub_k(body_ty_lift, ana_ty, tycker)?,
-                //     },
-                // };
-
-                // // lift the body
-                // let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), vec![])?;
-
-                // TermAnnId::Compu(body_lift, body_ty_lift)
-                todo!()
             }
             | Tm::Lit(lit) => {
                 fn check_against_ty(

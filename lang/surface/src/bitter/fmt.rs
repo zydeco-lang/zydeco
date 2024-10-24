@@ -1,5 +1,6 @@
 use crate::bitter::syntax::*;
 
+pub use zydeco_syntax::Ugly;
 pub struct Formatter<'arena> {
     // spans: SpanArenaTextual,
     arena: &'arena Arena,

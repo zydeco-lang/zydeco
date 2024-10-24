@@ -19,15 +19,8 @@ pub enum TyckError {
     MissingCoDataArm(DtorName),
     NonExhaustiveCoDataArms(im::HashMap<DtorName, TypeId>),
     Expressivity(&'static str),
-    MultipleMonads,
-    NeitherMonadNorAlgebra(su::TermId, TypeId),
-    MissingMonad,
     NotInlinable(ss::DefId),
     AlgebraGenerationFailure,
-    MonadicContextMismatch {
-        defined: im::Vector<MonadicDelimiter>,
-        current: im::Vector<MonadicDelimiter>,
-    },
 }
 
 #[derive(Clone)]
@@ -82,23 +75,6 @@ impl Tycker {
                 format!("Non-exhaustive data arms: {:?}", arms)
             }
             | TyckError::Expressivity(s) => format!("{}", s),
-            | TyckError::MultipleMonads => format!("Multiple monad implementations"),
-            | TyckError::NeitherMonadNorAlgebra(term, ty) => {
-                let span = self.spans[self.scoped.textual.back(&term.into()).unwrap()].to_owned();
-                format!(
-                    "Neither monad nor algebra: ({} : {}) ({})",
-                    {
-                        use zydeco_surface::scoped::fmt::*;
-                        term.ugly(&Formatter::new(&self.scoped))
-                    },
-                    {
-                        use crate::fmt::*;
-                        ty.ugly(&Formatter::new(&self.scoped, &self.statics))
-                    },
-                    span
-                )
-            }
-            | TyckError::MissingMonad => format!("Missing monad"),
             | TyckError::NotInlinable(def) => {
                 let span = self.spans[self.scoped.textual.back(&def.into()).unwrap()].to_owned();
                 format!(
@@ -112,23 +88,6 @@ impl Tycker {
             }
             | TyckError::AlgebraGenerationFailure => {
                 format!("Cannot generate algebra for this type")
-            }
-            | TyckError::MonadicContextMismatch { defined, current } => {
-                let mut s = String::new();
-                s += &format!("Monadic context mismatch:");
-                s += &format!("\n- defined in monadic context:");
-                for MonadicDelimiter { site: _, mo, mo_ty: _ } in defined {
-                    use crate::fmt::*;
-                    s +=
-                        &format!("\n\t- {}", mo.ugly(&Formatter::new(&self.scoped, &self.statics)));
-                }
-                s += &format!("\n- used in monadic context:");
-                for MonadicDelimiter { site: _, mo, mo_ty: _ } in current {
-                    use crate::fmt::*;
-                    s +=
-                        &format!("\n\t- {}", mo.ugly(&Formatter::new(&self.scoped, &self.statics)));
-                }
-                s
             }
         }
     }
