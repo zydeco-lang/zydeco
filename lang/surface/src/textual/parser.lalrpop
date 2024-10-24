@@ -285,16 +285,6 @@ Term: Term = {
     // "use" <uses:UsePath> "in" <tail:TermId> => UseBind {
     //     uses, tail
     // }.into(),
-    "data" <Data> "end" => <>.into(),
-    "codata" <CoData> "end" => <>.into(),
-    // match
-    "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {
-        scrut, arms
-    }.into(),
-    // comatch
-    "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {
-        arms
-    }.into(),
 };
 
 #[inline]
@@ -349,14 +339,28 @@ TermAtom: Term = {
     <TermParen>,
     <Hole> => <>.into(),
     <NameRef<VarName>> => <>.into(),
+    // thunk & force
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermAtomId> => Force(<>).into(),
+    // ret
     "ret" <TermAtomId> => Ret(<>).into(),
+    // monadic block
     "begin" <TermId> "end" => MoBlock(<>).into(),
+    // structural types
+    "data" <Data> "end" => <>.into(),
+    "codata" <CoData> "end" => <>.into(),
     // constructor
     <name:CtorName> <args:TermAtomId> => {
         Ctor(name, args).into()
     },
+    // match
+    "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {
+        scrut, arms
+    }.into(),
+    // comatch
+    "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {
+        arms
+    }.into(),
     <Literal> => <>.into(),
 };
 
