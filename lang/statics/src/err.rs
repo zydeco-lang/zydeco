@@ -262,39 +262,6 @@ impl Tycker {
                         truncated(ty.ugly(&Formatter::new(&self.scoped, &self.statics)))
                     );
                 }
-                | TyckTask::WithStruct(term) => {
-                    let prev = self.scoped.textual.back(&((*term).into())).unwrap();
-                    s +=
-                        &format!("\t- when tycking with-block structure ({}):\n", self.spans[prev]);
-                    s += &format!(
-                        "\t\t>> {}\n",
-                        truncated(term.ugly(&Formatter::new(&self.scoped))),
-                    );
-                }
-                | TyckTask::WithImport(import) => {
-                    let prev = self.scoped.textual.back(&((import.binder).into())).unwrap();
-                    s += &format!("\t- when tycking with-block import ({}):\n", self.spans[prev]);
-                    s += &format!(
-                        "\t\t>> {}\n",
-                        truncated(import.ugly(&Formatter::new(&self.scoped))),
-                    );
-                }
-                | TyckTask::WithBody(body) => {
-                    let prev = self.scoped.textual.back(&((*body).into())).unwrap();
-                    s += &format!("\t- when tycking with-block body ({}):\n", self.spans[prev]);
-                    s += &format!(
-                        "\t\t>> {}\n",
-                        truncated(body.ugly(&Formatter::new(&self.scoped))),
-                    );
-                }
-                | TyckTask::WithBodyLift(compu) => {
-                    use crate::fmt::*;
-                    s += "\t- when lifting with-block body computation:\n";
-                    s += &format!(
-                        "\t\t>> {}\n",
-                        truncated(compu.ugly(&Formatter::new(&self.scoped, &self.statics)))
-                    );
-                }
             }
         }
         s += &format!("Error: {}\n", self.error_output(error));

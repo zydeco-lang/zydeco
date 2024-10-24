@@ -235,27 +235,6 @@ CoMatcher: CoMatcherParam = {
     },
 };
 
-// Import: Import = {
-//     "import" <binder:PatId> ":" <ty:TermId> "=" <body:TermId> => Import {
-//         binder, ty, body
-//     },
-// };
-// Inline: DefId = {
-//     "inline" <DefId> => <>.into(),
-// };
-// WithBlock: WithBlock = {
-//     <structs:("with" <TermId>)*> <inlines:Inline*> <imports:Import*>
-//     "begin" <body:TermId> "end" => WithBlock {
-//         structs, inlines, imports, body
-//     },
-// };
-MonadicBlock: MBlock = {
-    "use" <mo:TermId> "begin" <body:TermId> "end" => MBlock { mo, body },
-};
-UnquoteBlock: WBlock = {
-    "embed" <alg:TermId> "begin" <body:TermId> "end" => WBlock { alg, body },
-};
-
 #[inline]
 TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
 
@@ -316,10 +295,6 @@ Term: Term = {
     "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {
         arms
     }.into(),
-    // with block
-    // <WithBlock> => <>.into(),
-    <MonadicBlock> => <>.into(),
-    <UnquoteBlock> => <>.into(),
 };
 
 #[inline]
@@ -377,6 +352,7 @@ TermAtom: Term = {
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermAtomId> => Force(<>).into(),
     "ret" <TermAtomId> => Ret(<>).into(),
+    "begin" <TermId> "end" => MoBlock(<>).into(),
     // constructor
     <name:CtorName> <args:TermAtomId> => {
         Ctor(name, args).into()

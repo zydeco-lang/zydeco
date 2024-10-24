@@ -5,8 +5,8 @@ deps = [
     { local = "../std/core.toml" }
 ]
 bins = [
-    "quote.zy",
-    "trans.zy",
+    # "quote.zy",
+    # "trans.zy",
 ]
 
 std = "NoStd"

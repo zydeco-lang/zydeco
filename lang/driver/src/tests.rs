@@ -104,6 +104,6 @@ mod spell {
 }
 
 mod monadic {
-    lib_proj_bin!(monadic, quote, "quote");
-    lib_proj_bin!(monadic, trans, "trans");
+    // lib_proj_bin!(monadic, quote, "quote");
+    // lib_proj_bin!(monadic, trans, "trans");
 }

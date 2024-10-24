@@ -595,6 +595,11 @@ impl Desugar for t::TermId {
             //     let tail = tail.desugar(desugarer)?;
             //     Alloc::alloc(desugarer, b::UseBind { uses, tail }.into(), self.into())
             // }
+            | Tm::MoBlock(term) => {
+                let t::MoBlock(body) = term;
+                let body = body.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::MoBlock(body).into(), self.into())
+            }
             | Tm::Data(data) => (data, self.into()).desugar(desugarer)?,
             | Tm::CoData(codata) => (codata, self.into()).desugar(desugarer)?,
             | Tm::Ctor(term) => {
@@ -654,41 +659,6 @@ impl Desugar for t::TermId {
                 let t::Dtor(term, name) = term;
                 let term = term.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Dtor(term, name).into(), self.into())
-            }
-            | Tm::WithBlock(term) => {
-                let t::WithBlock { structs, inlines, imports, body } = term;
-                let structs = structs.desugar(desugarer)?;
-                let mut inlines_ = Vec::new();
-                for inline in inlines {
-                    let def = inline;
-                    let name = desugarer.lookup_def(inline);
-                    let inline = inline.desugar(desugarer)?;
-                    let term = Alloc::alloc(
-                        desugarer,
-                        b::Term::Var(NameRef(false, vec![], name)),
-                        def.into(),
-                    );
-                    inlines_.push((inline, term))
-                }
-                let imports = imports.desugar(desugarer)?;
-                let body = body.desugar(desugarer)?;
-                Alloc::alloc(
-                    desugarer,
-                    b::WithBlock { structs, inlines: inlines_, imports, body }.into(),
-                    self.into(),
-                )
-            }
-            | Tm::MBlock(term) => {
-                let t::MBlock { mo, body } = term;
-                let mo = mo.desugar(desugarer)?;
-                let body = body.desugar(desugarer)?;
-                Alloc::alloc(desugarer, b::MBlock { mo, body }.into(), self.into())
-            }
-            | Tm::WBlock(term) => {
-                let t::WBlock { alg, body } = term;
-                let alg = alg.desugar(desugarer)?;
-                let body = body.desugar(desugarer)?;
-                Alloc::alloc(desugarer, b::WBlock { alg, body }.into(), self.into())
             }
             | Tm::Lit(term) => Alloc::alloc(desugarer, term.into(), self.into()),
         };
@@ -809,18 +779,6 @@ impl Desugar for (t::CoData, t::EntityId) {
         // codata -> ann
         let ctype = desugarer.ctype(prev);
         let res = Alloc::alloc(desugarer, b::Ann { tm: codata, ty: ctype }.into(), prev);
-        Ok(res)
-    }
-}
-
-impl Desugar for t::Import {
-    type Out = b::Import;
-    fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out> {
-        let t::Import { binder, ty, body } = self;
-        let binder = binder.desugar(desugarer)?;
-        let ty = ty.desugar(desugarer)?;
-        let body = body.desugar(desugarer)?;
-        let res = b::Import { binder, ty, body };
         Ok(res)
     }
 }

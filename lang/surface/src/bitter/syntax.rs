@@ -68,6 +68,10 @@ pub struct Sigma(pub PatId, pub TermId);
 //     pub tail: TermId,
 // }
 
+/// `begin ... end`
+#[derive(Clone, Debug)]
+pub struct MoBlock(pub TermId);
+
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug)]
 pub struct Data {
@@ -88,37 +92,6 @@ pub struct CoData {
 pub struct CoDataArm {
     pub name: DtorName,
     pub out: TermId,
-}
-
-/// `import f : B = V`
-#[derive(Clone, Debug)]
-pub struct Import {
-    pub binder: PatId,
-    pub ty: TermId,
-    pub body: TermId,
-}
-
-/// `with mo inline x import f : B = V begin M end`
-#[derive(Clone, Debug)]
-pub struct WithBlock {
-    pub structs: Vec<TermId>,
-    pub inlines: Vec<(DefId, TermId)>,
-    pub imports: Vec<Import>,
-    pub body: TermId,
-}
-
-/// `with_mo mo begin M end`
-#[derive(Clone, Debug)]
-pub struct MBlock {
-    pub mo: TermId,
-    pub body: TermId,
-}
-
-/// `with_alg alg begin M end`
-#[derive(Clone, Debug)]
-pub struct WBlock {
-    pub alg: TermId,
-    pub body: TermId,
 }
 
 #[derive(From, Clone, Debug)]
@@ -146,15 +119,13 @@ pub enum Term<Ref> {
     Do(Bind<PatId, TermId, TermId>),
     Let(PureBind<PatId, TermId, TermId>),
     // UseLet(UseBind),
+    MoBlock(MoBlock),
     Data(Data),
     CoData(CoData),
     Ctor(Ctor<TermId>),
     Match(Match<TermId, PatId, TermId>),
     CoMatch(CoMatch<TermId>),
     Dtor(Dtor<TermId>),
-    WithBlock(WithBlock),
-    MBlock(MBlock),
-    WBlock(WBlock),
     Lit(Literal),
 }
 

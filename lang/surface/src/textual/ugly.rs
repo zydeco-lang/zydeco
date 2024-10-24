@@ -105,15 +105,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Do(t) => s += &t.ugly(f),
             | Term::Let(t) => s += &t.ugly(f),
             // Term::UseLet(t) => s += &t.ugly(f),
+            | Term::MoBlock(t) => s += &t.ugly(f),
             | Term::Data(t) => s += &t.ugly(f),
             | Term::CoData(t) => s += &t.ugly(f),
             | Term::Ctor(t) => s += &t.ugly(f),
             | Term::Match(t) => s += &t.ugly(f),
             | Term::CoMatch(t) => s += &t.ugly(f),
             | Term::Dtor(t) => s += &t.ugly(f),
-            | Term::WithBlock(t) => s += &t.ugly(f),
-            | Term::MBlock(t) => s += &t.ugly(f),
-            | Term::WBlock(t) => s += &t.ugly(f),
             | Term::Lit(t) => s += &t.ugly(f),
         }
         s
@@ -461,6 +459,17 @@ impl<'a> Ugly<'a, Formatter<'a>> for GenBind<Option<TermId>> {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for MoBlock {
+    fn ugly(&self, f: &'a Formatter<'a>) -> String {
+        let mut s = String::new();
+        let MoBlock(body) = self;
+        s += "begin ";
+        s += &body.ugly(f);
+        s += " end";
+        s
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for Data {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
@@ -525,73 +534,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for CoMatchParam {
             s += " -> ";
             s += &tail.ugly(f);
         }
-        s += " end";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Import {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Import { binder, ty, body } = self;
-        s += "import ";
-        s += &binder.ugly(f);
-        s += " : ";
-        s += &ty.ugly(f);
-        s += " = ";
-        s += &body.ugly(f);
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for WithBlock {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let WithBlock { structs, inlines, imports, body } = self;
-        for struct_ in structs {
-            s += "with ";
-            s += &struct_.ugly(f);
-            s += " ";
-        }
-        for inline in inlines {
-            s += "inline ";
-            s += &inline.ugly(f);
-            s += " ";
-        }
-        for import in imports {
-            s += &import.ugly(f);
-            s += " ";
-        }
-        s += "begin ";
-        s += &body.ugly(f);
-        s += " end";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for MBlock {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let MBlock { mo, body } = self;
-        s += "with_mo ";
-        s += &mo.ugly(f);
-        s += " ";
-        s += "begin ";
-        s += &body.ugly(f);
-        s += " end";
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for WBlock {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let WBlock { alg, body } = self;
-        s += "with_alg ";
-        s += &alg.ugly(f);
-        s += " ";
-        s += "begin ";
-        s += &body.ugly(f);
         s += " end";
         s
     }

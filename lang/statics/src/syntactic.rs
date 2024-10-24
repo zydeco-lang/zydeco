@@ -126,15 +126,13 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::Ret(_)
             | Tm::Do(_)
             | Tm::Let(_)
+            | Tm::MoBlock(_)
             | Tm::Data(_)
             | Tm::CoData(_)
             | Tm::Ctor(_)
             | Tm::Match(_)
             | Tm::CoMatch(_)
             | Tm::Dtor(_)
-            | Tm::WithBlock(_)
-            | Tm::MBlock(_)
-            | Tm::WBlock(_)
             | Tm::Lit(_) => None,
         }
     }
@@ -169,15 +167,13 @@ impl SyntacticallySealed for su::TermId {
             | Tm::Ret(_)
             | Tm::Do(_)
             | Tm::Let(_)
+            | Tm::MoBlock(_)
             | Tm::Data(_)
             | Tm::CoData(_)
             | Tm::Ctor(_)
             | Tm::Match(_)
             | Tm::CoMatch(_)
             | Tm::Dtor(_)
-            | Tm::WithBlock(_)
-            | Tm::MBlock(_)
-            | Tm::WBlock(_)
             | Tm::Lit(_) => None,
         }
     }

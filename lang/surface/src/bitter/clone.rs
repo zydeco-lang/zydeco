@@ -170,6 +170,11 @@ impl DeepClone for b::TermId {
                 let tail = tail.deep_clone(desugarer);
                 b::PureBind { binder, bindee, tail }.into()
             }
+            | b::Term::MoBlock(term) => {
+                let b::MoBlock(body) = term;
+                let body = body.deep_clone(desugarer);
+                b::MoBlock(body).into()
+            }
             | b::Term::Data(term) => {
                 let b::Data { arms } = term;
                 let arms = arms
@@ -230,41 +235,6 @@ impl DeepClone for b::TermId {
                 let term = term.deep_clone(desugarer);
                 let name = name.clone();
                 b::Dtor(term, name).into()
-            }
-            | b::Term::WithBlock(term) => {
-                let b::WithBlock { structs, inlines, imports, body } = term;
-                let structs = structs.deep_clone(desugarer);
-                let inlines = inlines
-                    .into_iter()
-                    .map(|(def, term)| {
-                        let def = def.deep_clone(desugarer);
-                        let term = term.deep_clone(desugarer);
-                        (def, term)
-                    })
-                    .collect();
-                let imports = imports
-                    .into_iter()
-                    .map(|b::Import { binder, ty, body }| {
-                        let binder = binder.clone();
-                        let ty = ty.deep_clone(desugarer);
-                        let body = body.deep_clone(desugarer);
-                        b::Import { binder, ty, body }
-                    })
-                    .collect();
-                let body = body.deep_clone(desugarer);
-                b::WithBlock { structs, inlines, imports, body }.into()
-            }
-            | b::Term::MBlock(term) => {
-                let b::MBlock { mo, body } = term;
-                let mo = mo.deep_clone(desugarer);
-                let body = body.deep_clone(desugarer);
-                b::MBlock { mo, body }.into()
-            }
-            | b::Term::WBlock(term) => {
-                let b::WBlock { alg, body } = term;
-                let alg = alg.deep_clone(desugarer);
-                let body = body.deep_clone(desugarer);
-                b::WBlock { alg, body }.into()
             }
             | b::Term::Lit(term) => term.clone().into(),
         };

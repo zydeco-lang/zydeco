@@ -351,6 +351,11 @@ impl Resolve for TermId {
                 let () = tail.resolve(resolver, (local, global))?;
                 term.into()
             }
+            | Term::MoBlock(term) => {
+                let MoBlock(body) = &term;
+                let () = body.resolve(resolver, (local.clone(), global))?;
+                term.into()
+            }
             | Term::Data(term) => {
                 let Data { arms } = &term;
                 for arm in arms {
@@ -393,41 +398,6 @@ impl Resolve for TermId {
             }
             | Term::Dtor(term) => {
                 let Dtor(body, _dtor) = &term;
-                let () = body.resolve(resolver, (local.clone(), global))?;
-                term.into()
-            }
-            | Term::WithBlock(term) => {
-                let WithBlock { structs, inlines, imports, body } = &term;
-                for struct_ in structs {
-                    let () = struct_.resolve(resolver, (local.clone(), global))?;
-                }
-                for (def, term) in inlines {
-                    let () = term.resolve(resolver, (local.clone(), global))?;
-                    // Hack: should be a pattern
-                    let () = def.resolve(resolver, ())?;
-                    local.var_to_def.insert(resolver.bitter.defs[def].clone(), *def);
-                }
-                for import in imports {
-                    let Import { binder: _, ty, body } = import;
-                    let () = ty.resolve(resolver, (local.clone(), global))?;
-                    let () = body.resolve(resolver, (local.clone(), global))?;
-                }
-                for import in imports {
-                    let Import { binder, ty: _, body: _ } = import;
-                    local = binder.resolve(resolver, (local.clone(), global))?;
-                }
-                let () = body.resolve(resolver, (local, global))?;
-                term.into()
-            }
-            | Term::MBlock(term) => {
-                let MBlock { mo, body } = term;
-                let () = mo.resolve(resolver, (local.clone(), global))?;
-                let () = body.resolve(resolver, (local.clone(), global))?;
-                term.into()
-            }
-            | Term::WBlock(term) => {
-                let WBlock { alg, body } = term;
-                let () = alg.resolve(resolver, (local.clone(), global))?;
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
@@ -668,6 +638,10 @@ impl Collect for TermId {
                 let ctx = binder.collect(collector, ctx)?;
                 let () = tail.collect(collector, ctx)?;
             }
+            | Term::MoBlock(term) => {
+                let MoBlock(body) = term;
+                let () = body.collect(collector, ctx)?;
+            }
             | Term::Data(term) => {
                 let Data { arms } = term;
                 for arm in arms {
@@ -701,35 +675,6 @@ impl Collect for TermId {
             }
             | Term::Dtor(term) => {
                 let Dtor(body, _dtor) = term;
-                let () = body.collect(collector, ctx)?;
-            }
-            | Term::WithBlock(term) => {
-                let mut ctx = ctx.to_owned();
-                let WithBlock { structs, inlines, imports, body } = term;
-                for struct_ in structs {
-                    let () = struct_.collect(collector, ctx.to_owned())?;
-                }
-                for (def, term) in inlines {
-                    let () = term.collect(collector, ctx.to_owned())?;
-                    ctx = def.collect(collector, ctx)?;
-                }
-                for Import { binder: _, ty, body } in &imports {
-                    let () = ty.collect(collector, ctx.to_owned())?;
-                    let () = body.collect(collector, ctx.to_owned())?;
-                }
-                for Import { binder, ty: _, body: _ } in &imports {
-                    ctx = binder.collect(collector, ctx.to_owned())?;
-                }
-                let () = body.collect(collector, ctx)?;
-            }
-            | Term::MBlock(term) => {
-                let MBlock { mo, body } = term;
-                let () = mo.collect(collector, ctx.to_owned())?;
-                let () = body.collect(collector, ctx)?;
-            }
-            | Term::WBlock(term) => {
-                let WBlock { alg, body } = term;
-                let () = alg.collect(collector, ctx.to_owned())?;
                 let () = body.collect(collector, ctx)?;
             }
             | Term::Lit(_lit) => {}

@@ -201,6 +201,10 @@ impl<'a> DocumentSymbolContext<'a> {
                 let tail = self.term(tail);
                 [].into_iter().chain(binder).chain(bindee).chain(tail).collect()
             }
+            | b::Term::MoBlock(t) => {
+                let b::MoBlock(body) = t;
+                self.term(body)
+            }
             | b::Term::Data(t) => {
                 let b::Data { arms } = t;
                 arms.iter().flat_map(|arm| self.term(&arm.param)).collect()
@@ -233,20 +237,6 @@ impl<'a> DocumentSymbolContext<'a> {
                 let b::Dtor(body, _dtorv) = t;
                 let body = self.term(body);
                 [].into_iter().chain(body).collect()
-            }
-            | b::Term::WithBlock(t) => {
-                let _ = t;
-                vec![]
-            }
-            | b::Term::MBlock(t) => {
-                let b::MBlock { mo, body } = t;
-                let mo = self.term(mo);
-                let body = self.term(body);
-                [].into_iter().chain(mo).chain(body).collect()
-            }
-            | b::Term::WBlock(t) => {
-                let _ = t;
-                vec![]
             }
             | b::Term::Lit(t) => {
                 let _ = t;

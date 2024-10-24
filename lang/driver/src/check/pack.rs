@@ -135,6 +135,9 @@ impl PackageScoped {
                     rm(bindee);
                     rm(tail);
                 }
+                | Tm::MoBlock(sc::MoBlock(body)) => {
+                    rm(body);
+                }
                 | Tm::Data(_) => {}
                 | Tm::CoData(_) => {}
                 | Tm::Ctor(sc::Ctor(_ctor, body)) => {
@@ -152,15 +155,6 @@ impl PackageScoped {
                     }
                 }
                 | Tm::Dtor(sc::Dtor(body, _dtor)) => {
-                    rm(body);
-                }
-                | Tm::WithBlock(_) => {}
-                | Tm::MBlock(sc::MBlock { mo, body }) => {
-                    rm(mo);
-                    rm(body);
-                }
-                | Tm::WBlock(sc::WBlock { alg, body }) => {
-                    rm(alg);
                     rm(body);
                 }
                 | Tm::Lit(_) => {}
@@ -311,8 +305,6 @@ impl PackageScoped {
             prim: _,
             scoped,
             statics,
-            mo_ctx: _,
-            mo_stack: _,
             stack: _,
             errors: _,
         } = tycker;

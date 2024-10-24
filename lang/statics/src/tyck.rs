@@ -1,5 +1,5 @@
 use crate::{
-    surface_syntax::{Context, PrimDef, ScopedArena, SpanArena},
+    surface_syntax::{PrimDef, ScopedArena, SpanArena},
     syntax::{AnnId, Env, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
     *,
 };
@@ -11,10 +11,6 @@ pub struct Tycker {
     pub prim: PrimDef,
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
-    /// monadic stack
-    pub mo_stack: im::Vector<MonadicDelimiter>,
-    /// monadic context
-    pub mo_ctx: Context<im::Vector<MonadicDelimiter>>,
     /// call stack for debugging tycker and error tracking
     pub stack: im::Vector<TyckTask>,
     /// a writer monad for error handling
@@ -52,8 +48,6 @@ impl Tycker {
             prim,
             scoped,
             statics: StaticsArena::new(alloc),
-            mo_stack: im::Vector::new(),
-            mo_ctx: Context::new(),
             stack: im::Vector::new(),
             errors: Vec::new(),
         }
@@ -66,8 +60,6 @@ impl Tycker {
             prim,
             scoped,
             statics: StaticsArena::new_arc(alloc),
-            mo_stack: im::Vector::new(),
-            mo_ctx: Context::new(),
             stack: im::Vector::new(),
             errors: Vec::new(),
         }
@@ -191,10 +183,6 @@ pub enum TyckTask {
     Lub(AnnId, AnnId),
     Lift(ss::TermId),
     Algebra(ss::AnnId),
-    WithStruct(su::TermId),
-    WithImport(su::Import),
-    WithBody(su::TermId),
-    WithBodyLift(ss::CompuId),
 }
 
 pub struct Action<Ann> {
@@ -536,9 +524,6 @@ impl Tyck for SEnv<su::PatId> {
                     tycker.statics.annotations_var.replace(def, ann);
                 }
 
-                // add the var into the monadic context
-                tycker.mo_ctx += (def, tycker.mo_stack.clone());
-
                 PatAnnId::mk_var(tycker, def, ann)
             }
             | Pat::Ctor(pat) => match switch {
@@ -839,23 +824,6 @@ impl Tyck for SEnv<su::TermId> {
                 }
             }
             | Tm::Var(def) => {
-                // Todo: check if def is defined in the same monadic context
-                if let Some(_def_mo_ctx) = tycker.mo_ctx.get(&def) {
-                    // if def_mo_ctx != &tycker.mo_stack {
-                    //     tycker.err_k(
-                    //         TyckError::MonadicContextMismatch {
-                    //             defined: def_mo_ctx.clone(),
-                    //             current: tycker.mo_stack.clone(),
-                    //         },
-                    //         std::panic::Location::caller(),
-                    //     )?
-                    // }
-                } else {
-                    // use zydeco_surface::scoped::fmt::*;
-                    // println!("{}", def.ugly(&Formatter::new(&tycker.scoped)));
-                    // panic!()
-                }
-
                 let ann = {
                     match switch {
                         | Switch::Syn => tycker.statics.annotations_var[&def],
@@ -2046,319 +2014,33 @@ impl Tyck for SEnv<su::TermId> {
                     }
                 }
             }
-            | Tm::WithBlock(term) => {
-                let su::WithBlock { structs, inlines, imports, body } = term;
-
-                // first we collect all the monad and algebra instances given
-                let mut mo = None;
-                let mut algs = Vec::new();
-                for struct_ in structs {
-                    {
-                        // administrative
-                        tycker.stack.push_back(TyckTask::WithStruct(struct_));
-                    }
-                    let struct_out_ann = self.mk(struct_).tyck(tycker, Action::syn())?;
-                    let (val, ty) = struct_out_ann.try_as_value(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
-                    use prims::MonadOrAlgebra::*;
-                    match tycker.monad_or_algebra(&self.env, ty) {
-                        | Some(Monad(m)) => {
-                            if mo.is_some() {
-                                tycker.err_k(
-                                    TyckError::MultipleMonads,
-                                    std::panic::Location::caller(),
-                                )?
-                            }
-                            mo = Some((val, m));
-                        }
-                        | Some(Algebra(m, c)) => {
-                            algs.push((val, m, c));
-                        }
-                        | None => tycker.err_k(
-                            TyckError::NeitherMonadNorAlgebra(struct_, ty),
-                            std::panic::Location::caller(),
-                        )?,
-                    }
-                    {
-                        // administrative
-                        tycker.stack.pop_back();
-                    }
-                }
-                let (mo, mo_ty) = match mo {
-                    | Some(moo) => moo,
-                    | None => {
-                        tycker.err_k(TyckError::MissingMonad, std::panic::Location::caller())?
-                    }
-                };
-                // // Debug: print
-                // {
-                //     use crate::fmt::*;
-                //     println!("monad {} : Monad {}", mo.ugly(
-                //         &Formatter::new(&tycker.scoped, &tycker.statics)
-                //     ), mo_ty.ugly(
-                //         &Formatter::new(&tycker.scoped, &tycker.statics)
-                //     ));
-                // }
-                for (alg, alg_ty_mo_arg, alg_ty_carrier_arg) in &algs {
-                    // check monad_arg type
-                    Lub::lub_k(mo_ty, *alg_ty_mo_arg, tycker)?;
-                    let _ = alg;
-                    let _ = alg_ty_carrier_arg;
-                    // println!(
-                    //     "algebra {:?} : Algebra {:?} {:?}",
-                    //     alg, alg_ty_mo_arg, alg_ty_carrier_arg
-                    // );
-                }
-                let algs = algs.into_iter().map(|(alg, _, _)| (alg)).collect();
-
-                // then we deal with the inlines
-                let mut inline_subs = Vec::new();
-                for (def, term) in inlines {
-                    let term_out_ann = self.mk(term).tyck(tycker, Action::syn())?;
-                    let (val, ty) = term_out_ann.try_as_value(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
-                    let ss::Value::Var(rdef) = tycker.statics.values[&val].to_owned() else {
-                        unreachable!()
-                    };
-                    let Some(val) = tycker.statics.inlinables.get(&rdef).cloned() else {
-                        tycker
-                            .err_k(TyckError::NotInlinable(def), std::panic::Location::caller())?
-                    };
-                    let ann = ty.into();
-                    if let Some(ann_) = tycker.statics.annotations_var.insert_or_get(def, ann) {
-                        let ann = Lub::lub_k(ann_, ann, tycker)?;
-                        tycker.statics.annotations_var.replace(def, ann);
-                    }
-                    inline_subs.push((def, val));
-                }
-
-                // then we deal with the imports
-                // let mut imports_ = Vec::new();
-                let mut import_subs = Vec::new();
-                for su::Import { binder, ty, body } in imports {
-                    {
-                        // administrative
-                        tycker.stack.push_back(TyckTask::WithImport(su::Import {
-                            binder,
-                            ty,
-                            body,
-                        }));
-                    }
-                    let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
-                    let (body, body_ty) = body_out_ann.try_as_value(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
-                    let ty_out_ann = self.mk(ty).tyck(tycker, Action::syn())?;
-                    let (ty, kd) = ty_out_ann.try_as_type(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
-                    // kind must be vtype
-                    let vtype = tycker.vtype(&self.env);
-                    Lub::lub_k(vtype, kd, tycker)?;
-                    // check that ty and body_ty are compatible
-                    let ty_lift = self.mk(ty).lift(tycker, mo_ty)?;
-                    Lub::lub_k(ty_lift, body_ty, tycker)?;
-                    let binder_out_ann = self.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
-                    let (binder, _ty) = binder_out_ann.try_as_value(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?;
-                    // // Debug: print
-                    // {
-                    //     use crate::fmt::*;
-                    //     println!(
-                    //         "import {} : {} = {} : {}",
-                    //         binder.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                    //         ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                    //         body.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                    //         body_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                    //     );
-                    // }
-                    // imports_.push(ss::Import { binder, ty, body });
-                    import_subs.push((binder, body));
-                    {
-                        // administrative
-                        tycker.stack.pop_back();
-                    }
-                }
-
-                // then we tyck the body
-                {
-                    // administrative
-                    tycker.stack.push_back(TyckTask::WithBody(body));
-                }
-                let (body, body_ty) = self.mk(body).tyck(tycker, Action::syn())?.try_as_compu(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
-                // .. and solve the body_ty so that we don't have holes
-                let (body_ty, fills) = body_ty.solution_k(tycker)?;
-                if fills.len() > 0 {
-                    tycker
-                        .err_k(TyckError::MissingSolution(fills), std::panic::Location::caller())?
-                }
-                {
-                    // administrative
-                    tycker.stack.pop_back();
-                }
-
-                // // Debug: print
-                // {
-                //     use crate::fmt::*;
-                //     println!(
-                //         "body = {} : {}",
-                //         body.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                //         body_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                //     );
-                // }
-
-                // and then lift it, performing algebra translation on type level
-                {
-                    // administrative
-                    tycker.stack.push_back(TyckTask::WithBodyLift(body));
-                }
-                let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
-                let body_ty_lift = match switch {
-                    | Switch::Syn => body_ty_lift,
-                    | Switch::Ana(ana) => match ana {
-                        | AnnId::Set | AnnId::Kind(_) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                        | AnnId::Type(ana_ty) => Lub::lub_k(body_ty_lift, ana_ty, tycker)?,
-                    },
-                };
-
-                // perform inlining
-                for (def, bindee) in inline_subs {
-                    let users = tycker.scoped.users[&def].to_owned();
-                    for user in users {
-                        let val = tycker.statics.values[&bindee].to_owned();
-                        let user = match tycker.statics.terms.forth(&user).to_owned() {
-                            | ss::TermId::Value(user) => user,
-                            | ss::TermId::Kind(_) | ss::TermId::Type(_) | ss::TermId::Compu(_) => {
-                                unreachable!()
-                            }
-                        };
-                        let Some(user) = tycker.statics.values.get_mut(&user) else {
-                            unreachable!()
-                        };
-                        *user = val;
-                    }
-                }
-
-                // then the key part, perform algebra translation on term level
-                let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), algs)?;
-                {
-                    // administrative
-                    tycker.stack.pop_back();
-                }
-
-                // finally, perform import inlining
-                for (binder, bindee) in import_subs {
-                    use ss::ValuePattern as VPat;
-                    let def = match tycker.statics.vpats[&binder].to_owned() {
-                        | VPat::Var(def) => def,
-                        | VPat::Hole(_)
-                        | VPat::Ctor(_)
-                        | VPat::Triv(_)
-                        | VPat::VCons(_)
-                        | VPat::TCons(_) => unreachable!(),
-                    };
-                    let users = tycker.scoped.users[&def].to_owned();
-                    for user in users {
-                        let body = tycker.statics.values[&bindee].to_owned();
-                        let user = match tycker.statics.terms.forth(&user).to_owned() {
-                            | ss::TermId::Value(user) => user,
-                            | ss::TermId::Kind(_) | ss::TermId::Type(_) | ss::TermId::Compu(_) => {
-                                unreachable!()
-                            }
-                        };
-                        let Some(user) = tycker.statics.values.get_mut(&user) else {
-                            unreachable!()
-                        };
-                        *user = body;
-                    }
-                }
-
-                TermAnnId::Compu(body_lift, body_ty_lift)
-            }
-            | Tm::MBlock(term) => {
-                let su::MBlock { mo, body } = term;
-
-                // tyck the monad instance
-                let mo_out_ann = self.mk(mo).tyck(tycker, Action::syn())?;
-                let (mo, mo_ty) = mo_out_ann.try_as_value(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
-
-                // mo_ty should be the type that implements monad
-                let mo_ty = match tycker.monad_or_algebra(&self.env, mo_ty) {
-                    | Some(MonadOrAlgebra::Monad(mo_ty)) => mo_ty,
-                    | _ => tycker.err_k(TyckError::MissingMonad, std::panic::Location::caller())?,
-                };
-
-                // add the monad instance to the stack
-                tycker.mo_stack.push_back(MonadicDelimiter { site: self.inner, mo, mo_ty });
+            | Tm::MoBlock(term) => {
+                let su::MoBlock(body) = term;
 
                 // tyck the body
                 let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
-                let (body, body_ty) = body_out_ann.try_as_compu(
+                let (_body, _body_ty) = body_out_ann.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
 
-                // remove the monad instance from the stack
-                tycker.mo_stack.pop_back();
-
-                // lift the body type
-                let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
-                let body_ty_lift = match switch {
-                    | Switch::Syn => body_ty_lift,
-                    | Switch::Ana(ana) => match ana {
-                        | AnnId::Set | AnnId::Kind(_) => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        }
-                        | AnnId::Type(ana_ty) => Lub::lub_k(body_ty_lift, ana_ty, tycker)?,
-                    },
-                };
-
-                // lift the body
-                let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), vec![])?;
-
-                TermAnnId::Compu(body_lift, body_ty_lift)
-            }
-            | Tm::WBlock(_term) => {
-                // let su::WBlock { alg, body } = term;
-
-                // // tyck the algebra instance
-                // let alg_out_ann = self.mk(alg).tyck(tycker, Action::syn())?;
-                // let (alg, alg_ty) = alg_out_ann.try_as_value(
-                //     tycker,
-                //     TyckError::SortMismatch,
-                //     std::panic::Location::caller(),
-                // )?;
-
-                // // get mo_ty and carrier_ty
-                // let (mo_ty, carrier_ty) = match tycker.monad_or_algebra(&self.env, alg_ty) {
-                //     | Some(MonadOrAlgebra::Algebra(mo_ty, carrier_ty)) => (mo_ty, carrier_ty),
-                //     | _ => tycker.err_k(TyckError::MissingMonad, std::panic::Location::caller())?,
+                // // lift the body type
+                // let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
+                // let body_ty_lift = match switch {
+                //     | Switch::Syn => body_ty_lift,
+                //     | Switch::Ana(ana) => match ana {
+                //         | AnnId::Set | AnnId::Kind(_) => {
+                //             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                //         }
+                //         | AnnId::Type(ana_ty) => Lub::lub_k(body_ty_lift, ana_ty, tycker)?,
+                //     },
                 // };
 
+                // // lift the body
+                // let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), vec![])?;
+
+                // TermAnnId::Compu(body_lift, body_ty_lift)
                 todo!()
             }
             | Tm::Lit(lit) => {
