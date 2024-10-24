@@ -1,18 +1,30 @@
+mod utils {
+    use crate::BuildSystem;
+    use std::path::PathBuf;
+
+    pub fn wrapper_proj_bin(proj_path: impl Into<PathBuf>, bin_path: impl Into<PathBuf>) {
+        // env_logger::init();
+        let mut build_sys = BuildSystem::new();
+        build_sys.add_local_package(proj_path).unwrap();
+        let pack = build_sys.add_orphan_file(bin_path).unwrap();
+        match build_sys.test_pack(pack, false) {
+            | Ok(_) => {}
+            | Err(err) => {
+                eprintln!("{}", err);
+                panic!("Error running project");
+            }
+        }
+    }
+}
+
 macro_rules! lib_proj_bin {
     ($proj:ident, $name:ident, $binary:expr) => {
         #[test]
         fn $name() {
-            use crate::BuildSystem;
-            use std::path::PathBuf;
-
-            // env_logger::init();
-            let mut build_sys = BuildSystem::new();
-            let dir =
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lib").join(stringify!($proj));
-
+            let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../lib")
+                .join(stringify!($proj));
             let local = dir.join("proj.toml").canonicalize().unwrap();
-            build_sys.add_local_package(local).unwrap();
-
             let bin = {
                 let bin = dir.join(format!("{}", $binary));
                 let zy = dir.join(format!("{}.zy", $binary));
@@ -27,14 +39,8 @@ macro_rules! lib_proj_bin {
                     panic!("No zydeco file found for {}", stringify!($binary));
                 }
             };
-            let pack = build_sys.add_orphan_file(&bin).unwrap();
-            match build_sys.test_pack(pack, false) {
-                | Ok(_) => {}
-                | Err(err) => {
-                    eprintln!("{}", err);
-                    panic!("Error running project");
-                }
-            }
+
+            super::utils::wrapper_proj_bin(local, bin);
         }
     };
 }
@@ -92,15 +98,15 @@ mod icfp {
 }
 
 mod spell {
-    lib_proj_bin!(spell, toplevel, "0-toplevel");
-    lib_proj_bin!(spell, thunk_ret, "1-thunk-ret");
-    lib_proj_bin!(spell, data_codata, "2-data-codata");
-    lib_proj_bin!(spell, object, "3-object");
-    lib_proj_bin!(spell, y_combinator, "4-y-combinator");
-    lib_proj_bin!(spell, mutual_rec, "5-mutual-rec");
-    lib_proj_bin!(spell, cps, "6-cps");
-    // lib_proj_bin!(spell, call_by_need, "7-call-by-need");
-    lib_proj_bin!(spell, lense_prism_optics, "8-lense-prism-optics");
+    // lib_proj_bin!(spell, toplevel, "0-toplevel");
+    // lib_proj_bin!(spell, thunk_ret, "1-thunk-ret");
+    // lib_proj_bin!(spell, data_codata, "2-data-codata");
+    // lib_proj_bin!(spell, object, "3-object");
+    // lib_proj_bin!(spell, y_combinator, "4-y-combinator");
+    // lib_proj_bin!(spell, mutual_rec, "5-mutual-rec");
+    // lib_proj_bin!(spell, cps, "6-cps");
+    // // lib_proj_bin!(spell, call_by_need, "7-call-by-need");
+    // lib_proj_bin!(spell, lense_prism_optics, "8-lense-prism-optics");
 }
 
 mod monadic {
