@@ -186,11 +186,6 @@ impl Tycker {
     }
 }
 
-pub enum MonadOrAlgebra {
-    Monad(TypeId),
-    Algebra(TypeId, TypeId),
-}
-
 pub enum Structure {
     Top,
     Algebra(TypeId, TypeId),
@@ -198,55 +193,55 @@ pub enum Structure {
 }
 
 impl Tycker {
-    /// If ty is `Thunk (Monad M)` or `Thunk (Algebra M R)`, returns `Some(Monad(M))` or `Some(Algebra(M, R))` respectively.
-    pub fn monad_or_algebra(&self, env: &Env<AnnId>, ty: TypeId) -> Option<MonadOrAlgebra> {
-        let ty = match self.statics.types.get(&ty)? {
-            | Type::App(ty) => {
-                let App(head, body) = ty;
-                match self.statics.types.get(&head).clone()? {
-                    | Type::Thunk(_) => {}
-                    | _ => None?,
-                }
-                body
-            }
-            | _ => None?,
-        };
-        match self.statics.types.get(&ty)? {
-            | Type::App(App(head, ty_1)) => match self.statics.types.get(&head).clone()? {
-                | Type::Abst(mo) => {
-                    // check if mo is monad
-                    let AnnId::Type(id) = env[self.prim.monad.get()] else { unreachable!() };
-                    let Type::Abst(mo_real) = self.statics.types.get(&id).clone()? else {
-                        unreachable!()
-                    };
-                    if mo == mo_real {
-                        Some(MonadOrAlgebra::Monad(*ty_1))
-                    } else {
-                        None
-                    }
-                }
-                | Type::App(App(head, ty_0)) => {
-                    match self.statics.types.get(&head).clone()? {
-                        | Type::Abst(alg) => {
-                            // check if alg is algebra
-                            let AnnId::Type(id) = env[self.prim.algebra.get()] else {
-                                unreachable!()
-                            };
-                            let Type::Abst(alg_real) = self.statics.types.get(&id).clone()? else {
-                                unreachable!()
-                            };
-                            if alg == alg_real {
-                                Some(MonadOrAlgebra::Algebra(*ty_0, *ty_1))
-                            } else {
-                                None
-                            }
-                        }
-                        | _ => None,
-                    }
-                }
-                | _ => None,
-            },
-            | _ => None,
-        }
-    }
+    // /// If ty is `Thunk (Monad M)` or `Thunk (Algebra M R)`, returns `Some(Monad(M))` or `Some(Algebra(M, R))` respectively.
+    // pub fn monad_or_algebra(&self, env: &Env<AnnId>, ty: TypeId) -> Option<MonadOrAlgebra> {
+    //     let ty = match self.statics.types.get(&ty)? {
+    //         | Type::App(ty) => {
+    //             let App(head, body) = ty;
+    //             match self.statics.types.get(&head).clone()? {
+    //                 | Type::Thunk(_) => {}
+    //                 | _ => None?,
+    //             }
+    //             body
+    //         }
+    //         | _ => None?,
+    //     };
+    //     match self.statics.types.get(&ty)? {
+    //         | Type::App(App(head, ty_1)) => match self.statics.types.get(&head).clone()? {
+    //             | Type::Abst(mo) => {
+    //                 // check if mo is monad
+    //                 let AnnId::Type(id) = env[self.prim.monad.get()] else { unreachable!() };
+    //                 let Type::Abst(mo_real) = self.statics.types.get(&id).clone()? else {
+    //                     unreachable!()
+    //                 };
+    //                 if mo == mo_real {
+    //                     Some(MonadOrAlgebra::Monad(*ty_1))
+    //                 } else {
+    //                     None
+    //                 }
+    //             }
+    //             | Type::App(App(head, ty_0)) => {
+    //                 match self.statics.types.get(&head).clone()? {
+    //                     | Type::Abst(alg) => {
+    //                         // check if alg is algebra
+    //                         let AnnId::Type(id) = env[self.prim.algebra.get()] else {
+    //                             unreachable!()
+    //                         };
+    //                         let Type::Abst(alg_real) = self.statics.types.get(&id).clone()? else {
+    //                             unreachable!()
+    //                         };
+    //                         if alg == alg_real {
+    //                             Some(MonadOrAlgebra::Algebra(*ty_0, *ty_1))
+    //                         } else {
+    //                             None
+    //                         }
+    //                     }
+    //                     | _ => None,
+    //                 }
+    //             }
+    //             | _ => None,
+    //         },
+    //         | _ => None,
+    //     }
+    // }
 }

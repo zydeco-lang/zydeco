@@ -36,7 +36,7 @@ macro_rules! lib_proj_bin {
                 } else if zydeco.exists() {
                     zydeco
                 } else {
-                    panic!("No zydeco file found for {}", stringify!($binary));
+                    panic!("No zydeco file found for {}", $binary);
                 }
             };
 
