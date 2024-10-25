@@ -85,23 +85,6 @@ impl TypeId {
         };
         Ok(res)
     }
-    pub fn destruct_top(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<()> {
-        let res = match tycker.statics.types.get(self)?.to_owned() {
-            | Type::Abst(abst) => {
-                let AnnId::Type(id) = env[tycker.prim.top.get()] else { unreachable!() };
-                let Type::Abst(top_real) = tycker.statics.types[&id].to_owned() else {
-                    unreachable!()
-                };
-                if abst == top_real {
-                    ()
-                } else {
-                    None?
-                }
-            }
-            | _ => None?,
-        };
-        Some(res)
-    }
     pub fn destruct_thk_app(&self, tycker: &mut Tycker) -> Option<TypeId> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         let res = match tycker.statics.types[&f_ty].to_owned() {
@@ -153,30 +136,23 @@ impl TypeId {
         };
         Some(res)
     }
+    pub fn destruct_top(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<()> {
+        let structure = self.destruct_signature(env, tycker)?;
+        match structure {
+            | Signature::Top => Some(()),
+            | _ => None,
+        }
+    }
     pub fn destruct_algebra(
         &self, env: &Env<AnnId>, tycker: &mut Tycker,
     ) -> Option<(TypeId, TypeId)> {
-        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
-        if a_tys.len() != 2 {
-            None?;
+        let structure = self.destruct_signature(env, tycker)?;
+        match structure {
+            | Signature::Algebra(mo_ty, carrier_ty) => Some((mo_ty, carrier_ty)),
+            | _ => None,
         }
-        let res = match tycker.statics.types[&f_ty].to_owned() {
-            | Type::Abst(abst) => {
-                let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
-                let Type::Abst(alg_real) = tycker.statics.types.get(&id).cloned()? else {
-                    unreachable!()
-                };
-                if abst != alg_real {
-                    None?;
-                }
-                let mut iter = a_tys.into_iter();
-                (iter.next()?, iter.next()?)
-            }
-            | _ => None?,
-        };
-        Some(res)
     }
-    pub fn destruct_structure(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<Structure> {
+    pub fn destruct_signature(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<Signature> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         let res = 'out: {
             match tycker.statics.types[&f_ty].to_owned() {
@@ -192,14 +168,15 @@ impl TypeId {
 
                     if abst == top_real {
                         assert!(a_tys.is_empty());
-                        break 'out Structure::Top;
+                        break 'out Signature::Top;
                     }
 
                     if abst == alg_real {
+                        assert!(a_tys.len() == 2);
                         let mut iter = a_tys.into_iter();
                         let mo_ty = iter.next()?;
                         let carrier_ty = iter.next()?;
-                        break 'out Structure::Algebra(mo_ty, carrier_ty);
+                        break 'out Signature::Algebra(mo_ty, carrier_ty);
                     }
 
                     None?
