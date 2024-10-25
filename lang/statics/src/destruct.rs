@@ -136,56 +136,56 @@ impl TypeId {
         };
         Some(res)
     }
-    pub fn destruct_top(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<()> {
-        let structure = self.destruct_signature(env, tycker)?;
-        match structure {
-            | Signature::Top => Some(()),
-            | _ => None,
-        }
-    }
-    pub fn destruct_algebra(
-        &self, env: &Env<AnnId>, tycker: &mut Tycker,
-    ) -> Option<(TypeId, TypeId)> {
-        let structure = self.destruct_signature(env, tycker)?;
-        match structure {
-            | Signature::Algebra(mo_ty, carrier_ty) => Some((mo_ty, carrier_ty)),
-            | _ => None,
-        }
-    }
-    pub fn destruct_signature(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<Signature> {
-        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
-        let res = 'out: {
-            match tycker.statics.types[&f_ty].to_owned() {
-                | Type::Abst(abst) => {
-                    let AnnId::Type(id) = env[tycker.prim.top.get()] else { unreachable!() };
-                    let Type::Abst(top_real) = tycker.statics.types.get(&id).cloned()? else {
-                        unreachable!()
-                    };
-                    let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
-                    let Type::Abst(alg_real) = tycker.statics.types.get(&id).cloned()? else {
-                        unreachable!()
-                    };
+    // pub fn destruct_top(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<()> {
+    //     let structure = self.destruct_signature(env, tycker)?;
+    //     match structure {
+    //         | Signature::Top => Some(()),
+    //         | _ => None,
+    //     }
+    // }
+    // pub fn destruct_algebra(
+    //     &self, env: &Env<AnnId>, tycker: &mut Tycker,
+    // ) -> Option<(TypeId, TypeId)> {
+    //     let structure = self.destruct_signature(env, tycker)?;
+    //     match structure {
+    //         | Signature::Algebra(mo_ty, carrier_ty) => Some((mo_ty, carrier_ty)),
+    //         | _ => None,
+    //     }
+    // }
+    // pub fn destruct_signature(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<Signature> {
+    //     let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
+    //     let res = 'out: {
+    //         match tycker.statics.types[&f_ty].to_owned() {
+    //             | Type::Abst(abst) => {
+    //                 let AnnId::Type(id) = env[tycker.prim.top.get()] else { unreachable!() };
+    //                 let Type::Abst(top_real) = tycker.statics.types.get(&id).cloned()? else {
+    //                     unreachable!()
+    //                 };
+    //                 let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
+    //                 let Type::Abst(alg_real) = tycker.statics.types.get(&id).cloned()? else {
+    //                     unreachable!()
+    //                 };
 
-                    if abst == top_real {
-                        assert!(a_tys.is_empty());
-                        break 'out Signature::Top;
-                    }
+    //                 if abst == top_real {
+    //                     assert!(a_tys.is_empty());
+    //                     break 'out Signature::Top;
+    //                 }
 
-                    if abst == alg_real {
-                        assert!(a_tys.len() == 2);
-                        let mut iter = a_tys.into_iter();
-                        let mo_ty = iter.next()?;
-                        let carrier_ty = iter.next()?;
-                        break 'out Signature::Algebra(mo_ty, carrier_ty);
-                    }
+    //                 if abst == alg_real {
+    //                     assert!(a_tys.len() == 2);
+    //                     let mut iter = a_tys.into_iter();
+    //                     let mo_ty = iter.next()?;
+    //                     let carrier_ty = iter.next()?;
+    //                     break 'out Signature::Algebra(mo_ty, carrier_ty);
+    //                 }
 
-                    None?
-                }
-                | _ => None?,
-            }
-        };
-        Some(res)
-    }
+    //                 None?
+    //             }
+    //             | _ => None?,
+    //         }
+    //     };
+    //     Some(res)
+    // }
 }
 
 impl VPatId {

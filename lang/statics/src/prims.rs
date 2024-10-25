@@ -186,8 +186,8 @@ impl Tycker {
     }
 }
 
-pub enum Signature {
-    Top,
-    Algebra(TypeId, TypeId),
-    Arrow(Box<Signature>, Box<Signature>),
-}
+// pub enum Signature {
+//     Top,
+//     Algebra(TypeId, TypeId),
+//     Arrow(Box<Signature>, Box<Signature>),
+// }
