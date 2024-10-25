@@ -120,16 +120,11 @@ impl SEnv<TypeId> {
     /// 1. replacing `Ret`s with some `T` as the monad type
     /// 2. algebra passing style for higher order contravariant types like forall and exists quantifiers
     pub fn lift(&self, tycker: &mut Tycker, mo_ty: TypeId) -> ResultKont<TypeId> {
-        // administrative
-        {
-            tycker.stack.push_back(TyckTask::Lift(self.inner.into()))
-        }
-        let res = self.lift_inner(tycker, mo_ty);
-        // administrative
-        {
-            tycker.stack.pop_back();
-        }
-        res
+        tycker.guarded(|tycker| {
+            // administrative
+            tycker.stack.push_back(TyckTask::Lift(self.inner.into()));
+            self.lift_inner(tycker, mo_ty)
+        })
     }
     pub fn lift_inner(&self, tycker: &mut Tycker, mo_ty: TypeId) -> ResultKont<TypeId> {
         let ann = tycker.statics.annotations_type[&self.inner];
@@ -245,16 +240,11 @@ impl SEnv<TypeId> {
     pub fn algebra(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
     ) -> ResultKont<CompuId> {
-        // administrative
-        {
-            tycker.stack.push_back(TyckTask::Algebra(self.inner.into()))
-        }
-        let res = self.algebra_inner(tycker, (mo, mo_ty), algs);
-        // administrative
-        {
-            tycker.stack.pop_back();
-        }
-        res
+        tycker.guarded(|tycker| {
+            // administrative
+            tycker.stack.push_back(TyckTask::Algebra(self.inner.into()));
+            self.algebra_inner(tycker, (mo, mo_ty), algs)
+        })
     }
 
     fn algebra_inner(
@@ -685,16 +675,11 @@ impl SEnv<ValueId> {
     pub fn lift(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
     ) -> ResultKont<ValueId> {
-        // administrative
-        {
-            tycker.stack.push_back(TyckTask::Lift(self.inner.into()))
-        }
-        let res = self.lift_inner(tycker, (mo, mo_ty), algs);
-        // administrative
-        {
-            tycker.stack.pop_back();
-        }
-        res
+        tycker.guarded(|tycker| {
+            // administrative
+            tycker.stack.push_back(TyckTask::Lift(self.inner.into()));
+            self.lift_inner(tycker, (mo, mo_ty), algs)
+        })
     }
     pub fn lift_inner(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
@@ -757,16 +742,11 @@ impl SEnv<CompuId> {
     pub fn lift(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,
     ) -> ResultKont<CompuId> {
-        {
+        tycker.guarded(|tycker| {
             // administrative
-            tycker.stack.push_back(TyckTask::Lift(self.inner.into()))
-        }
-        let res = self.lift_inner(tycker, (mo, mo_ty), algs);
-        {
-            // administrative
-            tycker.stack.pop_back();
-        }
-        res
+            tycker.stack.push_back(TyckTask::Lift(self.inner.into()));
+            self.lift_inner(tycker, (mo, mo_ty), algs)
+        })
     }
     pub fn lift_inner(
         &self, tycker: &mut Tycker, (mo, mo_ty): (ValueId, TypeId), algs: Vec<ValueId>,

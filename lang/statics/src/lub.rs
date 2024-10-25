@@ -18,16 +18,11 @@ impl Lub for KindId {
     type Out = KindId;
 
     fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
-        {
+        tycker.guarded(|tycker| {
             // administrative
             tycker.stack.push_back(TyckTask::Lub(self.into(), other.into()));
-        }
-        let res = self.lub_inner(other, tycker);
-        {
-            // administrative
-            tycker.stack.pop_back();
-        }
-        res
+            self.lub_inner(other, tycker)
+        })
     }
     fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         let lhs = tycker.statics.kinds[&self].clone();
@@ -120,16 +115,11 @@ impl Debruijn {
         self.rhs.get(&rhs.into()).cloned()
     }
     fn lub(self, lhs_id: TypeId, rhs_id: TypeId, tycker: &mut Tycker) -> Result<TypeId> {
-        {
+        tycker.guarded(|tycker| {
             // administrative
             tycker.stack.push_back(TyckTask::Lub(lhs_id.into(), rhs_id.into()));
-        }
-        let res = self.lub_inner(lhs_id, rhs_id, tycker);
-        {
-            // administrative
-            tycker.stack.pop_back();
-        }
-        res
+            self.lub_inner(lhs_id, rhs_id, tycker)
+        })
     }
     fn lub_inner(self, lhs_id: TypeId, rhs_id: TypeId, tycker: &mut Tycker) -> Result<TypeId> {
         let lhs = tycker.statics.types[&lhs_id].clone();
