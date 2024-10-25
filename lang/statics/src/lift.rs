@@ -99,14 +99,14 @@ impl SEnv<KindId> {
         let res = match tycker.statics.kinds[&self.inner].to_owned() {
             | Kind::Fill(_) => unreachable!(),
             | Kind::VType(VType) => tycker.top(&self.env),
-            | Kind::CType(CType) => tycker.algebra_mo_carrier(&self.env, mo_ty, ty),
+            | Kind::CType(CType) => tycker.algebra_mo_car(&self.env, mo_ty, ty),
             | Kind::Arrow(Arrow(a_kd, b_kd)) => {
                 let Some((tpat, body)) = ty.destruct_type_abs_nf(tycker) else { unreachable!() };
                 let (tvar_a, _kd) = tpat.destruct_def(tycker);
                 assert!(Lub::lub_inner(a_kd, _kd, tycker).is_ok(), "input kind mismatch");
                 let ty_a = Alloc::alloc(tycker, tvar_a, a_kd);
                 let alg_a = self.mk(a_kd).signature(tycker, mo_ty, ty_a)?;
-                let thunk_alg_a = tycker.thunk_arg(&self.env, alg_a);
+                let thunk_alg_a = tycker.thk_arg(&self.env, alg_a);
                 let alg_b = self.mk(b_kd).signature(tycker, mo_ty, body)?;
                 Alloc::alloc(tycker, Arrow(thunk_alg_a, alg_b), ctype)
             }
@@ -176,7 +176,7 @@ impl SEnv<TypeId> {
                         Alloc::alloc(tycker, Type::Forall(Forall(abst, body_)), ann)
                     }
                     | None => {
-                        let thunk_sig = tycker.thunk_arg(&self.env, sig);
+                        let thunk_sig = tycker.thk_arg(&self.env, sig);
                         let body_ = self.mk(body).lift(tycker, mo_ty)?;
                         let ctype = tycker.ctype(&self.env);
                         let str_body_ = Alloc::alloc(tycker, Arrow(thunk_sig, body_), ctype);
@@ -199,7 +199,7 @@ impl SEnv<TypeId> {
                 let kd = tycker.statics.annotations_abst[&abst];
                 let abst_ty = Alloc::alloc(tycker, abst, kd);
                 let sig = self.mk(kd).signature(tycker, mo_ty, abst_ty)?;
-                let thunk_sig = tycker.thunk_arg(&self.env, sig);
+                let thunk_sig = tycker.thk_arg(&self.env, sig);
                 let body_ = self.mk(body).lift(tycker, mo_ty)?;
                 let vtype = tycker.vtype(&self.env);
                 let str_body_ = Alloc::alloc(tycker, Prod(thunk_sig, body_), vtype);
@@ -272,7 +272,7 @@ impl SEnv<TypeId> {
         // if so, just return the corresponding algebra
         for alg in algs.iter().cloned() {
             let thunked_alg_ty = tycker.statics.annotations_value[&alg];
-            let Some(alg_ty) = thunked_alg_ty.destruct_thunk_app(tycker) else { unreachable!() };
+            let Some(alg_ty) = thunked_alg_ty.destruct_thk_app(tycker) else { unreachable!() };
             let Some(structure) = alg_ty.destruct_structure(&self.env, tycker) else {
                 // Debug: print
                 {
@@ -289,7 +289,7 @@ impl SEnv<TypeId> {
                 | Structure::Algebra(_mo_ty, carrier_ty) => {
                     if Lub::lub_inner(carrier_ty, self_ty, tycker).is_ok() {
                         let force_alg = {
-                            let ann = tycker.algebra_mo_carrier(&self.env, mo_ty, carrier_ty);
+                            let ann = tycker.algebra_mo_car(&self.env, mo_ty, carrier_ty);
                             Alloc::alloc(tycker, Force(alg), ann)
                         };
                         return Ok(force_alg);
@@ -347,7 +347,7 @@ impl SEnv<TypeId> {
                         let force_mo_bind_x_a_m_ty = {
                             // Thunk (X -> M A) -> M A
                             let x_arr_mo_a = Alloc::alloc(tycker, Arrow(ty_x, mo_a_ty), ctype);
-                            let thunk_x_arr_mo_a = tycker.thunk_arg(env, x_arr_mo_a);
+                            let thunk_x_arr_mo_a = tycker.thk_arg(env, x_arr_mo_a);
                             Alloc::alloc(tycker, Arrow(thunk_x_arr_mo_a, mo_a_ty), ctype)
                         };
                         let force_mo_bind_x_a_m = Alloc::alloc(
@@ -460,7 +460,7 @@ impl SEnv<TypeId> {
                         let ty_x_arr_b = Alloc::alloc(tycker, Arrow(ty_x, b_ty), ctype);
                         let function = Alloc::alloc(tycker, Abs(vpat_x, force_f_x_a), ty_x_arr_b);
 
-                        let ann = tycker.thunk_arg(&self.env, ty_x_arr_b);
+                        let ann = tycker.thk_arg(&self.env, ty_x_arr_b);
                         Alloc::alloc(tycker, Thunk(function), ann)
                     };
 
@@ -500,7 +500,7 @@ impl SEnv<TypeId> {
                     // `strY` : Thunk Sig(Y)
                     // `str` meaning "structure"
                     let sig_y = self.mk(y_kd).signature(tycker, mo_ty, ty_y)?;
-                    let str_y_ty = tycker.thunk_arg(env, sig_y);
+                    let str_y_ty = tycker.thk_arg(env, sig_y);
                     let var_str_y =
                         Alloc::alloc(tycker, VarName("strY".to_string()), str_y_ty.into());
                     let vpat_str_y: VPatId = Alloc::alloc(tycker, var_str_y, str_y_ty);
@@ -541,7 +541,7 @@ impl SEnv<TypeId> {
                             let abst_y = Alloc::alloc(tycker, tvar_y, y_kd);
                             let ty_y = Alloc::alloc(tycker, abst_y, y_kd);
                             let sig_y = self.mk(y_kd).signature(tycker, mo_ty, ty_y)?;
-                            let thunk_sig_y = tycker.thunk_arg(env, sig_y);
+                            let thunk_sig_y = tycker.thk_arg(env, sig_y);
                             let latter =
                                 Alloc::alloc(tycker, Arrow(thunk_sig_y, carrier_ty), ctype);
                             let force_f_x_ty = Alloc::alloc(tycker, Forall(abst_y, latter), ctype);
@@ -554,7 +554,7 @@ impl SEnv<TypeId> {
                         let force_f_x = Alloc::alloc(tycker, App(force_f, val_x), force_f_x_ty);
 
                         // `U (Sig(Y)) -> R`
-                        let thunk_sig_y = tycker.thunk_arg(env, sig_y);
+                        let thunk_sig_y = tycker.thk_arg(env, sig_y);
                         let thunk_sig_y_r =
                             Alloc::alloc(tycker, Arrow(thunk_sig_y, carrier_ty), ctype);
                         let force_f_x_y = Alloc::alloc(tycker, App(force_f_x, ty_y), thunk_sig_y_r);
@@ -564,7 +564,7 @@ impl SEnv<TypeId> {
                         // X -> R
                         let ty_x_r = Alloc::alloc(tycker, Arrow(ty_x, carrier_ty), ctype);
                         let function = Alloc::alloc(tycker, Abs(vpat_x, force_f_x_y_str_y), ty_x_r);
-                        let ann = tycker.thunk_arg(&self.env, ty_x_r);
+                        let ann = tycker.thk_arg(&self.env, ty_x_r);
                         Alloc::alloc(tycker, Thunk(function), ann)
                     };
 
@@ -632,7 +632,7 @@ impl SEnv<TypeId> {
                             let function =
                                 Alloc::alloc(tycker, Abs(vpat_x, force_f_x_dtor), ty_x_arr_b);
 
-                            let ann = tycker.thunk_arg(&self.env, ty_x_arr_b);
+                            let ann = tycker.thk_arg(&self.env, ty_x_arr_b);
                             Alloc::alloc(tycker, Thunk(function), ann)
                         };
 
@@ -797,7 +797,7 @@ impl SEnv<CompuId> {
                     Alloc::alloc(tycker, Abs(tpat_, compu_), ty_)
                 } else {
                     let var_str = Alloc::alloc(tycker, VarName("str".to_string()), y_kd.into());
-                    let thunked_str_ty = tycker.thunk_arg(&self.env, str_ty_);
+                    let thunked_str_ty = tycker.thk_arg(&self.env, str_ty_);
                     let vpat_str_: VPatId = Alloc::alloc(tycker, var_str, thunked_str_ty);
                     let val_str_: ValueId = Alloc::alloc(tycker, var_str, thunked_str_ty);
                     let mut algs = algs;
@@ -824,7 +824,7 @@ impl SEnv<CompuId> {
                         // generate algebra given ty_a and pass in
                         let alg_a_ = self.mk(ty_a).algebra(tycker, (mo, mo_ty), algs)?;
                         let alg_a_ty_ = tycker.statics.annotations_compu[&alg_a_];
-                        let thunk_alg_a_ty_ = tycker.thunk_arg(&self.env, alg_a_ty_);
+                        let thunk_alg_a_ty_ = tycker.thk_arg(&self.env, alg_a_ty_);
                         let thunk_alg_a_ = Alloc::alloc(tycker, Thunk(alg_a_), thunk_alg_a_ty_);
 
                         // Fixme: wrong app order, not effecting runtime though
@@ -901,7 +901,7 @@ impl SEnv<CompuId> {
                 let (thunked_function_ty, thunked_function) = {
                     let function_ty = Alloc::alloc(tycker, Arrow(binder_ty, tail_ty), ctype);
                     let function = Alloc::alloc(tycker, Abs(binder_, tail_), function_ty);
-                    let thunked_function_ty = tycker.thunk_arg(&self.env, function_ty);
+                    let thunked_function_ty = tycker.thk_arg(&self.env, function_ty);
                     let thunked_function =
                         Alloc::alloc(tycker, Thunk(function), thunked_function_ty);
                     (thunked_function_ty, thunked_function)
@@ -922,7 +922,7 @@ impl SEnv<CompuId> {
                 let binda_v = Alloc::alloc(tycker, App(binda, binder_ty), binda_v_ty);
                 let bindee_ = self.mk(bindee).lift(tycker, (mo, mo_ty), algs)?;
                 let bindee_ty = tycker.statics.annotations_compu[&bindee];
-                let thunked_bindee_ty = tycker.thunk_arg(&self.env, bindee_ty);
+                let thunked_bindee_ty = tycker.thk_arg(&self.env, bindee_ty);
                 let thunked_bindee = Alloc::alloc(tycker, Thunk(bindee_), thunked_bindee_ty);
                 let binda_v_thunked_bindee_ty =
                     Alloc::alloc(tycker, Arrow(thunked_function_ty, tail_ty), ctype);
@@ -1019,10 +1019,10 @@ fn gen_mo_bind_body(
     // where M is the monad type `mo_ty`
     let ctype = tycker.ctype(env);
     let m_a = Alloc::alloc(tycker, App(mo_ty, a_ty), ctype);
-    let thunk_m_a = tycker.thunk_arg(env, m_a);
+    let thunk_m_a = tycker.thk_arg(env, m_a);
     let m_a_prime = Alloc::alloc(tycker, App(mo_ty, a_prime_ty), ctype);
     let a_arr_m_a_prime = Alloc::alloc(tycker, Arrow(a_ty, m_a_prime), ctype);
-    let thunk_a_arr_m_a_prime = tycker.thunk_arg(env, a_arr_m_a_prime);
+    let thunk_a_arr_m_a_prime = tycker.thk_arg(env, a_arr_m_a_prime);
     let latter_arr = Alloc::alloc(tycker, Arrow(thunk_a_arr_m_a_prime, m_a_prime), ctype);
     Alloc::alloc(tycker, Arrow(thunk_m_a, latter_arr), ctype)
 }
@@ -1059,7 +1059,7 @@ fn gen_alg_thunk_a_r_r(
     // Thunk (A -> R) -> R
     let ctype = tycker.ctype(env);
     let a_arr_carrier = Alloc::alloc(tycker, Arrow(a_ty, carrier_ty), ctype);
-    let thunk_a_arr_carrier = tycker.thunk_arg(env, a_arr_carrier);
+    let thunk_a_arr_carrier = tycker.thk_arg(env, a_arr_carrier);
     Alloc::alloc(tycker, Arrow(thunk_a_arr_carrier, carrier_ty), ctype)
 }
 /// `Thunk (M A) -> Thunk (A -> R) -> R`
@@ -1070,7 +1070,7 @@ fn gen_alg_binda_body(
     // where M is the monad type `mo_ty` and R is the carrier of the algebra `b`
     let ctype = tycker.ctype(env);
     let m_a = Alloc::alloc(tycker, App(mo_ty, a_ty), ctype);
-    let thunk_m_a = tycker.thunk_arg(env, m_a);
+    let thunk_m_a = tycker.thk_arg(env, m_a);
     let latter_arr = gen_alg_thunk_a_r_r(env, tycker, a_ty, carrier_ty);
     Alloc::alloc(tycker, Arrow(thunk_m_a, latter_arr), ctype)
 }
@@ -1115,7 +1115,7 @@ fn gen_algebra_template(
     // M X
     let m_x_ty = Alloc::alloc(tycker, App(mo_ty, ty_x), ctype);
     // Thunk (M X)
-    let m_ty = tycker.thunk_arg(env, m_x_ty);
+    let m_ty = tycker.thk_arg(env, m_x_ty);
 
     // m
     let var_m = Alloc::alloc(tycker, VarName("m".to_string()), m_ty.into());
@@ -1124,7 +1124,7 @@ fn gen_algebra_template(
 
     // Thunk (X -> R) -> R
     let x_arr_r_r_ty = gen_alg_thunk_a_r_r(env, tycker, ty_x, carrier_ty);
-    let f_ty = tycker.thunk_arg(env, x_arr_r_r_ty);
+    let f_ty = tycker.thk_arg(env, x_arr_r_r_ty);
 
     // f
     let var_f = Alloc::alloc(tycker, VarName("f".to_string()), f_ty.into());
@@ -1143,7 +1143,7 @@ fn gen_algebra_template(
 
     let tail = x_m_f_body;
 
-    let algebra_ty = tycker.algebra_mo_carrier(env, mo_ty, carrier_ty);
+    let algebra_ty = tycker.algebra_mo_car(env, mo_ty, carrier_ty);
     let res = Alloc::alloc(
         tycker,
         CoMatch { arms: vec![CoMatcher { dtor: dtor_binda, tail }] },

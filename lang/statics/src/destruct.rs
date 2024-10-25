@@ -102,7 +102,7 @@ impl TypeId {
         };
         Some(res)
     }
-    pub fn destruct_thunk_app(&self, tycker: &mut Tycker) -> Option<TypeId> {
+    pub fn destruct_thk_app(&self, tycker: &mut Tycker) -> Option<TypeId> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         let res = match tycker.statics.types[&f_ty].to_owned() {
             | Type::Thk(ThkTy) => {
@@ -133,10 +133,33 @@ impl TypeId {
             | _ => None,
         }
     }
+    pub fn destruct_monad(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<TypeId> {
+        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
+        if a_tys.len() != 1 {
+            None?;
+        }
+        let res = match tycker.statics.types[&f_ty].to_owned() {
+            | Type::Abst(abst) => {
+                let AnnId::Type(id) = env[tycker.prim.monad.get()] else { unreachable!() };
+                let Type::Abst(monad_real) = tycker.statics.types.get(&id).cloned()? else {
+                    unreachable!()
+                };
+                if abst != monad_real {
+                    None?;
+                }
+                a_tys.into_iter().next()?
+            }
+            | _ => None?,
+        };
+        Some(res)
+    }
     pub fn destruct_algebra(
         &self, env: &Env<AnnId>, tycker: &mut Tycker,
     ) -> Option<(TypeId, TypeId)> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
+        if a_tys.len() != 2 {
+            None?;
+        }
         let res = match tycker.statics.types[&f_ty].to_owned() {
             | Type::Abst(abst) => {
                 let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
