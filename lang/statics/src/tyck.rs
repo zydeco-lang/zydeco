@@ -17,10 +17,6 @@ pub struct Tycker {
     pub errors: Vec<TyckErrorEntry>,
 }
 
-// Todo: the error stack can keep a return point (like the depth of the stack) before recoverable calls
-// so that we don't need to maintain the count of push and pops manually;
-// instead, we can just pop until the return point
-
 // Todo: use async to cut all tycker functions into small segments (returning futures)
 // and achieve better concurrency
 
@@ -624,7 +620,10 @@ impl SEnv<ss::TPatId> {
                     match ann {
                         | AnnId::Kind(kd) => kd,
                         | _ => {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                            // tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                            panic!(
+                                "defensive programming: def should be in ctx and should be a kind"
+                            )
                         }
                     }
                 };

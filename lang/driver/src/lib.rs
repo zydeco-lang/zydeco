@@ -114,7 +114,7 @@ impl BuildSystem {
         // assuming that all packages added before are dependencies
         self.depends_on.add(
             pack,
-            (&self.packages).into_iter().filter_map(|(id, _)| (id != pack).then_some(id)),
+            self.packages.iter().filter_map(|(id, _)| (id != pack).then_some(id)),
         );
         Ok(pack)
     }

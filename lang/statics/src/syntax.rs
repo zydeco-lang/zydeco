@@ -538,7 +538,7 @@ pub enum Declaration {
 /// An arena of equivalence classes, designed for types, and structurally shared
 /// `data` and `codata` definitions.
 #[derive(Debug)]
-pub struct EquivArena<Id, Definition, Query>
+pub struct ArenaEquiv<Id, Definition, Query>
 where
     Id: IndexLike<Meta = usize>,
 {
@@ -549,7 +549,7 @@ where
     /// arena for equivalence classes
     pub eqs: ArenaAssoc<Query, Id>,
 }
-impl<Id, Definition, Query> EquivArena<Id, Definition, Query>
+impl<Id, Definition, Query> ArenaEquiv<Id, Definition, Query>
 where
     Id: IndexLike<Meta = usize>,
     Query: Clone + Eq + std::hash::Hash,
@@ -601,9 +601,9 @@ pub struct StaticsArena {
     /// arena for the solutions of fillings
     pub solus: ArenaAssoc<FillId, AnnId>,
     /// arena for `data`
-    pub datas: EquivArena<DataId, im::Vector<(CtorName, TypeId)>, Data>,
+    pub datas: ArenaEquiv<DataId, im::Vector<(CtorName, TypeId)>, Data>,
     /// arena for `codata`
-    pub codatas: EquivArena<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
+    pub codatas: ArenaEquiv<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
     /// arena for inlinable definitions
     pub inlinables: ArenaAssoc<DefId, ValueId>,
 
@@ -643,8 +643,8 @@ impl StaticsArena {
             abst_hints: ArenaAssoc::new(),
             fills: ArenaDense::new(alloc.alloc()),
             solus: ArenaAssoc::new(),
-            datas: EquivArena::new_arc(alloc.clone()),
-            codatas: EquivArena::new_arc(alloc),
+            datas: ArenaEquiv::new_arc(alloc.clone()),
+            codatas: ArenaEquiv::new_arc(alloc),
             inlinables: ArenaAssoc::new(),
 
             annotations_var: ArenaAssoc::new(),
