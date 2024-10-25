@@ -49,7 +49,7 @@ impl TypeId {
                     Alloc::alloc(tycker, App(ty1_, ty2_), kd)
                 }
             }
-            | Type::Thunk(_)
+            | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
             | Type::Int(_)
@@ -195,7 +195,7 @@ impl TypeId {
                     Alloc::alloc(tycker, App(ty1_, ty2_), kd)
                 }
             }
-            | Type::Thunk(_)
+            | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
             | Type::Int(_)
@@ -321,7 +321,7 @@ impl TypeId {
             | Type::Fill(_) // unchanged because terms with unfilled types can't be matched against
             | Type::Var(_) // unchanged because type-variable-typed terms are abstract
             | Type::Abs(_) // unchanged because type-abstration-typed terms are ill-formed
-            | Type::Thunk(_)
+            | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
             | Type::Int(_)
@@ -363,7 +363,7 @@ impl TypeId {
             | Type::Abst(_)
             | Type::Fill(_)
             | Type::Abs(_)
-            | Type::Thunk(_)
+            | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
             | Type::Int(_)
@@ -495,7 +495,7 @@ impl TypeId {
                     )
                 }
             }
-            | Type::Thunk(_)
+            | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
             | Type::Int(_)

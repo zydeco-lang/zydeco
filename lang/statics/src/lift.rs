@@ -154,7 +154,7 @@ impl SEnv<TypeId> {
                     Alloc::alloc(tycker, Type::App(App(f_, a_)), ann)
                 }
             }
-            | Type::Thunk(ThunkTy) => self.inner,
+            | Type::Thk(ThkTy) => self.inner,
             | Type::Ret(RetTy) => mo_ty,
             | Type::Unit(_) | Type::Int(_) | Type::Char(_) | Type::String(_) | Type::OS(_) => {
                 self.inner
@@ -413,7 +413,7 @@ impl SEnv<TypeId> {
                 // vtype, dealt with above
                 unreachable!()
             }
-            | Type::Thunk(_) | Type::Ret(_) => {
+            | Type::Thk(_) | Type::Ret(_) => {
                 // neither vtype nor ctype, dealt with above
                 unreachable!()
             }

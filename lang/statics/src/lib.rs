@@ -19,6 +19,8 @@ pub use syntactic::*;
 pub mod tyck;
 pub use tyck::*;
 pub mod lift;
+pub mod monadic;
+pub mod algebra;
 pub mod err;
 pub use err::*;
 pub mod fmt;

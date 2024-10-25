@@ -69,7 +69,7 @@ impl TypeId {
             | Type::Abst(_)
             | Type::Fill(_)
             | Type::Abs(_)
-            | Type::Thunk(_)
+            | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
             | Type::Int(_)
@@ -105,7 +105,7 @@ impl TypeId {
     pub fn destruct_thunk_app(&self, tycker: &mut Tycker) -> Option<TypeId> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         let res = match tycker.statics.types[&f_ty].to_owned() {
-            | Type::Thunk(ThunkTy) => {
+            | Type::Thk(ThkTy) => {
                 if a_tys.len() == 1 {
                     let mut iter = a_tys.into_iter();
                     iter.next()?

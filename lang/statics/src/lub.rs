@@ -213,8 +213,8 @@ impl Debruijn {
                 TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                 std::panic::Location::caller(),
             )?,
-            | (Type::Thunk(ThunkTy), Type::Thunk(ThunkTy)) => lhs_id,
-            | (Type::Thunk(_), _) => tycker.err(
+            | (Type::Thk(ThkTy), Type::Thk(ThkTy)) => lhs_id,
+            | (Type::Thk(_), _) => tycker.err(
                 TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                 std::panic::Location::caller(),
             )?,
@@ -385,8 +385,7 @@ impl Lub for TypeId {
     /// We need to remember the definitions introduced by both sides.
     /// We did this by using Debruijn.
     fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
-        let res = self.lub_inner(other, tycker);
-        res
+        self.lub_inner(other, tycker)
     }
     fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         Debruijn::new().lub(self, other, tycker)

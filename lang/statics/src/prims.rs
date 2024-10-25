@@ -134,7 +134,7 @@ impl Tycker {
                     }
                     | su::Internal::Thk => {
                         let kd = ty.unwrap();
-                        env = self.register_prim_ty(env, def, ThunkTy.into(), kd)?
+                        env = self.register_prim_ty(env, def, ThkTy.into(), kd)?
                     }
                     | su::Internal::Ret => {
                         let kd = ty.unwrap();

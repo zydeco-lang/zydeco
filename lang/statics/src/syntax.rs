@@ -33,7 +33,7 @@ pub enum TermId {
     Value(ValueId),
     Compu(CompuId),
 }
-/// and here, a very useful dispatcher for all terms that can show up at annotation sites
+// and here, a very useful dispatcher for all terms that can show up at annotation sites
 /// A dispatcher for all annotations.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum AnnId {
@@ -41,7 +41,7 @@ pub enum AnnId {
     Kind(KindId),
     Type(TypeId),
 }
-/// and there are times when we need a proper pair of annotated things
+// and there are times when we need a proper pair of annotated things
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum PatAnnId {
     Type(TPatId, KindId),
@@ -55,19 +55,8 @@ pub enum TermAnnId {
     Value(ValueId, TypeId),
     Compu(CompuId, TypeId),
 }
+/// The declaration identifiers are the same of the surface syntax.
 pub type DeclId = su::DeclId;
-// /// A dispatcher for all entities.
-// #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
-// pub enum EntityId {
-//     Def(DefId),
-//     Kind(KindId),
-//     TPat(TPatId),
-//     Type(TypeId),
-//     VPat(VPatId),
-//     Value(ValueId),
-//     Compu(CompuId),
-//     Decl(DeclId),
-// }
 
 new_key_type! {
     /// Identifier for abstract types, including:
@@ -76,8 +65,9 @@ new_key_type! {
     pub struct AbstId;
     /// Identifier for hole-filling targets with context constraints.
     pub struct FillId;
-    // Identifier for data and codata definitions.
+    /// Identifier for data definitions.
     pub struct DataId;
+    /// Identifier for codata definitions.
     pub struct CoDataId;
 }
 
@@ -329,7 +319,7 @@ pub enum TypePattern {
 
 /// `U`
 #[derive(Clone, Debug)]
-pub struct ThunkTy;
+pub struct ThkTy;
 
 /// `F`
 #[derive(Clone, Debug)]
@@ -384,7 +374,7 @@ pub enum Type {
     Fill(FillId),
     Abs(Abs<TPatId, TypeId>),
     App(App<TypeId, TypeId>),
-    Thunk(ThunkTy),
+    Thk(ThkTy),
     Ret(RetTy),
     Unit(UnitTy),
     Int(IntTy),
@@ -487,7 +477,10 @@ pub enum Declaration {
 
 /// Structurally shared arena for `data` and `codata` definitions.
 #[derive(Debug)]
-pub struct StructArena<Id: IndexLike<Meta = usize>, Definition, Query> {
+pub struct StructArena<Id, Definition, Query>
+where
+    Id: IndexLike<Meta = usize>,
+{
     /// arena for definitions
     pub defs: ArenaDense<Id, Definition>,
     /// arena for hashmap
@@ -500,13 +493,6 @@ where
     Id: IndexLike<Meta = usize>,
     Query: Clone + Eq + std::hash::Hash,
 {
-    pub fn new(alloc: &mut GlobalAlloc) -> Self {
-        Self {
-            defs: ArenaDense::new(alloc.alloc()),
-            tbls: ArenaAssoc::new(),
-            eqs: ArenaAssoc::new(),
-        }
-    }
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
         Self {
             defs: ArenaDense::new(alloc.alloc()),
@@ -578,37 +564,6 @@ pub struct StaticsArena {
 }
 
 impl StaticsArena {
-    pub fn new(alloc: &mut GlobalAlloc) -> Self {
-        Self {
-            kinds: ArenaSparse::new(alloc.alloc()),
-            tpats: ArenaSparse::new(alloc.alloc()),
-            types: ArenaSparse::new(alloc.alloc()),
-            vpats: ArenaSparse::new(alloc.alloc()),
-            values: ArenaSparse::new(alloc.alloc()),
-            compus: ArenaSparse::new(alloc.alloc()),
-            decls: ArenaAssoc::new(),
-
-            pats: ArenaBijective::new(),
-            terms: ArenaBijective::new(),
-
-            absts: ArenaDense::new(alloc.alloc()),
-            seals: ArenaAssoc::new(),
-            abst_hints: ArenaAssoc::new(),
-            fills: ArenaDense::new(alloc.alloc()),
-            solus: ArenaAssoc::new(),
-            datas: StructArena::new(alloc),
-            codatas: StructArena::new(alloc),
-            inlinables: ArenaAssoc::new(),
-
-            annotations_var: ArenaAssoc::new(),
-            annotations_abst: ArenaAssoc::new(),
-            annotations_tpat: ArenaAssoc::new(),
-            annotations_type: ArenaAssoc::new(),
-            annotations_vpat: ArenaAssoc::new(),
-            annotations_value: ArenaAssoc::new(),
-            annotations_compu: ArenaAssoc::new(),
-        }
-    }
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
         Self {
             kinds: ArenaSparse::new(alloc.alloc()),

@@ -106,11 +106,11 @@ impl Alloc<TypeId> for Type {
         tycker
             .statics
             .annotations_type
-            .insert_or_else(ty, kd, |_old, _new| {
-                // println!("duplicate keys: {:?} = {:?}, {:?}", ty, _old, _new);
-                // Todo: handle duplicate keys
-                let res: std::result::Result<KindId, ()> = Ok(_new);
-                res
+            .insert_or_else(ty, kd, |_old, _new| -> std::result::Result<KindId, ()> {
+                panic!("duplicate keys: {:?} = {:?}, {:?}", ty, _old, _new)
+                // // Todo: handle duplicate keys
+                // let res: std::result::Result<KindId, ()> = Ok(_new);
+                // res
             })
             .unwrap();
         ty
@@ -134,7 +134,7 @@ AllocType! {
     FillId
     Abs<TPatId, TypeId>
     App<TypeId, TypeId>
-    ThunkTy
+    ThkTy
     RetTy
     UnitTy
     IntTy

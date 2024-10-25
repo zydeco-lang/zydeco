@@ -110,31 +110,36 @@ impl Tycker {
     }
 }
 
-impl Tycker {
-    #[inline]
-    pub(crate) fn err<T>(
-        &self, error: TyckError, blame: &'static std::panic::Location<'static>,
-    ) -> Result<T> {
-        let stack = self.stack.clone();
-        Err(TyckErrorEntry { error, blame, stack })
-    }
-    #[inline]
-    fn push_err_entry_k<T>(&mut self, entry: TyckErrorEntry) -> ResultKont<T> {
-        self.errors.push(entry);
-        Err(())
-    }
-    #[inline]
-    pub(crate) fn err_k<T>(
-        &mut self, error: TyckError, blame: &'static std::panic::Location<'static>,
-    ) -> ResultKont<T> {
-        let stack = self.stack.clone();
-        self.push_err_entry_k(TyckErrorEntry { error, blame, stack })
-    }
-    #[inline]
-    pub(crate) fn err_p_to_k<T>(&mut self, res: Result<T>) -> ResultKont<T> {
-        match res {
-            | Ok(t) => Ok(t),
-            | Err(entry) => self.push_err_entry_k(entry),
+mod impl_tycker {
+    use super::*;
+    impl Tycker {
+        // #[inline]
+        // pub(crate) fn guarded(&mut self, with: impl FnOnce(&mut Self)) {}
+        #[inline]
+        pub(crate) fn err<T>(
+            &self, error: TyckError, blame: &'static std::panic::Location<'static>,
+        ) -> Result<T> {
+            let stack = self.stack.clone();
+            Err(TyckErrorEntry { error, blame, stack })
+        }
+        #[inline]
+        fn push_err_entry_k<T>(&mut self, entry: TyckErrorEntry) -> ResultKont<T> {
+            self.errors.push(entry);
+            Err(())
+        }
+        #[inline]
+        pub(crate) fn err_k<T>(
+            &mut self, error: TyckError, blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<T> {
+            let stack = self.stack.clone();
+            self.push_err_entry_k(TyckErrorEntry { error, blame, stack })
+        }
+        #[inline]
+        pub(crate) fn err_p_to_k<T>(&mut self, res: Result<T>) -> ResultKont<T> {
+            match res {
+                | Ok(t) => Ok(t),
+                | Err(entry) => self.push_err_entry_k(entry),
+            }
         }
     }
 }
