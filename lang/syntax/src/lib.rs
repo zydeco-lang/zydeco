@@ -6,13 +6,13 @@ use derive_more::From;
 
 /* --------------------------------- Binder --------------------------------- */
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VarName(pub String);
 /// `+C`, including the plus
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CtorName(pub String);
 /// `.dtor`, including the dot
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DtorName(pub String);
 
 /* ------------------------------- Structural ------------------------------- */

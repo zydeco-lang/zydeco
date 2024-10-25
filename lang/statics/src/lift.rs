@@ -211,8 +211,7 @@ impl SEnv<TypeId> {
                     let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
                     arms_vec.push_back((ctor, ty_));
                 }
-                let arms_tbl = arms_vec.iter().cloned().collect();
-                let data = Data { arms: arms_tbl };
+                let data = Data::new(arms_vec.iter().cloned());
                 let id_ = tycker.statics.datas.lookup_or_alloc(arms_vec, data);
                 Alloc::alloc(tycker, id_, ann)
             }
@@ -222,8 +221,7 @@ impl SEnv<TypeId> {
                     let ty_ = self.mk(ty).lift(tycker, mo_ty)?;
                     arms_vec.push_back((dtor, ty_));
                 }
-                let arms_tbl = arms_vec.iter().cloned().collect();
-                let codata = CoData { arms: arms_tbl };
+                let codata = CoData::new(arms_vec.iter().cloned());
                 let id_ = tycker.statics.codatas.lookup_or_alloc(arms_vec, codata);
                 Alloc::alloc(tycker, id_, ann)
             }

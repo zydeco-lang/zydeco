@@ -309,8 +309,10 @@ impl Debruijn {
                 //         std::panic::Location::caller(),
                 //     )?
                 // }
-                let Data { arms: lhs_tbl } = tycker.statics.datas.tbls[&lhs].to_owned();
-                let Data { arms: rhs_tbl } = tycker.statics.datas.tbls[&rhs].to_owned();
+                let lhs_tbl: HashMap<_, _> =
+                    tycker.statics.datas.tbls[&lhs].clone().into_iter().collect();
+                let rhs_tbl: HashMap<_, _> =
+                    tycker.statics.datas.tbls[&rhs].clone().into_iter().collect();
                 if lhs_tbl.len() != rhs_tbl.len() {
                     tycker.err(
                         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
@@ -340,8 +342,10 @@ impl Debruijn {
                 //         std::panic::Location::caller(),
                 //     )?
                 // }
-                let CoData { arms: lhs_tbl } = tycker.statics.codatas.tbls[&lhs].to_owned();
-                let CoData { arms: rhs_tbl } = tycker.statics.codatas.tbls[&rhs].to_owned();
+                let lhs_tbl: HashMap<_, _> =
+                    tycker.statics.codatas.tbls[&lhs].clone().into_iter().collect();
+                let rhs_tbl: HashMap<_, _> =
+                    tycker.statics.codatas.tbls[&rhs].clone().into_iter().collect();
                 if lhs_tbl.len() != rhs_tbl.len() {
                     tycker.err(
                         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
@@ -356,15 +358,73 @@ pub struct Exists(pub AbstId, pub TypeId);
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Data {
-    // Fixme: define correct behavior for hash and eq to deduplicate
-    pub arms: im::HashMap<CtorName, TypeId>,
+    arms: BTreeMap<CtorName, TypeId>,
 }
 
 /// `codata | .d_1 cp : ty | ... end`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CoData {
-    // Fixme: define correct behavior for hash and eq to deduplicate
-    pub arms: im::HashMap<DtorName, TypeId>,
+    arms: BTreeMap<DtorName, TypeId>,
+}
+
+mod impls_structs {
+    use super::*;
+
+    impl Data {
+        pub fn new(arms: impl Iterator<Item = (CtorName, TypeId)>) -> Self {
+            Self { arms: arms.collect() }
+        }
+        pub fn get(&self, ctor: &CtorName) -> Option<&TypeId> {
+            self.arms.get(ctor)
+        }
+        pub fn iter(&self) -> impl Iterator<Item = (&CtorName, &TypeId)> {
+            self.into_iter()
+        }
+    }
+
+    impl IntoIterator for Data {
+        type Item = (CtorName, TypeId);
+        type IntoIter = std::collections::btree_map::IntoIter<CtorName, TypeId>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.arms.into_iter()
+        }
+    }
+
+    impl<'a> IntoIterator for &'a Data {
+        type Item = (&'a CtorName, &'a TypeId);
+        type IntoIter = std::collections::btree_map::Iter<'a, CtorName, TypeId>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.arms.iter()
+        }
+    }
+
+    impl CoData {
+        pub fn new(arms: impl Iterator<Item = (DtorName, TypeId)>) -> Self {
+            Self { arms: arms.collect() }
+        }
+        pub fn get(&self, dtor: &DtorName) -> Option<&TypeId> {
+            self.arms.get(dtor)
+        }
+        pub fn iter(&self) -> impl Iterator<Item = (&DtorName, &TypeId)> {
+            self.into_iter()
+        }
+    }
+
+    impl IntoIterator for CoData {
+        type Item = (DtorName, TypeId);
+        type IntoIter = std::collections::btree_map::IntoIter<DtorName, TypeId>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.arms.into_iter()
+        }
+    }
+
+    impl<'a> IntoIterator for &'a CoData {
+        type Item = (&'a DtorName, &'a TypeId);
+        type IntoIter = std::collections::btree_map::Iter<'a, DtorName, TypeId>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.arms.iter()
+        }
+    }
 }
 
 #[derive(From, Clone, Debug)]
@@ -475,20 +535,21 @@ pub enum Declaration {
 
 /* ---------------------------------- Arena --------------------------------- */
 
-/// Structurally shared arena for `data` and `codata` definitions.
+/// An arena of equivalence classes, designed for types, and structurally shared
+/// `data` and `codata` definitions.
 #[derive(Debug)]
-pub struct StructArena<Id, Definition, Query>
+pub struct EquivArena<Id, Definition, Query>
 where
     Id: IndexLike<Meta = usize>,
 {
     /// arena for definitions
     pub defs: ArenaDense<Id, Definition>,
-    /// arena for hashmap
+    /// arena for query hashmap
     pub tbls: ArenaAssoc<Id, Query>,
     /// arena for equivalence classes
     pub eqs: ArenaAssoc<Query, Id>,
 }
-impl<Id, Definition, Query> StructArena<Id, Definition, Query>
+impl<Id, Definition, Query> EquivArena<Id, Definition, Query>
 where
     Id: IndexLike<Meta = usize>,
     Query: Clone + Eq + std::hash::Hash,
@@ -540,9 +601,9 @@ pub struct StaticsArena {
     /// arena for the solutions of fillings
     pub solus: ArenaAssoc<FillId, AnnId>,
     /// arena for `data`
-    pub datas: StructArena<DataId, im::Vector<(CtorName, TypeId)>, Data>,
+    pub datas: EquivArena<DataId, im::Vector<(CtorName, TypeId)>, Data>,
     /// arena for `codata`
-    pub codatas: StructArena<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
+    pub codatas: EquivArena<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
     /// arena for inlinable definitions
     pub inlinables: ArenaAssoc<DefId, ValueId>,
 
@@ -582,8 +643,8 @@ impl StaticsArena {
             abst_hints: ArenaAssoc::new(),
             fills: ArenaDense::new(alloc.alloc()),
             solus: ArenaAssoc::new(),
-            datas: StructArena::new_arc(alloc.clone()),
-            codatas: StructArena::new_arc(alloc),
+            datas: EquivArena::new_arc(alloc.clone()),
+            codatas: EquivArena::new_arc(alloc),
             inlinables: ArenaAssoc::new(),
 
             annotations_var: ArenaAssoc::new(),
