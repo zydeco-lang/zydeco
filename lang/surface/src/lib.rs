@@ -40,6 +40,7 @@ pub mod textual {
         pub use super::ugly::*;
         // pub use super::pretty::*;
     }
+    mod span;
 
     #[cfg(test)]
     mod tests;
@@ -59,6 +60,7 @@ pub mod bitter {
     pub mod err;
     pub use err::*;
     pub mod fmt;
+    mod span;
 }
 
 /// name resolution;
@@ -72,4 +74,5 @@ pub mod scoped {
     pub mod err;
     pub use err::*;
     pub mod fmt;
+    mod span;
 }

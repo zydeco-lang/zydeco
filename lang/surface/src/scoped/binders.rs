@@ -273,10 +273,8 @@ impl Resolver {
     ) -> Result<()> {
         for (name, def) in binders.iter() {
             if let Some(prev) = global.var_to_def.get(name) {
-                let prev = self.bitter.textual.back(&(*prev).into()).unwrap();
-                let def = self.bitter.textual.back(&(*def).into()).unwrap();
-                let span1 = &self.spans[prev];
-                let span2 = &self.spans[def];
+                let span1 = &prev.span(self);
+                let span2 = &def.span(self);
                 Err(ResolveError::DuplicateDefinition(
                     span1.make(name.clone()),
                     span2.make(name.clone()),

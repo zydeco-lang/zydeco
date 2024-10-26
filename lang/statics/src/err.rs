@@ -36,11 +36,10 @@ impl Tycker {
                 s += "Missing solution for:";
                 for fill in fills.iter() {
                     let site = self.statics.fills[&fill];
-                    let prev = self.scoped.textual.back(&(site.into())).unwrap();
                     s += &format!(
                         "\n\t>> {} ({})",
                         site.ugly(&Formatter::new(&self.scoped)),
-                        self.spans[prev]
+                        site.span(self)
                     )
                 }
                 s
@@ -70,7 +69,7 @@ impl Tycker {
             }
             | TyckError::Expressivity(s) => format!("{}", s),
             | TyckError::NotInlinable(def) => {
-                let span = self.spans[self.scoped.textual.back(&def.into()).unwrap()].to_owned();
+                let span = def.span(self).to_owned();
                 format!(
                     "Cannot inline definition: {} ({})",
                     {
@@ -104,35 +103,29 @@ impl Tycker {
         for task in stack.iter() {
             match task {
                 | TyckTask::DeclHead(decl) => {
-                    let prev = self.scoped.textual.back(&((*decl).into())).unwrap();
-                    s +=
-                        &format!("\t- when tycking external declaration ({}):\n", self.spans[prev]);
+                    s += &format!("\t- when tycking external declaration ({}):\n", decl.span(self));
                     s += &format!("\t\t{}\n", truncated(decl.ugly(&Formatter::new(&self.scoped))));
                 }
                 | TyckTask::DeclUni(decl) => {
-                    let prev = self.scoped.textual.back(&((*decl).into())).unwrap();
-                    s += &format!("\t- when tycking single declaration ({}):\n", self.spans[prev]);
+                    s += &format!("\t- when tycking single declaration ({}):\n", decl.span(self));
                     s += &format!("\t\t{}\n", truncated(decl.ugly(&Formatter::new(&self.scoped))));
                 }
                 | TyckTask::DeclScc(decls) => {
                     s += "\t- when tycking scc declarations:\n";
                     for decl in decls.iter() {
-                        let prev = self.scoped.textual.back(&((*decl).into())).unwrap();
                         s += &format!(
                             "\t\t({})\n\t\t{}\n",
-                            self.spans[prev],
+                            decl.span(self),
                             truncated(decl.ugly(&Formatter::new(&self.scoped)))
                         );
                     }
                 }
                 | TyckTask::Exec(exec) => {
-                    let prev = self.scoped.textual.back(&((*exec).into())).unwrap();
-                    s += &format!("\t- when tycking execution ({}):\n", self.spans[prev]);
+                    s += &format!("\t- when tycking execution ({}):\n", exec.span(self));
                     s += &format!("\t\t{}\n", truncated(exec.ugly(&Formatter::new(&self.scoped))));
                 }
                 | TyckTask::Pat(pat, switch) => {
-                    let prev = self.scoped.textual.back(&((*pat).into())).unwrap();
-                    s += &format!("\t- when tycking pattern ({}):\n", self.spans[prev]);
+                    s += &format!("\t- when tycking pattern ({}):\n", pat.span(self));
                     s +=
                         &format!("\t\t>> {}\n", truncated(pat.ugly(&Formatter::new(&self.scoped))));
                     match switch {
@@ -149,8 +142,7 @@ impl Tycker {
                     }
                 }
                 | TyckTask::Term(term, switch) => {
-                    let prev = self.scoped.textual.back(&((*term).into())).unwrap();
-                    s += &format!("\t- when tycking term ({}):\n", self.spans[prev]);
+                    s += &format!("\t- when tycking term ({}):\n", term.span(self));
                     s += &format!(
                         "\t\t>> {}\n",
                         truncated(term.ugly(&Formatter::new(&self.scoped)))

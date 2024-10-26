@@ -700,11 +700,10 @@ impl Tyck for SEnv<su::TermId> {
         // // Debug: print
         // {
         //     use zydeco_surface::scoped::fmt::*;
-        //     let prev = tycker.scoped.textual.back(&(self.inner.into())).unwrap();
         //     println!(
         //         "{} @ ({})",
         //         self.inner.ugly(&Formatter::new(&tycker.scoped)),
-        //         tycker.spans[prev]
+        //         self.inner.span(tycker)
         //     );
         //     match switch {
         //         | Switch::Syn => {

@@ -278,8 +278,7 @@ impl Resolve for TermId {
                     return Ok(());
                 }
                 // if not found, report an error
-                let term = resolver.bitter.textual.back(&(*self).into()).unwrap();
-                let span = &resolver.spans[term];
+                let span = &self.span(resolver);
                 Err(ResolveError::UnboundVar(span.make(var.clone())))?
             }
             | Term::Triv(term) => {

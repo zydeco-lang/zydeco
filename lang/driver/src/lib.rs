@@ -112,10 +112,8 @@ impl BuildSystem {
 
         let pack = self.packages.alloc(Package::Binary(path));
         // assuming that all packages added before are dependencies
-        self.depends_on.add(
-            pack,
-            self.packages.iter().filter_map(|(id, _)| (id != pack).then_some(id)),
-        );
+        self.depends_on
+            .add(pack, self.packages.iter().filter_map(|(id, _)| (id != pack).then_some(id)));
         Ok(pack)
     }
     pub fn add_binary_in_package(&mut self, pack: PackId) -> Result<HashMap<String, PackId>> {

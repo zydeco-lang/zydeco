@@ -1,3 +1,5 @@
+use zydeco_syntax::SpanView;
+
 use crate::{
     bitter::{syntax as b, *},
     syntax::*,
@@ -713,8 +715,7 @@ impl Desugar for t::GenBind<t::TermId> {
         // fix?
         if fix {
             if comp {
-                let binder_ = desugarer.bitter.textual.back(&binder.into()).unwrap();
-                let span = &desugarer.spans[binder_];
+                let span = binder.span(desugarer);
                 Err(DesugarError::CompWhileFix(span.make(binder)))?
             }
             let binder = binder.deep_clone(desugarer);

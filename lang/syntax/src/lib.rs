@@ -1,6 +1,9 @@
 pub mod fmt;
 pub use fmt::*;
 
+pub mod span;
+pub use span::*;
+
 mod impls;
 use derive_more::From;
 

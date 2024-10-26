@@ -300,14 +300,7 @@ impl PackageScoped {
 
         let _ = name;
 
-        let Tycker {
-            spans: _,
-            prim: _,
-            scoped,
-            statics,
-            stack: _,
-            errors: _,
-        } = tycker;
+        let Tycker { spans: _, prim: _, scoped, statics, stack: _, errors: _ } = tycker;
         Ok(PackageChecked { scoped, statics })
     }
 }
