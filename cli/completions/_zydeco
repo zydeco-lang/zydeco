@@ -30,7 +30,7 @@ _zydeco() {
         case $line[1] in
             (run)
 _arguments "${_arguments_options[@]}" : \
-'--bin=[Name of the binary]:BIN: ' \
+'--bin=[Name of the binary]:BIN:_default' \
 '--dry[Dry run (don'\''t execute)]' \
 '-v[Level of verbosity]' \
 '--verbose[Level of verbosity]' \
