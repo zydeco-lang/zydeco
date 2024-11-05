@@ -1,0 +1,13 @@
+alias Kont (R: CType) (A: VType) : CType = Thk (A -> R) -> R end
+
+def ! reset (A: VType) :
+  Thk (Kont (Ret A) A) -> Ret A
+=
+  fn e -> ! e { fn x -> ret x }
+end
+
+def ! shift (A: VType) (A': VType) :
+  Thk (Thk (A -> Ret A') -> Kont (Ret A') A') -> Kont (Ret A') A
+=
+  fn e -> fn kaa' -> ! e kaa' { fn x' -> ret x' }
+end

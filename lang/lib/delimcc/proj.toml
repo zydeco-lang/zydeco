@@ -1,6 +1,8 @@
 name = "Delimcc"
 
-srcs = []
+srcs = [
+    "lib.zy",
+]
 deps = [
     # { local = "../std/core.toml" },
     { local = "../std/proj.toml" },

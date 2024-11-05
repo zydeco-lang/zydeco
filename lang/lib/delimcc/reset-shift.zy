@@ -1,13 +1,3 @@
-alias Kont (R: CType) (A: VType) : CType = U (A -> R) -> R end
-
-def ! reset (A: VType) : U (Kont (Ret A) A) -> Ret A =
-  fn e -> ! e { fn x -> ret x }
-end
-
-def ! shift (A: VType) (A': VType) : U (U (A -> Ret A') -> Kont (Ret A') A') -> Kont (Ret A') A =
-  fn e -> fn kaa' -> ! e kaa' { fn x' -> ret x' }
-end
-
 // reset and shift are the primitives of delimited continuations.
 // example:
 

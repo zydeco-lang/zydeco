@@ -1,10 +1,10 @@
-alias Kont (R: CType) (A: VType) : CType = U (A -> R) -> R end
-
-def ! reset (A: VType) : U (Kont (Ret A) A) -> (forall (R: CType) . Kont R A) =
+def ! reset' (A: VType) : Thk (Kont (Ret A) A) -> (forall (R: CType) . Kont R A) =
   fn e -> fn R k -> do x <- ! e { fn x -> ret x }; ! k x
 end
 
-def ! shift (A: VType) (A': VType) : U (U (A -> (forall (R: CType) . Kont R A')) -> Kont (Ret A') A') -> Kont (Ret A') A =
+def ! shift' (A: VType) (A': VType) :
+  Thk (Thk (A -> (forall (R: CType) . Kont R A')) -> Kont (Ret A') A') -> Kont (Ret A') A
+=
   fn e -> fn kaa' -> ! e { fn x R ka' -> do x' <- ! kaa' x; ! ka' x' } { fn x' -> ret x' }
 end
 
@@ -12,8 +12,8 @@ end
 // example:
 
 // def ! _ : F Int =
-//   ! reset {
-//     do x <- ! shift { fn cont ->
+//   ! reset' {
+//     do x <- ! shift' { fn cont ->
 //       do y <- ! cont { ret 4 };
 //       ! add 17 y
 //     };
@@ -22,9 +22,9 @@ end
 // end
 
 def ! ex : forall (R: CType) . Kont R Int =
-  ! reset Int {
+  ! reset' Int {
     ! mkont (Ret Int) .bind Int Int {
-      ! shift Int Int { fn cont ->
+      ! shift' Int Int { fn cont ->
         ! mkont (Ret Int) .bind Int Int
         { ! cont 4 (Ret Int) }
         { fn y -> do res <- ! add 17 y; ! mkont (Ret Int) .return Int res }
