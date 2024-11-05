@@ -3,6 +3,11 @@ use crate::*;
 pub trait SyntacticallyUsed {
     fn syntactically_used(&self, tycker: &mut Tycker) -> bool;
 }
+impl SyntacticallyUsed for su::DefId {
+    fn syntactically_used(&self, tycker: &mut Tycker) -> bool {
+        !tycker.scoped.users.forth(self).is_empty()
+    }
+}
 impl SyntacticallyUsed for su::PatId {
     fn syntactically_used(&self, tycker: &mut Tycker) -> bool {
         let pat = tycker.scoped.pats[self].clone();
@@ -16,7 +21,7 @@ impl SyntacticallyUsed for su::PatId {
                 let su::Hole = pat;
                 false
             }
-            | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),
+            | Pat::Var(def) => def.syntactically_used(tycker),
             | Pat::Ctor(pat) => {
                 let su::Ctor(_ctor, pat) = pat;
                 pat.syntactically_used(tycker)
@@ -41,7 +46,7 @@ impl SyntacticallyUsed for ss::TPatId {
                 let ss::Hole = pat;
                 false
             }
-            | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),
+            | Pat::Var(def) => def.syntactically_used(tycker),
         }
     }
 }
@@ -54,7 +59,7 @@ impl SyntacticallyUsed for ss::VPatId {
                 let ss::Hole = pat;
                 false
             }
-            | Pat::Var(def) => !tycker.scoped.users.forth(&def).is_empty(),
+            | Pat::Var(def) => def.syntactically_used(tycker),
             | Pat::Ctor(pat) => {
                 let ss::Ctor(_ctor, pat) = pat;
                 pat.syntactically_used(tycker)

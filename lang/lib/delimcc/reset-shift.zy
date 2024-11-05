@@ -21,8 +21,7 @@ end
 //   }
 // end
 
-def ! ex (R: CType) : Kont R Int =
-  let ! returnR (A: VType) (a: A) (R': CType) = ! mkont R' .return A a in
+def ! ex : forall (R: CType) . Kont R Int =
   ! reset Int {
     ! mkont (Ret Int) .bind Int Int {
       ! shift Int Int { fn cont ->
@@ -32,8 +31,7 @@ def ! ex (R: CType) : Kont R Int =
       }
     }
     { fn x -> do res <- ! mul 2 x; ! mkont (Ret Int) .return Int res }
-  } R
-  // ! return Int 0
+  }
 end
 
 def ! mkont (R: CType) : Monad (Kont R) =
