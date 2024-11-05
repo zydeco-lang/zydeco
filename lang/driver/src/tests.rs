@@ -112,3 +112,8 @@ mod spell {
 mod monadic {
     // lib_proj_bin!(monadic, exnt, "exnt");
 }
+
+mod delimcc {
+    lib_proj_bin!(delimcc, reset_shift, "reset-shift");
+    lib_proj_bin!(delimcc, reset_shift_k, "reset-shift-k");
+}

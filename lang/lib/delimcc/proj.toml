@@ -6,6 +6,7 @@ deps = [
     { local = "../std/proj.toml" },
 ]
 bins = [
+    "reset-shift-k.zy",
     "reset-shift.zy",
 ]
 
