@@ -1,0 +1,12 @@
+name = "Delimcc"
+
+srcs = []
+deps = [
+    # { local = "../std/core.toml" },
+    { local = "../std/proj.toml" },
+]
+bins = [
+    "reset-shift.zy",
+]
+
+std = "NoStd"

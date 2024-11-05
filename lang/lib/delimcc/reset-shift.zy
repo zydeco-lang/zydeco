@@ -1,0 +1,48 @@
+alias Kont (R: CType) (A: VType) : CType = U (A -> R) -> R end
+
+def ! reset (A: VType) : U (Kont (Ret A) A) -> (forall (R: CType) . Kont R A) =
+  fn e -> fn R k -> do x <- ! e { fn x -> ret x }; ! k x
+end
+
+def ! shift (A: VType) (A': VType) : U (U (A -> (forall (R: CType) . Kont R A')) -> Kont (Ret A') A') -> Kont (Ret A') A =
+  fn e -> fn kaa' -> ! e { fn x R ka' -> do x' <- ! kaa' x; ! ka' x' } { fn x' -> ret x' }
+end
+
+// reset and shift are the primitives of delimited continuations.
+// example:
+
+// def ! _ : F Int =
+//   ! reset {
+//     do x <- ! shift { fn cont ->
+//       do y <- ! cont { ret 4 };
+//       ! add 17 y
+//     };
+//     ! mul 2 x
+//   }
+// end
+
+def ! ex (R: CType) : Kont R Int =
+  let ! returnR (A: VType) (a: A) (R': CType) = ! mkont R' .return A a in
+  ! reset Int {
+    ! mkont (Ret Int) .bind Int Int {
+      ! shift Int Int { fn cont ->
+        ! mkont (Ret Int) .bind Int Int
+        { ! cont 4 (Ret Int) }
+        { fn y -> do res <- ! add 17 y; ! mkont (Ret Int) .return Int res }
+      }
+    }
+    { fn x -> do res <- ! mul 2 x; ! mkont (Ret Int) .return Int res }
+  } R
+  // ! return Int 0
+end
+
+def ! mkont (R: CType) : Monad (Kont R) =
+  comatch
+  | .return A a -> fn k -> ! k a
+  | .bind A A' m f -> fn k -> ! m { fn a -> ! f a k }
+  end
+end
+
+main
+  ! ex OS { fn x -> ! write_int_line x { ! exit 0 } }
+end
