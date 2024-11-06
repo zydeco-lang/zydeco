@@ -8,8 +8,9 @@ deps = [
     { local = "../std/proj.toml" },
 ]
 bins = [
-    "reset-shift-k.zy",
     "reset-shift.zy",
+    "reset-shift-k.zy",
+    "try-catch.zy",
 ]
 
 std = "NoStd"

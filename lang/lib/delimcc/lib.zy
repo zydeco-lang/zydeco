@@ -1,13 +1,42 @@
 alias Kont (R: CType) (A: VType) : CType = Thk (A -> R) -> R end
 
-def ! reset (A: VType) :
-  Thk (Kont (Ret A) A) -> Ret A
-=
-  fn e -> ! e { fn x -> ret x }
+def ! mkont (R: CType) : Monad (Kont R) =
+  comatch
+  | .return A a -> fn k -> ! k a
+  | .bind A A' m f -> fn k -> ! m { fn a -> ! f a k }
+  end
 end
 
-def ! shift (A: VType) (A': VType) :
-  Thk (Thk (A -> Ret A') -> Kont (Ret A') A') -> Kont (Ret A') A
-=
-  fn e -> fn kaa' -> ! e kaa' { fn x' -> ret x' }
+alias KontRet (A: VType) : CType = Kont (Ret A) A end
+
+// reset and shift
+
+def ! reset (A: VType)
+  (e: Thk (KontRet A))
+: Ret A =
+  ! e { fn x -> ret x }
+end
+
+def ! shift (A: VType) (A': VType)
+  (e: Thk (Thk (A -> Ret A') -> KontRet A'))
+: Kont (Ret A') A =
+  fn ka' -> ! e ka' { fn x' -> ret x' }
+end
+
+// try catch and throw
+
+// def ! try (A: VType) (A': VType)
+//   (e: Thk (KontRet (Thk (Ret A))))
+//   (h: Thk (A' -> Ret A))
+// : Ret A =
+//   do (t : Thk (Kont (Ret A) A')) <-
+//     ! reset (Thk (Kont (Ret A) A')) { fn _ -> ret { fn _ -> ! e { fn x -> ret x } } }
+//   ;
+//   ! t h
+// end
+
+def ! throw (A: VType) (A': VType)
+  (a': A')
+: Kont (Ret A') A =
+  ! shift A A' { fn _ ka' -> ! ka' a' }
 end

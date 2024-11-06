@@ -34,13 +34,6 @@ def ! ex : forall (R: CType) . Kont R Int =
   }
 end
 
-def ! mkont (R: CType) : Monad (Kont R) =
-  comatch
-  | .return A a -> fn k -> ! k a
-  | .bind A A' m f -> fn k -> ! m { fn a -> ! f a k }
-  end
-end
-
 main
   ! ex OS { fn x -> ! write_int_line x { do zero <- ! sub x 25; ! exit zero } }
 end
