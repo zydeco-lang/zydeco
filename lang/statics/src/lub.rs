@@ -146,22 +146,23 @@ impl Debruijn {
             | (_, Type::Fill(rhs)) => fill_ty(tycker, rhs, lhs_id)?,
             | (Type::Fill(lhs), _) => fill_ty(tycker, lhs, rhs_id)?,
             | (Type::Var(lhs), Type::Var(rhs)) => {
-                if self.lookup_lhs(lhs) != self.lookup_rhs(rhs) {
-                    tycker.err(
+                match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
+                    | (Some(l), Some(r)) if l == r => lhs_id,
+                    | _ => tycker.err(
                         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                         std::panic::Location::caller(),
-                    )?
+                    )?,
                 }
-                lhs_id
             }
             | (Type::Abst(lhs), Type::Abst(rhs)) => {
-                if self.lookup_lhs(lhs) != self.lookup_rhs(rhs) {
-                    tycker.err(
+                match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
+                    | (Some(l), Some(r)) if l == r => lhs_id,
+                    | (None, None) if lhs == rhs => lhs_id,
+                    | _ => tycker.err(
                         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                         std::panic::Location::caller(),
-                    )?
+                    )?,
                 }
-                lhs_id
             }
             | (Type::Abst(_), _) => tycker.err(
                 TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },

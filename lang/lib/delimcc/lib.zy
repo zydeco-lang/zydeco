@@ -43,7 +43,7 @@ def ! try
     ! reset M mo (Thk (Kont (M A) E)) {
       fn _ -> ! mo .return _ t
     }
-  } { fn t -> ! t h }
+  } { fn (t: Thk (Kont (M A) E)) -> ! t h }
 end
 
 def ! throw
