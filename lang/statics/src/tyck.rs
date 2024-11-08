@@ -95,6 +95,38 @@ impl Tycker {
                 | _ => {}
             }
         }
+        // and also, print all hole solutions as a reference for the user
+        if self.statics.fill_hints.len() > 0 {
+            println!("Hole Solutions:");
+        }
+        for (id, ()) in &self.statics.fill_hints {
+            let site = self.statics.fills[id];
+            let site_text = {
+                use zydeco_surface::scoped::fmt::*;
+                site.ugly(&Formatter::new(&self.scoped))
+            };
+            let site_span = {
+                use zydeco_syntax::*;
+                site.span(self)
+            };
+            let site_solu = match self.statics.solus.get(&id) {
+                | Some(ann) => {
+                    use crate::fmt::*;
+                    ann.ugly(&Formatter::new(&self.scoped, &self.statics))
+                }
+                | None => "???".to_string(),
+            };
+            println!(
+                "{} {} {} : {}",
+                site_text,
+                {
+                    use colored::Colorize;
+                    "@".green()
+                },
+                site_span,
+                site_solu
+            );
+        }
         if !self.errors.is_empty() {
             Err(())?
         }
@@ -285,7 +317,7 @@ impl<'decl> SccDeclarations<'decl> {
             // synthesize the bindee
             let out_ann = env.mk(bindee).tyck(tycker, Action::syn())?;
             let env = match out_ann {
-                | TermAnnId::Hole | TermAnnId::Kind(_) => unreachable!(),
+                | TermAnnId::Hole(_) | TermAnnId::Kind(_) => unreachable!(),
                 | TermAnnId::Type(ty, kd) => {
                     let bindee = ty;
                     let binder = env.mk(binder).tyck(tycker, Action::ana(kd.into()))?;
@@ -441,7 +473,7 @@ impl Tyck for SEnv<su::PatId> {
                 let ty_tm: AnnId = match ty_out_ann {
                     | TermAnnId::Kind(kd) => kd.into(),
                     | TermAnnId::Type(ty, _) => ty.into(),
-                    | TermAnnId::Hole => {
+                    | TermAnnId::Hole(_) => {
                         // Fixme: I forgor
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
@@ -664,7 +696,7 @@ impl Tyck for SEnv<su::TermId> {
                             tycker.statics.solus.insert(fill, kd.into());
                             return Ok(TermAnnId::Type(ty, kd));
                         }
-                        | TermAnnId::Hole
+                        | TermAnnId::Hole(_)
                         | TermAnnId::Kind(_)
                         | TermAnnId::Value(_, _)
                         | TermAnnId::Compu(_, _) => {
@@ -683,7 +715,7 @@ impl Tyck for SEnv<su::TermId> {
                             let ty = fill.fill_k(tycker, ty.into())?.as_type();
                             return Ok(TermAnnId::Compu(c, ty));
                         }
-                        | TermAnnId::Hole | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
+                        | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Type(_, _) => {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
                     },
@@ -737,7 +769,7 @@ impl Tyck for SEnv<su::TermId> {
                 let ty_ann = match ty_out_ann {
                     | TermAnnId::Kind(kd) => kd.into(),
                     | TermAnnId::Type(ty, _kd) => ty.into(),
-                    | TermAnnId::Hole | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                    | TermAnnId::Hole(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 };
@@ -752,8 +784,8 @@ impl Tyck for SEnv<su::TermId> {
                 let su::Hole = term;
                 match switch {
                     | Switch::Syn => {
-                        // let ann = tycker.statics.fills.alloc(self.inner);
-                        TermAnnId::Hole
+                        let fill = Alloc::alloc(tycker, self.inner, ());
+                        TermAnnId::Hole(fill)
                     }
                     | Switch::Ana(AnnId::Set) => {
                         // can't deduce kind for now
@@ -761,7 +793,7 @@ impl Tyck for SEnv<su::TermId> {
                     }
                     | Switch::Ana(AnnId::Kind(kd)) => {
                         // a type hole, with a specific kind in mind
-                        let fill = tycker.statics.fills.alloc(self.inner);
+                        let fill = Alloc::alloc(tycker, self.inner, ());
                         let fill = Alloc::alloc(tycker, fill, kd);
                         TermAnnId::Type(fill, kd)
                     }
@@ -774,10 +806,16 @@ impl Tyck for SEnv<su::TermId> {
                                 std::panic::Location::caller(),
                             )?,
                             | ss::Kind::VType(ss::VType) => {
+                                let hole = Alloc::alloc(tycker, self.inner, ());
+                                tycker.statics.solus.insert(hole, ty.into());
+                                tycker.statics.fill_hints.insert(hole, ());
                                 let hole = Alloc::alloc(tycker, ss::Hole, ty);
                                 TermAnnId::Value(hole, ty)
                             }
                             | ss::Kind::CType(ss::CType) => {
+                                let hole = Alloc::alloc(tycker, self.inner, ());
+                                tycker.statics.solus.insert(hole, ty.into());
+                                tycker.statics.fill_hints.insert(hole, ());
                                 let hole = Alloc::alloc(tycker, ss::Hole, ty);
                                 TermAnnId::Compu(hole, ty)
                             }
@@ -848,7 +886,7 @@ impl Tyck for SEnv<su::TermId> {
                                 TyckError::MissingAnnotation,
                                 std::panic::Location::caller(),
                             )?,
-                            | TermAnnId::Hole | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
+                            | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
                                 tycker.err_k(
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
@@ -967,7 +1005,7 @@ impl Tyck for SEnv<su::TermId> {
                                         let abs = Alloc::alloc(tycker, ss::Abs(tpat, compu), ann);
                                         TermAnnId::Compu(abs, ann)
                                     }
-                                    | TermAnnId::Hole
+                                    | TermAnnId::Hole(_)
                                     | TermAnnId::Kind(_)
                                     | TermAnnId::Value(_, _) => tycker.err_k(
                                         TyckError::SortMismatch,
@@ -1102,7 +1140,7 @@ impl Tyck for SEnv<su::TermId> {
                 let su::App(f, a) = term;
                 let f_out_ann = self.mk(f).tyck(tycker, Action::syn())?;
                 match f_out_ann {
-                    | TermAnnId::Hole | TermAnnId::Kind(_) | TermAnnId::Value(_, _) => {
+                    | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Value(_, _) => {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                     | TermAnnId::Type(f_ty, f_kd) => {
@@ -1308,7 +1346,7 @@ impl Tyck for SEnv<su::TermId> {
                                             Alloc::alloc(tycker, ss::Forall(abst, ty_2), ctype);
                                         TermAnnId::Type(forall, ctype)
                                     }
-                                    | TermAnnId::Hole
+                                    | TermAnnId::Hole(_)
                                     | TermAnnId::Value(_, _)
                                     | TermAnnId::Compu(_, _) => tycker.err_k(
                                         TyckError::SortMismatch,

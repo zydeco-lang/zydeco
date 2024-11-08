@@ -1,9 +1,21 @@
-// reset and shift are the primitives of delimited continuations.
+def ! reset' (A: VType)
+  (e: Thk (Kont (Ret A) A))
+: Ret A =
+  ! e { fn x -> ret x }
+end
+
+def ! shift' (A: VType) (A': VType)
+  (e: Thk (Thk (A -> Ret A') -> Kont (Ret A') A'))
+: Kont (Ret A') A =
+  fn ka' -> ! e ka' { fn x' -> ret x' }
+end
+
+// reset' and shift' are the primitives of delimited continuations.
 // example:
 
 // def ! _ : F Int =
-//   ! reset {
-//     do x <- ! shift { fn cont ->
+//   ! reset' {
+//     do x <- ! shift' { fn cont ->
 //       do y <- ! cont { ret 4 };
 //       ! add 17 y
 //     };
@@ -12,9 +24,9 @@
 // end
 
 def ! ex : Ret Int =
-  ! reset Int {
+  ! reset' Int {
     ! mkont (Ret Int) .bind Int Int {
-      ! shift Int Int { fn cont ->
+      ! shift' Int Int { fn cont ->
         do y <- ! cont 4;
         do res <- ! add 17 y;
         ! mkont (Ret Int) .return Int res

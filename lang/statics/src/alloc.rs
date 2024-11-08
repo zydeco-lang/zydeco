@@ -46,6 +46,16 @@ impl Alloc<AbstId> for TPatId {
     }
 }
 
+/* ---------------------------------- Fill ---------------------------------- */
+
+impl Alloc<FillId> for su::TermId {
+    type Ann = ();
+    fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> FillId {
+        tycker.statics.fills.alloc(val)
+    }
+}
+
+
 /* ---------------------------------- Kind ---------------------------------- */
 
 impl Alloc<KindId> for Kind {

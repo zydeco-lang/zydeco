@@ -51,7 +51,7 @@ pub enum PatAnnId {
 }
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum TermAnnId {
-    Hole,
+    Hole(FillId),
     Kind(KindId),
     Type(TypeId, KindId),
     Value(ValueId, TypeId),
@@ -164,7 +164,7 @@ mod impls_identifiers {
                 | TermAnnId::Type(t, _) => TermId::Type(t),
                 | TermAnnId::Value(v, _) => TermId::Value(v),
                 | TermAnnId::Compu(c, _) => TermId::Compu(c),
-                | TermAnnId::Hole => None?,
+                | TermAnnId::Hole(_) => None?,
             };
             Some(res)
         }
@@ -172,7 +172,7 @@ mod impls_identifiers {
             match self {
                 | TermAnnId::Kind(k) => AnnId::Kind(k),
                 | TermAnnId::Type(t, _) => AnnId::Type(t),
-                | TermAnnId::Hole | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
+                | TermAnnId::Hole(_) | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => {
                     unreachable!()
                 }
             }
@@ -183,7 +183,7 @@ mod impls_identifiers {
         ) -> ResultKont<KindId> {
             match self {
                 | TermAnnId::Kind(kd) => Ok(kd),
-                | TermAnnId::Hole
+                | TermAnnId::Hole(_)
                 | TermAnnId::Type(_, _)
                 | TermAnnId::Value(_, _)
                 | TermAnnId::Compu(_, _) => tycker.err_k(err, blame),
@@ -195,7 +195,7 @@ mod impls_identifiers {
         ) -> ResultKont<(TypeId, KindId)> {
             match self {
                 | TermAnnId::Type(ty, kd) => Ok((ty, kd)),
-                | TermAnnId::Hole
+                | TermAnnId::Hole(_)
                 | TermAnnId::Kind(_)
                 | TermAnnId::Value(_, _)
                 | TermAnnId::Compu(_, _) => tycker.err_k(err, blame),
@@ -207,7 +207,7 @@ mod impls_identifiers {
         ) -> ResultKont<(ValueId, TypeId)> {
             match self {
                 | TermAnnId::Value(val, ty) => Ok((val, ty)),
-                | TermAnnId::Hole
+                | TermAnnId::Hole(_)
                 | TermAnnId::Kind(_)
                 | TermAnnId::Type(_, _)
                 | TermAnnId::Compu(_, _) => tycker.err_k(err, blame),
@@ -219,7 +219,7 @@ mod impls_identifiers {
         ) -> ResultKont<(CompuId, TypeId)> {
             match self {
                 | TermAnnId::Compu(com, ty) => Ok((com, ty)),
-                | TermAnnId::Hole
+                | TermAnnId::Hole(_)
                 | TermAnnId::Kind(_)
                 | TermAnnId::Type(_, _)
                 | TermAnnId::Value(_, _) => tycker.err_k(err, blame),
@@ -600,6 +600,8 @@ pub struct StaticsArena {
     pub fills: ArenaDense<FillId, su::TermId>,
     /// arena for the solutions of fillings
     pub solus: ArenaAssoc<FillId, AnnId>,
+    /// which holes are introduced by the user and should be reported
+    pub fill_hints: ArenaAssoc<FillId, ()>,
     /// arena for `data`
     pub datas: ArenaEquiv<DataId, im::Vector<(CtorName, TypeId)>, Data>,
     /// arena for `codata`
@@ -643,6 +645,7 @@ impl StaticsArena {
             abst_hints: ArenaAssoc::new(),
             fills: ArenaDense::new(alloc.alloc()),
             solus: ArenaAssoc::new(),
+            fill_hints: ArenaAssoc::new(),
             datas: ArenaEquiv::new_arc(alloc.clone()),
             codatas: ArenaEquiv::new_arc(alloc),
             inlinables: ArenaAssoc::new(),

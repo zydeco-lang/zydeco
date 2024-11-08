@@ -20,6 +20,7 @@ derive-where = { workspace = true }
 im = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
+colored = { workspace = true }
 
 [lib]
 doctest = false

@@ -4,8 +4,8 @@ use crate::textual::syntax::SpanArena;
 macro_rules! impl_span_view_pair {
     ($($ty:ty)*) => {
         $(
-            impl<'a> SpanView<'a, (SpanArena, ScopedArena)> for $ty {
-                fn span(&self, (spans, arena): &'a (SpanArena, ScopedArena)) -> &'a Span {
+            impl<'a, 'b> SpanView<'a, (&'b SpanArena, &'b ScopedArena)> for $ty {
+                fn span(&self, (spans, arena): &'a (&'b SpanArena, &'b ScopedArena)) -> &'a Span {
                     let entity = arena.textual.back(&(*self).into()).unwrap();
                     &spans[&entity]
                 }
