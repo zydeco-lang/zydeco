@@ -49,6 +49,6 @@ end
 def ! throw
   (M: VType -> CType) (mo: Thk (Monad M))
   (A: VType) (E: VType) (e: E)
-: Kont (M E) A =
-  ! shift M mo A E { fn _ ke -> ! ke e }
+: Kont (M A) E =
+  ! shift M mo E A { fn ke _ -> ! ke e }
 end
