@@ -1,0 +1,11 @@
+name = "Spell"
+
+srcs = []
+deps = [
+    { local = "../../lang/lib/std/proj.toml" }
+]
+bins = [
+    "tictactoe.zy",
+]
+
+std = "NoStd"
