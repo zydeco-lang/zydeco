@@ -32,6 +32,16 @@ fn run_files(
     let mut packs = Vec::new();
     let mut files = Vec::new();
     for path in paths {
+        // for dir, try finding "proj.toml" under it
+        if path.is_dir() {
+            let proj = path.join("proj.toml");
+            if proj.exists() {
+                let pack = build_sys.add_local_package(proj).map_err(|e| e.to_string())?;
+                packs.push(pack);
+                continue;
+            }
+            // fallback to adding the dir itself
+        }
         match path.extension() {
             | Some(ext) if ext == "toml" => {
                 // package
