@@ -45,6 +45,10 @@ macro_rules! lib_proj_bin {
     };
 }
 
+mod avl {
+    lib_proj_bin!(avl, hash, "hash");
+}
+
 mod exec {
     lib_proj_bin!(exec, abort, "abort");
     lib_proj_bin!(exec, add, "add");
@@ -67,7 +71,6 @@ mod exec {
     lib_proj_bin!(exec, forall, "forall");
     lib_proj_bin!(exec, free, "free");
     lib_proj_bin!(exec, free_, "free'");
-    lib_proj_bin!(exec, hash, "hash");
     lib_proj_bin!(exec, ifz, "ifz");
     lib_proj_bin!(exec, interpreter, "interpreter");
     lib_proj_bin!(exec, list, "list");

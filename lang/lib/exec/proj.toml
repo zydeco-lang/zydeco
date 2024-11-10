@@ -24,7 +24,6 @@ bins = [
     "forall.zy",
     "free.zy",
     "free'.zy",
-    "hash.zy",
     "ifz.zy",
     "interpreter.zydeco",
     "list.zydeco",

@@ -1,9 +1,7 @@
 name = "ICFP"
 
 srcs = []
-deps = [
-    { local = "../std/data.toml" }
-]
+deps = [{ local = "../std/proj.toml" }]
 bins = [
     "abort.zydeco",
     # "algebra.zydeco",

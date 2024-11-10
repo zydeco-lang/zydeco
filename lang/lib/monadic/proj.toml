@@ -1,9 +1,7 @@
 name = "Monadic"
 
 srcs = []
-deps = [
-    { local = "../std/core.toml" }
-]
+deps = [{ local = "../std/core.toml" }]
 bins = [
     "exnt.zy",
 ]

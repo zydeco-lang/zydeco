@@ -1,0 +1,11 @@
+name = "Avl"
+
+srcs = [
+    "lib.zy",
+]
+deps = [{ local = "../std/proj.toml" }]
+bins = [
+    "hash.zy",
+]
+
+std = "NoStd"
