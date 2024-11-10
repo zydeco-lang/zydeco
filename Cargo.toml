@@ -11,6 +11,7 @@ members = [
     "cli",
     "web",
     "editor/zls",
+    "editor/cajun",
 ]
 
 [workspace.package]
@@ -55,9 +56,9 @@ toml = "0.8"
 rayon = "1.10"
 # logging
 log = "0.4"
-env_logger = "0.10"
+env_logger = "0.11"
 # error handling
-thiserror = "1"
+thiserror = "2"
 unindent = "0.2"
 # parsing
 regex = "1"

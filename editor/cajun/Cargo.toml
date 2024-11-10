@@ -1,0 +1,19 @@
+[package]
+name = "cajun"
+version = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+# homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+
+[dependencies]
+zydeco-utils = { workspace = true }
+zydeco-derive = { workspace = true }
+zydeco-syntax = { workspace = true }
+zydeco-surface = { workspace = true }
+zydeco-statics = { workspace = true }
+zydeco-dynamics = { workspace = true }
+zydeco-driver = { workspace = true }
