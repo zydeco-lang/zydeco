@@ -383,6 +383,23 @@ impl<'decl> SccDeclarations<'decl> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.stack.push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
+            // // Debug: log
+            // {
+            //     let info = decls
+            //         .iter()
+            //         .map(|id| {
+            //             use zydeco_surface::scoped::fmt::*;
+            //             use zydeco_syntax::*;
+            //             format!(
+            //                 "({})\n\t\t{}...",
+            //                 id.span(tycker),
+            //                 &id.ugly(&Formatter::new(&tycker.scoped))[..30]
+            //             )
+            //         })
+            //         .collect::<Vec<_>>()
+            //         .join("\n\t");
+            //     log::info!("Tycking SCC:\n\t{}", info);
+            // }
 
             let mut binder_map = HashMap::new();
             let mut abst_map = HashMap::new();
@@ -399,7 +416,7 @@ impl<'decl> SccDeclarations<'decl> {
                 let Some(syn_ann) = bindee.syntactically_annotated(tycker) else {
                     tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
                 };
-                // try synthesizing the type
+                // try synthesizing the kind
                 let ann = env.mk(syn_ann).tyck(tycker, Action::syn())?;
                 // the binder should be a type; register it before analyzing the bindee
                 let kd = ann.try_as_kind(
@@ -649,15 +666,7 @@ impl SEnv<ss::TPatId> {
                 // defensive programming: def should be in ctx and should be a kind;
                 let def_kd = {
                     let ann = tycker.statics.annotations_var[&def];
-                    match ann {
-                        | AnnId::Kind(kd) => kd,
-                        | _ => {
-                            // tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                            panic!(
-                                "defensive programming: def should be in ctx and should be a kind"
-                            )
-                        }
-                    }
+                    ann.as_kind()
                 };
                 // def_kd should correctly be the type of assignee
                 let assignee_kd = { tycker.statics.annotations_type[&assignee].to_owned() };
