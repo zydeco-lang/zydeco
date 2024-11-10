@@ -68,3 +68,7 @@ lalrpop-util = "0.22"
 # cli
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
+# async
+tokio = { version = "1.41", features = ["full"] }
+# lsp
+tower-lsp = { version = "0.20", features = ["proposed"]}

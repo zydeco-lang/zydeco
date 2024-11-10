@@ -17,3 +17,6 @@ zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-dynamics = { workspace = true }
 zydeco-driver = { workspace = true }
+env_logger = { workspace = true }
+tokio = { workspace = true }
+tower-lsp = { workspace = true }
