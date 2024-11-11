@@ -10,7 +10,15 @@ use tower_lsp::{
 };
 
 /// The state and main struct for the Cajun Zydeco Language Server.
-pub struct Cajun {}
+pub struct Cajun {
+    client: Client,
+}
+
+impl Cajun {
+    pub fn new(client: Client) -> Self {
+        Self { client }
+    }
+}
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Cajun {
@@ -93,8 +101,37 @@ impl LanguageServer for Cajun {
             },
         })
     }
+    async fn initialized(&self, _: InitializedParams) {
+        self.client.log_message(MessageType::INFO, "initialized!").await;
+    }
 
     async fn shutdown(&self) -> Result<()> {
         Ok(())
+    }
+
+    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        self.client.log_message(MessageType::INFO, "file opened!").await;
+        // self.on_change(TextDocumentItem {
+        //     uri: params.text_document.uri,
+        //     text: params.text_document.text,
+        //     version: params.text_document.version,
+        // })
+        // .await
+    }
+
+    async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
+        // self.on_change(TextDocumentItem {
+        //     uri: params.text_document.uri,
+        //     text: std::mem::take(&mut params.content_changes[0].text),
+        //     version: params.text_document.version,
+        // })
+        // .await
+    }
+
+    async fn did_save(&self, _: DidSaveTextDocumentParams) {
+        self.client.log_message(MessageType::INFO, "file saved!").await;
+    }
+    async fn did_close(&self, _: DidCloseTextDocumentParams) {
+        self.client.log_message(MessageType::INFO, "file closed!").await;
     }
 }
