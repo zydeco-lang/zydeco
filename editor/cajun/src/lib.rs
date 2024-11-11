@@ -47,7 +47,7 @@ impl LanguageServer for Cajun {
                 //             scheme: Some("file".to_string()),
                 //             pattern: FileOperationPattern {
                 //                 glob: "**/*.{zy,zydeco}".to_string(),
-                //                 ..FileOperationPattern::default()
+                //                 ..Default::default()
                 //             },
                 //         }];
                 //         let opts = FileOperationRegistrationOptions { filters: zydeco_filters };
@@ -74,7 +74,7 @@ impl LanguageServer for Cajun {
                 //                 }
                 //             },
                 //             semantic_tokens_options: SemanticTokensOptions {
-                //                 work_done_progress_options: WorkDoneProgressOptions::default(),
+                //                 work_done_progress_options: Default::default(),
                 //                 legend: SemanticTokensLegend {
                 //                     token_types: LEGEND_TYPE.into(),
                 //                     token_modifiers: vec![],
@@ -82,14 +82,14 @@ impl LanguageServer for Cajun {
                 //                 range: Some(true),
                 //                 full: Some(SemanticTokensFullOptions::Bool(true)),
                 //             },
-                //             static_registration_options: StaticRegistrationOptions::default(),
+                //             static_registration_options: Default::default(),
                 //         },
                 //     ),
                 // ),
                 // definition_provider: Some(OneOf::Left(true)),
                 // references_provider: Some(OneOf::Left(true)),
                 // rename_provider: Some(OneOf::Left(true)),
-                ..ServerCapabilities::default()
+                ..Default::default()
             },
         })
     }
