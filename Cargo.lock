@@ -2854,6 +2854,7 @@ dependencies = [
 name = "zydeco-syntax"
 version = "0.2.0"
 dependencies = [
+ "auto_impl",
  "derive-where",
  "derive_more",
  "zydeco-derive",

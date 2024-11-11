@@ -15,6 +15,7 @@ zydeco-derive = { workspace = true }
 zydeco-utils = { workspace = true }
 derive_more = { workspace = true }
 derive-where = { workspace = true }
+auto_impl = { workspace = true }
 
 [lib]
 doctest = false

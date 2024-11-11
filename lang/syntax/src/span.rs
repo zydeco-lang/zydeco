@@ -2,15 +2,7 @@
 
 use zydeco_utils::span::Span;
 
+#[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait SpanView<'a, Arena> {
     fn span(&self, arena: &'a Arena) -> &'a Span;
-}
-
-impl<'a, T, Arena> SpanView<'a, Arena> for Box<T>
-where
-    T: SpanView<'a, Arena>,
-{
-    fn span(&self, arena: &'a Arena) -> &'a Span {
-        self.as_ref().span(arena)
-    }
 }

@@ -30,10 +30,10 @@ impl<'a> Ugly<'a, Formatter<'a>> for DefId {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for RcVPat {
+impl<'a> Ugly<'a, Formatter<'a>> for ValuePattern {
     fn ugly(&self, f: &'a Formatter) -> String {
         use ValuePattern as VPat;
-        match self.as_ref() {
+        match self {
             | VPat::Hole(Hole) => "_".to_string(),
             | VPat::Var(def) => def.ugly(f),
             | VPat::Ctor(vpat) => vpat.ugly(f),
@@ -43,11 +43,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for RcVPat {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for RcValue {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        self.as_ref().ugly(f)
-    }
-}
 impl<'a> Ugly<'a, Formatter<'a>> for Value {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
@@ -69,11 +64,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for RcCompu {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        self.as_ref().ugly(f)
-    }
-}
 impl<'a> Ugly<'a, Formatter<'a>> for Computation {
     fn ugly(&self, f: &'a Formatter) -> String {
         use Computation as Compu;
