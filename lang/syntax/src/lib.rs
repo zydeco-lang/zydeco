@@ -59,10 +59,10 @@ pub struct Sealed<T>(pub T);
 
 /* --------------------------------- Common --------------------------------- */
 
-/// `{ b }` has type `Thunk B`
+/// `{ b }` has type `Thk B`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Thunk<Tm>(pub Tm);
-/// `! a` has type `B` where `A = Thunk B`
+/// `! a` has type `B` where `A = Thk B`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Force<Tm>(pub Tm);
 
