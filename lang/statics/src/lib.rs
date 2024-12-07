@@ -13,6 +13,7 @@ pub use alloc::*;
 pub mod lub;
 pub use lub::*;
 pub mod norm;
+pub mod construct;
 pub mod destruct;
 pub mod syntactic;
 pub use syntactic::*;

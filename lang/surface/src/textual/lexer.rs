@@ -69,6 +69,10 @@ pub enum Tok<'input> {
     Inline,
     #[token("begin")]
     Begin,
+    #[token("monadic")]
+    Monadic,
+    #[token("monadically")]
+    Monadically,
     #[token("fn")]
     Fn,
     #[token("pi")]
@@ -163,12 +167,14 @@ impl<'input> Display for Tok<'input> {
             | Tok::Do => write!(f, "do"),
             | Tok::DoTilde => write!(f, "do~"),
             | Tok::Ret => write!(f, "ret"),
-            | Tok::Begin => write!(f, "begin"),
             | Tok::With => write!(f, "with"),
             | Tok::WithMo => write!(f, "with_mo"),
             | Tok::WithAlg => write!(f, "with_alg"),
             | Tok::Import => write!(f, "import"),
             | Tok::Inline => write!(f, "inline"),
+            | Tok::Begin => write!(f, "begin"),
+            | Tok::Monadic => write!(f, "monadic"),
+            | Tok::Monadically => write!(f, "monadically"),
             | Tok::Fn => write!(f, "fn"),
             | Tok::Pi => write!(f, "pi"),
             | Tok::Fix => write!(f, "fix"),

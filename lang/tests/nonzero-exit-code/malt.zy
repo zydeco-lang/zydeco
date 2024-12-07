@@ -62,7 +62,7 @@ main
     // we can import (translate) values from the outside world
     raise = { ! monad-err-optos .fail @(Int) }
     alt = { ! monad-alt-optos .alt @(Int) }
-  begin
+  monadic
     // we see two optos'es and we want to run them one by one,
     // and see if any succeeds
     do x <- ! alt { ! raise } { ret 0 };

@@ -43,7 +43,7 @@ def ! mo-exnt (E: VType) (M: VType -> CType)
 
   with mo
     inline mo-exn
-  begin
+  monadic
     ! mo-exn E
   end
 end
@@ -55,7 +55,7 @@ def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
     with mo
       import m : Thunk (Ret A) = m
       import mo-exnt-return : Thunk (A -> Exn E A) = { ! mo-exnt E M mo .return A }
-    begin
+    monadic
       do a <- ! m;
       ! mo-exnt-return a
     end
@@ -100,7 +100,7 @@ def ! mo-exnkt (E: VType) (M: VType -> CType)
 
   with mo
     inline mo-exnk
-  begin
+  monadic
     ! mo-exnk E
   end
 end
@@ -112,7 +112,7 @@ def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
     (with mo with alg
       import m : Thunk (Ret A) = m
       import mo-exnkt-return : Thunk (A -> ExnK E A) = { ! mo-exnkt E M mo .return A }
-    begin
+    monadic
       do a <- ! m;
       ! mo-exnkt-return a
     end) R alg
@@ -140,7 +140,7 @@ def ! mo-returnt (M: VType -> CType)
 : Monad (ReturnT M) =
   with mo
     inline mo-return
-  begin
+  monadic
     ! mo-return
   end
 end
@@ -152,7 +152,7 @@ def ! mt-returnt : MonadTrans ReturnT =
     with mo
       import m : Thunk (Ret A) = m
       import mo-returnt-return : Thunk (A -> Return A) = { ! mo-returnt M mo .return A }
-    begin
+    monadic
       do a <- ! m;
       ! mo-returnt-return a
     end
@@ -180,7 +180,7 @@ def ! mo-kontt (M: VType -> CType)
 : Monad (KontT M) =
   with mo
     inline mo-kont
-  begin
+  monadic
     ! mo-kont
   end
 end
@@ -192,7 +192,7 @@ def ! mt-kontt : MonadTrans KontT =
     (with mo with alg
       import m : Thunk (Ret A) = m
       import mo-kontt-return : Thunk (A -> Kont A) = { ! mo-kontt M mo .return A }
-    begin
+    monadic
       do a <- ! m;
       ! mo-kontt-return a
     end) R alg
@@ -224,7 +224,7 @@ def ! mo-statekt (S: VType) (M: VType -> CType)
 : Monad (StateKT S M) =
   with mo
     inline mo-statek
-  begin
+  monadic
     ! mo-statek S
   end
 end
@@ -236,7 +236,7 @@ def ! mt-statekt (S: VType) : MonadTrans (StateKT S) =
     (with mo with alg
       import m : Thunk (Ret A) = m
       import mo-statekt-return : Thunk (A -> StateK S A) = { ! mo-statekt S M mo .return A }
-    begin
+    monadic
       do a <- ! m;
       ! mo-statekt-return a
     end) R alg
@@ -282,7 +282,7 @@ def ! mo-nondett (M: VType -> CType)
 : Monad (NonDetT M) =
   with mo
     inline mo-nondet
-  begin
+  monadic
     ! mo-nondet
   end
 end
@@ -294,7 +294,7 @@ def ! mt-nondett : MonadTrans NonDetT =
     with mo
       import m : Thunk (Ret A) = m
       import mo-nondett-return : Thunk (A -> NonDet A) = { ! mo-nondett M mo .return A }
-    begin
+    monadic
       do a <- ! m;
       ! mo-nondett-return a
     end
@@ -309,7 +309,7 @@ main
     in
     with { ! mt-returnt .monad (ExnK String) { ! mo-exnk String } }
       import add_ : Thunk (Int -> Int -> Ret Int) = add_exn
-    begin
+    monadic
       do x <- ! add_ 1 -1;
       do x <- ret x;
       ret x

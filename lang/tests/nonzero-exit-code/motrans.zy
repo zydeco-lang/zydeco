@@ -22,7 +22,7 @@ end
 
 main
   let e = {
-    with { ! mexnk @(String) } begin
+    with { ! mexnk @(String) } monadic
       do x <- ret 0;
       ret x
     end

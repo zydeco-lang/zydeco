@@ -68,7 +68,7 @@ pub struct Sigma(pub PatId, pub TermId);
 //     pub tail: TermId,
 // }
 
-/// `begin ... end`
+/// `monadic ... end`
 #[derive(Clone, Debug)]
 pub struct MoBlock(pub TermId);
 
