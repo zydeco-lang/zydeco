@@ -512,7 +512,7 @@ module Parser where
       import p_word : U (String -> Ret String) = p_word
       import p_var : U (Ret String) = p_var
       import p_cbpv : U (ParserCbpv Ret) = p_cbpv
-    begin (
+    monadic (
       comatch
       | .value ->
         let ! _true : Ret SValue =

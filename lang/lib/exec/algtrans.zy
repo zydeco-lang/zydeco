@@ -29,7 +29,7 @@ end
 // test algebra generation for ret and bind
 def ! mo-return (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
   use mo
-  begin
+  monadic
     do a <- ret 1;
     ret a
   end
@@ -38,7 +38,7 @@ end
 // test algebra generation for thunk
 def ! mo-thunk (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
   use mo
-  begin
+  monadic
     do _ <- ret 1;
     ! { ret 1 }
   end
@@ -47,7 +47,7 @@ end
 // test algebra generation for thunk at argument position
 def ! mo-thunk-arg (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
   use mo
-  begin
+  monadic
     do _ <- ret 1;
     (fn (x: Thunk _) -> ! x) { ret 1 }
   end
@@ -56,7 +56,7 @@ end
 // test algebra generation for forall vtype
 def ! mo-forallv (E: VType) (mo: U (Monad (Exn E))) : forall (X: VType) . X -> Exn E X =
   use mo
-  begin
+  monadic
     do _ <- ret -1;
     fn (X: VType) (a: X) -> ret a
   end
@@ -84,7 +84,7 @@ def ! mo-forallc (E: VType)
   // { fn (_: Int) -> fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) -> ! b }
 
   use mo
-  begin
+  monadic
     do _ <- ret -1;
     fn (X: CType) (b: U X) -> ! b
   end
@@ -111,7 +111,7 @@ end
 //   // U (Algebra (Exn E) Y) -> U (X Y) -> (X Y))
 // =
 //   use mo
-//   begin
+//   monadic
 //     do _ <- ret -1;
 //     // forall (X: CType -> CType) (Y: CType) . U (X Y) -> X Y
 //     // 
@@ -139,7 +139,7 @@ end
 //         ! mo .return A a
 //       end
 //     } : Thunk (forall (A: VType) . A -> M A))
-//   begin
+//   monadic
 //     ! id
 //   end
 // end
@@ -161,7 +161,7 @@ end
 //         ! id~ B b
 //       end
 //     } : Thunk (forall (B: CType) . Thunk (Algebra M B) -> Thunk B -> B))
-//   begin
+//   monadic
 //     ! id~
 //   end
 // end
@@ -189,7 +189,7 @@ end
 //         ! alg .bindA A ma { fn a -> do a <- ! dethunk A { ret a }; ! mo .return A a }
 //       end
 //     } : Thunk (forall (A: VType) . Thunk (M A) -> M A))
-//   begin
+//   monadic
 //     ! dethunk
 //   end
 // end

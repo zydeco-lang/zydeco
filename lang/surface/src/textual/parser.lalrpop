@@ -44,6 +44,8 @@ extern {
         "import" => Tok::Import,
         "inline" => Tok::Inline,
         "begin" => Tok::Begin,
+        "monadic" => Tok::Monadic,
+        "monadically" => Tok::Monadically,
         "fn" => Tok::Fn,
         "pi" => Tok::Pi,
         "fix" => Tok::Fix,
@@ -245,7 +247,7 @@ Term: Term = {
     // ret
     "ret" <TermGen<Term>> => Ret(<>).into(),
     // monadic block
-    "begin" <TermId> "end" => MoBlock(<>).into(),
+    "monadic" <TermId> "end" => MoBlock(<>).into(),
     // structural types
     "data" <Data> "end" => <>.into(),
     "codata" <CoData> "end" => <>.into(),

@@ -23,7 +23,7 @@ def ! mo-exnt (E: VType) (M: VType -> CType)
   //   end
   // end
 
-  begin
+  monadic
     // inlining `! mo-exn E`
     (comatch
     | .return A a ->
@@ -49,7 +49,7 @@ end
 // end
 
 // def ! mt-exnt (E: VType) (M: VType -> CType) (mo: Thunk (Monad M)) : MonadTrans' (ExnT E) M =
-//   use mo begin
+//   use mo monadic
 //     let ! mo-exn : Monad (Exn E) = 
 //       // inlining `! mo-exn E`
 //       comatch

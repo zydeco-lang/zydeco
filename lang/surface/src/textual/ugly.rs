@@ -464,7 +464,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for MoBlock {
     fn ugly(&self, f: &'a Formatter<'a>) -> String {
         let mut s = String::new();
         let MoBlock(body) = self;
-        s += "begin ";
+        s += "monadic ";
         s += &body.ugly(f);
         s += " end";
         s
