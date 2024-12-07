@@ -100,6 +100,21 @@ impl TypeId {
         };
         Some(res)
     }
+    pub fn destruct_ret_app(&self, tycker: &mut Tycker) -> Option<TypeId> {
+        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
+        let res = match tycker.statics.types[&f_ty].to_owned() {
+            | Type::Ret(RetTy) => {
+                if a_tys.len() == 1 {
+                    let mut iter = a_tys.into_iter();
+                    iter.next()?
+                } else {
+                    None?
+                }
+            }
+            | _ => None?,
+        };
+        Some(res)
+    }
     pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
         let res = match tycker.statics.types[&self].to_owned() {
             | Type::Arrow(ty) => {
