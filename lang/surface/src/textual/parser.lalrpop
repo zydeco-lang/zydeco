@@ -1,5 +1,5 @@
 use crate::textual::{
-    syntax::*, lexer::*, escape,
+    syntax::*, lexer::*, escape::self,
 };
 
 grammar<'input, 'arena>(
@@ -77,12 +77,10 @@ extern {
 
 //* -------------------------------- Utilities ------------------------------- */
 
-#[inline]
 Sp<T>: Sp<T> = <l:@L> <inner:T> <r:@R> => Sp {
     info: Span::new(l, r).under_loc_ctx(loc), inner,
 };
 
-// #[inline]
 SepByDelim<Start, Sep, T, End>: Vec<T> = {
     Start <mut v: (<T> Sep)*> <last: T?> End => {
         match last {
@@ -112,7 +110,6 @@ Literal: Literal = {
 #[inline]
 MixedId: String = { <"UpperId"> => <>.into(), <"LowerId"> => <>.into(), };
 
-#[inline]
 VarName: VarName = <MixedId> => VarName(<>);
 CtorName: CtorName = <"CtorId"> => CtorName(<>.into());
 DtorName: DtorName = <"DtorId"> => DtorName(<>.into());
@@ -150,7 +147,6 @@ Hole: Hole = "_" => Hole;
 
 //* --------------------------------- Pattern -------------------------------- */
 
-#[inline]
 PatternGen<P>: PatId = <Sp<P>> => parser.pat(<>);
 
 #[inline]
@@ -163,7 +159,6 @@ Pattern: Pattern = {
     <Paren<PatId>> => <>.into(),
 };
 
-#[inline]
 CoPatternGen<P>: CoPatId = <Sp<P>> => parser.copat(<>);
 
 #[inline]
@@ -182,7 +177,6 @@ CoPatternAtom: CoPattern = {
 
 //* ---------------------------------- Term ---------------------------------- */
 
-#[inline]
 TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
 
 GenBind<T>: GenBind<T> = {
@@ -224,8 +218,9 @@ TermAnn: Term = {
 #[inline]
 TermId: TermId = <TermGen<Term>>;
 Term: Term = {
-    // indirect references (TermId) are full term references
-    // direct ones (TermGen<Term>) are only atomic terms
+    // Nominal semantics subtlety:
+    // Indirect references (TermId) are full term references;
+    // Direct ones (TermGen<Term>) are only atomic terms.
 
     #[precedence(level="0")]
     // parentheses
@@ -311,11 +306,6 @@ CoDataDef: CoDataDef = {
     "end" => CoDataDef {<>},
 };
 
-// UseLayer: Modifiers<UsePath> = {
-//     <Modifiers<("use" <UsePath>)>> => <>.into(),
-// };
-
-#[inline]
 DeclarationGen<D>: DeclId = <Sp<D>> => parser.decl(<>);
 
 #[inline]
@@ -327,11 +317,6 @@ Declaration: Declaration = {
     "alias" <GenBindTerm> "end" => Alias(<>).into(),
     "module" <name:(<NameRef<VarName>>)?>
     <top:("where" <TopLevel>)> "end" => Module {<>}.into(),
-    // "layer" <name:(<NameRef<VarName>>)?>
-    //     <uses:(<UseLayer>)*>
-    // <top:("where" <TopLevel>)> "end" => Layer {
-    //     name, uses, top
-    // }.into(),
     // "use" <UsePath> "end" => UseDef(<>).into(),
     // "use" <uses:UsePath> "where" <top:TopLevel> "end" => UseBlock {
     //     uses, top
