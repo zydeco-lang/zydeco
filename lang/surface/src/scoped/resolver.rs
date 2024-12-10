@@ -105,6 +105,7 @@ impl Resolver {
     }
 }
 
+/// Performs name resolution, effectively turning all `VarName`s back to `DefId`s.
 pub trait Resolve {
     type Out;
     type Lookup<'a>;
@@ -426,6 +427,11 @@ impl Collector {
     }
 }
 
+/// Collects contexts on all term sites.
+/// Additionally, collects whether top level declarations are recursive.
+///
+/// 1. Gradually collects variables from the topologically sorted top level declarations.
+/// 2. Within each declaration, collects variables according to the declaration's recursiveness.
 trait Collect {
     type Out;
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out>;
@@ -563,6 +569,7 @@ impl Collect for PatId {
 impl Collect for TermId {
     type Out = ();
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
+        // very important! this is where we update term contexts.
         collector.ctxs.insert(*self, ctx.to_owned());
         let term = collector.terms[self].clone();
         match term {
