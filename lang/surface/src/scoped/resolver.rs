@@ -1,6 +1,6 @@
 use crate::scoped::{syntax::*, *};
 use crate::textual::syntax as t;
-use zydeco_utils::{arena::*, deps::DepGraph, scc::Kosaraju, scc::SccGraph};
+use zydeco_utils::{arena::*, imc::*, deps::DepGraph, scc::Kosaraju, scc::SccGraph};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {

@@ -4,7 +4,10 @@ use crate::{
     *,
 };
 use std::collections::HashMap;
-use zydeco_utils::arena::{ArcGlobalAlloc, ArenaAccess};
+use zydeco_utils::{
+    arena::{ArcGlobalAlloc, ArenaAccess},
+    imc::ImmutableMonoidMap,
+};
 
 pub struct Tycker {
     pub spans: SpanArena,

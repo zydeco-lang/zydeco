@@ -1,5 +1,5 @@
 use crate::{syntax::*, *};
-use zydeco_utils::arena::ArenaAccess;
+use zydeco_utils::{arena::ArenaAccess, imc::ImmutableMonoidMap};
 
 /* ------------------------------ Substitution ------------------------------ */
 
