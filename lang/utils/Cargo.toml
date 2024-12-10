@@ -12,3 +12,4 @@ description = "utilities for zydeco"
 
 [dependencies]
 once_cell = { workspace = true }
+im = { workspace = true }

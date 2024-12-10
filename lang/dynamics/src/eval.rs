@@ -1,7 +1,6 @@
-use zydeco_utils::arena::ArenaAccess;
-
 use crate::{statics_syntax::Env, syntax::*};
 use std::io::{BufRead, Write};
+use zydeco_utils::{arena::ArenaAccess, imc::ImmutableMonoidMap};
 
 pub trait Eval<'rt>: Sized {
     type Out;

@@ -5,7 +5,7 @@ pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use crate::surface_syntax as su;
 use derive_more::From;
-use zydeco_utils::{arena::*, new_key_type};
+use zydeco_utils::{arena::*, imc::*, new_key_type};
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -241,23 +241,31 @@ pub struct Env<T> {
 
 mod impls_env {
     use super::*;
-    use std::ops::{Add, AddAssign, Index};
-    impl<T> Env<T>
+    use std::{
+        borrow::Borrow,
+        hash::Hash,
+        ops::{Add, AddAssign, Index},
+    };
+
+    impl<T> ImmutableMonoidMap<DefId, T> for Env<T>
     where
         T: Clone,
     {
-        pub fn new() -> Self {
+        fn new() -> Self {
             Self { defs: im::HashMap::new() }
         }
-        pub fn singleton(def: DefId, t: T) -> Self {
-            let mut defs = im::HashMap::new();
-            defs.insert(def, t);
+        fn singleton(def: DefId, t: T) -> Self {
+            let defs = im::HashMap::unit(def, t);
             Self { defs }
         }
-        pub fn get(&self, def: &DefId) -> Option<&T> {
+        fn get<BK>(&self, def: &BK) -> Option<&T>
+        where
+            BK: Hash + Eq + ?Sized,
+            DefId: Borrow<BK>,
+        {
             self.defs.get(def)
         }
-        pub fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
+        fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
             let Env { mut defs } = self.clone();
             defs.extend(iter);
             Self { defs }
