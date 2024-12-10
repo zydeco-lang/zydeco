@@ -8,6 +8,7 @@ use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
 
 /* --------------------------------- Context -------------------------------- */
 
+/// Context is what variables we can use at a given term site.
 #[derive(Clone, Debug)]
 pub struct Context<T> {
     pub defs: im::HashMap<DefId, T>,
@@ -92,7 +93,7 @@ pub struct ScopedArena {
     pub ctxs: ArenaAssoc<TermId, Context<()>>,
     /// externs to defs
     pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
-    /// non-self-referencing declarations
+    /// non-(optionally-mutual-)recursive declarations
     pub unis: ArenaAssoc<DeclId, ()>,
     /// dependency graph of the top level declarations
     pub deps: DepGraph<DeclId>,
