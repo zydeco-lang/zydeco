@@ -188,10 +188,11 @@ CoPatternAtom: CoPattern = {
 
 //* ---------------------------------- Term ---------------------------------- */
 
-CompModifier: () = { "!" };
+#[inline]
+TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
 
 GenBind<T>: GenBind<T> = {
-    <comp:CompModifier?> <fix:"fix"?> <binder:PatId> <params:CoPatId?>
+    <comp:"!"?> <fix:"fix"?> <binder:PatId> <params:CoPatId?>
     <ty:(":" <TermId>)?> <bindee:T> => GenBind {
         fix: fix.is_some(),
         comp: comp.is_some(),
@@ -220,38 +221,6 @@ CoMatcher: CoMatcherParam = {
 };
 
 #[inline]
-TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
-
-#[inline]
-TermId: TermId = <TermGen<Term>>;
-Term: Term = {
-    <TermArrow>,
-    // abstraction
-    "fn" <params:CoPatId> "->" <term:TermId> => Abs(<>).into(),
-    "comatch" <params:CoPatId> "->" <term:TermId> "end" => Abs(<>).into(),
-    // pi
-    "pi" <params:CoPatId> "." <term:TermId> => Pi(<>).into(),
-    // forall
-    "forall" <params:CoPatId> "." <ty:TermArrowId> => Forall(<>).into(),
-    // sigma
-    "sigma" <params:CoPatId> "." <ty:TermArrowId> => Sigma(<>).into(),
-    // exists
-    "exists" <params:CoPatId> "." <ty:TermArrowId> => Exists(<>).into(),
-    // fixed point
-    "fix" <binder:PatId> "->" <term:TermId> => Fix(<>).into(),
-    // kont call
-    "do~" <body:TermId> ";" <tail:TermId> => KontCall {<>}.into(),
-    // bind
-    "do" <binder:PatId> "<-" <bindee:TermId> ";" <tail:TermId> => Bind {
-        <>
-    }.into(),
-    // pure bind
-    "let" <binding:GenBindTerm> "in" <tail:TermId> => GenPureBind {<>}.into(),
-    // // use bind
-    // "use" <uses:UsePath> "in" <tail:TermId> => UseBind {<>}.into(),
-};
-
-#[inline]
 TermAnnId: TermId = <TermGen<TermAnn>>;
 TermAnn: Term = {
     <Term>,
@@ -259,59 +228,77 @@ TermAnn: Term = {
 };
 
 #[inline]
-TermParenId: TermId = <TermGen<TermParen>>;
-TermParen: Term = <Paren<TermAnnId>> => <>.into();
+TermId: TermId = <TermGen<Term>>;
+Term: Term = {
+    // indirect references (TermId) are full term references
+    // direct ones (TermGen<Term>) are only atomic terms
 
-#[inline]
-TermArrowId: TermId = <TermGen<TermArrow>>;
-TermArrow: Term = {
-    <TermProd>,
-    // arrow
-    <ty_in:TermProdId> "->" <ty_out:TermArrowId> => Arrow(<>).into(),
-};
-
-#[inline]
-TermProdId: TermId = <TermGen<TermProd>>;
-TermProd: Term = {
-    <TermApp>,
-    // product
-    <ty_l:TermAppId> "*" <ty_r:TermProdId> => Prod(<>).into(),
-};
-
-#[inline]
-TermAppId: TermId = <TermGen<TermApp>>;
-TermApp: Term = {
-    <TermAtom>,
-    // application
-    <term:TermAppId> <arg:TermAtomId> => Appli(vec![<>]).into(),
-    // destructor
-    <term:TermAppId> <name:DtorName> => Dtor(<>).into(),
-};
-
-#[inline]
-TermAtomId: TermId = <TermGen<TermAtom>>;
-TermAtom: Term = {
+    #[precedence(level="0")]
     // parentheses
-    <TermParen>,
+    <Paren<TermAnnId>> => <>.into(),
+    // hole and variable
     <Hole> => <>.into(),
     <NameRef<VarName>> => <>.into(),
     // thunk & force
     "{" <TermId> "}" => Thunk(<>).into(),
-    "!" <TermAtomId> => Force(<>).into(),
+    "!" <TermGen<Term>> => Force(<>).into(),
     // ret
-    "ret" <TermAtomId> => Ret(<>).into(),
+    "ret" <TermGen<Term>> => Ret(<>).into(),
     // monadic block
     "begin" <TermId> "end" => MoBlock(<>).into(),
     // structural types
     "data" <Data> "end" => <>.into(),
     "codata" <CoData> "end" => <>.into(),
     // constructor
-    <name:CtorName> <args:TermAtomId> => Ctor(<>).into(),
+    <name:CtorName> <args:TermGen<Term>> => Ctor(<>).into(),
     // match
     "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {<>}.into(),
     // comatch
     "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {<>}.into(),
     <Literal> => <>.into(),
+
+    #[precedence(level="1")] #[assoc(side="left")]
+    // application
+    <term:TermGen<Term>> <arg:TermGen<Term>> => Appli(vec![<>]).into(),
+    // destructor
+    <term:TermGen<Term>> <name:DtorName> => Dtor(<>).into(),
+
+    #[precedence(level="2")] #[assoc(side="right")]
+    // product
+    <ty_l:TermGen<Term>> "*" <ty_r:TermGen<Term>> => Prod(<>).into(),
+    
+    #[precedence(level="3")] #[assoc(side="right")]
+    // arrow
+    <ty_in:TermGen<Term>> "->" <ty_out:TermGen<Term>> => Arrow(<>).into(),
+
+    #[precedence(level="4")]
+    // pi
+    "pi" <params:CoPatId> "." <term:TermGen<Term>> => Pi(<>).into(),
+    // forall
+    "forall" <params:CoPatId> "." <ty:TermGen<Term>> => Forall(<>).into(),
+    // sigma
+    "sigma" <params:CoPatId> "." <ty:TermGen<Term>> => Sigma(<>).into(),
+    // exists
+    "exists" <params:CoPatId> "." <ty:TermGen<Term>> => Exists(<>).into(),
+
+    #[precedence(level="5")]
+    // abstraction
+    "fn" <params:CoPatId> "->" <term:TermGen<Term>> => Abs(<>).into(),
+    "comatch" <params:CoPatId> "->" <term:TermGen<Term>> "end" => Abs(<>).into(),
+    // fixed point
+    "fix" <binder:PatId> "->" <term:TermGen<Term>> => Fix(<>).into(),
+    // kont call
+    "do~" <body:TermGen<Term>> ";" <tail:TermGen<Term>> => KontCall {<>}.into(),
+    // bind
+    "do" <binder:PatId> "<-" <bindee:TermGen<Term>> ";" <tail:TermGen<Term>> => {
+        Bind {<>}.into()
+    },
+    // pure bind
+    "let" <binding:GenBindTerm> "in" <tail:TermGen<Term>> => {
+        GenPureBind {<>}.into()
+    },
+    // // use bind
+    // "use" <uses:UsePath> "in" <tail:TermGen<Term>> => UseBind {<>}.into(),
 };
 
 pub SingleTerm: TermId = TermId;
