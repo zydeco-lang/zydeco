@@ -1,12 +1,13 @@
-use crate::{
-    surface_syntax::{PrimDef, ScopedArena, SpanArena},
-    syntax::{AnnId, Env, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
-    *,
-};
-use std::collections::HashMap;
-use zydeco_utils::{
-    arena::{ArcGlobalAlloc, ArenaAccess},
-    imc::ImmutableMonoidMap,
+use {
+    crate::{
+        surface_syntax::{PrimDef, ScopedArena, SpanArena},
+        syntax::{AnnId, Env, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
+        *,
+    },
+    zydeco_utils::{
+        arena::{ArcGlobalAlloc, ArenaAccess},
+        imc::ImmutableMonoidMap,
+    },
 };
 
 pub struct Tycker {
@@ -384,6 +385,8 @@ impl<'decl> SccDeclarations<'decl> {
         let decls = decls.collect::<Vec<_>>();
 
         tycker.guarded(|tycker| {
+            use std::collections::HashMap;
+
             // administrative
             tycker.stack.push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
             // // Debug: log
@@ -1970,6 +1973,8 @@ impl Tyck for SEnv<su::TermId> {
                 }
             }
             | Tm::CoMatch(term) => {
+                use std::collections::HashMap;
+
                 let su::CoMatch { arms: comatchers } = term;
                 let ana_ty = match switch {
                     | Switch::Syn => tycker
