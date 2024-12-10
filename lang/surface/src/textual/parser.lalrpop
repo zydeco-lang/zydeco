@@ -141,7 +141,7 @@ DefId: DefId = <NameDef<Sp<VarName>>> => parser.def(<>.0);
 UsePath: UsePath = <NameRef<UseEnum>> => UsePath(<>);
 UseEnum: UseEnum = {
     <VarName> => <>.into(),
-    <binder:VarName> "=" <origin:VarName> => UseAlias(binder, origin).into(),
+    <binder:VarName> "=" <origin:VarName> => UseAlias(<>).into(),
     "*" => UseAll.into(),
     <Uses> => <>.into(),
 };
@@ -151,9 +151,7 @@ Uses: Uses = <SepByDelim<"(", ",", <UsePath>, ")">> => Uses(<>);
 
 Paren<T>: Paren<T> = SepByDelim<"(", ",", <T>, ")"> => Paren(<>);
 App<T>: App<T> = <T*> => Appli(<>);
-Ann<Tm, Ty>: Ann<Tm, Ty> = <tm:Tm> ":" <ty:Ty> => {
-    Ann { tm, ty, }
-};
+Ann<Tm, Ty>: Ann<Tm, Ty> = <tm:Tm> ":" <ty:Ty> => Ann {<>};
 Hole: Hole = "_" => Hole;
 
 //* --------------------------------- Pattern -------------------------------- */
@@ -167,9 +165,7 @@ Pattern: Pattern = {
     "(" <Ann<PatId, TermId>> ")" => <>.into(),
     <Hole> => <>.into(),
     <DefId> => <>.into(),
-    <ctor:CtorName> <pat:PatId> => {
-        Ctor(ctor, pat).into()
-    },
+    <ctor:CtorName> <pat:PatId> => Ctor(<>).into(),
     <Paren<PatId>> => <>.into(),
 };
 
@@ -180,18 +176,14 @@ CoPatternGen<P>: CoPatId = <Sp<P>> => parser.copat(<>);
 CoPatId: CoPatId = <CoPatternGen<CoPattern>>;
 CoPattern: CoPattern = {
     <CoPatternAtom>,
-    <x:CoPatId> <y:CoPatternAtomId> => {
-        Appli(vec![x, y]).into()
-    },
+    <x:CoPatId> <y:CoPatternAtomId> => Appli(vec![<>]).into(),
 };
 
 #[inline]
 CoPatternAtomId: CoPatId = <CoPatternGen<CoPatternAtom>>;
 CoPatternAtom: CoPattern = {
     <PatId> => <>.into(),
-    <DtorName> => {
-        <>.into()
-    },
+    <DtorName> => <>.into(),
 };
 
 //* ---------------------------------- Term ---------------------------------- */
@@ -209,30 +201,22 @@ GenBind<T>: GenBind<T> = {
 GenBindTerm: GenBind<TermId> = GenBind<("=" <TermId>)>;
 GenBindNull: GenBind<()> = GenBind<()>;
 
-Data: Data = <DataArm*> => Data { arms: <> };
+Data: Data = <arms:DataArm*> => Data {<>};
 #[inline]
 DataArm: DataArm = {
-    "|" <name:CtorName> ":" <param:TermId> => {
-        DataArm { name, param }
-    },
+    "|" <name:CtorName> ":" <param:TermId> => DataArm {<>},
 };
-CoData: CoData = <CoDataArm*> => CoData { arms: <> };
+CoData: CoData = <arms:CoDataArm*> => CoData {<>};
 #[inline]
 CoDataArm: CoDataArm = {
-    "|" <name:DtorName> <params:CoPatId?> ":" <out: TermId> => {
-        CoDataArm { name, params, out }
-    },
+    "|" <name:DtorName> <params:CoPatId?> ":" <out: TermId> => CoDataArm {<>},
 };
 
 Matcher: Matcher<PatId, TermId> = {
-    "|" <binder:PatId> "->" <tail:TermId> => Matcher {
-        binder, tail
-    },
+    "|" <binder:PatId> "->" <tail:TermId> => Matcher {<>},
 };
 CoMatcher: CoMatcherParam = {
-    "|" <params:CoPatId> "->" <tail:TermId> => CoMatcherParam {
-        params, tail
-    },
+    "|" <params:CoPatId> "->" <tail:TermId> => CoMatcherParam {<>},
 };
 
 #[inline]
@@ -243,48 +227,28 @@ TermId: TermId = <TermGen<Term>>;
 Term: Term = {
     <TermArrow>,
     // abstraction
-    "fn" <params:CoPatId> "->" <term:TermId> => {
-        Abs(params, term)
-    }.into(),
-    "comatch" <params:CoPatId> "->" <term:TermId> "end" => {
-        Abs(params, term)
-    }.into(),
+    "fn" <params:CoPatId> "->" <term:TermId> => Abs(<>).into(),
+    "comatch" <params:CoPatId> "->" <term:TermId> "end" => Abs(<>).into(),
     // pi
-    "pi" <params:CoPatId> "." <term:TermId> => {
-        Pi(params, term)
-    }.into(),
+    "pi" <params:CoPatId> "." <term:TermId> => Pi(<>).into(),
     // forall
-    "forall" <params:CoPatId> "." <ty:TermArrowId> => {
-        Forall(params, ty)
-    }.into(),
+    "forall" <params:CoPatId> "." <ty:TermArrowId> => Forall(<>).into(),
     // sigma
-    "sigma" <params:CoPatId> "." <ty:TermArrowId> => {
-        Sigma(params, ty)
-    }.into(),
+    "sigma" <params:CoPatId> "." <ty:TermArrowId> => Sigma(<>).into(),
     // exists
-    "exists" <params:CoPatId> "." <ty:TermArrowId> => {
-        Exists(params, ty)
-    }.into(),
+    "exists" <params:CoPatId> "." <ty:TermArrowId> => Exists(<>).into(),
     // fixed point
-    "fix" <binder:PatId> "->" <term:TermId> => {
-        Fix(binder, term)
-    }.into(),
+    "fix" <binder:PatId> "->" <term:TermId> => Fix(<>).into(),
     // kont call
-    "do~" <body:TermId> ";" <tail:TermId> => KontCall {
-        body, tail
-    }.into(),
+    "do~" <body:TermId> ";" <tail:TermId> => KontCall {<>}.into(),
     // bind
     "do" <binder:PatId> "<-" <bindee:TermId> ";" <tail:TermId> => Bind {
-        binder, bindee, tail
+        <>
     }.into(),
     // pure bind
-    "let" <binding:GenBindTerm> "in" <tail:TermId> => GenPureBind {
-        binding, tail
-    }.into(),
+    "let" <binding:GenBindTerm> "in" <tail:TermId> => GenPureBind {<>}.into(),
     // // use bind
-    // "use" <uses:UsePath> "in" <tail:TermId> => UseBind {
-    //     uses, tail
-    // }.into(),
+    // "use" <uses:UsePath> "in" <tail:TermId> => UseBind {<>}.into(),
 };
 
 #[inline]
@@ -303,9 +267,7 @@ TermArrowId: TermId = <TermGen<TermArrow>>;
 TermArrow: Term = {
     <TermProd>,
     // arrow
-    <ty_in:TermProdId> "->" <ty_out:TermArrowId> => {
-        Arrow(ty_in, ty_out).into()
-    },
+    <ty_in:TermProdId> "->" <ty_out:TermArrowId> => Arrow(<>).into(),
 };
 
 #[inline]
@@ -313,9 +275,7 @@ TermProdId: TermId = <TermGen<TermProd>>;
 TermProd: Term = {
     <TermApp>,
     // product
-    <ty_l:TermAppId> "*" <ty_r:TermProdId> => {
-        Prod(ty_l, ty_r).into()
-    },
+    <ty_l:TermAppId> "*" <ty_r:TermProdId> => Prod(<>).into(),
 };
 
 #[inline]
@@ -323,13 +283,9 @@ TermAppId: TermId = <TermGen<TermApp>>;
 TermApp: Term = {
     <TermAtom>,
     // application
-    <term:TermAppId> <arg:TermAtomId> => {
-        Appli(vec![term, arg]).into()
-    },
+    <term:TermAppId> <arg:TermAtomId> => Appli(vec![<>]).into(),
     // destructor
-    <term:TermAppId> <name:DtorName> => {
-        Dtor(term, name).into()
-    },
+    <term:TermAppId> <name:DtorName> => Dtor(<>).into(),
 };
 
 #[inline]
@@ -350,17 +306,11 @@ TermAtom: Term = {
     "data" <Data> "end" => <>.into(),
     "codata" <CoData> "end" => <>.into(),
     // constructor
-    <name:CtorName> <args:TermAtomId> => {
-        Ctor(name, args).into()
-    },
+    <name:CtorName> <args:TermAtomId> => Ctor(<>).into(),
     // match
-    "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {
-        scrut, arms
-    }.into(),
+    "match" <scrut:TermId> <arms:(<Matcher>)*> "end" => Match {<>}.into(),
     // comatch
-    "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {
-        arms
-    }.into(),
+    "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {<>}.into(),
     <Literal> => <>.into(),
 };
 
@@ -371,17 +321,13 @@ pub SingleTerm: TermId = TermId;
 DataDef: DataDef = {
     "data" <name:DefId> <params:PatId*>
         <def:("where" <Data>)>
-    "end" => DataDef {
-        name, params, def,
-    }
+    "end" => DataDef {<>},
 };
 
 CoDataDef: CoDataDef = {
     "codata" <name:DefId> <params:PatId*>
         <def:("where" <CoData>)>
-    "end" => CoDataDef {
-        name, params, def,
-    }
+    "end" => CoDataDef {<>},
 };
 
 // UseLayer: Modifiers<UsePath> = {
@@ -399,9 +345,7 @@ Declaration: Declaration = {
     "define" <GenBind<("=" <TermId>)?>> "end" => Define(<>).into(),
     "alias" <GenBindTerm> "end" => Alias(<>).into(),
     "module" <name:(<NameRef<VarName>>)?>
-    <top:("where" <TopLevel>)> "end" => Module {
-        name, top
-    }.into(),
+    <top:("where" <TopLevel>)> "end" => Module {<>}.into(),
     // "layer" <name:(<NameRef<VarName>>)?>
     //     <uses:(<UseLayer>)*>
     // <top:("where" <TopLevel>)> "end" => Layer {
