@@ -26,14 +26,10 @@ pub enum Tok<'input> {
     End,
     #[token("module")]
     Module,
-    #[token("layer")]
-    Layer,
     #[token("root")]
     Root,
     #[token("use")]
     Use,
-    #[token("embed")]
-    Embed,
     #[token("data")]
     Data,
     #[token("codata")]
@@ -57,18 +53,6 @@ pub enum Tok<'input> {
     DoTilde,
     #[token("ret")]
     Ret,
-    #[token("with")]
-    With,
-    #[token("with_mo")]
-    WithMo,
-    #[token("with_alg")]
-    WithAlg,
-    #[token("import")]
-    Import,
-    #[token("inline")]
-    Inline,
-    #[token("begin")]
-    Begin,
     #[token("monadic")]
     Monadic,
     #[token("monadically")]
@@ -152,10 +136,8 @@ impl<'input> Display for Tok<'input> {
             | Tok::End => write!(f, "end"),
             | Tok::Public => write!(f, "pub"),
             | Tok::Module => write!(f, "module"),
-            | Tok::Layer => write!(f, "layer"),
             | Tok::Root => write!(f, "root"),
             | Tok::Use => write!(f, "use"),
-            | Tok::Embed => write!(f, "embed"),
             | Tok::Data => write!(f, "data"),
             | Tok::Codata => write!(f, "codata"),
             | Tok::Alias => write!(f, "alias"),
@@ -167,12 +149,6 @@ impl<'input> Display for Tok<'input> {
             | Tok::Do => write!(f, "do"),
             | Tok::DoTilde => write!(f, "do~"),
             | Tok::Ret => write!(f, "ret"),
-            | Tok::With => write!(f, "with"),
-            | Tok::WithMo => write!(f, "with_mo"),
-            | Tok::WithAlg => write!(f, "with_alg"),
-            | Tok::Import => write!(f, "import"),
-            | Tok::Inline => write!(f, "inline"),
-            | Tok::Begin => write!(f, "begin"),
             | Tok::Monadic => write!(f, "monadic"),
             | Tok::Monadically => write!(f, "monadically"),
             | Tok::Fn => write!(f, "fn"),
