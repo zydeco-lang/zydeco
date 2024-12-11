@@ -1,5 +1,6 @@
 //! The surface syntax of zydeco.
 
+pub use super::arena::*;
 pub use crate::{arena::*, syntax::*};
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
@@ -289,19 +290,6 @@ pub enum ReplInput {
 
 #[derive(Clone, Debug)]
 pub struct TopLevel(pub Vec<DeclId>);
-
-/* ---------------------------------- Arena --------------------------------- */
-
-#[derive(Default, Debug)]
-pub struct Arena {
-    pub defs: ArenaAssoc<DefId, VarName>,
-    pub pats: ArenaAssoc<PatId, Pattern>,
-    pub copats: ArenaAssoc<CoPatId, CoPattern>,
-    pub terms: ArenaAssoc<TermId, Term>,
-    pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
-}
-
-pub type SpanArena = ArenaSparse<EntityId, Span>;
 
 /* --------------------------------- Parser --------------------------------- */
 

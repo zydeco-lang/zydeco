@@ -1,6 +1,6 @@
 use crate::scoped::{syntax::*, *};
 use crate::textual::syntax as t;
-use zydeco_utils::{arena::*, deps::DepGraph, imc::*, scc::Kosaraju, scc::SccGraph};
+use zydeco_utils::{deps::DepGraph, imc::*, scc::Kosaraju, scc::SccGraph};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {
@@ -530,13 +530,6 @@ impl Collect for SccDeclarations<'_> {
     }
 }
 
-impl Collect for DefId {
-    type Out = Context<()>;
-    fn collect(&self, _collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
-        Ok(ctx.extended([(*self, ())]))
-    }
-}
-
 impl Collect for PatId {
     type Out = Context<()>;
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
@@ -551,7 +544,7 @@ impl Collect for PatId {
                 let Hole = pat;
                 ctx
             }
-            | Pattern::Var(def) => def.collect(collector, ctx)?,
+            | Pattern::Var(def) => ctx.extended([(def, ())]),
             | Pattern::Ctor(pat) => {
                 let Ctor(_ctor, args) = pat;
                 args.collect(collector, ctx)?

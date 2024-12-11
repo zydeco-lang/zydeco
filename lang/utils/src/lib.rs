@@ -13,8 +13,8 @@ pub mod monoid;
 pub mod prelude {
     pub use crate::{
         arena::*,
-        imc::*,
         cells::{MultiCell, SingCell},
+        imc::*,
         monoid::Monoid,
         never::Never,
         span::{Sp, Span},

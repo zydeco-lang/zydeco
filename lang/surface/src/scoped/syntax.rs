@@ -1,10 +1,10 @@
+pub use super::arena::*;
 pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
 pub use crate::textual::syntax::SpanArena;
 
-use crate::textual::syntax as t;
 use std::collections::HashSet;
-use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
+use zydeco_utils::cells::SingCell;
 
 /* --------------------------------- Context -------------------------------- */
 
@@ -135,34 +135,6 @@ mod impls_co_context {
 /* -------------------------------- TopLevel -------------------------------- */
 
 pub struct SccDeclarations<'decl>(pub &'decl HashSet<DeclId>);
-
-/* ---------------------------------- Arena --------------------------------- */
-
-#[derive(Debug)]
-pub struct ScopedArena {
-    // arenas
-    pub defs: ArenaSparse<DefId, VarName>,
-    pub pats: ArenaSparse<PatId, Pattern>,
-    pub terms: ArenaSparse<TermId, Term<DefId>>,
-    pub decls: ArenaSparse<DeclId, Declaration>,
-    /// entity maps from textural syntax
-    pub textual: ArenaForth<t::EntityId, EntityId>,
-
-    /// def user map
-    pub users: ArenaForth<DefId, TermId>,
-    /// contexts upon terms
-    pub ctxs: ArenaAssoc<TermId, Context<()>>,
-    /// co-contexts upon terms
-    pub coctxs: ArenaAssoc<TermId, CoContext<()>>,
-    /// externs to defs
-    pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
-    /// non-(optionally-mutual-)recursive declarations
-    pub unis: ArenaAssoc<DeclId, ()>,
-    /// dependency graph of the top level declarations
-    pub deps: DepGraph<DeclId>,
-    /// scc graph of the top level declarations
-    pub top: SccGraph<DeclId>,
-}
 
 /* -------------------------------- Primitive ------------------------------- */
 
