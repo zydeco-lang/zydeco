@@ -8,7 +8,7 @@ use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
 
 /* --------------------------------- Context -------------------------------- */
 
-/// Context is what variables we can use at a given term site.
+/// Context is what variables we *can use* at a given term site.
 #[derive(Clone, Debug)]
 pub struct Context<T> {
     pub defs: im::HashMap<DefId, T>,
@@ -69,6 +69,69 @@ mod impls_context {
     }
 }
 
+/* -------------------------------- CoContext ------------------------------- */
+
+/// CoContext is what variables we *have used* at a given term site.
+#[derive(Clone, Debug)]
+pub struct CoContext<T> {
+    pub defs: im::HashMap<DefId, T>,
+}
+
+mod impls_co_context {
+    use super::*;
+    use std::ops::{Add, AddAssign, Index};
+
+    impl<T> From<im::HashMap<DefId, T>> for CoContext<T> {
+        fn from(defs: im::HashMap<DefId, T>) -> Self {
+            Self { defs }
+        }
+    }
+
+    impl<T> Into<im::HashMap<DefId, T>> for CoContext<T> {
+        fn into(self) -> im::HashMap<DefId, T> {
+            self.defs
+        }
+    }
+
+    impl<T> AsRef<im::HashMap<DefId, T>> for CoContext<T> {
+        fn as_ref(&self) -> &im::HashMap<DefId, T> {
+            &self.defs
+        }
+    }
+
+    impl<T> Add for CoContext<T>
+    where
+        T: Clone,
+    {
+        type Output = Self;
+        fn add(self, other: Self) -> Self {
+            let CoContext { mut defs } = self;
+            defs.extend(other.defs);
+            Self { defs }
+        }
+    }
+    impl<T> AddAssign<(DefId, T)> for CoContext<T>
+    where
+        T: Clone,
+    {
+        fn add_assign(&mut self, (def, t): (DefId, T)) {
+            let Self { defs } = self;
+            let mut defs = defs.clone();
+            defs.insert(def, t);
+            *self = Self { defs };
+        }
+    }
+    impl<T> Index<&DefId> for CoContext<T>
+    where
+        T: Clone,
+    {
+        type Output = T;
+        fn index(&self, def: &DefId) -> &T {
+            &self.defs[def]
+        }
+    }
+}
+
 /* -------------------------------- TopLevel -------------------------------- */
 
 pub struct SccDeclarations<'decl>(pub &'decl HashSet<DeclId>);
@@ -89,6 +152,8 @@ pub struct ScopedArena {
     pub users: ArenaForth<DefId, TermId>,
     /// contexts upon terms
     pub ctxs: ArenaAssoc<TermId, Context<()>>,
+    /// co-contexts upon terms
+    pub coctxs: ArenaAssoc<TermId, CoContext<()>>,
     /// externs to defs
     pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
     /// non-(optionally-mutual-)recursive declarations

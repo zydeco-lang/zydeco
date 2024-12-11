@@ -1,6 +1,6 @@
 use crate::scoped::{syntax::*, *};
 use crate::textual::syntax as t;
-use zydeco_utils::{arena::*, imc::*, deps::DepGraph, scc::Kosaraju, scc::SccGraph};
+use zydeco_utils::{arena::*, deps::DepGraph, imc::*, scc::Kosaraju, scc::SccGraph};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {
@@ -36,20 +36,6 @@ pub struct Resolver {
     pub deps: DepGraph<DeclId>,
 }
 
-pub struct Collector {
-    pub defs: ArenaSparse<DefId, VarName>,
-    pub pats: ArenaSparse<PatId, Pattern>,
-    pub terms: ArenaSparse<TermId, Term<DefId>>,
-    pub decls: ArenaSparse<DeclId, Declaration>,
-    pub textual: ArenaForth<t::EntityId, EntityId>,
-
-    pub users: ArenaForth<DefId, TermId>,
-    pub ctxs: ArenaAssoc<TermId, Context<()>>,
-    pub unis: ArenaAssoc<DeclId, ()>,
-    pub deps: DepGraph<DeclId>,
-    pub top: SccGraph<DeclId>,
-}
-
 pub struct ResolveOut {
     pub spans: SpanArena,
     pub prim: PrimDef,
@@ -81,10 +67,12 @@ impl Resolver {
         let decls = bitter.decls.filter_map_id(|id| decls.get(&id).cloned());
         let textual = bitter.textual;
         let ctxs = ArenaAssoc::default();
+        let coctxs = ArenaAssoc::default();
         let unis = ArenaAssoc::default();
         let top = Kosaraju::new(&deps).run();
-        let Collector { defs, pats, terms, decls, textual, users, ctxs, unis, deps, top } =
-            Collector { defs, pats, terms, decls, textual, users, ctxs, unis, deps, top }.run()?;
+        let Collector { defs, pats, terms, decls, textual, users, ctxs, coctxs, unis, deps, top } =
+            Collector { defs, pats, terms, decls, textual, users, ctxs, coctxs, unis, deps, top }
+                .run()?;
         Ok(ResolveOut {
             spans,
             prim,
@@ -96,6 +84,7 @@ impl Resolver {
                 textual,
                 users,
                 ctxs,
+                coctxs,
                 exts,
                 unis,
                 deps,
@@ -407,6 +396,21 @@ impl Resolve for TermId {
         resolver.terms.insert(*self, res);
         Ok(())
     }
+}
+
+pub struct Collector {
+    pub defs: ArenaSparse<DefId, VarName>,
+    pub pats: ArenaSparse<PatId, Pattern>,
+    pub terms: ArenaSparse<TermId, Term<DefId>>,
+    pub decls: ArenaSparse<DeclId, Declaration>,
+    pub textual: ArenaForth<t::EntityId, EntityId>,
+
+    pub users: ArenaForth<DefId, TermId>,
+    pub ctxs: ArenaAssoc<TermId, Context<()>>,
+    pub coctxs: ArenaAssoc<TermId, CoContext<()>>,
+    pub unis: ArenaAssoc<DeclId, ()>,
+    pub deps: DepGraph<DeclId>,
+    pub top: SccGraph<DeclId>,
 }
 
 impl Collector {
