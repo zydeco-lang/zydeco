@@ -220,7 +220,7 @@ TermId: TermId = <TermGen<Term>>;
 Term: Term = {
     // Nominal semantics subtlety:
     // Indirect references (TermId) are full term references;
-    // Direct ones (TermGen<Term>) are only atomic terms.
+    // Direct ones (TermGen<Term>) are only atomic (precedence -= 1) terms.
 
     #[precedence(level="0")]
     // parentheses
@@ -235,6 +235,8 @@ Term: Term = {
     "ret" <TermGen<Term>> => Ret(<>).into(),
     // monadic block
     "monadic" <TermId> "end" => MoBlock(<>).into(),
+    // abstraction (alternative syntax)
+    "comatch" <params:CoPatId> "->" <term:TermId> "end" => Abs(<>).into(),
     // structural types
     "data" <Data> "end" => <>.into(),
     "codata" <CoData> "end" => <>.into(),
@@ -273,9 +275,10 @@ Term: Term = {
     #[precedence(level="5")]
     // abstraction
     "fn" <params:CoPatId> "->" <term:TermGen<Term>> => Abs(<>).into(),
-    "comatch" <params:CoPatId> "->" <term:TermGen<Term>> "end" => Abs(<>).into(),
     // fixed point
     "fix" <binder:PatId> "->" <term:TermGen<Term>> => Fix(<>).into(),
+    // monadically
+    "monadically" <TermGen<Term>> => MoBlock(<>).into(),
     // kont call
     "do~" <body:TermGen<Term>> ";" <tail:TermGen<Term>> => KontCall {<>}.into(),
     // bind
