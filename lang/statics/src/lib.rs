@@ -6,6 +6,7 @@ pub mod surface_syntax {
 }
 
 pub mod syntax;
+pub mod arena;
 pub mod prims;
 // pub use prims::*;
 pub mod alloc;

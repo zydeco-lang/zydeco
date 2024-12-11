@@ -13,6 +13,7 @@ pub mod syntax;
 /// introduces the surface syntax (AST);
 pub mod textual {
     pub mod syntax;
+    pub mod arena;
     pub mod lexer;
     pub use lexer::*;
     #[allow(clippy::all)]
@@ -51,6 +52,7 @@ pub mod textual {
 /// Angostura
 pub mod bitter {
     pub mod syntax;
+    pub mod arena;
     pub mod alloc;
     pub use alloc::*;
     pub mod clone;
@@ -67,6 +69,7 @@ pub mod bitter {
 /// introduces the bound syntax (ABT);
 pub mod scoped {
     pub mod syntax;
+    pub mod arena;
     pub mod binders;
     pub use binders::*;
     pub mod resolver;

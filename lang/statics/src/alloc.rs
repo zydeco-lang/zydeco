@@ -55,7 +55,6 @@ impl Alloc<FillId> for su::TermId {
     }
 }
 
-
 /* ---------------------------------- Kind ---------------------------------- */
 
 impl Alloc<KindId> for Kind {

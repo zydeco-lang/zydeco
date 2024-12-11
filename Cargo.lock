@@ -2835,6 +2835,7 @@ dependencies = [
 name = "zydeco-surface"
 version = "0.2.0"
 dependencies = [
+ "auto_impl",
  "derive-where",
  "derive_more",
  "im",

@@ -1,12 +1,14 @@
 //! Desugaring of the zydeco surface syntax.
 
-pub use crate::syntax::*;
-use crate::{arena::*, textual::syntax as t};
+pub use super::arena::*;
+pub use crate::{arena::*, syntax::*};
+pub use zydeco_syntax::*;
+pub use zydeco_utils::span::{LocationCtx, Sp, Span};
+
+use crate::textual::syntax as t;
 use derive_more::From;
 use std::ops::AddAssign;
-pub use zydeco_syntax::*;
 use zydeco_utils::cells::MultiCell;
-pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -190,33 +192,6 @@ pub struct TopLevel(pub Vec<DeclId>);
 impl AddAssign for TopLevel {
     fn add_assign(&mut self, rhs: TopLevel) {
         self.0.extend(rhs.0);
-    }
-}
-
-/* ---------------------------------- Arena --------------------------------- */
-
-#[derive(Clone, Debug, derive_more::AddAssign)]
-pub struct Arena {
-    // arenas
-    pub defs: ArenaSparse<DefId, VarName>,
-    pub pats: ArenaSparse<PatId, Pattern>,
-    pub terms: ArenaSparse<TermId, Term<NameRef<VarName>>>,
-    pub decls: ArenaSparse<DeclId, Modifiers<Declaration>>,
-
-    /// entity maps from textural syntax
-    pub textual: ArenaForth<t::EntityId, EntityId>,
-}
-
-impl Arena {
-    pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
-        Arena {
-            defs: ArenaSparse::new(alloc.alloc()),
-            pats: ArenaSparse::new(alloc.alloc()),
-            terms: ArenaSparse::new(alloc.alloc()),
-            decls: ArenaSparse::new(alloc.alloc()),
-
-            textual: ArenaForth::new(),
-        }
     }
 }
 
