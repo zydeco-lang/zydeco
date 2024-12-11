@@ -4,7 +4,7 @@ pub use crate::textual::syntax::SpanArena;
 
 use crate::textual::syntax as t;
 use std::collections::HashSet;
-use zydeco_utils::{arena::*, imc::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
+use zydeco_utils::{arena::*, cells::SingCell, deps::DepGraph, scc::SccGraph};
 
 /* --------------------------------- Context -------------------------------- */
 
@@ -16,57 +16,26 @@ pub struct Context<T> {
 
 mod impls_context {
     use super::*;
-    use std::{
-        borrow::Borrow,
-        hash::Hash,
-        ops::{Add, AddAssign, Index},
-    };
+    use std::ops::{Add, AddAssign, Index};
 
-    impl<T> ImmutableMonoidMap<DefId, T> for Context<T>
-    where
-        T: Clone,
-    {
-        fn new() -> Self {
-            Self { defs: im::HashMap::new() }
-        }
-        fn singleton(def: DefId, t: T) -> Self {
-            let defs = im::HashMap::unit(def, t);
-            Self { defs }
-        }
-        fn get<BK>(&self, def: &BK) -> Option<&T>
-        where
-            BK: Hash + Eq + ?Sized,
-            DefId: Borrow<BK>,
-        {
-            self.defs.get(def)
-        }
-        fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
-            let Context { mut defs } = self.clone();
-            defs.extend(iter);
+    impl<T> From<im::HashMap<DefId, T>> for Context<T> {
+        fn from(defs: im::HashMap<DefId, T>) -> Self {
             Self { defs }
         }
     }
-    // impl<T> Context<T>
-    // where
-    //     T: Clone,
-    // {
-    //     pub fn new() -> Self {
-    //         Self { defs: im::HashMap::new() }
-    //     }
-    //     pub fn singleton(def: DefId, t: T) -> Self {
-    //         let mut defs = im::HashMap::new();
-    //         defs.insert(def, t);
-    //         Self { defs }
-    //     }
-    //     pub fn get(&self, def: &DefId) -> Option<&T> {
-    //         self.defs.get(def)
-    //     }
-    //     pub fn extended(&self, iter: impl IntoIterator<Item = (DefId, T)>) -> Self {
-    //         let Context { mut defs } = self.clone();
-    //         defs.extend(iter);
-    //         Self { defs }
-    //     }
-    // }
+
+    impl<T> Into<im::HashMap<DefId, T>> for Context<T> {
+        fn into(self) -> im::HashMap<DefId, T> {
+            self.defs
+        }
+    }
+
+    impl<T> AsRef<im::HashMap<DefId, T>> for Context<T> {
+        fn as_ref(&self) -> &im::HashMap<DefId, T> {
+            &self.defs
+        }
+    }
+
     impl<T> Add for Context<T>
     where
         T: Clone,
