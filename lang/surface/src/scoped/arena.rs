@@ -2,6 +2,7 @@ use super::syntax::*;
 use crate::textual::syntax as t;
 use zydeco_utils::{deps::DepGraph, scc::SccGraph};
 
+/// Item projectors out of the scoped arena.
 #[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait ArenaScoped {
     fn def(&self, id: &DefId) -> VarName;
@@ -10,13 +11,27 @@ pub trait ArenaScoped {
     fn decl(&self, id: &DeclId) -> Declaration;
 }
 
-#[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
-pub trait FoldingScoped<'er, Er: 'er + ArenaScoped, R> {
-    fn def_pat(&self, er: Er, res: R) -> R;
-    fn def_term(&self, er: Er, res: R) -> R;
-    fn pat(&self, er: Er, item: Pattern, res: R) -> R;
-    fn term(&self, er: Er, item: Term<DefId>, res: R) -> R;
-    fn decl(&self, er: Er, item: Declaration, res: R) -> R;
+/// A set of actions on scoped arena items.
+#[auto_impl::auto_impl(&mut, Box)]
+pub trait AccumFoldScoped<C, R>: ArenaScoped {
+    fn action_def(&mut self, item: VarName, ctx: &C, res: R) -> R;
+    fn action_pat(&mut self, item: Pattern, ctx: &C, res: R) -> R;
+    fn action_term(&mut self, item: Term<DefId>, ctx: &C, res: R) -> R;
+    fn action_decl(&mut self, item: Declaration, ctx: &C, res: R) -> R;
+}
+
+/// A forward fold w/ context and accumulator. Reader + State.
+pub trait ObverseAccumFold {
+    fn obverse_accum<C, R, F>(self, f: F, ctx: &C, res: R) -> R
+    where
+        F: AccumFoldScoped<C, R> + Clone;
+}
+
+/// A backward fold w/ context and accumulator. Reader + State.
+pub trait ReverseAccumFold {
+    fn reverse_accum<C, R, F>(self, f: F, ctx: &C, res: R) -> R
+    where
+        F: AccumFoldScoped<C, R> + Clone;
 }
 
 /* ---------------------------------- Arena --------------------------------- */
@@ -62,137 +77,372 @@ impl ArenaScoped for ScopedArena {
     }
 }
 
-// pub trait PatternFirstFold<'er, Er: 'er + ArenaScoped> {}
-// pub trait TermFirstFold<'er, Er: 'er + ArenaScoped>: Sized {
-//     type Item;
-//     fn fold<R, F>(self, er: Er, f: F, res: R) -> R
-//     where
-//         F: FoldingScoped<'er, Er, R>;
-// }
+use super::Collector;
 
-// use super::Collector;
+impl ArenaScoped for Collector {
+    fn def(&self, id: &DefId) -> VarName {
+        self.defs[id].to_owned()
+    }
+    fn pat(&self, id: &PatId) -> Pattern {
+        self.pats[id].to_owned()
+    }
+    fn term(&self, id: &TermId) -> Term<DefId> {
+        self.terms[id].to_owned()
+    }
+    fn decl(&self, id: &DeclId) -> Declaration {
+        self.decls[id].to_owned()
+    }
+}
 
-// impl ArenaScoped for Collector {
-//     fn def(&self, id: &DefId) -> VarName {
-//         self.defs[id].to_owned()
-//     }
-//     fn pat(&self, id: &PatId) -> Pattern {
-//         self.pats[id].to_owned()
-//     }
-//     fn term(&self, id: &TermId) -> Term<DefId> {
-//         self.terms[id].to_owned()
-//     }
-//     fn decl(&self, id: &DeclId) -> Declaration {
-//         self.decls[id].to_owned()
-//     }
-// }
+mod impl_obverse_accum {
+    use super::*;
 
-// impl<'er> TermFirstFold<'er, &'er mut Collector> for PatId {
-//     type Item = Pattern;
+    impl ObverseAccumFold for DefId {
+        fn obverse_accum<C, R, F>(self, mut f: F, ctx: &C, res: R) -> R
+        where
+            F: AccumFoldScoped<C, R>,
+        {
+            let item = f.def(&self);
+            f.action_def(item, ctx, res)
+        }
+    }
 
-//     fn fold<R, F>(self, er: &'er mut Collector, f: F, res: R) -> R
-//     where
-//         F: FoldingScoped<'er, &'er mut Collector, R>,
-//     {
-//         let item = er.pat(&self);
-//         match item {
-//             | Pattern::Ann(pat) => {
-//                 let Ann { tm, ty } = pat;
-//                 let res = ty.fold(er, f, res);
-//                 tm.fold(er, f, res)
-//             }
-//             | Pattern::Hole(pat) => {
-//                 let Hole = pat;
-//                 res
-//             }
-//             | Pattern::Var(pat) => {
-//                 let def = pat;
-//                 todo!()
-//             }
-//             | Pattern::Ctor(pat) => {
-//                 let Ctor(_ctorv, body) = pat;
-//                 body.fold(er, f, res)
-//             }
-//             | Pattern::Triv(pat) => {
-//                 let Triv = pat;
-//                 res
-//             }
-//             | Pattern::Cons(pat) => {
-//                 let Cons(a, b) = pat;
-//                 let res = a.fold(er, f, res);
-//                 b.fold(er, f, res)
-//             }
-//         }
-//     }
-// }
+    impl ObverseAccumFold for PatId {
+        fn obverse_accum<C, R, F>(self, mut f: F, ctx: &C, mut res: R) -> R
+        where
+            F: AccumFoldScoped<C, R> + Clone,
+        {
+            let item = f.pat(&self);
+            match item.to_owned() {
+                | Pattern::Ann(pat) => {
+                    let Ann { tm, ty } = pat;
+                    res = ty.obverse_accum(f.to_owned(), ctx, res);
+                    res = tm.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Pattern::Hole(pat) => {
+                    let Hole = pat;
+                }
+                | Pattern::Var(pat) => {
+                    let def = pat;
+                    res = def.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Pattern::Ctor(pat) => {
+                    let Ctor(_ctorv, body) = pat;
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Pattern::Triv(pat) => {
+                    let Triv = pat;
+                }
+                | Pattern::Cons(pat) => {
+                    let Cons(a, b) = pat;
+                    res = a.obverse_accum(f.to_owned(), ctx, res);
+                    res = b.obverse_accum(f.to_owned(), ctx, res);
+                }
+            };
+            f.action_pat(item, ctx, res)
+        }
+    }
 
-// impl<'er> TermFirstFold<'er, &'er mut Collector> for TermId {
-//     type Item = Term<DefId>;
+    impl ObverseAccumFold for TermId {
+        fn obverse_accum<C, R, F>(self, mut f: F, ctx: &C, mut res: R) -> R
+        where
+            F: AccumFoldScoped<C, R> + Clone,
+        {
+            let item = f.term(&self);
+            match item.to_owned() {
+                | Term::Internal(_) => unreachable!(),
+                | Term::Sealed(term) => {
+                    let Sealed(inner) = term;
+                    res = inner.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Ann(term) => {
+                    let Ann { tm, ty } = term;
+                    res = tm.obverse_accum(f.to_owned(), ctx, res);
+                    res = ty.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Hole(term) => {
+                    let Hole = term;
+                }
+                | Term::Var(term) => {
+                    let def = term;
+                    res = def.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Triv(term) => {
+                    let Triv = term;
+                }
+                | Term::Cons(term) => {
+                    let Cons(a, b) = term;
+                    res = a.obverse_accum(f.to_owned(), ctx, res);
+                    res = b.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Abs(term) => {
+                    let Abs(pat, body) = term;
+                    res = pat.obverse_accum(f.to_owned(), ctx, res);
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::App(term) => {
+                    let App(a, b) = term;
+                    res = a.obverse_accum(f.to_owned(), ctx, res);
+                    res = b.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Fix(term) => {
+                    let Fix(pat, body) = term;
+                    res = pat.obverse_accum(f.to_owned(), ctx, res);
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Pi(term) => {
+                    let Pi(pat, body) = term;
+                    res = pat.obverse_accum(f.to_owned(), ctx, res);
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Sigma(term) => {
+                    let Sigma(pat, body) = term;
+                    res = pat.obverse_accum(f.to_owned(), ctx, res);
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Thunk(term) => {
+                    let Thunk(body) = term;
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Force(term) => {
+                    let Force(body) = term;
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Ret(term) => {
+                    let Ret(body) = term;
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Do(term) => {
+                    let Bind { binder, bindee, tail } = term;
+                    res = bindee.obverse_accum(f.to_owned(), ctx, res);
+                    res = binder.obverse_accum(f.to_owned(), ctx, res);
+                    res = tail.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Let(term) => {
+                    let PureBind { binder, bindee, tail } = term;
+                    res = bindee.obverse_accum(f.to_owned(), ctx, res);
+                    res = binder.obverse_accum(f.to_owned(), ctx, res);
+                    res = tail.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::MoBlock(term) => {
+                    let MoBlock(body) = term;
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Data(term) => {
+                    let Data { arms } = term;
+                    for DataArm { name: _, param } in arms {
+                        res = param.obverse_accum(f.to_owned(), ctx, res);
+                    }
+                }
+                | Term::CoData(term) => {
+                    let CoData { arms } = term;
+                    for CoDataArm { name: _, out } in arms {
+                        res = out.obverse_accum(f.to_owned(), ctx, res);
+                    }
+                }
+                | Term::Ctor(term) => {
+                    let Ctor(_name, body) = term;
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Match(term) => {
+                    let Match { scrut, arms } = term;
+                    res = scrut.obverse_accum(f.to_owned(), ctx, res);
+                    for Matcher { binder, tail } in arms {
+                        res = binder.obverse_accum(f.to_owned(), ctx, res);
+                        res = tail.obverse_accum(f.to_owned(), ctx, res);
+                    }
+                }
+                | Term::CoMatch(term) => {
+                    let CoMatch { arms } = term;
+                    for CoMatcher { dtor: _, tail } in arms {
+                        res = tail.obverse_accum(f.to_owned(), ctx, res);
+                    }
+                }
+                | Term::Dtor(term) => {
+                    let Dtor(body, _name) = term;
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Lit(term) => {
+                    let _lit = term;
+                }
+            };
+            f.action_term(item, ctx, res)
+        }
+    }
+}
+mod impl_reverse_accum {
+    use super::*;
 
-//     fn fold<R, F>(self, er: &'er mut Collector, f: F, res: R) -> R
-//     where
-//         F: FoldingScoped<'er, &'er mut Collector, R>,
-//     {
-//         let item = er.term(&self);
-//         match item {
-//             Term::Internal(term) => {}
-//             Term::Sealed(term) => {}
-//             Term::Ann(term) => {}
-//             Term::Hole(term) => {}
-//             Term::Var(term) => {}
-//             Term::Triv(term) => {}
-//             Term::Cons(term) => {}
-//             Term::Abs(term) => {
-//                 let Abs(param, body) = term;
-//                 let res = body.fold(er, f);
-//                 param.fold(er, f)
-//             }
-//             Term::App(term) => {}
-//             Term::Fix(term) => {}
-//             Term::Pi(term) => {}
-//             Term::Sigma(term) => {}
-//             Term::Thunk(term) => {}
-//             Term::Force(term) => {}
-//             Term::Ret(term) => {}
-//             Term::Do(term) => {}
-//             Term::Let(term) => {}
-//             Term::MoBlock(term) => {}
-//             Term::Data(term) => {}
-//             Term::CoData(term) => {}
-//             Term::Ctor(term) => {}
-//             Term::Match(term) => {}
-//             Term::CoMatch(term) => {}
-//             Term::Dtor(term) => {}
-//             Term::Lit(term) => {}
-//         }
-//     }
-// }
+    impl ReverseAccumFold for DefId {
+        fn reverse_accum<C, R, F>(self, mut f: F, ctx: &C, res: R) -> R
+        where
+            F: AccumFoldScoped<C, R>,
+        {
+            let item = f.def(&self);
+            f.action_def(item, ctx, res)
+        }
+    }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::collections::HashMap;
+    impl ReverseAccumFold for PatId {
+        fn reverse_accum<C, R, F>(self, mut f: F, ctx: &C, mut res: R) -> R
+        where
+            F: AccumFoldScoped<C, R> + Clone,
+        {
+            let item = f.pat(&self);
+            match item.to_owned() {
+                | Pattern::Ann(pat) => {
+                    let Ann { tm, ty } = pat;
+                    res = ty.reverse_accum(f.to_owned(), ctx, res);
+                    res = tm.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Pattern::Hole(pat) => {
+                    let Hole = pat;
+                }
+                | Pattern::Var(pat) => {
+                    let def = pat;
+                    res = def.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Pattern::Ctor(pat) => {
+                    let Ctor(_ctorv, body) = pat;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Pattern::Triv(pat) => {
+                    let Triv = pat;
+                }
+                | Pattern::Cons(pat) => {
+                    let Cons(a, b) = pat;
+                    res = a.reverse_accum(f.to_owned(), ctx, res);
+                    res = b.reverse_accum(f.to_owned(), ctx, res);
+                }
+            };
+            f.action_pat(item, ctx, res)
+        }
+    }
 
-//     #[test]
-//     fn working_term_fold() {
-//         let mut alloc = GlobalAlloc::new();
-//         let deps = DepGraph::new();
-//         let mut collector = Collector {
-//             defs: ArenaSparse::new(alloc.alloc()),
-//             pats: ArenaSparse::new(alloc.alloc()),
-//             terms: ArenaSparse::new(alloc.alloc()),
-//             decls: ArenaSparse::new(alloc.alloc()),
-//             textual: ArenaForth::new(),
-//             users: ArenaForth::new(),
-//             ctxs: ArenaAssoc::new(),
-//             coctxs: ArenaAssoc::new(),
-//             unis: ArenaAssoc::new(),
-//             top: SccGraph::new(&deps, HashMap::new()),
-//             deps,
-//         };
-//         let name_correct = VarName("x".to_string());
-//         let def = collector.defs.alloc(name_correct.to_owned());
-//         let name = def.fold(&mut collector, |name, _er, _ress| name);
-//         assert_eq!(name, name_correct)
-//     }
-// }
+    impl ReverseAccumFold for TermId {
+        fn reverse_accum<C, R, F>(self, mut f: F, ctx: &C, mut res: R) -> R
+        where
+            F: AccumFoldScoped<C, R> + Clone,
+        {
+            let item = f.term(&self);
+            match item.to_owned() {
+                | Term::Internal(_) => unreachable!(),
+                | Term::Sealed(term) => {
+                    let Sealed(inner) = term;
+                    res = inner.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Ann(term) => {
+                    let Ann { tm, ty } = term;
+                    res = tm.reverse_accum(f.to_owned(), ctx, res);
+                    res = ty.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Hole(term) => {
+                    let Hole = term;
+                }
+                | Term::Var(term) => {
+                    let def = term;
+                    res = def.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Triv(term) => {
+                    let Triv = term;
+                }
+                | Term::Cons(term) => {
+                    let Cons(a, b) = term;
+                    res = a.reverse_accum(f.to_owned(), ctx, res);
+                    res = b.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Abs(term) => {
+                    let Abs(pat, body) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                    res = pat.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::App(term) => {
+                    let App(a, b) = term;
+                    res = a.reverse_accum(f.to_owned(), ctx, res);
+                    res = b.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Fix(term) => {
+                    let Fix(pat, body) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                    res = pat.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Pi(term) => {
+                    let Pi(pat, body) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                    res = pat.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Sigma(term) => {
+                    let Sigma(pat, body) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                    res = pat.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Thunk(term) => {
+                    let Thunk(body) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Force(term) => {
+                    let Force(body) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Ret(term) => {
+                    let Ret(body) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Do(term) => {
+                    let Bind { binder, bindee, tail } = term;
+                    res = tail.reverse_accum(f.to_owned(), ctx, res);
+                    res = binder.reverse_accum(f.to_owned(), ctx, res);
+                    res = bindee.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Let(term) => {
+                    let PureBind { binder, bindee, tail } = term;
+                    res = tail.reverse_accum(f.to_owned(), ctx, res);
+                    res = binder.reverse_accum(f.to_owned(), ctx, res);
+                    res = bindee.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::MoBlock(term) => {
+                    let MoBlock(body) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Data(term) => {
+                    let Data { arms } = term;
+                    for DataArm { name: _, param } in arms {
+                        res = param.reverse_accum(f.to_owned(), ctx, res);
+                    }
+                }
+                | Term::CoData(term) => {
+                    let CoData { arms } = term;
+                    for CoDataArm { name: _, out } in arms {
+                        res = out.reverse_accum(f.to_owned(), ctx, res);
+                    }
+                }
+                | Term::Ctor(term) => {
+                    let Ctor(_name, body) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Match(term) => {
+                    let Match { scrut, arms } = term;
+                    for Matcher { binder, tail } in arms {
+                        res = tail.reverse_accum(f.to_owned(), ctx, res);
+                        res = binder.reverse_accum(f.to_owned(), ctx, res);
+                    }
+                    res = scrut.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::CoMatch(term) => {
+                    let CoMatch { arms } = term;
+                    for CoMatcher { dtor: _, tail } in arms {
+                        res = tail.reverse_accum(f.to_owned(), ctx, res);
+                    }
+                }
+                | Term::Dtor(term) => {
+                    let Dtor(body, _name) = term;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Term::Lit(term) => {
+                    let _lit = term;
+                }
+            };
+            f.action_term(item, ctx, res)
+        }
+    }
+}
