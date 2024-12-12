@@ -2,6 +2,8 @@ use super::syntax::*;
 use crate::textual::syntax as t;
 use zydeco_utils::{deps::DepGraph, scc::SccGraph};
 
+/* ---------------------------------- Arena --------------------------------- */
+
 /// Item projectors out of the scoped arena.
 #[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait ArenaScoped {
@@ -10,31 +12,6 @@ pub trait ArenaScoped {
     fn term(&self, id: &TermId) -> Term<DefId>;
     fn decl(&self, id: &DeclId) -> Declaration;
 }
-
-/// A set of actions on scoped arena items.
-#[auto_impl::auto_impl(&mut, Box)]
-pub trait AccumFoldScoped<C, R>: ArenaScoped {
-    fn action_def(&mut self, item: VarName, ctx: &C, res: R) -> R;
-    fn action_pat(&mut self, item: Pattern, ctx: &C, res: R) -> R;
-    fn action_term(&mut self, item: Term<DefId>, ctx: &C, res: R) -> R;
-    fn action_decl(&mut self, item: Declaration, ctx: &C, res: R) -> R;
-}
-
-/// A forward fold w/ context and accumulator. Reader + State.
-pub trait ObverseAccumFold {
-    fn obverse_accum<C, R, F>(self, f: F, ctx: &C, res: R) -> R
-    where
-        F: AccumFoldScoped<C, R> + Clone;
-}
-
-/// A backward fold w/ context and accumulator. Reader + State.
-pub trait ReverseAccumFold {
-    fn reverse_accum<C, R, F>(self, f: F, ctx: &C, res: R) -> R
-    where
-        F: AccumFoldScoped<C, R> + Clone;
-}
-
-/* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Debug)]
 pub struct ScopedArena {
@@ -94,8 +71,48 @@ impl ArenaScoped for Collector {
     }
 }
 
+/* -------------------------------- AccumFold ------------------------------- */
+
+/// A set of actions on scoped arena items.
+#[auto_impl::auto_impl(&mut, Box)]
+pub trait AccumFoldScoped<C, R>: ArenaScoped {
+    fn action_def(&mut self, item: VarName, ctx: &C, res: R) -> R;
+    fn action_pat(&mut self, item: Pattern, ctx: &C, res: R) -> R;
+    fn action_term(&mut self, item: Term<DefId>, ctx: &C, res: R) -> R;
+    fn action_decl(&mut self, item: Declaration, ctx: &C, res: R) -> R;
+}
+
+/// A forward fold w/ context and accumulator. Reader + State.
+pub trait ObverseAccumFold {
+    fn obverse_accum<C, R, F>(self, f: F, ctx: &C, res: R) -> R
+    where
+        F: AccumFoldScoped<C, R> + Clone;
+}
+
+/// A backward fold w/ context and accumulator. Reader + State.
+pub trait ReverseAccumFold {
+    fn reverse_accum<C, R, F>(self, f: F, ctx: &C, res: R) -> R
+    where
+        F: AccumFoldScoped<C, R> + Clone;
+}
+
 mod impl_obverse_accum {
     use super::*;
+
+    impl<T> ObverseAccumFold for Option<T>
+    where
+        T: ObverseAccumFold,
+    {
+        fn obverse_accum<C, R, F>(self, f: F, ctx: &C, res: R) -> R
+        where
+            F: AccumFoldScoped<C, R> + Clone,
+        {
+            match self {
+                | Some(item) => item.obverse_accum(f, ctx, res),
+                | None => res,
+            }
+        }
+    }
 
     impl ObverseAccumFold for DefId {
         fn obverse_accum<C, R, F>(self, mut f: F, ctx: &C, res: R) -> R
@@ -269,9 +286,52 @@ mod impl_obverse_accum {
             f.action_term(item, ctx, res)
         }
     }
+
+    impl ObverseAccumFold for DeclId {
+        fn obverse_accum<C, R, F>(self, mut f: F, ctx: &C, mut res: R) -> R
+        where
+            F: AccumFoldScoped<C, R> + Clone,
+        {
+            let item = f.decl(&self);
+            match item.to_owned() {
+                | Declaration::AliasBody(decl) => {
+                    let AliasBody { binder, bindee } = decl;
+                    res = bindee.obverse_accum(f.to_owned(), ctx, res);
+                    res = binder.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Declaration::AliasHead(decl) => {
+                    let AliasHead { binder, ty } = decl;
+                    res = ty.obverse_accum(f.to_owned(), ctx, res);
+                    res = binder.obverse_accum(f.to_owned(), ctx, res);
+                }
+                | Declaration::Module(_) => unreachable!(),
+                | Declaration::Exec(decl) => {
+                    let Exec(body) = decl;
+                    res = body.obverse_accum(f.to_owned(), ctx, res);
+                }
+            }
+            f.action_decl(item, ctx, res)
+        }
+    }
 }
+
 mod impl_reverse_accum {
     use super::*;
+
+    impl<T> ReverseAccumFold for Option<T>
+    where
+        T: ReverseAccumFold,
+    {
+        fn reverse_accum<C, R, F>(self, f: F, ctx: &C, res: R) -> R
+        where
+            F: AccumFoldScoped<C, R> + Clone,
+        {
+            match self {
+                | Some(item) => item.reverse_accum(f, ctx, res),
+                | None => res,
+            }
+        }
+    }
 
     impl ReverseAccumFold for DefId {
         fn reverse_accum<C, R, F>(self, mut f: F, ctx: &C, res: R) -> R
@@ -443,6 +503,33 @@ mod impl_reverse_accum {
                 }
             };
             f.action_term(item, ctx, res)
+        }
+    }
+
+    impl ReverseAccumFold for DeclId {
+        fn reverse_accum<C, R, F>(self, mut f: F, ctx: &C, mut res: R) -> R
+        where
+            F: AccumFoldScoped<C, R> + Clone,
+        {
+            let item = f.decl(&self);
+            match item.to_owned() {
+                | Declaration::AliasBody(decl) => {
+                    let AliasBody { binder, bindee } = decl;
+                    res = bindee.reverse_accum(f.to_owned(), ctx, res);
+                    res = binder.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Declaration::AliasHead(decl) => {
+                    let AliasHead { binder, ty } = decl;
+                    res = ty.reverse_accum(f.to_owned(), ctx, res);
+                    res = binder.reverse_accum(f.to_owned(), ctx, res);
+                }
+                | Declaration::Module(_) => unreachable!(),
+                | Declaration::Exec(decl) => {
+                    let Exec(body) = decl;
+                    res = body.reverse_accum(f.to_owned(), ctx, res);
+                }
+            }
+            f.action_decl(item, ctx, res)
         }
     }
 }
