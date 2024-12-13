@@ -273,15 +273,23 @@ mod impls_env {
             Self { defs }
         }
     }
+    impl<T> Add<(DefId, T)> for Env<T>
+    where
+        T: Clone,
+    {
+        type Output = Self;
+        fn add(self, (def, t): (DefId, T)) -> Self {
+            let Env { mut defs } = self;
+            defs.insert(def, t);
+            Self { defs }
+        }
+    }
     impl<T> AddAssign<(DefId, T)> for Env<T>
     where
         T: Clone,
     {
         fn add_assign(&mut self, (def, t): (DefId, T)) {
-            let Self { defs } = self;
-            let mut defs = defs.clone();
-            defs.insert(def, t);
-            *self = Self { defs };
+            *self = self.clone() + (def, t);
         }
     }
     impl<T> Index<&DefId> for Env<T>
