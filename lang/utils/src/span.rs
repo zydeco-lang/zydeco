@@ -111,6 +111,12 @@ impl Span {
     }
 }
 
+impl Default for Span {
+    fn default() -> Self {
+        Span::dummy()
+    }
+}
+
 impl Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (l, r) = self.span1;
@@ -148,7 +154,7 @@ impl Display for Cursor2 {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct Sp<T> {
     pub inner: T,
     pub info: Span,
