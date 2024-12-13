@@ -47,15 +47,23 @@ mod impls_context {
             Self { defs }
         }
     }
+    impl<T> Add<(DefId, T)> for Context<T>
+    where
+        T: Clone,
+    {
+        type Output = Self;
+        fn add(self, (def, t): (DefId, T)) -> Self {
+            let Context { mut defs } = self;
+            defs.insert(def, t);
+            Self { defs }
+        }
+    }
     impl<T> AddAssign<(DefId, T)> for Context<T>
     where
         T: Clone,
     {
         fn add_assign(&mut self, (def, t): (DefId, T)) {
-            let Self { defs } = self;
-            let mut defs = defs.clone();
-            defs.insert(def, t);
-            *self = Self { defs };
+            *self = self.clone() + (def, t);
         }
     }
     impl<T> Index<&DefId> for Context<T>
@@ -79,7 +87,7 @@ pub struct CoContext<T> {
 
 mod impls_co_context {
     use super::*;
-    use std::ops::{Add, AddAssign, Index};
+    use std::ops::{Add, AddAssign, Sub, SubAssign, Index};
 
     impl<T> From<im::HashMap<DefId, T>> for CoContext<T> {
         fn from(defs: im::HashMap<DefId, T>) -> Self {
@@ -110,15 +118,42 @@ mod impls_co_context {
             Self { defs }
         }
     }
+    impl<T> Add<(DefId, T)> for CoContext<T>
+    where
+        T: Clone,
+    {
+        type Output = Self;
+        fn add(self, (def, t): (DefId, T)) -> Self {
+            let CoContext { mut defs } = self;
+            defs.insert(def, t);
+            Self { defs }
+        }
+    }
+    impl<T> Sub<&DefId> for CoContext<T>
+    where
+        T: Clone,
+    {
+        type Output = Self;
+        fn sub(self, def: &DefId) -> Self {
+            let CoContext { mut defs } = self;
+            defs.remove(def);
+            Self { defs }
+        }
+    }
     impl<T> AddAssign<(DefId, T)> for CoContext<T>
     where
         T: Clone,
     {
         fn add_assign(&mut self, (def, t): (DefId, T)) {
-            let Self { defs } = self;
-            let mut defs = defs.clone();
-            defs.insert(def, t);
-            *self = Self { defs };
+            *self = self.clone() + (def, t);
+        }
+    }
+    impl<T> SubAssign<&DefId> for CoContext<T>
+    where
+        T: Clone,
+    {
+        fn sub_assign(&mut self, def: &DefId) {
+            self.defs.remove(def);
         }
     }
     impl<T> Index<&DefId> for CoContext<T>

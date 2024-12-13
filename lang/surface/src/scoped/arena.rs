@@ -538,9 +538,9 @@ mod impl_reverse_accum {
 
 #[auto_impl::auto_impl(&mut, Box)]
 pub trait CtxFoldScoped<Cx>: ArenaScoped {
-    fn action_pat(&mut self, item: Pattern, ctx: Cx) -> Cx;
-    fn action_term(&mut self, item: Term<DefId>, ctx: Cx);
-    fn action_decl(&mut self, item: Declaration, ctx: Cx) -> Cx;
+    fn action_pat(&mut self, pat: PatId, ctx: Cx) -> Cx;
+    fn action_term(&mut self, term: TermId, ctx: Cx);
+    fn action_decl(&mut self, decl: DeclId, ctx: Cx) -> Cx;
 }
 
 pub trait ObverseCtxAccumFold {
@@ -624,7 +624,7 @@ mod impl_obverse_ctx {
                     ctx = b.obverse_ctx_accum(f.to_owned(), ctx)
                 }
             }
-            f.action_pat(item, ctx)
+            f.action_pat(self, ctx)
         }
     }
 
@@ -751,7 +751,7 @@ mod impl_obverse_ctx {
                     let _lit = term;
                 }
             };
-            f.action_term(item, ctx.to_owned())
+            f.action_term(self, ctx.to_owned())
         }
     }
 
@@ -779,8 +779,30 @@ mod impl_obverse_ctx {
                     body.obverse_ctx_final(f.to_owned(), &ctx);
                 }
             }
-            f.action_decl(item, ctx)
+            f.action_decl(self, ctx)
         }
+    }
+}
+
+impl CtxFoldScoped<Context<()>> for Collector {
+    fn action_pat(&mut self, pat: PatId, ctx: Context<()>) -> Context<()> {
+        let item = self.pat(&pat);
+        match item {
+            | Pattern::Var(def) => ctx + (def, ()),
+            | Pattern::Ann(_)
+            | Pattern::Hole(_)
+            | Pattern::Ctor(_)
+            | Pattern::Triv(_)
+            | Pattern::Cons(_) => ctx,
+        }
+    }
+
+    fn action_term(&mut self, term: TermId, ctx: Context<()>) {
+        self.ctxs.insert(term, ctx)
+    }
+
+    fn action_decl(&mut self, _decl: DeclId, ctx: Context<()>) -> Context<()> {
+        ctx
     }
 }
 
@@ -788,9 +810,9 @@ mod impl_obverse_ctx {
 
 #[auto_impl::auto_impl(&mut, Box)]
 pub trait CoCtxFoldScoped<Co>: ArenaScoped {
-    fn action_pat(&mut self, item: Pattern, co: Co) -> Co;
-    fn action_term(&mut self, item: Term<DefId>) -> Co;
-    fn action_decl(&mut self, item: Declaration, co: Co) -> Co;
+    fn action_pat(&mut self, pat: PatId, co: Co) -> Co;
+    fn action_term(&mut self, term: TermId, co: Co);
+    fn action_decl(&mut self, decl: DeclId, co: Co) -> Co;
 }
 
 pub trait ReverseCoCtxReduceFold {
@@ -874,7 +896,7 @@ mod impl_reverse_coctx {
                     co = a.reverse_coctx_reduce(f.to_owned(), co);
                 }
             }
-            f.action_pat(item, co)
+            f.action_pat(self, co)
         }
     }
 
@@ -885,128 +907,150 @@ mod impl_reverse_coctx {
             Co: Monoid + Clone,
         {
             let item = f.term(&self);
-            (match item.to_owned() {
-                | Term::Internal(_) => unreachable!(),
-                | Term::Sealed(term) => {
-                    let Sealed(inner) = term;
-                    inner.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Ann(term) => {
-                    let Ann { tm, ty } = term;
-                    tm.reverse_coctx_init(f.to_owned()) + ty.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Hole(term) => {
-                    let Hole = term;
-                    Co::default()
-                }
-                | Term::Var(term) => {
-                    let _ = term;
-                    Co::default()
-                }
-                | Term::Triv(term) => {
-                    let Triv = term;
-                    Co::default()
-                }
-                | Term::Cons(term) => {
-                    let Cons(a, b) = term;
-                    a.reverse_coctx_init(f.to_owned()) + b.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Abs(term) => {
-                    let Abs(pat, body) = term;
-                    let co = body.reverse_coctx_init(f.to_owned());
-                    pat.reverse_coctx_reduce(f.to_owned(), co)
-                }
-                | Term::App(term) => {
-                    let App(a, b) = term;
-                    a.reverse_coctx_init(f.to_owned()) + b.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Fix(term) => {
-                    let Fix(pat, body) = term;
-                    let co = body.reverse_coctx_init(f.to_owned());
-                    pat.reverse_coctx_reduce(f.to_owned(), co)
-                }
-                | Term::Pi(term) => {
-                    let Pi(pat, body) = term;
-                    let co = body.reverse_coctx_init(f.to_owned());
-                    pat.reverse_coctx_reduce(f.to_owned(), co)
-                }
-                | Term::Sigma(term) => {
-                    let Sigma(pat, body) = term;
-                    let co = body.reverse_coctx_init(f.to_owned());
-                    pat.reverse_coctx_reduce(f.to_owned(), co)
-                }
-                | Term::Thunk(term) => {
-                    let Thunk(body) = term;
-                    body.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Force(term) => {
-                    let Force(body) = term;
-                    body.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Ret(term) => {
-                    let Ret(body) = term;
-                    body.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Do(term) => {
-                    let Bind { binder, bindee, tail } = term;
-                    let co = tail.reverse_coctx_init(f.to_owned());
-                    binder.reverse_coctx_reduce(f.to_owned(), co)
-                        + bindee.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Let(term) => {
-                    let PureBind { binder, bindee, tail } = term;
-                    let co = tail.reverse_coctx_init(f.to_owned());
-                    binder.reverse_coctx_reduce(f.to_owned(), co)
-                        + bindee.reverse_coctx_init(f.to_owned())
-                }
-                | Term::MoBlock(term) => {
-                    let MoBlock(body) = term;
-                    body.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Data(term) => {
-                    let Data { arms } = term;
-                    Co::concat(
-                        arms.into_iter().map(|DataArm { name: _, param }| {
-                            param.reverse_coctx_init(f.to_owned())
-                        }),
-                    )
-                }
-                | Term::CoData(term) => {
-                    let CoData { arms } = term;
-                    Co::concat(
-                        arms.into_iter()
-                            .map(|CoDataArm { name: _, out }| out.reverse_coctx_init(f.to_owned())),
-                    )
-                }
-                | Term::Ctor(term) => {
-                    let Ctor(_name, body) = term;
-                    body.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Match(term) => {
-                    let Match { scrut, arms } = term;
-                    let co = Co::concat(arms.into_iter().map(|Matcher { binder, tail }| {
+            let co =
+                match item.to_owned() {
+                    | Term::Internal(_) => unreachable!(),
+                    | Term::Sealed(term) => {
+                        let Sealed(inner) = term;
+                        inner.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Ann(term) => {
+                        let Ann { tm, ty } = term;
+                        tm.reverse_coctx_init(f.to_owned()) + ty.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Hole(term) => {
+                        let Hole = term;
+                        Co::default()
+                    }
+                    | Term::Var(term) => {
+                        let _ = term;
+                        Co::default()
+                    }
+                    | Term::Triv(term) => {
+                        let Triv = term;
+                        Co::default()
+                    }
+                    | Term::Cons(term) => {
+                        let Cons(a, b) = term;
+                        a.reverse_coctx_init(f.to_owned()) + b.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Abs(term) => {
+                        let Abs(pat, body) = term;
+                        let co = body.reverse_coctx_init(f.to_owned());
+                        pat.reverse_coctx_reduce(f.to_owned(), co)
+                    }
+                    | Term::App(term) => {
+                        let App(a, b) = term;
+                        a.reverse_coctx_init(f.to_owned()) + b.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Fix(term) => {
+                        let Fix(pat, body) = term;
+                        let co = body.reverse_coctx_init(f.to_owned());
+                        pat.reverse_coctx_reduce(f.to_owned(), co)
+                    }
+                    | Term::Pi(term) => {
+                        let Pi(pat, body) = term;
+                        let co = body.reverse_coctx_init(f.to_owned());
+                        pat.reverse_coctx_reduce(f.to_owned(), co)
+                    }
+                    | Term::Sigma(term) => {
+                        let Sigma(pat, body) = term;
+                        let co = body.reverse_coctx_init(f.to_owned());
+                        pat.reverse_coctx_reduce(f.to_owned(), co)
+                    }
+                    | Term::Thunk(term) => {
+                        let Thunk(body) = term;
+                        body.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Force(term) => {
+                        let Force(body) = term;
+                        body.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Ret(term) => {
+                        let Ret(body) = term;
+                        body.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Do(term) => {
+                        let Bind { binder, bindee, tail } = term;
                         let co = tail.reverse_coctx_init(f.to_owned());
                         binder.reverse_coctx_reduce(f.to_owned(), co)
-                    }));
-                    scrut.reverse_coctx_init(f.to_owned()) + co
-                }
-                | Term::CoMatch(term) => {
-                    let CoMatch { arms } = term;
-                    Co::concat(
-                        arms.into_iter().map(|CoMatcher { dtor: _, tail }| {
+                            + bindee.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Let(term) => {
+                        let PureBind { binder, bindee, tail } = term;
+                        let co = tail.reverse_coctx_init(f.to_owned());
+                        binder.reverse_coctx_reduce(f.to_owned(), co)
+                            + bindee.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::MoBlock(term) => {
+                        let MoBlock(body) = term;
+                        body.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Data(term) => {
+                        let Data { arms } = term;
+                        Co::concat(arms.into_iter().map(|DataArm { name: _, param }| {
+                            param.reverse_coctx_init(f.to_owned())
+                        }))
+                    }
+                    | Term::CoData(term) => {
+                        let CoData { arms } = term;
+                        Co::concat(
+                            arms.into_iter().map(|CoDataArm { name: _, out }| {
+                                out.reverse_coctx_init(f.to_owned())
+                            }),
+                        )
+                    }
+                    | Term::Ctor(term) => {
+                        let Ctor(_name, body) = term;
+                        body.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Match(term) => {
+                        let Match { scrut, arms } = term;
+                        let co = Co::concat(arms.into_iter().map(|Matcher { binder, tail }| {
+                            let co = tail.reverse_coctx_init(f.to_owned());
+                            binder.reverse_coctx_reduce(f.to_owned(), co)
+                        }));
+                        scrut.reverse_coctx_init(f.to_owned()) + co
+                    }
+                    | Term::CoMatch(term) => {
+                        let CoMatch { arms } = term;
+                        Co::concat(arms.into_iter().map(|CoMatcher { dtor: _, tail }| {
                             tail.reverse_coctx_init(f.to_owned())
-                        }),
-                    )
-                }
-                | Term::Dtor(term) => {
-                    let Dtor(body, _name) = term;
-                    body.reverse_coctx_init(f.to_owned())
-                }
-                | Term::Lit(term) => {
-                    let _lit = term;
-                    Co::default()
-                }
-            }) + f.action_term(item)
+                        }))
+                    }
+                    | Term::Dtor(term) => {
+                        let Dtor(body, _name) = term;
+                        body.reverse_coctx_init(f.to_owned())
+                    }
+                    | Term::Lit(term) => {
+                        let _lit = term;
+                        Co::default()
+                    }
+                };
+            f.action_term(self, co.to_owned());
+            co
         }
+    }
+}
+
+impl CoCtxFoldScoped<CoContext<()>> for Collector {
+    fn action_pat(&mut self, pat: PatId, co: CoContext<()>) -> CoContext<()> {
+        let item = self.pat(&pat);
+        match item {
+            | Pattern::Var(def) => co - &def,
+            | Pattern::Ann(_)
+            | Pattern::Hole(_)
+            | Pattern::Ctor(_)
+            | Pattern::Triv(_)
+            | Pattern::Cons(_) => co,
+        }
+    }
+
+    fn action_term(&mut self, term: TermId, co: CoContext<()>) {
+        self.coctxs.insert(term, co)
+    }
+
+    fn action_decl(&mut self, _decl: DeclId, _co: CoContext<()>) -> CoContext<()> {
+        unreachable!()
     }
 }
