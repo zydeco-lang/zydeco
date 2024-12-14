@@ -66,13 +66,42 @@ impl Resolver {
         let terms = bitter.terms.filter_map_id(|id| terms.get(&id).cloned());
         let decls = bitter.decls.filter_map_id(|id| decls.get(&id).cloned());
         let textual = bitter.textual;
-        let ctxs = ArenaAssoc::default();
-        let coctxs = ArenaAssoc::default();
+        let ctxs_term = ArenaAssoc::default();
+        let ctxs_pat_local = ArenaAssoc::default();
+        let coctxs_pat_local = ArenaAssoc::default();
+        let coctxs_term_local = ArenaAssoc::default();
         let unis = ArenaAssoc::default();
         let top = Kosaraju::new(&deps).run();
-        let Collector { defs, pats, terms, decls, textual, users, ctxs, coctxs, unis, deps, top } =
-            Collector { defs, pats, terms, decls, textual, users, ctxs, coctxs, unis, deps, top }
-                .run()?;
+        let Collector {
+            defs,
+            pats,
+            terms,
+            decls,
+            textual,
+            users,
+            ctxs_term,
+            ctxs_pat_local,
+            coctxs_pat_local,
+            coctxs_term_local,
+            unis,
+            deps,
+            top,
+        } = Collector {
+            defs,
+            pats,
+            terms,
+            decls,
+            textual,
+            users,
+            ctxs_term,
+            ctxs_pat_local,
+            coctxs_pat_local,
+            coctxs_term_local,
+            unis,
+            deps,
+            top,
+        }
+        .run()?;
         Ok(ResolveOut {
             spans,
             prim,
@@ -83,8 +112,10 @@ impl Resolver {
                 decls,
                 textual,
                 users,
-                ctxs,
-                coctxs,
+                ctxs_term,
+                ctxs_pat_local,
+                coctxs_pat_local,
+                coctxs_term_local,
                 exts,
                 unis,
                 deps,
@@ -398,6 +429,7 @@ impl Resolve for TermId {
     }
 }
 
+/// See [`ScopedArena`] for more detail.
 pub struct Collector {
     pub defs: ArenaSparse<DefId, VarName>,
     pub pats: ArenaSparse<PatId, Pattern>,
@@ -406,8 +438,11 @@ pub struct Collector {
     pub textual: ArenaForth<t::EntityId, EntityId>,
 
     pub users: ArenaForth<DefId, TermId>,
-    pub ctxs: ArenaAssoc<TermId, Context<()>>,
-    pub coctxs: ArenaAssoc<TermId, CoContext<()>>,
+    pub ctxs_term: ArenaAssoc<TermId, Context<()>>,
+    pub ctxs_pat_local: ArenaAssoc<PatId, Context<()>>,
+    pub coctxs_pat_local: ArenaAssoc<PatId, CoContext<()>>,
+    pub coctxs_term_local: ArenaAssoc<TermId, CoContext<()>>,
+
     pub unis: ArenaAssoc<DeclId, ()>,
     pub deps: DepGraph<DeclId>,
     pub top: SccGraph<DeclId>,
@@ -533,7 +568,8 @@ impl Collect for SccDeclarations<'_> {
 impl Collect for PatId {
     type Out = Context<()>;
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
-        Ok(self.obverse_ctx_accum(collector, ctx))
+        // Ok(self.obverse_ctx_accum(collector, ctx))
+        todo!()
     }
 }
 
@@ -541,6 +577,7 @@ impl Collect for TermId {
     type Out = ();
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
         // very important! this is where we update term contexts.
-        Ok(self.obverse_ctx_final(collector, &ctx))
+        // Ok(self.obverse_ctx_final(collector, &ctx))
+        todo!()
     }
 }

@@ -87,26 +87,34 @@ pub struct CoContext<T> {
 
 mod impls_co_context {
     use super::*;
-    use std::ops::{Add, AddAssign, Sub, SubAssign, Index};
+    use std::ops::{Add, AddAssign, Index, Sub, SubAssign};
+    use zydeco_utils::{imc::ImmutableMonoidMap, monoid::Monoid};
+
+    // implementing the `ImmutableMonoidMap` trait for `CoContext`
 
     impl<T> From<im::HashMap<DefId, T>> for CoContext<T> {
         fn from(defs: im::HashMap<DefId, T>) -> Self {
             Self { defs }
         }
     }
-
     impl<T> Into<im::HashMap<DefId, T>> for CoContext<T> {
         fn into(self) -> im::HashMap<DefId, T> {
             self.defs
         }
     }
-
     impl<T> AsRef<im::HashMap<DefId, T>> for CoContext<T> {
         fn as_ref(&self) -> &im::HashMap<DefId, T> {
             &self.defs
         }
     }
 
+    impl<T: Clone> Monoid for CoContext<T> {}
+
+    impl<T: Clone> Default for CoContext<T> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
     impl<T> Add for CoContext<T>
     where
         T: Clone,
@@ -127,6 +135,18 @@ mod impls_co_context {
             let CoContext { mut defs } = self;
             defs.insert(def, t);
             Self { defs }
+        }
+    }
+    impl<S, T> Sub<Context<S>> for CoContext<T>
+    where
+        T: Clone,
+    {
+        type Output = Self;
+        fn sub(mut self, Context { defs: cx_defs }: Context<S>) -> Self {
+            for def in cx_defs.keys() {
+                self = self - def;
+            }
+            self
         }
     }
     impl<T> Sub<&DefId> for CoContext<T>
