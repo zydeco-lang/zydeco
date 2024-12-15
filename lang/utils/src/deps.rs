@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-/// dependency graph
+/// dependency graph; LHS depends on all RHSs
 #[derive(Clone, Debug, Default)]
 pub struct DepGraph<Id: Hash + Eq + Clone> {
     pub(crate) map: HashMap<Id, HashSet<Id>>,
