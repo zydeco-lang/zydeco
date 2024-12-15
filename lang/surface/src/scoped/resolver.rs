@@ -568,8 +568,8 @@ impl Collect for SccDeclarations<'_> {
 impl Collect for PatId {
     type Out = Context<()>;
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
-        // Ok(self.obverse_ctx_accum(collector, ctx))
-        todo!()
+        let () = self.obverse_local_post(collector, &ctx);
+        Ok(ctx + collector.ctxs_pat_local[self].to_owned())
     }
 }
 
@@ -577,7 +577,6 @@ impl Collect for TermId {
     type Out = ();
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
         // very important! this is where we update term contexts.
-        // Ok(self.obverse_ctx_final(collector, &ctx))
-        todo!()
+        Ok(self.obverse_local_post(collector, &ctx))
     }
 }

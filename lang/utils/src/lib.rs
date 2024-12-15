@@ -11,12 +11,19 @@ pub mod never;
 pub mod monoid;
 
 pub mod prelude {
+    /// Source code location.
+    pub use crate::span::{Sp, Span};
+    /// Data structures.
     pub use crate::{
         arena::*,
         cells::{MultiCell, SingCell},
         imc::*,
         monoid::Monoid,
         never::Never,
-        span::{Sp, Span},
+    };
+    /// SCC Graphs.
+    pub use crate::{
+        deps::{DepGraph, SrcGraph},
+        scc::{Kosaraju, SccGraph},
     };
 }
