@@ -139,6 +139,17 @@ impl<'a> Ugly<'a, Formatter<'a>> for AnnId {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for TermId {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        match self {
+            | TermId::Kind(kd) => kd.ugly(f),
+            | TermId::Type(ty) => ty.ugly(f),
+            | TermId::Value(v) => v.ugly(f),
+            | TermId::Compu(c) => c.ugly(f),
+        }
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for AbstId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let () = &f.statics.absts[self];
