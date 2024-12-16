@@ -2,9 +2,9 @@
   "name": "zls",
   "displayName": "zls",
   "description": "A zydeco language support.",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "engines": {
-    "vscode": "^1.87.0"
+    "vscode": "^1.96.0"
   },
   "repository": {
     "type": "git",
@@ -39,16 +39,19 @@
     ]
   },
   "scripts": {
-    "build-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node20",
-    "compile": "npm run build-base -- --sourcemap",
-    "watch": "npm run build-base -- --sourcemap --watch",
-    "check": "tsc --noEmit"
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "compile": "npm run esbuild-base -- --sourcemap",
+    "watch": "npm run esbuild-base -- --sourcemap --watch",
+    "check": "tsc --noEmit",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies"
   },
   "devDependencies": {
-    "@types/node": "^20.11.24",
-    "@types/vscode": "^1.87.0",
-    "esbuild": "^0.20.1",
-    "typescript": "^5.3.3"
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.96.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.2"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
