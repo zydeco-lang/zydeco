@@ -17,7 +17,7 @@
 			"patterns": [
 				{
 					"name": "storage.type.zydeco",
-					"match": "\\b(module|where|end|data|codata|alias|def|define|with|use|embed|begin|monadically|main|let|in|do|do~|match|comatch)\\b"
+					"match": "\\b(module|where|end|data|codata|alias|def|define|use|begin|monadic|monadically|main|let|in|do|do~|match|comatch)\\b"
 				},
 				{
 					"name": "keyword.control.zydeco",
