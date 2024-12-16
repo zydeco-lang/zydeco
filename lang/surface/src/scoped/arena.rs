@@ -308,6 +308,8 @@ impl LocalFoldScoped<Context<()>> for Collector {
     }
 }
 
+/* ------------------------------ LocalPostFold ----------------------------- */
+
 /// A forward fold w/ context. Reader + State monad.
 pub trait ObverseLocalPostFold {
     fn obverse_local_post<C, F>(self, f: &mut F, ctx: &C)

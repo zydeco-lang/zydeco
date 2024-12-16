@@ -2818,6 +2818,7 @@ dependencies = [
 name = "zydeco-statics"
 version = "0.2.0"
 dependencies = [
+ "auto_impl",
  "colored",
  "derive-where",
  "derive_more",

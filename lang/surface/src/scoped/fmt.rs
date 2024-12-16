@@ -489,3 +489,41 @@ impl<'a> Ugly<'a, Formatter<'a>> for Exec {
         s
     }
 }
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for Context<T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Context { defs } = self;
+        let mut s = String::new();
+        s += &defs
+            .iter()
+            .map(|(id, def)| format!("{} = {}", id.ugly(f), def.ugly(f)))
+            .collect::<Vec<_>>()
+            .join("; ");
+        s
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for CoContext<T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let CoContext { defs } = self;
+        let mut s = String::new();
+        s += &defs
+            .iter()
+            .map(|(id, def)| format!("{} = {}", id.ugly(f), def.ugly(f)))
+            .collect::<Vec<_>>()
+            .join("; ");
+        s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for () {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        "<>".to_string()
+    }
+}

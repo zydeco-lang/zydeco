@@ -44,6 +44,18 @@ where
     }
 }
 
+/// Item projectors out of the statics arena.
+#[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
+pub trait ArenaStatics {
+    fn kind(&self, id: &KindId) -> Kind;
+    fn tpat(&self, id: &TPatId) -> TypePattern;
+    fn r#type(&self, id: &TypeId) -> Type;
+    fn vpat(&self, id: &VPatId) -> ValuePattern;
+    fn value(&self, id: &ValueId) -> Value;
+    fn compu(&self, id: &CompuId) -> Computation;
+    fn decl(&self, id: &DeclId) -> Declaration;
+}
+
 #[derive(Debug)]
 pub struct StaticsArena {
     // arenas
@@ -75,8 +87,12 @@ pub struct StaticsArena {
     pub datas: ArenaEquiv<DataId, im::Vector<(CtorName, TypeId)>, Data>,
     /// arena for `codata`
     pub codatas: ArenaEquiv<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
-    /// arena for inlinable definitions
-    pub inlinables: ArenaAssoc<DefId, ValueId>,
+    // /// arena for inlinable definitions
+    // pub inlinables: ArenaAssoc<DefId, ValueId>,
+    /// definitions that are marked global
+    pub global_defs: ArenaAssoc<DefId, ()>,
+    /// terms that are marked global
+    pub global_terms: ArenaAssoc<TermId, ()>,
 
     // the type of terms under the context it's type checked; "annotation"
     /// annotations for variable definitions
@@ -117,7 +133,9 @@ impl StaticsArena {
             fill_hints: ArenaAssoc::new(),
             datas: ArenaEquiv::new_arc(alloc.clone()),
             codatas: ArenaEquiv::new_arc(alloc),
-            inlinables: ArenaAssoc::new(),
+            // inlinables: ArenaAssoc::new(),
+            global_defs: ArenaAssoc::new(),
+            global_terms: ArenaAssoc::new(),
 
             annotations_var: ArenaAssoc::new(),
             annotations_abst: ArenaAssoc::new(),
@@ -129,3 +147,68 @@ impl StaticsArena {
         }
     }
 }
+
+impl ArenaStatics for StaticsArena {
+    fn kind(&self, id: &KindId) -> Kind {
+        self.kinds[id].to_owned()
+    }
+    fn tpat(&self, id: &TPatId) -> TypePattern {
+        self.tpats[id].to_owned()
+    }
+    fn r#type(&self, id: &TypeId) -> Type {
+        self.types[id].to_owned()
+    }
+    fn vpat(&self, id: &VPatId) -> ValuePattern {
+        self.vpats[id].to_owned()
+    }
+    fn value(&self, id: &ValueId) -> Value {
+        self.values[id].to_owned()
+    }
+    fn compu(&self, id: &CompuId) -> Computation {
+        self.compus[id].to_owned()
+    }
+    fn decl(&self, id: &DeclId) -> Declaration {
+        self.decls[id].to_owned()
+    }
+}
+
+use super::Tycker;
+
+impl ArenaStatics for Tycker {
+    fn kind(&self, id: &KindId) -> Kind {
+        self.statics.kind(id)
+    }
+    fn tpat(&self, id: &TPatId) -> TypePattern {
+        self.statics.tpat(id)
+    }
+    fn r#type(&self, id: &TypeId) -> Type {
+        self.statics.r#type(id)
+    }
+    fn vpat(&self, id: &VPatId) -> ValuePattern {
+        self.statics.vpat(id)
+    }
+    fn value(&self, id: &ValueId) -> Value {
+        self.statics.value(id)
+    }
+    fn compu(&self, id: &CompuId) -> Computation {
+        self.statics.compu(id)
+    }
+    fn decl(&self, id: &DeclId) -> Declaration {
+        self.statics.decl(id)
+    }
+}
+
+/* -------------------------------- LocalFold ------------------------------- */
+
+/// A set of local actions on static arena items.
+#[auto_impl::auto_impl(&mut, Box)]
+pub trait LocalFoldStatics<Cx>: ArenaStatics {
+    fn action_kind(&mut self, kind: KindId, ctx: &Cx);
+    fn action_tpat(&mut self, tpat: TPatId, ctx: &Cx);
+    fn action_type(&mut self, r#type: TypeId, ctx: &Cx);
+    fn action_vpat(&mut self, vpat: VPatId, ctx: &Cx);
+    fn action_value(&mut self, value: ValueId, ctx: &Cx);
+    fn action_compu(&mut self, compu: CompuId, ctx: &Cx);
+    fn action_decl(&mut self, decl: DeclId, ctx: &Cx);
+}
+

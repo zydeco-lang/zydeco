@@ -21,6 +21,7 @@ pub use syntactic::*;
 pub mod tyck;
 pub use tyck::*;
 pub mod lift;
+pub mod inlinable;
 pub mod monadic;
 pub mod err;
 pub use err::*;
