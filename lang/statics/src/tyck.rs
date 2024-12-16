@@ -352,15 +352,22 @@ impl<'decl> SccDeclarations<'decl> {
                 | TermAnnId::Value(bindee, ty) => {
                     let binder = env.mk(binder).tyck(tycker, Action::ana(ty.into()))?;
                     let (binder, _) = binder.as_value();
-                    // since it's not a value, don't add the type into the environment
+                    // since it's not a type, don't add the type into the environment
                     tycker
                         .statics
                         .decls
                         .insert(id.to_owned(), ss::VAliasBody { binder, bindee }.into());
-                    // however, we can consider adding it to inlinables
+                    // // however, we can consider adding it to inlinables
+                    // match binder.try_destruct_def(tycker) {
+                    //     | (Some(def), _) => {
+                    //         tycker.statics.inlinables.insert(def, bindee);
+                    //     }
+                    //     | (None, _) => {}
+                    // }
+                    // however, it should be added to global
                     match binder.try_destruct_def(tycker) {
                         | (Some(def), _) => {
-                            tycker.statics.inlinables.insert(def, bindee);
+                            tycker.statics.global_defs.insert(def, ());
                         }
                         | (None, _) => {}
                     }
@@ -449,6 +456,13 @@ impl<'decl> SccDeclarations<'decl> {
                     | _ => unreachable!(),
                 };
                 let binder = binder_map[id];
+                // however, it should be added to global
+                match binder.try_destruct_def(tycker) {
+                    | (Some(def), _) => {
+                        tycker.statics.global_defs.insert(def, ());
+                    }
+                    | (None, _) => {}
+                }
                 // remove seal
                 let Some(bindee) = bindee.syntactically_sealed(tycker) else { unreachable!() };
                 let bindee = env.mk(bindee).tyck(tycker, Action::syn())?;
@@ -488,6 +502,19 @@ impl Tyck for SEnv<su::PatId> {
     fn tyck_inner(
         &self, tycker: &mut Tycker, Action { switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
+        // Debug: print
+        {
+            use colored::Colorize;
+            use zydeco_surface::scoped::fmt::*;
+            println!("{}", "=".repeat(80));
+            println!(
+                "\t{}",
+                &tycker.scoped.ctxs_pat_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
+            );
+            println!("   {}\t{}", "|-".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
+            println!("{}", "=".repeat(80));
+            println!();
+        }
         use su::Pattern as Pat;
         let pat_ann = match tycker.scoped.pats[&self.inner].clone() {
             | Pat::Ann(pat) => {
@@ -700,6 +727,19 @@ impl Tyck for SEnv<su::TermId> {
     fn tyck_inner(
         &self, tycker: &mut Tycker, Action { mut switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
+        // Debug: print
+        {
+            use colored::Colorize;
+            use zydeco_surface::scoped::fmt::*;
+            println!("{}", "=".repeat(80));
+            println!(
+                "\t{}",
+                &tycker.scoped.coctxs_term_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
+            );
+            println!("   {}\t{}", "-|".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
+            println!("{}", "=".repeat(80));
+            println!();
+        }
         // check if we're analyzing against an unfilled type
         match switch {
             | Switch::Syn => {}
@@ -851,7 +891,7 @@ impl Tyck for SEnv<su::TermId> {
                         }
                     }
                 };
-                match ann {
+                let out_ann = match ann {
                     | AnnId::Set => {
                         let ann = self.env[&def];
                         let AnnId::Kind(kd) = ann else { unreachable!() };
@@ -871,7 +911,8 @@ impl Tyck for SEnv<su::TermId> {
                         let val = Alloc::alloc(tycker, def, ty);
                         TermAnnId::Value(val, ty)
                     }
-                }
+                };
+                out_ann
             }
             | Tm::Triv(term) => {
                 let su::Triv = term;
@@ -1744,13 +1785,13 @@ impl Tyck for SEnv<su::TermId> {
                 // then, ana binder with bindee_ty
                 let binder_out_ann = self.mk(binder).tyck(tycker, Action::ana(bindee_ty.into()))?;
                 let (binder_out, _binder_ty) = binder_out_ann.as_value();
-                // consider adding it to the inlinables
-                match binder_out.try_destruct_def(tycker) {
-                    | (Some(def), _) => {
-                        tycker.statics.inlinables.insert(def, bindee_out);
-                    }
-                    | (None, _) => {}
-                }
+                // // consider adding it to the inlinables
+                // match binder_out.try_destruct_def(tycker) {
+                //     | (Some(def), _) => {
+                //         tycker.statics.inlinables.insert(def, bindee_out);
+                //     }
+                //     | (None, _) => {}
+                // }
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
                     let tail_out_ann = self.mk(tail).tyck(tycker, Action::switch(switch))?;
@@ -2105,6 +2146,38 @@ impl Tyck for SEnv<su::TermId> {
         if let Some(out_ann) = out_ann.as_term() {
             tycker.statics.terms.insert(self.inner, out_ann)
         }
+
+        // // check if the value or computation is global
+        // match out_ann.as_term() {
+        //     | Some(term) => match term {
+        //         | ss::TermId::Kind(_kd) => {
+        //             tycker.statics.global_terms.insert(term, ());
+        //         }
+        //         | ss::TermId::Type(ty) => match &tycker.statics.types[&ty] {
+        //             | ss::Type::Var(ty) => {}
+        //             | ss::Type::Abst(ty) => {}
+        //             | ss::Type::Fill(ty) => {}
+        //             | ss::Type::Abs(ty) => {}
+        //             | ss::Type::App(ty) => {}
+        //             | ss::Type::Thk(ty) => {}
+        //             | ss::Type::Ret(ty) => {}
+        //             | ss::Type::Unit(ty) => {}
+        //             | ss::Type::Int(ty) => {}
+        //             | ss::Type::Char(ty) => {}
+        //             | ss::Type::String(ty) => {}
+        //             | ss::Type::OS(ty) => {}
+        //             | ss::Type::Arrow(ty) => {}
+        //             | ss::Type::Forall(ty) => {}
+        //             | ss::Type::Prod(ty) => {}
+        //             | ss::Type::Exists(ty) => {}
+        //             | ss::Type::Data(ty) => {}
+        //             | ss::Type::CoData(ty) => {}
+        //         },
+        //         | ss::TermId::Value(value) => {}
+        //         | ss::TermId::Compu(compu) => {}
+        //     },
+        //     | None => {}
+        // }
 
         Ok(out_ann)
     }

@@ -56,7 +56,7 @@ impl<'rt> Runtime<'rt> {
             }
         }
         if konts.len() != 1 {
-            panic!("0 or multiple entry points: {}", konts.len());
+            panic!("{} entry points found, expected exactly 1", konts.len());
         }
         konts.pop().unwrap()
     }

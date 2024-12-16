@@ -17,6 +17,7 @@ zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
 derive_more = { workspace = true }
 derive-where = { workspace = true }
+auto_impl = { workspace = true }
 im = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
