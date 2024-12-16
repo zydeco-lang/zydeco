@@ -185,6 +185,17 @@ mod impls_co_context {
             &self.defs[def]
         }
     }
+
+    impl<T> IntoIterator for CoContext<T>
+    where
+        T: Clone,
+    {
+        type Item = (DefId, T);
+        type IntoIter = im::hashmap::ConsumingIter<(DefId, T)>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.defs.into_iter()
+        }
+    }
 }
 
 /* -------------------------------- TopLevel -------------------------------- */

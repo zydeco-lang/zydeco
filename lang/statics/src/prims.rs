@@ -67,6 +67,9 @@ impl Tycker {
                         unreachable!()
                     }
                 }
+
+                // should also be added to global
+                self.statics.global_defs.insert(def, ());
             }
             | None => {
                 // the alias head is a primitive value that needs to be linked later
@@ -83,6 +86,14 @@ impl Tycker {
                     | PatAnnId::Value(vpat, _) => vpat,
                 };
                 self.statics.decls.insert(id.clone(), VAliasHead { binder, ty }.into());
+
+                // should also be added to global
+                match binder.try_destruct_def(self) {
+                    | (Some(def), _) => {
+                        self.statics.global_defs.insert(def, ());
+                    }
+                    | (None, _) => {}
+                }
             }
         }
         Ok(env)

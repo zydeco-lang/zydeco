@@ -347,6 +347,13 @@ impl<'decl> SccDeclarations<'decl> {
                         .statics
                         .decls
                         .insert(id.to_owned(), ss::TAliasBody { binder, bindee }.into());
+                    // should also be added to global
+                    match binder.try_destruct_def(tycker) {
+                        | (Some(def), _) => {
+                            tycker.statics.global_defs.insert(def, ());
+                        }
+                        | (None, _) => {}
+                    }
                     env
                 }
                 | TermAnnId::Value(bindee, ty) => {
@@ -502,19 +509,19 @@ impl Tyck for SEnv<su::PatId> {
     fn tyck_inner(
         &self, tycker: &mut Tycker, Action { switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
-        // Debug: print
-        {
-            use colored::Colorize;
-            use zydeco_surface::scoped::fmt::*;
-            println!("{}", "=".repeat(80));
-            println!(
-                "\t{}",
-                &tycker.scoped.ctxs_pat_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
-            );
-            println!("   {}\t{}", "|-".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
-            println!("{}", "=".repeat(80));
-            println!();
-        }
+        // // Debug: print
+        // {
+        //     use colored::Colorize;
+        //     use zydeco_surface::scoped::fmt::*;
+        //     println!("{}", "=".repeat(80));
+        //     println!(
+        //         "\t{}",
+        //         &tycker.scoped.ctxs_pat_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
+        //     );
+        //     println!("   {}\t{}", "|-".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
+        //     println!("{}", "=".repeat(80));
+        //     println!();
+        // }
         use su::Pattern as Pat;
         let pat_ann = match tycker.scoped.pats[&self.inner].clone() {
             | Pat::Ann(pat) => {
@@ -727,19 +734,19 @@ impl Tyck for SEnv<su::TermId> {
     fn tyck_inner(
         &self, tycker: &mut Tycker, Action { mut switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
-        // Debug: print
-        {
-            use colored::Colorize;
-            use zydeco_surface::scoped::fmt::*;
-            println!("{}", "=".repeat(80));
-            println!(
-                "\t{}",
-                &tycker.scoped.coctxs_term_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
-            );
-            println!("   {}\t{}", "-|".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
-            println!("{}", "=".repeat(80));
-            println!();
-        }
+        // // Debug: print
+        // {
+        //     use colored::Colorize;
+        //     use zydeco_surface::scoped::fmt::*;
+        //     println!("{}", "=".repeat(80));
+        //     println!(
+        //         "\t{}",
+        //         &tycker.scoped.coctxs_term_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
+        //     );
+        //     println!("   {}\t{}", "-|".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
+        //     println!("{}", "=".repeat(80));
+        //     println!();
+        // }
         // check if we're analyzing against an unfilled type
         match switch {
             | Switch::Syn => {}
@@ -891,7 +898,7 @@ impl Tyck for SEnv<su::TermId> {
                         }
                     }
                 };
-                let out_ann = match ann {
+                match ann {
                     | AnnId::Set => {
                         let ann = self.env[&def];
                         let AnnId::Kind(kd) = ann else { unreachable!() };
@@ -911,8 +918,7 @@ impl Tyck for SEnv<su::TermId> {
                         let val = Alloc::alloc(tycker, def, ty);
                         TermAnnId::Value(val, ty)
                     }
-                };
-                out_ann
+                }
             }
             | Tm::Triv(term) => {
                 let su::Triv = term;
@@ -2142,42 +2148,53 @@ impl Tyck for SEnv<su::TermId> {
             }
         };
 
-        // maintain back mapping
-        if let Some(out_ann) = out_ann.as_term() {
-            tycker.statics.terms.insert(self.inner, out_ann)
-        }
+        if let Some(out) = out_ann.as_term() {
+            // maintain back mapping
+            tycker.statics.terms.insert(self.inner, out);
 
-        // // check if the value or computation is global
-        // match out_ann.as_term() {
-        //     | Some(term) => match term {
-        //         | ss::TermId::Kind(_kd) => {
-        //             tycker.statics.global_terms.insert(term, ());
-        //         }
-        //         | ss::TermId::Type(ty) => match &tycker.statics.types[&ty] {
-        //             | ss::Type::Var(ty) => {}
-        //             | ss::Type::Abst(ty) => {}
-        //             | ss::Type::Fill(ty) => {}
-        //             | ss::Type::Abs(ty) => {}
-        //             | ss::Type::App(ty) => {}
-        //             | ss::Type::Thk(ty) => {}
-        //             | ss::Type::Ret(ty) => {}
-        //             | ss::Type::Unit(ty) => {}
-        //             | ss::Type::Int(ty) => {}
-        //             | ss::Type::Char(ty) => {}
-        //             | ss::Type::String(ty) => {}
-        //             | ss::Type::OS(ty) => {}
-        //             | ss::Type::Arrow(ty) => {}
-        //             | ss::Type::Forall(ty) => {}
-        //             | ss::Type::Prod(ty) => {}
-        //             | ss::Type::Exists(ty) => {}
-        //             | ss::Type::Data(ty) => {}
-        //             | ss::Type::CoData(ty) => {}
-        //         },
-        //         | ss::TermId::Value(value) => {}
-        //         | ss::TermId::Compu(compu) => {}
-        //     },
-        //     | None => {}
-        // }
+            // check if the term is global
+            let coctx = tycker.scoped.coctxs_term_local[&self.inner].to_owned();
+
+            let mut non_global = Vec::new();
+            for (def, ()) in coctx.into_iter() {
+                if !tycker.statics.global_defs.get(&def).is_some() {
+                    non_global.push(def);
+                }
+            }
+            let global = non_global.is_empty();
+            // // a better way to check if the term is global
+            // let global = 'out: {
+            //     for (def, ()) in coctx.into_iter() {
+            //         if !tycker.statics.global_defs.get(&def).is_some() {
+            //             break 'out false;
+            //         }
+            //     }
+            //     true
+            // };
+
+            if global {
+                tycker.statics.global_terms.insert(out, ());
+            }
+            // if !global {
+            //     // Debug: print
+            //     {
+            //         use crate::fmt::*;
+            //         println!(
+            //             "non-global term: {}",
+            //             out.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+            //         );
+            //         println!(
+            //             "non-global defs: {}",
+            //             non_global
+            //                 .iter()
+            //                 .map(|def| def.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)))
+            //                 .collect::<Vec<_>>()
+            //                 .join(", ")
+            //         );
+            //         println!();
+            //     }
+            // }
+        }
 
         Ok(out_ann)
     }
