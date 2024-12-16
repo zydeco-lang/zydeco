@@ -29,47 +29,58 @@ impl Tycker {
                         let kd = Alloc::alloc(self, VType, ());
                         self.statics.annotations_var.insert(def, AnnId::Set);
                         env.env += (def, kd.into());
+                        // should also be added to global
+                        self.statics.global_defs.insert(def, ());
                     }
                     | su::Internal::CType => {
                         let kd = Alloc::alloc(self, CType, ());
                         self.statics.annotations_var.insert(def, AnnId::Set);
                         env.env += (def, kd.into());
+                        // should also be added to global
+                        self.statics.global_defs.insert(def, ());
                     }
                     | su::Internal::Thk => {
                         let kd = ty.unwrap();
-                        env = self.register_prim_ty(env, def, ThkTy.into(), kd)?
+                        env = self.register_prim_ty(env, def, ThkTy.into(), kd)?;
+                        // should also be added to global
+                        self.statics.global_defs.insert(def, ());
                     }
                     | su::Internal::Ret => {
                         let kd = ty.unwrap();
-                        env = self.register_prim_ty(env, def, RetTy.into(), kd)?
+                        env = self.register_prim_ty(env, def, RetTy.into(), kd)?;
+                        // should also be added to global
+                        self.statics.global_defs.insert(def, ());
                     }
                     | su::Internal::Unit => {
                         let kd = ty.unwrap();
-                        env = self.register_prim_ty(env, def, UnitTy.into(), kd)?
+                        env = self.register_prim_ty(env, def, UnitTy.into(), kd)?;
+                        // should also be added to global
+                        self.statics.global_defs.insert(def, ());
                     }
                     | su::Internal::Int => {
                         let kd = ty.unwrap();
-                        env = self.register_prim_ty(env, def, IntTy.into(), kd)?
+                        env = self.register_prim_ty(env, def, IntTy.into(), kd)?;
+                        // should NOT be added to global
                     }
                     | su::Internal::Char => {
                         let kd = ty.unwrap();
-                        env = self.register_prim_ty(env, def, CharTy.into(), kd)?
+                        env = self.register_prim_ty(env, def, CharTy.into(), kd)?;
+                        // should NOT be added to global
                     }
                     | su::Internal::String => {
                         let kd = ty.unwrap();
-                        env = self.register_prim_ty(env, def, StringTy.into(), kd)?
+                        env = self.register_prim_ty(env, def, StringTy.into(), kd)?;
+                        // should NOT be added to global
                     }
                     | su::Internal::OS => {
                         let kd = ty.unwrap();
-                        env = self.register_prim_ty(env, def, OSTy.into(), kd)?
+                        env = self.register_prim_ty(env, def, OSTy.into(), kd)?;
+                        // should NOT be added to global
                     }
                     | su::Internal::Top | su::Internal::Monad | su::Internal::Algebra => {
                         unreachable!()
                     }
                 }
-
-                // should also be added to global
-                self.statics.global_defs.insert(def, ());
             }
             | None => {
                 // the alias head is a primitive value that needs to be linked later
@@ -87,13 +98,13 @@ impl Tycker {
                 };
                 self.statics.decls.insert(id.clone(), VAliasHead { binder, ty }.into());
 
-                // should also be added to global
-                match binder.try_destruct_def(self) {
-                    | (Some(def), _) => {
-                        self.statics.global_defs.insert(def, ());
-                    }
-                    | (None, _) => {}
-                }
+                // should NOT be added to global
+                // match binder.try_destruct_def(self) {
+                //     | (Some(def), _) => {
+                //         self.statics.global_defs.insert(def, ());
+                //     }
+                //     | (None, _) => {}
+                // }
             }
         }
         Ok(env)

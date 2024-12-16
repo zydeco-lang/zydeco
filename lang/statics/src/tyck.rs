@@ -1798,6 +1798,15 @@ impl Tyck for SEnv<su::TermId> {
                 //     }
                 //     | (None, _) => {}
                 // }
+                // consider adding it to the globals if bindee is global
+                match binder_out.try_destruct_def(tycker) {
+                    | (Some(def), _) => {
+                        if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
+                            tycker.statics.global_defs.insert(def, ());
+                        }
+                    }
+                    | (None, _) => {}
+                }
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
                     let tail_out_ann = self.mk(tail).tyck(tycker, Action::switch(switch))?;
