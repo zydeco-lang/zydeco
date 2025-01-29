@@ -89,7 +89,7 @@ end
 
 def fix sumBetter (xs : List Int) : Summer =
   match xs
-  | +Nil()     -> ! retSummer 0
+  | +Nil()       -> ! retSummer 0
   | +Cons(x, xs) ->
     comatch
     | .done -> ! sumBetter xs .addN x .done
