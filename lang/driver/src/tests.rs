@@ -121,3 +121,8 @@ mod delimcc {
     lib_proj_bin!(delimcc, reset_shift_k, "reset-shift-k");
     lib_proj_bin!(delimcc, try_catch, "try-catch");
 }
+
+mod stack {
+    lib_proj_bin!(stack, invert, "invert");
+    lib_proj_bin!(stack, cbv, "cbv");
+}
