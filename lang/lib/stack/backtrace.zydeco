@@ -1,0 +1,82 @@
+// a binary tree
+data Tree (A: VType) where
+| +Leaf : Unit
+| +Node : Tree A * A * Tree A
+end
+
+// codata Trace (A: VType) where
+// | .done : Ret (Tree (List A))
+// | .step : A -> Trace A
+// end
+
+def fix trace
+  (A: VType) (t: Tree A) (stk: List A)
+: Ret (Tree (List A)) =
+  match t
+  | +Leaf () -> ret +Leaf ()
+  | +Node (l, a, r) ->
+    let stk : List A = +Cons(a, stk) in
+    do l <- ! trace A l stk;
+    do r <- ! trace A r stk;
+    ret +Node(l, stk, r)
+  end
+end
+
+// here's a test
+def t0 : Tree Int =
+  +Node(
+    +Node(
+      +Node(+Leaf(), 1, +Leaf()),
+      2,
+      +Leaf()
+    ),
+    0,
+    +Node(+Leaf(), 3, +Leaf()),
+  )
+end
+
+def ! write_list
+  (A: VType) (write: Thk (A -> Thk OS -> OS))
+  (l: List A) (k: Thk OS)
+: OS =
+  let fix write_list_aux
+    (l: List A) (k: Thk OS)
+  : OS =
+    match l
+    | +Nil() -> ! k
+    | +Cons(a, l) ->
+      ! write a {
+      ! write_str "," {
+      ! write_list_aux l k }}
+    end
+  in
+  ! write_str "[" {
+  ! write_list_aux l {
+  ! write_str "]" {
+  ! k }}}
+end
+
+def fix write_tree
+  (A: VType) (write: Thk (A -> Thk OS -> OS))
+  (t: Tree A) (k: Thk OS)
+: OS =
+  match t
+  | +Leaf() -> ! write_str "()" k
+  | +Node(l, a, r) ->
+    ! write_str "(" {
+    ! write_tree A write l {
+    ! write a {
+    ! write_tree A write r {
+    ! write_str ")" {
+    ! k }}}}}
+  end
+end
+
+main
+  do t1 <- ! trace Int t0 +Nil();
+  ! write_tree Int write_int t0 {
+  ! write_line "" {
+  ! write_tree (List Int) { ! write_list Int write_int } t1 {
+  ! write_line "" {
+  ! exit 0 }}}}
+end

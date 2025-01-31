@@ -124,5 +124,6 @@ mod delimcc {
 
 mod stack {
     lib_proj_bin!(stack, invert, "invert");
+    lib_proj_bin!(stack, backtrace, "backtrace");
     lib_proj_bin!(stack, cbv, "cbv");
 }
