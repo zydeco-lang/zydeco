@@ -5,5 +5,6 @@ deps = [{ local = "../std/proj.toml" }]
 
 bins = [
   "invert.zydeco",
+  "backtrace.zydeco",
   "cbv.zydeco",
 ]

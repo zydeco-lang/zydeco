@@ -66,14 +66,14 @@ def t0 : Tree Int =
   )
 end
 
-def fix print_tree (t: Tree Int) (k: Thk OS) : OS =
+def fix write_tree (t: Tree Int) (k: Thk OS) : OS =
   match t
   | +Leaf() -> ! write_str "()" k
   | +Node(l, a, r) ->
     ! write_str "(" {
-    ! print_tree l {
+    ! write_tree l {
     ! write_int a {
-    ! print_tree r {
+    ! write_tree r {
     ! write_str ")" {
     ! k }}}}}
   end
@@ -83,13 +83,13 @@ main
   do t1 <- ! invert Int t0;
   do t2 <- ! invert' Int t0;
   do t3 <- ! invert'' Int t0;
-  ! print_tree t0 {
+  ! write_tree t0 {
   ! write_line "" {
-  ! print_tree t1 {
+  ! write_tree t1 {
   ! write_line "" {
-  ! print_tree t2 {
+  ! write_tree t2 {
   ! write_line "" {
-  ! print_tree t3 {
+  ! write_tree t3 {
   ! write_line "" {
   ! exit 0 }}}}}}}}
 end
