@@ -1,0 +1,9 @@
+name = "Stack"
+
+srcs = []
+deps = [{ local = "../std/proj.toml" }]
+
+bins = [
+  "invert.zydeco",
+  "cbv.zydeco",
+]

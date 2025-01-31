@@ -1,0 +1,95 @@
+// a binary tree
+data Tree (A: VType) where
+| +Leaf : Unit
+| +Node : Tree A * A * Tree A
+end
+
+// a normal invert without tail-call opt.
+def fix invert (A: VType) (tree: Tree A) : Ret (Tree A) =
+  match tree
+  | +Leaf() -> ret +Leaf()
+  | +Node(l, a, r) ->
+    do l <- ! invert A l;
+    do r <- ! invert A r;
+    ret +Node(r, a, l)
+  end
+end
+
+// capture the shape of do binding with a kont type
+codata TreeKont (A: VType) where
+| .run : (Thk (Tree A -> Ret (Tree A))) -> Ret (Tree A)
+end
+
+// now we have the tree kont version of invert, tail recursive by default
+def fix invert_tree_kont (A: VType) (tree: Tree A) : TreeKont A =
+  match tree
+  | +Leaf() -> comatch .run k -> ! k +Leaf() end
+  | +Node(l, a, r) -> comatch .run k ->
+    ! invert_tree_kont A l .run { fn l ->
+      ! invert_tree_kont A r .run { fn r ->
+        ! k +Node(r, a, l) } }
+    end
+  end
+end
+
+def ! invert' (A: VType) (tree: Tree A) : Ret (Tree A) =
+  ! invert_tree_kont A tree .run { fn t -> ret t }
+end
+
+// and below is the correct cps solution
+def fix invert_kont
+  (A: VType) (tree: Tree A) (k: Thk (Tree A -> Ret (Tree A)))
+: Ret (Tree A) =
+  match tree
+  | +Leaf() -> ! k +Leaf()
+  | +Node(l, a, r) ->
+    ! invert_kont A l { fn l ->
+      ! invert_kont A r { fn r ->
+        ! k +Node(r, a, l) } }
+  end
+end
+
+def ! invert'' (A: VType) (tree: Tree A) : Ret (Tree A) =
+  ! invert_kont A tree { fn t -> ret t }
+end
+
+// here's a test
+def t0 : Tree Int =
+  +Node(
+    +Node(
+      +Node(+Leaf(), 1, +Leaf()),
+      2,
+      +Leaf()
+    ),
+    0,
+    +Node(+Leaf(), 3, +Leaf()),
+  )
+end
+
+def fix print_tree (t: Tree Int) (k: Thk OS) : OS =
+  match t
+  | +Leaf() -> ! write_str "()" k
+  | +Node(l, a, r) ->
+    ! write_str "(" {
+    ! print_tree l {
+    ! write_int a {
+    ! print_tree r {
+    ! write_str ")" {
+    ! k }}}}}
+  end
+end
+
+main
+  do t1 <- ! invert Int t0;
+  do t2 <- ! invert' Int t0;
+  do t3 <- ! invert'' Int t0;
+  ! print_tree t0 {
+  ! write_line "" {
+  ! print_tree t1 {
+  ! write_line "" {
+  ! print_tree t2 {
+  ! write_line "" {
+  ! print_tree t3 {
+  ! write_line "" {
+  ! exit 0 }}}}}}}}
+end

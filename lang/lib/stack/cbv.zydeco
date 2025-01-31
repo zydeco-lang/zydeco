@@ -1,0 +1,162 @@
+# This file implements an interpreter for a simple CBV language.
+
+# As it is a CBV language, our syntax only contains expressions.
+data Expr where
+| +Var : String
+| +True : Unit
+| +False : Unit
+| +Lam : String * Expr
+| +App : Expr * Expr
+| +If : Expr * Expr * Expr
+end
+
+# Environments are implemented as association lists.
+data Env where
+| +Empty : Unit
+| +Cons : String * Value * Env
+end
+
+def fix lookup (x : String) (g : Env) : Ret (Answer Value) =
+  match g
+  | +Empty() -> ret +Err()
+  | +Cons(y,v,g) ->
+    do b <- ! str_eq x y;
+    match b
+    | +True() -> ret +Ok(v)
+    | +False() -> ! lookup x g
+    end
+  end
+end
+
+# The interpreter works with semantic values, which do not include variables.
+# We use closures in the interpreter to implement semantic thunks.
+data Value where
+| +True    : Unit
+| +False   : Unit
+| +Closure : Thk (Value -> Stack)
+end
+
+def ! value_to_str (v : Value) : Ret String =
+  match v
+  | +True() -> ret "true"
+  | +False() -> ret "false"
+  | +Closure(_) -> ret "<closure>"
+  end
+end
+
+codata Stack where
+| .fun  : Expr * Env -> Stack
+| .app  : Value -> Stack
+| .if   : Expr * Expr * Env -> Stack
+| .bind : Ret (Answer Value)
+end
+
+# The "final answer" of the interpreter is either the final value or an error.
+data Answer (A : VType) where
+| +Ok  : A
+| +Err : Unit
+end
+
+# The error handler.
+def fix error: Stack =
+  comatch
+  | .fun _ -> ! error
+  | .app _ -> ! error
+  | .if  _ -> ! error
+  | .bind -> ret +Err()
+  end
+end
+
+# The abstract machine is a co-data type that describes the interpreter state:
+# either descending into an expression or returning a value.
+codata Machine where
+| .descend : Expr * Env -> Stack
+| .return  : Value -> Stack
+end
+
+def fix interp : Machine =
+  comatch
+  | .descend (expr, env) ->
+    match expr
+    | +Var(x) ->
+      do v <- ! lookup x env;
+      match v
+      | +Err _ -> ! error
+      | +Ok  v -> ! interp .return v
+      end
+    | +True() ->
+      ! interp .return +True()
+    | +False() ->
+      ! interp .return +False()
+    | +Lam(x, expr) ->
+      # Creates a host language thunk that runs the function body with an
+      # extended environment.
+      ! interp .return +Closure {
+        fn v -> ! interp .descend (expr, +Cons(x, v, env))
+      }
+    | +App(f, a) ->
+      ! interp .descend (f, env) .fun (a, env)
+    | +If(c, t, f) ->
+      ! interp .descend (c, env) .if (t, f, env)
+    end
+  | .return v ->
+    comatch
+    | .fun (a, env) ->
+      ! interp .descend (a, env) .app v
+    | .app f ->
+      match f
+      | +True  _ -> ! error
+      | +False _ -> ! error
+      | +Closure fun ->
+        # call the function and follow its continuation
+        ! fun v
+      end
+    | .if (t, f, env) ->
+      match v
+      | +True  _ -> ! interp .descend (t, env)
+      | +False _ -> ! interp .descend (f, env)
+      end
+    | .bind  -> ret +Ok v
+    end
+  end
+end
+
+# Examples
+
+def identity: Expr =
+  +Lam("x", +Var("x"))
+end
+
+def idff : Expr =
+  +App(identity, +False())
+end
+
+def true_ : Expr =
+  +Lam("x", +Lam("y", +Var("x")))
+end
+
+def false_ : Expr =
+  +Lam("x", +Lam("y", +Var("y")))
+end
+
+def if_ : Expr =
+  +Lam("c", +Lam("t", +Lam("f", +App(+App(+Var("c"), +Var("t")), +Var("f")))))
+end
+
+def w : Expr = +Lam("x", +App(+Var("x"), +Var("x"))) end
+
+def omega : Expr = +App(w, w) end
+
+def if_true : Expr =
+  +App(+App(+App(if_, true_), +True()), +False())
+end
+
+main
+  do x <- ! interp .descend (if_true, +Empty()) .bind;
+  match x
+  | +Err _ -> ! panic "ERROR"
+  | +Ok  v ->
+    do s <- ! value_to_str v;
+    ! write_line s { ! exit 0 }
+  end
+end
