@@ -1,5 +1,7 @@
 # Zydeco 🪗
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14948044.svg)](https://doi.org/10.5281/zenodo.14948044)
+
 Zydeco is a proof-of-concept programming language based on Call-by-push-value.
 
 ## Running Zydeco
