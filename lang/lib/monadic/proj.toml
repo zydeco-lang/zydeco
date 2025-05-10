@@ -4,6 +4,7 @@ srcs = []
 deps = [{ local = "../std/core.toml" }]
 bins = [
     "exnt.zy",
+    "exnkt.zy",
     "sam.zy",
 ]
 

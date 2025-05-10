@@ -16,13 +16,13 @@ impl Tycker {
 
 /* ---------------------------------- Type ---------------------------------- */
 impl Tycker {
-    pub fn thk(&mut self, env: &Env<AnnId>) -> TypeId {
+    pub fn type_thk(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.thk.get()] else { unreachable!() };
         ty
     }
     /// generates `Thunk B`
     pub fn thk_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
-        let thk = self.thk(env);
+        let thk = self.type_thk(env);
         let vtype = self.vtype(env);
         Alloc::alloc(self, App(thk, arg), vtype)
     }
@@ -33,13 +33,13 @@ impl Tycker {
         let hole = Alloc::alloc(self, fill, ctype);
         self.thk_arg(env, hole)
     }
-    pub fn ret(&mut self, env: &Env<AnnId>) -> TypeId {
+    pub fn type_ret(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
         ty
     }
     /// generates `Ret A`
     pub fn ret_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
-        let ret = self.ret(env);
+        let ret = self.type_ret(env);
         let ctype = self.ctype(env);
         Alloc::alloc(self, App(ret, arg), ctype)
     }
@@ -49,50 +49,72 @@ impl Tycker {
         let hole = Alloc::alloc(self, fill, vtype);
         self.ret_arg(env, hole)
     }
-    pub fn unit(&mut self, env: &Env<AnnId>) -> TypeId {
+    pub fn type_unit(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.unit.get()] else { unreachable!() };
         ty
     }
-    pub fn int(&mut self, env: &Env<AnnId>) -> TypeId {
+    pub fn type_int(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.int.get()] else { unreachable!() };
         ty
     }
-    pub fn char(&mut self, env: &Env<AnnId>) -> TypeId {
+    pub fn type_char(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.char.get()] else { unreachable!() };
         ty
     }
-    pub fn string(&mut self, env: &Env<AnnId>) -> TypeId {
+    pub fn type_string(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.string.get()] else { unreachable!() };
         ty
     }
-    pub fn top(&mut self, env: &Env<AnnId>) -> TypeId {
+    pub fn type_top(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.top.get()] else { unreachable!() };
         ty
     }
-    pub fn os(&mut self, env: &Env<AnnId>) -> TypeId {
+    pub fn type_os(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.os.get()] else { unreachable!() };
         ty
     }
+    pub fn type_prod(&mut self, env: &Env<AnnId>, a1: TypeId, a2: TypeId) -> TypeId {
+        let vtype = self.vtype(env);
+        Alloc::alloc(self, Prod(a1, a2), vtype)
+    }
+    pub fn type_exists(&mut self, env: &Env<AnnId>, x: AbstId, b: TypeId) -> TypeId {
+        let ctype = self.ctype(env);
+        Alloc::alloc(self, Exists(x, b), ctype)
+    }
+    pub fn type_arrow(&mut self, env: &Env<AnnId>, a: TypeId, b: TypeId) -> TypeId {
+        let ctype = self.ctype(env);
+        Alloc::alloc(self, Arrow(a, b), ctype)
+    }
+    pub fn type_forall(&mut self, env: &Env<AnnId>, x: AbstId, b: TypeId) -> TypeId {
+        let ctype = self.ctype(env);
+        Alloc::alloc(self, Forall(x, b), ctype)
+    }
+    // pub fn type_abs
+    pub fn type_app(&mut self, ty_1: TypeId, ty_2: TypeId) -> TypeId {
+        let kd_1 = self.statics.annotations_type[&ty_1];
+        let Some((kd_a, kd_b)) = kd_1.destruct_arrow(self) else { unreachable!() };
+        let kd_2 = self.statics.annotations_type[&ty_2];
+        let Ok(_) = Lub::lub(kd_a, kd_2, self) else { unreachable!() };
+        Alloc::alloc(self, App(ty_1, ty_2), kd_b)
+    }
     /// generates `Monad M` where:
-    /// 1. M is `mo` of kind `VType -> CType`
-    pub fn monad_mo(&mut self, env: &Env<AnnId>, mo: TypeId) -> TypeId {
+    /// 1. M is `monad_ty` of kind `VType -> CType`
+    pub fn monad_mo(&mut self, env: &Env<AnnId>, monad_ty: TypeId) -> TypeId {
         let AnnId::Type(monad) = env[self.prim.monad.get()] else { unreachable!() };
         let ctype = self.ctype(env);
-        Alloc::alloc(self, App(monad, mo), ctype)
+        Alloc::alloc(self, App(monad, monad_ty), ctype)
     }
     /// generates `Algebra M R` where:
-    /// 1. M is `mo` of kind `VType -> CType`
+    /// 1. M is `monad_ty` of kind `VType -> CType`
     /// 2. R is `carrier` of kind `CType`
-    pub fn algebra_mo_car(&mut self, env: &Env<AnnId>, mo: TypeId, carrier: TypeId) -> TypeId {
+    pub fn algebra_mo_car(
+        &mut self, env: &Env<AnnId>, monad_ty: TypeId, carrier: TypeId,
+    ) -> TypeId {
         let AnnId::Type(algebra) = env[self.prim.algebra.get()] else { unreachable!() };
         let ctype = self.ctype(env);
         let algebra_mo_kd = Alloc::alloc(self, Arrow(ctype, ctype), ());
-        let algebra_mo = Alloc::alloc(self, App(algebra, mo), algebra_mo_kd);
+        let algebra_mo = Alloc::alloc(self, App(algebra, monad_ty), algebra_mo_kd);
         Alloc::alloc(self, App(algebra_mo, carrier), ctype)
-    }
-    pub fn prod(&mut self, env: &Env<AnnId>, a: TypeId, b: TypeId) -> TypeId {
-        let vtype = self.vtype(env);
-        Alloc::alloc(self, Prod(a, b), vtype)
     }
 }
 
@@ -108,13 +130,13 @@ impl Tycker {
         Alloc::alloc(self, Thunk(body), ty)
     }
     pub fn value_triv(&mut self, env: &Env<AnnId>) -> ValueId {
-        let ty = self.unit(env);
+        let ty = self.type_unit(env);
         Alloc::alloc(self, Triv, ty)
     }
     pub fn value_vcons(&mut self, env: &Env<AnnId>, a: ValueId, b: ValueId) -> ValueId {
         let a_ty = self.statics.annotations_value[&a];
         let b_ty = self.statics.annotations_value[&b];
-        let ty = self.prod(env, a_ty, b_ty);
+        let ty = self.type_prod(env, a_ty, b_ty);
         Alloc::alloc(self, Cons(a, b), ty)
     }
 }
@@ -122,7 +144,7 @@ impl Tycker {
 /* ---------------------------------- Compu --------------------------------- */
 
 impl Tycker {
-    pub fn compu_uni_vabs(
+    pub fn compu_vabs(
         &mut self, env: &Env<AnnId>, name: VarName, def_ty: TypeId,
         body: impl Fn(&mut Self, DefId) -> CompuId,
     ) -> CompuId {
@@ -133,6 +155,18 @@ impl Tycker {
         let body_ty = self.statics.annotations_compu[&body];
         let ty = Alloc::alloc(self, Arrow(def_ty, body_ty), ctype);
         Alloc::alloc(self, Abs(vpat, body), ty)
+    }
+    pub fn try_compu_vabs(
+        &mut self, env: &Env<AnnId>, name: VarName, def_ty: TypeId,
+        body: impl Fn(&mut Self, DefId) -> Result<CompuId>,
+    ) -> Result<CompuId> {
+        let ctype = self.ctype(env);
+        let def = Alloc::alloc(self, name, def_ty.into());
+        let vpat: VPatId = Alloc::alloc(self, def, def_ty);
+        let body = body(self, def)?;
+        let body_ty = self.statics.annotations_compu[&body];
+        let ty = Alloc::alloc(self, Arrow(def_ty, body_ty), ctype);
+        Ok(Alloc::alloc(self, Abs(vpat, body), ty))
     }
     pub fn compu_vapp(&mut self, _env: &Env<AnnId>, abs: CompuId, arg: ValueId) -> CompuId {
         let abs_ty = self.statics.annotations_compu[&abs];
@@ -153,6 +187,19 @@ impl Tycker {
         let body_ty = self.statics.annotations_compu[&body];
         let ty = Alloc::alloc(self, Forall(abst, body_ty), ctype);
         Alloc::alloc(self, Abs(tpat, body), ty)
+    }
+    pub fn try_compu_tabs(
+        &mut self, env: &Env<AnnId>, name: VarName, def_kd: KindId,
+        body: impl Fn(&mut Self, DefId, AbstId) -> Result<CompuId>,
+    ) -> Result<CompuId> {
+        let ctype = self.ctype(env);
+        let def = Alloc::alloc(self, name, def_kd.into());
+        let abst = Alloc::alloc(self, def, def_kd);
+        let tpat: TPatId = Alloc::alloc(self, def, def_kd);
+        let body = body(self, def, abst)?;
+        let body_ty = self.statics.annotations_compu[&body];
+        let ty = Alloc::alloc(self, Forall(abst, body_ty), ctype);
+        Ok(Alloc::alloc(self, Abs(tpat, body), ty))
     }
     pub fn compu_tapp(&mut self, _env: &Env<AnnId>, abs: CompuId, arg: TypeId) -> CompuId {
         let abs_ty = self.statics.annotations_compu[&abs];
@@ -209,7 +256,13 @@ impl Tycker {
         Alloc::alloc(self, PureBind { binder, bindee, tail }, tail_ty)
     }
     pub fn compu_top(&mut self, env: &Env<AnnId>) -> CompuId {
-        let top = self.top(env);
+        let top = self.type_top(env);
         Alloc::alloc(self, CoMatch { arms: Vec::new() }, top)
+    }
+    pub fn compu_dtor(&mut self, env: &Env<AnnId>, head: CompuId, dtor: DtorName) -> CompuId {
+        let head_ty = self.statics.annotations_compu[&head];
+        let Some(coda) = head_ty.destruct_codata(env, self) else { unreachable!() };
+        let Some(ty) = coda.get(&dtor).cloned() else { unreachable!() };
+        Alloc::alloc(self, Dtor(head, dtor), ty)
     }
 }

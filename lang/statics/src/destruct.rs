@@ -1,5 +1,17 @@
 use crate::{syntax::*, *};
 
+impl KindId {
+    pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(KindId, KindId)> {
+        match tycker.statics.kinds[self].to_owned() {
+            | Fillable::Fill(_) => todo!(),
+            | Fillable::Done(kind) => match kind {
+                | Kind::Arrow(Arrow(from, to)) => Some((from, to)),
+                | _ => None,
+            },
+        }
+    }
+}
+
 impl TPatId {
     pub fn try_destruct_def(&self, tycker: &mut Tycker) -> (Option<DefId>, KindId) {
         use TypePattern as TPat;
@@ -114,6 +126,19 @@ impl TypeId {
         };
         Some(res)
     }
+    pub fn destruct_top(&self, _env: &Env<AnnId>, tycker: &mut Tycker) -> Option<()> {
+        let res = match tycker.statics.types[&self].to_owned() {
+            | Fillable::Fill(_) => todo!(),
+            | Fillable::Done(ty) => match ty {
+                | Type::CoData(coda) => {
+                    let coda = tycker.statics.codatas.defs[&coda].to_owned();
+                    (coda.len() == 0).then(|| ())?
+                }
+                | _ => None?,
+            },
+        };
+        Some(res)
+    }
     pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
         let res = match tycker.statics.types[&self].to_owned() {
             | Fillable::Fill(_) => todo!(),
@@ -156,56 +181,43 @@ impl TypeId {
         };
         Some(res)
     }
-    // pub fn destruct_top(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<()> {
-    //     let structure = self.destruct_signature(env, tycker)?;
-    //     match structure {
-    //         | Signature::Top => Some(()),
-    //         | _ => None,
-    //     }
-    // }
-    // pub fn destruct_algebra(
-    //     &self, env: &Env<AnnId>, tycker: &mut Tycker,
-    // ) -> Option<(TypeId, TypeId)> {
-    //     let structure = self.destruct_signature(env, tycker)?;
-    //     match structure {
-    //         | Signature::Algebra(mo_ty, carrier_ty) => Some((mo_ty, carrier_ty)),
-    //         | _ => None,
-    //     }
-    // }
-    // pub fn destruct_signature(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<Signature> {
-    //     let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
-    //     let res = 'out: {
-    //         match tycker.statics.types[&f_ty].to_owned() {
-    //             | Type::Abst(abst) => {
-    //                 let AnnId::Type(id) = env[tycker.prim.top.get()] else { unreachable!() };
-    //                 let Type::Abst(top_real) = tycker.statics.types.get(&id).cloned()? else {
-    //                     unreachable!()
-    //                 };
-    //                 let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
-    //                 let Type::Abst(alg_real) = tycker.statics.types.get(&id).cloned()? else {
-    //                     unreachable!()
-    //                 };
-
-    //                 if abst == top_real {
-    //                     assert!(a_tys.is_empty());
-    //                     break 'out Signature::Top;
-    //                 }
-
-    //                 if abst == alg_real {
-    //                     assert!(a_tys.len() == 2);
-    //                     let mut iter = a_tys.into_iter();
-    //                     let mo_ty = iter.next()?;
-    //                     let carrier_ty = iter.next()?;
-    //                     break 'out Signature::Algebra(mo_ty, carrier_ty);
-    //                 }
-
-    //                 None?
-    //             }
-    //             | _ => None?,
-    //         }
-    //     };
-    //     Some(res)
-    // }
+    pub fn destruct_algebra(
+        &self, env: &Env<AnnId>, tycker: &mut Tycker,
+    ) -> Option<(TypeId, TypeId)> {
+        let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
+        if a_tys.len() != 2 {
+            None?;
+        }
+        let res = match tycker.statics.types[&f_ty].to_owned() {
+            | Fillable::Done(Type::Abst(abst)) => {
+                let AnnId::Type(id) = env[tycker.prim.algebra.get()] else { unreachable!() };
+                let Type::Abst(algebra_real) = tycker.type_filled(&id).ok()?.to_owned() else {
+                    unreachable!()
+                };
+                if abst != algebra_real {
+                    None?;
+                }
+                let mut iter = a_tys.into_iter();
+                let mo_ty = iter.next()?;
+                let carrier_ty = iter.next()?;
+                (mo_ty, carrier_ty)
+            }
+            | _ => None?,
+        };
+        Some(res)
+    }
+    pub fn destruct_codata<'t>(
+        &self, _env: &Env<AnnId>, tycker: &'t mut Tycker,
+    ) -> Option<&'t CoData> {
+        use zydeco_utils::arena::ArenaAccess;
+        match tycker.statics.types[&self].to_owned() {
+            | Fillable::Fill(_) => todo!(),
+            | Fillable::Done(ty) => match ty {
+                | Type::CoData(coda) => tycker.statics.codatas.tbls.get(&coda),
+                | _ => None,
+            },
+        }
+    }
 }
 
 impl VPatId {

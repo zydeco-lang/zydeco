@@ -110,9 +110,3 @@ impl Tycker {
         Ok(env)
     }
 }
-
-// pub enum Signature {
-//     Top,
-//     Algebra(TypeId, TypeId),
-//     Arrow(Box<Signature>, Box<Signature>),
-// }

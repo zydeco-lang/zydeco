@@ -10,7 +10,10 @@ pub trait Lub<Rhs = Self>: Sized {
         let res = self.lub(other, tycker);
         tycker.err_p_to_k(res)
     }
-    fn lub(self, other: Rhs, tycker: &mut Tycker) -> Result<Self::Out>;
+    /// Override this method to add administrative tasks for error tracking.
+    fn lub(self, other: Rhs, tycker: &mut Tycker) -> Result<Self::Out> {
+        self.lub_inner(other, tycker)
+    }
     fn lub_inner(self, other: Rhs, tycker: &mut Tycker) -> Result<Self::Out>;
 }
 
@@ -343,9 +346,6 @@ impl Lub for TypeId {
 
     /// We need to remember the definitions introduced by both sides.
     /// We did this by using Debruijn.
-    fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
-        self.lub_inner(other, tycker)
-    }
     fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         Debruijn::new().lub(self, other, tycker)
     }
@@ -354,9 +354,6 @@ impl Lub for TypeId {
 impl Lub for AnnId {
     type Out = AnnId;
 
-    fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
-        self.lub_inner(other, tycker)
-    }
     fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         let res = match (self, other) {
             | (AnnId::Set, AnnId::Set) => AnnId::Set,

@@ -150,6 +150,7 @@ mod impl_tycker {
             self.stack = stack;
             res
         }
+        /// Throw a pure error.
         #[inline]
         pub(crate) fn err<T>(
             &self, error: TyckError, blame: &'static std::panic::Location<'static>,
@@ -157,11 +158,13 @@ mod impl_tycker {
             let stack = self.stack.clone();
             Err(TyckErrorEntry { error, blame, stack })
         }
+        /// Push an error entry into the error list.
         #[inline]
         fn push_err_entry_k<T>(&mut self, entry: TyckErrorEntry) -> ResultKont<T> {
             self.errors.push(entry);
             Err(())
         }
+        /// Throw a continuation error.
         #[inline]
         pub(crate) fn err_k<T>(
             &mut self, error: TyckError, blame: &'static std::panic::Location<'static>,
@@ -169,6 +172,7 @@ mod impl_tycker {
             let stack = self.stack.clone();
             self.push_err_entry_k(TyckErrorEntry { error, blame, stack })
         }
+        /// Convert a pure result into a continuation result.
         #[inline]
         pub(crate) fn err_p_to_k<T>(&mut self, res: Result<T>) -> ResultKont<T> {
             match res {
@@ -282,7 +286,7 @@ impl<'decl> SccDeclarations<'decl> {
                             // administrative
                             tycker.stack.push_back(TyckTask::Exec(id.to_owned()));
                             let su::Exec(term) = decl;
-                            let os = tycker.os(&env.env);
+                            let os = tycker.type_os(&env.env);
                             let out_ann = env.mk(term).tyck(tycker, Action::ana(os.into()))?;
                             let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                             tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
@@ -618,7 +622,7 @@ impl Tyck for SEnv<su::PatId> {
             },
             | Pat::Triv(pat) => {
                 let su::Triv = pat;
-                let ann = tycker.unit(&self.env);
+                let ann = tycker.type_unit(&self.env);
                 let triv = Alloc::alloc(tycker, ss::Triv, ann);
                 match switch {
                     | Switch::Syn => PatAnnId::Value(triv, ann),
@@ -939,7 +943,7 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Triv(term) => {
                 let su::Triv = term;
-                let unit = tycker.unit(&self.env);
+                let unit = tycker.type_unit(&self.env);
                 let triv = Alloc::alloc(tycker, ss::Triv, unit);
                 match switch {
                     | Switch::Syn => TermAnnId::Value(triv, unit),
@@ -1829,8 +1833,8 @@ impl Tyck for SEnv<su::TermId> {
             | Tm::MoBlock(term) => {
                 let su::MoBlock(body) = term;
 
-                // tyck the body
-                let body_out_ann = self.mk(body).tyck(tycker, Action::syn())?;
+                // tyck the body WITH AN (ALMOST) EMPTY ENV
+                let body_out_ann = SEnv::new(body).tyck(tycker, Action::syn())?;
                 let (_body, _body_ty) = body_out_ann.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,
@@ -2139,17 +2143,17 @@ impl Tyck for SEnv<su::TermId> {
                 use zydeco_syntax::Literal as Lit;
                 let (lit, ty) = match lit {
                     | Lit::Int(i) => {
-                        let ty = tycker.int(&self.env);
+                        let ty = tycker.type_int(&self.env);
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Int(i), ty)
                     }
                     | Lit::String(s) => {
-                        let ty = tycker.string(&self.env);
+                        let ty = tycker.type_string(&self.env);
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::String(s), ty)
                     }
                     | Lit::Char(c) => {
-                        let ty = tycker.char(&self.env);
+                        let ty = tycker.type_char(&self.env);
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Char(c), ty)
                     }

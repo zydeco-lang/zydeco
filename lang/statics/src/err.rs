@@ -5,6 +5,7 @@ pub enum TyckError {
     MissingAnnotation,
     MissingSeal,
     MissingSolution(Vec<FillId>),
+    MissingStructure(TypeId),
     SortMismatch,
     KindMismatch,
     TypeMismatch { expected: TypeId, found: TypeId },
@@ -14,7 +15,6 @@ pub enum TyckError {
     NonExhaustiveCoDataArms(std::collections::HashMap<DtorName, TypeId>),
     Expressivity(&'static str),
     NotInlinable(ss::DefId),
-    AlgebraGenerationFailure,
 }
 
 #[derive(Clone)]
@@ -43,6 +43,13 @@ impl Tycker {
                     )
                 }
                 s
+            }
+            | TyckError::MissingStructure(ty) => {
+                use crate::fmt::*;
+                format!(
+                    "Missing structure for type: {}",
+                    ty.ugly(&Formatter::new(&self.scoped, &self.statics))
+                )
             }
             | TyckError::SortMismatch => format!("Sort mismatch"),
             | TyckError::KindMismatch => format!("Kind mismatch"),
@@ -78,9 +85,6 @@ impl Tycker {
                     },
                     span
                 )
-            }
-            | TyckError::AlgebraGenerationFailure => {
-                format!("Cannot generate algebra for this type")
             }
         }
     }
