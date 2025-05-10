@@ -27,12 +27,14 @@ impl<'a> Ugly<'a, Formatter<'a>> for KindId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let kd = &f.statics.kinds[self];
         match kd {
-            | Kind::Fill(fill) => {
+            | Fillable::Fill(fill) => {
                 format!("[fill-kd {}]", fill.concise_inner())
             }
-            | Kind::VType(VType) => "VType".to_string(),
-            | Kind::CType(CType) => "CType".to_string(),
-            | Kind::Arrow(kd) => kd.ugly(f),
+            | Fillable::Done(kind) => match kind {
+                | Kind::VType(VType) => "VType".to_string(),
+                | Kind::CType(CType) => "CType".to_string(),
+                | Kind::Arrow(kd) => kd.ugly(f),
+            },
         }
     }
 }
@@ -51,26 +53,28 @@ impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let ty = &f.statics.types[self];
         match ty {
-            | Type::Var(def) => def.ugly(f),
-            | Type::Abst(abst) => abst.ugly(f),
-            | Type::Fill(fill) => {
+            | Fillable::Fill(fill) => {
                 format!("[fill-ty {}]", fill.concise_inner())
             }
-            | Type::Abs(ty) => ty.ugly(f),
-            | Type::App(ty) => ty.ugly(f),
-            | Type::Thk(ThkTy) => format!("Thk"),
-            | Type::Ret(RetTy) => format!("Ret"),
-            | Type::Unit(UnitTy) => format!("Unit"),
-            | Type::Int(IntTy) => format!("Int"),
-            | Type::Char(CharTy) => format!("Char"),
-            | Type::String(StringTy) => format!("String"),
-            | Type::OS(OSTy) => format!("OS"),
-            | Type::Arrow(ty) => ty.ugly(f),
-            | Type::Forall(ty) => ty.ugly(f),
-            | Type::Prod(ty) => ty.ugly(f),
-            | Type::Exists(ty) => ty.ugly(f),
-            | Type::Data(ty) => ty.ugly(f),
-            | Type::CoData(ty) => ty.ugly(f),
+            | Fillable::Done(ty) => match ty {
+                | Type::Var(def) => def.ugly(f),
+                | Type::Abst(abst) => abst.ugly(f),
+                | Type::Abs(ty) => ty.ugly(f),
+                | Type::App(ty) => ty.ugly(f),
+                | Type::Thk(ThkTy) => format!("Thk"),
+                | Type::Ret(RetTy) => format!("Ret"),
+                | Type::Unit(UnitTy) => format!("Unit"),
+                | Type::Int(IntTy) => format!("Int"),
+                | Type::Char(CharTy) => format!("Char"),
+                | Type::String(StringTy) => format!("String"),
+                | Type::OS(OSTy) => format!("OS"),
+                | Type::Arrow(ty) => ty.ugly(f),
+                | Type::Forall(ty) => ty.ugly(f),
+                | Type::Prod(ty) => ty.ugly(f),
+                | Type::Exists(ty) => ty.ugly(f),
+                | Type::Data(ty) => ty.ugly(f),
+                | Type::CoData(ty) => ty.ugly(f),
+            },
         }
     }
 }

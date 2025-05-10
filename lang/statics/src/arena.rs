@@ -1,5 +1,5 @@
-use super::syntax::*;
 use crate::surface_syntax as su;
+use crate::syntax::*;
 use zydeco_utils::arena::*;
 
 /* ---------------------------------- Arena --------------------------------- */
@@ -47,9 +47,9 @@ where
 /// Item projectors out of the statics arena.
 #[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait ArenaStatics {
-    fn kind(&self, id: &KindId) -> Kind;
+    fn kind(&self, id: &KindId) -> Fillable<Kind>;
     fn tpat(&self, id: &TPatId) -> TypePattern;
-    fn r#type(&self, id: &TypeId) -> Type;
+    fn r#type(&self, id: &TypeId) -> Fillable<Type>;
     fn vpat(&self, id: &VPatId) -> ValuePattern;
     fn value(&self, id: &ValueId) -> Value;
     fn compu(&self, id: &CompuId) -> Computation;
@@ -59,9 +59,9 @@ pub trait ArenaStatics {
 #[derive(Debug)]
 pub struct StaticsArena {
     // arenas
-    pub kinds: ArenaSparse<KindId, Kind>,
+    pub kinds: ArenaSparse<KindId, Fillable<Kind>>,
     pub tpats: ArenaSparse<TPatId, TypePattern>,
-    pub types: ArenaSparse<TypeId, Type>,
+    pub types: ArenaSparse<TypeId, Fillable<Type>>,
     pub vpats: ArenaSparse<VPatId, ValuePattern>,
     pub values: ArenaSparse<ValueId, Value>,
     pub compus: ArenaSparse<CompuId, Computation>,
@@ -77,9 +77,11 @@ pub struct StaticsArena {
     pub seals: ArenaAssoc<AbstId, TypeId>,
     /// name hints for abstract types
     pub abst_hints: ArenaAssoc<AbstId, DefId>,
-    /// arena for filling context-constrained holes; the TermId is the site
+    /// arena for filling context-constrained holes; the [`su::TermId`] is the site;
+    /// only types and kinds are now fillable
     pub fills: ArenaDense<FillId, su::TermId>,
-    /// arena for the solutions of fillings
+    /// arena for the solutions of fillings,
+    /// i.e. the the [`FillId`] should be assigned as the [`AnnId`]
     pub solus: ArenaAssoc<FillId, AnnId>,
     /// which holes are introduced by the user and should be reported
     pub fill_hints: ArenaAssoc<FillId, ()>,
@@ -149,13 +151,13 @@ impl StaticsArena {
 }
 
 impl ArenaStatics for StaticsArena {
-    fn kind(&self, id: &KindId) -> Kind {
+    fn kind(&self, id: &KindId) -> Fillable<Kind> {
         self.kinds[id].to_owned()
     }
     fn tpat(&self, id: &TPatId) -> TypePattern {
         self.tpats[id].to_owned()
     }
-    fn r#type(&self, id: &TypeId) -> Type {
+    fn r#type(&self, id: &TypeId) -> Fillable<Type> {
         self.types[id].to_owned()
     }
     fn vpat(&self, id: &VPatId) -> ValuePattern {
@@ -175,13 +177,13 @@ impl ArenaStatics for StaticsArena {
 use super::Tycker;
 
 impl ArenaStatics for Tycker {
-    fn kind(&self, id: &KindId) -> Kind {
+    fn kind(&self, id: &KindId) -> Fillable<Kind> {
         self.statics.kind(id)
     }
     fn tpat(&self, id: &TPatId) -> TypePattern {
         self.statics.tpat(id)
     }
-    fn r#type(&self, id: &TypeId) -> Type {
+    fn r#type(&self, id: &TypeId) -> Fillable<Type> {
         self.statics.r#type(id)
     }
     fn vpat(&self, id: &VPatId) -> ValuePattern {
@@ -211,4 +213,3 @@ pub trait LocalFoldStatics<Cx>: ArenaStatics {
     fn action_compu(&mut self, compu: CompuId, ctx: &Cx);
     fn action_decl(&mut self, decl: DeclId, ctx: &Cx);
 }
-

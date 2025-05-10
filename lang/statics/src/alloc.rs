@@ -57,10 +57,16 @@ impl Alloc<FillId> for su::TermId {
 
 /* ---------------------------------- Kind ---------------------------------- */
 
+impl Alloc<KindId> for FillId {
+    type Ann = ();
+    fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
+        tycker.statics.kinds.alloc(Fillable::Fill(val))
+    }
+}
 impl Alloc<KindId> for Kind {
     type Ann = ();
     fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
-        tycker.statics.kinds.alloc(val)
+        tycker.statics.kinds.alloc(Fillable::Done(val))
     }
 }
 macro_rules! AllocKind {
@@ -108,10 +114,27 @@ AllocTypePattern! {
     DefId
 }
 
+impl Alloc<TypeId> for FillId {
+    type Ann = KindId;
+    fn alloc(tycker: &mut Tycker, val: Self, kd: Self::Ann) -> TypeId {
+        let ty = tycker.statics.types.alloc(Fillable::Fill(val));
+        tycker
+            .statics
+            .annotations_type
+            .insert_or_else(ty, kd, |_old, _new| -> std::result::Result<KindId, ()> {
+                panic!("duplicate keys: {:?} = {:?}, {:?}", ty, _old, _new)
+                // // Todo: handle duplicate keys
+                // let res: std::result::Result<KindId, ()> = Ok(_new);
+                // res
+            })
+            .unwrap();
+        ty
+    }
+}
 impl Alloc<TypeId> for Type {
     type Ann = KindId;
     fn alloc(tycker: &mut Tycker, val: Self, kd: Self::Ann) -> TypeId {
-        let ty = tycker.statics.types.alloc(val.into());
+        let ty = tycker.statics.types.alloc(Fillable::Done(val.into()));
         tycker
             .statics
             .annotations_type
@@ -140,7 +163,6 @@ macro_rules! AllocType {
 AllocType! {
     DefId
     AbstId
-    FillId
     Abs<TPatId, TypeId>
     App<TypeId, TypeId>
     ThkTy

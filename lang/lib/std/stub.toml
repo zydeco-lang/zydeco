@@ -1,0 +1,11 @@
+name = "Stub"
+
+srcs = [
+    "core.zy",
+]
+deps = []
+bins = [
+    "stub.zy",
+]
+
+std = "NoStd"

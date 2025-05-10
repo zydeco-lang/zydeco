@@ -1,7 +1,7 @@
 use {
     crate::{
         surface_syntax::{PrimDef, ScopedArena, SpanArena},
-        syntax::{AnnId, Env, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
+        syntax::{AnnId, Env, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
         *,
     },
     zydeco_utils::{
@@ -75,9 +75,8 @@ impl Tycker {
             types.push((id.to_owned(), ty.to_owned()));
         }
         for (id, ty) in types {
-            use ss::Type as Ty;
             match ty {
-                | Ty::Fill(fill) => match self.statics.solus.get(&fill) {
+                | Fillable::Fill(fill) => match self.statics.solus.get(&fill) {
                     | Some(ann) => match ann {
                         | AnnId::Set | AnnId::Kind(_) => {
                             // keep running tycker even after unsuccesful solving hole
@@ -593,7 +592,7 @@ impl Tyck for SEnv<su::PatId> {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     };
                     let ann_ty_unroll = ann_ty.unroll(tycker)?.subst_env_k(tycker, &self.env)?;
-                    let ss::Type::Data(data_id) = &tycker.statics.types[&ann_ty_unroll] else {
+                    let ss::Type::Data(data_id) = &tycker.type_filled_k(&ann_ty_unroll)? else {
                         tycker.err_k(
                             TyckError::TypeExpected {
                                 expected: "data type definition".to_string(),
@@ -641,7 +640,7 @@ impl Tyck for SEnv<su::PatId> {
                         let AnnId::Type(ann_ty) = ann else {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         };
-                        match tycker.statics.types[&ann_ty].to_owned() {
+                        match tycker.type_filled_k(&ann_ty)?.to_owned() {
                             | ss::Type::Prod(ty) => {
                                 let ss::Prod(ty_a, ty_b) = ty;
                                 let a_out_ann =
@@ -736,24 +735,44 @@ impl Tyck for SEnv<su::TermId> {
     ) -> ResultKont<Self::Out> {
         // // Debug: print
         // {
-        //     use colored::Colorize;
         //     use zydeco_surface::scoped::fmt::*;
         //     println!("{}", "=".repeat(80));
+        //     // use colored::Colorize;
+        //     // println!(
+        //     //     "\t{}",
+        //     //     &tycker.scoped.coctxs_term_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
+        //     // );
+        //     // println!("   {}\t{}", "-|".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
+
+        //     use zydeco_syntax::SpanView;
         //     println!(
-        //         "\t{}",
-        //         &tycker.scoped.coctxs_term_local[&self.inner].ugly(&Formatter::new(&tycker.scoped))
+        //         "{} @ ({})",
+        //         self.inner.ugly(&Formatter::new(&tycker.scoped)),
+        //         self.inner.span(tycker)
         //     );
-        //     println!("   {}\t{}", "-|".green(), self.inner.ugly(&Formatter::new(&tycker.scoped)));
+        //     match switch {
+        //         | Switch::Syn => {
+        //             println!("\t>> (syn)")
+        //         }
+        //         | Switch::Ana(ana) => {
+        //             use crate::fmt::*;
+        //             println!(
+        //                 "\t>> (ana: {})",
+        //                 ana.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+        //             )
+        //         }
+        //     }
         //     println!("{}", "=".repeat(80));
         //     println!();
         // }
+
         // check if we're analyzing against an unfilled type
         match switch {
             | Switch::Syn => {}
             | Switch::Ana(ana) => match ana {
                 | AnnId::Set => {}
                 | AnnId::Kind(kd) => match tycker.statics.kinds[&kd].to_owned() {
-                    | ss::Kind::Fill(fill) => match self.tyck(tycker, Action::syn())? {
+                    | Fillable::Fill(fill) => match self.tyck(tycker, Action::syn())? {
                         | TermAnnId::Type(ty, kd) => {
                             tycker.statics.solus.insert(fill, kd.into());
                             return Ok(TermAnnId::Type(ty, kd));
@@ -768,7 +787,7 @@ impl Tyck for SEnv<su::TermId> {
                     | _ => {}
                 },
                 | AnnId::Type(ty) => match tycker.statics.types[&ty].to_owned() {
-                    | ss::Type::Fill(fill) => match self.tyck(tycker, Action::syn())? {
+                    | Fillable::Fill(fill) => match self.tyck(tycker, Action::syn())? {
                         | TermAnnId::Value(v, ty) => {
                             let ty = fill.fill_k(tycker, ty.into())?.as_type();
                             return Ok(TermAnnId::Value(v, ty));
@@ -790,10 +809,12 @@ impl Tyck for SEnv<su::TermId> {
                 },
             },
         }
+        // the switch should contain no unfilled from here on
 
         // // Debug: print
         // {
         //     use zydeco_surface::scoped::fmt::*;
+        //     use zydeco_syntax::SpanView;
         //     println!(
         //         "{} @ ({})",
         //         self.inner.ugly(&Formatter::new(&tycker.scoped)),
@@ -861,12 +882,8 @@ impl Tyck for SEnv<su::TermId> {
                     }
                     | Switch::Ana(AnnId::Type(ty)) => {
                         // a hole in either value or computation; like undefined in Haskell
-                        let kd = &tycker.statics.annotations_type[&ty];
-                        match tycker.statics.kinds[kd].to_owned() {
-                            | ss::Kind::Fill(_ann) => tycker.err_k(
-                                TyckError::MissingAnnotation,
-                                std::panic::Location::caller(),
-                            )?,
+                        let kd = tycker.statics.annotations_type[&ty].to_owned();
+                        match tycker.kind_filled_k(&kd)?.to_owned() {
                             | ss::Kind::VType(ss::VType) => {
                                 let hole = Alloc::alloc(tycker, self.inner, ());
                                 tycker.statics.solus.insert(hole, ty.into());
@@ -971,7 +988,7 @@ impl Tyck for SEnv<su::TermId> {
                                 .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
                             | AnnId::Type(ty) => ty,
                         };
-                        match tycker.statics.types[&ana_ty].to_owned() {
+                        match tycker.type_filled_k(&ana_ty)?.to_owned() {
                             | ss::Type::Prod(ty) => {
                                 let ss::Prod(ty_a, ty_b) = ty;
                                 let a_out_ann =
@@ -1097,7 +1114,7 @@ impl Tyck for SEnv<su::TermId> {
                             | AnnId::Kind(kd) => {
                                 // type function in f omega
                                 // expecting a kind arrow
-                                let ss::Kind::Arrow(kd_arr) = tycker.statics.kinds[&kd].to_owned()
+                                let ss::Kind::Arrow(kd_arr) = tycker.kind_filled_k(&kd)?.to_owned()
                                 else {
                                     tycker.err_k(
                                         TyckError::KindMismatch,
@@ -1124,7 +1141,7 @@ impl Tyck for SEnv<su::TermId> {
                             }
                             | AnnId::Type(ty) => {
                                 // could be either term-term fuction or type-polymorphic term function
-                                match tycker.statics.types[&ty].to_owned() {
+                                match tycker.type_filled_k(&ty)?.to_owned() {
                                     | ss::Type::Arrow(ty) => {
                                         // a term-term function
                                         let ss::Arrow(ty_1, ty_2) = ty;
@@ -1208,7 +1225,8 @@ impl Tyck for SEnv<su::TermId> {
                     | TermAnnId::Type(f_ty, f_kd) => {
                         // type application in f omega
                         // f_kd should be a kind arrow
-                        let ss::Kind::Arrow(kd_arr) = tycker.statics.kinds[&f_kd].to_owned() else {
+                        let ss::Kind::Arrow(kd_arr) = tycker.kind_filled_k(&f_kd)?.to_owned()
+                        else {
                             tycker.err_k(TyckError::KindMismatch, std::panic::Location::caller())?
                         };
                         let ss::Arrow(a_kd, kd_out) = kd_arr;
@@ -1239,7 +1257,7 @@ impl Tyck for SEnv<su::TermId> {
                         let f_kd = tycker.statics.annotations_type[&f_ty].to_owned();
                         let f_ty = f_ty.normalize_k(tycker, f_kd)?;
                         // either a term-term application or a type-polymorphic term application
-                        match tycker.statics.types[&f_ty].to_owned() {
+                        match tycker.type_filled_k(&f_ty)?.to_owned() {
                             | ss::Type::Arrow(ty) => {
                                 // a term-term application
                                 let ss::Arrow(ty_arg, ty_out) = ty;
@@ -1350,9 +1368,7 @@ impl Tyck for SEnv<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
                 let (binder, binder_ty) = {
-                    let ss::Type::App(ret_app_body_ty) =
-                        tycker.statics.types[&binder_ty].to_owned()
-                    else {
+                    let ss::Type::App(ret_app_body_ty) = tycker.type_filled_k(&binder_ty)? else {
                         unreachable!()
                     };
                     let ss::App(_ret_ty, body_ty) = ret_app_body_ty;
@@ -1449,21 +1465,7 @@ impl Tyck for SEnv<su::TermId> {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
                         | AnnId::Kind(kd) => {
-                            match tycker.statics.kinds[&kd].to_owned() {
-                                | ss::Kind::Fill(fill) => {
-                                    let out_ann = self.tyck(tycker, Action::syn())?;
-                                    let (ty, kd) = out_ann.try_as_type(
-                                        tycker,
-                                        TyckError::SortMismatch,
-                                        std::panic::Location::caller(),
-                                    )?;
-                                    tycker.statics.solus.insert_or_else(
-                                        fill,
-                                        kd.into(),
-                                        |old, new| panic!("{:?} = {:?}", old, new),
-                                    )?;
-                                    TermAnnId::Type(ty, kd)
-                                }
+                            match tycker.kind_filled_k(&kd)?.to_owned() {
                                 | ss::Kind::VType(_) => tycker.err_k(
                                     TyckError::KindMismatch,
                                     std::panic::Location::caller(),
@@ -1653,7 +1655,7 @@ impl Tyck for SEnv<su::TermId> {
                 };
                 let thunk_app_hole = tycker.thk_hole(&self.env, body);
                 let ty = Lub::lub_k(ana_ty, thunk_app_hole, tycker)?;
-                let ss::Type::App(thunk_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
+                let ss::Type::App(thunk_app_body_ty) = tycker.type_filled_k(&ty)?.to_owned() else {
                     unreachable!()
                 };
                 let ss::App(_thunk_ty, body_ty) = thunk_app_body_ty;
@@ -1704,7 +1706,7 @@ impl Tyck for SEnv<su::TermId> {
                 };
                 let force_ty = {
                     let ss::Type::App(thunk_app_body_ty) =
-                        tycker.statics.types[&body_ty].to_owned()
+                        tycker.type_filled_k(&body_ty)?.to_owned()
                     else {
                         unreachable!()
                     };
@@ -1725,7 +1727,7 @@ impl Tyck for SEnv<su::TermId> {
                 };
                 let ret_app_hole = tycker.ret_hole(&self.env, self.inner);
                 let ty = Lub::lub_k(ana_ty, ret_app_hole, tycker)?;
-                let ss::Type::App(ret_app_body_ty) = tycker.statics.types[&ty].to_owned() else {
+                let ss::Type::App(ret_app_body_ty) = tycker.type_filled_k(&ty)?.to_owned() else {
                     unreachable!()
                 };
                 let ss::App(_ret_ty, body_ty) = ret_app_body_ty;
@@ -1753,7 +1755,7 @@ impl Tyck for SEnv<su::TermId> {
                     )?
                 };
                 // then we get the binder_ty from bindee_ty and ana binder with it
-                let ss::Type::App(ret_app_binder_ty) = tycker.statics.types[&bindee_ty].to_owned()
+                let ss::Type::App(ret_app_binder_ty) = tycker.type_filled_k(&bindee_ty)?.to_owned()
                 else {
                     unreachable!()
                 };
@@ -1914,7 +1916,7 @@ impl Tyck for SEnv<su::TermId> {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
                 let ana_ty_unroll = ana_ty.unroll(tycker)?.subst_env_k(tycker, &self.env)?;
-                let ss::Type::Data(data_id) = &tycker.statics.types[&ana_ty_unroll] else {
+                let ss::Type::Data(data_id) = &tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
                             expected: format!("data type definition"),
@@ -2043,7 +2045,7 @@ impl Tyck for SEnv<su::TermId> {
                     },
                 };
                 let ana_ty_unroll = ana_ty.unroll(tycker)?.subst_env_k(tycker, &self.env)?;
-                let ss::Type::CoData(codata_id) = &tycker.statics.types[&ana_ty_unroll] else {
+                let ss::Type::CoData(codata_id) = &tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
                             expected: format!("codata type definition"),
@@ -2085,7 +2087,7 @@ impl Tyck for SEnv<su::TermId> {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
                 let ty_body_unroll = ty_body.unroll(tycker)?.subst_env_k(tycker, &self.env)?;
-                let ss::Type::CoData(codata_id) = &tycker.statics.types[&ty_body_unroll] else {
+                let ss::Type::CoData(codata_id) = &tycker.type_filled_k(&ty_body_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
                             expected: format!("codata type definition"),

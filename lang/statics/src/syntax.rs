@@ -303,6 +303,14 @@ mod impls_env {
     }
 }
 
+/* -------------------------------- Fillable -------------------------------- */
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum Fillable<T> {
+    Fill(FillId),
+    Done(T),
+}
+
 /* ---------------------------------- Kind ---------------------------------- */
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -312,7 +320,6 @@ pub struct CType;
 
 #[derive(Debug, Clone, From, Hash, PartialEq, Eq)]
 pub enum Kind {
-    Fill(FillId),
     VType(VType),
     CType(CType),
     Arrow(Arrow<KindId>),
@@ -438,7 +445,6 @@ mod impls_structs {
 pub enum Type {
     Var(DefId),
     Abst(AbstId),
-    Fill(FillId),
     Abs(Abs<TPatId, TypeId>),
     App(App<TypeId, TypeId>),
     Thk(ThkTy),

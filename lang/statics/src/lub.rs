@@ -46,27 +46,29 @@ impl Lub for KindId {
             }
         }
         let res = match (lhs, rhs) {
-            | (_, Kind::Fill(rhs)) => fill_kd(tycker, rhs, self)?,
-            | (Kind::Fill(lhs), _) => fill_kd(tycker, lhs, other)?,
-            | (Kind::VType(VType), Kind::VType(VType)) => {
-                let kd = Alloc::alloc(tycker, VType, ());
-                kd
-            }
-            | (Kind::CType(CType), Kind::CType(CType)) => {
-                let kd = Alloc::alloc(tycker, CType, ());
-                kd
-            }
-            | (Kind::Arrow(lhs), Kind::Arrow(rhs)) => {
-                let Arrow(lin, lout) = lhs;
-                let Arrow(rin, rout) = rhs;
-                let kd_in = lin.lub(rin, tycker)?;
-                let kd_out = lout.lub(rout, tycker)?;
-                let kd = Alloc::alloc(tycker, Arrow(kd_in, kd_out), ());
-                kd
-            }
-            | (Kind::VType(_), _) | (Kind::CType(_), _) | (Kind::Arrow(_), _) => {
-                tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?
-            }
+            | (_, Fillable::Fill(rhs)) => fill_kd(tycker, rhs, self)?,
+            | (Fillable::Fill(lhs), _) => fill_kd(tycker, lhs, other)?,
+            | (Fillable::Done(lhs), Fillable::Done(rhs)) => match (lhs, rhs) {
+                | (Kind::VType(VType), Kind::VType(VType)) => {
+                    let kd = Alloc::alloc(tycker, VType, ());
+                    kd
+                }
+                | (Kind::CType(CType), Kind::CType(CType)) => {
+                    let kd = Alloc::alloc(tycker, CType, ());
+                    kd
+                }
+                | (Kind::Arrow(lhs), Kind::Arrow(rhs)) => {
+                    let Arrow(lin, lout) = lhs;
+                    let Arrow(rin, rout) = rhs;
+                    let kd_in = lin.lub(rin, tycker)?;
+                    let kd_out = lout.lub(rout, tycker)?;
+                    let kd = Alloc::alloc(tycker, Arrow(kd_in, kd_out), ());
+                    kd
+                }
+                | (Kind::VType(_), _) | (Kind::CType(_), _) | (Kind::Arrow(_), _) => {
+                    tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?
+                }
+            },
         };
         Ok(res)
     }
@@ -143,192 +145,194 @@ impl Debruijn {
             }
         }
         let res = match (lhs, rhs) {
-            | (_, Type::Fill(rhs)) => fill_ty(tycker, rhs, lhs_id)?,
-            | (Type::Fill(lhs), _) => fill_ty(tycker, lhs, rhs_id)?,
-            | (Type::Var(lhs), Type::Var(rhs)) => {
-                match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
-                    | (Some(l), Some(r)) if l == r => lhs_id,
-                    | _ => tycker.err(
-                        TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                        std::panic::Location::caller(),
-                    )?,
+            | (_, Fillable::Fill(rhs)) => fill_ty(tycker, rhs, lhs_id)?,
+            | (Fillable::Fill(lhs), _) => fill_ty(tycker, lhs, rhs_id)?,
+            | (Fillable::Done(lhs), Fillable::Done(rhs)) => match (lhs, rhs) {
+                | (Type::Var(lhs), Type::Var(rhs)) => {
+                    match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
+                        | (Some(l), Some(r)) if l == r => lhs_id,
+                        | _ => tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?,
+                    }
                 }
-            }
-            | (Type::Abst(lhs), Type::Abst(rhs)) => {
-                match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
-                    | (Some(l), Some(r)) if l == r => lhs_id,
-                    | (None, None) if lhs == rhs => lhs_id,
-                    | _ => tycker.err(
-                        TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                        std::panic::Location::caller(),
-                    )?,
+                | (Type::Abst(lhs), Type::Abst(rhs)) => {
+                    match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
+                        | (Some(l), Some(r)) if l == r => lhs_id,
+                        | (None, None) if lhs == rhs => lhs_id,
+                        | _ => tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?,
+                    }
                 }
-            }
-            | (Type::Abst(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Var(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Abs(Abs(lpat, lbody)), Type::Abs(Abs(rpat, rbody))) => {
-                let (ldef, lkd) = lpat.try_destruct_def(tycker);
-                let (rdef, rkd) = rpat.try_destruct_def(tycker);
-                let _kd = Lub::lub(lkd, rkd, tycker)?;
-                let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
-                if body == lbody {
+                | (Type::Abst(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Var(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Abs(Abs(lpat, lbody)), Type::Abs(Abs(rpat, rbody))) => {
+                    let (ldef, lkd) = lpat.try_destruct_def(tycker);
+                    let (rdef, rkd) = rpat.try_destruct_def(tycker);
+                    let _kd = Lub::lub(lkd, rkd, tycker)?;
+                    let body = self.insert(ldef, rdef).lub(lbody, rbody, tycker)?;
+                    if body == lbody {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let abs = Alloc::alloc(tycker, Abs(lpat, body), kd);
+                        abs
+                    }
+                }
+                | (Type::Abs(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::App(App(lf, la)), Type::App(App(rf, ra))) => {
+                    let f = self.clone().lub(lf, rf, tycker)?;
+                    let a = self.lub(la, ra, tycker)?;
+                    if f == lf && a == la {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let app = Alloc::alloc(tycker, App(f, a), kd);
+                        app.normalize(tycker, kd)?
+                    }
+                }
+                | (Type::App(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Thk(ThkTy), Type::Thk(ThkTy)) => lhs_id,
+                | (Type::Thk(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Ret(RetTy), Type::Ret(RetTy)) => lhs_id,
+                | (Type::Ret(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Unit(UnitTy), Type::Unit(UnitTy)) => lhs_id,
+                | (Type::Unit(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Int(IntTy), Type::Int(IntTy)) => lhs_id,
+                | (Type::Int(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Char(CharTy), Type::Char(CharTy)) => lhs_id,
+                | (Type::Char(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::String(StringTy), Type::String(StringTy)) => lhs_id,
+                | (Type::String(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::OS(OSTy), Type::OS(OSTy)) => lhs_id,
+                | (Type::OS(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Arrow(Arrow(la, lb)), Type::Arrow(Arrow(ra, rb))) => {
+                    let a = self.clone().lub(la, ra, tycker)?;
+                    let b = self.lub(lb, rb, tycker)?;
+                    if a == la && b == lb {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let arrow = Alloc::alloc(tycker, Arrow(a, b), kd);
+                        arrow
+                    }
+                }
+                | (Type::Arrow(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Forall(Forall(labst, lbody)), Type::Forall(Forall(rabst, rbody))) => {
+                    let lkd = tycker.statics.annotations_abst[&labst].to_owned();
+                    let rkd = tycker.statics.annotations_abst[&rabst].to_owned();
+                    let _kd = Lub::lub(lkd, rkd, tycker)?;
+                    let body = self.insert(Some(labst), Some(rabst)).lub(lbody, rbody, tycker)?;
+                    if body == lbody {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let forall = Alloc::alloc(tycker, Forall(labst, body), kd);
+                        forall
+                    }
+                }
+                | (Type::Forall(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Prod(Prod(la, lb)), Type::Prod(Prod(ra, rb))) => {
+                    let a = self.clone().lub(la, ra, tycker)?;
+                    let b = self.lub(lb, rb, tycker)?;
+                    if a == la && b == lb {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let prod = Alloc::alloc(tycker, Prod(a, b), kd);
+                        prod
+                    }
+                }
+                | (Type::Prod(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Exists(Exists(labst, lbody)), Type::Exists(Exists(rabst, rbody))) => {
+                    let lkd = tycker.statics.annotations_abst[&labst].to_owned();
+                    let rkd = tycker.statics.annotations_abst[&rabst].to_owned();
+                    let _kd = Lub::lub(lkd, rkd, tycker)?;
+                    let body = self.insert(Some(labst), Some(rabst)).lub(lbody, rbody, tycker)?;
+                    if body == lbody {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let exists = Alloc::alloc(tycker, Exists(labst, body), kd);
+                        exists
+                    }
+                }
+                | (Type::Exists(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::Data(lhs), Type::Data(rhs)) => {
+                    if lhs != rhs {
+                        tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?
+                    }
                     lhs_id
-                } else {
-                    let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let abs = Alloc::alloc(tycker, Abs(lpat, body), kd);
-                    abs
                 }
-            }
-            | (Type::Abs(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::App(App(lf, la)), Type::App(App(rf, ra))) => {
-                let f = self.clone().lub(lf, rf, tycker)?;
-                let a = self.lub(la, ra, tycker)?;
-                if f == lf && a == la {
+                | (Type::Data(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+                | (Type::CoData(lhs), Type::CoData(rhs)) => {
+                    if lhs != rhs {
+                        tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?
+                    }
                     lhs_id
-                } else {
-                    let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let app = Alloc::alloc(tycker, App(f, a), kd);
-                    app.normalize(tycker, kd)?
                 }
-            }
-            | (Type::App(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Thk(ThkTy), Type::Thk(ThkTy)) => lhs_id,
-            | (Type::Thk(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Ret(RetTy), Type::Ret(RetTy)) => lhs_id,
-            | (Type::Ret(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Unit(UnitTy), Type::Unit(UnitTy)) => lhs_id,
-            | (Type::Unit(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Int(IntTy), Type::Int(IntTy)) => lhs_id,
-            | (Type::Int(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Char(CharTy), Type::Char(CharTy)) => lhs_id,
-            | (Type::Char(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::String(StringTy), Type::String(StringTy)) => lhs_id,
-            | (Type::String(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::OS(OSTy), Type::OS(OSTy)) => lhs_id,
-            | (Type::OS(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Arrow(Arrow(la, lb)), Type::Arrow(Arrow(ra, rb))) => {
-                let a = self.clone().lub(la, ra, tycker)?;
-                let b = self.lub(lb, rb, tycker)?;
-                if a == la && b == lb {
-                    lhs_id
-                } else {
-                    let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let arrow = Alloc::alloc(tycker, Arrow(a, b), kd);
-                    arrow
-                }
-            }
-            | (Type::Arrow(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Forall(Forall(labst, lbody)), Type::Forall(Forall(rabst, rbody))) => {
-                let lkd = tycker.statics.annotations_abst[&labst].to_owned();
-                let rkd = tycker.statics.annotations_abst[&rabst].to_owned();
-                let _kd = Lub::lub(lkd, rkd, tycker)?;
-                let body = self.insert(Some(labst), Some(rabst)).lub(lbody, rbody, tycker)?;
-                if body == lbody {
-                    lhs_id
-                } else {
-                    let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let forall = Alloc::alloc(tycker, Forall(labst, body), kd);
-                    forall
-                }
-            }
-            | (Type::Forall(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Prod(Prod(la, lb)), Type::Prod(Prod(ra, rb))) => {
-                let a = self.clone().lub(la, ra, tycker)?;
-                let b = self.lub(lb, rb, tycker)?;
-                if a == la && b == lb {
-                    lhs_id
-                } else {
-                    let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let prod = Alloc::alloc(tycker, Prod(a, b), kd);
-                    prod
-                }
-            }
-            | (Type::Prod(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Exists(Exists(labst, lbody)), Type::Exists(Exists(rabst, rbody))) => {
-                let lkd = tycker.statics.annotations_abst[&labst].to_owned();
-                let rkd = tycker.statics.annotations_abst[&rabst].to_owned();
-                let _kd = Lub::lub(lkd, rkd, tycker)?;
-                let body = self.insert(Some(labst), Some(rabst)).lub(lbody, rbody, tycker)?;
-                if body == lbody {
-                    lhs_id
-                } else {
-                    let kd = tycker.statics.annotations_type[&lhs_id].clone();
-                    let exists = Alloc::alloc(tycker, Exists(labst, body), kd);
-                    exists
-                }
-            }
-            | (Type::Exists(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::Data(lhs), Type::Data(rhs)) => {
-                if lhs != rhs {
-                    tycker.err(
-                        TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                        std::panic::Location::caller(),
-                    )?
-                }
-                lhs_id
-            }
-            | (Type::Data(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
-            | (Type::CoData(lhs), Type::CoData(rhs)) => {
-                if lhs != rhs {
-                    tycker.err(
-                        TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                        std::panic::Location::caller(),
-                    )?
-                }
-                lhs_id
-            }
-            | (Type::CoData(_), _) => tycker.err(
-                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                std::panic::Location::caller(),
-            )?,
+                | (Type::CoData(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
+            },
         };
         Ok(res)
     }
