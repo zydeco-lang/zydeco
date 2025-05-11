@@ -1,7 +1,7 @@
 {
   "name": "zls",
   "displayName": "zls",
-  "description": "A zydeco language support.",
+  "description": "Language support for Zydeco",
   "version": "0.0.12",
   "engines": {
     "vscode": "^1.96.0"
@@ -48,10 +48,10 @@
     "publish": "vsce publish --no-dependencies"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "@types/vscode": "^1.96.0",
-    "esbuild": "^0.24.0",
-    "typescript": "^5.7.2"
+    "@types/node": "^22.15.17",
+    "@types/vscode": "^1.100.0",
+    "esbuild": "^0.25.4",
+    "typescript": "^5.8.3"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
