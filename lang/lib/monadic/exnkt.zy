@@ -1,41 +1,41 @@
-alias Exn (E: VType) (A: VType) : CType =
-  Ret (Either E A)
+alias ExnK (E: VType) (A: VType) : CType =
+  forall (R: CType) . Thk (E -> R) -> Thk (A -> R) -> R
 end
 
 // Change `Ret` in Exn to `M`
-alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
-  M (Either E A)
+alias ExnKT (E: VType) (M: VType -> CType) (A: VType) : CType =
+  forall (R: CType) . Thk (Algebra M R) -> Thk (E -> R) -> Thk (A -> R) -> R
 end
 
-def ! mo-exnt (E: VType) (M: VType -> CType)
+def ! mo-exnkt (E: VType) (M: VType -> CType)
   (mo: Thk (Monad M))
-: Monad (ExnT E M) =
-  // correct anwser:
-  //
-  // comatch
-  // | .return A a ->
-  //   ! mo .return (Either E A) +Right(a)
-  // | .bind A A' m f ->
-  //   do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
-  //   match a?
-  //   | +Left(e) -> ! mo .return (Either E A') +Left(e)
-  //   | +Right(a) -> ! f a
-  //   end
-  // end
+: Monad (ExnKT E M) =
+  // // correct anwser:
+  // //
+  // // comatch
+  // // | .return A a ->
+  // //   ! mo .return (Either E A) +Right(a)
+  // // | .bind A A' m f ->
+  // //   do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
+  // //   match a?
+  // //   | +Left(e) -> ! mo .return (Either E A') +Left(e)
+  // //   | +Right(a) -> ! f a
+  // //   end
+  // // end
 
-  monadic
-    // inlining `! mo-exn E`
-    (comatch
-    | .return A a ->
-      ret +Right(a)
-    | .bind A A' m f ->
-      do a? <- ! m;
-      match a?
-      | +Left(e) -> ret +Left(e)
-      | +Right(a) -> ! f a
-      end
-    end : Monad (Exn E))
-  end M mo
+  // monadic
+  //   // inlining `! mo-exn E`
+  //   (comatch
+  //   | .return A a ->
+  //     ret +Right(a)
+  //   | .bind A A' m f ->
+  //     do a? <- ! m;
+  //     match a?
+  //     | +Left(e) -> ret +Left(e)
+  //     | +Right(a) -> ! f a
+  //     end
+  //   end : Monad (Exn E))
+  // end M mo
 end
 
 

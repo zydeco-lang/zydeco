@@ -2,15 +2,55 @@
 
 use crate::{syntax::*, *};
 
+pub trait Construct<T> {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> T;
+}
+
 /* ---------------------------------- Kind ---------------------------------- */
-impl Tycker {
-    pub fn vtype(&mut self, env: &Env<AnnId>) -> KindId {
-        let AnnId::Kind(kd) = env[self.prim.vtype.get()] else { unreachable!() };
+impl Construct<KindId> for KindId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> KindId {
+        self
+    }
+}
+impl Construct<KindId> for VType {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
+        let AnnId::Kind(kd) = env[tycker.prim.vtype.get()] else { unreachable!() };
         kd
     }
-    pub fn ctype(&mut self, env: &Env<AnnId>) -> KindId {
-        let AnnId::Kind(kd) = env[self.prim.ctype.get()] else { unreachable!() };
+}
+impl Construct<KindId> for CType {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
+        let AnnId::Kind(kd) = env[tycker.prim.ctype.get()] else { unreachable!() };
         kd
+    }
+}
+impl<K1, K2> Construct<KindId> for SArrow<K1, K2>
+where
+    K1: Construct<KindId>,
+    K2: Construct<KindId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
+        let SArrow(k1, k2) = self;
+        let k1 = k1.build(tycker, env);
+        let k2 = k2.build(tycker, env);
+        Alloc::alloc(tycker, Arrow(k1, k2), ())
+    }
+}
+
+impl Tycker {
+    pub fn vtype(&mut self, env: &Env<AnnId>) -> KindId {
+        VType.build(self, env)
+    }
+    pub fn ctype(&mut self, env: &Env<AnnId>) -> KindId {
+        CType.build(self, env)
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn static_test() {
+    fn _f(tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
+        SArrow(VType, SArrow(CType, CType)).build(tycker, env)
     }
 }
 
@@ -176,28 +216,30 @@ impl Tycker {
         Alloc::alloc(self, App(abs, arg), body_ty)
     }
     pub fn compu_tabs(
-        &mut self, env: &Env<AnnId>, name: VarName, def_kd: KindId,
+        &mut self, env: &Env<AnnId>, name: VarName, def_kd: impl Construct<KindId>,
         body: impl Fn(&mut Self, DefId, AbstId) -> CompuId,
     ) -> CompuId {
-        let ctype = self.ctype(env);
+        let def_kd = def_kd.build(self, env);
         let def = Alloc::alloc(self, name, def_kd.into());
         let abst = Alloc::alloc(self, def, def_kd);
         let tpat: TPatId = Alloc::alloc(self, def, def_kd);
         let body = body(self, def, abst);
         let body_ty = self.statics.annotations_compu[&body];
+        let ctype = self.ctype(env);
         let ty = Alloc::alloc(self, Forall(abst, body_ty), ctype);
         Alloc::alloc(self, Abs(tpat, body), ty)
     }
     pub fn try_compu_tabs(
-        &mut self, env: &Env<AnnId>, name: VarName, def_kd: KindId,
+        &mut self, env: &Env<AnnId>, name: VarName, def_kd: impl Construct<KindId>,
         body: impl Fn(&mut Self, DefId, AbstId) -> Result<CompuId>,
     ) -> Result<CompuId> {
-        let ctype = self.ctype(env);
+        let def_kd = def_kd.build(self, env);
         let def = Alloc::alloc(self, name, def_kd.into());
         let abst = Alloc::alloc(self, def, def_kd);
         let tpat: TPatId = Alloc::alloc(self, def, def_kd);
         let body = body(self, def, abst)?;
         let body_ty = self.statics.annotations_compu[&body];
+        let ctype = self.ctype(env);
         let ty = Alloc::alloc(self, Forall(abst, body_ty), ctype);
         Ok(Alloc::alloc(self, Abs(tpat, body), ty))
     }
