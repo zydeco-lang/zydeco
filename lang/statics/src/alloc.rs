@@ -84,7 +84,7 @@ macro_rules! AllocKind {
 AllocKind! {
     VType
     CType
-    Arrow<KindId>
+    ArrowU<KindId>
 }
 
 /* ---------------------------------- Type ---------------------------------- */
@@ -172,9 +172,9 @@ AllocType! {
     CharTy
     StringTy
     OSTy
-    Arrow<TypeId>
+    ArrowU<TypeId>
     Forall
-    Prod<TypeId>
+    ProdU<TypeId>
     Exists
     DataId
     CoDataId

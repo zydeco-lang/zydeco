@@ -287,7 +287,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Pi {
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Arrow<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for ArrowU<T>
 where
     T: Ugly<'a, Formatter<'a>>,
 {
@@ -325,7 +325,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Sigma {
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Prod<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for ProdU<T>
 where
     T: Ugly<'a, Formatter<'a>>,
 {

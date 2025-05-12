@@ -39,11 +39,10 @@ pub struct App<S, T>(pub S, pub T);
 
 /// a -> b shaped arrow
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Arrow<T>(pub T, pub T);
+pub struct Arrow<S, T>(pub S, pub T);
 
-/// static arrow that allows different components
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct SArrow<S, T>(pub S, pub T);
+/// unary arrow that applies the same component
+pub type ArrowU<T> = Arrow<T, T>;
 
 /// `()` as unit type
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -55,11 +54,10 @@ pub struct Cons<S, T>(pub S, pub T);
 
 /// a * b shaped product
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Prod<T>(pub T, pub T);
+pub struct Prod<S, T>(pub S, pub T);
 
-/// static product that allows different components
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct SProd<S, T>(pub S, pub T);
+/// unary product that applies the same component
+pub type ProdU<T> = Prod<T, T>;
 
 /// sealed term which is abstract, only eq to itself during tyck
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

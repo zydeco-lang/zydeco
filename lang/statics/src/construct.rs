@@ -24,13 +24,13 @@ impl Construct<KindId> for CType {
         kd
     }
 }
-impl<K1, K2> Construct<KindId> for SArrow<K1, K2>
+impl<K1, K2> Construct<KindId> for Arrow<K1, K2>
 where
     K1: Construct<KindId>,
     K2: Construct<KindId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
-        let SArrow(k1, k2) = self;
+        let Arrow(k1, k2) = self;
         let k1 = k1.build(tycker, env);
         let k2 = k2.build(tycker, env);
         Alloc::alloc(tycker, Arrow(k1, k2), ())
@@ -50,7 +50,7 @@ impl Tycker {
 #[test]
 fn static_test() {
     fn _f(tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
-        SArrow(VType, SArrow(CType, CType)).build(tycker, env)
+        Arrow(VType, Arrow(CType, CType)).build(tycker, env)
     }
 }
 

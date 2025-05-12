@@ -322,7 +322,7 @@ pub struct CType;
 pub enum Kind {
     VType(VType),
     CType(CType),
-    Arrow(Arrow<KindId>),
+    Arrow(ArrowU<KindId>),
 }
 
 /* ---------------------------------- Type ---------------------------------- */
@@ -454,9 +454,9 @@ pub enum Type {
     Char(CharTy),
     String(StringTy),
     OS(OSTy),
-    Arrow(Arrow<TypeId>),
+    Arrow(ArrowU<TypeId>),
     Forall(Forall),
-    Prod(Prod<TypeId>),
+    Prod(ProdU<TypeId>),
     Exists(Exists),
     Data(DataId),
     CoData(CoDataId),

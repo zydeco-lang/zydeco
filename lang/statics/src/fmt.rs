@@ -261,8 +261,9 @@ where
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Arrow<T>
+impl<'a, S, T> Ugly<'a, Formatter<'a>> for Arrow<S, T>
 where
+    S: Ugly<'a, Formatter<'a>>,
     T: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
@@ -288,8 +289,9 @@ where
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Prod<T>
+impl<'a, S, T> Ugly<'a, Formatter<'a>> for Prod<S, T>
 where
+    S: Ugly<'a, Formatter<'a>>,
     T: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
