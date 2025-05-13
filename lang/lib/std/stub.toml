@@ -1,4 +1,5 @@
 name = "Stub"
+# For testing minimal programs.
 
 srcs = [
     "core.zy",

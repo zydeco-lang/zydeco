@@ -21,7 +21,7 @@ pub struct Resolver {
     pub spans: SpanArena,
     pub bitter: Arena,
     pub prim_term: PrimTerms,
-    pub prim_def: PrimDef,
+    pub prim_def: PrimDefs,
     /// all internal definitions mapped to a corresponding def
     pub internal_to_def: ArenaAssoc<TermId, DefId>,
 
@@ -38,7 +38,7 @@ pub struct Resolver {
 
 pub struct ResolveOut {
     pub spans: SpanArena,
-    pub prim: PrimDef,
+    pub prim: PrimDefs,
     pub arena: ScopedArena,
 }
 

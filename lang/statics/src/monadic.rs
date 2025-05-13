@@ -262,27 +262,30 @@ pub fn value_translation(
     env: &Env<AnnId>, value: ValueId,
 ) -> Result<ValueId> {
     let ty = tycker.statics.annotations_value[&value];
+    let ty_ = type_translation(tycker, monad_ty, env, ty)?;
     let res = match tycker.value(&value).to_owned() {
-        | Value::Hole(Hole) | Value::Lit(_) => value,
+        | Value::Hole(Hole) => Alloc::alloc(tycker, Hole, ty_),
+        // figure out how to handle literals
+        | Value::Lit(_) => unreachable!(),
         // variables should be freshed and substituted
         | Value::Var(def) => todo!(),
         | Value::Thunk(value) => {
             let Thunk(body) = value;
             let body_ = computation_translation(tycker, monad_ty, monad_impl, env, body)?;
-            tycker.value_thunk(env, body_)
+            Thunk(body_).build(tycker, env)
         }
         | Value::Ctor(value) => {
             let Ctor(ctor, body) = value;
             let body_ = value_translation(tycker, monad_ty, monad_impl, str_env, env, body)?;
             let ty_ = type_translation(tycker, monad_ty, env, ty)?;
-            Alloc::alloc(tycker, Ctor(ctor, body_), ty_)
+            Ann { tm: Ctor(ctor, body_), ty: ty_ }.build(tycker, env)
         }
         | Value::Triv(Triv) => value,
         | Value::VCons(value) => {
             let Cons(value_1, value_2) = value;
             let value_1_ = value_translation(tycker, monad_ty, monad_impl, str_env, env, value_1)?;
             let value_2_ = value_translation(tycker, monad_ty, monad_impl, str_env, env, value_2)?;
-            tycker.value_vcons(env, value_1_, value_2_)
+            Cons(value_1_, value_2_).build(tycker, env)
         }
         | Value::TCons(value) => {
             let Cons(a_ty, body) = value;
@@ -292,8 +295,6 @@ pub fn value_translation(
             let vcons = tycker.value_vcons(env, thk_str, body_);
             let a_ty_ = type_translation(tycker, monad_ty, env, a_ty)?;
             // existential type construct should be type-guided
-            // tycker.value_tcons(env, a_ty_, vcons)
-            let ty_ = type_translation(tycker, monad_ty, env, ty)?;
             Alloc::alloc(tycker, Cons(a_ty_, vcons), ty_)
         }
     };
@@ -304,12 +305,22 @@ pub fn value_translation(
 pub fn computation_translation(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, env: &Env<AnnId>, compu: CompuId,
 ) -> Result<CompuId> {
-    let _ = tycker;
-    let _ = monad_ty;
-    let _ = monad_impl;
-    let _ = env;
-    let _ = compu;
-    todo!()
+    let res = match tycker.compu(&compu) {
+        | Computation::Hole(_) => todo!(),
+        | Computation::VAbs(_) => todo!(),
+        | Computation::VApp(_) => todo!(),
+        | Computation::TAbs(_) => todo!(),
+        | Computation::TApp(_) => todo!(),
+        | Computation::Fix(_) => todo!(),
+        | Computation::Force(_) => todo!(),
+        | Computation::Ret(_) => todo!(),
+        | Computation::Do(_) => todo!(),
+        | Computation::Let(_) => todo!(),
+        | Computation::Match(_) => todo!(),
+        | Computation::CoMatch(_) => todo!(),
+        | Computation::Dtor(_) => todo!(),
+    };
+    Ok(res)
 }
 
 /// Monadic Block Elaboration (Value)

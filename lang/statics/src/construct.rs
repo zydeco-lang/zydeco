@@ -1,9 +1,87 @@
-//! Constructors for patterns, types, and terms upon StaticArena.
+//! Constructors for patterns, types, and terms in [`StaticsArena`].
+//!
+//! This module provides the [`Construct`] trait, which describes a convenient DSL for
+//! writing Zydeco programs in Rust. Its semantics is as follows:
+//!
+//! `impl` [`Construct<T>`] for `S` means that `S` can be used to construct `T`
+//!
+//! The [`Construct`] API is an improvement based on [`Alloc`] in that unlike `Alloc`
+//! which requires feeding annotations manually, it tries to infer the annotations
+//! (types and kinds) of the constructed terms automatically, which brings two benefits:
+//! + It's more convenient, because much less boilerplate annotations are needed.
+//! + It's less error-prone, as the inferred types are constructed from the known context
+//!   of the compiler. Manually constructed types are not guaranteed to match the terms
+//!   that they are supposed to annotate.
+//!
+//! In conclusion, it's recommended to use `Construct` instead of `Alloc` for constructing
+//! Zydeco programs in Rust. Example use cases are wrapped as legacy methods in [`Tycker`],
+//! as well as static tests in `<sort>_test` modules.
 
 use crate::{syntax::*, *};
 
 pub trait Construct<T> {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> T;
+}
+
+impl<S, T, A> Construct<T> for Ann<S, A>
+where
+    S: Alloc<T, Ann = A>,
+{
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> T {
+        let Ann { tm, ty } = self;
+        Alloc::alloc(tycker, tm, ty)
+    }
+}
+
+pub mod syntax {
+    // use super::*;
+
+    /// `codata end`
+    pub struct TopTy;
+    /// `Monad M : (VType -> CType) -> CType`
+    pub struct MonadTy;
+    /// generates `Monad M` where:
+    /// 1. M is `monad_ty` of kind `VType -> CType`
+    pub struct Monad<M>(pub M);
+    /// `Algebra M R : (VType -> CType) -> CType -> CType`
+    pub struct AlgebraTy;
+    /// generates `Algebra M R` where:
+    /// 1. M is `monad_ty` of kind `VType -> CType`
+    /// 2. R is `carrier` of kind `CType`
+    pub struct Algebra<M, R>(pub M, pub R);
+
+    /// `exists X. A`
+    pub struct Exists<Param, FBody>(pub Param, pub FBody);
+    /// `forall X. B`
+    pub struct Forall<Param, FBody>(pub Param, pub FBody);
+}
+
+/* ------------------------------- Definition ------------------------------- */
+
+impl Construct<DefId> for DefId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> DefId {
+        self
+    }
+}
+impl Construct<DefId> for Ann<String, AnnId> {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> DefId {
+        let Ann { tm, ty } = self;
+        Ann { tm: VarName(tm), ty }.build(tycker, env)
+    }
+}
+impl Construct<DefId> for Ann<&str, AnnId> {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> DefId {
+        let Ann { tm, ty } = self;
+        Ann { tm: tm.to_string(), ty }.build(tycker, env)
+    }
+}
+
+/* -------------------------------- Abstract -------------------------------- */
+
+impl Construct<AbstId> for AbstId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> AbstId {
+        self
+    }
 }
 
 /* ---------------------------------- Kind ---------------------------------- */
@@ -48,10 +126,14 @@ impl Tycker {
 }
 
 #[cfg(test)]
-#[test]
-fn static_test() {
-    fn _f(tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
-        Arrow(VType, Arrow(CType, CType)).build(tycker, env)
+mod kind_test {
+    use crate::{syntax::*, *};
+
+    #[test]
+    fn r#static() {
+        fn _f(tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
+            Arrow(VType, Arrow(CType, CType)).build(tycker, env)
+        }
     }
 }
 
@@ -62,18 +144,23 @@ impl Construct<TPatId> for TPatId {
         self
     }
 }
-impl Construct<TPatId> for Ann<DefId, KindId> {
-    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> TPatId {
-        let Ann { tm: def, ty: kd } = self;
-        Alloc::alloc(tycker, def, kd)
-    }
-}
 
 /* ---------------------------------- Type ---------------------------------- */
 
 impl Construct<TypeId> for TypeId {
     fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> TypeId {
         self
+    }
+}
+impl<Kd> Construct<TypeId> for Ann<Hole, (Kd, su::TermId)>
+where
+    Kd: Construct<KindId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let Ann { tm: Hole, ty: (kd, site) } = self;
+        let kd = kd.build(tycker, env);
+        let fill = tycker.statics.fills.alloc(site);
+        Alloc::alloc(tycker, fill, kd)
     }
 }
 impl Construct<TypeId> for DefId {
@@ -83,22 +170,23 @@ impl Construct<TypeId> for DefId {
         Alloc::alloc(tycker, self, kd)
     }
 }
-impl Construct<TypeId> for Ann<AbstId, KindId> {
+impl Construct<TypeId> for AbstId {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> TypeId {
-        let Ann { tm: abst, ty: kd } = self;
-        Alloc::alloc(tycker, abst, kd)
+        let kd = tycker.statics.annotations_abst[&self];
+        Alloc::alloc(tycker, self, kd)
     }
 }
-impl<S, T> Construct<TypeId> for Abs<S, T>
+impl<S, F, T> Construct<TypeId> for Abs<S, F>
 where
     S: Construct<TPatId>,
+    F: Fn(TPatId, DefId, KindId) -> T,
     T: Construct<TypeId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
         let Abs(param, ty) = self;
         let tpat = param.build(tycker, env);
-        let param_kd = tycker.statics.annotations_tpat[&tpat];
-        let body = ty.build(tycker, env);
+        let (def, param_kd) = tpat.destruct_def(tycker);
+        let body = ty(tpat, def, param_kd).build(tycker, env);
         let body_kd = tycker.statics.annotations_type[&body];
         let kd = Arrow(param_kd, body_kd).build(tycker, env);
         Alloc::alloc(tycker, Abs(tpat, body), kd)
@@ -120,6 +208,42 @@ where
         Alloc::alloc(tycker, App(ty_1, ty_2), kd_b)
     }
 }
+impl Construct<TypeId> for IntTy {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let AnnId::Type(ty) = env[tycker.prim.int.get()] else { unreachable!() };
+        ty
+    }
+}
+impl Construct<TypeId> for CharTy {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let AnnId::Type(ty) = env[tycker.prim.char.get()] else { unreachable!() };
+        ty
+    }
+}
+impl Construct<TypeId> for StringTy {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let AnnId::Type(ty) = env[tycker.prim.string.get()] else { unreachable!() };
+        ty
+    }
+}
+impl Construct<TypeId> for ThkTy {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let AnnId::Type(ty) = env[tycker.prim.thk.get()] else { unreachable!() };
+        ty
+    }
+}
+impl<T> Construct<TypeId> for Thunk<T>
+where
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let Thunk(arg) = self;
+        let thk = ThkTy.build(tycker, env);
+        let arg = arg.build(tycker, env);
+        let vtype = VType.build(tycker, env);
+        Alloc::alloc(tycker, App(thk, arg), vtype)
+    }
+}
 impl Construct<TypeId> for UnitTy {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[tycker.prim.unit.get()] else { unreachable!() };
@@ -139,27 +263,29 @@ where
         Alloc::alloc(tycker, Prod(ty_1, ty_2), vtype)
     }
 }
-impl Construct<TypeId> for IntTy {
+impl<F, A, T> Construct<TypeId> for cs::Exists<A, F>
+where
+    F: Fn(AbstId) -> T,
+    A: Construct<AbstId>,
+    T: Construct<TypeId>,
+{
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.int.get()] else { unreachable!() };
-        ty
-    }
-}
-impl Construct<TypeId> for CharTy {
-    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.char.get()] else { unreachable!() };
-        ty
-    }
-}
-impl Construct<TypeId> for StringTy {
-    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.string.get()] else { unreachable!() };
-        ty
+        let cs::Exists(abst, ty) = self;
+        let abst = abst.build(tycker, env);
+        let ty = ty(abst).build(tycker, env);
+        let vtype = VType.build(tycker, env);
+        Alloc::alloc(tycker, Exists(abst, ty), vtype)
     }
 }
 impl Construct<TypeId> for OSTy {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[tycker.prim.os.get()] else { unreachable!() };
+        ty
+    }
+}
+impl Construct<TypeId> for cs::TopTy {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let AnnId::Type(ty) = env[tycker.prim.top.get()] else { unreachable!() };
         ty
     }
 }
@@ -176,104 +302,180 @@ where
         Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype)
     }
 }
-
-impl Tycker {
-    pub fn type_thk(&mut self, env: &Env<AnnId>) -> TypeId {
-        let AnnId::Type(ty) = env[self.prim.thk.get()] else { unreachable!() };
+impl<F, A, T> Construct<TypeId> for cs::Forall<A, F>
+where
+    F: Fn(AbstId) -> T,
+    A: Construct<AbstId>,
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let cs::Forall(abst, ty) = self;
+        let abst = abst.build(tycker, env);
+        let ty = ty(abst).build(tycker, env);
+        let ctype = CType.build(tycker, env);
+        Alloc::alloc(tycker, Exists(abst, ty), ctype)
+    }
+}
+impl Construct<TypeId> for RetTy {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let AnnId::Type(ty) = env[tycker.prim.ret.get()] else { unreachable!() };
         ty
     }
+}
+impl<T> Construct<TypeId> for Ret<T>
+where
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let Ret(arg) = self;
+        let ret = RetTy.build(tycker, env);
+        let arg = arg.build(tycker, env);
+        let ctype = CType.build(tycker, env);
+        Alloc::alloc(tycker, App(ret, arg), ctype)
+    }
+}
+impl Construct<TypeId> for syntax::MonadTy {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let AnnId::Type(ty) = env[tycker.prim.monad.get()] else { unreachable!() };
+        ty
+    }
+}
+impl<M> Construct<TypeId> for cs::Monad<M>
+where
+    M: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let cs::Monad(monad_ty) = self;
+        App(cs::MonadTy, monad_ty).build(tycker, env)
+    }
+}
+impl Construct<TypeId> for syntax::AlgebraTy {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let AnnId::Type(ty) = env[tycker.prim.algebra.get()] else { unreachable!() };
+        ty
+    }
+}
+impl<M, R> Construct<TypeId> for cs::Algebra<M, R>
+where
+    M: Construct<TypeId>,
+    R: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let cs::Algebra(monad_ty, carrier) = self;
+        App(App(cs::AlgebraTy, monad_ty), carrier).build(tycker, env)
+    }
+}
+
+impl Tycker {
     /// generates `Thunk B`
     pub fn thk_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
-        let thk = self.type_thk(env);
-        let vtype = self.vtype(env);
-        Alloc::alloc(self, App(thk, arg), vtype)
+        Thunk(arg).build(self, env)
     }
     /// generates `Thunk _`
     pub fn thk_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
-        let fill = self.statics.fills.alloc(site);
-        let ctype = self.ctype(env);
-        let hole = Alloc::alloc(self, fill, ctype);
-        self.thk_arg(env, hole)
-    }
-    pub fn type_ret(&mut self, env: &Env<AnnId>) -> TypeId {
-        let AnnId::Type(ty) = env[self.prim.ret.get()] else { unreachable!() };
-        ty
+        Thunk(Ann { tm: Hole, ty: (CType, site) }).build(self, env)
     }
     /// generates `Ret A`
     pub fn ret_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
-        let ret = self.type_ret(env);
-        let ctype = self.ctype(env);
-        Alloc::alloc(self, App(ret, arg), ctype)
+        Ret(arg).build(self, env)
     }
     /// generates `Ret _`
     pub fn ret_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
-        let fill = self.statics.fills.alloc(site);
-        let vtype = self.vtype(env);
-        let hole = Alloc::alloc(self, fill, vtype);
-        self.ret_arg(env, hole)
+        Ret(Ann { tm: Hole, ty: (VType, site) }).build(self, env)
     }
     pub fn type_top(&mut self, env: &Env<AnnId>) -> TypeId {
-        let AnnId::Type(ty) = env[self.prim.top.get()] else { unreachable!() };
-        ty
+        cs::TopTy.build(self, env)
     }
     pub fn type_exists(&mut self, env: &Env<AnnId>, x: AbstId, b: TypeId) -> TypeId {
-        let ctype = self.ctype(env);
-        Alloc::alloc(self, Exists(x, b), ctype)
+        cs::Exists(x, |_| b).build(self, env)
     }
     pub fn type_forall(&mut self, env: &Env<AnnId>, x: AbstId, b: TypeId) -> TypeId {
-        let ctype = self.ctype(env);
-        Alloc::alloc(self, Forall(x, b), ctype)
-    }
-    pub fn type_abs(
-        &mut self, env: &Env<AnnId>, def: DefId, def_kd: KindId, body: TypeId,
-    ) -> TypeId {
-        Abs(Ann { tm: def, ty: def_kd }, body).build(self, env)
+        cs::Forall(x, |_| b).build(self, env)
     }
     /// generates `Monad M` where:
     /// 1. M is `monad_ty` of kind `VType -> CType`
     pub fn monad_mo(&mut self, env: &Env<AnnId>, monad_ty: TypeId) -> TypeId {
-        let AnnId::Type(monad) = env[self.prim.monad.get()] else { unreachable!() };
-        let ctype = self.ctype(env);
-        Alloc::alloc(self, App(monad, monad_ty), ctype)
+        cs::Monad(monad_ty).build(self, env)
     }
-    /// generates `Algebra M R` where:
-    /// 1. M is `monad_ty` of kind `VType -> CType`
-    /// 2. R is `carrier` of kind `CType`
     pub fn algebra_mo_car(
         &mut self, env: &Env<AnnId>, monad_ty: TypeId, carrier: TypeId,
     ) -> TypeId {
-        let AnnId::Type(algebra) = env[self.prim.algebra.get()] else { unreachable!() };
-        let ctype = self.ctype(env);
-        let algebra_mo_kd = Alloc::alloc(self, Arrow(ctype, ctype), ());
-        let algebra_mo = Alloc::alloc(self, App(algebra, monad_ty), algebra_mo_kd);
-        Alloc::alloc(self, App(algebra_mo, carrier), ctype)
+        cs::Algebra(monad_ty, carrier).build(self, env)
+    }
+}
+
+/* ------------------------------ ValuePattern ------------------------------ */
+
+impl Construct<VPatId> for VPatId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> VPatId {
+        self
     }
 }
 
 /* ---------------------------------- Value --------------------------------- */
 
+impl Construct<ValueId> for ValueId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> ValueId {
+        self
+    }
+}
+impl<T> Construct<ValueId> for Thunk<T>
+where
+    T: Construct<CompuId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> ValueId {
+        let Thunk(body) = self;
+        let body = body.build(tycker, env);
+        let body_ty = tycker.statics.annotations_compu[&body];
+        let ty = tycker.thk_arg(env, body_ty);
+        Alloc::alloc(tycker, Thunk(body), ty)
+    }
+}
+impl Construct<ValueId> for Triv {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> ValueId {
+        let ty = UnitTy.build(tycker, env);
+        Alloc::alloc(tycker, Triv, ty)
+    }
+}
+impl<S, T> Construct<ValueId> for Cons<S, T>
+where
+    S: Construct<ValueId>,
+    T: Construct<ValueId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> ValueId {
+        let Cons(a, b) = self;
+        let a = a.build(tycker, env);
+        let a_ty = tycker.statics.annotations_value[&a];
+        let b = b.build(tycker, env);
+        let b_ty = tycker.statics.annotations_value[&b];
+        let ty = Prod(a_ty, b_ty).build(tycker, env);
+        Alloc::alloc(tycker, Cons(a, b), ty)
+    }
+}
+
 impl Tycker {
-    pub fn value_var(&mut self, _env: &Env<AnnId>, def: DefId, ty: TypeId) -> ValueId {
-        Alloc::alloc(self, def, ty.into())
+    pub fn value_var(&mut self, env: &Env<AnnId>, def: DefId, ty: TypeId) -> ValueId {
+        Ann { tm: def, ty }.build(self, env)
     }
     pub fn value_thunk(&mut self, env: &Env<AnnId>, body: CompuId) -> ValueId {
-        let body_ty = self.statics.annotations_compu[&body];
-        let ty = self.thk_arg(env, body_ty);
-        Alloc::alloc(self, Thunk(body), ty)
+        Thunk(body).build(self, env)
     }
     pub fn value_triv(&mut self, env: &Env<AnnId>) -> ValueId {
-        let ty = UnitTy.build(self, env);
-        Alloc::alloc(self, Triv, ty)
+        Triv.build(self, env)
     }
     pub fn value_vcons(&mut self, env: &Env<AnnId>, a: ValueId, b: ValueId) -> ValueId {
-        let a_ty = self.statics.annotations_value[&a];
-        let b_ty = self.statics.annotations_value[&b];
-        let ty = Prod(a_ty, b_ty).build(self, env);
-        Alloc::alloc(self, Cons(a, b), ty)
+        Cons(a, b).build(self, env)
     }
 }
 
 /* ---------------------------------- Compu --------------------------------- */
+
+impl Construct<CompuId> for CompuId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> CompuId {
+        self
+    }
+}
+// impl<> Construct<CompuId> for Abs<
 
 impl Tycker {
     pub fn compu_vabs(

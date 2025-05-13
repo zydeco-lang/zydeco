@@ -29,3 +29,4 @@ mod span;
 
 pub(crate) use surface_syntax as su;
 pub(crate) use syntax as ss;
+pub(crate) use construct::syntax as cs;

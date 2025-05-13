@@ -44,7 +44,7 @@ impl PackageStew {
             spans,
             bitter,
             prim_term,
-            prim_def: sc::PrimDef::default(),
+            prim_def: sc::PrimDefs::default(),
             internal_to_def: ArenaAssoc::default(),
 
             defs: ArenaAssoc::default(),
@@ -65,7 +65,7 @@ impl PackageStew {
 pub struct PackageScoped {
     pub sources: HashMap<PathBuf, String>,
     pub spans: t::SpanArena,
-    pub prim: sc::PrimDef,
+    pub prim: sc::PrimDefs,
     pub arena: sc::ScopedArena,
 }
 

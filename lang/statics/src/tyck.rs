@@ -1,6 +1,6 @@
 use {
     crate::{
-        surface_syntax::{PrimDef, ScopedArena, SpanArena},
+        surface_syntax::{PrimDefs, ScopedArena, SpanArena},
         syntax::{AnnId, Env, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
         *,
     },
@@ -12,7 +12,7 @@ use {
 
 pub struct Tycker {
     pub spans: SpanArena,
-    pub prim: PrimDef,
+    pub prim: PrimDefs,
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
     /// call stack for debugging tycker and error tracking
@@ -29,7 +29,7 @@ pub struct Tycker {
 
 impl Tycker {
     pub fn new_arc(
-        spans: SpanArena, prim: PrimDef, scoped: ScopedArena, alloc: ArcGlobalAlloc,
+        spans: SpanArena, prim: PrimDefs, scoped: ScopedArena, alloc: ArcGlobalAlloc,
     ) -> Self {
         Self {
             spans,

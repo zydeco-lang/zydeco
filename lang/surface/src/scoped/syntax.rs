@@ -213,7 +213,7 @@ pub struct SccDeclarations<'decl>(pub &'decl HashSet<DeclId>);
 ///    If so, add it to [`crate::bitter::syntax::PrimTerms`] too.
 /// 3. Implement the `check` method to ensure all fields are filled.
 #[derive(Default)]
-pub struct PrimDef {
+pub struct PrimDefs {
     pub vtype: SingCell<DefId>,
     pub ctype: SingCell<DefId>,
     pub thk: SingCell<DefId>,
@@ -231,7 +231,7 @@ pub struct PrimDef {
 mod impls {
     use super::*;
     use crate::scoped::err::*;
-    impl PrimDef {
+    impl PrimDefs {
         pub fn check(&self) -> Result<()> {
             self.vtype.get_or_else(|| ResolveError::MissingPrim("VType"))?;
             self.ctype.get_or_else(|| ResolveError::MissingPrim("CType"))?;
