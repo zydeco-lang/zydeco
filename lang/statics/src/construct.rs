@@ -25,10 +25,10 @@ impl Construct<KindId> for CType {
         kd
     }
 }
-impl<K1, K2> Construct<KindId> for Arrow<K1, K2>
+impl<S, T> Construct<KindId> for Arrow<S, T>
 where
-    K1: Construct<KindId>,
-    K2: Construct<KindId>,
+    S: Construct<KindId>,
+    T: Construct<KindId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
         let Arrow(k1, k2) = self;
@@ -212,34 +212,13 @@ impl Tycker {
         let hole = Alloc::alloc(self, fill, vtype);
         self.ret_arg(env, hole)
     }
-    pub fn type_unit(&mut self, env: &Env<AnnId>) -> TypeId {
-        UnitTy.build(self, env)
-    }
-    pub fn type_int(&mut self, env: &Env<AnnId>) -> TypeId {
-        IntTy.build(self, env)
-    }
-    pub fn type_char(&mut self, env: &Env<AnnId>) -> TypeId {
-        CharTy.build(self, env)
-    }
-    pub fn type_string(&mut self, env: &Env<AnnId>) -> TypeId {
-        StringTy.build(self, env)
-    }
     pub fn type_top(&mut self, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[self.prim.top.get()] else { unreachable!() };
         ty
     }
-    pub fn type_os(&mut self, env: &Env<AnnId>) -> TypeId {
-        OSTy.build(self, env)
-    }
-    pub fn type_prod(&mut self, env: &Env<AnnId>, a1: TypeId, a2: TypeId) -> TypeId {
-        Prod(a1, a2).build(self, env)
-    }
     pub fn type_exists(&mut self, env: &Env<AnnId>, x: AbstId, b: TypeId) -> TypeId {
         let ctype = self.ctype(env);
         Alloc::alloc(self, Exists(x, b), ctype)
-    }
-    pub fn type_arrow(&mut self, env: &Env<AnnId>, a: TypeId, b: TypeId) -> TypeId {
-        Arrow(a, b).build(self, env)
     }
     pub fn type_forall(&mut self, env: &Env<AnnId>, x: AbstId, b: TypeId) -> TypeId {
         let ctype = self.ctype(env);
@@ -249,9 +228,6 @@ impl Tycker {
         &mut self, env: &Env<AnnId>, def: DefId, def_kd: KindId, body: TypeId,
     ) -> TypeId {
         Abs(Ann { tm: def, ty: def_kd }, body).build(self, env)
-    }
-    pub fn type_app(&mut self, env: &Env<AnnId>, ty_1: TypeId, ty_2: TypeId) -> TypeId {
-        App(ty_1, ty_2).build(self, env)
     }
     /// generates `Monad M` where:
     /// 1. M is `monad_ty` of kind `VType -> CType`
@@ -286,13 +262,13 @@ impl Tycker {
         Alloc::alloc(self, Thunk(body), ty)
     }
     pub fn value_triv(&mut self, env: &Env<AnnId>) -> ValueId {
-        let ty = self.type_unit(env);
+        let ty = UnitTy.build(self, env);
         Alloc::alloc(self, Triv, ty)
     }
     pub fn value_vcons(&mut self, env: &Env<AnnId>, a: ValueId, b: ValueId) -> ValueId {
         let a_ty = self.statics.annotations_value[&a];
         let b_ty = self.statics.annotations_value[&b];
-        let ty = self.type_prod(env, a_ty, b_ty);
+        let ty = Prod(a_ty, b_ty).build(self, env);
         Alloc::alloc(self, Cons(a, b), ty)
     }
 }

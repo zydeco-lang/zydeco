@@ -22,9 +22,9 @@ pub fn signature_translation(
             let ty_1 = Alloc::alloc(tycker, abst, kd_1);
             let sig_1 = signature_translation(tycker, monad_ty, env, ty_1)?;
             let thk_sig_1 = tycker.thk_arg(env, sig_1);
-            let ty_2 = tycker.type_app(env, ty, ty_1);
+            let ty_2 = App(ty, ty_1).build(tycker, env);
             let sig_2 = signature_translation(tycker, monad_ty, env, ty_2)?;
-            let arr = tycker.type_arrow(env, thk_sig_1, sig_2);
+            let arr = Arrow(thk_sig_1, sig_2).build(tycker, env);
             tycker.type_forall(env, abst, arr)
         }
     };
@@ -181,7 +181,7 @@ pub fn type_translation(
             let App(ty_f, ty_a) = ty;
             let ty_f_ = type_translation(tycker, monad_ty, env, ty_f)?;
             let ty_a_ = type_translation(tycker, monad_ty, env, ty_a)?;
-            tycker.type_app(env, ty_f_, ty_a_)
+            App(ty_f_, ty_a_).build(tycker, env)
         }
         | Type::Thk(ThkTy) => Alloc::alloc(tycker, ThkTy, kd),
         // primitive types are not allowed in monadic blocks
@@ -207,7 +207,7 @@ pub fn type_translation(
             let Prod(ty_1, ty_2) = ty;
             let ty_1_ = type_translation(tycker, monad_ty, env, ty_1)?;
             let ty_2_ = type_translation(tycker, monad_ty, env, ty_2)?;
-            tycker.type_prod(env, ty_1_, ty_2_)
+            Prod(ty_1_, ty_2_).build(tycker, env)
         }
         | Type::Exists(ty) => {
             let Exists(abst, ty) = ty;
@@ -216,7 +216,7 @@ pub fn type_translation(
             let sig = signature_translation(tycker, monad_ty, env, ty_abst)?;
             let thk_sig = tycker.thk_arg(env, sig);
             let ty_ = type_translation(tycker, monad_ty, env, ty)?;
-            let prod = tycker.type_prod(env, thk_sig, ty_);
+            let prod = Prod(thk_sig, ty_).build(tycker, env);
             tycker.type_exists(env, abst, prod)
         }
         // os type is also not allowed in monadic blocks
@@ -240,7 +240,7 @@ pub fn type_translation(
             let Arrow(ty_1, ty_2) = ty;
             let ty_1_ = type_translation(tycker, monad_ty, env, ty_1)?;
             let ty_2_ = type_translation(tycker, monad_ty, env, ty_2)?;
-            tycker.type_arrow(env, ty_1_, ty_2_)
+            Arrow(ty_1_, ty_2_).build(tycker, env)
         }
         | Type::Forall(ty) => {
             let Forall(abst, ty) = ty;
@@ -249,7 +249,7 @@ pub fn type_translation(
             let sig = signature_translation(tycker, monad_ty, env, ty_abst)?;
             let thk_sig = tycker.thk_arg(env, sig);
             let ty_ = type_translation(tycker, monad_ty, env, ty)?;
-            let arr = tycker.type_arrow(env, thk_sig, ty_);
+            let arr = Arrow(thk_sig, ty_).build(tycker, env);
             tycker.type_forall(env, abst, arr)
         }
     };
@@ -258,11 +258,14 @@ pub fn type_translation(
 
 /// Term Translation (Value) `[V]`
 pub fn value_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv, env: &Env<AnnId>, value: ValueId,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
+    env: &Env<AnnId>, value: ValueId,
 ) -> Result<ValueId> {
     let ty = tycker.statics.annotations_value[&value];
     let res = match tycker.value(&value).to_owned() {
-        | Value::Hole(Hole) | Value::Var(_) | Value::Lit(_) => value,
+        | Value::Hole(Hole) | Value::Lit(_) => value,
+        // variables should be freshed and substituted
+        | Value::Var(def) => todo!(),
         | Value::Thunk(value) => {
             let Thunk(body) = value;
             let body_ = computation_translation(tycker, monad_ty, monad_impl, env, body)?;

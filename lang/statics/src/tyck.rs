@@ -286,7 +286,7 @@ impl<'decl> SccDeclarations<'decl> {
                             // administrative
                             tycker.stack.push_back(TyckTask::Exec(id.to_owned()));
                             let su::Exec(term) = decl;
-                            let os = tycker.type_os(&env.env);
+                            let os = ss::OSTy.build(tycker, &env.env);
                             let out_ann = env.mk(term).tyck(tycker, Action::ana(os.into()))?;
                             let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                             tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
@@ -622,7 +622,7 @@ impl Tyck for SEnv<su::PatId> {
             },
             | Pat::Triv(pat) => {
                 let su::Triv = pat;
-                let ann = tycker.type_unit(&self.env);
+                let ann = ss::UnitTy.build(tycker, &self.env);
                 let triv = Alloc::alloc(tycker, ss::Triv, ann);
                 match switch {
                     | Switch::Syn => PatAnnId::Value(triv, ann),
@@ -943,7 +943,7 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Triv(term) => {
                 let su::Triv = term;
-                let unit = tycker.type_unit(&self.env);
+                let unit = ss::UnitTy.build(tycker, &self.env);
                 let triv = Alloc::alloc(tycker, ss::Triv, unit);
                 match switch {
                     | Switch::Syn => TermAnnId::Value(triv, unit),
@@ -2143,17 +2143,17 @@ impl Tyck for SEnv<su::TermId> {
                 use zydeco_syntax::Literal as Lit;
                 let (lit, ty) = match lit {
                     | Lit::Int(i) => {
-                        let ty = tycker.type_int(&self.env);
+                        let ty = ss::IntTy.build(tycker, &self.env);
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Int(i), ty)
                     }
                     | Lit::String(s) => {
-                        let ty = tycker.type_string(&self.env);
+                        let ty = ss::StringTy.build(tycker, &self.env);
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::String(s), ty)
                     }
                     | Lit::Char(c) => {
-                        let ty = tycker.type_char(&self.env);
+                        let ty = ss::CharTy.build(tycker, &self.env);
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Char(c), ty)
                     }

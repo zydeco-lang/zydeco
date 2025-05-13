@@ -8,13 +8,13 @@ pub mod surface_syntax {
 pub mod syntax;
 pub mod arena;
 pub mod prims;
-// pub use prims::*;
 pub mod alloc;
 pub use alloc::*;
 pub mod lub;
 pub use lub::*;
 pub mod norm;
 pub mod construct;
+pub use construct::*;
 pub mod destruct;
 pub mod syntactic;
 pub use syntactic::*;
