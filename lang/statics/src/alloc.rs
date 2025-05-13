@@ -60,7 +60,7 @@ impl Alloc<FillId> for su::TermId {
 impl Alloc<KindId> for FillId {
     type Ann = ();
     fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
-        tycker.statics.kinds.alloc(Fillable::Fill(val))
+        tycker.statics.kinds.alloc(val.into())
     }
 }
 impl Alloc<KindId> for Kind {
@@ -87,7 +87,7 @@ AllocKind! {
     ArrowU<KindId>
 }
 
-/* ---------------------------------- Type ---------------------------------- */
+/* ------------------------------- TypePattern ------------------------------ */
 
 impl Alloc<TPatId> for TypePattern {
     type Ann = KindId;
@@ -114,10 +114,12 @@ AllocTypePattern! {
     DefId
 }
 
+/* ---------------------------------- Type ---------------------------------- */
+
 impl Alloc<TypeId> for FillId {
     type Ann = KindId;
     fn alloc(tycker: &mut Tycker, val: Self, kd: Self::Ann) -> TypeId {
-        let ty = tycker.statics.types.alloc(Fillable::Fill(val));
+        let ty = tycker.statics.types.alloc(val.into());
         tycker
             .statics
             .annotations_type
@@ -134,7 +136,7 @@ impl Alloc<TypeId> for FillId {
 impl Alloc<TypeId> for Type {
     type Ann = KindId;
     fn alloc(tycker: &mut Tycker, val: Self, kd: Self::Ann) -> TypeId {
-        let ty = tycker.statics.types.alloc(Fillable::Done(val.into()));
+        let ty = tycker.statics.types.alloc(Fillable::Done(val));
         tycker
             .statics
             .annotations_type
@@ -180,7 +182,7 @@ AllocType! {
     CoDataId
 }
 
-/* ---------------------------------- Value --------------------------------- */
+/* ------------------------------ ValuePattern ------------------------------ */
 
 impl Alloc<VPatId> for ValuePattern {
     type Ann = TypeId;
@@ -210,6 +212,8 @@ AllocValuePattern! {
     Cons<VPatId, VPatId>
     Cons<TPatId, VPatId>
 }
+
+/* ---------------------------------- Value --------------------------------- */
 
 impl Alloc<ValueId> for Value {
     type Ann = TypeId;
@@ -241,6 +245,8 @@ AllocValue! {
     Cons<TypeId, ValueId>
     Literal
 }
+
+/* ------------------------------- Computation ------------------------------ */
 
 impl Alloc<CompuId> for Computation {
     type Ann = TypeId;

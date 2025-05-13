@@ -22,7 +22,7 @@ pub fn signature_translation(
             let ty_1 = Alloc::alloc(tycker, abst, kd_1);
             let sig_1 = signature_translation(tycker, monad_ty, env, ty_1)?;
             let thk_sig_1 = tycker.thk_arg(env, sig_1);
-            let ty_2 = tycker.type_app(ty, ty_1);
+            let ty_2 = tycker.type_app(env, ty, ty_1);
             let sig_2 = signature_translation(tycker, monad_ty, env, ty_2)?;
             let arr = tycker.type_arrow(env, thk_sig_1, sig_2);
             tycker.type_forall(env, abst, arr)
@@ -181,7 +181,7 @@ pub fn type_translation(
             let App(ty_f, ty_a) = ty;
             let ty_f_ = type_translation(tycker, monad_ty, env, ty_f)?;
             let ty_a_ = type_translation(tycker, monad_ty, env, ty_a)?;
-            tycker.type_app(ty_f_, ty_a_)
+            tycker.type_app(env, ty_f_, ty_a_)
         }
         | Type::Thk(ThkTy) => Alloc::alloc(tycker, ThkTy, kd),
         // primitive types are not allowed in monadic blocks
