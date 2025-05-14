@@ -548,18 +548,18 @@ where
 }
 
 impl Tycker {
-    pub fn value_var(&mut self, env: &Env<AnnId>, def: DefId, ty: TypeId) -> ValueId {
-        Ann { tm: def, ty }.build(self, env)
-    }
-    pub fn value_thunk(&mut self, env: &Env<AnnId>, body: CompuId) -> ValueId {
-        Thunk(body).build(self, env)
-    }
-    pub fn value_triv(&mut self, env: &Env<AnnId>) -> ValueId {
-        Triv.build(self, env)
-    }
-    pub fn value_vcons(&mut self, env: &Env<AnnId>, a: ValueId, b: ValueId) -> ValueId {
-        Cons(a, b).build(self, env)
-    }
+    // pub fn value_var(&mut self, env: &Env<AnnId>, def: DefId, ty: TypeId) -> ValueId {
+    //     Ann { tm: def, ty }.build(self, env)
+    // }
+    // pub fn value_thunk(&mut self, env: &Env<AnnId>, body: CompuId) -> ValueId {
+    //     Thunk(body).build(self, env)
+    // }
+    // pub fn value_triv(&mut self, env: &Env<AnnId>) -> ValueId {
+    //     Triv.build(self, env)
+    // }
+    // pub fn value_vcons(&mut self, env: &Env<AnnId>, a: ValueId, b: ValueId) -> ValueId {
+    //     Cons(a, b).build(self, env)
+    // }
 }
 
 /* ------------------------------- Computation ------------------------------ */
@@ -891,24 +891,24 @@ impl Tycker {
         let param_kd = param_kd.build(self, env);
         Abs(Ann { tm: name, ty: param_kd }, body).build(self, env)
     }
-    pub fn compu_vapp(&mut self, env: &Env<AnnId>, abs: CompuId, arg: ValueId) -> CompuId {
-        App(abs, arg).build(self, env)
-    }
-    pub fn compu_tapp(&mut self, env: &Env<AnnId>, abs: CompuId, arg: TypeId) -> CompuId {
-        App(abs, arg).build(self, env)
-    }
+    // pub fn compu_vapp(&mut self, env: &Env<AnnId>, abs: CompuId, arg: ValueId) -> CompuId {
+    //     App(abs, arg).build(self, env)
+    // }
+    // pub fn compu_tapp(&mut self, env: &Env<AnnId>, abs: CompuId, arg: TypeId) -> CompuId {
+    //     App(abs, arg).build(self, env)
+    // }
     pub fn compu_fix(
         &mut self, env: &Env<AnnId>, name: VarName, ty: TypeId,
         body: impl Fn(&mut Self, &Env<AnnId>, DefId) -> CompuId,
     ) -> CompuId {
         Fix(Ann { tm: name, ty }, body).build(self, env)
     }
-    pub fn compu_force(&mut self, env: &Env<AnnId>, thk: ValueId) -> CompuId {
-        Force(thk).build(self, env)
-    }
-    pub fn compu_ret(&mut self, env: &Env<AnnId>, val: ValueId) -> CompuId {
-        Ret(val).build(self, env)
-    }
+    // pub fn compu_force(&mut self, env: &Env<AnnId>, thk: ValueId) -> CompuId {
+    //     Force(thk).build(self, env)
+    // }
+    // pub fn compu_ret(&mut self, env: &Env<AnnId>, val: ValueId) -> CompuId {
+    //     Ret(val).build(self, env)
+    // }
     pub fn compu_bind(
         &mut self, env: &Env<AnnId>, bindee: CompuId, name: VarName,
         tail: impl Fn(&mut Self, &Env<AnnId>, DefId) -> CompuId,
@@ -921,13 +921,13 @@ impl Tycker {
     ) -> CompuId {
         PureBind { binder: name, bindee, tail }.build(self, env)
     }
-    pub fn compu_top(&mut self, env: &Env<AnnId>) -> CompuId {
-        cs::Top.build(self, env)
-    }
-    pub fn compu_dtor(
-        &mut self, env: &Env<AnnId>, head: CompuId, dtor: impl Construct<DtorName>,
-    ) -> CompuId {
-        let dtor = dtor.build(self, env);
-        Dtor(head, dtor).build(self, env)
-    }
+    // pub fn compu_top(&mut self, env: &Env<AnnId>) -> CompuId {
+    //     cs::Top.build(self, env)
+    // }
+    // pub fn compu_dtor(
+    //     &mut self, env: &Env<AnnId>, head: CompuId, dtor: impl Construct<DtorName>,
+    // ) -> CompuId {
+    //     let dtor = dtor.build(self, env);
+    //     Dtor(head, dtor).build(self, env)
+    // }
 }

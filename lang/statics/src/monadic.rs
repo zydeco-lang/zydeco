@@ -62,7 +62,7 @@ pub fn structure_translation(
                     std::panic::Location::caller(),
                 )?,
             };
-            tycker.compu_force(env, str)
+            Force(str).build(tycker, env)
         }
         | Type::Abst(abst) => {
             let str = match str_env.absts.get(&abst) {
@@ -72,7 +72,7 @@ pub fn structure_translation(
                     std::panic::Location::caller(),
                 )?,
             };
-            tycker.compu_force(env, str)
+            Force(str).build(tycker, env)
         }
         | Type::Abs(ty) => {
             // input: fn (X : K) -> S
@@ -102,15 +102,15 @@ pub fn structure_translation(
             let ty_lift_a = type_translation(tycker, monad_ty, env, ty_a)?;
             let str_f_app_sig = App(str_f, ty_lift_a).build(tycker, env);
             let str_a = structure_translation(tycker, monad_ty, monad_impl, str_env, env, ty_a)?;
-            let thk_str_a = tycker.value_thunk(env, str_a);
-            tycker.compu_vapp(env, str_f_app_sig, thk_str_a)
+            let thk_str_a = Thunk(str_a).build(tycker, env);
+            App(str_f_app_sig, thk_str_a).build(tycker, env)
         }
         // primitive types are not allowed in monadic blocks
         | Type::Int(_) | Type::Char(_) | Type::String(_) => unreachable!(),
         // unit, product, and existential types have the trivial structure `top`
         // (so should data types)
         | Type::Unit(UnitTy) | Type::Prod(_) | Type::Exists(_) | Type::Data(_) => {
-            tycker.compu_top(env)
+            cs::Top.build(tycker, env)
         }
         // the thunk type is itself a type constructor,
         // so its structure takes a type and the type's structure as arguments
@@ -122,7 +122,7 @@ pub fn structure_translation(
                 let thk_sig = tycker.thk_arg(env, sig);
                 tycker.try_compu_vabs(env, "_", thk_sig, |tycker, _env, _var| {
                     // <top> = comatch end
-                    Ok(tycker.compu_top(env))
+                    Ok(cs::Top.build(tycker, env))
                 })
             })?
         }
@@ -307,9 +307,9 @@ pub fn value_translation(
         | Value::TCons(value) => {
             let Cons(a_ty, body) = value;
             let str = structure_translation(tycker, monad_ty, monad_impl, str_env, env, a_ty)?;
-            let thk_str = tycker.value_thunk(env, str);
+            let thk_str = Thunk(str).build(tycker, env);
             let body_ = value_translation(tycker, monad_ty, monad_impl, str_env, env, body)?;
-            let vcons = tycker.value_vcons(env, thk_str, body_);
+            let vcons = Cons(thk_str, body_).build(tycker, env);
             let a_ty_ = type_translation(tycker, monad_ty, env, a_ty)?;
             // existential type construct should be type-guided
             Alloc::alloc(tycker, Cons(a_ty_, vcons), ty_)
