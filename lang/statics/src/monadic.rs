@@ -82,12 +82,12 @@ pub fn structure_translation(
                 let (def, kd) = tpat.destruct_def(tycker);
                 (tycker.scoped.defs[&def].to_owned(), kd)
             };
-            tycker.try_compu_tabs(env, tvar.to_owned(), kd, |tycker, _tvar_def, abst| {
+            tycker.try_compu_tabs(env, tvar.to_owned(), kd, |tycker, _env, _tvar_def, abst| {
                 let svar = VarName(format!("str_{}", tvar.as_str()));
                 let abst_ty = Alloc::alloc(tycker, abst, kd);
                 let sig_ty = signature_translation(tycker, monad_ty, env, abst_ty)?;
                 let svar_ty = tycker.thk_arg(env, sig_ty);
-                tycker.try_compu_vabs(env, svar, svar_ty, |tycker, str_def| {
+                tycker.try_compu_vabs(env, svar, svar_ty, |tycker, _env, str_def| {
                     let str = Alloc::alloc(tycker, str_def, svar_ty);
                     let str_env = str_env.extend_with_abst(abst, str);
                     structure_translation(tycker, monad_ty, monad_impl, &str_env, env, ty)
@@ -100,7 +100,7 @@ pub fn structure_translation(
             // output: Str(S_f) Lift(S_a) Str(S_a)
             let str_f = structure_translation(tycker, monad_ty, monad_impl, str_env, env, ty_f)?;
             let ty_lift_a = type_translation(tycker, monad_ty, env, ty_a)?;
-            let str_f_app_sig = tycker.compu_tapp(env, str_f, ty_lift_a);
+            let str_f_app_sig = App(str_f, ty_lift_a).build(tycker, env);
             let str_a = structure_translation(tycker, monad_ty, monad_impl, str_env, env, ty_a)?;
             let thk_str_a = tycker.value_thunk(env, str_a);
             tycker.compu_vapp(env, str_f_app_sig, thk_str_a)
@@ -116,12 +116,11 @@ pub fn structure_translation(
         // so its structure takes a type and the type's structure as arguments
         | Type::Thk(ThkTy) => {
             // output: fn (X : CType) (_ : Thk (Sig_CType(X))) -> <top>
-            let ctype = tycker.ctype(env);
-            tycker.try_compu_tabs(env, VarName("_".to_string()), ctype, |tycker, _tvar, abst| {
-                let abst_ty = Alloc::alloc(tycker, abst, ctype);
+            tycker.try_compu_tabs(env, "_", CType, |tycker, _env, _tvar, abst| {
+                let abst_ty = abst.build(tycker, env);
                 let sig = signature_translation(tycker, monad_ty, env, abst_ty)?;
                 let thk_sig = tycker.thk_arg(env, sig);
-                tycker.try_compu_vabs(env, VarName("_".to_string()), thk_sig, |tycker, _var| {
+                tycker.try_compu_vabs(env, "_", thk_sig, |tycker, _env, _var| {
                     // <top> = comatch end
                     Ok(tycker.compu_top(env))
                 })
@@ -131,32 +130,50 @@ pub fn structure_translation(
         | Type::OS(_) => unreachable!(),
         | Type::Ret(RetTy) => {
             // output: fn (X : VType) (_ : Thk (Sig_VType(X))) -> <monadic_bind>
-            let vtype = tycker.vtype(env);
-            tycker.try_compu_tabs(
-                env,
-                VarName("_".to_string()),
-                vtype,
-                |tycker, _tvar, abst_x| {
-                    let abst_x_ty = Alloc::alloc(tycker, abst_x, vtype);
-                    let sig = signature_translation(tycker, monad_ty, env, abst_x_ty)?;
-                    let thk_sig = tycker.thk_arg(env, sig);
-                    tycker.try_compu_vabs(env, VarName("_".to_string()), thk_sig, |tycker, _var| {
-                        // <monadic_bind> = fn (Z : VType) -> ! monad_impl .bind Z X
-                        let tvar_z = VarName("Z".to_string());
-                        tycker.try_compu_tabs(env, tvar_z, vtype, |tycker, _tvar_z, abst_z| {
-                            let force = tycker.compu_force(env, monad_impl);
-                            let bind = tycker.compu_dtor(env, force, DtorName(".bind".to_string()));
-                            let abst_z_ty = Alloc::alloc(tycker, abst_z, vtype);
-                            let app_z = tycker.compu_tapp(env, bind, abst_z_ty);
-                            let app_x = tycker.compu_tapp(env, app_z, abst_x_ty);
-                            Ok(app_x)
-                        })
+            tycker.try_compu_tabs(env, "_", VType, |tycker, _env, _tvar, abst_x| {
+                let abst_x_ty: TypeId = abst_x.build(tycker, env);
+                let sig = signature_translation(tycker, monad_ty, env, abst_x_ty)?;
+                tycker.try_compu_vabs(env, "_", Thunk(sig), |tycker, _env, _var| {
+                    // <monadic_bind> = fn (Z : VType) -> ! monad_impl .bind Z X
+                    tycker.try_compu_tabs(env, "Z", VType, |tycker, _env, _tvar_z, abst_z| {
+                        let abst_z_ty: TypeId = abst_z.build(tycker, env);
+                        let res =
+                            App(App(cs::Dtor(Force(monad_impl), ".bind"), abst_z_ty), abst_x_ty);
+                        Ok(res)
                     })
-                },
-            )?
+                })
+            })?
         }
         | Type::CoData(coda) => todo!(),
-        | Type::Arrow(arrow) => todo!(),
+        | Type::Arrow(ty) => {
+            let Arrow(ty_p, ty_b) = ty;
+            tycker.try_compu_tabs(env, "Z", VType, |tycker, env, _tvar_z, abst_z| {
+                let abst_z_ty: TypeId = abst_z.build(tycker, env);
+                let mz_ty = App(monad_ty, abst_z_ty);
+                tycker.try_compu_vabs(env, "mz", mz_ty, |tycker, env, var_mz| -> Result<_> {
+                    let ty_p_ = type_translation(tycker, monad_ty, env, ty_p)?;
+                    let ty_b_ = type_translation(tycker, monad_ty, env, ty_b)?;
+                    let f_ty = Thunk(Arrow(abst_z_ty, Arrow(ty_p_, ty_b_)));
+                    tycker.try_compu_vabs(env, "f", f_ty, |tycker, env, var_f| {
+                        tycker.try_compu_vabs(env, "x", ty_p_, |tycker, env, var_x| {
+                            let alg_b = structure_translation(
+                                tycker, monad_ty, monad_impl, str_env, env, ty_b,
+                            )?;
+                            let mz: ValueId = var_mz.build(tycker, env);
+                            let kont =
+                                tycker.compu_vabs(env, "z", abst_z_ty, |tycker, env, var_z| {
+                                    let f: ValueId = var_f.build(tycker, env);
+                                    let z: ValueId = var_z.build(tycker, env);
+                                    let x: ValueId = var_x.build(tycker, env);
+                                    App(App(Force(f), z), x)
+                                });
+                            let res = App(App(App(alg_b, abst_z_ty), mz), Thunk(kont));
+                            Ok(res)
+                        })
+                    })
+                })
+            })?
+        }
         | Type::Forall(forall) => todo!(),
     };
     Ok(res)
