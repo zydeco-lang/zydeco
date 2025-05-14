@@ -16,9 +16,9 @@ members = [
 
 [workspace.package]
 version = "0.2.0"
-rust-version = "1.74"
+rust-version = "1.86"
 authors = ["The Zydeco Project Developers"]
-edition = "2021"
+edition = "2024"
 # homepage = "https://zydeco-lang.github.io"
 repository = "https://github.com/zydeco-lang/zydeco"
 license = "MIT"

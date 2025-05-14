@@ -382,7 +382,7 @@ impl Desugar for t::TermId {
                         | b::CoPatternItem::Pat(pat) => {
                             tail = Alloc::alloc(desugarer, b::Abs(pat, tail).into(), self.into());
                             let pat_ty = pat.deep_clone(desugarer);
-                            if let Some(ref mut annotation) = &mut annotation {
+                            if let Some(annotation) = &mut annotation {
                                 *annotation = Alloc::alloc(
                                     desugarer,
                                     b::Pi(pat_ty, *annotation).into(),

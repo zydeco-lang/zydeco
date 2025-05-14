@@ -33,7 +33,7 @@ pub static BUILTINS: Lazy<HashMap<&'static str, Prim>> = {
             Builtin::new("exit", 1, exit),
         ]
         .into_iter()
-        .map(Builtin::gen)
+        .map(Builtin::generate)
         .collect()
     })
 };
@@ -48,11 +48,11 @@ impl Builtin {
     fn new(name: &'static str, arity: u64, behavior: PrimComp) -> Self {
         Builtin { name, arity, behavior }
     }
-    fn gen(self) -> (&'static str, Prim) {
+    fn generate(self) -> (&'static str, Prim) {
         let Builtin { name, arity, behavior } = self;
         (name, Prim { arity, body: behavior })
     }
-    // fn gen(self) -> (&'static str, RcValue) {
+    // fn generate(self) -> (&'static str, RcValue) {
     //     let Builtin { name, arity, behavior } = self;
     //     let prim = Prim { arity, body: *behavior }.into();
     //     let thunk = Thunk(Rc::new(prim)).into();

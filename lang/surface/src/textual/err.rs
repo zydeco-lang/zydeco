@@ -10,43 +10,43 @@ pub struct ParseError<'input> {
 impl Display for ParseError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use lalrpop_util::ParseError::*;
-        let ParseError { error, file_info: gen } = self;
+        let ParseError { error, file_info: info } = self;
         match error {
-            | User { ref error } => write!(f, "{error}"),
-            | InvalidToken { ref location } => {
+            | User { error } => write!(f, "{error}"),
+            | InvalidToken { location } => {
                 write!(
                     f,
                     "Invalid token at {}:{}",
-                    gen.path().display(),
-                    gen.trans_span2(*location)
+                    info.path().display(),
+                    info.trans_span2(*location)
                 )
             }
-            | UnrecognizedEof { ref location, ref expected } => {
+            | UnrecognizedEof { location, expected } => {
                 write!(
                     f,
                     "Unrecognized EOF found at {}:{}{}",
-                    gen.path().display(),
-                    gen.trans_span2(*location),
+                    info.path().display(),
+                    info.trans_span2(*location),
                     fmt_expected(expected)
                 )
             }
-            | UnrecognizedToken { token: (ref start, ref token, ref end), ref expected } => {
+            | UnrecognizedToken { token: (start, token, end), expected } => {
                 write!(
                     f,
                     "Unrecognized token `{token}` found at {}:{} - {}{}",
-                    gen.path().display(),
-                    gen.trans_span2(*start),
-                    gen.trans_span2(*end),
+                    info.path().display(),
+                    info.trans_span2(*start),
+                    info.trans_span2(*end),
                     fmt_expected(expected)
                 )
             }
-            | ExtraToken { token: (ref start, ref token, ref end) } => {
+            | ExtraToken { token: (start, token, end) } => {
                 write!(
                     f,
                     "Extra token `{token}` found at {}:{} - {}",
-                    gen.path().display(),
-                    gen.trans_span2(*start),
-                    gen.trans_span2(*end),
+                    info.path().display(),
+                    info.trans_span2(*start),
+                    info.trans_span2(*end),
                 )
             }
         }

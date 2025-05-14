@@ -90,12 +90,12 @@ impl Span {
     pub fn make_arc<T>(&self, inner: T) -> Arc<Sp<T>> {
         Arc::new(Sp { inner, info: self.clone() })
     }
-    pub fn set_info(&self, gen: &FileInfo) {
+    pub fn set_info(&self, r#gen: &FileInfo) {
         let (start, end) = self.span1;
         self.span2
-            .set((gen.trans_span2(start), gen.trans_span2(end)))
+            .set((r#gen.trans_span2(start), r#gen.trans_span2(end)))
             .expect("span2 is already set");
-        self.path.set(gen.path.clone()).expect("path is already set");
+        self.path.set(r#gen.path.clone()).expect("path is already set");
     }
     pub fn get_cursor1(&self) -> (Cursor1, Cursor1) {
         self.span1

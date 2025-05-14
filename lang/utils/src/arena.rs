@@ -40,7 +40,7 @@ impl IndexAlloc<()> {
 impl<Meta: Copy> Iterator for IndexAlloc<Meta> {
     type Item = (Meta, usize);
     fn next(&mut self) -> Option<Self::Item> {
-        let IndexAlloc(meta, ref mut idx) = self;
+        let IndexAlloc(meta, idx) = self;
         let old = *idx;
         *idx += 1;
         Some((*meta, old))

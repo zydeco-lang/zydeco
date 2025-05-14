@@ -284,7 +284,7 @@ pub fn value_translation(
         | Value::Hole(Hole) => Alloc::alloc(tycker, Hole, ty_),
         // figure out how to handle literals
         | Value::Lit(_) => unreachable!(),
-        // variables should be freshed and substituted
+        // Fixme: variables should be freshed and substituted
         | Value::Var(def) => todo!(),
         | Value::Thunk(value) => {
             let Thunk(body) = value;

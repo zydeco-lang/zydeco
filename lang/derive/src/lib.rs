@@ -63,14 +63,14 @@ pub fn span_holder_derive(input: TokenStream) -> TokenStream {
         },
         | _ => unreachable!("SpanHolder can only be derived for enums and structs"),
     }
-    let gen = quote!(
+    let r#gen = quote!(
         impl #impl_generics crate::utils::span::SpanHolder for #ident #ty_generics #where_clause
         {
             fn span_map_mut<F>(&mut self, f: F) where F: Fn(&mut crate::utils::span::Span) + Clone,
             { #span_map_mut_body }
         }
     );
-    res.extend(TokenStream::from(gen));
+    res.extend(TokenStream::from(r#gen));
     res
 }
 
@@ -91,7 +91,7 @@ pub fn fmt_args_derive(input: TokenStream) -> TokenStream {
             }
         }
     }
-    let gen = quote!(
+    let r#gen = quote!(
         impl #impl_generics crate::utils::fmt::FmtArgs for #ident #ty_generics #where_clause {
             fn fmt_args(&self, fargs: crate::utils::fmt::Args) -> String {
                 match self {
@@ -100,6 +100,6 @@ pub fn fmt_args_derive(input: TokenStream) -> TokenStream {
             }
         }
     );
-    res.extend(TokenStream::from(gen));
+    res.extend(TokenStream::from(r#gen));
     res
 }
