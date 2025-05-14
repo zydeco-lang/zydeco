@@ -61,6 +61,9 @@ pub mod syntax {
     pub struct Dtor<Head, Name>(pub Head, pub Name);
     /// `comatch end`
     pub struct Top;
+
+    pub struct VAbs<P, F>(pub P, pub F);
+    pub struct TAbs<P, F>(pub P, pub F);
 }
 
 /* ------------------------------- Definition ------------------------------- */
@@ -209,6 +212,15 @@ mod kind_test {
 impl Construct<TPatId> for TPatId {
     fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> TPatId {
         self
+    }
+}
+impl Construct<TPatId> for Ann<Option<DefId>, KindId> {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TPatId {
+        let Ann { tm, ty } = self;
+        match tm {
+            | Some(def) => Ann { tm: def, ty }.build(tycker, env),
+            | None => Ann { tm: Hole, ty }.build(tycker, env),
+        }
     }
 }
 
@@ -478,6 +490,15 @@ impl Construct<VPatId> for VPatId {
         self
     }
 }
+impl Construct<VPatId> for Ann<Option<DefId>, TypeId> {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> VPatId {
+        let Ann { tm, ty } = self;
+        match tm {
+            | Some(def) => Ann { tm: def, ty }.build(tycker, env),
+            | None => Ann { tm: Hole, ty }.build(tycker, env),
+        }
+    }
+}
 
 /* ---------------------------------- Value --------------------------------- */
 
@@ -541,7 +562,7 @@ impl Tycker {
     }
 }
 
-/* ---------------------------------- Compu --------------------------------- */
+/* ------------------------------- Computation ------------------------------ */
 
 impl Construct<CompuId> for CompuId {
     fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> CompuId {
@@ -549,6 +570,38 @@ impl Construct<CompuId> for CompuId {
     }
 }
 // computation value abstraction
+impl<P, T> Construct<CompuId> for cs::VAbs<P, T>
+where
+    P: Construct<VPatId>,
+    T: Construct<CompuId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
+        let cs::VAbs(vpat, body) = self;
+        let vpat = vpat.build(tycker, env);
+        let (_, param_ty) = vpat.try_destruct_def(tycker);
+        let body = body.build(tycker, env);
+        let body_ty = tycker.statics.annotations_compu[&body];
+        let ty = Arrow(param_ty, body_ty).build(tycker, env);
+        Alloc::alloc(tycker, Abs(vpat, body), ty)
+    }
+}
+// impl<P, F, T> Construct<CompuId> for cs::VAbs<P, F>
+// where
+//     P: Construct<VPatId>,
+//     F: Fn(&mut Tycker, &Env<AnnId>, Option<DefId>) -> T,
+//     T: Construct<CompuId>,
+// {
+//     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
+//         let cs::VAbs(vpat, body) = self;
+//         let vpat = vpat.build(tycker, env);
+//         let (def, param_ty) = vpat.try_destruct_def(tycker);
+//         let body = body(tycker, env, def);
+//         let body = body.build(tycker, env);
+//         let body_ty = tycker.statics.annotations_compu[&body];
+//         let ty = Arrow(param_ty, body_ty).build(tycker, env);
+//         Alloc::alloc(tycker, Abs(vpat, body), ty)
+//     }
+// }
 impl<V, F, T> Construct<CompuId> for Abs<Ann<V, TypeId>, F>
 where
     V: Construct<VarName>,
@@ -586,6 +639,29 @@ where
     }
 }
 // computation type abstraction
+impl<P, F, T> Construct<CompuId> for cs::TAbs<P, F>
+where
+    P: Construct<TPatId>,
+    F: Fn(AbstId) -> T,
+    T: Construct<CompuId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
+        let cs::TAbs(tpat, body) = self;
+        let tpat = tpat.build(tycker, env);
+        let (def, param_kd) = tpat.try_destruct_def(tycker);
+        let abst = Alloc::alloc(tycker, def, param_kd);
+        let abst_ty = Alloc::alloc(tycker, abst, param_kd);
+        let mut env = env.to_owned();
+        match def {
+            | Some(def) => env += (def, abst_ty.into()),
+            | None => {}
+        };
+        let body = body(abst).build(tycker, &env);
+        let body_ty = tycker.statics.annotations_compu[&body];
+        let ty = cs::Forall(abst, |_| body_ty).build(tycker, &env);
+        Alloc::alloc(tycker, Abs(tpat, body), ty)
+    }
+}
 impl<V, F, T> Construct<CompuId> for Abs<Ann<V, KindId>, F>
 where
     V: Construct<VarName>,

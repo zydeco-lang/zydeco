@@ -288,7 +288,7 @@ pub fn value_translation(
         | Value::Var(def) => todo!(),
         | Value::Thunk(value) => {
             let Thunk(body) = value;
-            let body_ = computation_translation(tycker, monad_ty, monad_impl, env, body)?;
+            let body_ = computation_translation(tycker, monad_ty, monad_impl, str_env, env, body)?;
             Thunk(body_).build(tycker, env)
         }
         | Value::Ctor(value) => {
@@ -320,22 +320,57 @@ pub fn value_translation(
 
 /// Term Translation (Computation) `[C]`
 pub fn computation_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, env: &Env<AnnId>, compu: CompuId,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
+    env: &Env<AnnId>, compu: CompuId,
 ) -> Result<CompuId> {
+    use Computation as Compu;
     let res = match tycker.compu(&compu) {
-        | Computation::Hole(_) => todo!(),
-        | Computation::VAbs(_) => todo!(),
-        | Computation::VApp(_) => todo!(),
-        | Computation::TAbs(_) => todo!(),
-        | Computation::TApp(_) => todo!(),
-        | Computation::Fix(_) => todo!(),
-        | Computation::Force(_) => todo!(),
-        | Computation::Ret(_) => todo!(),
-        | Computation::Do(_) => todo!(),
-        | Computation::Let(_) => todo!(),
-        | Computation::Match(_) => todo!(),
-        | Computation::CoMatch(_) => todo!(),
-        | Computation::Dtor(_) => todo!(),
+        | Compu::Hole(_) => todo!(),
+        | Compu::VAbs(compu) => {
+            let Abs(vpat, compu) = compu;
+            let (def, param_ty) = vpat.try_destruct_def(tycker);
+            let param_ty_ = type_translation(tycker, monad_ty, env, param_ty)?;
+            let vpat_: VPatId = Ann { tm: def, ty: param_ty_ }.build(tycker, env);
+            let compu_ =
+                computation_translation(tycker, monad_ty, monad_impl, str_env, env, compu)?;
+            cs::VAbs(vpat_, compu_).build(tycker, env)
+        }
+        | Compu::VApp(compu) => {
+            let App(fun, arg) = compu;
+            let fun_ = computation_translation(tycker, monad_ty, monad_impl, str_env, env, fun)?;
+            let arg_ = value_translation(tycker, monad_ty, monad_impl, str_env, env, arg)?;
+            App(fun_, arg_).build(tycker, env)
+        }
+        | Compu::TAbs(compu) => {
+            let Abs(tpat, compu) = compu;
+            let (def, param_kd) = tpat.try_destruct_def(tycker);
+            let tpat_: TPatId = Ann { tm: def, ty: param_kd }.build(tycker, env);
+            // Fixme: update tycker and env
+            let compu_ =
+                computation_translation(tycker, monad_ty, monad_impl, str_env, env, compu)?;
+            cs::TAbs(tpat_, |_abst| compu_).build(tycker, env)
+        }
+        | Compu::TApp(compu) => {
+            let App(fun, arg) = compu;
+            let fun_ = computation_translation(tycker, monad_ty, monad_impl, str_env, env, fun)?;
+            let arg_ = type_translation(tycker, monad_ty, env, arg)?;
+            App(fun_, arg_).build(tycker, env)
+        }
+        | Compu::Fix(_) => todo!(),
+        | Compu::Force(compu) => {
+            let Force(value) = compu;
+            let value_ = value_translation(tycker, monad_ty, monad_impl, str_env, env, value)?;
+            Force(value_).build(tycker, env)
+        }
+        | Compu::Ret(compu) => {
+            let Ret(value) = compu;
+            todo!()
+        }
+        | Compu::Do(_) => todo!(),
+        | Compu::Let(_) => todo!(),
+        | Compu::Match(_) => todo!(),
+        | Compu::CoMatch(_) => todo!(),
+        | Compu::Dtor(_) => todo!(),
     };
     Ok(res)
 }
