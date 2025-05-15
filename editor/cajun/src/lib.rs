@@ -28,8 +28,7 @@ impl LanguageServer for Cajun {
                 ServerInfo {
                     name: "Cajun Zydeco Language Server".to_string(),
                     version: Some(env!("CARGO_PKG_VERSION").to_string()),
-                }
-                .into(),
+                },
             ),
             offset_encoding: None,
             capabilities: ServerCapabilities {

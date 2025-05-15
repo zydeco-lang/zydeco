@@ -353,7 +353,7 @@ mod impls {
     {
         pub fn map_id<U>(self, f: impl Fn(Id) -> U) -> ArenaSparse<Id, U> {
             let Self { allocator, map, _marker } = self;
-            let map = map.into_iter().map(|(id, _val)| (id, f(id))).collect();
+            let map = map.into_keys().map(|id| (id, f(id))).collect();
             ArenaSparse { allocator, map, _marker }
         }
         pub fn map_value<U>(self, f: impl Fn(T) -> U) -> ArenaSparse<Id, U> {
@@ -482,7 +482,7 @@ mod impls {
         }
     }
 
-    impl<'a, Id, T> ArenaAccess<&'a Id, T, ()> for ArenaAssoc<Id, T>
+    impl<Id, T> ArenaAccess<&Id, T, ()> for ArenaAssoc<Id, T>
     where
         Id: Eq + Hash,
     {
@@ -575,7 +575,7 @@ mod impls {
         }
     }
 
-    impl<'a, P, Q> Index<&P> for Forth<'a, ArenaForth<P, Q>>
+    impl<P, Q> Index<&P> for Forth<'_, ArenaForth<P, Q>>
     where
         P: Eq + Hash + Clone,
     {
@@ -586,7 +586,7 @@ mod impls {
         }
     }
 
-    impl<'a, P, Q> Index<&Q> for Back<'a, ArenaForth<P, Q>>
+    impl<P, Q> Index<&Q> for Back<'_, ArenaForth<P, Q>>
     where
         Q: Eq + Hash + Clone,
     {
@@ -693,7 +693,7 @@ mod impls {
         }
     }
 
-    impl<'a, P, Q> Index<&P> for Forth<'a, ArenaBack<P, Q>>
+    impl<P, Q> Index<&P> for Forth<'_, ArenaBack<P, Q>>
     where
         P: Eq + Hash + Clone,
     {
@@ -704,7 +704,7 @@ mod impls {
         }
     }
 
-    impl<'a, P, Q> Index<&Q> for Back<'a, ArenaBack<P, Q>>
+    impl<P, Q> Index<&Q> for Back<'_, ArenaBack<P, Q>>
     where
         Q: Eq + Hash + Clone,
     {
@@ -809,7 +809,7 @@ mod impls {
         }
     }
 
-    impl<'a, P, Q> Index<&P> for Forth<'a, ArenaBijective<P, Q>>
+    impl<P, Q> Index<&P> for Forth<'_, ArenaBijective<P, Q>>
     where
         P: Eq + Hash + Clone,
     {
@@ -820,7 +820,7 @@ mod impls {
         }
     }
 
-    impl<'a, P, Q> Index<&Q> for Back<'a, ArenaBijective<P, Q>>
+    impl<P, Q> Index<&Q> for Back<'_, ArenaBijective<P, Q>>
     where
         Q: Eq + Hash + Clone,
     {
@@ -925,7 +925,7 @@ mod impls {
         }
     }
 
-    impl<'a, P, Q> Index<&P> for Forth<'a, ArenaBipartite<P, Q>>
+    impl<P, Q> Index<&P> for Forth<'_, ArenaBipartite<P, Q>>
     where
         P: Eq + Hash + Clone,
     {
@@ -936,7 +936,7 @@ mod impls {
         }
     }
 
-    impl<'a, P, Q> Index<&Q> for Back<'a, ArenaBipartite<P, Q>>
+    impl<P, Q> Index<&Q> for Back<'_, ArenaBipartite<P, Q>>
     where
         Q: Eq + Hash + Clone,
     {

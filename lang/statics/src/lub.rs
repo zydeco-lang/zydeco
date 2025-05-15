@@ -186,7 +186,7 @@ impl Debruijn {
                     if body == lbody {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let kd = tycker.statics.annotations_type[&lhs_id];
                         let abs = Alloc::alloc(tycker, Abs(lpat, body), kd);
                         abs
                     }
@@ -201,7 +201,7 @@ impl Debruijn {
                     if f == lf && a == la {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let kd = tycker.statics.annotations_type[&lhs_id];
                         let app = Alloc::alloc(tycker, App(f, a), kd);
                         app.normalize(tycker, kd)?
                     }
@@ -251,7 +251,7 @@ impl Debruijn {
                     if a == la && b == lb {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let kd = tycker.statics.annotations_type[&lhs_id];
                         let arrow = Alloc::alloc(tycker, Arrow(a, b), kd);
                         arrow
                     }
@@ -268,7 +268,7 @@ impl Debruijn {
                     if body == lbody {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let kd = tycker.statics.annotations_type[&lhs_id];
                         let forall = Alloc::alloc(tycker, Forall(labst, body), kd);
                         forall
                     }
@@ -283,7 +283,7 @@ impl Debruijn {
                     if a == la && b == lb {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let kd = tycker.statics.annotations_type[&lhs_id];
                         let prod = Alloc::alloc(tycker, Prod(a, b), kd);
                         prod
                     }
@@ -300,7 +300,7 @@ impl Debruijn {
                     if body == lbody {
                         lhs_id
                     } else {
-                        let kd = tycker.statics.annotations_type[&lhs_id].clone();
+                        let kd = tycker.statics.annotations_type[&lhs_id];
                         let exists = Alloc::alloc(tycker, Exists(labst, body), kd);
                         exists
                     }

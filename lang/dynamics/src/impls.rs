@@ -35,7 +35,7 @@ fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
             let mut body: SemValue = Cons(mk_box(fst), mk_box(snd)).into();
             for term in iter {
                 let term = term.as_ref().to_owned();
-                let id = body.into();
+                let id = body;
                 body = Cons(mk_box(term), mk_box(id)).into()
             }
             mk_box(body)

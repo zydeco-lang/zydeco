@@ -8,7 +8,7 @@ use zydeco_utils::arena::{ArenaAccess, ArenaSparse};
 pub trait Link {
     type Arena<'a>;
     type Out;
-    fn link<'a>(&self, arena: Self::Arena<'a>) -> Self::Out;
+    fn link(&self, arena: Self::Arena<'_>) -> Self::Out;
 }
 
 pub struct Linker {
@@ -38,7 +38,7 @@ impl Link for ss::DeclId {
     type Arena<'a> = (&'a StaticsArena, &'a ArenaSparse<ds::DefId, VarName>);
     type Out = Option<ds::Declaration>;
 
-    fn link<'a>(&self, (statics, defs): Self::Arena<'a>) -> Self::Out {
+    fn link(&self, (statics, defs): Self::Arena<'_>) -> Self::Out {
         let decl: &ss::Declaration = statics.decls.get(self)?;
         use ss::Declaration as Decl;
         let decl = match decl {
@@ -82,7 +82,7 @@ impl Link for ss::VPatId {
     type Arena<'a> = &'a StaticsArena;
     type Out = ds::RcVPat;
 
-    fn link<'a>(&self, statics: Self::Arena<'a>) -> Self::Out {
+    fn link(&self, statics: Self::Arena<'_>) -> Self::Out {
         let vpat = &statics.vpats[self];
         use ss::ValuePattern as VPat;
         let vpat = match vpat {
@@ -112,7 +112,7 @@ impl Link for ss::ValueId {
     type Arena<'a> = &'a StaticsArena;
     type Out = ds::RcValue;
 
-    fn link<'a>(&self, statics: Self::Arena<'a>) -> Self::Out {
+    fn link(&self, statics: Self::Arena<'_>) -> Self::Out {
         let value = &statics.values[self];
         use ss::Value;
         let value = match value {
@@ -147,7 +147,7 @@ impl Link for ss::CompuId {
     type Arena<'a> = &'a StaticsArena;
     type Out = ds::RcCompu;
 
-    fn link<'a>(&self, statics: Self::Arena<'a>) -> Self::Out {
+    fn link(&self, statics: Self::Arena<'_>) -> Self::Out {
         let compu = &statics.compus[self];
         use ss::Computation as Compu;
         let compu = match compu {

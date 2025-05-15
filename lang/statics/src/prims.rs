@@ -96,7 +96,7 @@ impl Tycker {
                     | PatAnnId::Type(_, _) => unreachable!(),
                     | PatAnnId::Value(vpat, _) => vpat,
                 };
-                self.statics.decls.insert(id.clone(), VAliasHead { binder, ty }.into());
+                self.statics.decls.insert(*id, VAliasHead { binder, ty }.into());
 
                 // should NOT be added to global
                 // match binder.try_destruct_def(self) {

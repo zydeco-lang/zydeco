@@ -138,7 +138,7 @@ impl BuildSystem {
     }
     pub fn pick_marked(&self, name: Option<String>) -> Result<PackId> {
         if self.marked.len() == 1 {
-            Ok(self.marked.iter().next().unwrap().1.clone())
+            Ok(*self.marked.iter().next().unwrap().1)
         } else {
             match name {
                 | Some(name) => {
@@ -204,7 +204,7 @@ impl BuildSystem {
         log::info!("Adding local package: {}", path.display());
         if let Some(id) = self.seen.get(&path) {
             log::warn!("Package already added: {}", path.display());
-            return Ok(id.clone());
+            return Ok(*id);
         }
         let pack_id = self.packages.alloc(pack.into());
         self.seen.insert(path, pack_id);

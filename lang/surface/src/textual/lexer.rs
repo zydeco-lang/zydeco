@@ -125,7 +125,7 @@ pub enum Tok<'input> {
     Hole,
 }
 
-impl<'input> Display for Tok<'input> {
+impl Display for Tok<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             | Tok::UpperIdent(s) => write!(f, "UpperIdent({})", s),

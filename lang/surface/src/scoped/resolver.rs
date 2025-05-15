@@ -577,6 +577,7 @@ impl Collect for TermId {
     type Out = ();
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
         // very important! this is where we update term contexts.
-        Ok(self.obverse_local_post(collector, &ctx))
+        self.obverse_local_post(collector, &ctx);
+        Ok(())
     }
 }

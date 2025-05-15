@@ -130,7 +130,7 @@ impl File {
         let info = FileInfo::new(source.as_str(), Some(Arc::new(path)));
         let s = HashLexer::new(&source)
             .hash_string(&info)
-            .map_err(|span| LocalError::LexerError(span))?;
+            .map_err(LocalError::LexerError)?;
         Ok(FileLoaded { info, source, hash: s.snap() })
     }
 }

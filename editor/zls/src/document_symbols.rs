@@ -29,7 +29,7 @@ pub struct DocumentSymbolContext<'a> {
     pub stew: &'a PackageStew,
 }
 
-impl<'a> DocumentSymbolContext<'a> {
+impl DocumentSymbolContext<'_> {
     fn declaration(&self, id: &b::DeclId) -> Vec<DocumentSymbol> {
         let b::Modifiers { public: _, external: _, inner } = &self.stew.arena.decls[id];
         match inner {
@@ -58,14 +58,14 @@ impl<'a> DocumentSymbolContext<'a> {
     }
     fn definition(&self, id: &b::DefId) -> DocumentSymbol {
         let def = &self.stew.arena.defs[id];
-        let tid = self.stew.arena.textual.back(&id.clone().into()).unwrap();
+        let tid = self.stew.arena.textual.back(&(*id).into()).unwrap();
         let span = &self.stew.spans[tid];
         let name_range = span_to_range(span, self.document);
         document_symbol_new(def.0.to_string(), SymbolKind::VARIABLE, name_range, name_range, None)
     }
     fn pattern(&self, id: &b::PatId) -> Vec<DocumentSymbol> {
         let pat = &self.stew.arena.pats[id];
-        let tid = self.stew.arena.textual.back(&id.clone().into()).unwrap();
+        let tid = self.stew.arena.textual.back(&(*id).into()).unwrap();
         let span = &self.stew.spans[tid];
         match pat {
             | b::Pattern::Ann(p) => {
@@ -102,7 +102,7 @@ impl<'a> DocumentSymbolContext<'a> {
     }
     fn term(&self, id: &b::TermId) -> Vec<DocumentSymbol> {
         let term = &self.stew.arena.terms[id];
-        let tid = self.stew.arena.textual.back(&id.clone().into()).unwrap();
+        let tid = self.stew.arena.textual.back(&(*id).into()).unwrap();
         let span = &self.stew.spans[tid];
         match term {
             | b::Term::Internal(t) => {

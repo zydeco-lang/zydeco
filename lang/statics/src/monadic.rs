@@ -58,7 +58,7 @@ mod syntax_impl {
     }
 
     // StructureTrans
-    impl<'a, T> Construct<Result<CompuId>> for cs::Structure<'a, T>
+    impl<T> Construct<Result<CompuId>> for cs::Structure<'_, T>
     where
         T: Construct<TypeId>,
     {
@@ -82,7 +82,7 @@ mod syntax_impl {
     }
 
     // TermLift (value translation)
-    impl<'a, T> Construct<Result<ValueId>> for cs::TermLift<'a, T>
+    impl<T> Construct<Result<ValueId>> for cs::TermLift<'_, T>
     where
         T: Construct<ValueId>,
     {
@@ -94,7 +94,7 @@ mod syntax_impl {
     }
 
     // TermLift (computation translation)
-    impl<'a, T> Construct<Result<CompuId>> for cs::TermLift<'a, T>
+    impl<T> Construct<Result<CompuId>> for cs::TermLift<'_, T>
     where
         T: Construct<CompuId>,
     {
@@ -106,7 +106,7 @@ mod syntax_impl {
     }
 
     // Elaboration (value)
-    impl<'a, T> Construct<Result<ValueId>> for cs::Elaboration<'a, T>
+    impl<T> Construct<Result<ValueId>> for cs::Elaboration<'_, T>
     where
         T: Construct<ValueId>,
     {
@@ -118,7 +118,7 @@ mod syntax_impl {
     }
 
     // Elaboration (computation)
-    impl<'a, T> Construct<Result<CompuId>> for cs::Elaboration<'a, T>
+    impl<T> Construct<Result<CompuId>> for cs::Elaboration<'_, T>
     where
         T: Construct<CompuId>,
     {

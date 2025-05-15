@@ -255,7 +255,7 @@ impl<T> From<(&Env<AnnId>, T)> for SEnv<T> {
     }
 }
 
-impl<'decl> SccDeclarations<'decl> {
+impl SccDeclarations<'_> {
     pub fn tyck(&self, tycker: &mut Tycker, mut env: SEnv<()>) -> ResultKont<SEnv<()>> {
         let SccDeclarations(decls) = self;
         use su::Declaration as Decl;
@@ -665,7 +665,7 @@ impl Tyck for SEnv<su::PatId> {
                                 let (a_out, _a_kd) = a_out_ann.as_type();
                                 let mut subst_vec = Vec::new();
                                 if let (Some(def), _kd) = a_out.try_destruct_def(tycker) {
-                                    let ty_abst = Alloc::alloc(tycker, abst, kd.into());
+                                    let ty_abst = Alloc::alloc(tycker, abst, kd);
                                     subst_vec.push((def, ty_abst.into()));
                                 }
                                 let b_out_ann = self
@@ -1991,7 +1991,7 @@ impl Tyck for SEnv<su::TermId> {
                         }
                         | Switch::Ana(ana_ty) => {
                             let tail_out_ann =
-                                self.mk(tail).tyck(tycker, Action::ana(ana_ty.into()))?;
+                                self.mk(tail).tyck(tycker, Action::ana(ana_ty))?;
                             let TermAnnId::Compu(tail, ty) = tail_out_ann else {
                                 tycker.err_k(
                                     TyckError::SortMismatch,
@@ -2172,7 +2172,7 @@ impl Tyck for SEnv<su::TermId> {
 
             let mut non_global = Vec::new();
             for (def, ()) in coctx.into_iter() {
-                if !tycker.statics.global_defs.get(&def).is_some() {
+                if tycker.statics.global_defs.get(&def).is_none() {
                     non_global.push(def);
                 }
             }

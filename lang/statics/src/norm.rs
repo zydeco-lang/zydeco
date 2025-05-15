@@ -9,7 +9,7 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn subst_env(&self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
-        let kd = tycker.statics.annotations_type[self].clone();
+        let kd = tycker.statics.annotations_type[self];
         let ty = tycker.statics.types[&self].to_owned();
         let ty = match ty {
             | Fillable::Fill(_) => *self,
@@ -142,7 +142,7 @@ impl TypeId {
                 }
             },
         };
-        let kd = tycker.statics.annotations_type[&ty].clone();
+        let kd = tycker.statics.annotations_type[&ty];
         let ty = ty.normalize(tycker, kd)?;
         Ok(ty)
     }
@@ -163,7 +163,7 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn subst_abst(&self, tycker: &mut Tycker, assign: (AbstId, TypeId)) -> Result<TypeId> {
-        let kd = tycker.statics.annotations_type[self].clone();
+        let kd = tycker.statics.annotations_type[self];
         let ty = match tycker.statics.types[self].to_owned() {
             // Todo: add subst obligation to fills
             | Fillable::Fill(_) => *self,
@@ -289,7 +289,7 @@ impl TypeId {
                 }
             },
         };
-        let kd = tycker.statics.annotations_type[&ty].clone();
+        let kd = tycker.statics.annotations_type[&ty];
         let ty = ty.normalize(tycker, kd)?;
         Ok(ty)
     }
@@ -299,7 +299,7 @@ impl TypeId {
 
 impl TypeId {
     pub fn unroll(self, tycker: &mut Tycker) -> ResultKont<TypeId> {
-        let kd = tycker.statics.annotations_type[&self].clone();
+        let kd = tycker.statics.annotations_type[&self];
         let res = match tycker.type_filled_k(&self)?.to_owned() {
             | Type::Abst(abst) => {
                 match tycker.statics.seals.get(&abst) {
@@ -355,7 +355,7 @@ impl TypeId {
             | Fillable::Done(ty) => match ty {
                 | Type::App(app) => {
                     let App(ty1, ty2) = app;
-                    let kd2 = tycker.statics.annotations_type[&ty2].clone();
+                    let kd2 = tycker.statics.annotations_type[&ty2];
                     let ty2 = ty2.normalize(tycker, kd2)?;
                     ty1.normalize_app(tycker, ty2, kd)?
                 }
@@ -419,10 +419,10 @@ impl TypeId {
     }
     pub fn normalize_apps(self, tycker: &mut Tycker, a_tys: Vec<TypeId>) -> Result<TypeId> {
         let res = a_tys.into_iter().try_fold(self, |f_ty, a_ty| {
-            let abs_kd = tycker.statics.annotations_type[&f_ty].clone();
+            let abs_kd = tycker.statics.annotations_type[&f_ty];
             let kd = match tycker.kind_filled(&abs_kd)?.to_owned() {
                 | Kind::Arrow(Arrow(arg_kd, body_kd)) => {
-                    let arg_kd_ = tycker.statics.annotations_type[&a_ty].clone();
+                    let arg_kd_ = tycker.statics.annotations_type[&a_ty];
                     Lub::lub(arg_kd_, arg_kd, tycker)?;
                     body_kd
                 }
@@ -487,7 +487,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Abs(tpat_, ty_),
-                            tycker.statics.annotations_type[&res].clone(),
+                            tycker.statics.annotations_type[&res],
                         )
                     }
                 }
@@ -503,7 +503,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             App(f_ty_, a_ty_),
-                            tycker.statics.annotations_type[&res].clone(),
+                            tycker.statics.annotations_type[&res],
                         )
                     }
                 }
@@ -526,7 +526,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Arrow(ty1_, ty2_),
-                            tycker.statics.annotations_type[&res].clone(),
+                            tycker.statics.annotations_type[&res],
                         )
                     }
                 }
@@ -541,7 +541,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Forall(tpat_, ty_),
-                            tycker.statics.annotations_type[&res].clone(),
+                            tycker.statics.annotations_type[&res],
                         )
                     }
                 }
@@ -557,7 +557,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Prod(ty1_, ty2_),
-                            tycker.statics.annotations_type[&res].clone(),
+                            tycker.statics.annotations_type[&res],
                         )
                     }
                 }
@@ -572,7 +572,7 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Exists(tpat_, ty_),
-                            tycker.statics.annotations_type[&res].clone(),
+                            tycker.statics.annotations_type[&res],
                         )
                     }
                 }
@@ -597,7 +597,7 @@ impl TypeId {
                     } else {
                         let data_ = Data::new(arms_.iter().cloned());
                         let data = tycker.statics.datas.lookup_or_alloc(arms_, data_);
-                        Alloc::alloc(tycker, data, tycker.statics.annotations_type[&res].clone())
+                        Alloc::alloc(tycker, data, tycker.statics.annotations_type[&res])
                     }
                 }
                 | Type::CoData(codata) => {
@@ -621,7 +621,7 @@ impl TypeId {
                     } else {
                         let codata_ = CoData::new(arms_.iter().cloned());
                         let codata = tycker.statics.codatas.lookup_or_alloc(arms_, codata_);
-                        Alloc::alloc(tycker, codata, tycker.statics.annotations_type[&res].clone())
+                        Alloc::alloc(tycker, codata, tycker.statics.annotations_type[&res])
                     }
                 }
             },
