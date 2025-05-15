@@ -328,8 +328,8 @@ pub fn random_int(
     use rand::Rng;
     match args.as_slice() {
         | [k] => {
-            let mut rng = rand::thread_rng();
-            let i = Literal::Int(rng.gen_range(i64::MIN..=i64::MAX));
+            let mut rng = rand::rng();
+            let i = Literal::Int(rng.random_range(i64::MIN..=i64::MAX));
             Ok(app(mk_rc(Force(mk_rc(k.clone().into())).into()), i.into()))
         }
         | _ => unreachable!(""),
