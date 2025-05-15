@@ -66,8 +66,7 @@ impl TypeId {
             | Type::App(app_ty) => {
                 let App(f_ty, a_ty) = app_ty;
                 let (f_ty, mut a_tys) = f_ty.destruct_type_app_nf(tycker)?;
-                let a_ty =
-                    a_ty.normalize(tycker, tycker.statics.annotations_type[&a_ty])?;
+                let a_ty = a_ty.normalize(tycker, tycker.statics.annotations_type[&a_ty])?;
                 a_tys.push(a_ty);
                 (f_ty, a_tys)
             }

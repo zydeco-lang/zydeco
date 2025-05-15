@@ -1,4 +1,4 @@
-use sculptor::{impl_serde_str_toml, AppAuthor};
+use sculptor::{AppAuthor, impl_serde_str_toml};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

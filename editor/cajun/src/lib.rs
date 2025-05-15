@@ -4,9 +4,9 @@ mod token;
 use token::LEGEND_TYPE;
 
 use tower_lsp::{
+    Client, LanguageServer, LspService, Server,
     jsonrpc::Result,
     lsp_types::{notification::Notification, *},
-    Client, LanguageServer, LspService, Server,
 };
 
 /// The state and main struct for the Cajun Zydeco Language Server.
@@ -24,12 +24,10 @@ impl Cajun {
 impl LanguageServer for Cajun {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
         Ok(InitializeResult {
-            server_info: Some(
-                ServerInfo {
-                    name: "Cajun Zydeco Language Server".to_string(),
-                    version: Some(env!("CARGO_PKG_VERSION").to_string()),
-                },
-            ),
+            server_info: Some(ServerInfo {
+                name: "Cajun Zydeco Language Server".to_string(),
+                version: Some(env!("CARGO_PKG_VERSION").to_string()),
+            }),
             offset_encoding: None,
             capabilities: ServerCapabilities {
                 // inlay_hint_provider: Some(OneOf::Left(true)),

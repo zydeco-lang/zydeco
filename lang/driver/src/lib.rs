@@ -43,7 +43,7 @@ use crate::check::pack::PackageStew;
 use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{
-    arena::{new_key_type, ArenaDense},
+    arena::{ArenaDense, new_key_type},
     deps::DepGraph,
     scc::Kosaraju,
 };

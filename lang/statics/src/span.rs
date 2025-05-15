@@ -1,5 +1,5 @@
 use super::syntax::*;
-use crate::{su, Tycker};
+use crate::{Tycker, su};
 
 impl<'a> SpanView<'a, Tycker> for DefId {
     fn span(&self, tycker: &'a Tycker) -> &'a Span {

@@ -1,5 +1,5 @@
-pub use crate::arena::*;
 use super::syntax::*;
+pub use crate::arena::*;
 use crate::textual::syntax as t;
 use zydeco_utils::{deps::DepGraph, imc::ImmutableMonoidMap, monoid::Monoid, scc::SccGraph};
 

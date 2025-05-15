@@ -27,6 +27,6 @@ pub use err::*;
 pub mod fmt;
 mod span;
 
+pub(crate) use construct::syntax as cs;
 pub(crate) use surface_syntax as su;
 pub(crate) use syntax as ss;
-pub(crate) use construct::syntax as cs;

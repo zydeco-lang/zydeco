@@ -1,4 +1,4 @@
-use super::{syntax::*, Desugarer};
+use super::{Desugarer, syntax::*};
 use crate::textual::syntax::SpanArena;
 
 macro_rules! impl_span_view_pair {

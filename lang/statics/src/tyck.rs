@@ -1990,8 +1990,7 @@ impl Tyck for SEnv<su::TermId> {
                             arms_ty.push(ty);
                         }
                         | Switch::Ana(ana_ty) => {
-                            let tail_out_ann =
-                                self.mk(tail).tyck(tycker, Action::ana(ana_ty))?;
+                            let tail_out_ann = self.mk(tail).tyck(tycker, Action::ana(ana_ty))?;
                             let TermAnnId::Compu(tail, ty) = tail_out_ann else {
                                 tycker.err_k(
                                     TyckError::SortMismatch,
