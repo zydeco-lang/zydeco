@@ -19,23 +19,59 @@
 
 use crate::{syntax::*, *};
 
+/// Trait for constructing entities in [`Tycker`] with more type inference available.
+///
+/// The only method provided is [`Construct::build`], which takes `&mut` [`Tycker`]
+/// and the environment of the type checked program, and returns the constructed value.
+///
+/// The trait is different from [`Alloc`] in that it does not require feeding annotations
+/// manually, but instead infers them from the context.
 pub trait Construct<T> {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> T;
 }
 
-impl<S, T, A> Construct<T> for Ann<S, A>
+impl<S, T, A> Construct<T> for cs::Ann<S, A>
 where
     S: Alloc<T, Ann = A>,
 {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> T {
-        let Ann { tm, ty } = self;
+        let cs::Ann(tm, ty) = self;
         Alloc::alloc(tycker, tm, ty)
     }
 }
 
-pub mod syntax {
-    // use super::*;
+impl<T> Construct<Result<T>> for Result<T> {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<T> {
+        self
+    }
+}
 
+/// Syntax used by [`Construct`]. Specifically,
+///
+/// + Some structures that are not defined as part of the common syntax of Zydeco,
+///   such as `Monad` and `Algebra`.
+/// + Some existing structures that may take a more convenient syntax,
+///   such as `Ann`, `Ctor`, and `Dtor`.
+/// + Head-only structures (starting with `H`) that implements methods for
+///   generating the whole term accordingly.
+///
+/// The head-only structures are the most interesting in that they are invented
+/// only because of the limitation of Rust's trait constraint solver.
+/// These head-only structures are the first part of their corresponding HOAS.
+/// They store the positive data for parameters, and methods implementing different
+/// `apply` methods will be provided to take a user-provided continuation and
+/// generate the whole term.
+pub mod syntax {
+    /// `Ann { tm: S, ty: A }`
+    #[derive(Clone, Copy)]
+    pub struct Ann<S, A>(pub S, pub A);
+    /// type indicator; used to resolve trait conflicts
+    ///
+    /// see [`super::App`] implementations on term level for examples
+    pub struct Ty<T>(pub T);
+
+    /// generates an abstract type
+    pub struct AbstTy<T>(pub T);
     /// `codata end`
     pub struct TopTy;
     /// `Monad M : (VType -> CType) -> CType`
@@ -50,9 +86,15 @@ pub mod syntax {
     /// 2. R is `carrier` of kind `CType`
     pub struct Algebra<M, R>(pub M, pub R);
 
-    /// `exists X. A`
+    /// `exists X. ...`
+    ///
+    /// See crate level documentation [`crate::construct::syntax`] for more details.
+    pub struct HExists<Param>(pub Param);
     pub struct Exists<Param, FBody>(pub Param, pub FBody);
-    /// `forall X. B`
+    /// `forall X. ...`
+    ///
+    /// See crate level documentation [`crate::construct::syntax`] for more details.
+    pub struct HForall<Param>(pub Param);
     pub struct Forall<Param, FBody>(pub Param, pub FBody);
 
     /// `+Ctor(tail)`
@@ -62,8 +104,15 @@ pub mod syntax {
     /// `comatch end`
     pub struct Top;
 
-    pub struct VAbs<P, F>(pub P, pub F);
-    pub struct TAbs<P, F>(pub P, pub F);
+    /// `fn h -> ...`
+    ///
+    /// head-only abstractions that implements methods for
+    /// generating the whole term accordingly
+    ///
+    /// See crate level documentation [`crate::construct::syntax`] for more details.
+    pub struct HAbs<Param>(pub Param);
+
+    pub use crate::monadic::syntax::*;
 }
 
 /* ------------------------------- Definition ------------------------------- */
@@ -115,34 +164,34 @@ impl Construct<DefId> for DefId {
         self
     }
 }
-impl Construct<DefId> for Ann<VarName, KindId> {
+impl Construct<DefId> for cs::Ann<VarName, KindId> {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> DefId {
-        let Ann { tm, ty } = self;
+        let cs::Ann(tm, ty) = self;
         Alloc::alloc(tycker, tm, ty.into())
     }
 }
-impl Construct<DefId> for Ann<VarName, TypeId> {
+impl Construct<DefId> for cs::Ann<VarName, TypeId> {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> DefId {
-        let Ann { tm, ty } = self;
+        let cs::Ann(tm, ty) = self;
         Alloc::alloc(tycker, tm, ty.into())
     }
 }
-impl<A> Construct<DefId> for Ann<String, A>
+impl<A> Construct<DefId> for cs::Ann<String, A>
 where
     A: Into<AnnId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> DefId {
-        let Ann { tm, ty } = self;
-        Ann { tm: VarName(tm), ty: ty.into() }.build(tycker, env)
+        let cs::Ann(tm, ty) = self;
+        cs::Ann(VarName(tm), ty.into()).build(tycker, env)
     }
 }
-impl<A> Construct<DefId> for Ann<&str, A>
+impl<A> Construct<DefId> for cs::Ann<&str, A>
 where
     A: Into<AnnId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> DefId {
-        let Ann { tm, ty } = self;
-        Ann { tm: tm.to_string(), ty }.build(tycker, env)
+        let cs::Ann(tm, ty) = self;
+        cs::Ann(tm.to_string(), ty.into()).build(tycker, env)
     }
 }
 
@@ -214,12 +263,12 @@ impl Construct<TPatId> for TPatId {
         self
     }
 }
-impl Construct<TPatId> for Ann<Option<DefId>, KindId> {
+impl Construct<TPatId> for cs::Ann<Option<DefId>, KindId> {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TPatId {
-        let Ann { tm, ty } = self;
+        let cs::Ann(tm, ty) = self;
         match tm {
-            | Some(def) => Ann { tm: def, ty }.build(tycker, env),
-            | None => Ann { tm: Hole, ty }.build(tycker, env),
+            | Some(def) => cs::Ann(def, ty).build(tycker, env),
+            | None => cs::Ann(Hole, ty).build(tycker, env),
         }
     }
 }
@@ -231,12 +280,17 @@ impl Construct<TypeId> for TypeId {
         self
     }
 }
-impl<K> Construct<TypeId> for Ann<Hole, (K, su::TermId)>
+impl Construct<Result<TypeId>> for TypeId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<TypeId> {
+        Ok(self)
+    }
+}
+impl<K> Construct<TypeId> for cs::Ann<Hole, (K, su::TermId)>
 where
     K: Construct<KindId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
-        let Ann { tm: Hole, ty: (kd, site) } = self;
+        let cs::Ann(Hole, (kd, site)) = self;
         let kd = kd.build(tycker, env);
         let fill = tycker.statics.fills.alloc(site);
         Alloc::alloc(tycker, fill, kd)
@@ -255,6 +309,17 @@ impl Construct<TypeId> for AbstId {
         Alloc::alloc(tycker, self, kd)
     }
 }
+impl<T> Construct<TypeId> for cs::AbstTy<T>
+where
+    T: Construct<AbstId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
+        let cs::AbstTy(abst) = self;
+        let abst = abst.build(tycker, env);
+        abst.build(tycker, env)
+    }
+}
+
 impl<S, F, T> Construct<TypeId> for Abs<S, F>
 where
     S: Construct<TPatId>,
@@ -323,6 +388,18 @@ where
         Alloc::alloc(tycker, App(thk, arg), vtype)
     }
 }
+impl<T> Construct<Result<TypeId>> for Thunk<T>
+where
+    T: Construct<Result<TypeId>>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+        let Thunk(arg) = self;
+        let thk = ThkTy.build(tycker, env);
+        let arg = arg.build(tycker, env)?;
+        let vtype = VType.build(tycker, env);
+        Ok(Alloc::alloc(tycker, App(thk, arg), vtype))
+    }
+}
 impl Construct<TypeId> for UnitTy {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[tycker.prim.unit.get()] else { unreachable!() };
@@ -356,6 +433,20 @@ where
         Alloc::alloc(tycker, Exists(abst, ty), vtype)
     }
 }
+// impl<P> cs::HExists<P>
+// where
+//     P: Construct<AbstId>,
+// {
+//     fn mk<F, T>(self, tycker: &mut Tycker, env: &Env<AnnId>, body: F) -> impl Construct<TypeId>
+//     where
+//         F: Fn(AbstId) -> T,
+//         T: Construct<TypeId>,
+//     {
+//         let cs::HExists(abst) = self;
+//         let abst = abst.build(tycker, env);
+//         body(abst)
+//     }
+// }
 impl Construct<TypeId> for OSTy {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
         let AnnId::Type(ty) = env[tycker.prim.os.get()] else { unreachable!() };
@@ -381,9 +472,22 @@ where
         Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype)
     }
 }
+impl<S, T> Construct<Result<TypeId>> for Arrow<S, T>
+where
+    S: Construct<Result<TypeId>>,
+    T: Construct<Result<TypeId>>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+        let Arrow(ty_1, ty_2) = self;
+        let ty_1 = ty_1.build(tycker, env)?;
+        let ty_2 = ty_2.build(tycker, env)?;
+        let ctype = tycker.ctype(env);
+        Ok(Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype))
+    }
+}
 impl<F, A, T> Construct<TypeId> for cs::Forall<A, F>
 where
-    F: Fn(AbstId) -> T,
+    F: FnOnce(AbstId) -> T,
     A: Construct<AbstId>,
     T: Construct<TypeId>,
 {
@@ -392,7 +496,21 @@ where
         let abst = abst.build(tycker, env);
         let ty = ty(abst).build(tycker, env);
         let ctype = CType.build(tycker, env);
-        Alloc::alloc(tycker, Exists(abst, ty), ctype)
+        Alloc::alloc(tycker, Forall(abst, ty), ctype)
+    }
+}
+impl<F, A, T> Construct<Result<TypeId>> for cs::Forall<A, F>
+where
+    F: FnOnce(AbstId) -> T,
+    A: Construct<AbstId>,
+    T: Construct<Result<TypeId>>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+        let cs::Forall(abst, ty) = self;
+        let abst = abst.build(tycker, env);
+        let ty = ty(abst).build(tycker, env)?;
+        let ctype = CType.build(tycker, env);
+        Ok(Alloc::alloc(tycker, Forall(abst, ty), ctype))
     }
 }
 impl Construct<TypeId> for RetTy {
@@ -446,41 +564,33 @@ where
 }
 
 impl Tycker {
-    /// generates `Thunk B`
-    pub fn thk_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
-        Thunk(arg).build(self, env)
-    }
+    // /// generates `Thunk B`
+    // pub fn thk_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
+    //     Thunk(arg).build(self, env)
+    // }
     /// generates `Thunk _`
     pub fn thk_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
-        Thunk(Ann { tm: Hole, ty: (CType, site) }).build(self, env)
+        Thunk(cs::Ann(Hole, (CType, site))).build(self, env)
     }
-    /// generates `Ret A`
-    pub fn ret_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
-        Ret(arg).build(self, env)
-    }
+    // /// generates `Ret A`
+    // pub fn ret_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
+    //     Ret(arg).build(self, env)
+    // }
     /// generates `Ret _`
     pub fn ret_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
-        Ret(Ann { tm: Hole, ty: (VType, site) }).build(self, env)
+        Ret(cs::Ann(Hole, (VType, site))).build(self, env)
     }
-    pub fn type_top(&mut self, env: &Env<AnnId>) -> TypeId {
-        cs::TopTy.build(self, env)
-    }
-    pub fn type_exists(&mut self, env: &Env<AnnId>, x: AbstId, b: TypeId) -> TypeId {
-        cs::Exists(x, |_| b).build(self, env)
-    }
-    pub fn type_forall(&mut self, env: &Env<AnnId>, x: AbstId, b: TypeId) -> TypeId {
-        cs::Forall(x, |_| b).build(self, env)
-    }
-    /// generates `Monad M` where:
-    /// 1. M is `monad_ty` of kind `VType -> CType`
-    pub fn monad_mo(&mut self, env: &Env<AnnId>, monad_ty: TypeId) -> TypeId {
-        cs::Monad(monad_ty).build(self, env)
-    }
-    pub fn algebra_mo_car(
-        &mut self, env: &Env<AnnId>, monad_ty: TypeId, carrier: TypeId,
-    ) -> TypeId {
-        cs::Algebra(monad_ty, carrier).build(self, env)
-    }
+    // pub fn type_top(&mut self, env: &Env<AnnId>) -> TypeId {
+    //     cs::TopTy.build(self, env)
+    // }
+    // pub fn monad_mo(&mut self, env: &Env<AnnId>, monad_ty: TypeId) -> TypeId {
+    //     cs::Monad(monad_ty).build(self, env)
+    // }
+    // pub fn algebra_mo_car(
+    //     &mut self, env: &Env<AnnId>, monad_ty: TypeId, carrier: TypeId,
+    // ) -> TypeId {
+    //     cs::Algebra(monad_ty, carrier).build(self, env)
+    // }
 }
 
 /* ------------------------------ ValuePattern ------------------------------ */
@@ -490,12 +600,12 @@ impl Construct<VPatId> for VPatId {
         self
     }
 }
-impl Construct<VPatId> for Ann<Option<DefId>, TypeId> {
+impl Construct<VPatId> for cs::Ann<Option<DefId>, TypeId> {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> VPatId {
-        let Ann { tm, ty } = self;
+        let cs::Ann(tm, ty) = self;
         match tm {
-            | Some(def) => Ann { tm: def, ty }.build(tycker, env),
-            | None => Ann { tm: Hole, ty }.build(tycker, env),
+            | Some(def) => cs::Ann(def, ty).build(tycker, env),
+            | None => cs::Ann(Hole, ty).build(tycker, env),
         }
     }
 }
@@ -505,6 +615,11 @@ impl Construct<VPatId> for Ann<Option<DefId>, TypeId> {
 impl Construct<ValueId> for ValueId {
     fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> ValueId {
         self
+    }
+}
+impl Construct<Result<ValueId>> for ValueId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<ValueId> {
+        Ok(self)
     }
 }
 impl Construct<ValueId> for DefId {
@@ -521,7 +636,7 @@ where
         let Thunk(body) = self;
         let body = body.build(tycker, env);
         let body_ty = tycker.statics.annotations_compu[&body];
-        let ty = tycker.thk_arg(env, body_ty);
+        let ty = Thunk(body_ty).build(tycker, env);
         Alloc::alloc(tycker, Thunk(body), ty)
     }
 }
@@ -549,7 +664,7 @@ where
 
 impl Tycker {
     // pub fn value_var(&mut self, env: &Env<AnnId>, def: DefId, ty: TypeId) -> ValueId {
-    //     Ann { tm: def, ty }.build(self, env)
+    //     cs::Ann(def, ty).build(self, env)
     // }
     // pub fn value_thunk(&mut self, env: &Env<AnnId>, body: CompuId) -> ValueId {
     //     Thunk(body).build(self, env)
@@ -569,47 +684,42 @@ impl Construct<CompuId> for CompuId {
         self
     }
 }
+impl Construct<Result<CompuId>> for CompuId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<CompuId> {
+        Ok(self)
+    }
+}
 // computation value abstraction
-impl<P, T> Construct<CompuId> for cs::VAbs<P, T>
+impl<P> cs::HAbs<P>
 where
     P: Construct<VPatId>,
-    T: Construct<CompuId>,
 {
-    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
-        let cs::VAbs(vpat, body) = self;
+    pub fn try_vbody<F, T>(
+        self, (tycker, env): (&mut Tycker, &Env<AnnId>), body: F,
+    ) -> Result<CompuId>
+    where
+        F: Fn(&mut Tycker, &Env<AnnId>, Option<DefId>) -> Result<T>,
+        T: Construct<CompuId>,
+    {
+        let cs::HAbs(vpat) = self;
         let vpat = vpat.build(tycker, env);
-        let (_, param_ty) = vpat.try_destruct_def(tycker);
+        let (def, param_ty) = vpat.try_destruct_def(tycker);
+        let body = body(tycker, env, def)?;
         let body = body.build(tycker, env);
         let body_ty = tycker.statics.annotations_compu[&body];
         let ty = Arrow(param_ty, body_ty).build(tycker, env);
-        Alloc::alloc(tycker, Abs(vpat, body), ty)
+        let res = Alloc::alloc(tycker, Abs(vpat, body), ty);
+        Ok(res)
     }
 }
-// impl<P, F, T> Construct<CompuId> for cs::VAbs<P, F>
-// where
-//     P: Construct<VPatId>,
-//     F: Fn(&mut Tycker, &Env<AnnId>, Option<DefId>) -> T,
-//     T: Construct<CompuId>,
-// {
-//     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
-//         let cs::VAbs(vpat, body) = self;
-//         let vpat = vpat.build(tycker, env);
-//         let (def, param_ty) = vpat.try_destruct_def(tycker);
-//         let body = body(tycker, env, def);
-//         let body = body.build(tycker, env);
-//         let body_ty = tycker.statics.annotations_compu[&body];
-//         let ty = Arrow(param_ty, body_ty).build(tycker, env);
-//         Alloc::alloc(tycker, Abs(vpat, body), ty)
-//     }
-// }
-impl<V, F, T> Construct<CompuId> for Abs<Ann<V, TypeId>, F>
+impl<V, F, T> Construct<CompuId> for Abs<cs::Ann<V, TypeId>, F>
 where
     V: Construct<VarName>,
     F: Fn(&mut Tycker, &Env<AnnId>, DefId) -> T,
     T: Construct<CompuId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
-        let Abs(Ann { tm: var, ty: param_ty }, body) = self;
+        let Abs(cs::Ann(var, param_ty), body) = self;
         let var = var.build(tycker, env);
         let def = Alloc::alloc(tycker, var, param_ty.into());
         let vpat: VPatId = Alloc::alloc(tycker, def, param_ty);
@@ -620,14 +730,14 @@ where
         Alloc::alloc(tycker, Abs(vpat, body), ty)
     }
 }
-impl<V, F, T> Construct<Result<CompuId>> for Abs<Ann<V, TypeId>, F>
+impl<V, F, T> Construct<Result<CompuId>> for Abs<cs::Ann<V, TypeId>, F>
 where
     V: Construct<VarName>,
     F: Fn(&mut Tycker, &Env<AnnId>, DefId) -> Result<T>,
     T: Construct<CompuId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
-        let Abs(Ann { tm: var, ty: param_ty }, body) = self;
+        let Abs(cs::Ann(var, param_ty), body) = self;
         let var = var.build(tycker, env);
         let def = Alloc::alloc(tycker, var, param_ty.into());
         let vpat: VPatId = Alloc::alloc(tycker, def, param_ty);
@@ -639,37 +749,38 @@ where
     }
 }
 // computation type abstraction
-impl<P, F, T> Construct<CompuId> for cs::TAbs<P, F>
+impl<P> cs::HAbs<P>
 where
     P: Construct<TPatId>,
-    F: Fn(AbstId) -> T,
-    T: Construct<CompuId>,
 {
-    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
-        let cs::TAbs(tpat, body) = self;
+    pub fn try_tbody<F, T>(
+        self, (tycker, env): (&mut Tycker, &Env<AnnId>), body: F,
+    ) -> Result<CompuId>
+    where
+        F: Fn(&mut Tycker, &Env<AnnId>, Option<DefId>, AbstId) -> Result<T>,
+        T: Construct<CompuId>,
+    {
+        let cs::HAbs(tpat) = self;
         let tpat = tpat.build(tycker, env);
-        let (def, param_kd) = tpat.try_destruct_def(tycker);
-        let abst = Alloc::alloc(tycker, def, param_kd);
-        let abst_ty = Alloc::alloc(tycker, abst, param_kd);
-        let mut env = env.to_owned();
-        match def {
-            | Some(def) => env += (def, abst_ty.into()),
-            | None => {}
-        };
-        let body = body(abst).build(tycker, &env);
+        let (def, param_ty) = tpat.try_destruct_def(tycker);
+        let abst = Alloc::alloc(tycker, def, param_ty);
+        let body = body(tycker, env, def, abst)?;
+        let body = body.build(tycker, env);
         let body_ty = tycker.statics.annotations_compu[&body];
-        let ty = cs::Forall(abst, |_| body_ty).build(tycker, &env);
-        Alloc::alloc(tycker, Abs(tpat, body), ty)
+        let ctype = CType.build(tycker, env);
+        let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);
+        let res = Alloc::alloc(tycker, Abs(tpat, body), ty);
+        Ok(res)
     }
 }
-impl<V, F, T> Construct<CompuId> for Abs<Ann<V, KindId>, F>
+impl<V, F, T> Construct<CompuId> for Abs<cs::Ann<V, KindId>, F>
 where
     V: Construct<VarName>,
     F: Fn(&mut Tycker, &Env<AnnId>, DefId, AbstId) -> T,
     T: Construct<CompuId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
-        let Abs(Ann { tm: var, ty: param_kd }, body) = self;
+        let Abs(cs::Ann(var, param_kd), body) = self;
         let var = var.build(tycker, env);
         let def = Alloc::alloc(tycker, var, param_kd.into());
         let abst = Alloc::alloc(tycker, def, param_kd);
@@ -682,14 +793,14 @@ where
         Alloc::alloc(tycker, Abs(tpat, body), ty)
     }
 }
-impl<V, F, T> Construct<Result<CompuId>> for Abs<Ann<V, KindId>, F>
+impl<V, F, T> Construct<Result<CompuId>> for Abs<cs::Ann<V, KindId>, F>
 where
     V: Construct<VarName>,
     F: Fn(&mut Tycker, &Env<AnnId>, DefId, AbstId) -> Result<T>,
     T: Construct<CompuId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
-        let Abs(Ann { tm: var, ty: param_kd }, body) = self;
+        let Abs(cs::Ann(var, param_kd), body) = self;
         let var = var.build(tycker, env);
         let def = Alloc::alloc(tycker, var, param_kd.into());
         let abst = Alloc::alloc(tycker, def, param_kd);
@@ -719,31 +830,90 @@ where
         Alloc::alloc(tycker, App(abs, arg), body_ty)
     }
 }
+impl<S, T> Construct<Result<CompuId>> for App<S, T>
+where
+    S: Construct<Result<CompuId>>,
+    T: Construct<Result<ValueId>>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let App(abs, arg) = self;
+        let abs = abs.build(tycker, env)?;
+        let abs_ty = tycker.statics.annotations_compu[&abs];
+        let Some((param_ty, body_ty)) = abs_ty.destruct_arrow(tycker) else { unreachable!() };
+        let arg = arg.build(tycker, env)?;
+        let arg_ty = tycker.statics.annotations_value[&arg];
+        let Ok(_) = Lub::lub(param_ty, arg_ty, tycker) else { unreachable!() };
+        Ok(Alloc::alloc(tycker, App(abs, arg), body_ty))
+    }
+}
 // computation type application
-impl<S> Construct<CompuId> for App<S, TypeId>
+impl<S, T> Construct<CompuId> for App<S, cs::Ty<T>>
 where
     S: Construct<CompuId>,
+    T: Construct<TypeId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
-        let App(abs, arg) = self;
+        let App(abs, cs::Ty(arg)) = self;
         let abs = abs.build(tycker, env);
         let abs_ty = tycker.statics.annotations_compu[&abs];
         let Some((abst, body_ty)) = abs_ty.destruct_forall(tycker) else { unreachable!() };
         let param_kd = tycker.statics.annotations_abst[&abst];
+        let arg = arg.build(tycker, env);
         let arg_kd = tycker.statics.annotations_type[&arg];
         let Ok(_) = Lub::lub(param_kd, arg_kd, tycker) else { unreachable!() };
         let Ok(ty) = body_ty.subst_abst(tycker, (abst, arg)) else { unreachable!() };
         Alloc::alloc(tycker, App(abs, arg), ty)
     }
 }
+impl<S, T> Construct<Result<CompuId>> for App<S, cs::Ty<T>>
+where
+    S: Construct<Result<CompuId>>,
+    T: Construct<Result<TypeId>>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let App(abs, cs::Ty(arg)) = self;
+        let abs = abs.build(tycker, env)?;
+        let abs_ty = tycker.statics.annotations_compu[&abs];
+        let Some((abst, body_ty)) = abs_ty.destruct_forall(tycker) else { unreachable!() };
+        let param_kd = tycker.statics.annotations_abst[&abst];
+        let arg = arg.build(tycker, env)?;
+        let arg_kd = tycker.statics.annotations_type[&arg];
+        let Ok(_) = Lub::lub(param_kd, arg_kd, tycker) else { unreachable!() };
+        let Ok(ty) = body_ty.subst_abst(tycker, (abst, arg)) else { unreachable!() };
+        Ok(Alloc::alloc(tycker, App(abs, arg), ty))
+    }
+}
 // fixed point
-impl<V, F> Construct<CompuId> for Fix<Ann<V, TypeId>, F>
+impl<H> cs::HAbs<H>
+where
+    H: Construct<VPatId>,
+{
+    pub fn try_fix<F, T>(
+        self, (tycker, env): (&mut Tycker, &Env<AnnId>), body: F,
+    ) -> Result<CompuId>
+    where
+        F: Fn(&mut Tycker, &Env<AnnId>, Option<DefId>) -> Result<T>,
+        T: Construct<CompuId>,
+    {
+        let cs::HAbs(vpat) = self;
+        let vpat = vpat.build(tycker, env);
+        let (def, param_ty) = vpat.try_destruct_def(tycker);
+        let Some(ty) = param_ty.destruct_thk_app(tycker) else { unreachable!() };
+        let body = body(tycker, env, def)?;
+        let body = body.build(tycker, env);
+        let body_ty = tycker.statics.annotations_compu[&body];
+        let Ok(_) = Lub::lub(ty, body_ty, tycker) else { unreachable!() };
+        let res = Alloc::alloc(tycker, Fix(vpat, body), ty);
+        Ok(res)
+    }
+}
+impl<V, F> Construct<CompuId> for Fix<cs::Ann<V, TypeId>, F>
 where
     V: Construct<VarName>,
     F: Fn(&mut Tycker, &Env<AnnId>, DefId) -> CompuId,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> CompuId {
-        let Fix(Ann { tm: var, ty: param_ty }, body) = self;
+        let Fix(cs::Ann(var, param_ty), body) = self;
         let var = var.build(tycker, env);
         let def = Alloc::alloc(tycker, var, param_ty.into());
         let Some(ty) = param_ty.destruct_thk_app(tycker) else { unreachable!() };
@@ -767,6 +937,18 @@ where
         Alloc::alloc(tycker, Force(thk), body_ty)
     }
 }
+impl<T> Construct<Result<CompuId>> for Force<T>
+where
+    T: Construct<Result<ValueId>>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let Force(thk) = self;
+        let thk = thk.build(tycker, env)?;
+        let thk_ty = tycker.statics.annotations_value[&thk];
+        let Some(body_ty) = thk_ty.destruct_thk_app(tycker) else { unreachable!() };
+        Ok(Alloc::alloc(tycker, Force(thk), body_ty))
+    }
+}
 // return
 impl<T> Construct<CompuId> for Ret<T>
 where
@@ -776,8 +958,20 @@ where
         let Ret(val) = self;
         let val = val.build(tycker, env);
         let val_ty = tycker.statics.annotations_value[&val];
-        let ret_ty = tycker.ret_arg(env, val_ty);
+        let ret_ty = Ret(val_ty).build(tycker, env);
         Alloc::alloc(tycker, Ret(val), ret_ty)
+    }
+}
+impl<T> Construct<Result<CompuId>> for Ret<T>
+where
+    T: Construct<Result<ValueId>>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let Ret(val) = self;
+        let val = val.build(tycker, env)?;
+        let val_ty = tycker.statics.annotations_value[&val];
+        let ret_ty = Ret(val_ty).build(tycker, env);
+        Ok(Alloc::alloc(tycker, Ret(val), ret_ty))
     }
 }
 // bind
@@ -848,6 +1042,27 @@ where
         Dtor(head, dtor).build(tycker, env)
     }
 }
+impl Construct<Result<CompuId>> for Dtor<CompuId> {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let Dtor(head, dtor) = self;
+        let head_ty = tycker.statics.annotations_compu[&head];
+        let Some(coda) = head_ty.destruct_codata(env, tycker) else { unreachable!() };
+        let Some(ty) = coda.get(&dtor).cloned() else { unreachable!() };
+        Ok(Alloc::alloc(tycker, Dtor(head, dtor), ty))
+    }
+}
+impl<T, D> Construct<Result<CompuId>> for cs::Dtor<T, D>
+where
+    T: Construct<Result<CompuId>>,
+    D: Construct<DtorName>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let cs::Dtor(head, dtor) = self;
+        let head = head.build(tycker, env)?;
+        let dtor = dtor.build(tycker, env);
+        Ok(Dtor(head, dtor).build(tycker, env))
+    }
+}
 
 impl Tycker {
     pub fn compu_vabs<F, T>(
@@ -859,7 +1074,7 @@ impl Tycker {
         T: Construct<CompuId>,
     {
         let param_ty = param_ty.build(self, env);
-        Abs(Ann { tm: name, ty: param_ty }, body).build(self, env)
+        Abs(cs::Ann(name, param_ty), body).build(self, env)
     }
     pub fn try_compu_vabs<F, T>(
         &mut self, env: &Env<AnnId>, name: impl Construct<VarName>,
@@ -870,7 +1085,7 @@ impl Tycker {
         T: Construct<CompuId>,
     {
         let param_ty = param_ty.build(self, env);
-        Abs(Ann { tm: name, ty: param_ty }, body).build(self, env)
+        Abs(cs::Ann(name, param_ty), body).build(self, env)
     }
     pub fn compu_tabs(
         &mut self, env: &Env<AnnId>, name: impl Construct<VarName>,
@@ -878,7 +1093,7 @@ impl Tycker {
         body: impl Fn(&mut Self, &Env<AnnId>, DefId, AbstId) -> CompuId,
     ) -> CompuId {
         let param_kd = param_kd.build(self, env);
-        Abs(Ann { tm: name, ty: param_kd }, body).build(self, env)
+        Abs(cs::Ann(name, param_kd), body).build(self, env)
     }
     pub fn try_compu_tabs<F, T>(
         &mut self, env: &Env<AnnId>, name: impl Construct<VarName>,
@@ -889,7 +1104,7 @@ impl Tycker {
         T: Construct<CompuId>,
     {
         let param_kd = param_kd.build(self, env);
-        Abs(Ann { tm: name, ty: param_kd }, body).build(self, env)
+        Abs(cs::Ann(name, param_kd), body).build(self, env)
     }
     // pub fn compu_vapp(&mut self, env: &Env<AnnId>, abs: CompuId, arg: ValueId) -> CompuId {
     //     App(abs, arg).build(self, env)
@@ -901,7 +1116,7 @@ impl Tycker {
         &mut self, env: &Env<AnnId>, name: VarName, ty: TypeId,
         body: impl Fn(&mut Self, &Env<AnnId>, DefId) -> CompuId,
     ) -> CompuId {
-        Fix(Ann { tm: name, ty }, body).build(self, env)
+        Fix(cs::Ann(name, ty), body).build(self, env)
     }
     // pub fn compu_force(&mut self, env: &Env<AnnId>, thk: ValueId) -> CompuId {
     //     Force(thk).build(self, env)

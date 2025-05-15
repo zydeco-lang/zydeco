@@ -1,7 +1,28 @@
+//! Allocation of entities in [`StaticsArena`].
+//! 
+//! This module provides the [`Alloc`] trait and all its implementations,
+//! which provides a type-safe approach to allocate in a post-type-check arena.
+
 use crate::{syntax::*, *};
 
+/// Trait for allocating entities in [`StaticsArena`].
+/// The only method provided is [`Alloc::alloc`], which takes `&mut` [`Tycker`],
+/// the value of type `Self` to allocate, and the annotation of the value.
+/// Some key parameters are:
+///
+/// + The parameter `T` is the "target" type allocation.
+///   Callers of this trait will get a value of type `T` after allocation.
+/// + The parameter [`Alloc::Ann`] is the type of the annotation of the entity.
+///   Each implementation will specify a suitable annotation to ensure type safety.
+/// 
+/// The trait is different from [`Construct`] in that [`Construct::build`] implementations
+/// are built on top of [`Alloc`] implementations, and thus are more convenient to use if 
+/// the type inference is easy, i.e. the annotations are not needed.
 pub trait Alloc<T> {
+    /// The annotation of this allocation.
     type Ann;
+    /// Allocates the value in the arena in the [`Tycker`] and returns the allocated value.
+    /// See the documentation of trait [`Alloc`] and [`crate::alloc`] for more details.
     fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> T;
 }
 
