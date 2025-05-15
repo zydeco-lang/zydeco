@@ -77,6 +77,10 @@ pub mod syntax {
 
     /// generates an abstract type [`super::TypeId`] from [`super::AbstId`]
     pub struct AbstTy<T>(pub T);
+    /// `Thk B`
+    pub struct Thk<B>(pub B);
+    /// `Ret A`
+    pub struct Ret<A>(pub A);
     /// `codata end`
     pub struct TopTy;
     /// `Monad M : (VType -> CType) -> CType`
@@ -119,6 +123,25 @@ pub mod syntax {
 
     pub use crate::monadic::syntax::*;
 }
+
+macro_rules! impl_construct_trivial {
+    ($($ty:ty),*) => {
+        $(
+            impl Construct<$ty> for $ty {
+                fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> $ty {
+                    self
+                }
+            }
+            impl Construct<Result<$ty>> for $ty {
+                fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<$ty> {
+                    Ok(self)
+                }
+            }
+        )*
+    }
+}
+
+impl_construct_trivial!(DefId, KindId, AbstId, TPatId, TypeId, VPatId, ValueId, CompuId);
 
 /* ------------------------------- Definition ------------------------------- */
 
@@ -164,11 +187,6 @@ impl Construct<DtorName> for &str {
 }
 
 // DefId
-impl Construct<DefId> for DefId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> DefId {
-        self
-    }
-}
 impl Construct<DefId> for cs::Ann<VarName, KindId> {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> DefId {
         let cs::Ann(tm, ty) = self;
@@ -200,26 +218,8 @@ where
     }
 }
 
-/* -------------------------------- Abstract -------------------------------- */
-
-impl Construct<AbstId> for AbstId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> AbstId {
-        self
-    }
-}
-
 /* ---------------------------------- Kind ---------------------------------- */
 
-impl Construct<KindId> for KindId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> KindId {
-        self
-    }
-}
-impl Construct<Result<KindId>> for KindId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<KindId> {
-        Ok(self)
-    }
-}
 impl Construct<KindId> for cs::TypeOf<TypeId> {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> KindId {
         let cs::TypeOf(ty) = self;
@@ -280,11 +280,6 @@ mod kind_test {
 
 /* ------------------------------- TypePattern ------------------------------ */
 
-impl Construct<TPatId> for TPatId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> TPatId {
-        self
-    }
-}
 impl Construct<TPatId> for cs::Ann<Option<DefId>, KindId> {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TPatId {
         let cs::Ann(tm, ty) = self;
@@ -297,16 +292,6 @@ impl Construct<TPatId> for cs::Ann<Option<DefId>, KindId> {
 
 /* ---------------------------------- Type ---------------------------------- */
 
-impl Construct<TypeId> for TypeId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> TypeId {
-        self
-    }
-}
-impl Construct<Result<TypeId>> for TypeId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<TypeId> {
-        Ok(self)
-    }
-}
 impl Construct<TypeId> for cs::TypeOf<ValueId> {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> TypeId {
         let cs::TypeOf(value) = self;
@@ -410,24 +395,24 @@ impl Construct<TypeId> for ThkTy {
         ty
     }
 }
-impl<T> Construct<TypeId> for Thunk<T>
+impl<T> Construct<TypeId> for cs::Thk<T>
 where
     T: Construct<TypeId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
-        let Thunk(arg) = self;
+        let cs::Thk(arg) = self;
         let thk = ThkTy.build(tycker, env);
         let arg = arg.build(tycker, env);
         let vtype = VType.build(tycker, env);
         Alloc::alloc(tycker, App(thk, arg), vtype)
     }
 }
-impl<T> Construct<Result<TypeId>> for Thunk<T>
+impl<T> Construct<Result<TypeId>> for cs::Thk<T>
 where
     T: Construct<Result<TypeId>>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
-        let Thunk(arg) = self;
+        let cs::Thk(arg) = self;
         let thk = ThkTy.build(tycker, env);
         let arg = arg.build(tycker, env)?;
         let vtype = VType.build(tycker, env);
@@ -553,12 +538,12 @@ impl Construct<TypeId> for RetTy {
         ty
     }
 }
-impl<T> Construct<TypeId> for Ret<T>
+impl<T> Construct<TypeId> for cs::Ret<T>
 where
     T: Construct<TypeId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
-        let Ret(arg) = self;
+        let cs::Ret(arg) = self;
         let ret = RetTy.build(tycker, env);
         let arg = arg.build(tycker, env);
         let ctype = CType.build(tycker, env);
@@ -604,7 +589,7 @@ impl Tycker {
     // }
     /// generates `Thunk _`
     pub fn thk_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
-        Thunk(cs::Ann(Hole, (CType, site))).build(self, env)
+        cs::Thk(cs::Ann(Hole, (CType, site))).build(self, env)
     }
     // /// generates `Ret A`
     // pub fn ret_arg(&mut self, env: &Env<AnnId>, arg: TypeId) -> TypeId {
@@ -612,7 +597,7 @@ impl Tycker {
     // }
     /// generates `Ret _`
     pub fn ret_hole(&mut self, env: &Env<AnnId>, site: su::TermId) -> TypeId {
-        Ret(cs::Ann(Hole, (VType, site))).build(self, env)
+        cs::Ret(cs::Ann(Hole, (VType, site))).build(self, env)
     }
     // pub fn type_top(&mut self, env: &Env<AnnId>) -> TypeId {
     //     cs::TopTy.build(self, env)
@@ -629,11 +614,6 @@ impl Tycker {
 
 /* ------------------------------ ValuePattern ------------------------------ */
 
-impl Construct<VPatId> for VPatId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> VPatId {
-        self
-    }
-}
 impl Construct<VPatId> for cs::Ann<Option<DefId>, TypeId> {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> VPatId {
         let cs::Ann(tm, ty) = self;
@@ -646,16 +626,6 @@ impl Construct<VPatId> for cs::Ann<Option<DefId>, TypeId> {
 
 /* ---------------------------------- Value --------------------------------- */
 
-impl Construct<ValueId> for ValueId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> ValueId {
-        self
-    }
-}
-impl Construct<Result<ValueId>> for ValueId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<ValueId> {
-        Ok(self)
-    }
-}
 impl Construct<ValueId> for DefId {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> ValueId {
         let AnnId::Type(ty) = tycker.statics.annotations_var[&self] else { unreachable!() };
@@ -670,7 +640,7 @@ where
         let Thunk(body) = self;
         let body = body.build(tycker, env);
         let body_ty = tycker.statics.annotations_compu[&body];
-        let ty = Thunk(body_ty).build(tycker, env);
+        let ty = cs::Thk(body_ty).build(tycker, env);
         Alloc::alloc(tycker, Thunk(body), ty)
     }
 }
@@ -713,16 +683,6 @@ impl Tycker {
 
 /* ------------------------------- Computation ------------------------------ */
 
-impl Construct<CompuId> for CompuId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> CompuId {
-        self
-    }
-}
-impl Construct<Result<CompuId>> for CompuId {
-    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<CompuId> {
-        Ok(self)
-    }
-}
 // computation value abstraction
 impl<P> cs::HAbs<P>
 where
@@ -992,7 +952,7 @@ where
         let Ret(val) = self;
         let val = val.build(tycker, env);
         let val_ty = tycker.statics.annotations_value[&val];
-        let ret_ty = Ret(val_ty).build(tycker, env);
+        let ret_ty = cs::Ret(val_ty).build(tycker, env);
         Alloc::alloc(tycker, Ret(val), ret_ty)
     }
 }
@@ -1004,7 +964,7 @@ where
         let Ret(val) = self;
         let val = val.build(tycker, env)?;
         let val_ty = tycker.statics.annotations_value[&val];
-        let ret_ty = Ret(val_ty).build(tycker, env);
+        let ret_ty = cs::Ret(val_ty).build(tycker, env);
         Ok(Alloc::alloc(tycker, Ret(val), ret_ty))
     }
 }

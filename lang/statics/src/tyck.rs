@@ -1358,7 +1358,7 @@ impl Tyck for SEnv<su::TermId> {
                     let switch = {
                         match switch {
                             | Switch::Ana(AnnId::Type(ty)) => {
-                                let thunk_app_ty: ss::TypeId = ss::Thunk(ty).build(tycker, &self.env);
+                                let thunk_app_ty: ss::TypeId = cs::Thk(ty).build(tycker, &self.env);
                                 Switch::Ana(thunk_app_ty.into())
                             }
                             | _ => switch,
@@ -1669,7 +1669,7 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let thunk_app_body_ty = ss::Thunk(body_ty).build(tycker, &self.env);
+                let thunk_app_body_ty = cs::Thk(body_ty).build(tycker, &self.env);
                 let thunk = Alloc::alloc(tycker, ss::Thunk(body_out), thunk_app_body_ty);
                 TermAnnId::Value(thunk, thunk_app_body_ty)
             }
@@ -1695,7 +1695,7 @@ impl Tyck for SEnv<su::TermId> {
                             let ana_ty_kd = tycker.statics.annotations_type[&ana_ty].to_owned();
                             Lub::lub_k(ctype, ana_ty_kd, tycker)?;
                             // if ana, then ana the body with thunked body_ty
-                            ss::Thunk(ana_ty).build(tycker, &self.env)
+                            cs::Thk(ana_ty).build(tycker, &self.env)
                         }
                     }
                 };
@@ -1741,7 +1741,7 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let ret_app_body_ty = ss::Ret(body_ty).build(tycker, &self.env);
+                let ret_app_body_ty = cs::Ret(body_ty).build(tycker, &self.env);
                 let ret = Alloc::alloc(tycker, ss::Ret(body_out), ret_app_body_ty);
                 TermAnnId::Compu(ret, ret_app_body_ty)
             }

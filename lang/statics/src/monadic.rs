@@ -139,7 +139,7 @@ mod syntax_impl {
 /// + `T: VType` -> `Top`
 /// + `T: CType` -> `Algebra M T`
 /// + `T: K_1 -> K_2` -> `forall X: K_1 . Thk (Sig_K_1(X)) -> Sig_K_2(T X)`
-pub fn signature_translation(
+fn signature_translation(
     tycker: &mut Tycker, monad_ty: TypeId, env: &Env<AnnId>, ty: TypeId,
 ) -> Result<TypeId> {
     let kd = cs::TypeOf(ty).build(tycker, env);
@@ -149,7 +149,7 @@ pub fn signature_translation(
         | Kind::Arrow(Arrow(kd_1, _)) => cs::Forall(cs::Ann(None, kd_1), |abst| {
             let ty_1 = cs::Ann(abst, kd_1);
             Arrow(
-                Thunk(cs::Signature { monad_ty, ty: ty_1 }),
+                cs::Thk(cs::Signature { monad_ty, ty: ty_1 }),
                 cs::Signature { monad_ty, ty: App(ty, ty_1) },
             )
         })
@@ -168,7 +168,7 @@ impl StructureEnv {
     pub fn new() -> Self {
         Self { defs: HashMap::new(), absts: HashMap::new() }
     }
-    pub fn extend_with_abst(&self, abst: AbstId, str: ValueId) -> Self {
+    fn extend_with_abst(&self, abst: AbstId, str: ValueId) -> Self {
         let mut new = self.clone();
         new.absts.insert(abst, str);
         new
@@ -176,7 +176,7 @@ impl StructureEnv {
 }
 
 /// Structure Translation `Str(T)`
-pub fn structure_translation(
+fn structure_translation(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
     env: &Env<AnnId>, ty: TypeId,
 ) -> Result<CompuId> {
@@ -212,7 +212,7 @@ pub fn structure_translation(
             tycker.try_compu_tabs(env, tvar.to_owned(), kd, |tycker, _env, _tvar_def, abst| {
                 let svar = VarName(format!("str_{}", tvar.as_str()));
                 let svar_ty =
-                    Thunk(cs::Signature { monad_ty, ty: cs::AbstTy(abst) }).build(tycker, env)?;
+                cs::Thk(cs::Signature { monad_ty, ty: cs::AbstTy(abst) }).build(tycker, env)?;
                 tycker.try_compu_vabs(env, svar, svar_ty, |tycker, _env, str_def| {
                     let str = Alloc::alloc(tycker, str_def, svar_ty);
                     let str_env = &str_env.extend_with_abst(abst, str);
@@ -246,7 +246,7 @@ pub fn structure_translation(
             // output: fn (X : CType) (_ : Thk (Sig_CType(X))) -> <top>
             tycker.try_compu_tabs(env, "_", CType, |tycker, _env, _tvar, abst| {
                 let thk_sig =
-                    Thunk(cs::Signature { monad_ty, ty: cs::AbstTy(abst) }).build(tycker, env)?;
+                cs::Thk(cs::Signature { monad_ty, ty: cs::AbstTy(abst) }).build(tycker, env)?;
                 tycker.try_compu_vabs(env, "_", thk_sig, |tycker, _env, _var| {
                     // <top> = comatch end
                     Ok(cs::Top.build(tycker, env))
@@ -260,7 +260,7 @@ pub fn structure_translation(
             tycker.try_compu_tabs(env, "_", VType, |tycker, _env, _tvar, abst_x| {
                 let abst_x_ty = cs::AbstTy(abst_x).build(tycker, env);
                 let thk_sig =
-                    Thunk(cs::Signature { monad_ty, ty: abst_x_ty }).build(tycker, env)?;
+                cs::Thk(cs::Signature { monad_ty, ty: abst_x_ty }).build(tycker, env)?;
                 tycker.try_compu_vabs(env, "_", thk_sig, |tycker, _env, _var| {
                     // <monadic_bind> = fn (Z : VType) -> ! monad_impl .bind Z X
                     tycker.try_compu_tabs(env, "Z", VType, |tycker, _env, _tvar_z, abst_z| {
@@ -281,7 +281,7 @@ pub fn structure_translation(
                 tycker.try_compu_vabs(env, "mz", mz_ty, |tycker, env, var_mz| -> Result<_> {
                     let ty_p_ = cs::TypeLift { monad_ty, ty: ty_p }.build(tycker, env)?;
                     let ty_b_ = cs::TypeLift { monad_ty, ty: ty_b }.build(tycker, env)?;
-                    let f_ty = Thunk(Arrow(abst_z_ty, Arrow(ty_p_, ty_b_)));
+                    let f_ty = cs::Thk(Arrow(abst_z_ty, Arrow(ty_p_, ty_b_)));
                     tycker.try_compu_vabs(env, "f", f_ty, |tycker, env, var_f| {
                         tycker.try_compu_vabs(env, "x", ty_p_, |tycker, env, var_x| {
                             let alg_b = cs::Structure { monad_ty, monad_impl, str_env, ty: ty_b }
@@ -307,7 +307,7 @@ pub fn structure_translation(
 }
 
 /// Carrier (Type) Translation `[T]`
-pub fn type_translation(
+fn type_translation(
     tycker: &mut Tycker, monad_ty: TypeId, env: &Env<AnnId>, ty: TypeId,
 ) -> Result<TypeId> {
     let kd = cs::TypeOf(ty).build(tycker, env);
@@ -358,7 +358,7 @@ pub fn type_translation(
             let Exists(abst, ty) = ty;
             let abst_kd = cs::TypeOf(abst).build(tycker, env);
             let ty_abst = Alloc::alloc(tycker, abst, abst_kd);
-            let thk_sig = Thunk(cs::Signature { monad_ty, ty: ty_abst }).build(tycker, env)?;
+            let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: ty_abst }).build(tycker, env)?;
             let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
             let prod = Prod(thk_sig, ty_).build(tycker, env);
             cs::Exists(abst, |_| prod).build(tycker, env)
@@ -391,7 +391,7 @@ pub fn type_translation(
             let Forall(abst, ty) = ty;
             let abst_kd = cs::TypeOf(abst).build(tycker, env);
             let ty_abst = Alloc::alloc(tycker, abst, abst_kd);
-            let thk_sig = Thunk(cs::Signature { monad_ty, ty: ty_abst }).build(tycker, env)?;
+            let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: ty_abst }).build(tycker, env)?;
             let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
             cs::Forall(abst, |_| Arrow(thk_sig, ty_)).build(tycker, env)
         }
@@ -400,7 +400,7 @@ pub fn type_translation(
 }
 
 /// Term Translation (Value) `[V]`
-pub fn value_translation(
+fn value_translation(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
     env: &Env<AnnId>, value: ValueId,
 ) -> Result<ValueId> {
@@ -451,7 +451,7 @@ pub fn value_translation(
 }
 
 /// Term Translation (Computation) `[C]`
-pub fn computation_translation(
+fn computation_translation(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
     env: &Env<AnnId>, compu: CompuId,
 ) -> Result<CompuId> {
@@ -481,7 +481,7 @@ pub fn computation_translation(
             cs::HAbs(cs::Ann(def, param_kd_)).try_tbody(
                 (tycker, env),
                 |tycker, env, _def, abst| {
-                    let thk_sig = Thunk(cs::Signature { monad_ty, ty: cs::AbstTy(abst) })
+                    let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: cs::AbstTy(abst) })
                         .build(tycker, env)?;
                     let str_name = {
                         use crate::fmt::*;
@@ -538,7 +538,7 @@ pub fn computation_translation(
 }
 
 /// Monadic Block Elaboration (Value)
-pub fn value_monadic_elaboration(
+fn value_monadic_elaboration(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
     env: &Env<AnnId>, value: ValueId,
 ) -> Result<ValueId> {
@@ -552,7 +552,7 @@ pub fn value_monadic_elaboration(
 }
 
 /// Monadic Block Elaboration (Computation)
-pub fn computation_monadic_elaboration(
+fn computation_monadic_elaboration(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
     env: &Env<AnnId>, compu: CompuId,
 ) -> Result<CompuId> {
