@@ -1,9 +1,14 @@
 //! Constructors for patterns, types, and terms in [`StaticsArena`].
 //!
 //! This module provides the [`Construct`] trait, which describes a convenient DSL for
-//! writing Zydeco programs in Rust. Its semantics is as follows:
+//! writing Zydeco programs in Rust. If you're familiar with HOAS (High Order Abstract Syntax),
+//! we're trying to achieve exactly the same in this trait.
+//! [`Construct`] has the following semantics:
 //!
 //! `impl` [`Construct<T>`] for `S` means that `S` can be used to construct `T`
+//! 
+//! 
+//! ## Comparison with [`Alloc`]
 //!
 //! The [`Construct`] API is an improvement based on [`Alloc`] in that unlike `Alloc`
 //! which requires feeding annotations manually, it tries to infer the annotations
@@ -16,6 +21,34 @@
 //! In conclusion, it's recommended to use `Construct` instead of `Alloc` for constructing
 //! Zydeco programs in Rust. Example use cases are wrapped as legacy methods in [`Tycker`],
 //! as well as static tests in `<sort>_test` modules.
+//! 
+//! 
+//! ## Advice on writing Zydeco programs in [`Construct`] style
+//! 
+//! [`Construct`] works very similar to how monadic expressions work (e.g. in Haskell).
+//! That is, you should think of them as a thin piece of syntax or "recipe" for
+//! constructing terms that may have interactions with the `tycker`, or side effects
+//! in general.
+//! 
+//! If there's a side effect that is not currently supported by [`Construct`], you should
+//! create a new structure in [`syntax`] module, and implement [`Construct`] for it.
+//! 
+//! 
+//! ## Advice on compile-time debugging
+//! 
+//! When your Zydeco program written in [`Construct`] fails to compile, it's likely
+//! that you're not constructing the term correctly; if not, that's a bug in this module,
+//! which is sad. (>_<)
+//! 
+//! To find out what's happening, you should first try to break down the term that's been
+//! constructed into smaller pieces, and see if you can find the problem.
+//! Two useful approaches are:
+//! + Insert small and trivial terms like `cs::TopTy` for type, `cs::Top` for computation,
+//!   and `Thunk(cs::Top)` for value, and see if the program can partially compile.
+//! + Break subterms into let bindings `let small = ...;`, and see if the small bindees
+//!   can compile by calling `small.build(tycker, env)`.
+//! 
+//! Good luck (つ´ω｀)つ
 
 use crate::{syntax::*, *};
 
@@ -27,7 +60,13 @@ use crate::{syntax::*, *};
 /// The trait is different from [`Alloc`] in that it does not require feeding annotations
 /// manually, but instead infers them from the context.
 pub trait Construct<T>: Sized {
+    /// Build the term with the given type checker and environment.
+    ///
+    /// See [`Construct`] level documentation for more details.
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<T>;
+
+    /// Turn the result of [`Construct::build`] into a [`ResultKont`].
+    /// Eaiser to use under a `_k` context.
     fn build_k(self, tycker: &mut Tycker, env: &Env<AnnId>) -> ResultKont<T> {
         let res = self.build(tycker, env);
         tycker.err_p_to_k(res)
@@ -50,21 +89,15 @@ impl<T> Construct<T> for Result<T> {
     }
 }
 
-/// Syntax used by [`Construct`]. Specifically,
+/// Syntax used by [`Construct`]. They work together as part of the HOAS
+/// (High Order Abstract Syntax) for Zydeco in Rust. Specifically,
 ///
+/// + Structures that carry semantic actions, such as `Ann`, `Pat`, `Ty`, `TypeOf`,
+///   `Fresh`, and other structures related to the algebra translation.
 /// + Some structures that are not defined as part of the common syntax of Zydeco,
 ///   such as `Monad` and `Algebra`.
 /// + Some existing structures that may take a more convenient syntax,
 ///   such as `Ann`, `Ctor`, and `Dtor`.
-/// + Head-only structures (starting with `H`) that implements methods for
-///   generating the whole term accordingly.
-///
-/// The head-only structures are the most interesting in that they are invented
-/// only because of the limitation of Rust's trait constraint solver.
-/// These head-only structures are the first part of their corresponding HOAS.
-/// They store the positive data for parameters, and methods implementing different
-/// `apply` methods will be provided to take a user-provided continuation and
-/// generate the whole term.
 pub mod syntax {
     /// `Ann { tm: S, ty: A }`
     #[derive(Clone, Copy)]
@@ -87,6 +120,11 @@ pub mod syntax {
     pub struct Fresh<T>(pub T);
     // Todo: complete fresh
 
+    /// Construct to value immediately
+    pub struct Value<T>(pub T);
+    /// Construct to computation immediately
+    pub struct Compu<T>(pub T);
+
     /// `Thk B`
     pub struct Thk<B>(pub B);
     /// `Ret A`
@@ -104,6 +142,15 @@ pub mod syntax {
     /// 1. M is `monad_ty` of kind `VType -> CType`
     /// 2. R is `carrier` of kind `CType`
     pub struct Algebra<M, R>(pub M, pub R);
+
+    /// `data ... end`
+    ///
+    /// `T` here should only be DataId
+    pub struct Data<T, F>(pub T, pub F);
+    /// `codata ... end`
+    ///
+    /// `T` here should only be CoDataId
+    pub struct CoData<T, F>(pub T, pub F);
 
     /// `exists X. ...`
     ///
@@ -356,23 +403,21 @@ where
         abst.build(tycker, env)
     }
 }
-
-// impl<S, F, T> Construct<TypeId> for Abs<S, F>
-// where
-//     S: Construct<TPatId>,
-//     F: Fn(&mut Tycker, &Env<AnnId>, TPatId, DefId, KindId) -> T,
-//     T: Construct<TypeId>,
-// {
-//     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
-//         let Abs(param, ty) = self;
-//         let tpat = param.build(tycker, env);
-//         let (def, param_kd) = tpat.destruct_def(tycker);
-//         let body = ty(tycker, env, tpat, def, param_kd).build(tycker, env);
-//         let body_kd = tycker.statics.annotations_type[&body];
-//         let kd = Arrow(param_kd, body_kd).build(tycker, env);
-//         Alloc::alloc(tycker, Abs(tpat, body), kd)
-//     }
-// }
+impl<S, F, T> Construct<TypeId> for Abs<S, F>
+where
+    S: Construct<TPatId>,
+    F: FnOnce(TPatId, DefId, KindId) -> T,
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+        let Abs(param, ty) = self;
+        let tpat = param.build(tycker, env)?;
+        let (def, param_kd) = tpat.destruct_def(tycker);
+        let body = ty(tpat, def, param_kd).build(tycker, env)?;
+        let kd = Arrow(param_kd, cs::TypeOf(body)).build(tycker, env)?;
+        Ok(Alloc::alloc(tycker, Abs(tpat, body), kd))
+    }
+}
 impl<S, T> Construct<TypeId> for App<S, T>
 where
     S: Construct<TypeId>,
@@ -405,6 +450,27 @@ impl Construct<TypeId> for StringTy {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
         let AnnId::Type(ty) = env[tycker.prim.string.get()] else { unreachable!() };
         Ok(ty)
+    }
+}
+impl<F, T> Construct<TypeId> for cs::Data<DataId, F>
+where
+    F: Clone + FnOnce(CtorName, TypeId) -> T,
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+        let cs::Data(data, f) = self;
+        let arms = tycker.statics.datas.defs[&data].clone();
+        let arms_ = arms
+            .into_iter()
+            .map(|(ctor, ty)| {
+                let ty_ = (f.clone())(ctor.clone(), ty).build(tycker, env)?;
+                Ok((ctor, ty_))
+            })
+            .collect::<Result<im::Vector<_>>>()?;
+        let data_ = Data::new(arms_.iter().cloned());
+        let data = tycker.statics.datas.lookup_or_alloc(arms_, data_);
+        let kd = VType.build(tycker, env)?;
+        Ok(Alloc::alloc(tycker, data, kd))
     }
 }
 impl Construct<TypeId> for ThkTy {
@@ -482,6 +548,27 @@ impl Construct<TypeId> for cs::TopTy {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
         let AnnId::Type(ty) = env[tycker.prim.top.get()] else { unreachable!() };
         Ok(ty)
+    }
+}
+impl<F, T> Construct<TypeId> for cs::CoData<CoDataId, F>
+where
+    F: Clone + FnOnce(DtorName, TypeId) -> T,
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+        let cs::CoData(coda, f) = self;
+        let arms = tycker.statics.codatas.defs[&coda].clone();
+        let arms_ = arms
+            .into_iter()
+            .map(|(dtor, ty)| {
+                let ty_ = (f.clone())(dtor.clone(), ty).build(tycker, env)?;
+                Ok((dtor, ty_))
+            })
+            .collect::<Result<im::Vector<_>>>()?;
+        let coda_ = CoData::new(arms_.iter().cloned());
+        let coda = tycker.statics.codatas.lookup_or_alloc(arms_, coda_);
+        let kd = CType.build(tycker, env)?;
+        Ok(Alloc::alloc(tycker, coda, kd))
     }
 }
 impl<S, T> Construct<TypeId> for Arrow<S, T>
@@ -631,10 +718,25 @@ where
 
 /* ---------------------------------- Value --------------------------------- */
 
+impl<T> Construct<ValueId> for cs::Value<T>
+where
+    T: Construct<ValueId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<ValueId> {
+        let cs::Value(arg) = self;
+        arg.build(tycker, env)
+    }
+}
 impl Construct<ValueId> for DefId {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<ValueId> {
         let AnnId::Type(ty) = tycker.statics.annotations_var[&self] else { unreachable!() };
         Ok(Alloc::alloc(tycker, self, ty))
+    }
+}
+impl Construct<ValueId> for Option<DefId> {
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<ValueId> {
+        let Some(def) = self else { unreachable!() };
+        def.build(tycker, _env)
     }
 }
 impl<T> Construct<ValueId> for Thunk<T>
@@ -688,6 +790,15 @@ impl Tycker {
 
 /* ------------------------------- Computation ------------------------------ */
 
+impl<T> Construct<CompuId> for cs::Compu<T>
+where
+    T: Construct<CompuId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let cs::Compu(arg) = self;
+        arg.build(tycker, env)
+    }
+}
 // computation value abstraction
 impl<P> cs::HAbs<P>
 where

@@ -7,7 +7,7 @@ impl Tycker {
     pub fn register_prim_ty(
         &mut self, mut env: SEnv<()>, def: DefId, prim: Type, syn_kd: su::TermId,
     ) -> ResultKont<SEnv<()>> {
-        let kd = match env.mk(syn_kd).tyck(self, Action::syn())?.as_term_static() {
+        let kd = match env.mk(syn_kd).tyck_k(self, Action::syn())?.as_term_static() {
             | AnnId::Kind(kd) => kd,
             | AnnId::Set | AnnId::Type(_) => unreachable!(),
         };
@@ -87,11 +87,11 @@ impl Tycker {
                 let Some(ty) = ty else {
                     self.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
                 };
-                let ty = match env.mk(ty).tyck(self, Action::syn())?.as_term_static() {
+                let ty = match env.mk(ty).tyck_k(self, Action::syn())?.as_term_static() {
                     | AnnId::Type(ty) => ty,
                     | AnnId::Set | AnnId::Kind(_) => unreachable!(),
                 };
-                let pat_out_ann = env.mk(binder).tyck(self, Action::ana(ty.into()))?;
+                let pat_out_ann = env.mk(binder).tyck_k(self, Action::ana(ty.into()))?;
                 let binder = match pat_out_ann {
                     | PatAnnId::Type(_, _) => unreachable!(),
                     | PatAnnId::Value(vpat, _) => vpat,
