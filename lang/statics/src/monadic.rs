@@ -142,7 +142,7 @@ mod syntax_impl {
 pub fn signature_translation(
     tycker: &mut Tycker, monad_ty: TypeId, env: &Env<AnnId>, ty: TypeId,
 ) -> Result<TypeId> {
-    let kd = tycker.statics.annotations_type[&ty].to_owned();
+    let kd = cs::TypeOf(ty).build(tycker, env);
     let res = match tycker.kind_filled(&kd)?.to_owned() {
         | Kind::VType(VType) => cs::TopTy.build(tycker, env),
         | Kind::CType(CType) => cs::Algebra(monad_ty, ty).build(tycker, env),
@@ -310,7 +310,7 @@ pub fn structure_translation(
 pub fn type_translation(
     tycker: &mut Tycker, monad_ty: TypeId, env: &Env<AnnId>, ty: TypeId,
 ) -> Result<TypeId> {
-    let kd = tycker.statics.annotations_type[&ty].to_owned();
+    let kd = cs::TypeOf(ty).build(tycker, env);
     let res = match tycker.type_filled(&ty)?.to_owned() {
         | Type::Var(def) => Alloc::alloc(tycker, def, kd),
         | Type::Abst(abst) => Alloc::alloc(tycker, abst, kd),
@@ -344,7 +344,8 @@ pub fn type_translation(
                 .collect::<Result<im::Vector<_>>>()?;
             let data_ = Data::new(arms_.iter().cloned());
             let data = tycker.statics.datas.lookup_or_alloc(arms_, data_);
-            Alloc::alloc(tycker, data, tycker.statics.annotations_type[&ty].clone())
+            let kd = cs::TypeOf(ty).build(tycker, env);
+            Alloc::alloc(tycker, data, kd)
         }
         | Type::Unit(UnitTy) => ty,
         | Type::Prod(ty) => {
@@ -355,7 +356,7 @@ pub fn type_translation(
         }
         | Type::Exists(ty) => {
             let Exists(abst, ty) = ty;
-            let abst_kd = tycker.statics.annotations_abst[&abst];
+            let abst_kd = cs::TypeOf(abst).build(tycker, env);
             let ty_abst = Alloc::alloc(tycker, abst, abst_kd);
             let thk_sig = Thunk(cs::Signature { monad_ty, ty: ty_abst }).build(tycker, env)?;
             let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
@@ -377,7 +378,8 @@ pub fn type_translation(
                 .collect::<Result<im::Vector<_>>>()?;
             let coda_ = CoData::new(arms_.iter().cloned());
             let coda = tycker.statics.codatas.lookup_or_alloc(arms_, coda_);
-            Alloc::alloc(tycker, coda, tycker.statics.annotations_type[&ty].clone())
+            let kd = cs::TypeOf(ty).build(tycker, env);
+            Alloc::alloc(tycker, coda, kd)
         }
         | Type::Arrow(ty) => {
             let Arrow(ty_1, ty_2) = ty;
@@ -387,7 +389,7 @@ pub fn type_translation(
         }
         | Type::Forall(ty) => {
             let Forall(abst, ty) = ty;
-            let abst_kd = tycker.statics.annotations_abst[&abst];
+            let abst_kd = cs::TypeOf(abst).build(tycker, env);
             let ty_abst = Alloc::alloc(tycker, abst, abst_kd);
             let thk_sig = Thunk(cs::Signature { monad_ty, ty: ty_abst }).build(tycker, env)?;
             let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
@@ -402,7 +404,7 @@ pub fn value_translation(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
     env: &Env<AnnId>, value: ValueId,
 ) -> Result<ValueId> {
-    let ty = tycker.statics.annotations_value[&value];
+    let ty = cs::TypeOf(value).build(tycker, env);
     let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
     let res = match tycker.value(&value).to_owned() {
         | Value::Hole(Hole) => Alloc::alloc(tycker, Hole, ty_),
@@ -517,11 +519,10 @@ pub fn computation_translation(
         }
         | Compu::Ret(compu) => {
             let Ret(value) = compu;
-            let value_ty = tycker.statics.annotations_value[&value];
             App(
                 App(
                     cs::Dtor(Force(monad_impl), ".return"),
-                    cs::Ty(cs::TypeLift { monad_ty, ty: value_ty }),
+                    cs::Ty(cs::TypeLift { monad_ty, ty: cs::TypeOf(value) }),
                 ),
                 cs::TermLift { monad_ty, monad_impl, str_env, tm: value },
             )

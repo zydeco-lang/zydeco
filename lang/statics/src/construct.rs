@@ -69,8 +69,13 @@ pub mod syntax {
     ///
     /// see [`super::App`] implementations on term level for examples
     pub struct Ty<T>(pub T);
+    /// take the annotated type of a term, or the kind of a type
+    pub struct TypeOf<T>(pub T);
+    /// fresh variable [`super::DefId`] or abstract type [`super::AbstId`]
+    pub struct Fresh<T>(pub T);
+    // Todo: complete fresh
 
-    /// generates an abstract type
+    /// generates an abstract type [`super::TypeId`] from [`super::AbstId`]
     pub struct AbstTy<T>(pub T);
     /// `codata end`
     pub struct TopTy;
@@ -210,6 +215,23 @@ impl Construct<KindId> for KindId {
         self
     }
 }
+impl Construct<Result<KindId>> for KindId {
+    fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<KindId> {
+        Ok(self)
+    }
+}
+impl Construct<KindId> for cs::TypeOf<TypeId> {
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> KindId {
+        let cs::TypeOf(ty) = self;
+        tycker.statics.annotations_type[&ty]
+    }
+}
+impl Construct<KindId> for cs::TypeOf<AbstId> {
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> KindId {
+        let cs::TypeOf(abst) = self;
+        tycker.statics.annotations_abst[&abst]
+    }
+}
 impl Construct<KindId> for VType {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> KindId {
         let AnnId::Kind(kd) = env[tycker.prim.vtype.get()] else { unreachable!() };
@@ -283,6 +305,18 @@ impl Construct<TypeId> for TypeId {
 impl Construct<Result<TypeId>> for TypeId {
     fn build(self, _tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<TypeId> {
         Ok(self)
+    }
+}
+impl Construct<TypeId> for cs::TypeOf<ValueId> {
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> TypeId {
+        let cs::TypeOf(value) = self;
+        tycker.statics.annotations_value[&value]
+    }
+}
+impl Construct<TypeId> for cs::TypeOf<CompuId> {
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> TypeId {
+        let cs::TypeOf(compu) = self;
+        tycker.statics.annotations_compu[&compu]
     }
 }
 impl<K> Construct<TypeId> for cs::Ann<Hole, (K, su::TermId)>
