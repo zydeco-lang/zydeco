@@ -286,7 +286,7 @@ impl SccDeclarations<'_> {
                             // administrative
                             tycker.stack.push_back(TyckTask::Exec(id.to_owned()));
                             let su::Exec(term) = decl;
-                            let os = ss::OSTy.build(tycker, &env.env);
+                            let os = ss::OSTy.build_k(tycker, &env.env)?;
                             let out_ann = env.mk(term).tyck(tycker, Action::ana(os.into()))?;
                             let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                             tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
@@ -622,7 +622,7 @@ impl Tyck for SEnv<su::PatId> {
             },
             | Pat::Triv(pat) => {
                 let su::Triv = pat;
-                let ann = ss::UnitTy.build(tycker, &self.env);
+                let ann = ss::UnitTy.build_k(tycker, &self.env)?;
                 let triv = Alloc::alloc(tycker, ss::Triv, ann);
                 match switch {
                     | Switch::Syn => PatAnnId::Value(triv, ann),
@@ -943,7 +943,7 @@ impl Tyck for SEnv<su::TermId> {
             }
             | Tm::Triv(term) => {
                 let su::Triv = term;
-                let unit = ss::UnitTy.build(tycker, &self.env);
+                let unit = ss::UnitTy.build_k(tycker, &self.env)?;
                 let triv = Alloc::alloc(tycker, ss::Triv, unit);
                 match switch {
                     | Switch::Syn => TermAnnId::Value(triv, unit),
@@ -1358,7 +1358,7 @@ impl Tyck for SEnv<su::TermId> {
                     let switch = {
                         match switch {
                             | Switch::Ana(AnnId::Type(ty)) => {
-                                let thunk_app_ty: ss::TypeId = cs::Thk(ty).build(tycker, &self.env);
+                                let thunk_app_ty: ss::TypeId = cs::Thk(ty).build_k(tycker, &self.env)?;
                                 Switch::Ana(thunk_app_ty.into())
                             }
                             | _ => switch,
@@ -1669,7 +1669,7 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let thunk_app_body_ty = cs::Thk(body_ty).build(tycker, &self.env);
+                let thunk_app_body_ty = cs::Thk(body_ty).build_k(tycker, &self.env)?;
                 let thunk = Alloc::alloc(tycker, ss::Thunk(body_out), thunk_app_body_ty);
                 TermAnnId::Value(thunk, thunk_app_body_ty)
             }
@@ -1695,7 +1695,7 @@ impl Tyck for SEnv<su::TermId> {
                             let ana_ty_kd = tycker.statics.annotations_type[&ana_ty].to_owned();
                             Lub::lub_k(ctype, ana_ty_kd, tycker)?;
                             // if ana, then ana the body with thunked body_ty
-                            cs::Thk(ana_ty).build(tycker, &self.env)
+                            cs::Thk(ana_ty).build_k(tycker, &self.env)?
                         }
                     }
                 };
@@ -1741,7 +1741,7 @@ impl Tyck for SEnv<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let ret_app_body_ty = cs::Ret(body_ty).build(tycker, &self.env);
+                let ret_app_body_ty = cs::Ret(body_ty).build_k(tycker, &self.env)?;
                 let ret = Alloc::alloc(tycker, ss::Ret(body_out), ret_app_body_ty);
                 TermAnnId::Compu(ret, ret_app_body_ty)
             }
@@ -2142,17 +2142,17 @@ impl Tyck for SEnv<su::TermId> {
                 use zydeco_syntax::Literal as Lit;
                 let (lit, ty) = match lit {
                     | Lit::Int(i) => {
-                        let ty = ss::IntTy.build(tycker, &self.env);
+                        let ty = ss::IntTy.build_k(tycker, &self.env)?;
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Int(i), ty)
                     }
                     | Lit::String(s) => {
-                        let ty = ss::StringTy.build(tycker, &self.env);
+                        let ty = ss::StringTy.build_k(tycker, &self.env)?;
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::String(s), ty)
                     }
                     | Lit::Char(c) => {
-                        let ty = ss::CharTy.build(tycker, &self.env);
+                        let ty = ss::CharTy.build_k(tycker, &self.env)?;
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Char(c), ty)
                     }
