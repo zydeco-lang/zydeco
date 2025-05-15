@@ -65,18 +65,19 @@ pub mod syntax {
     /// `Ann { tm: S, ty: A }`
     #[derive(Clone, Copy)]
     pub struct Ann<S, A>(pub S, pub A);
+
     /// type indicator; used to resolve trait conflicts
     ///
     /// see [`super::App`] implementations on term level for examples
     pub struct Ty<T>(pub T);
+
     /// take the annotated type of a term, or the kind of a type
     pub struct TypeOf<T>(pub T);
+
     /// fresh variable [`super::DefId`] or abstract type [`super::AbstId`]
     pub struct Fresh<T>(pub T);
     // Todo: complete fresh
 
-    /// generates an abstract type [`super::TypeId`] from [`super::AbstId`]
-    pub struct AbstTy<T>(pub T);
     /// `Thk B`
     pub struct Thk<B>(pub B);
     /// `Ret A`
@@ -328,12 +329,12 @@ impl Construct<TypeId> for AbstId {
         Alloc::alloc(tycker, self, kd)
     }
 }
-impl<T> Construct<TypeId> for cs::AbstTy<T>
+impl<T> Construct<TypeId> for cs::Ty<T>
 where
     T: Construct<AbstId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> TypeId {
-        let cs::AbstTy(abst) = self;
+        let cs::Ty(abst) = self;
         let abst = abst.build(tycker, env);
         abst.build(tycker, env)
     }

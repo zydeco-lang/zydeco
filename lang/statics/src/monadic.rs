@@ -212,7 +212,7 @@ fn structure_translation(
             tycker.try_compu_tabs(env, tvar.to_owned(), kd, |tycker, _env, _tvar_def, abst| {
                 let svar = VarName(format!("str_{}", tvar.as_str()));
                 let svar_ty =
-                    cs::Thk(cs::Signature { monad_ty, ty: cs::AbstTy(abst) }).build(tycker, env)?;
+                    cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) }).build(tycker, env)?;
                 tycker.try_compu_vabs(env, svar, svar_ty, |tycker, _env, str_def| {
                     let str = Alloc::alloc(tycker, str_def, svar_ty);
                     let str_env = &str_env.extend_with_abst(abst, str);
@@ -246,7 +246,7 @@ fn structure_translation(
             // output: fn (X : CType) (_ : Thk (Sig_CType(X))) -> <top>
             tycker.try_compu_tabs(env, "_", CType, |tycker, _env, _tvar, abst| {
                 let thk_sig =
-                    cs::Thk(cs::Signature { monad_ty, ty: cs::AbstTy(abst) }).build(tycker, env)?;
+                    cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) }).build(tycker, env)?;
                 tycker.try_compu_vabs(env, "_", thk_sig, |tycker, _env, _var| {
                     // <top> = comatch end
                     Ok(cs::Top.build(tycker, env))
@@ -258,13 +258,13 @@ fn structure_translation(
         | Type::Ret(RetTy) => {
             // output: fn (X : VType) (_ : Thk (Sig_VType(X))) -> <monadic_bind>
             tycker.try_compu_tabs(env, "_", VType, |tycker, _env, _tvar, abst_x| {
-                let abst_x_ty = cs::AbstTy(abst_x).build(tycker, env);
+                let abst_x_ty = cs::Ty(abst_x).build(tycker, env);
                 let thk_sig =
                     cs::Thk(cs::Signature { monad_ty, ty: abst_x_ty }).build(tycker, env)?;
                 tycker.try_compu_vabs(env, "_", thk_sig, |tycker, _env, _var| {
                     // <monadic_bind> = fn (Z : VType) -> ! monad_impl .bind Z X
                     tycker.try_compu_tabs(env, "Z", VType, |tycker, _env, _tvar_z, abst_z| {
-                        let abst_z_ty = cs::AbstTy(abst_z).build(tycker, env);
+                        let abst_z_ty = cs::Ty(abst_z).build(tycker, env);
                         let body = cs::Dtor(Force(monad_impl), ".bind");
                         let res = App(App(body, cs::Ty(abst_z_ty)), cs::Ty(abst_x_ty));
                         Ok(res)
@@ -276,7 +276,7 @@ fn structure_translation(
         | Type::Arrow(ty) => {
             let Arrow(ty_p, ty_b) = ty;
             tycker.try_compu_tabs(env, "Z", VType, |tycker, env, _tvar_z, abst_z| {
-                let abst_z_ty = cs::AbstTy(abst_z).build(tycker, env);
+                let abst_z_ty = cs::Ty(abst_z).build(tycker, env);
                 let mz_ty = App(monad_ty, abst_z_ty);
                 tycker.try_compu_vabs(env, "mz", mz_ty, |tycker, env, var_mz| -> Result<_> {
                     let ty_p_ = cs::TypeLift { monad_ty, ty: ty_p }.build(tycker, env)?;
@@ -481,8 +481,8 @@ fn computation_translation(
             cs::HAbs(cs::Ann(def, param_kd_)).try_tbody(
                 (tycker, env),
                 |tycker, env, _def, abst| {
-                    let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: cs::AbstTy(abst) })
-                        .build(tycker, env)?;
+                    let thk_sig =
+                        cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) }).build(tycker, env)?;
                     let str_name = {
                         use crate::fmt::*;
                         format!(
@@ -513,9 +513,7 @@ fn computation_translation(
         }
         | Compu::Force(compu) => {
             let Force(value) = compu;
-            let value_ =
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: value }.build(tycker, env)?;
-            Force(value_).build(tycker, env)
+            Force(cs::TermLift { monad_ty, monad_impl, str_env, tm: value }).build(tycker, env)?
         }
         | Compu::Ret(compu) => {
             let Ret(value) = compu;
