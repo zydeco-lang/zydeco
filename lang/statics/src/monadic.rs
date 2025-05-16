@@ -314,7 +314,7 @@ fn structure_translation(
         | Type::Arrow(ty) => {
             // input: A -> B
             let Arrow(ty_p, ty_b) = ty;
-            // output: fn (Z : VType) (mz : Thk (M Z)) (f: Thk (Z -> [A] -> [B])) -> <body>
+            // output: fn (Z : VType) (mz : Thk (M Z)) (f : Thk (Z -> [A] -> [B])) -> <body>
             Abs(cs::Ty(cs::Pat("Z", VType)), |_tvar, abst_z| {
                 let abst_z_ty = cs::Ty(abst_z);
                 let mz_ty = cs::Thk(App(monad_ty, abst_z_ty));
@@ -337,8 +337,45 @@ fn structure_translation(
             .build(tycker, env)?
         }
         | Type::Forall(ty) => {
+            // input: forall (X : K) . B
             let Forall(abst, ty) = ty;
-            cs::Top.build(tycker, env)?
+            let kd = cs::TypeOf(abst);
+            // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) -> <body>
+            Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
+                let abst_z_ty = cs::Ty(abst_z);
+                Abs(cs::Pat("mz", cs::Thk(App(monad_ty, abst_z_ty))), move |var_mz| {
+                    // construct abstract type X first
+                    cs::Abst(cs::Ann("X", kd), move |abst_x| {
+                        // <f_ty> = Thk (Z -> forall (X : K) . Thk (Sig_K(X)) -> [B])
+                        let f_ty = cs::Thk(Arrow(
+                            abst_z_ty,
+                            cs::Forall(abst_x, move |abst_x: AbstId| {
+                                let abst_x_ty = cs::Ty(abst_x);
+                                Arrow(
+                                    cs::Thk(cs::Signature { monad_ty, ty: abst_x_ty }),
+                                    cs::TypeLift { monad_ty, ty },
+                                )
+                            }),
+                        ));
+                        Abs(cs::Pat("f", f_ty), move |var_f| {
+                            // <body> = fn (X : K) (str_X : Thk (Sig_K(X))) -> Str(B) Z mz <kont>
+                            Abs(cs::Ty(abst_x), move |_, abst_x: AbstId| {
+                                let abst_x_ty = cs::Ty(abst_x);
+                                let sig = cs::Signature { monad_ty, ty: abst_x_ty };
+                                Abs(cs::Pat("str_X", cs::Thk(sig)), move |var_str_x| {
+                                    // <kont> = { fn (z : Z) -> ! f z X str_X }
+                                    let kont = Abs(cs::Pat("z", abst_z_ty), move |var_z| {
+                                        App(App(App(Force(var_f), var_z), abst_x_ty), var_str_x)
+                                    });
+                                    let str_ = cs::Structure { monad_ty, monad_impl, str_env, ty };
+                                    App(App(App(str_, abst_z_ty), var_mz), Thunk(kont))
+                                })
+                            })
+                        })
+                    })
+                })
+            })
+            .build(tycker, env)?
         }
     };
     Ok(res)

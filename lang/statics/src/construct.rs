@@ -48,6 +48,10 @@
 //! + Break subterms into let bindings `let small = ...;`, and see if the small bindees
 //!   can compile by calling `small.build(tycker, env)`.
 //!
+//! Finally, a word of caution:
+//! + If you're having issues regarding lifetime, make sure to put `move` on the closure,
+//!   since they implement [`FnOnce`] instead of [`Fn`].
+//!
 //! Good luck (つ´ω｀)つ
 
 use crate::{syntax::*, *};
@@ -114,6 +118,7 @@ pub mod syntax {
     pub struct Ty<T>(pub T);
 
     /// take the annotated type of a term, or the kind of a type
+    #[derive(Clone, Copy)]
     pub struct TypeOf<T>(pub T);
 
     /// fresh variable [`super::DefId`] or abstract type [`super::AbstId`]
@@ -121,6 +126,8 @@ pub mod syntax {
     /// currently used for new type pattern and value pattern
     pub struct Fresh<T>(pub T);
 
+    /// Construct to abstract type immediately
+    pub struct Abst<T, F>(pub T, pub F);
     /// Construct to value immediately
     pub struct Value<T>(pub T);
     /// Construct to computation immediately
@@ -263,6 +270,50 @@ where
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<DefId> {
         let cs::Ann(tm, ty) = self;
         cs::Ann(tm.to_string(), ty.into()).build(tycker, env)
+    }
+}
+
+/* -------------------------------- Abstract -------------------------------- */
+
+impl<T, F, C, R> Construct<R> for cs::Abst<T, F>
+where
+    T: Construct<AbstId>,
+    F: FnOnce(AbstId) -> C,
+    C: Construct<R>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<R> {
+        let cs::Abst(abst, f) = self;
+        let abst = abst.build(tycker, env)?;
+        f(abst).build(tycker, env)
+    }
+}
+impl<K> Construct<AbstId> for cs::Ann<VarName, K>
+where
+    K: Construct<KindId>,
+{
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<AbstId> {
+        let cs::Ann(var, kd) = self;
+        let kd = kd.build(tycker, _env)?;
+        let def = Alloc::alloc(tycker, var, kd.into());
+        Ok(Alloc::alloc(tycker, def, kd))
+    }
+}
+impl<K> Construct<AbstId> for cs::Ann<String, K>
+where
+    K: Construct<KindId>,
+{
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<AbstId> {
+        let cs::Ann(tm, kd) = self;
+        cs::Ann(VarName(tm), kd).build(tycker, _env)
+    }
+}
+impl<K> Construct<AbstId> for cs::Ann<&str, K>
+where
+    K: Construct<KindId>,
+{
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<AbstId> {
+        let cs::Ann(tm, kd) = self;
+        cs::Ann(tm.to_string(), kd).build(tycker, _env)
     }
 }
 
@@ -529,7 +580,7 @@ where
 }
 impl<F, A, T> Construct<TypeId> for cs::Exists<A, F>
 where
-    F: Fn(AbstId) -> T,
+    F: FnOnce(AbstId) -> T,
     A: Construct<AbstId>,
     T: Construct<TypeId>,
 {
@@ -856,8 +907,7 @@ where
         let Abs(vpat, body) = self;
         let vpat: VPatId = vpat.build(tycker, env)?;
         let (def, param_ty) = vpat.try_destruct_def(tycker);
-        let body = body(def);
-        let body = body.build(tycker, env)?;
+        let body = body(def).build(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
         let ty = Arrow(param_ty, body_ty).build(tycker, env)?;
         Ok(Alloc::alloc(tycker, Abs(vpat, body), ty))
@@ -901,6 +951,24 @@ where
         let abst = Alloc::alloc(tycker, def, param_kd);
         let body = body(def, abst);
         let body = body.build(tycker, env)?;
+        let body_ty = tycker.statics.annotations_compu[&body];
+        let ctype = CType.build(tycker, env)?;
+        let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);
+        Ok(Alloc::alloc(tycker, Abs(tpat, body), ty))
+    }
+}
+impl<F, T> Construct<CompuId> for Abs<cs::Ty<AbstId>, F>
+where
+    F: FnOnce(Option<DefId>, AbstId) -> T,
+    T: Construct<CompuId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let Abs(cs::Ty(abst), body) = self;
+        use zydeco_utils::arena::ArenaAccess;
+        let def = tycker.statics.abst_hints.get(&abst).cloned();
+        let param_kd = tycker.statics.annotations_abst[&abst];
+        let tpat: TPatId = cs::Ann(def, param_kd).build(tycker, env)?;
+        let body = body(def, abst).build(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
         let ctype = CType.build(tycker, env)?;
         let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);
@@ -1011,11 +1079,12 @@ where
     }
 }
 // bind
-impl<V, B, F> Construct<CompuId> for Bind<V, B, F>
+impl<V, B, F, R> Construct<CompuId> for Bind<V, B, F>
 where
     V: Construct<VarName>,
     B: Construct<CompuId>,
-    F: Fn(&mut Tycker, &Env<AnnId>, DefId) -> CompuId,
+    F: FnOnce(DefId) -> R,
+    R: Construct<CompuId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
         let Bind { binder, bindee, tail } = self;
@@ -1025,17 +1094,18 @@ where
         let var = binder.build(tycker, env)?;
         let def = Alloc::alloc(tycker, var, def_ty.into());
         let binder = Alloc::alloc(tycker, def, def_ty);
-        let tail = tail(tycker, env, def);
+        let tail = tail(def).build(tycker, env)?;
         let tail_ty = tycker.statics.annotations_compu[&tail];
         Ok(Alloc::alloc(tycker, Bind { binder, bindee, tail }, tail_ty))
     }
 }
 // pure bind
-impl<V, B, F> Construct<CompuId> for PureBind<V, B, F>
+impl<V, B, F, R> Construct<CompuId> for PureBind<V, B, F>
 where
     V: Construct<VarName>,
     B: Construct<ValueId>,
-    F: Fn(&mut Tycker, &Env<AnnId>, DefId) -> CompuId,
+    F: FnOnce(DefId) -> R,
+    R: Construct<CompuId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
         let PureBind { binder, bindee, tail } = self;
@@ -1044,7 +1114,7 @@ where
         let var = binder.build(tycker, env)?;
         let def = Alloc::alloc(tycker, var, def_ty.into());
         let binder = Alloc::alloc(tycker, def, def_ty);
-        let tail = tail(tycker, env, def);
+        let tail = tail(def).build(tycker, env)?;
         let tail_ty = tycker.statics.annotations_compu[&tail];
         Ok(Alloc::alloc(tycker, PureBind { binder, bindee, tail }, tail_ty))
     }
