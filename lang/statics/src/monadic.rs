@@ -241,15 +241,11 @@ fn structure_translation(
         | Type::App(ty) => {
             // input: S_f S_a
             let App(ty_f, ty_a) = ty;
-            // output: Str(S_f) Lift(S_a) Str(S_a)
-            let str_f =
-                cs::Structure { monad_ty, monad_impl, str_env, ty: ty_f }.build(tycker, env)?;
-            let ty_lift_a = cs::TypeLift { monad_ty, ty: ty_a }.build(tycker, env)?;
-            let str_f_app_sig: CompuId = App(str_f, cs::Ty(ty_lift_a)).build(tycker, env)?;
-            let str_a =
-                cs::Structure { monad_ty, monad_impl, str_env, ty: ty_a }.build(tycker, env)?;
-            let thk_str_a = Thunk(str_a).build(tycker, env);
-            App(str_f_app_sig, thk_str_a).build(tycker, env)?
+            // output: Str(S_f) Lift(S_a) { Str(S_a) }
+            let str_f = cs::Structure { monad_ty, monad_impl, str_env, ty: ty_f };
+            let ty_a_lift = cs::TypeLift { monad_ty, ty: ty_a };
+            let str_a = cs::Structure { monad_ty, monad_impl, str_env, ty: ty_a };
+            App(App(str_f, cs::Ty(ty_a_lift)), Thunk(str_a)).build(tycker, env)?
         }
         // primitive types are not allowed in monadic blocks
         | Type::Int(_) | Type::Char(_) | Type::String(_) => unreachable!(),
@@ -300,11 +296,16 @@ fn structure_translation(
                     Abs(cs::Pat("f", f_ty), move |var_f| {
                         // <body> =
                         // comatch
-                        // | .dtor_n -> ! Str(B_n) Z mz { fn (z : Z) -> ! f z .dtor_n }
+                        // | .dtor_n -> Str(B_n) Z mz { fn (z : Z) -> ! f z .dtor_n }
                         // | ...
                         // end
-                        // Fixme: implement this
-                        cs::Top
+                        cs::CoMatch(coda, move |dtor, ty| {
+                            let kont = Abs(cs::Pat("z", abst_z_ty), move |var_z| {
+                                Dtor(App(Force(var_f), var_z), dtor)
+                            });
+                            let str = cs::Structure { monad_ty, monad_impl, str_env, ty };
+                            App(App(App(str, abst_z_ty), var_mz), Thunk(kont))
+                        })
                     })
                 })
             })
@@ -335,7 +336,10 @@ fn structure_translation(
             })
             .build(tycker, env)?
         }
-        | Type::Forall(forall) => todo!(),
+        | Type::Forall(ty) => {
+            let Forall(abst, ty) = ty;
+            cs::Top.build(tycker, env)?
+        }
     };
     Ok(res)
 }

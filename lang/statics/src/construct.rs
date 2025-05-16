@@ -164,9 +164,17 @@ pub mod syntax {
     pub struct HForall<Param>(pub Param);
     pub struct Forall<Param, FBody>(pub Param, pub FBody);
 
-    /// `+Ctor(tail)`
+    /// `+Ctor(<tail>)`
     pub struct Ctor<Name, Tail>(pub Name, pub Tail);
-    /// `head .dtor`
+    /// `match_ty <t> | <f> ... end`
+    ///
+    /// `Ty` here should be DataId
+    pub struct Match<Ty, T, F>(pub Ty, pub T, pub F);
+    /// `comatch_ty | <f> ... end`
+    ///
+    /// `Ty` here should be CoDataId
+    pub struct CoMatch<Ty, F>(pub Ty, pub F);
+    /// `<head> .dtor`
     pub struct Dtor<Head, Name>(pub Head, pub Name);
     /// `comatch end`
     pub struct Top;
@@ -1041,17 +1049,63 @@ where
         Ok(Alloc::alloc(tycker, PureBind { binder, bindee, tail }, tail_ty))
     }
 }
-// top
-impl Construct<CompuId> for cs::Top {
+// match
+impl<T, F, R> Construct<CompuId> for cs::Match<DataId, T, F>
+where
+    T: Construct<ValueId>,
+    F: Clone + FnOnce(CtorName, DefId, TypeId) -> R,
+    R: Construct<CompuId>,
+{
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
-        let top = cs::TopTy.build(tycker, env)?;
-        Ok(Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top))
+        let cs::Match(data, scrut, arm) = self;
+        let scrut = scrut.build(tycker, env)?;
+        let data = tycker.statics.datas.defs[&data].to_owned();
+        let mut ty_ = None;
+        let arms = (data.into_iter())
+            .map(|(ctor, ty)| {
+                let var = VarName(format!("{}", ctor.0.trim_start_matches("+").to_lowercase()));
+                let def = Alloc::alloc(tycker, var, ty.into());
+                let binder = cs::Ann(def, ty).build(tycker, env)?;
+                let tail = (arm.clone())(ctor, def, ty).build(tycker, env)?;
+                // Todo: consider lub (?)
+                let tail_ty = tycker.statics.annotations_compu[&tail];
+                ty_ = Some(tail_ty);
+                Ok(Matcher { binder, tail })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Alloc::alloc(tycker, Match { scrut, arms }, ty_.unwrap()))
+    }
+}
+// comatch
+impl<F, R> Construct<CompuId> for cs::CoMatch<CoDataId, F>
+where
+    F: Clone + FnOnce(DtorName, TypeId) -> R,
+    R: Construct<CompuId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let cs::CoMatch(coda_id, arm) = self;
+        let coda = tycker.statics.codatas.defs[&coda_id].to_owned();
+        let arms = (coda.into_iter())
+            .map(|(dtor, ty)| {
+                let tail = (arm.clone())(dtor.clone(), ty).build(tycker, env)?;
+                let tail_ty = tycker.statics.annotations_compu[&tail];
+                let Ok(_) = Lub::lub(ty, tail_ty, tycker) else { unreachable!() };
+                Ok(CoMatcher { dtor, tail })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let ctype = CType.build(tycker, env)?;
+        let ty_ = Alloc::alloc(tycker, Type::from(coda_id), ctype);
+        Ok(Alloc::alloc(tycker, CoMatch { arms }, ty_))
     }
 }
 // dtor
-impl Construct<CompuId> for Dtor<CompuId> {
+impl<T> Construct<CompuId> for Dtor<T>
+where
+    T: Construct<CompuId>,
+{
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
         let Dtor(head, dtor) = self;
+        let head = head.build(tycker, env)?;
         let head_ty = tycker.statics.annotations_compu[&head];
         let Some(coda) = head_ty.destruct_codata(env, tycker) else { unreachable!() };
         let Some(ty) = coda.get(&dtor).cloned() else { unreachable!() };
@@ -1068,6 +1122,13 @@ where
         let head = head.build(tycker, env)?;
         let dtor = dtor.build(tycker, env)?;
         Dtor(head, dtor).build(tycker, env)
+    }
+}
+// top
+impl Construct<CompuId> for cs::Top {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        let top = cs::TopTy.build(tycker, env)?;
+        Ok(Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top))
     }
 }
 
