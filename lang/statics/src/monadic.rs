@@ -334,31 +334,6 @@ fn structure_translation(
                 })
             })
             .build(tycker, env)?
-            // tycker.try_compu_tabs(env, "Z", VType, |tycker, env, _tvar_z, abst_z| {
-            //     let abst_z_ty = cs::Ty(abst_z).build(tycker, env);
-            //     let mz_ty = App(monad_ty, abst_z_ty);
-            //     tycker.try_compu_vabs(env, "mz", mz_ty, |tycker, env, var_mz| -> Result<_> {
-            //         let ty_p_ = cs::TypeLift { monad_ty, ty: ty_p }.build(tycker, env)?;
-            //         let ty_b_ = cs::TypeLift { monad_ty, ty: ty_b }.build(tycker, env)?;
-            //         let f_ty = cs::Thk(Arrow(abst_z_ty, Arrow(ty_p_, ty_b_)));
-            //         tycker.try_compu_vabs(env, "f", f_ty, |tycker, env, var_f| {
-            //             tycker.try_compu_vabs(env, "x", ty_p_, |tycker, env, var_x| {
-            //                 let alg_b = cs::Structure { monad_ty, monad_impl, str_env, ty: ty_b }
-            //                     .build(tycker, env)?;
-            //                 let mz: ValueId = var_mz.build(tycker, env);
-            //                 let kont =
-            //                     tycker.compu_vabs(env, "z", abst_z_ty, |tycker, env, var_z| {
-            //                         let f: ValueId = var_f.build(tycker, env);
-            //                         let z: ValueId = var_z.build(tycker, env);
-            //                         let x: ValueId = var_x.build(tycker, env);
-            //                         App(App(Force(f), z), x)
-            //                     });
-            //                 let res = App(App(App(alg_b, cs::Ty(abst_z_ty)), mz), Thunk(kont));
-            //                 Ok(res)
-            //             })
-            //         })
-            //     })
-            // })?
         }
         | Type::Forall(forall) => todo!(),
     };
@@ -375,10 +350,7 @@ fn type_translation(
         | Type::Abst(abst) => Alloc::alloc(tycker, abst, kd),
         | Type::Abs(ty) => {
             let Abs(tpat, ty) = ty;
-            let (def, param_kd) = tpat.destruct_def(tycker);
-            let tpat_ = Alloc::alloc(tycker, def, param_kd);
-            let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
-            Alloc::alloc(tycker, Abs(tpat_, ty_), kd)
+            Abs(cs::Fresh(tpat), |_, _, _| cs::TypeLift { monad_ty, ty }).build(tycker, env)?
         }
         | Type::App(ty) => {
             let App(ty_f, ty_a) = ty;
@@ -389,9 +361,6 @@ fn type_translation(
         | Type::Thk(ThkTy) => Alloc::alloc(tycker, ThkTy, kd),
         // primitive types are not allowed in monadic blocks
         | Type::Int(_) | Type::Char(_) | Type::String(_) => unreachable!(),
-        // | Type::Int(IntTy) => Alloc::alloc(tycker, IntTy, kd),
-        // | Type::Char(CharTy) => Alloc::alloc(tycker, CharTy, kd),
-        // | Type::String(StringTy) => Alloc::alloc(tycker, StringTy, kd),
         | Type::Data(data) => {
             cs::Data(data, |_ctor, ty| cs::TypeLift { monad_ty, ty }).build(tycker, env)?
         }

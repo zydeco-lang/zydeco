@@ -6,8 +6,8 @@
 //! [`Construct`] has the following semantics:
 //!
 //! `impl` [`Construct<T>`] for `S` means that `S` can be used to construct `T`
-//! 
-//! 
+//!
+//!
 //! ## Comparison with [`Alloc`]
 //!
 //! The [`Construct`] API is an improvement based on [`Alloc`] in that unlike `Alloc`
@@ -21,25 +21,25 @@
 //! In conclusion, it's recommended to use `Construct` instead of `Alloc` for constructing
 //! Zydeco programs in Rust. Example use cases are wrapped as legacy methods in [`Tycker`],
 //! as well as static tests in `<sort>_test` modules.
-//! 
-//! 
+//!
+//!
 //! ## Advice on writing Zydeco programs in [`Construct`] style
-//! 
+//!
 //! [`Construct`] works very similar to how monadic expressions work (e.g. in Haskell).
 //! That is, you should think of them as a thin piece of syntax or "recipe" for
 //! constructing terms that may have interactions with the `tycker`, or side effects
 //! in general.
-//! 
+//!
 //! If there's a side effect that is not currently supported by [`Construct`], you should
 //! create a new structure in [`syntax`] module, and implement [`Construct`] for it.
-//! 
-//! 
+//!
+//!
 //! ## Advice on compile-time debugging
-//! 
+//!
 //! When your Zydeco program written in [`Construct`] fails to compile, it's likely
 //! that you're not constructing the term correctly; if not, that's a bug in this module,
 //! which is sad. (>_<)
-//! 
+//!
 //! To find out what's happening, you should first try to break down the term that's been
 //! constructed into smaller pieces, and see if you can find the problem.
 //! Two useful approaches are:
@@ -47,7 +47,7 @@
 //!   and `Thunk(cs::Top)` for value, and see if the program can partially compile.
 //! + Break subterms into let bindings `let small = ...;`, and see if the small bindees
 //!   can compile by calling `small.build(tycker, env)`.
-//! 
+//!
 //! Good luck (つ´ω｀)つ
 
 use crate::{syntax::*, *};
@@ -117,8 +117,9 @@ pub mod syntax {
     pub struct TypeOf<T>(pub T);
 
     /// fresh variable [`super::DefId`] or abstract type [`super::AbstId`]
+    ///
+    /// currently used for new type pattern and value pattern
     pub struct Fresh<T>(pub T);
-    // Todo: complete fresh
 
     /// Construct to value immediately
     pub struct Value<T>(pub T);
@@ -321,6 +322,14 @@ mod kind_test {
 
 /* ------------------------------- TypePattern ------------------------------ */
 
+impl Construct<TPatId> for cs::Fresh<TPatId> {
+    fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<TPatId> {
+        let cs::Fresh(tm) = self;
+        let (def, kd) = tm.destruct_def(tycker);
+        let tpat_ = Alloc::alloc(tycker, def, kd);
+        Ok(tpat_)
+    }
+}
 impl Construct<TPatId> for cs::Ann<Option<DefId>, KindId> {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TPatId> {
         let cs::Ann(tm, ty) = self;
@@ -682,6 +691,13 @@ impl Tycker {
 
 /* ------------------------------ ValuePattern ------------------------------ */
 
+impl Construct<VPatId> for cs::Fresh<VPatId> {
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<VPatId> {
+        let cs::Fresh(tm) = self;
+        let (def, ty) = tm.try_destruct_def(tycker);
+        cs::Ann(def, ty).build(tycker, env)
+    }
+}
 impl Construct<VPatId> for cs::Ann<Option<DefId>, TypeId> {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<VPatId> {
         let cs::Ann(tm, ty) = self;
