@@ -5,7 +5,6 @@
 //! + Detailed Implementation: [https://arxiv.org/abs/2502.15031](appendix D of the extended version)
 
 use crate::{syntax::*, *};
-use std::collections::HashMap;
 
 pub mod syntax {
     use super::*;
@@ -345,7 +344,7 @@ fn structure_translation(
                 let abst_z_ty = cs::Ty(abst_z);
                 Abs(cs::Pat("mz", cs::Thk(App(monad_ty, abst_z_ty))), move |var_mz| {
                     // construct abstract type X first
-                    cs::Abst(cs::Ann("X", kd), move |abst_x| {
+                    cs::CBind::new(cs::Ann("X", kd), move |abst_x| {
                         // <f_ty> = Thk (Z -> forall (X : K) . Thk (Sig_K(X)) -> [B])
                         let f_ty = cs::Thk(Arrow(
                             abst_z_ty,
@@ -391,6 +390,7 @@ fn type_translation(
         | Type::Abst(abst) => Alloc::alloc(tycker, abst, kd),
         | Type::Abs(ty) => {
             let Abs(tpat, ty) = ty;
+            // Fixme: bind environment
             Abs(cs::Fresh(tpat), |_, _, _| cs::TypeLift { monad_ty, ty }).build(tycker, env)?
         }
         | Type::App(ty) => {

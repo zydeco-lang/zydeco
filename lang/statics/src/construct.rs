@@ -103,6 +103,14 @@ impl<T> Construct<T> for Result<T> {
 /// + Some existing structures that may take a more convenient syntax,
 ///   such as `Ann`, `Ctor`, and `Dtor`.
 pub mod syntax {
+    /// Monadic bind for [`super::Construct`]
+    pub struct CBind<T, I, F>(pub T, pub std::marker::PhantomData<I>, pub F);
+    impl<T, I, F> CBind<T, I, F> {
+        pub fn new(t: T, f: F) -> Self {
+            Self(t, std::marker::PhantomData, f)
+        }
+    }
+
     /// `Ann { tm: S, ty: A }`
     #[derive(Clone, Copy)]
     pub struct Ann<S, A>(pub S, pub A);
@@ -126,8 +134,6 @@ pub mod syntax {
     /// currently used for new type pattern and value pattern
     pub struct Fresh<T>(pub T);
 
-    /// Construct to abstract type immediately
-    pub struct Abst<T, F>(pub T, pub F);
     /// Construct to value immediately
     pub struct Value<T>(pub T);
     /// Construct to computation immediately
@@ -197,6 +203,7 @@ pub mod syntax {
     pub use crate::monadic::syntax::*;
 }
 
+/// Trivial [`Construct`] construction
 macro_rules! impl_construct_trivial {
     ($($ty:ty),*) => {
         $(
@@ -208,6 +215,23 @@ macro_rules! impl_construct_trivial {
         )*
     }
 }
+
+/* ---------------------------- Monadic Construct --------------------------- */
+
+impl<T, F, I, O, R> Construct<R> for cs::CBind<T, I, F>
+where
+    T: Construct<I>,
+    F: FnOnce(I) -> O,
+    O: Construct<R>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<R> {
+        let cs::CBind(input, _, f) = self;
+        let input = input.build(tycker, env)?;
+        f(input).build(tycker, env)
+    }
+}
+
+/* ------------------------------- Identifier ------------------------------- */
 
 impl_construct_trivial!(DefId, KindId, AbstId, TPatId, TypeId, VPatId, ValueId, CompuId);
 
@@ -275,18 +299,6 @@ where
 
 /* -------------------------------- Abstract -------------------------------- */
 
-impl<T, F, C, R> Construct<R> for cs::Abst<T, F>
-where
-    T: Construct<AbstId>,
-    F: FnOnce(AbstId) -> C,
-    C: Construct<R>,
-{
-    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<R> {
-        let cs::Abst(abst, f) = self;
-        let abst = abst.build(tycker, env)?;
-        f(abst).build(tycker, env)
-    }
-}
 impl<K> Construct<AbstId> for cs::Ann<VarName, K>
 where
     K: Construct<KindId>,
