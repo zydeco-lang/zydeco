@@ -15,11 +15,11 @@ pub mod syntax {
         pub ty: T,
     }
     /// structure translation
-    #[derive(Clone, Copy)]
-    pub struct Structure<'a, T> {
+    #[derive(Clone)]
+    pub struct Structure<T> {
         pub monad_ty: TypeId,
         pub monad_impl: ValueId,
-        pub str_env: &'a StructureEnv,
+        pub str_env: StructureEnv,
         pub ty: T,
     }
     /// type translation (lift)
@@ -29,19 +29,19 @@ pub mod syntax {
         pub ty: T,
     }
     /// term translation (lift)
-    #[derive(Clone, Copy)]
-    pub struct TermLift<'a, T> {
+    #[derive(Clone)]
+    pub struct TermLift<T> {
         pub monad_ty: TypeId,
         pub monad_impl: ValueId,
-        pub str_env: &'a StructureEnv,
+        pub str_env: StructureEnv,
         pub tm: T,
     }
     /// monadic elaboration
-    #[derive(Clone, Copy)]
-    pub struct Elaboration<'a, T> {
+    #[derive(Clone)]
+    pub struct Elaboration<T> {
         pub monad_ty: TypeId,
         pub monad_impl: ValueId,
-        pub str_env: &'a StructureEnv,
+        pub str_env: StructureEnv,
         pub tm: T,
     }
 }
@@ -62,7 +62,7 @@ mod syntax_impl {
     }
 
     // StructureTrans
-    impl<T> Construct<CompuId> for cs::Structure<'_, T>
+    impl<T> Construct<CompuId> for cs::Structure<T>
     where
         T: Construct<TypeId>,
     {
@@ -86,7 +86,7 @@ mod syntax_impl {
     }
 
     // TermLift (value translation)
-    impl<T> Construct<ValueId> for cs::TermLift<'_, T>
+    impl<T> Construct<ValueId> for cs::TermLift<T>
     where
         T: Construct<ValueId>,
     {
@@ -98,7 +98,7 @@ mod syntax_impl {
     }
 
     // TermLift (computation translation)
-    impl<T> Construct<CompuId> for cs::TermLift<'_, T>
+    impl<T> Construct<CompuId> for cs::TermLift<T>
     where
         T: Construct<CompuId>,
     {
@@ -110,7 +110,7 @@ mod syntax_impl {
     }
 
     // Elaboration (value)
-    impl<T> Construct<ValueId> for cs::Elaboration<'_, T>
+    impl<T> Construct<ValueId> for cs::Elaboration<T>
     where
         T: Construct<ValueId>,
     {
@@ -122,7 +122,7 @@ mod syntax_impl {
     }
 
     // Elaboration (computation)
-    impl<T> Construct<CompuId> for cs::Elaboration<'_, T>
+    impl<T> Construct<CompuId> for cs::Elaboration<T>
     where
         T: Construct<CompuId>,
     {
@@ -188,7 +188,7 @@ impl StructureEnv {
 
 /// Structure Translation `Str(T)`
 fn structure_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
     env: &Env<AnnId>, ty: TypeId,
 ) -> Result<CompuId> {
     let res = match tycker.type_filled(&ty)?.to_owned() {
@@ -241,7 +241,8 @@ fn structure_translation(
             // input: S_f S_a
             let App(ty_f, ty_a) = ty;
             // output: Str(S_f) Lift(S_a) { Str(S_a) }
-            let str_f = cs::Structure { monad_ty, monad_impl, str_env, ty: ty_f };
+            let str_f =
+                cs::Structure { monad_ty, monad_impl, str_env: str_env.to_owned(), ty: ty_f };
             let ty_a_lift = cs::TypeLift { monad_ty, ty: ty_a };
             let str_a = cs::Structure { monad_ty, monad_impl, str_env, ty: ty_a };
             App(App(str_f, cs::Ty(ty_a_lift)), Thunk(str_a)).build(tycker, env)?
@@ -449,7 +450,7 @@ fn type_translation(
 
 /// Term Translation (Value) `[V]`
 fn value_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
     env: &Env<AnnId>, value: ValueId,
 ) -> Result<ValueId> {
     let ty = cs::TypeOf(value).build(tycker, env)?;
@@ -473,13 +474,15 @@ fn value_translation(
         | Value::Triv(Triv) => Triv.build(tycker, env)?,
         | Value::VCons(value) => {
             let Cons(value_1, value_2) = value;
-            let value_1_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: value_1 };
+            let value_1_ =
+                cs::TermLift { monad_ty, monad_impl, str_env: str_env.to_owned(), tm: value_1 };
             let value_2_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: value_2 };
             Cons(value_1_, value_2_).build(tycker, env)?
         }
         | Value::TCons(value) => {
             let Cons(a_ty, body) = value;
-            let a_str = cs::Structure { monad_ty, monad_impl, str_env, ty: a_ty };
+            let a_str =
+                cs::Structure { monad_ty, monad_impl, str_env: str_env.to_owned(), ty: a_ty };
             let body_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: body };
             let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
             // existential type construct should be type-guided
@@ -491,7 +494,7 @@ fn value_translation(
 
 /// Term Translation (Computation) `[C]`
 fn computation_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
     env: &Env<AnnId>, compu: CompuId,
 ) -> Result<CompuId> {
     use Computation as Compu;
@@ -513,7 +516,7 @@ fn computation_translation(
         }
         | Compu::VApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: fun };
+            let fun_ = cs::TermLift { monad_ty, monad_impl, str_env: str_env.to_owned(), tm: fun };
             let arg_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: arg };
             App(fun_, arg_).build(tycker, env)?
         }
@@ -530,7 +533,7 @@ fn computation_translation(
         }
         | Compu::TApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: fun };
+            let fun_ = cs::TermLift { monad_ty, monad_impl, str_env: str_env.to_owned(), tm: fun };
             let arg_ = cs::TypeLift { monad_ty, ty: arg };
             let str_ = cs::Structure { monad_ty, monad_impl, str_env, ty: arg };
             App(App(fun_, cs::Ty(arg_)), Thunk(str_)).build(tycker, env)?
@@ -564,11 +567,12 @@ fn computation_translation(
         }
         | Compu::Do(compu) => {
             let Bind { binder, bindee, tail } = compu;
-            let str_ = cs::Structure { monad_ty, monad_impl, str_env, ty: ty_ };
+            let str_ = cs::Structure { monad_ty, monad_impl, str_env: str_env.to_owned(), ty: ty_ };
             let ret_ty = cs::TypeOf(bindee).build(tycker, env)?;
             let Some(a_ty) = ret_ty.destruct_ret_app(tycker) else { unreachable!() };
             let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
-            let bindee_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: bindee };
+            let bindee_ =
+                cs::TermLift { monad_ty, monad_impl, str_env: str_env.to_owned(), tm: bindee };
             let kont = Abs(cs::Fresh(binder), move |_var| cs::TermLift {
                 monad_ty,
                 monad_impl,
@@ -587,7 +591,7 @@ fn computation_translation(
 
 /// Monadic Block Elaboration (Value)
 fn value_monadic_elaboration(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
     env: &Env<AnnId>, value: ValueId,
 ) -> Result<ValueId> {
     let _ = tycker;
@@ -601,7 +605,7 @@ fn value_monadic_elaboration(
 
 /// Monadic Block Elaboration (Computation)
 fn computation_monadic_elaboration(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: &StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
     env: &Env<AnnId>, compu: CompuId,
 ) -> Result<CompuId> {
     let _ = tycker;
