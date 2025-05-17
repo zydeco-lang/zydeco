@@ -152,12 +152,17 @@ impl Debruijn {
             | (Fillable::Fill(lhs), _) => fill_ty(tycker, lhs, rhs_id)?,
             | (Fillable::Done(lhs), Fillable::Done(rhs)) => match (lhs, rhs) {
                 | (Type::Var(lhs), Type::Var(rhs)) => {
-                    match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
-                        | (Some(l), Some(r)) if l == r => lhs_id,
-                        | _ => tycker.err(
-                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
-                            std::panic::Location::caller(),
-                        )?,
+                    // Todo: is "checking whether the two variables are the same" the canonical way?
+                    if lhs == rhs {
+                        lhs_id
+                    } else {
+                        match (self.lookup_lhs(lhs), self.lookup_rhs(rhs)) {
+                            | (Some(l), Some(r)) if l == r => lhs_id,
+                            | _ => tycker.err(
+                                TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                                std::panic::Location::caller(),
+                            )?,
+                        }
                     }
                 }
                 | (Type::Abst(lhs), Type::Abst(rhs)) => {

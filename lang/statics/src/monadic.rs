@@ -395,8 +395,8 @@ fn type_translation(
         }
         | Type::App(ty) => {
             let App(ty_f, ty_a) = ty;
-            let ty_f_ = cs::TypeLift { monad_ty, ty: ty_f }.build(tycker, env)?;
-            let ty_a_ = cs::TypeLift { monad_ty, ty: ty_a }.build(tycker, env)?;
+            let ty_f_ = cs::TypeLift { monad_ty, ty: ty_f };
+            let ty_a_ = cs::TypeLift { monad_ty, ty: ty_a };
             App(ty_f_, ty_a_).build(tycker, env)?
         }
         | Type::Thk(ThkTy) => Alloc::alloc(tycker, ThkTy, kd),
@@ -405,20 +405,19 @@ fn type_translation(
         | Type::Data(data) => {
             cs::Data(data, |_ctor, ty| cs::TypeLift { monad_ty, ty }).build(tycker, env)?
         }
-        | Type::Unit(UnitTy) => ty,
+        | Type::Unit(UnitTy) => UnitTy.build(tycker, env)?,
         | Type::Prod(ty) => {
             let Prod(ty_1, ty_2) = ty;
-            let ty_1_ = cs::TypeLift { monad_ty, ty: ty_1 }.build(tycker, env)?;
-            let ty_2_ = cs::TypeLift { monad_ty, ty: ty_2 }.build(tycker, env)?;
+            let ty_1_ = cs::TypeLift { monad_ty, ty: ty_1 };
+            let ty_2_ = cs::TypeLift { monad_ty, ty: ty_2 };
             Prod(ty_1_, ty_2_).build(tycker, env)?
         }
         | Type::Exists(ty) => {
             let Exists(abst, ty) = ty;
-            let abst_kd = cs::TypeOf(abst).build(tycker, env)?;
-            let ty_abst = Alloc::alloc(tycker, abst, abst_kd);
-            let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: ty_abst }).build(tycker, env)?;
-            let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
-            let prod = Prod(thk_sig, ty_).build(tycker, env)?;
+            let abst_ty = cs::Ty(abst);
+            let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: abst_ty });
+            let ty_ = cs::TypeLift { monad_ty, ty };
+            let prod = Prod(thk_sig, ty_);
             cs::Exists(abst, |_| prod).build(tycker, env)?
         }
         // os type is also not allowed in monadic blocks
@@ -430,17 +429,19 @@ fn type_translation(
         }
         | Type::Arrow(ty) => {
             let Arrow(ty_1, ty_2) = ty;
-            let ty_1_ = cs::TypeLift { monad_ty, ty: ty_1 }.build(tycker, env)?;
-            let ty_2_ = cs::TypeLift { monad_ty, ty: ty_2 }.build(tycker, env)?;
+            let ty_1_ = cs::TypeLift { monad_ty, ty: ty_1 };
+            let ty_2_ = cs::TypeLift { monad_ty, ty: ty_2 };
             Arrow(ty_1_, ty_2_).build(tycker, env)?
         }
         | Type::Forall(ty) => {
             let Forall(abst, ty) = ty;
-            let abst_kd = cs::TypeOf(abst).build(tycker, env)?;
-            let ty_abst = Alloc::alloc(tycker, abst, abst_kd);
-            let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: ty_abst }).build(tycker, env)?;
-            let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
-            cs::Forall(abst, |_| Arrow(thk_sig, ty_)).build(tycker, env)?
+            cs::Forall(abst, move |abst| {
+                Arrow(
+                    cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) }),
+                    cs::TypeLift { monad_ty, ty },
+                )
+            })
+            .build(tycker, env)?
         }
     };
     Ok(res)
@@ -461,37 +462,28 @@ fn value_translation(
         | Value::Var(def) => todo!(),
         | Value::Thunk(value) => {
             let Thunk(body) = value;
-            let body_ =
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: body }.build(tycker, env)?;
-            Thunk(body_).build(tycker, env)?
+            Thunk(cs::TermLift { monad_ty, monad_impl, str_env, tm: body }).build(tycker, env)?
         }
         | Value::Ctor(value) => {
             let Ctor(ctor, body) = value;
-            let body_ =
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: body }.build(tycker, env)?;
-            let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
-            cs::Ann(Ctor(ctor, body_), ty_).build(tycker, env)?
+            let body_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: body };
+            let ty_ = cs::TypeLift { monad_ty, ty };
+            cs::Ann(cs::Ctor(ctor, body_), ty_).build(tycker, env)?
         }
-        | Value::Triv(Triv) => value,
+        | Value::Triv(Triv) => Triv.build(tycker, env)?,
         | Value::VCons(value) => {
             let Cons(value_1, value_2) = value;
-            let value_1_ =
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: value_1 }.build(tycker, env)?;
-            let value_2_ =
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: value_2 }.build(tycker, env)?;
+            let value_1_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: value_1 };
+            let value_2_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: value_2 };
             Cons(value_1_, value_2_).build(tycker, env)?
         }
         | Value::TCons(value) => {
             let Cons(a_ty, body) = value;
-            let str =
-                cs::Structure { monad_ty, monad_impl, str_env, ty: a_ty }.build(tycker, env)?;
-            let thk_str = Thunk(str).build(tycker, env);
-            let body_ =
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: body }.build(tycker, env)?;
-            let vcons = Cons(thk_str, body_).build(tycker, env)?;
-            let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty }.build(tycker, env)?;
+            let a_str = cs::Structure { monad_ty, monad_impl, str_env, ty: a_ty };
+            let body_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: body };
+            let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
             // existential type construct should be type-guided
-            Alloc::alloc(tycker, Cons(a_ty_, vcons), ty_)
+            cs::Ann(Cons(cs::Ty(a_ty_), Cons(Thunk(a_str), body_)), ty_).build(tycker, env)?
         }
     };
     Ok(res)

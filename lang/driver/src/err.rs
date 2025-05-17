@@ -12,6 +12,8 @@ pub enum BuildError {
     InterpError(#[from] crate::interp::err::InterpError),
     #[error("Duplicate package marked name: {0}")]
     DuplicateMark(String),
+    #[error("No suitable marked binary to run: wanted: {0}, available: {1:#?}")]
+    NoSuitableMark(String, Vec<String>),
     #[error("Can't determine a suitable marked binary to run from: {0:#?}")]
     AmbiguousMark(Vec<String>),
 }

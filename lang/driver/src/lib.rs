@@ -137,18 +137,21 @@ impl BuildSystem {
         Ok(name)
     }
     pub fn pick_marked(&self, name: Option<String>) -> Result<PackId> {
-        if self.marked.len() == 1 {
-            Ok(*self.marked.iter().next().unwrap().1)
-        } else {
-            match name {
-                | Some(name) => {
-                    if let Some(pack) = self.marked.get(&name) {
-                        return Ok(*pack);
-                    }
+        match name {
+            | Some(name) => {
+                if let Some(pack) = self.marked.get(&name) {
+                    Ok(*pack)
+                } else {
+                    Err(BuildError::NoSuitableMark(name, self.marked.keys().cloned().collect()))?
                 }
-                | None => {}
             }
-            Err(BuildError::AmbiguousMark(self.marked.keys().cloned().collect()))?
+            | None => {
+                if self.marked.len() == 1 {
+                    Ok(*self.marked.iter().next().unwrap().1)
+                } else {
+                    Err(BuildError::AmbiguousMark(self.marked.keys().cloned().collect()))
+                }
+            }
         }
     }
     pub fn run_pack(&self, pack: PackId, dry: bool, verbose: bool) -> Result<ProgKont> {

@@ -134,6 +134,8 @@ pub mod syntax {
     /// currently used for new type pattern and value pattern
     pub struct Fresh<T>(pub T);
 
+    /// Construct to type immediately
+    pub struct Type<T>(pub T);
     /// Construct to value immediately
     pub struct Value<T>(pub T);
     /// Construct to computation immediately
@@ -437,6 +439,15 @@ where
 
 /* ---------------------------------- Type ---------------------------------- */
 
+impl<T> Construct<TypeId> for cs::Type<T>
+where
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+        let cs::Type(ty) = self;
+        ty.build(tycker, env)
+    }
+}
 impl Construct<TypeId> for cs::TypeOf<ValueId> {
     fn build(self, tycker: &mut Tycker, _env: &Env<AnnId>) -> Result<TypeId> {
         let cs::TypeOf(value) = self;
@@ -859,6 +870,34 @@ where
         Ok(Alloc::alloc(tycker, Cons(a, b), ty))
     }
 }
+impl<S, V, T> Construct<ValueId> for cs::Ann<Cons<cs::Ty<S>, V>, T>
+where
+    S: Construct<TypeId>,
+    V: Construct<ValueId>,
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<ValueId> {
+        let cs::Ann(Cons(cs::Ty(a), b), ty) = self;
+        let a = a.build(tycker, env)?;
+        let b = b.build(tycker, env)?;
+        let ty = ty.build(tycker, env)?;
+        cs::Ann(Cons(a, b), ty).build(tycker, env)
+    }
+}
+impl<C, V, T> Construct<ValueId> for cs::Ann<cs::Ctor<C, V>, T>
+where
+    C: Construct<CtorName>,
+    V: Construct<ValueId>,
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<ValueId> {
+        let cs::Ann(cs::Ctor(ctor, body), ty) = self;
+        let ctor = ctor.build(tycker, env)?;
+        let body = body.build(tycker, env)?;
+        let ty = ty.build(tycker, env)?;
+        cs::Ann(Ctor(ctor, body), ty).build(tycker, env)
+    }
+}
 
 impl Tycker {
     // pub fn value_var(&mut self, env: &Env<AnnId>, def: DefId, ty: TypeId) -> Result<ValueId> {
@@ -1201,7 +1240,6 @@ where
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
         let cs::Dtor(head, dtor) = self;
-        let head = head.build(tycker, env)?;
         let dtor = dtor.build(tycker, env)?;
         Dtor(head, dtor).build(tycker, env)
     }

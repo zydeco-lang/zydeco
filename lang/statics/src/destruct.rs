@@ -205,6 +205,16 @@ impl TypeId {
         };
         Some(res)
     }
+    pub fn destruct_data<'t>(&self, _env: &Env<AnnId>, tycker: &'t mut Tycker) -> Option<&'t Data> {
+        use zydeco_utils::arena::ArenaAccess;
+        match tycker.statics.types[&self].to_owned() {
+            | Fillable::Fill(_) => todo!(),
+            | Fillable::Done(ty) => match ty {
+                | Type::Data(data) => tycker.statics.datas.tbls.get(&data),
+                | _ => None,
+            },
+        }
+    }
     pub fn destruct_codata<'t>(
         &self, _env: &Env<AnnId>, tycker: &'t mut Tycker,
     ) -> Option<&'t CoData> {
