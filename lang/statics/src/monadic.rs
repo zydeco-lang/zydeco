@@ -455,11 +455,11 @@ fn value_translation(
     let ty = cs::TypeOf(value).build(tycker, env)?;
     let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
     let res = match tycker.value(&value).to_owned() {
-        | Value::Hole(Hole) => Alloc::alloc(tycker, Hole, ty_),
+        | Value::Hole(Hole) => cs::Ann(Hole, ty_).build(tycker, env)?,
         // figure out how to handle literals
         | Value::Lit(_) => unreachable!(),
         // Fixme: variables should be freshed and substituted
-        | Value::Var(def) => todo!(),
+        | Value::Var(_def) => todo!(),
         | Value::Thunk(value) => {
             let Thunk(body) = value;
             Thunk(cs::TermLift { monad_ty, monad_impl, str_env, tm: body }).build(tycker, env)?
@@ -495,64 +495,57 @@ fn computation_translation(
     env: &Env<AnnId>, compu: CompuId,
 ) -> Result<CompuId> {
     use Computation as Compu;
+    let ty = cs::TypeOf(compu).build(tycker, env)?;
+    let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
     let res = match tycker.compu(&compu) {
-        | Compu::Hole(_) => todo!(),
+        | Compu::Hole(Hole) => cs::Ann(Hole, ty_).build(tycker, env)?,
         | Compu::VAbs(compu) => {
             let Abs(vpat, compu) = compu;
             let (def, param_ty) = vpat.try_destruct_def(tycker);
-            let param_ty_ = cs::TypeLift { monad_ty, ty: param_ty }.build(tycker, env)?;
-            cs::HAbs(cs::Ann(def, param_ty_)).try_vbody((tycker, env), |tycker, env, _def| {
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: compu }.build(tycker, env)
-            })?
+            let param_ty_ = cs::TypeLift { monad_ty, ty: param_ty };
+            Abs(cs::Pat(def, param_ty_), move |_def| cs::TermLift {
+                monad_ty,
+                monad_impl,
+                str_env,
+                tm: compu,
+            })
+            .build(tycker, env)?
         }
         | Compu::VApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ =
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: fun }.build(tycker, env)?;
-            let arg_ =
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: arg }.build(tycker, env)?;
+            let fun_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: fun };
+            let arg_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: arg };
             App(fun_, arg_).build(tycker, env)?
         }
         | Compu::TAbs(compu) => {
             let Abs(tpat, compu) = compu;
-            let (def, param_kd) = tpat.try_destruct_def(tycker);
-            let param_kd_ = param_kd;
-            cs::HAbs(cs::Ann(def, param_kd_)).try_tbody(
-                (tycker, env),
-                |tycker, env, _def, abst| {
-                    let thk_sig =
-                        cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) }).build(tycker, env)?;
-                    let str_name = {
-                        use crate::fmt::*;
-                        format!(
-                            "str_{}",
-                            abst.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                        )
-                    };
-                    Abs(cs::Pat(str_name, thk_sig), |_str_var| cs::TermLift {
-                        monad_ty,
-                        monad_impl,
-                        str_env,
-                        tm: compu,
-                    })
-                    .build(tycker, env)
-                },
-            )?
+            Abs(cs::Ty(cs::Fresh(tpat)), move |_def, abst| {
+                let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) });
+                Abs(cs::Pat("str", thk_sig), move |_str_var| {
+                    // Fixme: bind environment
+                    cs::TermLift { monad_ty, monad_impl, str_env, tm: compu }
+                })
+            })
+            .build(tycker, env)?
         }
         | Compu::TApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ =
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: fun }.build(tycker, env)?;
-            let arg_ = cs::TypeLift { monad_ty, ty: arg }.build(tycker, env)?;
-            App(fun_, cs::Ty(arg_)).build(tycker, env)?
+            let fun_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: fun };
+            let arg_ = cs::TypeLift { monad_ty, ty: arg };
+            let str_ = cs::Structure { monad_ty, monad_impl, str_env, ty: arg };
+            App(App(fun_, cs::Ty(arg_)), Thunk(str_)).build(tycker, env)?
         }
         | Compu::Fix(compu) => {
             let Fix(vpat, compu) = compu;
             let (def, param_ty) = vpat.try_destruct_def(tycker);
             let param_ty_ = cs::TypeLift { monad_ty, ty: param_ty }.build(tycker, env)?;
-            cs::HAbs(cs::Ann(def, param_ty_)).try_fix((tycker, env), |tycker, env, _def| {
-                cs::TermLift { monad_ty, monad_impl, str_env, tm: compu }.build(tycker, env)
-            })?
+            Abs(cs::Ann(def, param_ty_), move |_def| cs::TermLift {
+                monad_ty,
+                monad_impl,
+                str_env,
+                tm: compu,
+            })
+            .build(tycker, env)?
         }
         | Compu::Force(compu) => {
             let Force(value) = compu;
@@ -569,7 +562,21 @@ fn computation_translation(
             )
             .build(tycker, env)?
         }
-        | Compu::Do(_) => todo!(),
+        | Compu::Do(compu) => {
+            let Bind { binder, bindee, tail } = compu;
+            let str_ = cs::Structure { monad_ty, monad_impl, str_env, ty: ty_ };
+            let ret_ty = cs::TypeOf(bindee).build(tycker, env)?;
+            let Some(a_ty) = ret_ty.destruct_ret_app(tycker) else { unreachable!() };
+            let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
+            let bindee_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: bindee };
+            let kont = Abs(cs::Fresh(binder), move |_var| cs::TermLift {
+                monad_ty,
+                monad_impl,
+                str_env,
+                tm: tail,
+            });
+            App(App(App(str_, cs::Ty(a_ty_)), Thunk(bindee_)), Thunk(kont)).build(tycker, env)?
+        }
         | Compu::Let(_) => todo!(),
         | Compu::Match(_) => todo!(),
         | Compu::CoMatch(_) => todo!(),

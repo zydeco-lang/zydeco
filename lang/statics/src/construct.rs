@@ -169,14 +169,8 @@ pub mod syntax {
     pub struct CoData<T, F>(pub T, pub F);
 
     /// `exists X. ...`
-    ///
-    /// See crate level documentation [`crate::construct::syntax`] for more details.
-    pub struct HExists<Param>(pub Param);
     pub struct Exists<Param, FBody>(pub Param, pub FBody);
     /// `forall X. ...`
-    ///
-    /// See crate level documentation [`crate::construct::syntax`] for more details.
-    pub struct HForall<Param>(pub Param);
     pub struct Forall<Param, FBody>(pub Param, pub FBody);
 
     /// `+Ctor(<tail>)`
@@ -193,14 +187,6 @@ pub mod syntax {
     pub struct Dtor<Head, Name>(pub Head, pub Name);
     /// `comatch end`
     pub struct Top;
-
-    /// `fn h -> ...`
-    ///
-    /// head-only abstractions that implements methods for
-    /// generating the whole term accordingly
-    ///
-    /// See crate level documentation [`crate::construct::syntax`] for more details.
-    pub struct HAbs<Param>(pub Param);
 
     pub use crate::monadic::syntax::*;
 }
@@ -789,6 +775,19 @@ impl Construct<VPatId> for cs::Ann<Option<DefId>, TypeId> {
         }
     }
 }
+impl<T> Construct<VPatId> for cs::Pat<Option<DefId>, T>
+where
+    T: Construct<TypeId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<VPatId> {
+        let cs::Pat(tm, ty) = self;
+        let ty = ty.build(tycker, env)?;
+        match tm {
+            | Some(def) => cs::Ann(def, ty).build(tycker, env),
+            | None => cs::Ann(Hole, ty).build(tycker, env),
+        }
+    }
+}
 impl<T> Construct<VPatId> for cs::Ann<VarName, T>
 where
     T: Construct<TypeId>,
@@ -926,31 +925,9 @@ where
     }
 }
 // computation value abstraction
-impl<P> cs::HAbs<P>
+impl<P, F, T> Construct<CompuId> for Abs<P, F>
 where
     P: Construct<VPatId>,
-{
-    pub fn try_vbody<F, T>(
-        self, (tycker, env): (&mut Tycker, &Env<AnnId>), body: F,
-    ) -> Result<CompuId>
-    where
-        F: Fn(&mut Tycker, &Env<AnnId>, Option<DefId>) -> Result<T>,
-        T: Construct<CompuId>,
-    {
-        let cs::HAbs(vpat) = self;
-        let vpat = vpat.build(tycker, env)?;
-        let (def, param_ty) = vpat.try_destruct_def(tycker);
-        let body = body(tycker, env, def)?;
-        let body = body.build(tycker, env)?;
-        let body_ty = tycker.statics.annotations_compu[&body];
-        let ty = Arrow(param_ty, body_ty).build(tycker, env)?;
-        let res = Alloc::alloc(tycker, Abs(vpat, body), ty);
-        Ok(res)
-    }
-}
-impl<V, F, T> Construct<CompuId> for Abs<V, F>
-where
-    V: Construct<VPatId>,
     F: FnOnce(Option<DefId>) -> T,
     T: Construct<CompuId>,
 {
@@ -965,33 +942,9 @@ where
     }
 }
 // computation type abstraction
-impl<P> cs::HAbs<P>
+impl<P, F, T> Construct<CompuId> for Abs<cs::Ty<P>, F>
 where
     P: Construct<TPatId>,
-{
-    pub fn try_tbody<F, T>(
-        self, (tycker, env): (&mut Tycker, &Env<AnnId>), body: F,
-    ) -> Result<CompuId>
-    where
-        F: Fn(&mut Tycker, &Env<AnnId>, Option<DefId>, AbstId) -> Result<T>,
-        T: Construct<CompuId>,
-    {
-        let cs::HAbs(tpat) = self;
-        let tpat = tpat.build(tycker, env)?;
-        let (def, param_ty) = tpat.try_destruct_def(tycker);
-        let abst = Alloc::alloc(tycker, def, param_ty);
-        let body = body(tycker, env, def, abst)?;
-        let body = body.build(tycker, env)?;
-        let body_ty = tycker.statics.annotations_compu[&body];
-        let ctype = CType.build(tycker, env)?;
-        let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);
-        let res = Alloc::alloc(tycker, Abs(tpat, body), ty);
-        Ok(res)
-    }
-}
-impl<V, F, T> Construct<CompuId> for Abs<cs::Ty<V>, F>
-where
-    V: Construct<TPatId>,
     F: FnOnce(Option<DefId>, AbstId) -> T,
     T: Construct<CompuId>,
 {
@@ -1063,41 +1016,20 @@ where
     }
 }
 // fixed point
-impl<H> cs::HAbs<H>
-where
-    H: Construct<VPatId>,
-{
-    pub fn try_fix<F, T>(
-        self, (tycker, env): (&mut Tycker, &Env<AnnId>), body: F,
-    ) -> Result<CompuId>
-    where
-        F: Fn(&mut Tycker, &Env<AnnId>, Option<DefId>) -> Result<T>,
-        T: Construct<CompuId>,
-    {
-        let cs::HAbs(vpat) = self;
-        let vpat = vpat.build(tycker, env)?;
-        let (def, param_ty) = vpat.try_destruct_def(tycker);
-        let Some(ty) = param_ty.destruct_thk_app(tycker) else { unreachable!() };
-        let body = body(tycker, env, def)?;
-        let body = body.build(tycker, env)?;
-        let body_ty = tycker.statics.annotations_compu[&body];
-        let Ok(_) = Lub::lub(ty, body_ty, tycker) else { unreachable!() };
-        let res = Alloc::alloc(tycker, Fix(vpat, body), ty);
-        Ok(res)
-    }
-}
-impl<V, F> Construct<CompuId> for Fix<cs::Ann<V, TypeId>, F>
+impl<V, T, F> Construct<CompuId> for Fix<cs::Ann<V, T>, F>
 where
     V: Construct<VarName>,
-    F: Fn(&mut Tycker, &Env<AnnId>, DefId) -> CompuId,
+    T: Construct<TypeId>,
+    F: Fn(DefId) -> CompuId,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
         let Fix(cs::Ann(var, param_ty), body) = self;
         let var = var.build(tycker, env)?;
+        let param_ty = param_ty.build(tycker, env)?;
         let def = Alloc::alloc(tycker, var, param_ty.into());
         let Some(ty) = param_ty.destruct_thk_app(tycker) else { unreachable!() };
         let vpat: VPatId = Alloc::alloc(tycker, def, param_ty);
-        let body = body(tycker, env, def);
+        let body = body(def);
         let body_ty = tycker.statics.annotations_compu[&body];
         let Ok(_) = Lub::lub(ty, body_ty, tycker) else { unreachable!() };
         Ok(Alloc::alloc(tycker, Fix(vpat, body), ty))
