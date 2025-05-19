@@ -1083,21 +1083,18 @@ where
     }
 }
 // pure bind
-impl<V, B, F, R> Construct<CompuId> for PureBind<V, B, F>
+impl<P, B, F, R> Construct<CompuId> for PureBind<P, B, F>
 where
-    V: Construct<VarName>,
+    P: Construct<VPatId>,
     B: Construct<ValueId>,
-    F: FnOnce(DefId) -> R,
+    F: FnOnce(VPatId) -> R,
     R: Construct<CompuId>,
 {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
         let PureBind { binder, bindee, tail } = self;
         let bindee = bindee.build(tycker, env)?;
-        let def_ty = tycker.statics.annotations_value[&bindee];
-        let var = binder.build(tycker, env)?;
-        let def = Alloc::alloc(tycker, var, def_ty.into());
-        let binder = Alloc::alloc(tycker, def, def_ty);
-        let tail = tail(def).build(tycker, env)?;
+        let binder = binder.build(tycker, env)?;
+        let tail = tail(binder).build(tycker, env)?;
         let tail_ty = tycker.statics.annotations_compu[&tail];
         Ok(Alloc::alloc(tycker, PureBind { binder, bindee, tail }, tail_ty))
     }

@@ -241,8 +241,10 @@ fn structure_translation(
             // input: S_f S_a
             let App(ty_f, ty_a) = ty;
             // output: Str(S_f) Lift(S_a) { Str(S_a) }
-            let str_f =
-                cs::Structure { monad_ty, monad_impl, str_env: str_env.to_owned(), ty: ty_f };
+            let str_f = {
+                let str_env = str_env.to_owned();
+                cs::Structure { monad_ty, monad_impl, str_env, ty: ty_f }
+            };
             let ty_a_lift = cs::TypeLift { monad_ty, ty: ty_a };
             let str_a = cs::Structure { monad_ty, monad_impl, str_env, ty: ty_a };
             App(App(str_f, cs::Ty(ty_a_lift)), Thunk(str_a)).build(tycker, env)?
@@ -474,15 +476,19 @@ fn value_translation(
         | Value::Triv(Triv) => Triv.build(tycker, env)?,
         | Value::VCons(value) => {
             let Cons(value_1, value_2) = value;
-            let value_1_ =
-                cs::TermLift { monad_ty, monad_impl, str_env: str_env.to_owned(), tm: value_1 };
+            let value_1_ = {
+                let str_env = str_env.to_owned();
+                cs::TermLift { monad_ty, monad_impl, str_env, tm: value_1 }
+            };
             let value_2_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: value_2 };
             Cons(value_1_, value_2_).build(tycker, env)?
         }
         | Value::TCons(value) => {
             let Cons(a_ty, body) = value;
-            let a_str =
-                cs::Structure { monad_ty, monad_impl, str_env: str_env.to_owned(), ty: a_ty };
+            let a_str = {
+                let str_env = str_env.to_owned();
+                cs::Structure { monad_ty, monad_impl, str_env, ty: a_ty }
+            };
             let body_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: body };
             let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
             // existential type construct should be type-guided
@@ -516,7 +522,10 @@ fn computation_translation(
         }
         | Compu::VApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ = cs::TermLift { monad_ty, monad_impl, str_env: str_env.to_owned(), tm: fun };
+            let fun_ = {
+                let str_env = str_env.to_owned();
+                cs::TermLift { monad_ty, monad_impl, str_env, tm: fun }
+            };
             let arg_ = cs::TermLift { monad_ty, monad_impl, str_env, tm: arg };
             App(fun_, arg_).build(tycker, env)?
         }
@@ -533,7 +542,10 @@ fn computation_translation(
         }
         | Compu::TApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ = cs::TermLift { monad_ty, monad_impl, str_env: str_env.to_owned(), tm: fun };
+            let fun_ = {
+                let str_env = str_env.to_owned();
+                cs::TermLift { monad_ty, monad_impl, str_env, tm: fun }
+            };
             let arg_ = cs::TypeLift { monad_ty, ty: arg };
             let str_ = cs::Structure { monad_ty, monad_impl, str_env, ty: arg };
             App(App(fun_, cs::Ty(arg_)), Thunk(str_)).build(tycker, env)?
@@ -567,12 +579,17 @@ fn computation_translation(
         }
         | Compu::Do(compu) => {
             let Bind { binder, bindee, tail } = compu;
-            let str_ = cs::Structure { monad_ty, monad_impl, str_env: str_env.to_owned(), ty: ty_ };
+            let str_ = {
+                let str_env = str_env.to_owned();
+                cs::Structure { monad_ty, monad_impl, str_env, ty: ty_ }
+            };
             let ret_ty = cs::TypeOf(bindee).build(tycker, env)?;
             let Some(a_ty) = ret_ty.destruct_ret_app(tycker) else { unreachable!() };
             let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
-            let bindee_ =
-                cs::TermLift { monad_ty, monad_impl, str_env: str_env.to_owned(), tm: bindee };
+            let bindee_ = {
+                let str_env = str_env.to_owned();
+                cs::TermLift { monad_ty, monad_impl, str_env, tm: bindee }
+            };
             let kont = Abs(cs::Fresh(binder), move |_var| cs::TermLift {
                 monad_ty,
                 monad_impl,
@@ -581,8 +598,24 @@ fn computation_translation(
             });
             App(App(App(str_, cs::Ty(a_ty_)), Thunk(bindee_)), Thunk(kont)).build(tycker, env)?
         }
-        | Compu::Let(_) => todo!(),
-        | Compu::Match(_) => todo!(),
+        | Compu::Let(compu) => {
+            let PureBind { binder, bindee, tail } = compu;
+            let bindee_ = {
+                let str_env = str_env.to_owned();
+                cs::TermLift { monad_ty, monad_impl, str_env, tm: bindee }
+            };
+            let binder_ = cs::Fresh(binder);
+            PureBind {
+                binder: binder_,
+                bindee: bindee_,
+                tail: move |_| cs::TermLift { monad_ty, monad_impl, str_env, tm: tail },
+            }
+            .build(tycker, env)?
+        }
+        | Compu::Match(_) => {
+            // let Match { scrut, arms } = compu;
+            todo!()
+        }
         | Compu::CoMatch(_) => todo!(),
         | Compu::Dtor(_) => todo!(),
     };
