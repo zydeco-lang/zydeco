@@ -85,6 +85,8 @@ mod syntax_impl {
         }
     }
 
+    // Todo: ValuePatternLift
+
     // TermLift (value translation)
     impl<T> Construct<ValueId> for cs::TermLift<T>
     where
@@ -317,7 +319,7 @@ fn structure_translation(
             // input: A -> B
             let Arrow(ty_p, ty_b) = ty;
             // output: fn (Z : VType) (mz : Thk (M Z)) (f : Thk (Z -> [A] -> [B])) -> <body>
-            Abs(cs::Ty(cs::Pat("Z", VType)), |_tvar, abst_z| {
+            Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
                 let abst_z_ty = cs::Ty(abst_z);
                 let mz_ty = cs::Thk(App(monad_ty, abst_z_ty));
                 Abs(cs::Pat("mz", mz_ty), move |var_mz| {
@@ -449,6 +451,8 @@ fn type_translation(
     };
     Ok(res)
 }
+
+/// Todo: Value Pattern Translation
 
 /// Term Translation (Value) `[V]`
 fn value_translation(

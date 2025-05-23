@@ -374,6 +374,7 @@ mod kind_test {
     #[test]
     fn r#static() {
         fn _f(tycker: &mut Tycker, env: &Env<AnnId>) -> Result<KindId> {
+            // VType -> (CType -> CType)
             Arrow(VType, Arrow(CType, CType)).build(tycker, env)
         }
     }
@@ -601,20 +602,6 @@ where
         Ok(Alloc::alloc(tycker, Exists(abst, ty), vtype))
     }
 }
-// impl<P> cs::HExists<P>
-// where
-//     P: Construct<AbstId>,
-// {
-//     fn mk<F, T>(self, tycker: &mut Tycker, env: &Env<AnnId>, body: F) -> impl Construct<TypeId>
-//     where
-//         F: Fn(AbstId) -> T,
-//         T: Construct<TypeId>,
-//     {
-//         let cs::HExists(abst) = self;
-//         let abst = abst.build(tycker, env);
-//         body(abst)
-//     }
-// }
 impl Construct<TypeId> for OSTy {
     fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
         let AnnId::Type(ty) = env[tycker.prim.os.get()] else { unreachable!() };
