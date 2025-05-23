@@ -85,6 +85,8 @@ mod syntax_impl {
         }
     }
 
+    // Todo: ValuePatternLift
+
     // TermLift (value translation)
     impl<T> Construct<ValueId> for cs::TermLift<T>
     where
@@ -449,6 +451,8 @@ fn type_translation(
     };
     Ok(res)
 }
+
+/// Todo: Value Pattern Translation
 
 /// Term Translation (Value) `[V]`
 fn value_translation(
