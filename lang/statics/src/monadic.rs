@@ -19,7 +19,7 @@ pub mod syntax {
     pub struct Structure<T> {
         pub monad_ty: TypeId,
         pub monad_impl: ValueId,
-        pub str_env: StructureEnv,
+        pub str_env: StrEnv,
         pub ty: T,
     }
     /// type translation (lift)
@@ -33,7 +33,7 @@ pub mod syntax {
     pub struct TermLift<T> {
         pub monad_ty: TypeId,
         pub monad_impl: ValueId,
-        pub str_env: StructureEnv,
+        pub str_env: StrEnv,
         pub tm: T,
     }
     /// monadic elaboration
@@ -41,7 +41,7 @@ pub mod syntax {
     pub struct Elaboration<T> {
         pub monad_ty: TypeId,
         pub monad_impl: ValueId,
-        pub str_env: StructureEnv,
+        pub str_env: StrEnv,
         pub tm: T,
     }
 }
@@ -164,33 +164,9 @@ fn signature_translation(
     Ok(res)
 }
 
-#[derive(Clone)]
-pub struct StructureEnv {
-    pub def_map: im::HashMap<DefId, AbstId>,
-    pub absts: im::HashMap<AbstId, ValueId>,
-}
-
-impl StructureEnv {
-    pub fn new() -> Self {
-        Self { def_map: im::HashMap::new(), absts: im::HashMap::new() }
-    }
-    fn extended(
-        &self, abst: AbstId, def: Option<DefId>, str: impl Construct<ValueId>, tycker: &mut Tycker,
-        env: &TyEnv,
-    ) -> Self {
-        let mut new = self.clone();
-        if let Some(def) = def {
-            new.def_map.insert(def, abst);
-        }
-        let Ok(str) = str.build(tycker, env) else { unreachable!() };
-        new.absts.insert(abst, str);
-        new
-    }
-}
-
 /// Structure Translation `Str(T)`
 fn structure_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StrEnv,
     env: &TyEnv, ty: TypeId,
 ) -> Result<CompuId> {
     let res = match tycker.type_filled(&ty)?.to_owned() {
@@ -456,7 +432,7 @@ fn type_translation(
 
 /// Term Translation (Value) `[V]`
 fn value_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StrEnv,
     env: &TyEnv, value: ValueId,
 ) -> Result<ValueId> {
     let ty = cs::TypeOf(value).build(tycker, env)?;
@@ -504,7 +480,7 @@ fn value_translation(
 
 /// Term Translation (Computation) `[C]`
 fn computation_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StrEnv,
     env: &TyEnv, compu: CompuId,
 ) -> Result<CompuId> {
     use Computation as Compu;
@@ -628,7 +604,7 @@ fn computation_translation(
 
 /// Monadic Block Elaboration (Value)
 fn value_monadic_elaboration(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StrEnv,
     env: &TyEnv, value: ValueId,
 ) -> Result<ValueId> {
     let _ = tycker;
@@ -642,7 +618,7 @@ fn value_monadic_elaboration(
 
 /// Monadic Block Elaboration (Computation)
 fn computation_monadic_elaboration(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StrEnv,
     env: &TyEnv, compu: CompuId,
 ) -> Result<CompuId> {
     let _ = tycker;

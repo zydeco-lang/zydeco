@@ -1,7 +1,7 @@
 use {
     crate::{
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
-        syntax::{AnnId, Env, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId, TyEnv},
+        syntax::{AnnId, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId, TyEnvT},
         *,
     },
     zydeco_utils::arena::{ArcGlobalAlloc, ArenaAccess},
@@ -39,7 +39,7 @@ impl Tycker {
     }
     pub fn run(&mut self) -> ResultKont<()> {
         let mut scc = self.scoped.top.clone();
-        let mut env = SEnv::new(());
+        let mut env = TyEnvT::new(());
         loop {
             let groups = scc.top();
             // if no more groups are at the top, we're done
@@ -48,7 +48,7 @@ impl Tycker {
             }
             for group in groups {
                 // each group should be type checked on its own
-                match SccDeclarations(&group).tyck(self, env.mk(())) {
+                match env.mk(SccDeclarations(&group)).tyck_k(self, ()) {
                     | Ok(new_env) => {
                         // move on
                         env = new_env;
@@ -76,7 +76,7 @@ impl Tycker {
                 | Fillable::Fill(fill) => match self.statics.solus.get(&fill) {
                     | Some(ann) => match ann {
                         | AnnId::Set | AnnId::Kind(_) => {
-                            // keep running tycker even after unsuccesful solving hole
+                            // keep running tycker even after unsuccessful solving hole
                             let _: ResultKont<()> =
                                 self.err_k(TyckError::SortMismatch, std::panic::Location::caller());
                         }
@@ -85,7 +85,7 @@ impl Tycker {
                         }
                     },
                     | None => {
-                        // keep running tycker even after unsuccesful solving hole
+                        // keep running tycker even after unsuccessful solving hole
                         let _: ResultKont<()> = self.err_k(
                             TyckError::MissingSolution(vec![fill]),
                             std::panic::Location::caller(),
@@ -183,7 +183,9 @@ mod impl_tycker {
 pub trait Tyck {
     type Out;
     type Action;
-    fn tyck_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out>;
+    fn tyck_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out> {
+        self.tyck_inner_k(tycker, action)
+    }
     fn tyck_inner_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out>;
 }
 
@@ -222,39 +224,12 @@ impl<Ann> Action<Ann> {
     }
 }
 
-/// substituting types for type variables;
-/// S for substitution / statics
-/// PLEASE NOTE: when performing substitution, the environment should be applied one by one
-pub struct SEnv<T> {
-    /// the environment of type variables; should be applied from the first to the last
-    // Note: should be ordered?
-    pub env: TyEnv,
-    pub inner: T,
-}
-
-impl<T> SEnv<T> {
-    pub fn new(inner: T) -> Self {
-        Self { env: Env::new(), inner }
-    }
-    pub fn mk<S>(&self, inner: S) -> SEnv<S> {
-        SEnv { env: self.env.clone(), inner }
-    }
-    pub fn mk_ext<S>(
-        &self, iter: impl IntoIterator<Item = (ss::DefId, AnnId)>, inner: S,
-    ) -> SEnv<S> {
-        SEnv { env: self.env.clone() + iter, inner }
-    }
-}
-
-impl<T> From<(&TyEnv, T)> for SEnv<T> {
-    fn from((env, inner): (&TyEnv, T)) -> Self {
-        Self { env: env.clone(), inner }
-    }
-}
-
-impl SccDeclarations<'_> {
-    pub fn tyck(&self, tycker: &mut Tycker, mut env: SEnv<()>) -> ResultKont<SEnv<()>> {
-        let SccDeclarations(decls) = self;
+impl Tyck for TyEnvT<SccDeclarations<'_>> {
+    type Out = TyEnvT<()>;
+    type Action = ();
+    fn tyck_inner_k(&self, tycker: &mut Tycker, (): ()) -> ResultKont<TyEnvT<()>> {
+        let mut env = self.mk(());
+        let SccDeclarations(decls) = self.inner;
         use su::Declaration as Decl;
         match decls.len() {
             | 0 => Ok(env),
@@ -264,9 +239,9 @@ impl SccDeclarations<'_> {
                     | Decl::AliasBody(_) => {
                         let uni = tycker.scoped.unis.get(id).is_some();
                         if uni {
-                            Self::tyck_uni_ref(id, tycker, env)
+                            SccDeclarations::tyck_uni_ref(id, tycker, env)
                         } else {
-                            Self::tyck_scc_refs([id].into_iter(), tycker, env)
+                            SccDeclarations::tyck_scc_refs([id].into_iter(), tycker, env)
                         }
                     }
                     | Decl::AliasHead(decl) => {
@@ -300,12 +275,15 @@ impl SccDeclarations<'_> {
                     }
                 }
             }
-            | _ => Self::tyck_scc_refs(decls.into_iter(), tycker, env),
+            | _ => SccDeclarations::tyck_scc_refs(decls.into_iter(), tycker, env),
         }
     }
+}
+
+impl SccDeclarations<'_> {
     fn tyck_uni_ref(
-        id: &su::DeclId, tycker: &mut Tycker, mut env: SEnv<()>,
-    ) -> ResultKont<SEnv<()>> {
+        id: &su::DeclId, tycker: &mut Tycker, mut env: TyEnvT<()>,
+    ) -> ResultKont<TyEnvT<()>> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.stack.push_back(TyckTask::DeclUni(id.to_owned()));
@@ -340,7 +318,7 @@ impl SccDeclarations<'_> {
                     };
 
                     // add the type into the environment
-                    let SEnv { env: new_env, inner: () } =
+                    let TyEnvT { env: new_env, inner: () } =
                         env.mk(binder).tyck_assign(tycker, Action::syn(), bindee)?;
                     env.env = new_env;
                     tycker
@@ -394,8 +372,8 @@ impl SccDeclarations<'_> {
         })
     }
     fn tyck_scc_refs<'f>(
-        decls: impl Iterator<Item = &'f su::DeclId>, tycker: &mut Tycker, mut env: SEnv<()>,
-    ) -> ResultKont<SEnv<()>> {
+        decls: impl Iterator<Item = &'f su::DeclId>, tycker: &mut Tycker, mut env: TyEnvT<()>,
+    ) -> ResultKont<TyEnvT<()>> {
         let decls = decls.collect::<Vec<_>>();
 
         tycker.guarded(|tycker| {
@@ -485,7 +463,7 @@ impl SccDeclarations<'_> {
                 tycker.statics.seals.insert(abst, bindee_subst);
                 let abst_ty = Alloc::alloc(tycker, abst, kd);
                 // add the type into the environment
-                let SEnv { env: new_env, inner: () } =
+                let TyEnvT { env: new_env, inner: () } =
                     env.mk(binder).tyck_assign(tycker, Action::syn(), abst_ty)?;
                 env.env = new_env;
             }
@@ -494,7 +472,7 @@ impl SccDeclarations<'_> {
     }
 }
 
-impl Tyck for SEnv<su::PatId> {
+impl Tyck for TyEnvT<su::PatId> {
     type Out = PatAnnId;
     type Action = Action<AnnId>;
 
@@ -697,10 +675,10 @@ impl Tyck for SEnv<su::PatId> {
     }
 }
 
-impl SEnv<ss::TPatId> {
+impl TyEnvT<ss::TPatId> {
     pub fn tyck_assign(
         &self, tycker: &mut Tycker, Action { switch: _ }: Action<AnnId>, assignee: ss::TypeId,
-    ) -> ResultKont<SEnv<()>> {
+    ) -> ResultKont<TyEnvT<()>> {
         use ss::TypePattern as TPat;
         let pat = tycker.statics.tpats[&self.inner].to_owned();
         match pat {
@@ -716,13 +694,13 @@ impl SEnv<ss::TPatId> {
                 Lub::lub_k(def_kd, assignee_kd, tycker)?;
                 let mut env = self.env.clone();
                 env += [(def, assignee.into())];
-                Ok(SEnv { env, inner: () })
+                Ok(TyEnvT { env, inner: () })
             }
         }
     }
 }
 
-impl Tyck for SEnv<su::TermId> {
+impl Tyck for TyEnvT<su::TermId> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
 
@@ -1196,7 +1174,7 @@ impl Tyck for SEnv<su::TermId> {
                                             let abst_ty = Alloc::alloc(tycker, abst, binder_kd);
                                             env += [(def, abst_ty.into())];
                                         }
-                                        let body_out_ann = SEnv { env, inner: body }
+                                        let body_out_ann = TyEnvT { env, inner: body }
                                             .tyck_k(tycker, Action::ana(ty_body.into()))?;
                                         // throwing _body_ty away because it has been substituted
                                         // Todo: reuse _body_ty by substituting abst back
@@ -1844,7 +1822,7 @@ impl Tyck for SEnv<su::TermId> {
                 let su::MoBlock(body) = term;
 
                 // tyck the body WITH AN (ALMOST) EMPTY ENV
-                let body_out_ann = SEnv::new(body).tyck_k(tycker, Action::syn())?;
+                let body_out_ann = TyEnvT::new(body).tyck_k(tycker, Action::syn())?;
                 let (_body, _body_ty) = body_out_ann.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,

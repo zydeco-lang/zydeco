@@ -37,7 +37,7 @@ zydeco-driver = { path = "lang/driver" }
 syn = "2.0"
 quote = "1.0"
 # derive
-derive_more = { version = "2.0", features = ["from", "into", "deref", "add", "add_assign"] }
+derive_more = { version = "2.0", features = ["from", "into", "deref", "deref_mut", "add", "add_assign"] }
 derive-where = "1.4"
 auto_impl = "1.3"
 # utils

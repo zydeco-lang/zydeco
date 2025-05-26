@@ -1,11 +1,12 @@
 use std::collections::BTreeMap;
 
 pub use super::arena::*;
+pub use super::env::*;
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use crate::surface_syntax as su;
-use derive_more::{Deref, From, Into};
+use derive_more::From;
 use zydeco_utils::new_key_type;
 
 /* ------------------------------- Identifier ------------------------------- */
@@ -232,80 +233,6 @@ mod impls_identifiers {
 /* --------------------------------- Context -------------------------------- */
 
 pub use su::Context;
-
-/* ------------------------------- Environment ------------------------------ */
-
-#[derive(Clone, Debug, From, Into, Deref)]
-pub struct Env<T>(im::HashMap<DefId, T>);
-pub type TyEnv = Env<AnnId>;
-
-mod impls_env {
-    use super::*;
-    use std::ops::{Add, AddAssign, Index};
-
-    impl<Iter, T> Add<Iter> for Env<T>
-    where
-        T: Clone,
-        Iter: IntoIterator<Item = (DefId, T)>,
-    {
-        type Output = Self;
-        fn add(self, iter: Iter) -> Self {
-            let Env(mut defs) = self;
-            for (def, t) in iter {
-                defs.insert(def, t);
-            }
-            Self(defs)
-        }
-    }
-    impl<Iter, T> AddAssign<Iter> for Env<T>
-    where
-        T: Clone,
-        Iter: IntoIterator<Item = (DefId, T)>,
-    {
-        fn add_assign(&mut self, iter: Iter) {
-            for (def, t) in iter {
-                self.0.insert(def, t);
-            }
-        }
-    }
-    impl<T> Env<T> {
-        pub fn new() -> Self {
-            Self(im::HashMap::new())
-        }
-    }
-    impl<T> Default for Env<T> {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-    impl<T> Index<&DefId> for Env<T>
-    where
-        T: Clone,
-    {
-        type Output = T;
-        fn index(&self, def: &DefId) -> &T {
-            &self.0[def]
-        }
-    }
-    impl<T> FromIterator<(DefId, T)> for Env<T>
-    where
-        T: Clone,
-    {
-        fn from_iter<I: IntoIterator<Item = (DefId, T)>>(iter: I) -> Self {
-            Self(iter.into_iter().collect())
-        }
-    }
-    impl<T> IntoIterator for Env<T>
-    where
-        T: Clone,
-    {
-        type Item = (DefId, T);
-        type IntoIter = im::hashmap::ConsumingIter<(DefId, T)>;
-        fn into_iter(self) -> Self::IntoIter {
-            self.0.into_iter()
-        }
-    }
-}
 
 /* -------------------------------- Fillable -------------------------------- */
 

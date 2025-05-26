@@ -5,8 +5,8 @@ use zydeco_utils::arena::ArenaAccess;
 
 impl Tycker {
     pub fn register_prim_ty(
-        &mut self, mut env: SEnv<()>, def: DefId, prim: Type, syn_kd: su::TermId,
-    ) -> ResultKont<SEnv<()>> {
+        &mut self, mut env: TyEnvT<()>, def: DefId, prim: Type, syn_kd: su::TermId,
+    ) -> ResultKont<TyEnvT<()>> {
         let kd = match env.mk(syn_kd).tyck_k(self, Action::syn())?.as_term_static() {
             | AnnId::Kind(kd) => kd,
             | AnnId::Set | AnnId::Type(_) => unreachable!(),
@@ -17,8 +17,8 @@ impl Tycker {
         Ok(env)
     }
     pub fn register_prim_decl(
-        &mut self, decl: su::AliasHead, id: &su::DeclId, mut env: SEnv<()>,
-    ) -> ResultKont<SEnv<()>> {
+        &mut self, decl: su::AliasHead, id: &su::DeclId, mut env: TyEnvT<()>,
+    ) -> ResultKont<TyEnvT<()>> {
         let su::AliasHead { binder, ty } = decl;
         let internal_or = self.scoped.exts.get(id).cloned();
         match internal_or {
