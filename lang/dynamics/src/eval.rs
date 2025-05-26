@@ -1,6 +1,6 @@
 use crate::{statics_syntax::Env, syntax::*};
 use std::io::{BufRead, Write};
-use zydeco_utils::{arena::ArenaAccess, imc::ImmutableMonoidMap};
+use zydeco_utils::arena::ArenaAccess;
 
 pub trait Eval<'rt>: Sized {
     type Out;
@@ -102,7 +102,7 @@ impl<'rt> Eval<'rt> for (RcVPat, SemValue) {
             | VPat::Hole(Hole) => {}
             | VPat::Var(def) => {
                 // println!("<== {:?}", def);
-                runtime.env += (*def, sem);
+                runtime.env += [(*def, sem)];
             }
             | VPat::Ctor(Ctor(ctor, vpat)) => match sem {
                 | SemValue::Ctor(Ctor(ctor_, body)) => {

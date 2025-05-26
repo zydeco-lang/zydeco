@@ -4,10 +4,7 @@ use {
         syntax::{AnnId, Env, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
         *,
     },
-    zydeco_utils::{
-        arena::{ArcGlobalAlloc, ArenaAccess},
-        imc::ImmutableMonoidMap,
-    },
+    zydeco_utils::arena::{ArcGlobalAlloc, ArenaAccess},
 };
 
 pub struct Tycker {
@@ -245,7 +242,7 @@ impl<T> SEnv<T> {
     pub fn mk_ext<S>(
         &self, iter: impl IntoIterator<Item = (ss::DefId, AnnId)>, inner: S,
     ) -> SEnv<S> {
-        SEnv { env: self.env.extended(iter), inner }
+        SEnv { env: self.env.clone() + iter, inner }
     }
 }
 
@@ -456,7 +453,7 @@ impl SccDeclarations<'_> {
                     let abst = tycker.statics.absts.alloc(());
                     tycker.statics.abst_hints.insert(abst, def);
                     let abst_ty = Alloc::alloc(tycker, abst, kd);
-                    env.env += (def, abst_ty.into());
+                    env.env += [(def, abst_ty.into())];
                     abst_map.insert(id.to_owned(), (abst, kd));
                 }
             }
@@ -718,7 +715,7 @@ impl SEnv<ss::TPatId> {
                 let assignee_kd = { tycker.statics.annotations_type[&assignee].to_owned() };
                 Lub::lub_k(def_kd, assignee_kd, tycker)?;
                 let mut env = self.env.clone();
-                env += (def, assignee.into());
+                env += [(def, assignee.into())];
                 Ok(SEnv { env, inner: () })
             }
         }
@@ -1197,7 +1194,7 @@ impl Tyck for SEnv<su::TermId> {
                                         let mut env = self.env.clone();
                                         if let Some(def) = def_binder {
                                             let abst_ty = Alloc::alloc(tycker, abst, binder_kd);
-                                            env += (def, abst_ty.into());
+                                            env += [(def, abst_ty.into())];
                                         }
                                         let body_out_ann = SEnv { env, inner: body }
                                             .tyck_k(tycker, Action::ana(ty_body.into()))?;

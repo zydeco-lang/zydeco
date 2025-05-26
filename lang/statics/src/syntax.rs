@@ -5,7 +5,7 @@ pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use crate::surface_syntax as su;
-use derive_more::From;
+use derive_more::{Deref, From, Into};
 use zydeco_utils::new_key_type;
 
 /* ------------------------------- Identifier ------------------------------- */
@@ -235,61 +235,46 @@ pub use su::Context;
 
 /* ------------------------------- Environment ------------------------------ */
 
-#[derive(Clone, Debug)]
-pub struct Env<T> {
-    pub defs: im::HashMap<DefId, T>,
-}
+#[derive(Clone, Debug, From, Into, Deref)]
+pub struct Env<T>(im::HashMap<DefId, T>);
 
 mod impls_env {
     use super::*;
     use std::ops::{Add, AddAssign, Index};
 
-    impl<T> From<im::HashMap<DefId, T>> for Env<T> {
-        fn from(defs: im::HashMap<DefId, T>) -> Self {
-            Self { defs }
-        }
-    }
-
-    impl<T> Into<im::HashMap<DefId, T>> for Env<T> {
-        fn into(self) -> im::HashMap<DefId, T> {
-            self.defs
-        }
-    }
-
-    impl<T> AsRef<im::HashMap<DefId, T>> for Env<T> {
-        fn as_ref(&self) -> &im::HashMap<DefId, T> {
-            &self.defs
-        }
-    }
-
-    impl<T> Add for Env<T>
+    impl<Iter, T> Add<Iter> for Env<T>
     where
         T: Clone,
+        Iter: IntoIterator<Item = (DefId, T)>,
     {
         type Output = Self;
-        fn add(self, other: Self) -> Self {
-            let Env { mut defs } = self;
-            defs.extend(other.defs);
-            Self { defs }
+        fn add(self, iter: Iter) -> Self {
+            let Env(mut defs) = self;
+            for (def, t) in iter {
+                defs.insert(def, t);
+            }
+            Self(defs)
         }
     }
-    impl<T> Add<(DefId, T)> for Env<T>
+    impl<Iter, T> AddAssign<Iter> for Env<T>
     where
         T: Clone,
+        Iter: IntoIterator<Item = (DefId, T)>,
     {
-        type Output = Self;
-        fn add(self, (def, t): (DefId, T)) -> Self {
-            let Env { mut defs } = self;
-            defs.insert(def, t);
-            Self { defs }
+        fn add_assign(&mut self, iter: Iter) {
+            for (def, t) in iter {
+                self.0.insert(def, t);
+            }
         }
     }
-    impl<T> AddAssign<(DefId, T)> for Env<T>
-    where
-        T: Clone,
-    {
-        fn add_assign(&mut self, (def, t): (DefId, T)) {
-            *self = self.clone() + (def, t);
+    impl<T> Env<T> {
+        pub fn new() -> Self {
+            Self(im::HashMap::new())
+        }
+    }
+    impl<T> Default for Env<T> {
+        fn default() -> Self {
+            Self::new()
         }
     }
     impl<T> Index<&DefId> for Env<T>
@@ -298,7 +283,25 @@ mod impls_env {
     {
         type Output = T;
         fn index(&self, def: &DefId) -> &T {
-            &self.defs[def]
+            &self.0[def]
+        }
+    }
+    impl<T> FromIterator<(DefId, T)> for Env<T>
+    where
+        T: Clone,
+    {
+        fn from_iter<I: IntoIterator<Item = (DefId, T)>>(iter: I) -> Self {
+            Self(iter.into_iter().collect())
+        }
+    }
+    impl<T> IntoIterator for Env<T>
+    where
+        T: Clone,
+    {
+        type Item = (DefId, T);
+        type IntoIter = im::hashmap::ConsumingIter<(DefId, T)>;
+        fn into_iter(self) -> Self::IntoIter {
+            self.0.into_iter()
         }
     }
 }

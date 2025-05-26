@@ -1,5 +1,5 @@
 use crate::{syntax::*, *};
-use zydeco_utils::{arena::ArenaAccess, imc::ImmutableMonoidMap};
+use zydeco_utils::arena::ArenaAccess;
 
 /* ------------------------------ Substitution ------------------------------ */
 
@@ -139,7 +139,7 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> Result<TypeId> {
-        self.subst_env(tycker, &Env::singleton(var, with.into()))
+        self.subst_env(tycker, &Env::from_iter([(var, with.into())]))
     }
 }
 
