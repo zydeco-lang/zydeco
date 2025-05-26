@@ -990,7 +990,7 @@
 // /* ---------------------------- Helper Functions ---------------------------- */
 // /// `A -> M A`
 // fn gen_mo_return_body(
-//     env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId,
+//     env: &TyEnv, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId,
 // ) -> TypeId {
 //     // A -> M A
 //     // where M is the monad type `mo_ty`
@@ -999,7 +999,7 @@
 //     Alloc::alloc(tycker, Arrow(a_ty, m_a), ctype)
 // }
 // /// `forall (A: VType) . A -> M A`
-// fn gen_mo_return_forall(env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId) -> TypeId {
+// fn gen_mo_return_forall(env: &TyEnv, tycker: &mut Tycker, mo_ty: TypeId) -> TypeId {
 //     // forall (A: VType) . A -> M A
 //     // where M is the monad type `mo_ty`
 //     let vtype = tycker.vtype(env);
@@ -1012,7 +1012,7 @@
 // }
 // /// `Thunk (M A) -> Thunk (A -> M A') -> M A'`
 // fn gen_mo_bind_body(
-//     env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId, a_prime_ty: TypeId,
+//     env: &TyEnv, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId, a_prime_ty: TypeId,
 // ) -> TypeId {
 //     // Thunk (M A) -> Thunk (A -> M A') -> M A'
 //     // where M is the monad type `mo_ty`
@@ -1027,7 +1027,7 @@
 // }
 // /// `forall (A': VType) . Thunk (M A) -> Thunk (A -> M A') -> M A'`
 // fn gen_mo_bind_forall(
-//     env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId,
+//     env: &TyEnv, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId,
 // ) -> TypeId {
 //     // forall (A': VType) . Thunk (M A) -> Thunk (A -> M A') -> M A'
 //     // where M is the monad type `mo_ty`
@@ -1040,7 +1040,7 @@
 //     Alloc::alloc(tycker, Forall(abst_a_prime, forall_body), ctype)
 // }
 // /// `forall (A: VType) . forall (A': VType) . Thunk (M A) -> Thunk (A -> M A') -> M A'`
-// fn gen_mo_bind_forall_forall(env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId) -> TypeId {
+// fn gen_mo_bind_forall_forall(env: &TyEnv, tycker: &mut Tycker, mo_ty: TypeId) -> TypeId {
 //     // forall (A: VType) . forall (A': VType) . Thunk (M A) -> Thunk (A -> M A') -> M A'
 //     // where M is the monad type `mo_ty`
 //     let vtype = tycker.vtype(env);
@@ -1053,7 +1053,7 @@
 // }
 // /// `Thunk (A -> R) -> R`
 // fn gen_alg_thunk_a_r_r(
-//     env: &Env<AnnId>, tycker: &mut Tycker, a_ty: TypeId, carrier_ty: TypeId,
+//     env: &TyEnv, tycker: &mut Tycker, a_ty: TypeId, carrier_ty: TypeId,
 // ) -> TypeId {
 //     // Thunk (A -> R) -> R
 //     let ctype = tycker.ctype(env);
@@ -1063,7 +1063,7 @@
 // }
 // /// `Thunk (M A) -> Thunk (A -> R) -> R`
 // fn gen_alg_binda_body(
-//     env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId, carrier_ty: TypeId,
+//     env: &TyEnv, tycker: &mut Tycker, mo_ty: TypeId, a_ty: TypeId, carrier_ty: TypeId,
 // ) -> TypeId {
 //     // Thunk (M A) -> Thunk (A -> R) -> R
 //     // where M is the monad type `mo_ty` and R is the carrier of the algebra `b`
@@ -1075,7 +1075,7 @@
 // }
 // /// `forall (A: VType) . Thunk (M A) -> Thunk (A -> R) -> R`
 // fn gen_alg_binda_forall(
-//     env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, carrier_ty: TypeId,
+//     env: &TyEnv, tycker: &mut Tycker, mo_ty: TypeId, carrier_ty: TypeId,
 // ) -> TypeId {
 //     // forall (A: VType) . Thunk (M A) -> Thunk (A -> R) -> R
 //     // where M is the monad type `mo_ty` and R is the carrier of the algebra `carrier_ty`
@@ -1099,8 +1099,8 @@
 // /// end
 // /// ```
 // fn gen_algebra_template(
-//     env: &Env<AnnId>, tycker: &mut Tycker, mo_ty: TypeId, carrier_ty: TypeId,
-//     body: impl FnOnce(&Env<AnnId>, &mut Tycker, AlgebraBodyArgs) -> ResultKont<CompuId>,
+//     env: &TyEnv, tycker: &mut Tycker, mo_ty: TypeId, carrier_ty: TypeId,
+//     body: impl FnOnce(&TyEnv, &mut Tycker, AlgebraBodyArgs) -> ResultKont<CompuId>,
 // ) -> ResultKont<CompuId> {
 //     let dtor_binda = DtorName(".bindA".to_string());
 //     let vtype = tycker.vtype(env);

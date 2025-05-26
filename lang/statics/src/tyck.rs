@@ -1,7 +1,7 @@
 use {
     crate::{
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
-        syntax::{AnnId, Env, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId},
+        syntax::{AnnId, Env, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId, TyEnv},
         *,
     },
     zydeco_utils::arena::{ArcGlobalAlloc, ArenaAccess},
@@ -228,7 +228,7 @@ impl<Ann> Action<Ann> {
 pub struct SEnv<T> {
     /// the environment of type variables; should be applied from the first to the last
     // Note: should be ordered?
-    pub env: Env<AnnId>,
+    pub env: TyEnv,
     pub inner: T,
 }
 
@@ -246,8 +246,8 @@ impl<T> SEnv<T> {
     }
 }
 
-impl<T> From<(&Env<AnnId>, T)> for SEnv<T> {
-    fn from((env, inner): (&Env<AnnId>, T)) -> Self {
+impl<T> From<(&TyEnv, T)> for SEnv<T> {
+    fn from((env, inner): (&TyEnv, T)) -> Self {
         Self { env: env.clone(), inner }
     }
 }

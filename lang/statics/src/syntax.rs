@@ -237,6 +237,7 @@ pub use su::Context;
 
 #[derive(Clone, Debug, From, Into, Deref)]
 pub struct Env<T>(im::HashMap<DefId, T>);
+pub type TyEnv = Env<AnnId>;
 
 mod impls_env {
     use super::*;

@@ -4,11 +4,11 @@ use zydeco_utils::arena::ArenaAccess;
 /* ------------------------------ Substitution ------------------------------ */
 
 impl TypeId {
-    pub fn subst_env_k(&self, tycker: &mut Tycker, env: &Env<AnnId>) -> ResultKont<TypeId> {
+    pub fn subst_env_k(&self, tycker: &mut Tycker, env: &TyEnv) -> ResultKont<TypeId> {
         let res = self.subst_env(tycker, env);
         tycker.err_p_to_k(res)
     }
-    pub fn subst_env(&self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+    pub fn subst_env(&self, tycker: &mut Tycker, env: &TyEnv) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[self];
         let ty = tycker.statics.types[&self].to_owned();
         let ty = match ty {

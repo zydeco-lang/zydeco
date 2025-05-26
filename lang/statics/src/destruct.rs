@@ -125,7 +125,7 @@ impl TypeId {
         };
         Some(res)
     }
-    pub fn destruct_top(&self, _env: &Env<AnnId>, tycker: &mut Tycker) -> Option<()> {
+    pub fn destruct_top(&self, _env: &TyEnv, tycker: &mut Tycker) -> Option<()> {
         let res = match tycker.statics.types[&self].to_owned() {
             | Fillable::Fill(_) => todo!(),
             | Fillable::Done(ty) => match ty {
@@ -160,7 +160,7 @@ impl TypeId {
             },
         }
     }
-    pub fn destruct_monad(&self, env: &Env<AnnId>, tycker: &mut Tycker) -> Option<TypeId> {
+    pub fn destruct_monad(&self, env: &TyEnv, tycker: &mut Tycker) -> Option<TypeId> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         if a_tys.len() != 1 {
             None?;
@@ -181,7 +181,7 @@ impl TypeId {
         Some(res)
     }
     pub fn destruct_algebra(
-        &self, env: &Env<AnnId>, tycker: &mut Tycker,
+        &self, env: &TyEnv, tycker: &mut Tycker,
     ) -> Option<(TypeId, TypeId)> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         if a_tys.len() != 2 {
@@ -205,7 +205,7 @@ impl TypeId {
         };
         Some(res)
     }
-    pub fn destruct_data<'t>(&self, _env: &Env<AnnId>, tycker: &'t mut Tycker) -> Option<&'t Data> {
+    pub fn destruct_data<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t Data> {
         use zydeco_utils::arena::ArenaAccess;
         match tycker.statics.types[&self].to_owned() {
             | Fillable::Fill(_) => todo!(),
@@ -216,7 +216,7 @@ impl TypeId {
         }
     }
     pub fn destruct_codata<'t>(
-        &self, _env: &Env<AnnId>, tycker: &'t mut Tycker,
+        &self, _env: &TyEnv, tycker: &'t mut Tycker,
     ) -> Option<&'t CoData> {
         use zydeco_utils::arena::ArenaAccess;
         match tycker.statics.types[&self].to_owned() {

@@ -54,7 +54,7 @@ mod syntax_impl {
     where
         T: Construct<TypeId>,
     {
-        fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+        fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<TypeId> {
             let cs::Signature { monad_ty, ty } = self;
             let ty = ty.build(tycker, env)?;
             signature_translation(tycker, monad_ty, env, ty)
@@ -66,7 +66,7 @@ mod syntax_impl {
     where
         T: Construct<TypeId>,
     {
-        fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<CompuId> {
             let cs::Structure { monad_ty, monad_impl, str_env, ty } = self;
             let ty = ty.build(tycker, env)?;
             structure_translation(tycker, monad_ty, monad_impl, str_env, env, ty)
@@ -78,7 +78,7 @@ mod syntax_impl {
     where
         T: Construct<TypeId>,
     {
-        fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<TypeId> {
+        fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<TypeId> {
             let cs::TypeLift { monad_ty, ty } = self;
             let ty = ty.build(tycker, env)?;
             type_translation(tycker, monad_ty, env, ty)
@@ -92,7 +92,7 @@ mod syntax_impl {
     where
         T: Construct<ValueId>,
     {
-        fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<ValueId> {
+        fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<ValueId> {
             let cs::TermLift { monad_ty, monad_impl, str_env, tm } = self;
             let tm = tm.build(tycker, env)?;
             value_translation(tycker, monad_ty, monad_impl, str_env, env, tm)
@@ -104,7 +104,7 @@ mod syntax_impl {
     where
         T: Construct<CompuId>,
     {
-        fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<CompuId> {
             let cs::TermLift { monad_ty, monad_impl, str_env, tm } = self;
             let tm = tm.build(tycker, env)?;
             computation_translation(tycker, monad_ty, monad_impl, str_env, env, tm)
@@ -116,7 +116,7 @@ mod syntax_impl {
     where
         T: Construct<ValueId>,
     {
-        fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<ValueId> {
+        fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<ValueId> {
             let cs::Elaboration { monad_ty, monad_impl, str_env, tm } = self;
             let tm = tm.build(tycker, env)?;
             value_monadic_elaboration(tycker, monad_ty, monad_impl, str_env, env, tm)
@@ -128,7 +128,7 @@ mod syntax_impl {
     where
         T: Construct<CompuId>,
     {
-        fn build(self, tycker: &mut Tycker, env: &Env<AnnId>) -> Result<CompuId> {
+        fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<CompuId> {
             let cs::Elaboration { monad_ty, monad_impl, str_env, tm } = self;
             let tm = tm.build(tycker, env)?;
             computation_monadic_elaboration(tycker, monad_ty, monad_impl, str_env, env, tm)
@@ -146,7 +146,7 @@ mod syntax_impl {
 /// + `T: CType` -> `Algebra M T`
 /// + `T: K_1 -> K_2` -> `forall X: K_1 . Thk (Sig_K_1(X)) -> Sig_K_2(T X)`
 fn signature_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, env: &Env<AnnId>, ty: TypeId,
+    tycker: &mut Tycker, monad_ty: TypeId, env: &TyEnv, ty: TypeId,
 ) -> Result<TypeId> {
     let kd = cs::TypeOf(ty).build(tycker, env)?;
     let res = match tycker.kind_filled(&kd)?.to_owned() {
@@ -176,7 +176,7 @@ impl StructureEnv {
     }
     fn extended(
         &self, abst: AbstId, def: Option<DefId>, str: impl Construct<ValueId>, tycker: &mut Tycker,
-        env: &Env<AnnId>,
+        env: &TyEnv,
     ) -> Self {
         let mut new = self.clone();
         if let Some(def) = def {
@@ -191,7 +191,7 @@ impl StructureEnv {
 /// Structure Translation `Str(T)`
 fn structure_translation(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
-    env: &Env<AnnId>, ty: TypeId,
+    env: &TyEnv, ty: TypeId,
 ) -> Result<CompuId> {
     let res = match tycker.type_filled(&ty)?.to_owned() {
         | Type::Var(def) => {
@@ -387,7 +387,7 @@ fn structure_translation(
 
 /// Carrier (Type) Translation `[T]`
 fn type_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, env: &Env<AnnId>, ty: TypeId,
+    tycker: &mut Tycker, monad_ty: TypeId, env: &TyEnv, ty: TypeId,
 ) -> Result<TypeId> {
     let kd = cs::TypeOf(ty).build(tycker, env)?;
     let res = match tycker.type_filled(&ty)?.to_owned() {
@@ -457,7 +457,7 @@ fn type_translation(
 /// Term Translation (Value) `[V]`
 fn value_translation(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
-    env: &Env<AnnId>, value: ValueId,
+    env: &TyEnv, value: ValueId,
 ) -> Result<ValueId> {
     let ty = cs::TypeOf(value).build(tycker, env)?;
     let ty_ = cs::TypeLift { monad_ty, ty }.build(tycker, env)?;
@@ -505,7 +505,7 @@ fn value_translation(
 /// Term Translation (Computation) `[C]`
 fn computation_translation(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
-    env: &Env<AnnId>, compu: CompuId,
+    env: &TyEnv, compu: CompuId,
 ) -> Result<CompuId> {
     use Computation as Compu;
     let ty = cs::TypeOf(compu).build(tycker, env)?;
@@ -629,7 +629,7 @@ fn computation_translation(
 /// Monadic Block Elaboration (Value)
 fn value_monadic_elaboration(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
-    env: &Env<AnnId>, value: ValueId,
+    env: &TyEnv, value: ValueId,
 ) -> Result<ValueId> {
     let _ = tycker;
     let _ = monad_ty;
@@ -643,7 +643,7 @@ fn value_monadic_elaboration(
 /// Monadic Block Elaboration (Computation)
 fn computation_monadic_elaboration(
     tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, str_env: StructureEnv,
-    env: &Env<AnnId>, compu: CompuId,
+    env: &TyEnv, compu: CompuId,
 ) -> Result<CompuId> {
     let _ = tycker;
     let _ = monad_ty;
