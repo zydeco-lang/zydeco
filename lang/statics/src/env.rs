@@ -242,3 +242,10 @@ mod impls_str_env_t {
         }
     }
 }
+
+#[derive(Clone)]
+pub struct MonEnv {
+    pub ty: TyEnv,
+    pub subst: SubstEnv,
+    pub structure: StrEnv,
+}
