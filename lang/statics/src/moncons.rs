@@ -34,11 +34,6 @@ impl<T> MonConstruct<T> for Result<T> {
     }
 }
 
-// pub mod syntax {
-//     /// invoke substitution on defs
-//     pub struct Subst<T>(pub T);
-// }
-
 /// Trivial [`MonConstruct`] construction
 macro_rules! impl_mon_construct_trivial {
     ($($ty:ty),*) => {
@@ -52,7 +47,7 @@ macro_rules! impl_mon_construct_trivial {
     }
 }
 
-/* ---------------------------- Monadic MonConstruct --------------------------- */
+/* --------------------------------- Monadic -------------------------------- */
 
 impl<T, F, I, O, R> MonConstruct<R> for cs::CBind<T, I, F>
 where
@@ -135,6 +130,18 @@ impl MonConstruct<DtorName> for &str {
 // }
 
 /* -------------------------------- Abstract -------------------------------- */
+
+impl<K> MonConstruct<AbstId> for cs::Ty<cs::Ann<Option<DefId>, K>>
+where
+    K: MonConstruct<KindId>,
+{
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
+        let cs::Ty(cs::Ann(def, kd)) = self;
+        let (env, kd) = kd.mbuild(tycker, env)?;
+        let abst = Alloc::alloc(tycker, def, kd.into());
+        Ok((env, abst))
+    }
+}
 
 impl<K> MonConstruct<AbstId> for cs::Ann<VarName, K>
 where
@@ -265,24 +272,16 @@ where
         Ok((env, tpat))
     }
 }
-impl MonConstruct<TPatId> for cs::Ann<Option<DefId>, KindId> {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
-        let cs::Ann(tm, ty) = self;
-        match tm {
-            | Some(def) => cs::Ann(def, ty).mbuild(tycker, env),
-            | None => cs::Ann(Hole, ty).mbuild(tycker, env),
-        }
-    }
-}
-impl<K> MonConstruct<TPatId> for cs::Ann<VarName, K>
+impl<K> MonConstruct<TPatId> for cs::Pat<Option<DefId>, K>
 where
     K: MonConstruct<KindId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
-        let cs::Ann(var, kd) = self;
-        let (env, ty) = kd.mbuild(tycker, env)?;
-        let def = Alloc::alloc(tycker, var, ty.into());
-        cs::Ann(def, ty).mbuild(tycker, env)
+        let cs::Pat(tm, kd) = self;
+        match tm {
+            | Some(def) => cs::Pat(def, kd).mbuild(tycker, env),
+            | None => cs::Pat(Hole, kd).mbuild(tycker, env),
+        }
     }
 }
 impl<V, K> MonConstruct<TPatId> for cs::Pat<V, K>
@@ -621,6 +620,18 @@ where
         Ok((env, vpat))
     }
 }
+impl<T> MonConstruct<VPatId> for cs::Pat<Option<DefId>, T>
+where
+    T: MonConstruct<TypeId>,
+{
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+        let cs::Pat(tm, ty) = self;
+        match tm {
+            | Some(def) => cs::Pat(def, ty).mbuild(tycker, env),
+            | None => cs::Pat(Hole, ty).mbuild(tycker, env),
+        }
+    }
+}
 impl<V, T> MonConstruct<VPatId> for cs::Pat<V, T>
 where
     V: MonConstruct<VarName>,
@@ -632,18 +643,6 @@ where
         let (env, var) = var.mbuild(tycker, env)?;
         let def = Alloc::alloc(tycker, var, ty.into());
         cs::Ann(def, ty).mbuild(tycker, env)
-    }
-}
-impl<T> MonConstruct<VPatId> for cs::Pat<Option<DefId>, T>
-where
-    T: MonConstruct<TypeId>,
-{
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-        let cs::Pat(tm, ty) = self;
-        match tm {
-            | Some(def) => cs::Pat(def, ty).mbuild(tycker, env),
-            | None => cs::Pat(Hole, ty).mbuild(tycker, env),
-        }
     }
 }
 impl<C, V, T> MonConstruct<VPatId> for cs::Pat<cs::Ctor<C, V>, T>
@@ -682,13 +681,35 @@ where
         cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
     }
 }
-impl<S, T> MonConstruct<VPatId> for Cons<cs::Ty<S>, T>
+// impl<S, V, T> MonConstruct<VPatId> for cs::Pat<Cons<cs::Ty<S>, V>, T>
+// where
+//     S: MonConstruct<TPatId>,
+//     V: MonConstruct<VPatId>,
+//     T: MonConstruct<TypeId>,
+// {
+//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+//         let cs::Pat(Cons(cs::Ty(a), b), ty) = self;
+//         let (mut env, a) = a.mbuild(tycker, env)?;
+//         let (a_var, a_kd) = a.try_destruct_def(tycker);
+//         let abst = Alloc::alloc(tycker, a_var, a_kd);
+//         let a_ty = Alloc::alloc(tycker, abst, a_kd);
+//         if let Some(a_var) = a_var {
+//             env.ty += [(a_var, a_ty.into())];
+//         }
+//         let (env, b) = b.mbuild(tycker, env)?;
+//         let (env, ty) = ty.mbuild(tycker, env)?;
+//         cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
+//     }
+// }
+impl<S, F, V, T> MonConstruct<VPatId> for cs::Pat<cs::TCons<S, F>, T>
 where
     S: MonConstruct<TPatId>,
-    T: MonConstruct<VPatId>,
+    F: FnOnce(Option<DefId>) -> V,
+    V: MonConstruct<VPatId>,
+    T: MonConstruct<TypeId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-        let Cons(cs::Ty(a), b) = self;
+        let cs::Pat(cs::TCons(a, f), ty) = self;
         let (mut env, a) = a.mbuild(tycker, env)?;
         let (a_var, a_kd) = a.try_destruct_def(tycker);
         let abst = Alloc::alloc(tycker, a_var, a_kd);
@@ -696,9 +717,8 @@ where
         if let Some(a_var) = a_var {
             env.ty += [(a_var, a_ty.into())];
         }
-        let (env, b) = b.mbuild(tycker, env)?;
-        let b_ty = tycker.statics.annotations_vpat[&b];
-        let (env, ty) = cs::Exists(abst, move |_| b_ty).mbuild(tycker, env)?;
+        let (env, b) = f(a_var).mbuild(tycker, env)?;
+        let (env, ty) = ty.mbuild(tycker, env)?;
         cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
     }
 }
@@ -864,7 +884,7 @@ where
         use zydeco_utils::arena::ArenaAccess;
         let def = tycker.statics.abst_hints.get(&abst).cloned();
         let param_kd = tycker.statics.annotations_abst[&abst];
-        let (env, tpat): (_, TPatId) = cs::Ann(def, param_kd).mbuild(tycker, env)?;
+        let (env, tpat): (_, TPatId) = cs::Pat(def, param_kd).mbuild(tycker, env)?;
         let (env, body) = body(def, abst).mbuild(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
         let (env, ctype) = CType.mbuild(tycker, env)?;

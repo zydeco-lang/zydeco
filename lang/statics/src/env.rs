@@ -248,4 +248,6 @@ pub struct MonEnv {
     pub ty: TyEnv,
     pub subst: SubstEnv,
     pub structure: StrEnv,
+    pub monad_ty: TypeId,
+    pub monad_impl: ValueId,
 }

@@ -7,40 +7,39 @@
 use crate::{syntax::*, *};
 
 pub mod syntax {
-    use super::*;
     /// signature translation
     #[derive(Clone, Copy)]
     pub struct Signature<T> {
-        pub monad_ty: TypeId,
         pub ty: T,
     }
     /// structure translation
     #[derive(Clone)]
     pub struct Structure<T> {
-        pub monad_ty: TypeId,
-        pub monad_impl: ValueId,
         pub ty: T,
     }
     /// type translation (lift)
     #[derive(Clone, Copy)]
     pub struct TypeLift<T> {
-        pub monad_ty: TypeId,
         pub ty: T,
     }
     /// term translation (lift)
     #[derive(Clone)]
     pub struct TermLift<T> {
-        pub monad_ty: TypeId,
-        pub monad_impl: ValueId,
         pub tm: T,
     }
     /// monadic elaboration
     #[derive(Clone)]
     pub struct Elaboration<T> {
-        pub monad_ty: TypeId,
-        pub monad_impl: ValueId,
         pub tm: T,
     }
+
+    // /// invoke substitution on defs
+    // pub struct Subst<T>(pub T);
+
+    /// structure pattern introduction
+    ///
+    /// need to register the fresh var `S` as a structure of a given (abstract) type `A`
+    pub struct StrPat<S, A, T>(pub S, pub A, pub T);
 }
 
 mod syntax_impl {
@@ -52,9 +51,9 @@ mod syntax_impl {
         T: MonConstruct<TypeId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
-            let cs::Signature { monad_ty, ty } = self;
+            let cs::Signature { ty } = self;
             let (env, ty) = ty.mbuild(tycker, env)?;
-            signature_translation(tycker, monad_ty, env, ty)
+            signature_translation(tycker, env, ty)
         }
     }
 
@@ -64,9 +63,9 @@ mod syntax_impl {
         T: MonConstruct<TypeId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-            let cs::Structure { monad_ty, monad_impl, ty } = self;
+            let cs::Structure { ty } = self;
             let (env, ty) = ty.mbuild(tycker, env)?;
-            structure_translation(tycker, monad_ty, monad_impl, env, ty)
+            structure_translation(tycker, env, ty)
         }
     }
 
@@ -76,9 +75,9 @@ mod syntax_impl {
         T: MonConstruct<TPatId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
-            let cs::TypeLift { monad_ty, ty } = self;
+            let cs::TypeLift { ty } = self;
             let (env, ty) = ty.mbuild(tycker, env)?;
-            type_pattern_translation(tycker, monad_ty, env, ty)
+            type_pattern_translation(tycker, env, ty)
         }
     }
 
@@ -88,9 +87,9 @@ mod syntax_impl {
         T: MonConstruct<TypeId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
-            let cs::TypeLift { monad_ty, ty } = self;
+            let cs::TypeLift { ty } = self;
             let (env, ty) = ty.mbuild(tycker, env)?;
-            type_translation(tycker, monad_ty, env, ty)
+            type_translation(tycker, env, ty)
         }
     }
 
@@ -100,9 +99,9 @@ mod syntax_impl {
         T: MonConstruct<VPatId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-            let cs::TermLift { monad_ty, monad_impl, tm } = self;
+            let cs::TermLift { tm } = self;
             let (env, tm) = tm.mbuild(tycker, env)?;
-            value_pattern_translation(tycker, monad_ty, monad_impl, env, tm)
+            value_pattern_translation(tycker, env, tm)
         }
     }
 
@@ -112,9 +111,9 @@ mod syntax_impl {
         T: MonConstruct<ValueId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
-            let cs::TermLift { monad_ty, monad_impl, tm } = self;
+            let cs::TermLift { tm } = self;
             let (env, tm) = tm.mbuild(tycker, env)?;
-            value_translation(tycker, monad_ty, monad_impl, env, tm)
+            value_translation(tycker, env, tm)
         }
     }
 
@@ -124,9 +123,9 @@ mod syntax_impl {
         T: MonConstruct<CompuId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-            let cs::TermLift { monad_ty, monad_impl, tm } = self;
+            let cs::TermLift { tm } = self;
             let (env, tm) = tm.mbuild(tycker, env)?;
-            computation_translation(tycker, monad_ty, monad_impl, env, tm)
+            computation_translation(tycker, env, tm)
         }
     }
 
@@ -136,9 +135,9 @@ mod syntax_impl {
         T: MonConstruct<ValueId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
-            let cs::Elaboration { monad_ty, monad_impl, tm } = self;
+            let cs::Elaboration { tm } = self;
             let (env, tm) = tm.mbuild(tycker, env)?;
-            value_monadic_elaboration(tycker, monad_ty, monad_impl, env, tm)
+            value_monadic_elaboration(tycker, env, tm)
         }
     }
 
@@ -148,9 +147,34 @@ mod syntax_impl {
         T: MonConstruct<CompuId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-            let cs::Elaboration { monad_ty, monad_impl, tm } = self;
+            let cs::Elaboration { tm } = self;
             let (env, tm) = tm.mbuild(tycker, env)?;
-            computation_monadic_elaboration(tycker, monad_ty, monad_impl, env, tm)
+            computation_monadic_elaboration(tycker, env, tm)
+        }
+    }
+
+    // StrPat
+    impl<S, A, T> MonConstruct<VPatId> for cs::StrPat<S, A, T>
+    where
+        S: MonConstruct<VarName>,
+        A: MonConstruct<AbstId>,
+        T: MonConstruct<Option<DefId>>,
+    {
+        fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+            let cs::StrPat(var, abst, tvar) = self;
+            let (env, abst) = abst.mbuild(tycker, env)?;
+            let (env, ty) = cs::Thk(cs::Signature { ty: cs::Type(abst) }).mbuild(tycker, env)?;
+            let (env, var) = var.mbuild(tycker, env)?;
+            let def = Alloc::alloc(tycker, var, ty.into());
+            let (env, str) = cs::Value(def).mbuild(tycker, env)?;
+            let (env, tvar) = tvar.mbuild(tycker, env)?;
+            let mut env = env;
+            env.structure.absts.insert(abst, str);
+            if let Some(tvar) = tvar {
+                env.structure.def_map.insert(tvar, abst);
+            }
+            let (env, ty) = ty.mbuild(tycker, env)?;
+            cs::Pat(def, ty).mbuild(tycker, env)
         }
     }
 }
@@ -164,19 +188,14 @@ mod syntax_impl {
 /// + `T: VType` -> `Top`
 /// + `T: CType` -> `Algebra M T`
 /// + `T: K_1 -> K_2` -> `forall X: K_1 . Thk (Sig_K_1(X)) -> Sig_K_2(T X)`
-fn signature_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, env: MonEnv, ty: TypeId,
-) -> Result<(MonEnv, TypeId)> {
+fn signature_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(MonEnv, TypeId)> {
     let (env, kd) = cs::TypeOf(ty).mbuild(tycker, env)?;
     let res = match tycker.kind_filled(&kd)?.to_owned() {
         | Kind::VType(VType) => cs::TopTy.mbuild(tycker, env)?,
-        | Kind::CType(CType) => cs::Algebra(monad_ty, ty).mbuild(tycker, env)?,
+        | Kind::CType(CType) => cs::Algebra(env.monad_ty, ty).mbuild(tycker, env)?,
         | Kind::Arrow(Arrow(kd_1, _)) => cs::Forall(cs::Ann(None, kd_1), |abst| {
             let ty_1 = cs::Ann(abst, kd_1);
-            Arrow(
-                cs::Thk(cs::Signature { monad_ty, ty: ty_1 }),
-                cs::Signature { monad_ty, ty: App(ty, ty_1) },
-            )
+            Arrow(cs::Thk(cs::Signature { ty: ty_1 }), cs::Signature { ty: App(ty, ty_1) })
         })
         .mbuild(tycker, env)?,
     };
@@ -185,8 +204,10 @@ fn signature_translation(
 
 /// Structure Translation `Str(T)`
 fn structure_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, env: MonEnv, ty: TypeId,
+    tycker: &mut Tycker, env: MonEnv, ty: TypeId,
 ) -> Result<(MonEnv, CompuId)> {
+    let monad_ty = env.monad_ty;
+    let monad_impl = env.monad_impl;
     let res = match tycker.type_filled(&ty)?.to_owned() {
         | Type::Var(def) => {
             let str = match env.structure.def_map.get(&def).map(|abst| env.structure.absts[&abst]) {
@@ -219,11 +240,11 @@ fn structure_translation(
             let tvar = tvar.as_str();
             Abs(cs::Ty(cs::Pat(tvar, kd)), |tdef, abst| {
                 let svar = VarName(format!("str_{}", tvar));
-                let svar_ty = cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) });
+                let svar_ty = cs::Thk(cs::Signature { ty: cs::Ty(abst) });
                 Abs(cs::Pat(svar, svar_ty), |str_def: Option<DefId>| {
                     // let str = str_def.unwrap();
                     // let str_env = &str_env.extended(abst, tdef, str, tycker, env);
-                    // cs::Structure { monad_ty, monad_impl, ty }
+                    // cs::Structure { ty }
                     // Fixme: figure out how to register structure
                     let _ = ty;
                     let _ = tdef;
@@ -237,9 +258,9 @@ fn structure_translation(
             // input: S_f S_a
             let App(ty_f, ty_a) = ty;
             // output: Str(S_f) Lift(S_a) { Str(S_a) }
-            let str_f = { cs::Structure { monad_ty, monad_impl, ty: ty_f } };
-            let ty_a_lift = cs::TypeLift { monad_ty, ty: ty_a };
-            let str_a = cs::Structure { monad_ty, monad_impl, ty: ty_a };
+            let str_f = { cs::Structure { ty: ty_f } };
+            let ty_a_lift = cs::TypeLift { ty: ty_a };
+            let str_a = cs::Structure { ty: ty_a };
             App(App(str_f, cs::Ty(ty_a_lift)), Thunk(str_a)).mbuild(tycker, env)?
         }
         // primitive types are not allowed in monadic blocks
@@ -254,7 +275,7 @@ fn structure_translation(
         | Type::Thk(ThkTy) => {
             // output: fn (X : CType) (_ : Thk (Sig_CType(X))) -> <top>
             Abs(cs::Ty(cs::Pat("_", CType)), |_tvar, abst| {
-                let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) });
+                let thk_sig = cs::Thk(cs::Signature { ty: cs::Ty(abst) });
                 Abs(cs::Pat("_", thk_sig), |_var| {
                     // <top> = comatch end
                     cs::Top
@@ -268,7 +289,7 @@ fn structure_translation(
             // output: fn (X : VType) (_ : Thk (Sig_VType(X))) -> <monadic_bind>
             Abs(cs::Ty(cs::Pat("_", VType)), |_tvar, abst_x| {
                 let abst_x_ty = cs::Ty(abst_x);
-                let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: abst_x_ty });
+                let thk_sig = cs::Thk(cs::Signature { ty: abst_x_ty });
                 Abs(cs::Pat("_", thk_sig), move |_var| {
                     // <monadic_bind> = fn (Z : VType) -> ! monad_impl .bind Z X
                     Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
@@ -286,7 +307,7 @@ fn structure_translation(
                 let abst_z_ty = cs::Ty(abst_z);
                 let mz_ty = cs::Thk(App(monad_ty, abst_z_ty));
                 Abs(cs::Pat("mz", mz_ty), move |var_mz| {
-                    let ty_ = cs::TypeLift { monad_ty, ty };
+                    let ty_ = cs::TypeLift { ty };
                     let f_ty = cs::Thk(Arrow(abst_z_ty, ty_));
                     Abs(cs::Pat("f", f_ty), move |var_f| {
                         // <body> =
@@ -298,7 +319,7 @@ fn structure_translation(
                             let kont = Abs(cs::Pat("z", abst_z_ty), move |var_z| {
                                 Dtor(App(Force(var_f), var_z), dtor)
                             });
-                            let str = cs::Structure { monad_ty, monad_impl, ty };
+                            let str = cs::Structure { ty };
                             App(App(App(str, abst_z_ty), var_mz), Thunk(kont))
                         })
                     })
@@ -312,15 +333,15 @@ fn structure_translation(
             // output: fn (Z : VType) (mz : Thk (M Z)) (f : Thk (Z -> [A] -> [B])) -> <body>
             Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
                 let abst_z_ty = cs::Ty(abst_z);
-                let mz_ty = cs::Thk(App(monad_ty, abst_z_ty));
+                let mz_ty = cs::Thk(App(env.monad_ty, abst_z_ty));
                 Abs(cs::Pat("mz", mz_ty), move |var_mz| {
-                    let ty_p_ = cs::TypeLift { monad_ty, ty: ty_p };
-                    let ty_b_ = cs::TypeLift { monad_ty, ty: ty_b };
+                    let ty_p_ = cs::TypeLift { ty: ty_p };
+                    let ty_b_ = cs::TypeLift { ty: ty_b };
                     let f_ty = cs::Thk(Arrow(abst_z_ty, Arrow(ty_p_, ty_b_)));
                     Abs(cs::Pat("f", f_ty), move |var_f| {
                         // <body> = fn (x : [A]) -> Str(B) Z mz { fn (z : Z) -> ! f z x }
                         Abs(cs::Pat("x", ty_p_), move |var_x| {
-                            let alg_b = cs::Structure { monad_ty, monad_impl, ty: ty_b };
+                            let alg_b = cs::Structure { ty: ty_b };
                             let kont = Abs(cs::Pat("z", abst_z_ty), move |var_z| {
                                 App(App(Force(var_f), var_z), var_x)
                             });
@@ -338,7 +359,7 @@ fn structure_translation(
             // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) -> <body>
             Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
                 let abst_z_ty = cs::Ty(abst_z);
-                Abs(cs::Pat("mz", cs::Thk(App(monad_ty, abst_z_ty))), move |var_mz| {
+                Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, abst_z_ty))), move |var_mz| {
                     // construct abstract type X first
                     cs::CBind::new(cs::Ann("X", kd), move |abst_x| {
                         // <f_ty> = Thk (Z -> forall (X : K) . Thk (Sig_K(X)) -> [B])
@@ -346,23 +367,20 @@ fn structure_translation(
                             abst_z_ty,
                             cs::Forall(abst_x, move |abst_x: AbstId| {
                                 let abst_x_ty = cs::Ty(abst_x);
-                                Arrow(
-                                    cs::Thk(cs::Signature { monad_ty, ty: abst_x_ty }),
-                                    cs::TypeLift { monad_ty, ty },
-                                )
+                                Arrow(cs::Thk(cs::Signature { ty: abst_x_ty }), cs::TypeLift { ty })
                             }),
                         ));
                         Abs(cs::Pat("f", f_ty), move |var_f| {
                             // <body> = fn (X : K) (str_X : Thk (Sig_K(X))) -> Str(B) Z mz <kont>
                             Abs(cs::Ty(abst_x), move |_, abst_x: AbstId| {
                                 let abst_x_ty = cs::Ty(abst_x);
-                                let sig = cs::Signature { monad_ty, ty: abst_x_ty };
+                                let sig = cs::Signature { ty: abst_x_ty };
                                 Abs(cs::Pat("str_X", cs::Thk(sig)), move |var_str_x| {
                                     // <kont> = { fn (z : Z) -> ! f z X str_X }
                                     let kont = Abs(cs::Pat("z", abst_z_ty), move |var_z| {
                                         App(App(App(Force(var_f), var_z), abst_x_ty), var_str_x)
                                     });
-                                    let str_ = cs::Structure { monad_ty, monad_impl, ty };
+                                    let str_ = cs::Structure { ty };
                                     App(App(App(str_, abst_z_ty), var_mz), Thunk(kont))
                                 })
                             })
@@ -378,7 +396,7 @@ fn structure_translation(
 
 /// Type Pattern Translation `[TPat]`
 fn type_pattern_translation(
-    tycker: &mut Tycker, _monad_ty: TypeId, env: MonEnv, tpat: TPatId,
+    tycker: &mut Tycker, env: MonEnv, tpat: TPatId,
 ) -> Result<(MonEnv, TPatId)> {
     use TypePattern as TPat;
     let (env, kd) = cs::TypeOf(tpat).mbuild(tycker, env)?;
@@ -390,9 +408,8 @@ fn type_pattern_translation(
 }
 
 /// Carrier (Type) Translation `[T]`
-fn type_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, env: MonEnv, ty: TypeId,
-) -> Result<(MonEnv, TypeId)> {
+fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(MonEnv, TypeId)> {
+    let monad_ty = env.monad_ty;
     let (env, kd) = cs::TypeOf(ty).mbuild(tycker, env)?;
     let (env, res) = match tycker.type_filled(&ty)?.to_owned() {
         | Type::Var(def) => {
@@ -405,33 +422,32 @@ fn type_translation(
         | Type::Abs(ty) => {
             let Abs(tpat, ty) = ty;
             // Fixme: bind environment
-            Abs(cs::TypeLift { monad_ty, ty: tpat }, |_, _, _| cs::TypeLift { monad_ty, ty })
-                .mbuild(tycker, env)?
+            Abs(cs::TypeLift { ty: tpat }, |_, _, _| cs::TypeLift { ty }).mbuild(tycker, env)?
         }
         | Type::App(ty) => {
             let App(ty_f, ty_a) = ty;
-            let ty_f_ = cs::TypeLift { monad_ty, ty: ty_f };
-            let ty_a_ = cs::TypeLift { monad_ty, ty: ty_a };
+            let ty_f_ = cs::TypeLift { ty: ty_f };
+            let ty_a_ = cs::TypeLift { ty: ty_a };
             App(ty_f_, ty_a_).mbuild(tycker, env)?
         }
         | Type::Thk(ThkTy) => (env, Alloc::alloc(tycker, ThkTy, kd)),
         // primitive types are not allowed in monadic blocks
         | Type::Int(_) | Type::Char(_) | Type::String(_) => unreachable!(),
         | Type::Data(data) => {
-            cs::Data(data, |_ctor, ty| cs::TypeLift { monad_ty, ty }).mbuild(tycker, env)?
+            cs::Data(data, |_ctor, ty| cs::TypeLift { ty }).mbuild(tycker, env)?
         }
         | Type::Unit(UnitTy) => UnitTy.mbuild(tycker, env)?,
         | Type::Prod(ty) => {
             let Prod(ty_1, ty_2) = ty;
-            let ty_1_ = cs::TypeLift { monad_ty, ty: ty_1 };
-            let ty_2_ = cs::TypeLift { monad_ty, ty: ty_2 };
+            let ty_1_ = cs::TypeLift { ty: ty_1 };
+            let ty_2_ = cs::TypeLift { ty: ty_2 };
             Prod(ty_1_, ty_2_).mbuild(tycker, env)?
         }
         | Type::Exists(ty) => {
             let Exists(abst, ty) = ty;
             let abst_ty = cs::Ty(abst);
-            let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: abst_ty });
-            let ty_ = cs::TypeLift { monad_ty, ty };
+            let thk_sig = cs::Thk(cs::Signature { ty: abst_ty });
+            let ty_ = cs::TypeLift { ty };
             let prod = Prod(thk_sig, ty_);
             cs::Exists(abst, |_| prod).mbuild(tycker, env)?
         }
@@ -440,21 +456,18 @@ fn type_translation(
         // the return type is translated to the provided monad type
         | Type::Ret(RetTy) => (env, monad_ty),
         | Type::CoData(coda) => {
-            cs::CoData(coda, |_dtor, ty| cs::TypeLift { monad_ty, ty }).mbuild(tycker, env)?
+            cs::CoData(coda, |_dtor, ty| cs::TypeLift { ty }).mbuild(tycker, env)?
         }
         | Type::Arrow(ty) => {
             let Arrow(ty_1, ty_2) = ty;
-            let ty_1_ = cs::TypeLift { monad_ty, ty: ty_1 };
-            let ty_2_ = cs::TypeLift { monad_ty, ty: ty_2 };
+            let ty_1_ = cs::TypeLift { ty: ty_1 };
+            let ty_2_ = cs::TypeLift { ty: ty_2 };
             Arrow(ty_1_, ty_2_).mbuild(tycker, env)?
         }
         | Type::Forall(ty) => {
             let Forall(abst, ty) = ty;
             cs::Forall(abst, move |abst| {
-                Arrow(
-                    cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) }),
-                    cs::TypeLift { monad_ty, ty },
-                )
+                Arrow(cs::Thk(cs::Signature { ty: cs::Ty(abst) }), cs::TypeLift { ty })
             })
             .mbuild(tycker, env)?
         }
@@ -464,11 +477,11 @@ fn type_translation(
 
 /// Value Pattern Translation `[VPat]`
 fn value_pattern_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, env: MonEnv, vpat: VPatId,
+    tycker: &mut Tycker, env: MonEnv, vpat: VPatId,
 ) -> Result<(MonEnv, VPatId)> {
     use ValuePattern as VPat;
     let (env, ty) = cs::TypeOf(vpat).mbuild(tycker, env)?;
-    let (env, ty_) = cs::TypeLift { monad_ty, ty }.mbuild(tycker, env)?;
+    let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
     let (env, vpat_) = match tycker.vpat(&vpat) {
         | VPat::Hole(hole) => cs::Pat(hole, ty_).mbuild(tycker, env)?,
         | VPat::Var(def) => {
@@ -477,24 +490,28 @@ fn value_pattern_translation(
         }
         | VPat::Ctor(vpat) => {
             let Ctor(ctor, body) = vpat;
-            let body_ = cs::TermLift { monad_ty, monad_impl, tm: body };
-            let ty_ = cs::TypeLift { monad_ty, ty };
+            let body_ = cs::TermLift { tm: body };
             cs::Pat(cs::Ctor(ctor, body_), ty_).mbuild(tycker, env)?
         }
         | VPat::Triv(triv) => triv.mbuild(tycker, env)?,
         | VPat::VCons(vpat) => {
             let Cons(a, b) = vpat;
-            let a_ = cs::TermLift { monad_ty, monad_impl, tm: a };
-            let b_ = cs::TermLift { monad_ty, monad_impl, tm: b };
+            let a_ = cs::TermLift { tm: a };
+            let b_ = cs::TermLift { tm: b };
             Cons(a_, b_).mbuild(tycker, env)?
         }
         | VPat::TCons(vpat) => {
-            let Cons(a_ty, body) = vpat;
-            let a_sig = cs::Signature { monad_ty, ty: a_ty };
-            let var_sig = cs::Ann("str", cs::Thk(a_sig));
-            let body_ = cs::TermLift { monad_ty, monad_impl, tm: body };
-            let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
-            // Cons(cs::Ty(a_ty_), Cons(var_sig, body_)).mbuild(tycker, env)?
+            // let Cons(tpat, body) = vpat;
+            // cs::Pat(
+            //     cs::TCons(cs::TypeLift { ty: tpat }, |tvar: Option<DefId>| {
+            //         cs::CBind::new(cs::Ty(cs::Ann(tvar, cs::TypeOf(tpat))), |abst: AbstId| {
+            //             Cons(cs::StrPat("str", abst, tvar), cs::TermLift { tm: body })
+            //         })
+            //     }),
+            //     ty_,
+            // )
+            // .mbuild(tycker, env)?
+            let _ = vpat;
             todo!()
         }
     };
@@ -503,10 +520,10 @@ fn value_pattern_translation(
 
 /// Term Translation (Value) `[V]`
 fn value_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, env: MonEnv, value: ValueId,
+    tycker: &mut Tycker, env: MonEnv, value: ValueId,
 ) -> Result<(MonEnv, ValueId)> {
     let (env, ty) = cs::TypeOf(value).mbuild(tycker, env)?;
-    let (env, ty_) = cs::TypeLift { monad_ty, ty }.mbuild(tycker, env)?;
+    let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
     let (env, res) = match tycker.value(&value).to_owned() {
         | Value::Hole(Hole) => cs::Ann(Hole, ty_).mbuild(tycker, env)?,
         // figure out how to handle literals
@@ -518,26 +535,26 @@ fn value_translation(
         }
         | Value::Thunk(value) => {
             let Thunk(body) = value;
-            Thunk(cs::TermLift { monad_ty, monad_impl, tm: body }).mbuild(tycker, env)?
+            Thunk(cs::TermLift { tm: body }).mbuild(tycker, env)?
         }
         | Value::Ctor(value) => {
             let Ctor(ctor, body) = value;
-            let body_ = cs::TermLift { monad_ty, monad_impl, tm: body };
-            let ty_ = cs::TypeLift { monad_ty, ty };
+            let body_ = cs::TermLift { tm: body };
+            let ty_ = cs::TypeLift { ty };
             cs::Ann(cs::Ctor(ctor, body_), ty_).mbuild(tycker, env)?
         }
         | Value::Triv(Triv) => Triv.mbuild(tycker, env)?,
         | Value::VCons(value) => {
             let Cons(value_1, value_2) = value;
-            let value_1_ = { cs::TermLift { monad_ty, monad_impl, tm: value_1 } };
-            let value_2_ = cs::TermLift { monad_ty, monad_impl, tm: value_2 };
+            let value_1_ = { cs::TermLift { tm: value_1 } };
+            let value_2_ = cs::TermLift { tm: value_2 };
             Cons(value_1_, value_2_).mbuild(tycker, env)?
         }
         | Value::TCons(value) => {
             let Cons(a_ty, body) = value;
-            let a_str = { cs::Structure { monad_ty, monad_impl, ty: a_ty } };
-            let body_ = cs::TermLift { monad_ty, monad_impl, tm: body };
-            let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
+            let a_str = { cs::Structure { ty: a_ty } };
+            let body_ = cs::TermLift { tm: body };
+            let a_ty_ = cs::TypeLift { ty: a_ty };
             // existential type construct should be type-guided
             cs::Ann(Cons(cs::Ty(a_ty_), Cons(Thunk(a_str), body_)), ty_).mbuild(tycker, env)?
         }
@@ -547,97 +564,83 @@ fn value_translation(
 
 /// Term Translation (Computation) `[C]`
 fn computation_translation(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, env: MonEnv, compu: CompuId,
+    tycker: &mut Tycker, env: MonEnv, compu: CompuId,
 ) -> Result<(MonEnv, CompuId)> {
     use Computation as Compu;
     let (env, ty) = cs::TypeOf(compu).mbuild(tycker, env)?;
-    let (env, ty_) = cs::TypeLift { monad_ty, ty }.mbuild(tycker, env)?;
+    let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
     let (env, res) = match tycker.compu(&compu) {
         | Compu::Hole(Hole) => cs::Ann(Hole, ty_).mbuild(tycker, env)?,
         | Compu::VAbs(compu) => {
             let Abs(vpat, compu) = compu;
             let (def, param_ty) = vpat.try_destruct_def(tycker);
-            let param_ty_ = cs::TypeLift { monad_ty, ty: param_ty };
-            Abs(cs::Pat(def, param_ty_), move |_def| cs::TermLift {
-                monad_ty,
-                monad_impl,
-                tm: compu,
-            })
-            .mbuild(tycker, env)?
+            let param_ty_ = cs::TypeLift { ty: param_ty };
+            Abs(cs::Pat(def, param_ty_), move |_def| cs::TermLift { tm: compu })
+                .mbuild(tycker, env)?
         }
         | Compu::VApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ = { cs::TermLift { monad_ty, monad_impl, tm: fun } };
-            let arg_ = cs::TermLift { monad_ty, monad_impl, tm: arg };
+            let fun_ = { cs::TermLift { tm: fun } };
+            let arg_ = cs::TermLift { tm: arg };
             App(fun_, arg_).mbuild(tycker, env)?
         }
         | Compu::TAbs(compu) => {
             let Abs(tpat, compu) = compu;
-            Abs(cs::Ty(cs::TypeLift { monad_ty, ty: tpat }), move |_def, abst| {
-                let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) });
+            Abs(cs::Ty(cs::TypeLift { ty: tpat }), move |_def, abst| {
+                let thk_sig = cs::Thk(cs::Signature { ty: cs::Ty(abst) });
                 Abs(cs::Pat("str", thk_sig), move |_str_var| {
                     // Fixme: bind environment
-                    cs::TermLift { monad_ty, monad_impl, tm: compu }
+                    cs::TermLift { tm: compu }
                 })
             })
             .mbuild(tycker, env)?
         }
         | Compu::TApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ = { cs::TermLift { monad_ty, monad_impl, tm: fun } };
-            let arg_ = cs::TypeLift { monad_ty, ty: arg };
-            let str_ = cs::Structure { monad_ty, monad_impl, ty: arg };
+            let fun_ = { cs::TermLift { tm: fun } };
+            let arg_ = cs::TypeLift { ty: arg };
+            let str_ = cs::Structure { ty: arg };
             App(App(fun_, cs::Ty(arg_)), Thunk(str_)).mbuild(tycker, env)?
         }
         | Compu::Fix(compu) => {
             let Fix(vpat, compu) = compu;
             let (def, param_ty) = vpat.try_destruct_def(tycker);
-            let (env, param_ty_) = cs::TypeLift { monad_ty, ty: param_ty }.mbuild(tycker, env)?;
+            let (env, param_ty_) = cs::TypeLift { ty: param_ty }.mbuild(tycker, env)?;
             // Fixme: should be a fix
-            Abs(cs::Pat(def, param_ty_), move |_def| cs::TermLift {
-                monad_ty,
-                monad_impl,
-                tm: compu,
-            })
-            .mbuild(tycker, env)?
+            Abs(cs::Pat(def, param_ty_), move |_def| cs::TermLift { tm: compu })
+                .mbuild(tycker, env)?
         }
         | Compu::Force(compu) => {
             let Force(value) = compu;
-            Force(cs::TermLift { monad_ty, monad_impl, tm: value }).mbuild(tycker, env)?
+            Force(cs::TermLift { tm: value }).mbuild(tycker, env)?
         }
         | Compu::Ret(compu) => {
             let Ret(value) = compu;
             App(
                 App(
-                    cs::Dtor(Force(monad_impl), ".return"),
-                    cs::Ty(cs::TypeLift { monad_ty, ty: cs::TypeOf(value) }),
+                    cs::Dtor(Force(env.monad_impl), ".return"),
+                    cs::Ty(cs::TypeLift { ty: cs::TypeOf(value) }),
                 ),
-                cs::TermLift { monad_ty, monad_impl, tm: value },
+                cs::TermLift { tm: value },
             )
             .mbuild(tycker, env)?
         }
         | Compu::Do(compu) => {
             let Bind { binder, bindee, tail } = compu;
-            let str_ = { cs::Structure { monad_ty, monad_impl, ty: ty_ } };
+            let str_ = { cs::Structure { ty: ty_ } };
             let (env, ret_ty) = cs::TypeOf(bindee).mbuild(tycker, env)?;
             let Some(a_ty) = ret_ty.destruct_ret_app(tycker) else { unreachable!() };
-            let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
-            let bindee_ = { cs::TermLift { monad_ty, monad_impl, tm: bindee } };
-            let kont = Abs(cs::TermLift { monad_ty, monad_impl, tm: binder }, move |_var| {
-                cs::TermLift { monad_ty, monad_impl, tm: tail }
-            });
+            let a_ty_ = cs::TypeLift { ty: a_ty };
+            let bindee_ = { cs::TermLift { tm: bindee } };
+            let kont = Abs(cs::TermLift { tm: binder }, move |_var| cs::TermLift { tm: tail });
             App(App(App(str_, cs::Ty(a_ty_)), Thunk(bindee_)), Thunk(kont)).mbuild(tycker, env)?
         }
         | Compu::Let(compu) => {
             let PureBind { binder, bindee, tail } = compu;
-            let bindee_ = cs::TermLift { monad_ty, monad_impl, tm: bindee };
-            let binder_ = cs::TermLift { monad_ty, monad_impl, tm: binder };
-            PureBind {
-                binder: binder_,
-                bindee: bindee_,
-                tail: move |_| cs::TermLift { monad_ty, monad_impl, tm: tail },
-            }
-            .mbuild(tycker, env)?
+            let bindee_ = cs::TermLift { tm: bindee };
+            let binder_ = cs::TermLift { tm: binder };
+            PureBind { binder: binder_, bindee: bindee_, tail: move |_| cs::TermLift { tm: tail } }
+                .mbuild(tycker, env)?
         }
         | Compu::Match(_) => {
             // let Match { scrut, arms } = compu;
@@ -651,11 +654,9 @@ fn computation_translation(
 
 /// Monadic Block Elaboration (Value)
 fn value_monadic_elaboration(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, env: MonEnv, value: ValueId,
+    tycker: &mut Tycker, env: MonEnv, value: ValueId,
 ) -> Result<(MonEnv, ValueId)> {
     let _ = tycker;
-    let _ = monad_ty;
-    let _ = monad_impl;
     let _ = env;
     let _ = value;
     todo!()
@@ -663,11 +664,9 @@ fn value_monadic_elaboration(
 
 /// Monadic Block Elaboration (Computation)
 fn computation_monadic_elaboration(
-    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, env: MonEnv, compu: CompuId,
+    tycker: &mut Tycker, env: MonEnv, compu: CompuId,
 ) -> Result<(MonEnv, CompuId)> {
     let _ = tycker;
-    let _ = monad_ty;
-    let _ = monad_impl;
     let _ = env;
     let _ = compu;
     todo!()

@@ -183,8 +183,10 @@ pub mod syntax {
     /// `comatch end`
     pub struct Top;
 
+    /// TCons
+    pub struct TCons<T, F>(pub T, pub F);
+
     pub use crate::monadic::syntax::*;
-    // pub use crate::moncons::syntax::*;
 }
 
 /// Trivial [`Construct`] construction
