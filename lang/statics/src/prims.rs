@@ -23,7 +23,7 @@ impl Tycker {
         let internal_or = self.scoped.exts.get(id).cloned();
         match internal_or {
             | Some((internal, def)) => {
-                // the alias head is a internal type; unless it's VType or CType
+                // the alias head is a internal type / kind
                 match internal {
                     | su::Internal::VType => {
                         let kd = Alloc::alloc(self, VType, ());

@@ -91,6 +91,18 @@ mod impls_ty_env_t {
         pub fn new(inner: T) -> Self {
             Self { env: Env::new(), inner }
         }
+        pub fn monadic_new(tycker: &mut Tycker, ori: &TyEnv, inner: T) -> Self {
+            let mut env = Env::new();
+            env += [
+                (tycker.prim.vtype.get().to_owned(), VType.build(tycker, ori).into()),
+                (tycker.prim.ctype.get().to_owned(), CType.build(tycker, ori).into()),
+                (tycker.prim.thk.get().to_owned(), ThkTy.build(tycker, ori).into()),
+                (tycker.prim.ret.get().to_owned(), RetTy.build(tycker, ori).into()),
+                (tycker.prim.monad.get().to_owned(), cs::MonadTy.build(tycker, ori).into()),
+                (tycker.prim.algebra.get().to_owned(), cs::AlgebraTy.build(tycker, ori).into()),
+            ];
+            Self { env, inner }
+        }
         pub fn mk<S>(&self, inner: S) -> TyEnvT<S> {
             TyEnvT { env: self.env.clone(), inner }
         }
@@ -185,18 +197,18 @@ mod impls_str_env {
         pub fn new() -> Self {
             Self { def_map: im::HashMap::new(), absts: im::HashMap::new() }
         }
-        pub fn extended(
-            &self, abst: AbstId, def: Option<DefId>, str: impl Construct<ValueId>,
-            tycker: &mut Tycker, env: &TyEnv,
-        ) -> Self {
-            let mut new = self.clone();
-            if let Some(def) = def {
-                new.def_map.insert(def, abst);
-            }
-            let Ok(str) = str.build(tycker, env) else { unreachable!() };
-            new.absts.insert(abst, str);
-            new
-        }
+        // pub fn extended(
+        //     &self, abst: AbstId, def: Option<DefId>, str: impl MonConstruct<ValueId>,
+        //     tycker: &mut Tycker, env: MonEnv,
+        // ) -> Self {
+        //     let mut new = self.clone();
+        //     if let Some(def) = def {
+        //         new.def_map.insert(def, abst);
+        //     }
+        //     let Ok((_env, str)) = str.mbuild(tycker, env) else { unreachable!() };
+        //     new.absts.insert(abst, str);
+        //     new
+        // }
     }
 }
 

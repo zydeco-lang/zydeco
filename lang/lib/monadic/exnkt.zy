@@ -7,38 +7,35 @@ alias ExnKT (E: VType) (M: VType -> CType) (A: VType) : CType =
   forall (R: CType) . Thk (Algebra M R) -> Thk (E -> R) -> Thk (A -> R) -> R
 end
 
+def ! mo-exnk (E: VType) : Monad (ExnK E) =
+  comatch
+  | .return A a -> fn R ke ka ->
+    ! ka a
+  | .bind A A' m f -> fn R ke ka ->
+    ! m R ke { fn a -> ! f a R ke ka }
+  end
+end
+
 def ! mo-exnkt (E: VType) (M: VType -> CType)
   (mo: Thk (Monad M))
 : Monad (ExnKT E M) =
-  // // correct anwser:
-  // //
-  // // comatch
-  // // | .return A a ->
-  // //   ! mo .return (Either E A) +Right(a)
-  // // | .bind A A' m f ->
-  // //   do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
-  // //   match a?
-  // //   | +Left(e) -> ! mo .return (Either E A') +Left(e)
-  // //   | +Right(a) -> ! f a
-  // //   end
-  // // end
-
-  // monadic
-  //   // inlining `! mo-exn E`
-  //   (comatch
-  //   | .return A a ->
-  //     ret +Right(a)
-  //   | .bind A A' m f ->
-  //     do a? <- ! m;
-  //     match a?
-  //     | +Left(e) -> ret +Left(e)
-  //     | +Right(a) -> ! f a
-  //     end
-  //   end : Monad (Exn E))
-  // end M mo
+  let ! mo' =
+    monadic
+      // inlining `! mo-exnk E`
+      (comatch
+      | .return A a -> fn R ke ka ->
+        ! ka a
+      | .bind A A' m f -> fn R ke ka ->
+        ! m R ke { fn a -> ! f a R ke ka }
+      end : Monad (ExnK E))
+    end M mo
+  in
+  let ! triv = comatch end in
+  comatch
+  | .return A -> ! mo' .return A triv
+  | .bind A A' -> ! mo' .bind A triv A' triv
+  end
 end
-
-
 
 
 // alias MonadTrans' (T: (VType -> CType) -> VType -> CType) (M: VType -> CType) : CType =
