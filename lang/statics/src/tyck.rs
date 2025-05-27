@@ -1821,30 +1821,38 @@ impl Tyck for TyEnvT<su::TermId> {
                 let su::MoBlock(body) = term;
 
                 // tyck the body WITH AN (ALMOST) EMPTY ENV
-                let body_out_ann = TyEnvT::new(body).tyck_k(tycker, Action::syn())?;
-                let (_body, _body_ty) = body_out_ann.try_as_compu(
+                let ty_env = TyEnv::monadic_new(tycker, &self.env);
+                let body_out_ann =
+                    TyEnvT { env: ty_env.to_owned(), inner: body }.tyck_k(tycker, Action::syn())?;
+                let (body, _body_ty) = body_out_ann.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
 
-                // // lift the body type
-                // let body_ty_lift = self.mk(body_ty).lift(tycker, mo_ty)?;
-                // let body_ty_lift = match switch {
-                //     | Switch::Syn => body_ty_lift,
-                //     | Switch::Ana(ana) => match ana {
-                //         | AnnId::Set | AnnId::Kind(_) => {
-                //             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                //         }
-                //         | AnnId::Type(ana_ty) => Lub::lub_k(body_ty_lift, ana_ty, tycker)?,
-                //     },
-                // };
+                let monad_ty_kd = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.env);
+                let monad_ty_var =
+                    Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into());
+                let monad_ty = cs::Type(monad_ty_var).build(tycker, &self.env);
+                let monad_impl_ty = cs::Thk(cs::Monad(monad_ty)).build(tycker, &self.env);
+                let monad_impl_var =
+                    Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into());
+                let monad_impl = cs::Value(monad_impl_var).build(tycker, &self.env);
 
-                // // lift the body
-                // let body_lift = self.mk(body).lift(tycker, (mo, mo_ty), vec![])?;
+                use crate::env::*;
+                let (_menv, body_lift) = cs::TermLift { tm: body }.mbuild_k(
+                    tycker,
+                    MonEnv {
+                        ty: ty_env,
+                        subst: SubstEnv::new(),
+                        structure: StrEnv::new(),
+                        monad_ty,
+                        monad_impl,
+                    },
+                )?;
 
-                // TermAnnId::Compu(body_lift, body_ty_lift)
-                todo!()
+                let body_lift_ty = cs::TypeOf(body_lift).build(tycker, &self.env);
+                TermAnnId::Compu(body_lift, body_lift_ty)
             }
             | Tm::Data(term) => {
                 let su::Data { arms } = term;

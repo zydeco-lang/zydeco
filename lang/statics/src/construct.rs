@@ -766,23 +766,23 @@ impl Tycker {
 //     }
 // }
 
-// /* ---------------------------------- Value --------------------------------- */
+/* ---------------------------------- Value --------------------------------- */
 
-// impl<T> Construct<ValueId> for cs::Value<T>
-// where
-//     T: Construct<ValueId>,
-// {
-//     fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<ValueId> {
-//         let cs::Value(arg) = self;
-//         arg.build(tycker, env)
-//     }
-// }
-// impl Construct<ValueId> for DefId {
-//     fn build(self, tycker: &mut Tycker, _env: &TyEnv) -> Result<ValueId> {
-//         let AnnId::Type(ty) = tycker.statics.annotations_var[&self] else { unreachable!() };
-//         Ok(Alloc::alloc(tycker, self, ty))
-//     }
-// }
+impl<T> Construct<ValueId> for cs::Value<T>
+where
+    T: Construct<ValueId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &TyEnv) -> ValueId {
+        let cs::Value(arg) = self;
+        arg.build(tycker, env)
+    }
+}
+impl Construct<ValueId> for DefId {
+    fn build(self, tycker: &mut Tycker, _env: &TyEnv) -> ValueId {
+        let AnnId::Type(ty) = tycker.statics.annotations_var[&self] else { unreachable!() };
+        Alloc::alloc(tycker, self, ty)
+    }
+}
 // impl Construct<ValueId> for Option<DefId> {
 //     fn build(self, tycker: &mut Tycker, _env: &TyEnv) -> Result<ValueId> {
 //         let Some(def) = self else { unreachable!() };

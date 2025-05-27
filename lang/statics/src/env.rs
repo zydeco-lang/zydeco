@@ -74,6 +74,27 @@ mod impls_env {
 
 pub type TyEnv = Env<AnnId>;
 
+mod impls_ty_env {
+    use super::*;
+
+    impl TyEnv {
+        pub fn monadic_new(tycker: &mut Tycker, ori: &TyEnv) -> Self {
+            let mut env = Env::new();
+            env += [
+                (tycker.prim.vtype.get().to_owned(), VType.build(tycker, ori).into()),
+                (tycker.prim.ctype.get().to_owned(), CType.build(tycker, ori).into()),
+                (tycker.prim.thk.get().to_owned(), ThkTy.build(tycker, ori).into()),
+                (tycker.prim.ret.get().to_owned(), RetTy.build(tycker, ori).into()),
+                (tycker.prim.unit.get().to_owned(), UnitTy.build(tycker, ori).into()),
+                (tycker.prim.top.get().to_owned(), cs::TopTy.build(tycker, ori).into()),
+                (tycker.prim.monad.get().to_owned(), cs::MonadTy.build(tycker, ori).into()),
+                (tycker.prim.algebra.get().to_owned(), cs::AlgebraTy.build(tycker, ori).into()),
+            ];
+            env
+        }
+    }
+}
+
 /// substituting types for type variables;
 /// S for substitution / statics
 /// PLEASE NOTE: when performing substitution, the environment should be applied one by one
@@ -90,18 +111,6 @@ mod impls_ty_env_t {
     impl<T> TyEnvT<T> {
         pub fn new(inner: T) -> Self {
             Self { env: Env::new(), inner }
-        }
-        pub fn monadic_new(tycker: &mut Tycker, ori: &TyEnv, inner: T) -> Self {
-            let mut env = Env::new();
-            env += [
-                (tycker.prim.vtype.get().to_owned(), VType.build(tycker, ori).into()),
-                (tycker.prim.ctype.get().to_owned(), CType.build(tycker, ori).into()),
-                (tycker.prim.thk.get().to_owned(), ThkTy.build(tycker, ori).into()),
-                (tycker.prim.ret.get().to_owned(), RetTy.build(tycker, ori).into()),
-                (tycker.prim.monad.get().to_owned(), cs::MonadTy.build(tycker, ori).into()),
-                (tycker.prim.algebra.get().to_owned(), cs::AlgebraTy.build(tycker, ori).into()),
-            ];
-            Self { env, inner }
         }
         pub fn mk<S>(&self, inner: S) -> TyEnvT<S> {
             TyEnvT { env: self.env.clone(), inner }

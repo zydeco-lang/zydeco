@@ -80,6 +80,21 @@ impl Tycker {
                     | su::Internal::Top | su::Internal::Monad | su::Internal::Algebra => {
                         unreachable!()
                     }
+                    // | su::Internal::Top => {
+                    //     let kd = ty.unwrap();
+                    //     env = self.register_prim_ty(env, def, TopTy.into(), kd)?;
+                    //     // should NOT be added to global
+                    // }
+                    // | su::Internal::Monad => {
+                    //     let kd = ty.unwrap();
+                    //     env = self.register_prim_ty(env, def, MonadTy.into(), kd)?;
+                    //     // should NOT be added to global
+                    // }
+                    // | su::Internal::Algebra => {
+                    //     let kd = ty.unwrap();
+                    //     env = self.register_prim_ty(env, def, AlgebraTy.into(), kd)?;
+                    //     // should NOT be added to global
+                    // }
                 }
             }
             | None => {

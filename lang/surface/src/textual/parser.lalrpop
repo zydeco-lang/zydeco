@@ -212,6 +212,10 @@ CoMatcher: CoMatcherParam = {
 TermAnnId: TermId = <TermGen<TermAnn>>;
 TermAnn: Term = {
     <Term>,
+    <TermAnnInner>,
+};
+// Todo: figure out how to avoid this
+TermAnnInner: Term = {
     <Ann<TermId, TermId>> => <>.into(),
 };
 
@@ -235,6 +239,7 @@ Term: Term = {
     "ret" <TermGen<Term>> => Ret(<>).into(),
     // monadic block
     "monadic" <TermId> "end" => MoBlock(<>).into(),
+    "monadic" <TermGen<TermAnnInner>> "end" => MoBlock(<>).into(),
     // abstraction (alternative syntax)
     "comatch" <params:CoPatId> "->" <term:TermId> "end" => Abs(<>).into(),
     // structural types
