@@ -34,6 +34,11 @@ impl<T> MonConstruct<T> for Result<T> {
     }
 }
 
+// pub mod syntax {
+//     /// invoke substitution on defs
+//     pub struct Subst<T>(pub T);
+// }
+
 /// Trivial [`MonConstruct`] construction
 macro_rules! impl_mon_construct_trivial {
     ($($ty:ty),*) => {
@@ -98,36 +103,36 @@ impl MonConstruct<DtorName> for &str {
 }
 
 // DefId
-impl MonConstruct<DefId> for cs::Ann<VarName, KindId> {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
-        let cs::Ann(tm, ty) = self;
-        Ok((env, Alloc::alloc(tycker, tm, ty.into())))
-    }
-}
-impl MonConstruct<DefId> for cs::Ann<VarName, TypeId> {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
-        let cs::Ann(tm, ty) = self;
-        Ok((env, Alloc::alloc(tycker, tm, ty.into())))
-    }
-}
-impl<A> MonConstruct<DefId> for cs::Ann<String, A>
-where
-    A: Into<AnnId>,
-{
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
-        let cs::Ann(tm, ty) = self;
-        cs::Ann(VarName(tm), ty.into()).mbuild(tycker, env)
-    }
-}
-impl<A> MonConstruct<DefId> for cs::Ann<&str, A>
-where
-    A: Into<AnnId>,
-{
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
-        let cs::Ann(tm, ty) = self;
-        cs::Ann(tm.to_string(), ty.into()).mbuild(tycker, env)
-    }
-}
+// impl MonConstruct<DefId> for cs::Ann<VarName, KindId> {
+//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
+//         let cs::Ann(tm, ty) = self;
+//         Ok((env, Alloc::alloc(tycker, tm, ty.into())))
+//     }
+// }
+// impl MonConstruct<DefId> for cs::Ann<VarName, TypeId> {
+//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
+//         let cs::Ann(tm, ty) = self;
+//         Ok((env, Alloc::alloc(tycker, tm, ty.into())))
+//     }
+// }
+// impl<A> MonConstruct<DefId> for cs::Ann<String, A>
+// where
+//     A: Into<AnnId>,
+// {
+//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
+//         let cs::Ann(tm, ty) = self;
+//         cs::Ann(VarName(tm), ty.into()).mbuild(tycker, env)
+//     }
+// }
+// impl<A> MonConstruct<DefId> for cs::Ann<&str, A>
+// where
+//     A: Into<AnnId>,
+// {
+//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
+//         let cs::Ann(tm, ty) = self;
+//         cs::Ann(tm.to_string(), ty.into()).mbuild(tycker, env)
+//     }
+// }
 
 /* -------------------------------- Abstract -------------------------------- */
 
@@ -162,6 +167,13 @@ where
 }
 
 /* ---------------------------------- Kind ---------------------------------- */
+
+impl MonConstruct<KindId> for cs::TypeOf<TPatId> {
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, KindId)> {
+        let cs::TypeOf(ty) = self;
+        Ok((env, tycker.statics.annotations_tpat[&ty]))
+    }
+}
 
 impl MonConstruct<KindId> for cs::TypeOf<TypeId> {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, KindId)> {
@@ -215,12 +227,42 @@ mod kind_test {
 
 /* ------------------------------- TypePattern ------------------------------ */
 
-impl MonConstruct<TPatId> for cs::Fresh<TPatId> {
+// impl MonConstruct<TPatId> for cs::Fresh<TPatId> {
+//     fn mbuild(self, tycker: &mut Tycker, mut env: MonEnv) -> Result<(MonEnv, TPatId)> {
+//         let cs::Fresh(tm) = self;
+//         let (def, kd) = tm.destruct_def(tycker);
+//         use zydeco_surface::scoped::arena::ArenaScoped;
+//         let var = tycker.scoped.def(&def);
+//         let def_ = Alloc::alloc(tycker, var, kd.into());
+//         let None = env.subst.insert(def, def_) else { unreachable!() };
+//         let tpat_ = Alloc::alloc(tycker, def_, kd);
+//         Ok((env, tpat_))
+//     }
+// }
+impl<K> MonConstruct<TPatId> for cs::Pat<Hole, K>
+where
+    K: MonConstruct<KindId>,
+{
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
-        let cs::Fresh(tm) = self;
-        let (def, kd) = tm.destruct_def(tycker);
-        let tpat_ = Alloc::alloc(tycker, def, kd);
-        Ok((env, tpat_))
+        let cs::Pat(Hole, kd) = self;
+        let (env, kd) = kd.mbuild(tycker, env)?;
+        Ok((env, Alloc::alloc(tycker, Hole, kd)))
+    }
+}
+impl<K> MonConstruct<TPatId> for cs::Pat<DefId, K>
+where
+    K: MonConstruct<KindId>,
+{
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
+        let cs::Pat(def, kd) = self;
+        let (mut env, kd) = kd.mbuild(tycker, env)?;
+        use zydeco_surface::scoped::arena::ArenaScoped;
+        let var = tycker.scoped.def(&def);
+        let def_ = Alloc::alloc(tycker, var, kd.into());
+        // track the substitution
+        env.subst += [(def, def_)];
+        let tpat = Alloc::alloc(tycker, def_, kd.into());
+        Ok((env, tpat))
     }
 }
 impl MonConstruct<TPatId> for cs::Ann<Option<DefId>, KindId> {
@@ -266,6 +308,12 @@ where
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Type(ty) = self;
         ty.mbuild(tycker, env)
+    }
+}
+impl MonConstruct<TypeId> for cs::TypeOf<VPatId> {
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+        let cs::TypeOf(vpat) = self;
+        Ok((env, tycker.statics.annotations_vpat[&vpat]))
     }
 }
 impl MonConstruct<TypeId> for cs::TypeOf<ValueId> {
@@ -547,44 +595,30 @@ where
 
 /* ------------------------------ ValuePattern ------------------------------ */
 
-impl MonConstruct<VPatId> for cs::Fresh<VPatId> {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-        let cs::Fresh(tm) = self;
-        let (def, ty) = tm.try_destruct_def(tycker);
-        cs::Ann(def, ty).mbuild(tycker, env)
-    }
-}
-impl MonConstruct<VPatId> for cs::Ann<Option<DefId>, TypeId> {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-        let cs::Ann(tm, ty) = self;
-        match tm {
-            | Some(def) => cs::Ann(def, ty).mbuild(tycker, env),
-            | None => cs::Ann(Hole, ty).mbuild(tycker, env),
-        }
-    }
-}
-impl<T> MonConstruct<VPatId> for cs::Pat<Option<DefId>, T>
+impl<T> MonConstruct<VPatId> for cs::Pat<Hole, T>
 where
     T: MonConstruct<TypeId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-        let cs::Pat(tm, ty) = self;
+        let cs::Pat(Hole, ty) = self;
         let (env, ty) = ty.mbuild(tycker, env)?;
-        match tm {
-            | Some(def) => cs::Ann(def, ty).mbuild(tycker, env),
-            | None => cs::Ann(Hole, ty).mbuild(tycker, env),
-        }
+        cs::Ann(Hole, ty).mbuild(tycker, env)
     }
 }
-impl<T> MonConstruct<VPatId> for cs::Ann<VarName, T>
+impl<T> MonConstruct<VPatId> for cs::Pat<DefId, T>
 where
     T: MonConstruct<TypeId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-        let cs::Ann(var, ty) = self;
-        let (env, ty) = ty.mbuild(tycker, env)?;
-        let def = Alloc::alloc(tycker, var, ty.into());
-        cs::Ann(def, ty).mbuild(tycker, env)
+        let cs::Pat(def, ty) = self;
+        let (mut env, ty) = ty.mbuild(tycker, env)?;
+        use zydeco_surface::scoped::arena::ArenaScoped;
+        let var = tycker.scoped.def(&def);
+        let def_ = Alloc::alloc(tycker, var, ty.into());
+        // track the substitution
+        env.subst += [(def, def_)];
+        let vpat = Alloc::alloc(tycker, def_, ty.into());
+        Ok((env, vpat))
     }
 }
 impl<V, T> MonConstruct<VPatId> for cs::Pat<V, T>
@@ -594,10 +628,78 @@ where
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(var, ty) = self;
-        let (env, var) = var.mbuild(tycker, env)?;
         let (env, ty) = ty.mbuild(tycker, env)?;
+        let (env, var) = var.mbuild(tycker, env)?;
         let def = Alloc::alloc(tycker, var, ty.into());
         cs::Ann(def, ty).mbuild(tycker, env)
+    }
+}
+impl<T> MonConstruct<VPatId> for cs::Pat<Option<DefId>, T>
+where
+    T: MonConstruct<TypeId>,
+{
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+        let cs::Pat(tm, ty) = self;
+        match tm {
+            | Some(def) => cs::Pat(def, ty).mbuild(tycker, env),
+            | None => cs::Pat(Hole, ty).mbuild(tycker, env),
+        }
+    }
+}
+impl<C, V, T> MonConstruct<VPatId> for cs::Pat<cs::Ctor<C, V>, T>
+where
+    C: MonConstruct<CtorName>,
+    V: MonConstruct<VPatId>,
+    T: MonConstruct<TypeId>,
+{
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+        let cs::Pat(cs::Ctor(ctor, body), ty) = self;
+        let (env, ctor) = ctor.mbuild(tycker, env)?;
+        let (env, body) = body.mbuild(tycker, env)?;
+        let (env, ty) = ty.mbuild(tycker, env)?;
+        cs::Ann(Ctor(ctor, body), ty).mbuild(tycker, env)
+    }
+}
+impl MonConstruct<VPatId> for Triv {
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+        let Triv = self;
+        let (env, ty) = UnitTy.mbuild(tycker, env)?;
+        cs::Ann(Triv, ty).mbuild(tycker, env)
+    }
+}
+impl<S, T> MonConstruct<VPatId> for Cons<S, T>
+where
+    S: MonConstruct<VPatId>,
+    T: MonConstruct<VPatId>,
+{
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+        let Cons(a, b) = self;
+        let (env, a) = a.mbuild(tycker, env)?;
+        let a_ty = tycker.statics.annotations_vpat[&a];
+        let (env, b) = b.mbuild(tycker, env)?;
+        let b_ty = tycker.statics.annotations_vpat[&b];
+        let (env, ty) = Prod(a_ty, b_ty).mbuild(tycker, env)?;
+        cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
+    }
+}
+impl<S, T> MonConstruct<VPatId> for Cons<cs::Ty<S>, T>
+where
+    S: MonConstruct<TPatId>,
+    T: MonConstruct<VPatId>,
+{
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+        let Cons(cs::Ty(a), b) = self;
+        let (mut env, a) = a.mbuild(tycker, env)?;
+        let (a_var, a_kd) = a.try_destruct_def(tycker);
+        let abst = Alloc::alloc(tycker, a_var, a_kd);
+        let a_ty = Alloc::alloc(tycker, abst, a_kd);
+        if let Some(a_var) = a_var {
+            env.ty += [(a_var, a_ty.into())];
+        }
+        let (env, b) = b.mbuild(tycker, env)?;
+        let b_ty = tycker.statics.annotations_vpat[&b];
+        let (env, ty) = cs::Exists(abst, move |_| b_ty).mbuild(tycker, env)?;
+        cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
     }
 }
 
@@ -614,8 +716,11 @@ where
 }
 impl MonConstruct<ValueId> for DefId {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
-        let AnnId::Type(ty) = tycker.statics.annotations_var[&self] else { unreachable!() };
-        Ok((env, Alloc::alloc(tycker, self, ty)))
+        // substitute according to the environment
+        let def = env.subst.get(&self).cloned().unwrap();
+        // and then get the type
+        let AnnId::Type(ty) = tycker.statics.annotations_var[&def] else { unreachable!() };
+        Ok((env, Alloc::alloc(tycker, def, ty)))
     }
 }
 impl MonConstruct<ValueId> for Option<DefId> {

@@ -129,11 +129,6 @@ pub mod syntax {
     #[derive(Clone, Copy)]
     pub struct TypeOf<T>(pub T);
 
-    /// fresh variable [`super::DefId`] or abstract type [`super::AbstId`]
-    ///
-    /// currently used for new type pattern and value pattern
-    pub struct Fresh<T>(pub T);
-
     /// Construct to type immediately
     pub struct Type<T>(pub T);
     /// Construct to value immediately
@@ -189,6 +184,7 @@ pub mod syntax {
     pub struct Top;
 
     pub use crate::monadic::syntax::*;
+    // pub use crate::moncons::syntax::*;
 }
 
 /// Trivial [`Construct`] construction
@@ -382,14 +378,6 @@ mod kind_test {
 
 /* ------------------------------- TypePattern ------------------------------ */
 
-impl Construct<TPatId> for cs::Fresh<TPatId> {
-    fn build(self, tycker: &mut Tycker, _env: &TyEnv) -> Result<TPatId> {
-        let cs::Fresh(tm) = self;
-        let (def, kd) = tm.destruct_def(tycker);
-        let tpat_ = Alloc::alloc(tycker, def, kd);
-        Ok(tpat_)
-    }
-}
 impl Construct<TPatId> for cs::Ann<Option<DefId>, KindId> {
     fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<TPatId> {
         let cs::Ann(tm, ty) = self;
@@ -746,13 +734,6 @@ impl Tycker {
 
 /* ------------------------------ ValuePattern ------------------------------ */
 
-impl Construct<VPatId> for cs::Fresh<VPatId> {
-    fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<VPatId> {
-        let cs::Fresh(tm) = self;
-        let (def, ty) = tm.try_destruct_def(tycker);
-        cs::Ann(def, ty).build(tycker, env)
-    }
-}
 impl Construct<VPatId> for cs::Ann<Option<DefId>, TypeId> {
     fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<VPatId> {
         let cs::Ann(tm, ty) = self;

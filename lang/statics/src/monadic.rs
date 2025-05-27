@@ -70,6 +70,18 @@ mod syntax_impl {
         }
     }
 
+    // TypeLift (type pattern translation)
+    impl<T> MonConstruct<TPatId> for cs::TypeLift<T>
+    where
+        T: MonConstruct<TPatId>,
+    {
+        fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
+            let cs::TypeLift { monad_ty, ty } = self;
+            let (env, ty) = ty.mbuild(tycker, env)?;
+            type_pattern_translation(tycker, monad_ty, env, ty)
+        }
+    }
+
     // TypeLift
     impl<T> MonConstruct<TypeId> for cs::TypeLift<T>
     where
@@ -82,7 +94,17 @@ mod syntax_impl {
         }
     }
 
-    // Todo: ValuePatternLift
+    // TermLift (value pattern translation)
+    impl<T> MonConstruct<VPatId> for cs::TermLift<T>
+    where
+        T: MonConstruct<VPatId>,
+    {
+        fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+            let cs::TermLift { monad_ty, monad_impl, tm } = self;
+            let (env, tm) = tm.mbuild(tycker, env)?;
+            value_pattern_translation(tycker, monad_ty, monad_impl, env, tm)
+        }
+    }
 
     // TermLift (value translation)
     impl<T> MonConstruct<ValueId> for cs::TermLift<T>
@@ -354,18 +376,37 @@ fn structure_translation(
     Ok(res)
 }
 
+/// Type Pattern Translation `[TPat]`
+fn type_pattern_translation(
+    tycker: &mut Tycker, _monad_ty: TypeId, env: MonEnv, tpat: TPatId,
+) -> Result<(MonEnv, TPatId)> {
+    use TypePattern as TPat;
+    let (env, kd) = cs::TypeOf(tpat).mbuild(tycker, env)?;
+    let (env, tpat_) = match tycker.tpat(&tpat) {
+        | TPat::Hole(hole) => cs::Pat(hole, kd).mbuild(tycker, env)?,
+        | TPat::Var(def) => cs::Pat(def, kd).mbuild(tycker, env)?,
+    };
+    Ok((env, tpat_))
+}
+
 /// Carrier (Type) Translation `[T]`
 fn type_translation(
     tycker: &mut Tycker, monad_ty: TypeId, env: MonEnv, ty: TypeId,
 ) -> Result<(MonEnv, TypeId)> {
     let (env, kd) = cs::TypeOf(ty).mbuild(tycker, env)?;
     let (env, res) = match tycker.type_filled(&ty)?.to_owned() {
-        | Type::Var(def) => (env, Alloc::alloc(tycker, def, kd)),
-        | Type::Abst(abst) => (env, Alloc::alloc(tycker, abst, kd)),
+        | Type::Var(def) => {
+            // substitute according to the environment
+            let def_ = env.subst.get(&def).cloned().unwrap();
+            (env, Alloc::alloc(tycker, def_, kd))
+        }
+        // | Type::Abst(abst) => (env, Alloc::alloc(tycker, abst, kd)),
+        | Type::Abst(_abst) => unreachable!(),
         | Type::Abs(ty) => {
             let Abs(tpat, ty) = ty;
             // Fixme: bind environment
-            Abs(cs::Fresh(tpat), |_, _, _| cs::TypeLift { monad_ty, ty }).mbuild(tycker, env)?
+            Abs(cs::TypeLift { monad_ty, ty: tpat }, |_, _, _| cs::TypeLift { monad_ty, ty })
+                .mbuild(tycker, env)?
         }
         | Type::App(ty) => {
             let App(ty_f, ty_a) = ty;
@@ -421,7 +462,44 @@ fn type_translation(
     Ok((env, res))
 }
 
-/// Todo: Value Pattern Translation
+/// Value Pattern Translation `[VPat]`
+fn value_pattern_translation(
+    tycker: &mut Tycker, monad_ty: TypeId, monad_impl: ValueId, env: MonEnv, vpat: VPatId,
+) -> Result<(MonEnv, VPatId)> {
+    use ValuePattern as VPat;
+    let (env, ty) = cs::TypeOf(vpat).mbuild(tycker, env)?;
+    let (env, ty_) = cs::TypeLift { monad_ty, ty }.mbuild(tycker, env)?;
+    let (env, vpat_) = match tycker.vpat(&vpat) {
+        | VPat::Hole(hole) => cs::Pat(hole, ty_).mbuild(tycker, env)?,
+        | VPat::Var(def) => {
+            // create a fresh variable, and track the substitution
+            cs::Pat(def, ty_).mbuild(tycker, env)?
+        }
+        | VPat::Ctor(vpat) => {
+            let Ctor(ctor, body) = vpat;
+            let body_ = cs::TermLift { monad_ty, monad_impl, tm: body };
+            let ty_ = cs::TypeLift { monad_ty, ty };
+            cs::Pat(cs::Ctor(ctor, body_), ty_).mbuild(tycker, env)?
+        }
+        | VPat::Triv(triv) => triv.mbuild(tycker, env)?,
+        | VPat::VCons(vpat) => {
+            let Cons(a, b) = vpat;
+            let a_ = cs::TermLift { monad_ty, monad_impl, tm: a };
+            let b_ = cs::TermLift { monad_ty, monad_impl, tm: b };
+            Cons(a_, b_).mbuild(tycker, env)?
+        }
+        | VPat::TCons(vpat) => {
+            let Cons(a_ty, body) = vpat;
+            let a_sig = cs::Signature { monad_ty, ty: a_ty };
+            let var_sig = cs::Ann("str", cs::Thk(a_sig));
+            let body_ = cs::TermLift { monad_ty, monad_impl, tm: body };
+            let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
+            // Cons(cs::Ty(a_ty_), Cons(var_sig, body_)).mbuild(tycker, env)?
+            todo!()
+        }
+    };
+    Ok((env, vpat_))
+}
 
 /// Term Translation (Value) `[V]`
 fn value_translation(
@@ -433,8 +511,11 @@ fn value_translation(
         | Value::Hole(Hole) => cs::Ann(Hole, ty_).mbuild(tycker, env)?,
         // figure out how to handle literals
         | Value::Lit(_) => unreachable!(),
-        // Fixme: variables should be freshed and substituted
-        | Value::Var(_def) => todo!(),
+        | Value::Var(def) => {
+            // substitute according to the environment
+            let def_ = env.subst.get(&def).cloned().unwrap();
+            (env, Alloc::alloc(tycker, def_, ty_))
+        }
         | Value::Thunk(value) => {
             let Thunk(body) = value;
             Thunk(cs::TermLift { monad_ty, monad_impl, tm: body }).mbuild(tycker, env)?
@@ -480,7 +561,6 @@ fn computation_translation(
             Abs(cs::Pat(def, param_ty_), move |_def| cs::TermLift {
                 monad_ty,
                 monad_impl,
-
                 tm: compu,
             })
             .mbuild(tycker, env)?
@@ -493,7 +573,7 @@ fn computation_translation(
         }
         | Compu::TAbs(compu) => {
             let Abs(tpat, compu) = compu;
-            Abs(cs::Ty(cs::Fresh(tpat)), move |_def, abst| {
+            Abs(cs::Ty(cs::TypeLift { monad_ty, ty: tpat }), move |_def, abst| {
                 let thk_sig = cs::Thk(cs::Signature { monad_ty, ty: cs::Ty(abst) });
                 Abs(cs::Pat("str", thk_sig), move |_str_var| {
                     // Fixme: bind environment
@@ -514,10 +594,9 @@ fn computation_translation(
             let (def, param_ty) = vpat.try_destruct_def(tycker);
             let (env, param_ty_) = cs::TypeLift { monad_ty, ty: param_ty }.mbuild(tycker, env)?;
             // Fixme: should be a fix
-            Abs(cs::Ann(def, param_ty_), move |_def| cs::TermLift {
+            Abs(cs::Pat(def, param_ty_), move |_def| cs::TermLift {
                 monad_ty,
                 monad_impl,
-
                 tm: compu,
             })
             .mbuild(tycker, env)?
@@ -544,14 +623,15 @@ fn computation_translation(
             let Some(a_ty) = ret_ty.destruct_ret_app(tycker) else { unreachable!() };
             let a_ty_ = cs::TypeLift { monad_ty, ty: a_ty };
             let bindee_ = { cs::TermLift { monad_ty, monad_impl, tm: bindee } };
-            let kont =
-                Abs(cs::Fresh(binder), move |_var| cs::TermLift { monad_ty, monad_impl, tm: tail });
+            let kont = Abs(cs::TermLift { monad_ty, monad_impl, tm: binder }, move |_var| {
+                cs::TermLift { monad_ty, monad_impl, tm: tail }
+            });
             App(App(App(str_, cs::Ty(a_ty_)), Thunk(bindee_)), Thunk(kont)).mbuild(tycker, env)?
         }
         | Compu::Let(compu) => {
             let PureBind { binder, bindee, tail } = compu;
-            let bindee_ = { cs::TermLift { monad_ty, monad_impl, tm: bindee } };
-            let binder_ = cs::Fresh(binder);
+            let bindee_ = cs::TermLift { monad_ty, monad_impl, tm: bindee };
+            let binder_ = cs::TermLift { monad_ty, monad_impl, tm: binder };
             PureBind {
                 binder: binder_,
                 bindee: bindee_,
