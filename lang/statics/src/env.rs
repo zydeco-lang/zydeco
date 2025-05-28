@@ -86,9 +86,9 @@ mod impls_ty_env {
                 (tycker.prim.thk.get().to_owned(), ThkTy.build(tycker, ori).into()),
                 (tycker.prim.ret.get().to_owned(), RetTy.build(tycker, ori).into()),
                 (tycker.prim.unit.get().to_owned(), UnitTy.build(tycker, ori).into()),
-                (tycker.prim.top.get().to_owned(), cs::TopTy.build(tycker, ori).into()),
-                (tycker.prim.monad.get().to_owned(), cs::MonadTy.build(tycker, ori).into()),
-                (tycker.prim.algebra.get().to_owned(), cs::AlgebraTy.build(tycker, ori).into()),
+                // (tycker.prim.top.get().to_owned(), cs::TopTy.build(tycker, ori).into()),
+                // (tycker.prim.monad.get().to_owned(), cs::MonadTy.build(tycker, ori).into()),
+                // (tycker.prim.algebra.get().to_owned(), cs::AlgebraTy.build(tycker, ori).into()),
             ];
             env
         }

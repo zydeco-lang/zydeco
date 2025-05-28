@@ -31,9 +31,9 @@ codata ExnT (E: VType) (M: VType -> CType) (A: VType) where
   | .done : M (Either E A)
 end
 
-def ! mtexn (E: VType) : MonadTrans (ExnT E) =
+def ! mtexn (E: VType) : MonadTrans (ExnT E) = fn M mo ->
   comatch
-  | .monad M mo ->
+  | .monad ->
     comatch
     | .return A a -> fn .done ->
       ! mo .return (Either E A) +Right(a)
@@ -45,7 +45,7 @@ def ! mtexn (E: VType) : MonadTrans (ExnT E) =
           | +Right(a) -> ! f a .done
           end }
     end
-  | .lift M A mo m -> fn .done ->
+  | .lift A m -> fn .done ->
     ! mo .bind A (Either E A) m
     { fn a ->
       ! mo .return (Either E A) +Right(a) }
@@ -58,9 +58,9 @@ codata ExnKT (E: VType) (R: CType) (M: VType -> CType) (A: VType) where
   | .run : Thunk (Algebra M R) -> Thunk (E -> R) -> Thunk (A -> R) -> R
 end
 
-def ! mtexnk (E: VType) (R: CType) : MonadTrans (ExnKT E R) =
+def ! mtexnk (E: VType) (R: CType) : MonadTrans (ExnKT E R) = fn M mo ->
   comatch
-  | .monad M mo ->
+  | .monad ->
     comatch
     | .return A a -> fn .run alg -> fn ke ka ->
       ! ka a
@@ -68,7 +68,7 @@ def ! mtexnk (E: VType) (R: CType) : MonadTrans (ExnKT E R) =
       do~ ! m .run alg ke; fn a ->
       ! f a .run alg ke ka'
     end
-  | .lift M A mo m -> fn .run alg -> fn ke ka ->
+  | .lift A m -> fn .run alg -> fn ke ka ->
     ! alg .bindA A m ka
   end
 end

@@ -20,32 +20,36 @@ module Builtin where
   pub extern def Int : VType end
   pub extern def Char : VType end
   pub extern def String : VType end
-  pub extern def Top : CType = codata end end
   pub extern def OS : CType end
 
   /// interface for monads and algebras
-  pub extern codata Monad (M: VType -> CType) where
+  pub extern alias Monad (M: VType -> CType) : CType =
+    codata
     | .return : forall (A: VType) .
       A -> M A
     | .bind : forall (A: VType) (A': VType) .
-      Thunk (M A) -> Thunk (A -> M A') -> M A'
+      Thk (M A) -> Thk (A -> M A') -> M A'
+    end
   end
-  pub extern codata Algebra (M: VType -> CType) (R: CType) where
+  pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
+    codata
     | .bindA : forall (A: VType) .
-      Thunk (M A) -> Thunk (A -> R) -> R
+      Thk (M A) -> Thk (A -> R) -> R
+    end
   end
 
   /// interface for monad transformers
-  pub codata MonadTrans (T: (VType -> CType) -> VType -> CType) where
-    | .monad : forall (M: VType -> CType) .
-      Thunk (Monad M) -> Monad (T M)
-    | .lift : forall (M: VType -> CType) (A: VType) .
-      Thunk (Monad M) -> Thunk (M A) -> T M A
+  pub alias MonadTrans (T: (VType -> CType) -> VType -> CType) : CType =
+    forall (M: VType -> CType) . Thk (Monad M) -> codata
+    | .monad : Monad (T M)
+    | .lift  : forall (A: VType) . Thk (M A) -> T M A
+    end
   end
 end
 
 module Core where
-  pub data Empty where end
+  pub alias Empty : VType = data end end
+  pub alias Top : CType = codata end end
 
   pub data Option (A : VType) where
     | +None : Unit
