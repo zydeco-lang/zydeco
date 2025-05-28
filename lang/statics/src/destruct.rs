@@ -31,6 +31,16 @@ impl TPatId {
             }
         }
     }
+    pub fn reify(&self, tycker: &mut Tycker) -> TypeId {
+        use TypePattern as TPat;
+        let kd = tycker.statics.annotations_tpat[self].to_owned();
+        match tycker.statics.tpats[self].to_owned() {
+            | TPat::Hole(Hole) => {
+                todo!()
+            }
+            | TPat::Var(def) => Alloc::alloc(tycker, def, kd),
+        }
+    }
 }
 
 impl TypeId {
@@ -180,9 +190,7 @@ impl TypeId {
         };
         Some(res)
     }
-    pub fn destruct_algebra(
-        &self, env: &TyEnv, tycker: &mut Tycker,
-    ) -> Option<(TypeId, TypeId)> {
+    pub fn destruct_algebra(&self, env: &TyEnv, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         if a_tys.len() != 2 {
             None?;
@@ -215,9 +223,7 @@ impl TypeId {
             },
         }
     }
-    pub fn destruct_codata<'t>(
-        &self, _env: &TyEnv, tycker: &'t mut Tycker,
-    ) -> Option<&'t CoData> {
+    pub fn destruct_codata<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t CoData> {
         use zydeco_utils::arena::ArenaAccess;
         match tycker.statics.types[&self].to_owned() {
             | Fillable::Fill(_) => todo!(),
@@ -242,6 +248,37 @@ impl VPatId {
             | VPat::Triv(_) => (None, ty),
             | VPat::VCons(_) => (None, ty),
             | VPat::TCons(_) => (None, ty),
+        }
+    }
+    /// Turn a value pattern into a value of the same type by assuming the variables
+    /// in the pattern are bound in the environment.
+    pub fn reify(&self, tycker: &mut Tycker) -> ValueId {
+        use ValuePattern as VPat;
+        let ty = tycker.statics.annotations_vpat[self].to_owned();
+        match tycker.statics.vpats[self].to_owned() {
+            | VPat::Hole(Hole) => Alloc::alloc(tycker, Hole, ty),
+            | VPat::Var(def) => Alloc::alloc(tycker, def, ty),
+            | VPat::Ctor(vpat) => {
+                let Ctor(ctor, vpat) = vpat;
+                let vpat_ = vpat.reify(tycker);
+                Alloc::alloc(tycker, Ctor(ctor, vpat_), ty)
+            }
+            | VPat::Triv(vpat) => {
+                let Triv = vpat;
+                Alloc::alloc(tycker, Triv, ty)
+            }
+            | VPat::VCons(vpat) => {
+                let Cons(a, b) = vpat;
+                let a_ = a.reify(tycker);
+                let b_ = b.reify(tycker);
+                Alloc::alloc(tycker, Cons(a_, b_), ty)
+            }
+            | VPat::TCons(vpat) => {
+                let Cons(a, b) = vpat;
+                let a_ = a.reify(tycker);
+                let b_ = b.reify(tycker);
+                Alloc::alloc(tycker, Cons(a_, b_), ty)
+            }
         }
     }
 }
