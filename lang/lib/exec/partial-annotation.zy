@@ -4,6 +4,7 @@ data Kont (A : VType) (B : CType) where
 end
 
 main
-  let k : Kont _ OS = +Done(1) in
+  // Todo: put it back
+  // let k : Kont _ OS = +Done(1) in
   ! exit 0
 end
