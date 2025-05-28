@@ -568,7 +568,7 @@ impl Tyck for TyEnvT<su::PatId> {
                     let AnnId::Type(ann_ty) = ann else {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     };
-                    let ann_ty_unroll = ann_ty.unroll(tycker)?.subst_env_k(tycker, &self.env)?;
+                    let ann_ty_unroll = ann_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
                     let ss::Type::Data(data_id) = &tycker.type_filled_k(&ann_ty_unroll)? else {
                         tycker.err_k(
                             TyckError::TypeExpected {
@@ -1912,7 +1912,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 let AnnId::Type(ana_ty) = ana_ty else {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
-                let ana_ty_unroll = ana_ty.unroll(tycker)?.subst_env_k(tycker, &self.env)?;
+                let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
                 let ss::Type::Data(data_id) = &tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
@@ -1951,7 +1951,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 //         scrut_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
                 //     );
                 // }
-                let scrut_ty_unroll = scrut_ty.unroll(tycker)?.subst_env_k(tycker, &self.env)?;
+                let scrut_ty_unroll = scrut_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
                 // // Debug: print
                 // {
                 //     use crate::fmt::*;
@@ -2040,7 +2040,7 @@ impl Tyck for TyEnvT<su::TermId> {
                         | AnnId::Type(ana_ty) => ana_ty,
                     },
                 };
-                let ana_ty_unroll = ana_ty.unroll(tycker)?.subst_env_k(tycker, &self.env)?;
+                let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
                 let ss::Type::CoData(codata_id) = &tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
@@ -2082,7 +2082,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 let TermAnnId::Compu(body, ty_body) = body_out_ann else {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
-                let ty_body_unroll = ty_body.unroll(tycker)?.subst_env_k(tycker, &self.env)?;
+                let ty_body_unroll = ty_body.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
                 let ss::Type::CoData(codata_id) = &tycker.type_filled_k(&ty_body_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {

@@ -1,4 +1,4 @@
-use crate::syntax::*;
+use crate::{syntax::*, cs};
 use zydeco_surface::scoped::syntax::ScopedArena;
 use zydeco_utils::arena::ArenaAccess;
 
@@ -10,6 +10,19 @@ pub struct Formatter<'arena> {
 impl<'arena> Formatter<'arena> {
     pub fn new(scoped: &'arena ScopedArena, statics: &'arena StaticsArena) -> Self {
         Formatter { scoped, statics }
+    }
+}
+
+// Fixme: not a good idea because the impl is actually not for annotation,
+// but for type substitution
+impl<'a, S, T> Ugly<'a, Formatter<'a>> for cs::Ann<S, T>
+where
+    S: Ugly<'a, Formatter<'a>>,
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let cs::Ann(tm, ty) = self;
+        format!("{} := {}", tm.ugly(f), ty.ugly(f))
     }
 }
 

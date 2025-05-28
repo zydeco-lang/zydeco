@@ -20,7 +20,7 @@ module Builtin where
   pub extern def Int : VType end
   pub extern def Char : VType end
   pub extern def String : VType end
-  pub extern codata Top where end
+  pub extern def Top : CType = codata end end
   pub extern def OS : CType end
 
   /// interface for monads and algebras

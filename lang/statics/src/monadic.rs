@@ -417,8 +417,24 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let def_ = env.subst.get(&def).cloned().unwrap();
             (env, Alloc::alloc(tycker, def_, kd))
         }
-        // | Type::Abst(abst) => (env, Alloc::alloc(tycker, abst, kd)),
-        | Type::Abst(_abst) => unreachable!(),
+        // Fixme: only very few types are allowed here, e.g. Top
+        | Type::Abst(abst) => {
+            // Debug: log the abst type
+            {
+                use zydeco_utils::arena::ArenaAccess;
+                let hint = match tycker.statics.abst_hints.get(&abst) {
+                    | Some(hint) => tycker.dump_scoped(hint),
+                    | None => "<unknown>".to_string(),
+                };
+                logg::warn!(
+                    "carrier translation of {}({}) may leak",
+                    tycker.dump_statics(abst),
+                    hint
+                );
+            }
+            (env, Alloc::alloc(tycker, abst, kd))
+        }
+        // | Type::Abst(_abst) => unreachable!(),
         | Type::Abs(ty) => {
             let Abs(tpat, ty) = ty;
             // Fixme: bind environment
@@ -567,10 +583,19 @@ fn computation_translation(
     tycker: &mut Tycker, env: MonEnv, compu: CompuId,
 ) -> Result<(MonEnv, CompuId)> {
     use Computation as Compu;
+    // Debug: print ty env so far
+    {
+        for (def, ty) in env.ty.iter() {
+            logg::trace!("{}", tycker.dump_statics(cs::Ann(def, ty)));
+        }
+    }
     let (env, ty) = cs::TypeOf(compu).mbuild(tycker, env)?;
-    let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+    // let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
     let (env, res) = match tycker.compu(&compu) {
-        | Compu::Hole(Hole) => cs::Ann(Hole, ty_).mbuild(tycker, env)?,
+        | Compu::Hole(Hole) => {
+            let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+            cs::Ann(Hole, ty_).mbuild(tycker, env)?
+        }
         | Compu::VAbs(compu) => {
             let Abs(vpat, compu) = compu;
             let (def, param_ty) = vpat.try_destruct_def(tycker);
@@ -627,7 +652,7 @@ fn computation_translation(
         }
         | Compu::Do(compu) => {
             let Bind { binder, bindee, tail } = compu;
-            let str_ = { cs::Structure { ty: ty_ } };
+            let str_ = cs::Structure { ty };
             let (env, ret_ty) = cs::TypeOf(bindee).mbuild(tycker, env)?;
             let Some(a_ty) = ret_ty.destruct_ret_app(tycker) else { unreachable!() };
             let a_ty_ = cs::TypeLift { ty: a_ty };
@@ -646,7 +671,19 @@ fn computation_translation(
             // let Match { scrut, arms } = compu;
             todo!()
         }
-        | Compu::CoMatch(_) => todo!(),
+        | Compu::CoMatch(compu) => {
+            let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+            let ty_ = ty_.unroll(tycker)?;
+            let Type::CoData(coda) = tycker.type_filled(&ty_)? else { unreachable!() };
+            let CoMatch { arms } = compu;
+            let arms: std::collections::HashMap<_, _> =
+                arms.into_iter().map(|CoMatcher { dtor, tail }| (dtor, tail)).collect();
+            cs::CoMatch(coda, |dtor, _ty| {
+                let tail = arms.get(&dtor).cloned().unwrap();
+                cs::TermLift { tm: tail }
+            })
+            .mbuild(tycker, env)?
+        }
         | Compu::Dtor(_) => todo!(),
     };
     Ok((env, res))

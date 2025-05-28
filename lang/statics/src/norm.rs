@@ -270,9 +270,13 @@ impl TypeId {
 /* --------------------------- Unroll Sealed Types -------------------------- */
 
 impl TypeId {
-    pub fn unroll(self, tycker: &mut Tycker) -> ResultKont<TypeId> {
+    pub fn unroll_k(self, tycker: &mut Tycker) -> ResultKont<TypeId> {
+        let res = self.unroll(tycker);
+        tycker.err_p_to_k(res)
+    }
+    pub fn unroll(self, tycker: &mut Tycker) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[&self];
-        let res = match tycker.type_filled_k(&self)?.to_owned() {
+        let res = match tycker.type_filled(&self)?.to_owned() {
             | Type::Abst(abst) => {
                 match tycker.statics.seals.get(&abst) {
                     | Some(ty) => {
@@ -289,7 +293,7 @@ impl TypeId {
                     self
                 } else {
                     let app = Alloc::alloc(tycker, App(ty1_, ty2), kd);
-                    app.normalize_k(tycker, kd)?
+                    app.normalize(tycker, kd)?
                 }
             }
             // Todo: figure out if this is correct

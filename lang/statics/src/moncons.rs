@@ -1051,8 +1051,8 @@ where
         let arms = (coda.into_iter())
             .map(|(dtor, ty)| {
                 let (_, tail) = (arm.clone())(dtor.clone(), ty).mbuild(tycker, env.clone())?;
-                let tail_ty = tycker.statics.annotations_compu[&tail];
-                let Ok(_) = Lub::lub(ty, tail_ty, tycker) else { unreachable!() };
+                // let tail_ty = tycker.statics.annotations_compu[&tail];
+                // let Ok(_) = Lub::lub(ty, tail_ty, tycker) else { unreachable!() };
                 Ok(CoMatcher { dtor, tail })
             })
             .collect::<Result<Vec<_>>>()?;

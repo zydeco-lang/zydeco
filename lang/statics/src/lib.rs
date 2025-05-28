@@ -29,7 +29,7 @@ pub mod wellformed;
 pub mod err;
 pub use err::*;
 pub mod fmt;
-mod log;
+mod logg;
 mod span;
 
 pub(crate) use construct::syntax as cs;
