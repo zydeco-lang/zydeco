@@ -22,7 +22,7 @@ im = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
 colored = { workspace = true }
-log = { workspace = true}
+log = { workspace = true }
 
 [lib]
 doctest = false
