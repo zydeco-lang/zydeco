@@ -31,7 +31,7 @@ def ! alg-exnk-os (E: VType) (ke: Thk (E -> OS)) : Algebra (ExnK E) OS =
   end
 end
 
-def ! _ =
+def ! main_exnk_os =
   monadic
     fn (R: CType) (r: Thk R) -> ! r
   :
@@ -102,5 +102,5 @@ end
 
 
 
-
-main ! exit 0 end
+main ! main_exnk_os { ! exit 0 } end
+// main ! exit 0 end

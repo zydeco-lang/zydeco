@@ -107,38 +107,6 @@ impl MonConstruct<DtorName> for &str {
     }
 }
 
-// DefId
-// impl MonConstruct<DefId> for cs::Ann<VarName, KindId> {
-//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
-//         let cs::Ann(tm, ty) = self;
-//         Ok((env, Alloc::alloc(tycker, tm, ty.into())))
-//     }
-// }
-// impl MonConstruct<DefId> for cs::Ann<VarName, TypeId> {
-//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
-//         let cs::Ann(tm, ty) = self;
-//         Ok((env, Alloc::alloc(tycker, tm, ty.into())))
-//     }
-// }
-// impl<A> MonConstruct<DefId> for cs::Ann<String, A>
-// where
-//     A: Into<AnnId>,
-// {
-//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
-//         let cs::Ann(tm, ty) = self;
-//         cs::Ann(VarName(tm), ty.into()).mbuild(tycker, env)
-//     }
-// }
-// impl<A> MonConstruct<DefId> for cs::Ann<&str, A>
-// where
-//     A: Into<AnnId>,
-// {
-//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
-//         let cs::Ann(tm, ty) = self;
-//         cs::Ann(tm.to_string(), ty.into()).mbuild(tycker, env)
-//     }
-// }
-
 /* -------------------------------- Abstract -------------------------------- */
 
 impl<K> MonConstruct<AbstId> for cs::Ty<cs::Ann<Option<DefId>, K>>
@@ -244,18 +212,6 @@ mod kind_test {
 
 /* ------------------------------- TypePattern ------------------------------ */
 
-// impl MonConstruct<TPatId> for cs::Fresh<TPatId> {
-//     fn mbuild(self, tycker: &mut Tycker, mut env: MonEnv) -> Result<(MonEnv, TPatId)> {
-//         let cs::Fresh(tm) = self;
-//         let (def, kd) = tm.destruct_def(tycker);
-//         use zydeco_surface::scoped::arena::ArenaScoped;
-//         let var = tycker.scoped.def(&def);
-//         let def_ = Alloc::alloc(tycker, var, kd.into());
-//         let None = env.subst.insert(def, def_) else { unreachable!() };
-//         let tpat_ = Alloc::alloc(tycker, def_, kd);
-//         Ok((env, tpat_))
-//     }
-// }
 impl<K> MonConstruct<TPatId> for cs::Pat<Hole, K>
 where
     K: MonConstruct<KindId>,
@@ -691,26 +647,6 @@ where
         cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
     }
 }
-// impl<S, V, T> MonConstruct<VPatId> for cs::Pat<Cons<cs::Ty<S>, V>, T>
-// where
-//     S: MonConstruct<TPatId>,
-//     V: MonConstruct<VPatId>,
-//     T: MonConstruct<TypeId>,
-// {
-//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-//         let cs::Pat(Cons(cs::Ty(a), b), ty) = self;
-//         let (mut env, a) = a.mbuild(tycker, env)?;
-//         let (a_var, a_kd) = a.try_destruct_def(tycker);
-//         let abst = Alloc::alloc(tycker, a_var, a_kd);
-//         let a_ty = Alloc::alloc(tycker, abst, a_kd);
-//         if let Some(a_var) = a_var {
-//             env.ty += [(a_var, a_ty.into())];
-//         }
-//         let (env, b) = b.mbuild(tycker, env)?;
-//         let (env, ty) = ty.mbuild(tycker, env)?;
-//         cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
-//     }
-// }
 impl<S, F, V, T> MonConstruct<VPatId> for cs::Pat<cs::TCons<S, F>, T>
 where
     S: MonConstruct<TPatId>,
@@ -826,21 +762,6 @@ where
         let (env, ty) = ty.mbuild(tycker, env)?;
         cs::Ann(Ctor(ctor, body), ty).mbuild(tycker, env)
     }
-}
-
-impl Tycker {
-    // pub fn value_var(&mut self, env: &TyEnv, def: DefId, ty: TypeId) -> Result<ValueId> {
-    //     cs::Ann(def, ty).mbuild(self, env)
-    // }
-    // pub fn value_thunk(&mut self, env: &TyEnv, body: CompuId) -> Result<ValueId> {
-    //     Thunk(body).mbuild(self, env)
-    // }
-    // pub fn value_triv(&mut self, env: &TyEnv) -> Result<ValueId> {
-    //     Triv.mbuild(self, env)
-    // }
-    // pub fn value_vcons(&mut self, env: &TyEnv, a: ValueId, b: ValueId) -> Result<ValueId> {
-    //     Cons(a, b).mbuild(self, env)
-    // }
 }
 
 /* ------------------------------- Computation ------------------------------ */
@@ -1107,87 +1028,4 @@ impl MonConstruct<CompuId> for cs::Top {
         let (env, top) = cs::TopTy.mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top)))
     }
-}
-
-impl Tycker {
-    // pub fn compu_vabs<F, T>(
-    //     &mut self, env: &TyEnv, name: impl MonConstruct<VarName>,
-    //     param_ty: impl MonConstruct<TypeId>, body: F,
-    // ) -> CompuId
-    // where
-    //     F: Fn(&mut Tycker, &TyEnv, DefId) -> T,
-    //     T: MonConstruct<CompuId>,
-    // {
-    //     let param_ty = param_ty.mbuild(self, env);
-    //     Abs(cs::Ann(name, param_ty), body).mbuild(self, env)
-    // }
-    // pub fn try_compu_vabs<F, T>(
-    //     &mut self, env: &TyEnv, name: impl MonConstruct<VarName>,
-    //     param_ty: impl MonConstruct<TypeId>, body: F,
-    // ) -> Result<CompuId>
-    // where
-    //     F: Fn(&mut Self, &TyEnv, DefId) -> Result<T>,
-    //     T: MonConstruct<CompuId>,
-    // {
-    //     let param_ty = param_ty.mbuild(self, env);
-    //     Abs(cs::Ann(name, param_ty), body).mbuild(self, env)
-    // }
-    // pub fn compu_tabs(
-    //     &mut self, env: &TyEnv, name: impl MonConstruct<VarName>,
-    //     param_kd: impl MonConstruct<KindId>,
-    //     body: impl Fn(&mut Self, &TyEnv, DefId, AbstId) -> CompuId,
-    // ) -> CompuId {
-    //     let param_kd = param_kd.mbuild(self, env);
-    //     Abs(cs::Ann(name, param_kd), body).mbuild(self, env)
-    // }
-    // pub fn try_compu_tabs<F, T>(
-    //     &mut self, env: &TyEnv, name: impl MonConstruct<VarName>,
-    //     param_kd: impl MonConstruct<KindId>, body: F,
-    // ) -> Result<CompuId>
-    // where
-    //     F: Fn(&mut Self, &TyEnv, DefId, AbstId) -> Result<T>,
-    //     T: MonConstruct<CompuId>,
-    // {
-    //     let param_kd = param_kd.mbuild(self, env);
-    //     Abs(cs::Ann(name, param_kd), body).mbuild(self, env)
-    // }
-    // pub fn compu_vapp(&mut self, env: &TyEnv, abs: CompuId, arg: ValueId) -> CompuId {
-    //     App(abs, arg).mbuild(self, env)
-    // }
-    // pub fn compu_tapp(&mut self, env: &TyEnv, abs: CompuId, arg: TypeId) -> CompuId {
-    //     App(abs, arg).mbuild(self, env)
-    // }
-    // pub fn compu_fix(
-    //     &mut self, env: &TyEnv, name: VarName, ty: TypeId,
-    //     body: impl Fn(&mut Self, &TyEnv, DefId) -> CompuId,
-    // ) -> Result<CompuId> {
-    //     Fix(cs::Ann(name, ty), body).mbuild(self, env)
-    // }
-    // pub fn compu_force(&mut self, env: &TyEnv, thk: ValueId) -> CompuId {
-    //     Force(thk).mbuild(self, env)
-    // }
-    // pub fn compu_ret(&mut self, env: &TyEnv, val: ValueId) -> CompuId {
-    //     Ret(val).mbuild(self, env)
-    // }
-    // pub fn compu_bind(
-    //     &mut self, env: &TyEnv, bindee: CompuId, name: VarName,
-    //     tail: impl Fn(&mut Self, &TyEnv, DefId) -> CompuId,
-    // ) -> CompuId {
-    //     Bind { binder: name, bindee, tail }.mbuild(self, env)
-    // }
-    // pub fn compu_let(
-    //     &mut self, env: &TyEnv, bindee: ValueId, name: VarName,
-    //     tail: impl Fn(&mut Self, &TyEnv, DefId) -> CompuId,
-    // ) -> CompuId {
-    //     PureBind { binder: name, bindee, tail }.mbuild(self, env)
-    // }
-    // pub fn compu_top(&mut self, env: &TyEnv) -> CompuId {
-    //     cs::Top.mbuild(self, env)
-    // }
-    // pub fn compu_dtor(
-    //     &mut self, env: &TyEnv, head: CompuId, dtor: impl MonConstruct<DtorName>,
-    // ) -> CompuId {
-    //     let dtor = dtor.mbuild(self, env);
-    //     Dtor(head, dtor).mbuild(self, env)
-    // }
 }

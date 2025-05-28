@@ -23,7 +23,6 @@ pub use lub::*;
 pub mod norm;
 pub mod tyck;
 pub use tyck::*;
-pub mod lift;
 pub mod monadic;
 // pub mod wellformed;
 pub mod err;

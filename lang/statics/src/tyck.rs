@@ -1298,13 +1298,11 @@ impl Tyck for TyEnvT<su::TermId> {
                                 let body_ty_subst = ty_body.subst_abst_k(tycker, (abst, a_ty))?;
                                 // // Debug: print
                                 // {
-                                //     use crate::fmt::*;
                                 //     println!(
                                 //         "Substituting\n\t{}\nwith\n\t{}\ngetting\n\t{}\n\n",
-                                //         f_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                                //         a_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                                //         body_ty_subst
-                                //             .ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+                                //         tycker.dump_statics(f_ty),
+                                //         tycker.dump_statics(a_ty),
+                                //         tycker.dump_statics(body_ty_subst),
                                 //     );
                                 // }
                                 let ty_out = {
@@ -1818,7 +1816,7 @@ impl Tyck for TyEnvT<su::TermId> {
             | Tm::MoBlock(term) => {
                 let su::MoBlock(body) = term;
 
-                // tyck the body WITH AN (ALMOST) EMPTY ENV
+                // tyck the body with an (almost) empty env
                 let ty_env = TyEnv::monadic_new(tycker, &self.env);
                 let body_out_ann =
                     TyEnvT { env: ty_env.to_owned(), inner: body }.tyck_k(tycker, Action::syn())?;
@@ -1828,19 +1826,20 @@ impl Tyck for TyEnvT<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
 
-                // Debug: print
-                {
-                    println!("{}", tycker.dump_statics(body));
-                }
+                // // Debug: print
+                // {
+                //     println!("{}", tycker.dump_statics(body));
+                // }
 
                 let monad_ty_kd = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.env);
                 let monad_ty_var =
-                    Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into());
+                    Alloc::alloc(tycker, ss::VarName("M?".to_string()), monad_ty_kd.into());
+                let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd);
                 let monad_ty =
-                    cs::Type(cs::Ann(monad_ty_var, monad_ty_kd)).build(tycker, &self.env);
+                    cs::Type(cs::Ann(abst, monad_ty_kd)).build(tycker, &self.env);
                 let monad_impl_ty = cs::Thk(cs::Monad(monad_ty)).build(tycker, &self.env);
                 let monad_impl_var =
-                    Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into());
+                    Alloc::alloc(tycker, ss::VarName("mo?".to_string()), monad_impl_ty.into());
                 let monad_impl = cs::Value(monad_impl_var).build(tycker, &self.env);
 
                 use crate::env::*;
@@ -1870,7 +1869,6 @@ impl Tyck for TyEnvT<su::TermId> {
 
                 // fn (M : VType -> CType) -> <monad_impl_to_body_lift>
                 let monad_ty_tpat: ss::TPatId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd);
-                let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd);
                 let res_body_ty =
                     Alloc::alloc(tycker, ss::Forall(abst, monad_impl_to_body_lift_ty), ctype);
                 let res_body = Alloc::alloc(
@@ -2214,16 +2212,15 @@ impl Tyck for TyEnvT<su::TermId> {
             // if !global {
             //     // Debug: print
             //     {
-            //         use crate::fmt::*;
             //         println!(
             //             "non-global term: {}",
-            //             out.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
+            //             tycker.dump_statics(out)
             //         );
             //         println!(
             //             "non-global defs: {}",
             //             non_global
             //                 .iter()
-            //                 .map(|def| def.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)))
+            //                 .map(|def| tycker.dump_statics(def))
             //                 .collect::<Vec<_>>()
             //                 .join(", ")
             //         );
