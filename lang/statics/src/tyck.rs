@@ -224,10 +224,12 @@ impl<Ann> Action<Ann> {
     }
 }
 
+pub struct Assign<Br, Be>(pub Br, pub Be);
+
 impl Tyck for TyEnvT<SccDeclarations<'_>> {
     type Out = TyEnvT<()>;
     type Action = ();
-    fn tyck_inner_k(&self, tycker: &mut Tycker, (): ()) -> ResultKont<TyEnvT<()>> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker, (): Self::Action) -> ResultKont<TyEnvT<()>> {
         let mut env = self.mk(());
         let SccDeclarations(decls) = self.inner;
         use su::Declaration as Decl;
@@ -319,7 +321,7 @@ impl SccDeclarations<'_> {
 
                     // add the type into the environment
                     let TyEnvT { env: new_env, inner: () } =
-                        env.mk(binder).tyck_assign(tycker, Action::syn(), bindee)?;
+                        env.mk(Assign(binder, bindee)).tyck_k(tycker, ())?;
                     env.env = new_env;
                     tycker
                         .statics
@@ -342,14 +344,8 @@ impl SccDeclarations<'_> {
                         .statics
                         .decls
                         .insert(id.to_owned(), ss::VAliasBody { binder, bindee }.into());
-                    // // however, we can consider adding it to inlinables
-                    // match binder.try_destruct_def(tycker) {
-                    //     | (Some(def), _) => {
-                    //         tycker.statics.inlinables.insert(def, bindee);
-                    //     }
-                    //     | (None, _) => {}
-                    // }
                     // however, it should be added to global
+                    // Fixme: only if it's well-typed under global type environment
                     match binder.try_destruct_def(tycker) {
                         | (Some(def), _) => {
                             tycker.statics.global_defs.insert(def, ());
@@ -464,7 +460,7 @@ impl SccDeclarations<'_> {
                 let abst_ty = Alloc::alloc(tycker, abst, kd);
                 // add the type into the environment
                 let TyEnvT { env: new_env, inner: () } =
-                    env.mk(binder).tyck_assign(tycker, Action::syn(), abst_ty)?;
+                    env.mk(Assign(binder, abst_ty)).tyck_k(tycker, ())?;
                 env.env = new_env;
             }
             Ok(env)
@@ -675,12 +671,14 @@ impl Tyck for TyEnvT<su::PatId> {
     }
 }
 
-impl TyEnvT<ss::TPatId> {
-    pub fn tyck_assign(
-        &self, tycker: &mut Tycker, Action { switch: _ }: Action<AnnId>, assignee: ss::TypeId,
-    ) -> ResultKont<TyEnvT<()>> {
+impl Tyck for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
+    type Out = TyEnvT<()>;
+    type Action = ();
+
+    fn tyck_inner_k(&self, tycker: &mut Tycker, (): Self::Action) -> ResultKont<Self::Out> {
         use ss::TypePattern as TPat;
-        let pat = tycker.statics.tpats[&self.inner].to_owned();
+        let Assign(assigner, assignee) = self.inner;
+        let pat = tycker.statics.tpats[&assigner].to_owned();
         match pat {
             | TPat::Hole(_) => Ok(self.mk(())),
             | TPat::Var(def) => {
@@ -1833,7 +1831,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 let monad_ty_kd = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.env);
                 let monad_ty_var =
                     Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into());
-                let monad_ty = cs::Type(monad_ty_var).build(tycker, &self.env);
+                let monad_ty = cs::Type(cs::Ann(monad_ty_var, monad_ty_kd)).build(tycker, &self.env);
                 let monad_impl_ty = cs::Thk(cs::Monad(monad_ty)).build(tycker, &self.env);
                 let monad_impl_var =
                     Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into());

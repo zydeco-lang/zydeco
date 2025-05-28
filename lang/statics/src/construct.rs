@@ -718,7 +718,6 @@ impl Tycker {
 }
 
 // /* ------------------------------ ValuePattern ------------------------------ */
-
 // impl Construct<VPatId> for cs::Ann<Option<DefId>, TypeId> {
 //     fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<VPatId> {
 //         let cs::Ann(tm, ty) = self;
@@ -867,7 +866,6 @@ impl Construct<ValueId> for DefId {
 // }
 
 // /* ------------------------------- Computation ------------------------------ */
-
 // impl<T> Construct<CompuId> for cs::Compu<T>
 // where
 //     T: Construct<CompuId>,

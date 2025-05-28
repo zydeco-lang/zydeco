@@ -374,6 +374,8 @@ impl Resolve for TermId {
             | Term::MoBlock(term) => {
                 let MoBlock(body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
+                let mo_def = resolver.prim_def.monad.get().to_owned();
+                resolver.deps.add(local.under, [global.under_map[&mo_def]]);
                 term.into()
             }
             | Term::Data(term) => {
