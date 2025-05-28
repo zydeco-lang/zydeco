@@ -903,7 +903,7 @@ impl Tyck for TyEnvT<su::TermId> {
                         let AnnId::Kind(kd) = ann else { unreachable!() };
                         TermAnnId::Kind(kd)
                     }
-                    | AnnId::Kind(kd) => match self.env.get(&def) {
+                    | AnnId::Kind(kd) => match self.env.recursively_get_type(tycker, &def) {
                         | Some(&ann) => {
                             let AnnId::Type(ty) = ann else { unreachable!() };
                             TermAnnId::Type(ty, kd)
@@ -1828,10 +1828,16 @@ impl Tyck for TyEnvT<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
 
+                // Debug: print
+                {
+                    println!("{}", tycker.dump_statics(body));
+                }
+
                 let monad_ty_kd = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.env);
                 let monad_ty_var =
                     Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into());
-                let monad_ty = cs::Type(cs::Ann(monad_ty_var, monad_ty_kd)).build(tycker, &self.env);
+                let monad_ty =
+                    cs::Type(cs::Ann(monad_ty_var, monad_ty_kd)).build(tycker, &self.env);
                 let monad_impl_ty = cs::Thk(cs::Monad(monad_ty)).build(tycker, &self.env);
                 let monad_impl_var =
                     Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into());
@@ -1848,9 +1854,32 @@ impl Tyck for TyEnvT<su::TermId> {
                         monad_impl,
                     },
                 )?;
-
                 let body_lift_ty = cs::TypeOf(body_lift).build(tycker, &self.env);
-                TermAnnId::Compu(body_lift, body_lift_ty)
+
+                // <monad_impl_to_body_lift> = fn (mo: Thk (Monad M)) -> Lift(body)
+                let monad_impl_vpat: ss::VPatId =
+                    Alloc::alloc(tycker, monad_impl_var, monad_impl_ty);
+                let ctype = ss::CType.build(tycker, &self.env);
+                let monad_impl_to_body_lift_ty =
+                    Alloc::alloc(tycker, ss::Arrow(monad_impl_ty, body_lift_ty), ctype);
+                let monad_impl_to_body_lift = Alloc::alloc(
+                    tycker,
+                    ss::Abs(monad_impl_vpat, body_lift),
+                    monad_impl_to_body_lift_ty,
+                );
+
+                // fn (M : VType -> CType) -> <monad_impl_to_body_lift>
+                let monad_ty_tpat: ss::TPatId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd);
+                let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd);
+                let res_body_ty =
+                    Alloc::alloc(tycker, ss::Forall(abst, monad_impl_to_body_lift_ty), ctype);
+                let res_body = Alloc::alloc(
+                    tycker,
+                    ss::Abs(monad_ty_tpat, monad_impl_to_body_lift),
+                    res_body_ty,
+                );
+
+                TermAnnId::Compu(res_body, res_body_ty)
             }
             | Tm::Data(term) => {
                 let su::Data { arms } = term;

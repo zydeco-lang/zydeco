@@ -92,6 +92,21 @@ mod impls_ty_env {
             ];
             env
         }
+        pub fn recursively_get_type(&self, tycker: &Tycker, def: &DefId) -> Option<&AnnId> {
+            let ann = self.0.get(def)?;
+            match ann {
+                | AnnId::Set | AnnId::Kind(_) => unreachable!(),
+                | AnnId::Type(ty) => {
+                    let ty = tycker.r#type(ty);
+                    match ty {
+                        | Fillable::Done(Type::Var(ref def)) => {
+                            self.recursively_get_type(tycker, def)
+                        }
+                        | _ => Some(ann),
+                    }
+                }
+            }
+        }
     }
 }
 

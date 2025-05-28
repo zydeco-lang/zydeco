@@ -208,27 +208,40 @@ fn structure_translation(
 ) -> Result<(MonEnv, CompuId)> {
     let monad_ty = env.monad_ty;
     let monad_impl = env.monad_impl;
-    let res = match tycker.type_filled(&ty)?.to_owned() {
+    let res = match tycker.type_filled(&ty)? {
         | Type::Var(def) => {
-            let str = match env.structure.def_map.get(&def).map(|abst| env.structure.absts[&abst]) {
-                | Some(str) => str.to_owned(),
-                | None => tycker.err(
-                    TyckError::MissingStructure(ty.to_owned()),
-                    std::panic::Location::caller(),
-                )?,
-            };
-            Force(str).mbuild(tycker, env)?
+            match env.structure.def_map.get(&def).map(|abst| env.structure.absts[abst]) {
+                | Some(str) => Force(str).mbuild(tycker, env)?,
+                | None => {
+                    let (env, sig) = cs::Signature { ty }.mbuild(tycker, env)?;
+                    (env, Alloc::alloc(tycker, Hole, sig))
+                    // tycker.err(TyckError::MissingStructure(ty), std::panic::Location::caller())?
+                }
+            }
         }
-        | Type::Abst(abst) => {
-            let str = match env.structure.absts.get(&abst) {
-                | Some(str) => str.to_owned(),
-                | None => tycker.err(
-                    TyckError::MissingStructure(ty.to_owned()),
-                    std::panic::Location::caller(),
-                )?,
-            };
-            Force(str).mbuild(tycker, env)?
-        }
+        | Type::Abst(abst) => match env.structure.absts.get(&abst).cloned() {
+            | Some(str) => Force(str).mbuild(tycker, env)?,
+            | None => {
+                logg::warn!(
+                    "backtracking structure for abstract type: {}",
+                    tycker.dump_statics(abst)
+                );
+                use zydeco_utils::arena::ArenaAccess;
+                match tycker.statics.abst_hints.get(&abst).cloned() {
+                    | Some(def) => {
+                        logg::warn!("backtracked to definition: {}", tycker.dump_statics(def));
+                        let kd = tycker.statics.annotations_type[&ty];
+                        let ty: TypeId = Alloc::alloc(tycker, def, kd);
+                        cs::Structure { ty }.mbuild(tycker, env)?
+                    }
+                    | None => {
+                        // tycker.err(TyckError::MissingStructure(ty), std::panic::Location::caller())?
+                        let (env, sig) = cs::Signature { ty }.mbuild(tycker, env)?;
+                        (env, Alloc::alloc(tycker, Hole, sig))
+                    }
+                }
+            }
+        },
         | Type::Abs(ty) => {
             // input: fn (X : K) -> S
             let Abs(tpat, ty) = ty;
@@ -575,11 +588,16 @@ fn computation_translation(
     tycker: &mut Tycker, env: MonEnv, compu: CompuId,
 ) -> Result<(MonEnv, CompuId)> {
     use Computation as Compu;
-    // Debug: print ty env so far
+    // Debug: print env so far
     {
-        for (def, ty) in env.ty.iter() {
-            logg::trace!("{}", tycker.dump_statics(cs::Ann(def, ty)));
+        logg::trace!("{}", ">".repeat(20));
+        logg::trace!("{}", tycker.dump_statics(compu));
+        logg::trace!("@ {}", compu.span(tycker));
+        logg::trace!("{}", "=".repeat(20));
+        for (abst, str) in env.structure.absts.iter() {
+            logg::trace!("{}", tycker.dump_statics(cs::Ann(abst, str)));
         }
+        logg::trace!("{}", "<".repeat(20));
     }
     let (env, ty) = cs::TypeOf(compu).mbuild(tycker, env)?;
     // let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;

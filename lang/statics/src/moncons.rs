@@ -754,7 +754,7 @@ impl MonConstruct<ValueId> for cs::Value<VPatId> {
 impl MonConstruct<ValueId> for DefId {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         // substitute according to the environment
-        let def = env.subst.get(&self).cloned().unwrap();
+        let def = env.subst.get(&self).cloned().unwrap_or(self);
         // and then get the type
         let AnnId::Type(ty) = tycker.statics.annotations_var[&def] else { unreachable!() };
         Ok((env, Alloc::alloc(tycker, def, ty)))
@@ -922,7 +922,10 @@ where
         let Some((param_ty, body_ty)) = abs_ty.destruct_arrow(tycker) else { unreachable!() };
         let (env, arg) = arg.mbuild(tycker, env)?;
         let arg_ty = tycker.statics.annotations_value[&arg];
-        let Ok(_) = Lub::lub(param_ty, arg_ty, tycker) else { unreachable!() };
+        // Fixme: add the check
+        // let Ok(_) = Lub::lub(param_ty, arg_ty, tycker) else { unreachable!() };
+        let _ = param_ty;
+        let _ = arg_ty;
         Ok((env, Alloc::alloc(tycker, App(abs, arg), body_ty)))
     }
 }

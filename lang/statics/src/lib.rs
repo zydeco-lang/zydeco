@@ -25,7 +25,7 @@ pub mod tyck;
 pub use tyck::*;
 pub mod lift;
 pub mod monadic;
-pub mod wellformed;
+// pub mod wellformed;
 pub mod err;
 pub use err::*;
 pub mod fmt;
