@@ -526,10 +526,8 @@ fn value_pattern_translation(
         | VPat::TCons(vpat) => {
             let Cons(tpat, body) = vpat;
             cs::Pat(
-                cs::TCons(cs::TypeLift { ty: tpat }, move |tvar: Option<DefId>| {
-                    cs::CBind::new(cs::Ty(cs::Ann(tvar, cs::TypeOf(tpat))), move |abst: AbstId| {
-                        Cons(cs::StrPat("str", abst, tvar), cs::TermLift { tm: body })
-                    })
+                cs::TCons(cs::TypeLift { ty: tpat }, move |tvar, abst| {
+                    Cons(cs::StrPat("str", abst, tvar), cs::TermLift { tm: body })
                 }),
                 ty_,
             )
@@ -597,7 +595,19 @@ fn computation_translation(
         logg::trace!("@ {}", compu.span(tycker));
         logg::trace!("{}", "=".repeat(20));
         for (abst, str) in env.structure.absts.iter() {
-            logg::trace!("{}", tycker.dump_statics(cs::Ann(abst, str)));
+            let defs = env
+                .structure
+                .def_map
+                .iter()
+                .filter_map(|(def, a)| (a == abst).then_some(def))
+                .map(|d| tycker.dump_statics(*d))
+                .collect::<Vec<_>>();
+            logg::trace!(
+                "{} ({}) := {}",
+                tycker.dump_statics(abst),
+                defs.join(", "),
+                tycker.dump_statics(str)
+            );
         }
         logg::trace!("{}", "<".repeat(20));
     }

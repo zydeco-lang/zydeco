@@ -109,17 +109,17 @@ impl MonConstruct<DtorName> for &str {
 
 /* -------------------------------- Abstract -------------------------------- */
 
-impl<K> MonConstruct<AbstId> for cs::Ty<cs::Ann<Option<DefId>, K>>
-where
-    K: MonConstruct<KindId>,
-{
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
-        let cs::Ty(cs::Ann(def, kd)) = self;
-        let (env, kd) = kd.mbuild(tycker, env)?;
-        let abst = Alloc::alloc(tycker, def, kd.into());
-        Ok((env, abst))
-    }
-}
+// impl<K> MonConstruct<AbstId> for cs::Ty<cs::Ann<Option<DefId>, K>>
+// where
+//     K: MonConstruct<KindId>,
+// {
+//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
+//         let cs::Ty(cs::Ann(def, kd)) = self;
+//         let (env, kd) = kd.mbuild(tycker, env)?;
+//         let abst = Alloc::alloc(tycker, def, kd.into());
+//         Ok((env, abst))
+//     }
+// }
 
 impl<K> MonConstruct<AbstId> for cs::Ann<VarName, K>
 where
@@ -651,21 +651,22 @@ where
 impl<S, F, V, T> MonConstruct<VPatId> for cs::Pat<cs::TCons<S, F>, T>
 where
     S: MonConstruct<TPatId>,
-    F: FnOnce(Option<DefId>) -> V,
+    F: FnOnce(Option<DefId>, AbstId) -> V,
     V: MonConstruct<VPatId>,
     T: MonConstruct<TypeId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(cs::TCons(a, f), ty) = self;
-        let (mut env, a) = a.mbuild(tycker, env)?;
-        let (a_var, a_kd) = a.try_destruct_def(tycker);
-        let abst = Alloc::alloc(tycker, a_var, a_kd);
-        let a_ty = Alloc::alloc(tycker, abst, a_kd);
+        let (env, ty) = ty.mbuild(tycker, env)?;
+        let Some((abst, _)) = ty.destruct_exists(tycker) else { unreachable!() };
+        let (env, a) = a.mbuild(tycker, env)?;
+        let (a_var, _) = a.try_destruct_def(tycker);
+        let (env, a_ty) = cs::Type(abst).mbuild(tycker, env)?;
+        let mut env = env;
         if let Some(a_var) = a_var {
             env.ty += [(a_var, a_ty.into())];
         }
-        let (env, b) = f(a_var).mbuild(tycker, env)?;
-        let (env, ty) = ty.mbuild(tycker, env)?;
+        let (env, b) = f(a_var, abst).mbuild(tycker, env)?;
         cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
     }
 }
@@ -793,23 +794,6 @@ where
         Ok((env, Alloc::alloc(tycker, Abs(vpat, body), ty)))
     }
 }
-impl<P, F, T> MonConstruct<CompuId> for Abs<cs::Ty<(P, AbstId)>, F>
-where
-    P: MonConstruct<TPatId>,
-    F: FnOnce(TPatId, AbstId) -> T,
-    T: MonConstruct<CompuId>,
-{
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-        let Abs(cs::Ty((tpat, abst)), body) = self;
-        let (env, tpat): (_, TPatId) = tpat.mbuild(tycker, env)?;
-        let body = body(tpat, abst);
-        let (env, body) = body.mbuild(tycker, env)?;
-        let body_ty = tycker.statics.annotations_compu[&body];
-        let (env, ctype) = CType.mbuild(tycker, env)?;
-        let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);
-        Ok((env, Alloc::alloc(tycker, Abs(tpat, body), ty)))
-    }
-}
 // computation type abstraction
 impl<P, F, T> MonConstruct<CompuId> for Abs<cs::Ty<P>, F>
 where
@@ -842,6 +826,23 @@ where
         let param_kd = tycker.statics.annotations_abst[&abst];
         let (env, tpat): (_, TPatId) = cs::Pat(def, param_kd).mbuild(tycker, env)?;
         let (env, body) = body(def, abst).mbuild(tycker, env)?;
+        let body_ty = tycker.statics.annotations_compu[&body];
+        let (env, ctype) = CType.mbuild(tycker, env)?;
+        let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);
+        Ok((env, Alloc::alloc(tycker, Abs(tpat, body), ty)))
+    }
+}
+impl<P, F, T> MonConstruct<CompuId> for Abs<cs::Ty<(P, AbstId)>, F>
+where
+    P: MonConstruct<TPatId>,
+    F: FnOnce(TPatId, AbstId) -> T,
+    T: MonConstruct<CompuId>,
+{
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+        let Abs(cs::Ty((tpat, abst)), body) = self;
+        let (env, tpat): (_, TPatId) = tpat.mbuild(tycker, env)?;
+        let body = body(tpat, abst);
+        let (env, body) = body.mbuild(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
         let (env, ctype) = CType.mbuild(tycker, env)?;
         let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);

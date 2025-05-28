@@ -170,6 +170,15 @@ impl TypeId {
             },
         }
     }
+    pub fn destruct_exists(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
+        match tycker.statics.types[&self].to_owned() {
+            | Fillable::Fill(_) => todo!(),
+            | Fillable::Done(ty) => match ty {
+                | Type::Exists(Exists(abst, ty)) => Some((abst, ty)),
+                | _ => None,
+            },
+        }
+    }
     pub fn destruct_monad(&self, env: &TyEnv, tycker: &mut Tycker) -> Option<TypeId> {
         let (f_ty, a_tys) = self.destruct_type_app_nf(tycker).ok()?;
         if a_tys.len() != 1 {
