@@ -65,7 +65,7 @@ where
 
 /* ------------------------------- Identifier ------------------------------- */
 
-impl_mon_construct_trivial!(DefId, KindId, AbstId, TPatId, TypeId, VPatId, ValueId, CompuId);
+impl_mon_construct_trivial!(Option<DefId>, DefId, KindId, AbstId, TPatId, TypeId, VPatId, ValueId, CompuId);
 
 /* ------------------------------- Definition ------------------------------- */
 
@@ -734,6 +734,13 @@ where
         arg.mbuild(tycker, env)
     }
 }
+impl MonConstruct<ValueId> for cs::Value<VPatId> {
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+        let cs::Value(vpat) = self;
+        let value = vpat.reify(tycker);
+        Ok((env, value))
+    }
+}
 impl MonConstruct<ValueId> for DefId {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         // substitute according to the environment
@@ -841,14 +848,14 @@ where
 impl<P, F, T> MonConstruct<CompuId> for Abs<P, F>
 where
     P: MonConstruct<VPatId>,
-    F: FnOnce(Option<DefId>) -> T,
+    F: FnOnce(VPatId) -> T,
     T: MonConstruct<CompuId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Abs(vpat, body) = self;
         let (env, vpat): (_, VPatId) = vpat.mbuild(tycker, env)?;
-        let (def, param_ty) = vpat.try_destruct_def(tycker);
-        let (env, body) = body(def).mbuild(tycker, env)?;
+        let param_ty = tycker.statics.annotations_vpat[&vpat];
+        let (env, body) = body(vpat).mbuild(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
         let (env, ty) = Arrow(param_ty, body_ty).mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, Abs(vpat, body), ty)))

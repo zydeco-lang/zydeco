@@ -232,25 +232,16 @@ fn structure_translation(
         | Type::Abs(ty) => {
             // input: fn (X : K) -> S
             let Abs(tpat, ty) = ty;
-            // output: fn (X : K) (str_X : Thk (Sig_K(X))) -> Str(S)
-            let (tvar, kd) = {
-                let (def, kd) = tpat.destruct_def(tycker);
-                (tycker.scoped.defs[&def].to_owned(), kd)
+            let svar = {
+                let (tvar, _) = tpat.try_destruct_def(tycker);
+                match tvar {
+                    | Some(tvar) => format!("str_{}", tycker.scoped.defs[&tvar].as_str()),
+                    | None => "str".to_string(),
+                }
             };
-            let tvar = tvar.as_str();
-            Abs(cs::Ty(cs::Pat(tvar, kd)), |tdef, abst| {
-                let svar = VarName(format!("str_{}", tvar));
-                let svar_ty = cs::Thk(cs::Signature { ty: cs::Ty(abst) });
-                Abs(cs::Pat(svar, svar_ty), |str_def: Option<DefId>| {
-                    // let str = str_def.unwrap();
-                    // let str_env = &str_env.extended(abst, tdef, str, tycker, env);
-                    // cs::Structure { ty }
-                    // Fixme: figure out how to register structure
-                    let _ = ty;
-                    let _ = tdef;
-                    let _ = str_def;
-                    cs::Top
-                })
+            // output: fn (X : K) (str_X : Thk (Sig_K(X))) -> Str(S)
+            Abs(cs::Ty(cs::TypeLift { ty: tpat }), move |_tvar, abst| {
+                Abs(cs::StrPat(svar, abst, None), move |_str: VPatId| cs::Structure { ty })
             })
             .mbuild(tycker, env)?
         }
@@ -306,21 +297,21 @@ fn structure_translation(
             Abs(cs::Ty(cs::Pat("Z", VType)), |_tvar, abst_z| {
                 let abst_z_ty = cs::Ty(abst_z);
                 let mz_ty = cs::Thk(App(monad_ty, abst_z_ty));
-                Abs(cs::Pat("mz", mz_ty), move |var_mz| {
+                Abs(cs::Pat("mz", mz_ty), move |mz: VPatId| {
                     let ty_ = cs::TypeLift { ty };
                     let f_ty = cs::Thk(Arrow(abst_z_ty, ty_));
-                    Abs(cs::Pat("f", f_ty), move |var_f| {
+                    Abs(cs::Pat("f", f_ty), move |f: VPatId| {
                         // <body> =
                         // comatch
                         // | .dtor_n -> Str(B_n) Z mz { fn (z : Z) -> ! f z .dtor_n }
                         // | ...
                         // end
                         cs::CoMatch(coda, move |dtor, ty| {
-                            let kont = Abs(cs::Pat("z", abst_z_ty), move |var_z| {
-                                Dtor(App(Force(var_f), var_z), dtor)
+                            let kont = Abs(cs::Pat("z", abst_z_ty), move |z: VPatId| {
+                                Dtor(App(Force(cs::Value(f)), cs::Value(z)), dtor)
                             });
                             let str = cs::Structure { ty };
-                            App(App(App(str, abst_z_ty), var_mz), Thunk(kont))
+                            App(App(App(str, abst_z_ty), cs::Value(mz)), Thunk(kont))
                         })
                     })
                 })
@@ -334,18 +325,18 @@ fn structure_translation(
             Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
                 let abst_z_ty = cs::Ty(abst_z);
                 let mz_ty = cs::Thk(App(env.monad_ty, abst_z_ty));
-                Abs(cs::Pat("mz", mz_ty), move |var_mz| {
+                Abs(cs::Pat("mz", mz_ty), move |mz: VPatId| {
                     let ty_p_ = cs::TypeLift { ty: ty_p };
                     let ty_b_ = cs::TypeLift { ty: ty_b };
                     let f_ty = cs::Thk(Arrow(abst_z_ty, Arrow(ty_p_, ty_b_)));
-                    Abs(cs::Pat("f", f_ty), move |var_f| {
+                    Abs(cs::Pat("f", f_ty), move |f: VPatId| {
                         // <body> = fn (x : [A]) -> Str(B) Z mz { fn (z : Z) -> ! f z x }
-                        Abs(cs::Pat("x", ty_p_), move |var_x| {
+                        Abs(cs::Pat("x", ty_p_), move |x: VPatId| {
                             let alg_b = cs::Structure { ty: ty_b };
-                            let kont = Abs(cs::Pat("z", abst_z_ty), move |var_z| {
-                                App(App(Force(var_f), var_z), var_x)
+                            let kont = Abs(cs::Pat("z", abst_z_ty), move |z: VPatId| {
+                                App(App(Force(cs::Value(f)), cs::Value(z)), cs::Value(x))
                             });
-                            App(App(App(alg_b, cs::Ty(abst_z_ty)), var_mz), Thunk(kont))
+                            App(App(App(alg_b, cs::Ty(abst_z_ty)), cs::Value(mz)), Thunk(kont))
                         })
                     })
                 })
@@ -359,7 +350,7 @@ fn structure_translation(
             // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) -> <body>
             Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
                 let abst_z_ty = cs::Ty(abst_z);
-                Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, abst_z_ty))), move |var_mz| {
+                Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, abst_z_ty))), move |mz: VPatId| {
                     // construct abstract type X first
                     cs::CBind::new(cs::Ann("X", kd), move |abst_x| {
                         // <f_ty> = Thk (Z -> forall (X : K) . Thk (Sig_K(X)) -> [B])
@@ -370,18 +361,21 @@ fn structure_translation(
                                 Arrow(cs::Thk(cs::Signature { ty: abst_x_ty }), cs::TypeLift { ty })
                             }),
                         ));
-                        Abs(cs::Pat("f", f_ty), move |var_f| {
+                        Abs(cs::Pat("f", f_ty), move |f: VPatId| {
                             // <body> = fn (X : K) (str_X : Thk (Sig_K(X))) -> Str(B) Z mz <kont>
                             Abs(cs::Ty(abst_x), move |_, abst_x: AbstId| {
                                 let abst_x_ty = cs::Ty(abst_x);
                                 let sig = cs::Signature { ty: abst_x_ty };
-                                Abs(cs::Pat("str_X", cs::Thk(sig)), move |var_str_x| {
+                                Abs(cs::Pat("str_X", cs::Thk(sig)), move |str_x: VPatId| {
                                     // <kont> = { fn (z : Z) -> ! f z X str_X }
-                                    let kont = Abs(cs::Pat("z", abst_z_ty), move |var_z| {
-                                        App(App(App(Force(var_f), var_z), abst_x_ty), var_str_x)
+                                    let kont = Abs(cs::Pat("z", abst_z_ty), move |z: VPatId| {
+                                        let f = cs::Value(f);
+                                        let z = cs::Value(z);
+                                        let str_x = cs::Value(str_x);
+                                        App(App(App(Force(f), z), abst_x_ty), str_x)
                                     });
                                     let str_ = cs::Structure { ty };
-                                    App(App(App(str_, abst_z_ty), var_mz), Thunk(kont))
+                                    App(App(App(str_, abst_z_ty), cs::Value(mz)), Thunk(kont))
                                 })
                             })
                         })
@@ -517,18 +511,16 @@ fn value_pattern_translation(
             Cons(a_, b_).mbuild(tycker, env)?
         }
         | VPat::TCons(vpat) => {
-            // let Cons(tpat, body) = vpat;
-            // cs::Pat(
-            //     cs::TCons(cs::TypeLift { ty: tpat }, |tvar: Option<DefId>| {
-            //         cs::CBind::new(cs::Ty(cs::Ann(tvar, cs::TypeOf(tpat))), |abst: AbstId| {
-            //             Cons(cs::StrPat("str", abst, tvar), cs::TermLift { tm: body })
-            //         })
-            //     }),
-            //     ty_,
-            // )
-            // .mbuild(tycker, env)?
-            let _ = vpat;
-            todo!()
+            let Cons(tpat, body) = vpat;
+            cs::Pat(
+                cs::TCons(cs::TypeLift { ty: tpat }, move |tvar: Option<DefId>| {
+                    cs::CBind::new(cs::Ty(cs::Ann(tvar, cs::TypeOf(tpat))), move |abst: AbstId| {
+                        Cons(cs::StrPat("str", abst, tvar), cs::TermLift { tm: body })
+                    })
+                }),
+                ty_,
+            )
+            .mbuild(tycker, env)?
         }
     };
     Ok((env, vpat_))
