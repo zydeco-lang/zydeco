@@ -18,6 +18,13 @@ pub trait MonConstruct<T>: Sized {
     }
 }
 
+// impl<C, T> MonConstruct<T> for C where C: Construct<T> {
+//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, T)> {
+//         let res = self.build(tycker, &env.ty);
+//         Ok((env, res))
+//     }
+// }
+
 impl<S, T, A> MonConstruct<T> for cs::Ann<S, A>
 where
     S: Alloc<T, Ann = A>,
@@ -457,8 +464,9 @@ impl MonConstruct<TypeId> for OSTy {
 }
 impl MonConstruct<TypeId> for cs::TopTy {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
-        let AnnId::Type(ty) = env.ty[tycker.prim.top.get()] else { unreachable!() };
-        Ok((env, ty))
+        let ctype = CType.build(tycker, &env.ty);
+        let coda = tycker.lookup_or_alloc_codata(im::Vector::new(), CoData::new([]));
+        Ok((env, Alloc::alloc(tycker, coda, ctype)))
     }
 }
 impl<F, T> MonConstruct<TypeId> for cs::CoData<CoDataId, F>

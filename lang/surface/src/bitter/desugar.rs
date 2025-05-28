@@ -838,10 +838,6 @@ mod impls {
             let term = Alloc::alloc(self, b::Internal::String.into(), prev);
             *self.prim.string.extend_one(term)
         }
-        pub(crate) fn top(&mut self, prev: t::EntityId) -> b::TermId {
-            let term = Alloc::alloc(self, b::Internal::Top.into(), prev);
-            *self.prim.top.extend_one(term)
-        }
         pub(crate) fn os(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::OS.into(), prev);
             *self.prim.os.extend_one(term)

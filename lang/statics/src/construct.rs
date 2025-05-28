@@ -585,8 +585,9 @@ impl Construct<TypeId> for OSTy {
 }
 impl Construct<TypeId> for cs::TopTy {
     fn build(self, tycker: &mut Tycker, env: &TyEnv) -> TypeId {
-        let AnnId::Type(ty) = env[tycker.prim.top.get()] else { unreachable!() };
-        ty
+        let ctype = CType.build(tycker, &env);
+        let coda = tycker.lookup_or_alloc_codata(im::Vector::new(), CoData::new([]));
+        Alloc::alloc(tycker, coda, ctype)
     }
 }
 impl<F, T> Construct<TypeId> for cs::CoData<CoDataId, F>

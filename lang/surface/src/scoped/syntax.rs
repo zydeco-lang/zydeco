@@ -222,7 +222,6 @@ pub struct PrimDefs {
     pub int: SingCell<DefId>,
     pub char: SingCell<DefId>,
     pub string: SingCell<DefId>,
-    pub top: SingCell<DefId>,
     pub os: SingCell<DefId>,
     pub monad: SingCell<DefId>,
     pub algebra: SingCell<DefId>,
@@ -241,7 +240,6 @@ mod impls {
             self.int.get_or_else(|| ResolveError::MissingPrim("Int"))?;
             self.char.get_or_else(|| ResolveError::MissingPrim("Char"))?;
             self.string.get_or_else(|| ResolveError::MissingPrim("String"))?;
-            self.top.get_or_else(|| ResolveError::MissingPrim("Top"))?;
             self.os.get_or_else(|| ResolveError::MissingPrim("OS"))?;
             self.monad.get_or_else(|| ResolveError::MissingPrim("Monad"))?;
             self.algebra.get_or_else(|| ResolveError::MissingPrim("Algebra"))?;

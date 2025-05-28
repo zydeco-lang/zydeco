@@ -77,7 +77,7 @@ impl Tycker {
                         env = self.register_prim_ty(env, def, OSTy.into(), kd)?;
                         // should NOT be added to global
                     }
-                    | su::Internal::Top | su::Internal::Monad | su::Internal::Algebra => {
+                    | su::Internal::Monad | su::Internal::Algebra => {
                         // they are AliasBodys, which are not registered here
                         unreachable!()
                     }

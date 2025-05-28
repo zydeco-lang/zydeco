@@ -115,7 +115,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Internal {
             | Internal::Int => s += "Int",
             | Internal::Char => s += "Char",
             | Internal::String => s += "String",
-            | Internal::Top => s += "Top",
             | Internal::OS => s += "OS",
             | Internal::Monad => s += "Monad",
             | Internal::Algebra => s += "Algebra",

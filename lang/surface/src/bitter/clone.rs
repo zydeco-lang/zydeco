@@ -79,9 +79,6 @@ impl DeepClone for b::TermId {
                     | Internal::String => {
                         return desugarer.string(prev);
                     }
-                    | Internal::Top => {
-                        return desugarer.top(prev);
-                    }
                     | Internal::OS => {
                         return desugarer.os(prev);
                     }

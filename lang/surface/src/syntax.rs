@@ -20,7 +20,6 @@ pub enum Internal {
     Int,
     Char,
     String,
-    Top,
     OS,
     Monad,
     Algebra,

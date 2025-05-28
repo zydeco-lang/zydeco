@@ -376,8 +376,8 @@ mod impls_structs {
     }
 
     impl CoData {
-        pub fn new(arms: impl Iterator<Item = (DtorName, TypeId)>) -> Self {
-            Self { arms: arms.collect() }
+        pub fn new(arms: impl IntoIterator<Item = (DtorName, TypeId)>) -> Self {
+            Self { arms: arms.into_iter().collect() }
         }
         pub fn get(&self, dtor: &DtorName) -> Option<&TypeId> {
             self.arms.get(dtor)
