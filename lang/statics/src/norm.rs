@@ -101,7 +101,7 @@ impl TypeId {
                         *self
                     } else {
                         let data_ = Data::new(arms_.iter().cloned());
-                        let id_ = tycker.statics.datas.lookup_or_alloc(arms_, data_);
+                        let id_ = tycker.lookup_or_alloc_data(arms_, data_);
                         Alloc::alloc(tycker, id_, kd)
                     }
                 }
@@ -124,7 +124,7 @@ impl TypeId {
                         *self
                     } else {
                         let codata_ = CoData::new(arms_.iter().cloned());
-                        let id_ = tycker.statics.codatas.lookup_or_alloc(arms_, codata_);
+                        let id_ = tycker.lookup_or_alloc_codata(arms_, codata_);
                         Alloc::alloc(tycker, id_, kd)
                     }
                 }
@@ -232,7 +232,7 @@ impl TypeId {
                         *self
                     } else {
                         let data_ = Data::new(arms_.iter().cloned());
-                        let id_ = tycker.statics.datas.lookup_or_alloc(arms_, data_);
+                        let id_ = tycker.lookup_or_alloc_data(arms_, data_);
                         Alloc::alloc(tycker, id_, kd)
                     }
                 }
@@ -255,7 +255,7 @@ impl TypeId {
                         *self
                     } else {
                         let codata_ = CoData::new(arms_.iter().cloned());
-                        let id_ = tycker.statics.codatas.lookup_or_alloc(arms_, codata_);
+                        let id_ = tycker.lookup_or_alloc_codata(arms_, codata_);
                         Alloc::alloc(tycker, id_, kd)
                     }
                 }
@@ -568,7 +568,7 @@ impl TypeId {
                         res
                     } else {
                         let data_ = Data::new(arms_.iter().cloned());
-                        let data = tycker.statics.datas.lookup_or_alloc(arms_, data_);
+                        let data = tycker.lookup_or_alloc_data(arms_, data_);
                         Alloc::alloc(tycker, data, tycker.statics.annotations_type[&res])
                     }
                 }
@@ -592,7 +592,7 @@ impl TypeId {
                         res
                     } else {
                         let codata_ = CoData::new(arms_.iter().cloned());
-                        let codata = tycker.statics.codatas.lookup_or_alloc(arms_, codata_);
+                        let codata = tycker.lookup_or_alloc_codata(arms_, codata_);
                         Alloc::alloc(tycker, codata, tycker.statics.annotations_type[&res])
                     }
                 }

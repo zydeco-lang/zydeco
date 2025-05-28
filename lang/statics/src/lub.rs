@@ -315,12 +315,23 @@ impl Debruijn {
                     std::panic::Location::caller(),
                 )?,
                 | (Type::Data(lhs), Type::Data(rhs)) => {
-                    if lhs != rhs {
+                    let lhs_query = tycker.statics.datas.tbls[&lhs].to_owned();
+                    let rhs_query = tycker.statics.datas.tbls[&rhs].to_owned();
+                    if let Err(_e) = Lub::lub(lhs_query, rhs_query, tycker) {
                         tycker.err(
                             TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                             std::panic::Location::caller(),
                         )?
                     }
+                    // Fixme: try to make id-equality check work
+                    // id-equality check:
+                    // if lhs != rhs {
+                    //     tycker.err(
+                    //         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    //         std::panic::Location::caller(),
+                    //     )?
+                    // }
+
                     lhs_id
                 }
                 | (Type::Data(_), _) => tycker.err(
@@ -328,12 +339,23 @@ impl Debruijn {
                     std::panic::Location::caller(),
                 )?,
                 | (Type::CoData(lhs), Type::CoData(rhs)) => {
-                    if lhs != rhs {
+                    let lhs_query = tycker.statics.codatas.tbls[&lhs].to_owned();
+                    let rhs_query = tycker.statics.codatas.tbls[&rhs].to_owned();
+                    if let Err(_e) = Lub::lub(lhs_query, rhs_query, tycker) {
                         tycker.err(
                             TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                             std::panic::Location::caller(),
                         )?
                     }
+                    // Fixme: try to make id-equality check work
+                    // id-equality check:
+                    // if lhs != rhs {
+                    //     tycker.err(
+                    //         TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    //         std::panic::Location::caller(),
+                    //     )?
+                    // }
+
                     lhs_id
                 }
                 | (Type::CoData(_), _) => tycker.err(

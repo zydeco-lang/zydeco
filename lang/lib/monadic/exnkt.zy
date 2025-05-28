@@ -1,3 +1,79 @@
+module Builtin where
+  /// VType and CType
+  pub extern def VType end
+  pub extern def CType end
+  /// Thk and Ret
+  pub extern def Thk (B : CType) : VType end
+  pub extern def Ret (A : VType) : CType end
+  pub alias Thunk = Thk end
+  pub alias U = Thk end
+  pub alias F = Ret end
+
+  /// primitive base types
+
+  /// we support the constructors externally because
+  /// the parsers of their constructors are customized
+  /// so the type is registered as a data type but the constructors
+  /// are not implemented as internal constructors
+
+  pub extern def Unit : VType end
+  pub extern def Int : VType end
+  pub extern def Char : VType end
+  pub extern def String : VType end
+  pub extern def Top : CType = codata end end
+  pub extern def OS : CType end
+
+  /// interface for monads and algebras
+  pub extern alias Monad (M: VType -> CType) : CType =
+    codata
+    | .return : forall (A: VType) .
+      A -> M A
+    | .bind : forall (A: VType) (A': VType) .
+      Thunk (M A) -> Thunk (A -> M A') -> M A'
+    end
+  end
+  pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
+    codata
+    | .bindA : forall (A: VType) .
+      Thunk (M A) -> Thunk (A -> R) -> R
+    end
+  end
+
+  /// interface for monad transformers
+  pub alias MonadTrans (T: (VType -> CType) -> VType -> CType) : CType =
+    codata
+    | .monad : forall (M: VType -> CType) .
+      Thunk (Monad M) -> Monad (T M)
+    | .lift : forall (M: VType -> CType) (A: VType) .
+      Thunk (Monad M) -> Thunk (M A) -> T M A
+    end
+  end
+end
+
+module String where
+  pub extern def str_append : Thunk(String -> String -> Ret String) end
+end
+
+module OS where
+  pub extern def write_str : Thunk(String -> Thunk(OS) -> OS) end
+  pub extern def read_line : Thunk(Thunk(String -> OS) -> OS) end
+  pub extern def exit : Thunk(Int -> OS) end
+
+  pub def write_line : Thunk(String -> Thunk(OS) -> OS) = {
+    fn (s: String) (k: Thunk(OS)) ->
+      do s <- ! str_append s "\n";
+      ! write_str s k
+  } end
+
+  pub def panic : Thunk(String -> OS) = {
+    fn (msg: String) ->
+      do msg <- ! str_append "Program panicked with message: " msg;
+      ! write_line msg { ! exit 1 }
+  } end
+end
+
+
+
 alias ExnK (E: VType) (A: VType) : CType =
   forall (R: CType) . Thk (E -> R) -> Thk (A -> R) -> R
 end
@@ -16,13 +92,13 @@ def ! mo-exnk (E: VType) : Monad (ExnK E) =
   end
 end
 
-def ! _ =
-  monadic
-    comatch end
-  :
-    Top
-  end
-end
+// def ! _ =
+//   monadic
+//     comatch end
+//   :
+//     Top
+//   end
+// end
 
 def ! alg-exnk-os (E: VType) (ke: Thk (E -> OS)) : Algebra (ExnK E) OS =
   comatch
@@ -31,37 +107,37 @@ def ! alg-exnk-os (E: VType) (ke: Thk (E -> OS)) : Algebra (ExnK E) OS =
   end
 end
 
-def ! main_exnk_os =
-  monadic
-    fn (R: CType) (r: Thk R) -> ! r
-  :
-    forall (R: CType) . Thk R -> R
-  end (ExnK String) { ! mo-exnk String } OS { ! alg-exnk-os String panic }
-end
-
-// def ! mo-exnkt (E: VType) (M: VType -> CType)
-//   (mo: Thk (Monad M))
-// : Monad (ExnKT E M) =
-//   let ! triv : Top = comatch end in
-//   let ! mo' =
-//     monadic
-//       // inlining `! mo-exnk`
-//       fn (E: VType) -> comatch
-//       | .return A a -> fn R ke ka ->
-//         ! ka a
-//       | .bind A A' m f -> fn R ke ka ->
-//         ! m R ke { fn a -> ! f a R ke ka }
-//       end
-//     :
-//       // fn (E: VType) -> Monad (ExnK E)
-//       forall (E: VType) . Monad (fn (A: VType) -> forall (R: CType) . Thk (E -> R) -> Thk (A -> R) -> R)
-//     end M mo E triv
-//   in
-//   comatch
-//   | .return A -> ! mo' .return A triv
-//   | .bind A A' -> ! mo' .bind A triv A' triv
-//   end
+// def ! triv_exnk_os =
+//   monadic
+//     fn (R: CType) (r: Thk R) -> ! r
+//   :
+//     forall (R: CType) . Thk R -> R
+//   end (ExnK String) { ! mo-exnk String } OS { ! alg-exnk-os String panic }
 // end
+
+def ! mo-exnkt (E: VType) (M: VType -> CType)
+  (mo: Thk (Monad M))
+: Monad (ExnKT E M) =
+  let ! triv : Top = comatch end in
+  let ! mo' =
+    monadic
+      // inlining `! mo-exnk`
+      fn (E: VType) -> comatch
+      | .return A a -> fn R ke ka ->
+        ! ka a
+      | .bind A A' m f -> fn R ke ka ->
+        ! m R ke { fn a -> ! f a R ke ka }
+      end
+    :
+      // fn (E: VType) -> Monad (ExnK E)
+      forall (E: VType) . Monad (fn (A: VType) -> forall (R: CType) . Thk (E -> R) -> Thk (A -> R) -> R)
+    end M mo E triv
+  in
+  comatch
+  | .return A -> ! mo' .return A triv
+  | .bind A A' -> ! mo' .bind A triv A' triv
+  end
+end
 
 
 // alias MonadTrans' (T: (VType -> CType) -> VType -> CType) (M: VType -> CType) : CType =
@@ -102,5 +178,5 @@ end
 
 
 
-main ! main_exnk_os { ! exit 0 } end
-// main ! exit 0 end
+main ! exit 0 end
+// main ! triv_exnk_os { ! exit 0 } end

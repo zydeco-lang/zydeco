@@ -1900,7 +1900,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     arms_vec.push_back((name, ty));
                 }
                 let data = ss::Data::new(arms_vec.iter().cloned());
-                let id = tycker.statics.datas.lookup_or_alloc(arms_vec, data);
+                let id = tycker.lookup_or_alloc_data(arms_vec, data);
                 let data = Alloc::alloc(tycker, id, vtype);
                 TermAnnId::Type(data, vtype)
             }
@@ -1925,7 +1925,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     arms_vec.push_back((name, ty));
                 }
                 let codata = ss::CoData::new(arms_vec.iter().cloned());
-                let id = tycker.statics.codatas.lookup_or_alloc(arms_vec, codata);
+                let id = tycker.lookup_or_alloc_codata(arms_vec, codata);
                 let codata = Alloc::alloc(tycker, id, ctype);
                 TermAnnId::Type(codata, ctype)
             }

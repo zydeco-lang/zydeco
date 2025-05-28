@@ -424,21 +424,21 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let def_ = env.subst.get(&def).cloned().unwrap();
             (env, Alloc::alloc(tycker, def_, kd))
         }
-        // Fixme: only very few types are allowed here, e.g. Top
+        // Todo: only very few types are allowed here, e.g. Top (is this true?)
         | Type::Abst(abst) => {
-            // Debug: log the abst type
-            {
-                use zydeco_utils::arena::ArenaAccess;
-                let hint = match tycker.statics.abst_hints.get(&abst) {
-                    | Some(hint) => tycker.dump_scoped(hint),
-                    | None => "<unknown>".to_string(),
-                };
-                logg::warn!(
-                    "carrier translation of {}({}) may leak",
-                    tycker.dump_statics(abst),
-                    hint
-                );
-            }
+            // // Debug: log the abst type
+            // {
+            //     use zydeco_utils::arena::ArenaAccess;
+            //     let hint = match tycker.statics.abst_hints.get(&abst) {
+            //         | Some(hint) => tycker.dump_scoped(hint),
+            //         | None => "<unknown>".to_string(),
+            //     };
+            //     logg::warn!(
+            //         "carrier translation of {}({}) may leak",
+            //         tycker.dump_statics(abst),
+            //         hint
+            //     );
+            // }
             (env, Alloc::alloc(tycker, abst, kd))
         }
         // | Type::Abst(_abst) => unreachable!(),
@@ -588,10 +588,12 @@ fn computation_translation(
     tycker: &mut Tycker, env: MonEnv, compu: CompuId,
 ) -> Result<(MonEnv, CompuId)> {
     use Computation as Compu;
-    // Debug: print env so far
+    let (env, ty) = cs::TypeOf(compu).mbuild(tycker, env)?;
+
+    // Debug: print
     {
         logg::trace!("{}", ">".repeat(20));
-        logg::trace!("{}", tycker.dump_statics(compu));
+        logg::trace!("[begin] {} : {}", tycker.dump_statics(compu), tycker.dump_statics(ty));
         logg::trace!("@ {}", compu.span(tycker));
         logg::trace!("{}", "=".repeat(20));
         for (abst, str) in env.structure.absts.iter() {
@@ -599,8 +601,7 @@ fn computation_translation(
         }
         logg::trace!("{}", "<".repeat(20));
     }
-    let (env, ty) = cs::TypeOf(compu).mbuild(tycker, env)?;
-    // let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+
     let (env, res) = match tycker.compu(&compu) {
         | Compu::Hole(Hole) => {
             let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
@@ -619,7 +620,8 @@ fn computation_translation(
         }
         | Compu::TAbs(compu) => {
             let Abs(tpat, compu) = compu;
-            Abs(cs::Ty(cs::TypeLift { ty: tpat }), move |_def, abst| {
+            let Some((abst, _)) = ty.destruct_forall(tycker) else { unreachable!() };
+            Abs(cs::Ty((cs::TypeLift { ty: tpat }, abst)), move |_tpat, abst| {
                 Abs(cs::StrPat("str", abst, None), move |_str| cs::TermLift { tm: compu })
             })
             .mbuild(tycker, env)?
@@ -687,6 +689,20 @@ fn computation_translation(
         }
         | Compu::Dtor(_) => todo!(),
     };
+
+    // Debug: print
+    {
+        logg::trace!("{}", ">".repeat(20));
+        logg::trace!("[end] {} : {}", tycker.dump_statics(compu), tycker.dump_statics(ty));
+        logg::trace!("@ {}", compu.span(tycker));
+        logg::trace!("{}", "=".repeat(20));
+        // for (abst, str) in env.structure.absts.iter() {
+        //     logg::trace!("{}", tycker.dump_statics(cs::Ann(abst, str)));
+        // }
+        logg::trace!("{}", tycker.dump_statics(res));
+        logg::trace!("{}", "<".repeat(20));
+    }
+
     Ok((env, res))
 }
 

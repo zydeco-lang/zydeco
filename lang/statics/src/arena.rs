@@ -4,9 +4,48 @@ use zydeco_utils::arena::*;
 
 /* ---------------------------------- Arena --------------------------------- */
 
-/// An arena of equivalence classes, designed for types, and structurally shared
-/// `data` and `codata` definitions.
-#[derive(Debug)]
+// /// An arena of equivalence classes, designed for types, and structurally shared
+// /// `data` and `codata` definitions.
+// #[derive(Debug)]
+// pub struct ArenaEquiv<Id, Definition, Query>
+// where
+//     Id: IndexLike<Meta = usize>,
+// {
+//     /// arena for definitions
+//     pub defs: ArenaDense<Id, Definition>,
+//     /// arena for query hashmap
+//     pub tbls: ArenaAssoc<Id, Query>,
+//     /// arena for equivalence classes
+//     pub eqs: ArenaAssoc<Query, Id>,
+// }
+// impl<Id, Definition, Query> ArenaEquiv<Id, Definition, Query>
+// where
+//     Id: IndexLike<Meta = usize>,
+//     Query: Clone + crate::Lub + std::hash::Hash,
+// {
+//     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
+//         Self {
+//             defs: ArenaDense::new(alloc.alloc()),
+//             tbls: ArenaAssoc::new(),
+//             eqs: ArenaAssoc::new(),
+//         }
+//     }
+//     pub fn lookup_or_alloc(&mut self, def: Definition, query: Query) -> Id {
+//         if let Some(id) = self.eqs.get(&query) {
+//             // if the query is already registered, just return the DataId
+//             *id
+//         } else {
+//             // else, register the query
+//             let id = self.defs.alloc(def);
+//             self.tbls.insert(id, query.clone());
+//             self.eqs.insert(query, id);
+//             id
+//         }
+//     }
+// }
+
+/// Some random equality-based arena that is very inefficient.
+#[derive(Clone, Debug)]
 pub struct ArenaEquiv<Id, Definition, Query>
 where
     Id: IndexLike<Meta = usize>,
@@ -15,32 +54,41 @@ where
     pub defs: ArenaDense<Id, Definition>,
     /// arena for query hashmap
     pub tbls: ArenaAssoc<Id, Query>,
-    /// arena for equivalence classes
-    pub eqs: ArenaAssoc<Query, Id>,
 }
 impl<Id, Definition, Query> ArenaEquiv<Id, Definition, Query>
 where
     Id: IndexLike<Meta = usize>,
-    Query: Clone + Eq + std::hash::Hash,
+    Query: Clone + crate::Lub,
 {
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
-        Self {
-            defs: ArenaDense::new(alloc.alloc()),
-            tbls: ArenaAssoc::new(),
-            eqs: ArenaAssoc::new(),
-        }
+        Self { defs: ArenaDense::new(alloc.alloc()), tbls: ArenaAssoc::new() }
     }
-    pub fn lookup_or_alloc(&mut self, def: Definition, query: Query) -> Id {
-        if let Some(id) = self.eqs.get(&query) {
-            // if the query is already registered, just return the DataId
-            *id
-        } else {
-            // else, register the query
-            let id = self.defs.alloc(def);
-            self.tbls.insert(id, query.clone());
-            self.eqs.insert(query, id);
-            id
+    pub fn lookup_or_alloc(&mut self, def: Definition, query: Query, tycker: &mut Tycker) -> Id {
+        // traverse the tbls, and find the first id that has the same query
+        for (id, q) in self.tbls.iter() {
+            if let Ok(_) = crate::Lub::lub(query.to_owned(), q.to_owned(), tycker) {
+                return *id;
+            }
         }
+        // if not found, allocate a new id
+        let id = self.defs.alloc(def);
+        self.tbls.insert(id, query);
+        id
+    }
+}
+
+impl Tycker {
+    pub fn lookup_or_alloc_data(&mut self, def: im::Vector<(CtorName, TypeId)>, query: Data) -> DataId {
+        let mut datas = self.statics.datas.to_owned();
+        let id = datas.lookup_or_alloc(def, query, self);
+        self.statics.datas = datas;
+        id
+    }
+    pub fn lookup_or_alloc_codata(&mut self, def: im::Vector<(DtorName, TypeId)>, query: CoData) -> CoDataId {
+        let mut codatas = self.statics.codatas.to_owned();
+        let id = codatas.lookup_or_alloc(def, query, self);
+        self.statics.codatas = codatas;
+        id
     }
 }
 
@@ -85,9 +133,9 @@ pub struct StaticsArena {
     pub solus: ArenaAssoc<FillId, AnnId>,
     /// which holes are introduced by the user and should be reported
     pub fill_hints: ArenaAssoc<FillId, ()>,
-    /// arena for `data`
+    /// arena for `data`; plural plural
     pub datas: ArenaEquiv<DataId, im::Vector<(CtorName, TypeId)>, Data>,
-    /// arena for `codata`
+    /// arena for `codata`; plural plural
     pub codatas: ArenaEquiv<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
     // /// arena for inlinable definitions
     // pub inlinables: ArenaAssoc<DefId, ValueId>,

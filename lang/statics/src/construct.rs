@@ -521,7 +521,7 @@ where
             })
             .collect::<im::Vector<_>>();
         let data_ = Data::new(arms_.iter().cloned());
-        let data = tycker.statics.datas.lookup_or_alloc(arms_, data_);
+        let data = tycker.lookup_or_alloc_data(arms_, data_);
         let kd = VType.build(tycker, env);
         Alloc::alloc(tycker, data, kd)
     }
@@ -605,7 +605,7 @@ where
             })
             .collect::<im::Vector<_>>();
         let coda_ = CoData::new(arms_.iter().cloned());
-        let coda = tycker.statics.codatas.lookup_or_alloc(arms_, coda_);
+        let coda = tycker.lookup_or_alloc_codata(arms_, coda_);
         let kd = CType.build(tycker, env);
         Alloc::alloc(tycker, coda, kd)
     }

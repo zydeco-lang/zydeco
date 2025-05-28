@@ -85,7 +85,9 @@ pub trait ArenaAccess<Id, T, Meta>: Index<Id, Output = T> + IndexMut<Id, Output 
 pub struct Forth<'a, T>(pub &'a T);
 pub struct Back<'a, T>(pub &'a T);
 
-#[derive(Debug)]
+// Fixme: shouldn't be cloneable
+#[derive(Clone, Debug)]
+// #[derive(Debug)]
 pub struct ArenaDense<Id: IndexLike, T> {
     allocator: IndexAlloc<Id::Meta>,
     vec: Vec<T>,

@@ -36,7 +36,7 @@ module Builtin where
   end
 
   /// interface for monad transformers
-  codata MonadTrans (T: (VType -> CType) -> VType -> CType) where
+  pub codata MonadTrans (T: (VType -> CType) -> VType -> CType) where
     | .monad : forall (M: VType -> CType) .
       Thunk (Monad M) -> Monad (T M)
     | .lift : forall (M: VType -> CType) (A: VType) .

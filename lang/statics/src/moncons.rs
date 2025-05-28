@@ -256,6 +256,7 @@ where
     K: MonConstruct<KindId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
+        // Fixme: no type substitution from def to abst?
         let cs::Pat(var, kd) = self;
         let (env, var) = var.mbuild(tycker, env)?;
         let (env, ty) = kd.mbuild(tycker, env)?;
@@ -392,7 +393,7 @@ where
             })
             .collect::<Result<im::Vector<_>>>()?;
         let data_ = Data::new(arms_.iter().cloned());
-        let data = tycker.statics.datas.lookup_or_alloc(arms_, data_);
+        let data = tycker.lookup_or_alloc_data(arms_, data_);
         let (env, kd) = VType.mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, data, kd)))
     }
@@ -476,7 +477,7 @@ where
             })
             .collect::<Result<im::Vector<_>>>()?;
         let coda_ = CoData::new(arms_.iter().cloned());
-        let coda = tycker.statics.codatas.lookup_or_alloc(arms_, coda_);
+        let coda = tycker.lookup_or_alloc_codata(arms_, coda_);
         let (env, kd) = CType.mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, coda, kd)))
     }
@@ -792,11 +793,28 @@ where
         Ok((env, Alloc::alloc(tycker, Abs(vpat, body), ty)))
     }
 }
+impl<P, F, T> MonConstruct<CompuId> for Abs<cs::Ty<(P, AbstId)>, F>
+where
+    P: MonConstruct<TPatId>,
+    F: FnOnce(TPatId, AbstId) -> T,
+    T: MonConstruct<CompuId>,
+{
+    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+        let Abs(cs::Ty((tpat, abst)), body) = self;
+        let (env, tpat): (_, TPatId) = tpat.mbuild(tycker, env)?;
+        let body = body(tpat, abst);
+        let (env, body) = body.mbuild(tycker, env)?;
+        let body_ty = tycker.statics.annotations_compu[&body];
+        let (env, ctype) = CType.mbuild(tycker, env)?;
+        let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);
+        Ok((env, Alloc::alloc(tycker, Abs(tpat, body), ty)))
+    }
+}
 // computation type abstraction
 impl<P, F, T> MonConstruct<CompuId> for Abs<cs::Ty<P>, F>
 where
     P: MonConstruct<TPatId>,
-    F: FnOnce(Option<DefId>, AbstId) -> T,
+    F: FnOnce(TPatId, AbstId) -> T,
     T: MonConstruct<CompuId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
@@ -804,7 +822,7 @@ where
         let (env, tpat): (_, TPatId) = tpat.mbuild(tycker, env)?;
         let (def, param_kd) = tpat.try_destruct_def(tycker);
         let abst = Alloc::alloc(tycker, def, param_kd);
-        let body = body(def, abst);
+        let body = body(tpat, abst);
         let (env, body) = body.mbuild(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
         let (env, ctype) = CType.mbuild(tycker, env)?;

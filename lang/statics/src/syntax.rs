@@ -302,19 +302,20 @@ pub struct Forall(pub AbstId, pub TypeId);
 pub struct Exists(pub AbstId, pub TypeId);
 
 /// data | C_1 ty | ... end
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash)]
 pub struct Data {
-    arms: BTreeMap<CtorName, TypeId>,
+    pub(crate) arms: BTreeMap<CtorName, TypeId>,
 }
 
 /// `codata | .d_1 cp : ty | ... end`
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash)]
 pub struct CoData {
-    arms: BTreeMap<DtorName, TypeId>,
+    pub(crate) arms: BTreeMap<DtorName, TypeId>,
 }
 
 mod impls_structs {
     use super::*;
+    use crate::*;
 
     impl Data {
         pub fn new(arms: impl Iterator<Item = (CtorName, TypeId)>) -> Self {
@@ -344,6 +345,36 @@ mod impls_structs {
         }
     }
 
+    impl Lub for Data {
+        type Out = Data;
+
+        fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
+            let Data { arms: mut lhs } = self;
+            let Data { arms: mut rhs } = other;
+            if lhs.len() != rhs.len() {
+                tycker.err(
+                    TyckError::Expressivity("data type equality"),
+                    std::panic::Location::caller(),
+                )?
+            }
+            let mut arms = BTreeMap::new();
+            while let (Some((lhs_ctor, lhs_ty)), Some((rhs_ctor, rhs_ty))) =
+                (lhs.pop_first(), rhs.pop_first())
+            {
+                if lhs_ctor != rhs_ctor {
+                    tycker.err(
+                        TyckError::Expressivity("data type equality"),
+                        std::panic::Location::caller(),
+                    )?
+                }
+                let lhs_ty = Lub::lub(lhs_ty, rhs_ty, tycker)?;
+                arms.insert(lhs_ctor, lhs_ty);
+            }
+            let res = Data { arms };
+            Ok(res)
+        }
+    }
+
     impl CoData {
         pub fn new(arms: impl Iterator<Item = (DtorName, TypeId)>) -> Self {
             Self { arms: arms.collect() }
@@ -369,6 +400,36 @@ mod impls_structs {
         type IntoIter = std::collections::btree_map::Iter<'a, DtorName, TypeId>;
         fn into_iter(self) -> Self::IntoIter {
             self.arms.iter()
+        }
+    }
+
+    impl Lub for CoData {
+        type Out = CoData;
+
+        fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
+            let CoData { arms: mut lhs } = self;
+            let CoData { arms: mut rhs } = other;
+            if lhs.len() != rhs.len() {
+                tycker.err(
+                    TyckError::Expressivity("data type equality"),
+                    std::panic::Location::caller(),
+                )?
+            }
+            let mut arms = BTreeMap::new();
+            while let (Some((lhs_dtor, lhs_ty)), Some((rhs_dtor, rhs_ty))) =
+                (lhs.pop_first(), rhs.pop_first())
+            {
+                if lhs_dtor != rhs_dtor {
+                    tycker.err(
+                        TyckError::Expressivity("data type equality"),
+                        std::panic::Location::caller(),
+                    )?
+                }
+                let lhs_ty = Lub::lub(lhs_ty, rhs_ty, tycker)?;
+                arms.insert(lhs_dtor, lhs_ty);
+            }
+            let res = CoData { arms };
+            Ok(res)
         }
     }
 }
