@@ -12,6 +12,7 @@ impl TypeId {
         let kd = tycker.statics.annotations_type[self];
         let ty = tycker.statics.types[&self].to_owned();
         let ty = match ty {
+            // Fixme: should invoke substitution once the type is filled
             | Fillable::Fill(_) => *self,
             | Fillable::Done(ty) => match ty {
                 | Type::Var(def) => match env.get(&def) {
@@ -19,7 +20,13 @@ impl TypeId {
                         | AnnId::Set | AnnId::Kind(_) => {
                             tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
-                        | AnnId::Type(with) => *with,
+                        | AnnId::Type(with) => {
+                            // // Debug: print
+                            // {
+                            //     println!("[var] {} -> {}", tycker.dump_statics(def), tycker.dump_statics(with));
+                            // }
+                            *with
+                        }
                     },
                     | None => *self,
                 },
@@ -83,46 +90,83 @@ impl TypeId {
                     if ty == ty_ { *self } else { Alloc::alloc(tycker, Exists(tpat, ty_), kd) }
                 }
                 | Type::Data(id) => {
+                    // // Debug: print
+                    // {
+                    //     println!("{}", ">".repeat(20));
+                    //     println!("target: {}", tycker.dump_statics(id));
+                    //     println!("{}", "=".repeat(20));
+                    //     for (def, ty) in env.iter() {
+                    //         println!("{} := {}", tycker.dump_statics(def), tycker.dump_statics(ty));
+                    //     }
+                    //     println!("{}", "-".repeat(20));
+                    // }
                     let arms = tycker.statics.datas.defs[&id].clone();
-                    let mut unchanged = true;
+                    // // Debug: print
+                    // {
+                    //     for (ctor, ty) in arms.iter() {
+                    //         println!("{} : {}", tycker.dump_statics(ctor), tycker.dump_statics(ty));
+                    //     }
+                    // }
+                    // let mut unchanged = true;
                     let arms_ = arms
                         .into_iter()
                         .map(|(ctor, ty)| {
                             let ty_ = ty.subst_env(tycker, env)?;
-                            if ty == ty_ {
-                                Ok((ctor, ty))
-                            } else {
-                                unchanged = false;
-                                Ok((ctor, ty_))
-                            }
+                            // if ty == ty_ {
+                            //     Ok((ctor, ty))
+                            // } else {
+                            //     unchanged = false;
+                            //     Ok((ctor, ty_))
+                            // }
+                            Ok((ctor, ty_))
                         })
                         .collect::<Result<im::Vector<_>>>()?;
-                    if unchanged {
-                        *self
-                    } else {
+                    // if unchanged {
+                    //     *self
+                    // } else
+                    {
                         let data_ = Data::new(arms_.iter().cloned());
+                        // // Debug: print
+                        // {
+                        //     for (ctor, ty_) in arms_.iter() {
+                        //         println!("{}", "-".repeat(20));
+                        //         println!(
+                        //             "{} : {}",
+                        //             tycker.dump_statics(ctor),
+                        //             tycker.dump_statics(ty_)
+                        //         );
+                        //     }
+                        // }
                         let id_ = tycker.lookup_or_alloc_data(arms_, data_);
+                        // // Debug: print
+                        // {
+                        //     println!("{}", "-".repeat(20));
+                        //     println!("{}", tycker.dump_statics(id_));
+                        //     println!("{}", "<".repeat(20));
+                        // }
                         Alloc::alloc(tycker, id_, kd)
                     }
                 }
                 | Type::CoData(id) => {
                     let arms = tycker.statics.codatas.defs[&id].clone();
-                    let mut unchanged = true;
+                    // let mut unchanged = true;
                     let arms_ = arms
                         .into_iter()
                         .map(|(dtor, ty)| {
                             let ty_ = ty.subst_env(tycker, env)?;
-                            if ty == ty_ {
-                                Ok((dtor, ty))
-                            } else {
-                                unchanged = false;
-                                Ok((dtor, ty_))
-                            }
+                            // if ty == ty_ {
+                            //     Ok((dtor, ty))
+                            // } else {
+                            //     unchanged = false;
+                            //     Ok((dtor, ty_))
+                            // }
+                            Ok((dtor, ty_))
                         })
                         .collect::<Result<im::Vector<_>>>()?;
-                    if unchanged {
-                        *self
-                    } else {
+                    // if unchanged {
+                    //     *self
+                    // } else
+                    {
                         let codata_ = CoData::new(arms_.iter().cloned());
                         let id_ = tycker.lookup_or_alloc_codata(arms_, codata_);
                         Alloc::alloc(tycker, id_, kd)

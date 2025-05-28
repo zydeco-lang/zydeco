@@ -63,13 +63,14 @@ where
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
         Self { defs: ArenaDense::new(alloc.alloc()), tbls: ArenaAssoc::new() }
     }
-    pub fn lookup_or_alloc(&mut self, def: Definition, query: Query, tycker: &mut Tycker) -> Id {
-        // traverse the tbls, and find the first id that has the same query
-        for (id, q) in self.tbls.iter() {
-            if let Ok(_) = crate::Lub::lub(query.to_owned(), q.to_owned(), tycker) {
-                return *id;
-            }
-        }
+    pub fn lookup_or_alloc(&mut self, def: Definition, query: Query, _tycker: &mut Tycker) -> Id {
+        // Fixme: brings subtle bug regarding holes
+        // // traverse the tbls, and find the first id that has the same query
+        // for (id, q) in self.tbls.iter() {
+        //     if let Ok(_) = crate::Lub::lub(query.to_owned(), q.to_owned(), tycker) {
+        //         return *id;
+        //     }
+        // }
         // if not found, allocate a new id
         let id = self.defs.alloc(def);
         self.tbls.insert(id, query);
