@@ -65,7 +65,17 @@ where
 
 /* ------------------------------- Identifier ------------------------------- */
 
-impl_mon_construct_trivial!(Option<DefId>, DefId, KindId, AbstId, TPatId, TypeId, VPatId, ValueId, CompuId);
+impl_mon_construct_trivial!(
+    Option<DefId>,
+    DefId,
+    KindId,
+    AbstId,
+    TPatId,
+    TypeId,
+    VPatId,
+    ValueId,
+    CompuId
+);
 
 /* ------------------------------- Definition ------------------------------- */
 
@@ -936,23 +946,18 @@ where
     }
 }
 // fixed point
-impl<V, T, F> MonConstruct<CompuId> for Fix<cs::Ann<V, T>, F>
+impl<P, F, T> MonConstruct<CompuId> for Fix<P, F>
 where
-    V: MonConstruct<VarName>,
-    T: MonConstruct<TypeId>,
-    F: FnOnce(DefId) -> CompuId,
+    P: MonConstruct<VPatId>,
+    F: FnOnce(VPatId) -> T,
+    T: MonConstruct<CompuId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-        let Fix(cs::Ann(var, param_ty), body) = self;
-        let (env, var) = var.mbuild(tycker, env)?;
-        let (env, param_ty) = param_ty.mbuild(tycker, env)?;
-        let def = Alloc::alloc(tycker, var, param_ty.into());
-        let Some(ty) = param_ty.destruct_thk_app(tycker) else { unreachable!() };
-        let vpat: VPatId = Alloc::alloc(tycker, def, param_ty);
-        let body = body(def);
+        let Fix(vpat, body) = self;
+        let (env, vpat) = vpat.mbuild(tycker, env)?;
+        let (env, body) = body(vpat).mbuild(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
-        let Ok(_) = Lub::lub(ty, body_ty, tycker) else { unreachable!() };
-        Ok((env, Alloc::alloc(tycker, Fix(vpat, body), ty)))
+        Ok((env, Alloc::alloc(tycker, Fix(vpat, body), body_ty)))
     }
 }
 // force

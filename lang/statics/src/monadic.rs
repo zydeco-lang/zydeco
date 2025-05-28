@@ -590,9 +590,7 @@ fn computation_translation(
         }
         | Compu::VAbs(compu) => {
             let Abs(vpat, compu) = compu;
-            let (def, param_ty) = vpat.try_destruct_def(tycker);
-            let param_ty_ = cs::TypeLift { ty: param_ty };
-            Abs(cs::Pat(def, param_ty_), move |_def| cs::TermLift { tm: compu })
+            Abs(cs::TermLift { tm: vpat }, move |_def| cs::TermLift { tm: compu })
                 .mbuild(tycker, env)?
         }
         | Compu::VApp(compu) => {
@@ -604,11 +602,7 @@ fn computation_translation(
         | Compu::TAbs(compu) => {
             let Abs(tpat, compu) = compu;
             Abs(cs::Ty(cs::TypeLift { ty: tpat }), move |_def, abst| {
-                let thk_sig = cs::Thk(cs::Signature { ty: cs::Ty(abst) });
-                Abs(cs::Pat("str", thk_sig), move |_str_var| {
-                    // Fixme: bind environment
-                    cs::TermLift { tm: compu }
-                })
+                Abs(cs::StrPat("str", abst, None), move |_str| cs::TermLift { tm: compu })
             })
             .mbuild(tycker, env)?
         }
@@ -621,10 +615,7 @@ fn computation_translation(
         }
         | Compu::Fix(compu) => {
             let Fix(vpat, compu) = compu;
-            let (def, param_ty) = vpat.try_destruct_def(tycker);
-            let (env, param_ty_) = cs::TypeLift { ty: param_ty }.mbuild(tycker, env)?;
-            // Fixme: should be a fix
-            Abs(cs::Pat(def, param_ty_), move |_def| cs::TermLift { tm: compu })
+            Fix(cs::TermLift { tm: vpat }, move |_vpat| cs::TermLift { tm: compu })
                 .mbuild(tycker, env)?
         }
         | Compu::Force(compu) => {
