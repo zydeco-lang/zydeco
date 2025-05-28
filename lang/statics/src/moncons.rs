@@ -1026,7 +1026,11 @@ where
         let (env, head) = head.mbuild(tycker, env)?;
         let head_ty = tycker.statics.annotations_compu[&head];
         let Some(coda) = head_ty.destruct_codata(&env.ty, tycker) else { unreachable!() };
-        let Some(ty) = coda.get(&dtor).cloned() else { unreachable!() };
+        use std::collections::HashMap;
+        let Some(ty) = coda.into_iter().cloned().collect::<HashMap<_, _>>().get(&dtor).cloned()
+        else {
+            unreachable!()
+        };
         Ok((env, Alloc::alloc(tycker, Dtor(head, dtor), ty)))
     }
 }

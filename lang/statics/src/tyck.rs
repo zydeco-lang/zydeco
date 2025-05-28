@@ -1833,13 +1833,12 @@ impl Tyck for TyEnvT<su::TermId> {
 
                 let monad_ty_kd = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.env);
                 let monad_ty_var =
-                    Alloc::alloc(tycker, ss::VarName("M?".to_string()), monad_ty_kd.into());
+                    Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into());
                 let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd);
-                let monad_ty =
-                    cs::Type(cs::Ann(abst, monad_ty_kd)).build(tycker, &self.env);
+                let monad_ty = cs::Type(cs::Ann(abst, monad_ty_kd)).build(tycker, &self.env);
                 let monad_impl_ty = cs::Thk(cs::Monad(monad_ty)).build(tycker, &self.env);
                 let monad_impl_var =
-                    Alloc::alloc(tycker, ss::VarName("mo?".to_string()), monad_impl_ty.into());
+                    Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into());
                 let monad_impl = cs::Value(monad_impl_var).build(tycker, &self.env);
 
                 use crate::env::*;
@@ -1876,6 +1875,15 @@ impl Tyck for TyEnvT<su::TermId> {
                     ss::Abs(monad_ty_tpat, monad_impl_to_body_lift),
                     res_body_ty,
                 );
+
+                // Debug: print
+                {
+                    println!("{}", ">".repeat(40));
+                    println!("{}", tycker.dump_statics(body));
+                    println!("{}", "=".repeat(40));
+                    println!("{}", tycker.dump_statics(res_body));
+                    println!("{}", "<".repeat(40));
+                }
 
                 TermAnnId::Compu(res_body, res_body_ty)
             }
@@ -2078,7 +2086,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     )?
                 };
                 let mut arms: HashMap<_, _> =
-                    tycker.statics.codatas.tbls[codata_id].clone().into_iter().collect();
+                    tycker.statics.codatas.defs[codata_id].clone().into_iter().collect();
                 let mut comatchers_new = Vec::new();
                 for su::CoMatcher { dtor, tail } in comatchers {
                     let arm_ty = match arms.remove(&dtor) {

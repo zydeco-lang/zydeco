@@ -222,22 +222,22 @@ impl TypeId {
         };
         Some(res)
     }
-    pub fn destruct_data<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t Data> {
+    pub fn destruct_data<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t im::Vector<(CtorName, TypeId)>> {
         use zydeco_utils::arena::ArenaAccess;
         match tycker.statics.types[&self].to_owned() {
             | Fillable::Fill(_) => todo!(),
             | Fillable::Done(ty) => match ty {
-                | Type::Data(data) => tycker.statics.datas.tbls.get(&data),
+                | Type::Data(data) => tycker.statics.datas.defs.get(&data),
                 | _ => None,
             },
         }
     }
-    pub fn destruct_codata<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t CoData> {
+    pub fn destruct_codata<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t im::Vector<(DtorName, TypeId)>> {
         use zydeco_utils::arena::ArenaAccess;
         match tycker.statics.types[&self].to_owned() {
             | Fillable::Fill(_) => todo!(),
             | Fillable::Done(ty) => match ty {
-                | Type::CoData(coda) => tycker.statics.codatas.tbls.get(&coda),
+                | Type::CoData(coda) => tycker.statics.codatas.defs.get(&coda),
                 | _ => None,
             },
         }
