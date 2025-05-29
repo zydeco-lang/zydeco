@@ -442,7 +442,6 @@ pub enum Computation {
     Match(Match<ValueId, VPatId, CompuId>),
     CoMatch(CoMatch<CompuId>),
     Dtor(Dtor<CompuId>),
-    // WithBlock(WithBlock),
 }
 
 /* -------------------------------- TopLevel -------------------------------- */

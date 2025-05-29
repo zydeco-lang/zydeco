@@ -549,8 +549,17 @@ fn value_translation(
         | Value::Lit(_) => unreachable!(),
         | Value::Var(def) => {
             // substitute according to the environment
-            let def_ = env.subst.get(&def).cloned().unwrap();
-            (env, Alloc::alloc(tycker, def_, ty_))
+            match env.subst.get(&def).cloned() {
+                | Some(def_) => {
+                    // the definition is closed in this monadic block
+                    (env, Alloc::alloc(tycker, def_, ty_))
+                }
+                | None => {
+                    // it should then be global and should be in the inlinables
+                    let value = tycker.statics.inlinables[&def];
+                    cs::TermLift { tm: value }.mbuild(tycker, env)?
+                }
+            }
         }
         | Value::Thunk(value) => {
             let Thunk(body) = value;

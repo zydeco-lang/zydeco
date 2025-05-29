@@ -90,8 +90,8 @@ pub struct StaticsArena {
     pub datas: ArenaDense<DataId, Data>,
     /// arena for `codata`; plural plural
     pub codatas: ArenaDense<CoDataId, CoData>,
-    // /// arena for inlinable definitions
-    // pub inlinables: ArenaAssoc<DefId, ValueId>,
+    /// arena for inlinable definitions, typically global (necessity modality) definitions
+    pub inlinables: ArenaAssoc<DefId, ValueId>,
     /// definitions that are marked global
     pub global_defs: ArenaAssoc<DefId, ()>,
     /// terms that are marked global
@@ -136,7 +136,7 @@ impl StaticsArena {
             fill_hints: ArenaAssoc::new(),
             datas: ArenaDense::new(alloc.alloc()),
             codatas: ArenaDense::new(alloc.alloc()),
-            // inlinables: ArenaAssoc::new(),
+            inlinables: ArenaAssoc::new(),
             global_defs: ArenaAssoc::new(),
             global_terms: ArenaAssoc::new(),
 

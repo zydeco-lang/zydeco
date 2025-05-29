@@ -114,44 +114,35 @@ end
 //   end (ExnK String) { ! mo-exnk String } OS { ! alg-exnk-os String panic }
 // end
 
-def ! mo-exnkt (E: VType) (M: VType -> CType)
-  (mo: Thk (Monad M))
-: Monad (ExnKT E M) =
-  let ! mo' =
-    monadic
-      // inlining `! mo-exnk`
-      fn (E: VType) -> comatch
-      | .return A a -> fn R ke ka ->
-        ! ka a
-      | .bind A A' m f -> fn R ke ka ->
-        ! m R ke { fn a -> ! f a R ke ka }
-      end
-    :
-      forall (E: VType) . Monad (ExnK E)
-    end M mo E triv
-  in
-  comatch
-  | .return A -> ! mo' .return A triv
-  | .bind A A' -> ! mo' .bind A triv A' triv
-  end
-end
+// def ! mo-exnkt (E: VType) (M: VType -> CType)
+//   (mo: Thk (Monad M))
+// : Monad (ExnKT E M) =
+//   let ! mo' =
+//     monadic
+//       // inlining `! mo-exnk`
+//       fn (E: VType) -> comatch
+//       | .return A a -> fn R ke ka ->
+//         ! ka a
+//       | .bind A A' m f -> fn R ke ka ->
+//         ! m R ke { fn a -> ! f a R ke ka }
+//       end
+//     :
+//       forall (E: VType) . Monad (ExnK E)
+//     end M mo E triv
+//   in
+//   comatch
+//   | .return A -> ! mo' .return A triv
+//   | .bind A A' -> ! mo' .bind A triv A' triv
+//   end
+// end
 
 def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
   fn (M: VType -> CType) (mo: Thk (Monad M)) ->
   let ! mt' =
     monadic fn (E: VType) ->
-      // Monad (ExnK E)
-      let ! mo-exnk : Monad (ExnK E) = 
-        comatch
-        | .return A a -> fn R ke ka ->
-          ! ka a
-        | .bind A A' m f -> fn R ke ka ->
-          ! m R ke { fn a -> ! f a R ke ka }
-        end
-      in
       comatch
-      | .monad -> ! mo-exnk
-      | .lift A m -> do a <- ! m; ! mo-exnk .return A a
+      | .monad -> ! mo-exnk E
+      | .lift A m -> do a <- ! m; ! mo-exnk E .return A a
       end
     :
       forall (E: VType) . codata

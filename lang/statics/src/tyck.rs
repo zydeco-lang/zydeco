@@ -349,6 +349,8 @@ impl SccDeclarations<'_> {
                     match binder.try_destruct_def(tycker) {
                         | (Some(def), _) => {
                             tycker.statics.global_defs.insert(def, ());
+                            // consider adding it to the inlinables as well
+                            tycker.statics.inlinables.insert(def, bindee);
                         }
                         | (None, _) => {}
                     }
@@ -1787,18 +1789,13 @@ impl Tyck for TyEnvT<su::TermId> {
                 let binder_out_ann =
                     self.mk(binder).tyck_k(tycker, Action::ana(bindee_ty.into()))?;
                 let (binder_out, _binder_ty) = binder_out_ann.as_value();
-                // // consider adding it to the inlinables
-                // match binder_out.try_destruct_def(tycker) {
-                //     | (Some(def), _) => {
-                //         tycker.statics.inlinables.insert(def, bindee_out);
-                //     }
-                //     | (None, _) => {}
-                // }
-                // consider adding it to the globals if bindee is global
                 match binder_out.try_destruct_def(tycker) {
                     | (Some(def), _) => {
+                        // consider adding it to the globals if bindee is global
                         if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
                             tycker.statics.global_defs.insert(def, ());
+                            // consider adding it to the inlinables as well
+                            tycker.statics.inlinables.insert(def, bindee_out);
                         }
                     }
                     | (None, _) => {}
