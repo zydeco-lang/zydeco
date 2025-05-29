@@ -15,6 +15,7 @@ pub enum TyckError {
     NonExhaustiveCoDataArms(std::collections::HashMap<DtorName, TypeId>),
     Expressivity(&'static str),
     NotInlinable(ss::DefId),
+    OutOfScope(ss::DefId),
 }
 
 #[derive(Clone)]
@@ -31,16 +32,11 @@ impl Tycker {
             | TyckError::MissingAnnotation => format!("Missing annotation"),
             | TyckError::MissingSeal => format!("Missing seal"),
             | TyckError::MissingSolution(fills) => {
-                use zydeco_surface::scoped::fmt::*;
                 let mut s = String::new();
                 s += "Missing solution for:";
                 for fill in fills.iter() {
                     let site = self.statics.fills[&fill];
-                    s += &format!(
-                        "\n\t>> {} ({})",
-                        site.ugly(&Formatter::new(&self.scoped)),
-                        site.span(self)
-                    )
+                    s += &format!("\n\t>> {} ({})", self.dump_scoped(site), site.span(self))
                 }
                 s
             }
@@ -62,12 +58,7 @@ impl Tycker {
                 )
             }
             | TyckError::TypeExpected { expected, found } => {
-                use crate::fmt::*;
-                format!(
-                    "Type expected: {}, found `{}`",
-                    expected,
-                    found.ugly(&Formatter::new(&self.scoped, &self.statics))
-                )
+                format!("Type expected: {}, found `{}`", expected, self.dump_statics(found))
             }
             | TyckError::MissingDataArm(ctor) => format!("Missing data arm: {:?}", ctor),
             | TyckError::MissingCoDataArm(dtor) => format!("Missing codata arm: {:?}", dtor),
@@ -77,14 +68,10 @@ impl Tycker {
             | TyckError::Expressivity(s) => format!("{}", s),
             | TyckError::NotInlinable(def) => {
                 let span = def.span(self).to_owned();
-                format!(
-                    "Cannot inline definition: {} ({})",
-                    {
-                        use crate::fmt::*;
-                        def.ugly(&Formatter::new(&self.scoped, &self.statics))
-                    },
-                    span
-                )
+                format!("Cannot inline definition: {} ({})", self.dump_statics(def), span)
+            }
+            | TyckError::OutOfScope(def) => {
+                format!("Definition {} out of scope: {}", self.dump_scoped(def), def.span(self))
             }
         }
     }

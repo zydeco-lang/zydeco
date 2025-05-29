@@ -140,6 +140,7 @@ def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
   fn (M: VType -> CType) (mo: Thk (Monad M)) ->
   let ! mt' =
     monadic fn (E: VType) ->
+      // let ! _ : OS = _ in
       comatch
       | .monad -> ! mo-exnk E
       | .lift A m -> do a <- ! m; ! mo-exnk E .return A a

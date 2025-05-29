@@ -421,7 +421,9 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
     let (env, res) = match tycker.type_filled(&ty)?.to_owned() {
         | Type::Var(def) => {
             // substitute according to the environment
-            let def_ = env.subst.get(&def).cloned().unwrap();
+            let Some(def_) = env.subst.get(&def).cloned() else {
+                tycker.err(TyckError::OutOfScope(def), std::panic::Location::caller())?
+            };
             (env, Alloc::alloc(tycker, def_, kd))
         }
         // Todo: only very few types are allowed here, e.g. Top (is this true?)
@@ -555,8 +557,11 @@ fn value_translation(
                     (env, Alloc::alloc(tycker, def_, ty_))
                 }
                 | None => {
+                    use zydeco_utils::arena::ArenaAccess;
                     // it should then be global and should be in the inlinables
-                    let value = tycker.statics.inlinables[&def];
+                    let Some(value) = tycker.statics.inlinables.get(&def).cloned() else {
+                        tycker.err(TyckError::OutOfScope(def), std::panic::Location::caller())?
+                    };
                     cs::TermLift { tm: value }.mbuild(tycker, env)?
                 }
             }
