@@ -20,7 +20,6 @@ module Builtin where
   pub extern def Int : VType end
   pub extern def Char : VType end
   pub extern def String : VType end
-  pub extern alias Top : CType = codata end end
   pub extern def OS : CType end
 
   /// interface for monads and algebras
@@ -44,6 +43,10 @@ module Builtin where
     | .lift  : forall (A: VType) . Thk (M A) -> T M A
     end
   end
+end
+
+module Core where
+  pub alias Top : CType = codata end end
 end
 
 module String where
@@ -136,14 +139,14 @@ end
 //   end
 // end
 
-extern def div : Thk(Int -> Int -> Ret Int) end
+// extern def div : Thk(Int -> Int -> Ret Int) end
 
 def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
   fn (M: VType -> CType) (mo: Thk (Monad M)) ->
   let ! mt' =
     monadic fn (E: VType) ->
       // let ! _ : OS = _ in
-      let _ = div in
+      // let _ = div in
       comatch
       | .monad -> ! mo-exnk E
       | .lift A m -> do a <- ! m; ! mo-exnk E .return A a

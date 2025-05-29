@@ -359,6 +359,8 @@ impl Tyck for TyEnvT<su::DeclId> {
                             .all(|(id, ())| tycker.statics.global_defs.get(&id).is_some())
                         {
                             tycker.statics.global_defs.insert(def, ());
+                            // consider adding it to the inlinables as well
+                            tycker.statics.inlinables.insert(def, bindee);
                         }
                     }
                     | (None, _) => {}
@@ -387,7 +389,7 @@ impl SccDeclarations<'_> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.stack.push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
-            
+
             use std::collections::HashMap;
 
             let mut binder_map = HashMap::new();
