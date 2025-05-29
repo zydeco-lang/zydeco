@@ -697,7 +697,11 @@ fn computation_translation(
             })
             .mbuild(tycker, env)?
         }
-        | Compu::Dtor(_) => todo!(),
+        | Compu::Dtor(compu) => {
+            let Dtor(compu, dtor) = compu;
+            let compu_ = cs::TermLift { tm: compu };
+            cs::Dtor(compu_, dtor).mbuild(tycker, env)?
+        }
     };
 
     // Debug: print

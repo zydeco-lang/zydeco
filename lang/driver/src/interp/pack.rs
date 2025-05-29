@@ -14,8 +14,8 @@ impl PackageRuntime {
         let PackageRuntime { dynamics } = self;
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
-        let kont = Runtime::new(&mut input, &mut output, args, dynamics).run();
-        kont
+        
+        Runtime::new(&mut input, &mut output, args, dynamics).run()
     }
     pub fn test(self, name: &str, aloud: bool) -> Result<()> {
         let PackageRuntime { dynamics } = self;

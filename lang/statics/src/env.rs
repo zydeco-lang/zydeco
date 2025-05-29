@@ -90,6 +90,12 @@ mod impls_ty_env {
                 // (tycker.prim.monad.get().to_owned(), cs::MonadTy.build(tycker, ori).into()),
                 // (tycker.prim.algebra.get().to_owned(), cs::AlgebraTy.build(tycker, ori).into()),
             ];
+            for (def, ann) in ori.to_owned() {
+                use zydeco_surface::arena::ArenaAccess;
+                if tycker.statics.global_defs.get(&def).is_some() {
+                    env += [(def, ann)];
+                }
+            }
             env
         }
         pub fn recursively_get_type(&self, tycker: &Tycker, def: &DefId) -> Option<&AnnId> {

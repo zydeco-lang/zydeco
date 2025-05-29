@@ -241,7 +241,7 @@ where
         let def_ = Alloc::alloc(tycker, var, kd.into());
         // track the substitution
         env.subst += [(def, def_)];
-        let tpat = Alloc::alloc(tycker, def_, kd.into());
+        let tpat = Alloc::alloc(tycker, def_, kd);
         Ok((env, tpat))
     }
 }
@@ -359,11 +359,12 @@ where
         let App(ty_1, ty_2) = self;
         let (env, ty_1) = ty_1.mbuild(tycker, env)?;
         let kd_1 = tycker.statics.annotations_type[&ty_1];
-        let Some((kd_a, kd_b)) = kd_1.destruct_arrow(tycker) else { unreachable!() };
+        let Some((_kd_a, kd_b)) = kd_1.destruct_arrow(tycker) else { unreachable!() };
         let (env, ty_2) = ty_2.mbuild(tycker, env)?;
-        let kd_2 = tycker.statics.annotations_type[&ty_2];
-        let Ok(_) = Lub::lub(kd_a, kd_2, tycker) else { unreachable!() };
-        Ok((env, Alloc::alloc(tycker, App(ty_1, ty_2), kd_b)))
+        // let kd_2 = tycker.statics.annotations_type[&ty_2];
+        // let Ok(_) = Lub::lub(kd_a, kd_2, tycker) else { unreachable!() };
+        let res = ty_1.normalize_app(tycker, ty_2, kd_b)?;
+        Ok((env, res))
     }
 }
 impl MonConstruct<TypeId> for IntTy {
@@ -589,7 +590,7 @@ where
         let def_ = Alloc::alloc(tycker, var, ty.into());
         // track the substitution
         env.subst += [(def, def_)];
-        let vpat = Alloc::alloc(tycker, def_, ty.into());
+        let vpat = Alloc::alloc(tycker, def_, ty);
         Ok((env, vpat))
     }
 }
