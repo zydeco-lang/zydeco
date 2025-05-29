@@ -422,11 +422,10 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         | Type::Var(def) => {
             // substitute according to the environment
             let Some(def_) = env.subst.get(&def).cloned() else {
-                tycker.err(TyckError::OutOfScope(def), std::panic::Location::caller())?
+                tycker.err(TyckError::NotInlinable(def), std::panic::Location::caller())?
             };
             (env, Alloc::alloc(tycker, def_, kd))
         }
-        // Todo: only very few types are allowed here, e.g. Top (is this true?)
         | Type::Abst(abst) => {
             // // Debug: log the abst type
             // {
@@ -441,7 +440,14 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             //         hint
             //     );
             // }
-            (env, Alloc::alloc(tycker, abst, kd))
+            // only types that are not sealed are allowed here
+            use zydeco_utils::arena::ArenaAccess;
+            match tycker.statics.seals.get(&abst) {
+                | Some(_) => {
+                    tycker.err(TyckError::NotInlinableSeal(abst), std::panic::Location::caller())?
+                }
+                | None => (env, Alloc::alloc(tycker, abst, kd)),
+            }
         }
         // | Type::Abst(_abst) => unreachable!(),
         | Type::Abs(ty) => {
@@ -457,7 +463,20 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         }
         | Type::Thk(ThkTy) => (env, Alloc::alloc(tycker, ThkTy, kd)),
         // primitive types are not allowed in monadic blocks
-        | Type::Int(_) | Type::Char(_) | Type::String(_) => unreachable!(),
+        | ty @ (Type::Int(_) | Type::Char(_) | Type::String(_)) => {
+            let def = {
+                if let Type::Int(_) = ty {
+                    tycker.prim.int.get().to_owned()
+                } else if let Type::Char(_) = ty {
+                    tycker.prim.char.get().to_owned()
+                } else if let Type::String(_) = ty {
+                    tycker.prim.string.get().to_owned()
+                } else {
+                    unreachable!()
+                }
+            };
+            tycker.err(TyckError::NotInlinable(def), std::panic::Location::caller())?
+        }
         | Type::Data(data) => {
             cs::Data(data, |_ctor, ty| cs::TypeLift { ty }).mbuild(tycker, env)?
         }
@@ -560,7 +579,7 @@ fn value_translation(
                     use zydeco_utils::arena::ArenaAccess;
                     // it should then be global and should be in the inlinables
                     let Some(value) = tycker.statics.inlinables.get(&def).cloned() else {
-                        tycker.err(TyckError::OutOfScope(def), std::panic::Location::caller())?
+                        tycker.err(TyckError::NotInlinable(def), std::panic::Location::caller())?
                     };
                     cs::TermLift { tm: value }.mbuild(tycker, env)?
                 }

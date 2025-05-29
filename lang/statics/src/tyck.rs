@@ -264,14 +264,6 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                             let out_ann = env.mk(term).tyck_k(tycker, Action::ana(os.into()))?;
                             let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
                             tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
-                            // // Debug: print
-                            // {
-                            //     use crate::fmt::*;
-                            //     println!(
-                            //         "{}",
-                            //         id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                            //     );
-                            // }
                             Ok(env)
                         })
                     }
@@ -294,6 +286,7 @@ impl SccDeclarations<'_> {
                 unreachable!()
             };
             let su::AliasBody { binder, bindee } = decl;
+            let surface_bindee = bindee;
             let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
                 | Some(bindee) => (bindee, true),
                 | None => (bindee, false),
@@ -327,10 +320,16 @@ impl SccDeclarations<'_> {
                         .statics
                         .decls
                         .insert(id.to_owned(), ss::TAliasBody { binder, bindee }.into());
-                    // should also be added to global
+                    // should also be added to global if it only depends on global definitions
                     match binder.try_destruct_def(tycker) {
                         | (Some(def), _) => {
-                            tycker.statics.global_defs.insert(def, ());
+                            // coctx defines what the bindee is using that is not local
+                            if (tycker.scoped.coctxs_term_local[&surface_bindee].clone())
+                                .into_iter()
+                                .all(|(id, ())| tycker.statics.global_defs.get(&id).is_some())
+                            {
+                                tycker.statics.global_defs.insert(def, ());
+                            }
                         }
                         | (None, _) => {}
                     }
@@ -439,13 +438,13 @@ impl SccDeclarations<'_> {
                     | _ => unreachable!(),
                 };
                 let binder = binder_map[id];
-                // however, it should be added to global
-                match binder.try_destruct_def(tycker) {
-                    | (Some(def), _) => {
-                        tycker.statics.global_defs.insert(def, ());
-                    }
-                    | (None, _) => {}
-                }
+                // should not be added to global because they are mutually recursive
+                // match binder.try_destruct_def(tycker) {
+                //     | (Some(def), _) => {
+                //         tycker.statics.global_defs.insert(def, ());
+                //     }
+                //     | (None, _) => {}
+                // }
                 // remove seal
                 let Some(bindee) = bindee.syntactically_sealed(tycker) else { unreachable!() };
                 let bindee = env.mk(bindee).tyck_k(tycker, Action::syn())?;

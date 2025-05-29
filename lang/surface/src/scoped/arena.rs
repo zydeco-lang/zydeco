@@ -30,7 +30,7 @@ pub struct ScopedArena {
     pub ctxs_term: ArenaAssoc<TermId, Context<()>>,
     /// variables that are introduced by the pattern
     pub ctxs_pat_local: ArenaAssoc<PatId, Context<()>>,
-    /// variables that are free within the pattern
+    /// variables that are free within the pattern (e.g. unbound type variable in annotations)
     pub coctxs_pat_local: ArenaAssoc<PatId, CoContext<()>>,
     /// variables that are free within the term
     pub coctxs_term_local: ArenaAssoc<TermId, CoContext<()>>,

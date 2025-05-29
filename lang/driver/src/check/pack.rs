@@ -244,6 +244,18 @@ impl PackageScoped {
         match tycker.run() {
             | Ok(()) => {}
             | Err(()) => {
+                // // Debug: print the declarations
+                // if cfg!(debug_assertions) {
+                //     use std::collections::BTreeMap;
+                //     println!(">>> [{}] declarations", name);
+                //     for (id, _decl) in
+                //         tycker.statics.decls.clone().into_iter().collect::<BTreeMap<_, _>>()
+                //     {
+                //         println!("{} {}", id.concise(), tycker.dump_statics(id));
+                //     }
+                //     println!("<<< [{}]", name);
+                // }
+
                 use std::collections::BTreeSet;
                 let mut bs = BTreeSet::new();
                 for err in tycker.errors.to_vec() {
