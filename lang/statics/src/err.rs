@@ -149,25 +149,25 @@ impl Tycker {
                     s += &format!("\t\t>> {}\n", truncated(self.dump_statics(lhs)));
                     s += &format!("\t\t>> {}\n", truncated(self.dump_statics(rhs)));
                 }
-                | TyckTask::Lift(term) => match term {
-                    | TermId::Kind(_) => unreachable!(),
-                    | TermId::Type(ty) => {
-                        s += "\t- when lifting type:\n";
-                        s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ty)));
-                    }
-                    | TermId::Value(value) => {
-                        s += "\t- when lifting value:\n";
-                        s += &format!("\t\t>> {}\n", truncated(self.dump_statics(value)));
-                    }
-                    | TermId::Compu(compu) => {
-                        s += "\t- when lifting computation:\n";
-                        s += &format!("\t\t>> {}\n", truncated(self.dump_statics(compu)));
-                    }
-                },
-                | TyckTask::Algebra(ty) => {
-                    s += &format!("\t- when performing algebra translation:\n");
-                    s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ty)));
-                }
+                // | TyckTask::Lift(term) => match term {
+                //     | TermId::Kind(_) => unreachable!(),
+                //     | TermId::Type(ty) => {
+                //         s += "\t- when lifting type:\n";
+                //         s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ty)));
+                //     }
+                //     | TermId::Value(value) => {
+                //         s += "\t- when lifting value:\n";
+                //         s += &format!("\t\t>> {}\n", truncated(self.dump_statics(value)));
+                //     }
+                //     | TermId::Compu(compu) => {
+                //         s += "\t- when lifting computation:\n";
+                //         s += &format!("\t\t>> {}\n", truncated(self.dump_statics(compu)));
+                //     }
+                // },
+                // | TyckTask::Algebra(ty) => {
+                //     s += &format!("\t- when performing algebra translation:\n");
+                //     s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ty)));
+                // }
             }
         }
         s += &format!("Error: {}\n", self.error_output(error));
