@@ -73,7 +73,11 @@ impl Tycker {
                     }
                     | None => "".to_string(),
                 };
-                format!("Cannot inline sealed abstract type: {}{}", self.dump_statics(abst), hint_msg)
+                format!(
+                    "Cannot inline sealed abstract type: {}{}",
+                    self.dump_statics(abst),
+                    hint_msg
+                )
             }
         }
     }
@@ -96,11 +100,11 @@ impl Tycker {
             match task {
                 | TyckTask::DeclHead(decl) => {
                     s += &format!("\t- when tycking external declaration ({}):\n", decl.span(self));
-                    s += &format!("\t\t{}\n", truncated(self.dump_statics(decl)));
+                    s += &format!("\t\t{}\n", truncated(self.dump_scoped(decl)));
                 }
                 | TyckTask::DeclUni(decl) => {
                     s += &format!("\t- when tycking single declaration ({}):\n", decl.span(self));
-                    s += &format!("\t\t{}\n", truncated(self.dump_statics(decl)));
+                    s += &format!("\t\t{}\n", truncated(self.dump_scoped(decl)));
                 }
                 | TyckTask::DeclScc(decls) => {
                     s += "\t- when tycking scc declarations:\n";
@@ -108,13 +112,13 @@ impl Tycker {
                         s += &format!(
                             "\t\t({})\n\t\t{}\n",
                             decl.span(self),
-                            truncated(self.dump_statics(decl))
+                            truncated(self.dump_scoped(decl))
                         );
                     }
                 }
                 | TyckTask::Exec(exec) => {
                     s += &format!("\t- when tycking execution ({}):\n", exec.span(self));
-                    s += &format!("\t\t{}\n", truncated(self.dump_statics(exec)));
+                    s += &format!("\t\t{}\n", truncated(self.dump_scoped(exec)));
                 }
                 | TyckTask::Pat(pat, switch) => {
                     s += &format!("\t- when tycking pattern ({}):\n", pat.span(self));
@@ -161,12 +165,8 @@ impl Tycker {
                     }
                 },
                 | TyckTask::Algebra(ty) => {
-                    use crate::fmt::*;
-                    s += &format!("\t- when generating algebra:\n");
-                    s += &format!(
-                        "\t\t>> {}\n",
-                        truncated(ty.ugly(&Formatter::new(&self.scoped, &self.statics)))
-                    );
+                    s += &format!("\t- when performing algebra translation:\n");
+                    s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ty)));
                 }
             }
         }

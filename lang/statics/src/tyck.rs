@@ -241,7 +241,7 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                     | Decl::AliasBody(_) => {
                         let uni = tycker.scoped.unis.get(id).is_some();
                         if uni {
-                            SccDeclarations::tyck_uni_ref(id, tycker, env)
+                            env.mk(id.to_owned()).tyck_k(tycker, ())
                         } else {
                             SccDeclarations::tyck_scc_refs([id].into_iter(), tycker, env)
                         }
@@ -274,127 +274,121 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
     }
 }
 
-impl SccDeclarations<'_> {
-    fn tyck_uni_ref(
-        id: &su::DeclId, tycker: &mut Tycker, mut env: TyEnvT<()>,
-    ) -> ResultKont<TyEnvT<()>> {
+/// Type check a single declaration (uni ref)
+impl Tyck for TyEnvT<su::DeclId> {
+    type Out = TyEnvT<()>;
+    type Action = ();
+    fn tyck_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
-            tycker.stack.push_back(TyckTask::DeclUni(id.to_owned()));
-
-            let su::Declaration::AliasBody(decl) = tycker.scoped.decls[id].clone() else {
-                unreachable!()
-            };
-            let su::AliasBody { binder, bindee } = decl;
-            let surface_bindee = bindee;
-            let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
-                | Some(bindee) => (bindee, true),
-                | None => (bindee, false),
-            };
-            // synthesize the bindee
-            let out_ann = env.mk(bindee).tyck_k(tycker, Action::syn())?;
-            let env = match out_ann {
-                | TermAnnId::Hole(_) | TermAnnId::Kind(_) => unreachable!(),
-                | TermAnnId::Type(ty, kd) => {
-                    let bindee = ty;
-                    let binder = env.mk(binder).tyck_k(tycker, Action::ana(kd.into()))?;
-                    let (binder, _kd) = binder.as_type();
-
-                    // seal the type if needed
-                    let bindee = if is_sealed {
-                        let abst = tycker.statics.absts.alloc(());
-                        if let (Some(def), _kd) = binder.try_destruct_def(tycker) {
-                            tycker.statics.abst_hints.insert(abst, def);
-                        }
-                        tycker.statics.seals.insert(abst, ty);
-                        Alloc::alloc(tycker, abst, kd)
-                    } else {
-                        bindee
-                    };
-
-                    // add the type into the environment
-                    let TyEnvT { env: new_env, inner: () } =
-                        env.mk(Assign(binder, bindee)).tyck_k(tycker, ())?;
-                    env.env = new_env;
-                    tycker
-                        .statics
-                        .decls
-                        .insert(id.to_owned(), ss::TAliasBody { binder, bindee }.into());
-                    // should also be added to global if it only depends on global definitions
-                    match binder.try_destruct_def(tycker) {
-                        | (Some(def), _) => {
-                            // coctx defines what the bindee is using that is not local
-                            if (tycker.scoped.coctxs_term_local[&surface_bindee].clone())
-                                .into_iter()
-                                .all(|(id, ())| tycker.statics.global_defs.get(&id).is_some())
-                            {
-                                tycker.statics.global_defs.insert(def, ());
-                            }
-                        }
-                        | (None, _) => {}
-                    }
-                    env
-                }
-                | TermAnnId::Value(bindee, ty) => {
-                    let binder = env.mk(binder).tyck_k(tycker, Action::ana(ty.into()))?;
-                    let (binder, _) = binder.as_value();
-                    // since it's not a type, don't add the type into the environment
-                    tycker
-                        .statics
-                        .decls
-                        .insert(id.to_owned(), ss::VAliasBody { binder, bindee }.into());
-                    // however, it should be added to global
-                    // Fixme: only if it's well-typed under global type environment
-                    match binder.try_destruct_def(tycker) {
-                        | (Some(def), _) => {
-                            tycker.statics.global_defs.insert(def, ());
-                            // consider adding it to the inlinables as well
-                            tycker.statics.inlinables.insert(def, bindee);
-                        }
-                        | (None, _) => {}
-                    }
-                    env
-                }
-                | TermAnnId::Compu(_, _) => {
-                    tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                }
-            };
-
-            // // Debug: print
-            // {
-            //     use crate::fmt::*;
-            //     println!("{}", id.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)));
-            // }
-            Ok(env)
+            tycker.stack.push_back(TyckTask::DeclUni(self.inner.to_owned()));
+            self.tyck_inner_k(tycker, action)
         })
     }
+    fn tyck_inner_k(&self, tycker: &mut Tycker, (): Self::Action) -> ResultKont<TyEnvT<()>> {
+        let id = self.inner;
+        let mut env = self.mk(());
+
+        let su::Declaration::AliasBody(decl) = tycker.scoped.decls[&id].clone() else {
+            unreachable!()
+        };
+        let su::AliasBody { binder, bindee } = decl;
+        let surface_bindee = bindee;
+        let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
+            | Some(bindee) => (bindee, true),
+            | None => (bindee, false),
+        };
+        // synthesize the bindee
+        let out_ann = env.mk(bindee).tyck_k(tycker, Action::syn())?;
+        let env = match out_ann {
+            | TermAnnId::Hole(_) | TermAnnId::Kind(_) => unreachable!(),
+            | TermAnnId::Type(ty, kd) => {
+                let bindee = ty;
+                let binder = env.mk(binder).tyck_k(tycker, Action::ana(kd.into()))?;
+                let (binder, _kd) = binder.as_type();
+
+                // seal the type if needed
+                let bindee = if is_sealed {
+                    let abst = tycker.statics.absts.alloc(());
+                    if let (Some(def), _kd) = binder.try_destruct_def(tycker) {
+                        tycker.statics.abst_hints.insert(abst, def);
+                    }
+                    tycker.statics.seals.insert(abst, ty);
+                    Alloc::alloc(tycker, abst, kd)
+                } else {
+                    bindee
+                };
+
+                // add the type into the environment
+                let TyEnvT { env: new_env, inner: () } =
+                    env.mk(Assign(binder, bindee)).tyck_k(tycker, ())?;
+                env.env = new_env;
+                tycker
+                    .statics
+                    .decls
+                    .insert(id.to_owned(), ss::TAliasBody { binder, bindee }.into());
+                // should also be added to global if it only depends on global definitions
+                match binder.try_destruct_def(tycker) {
+                    | (Some(def), _) => {
+                        // coctx defines what the bindee is using that is not local
+                        if (tycker.scoped.coctxs_term_local[&surface_bindee].clone())
+                            .into_iter()
+                            .all(|(id, ())| tycker.statics.global_defs.get(&id).is_some())
+                        {
+                            tycker.statics.global_defs.insert(def, ());
+                        }
+                    }
+                    | (None, _) => {}
+                }
+                env
+            }
+            | TermAnnId::Value(bindee, ty) => {
+                let binder = env.mk(binder).tyck_k(tycker, Action::ana(ty.into()))?;
+                let (binder, _) = binder.as_value();
+                // since it's not a type, don't add the type into the environment
+                tycker
+                    .statics
+                    .decls
+                    .insert(id.to_owned(), ss::VAliasBody { binder, bindee }.into());
+                // should also be added to global if it only depends on global definitions
+                match binder.try_destruct_def(tycker) {
+                    | (Some(def), _) => {
+                        // coctx defines what the bindee is using that is not local
+                        if (tycker.scoped.coctxs_term_local[&surface_bindee].clone())
+                            .into_iter()
+                            .all(|(id, ())| tycker.statics.global_defs.get(&id).is_some())
+                        {
+                            tycker.statics.global_defs.insert(def, ());
+                        }
+                    }
+                    | (None, _) => {}
+                }
+                env
+            }
+            | TermAnnId::Compu(_, _) => {
+                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+            }
+        };
+
+        // // Debug: print
+        // {
+        //     println!("{}", tycker.dump_statics(id));
+        // }
+        Ok(env)
+    }
+}
+
+impl SccDeclarations<'_> {
     fn tyck_scc_refs<'f>(
         decls: impl Iterator<Item = &'f su::DeclId>, tycker: &mut Tycker, mut env: TyEnvT<()>,
     ) -> ResultKont<TyEnvT<()>> {
         let decls = decls.collect::<Vec<_>>();
 
         tycker.guarded(|tycker| {
-            use std::collections::HashMap;
-
             // administrative
             tycker.stack.push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
-            // // Debug: log
-            // {
-            //     let info = decls
-            //         .iter()
-            //         .map(|id| {
-            //             use zydeco_surface::scoped::fmt::*;
-            //             use zydeco_syntax::*;
-            //             format!(
-            //                 "({})\n\t\t{}...",
-            //                 id.span(tycker),
-            //                 &id.ugly(&Formatter::new(&tycker.scoped))[..30]
-            //             )
-            //         })
-            //         .collect::<Vec<_>>()
-            //         .join("\n\t");
-            //     log::info!("Tycking SCC:\n\t{}", info);
-            // }
+            
+            use std::collections::HashMap;
 
             let mut binder_map = HashMap::new();
             let mut abst_map = HashMap::new();
