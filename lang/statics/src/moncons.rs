@@ -391,7 +391,7 @@ where
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Data(data, f) = self;
-        let arms = tycker.statics.datas.defs[&data].clone();
+        let arms = tycker.statics.datas[&data].clone();
         let arms_ = arms
             .into_iter()
             .map(|(ctor, ty)| {
@@ -399,8 +399,7 @@ where
                 Ok((ctor, ty_))
             })
             .collect::<Result<im::Vector<_>>>()?;
-        let data_ = Data::new(arms_.iter().cloned());
-        let data = tycker.lookup_or_alloc_data(arms_, data_);
+        let data = tycker.statics.datas.alloc(Data::new(arms_));
         let (env, kd) = VType.mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, data, kd)))
     }
@@ -465,7 +464,7 @@ impl MonConstruct<TypeId> for OSTy {
 impl MonConstruct<TypeId> for cs::TopTy {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let ctype = CType.build(tycker, &env.ty);
-        let coda = tycker.lookup_or_alloc_codata(im::Vector::new(), CoData::new([]));
+        let coda = tycker.statics.codatas.alloc(CoData::new([]));
         Ok((env, Alloc::alloc(tycker, coda, ctype)))
     }
 }
@@ -476,7 +475,7 @@ where
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::CoData(coda, f) = self;
-        let arms = tycker.statics.codatas.defs[&coda].clone();
+        let arms = tycker.statics.codatas[&coda].clone();
         let arms_ = arms
             .into_iter()
             .map(|(dtor, ty)| {
@@ -484,8 +483,7 @@ where
                 Ok((dtor, ty_))
             })
             .collect::<Result<im::Vector<_>>>()?;
-        let coda_ = CoData::new(arms_.iter().cloned());
-        let coda = tycker.lookup_or_alloc_codata(arms_, coda_);
+        let coda = tycker.statics.codatas.alloc(CoData::new(arms_));
         let (env, kd) = CType.mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, coda, kd)))
     }
@@ -985,7 +983,7 @@ where
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let cs::Match(data, scrut, arm) = self;
         let (env, scrut) = scrut.mbuild(tycker, env)?;
-        let data = tycker.statics.datas.defs[&data].to_owned();
+        let data = tycker.statics.datas[&data].to_owned();
         let mut ty_ = None;
         let arms = (data.into_iter())
             .map(|(ctor, ty)| {
@@ -1010,7 +1008,7 @@ where
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let cs::CoMatch(coda_id, arm) = self;
-        let coda = tycker.statics.codatas.defs[&coda_id].to_owned();
+        let coda = tycker.statics.codatas[&coda_id].to_owned();
         let arms = (coda.into_iter())
             .map(|(dtor, ty)| {
                 let (_, tail) = (arm.clone())(dtor.clone(), ty).mbuild(tycker, env.clone())?;
@@ -1034,8 +1032,7 @@ where
         let (env, head) = head.mbuild(tycker, env)?;
         let head_ty = tycker.statics.annotations_compu[&head];
         let Some(coda) = head_ty.destruct_codata(&env.ty, tycker) else { unreachable!() };
-        use std::collections::HashMap;
-        let Some(ty) = coda.into_iter().cloned().collect::<HashMap<_, _>>().get(&dtor).cloned()
+        let Some(ty) = coda.get(&dtor)
         else {
             unreachable!()
         };

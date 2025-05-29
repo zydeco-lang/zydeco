@@ -194,7 +194,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for DataId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         s += &format!("data");
-        for (ctor, ty) in f.statics.datas.defs[self].iter() {
+        for (ctor, ty) in f.statics.datas[self].iter() {
             s += &format!(" | {} : {}", ctor.ugly(f), ty.ugly(f));
         }
         s += &format!(" end");
@@ -206,7 +206,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for CoDataId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         s += &format!("codata");
-        for (dtor, ty) in f.statics.codatas.defs[self].iter() {
+        for (dtor, ty) in f.statics.codatas[self].iter() {
             s += &format!(" | {} : {}", dtor.ugly(f), ty.ugly(f));
         }
         s += &format!(" end");

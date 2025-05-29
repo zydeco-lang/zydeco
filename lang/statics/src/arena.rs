@@ -44,54 +44,6 @@ use zydeco_utils::arena::*;
 //     }
 // }
 
-/// Some random equality-based arena that is very inefficient.
-#[derive(Clone, Debug)]
-pub struct ArenaEquiv<Id, Definition, Query>
-where
-    Id: IndexLike<Meta = usize>,
-{
-    /// arena for definitions
-    pub defs: ArenaDense<Id, Definition>,
-    /// arena for query hashmap
-    pub tbls: ArenaAssoc<Id, Query>,
-}
-impl<Id, Definition, Query> ArenaEquiv<Id, Definition, Query>
-where
-    Id: IndexLike<Meta = usize>,
-    Query: Clone + crate::Lub,
-{
-    pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
-        Self { defs: ArenaDense::new(alloc.alloc()), tbls: ArenaAssoc::new() }
-    }
-    pub fn lookup_or_alloc(&mut self, def: Definition, query: Query, _tycker: &mut Tycker) -> Id {
-        // Fixme: brings subtle bug regarding holes
-        // // traverse the tbls, and find the first id that has the same query
-        // for (id, q) in self.tbls.iter() {
-        //     if let Ok(_) = crate::Lub::lub(query.to_owned(), q.to_owned(), tycker) {
-        //         return *id;
-        //     }
-        // }
-        // if not found, allocate a new id
-        let id = self.defs.alloc(def);
-        self.tbls.insert(id, query);
-        id
-    }
-}
-
-impl Tycker {
-    pub fn lookup_or_alloc_data(&mut self, def: im::Vector<(CtorName, TypeId)>, query: Data) -> DataId {
-        let mut datas = self.statics.datas.to_owned();
-        let id = datas.lookup_or_alloc(def, query, self);
-        self.statics.datas = datas;
-        id
-    }
-    pub fn lookup_or_alloc_codata(&mut self, def: im::Vector<(DtorName, TypeId)>, query: CoData) -> CoDataId {
-        let mut codatas = self.statics.codatas.to_owned();
-        let id = codatas.lookup_or_alloc(def, query, self);
-        self.statics.codatas = codatas;
-        id
-    }
-}
 
 /// Item projectors out of the statics arena.
 #[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
@@ -135,9 +87,9 @@ pub struct StaticsArena {
     /// which holes are introduced by the user and should be reported
     pub fill_hints: ArenaAssoc<FillId, ()>,
     /// arena for `data`; plural plural
-    pub datas: ArenaEquiv<DataId, im::Vector<(CtorName, TypeId)>, Data>,
+    pub datas: ArenaDense<DataId, Data>,
     /// arena for `codata`; plural plural
-    pub codatas: ArenaEquiv<CoDataId, im::Vector<(DtorName, TypeId)>, CoData>,
+    pub codatas: ArenaDense<CoDataId, CoData>,
     // /// arena for inlinable definitions
     // pub inlinables: ArenaAssoc<DefId, ValueId>,
     /// definitions that are marked global
@@ -182,8 +134,8 @@ impl StaticsArena {
             fills: ArenaDense::new(alloc.alloc()),
             solus: ArenaAssoc::new(),
             fill_hints: ArenaAssoc::new(),
-            datas: ArenaEquiv::new_arc(alloc.clone()),
-            codatas: ArenaEquiv::new_arc(alloc),
+            datas: ArenaDense::new(alloc.alloc()),
+            codatas: ArenaDense::new(alloc.alloc()),
             // inlinables: ArenaAssoc::new(),
             global_defs: ArenaAssoc::new(),
             global_terms: ArenaAssoc::new(),

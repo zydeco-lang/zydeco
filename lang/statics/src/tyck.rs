@@ -579,7 +579,14 @@ impl Tyck for TyEnvT<su::PatId> {
                         )?
                     };
                     let su::Ctor(ctor, args) = pat;
-                    let arm_ty = match tycker.statics.datas.tbls[data_id].get(&ctor) {
+                    use std::collections::HashMap;
+                    let arm_ty = match tycker.statics.datas[data_id]
+                        .clone()
+                        .into_iter()
+                        .collect::<HashMap<_, _>>()
+                        .get(&ctor)
+                        .cloned()
+                    {
                         | Some(ty) => ty,
                         | None => tycker.err_k(
                             TyckError::MissingDataArm(ctor.clone()),
@@ -1907,8 +1914,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     };
                     arms_vec.push_back((name, ty));
                 }
-                let data = ss::Data::new(arms_vec.iter().cloned());
-                let id = tycker.lookup_or_alloc_data(arms_vec, data);
+                let id = tycker.statics.datas.alloc(ss::Data::new(arms_vec));
                 let data = Alloc::alloc(tycker, id, vtype);
                 TermAnnId::Type(data, vtype)
             }
@@ -1932,8 +1938,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     };
                     arms_vec.push_back((name, ty));
                 }
-                let codata = ss::CoData::new(arms_vec.iter().cloned());
-                let id = tycker.lookup_or_alloc_codata(arms_vec, codata);
+                let id = tycker.statics.codatas.alloc(ss::CoData::new(arms_vec));
                 let codata = Alloc::alloc(tycker, id, ctype);
                 TermAnnId::Type(codata, ctype)
             }
@@ -1957,7 +1962,7 @@ impl Tyck for TyEnvT<su::TermId> {
                         std::panic::Location::caller(),
                     )?
                 };
-                let arg_ty = match tycker.statics.datas.tbls[data_id].get(&ctor) {
+                let arg_ty = match tycker.statics.datas[&data_id].get(&ctor) {
                     | Some(ty) => ty.to_owned(),
                     | None => tycker.err_k(
                         TyckError::MissingDataArm(ctor.clone()),
@@ -2062,8 +2067,6 @@ impl Tyck for TyEnvT<su::TermId> {
                 }
             }
             | Tm::CoMatch(term) => {
-                use std::collections::HashMap;
-
                 let su::CoMatch { arms: comatchers } = term;
                 let ana_ty = match switch {
                     | Switch::Syn => tycker
@@ -2085,8 +2088,11 @@ impl Tyck for TyEnvT<su::TermId> {
                         std::panic::Location::caller(),
                     )?
                 };
-                let mut arms: HashMap<_, _> =
-                    tycker.statics.codatas.defs[codata_id].clone().into_iter().collect();
+                use std::collections::HashMap;
+                let mut arms = tycker.statics.codatas[codata_id]
+                    .clone()
+                    .into_iter()
+                    .collect::<HashMap<_, _>>();
                 let mut comatchers_new = Vec::new();
                 for su::CoMatcher { dtor, tail } in comatchers {
                     let arm_ty = match arms.remove(&dtor) {
@@ -2127,7 +2133,7 @@ impl Tyck for TyEnvT<su::TermId> {
                         std::panic::Location::caller(),
                     )?
                 };
-                let whole_ty = match tycker.statics.codatas.tbls[codata_id].get(&dtor) {
+                let whole_ty = match tycker.statics.codatas[codata_id].get(&dtor) {
                     | Some(ty) => ty.to_owned(),
                     | None => tycker.err_k(
                         TyckError::MissingCoDataArm(dtor.clone()),

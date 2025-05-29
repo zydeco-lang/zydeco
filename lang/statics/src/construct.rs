@@ -512,7 +512,7 @@ where
 {
     fn build(self, tycker: &mut Tycker, env: &TyEnv) -> TypeId {
         let cs::Data(data, f) = self;
-        let arms = tycker.statics.datas.defs[&data].clone();
+        let arms = tycker.statics.datas[&data].clone();
         let arms_ = arms
             .into_iter()
             .map(|(ctor, ty)| {
@@ -520,8 +520,7 @@ where
                 (ctor, ty_)
             })
             .collect::<im::Vector<_>>();
-        let data_ = Data::new(arms_.iter().cloned());
-        let data = tycker.lookup_or_alloc_data(arms_, data_);
+        let data = tycker.statics.datas.alloc(Data::new(arms_));
         let kd = VType.build(tycker, env);
         Alloc::alloc(tycker, data, kd)
     }
@@ -586,7 +585,7 @@ impl Construct<TypeId> for OSTy {
 impl Construct<TypeId> for cs::TopTy {
     fn build(self, tycker: &mut Tycker, env: &TyEnv) -> TypeId {
         let ctype = CType.build(tycker, &env);
-        let coda = tycker.lookup_or_alloc_codata(im::Vector::new(), CoData::new([]));
+        let coda = tycker.statics.codatas.alloc(CoData::new([]));
         Alloc::alloc(tycker, coda, ctype)
     }
 }
@@ -597,7 +596,7 @@ where
 {
     fn build(self, tycker: &mut Tycker, env: &TyEnv) -> TypeId {
         let cs::CoData(coda, f) = self;
-        let arms = tycker.statics.codatas.defs[&coda].clone();
+        let arms = tycker.statics.codatas[&coda].clone();
         let arms_ = arms
             .into_iter()
             .map(|(dtor, ty)| {
@@ -605,8 +604,7 @@ where
                 (dtor, ty_)
             })
             .collect::<im::Vector<_>>();
-        let coda_ = CoData::new(arms_.iter().cloned());
-        let coda = tycker.lookup_or_alloc_codata(arms_, coda_);
+        let coda = tycker.statics.codatas.alloc(CoData::new(arms_));
         let kd = CType.build(tycker, env);
         Alloc::alloc(tycker, coda, kd)
     }

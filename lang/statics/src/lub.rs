@@ -317,9 +317,9 @@ impl Debruijn {
                 | (Type::Data(lhs), Type::Data(rhs)) => {
                     use std::collections::HashMap;
                     let lhs_query =
-                        tycker.statics.datas.defs[&lhs].iter().cloned().collect::<HashMap<_, _>>();
+                        tycker.statics.datas[&lhs].clone().into_iter().collect::<HashMap<_, _>>();
                     let rhs_query =
-                        tycker.statics.datas.defs[&rhs].iter().cloned().collect::<HashMap<_, _>>();
+                        tycker.statics.datas[&rhs].clone().into_iter().collect::<HashMap<_, _>>();
                     if lhs_query.len() != rhs_query.len() {
                         tycker.err(
                             TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
@@ -354,9 +354,9 @@ impl Debruijn {
                 | (Type::CoData(lhs), Type::CoData(rhs)) => {
                     use std::collections::HashMap;
                     let lhs_query =
-                        tycker.statics.codatas.defs[&lhs].iter().cloned().collect::<HashMap<_, _>>();
+                        tycker.statics.codatas[&lhs].clone().into_iter().collect::<HashMap<_, _>>();
                     let rhs_query =
-                        tycker.statics.codatas.defs[&rhs].iter().cloned().collect::<HashMap<_, _>>();
+                        tycker.statics.codatas[&rhs].clone().into_iter().collect::<HashMap<_, _>>();
                     if lhs_query.len() != rhs_query.len() {
                         tycker.err(
                             TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },

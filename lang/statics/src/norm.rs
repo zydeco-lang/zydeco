@@ -100,7 +100,7 @@ impl TypeId {
                     //     }
                     //     println!("{}", "-".repeat(20));
                     // }
-                    let arms = tycker.statics.datas.defs[&id].clone();
+                    let arms = tycker.statics.datas[&id].clone();
                     // // Debug: print
                     // {
                     //     for (ctor, ty) in arms.iter() {
@@ -125,7 +125,6 @@ impl TypeId {
                     //     *self
                     // } else
                     {
-                        let data_ = Data::new(arms_.iter().cloned());
                         // // Debug: print
                         // {
                         //     for (ctor, ty_) in arms_.iter() {
@@ -137,7 +136,7 @@ impl TypeId {
                         //         );
                         //     }
                         // }
-                        let id_ = tycker.lookup_or_alloc_data(arms_, data_);
+                        let id_ = tycker.statics.datas.alloc(Data::new(arms_));
                         // // Debug: print
                         // {
                         //     println!("{}", "-".repeat(20));
@@ -148,7 +147,7 @@ impl TypeId {
                     }
                 }
                 | Type::CoData(id) => {
-                    let arms = tycker.statics.codatas.defs[&id].clone();
+                    let arms = tycker.statics.codatas[&id].clone();
                     // let mut unchanged = true;
                     let arms_ = arms
                         .into_iter()
@@ -167,8 +166,7 @@ impl TypeId {
                     //     *self
                     // } else
                     {
-                        let codata_ = CoData::new(arms_.iter().cloned());
-                        let id_ = tycker.lookup_or_alloc_codata(arms_, codata_);
+                        let id_ = tycker.statics.codatas.alloc(CoData::new(arms_));
                         Alloc::alloc(tycker, id_, kd)
                     }
                 }
@@ -258,7 +256,7 @@ impl TypeId {
                     if ty == ty_ { *self } else { Alloc::alloc(tycker, Exists(tpat, ty_), kd) }
                 }
                 | Type::Data(id) => {
-                    let arms = tycker.statics.datas.defs[&id].clone();
+                    let arms = tycker.statics.datas[&id].clone();
                     let mut unchanged = true;
                     let arms_ = arms
                         .into_iter()
@@ -275,13 +273,12 @@ impl TypeId {
                     if unchanged {
                         *self
                     } else {
-                        let data_ = Data::new(arms_.iter().cloned());
-                        let id_ = tycker.lookup_or_alloc_data(arms_, data_);
+                        let id_ = tycker.statics.datas.alloc(Data::new(arms_));
                         Alloc::alloc(tycker, id_, kd)
                     }
                 }
                 | Type::CoData(id) => {
-                    let arms = tycker.statics.codatas.defs[&id].clone();
+                    let arms = tycker.statics.codatas[&id].clone();
                     let mut unchanged = true;
                     let arms_ = arms
                         .into_iter()
@@ -298,8 +295,7 @@ impl TypeId {
                     if unchanged {
                         *self
                     } else {
-                        let codata_ = CoData::new(arms_.iter().cloned());
-                        let id_ = tycker.lookup_or_alloc_codata(arms_, codata_);
+                        let id_ = tycker.statics.codatas.alloc(CoData::new(arms_));
                         Alloc::alloc(tycker, id_, kd)
                     }
                 }
@@ -593,7 +589,7 @@ impl TypeId {
                     }
                 }
                 | Type::Data(data) => {
-                    let arms = tycker.statics.datas.defs[&data].clone();
+                    let arms = tycker.statics.datas[&data].clone();
                     let mut unchanged = true;
                     let arms_ = arms
                         .into_iter()
@@ -611,13 +607,12 @@ impl TypeId {
                     if unchanged {
                         res
                     } else {
-                        let data_ = Data::new(arms_.iter().cloned());
-                        let data = tycker.lookup_or_alloc_data(arms_, data_);
+                        let data = tycker.statics.datas.alloc(Data::new(arms_));
                         Alloc::alloc(tycker, data, tycker.statics.annotations_type[&res])
                     }
                 }
                 | Type::CoData(codata) => {
-                    let arms = tycker.statics.codatas.defs[&codata].clone();
+                    let arms = tycker.statics.codatas[&codata].clone();
                     let mut unchanged = true;
                     let arms_ = arms
                         .into_iter()
@@ -635,8 +630,7 @@ impl TypeId {
                     if unchanged {
                         res
                     } else {
-                        let codata_ = CoData::new(arms_.iter().cloned());
-                        let codata = tycker.lookup_or_alloc_codata(arms_, codata_);
+                        let codata = tycker.statics.codatas.alloc(CoData::new(arms_));
                         Alloc::alloc(tycker, codata, tycker.statics.annotations_type[&res])
                     }
                 }

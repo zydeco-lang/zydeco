@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 pub use super::arena::*;
 pub use super::env::*;
 pub use zydeco_syntax::*;
@@ -302,76 +300,46 @@ pub struct Forall(pub AbstId, pub TypeId);
 pub struct Exists(pub AbstId, pub TypeId);
 
 /// data | C_1 ty | ... end
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug)]
 pub struct Data {
-    pub(crate) arms: BTreeMap<CtorName, TypeId>,
+    arms: im::Vector<(CtorName, TypeId)>,
 }
 
 /// `codata | .d_1 cp : ty | ... end`
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug)]
 pub struct CoData {
-    pub(crate) arms: BTreeMap<DtorName, TypeId>,
+    arms: im::Vector<(DtorName, TypeId)>,
 }
 
 mod impls_structs {
     use super::*;
-    use crate::*;
 
     impl Data {
-        pub fn new(arms: impl Iterator<Item = (CtorName, TypeId)>) -> Self {
-            Self { arms: arms.collect() }
+        pub fn new(arms: impl IntoIterator<Item = (CtorName, TypeId)>) -> Self {
+            Self { arms: arms.into_iter().collect() }
         }
-        pub fn get(&self, ctor: &CtorName) -> Option<&TypeId> {
-            self.arms.get(ctor)
+        pub fn get(&self, ctor: &CtorName) -> Option<TypeId> {
+            use std::collections::HashMap;
+            self.arms.iter().cloned().collect::<HashMap<_, _>>().get(ctor).cloned()
         }
-        pub fn iter(&self) -> impl Iterator<Item = (&CtorName, &TypeId)> {
+        pub fn iter(&self) -> impl Iterator<Item = &(CtorName, TypeId)> {
             self.into_iter()
         }
     }
 
     impl IntoIterator for Data {
         type Item = (CtorName, TypeId);
-        type IntoIter = std::collections::btree_map::IntoIter<CtorName, TypeId>;
+        type IntoIter = im::vector::ConsumingIter<(CtorName, TypeId)>;
         fn into_iter(self) -> Self::IntoIter {
             self.arms.into_iter()
         }
     }
 
     impl<'a> IntoIterator for &'a Data {
-        type Item = (&'a CtorName, &'a TypeId);
-        type IntoIter = std::collections::btree_map::Iter<'a, CtorName, TypeId>;
+        type Item = &'a (CtorName, TypeId);
+        type IntoIter = im::vector::Iter<'a, (CtorName, TypeId)>;
         fn into_iter(self) -> Self::IntoIter {
             self.arms.iter()
-        }
-    }
-
-    impl Lub for Data {
-        type Out = Data;
-
-        fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
-            let Data { arms: mut lhs } = self;
-            let Data { arms: mut rhs } = other;
-            if lhs.len() != rhs.len() {
-                tycker.err(
-                    TyckError::Expressivity("data type equality"),
-                    std::panic::Location::caller(),
-                )?
-            }
-            let mut arms = BTreeMap::new();
-            while let (Some((lhs_ctor, lhs_ty)), Some((rhs_ctor, rhs_ty))) =
-                (lhs.pop_first(), rhs.pop_first())
-            {
-                if lhs_ctor != rhs_ctor {
-                    tycker.err(
-                        TyckError::Expressivity("data type equality"),
-                        std::panic::Location::caller(),
-                    )?
-                }
-                let lhs_ty = Lub::lub(lhs_ty, rhs_ty, tycker)?;
-                arms.insert(lhs_ctor, lhs_ty);
-            }
-            let res = Data { arms };
-            Ok(res)
         }
     }
 
@@ -379,57 +347,28 @@ mod impls_structs {
         pub fn new(arms: impl IntoIterator<Item = (DtorName, TypeId)>) -> Self {
             Self { arms: arms.into_iter().collect() }
         }
-        pub fn get(&self, dtor: &DtorName) -> Option<&TypeId> {
-            self.arms.get(dtor)
+        pub fn get(&self, dtor: &DtorName) -> Option<TypeId> {
+            use std::collections::HashMap;
+            self.arms.iter().cloned().collect::<HashMap<_, _>>().get(dtor).cloned()
         }
-        pub fn iter(&self) -> impl Iterator<Item = (&DtorName, &TypeId)> {
+        pub fn iter(&self) -> impl Iterator<Item = &(DtorName, TypeId)> {
             self.into_iter()
         }
     }
 
     impl IntoIterator for CoData {
         type Item = (DtorName, TypeId);
-        type IntoIter = std::collections::btree_map::IntoIter<DtorName, TypeId>;
+        type IntoIter = im::vector::ConsumingIter<(DtorName, TypeId)>;
         fn into_iter(self) -> Self::IntoIter {
             self.arms.into_iter()
         }
     }
 
     impl<'a> IntoIterator for &'a CoData {
-        type Item = (&'a DtorName, &'a TypeId);
-        type IntoIter = std::collections::btree_map::Iter<'a, DtorName, TypeId>;
+        type Item = &'a (DtorName, TypeId);
+        type IntoIter = im::vector::Iter<'a, (DtorName, TypeId)>;
         fn into_iter(self) -> Self::IntoIter {
             self.arms.iter()
-        }
-    }
-
-    impl Lub for CoData {
-        type Out = CoData;
-
-        fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
-            let CoData { arms: mut lhs } = self;
-            let CoData { arms: mut rhs } = other;
-            if lhs.len() != rhs.len() {
-                tycker.err(
-                    TyckError::Expressivity("data type equality"),
-                    std::panic::Location::caller(),
-                )?
-            }
-            let mut arms = BTreeMap::new();
-            while let (Some((lhs_dtor, lhs_ty)), Some((rhs_dtor, rhs_ty))) =
-                (lhs.pop_first(), rhs.pop_first())
-            {
-                if lhs_dtor != rhs_dtor {
-                    tycker.err(
-                        TyckError::Expressivity("data type equality"),
-                        std::panic::Location::caller(),
-                    )?
-                }
-                let lhs_ty = Lub::lub(lhs_ty, rhs_ty, tycker)?;
-                arms.insert(lhs_dtor, lhs_ty);
-            }
-            let res = CoData { arms };
-            Ok(res)
         }
     }
 }
