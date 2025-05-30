@@ -153,7 +153,7 @@ pub mod syntax {
     /// `match_ty <t> | <f> ... end`
     ///
     /// `Ty` here should be DataId
-    pub struct Match<Ty, T, F>(pub Ty, pub T, pub F);
+    pub struct Match<T, F>(pub T, pub F);
     /// `comatch_ty | <f> ... end`
     ///
     /// `Ty` here should be CoDataId

@@ -765,8 +765,11 @@ fn computation_translation(
             PureBind { binder: binder_, bindee: bindee_, tail: move |_| cs::TermLift { tm: tail } }
                 .mbuild(tycker, env)?
         }
-        | Compu::Match(_) => {
-            // let Match { scrut, arms } = compu;
+        | Compu::Match(compu) => {
+            let Match { scrut, arms } = compu;
+            let scrut_ = cs::TermLift { tm: scrut };
+            let _ = arms;
+            let _ = scrut_;
             todo!()
         }
         | Compu::CoMatch(compu) => {

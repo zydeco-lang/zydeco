@@ -919,16 +919,17 @@ where
     }
 }
 // match
-impl<T, F, R> MonConstruct<CompuId> for cs::Match<DataId, T, F>
+impl<T, F, R> MonConstruct<CompuId> for cs::Match<T, F>
 where
     T: MonConstruct<ValueId>,
     F: Clone + FnOnce(CtorName, DefId, TypeId) -> R,
     R: MonConstruct<CompuId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-        let cs::Match(data, scrut, arm) = self;
+        let cs::Match(scrut, arm) = self;
         let (env, scrut) = scrut.mbuild(tycker, env)?;
-        let data = tycker.statics.datas[&data].to_owned();
+        let scrut_ty = tycker.statics.annotations_value[&scrut];
+        let Some(data) = scrut_ty.destruct_data(&env.ty, tycker).cloned() else { unreachable!() };
         let mut ty_ = None;
         let arms = (data.into_iter())
             .map(|(ctor, ty)| {
