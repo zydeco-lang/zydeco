@@ -79,7 +79,7 @@ def ! koption_t_trans : MonadTrans' KOptionT =
   | .lift -> fn M A mo m -> // m : U(M A)
     comatch
     | .run -> fn R bAlg kS kE -> // kS : U(A -> R), bAlg : Algebra M B
-      ! bAlg .bindA (A) m kS
+      ! bAlg A m kS
     end
   end
 end
@@ -94,7 +94,7 @@ def ! koption_t_monad (M : VType -> CType) (monadM : U(Monad M)) : Monad (KOptio
   | .bind -> fn A A' m k -> // m : U(KOptT M A), k : U(A -> KOptT M A'), goal: KOptT M A'
     comatch
     | .run -> fn R bAlg kS kE -> // kS : U(A' -> R), kE: U R, bAlg: Algebra M R, goal: R
-      ! m .run (R) bAlg { fn a -> ! k a .run (R) bAlg kS kE } kE
+      ! m .run R bAlg { fn a -> ! k a .run R bAlg kS kE } kE
     end
   end
 end

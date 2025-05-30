@@ -12,9 +12,8 @@
 // end
 
 // The interface for the algebra
-// codata Algebra (M: VType -> CType) (R: CType) where
-//   | .bindA : forall (A: VType) .
-//     Thunk (M A) -> Thunk (A -> R) -> R
+// alias Algebra (M: VType -> CType) (R: CType) : CType =
+//   forall (A: VType) . Thunk (M A) -> Thunk (A -> R) -> R
 // end
 
 // The interface for the monad transformer
@@ -69,7 +68,7 @@ def ! mtexnk (E: VType) (R: CType) : MonadTrans (ExnKT E R) = fn M mo ->
       ! f a .run alg ke ka'
     end
   | .lift A m -> fn .run alg -> fn ke ka ->
-    ! alg .bindA A m ka
+    ! alg A m ka
   end
 end
 

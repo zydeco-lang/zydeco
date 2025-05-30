@@ -79,19 +79,17 @@ end
 def ! abort (e: Exception) : Compu =
   fix unwind -> comatch
   | .app _ -> ! unwind
-  | .bind -> ! mexn .fail (Value) e
+  | .bind -> ! mexn .fail Value e
   end
 end
 
-def fix malg : Algebra MExnOS Compu =
+def fix malg : Algebra MExnOS Compu = fn A m f ->
+  // m : U (MExnOS A), f: U (A -> Compu)
   comatch
-  | .bindA -> fn A m f -> // m : U (MExnOS A), f: U (A -> Compu)
-    comatch
-    | .app a -> // goal: Compu
-      ! malg .bindA (A) m { fn v -> ! f v .app a }
-    | .bind -> // goal: MExnOS Value, use ordinary bind
-      ! mexn .bind (A) (Value) m { fn x -> ! f x .bind }
-    end
+  | .app a -> // goal: Compu
+    ! malg A m { fn v -> ! f v .app a }
+  | .bind -> // goal: MExnOS Value, use ordinary bind
+    ! mexn .bind A Value m { fn x -> ! f x .bind }
   end
 end
 
@@ -122,14 +120,14 @@ def fix interp (env: U EnvO) : Interp =
     | +Var(x) ->
       do x? <- ! env .lookup x;
       match x?
-      | +None() -> ! mexn .fail (Value) +FreeVariable()
+      | +None() -> ! mexn .fail Value +FreeVariable()
       | +Some(v) ->
-        ! mexn .return (Value) v
+        ! mexn .return Value v
       end
     | +Bool(b) ->
-      ! mexn .return (Value) +Bool(b)
+      ! mexn .return Value +Bool(b)
     | +Thunk(c) ->
-      ! mexn .return (Value) +Thunk({ ! interp env .compu c })
+      ! mexn .return Value +Thunk({ ! interp env .compu c })
     end
   | .compu sc ->
     match sc
@@ -137,27 +135,27 @@ def fix interp (env: U EnvO) : Interp =
       comatch
       | .app v ->
         ! interp { ! env .extend x v } .compu sc
-      | .bind -> ! mexn .fail (Value) +TypeError()
+      | .bind -> ! mexn .fail Value +TypeError()
       end
     | +App(sc, sv) ->
       let mv = { ! interp env .value sv } in
-      ! malg .bindA (Value) mv { fn v -> ! interp env .compu sc .app v }
+      ! malg Value mv { fn v -> ! interp env .compu sc .app v }
     | +Ret(sv) ->
       let fix unwind (m: U (MExnOS Value)) : Compu =
         comatch
-        | .app _ -> ! unwind { ! mexn .fail (Value) +TypeError() }
+        | .app _ -> ! unwind { ! mexn .fail Value +TypeError() }
         | .bind -> ! m
         end
       in
       ! unwind { ! interp env .value sv }
     | +Bind(sc1, x, sc2) ->
       let mv = { ! interp env .compu sc1 .bind } in
-      ! malg .bindA (Value) mv { fn v ->
+      ! malg Value mv { fn v ->
         ! interp { ! env .extend x v } .compu sc2
       }
     | +Force(sv) ->
       let mv = { ! interp env .value sv } in
-      ! malg .bindA (Value) mv { fn v ->
+      ! malg Value mv { fn v ->
         match v
         | +Bool(_) -> ! abort +TypeError()
         | +Thunk(c) -> ! c
@@ -165,7 +163,7 @@ def fix interp (env: U EnvO) : Interp =
       }
     | +If(sv, c1, c2) ->
       let mv = { ! interp env .value sv } in
-      ! malg .bindA (Value) mv { fn v ->
+      ! malg Value mv { fn v ->
         match v
         | +Bool(b) ->
           match b

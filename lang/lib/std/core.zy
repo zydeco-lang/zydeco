@@ -22,7 +22,7 @@ module Builtin where
   pub extern def String : VType end
   pub extern def OS : CType end
 
-  /// interface for monads and algebras
+  /// interface for monads and their algebras
   pub extern alias Monad (M: VType -> CType) : CType =
     codata
     | .return : forall (A: VType) .
@@ -32,10 +32,7 @@ module Builtin where
     end
   end
   pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
-    codata
-    | .bindA : forall (A: VType) .
-      Thk (M A) -> Thk (A -> R) -> R
-    end
+    forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
   end
 
   /// interface for monad transformers

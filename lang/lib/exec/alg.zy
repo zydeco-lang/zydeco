@@ -3,9 +3,8 @@ def ! alg_arrow
   (A: VType)
   (B: CType) (alg: U (Algebra M B))
 : Algebra M (A -> B) =
-  comatch
-  | .bindA X (m: U (M X)) (f: U (X -> A -> B)) ->
-    fn a -> ! alg .bindA X m { fn x -> ! f x a }
+  comatch X (m: U (M X)) (f: U (X -> A -> B)) ->
+    fn a -> ! alg X m { fn x -> ! f x a }
   end
 end
 
@@ -19,11 +18,10 @@ def ! alg_with
   (B1: CType) (alg1: U (Algebra M B1))
   (B2: CType) (alg2: U (Algebra M B2))
 : Algebra M (With B1 B2) =
-  comatch
-  | .bindA X (m: U (M X)) (f: U (X -> With B1 B2)) ->
+  comatch X (m: U (M X)) (f: U (X -> With B1 B2)) ->
     comatch
-    | .l -> ! alg1 .bindA X m { fn x -> ! f x .l }
-    | .r -> ! alg2 .bindA X m { fn x -> ! f x .r }
+    | .l -> ! alg1 X m { fn x -> ! f x .l }
+    | .r -> ! alg2 X m { fn x -> ! f x .r }
     end
   end
 end
@@ -32,8 +30,7 @@ def ! alg_ret
   (M: VType -> CType) (mo: U (Monad M))
   (A: VType)
 : Algebra M (M A) =
-  comatch
-  | .bindA X m f ->
+  comatch X m f ->
     ! mo .bind X A m f
   end
 end
@@ -42,10 +39,9 @@ def ! alg_forall_ctype
   (M: VType -> CType)
   (S: CType -> CType) (algS: U (forall (Y: CType) . U (Algebra M Y) -> Algebra M (S Y)))
 : Algebra M (forall (Y: CType) . U (Algebra M Y) -> S Y) =
-  comatch
-  | .bindA X (m: U (M X)) (f: U (X -> (forall (Y: CType) . U (Algebra M Y) -> S Y))) ->
+  comatch X (m: U (M X)) (f: U (X -> (forall (Y: CType) . U (Algebra M Y) -> S Y))) ->
     comatch Y algY ->
-      ! algS Y algY .bindA X m { fn a -> ! f a Y algY }
+      ! algS Y algY X m { fn a -> ! f a Y algY }
     end
   end
 end
@@ -55,23 +51,22 @@ def ! alg_forall_ctype_constructor
   (S: (CType -> CType) -> CType)
   (algS: U (forall (F: CType -> CType) . U (forall (Z: CType) . U (Algebra M Z) -> Algebra M (F Z)) -> Algebra M (S F)))
 : Algebra M (forall (F: CType -> CType) . U (forall (Z: CType) . U (Algebra M Z) -> Algebra M (F Z)) -> S F) =
-  comatch
-  | .bindA X (m: U (M X))
+  comatch X (m: U (M X))
     (f: U (X -> (forall (F: CType -> CType) . U (forall (Z: CType) . U (Algebra M Z) -> Algebra M (F Z)) -> S F))) ->
     comatch F algZFZ ->
-      ! algS F algZFZ .bindA X m { fn a -> ! f a F algZFZ }
+      ! algS F algZFZ X m { fn a -> ! f a F algZFZ }
     end
   end
 end
 
 def ! alg_of_ret (R: CType) : Algebra Ret R =
-  comatch .bindA X m f ->
+  comatch X m f ->
     do x <- ! m;
     ! f x
   end
 end
 
 main
-  do x <- ! alg_of_ret (Ret Int) .bindA Int { ret 0 } { fn x -> ret x };
+  do x <- ! alg_of_ret (Ret Int) Int { ret 0 } { fn x -> ret x };
   ! exit x
 end
