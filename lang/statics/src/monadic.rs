@@ -35,8 +35,12 @@ pub mod syntax {
 
     /// structure pattern introduction
     ///
-    /// need to register the fresh var `S` as a structure of a given (abstract) type `A`
+    /// need to register the fresh var `S` as a structure of a given (abstract) type `A`;
+    /// the optional variable definition `T` can be passed
     pub struct StrPat<S, A, T>(pub S, pub A, pub T);
+
+    /// substitute abstract type from `S` to `T`
+    pub struct AbstPat<S, T>(pub S, pub T);
 }
 
 mod syntax_impl {
@@ -209,6 +213,22 @@ mod syntax_impl {
             cs::Pat(def, ty).mbuild(tycker, env)
         }
     }
+
+    // AbstPat
+    impl<S, T> MonConstruct<AbstId> for cs::AbstPat<S, T>
+    where
+        S: MonConstruct<AbstId>,
+        T: MonConstruct<AbstId>,
+    {
+        fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
+            let cs::AbstPat(old, new) = self;
+            let (env, old) = old.mbuild(tycker, env)?;
+            let (env, new) = new.mbuild(tycker, env)?;
+            let mut env = env;
+            env.subst_abst.insert(old, new);
+            Ok((env, new))
+        }
+    }
 }
 
 /// Signature Translation `Sig_K(T)`
@@ -245,35 +265,28 @@ fn structure_translation(
             match env.structure.def_map.get(&def).map(|abst| env.structure.absts[abst]) {
                 | Some(str) => Force(str).mbuild(tycker, env)?,
                 | None => {
-                    let (env, sig) = cs::Signature { ty }.mbuild(tycker, env)?;
-                    (env, Alloc::alloc(tycker, Hole, sig))
-                    // tycker.err(TyckError::MissingStructure(ty), std::panic::Location::caller())?
+                    tycker.err(TyckError::MissingStructure(ty), std::panic::Location::caller())?
+                    // Fixme: or just ignore it
+                    // let (env, sig) = cs::Signature { ty }.mbuild(tycker, env)?;
+                    // (env, Alloc::alloc(tycker, Hole, sig))
                 }
             }
         }
-        | Type::Abst(abst) => match env.structure.absts.get(&abst).cloned() {
-            | Some(str) => Force(str).mbuild(tycker, env)?,
-            | None => {
-                logg::warn!(
-                    "backtracking structure for abstract type: {}",
-                    tycker.dump_statics(abst)
-                );
-                use zydeco_utils::arena::ArenaAccess;
-                match tycker.statics.abst_hints.get(&abst).cloned() {
-                    | Some(def) => {
-                        logg::warn!("backtracked to definition: {}", tycker.dump_statics(def));
-                        let kd = tycker.statics.annotations_type[&ty];
-                        let ty: TypeId = Alloc::alloc(tycker, def, kd);
-                        cs::Structure { ty }.mbuild(tycker, env)?
-                    }
-                    | None => {
-                        // tycker.err(TyckError::MissingStructure(ty), std::panic::Location::caller())?
-                        let (env, sig) = cs::Signature { ty }.mbuild(tycker, env)?;
-                        (env, Alloc::alloc(tycker, Hole, sig))
-                    }
+        | Type::Abst(abst) => {
+            let abst = match env.subst_abst.get(&abst).cloned() {
+                | Some(new_abst) => new_abst,
+                | None => abst,
+            };
+            match env.structure.absts.get(&abst).cloned() {
+                | Some(str) => Force(str).mbuild(tycker, env)?,
+                | None => {
+                    tycker.err(TyckError::MissingStructure(ty), std::panic::Location::caller())?
+                    // Fixme: or just ignore it
+                    // let (env, sig) = cs::Signature { ty }.mbuild(tycker, env)?;
+                    // (env, Alloc::alloc(tycker, Hole, sig))
                 }
             }
-        },
+        }
         | Type::Abs(ty) => {
             // input: fn (X : K) -> S
             let Abs(tpat, ty) = ty;
@@ -384,19 +397,25 @@ fn structure_translation(
             })
             .mbuild(tycker, env)?
         }
-        | Type::Forall(ty) => {
+        | Type::Forall(ty_forall) => {
             // input: forall (X : K) . B
-            let Forall(abst, ty) = ty;
+            // Debug: log
+            // logg::trace!("structure translation of forall: {}", tycker.dump_statics(ty));
+            let Forall(abst, ty) = ty_forall;
             let kd = cs::TypeOf(abst);
             // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) -> <body>
             Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
                 Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, abst_z))), move |mz: VPatId| {
                     // construct abstract type X first
-                    cs::CBind::new(cs::Ann("X", kd), move |abst_x| {
+                    // substitute the abstract type `abst` with `abst_x`
+                    cs::CBind::new(cs::AbstPat(abst, cs::Ann("X", kd)), move |abst_x: AbstId| {
+                        // Debug: log
+                        // logg::trace!("new abstract type: {} -> {}", abst.concise(), abst_x.concise());
                         // <f_ty> = Thk (Z -> forall (X : K) . Thk (Sig_K(X)) -> [B])
                         let f_ty = cs::Thk(Arrow(
                             abst_z,
                             cs::Forall(abst_x, move |abst_x: AbstId| {
+                                // substitute the abstract type `abst` in the `ty` here with `abst_x`
                                 Arrow(cs::Thk(cs::Signature { ty: abst_x }), cs::TypeLift { ty })
                             }),
                         ));
@@ -411,6 +430,7 @@ fn structure_translation(
                                         let str_x = cs::Value(str_x);
                                         App(App(App(Force(f), z), cs::Ty(abst_x)), str_x)
                                     });
+                                    // substitute the abstract type `abst` in the `ty` here with `abst_x`
                                     let str_ = cs::Structure { ty };
                                     App(App(App(str_, cs::Ty(abst_z)), cs::Value(mz)), Thunk(kont))
                                 })
@@ -470,13 +490,22 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
                 | Some(_) => {
                     tycker.err(TyckError::NotInlinableSeal(abst), std::panic::Location::caller())?
                 }
-                | None => (env, Alloc::alloc(tycker, abst, kd)),
+                | None => match env.subst_abst.get(&abst).cloned() {
+                    | Some(new) => (env, Alloc::alloc(tycker, new, kd)),
+                    | None => {
+                        // logg::warn!(
+                        //     "carrier translation of {} may leak",
+                        //     tycker.dump_statics(abst)
+                        // );
+                        (env, Alloc::alloc(tycker, abst, kd))
+                    }
+                },
             }
         }
         // | Type::Abst(_abst) => unreachable!(),
         | Type::Abs(ty) => {
             let Abs(tpat, ty) = ty;
-            // Fixme: bind environment
+            // the environment is bound by type pattern lift
             Abs(cs::TypeLift { ty: tpat }, |_, _, _| cs::TypeLift { ty }).mbuild(tycker, env)?
         }
         | Type::App(ty) => {

@@ -77,7 +77,7 @@ def ! triv : Top = comatch end end
 
 
 alias ExnK (E: VType) (A: VType) : CType =
-  forall (R: CType) . Thk (E -> R) -> Thk (A -> R) -> R
+  forall (R'': CType) . Thk (E -> R'') -> Thk (A -> R'') -> R''
 end
 
 // Change `Ret` in Exn to `M`
@@ -141,15 +141,33 @@ end
 
 // extern def div : Thk(Int -> Int -> Ret Int) end
 
+// def ! _ =
+//   monadic fn (E: VType) (A: VType) (a: A) ->
+//     ! mo-exnk E .return A a
+//   :
+//     forall (E: VType) (A: VType) . A -> ExnK E A
+//   end
+// end
+
+
 def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
   fn (M: VType -> CType) (mo: Thk (Monad M)) ->
   let ! mt' =
     monadic fn (E: VType) ->
       // let ! _ : OS = _ in
       // let _ = div in
+      // let ! mo-exnk (E: VType) : Monad (ExnK E) =
+      //   comatch
+      //   | .return A a -> fn R ke ka ->
+      //     ! ka a
+      //   | .bind A A' m f -> fn R ke ka ->
+      //     ! m R ke { fn a -> ! f a R ke ka }
+      //   end
+      // in
       comatch
       | .monad -> ! mo-exnk E
-      | .lift A m -> do a <- ! m; ! mo-exnk E .return A a
+      | .lift A m ->
+        do a <- ! m; ! mo-exnk E .return A a
       end
     :
       forall (E: VType) . codata

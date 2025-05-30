@@ -28,7 +28,7 @@ pub mod monadic;
 pub mod err;
 pub use err::*;
 pub mod fmt;
-mod logg;
+pub mod logg;
 mod span;
 
 pub(crate) use construct::syntax as cs;

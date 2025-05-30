@@ -170,6 +170,7 @@ mod impls_ty_env_t {
 }
 
 pub type SubstEnv = Env<DefId>;
+pub type SubstAbstEnv = im::HashMap<AbstId, AbstId>;
 
 pub struct SubstEnvT<T> {
     pub env: SubstEnv,
@@ -216,6 +217,7 @@ mod impls_subst_env_t {
 
 #[derive(Clone)]
 pub struct StrEnv {
+    // Todo: remove this useless non-sense
     pub def_map: im::HashMap<DefId, AbstId>,
     pub absts: im::HashMap<AbstId, ValueId>,
 }
@@ -289,6 +291,7 @@ mod impls_str_env_t {
 pub struct MonEnv {
     pub ty: TyEnv,
     pub subst: SubstEnv,
+    pub subst_abst: SubstAbstEnv,
     pub structure: StrEnv,
     pub monad_ty: TypeId,
     pub monad_impl: ValueId,

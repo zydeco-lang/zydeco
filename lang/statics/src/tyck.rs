@@ -1843,6 +1843,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     MonEnv {
                         ty: ty_env,
                         subst: SubstEnv::new(),
+                        subst_abst: SubstAbstEnv::new(),
                         structure: StrEnv::new(),
                         monad_ty,
                         monad_impl,

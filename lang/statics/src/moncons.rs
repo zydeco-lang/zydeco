@@ -103,14 +103,31 @@ where
 
 impl_mon_construct_from_construct! {
     impl MonConstruct<Option<DefId>> for Option<DefId>;
-    impl MonConstruct<DefId> for DefId;
+    // impl MonConstruct<DefId> for DefId;
     impl MonConstruct<KindId> for KindId;
-    impl MonConstruct<AbstId> for AbstId;
+    // impl MonConstruct<AbstId> for AbstId;
     impl MonConstruct<TPatId> for TPatId;
     impl MonConstruct<TypeId> for TypeId;
     impl MonConstruct<VPatId> for VPatId;
     impl MonConstruct<ValueId> for ValueId;
     impl MonConstruct<CompuId> for CompuId;
+}
+// need to perform substitution whenever necessary
+impl MonConstruct<DefId> for DefId {
+    fn mbuild(self, _tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
+        match env.subst.get(&self).cloned() {
+            | Some(new) => Ok((env, new)),
+            | None => Ok((env, self)),
+        }
+    }
+}
+impl MonConstruct<AbstId> for AbstId {
+    fn mbuild(self, _tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
+        match env.subst_abst.get(&self).cloned() {
+            | Some(new) => Ok((env, new)),
+            | None => Ok((env, self)),
+        }
+    }
 }
 
 /* ------------------------------- Definition ------------------------------- */
@@ -730,8 +747,7 @@ where
         let (def, param_kd) = tpat.try_destruct_def(tycker);
         // make sure that the abstract type is allocated only once!
         let abst = Alloc::alloc(tycker, def, param_kd);
-        let body = body(tpat, abst);
-        let (env, body) = body.mbuild(tycker, env)?;
+        let (env, body) = body(tpat, abst).mbuild(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
         let (env, ctype) = CType.mbuild(tycker, env)?;
         let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);
@@ -765,8 +781,7 @@ where
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Abs(cs::Ty((tpat, abst)), body) = self;
         let (env, tpat): (_, TPatId) = tpat.mbuild(tycker, env)?;
-        let body = body(tpat, abst);
-        let (env, body) = body.mbuild(tycker, env)?;
+        let (env, body) = body(tpat, abst).mbuild(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
         let (env, ctype) = CType.mbuild(tycker, env)?;
         let ty = Alloc::alloc(tycker, Forall(abst, body_ty), ctype);
@@ -786,16 +801,7 @@ where
         let Some((param_ty, body_ty)) = abs_ty.destruct_arrow(tycker) else { unreachable!() };
         let (env, arg) = arg.mbuild(tycker, env)?;
         let arg_ty = tycker.statics.annotations_value[&arg];
-        // Fixme: add the check
-        let _ = param_ty;
-        let _ = arg_ty;
-        // logg::info!(
-        //     "param_ty: {} \\/ arg_ty: {}",
-        //     tycker.dump_statics(param_ty),
-        //     tycker.dump_statics(arg_ty)
-        // );
-        // let Ok(_) = Lub::lub(param_ty, arg_ty, tycker) else { unreachable!() };
-        let _ = Lub::lub(param_ty, arg_ty, tycker)?;
+        let Ok(_) = Lub::lub(param_ty, arg_ty, tycker) else { unreachable!() };
         Ok((env, Alloc::alloc(tycker, App(abs, arg), body_ty)))
     }
 }
@@ -810,10 +816,23 @@ where
         let (env, abs) = abs.mbuild(tycker, env)?;
         let abs_ty = tycker.statics.annotations_compu[&abs];
         let Some((abst, body_ty)) = abs_ty.destruct_forall(tycker) else { unreachable!() };
+        // Fixme: is this necessary?
+        // let (env, abst, body_ty) = match env.subst_abst.get(&abst).cloned() {
+        //     | Some(new) => {
+        //         logg::warn!(
+        //             "abst hit: {} -> {}",
+        //             tycker.dump_statics(abst),
+        //             tycker.dump_statics(new)
+        //         );
+        //         let (env, new_abst) = new.mbuild(tycker, env)?;
+        //         (env, abst, body_ty.subst_abst(tycker, (abst, new_abst))?)
+        //     }
+        //     | None => (env, abst, body_ty),
+        // };
         let param_kd = tycker.statics.annotations_abst[&abst];
         let (env, arg) = arg.mbuild(tycker, env)?;
         // Todo: check if the substitution is necessary
-        let arg = arg.subst_env(tycker, &env.ty)?;
+        // let arg = arg.subst_env(tycker, &env.ty)?;
         let arg_kd = tycker.statics.annotations_type[&arg];
         let Ok(_) = Lub::lub(param_kd, arg_kd, tycker) else { unreachable!() };
         let Ok(ty) = body_ty.subst_abst(tycker, (abst, arg)) else { unreachable!() };
