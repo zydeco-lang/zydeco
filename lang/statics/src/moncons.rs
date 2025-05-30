@@ -281,19 +281,16 @@ where
         Ok((env, Alloc::alloc(tycker, fill, kd)))
     }
 }
-impl_mon_construct_from_construct! {
-    impl MonConstruct<TypeId> for DefId;
-    impl MonConstruct<TypeId> for AbstId;
-}
-impl<T> MonConstruct<TypeId> for cs::Ty<T>
-where
-    T: MonConstruct<AbstId>,
-{
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
-        let cs::Ty(abst) = self;
-        let (env, abst) = abst.mbuild(tycker, env)?;
-        abst.mbuild(tycker, env)
+impl MonConstruct<TypeId> for DefId {
+    fn mbuild(self, _tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+        // need to first substitute in the subst environment
+        let Some(ty) = env.subst.get(&self) else { unreachable!() };
+        let AnnId::Type(ty) = env.ty[&ty] else { unreachable!() };
+        Ok((env, ty))
     }
+}
+impl_mon_construct_from_construct! {
+    impl MonConstruct<TypeId> for AbstId;
 }
 impl<S, F, T> MonConstruct<TypeId> for Abs<S, F>
 where
@@ -323,7 +320,11 @@ where
         let (env, ty_2) = ty_2.mbuild(tycker, env)?;
         // let kd_2 = tycker.statics.annotations_type[&ty_2];
         // let Ok(_) = Lub::lub(kd_a, kd_2, tycker) else { unreachable!() };
-        let res = ty_1.normalize_app(tycker, ty_2, kd_b)?;
+        // normalize the result of type application (including the type argument)
+        let ty = Alloc::alloc(tycker, App(ty_1, ty_2), kd_b);
+        let res = ty.normalize(tycker, kd_b)?;
+        // alternatively, only normalize the type application
+        // let res = ty_1.normalize_app(tycker, ty_2, kd_b)?;
         Ok((env, res))
     }
 }
@@ -794,6 +795,7 @@ where
         //     tycker.dump_statics(arg_ty)
         // );
         // let Ok(_) = Lub::lub(param_ty, arg_ty, tycker) else { unreachable!() };
+        let _ = Lub::lub(param_ty, arg_ty, tycker)?;
         Ok((env, Alloc::alloc(tycker, App(abs, arg), body_ty)))
     }
 }
@@ -810,6 +812,8 @@ where
         let Some((abst, body_ty)) = abs_ty.destruct_forall(tycker) else { unreachable!() };
         let param_kd = tycker.statics.annotations_abst[&abst];
         let (env, arg) = arg.mbuild(tycker, env)?;
+        // Todo: check if the substitution is necessary
+        let arg = arg.subst_env(tycker, &env.ty)?;
         let arg_kd = tycker.statics.annotations_type[&arg];
         let Ok(_) = Lub::lub(param_kd, arg_kd, tycker) else { unreachable!() };
         let Ok(ty) = body_ty.subst_abst(tycker, (abst, arg)) else { unreachable!() };

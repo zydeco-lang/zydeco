@@ -107,10 +107,13 @@ pub mod syntax {
     pub struct TypeOf<T>(pub T);
 
     /// Construct to type immediately
+    #[derive(Clone, Copy)]
     pub struct Type<T>(pub T);
     /// Construct to value immediately
+    #[derive(Clone, Copy)]
     pub struct Value<T>(pub T);
     /// Construct to computation immediately
+    #[derive(Clone, Copy)]
     pub struct Compu<T>(pub T);
 
     /// `Thk B`
@@ -418,10 +421,10 @@ where
     }
 }
 impl Construct<TypeId> for DefId {
-    fn build(self, tycker: &mut Tycker, env: &TyEnv) -> TypeId {
+    fn build(self, _tycker: &mut Tycker, env: &TyEnv) -> TypeId {
+        // Note: different from monadic construction, here we do not need to further substitute
         let AnnId::Type(ty) = env[&self] else { unreachable!() };
-        let kd = tycker.statics.annotations_type[&ty];
-        Alloc::alloc(tycker, self, kd)
+        ty
     }
 }
 impl Construct<TypeId> for AbstId {
@@ -469,7 +472,6 @@ where
         // let kd_2 = tycker.statics.annotations_type[&ty_2];
         // let Ok(_) = Lub::lub(kd_a, kd_2, tycker) else { unreachable!() };
         // Note: note that the resulting type application of [`Construct::build`] is not normalized
-        // let res = ty_1.normalize_app(tycker, ty_2, kd_b)?;
         Alloc::alloc(tycker, App(ty_1, ty_2), kd_b)
     }
 }

@@ -294,7 +294,7 @@ fn structure_translation(
             // input: S_f S_a
             let App(ty_f, ty_a) = ty;
             // output: Str(S_f) Lift(S_a) { Str(S_a) }
-            let str_f = { cs::Structure { ty: ty_f } };
+            let str_f = cs::Structure { ty: ty_f };
             let ty_a_lift = cs::TypeLift { ty: ty_a };
             let str_a = cs::Structure { ty: ty_a };
             App(App(str_f, cs::Ty(ty_a_lift)), Thunk(str_a)).mbuild(tycker, env)?
@@ -310,9 +310,9 @@ fn structure_translation(
         // so its structure takes a type and the type's structure as arguments
         | Type::Thk(ThkTy) => {
             // output: fn (X : CType) (_ : Thk (Sig_CType(X))) -> <top>
-            Abs(cs::Ty(cs::Pat("_", CType)), |_tvar, abst| {
-                let thk_sig = cs::Thk(cs::Signature { ty: cs::Ty(abst) });
-                Abs(cs::Pat("_", thk_sig), |_var| {
+            Abs(cs::Ty(cs::Pat("_", CType)), move |_tvar, abst| {
+                let thk_sig = cs::Thk(cs::Signature { ty: cs::Type(abst) });
+                Abs(cs::Pat("_", thk_sig), move |_var| {
                     // <top> = comatch end
                     cs::Top
                 })
@@ -324,14 +324,12 @@ fn structure_translation(
         | Type::Ret(RetTy) => {
             // output: fn (X : VType) (_ : Thk (Sig_VType(X))) -> <monadic_bind>
             Abs(cs::Ty(cs::Pat("_", VType)), |_tvar, abst_x| {
-                let abst_x_ty = cs::Ty(abst_x);
-                let thk_sig = cs::Thk(cs::Signature { ty: abst_x_ty });
+                let thk_sig = cs::Thk(cs::Signature { ty: abst_x });
                 Abs(cs::Pat("_", thk_sig), move |_var| {
                     // <monadic_bind> = fn (Z : VType) -> ! monad_impl .bind Z X
                     Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
-                        let abst_z_ty = cs::Ty(abst_z);
                         let body = cs::Dtor(Force(monad_impl), ".bind");
-                        App(App(body, cs::Ty(abst_z_ty)), cs::Ty(abst_x_ty))
+                        App(App(body, cs::Ty(abst_z)), cs::Ty(abst_x))
                     })
                 })
             })
@@ -339,12 +337,11 @@ fn structure_translation(
         }
         | Type::CoData(coda) => {
             // output: fn (Z : VType) (mz : Thk (M Z)) (f: Thk (Z -> &_n[B_n])) -> <body>
-            Abs(cs::Ty(cs::Pat("Z", VType)), |_tvar, abst_z| {
-                let abst_z_ty = cs::Ty(abst_z);
-                let mz_ty = cs::Thk(App(monad_ty, abst_z_ty));
+            Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
+                let mz_ty = cs::Thk(App(monad_ty, abst_z));
                 Abs(cs::Pat("mz", mz_ty), move |mz: VPatId| {
                     let ty_ = cs::TypeLift { ty };
-                    let f_ty = cs::Thk(Arrow(abst_z_ty, ty_));
+                    let f_ty = cs::Thk(Arrow(abst_z, ty_));
                     Abs(cs::Pat("f", f_ty), move |f: VPatId| {
                         // <body> =
                         // comatch
@@ -352,11 +349,11 @@ fn structure_translation(
                         // | ...
                         // end
                         cs::CoMatch(coda, move |dtor, ty| {
-                            let kont = Abs(cs::Pat("z", abst_z_ty), move |z: VPatId| {
+                            let kont = Abs(cs::Pat("z", abst_z), move |z: VPatId| {
                                 Dtor(App(Force(cs::Value(f)), cs::Value(z)), dtor)
                             });
                             let str = cs::Structure { ty };
-                            App(App(App(str, abst_z_ty), cs::Value(mz)), Thunk(kont))
+                            App(App(App(str, cs::Ty(abst_z)), cs::Value(mz)), Thunk(kont))
                         })
                     })
                 })
@@ -365,23 +362,22 @@ fn structure_translation(
         }
         | Type::Arrow(ty) => {
             // input: A -> B
-            let Arrow(ty_p, ty_b) = ty;
+            let Arrow(ty_a, ty_b) = ty;
             // output: fn (Z : VType) (mz : Thk (M Z)) (f : Thk (Z -> [A] -> [B])) -> <body>
             Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
-                let abst_z_ty = cs::Ty(abst_z);
-                let mz_ty = cs::Thk(App(env.monad_ty, abst_z_ty));
+                let mz_ty = cs::Thk(App(env.monad_ty, abst_z));
                 Abs(cs::Pat("mz", mz_ty), move |mz: VPatId| {
-                    let ty_p_ = cs::TypeLift { ty: ty_p };
+                    let ty_a_ = cs::TypeLift { ty: ty_a };
                     let ty_b_ = cs::TypeLift { ty: ty_b };
-                    let f_ty = cs::Thk(Arrow(abst_z_ty, Arrow(ty_p_, ty_b_)));
+                    let f_ty = cs::Thk(Arrow(abst_z, Arrow(ty_a_, ty_b_)));
                     Abs(cs::Pat("f", f_ty), move |f: VPatId| {
                         // <body> = fn (x : [A]) -> Str(B) Z mz { fn (z : Z) -> ! f z x }
-                        Abs(cs::Pat("x", ty_p_), move |x: VPatId| {
+                        Abs(cs::Pat("x", ty_a_), move |x: VPatId| {
                             let alg_b = cs::Structure { ty: ty_b };
-                            let kont = Abs(cs::Pat("z", abst_z_ty), move |z: VPatId| {
+                            let kont = Abs(cs::Pat("z", abst_z), move |z: VPatId| {
                                 App(App(Force(cs::Value(f)), cs::Value(z)), cs::Value(x))
                             });
-                            App(App(App(alg_b, cs::Ty(abst_z_ty)), cs::Value(mz)), Thunk(kont))
+                            App(App(App(alg_b, cs::Ty(abst_z)), cs::Value(mz)), Thunk(kont))
                         })
                     })
                 })
@@ -394,33 +390,29 @@ fn structure_translation(
             let kd = cs::TypeOf(abst);
             // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) -> <body>
             Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
-                let abst_z_ty = cs::Ty(abst_z);
-                Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, abst_z_ty))), move |mz: VPatId| {
+                Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, abst_z))), move |mz: VPatId| {
                     // construct abstract type X first
                     cs::CBind::new(cs::Ann("X", kd), move |abst_x| {
                         // <f_ty> = Thk (Z -> forall (X : K) . Thk (Sig_K(X)) -> [B])
                         let f_ty = cs::Thk(Arrow(
-                            abst_z_ty,
+                            abst_z,
                             cs::Forall(abst_x, move |abst_x: AbstId| {
-                                let abst_x_ty = cs::Ty(abst_x);
-                                Arrow(cs::Thk(cs::Signature { ty: abst_x_ty }), cs::TypeLift { ty })
+                                Arrow(cs::Thk(cs::Signature { ty: abst_x }), cs::TypeLift { ty })
                             }),
                         ));
                         Abs(cs::Pat("f", f_ty), move |f: VPatId| {
                             // <body> = fn (X : K) (str_X : Thk (Sig_K(X))) -> Str(B) Z mz <kont>
                             Abs(cs::Ty(abst_x), move |_, abst_x: AbstId| {
-                                let abst_x_ty = cs::Ty(abst_x);
-                                let sig = cs::Signature { ty: abst_x_ty };
-                                Abs(cs::Pat("str_X", cs::Thk(sig)), move |str_x: VPatId| {
+                                Abs(cs::StrPat("str_X", abst_x, None), move |str_x: VPatId| {
                                     // <kont> = { fn (z : Z) -> ! f z X str_X }
-                                    let kont = Abs(cs::Pat("z", abst_z_ty), move |z: VPatId| {
+                                    let kont = Abs(cs::Pat("z", abst_z), move |z: VPatId| {
                                         let f = cs::Value(f);
                                         let z = cs::Value(z);
                                         let str_x = cs::Value(str_x);
-                                        App(App(App(Force(f), z), abst_x_ty), str_x)
+                                        App(App(App(Force(f), z), cs::Ty(abst_x)), str_x)
                                     });
                                     let str_ = cs::Structure { ty };
-                                    App(App(App(str_, abst_z_ty), cs::Value(mz)), Thunk(kont))
+                                    App(App(App(str_, cs::Ty(abst_z)), cs::Value(mz)), Thunk(kont))
                                 })
                             })
                         })
@@ -521,8 +513,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         }
         | Type::Exists(ty) => {
             let Exists(abst, ty) = ty;
-            let abst_ty = cs::Ty(abst);
-            let thk_sig = cs::Thk(cs::Signature { ty: abst_ty });
+            let thk_sig = cs::Thk(cs::Signature { ty: abst });
             let ty_ = cs::TypeLift { ty };
             let prod = Prod(thk_sig, ty_);
             cs::Exists(abst, |_| prod).mbuild(tycker, env)?
@@ -543,7 +534,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
         | Type::Forall(ty) => {
             let Forall(abst, ty) = ty;
             cs::Forall(abst, move |abst| {
-                Arrow(cs::Thk(cs::Signature { ty: cs::Ty(abst) }), cs::TypeLift { ty })
+                Arrow(cs::Thk(cs::Signature { ty: abst }), cs::TypeLift { ty })
             })
             .mbuild(tycker, env)?
         }
@@ -630,13 +621,13 @@ fn value_translation(
         | Value::Triv(Triv) => Triv.mbuild(tycker, env)?,
         | Value::VCons(value) => {
             let Cons(value_1, value_2) = value;
-            let value_1_ = { cs::TermLift { tm: value_1 } };
+            let value_1_ = cs::TermLift { tm: value_1 };
             let value_2_ = cs::TermLift { tm: value_2 };
             Cons(value_1_, value_2_).mbuild(tycker, env)?
         }
         | Value::TCons(value) => {
             let Cons(a_ty, body) = value;
-            let a_str = { cs::Structure { ty: a_ty } };
+            let a_str = cs::Structure { ty: a_ty };
             let body_ = cs::TermLift { tm: body };
             let a_ty_ = cs::TypeLift { ty: a_ty };
             // existential type construct should be type-guided
@@ -689,7 +680,7 @@ fn computation_translation(
         }
         | Compu::VApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ = { cs::TermLift { tm: fun } };
+            let fun_ = cs::TermLift { tm: fun };
             let arg_ = cs::TermLift { tm: arg };
             App(fun_, arg_).mbuild(tycker, env)?
         }
@@ -703,7 +694,7 @@ fn computation_translation(
         }
         | Compu::TApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ = { cs::TermLift { tm: fun } };
+            let fun_ = cs::TermLift { tm: fun };
             let arg_ = cs::TypeLift { ty: arg };
             let str_ = cs::Structure { ty: arg };
             App(App(fun_, cs::Ty(arg_)), Thunk(str_)).mbuild(tycker, env)?
@@ -734,7 +725,7 @@ fn computation_translation(
             let (env, ret_ty) = cs::TypeOf(bindee).mbuild(tycker, env)?;
             let Some(a_ty) = ret_ty.destruct_ret_app(tycker) else { unreachable!() };
             let a_ty_ = cs::TypeLift { ty: a_ty };
-            let bindee_ = { cs::TermLift { tm: bindee } };
+            let bindee_ = cs::TermLift { tm: bindee };
             let kont = Abs(cs::TermLift { tm: binder }, move |_var| cs::TermLift { tm: tail });
             App(App(App(str_, cs::Ty(a_ty_)), Thunk(bindee_)), Thunk(kont)).mbuild(tycker, env)?
         }

@@ -375,6 +375,12 @@ impl TypeId {
                     let ty2 = ty2.normalize(tycker, kd2)?;
                     ty1.normalize_app(tycker, ty2, kd)?
                 }
+                // | Type::App(app) => {
+                //     let App(ty1, ty2) = app;
+                //     let kd2 = tycker.statics.annotations_type[&ty2];
+                //     let ty2 = ty2.normalize(tycker, kd2)?;
+                //     ty1.normalize_app(tycker, ty2, kd)?
+                // }
                 // weak head normalization (?)
                 // | Type::App(app) => {
                 //     let App(ty1, ty2) = app;
