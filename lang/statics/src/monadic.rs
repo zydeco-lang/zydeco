@@ -27,14 +27,11 @@ pub mod syntax {
     pub struct TermLift<T> {
         pub tm: T,
     }
-    /// monadic elaboration
-    #[derive(Clone)]
-    pub struct Elaboration<T> {
-        pub tm: T,
-    }
-
-    // /// invoke substitution on defs
-    // pub struct Subst<T>(pub T);
+    // /// monadic elaboration
+    // #[derive(Clone)]
+    // pub struct Elaboration<T> {
+    //     pub tm: T,
+    // }
 
     /// structure pattern introduction
     ///
@@ -51,9 +48,14 @@ mod syntax_impl {
         T: MonConstruct<TypeId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
-            let cs::Signature { ty } = self;
-            let (env, ty) = ty.mbuild(tycker, env)?;
-            signature_translation(tycker, env, ty)
+            tycker.guarded(|tycker| {
+                let cs::Signature { ty } = self;
+                let (env, ty) = ty.mbuild(tycker, env)?;
+
+                // administrative
+                tycker.stack.push_back(TyckTask::SignatureGen(ty.into()));
+                signature_translation(tycker, env, ty)
+            })
         }
     }
 
@@ -63,9 +65,14 @@ mod syntax_impl {
         T: MonConstruct<TypeId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-            let cs::Structure { ty } = self;
-            let (env, ty) = ty.mbuild(tycker, env)?;
-            structure_translation(tycker, env, ty)
+            tycker.guarded(|tycker| {
+                let cs::Structure { ty } = self;
+                let (env, ty) = ty.mbuild(tycker, env)?;
+
+                // administrative
+                tycker.stack.push_back(TyckTask::StructureGen(ty.into()));
+                structure_translation(tycker, env, ty)
+            })
         }
     }
 
@@ -75,9 +82,14 @@ mod syntax_impl {
         T: MonConstruct<TPatId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
-            let cs::TypeLift { ty } = self;
-            let (env, ty) = ty.mbuild(tycker, env)?;
-            type_pattern_translation(tycker, env, ty)
+            tycker.guarded(|tycker| {
+                let cs::TypeLift { ty } = self;
+                let (env, ty) = ty.mbuild(tycker, env)?;
+
+                // administrative
+                tycker.stack.push_back(TyckTask::MonadicLiftPat(ty.into()));
+                type_pattern_translation(tycker, env, ty)
+            })
         }
     }
 
@@ -87,9 +99,14 @@ mod syntax_impl {
         T: MonConstruct<TypeId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
-            let cs::TypeLift { ty } = self;
-            let (env, ty) = ty.mbuild(tycker, env)?;
-            type_translation(tycker, env, ty)
+            tycker.guarded(|tycker| {
+                let cs::TypeLift { ty } = self;
+                let (env, ty) = ty.mbuild(tycker, env)?;
+
+                // administrative
+                tycker.stack.push_back(TyckTask::MonadicLiftTerm(ty.into()));
+                type_translation(tycker, env, ty)
+            })
         }
     }
 
@@ -99,9 +116,14 @@ mod syntax_impl {
         T: MonConstruct<VPatId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-            let cs::TermLift { tm } = self;
-            let (env, tm) = tm.mbuild(tycker, env)?;
-            value_pattern_translation(tycker, env, tm)
+            tycker.guarded(|tycker| {
+                let cs::TermLift { tm } = self;
+                let (env, tm) = tm.mbuild(tycker, env)?;
+
+                // administrative
+                tycker.stack.push_back(TyckTask::MonadicLiftPat(tm.into()));
+                value_pattern_translation(tycker, env, tm)
+            })
         }
     }
 
@@ -111,9 +133,14 @@ mod syntax_impl {
         T: MonConstruct<ValueId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
-            let cs::TermLift { tm } = self;
-            let (env, tm) = tm.mbuild(tycker, env)?;
-            value_translation(tycker, env, tm)
+            tycker.guarded(|tycker| {
+                let cs::TermLift { tm } = self;
+                let (env, tm) = tm.mbuild(tycker, env)?;
+
+                // administrative
+                tycker.stack.push_back(TyckTask::MonadicLiftTerm(tm.into()));
+                value_translation(tycker, env, tm)
+            })
         }
     }
 
@@ -123,35 +150,40 @@ mod syntax_impl {
         T: MonConstruct<CompuId>,
     {
         fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-            let cs::TermLift { tm } = self;
-            let (env, tm) = tm.mbuild(tycker, env)?;
-            computation_translation(tycker, env, tm)
+            tycker.guarded(|tycker| {
+                let cs::TermLift { tm } = self;
+                let (env, tm) = tm.mbuild(tycker, env)?;
+
+                // administrative
+                tycker.stack.push_back(TyckTask::MonadicLiftTerm(tm.into()));
+                computation_translation(tycker, env, tm)
+            })
         }
     }
 
-    // Elaboration (value)
-    impl<T> MonConstruct<ValueId> for cs::Elaboration<T>
-    where
-        T: MonConstruct<ValueId>,
-    {
-        fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
-            let cs::Elaboration { tm } = self;
-            let (env, tm) = tm.mbuild(tycker, env)?;
-            value_monadic_elaboration(tycker, env, tm)
-        }
-    }
+    // // Elaboration (value)
+    // impl<T> MonConstruct<ValueId> for cs::Elaboration<T>
+    // where
+    //     T: MonConstruct<ValueId>,
+    // {
+    //     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    //         let cs::Elaboration { tm } = self;
+    //         let (env, tm) = tm.mbuild(tycker, env)?;
+    //         value_monadic_elaboration(tycker, env, tm)
+    //     }
+    // }
 
-    // Elaboration (computation)
-    impl<T> MonConstruct<CompuId> for cs::Elaboration<T>
-    where
-        T: MonConstruct<CompuId>,
-    {
-        fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-            let cs::Elaboration { tm } = self;
-            let (env, tm) = tm.mbuild(tycker, env)?;
-            computation_monadic_elaboration(tycker, env, tm)
-        }
-    }
+    // // Elaboration (computation)
+    // impl<T> MonConstruct<CompuId> for cs::Elaboration<T>
+    // where
+    //     T: MonConstruct<CompuId>,
+    // {
+    //     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    //         let cs::Elaboration { tm } = self;
+    //         let (env, tm) = tm.mbuild(tycker, env)?;
+    //         computation_monadic_elaboration(tycker, env, tm)
+    //     }
+    // }
 
     // StrPat
     impl<S, A, T> MonConstruct<VPatId> for cs::StrPat<S, A, T>
@@ -753,22 +785,22 @@ fn computation_translation(
     Ok((env, res))
 }
 
-/// Monadic Block Elaboration (Value)
-fn value_monadic_elaboration(
-    tycker: &mut Tycker, env: MonEnv, value: ValueId,
-) -> Result<(MonEnv, ValueId)> {
-    let _ = tycker;
-    let _ = env;
-    let _ = value;
-    todo!()
-}
+// /// Monadic Block Elaboration (Value)
+// fn value_monadic_elaboration(
+//     tycker: &mut Tycker, env: MonEnv, value: ValueId,
+// ) -> Result<(MonEnv, ValueId)> {
+//     let _ = tycker;
+//     let _ = env;
+//     let _ = value;
+//     todo!()
+// }
 
-/// Monadic Block Elaboration (Computation)
-fn computation_monadic_elaboration(
-    tycker: &mut Tycker, env: MonEnv, compu: CompuId,
-) -> Result<(MonEnv, CompuId)> {
-    let _ = tycker;
-    let _ = env;
-    let _ = compu;
-    todo!()
-}
+// /// Monadic Block Elaboration (Computation)
+// fn computation_monadic_elaboration(
+//     tycker: &mut Tycker, env: MonEnv, compu: CompuId,
+// ) -> Result<(MonEnv, CompuId)> {
+//     let _ = tycker;
+//     let _ = env;
+//     let _ = compu;
+//     todo!()
+// }

@@ -149,25 +149,39 @@ impl Tycker {
                     s += &format!("\t\t>> {}\n", truncated(self.dump_statics(lhs)));
                     s += &format!("\t\t>> {}\n", truncated(self.dump_statics(rhs)));
                 }
-                // | TyckTask::Lift(term) => match term {
-                //     | TermId::Kind(_) => unreachable!(),
-                //     | TermId::Type(ty) => {
-                //         s += "\t- when lifting type:\n";
-                //         s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ty)));
-                //     }
-                //     | TermId::Value(value) => {
-                //         s += "\t- when lifting value:\n";
-                //         s += &format!("\t\t>> {}\n", truncated(self.dump_statics(value)));
-                //     }
-                //     | TermId::Compu(compu) => {
-                //         s += "\t- when lifting computation:\n";
-                //         s += &format!("\t\t>> {}\n", truncated(self.dump_statics(compu)));
-                //     }
-                // },
-                // | TyckTask::Algebra(ty) => {
-                //     s += &format!("\t- when performing algebra translation:\n");
-                //     s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ty)));
-                // }
+                | TyckTask::SignatureGen(ann) => {
+                    s += "\t- when generating signature:\n";
+                    s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ann)));
+                }
+                | TyckTask::StructureGen(ann) => {
+                    s += "\t- when generating structure:\n";
+                    s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ann)));
+                }
+                | TyckTask::MonadicLiftPat(pat) => match pat {
+                    | PatId::Type(ty) => {
+                        s += "\t- when performing monadic lift of type pattern:\n";
+                        s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ty)));
+                    }
+                    | PatId::Value(value) => {
+                        s += "\t- when performing monadic lift of value pattern:\n";
+                        s += &format!("\t\t>> {}\n", truncated(self.dump_statics(value)));
+                    }
+                },
+                | TyckTask::MonadicLiftTerm(term) => match term {
+                    | TermId::Kind(_) => unreachable!(),
+                    | TermId::Type(ty) => {
+                        s += "\t- when performing monadic lift of type:\n";
+                        s += &format!("\t\t>> {}\n", truncated(self.dump_statics(ty)));
+                    }
+                    | TermId::Value(value) => {
+                        s += "\t- when performing monadic lift of value:\n";
+                        s += &format!("\t\t>> {}\n", truncated(self.dump_statics(value)));
+                    }
+                    | TermId::Compu(compu) => {
+                        s += "\t- when performing monadic lift of computation:\n";
+                        s += &format!("\t\t>> {}\n", truncated(self.dump_statics(compu)));
+                    }
+                },
             }
         }
         s += &format!("Error: {}\n", self.error_output(error));

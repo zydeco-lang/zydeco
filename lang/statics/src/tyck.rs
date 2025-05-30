@@ -204,8 +204,10 @@ pub enum TyckTask {
     Pat(su::PatId, Switch<AnnId>),
     Term(su::TermId, Switch<AnnId>),
     Lub(AnnId, AnnId),
-    // Lift(ss::TermId),
-    // Algebra(ss::AnnId),
+    SignatureGen(ss::AnnId),
+    StructureGen(ss::AnnId),
+    MonadicLiftPat(ss::PatId),
+    MonadicLiftTerm(ss::TermId),
 }
 
 pub struct Action<Ann> {
