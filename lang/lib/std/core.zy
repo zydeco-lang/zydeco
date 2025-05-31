@@ -48,23 +48,31 @@ module Core where
   pub alias Empty : VType = data end end
   pub alias Top : CType = codata end end
 
-  pub data Option (A : VType) where
+  pub alias Option (A : VType) : VType =
+    data
     | +None : Unit
     | +Some : A
+    end
   end
 
-  pub data Either (E : VType) (A : VType) where
+  pub alias Either (E : VType) (A : VType) : VType =
+    data
     | +Left : E
     | +Right : A
+    end
   end
 
-  pub data Pair (A : VType) (A' : VType) where
+  pub alias Pair (A : VType) (A' : VType) : VType =
+    data
     | +Cons : A * A'
+    end
   end
 
-  pub data Bool where
+  pub alias Bool : VType =
+    data
     | +True : Unit
     | +False : Unit
+    end
   end
 
   pub data Nat where

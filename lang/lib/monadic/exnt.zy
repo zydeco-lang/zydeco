@@ -1,3 +1,5 @@
+def ! triv : Top = comatch end end
+
 alias Exn (E: VType) (A: VType) : CType =
   Ret (Either E A)
 end
@@ -7,77 +9,76 @@ alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
   M (Either E A)
 end
 
-def ! mo-exnt (E: VType) (M: VType -> CType)
-  (mo: Thk (Monad M))
-: Monad (ExnT E M) =
-  // correct anwser:
-  //
-  // comatch
-  // | .return A a ->
-  //   ! mo .return (Either E A) +Right(a)
-  // | .bind A A' m f ->
-  //   do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
-  //   match a?
-  //   | +Left(e) -> ! mo .return (Either E A') +Left(e)
-  //   | +Right(a) -> ! f a
-  //   end
-  // end
-
-  monadic
-    // inlining `! mo-exn E`
-    (comatch
-    | .return A a ->
-      ret +Right(a)
-    | .bind A A' m f ->
-      do a? <- ! m;
-      match a?
-      | +Left(e) -> ret +Left(e)
-      | +Right(a) -> ! f a
-      end
-    end : Monad (Exn E))
-  end M mo
+def ! mo-exn (E: VType) : Monad (Exn E) =
+  comatch
+  | .return A a ->
+    ret +Right(a)
+  | .bind A A' m f ->
+    do a? <- ! m;
+    match a?
+    | +Left(e) -> ret +Left(e)
+    | +Right(a) -> ! f a
+    end
+  end
 end
 
+// def ! mo-exnt (E: VType) (M: VType -> CType)
+//   (mo: Thk (Monad M))
+// : Monad (ExnT E M) =
+//   // correct anwser:
+//   //
+//   // comatch
+//   // | .return A a ->
+//   //   ! mo .return (Either E A) +Right(a)
+//   // | .bind A A' m f ->
+//   //   do~ ! mo .bind (Either E A) (Either E A') { ! m }; fn a? ->
+//   //   match a?
+//   //   | +Left(e) -> ! mo .return (Either E A') +Left(e)
+//   //   | +Right(a) -> ! f a
+//   //   end
+//   // end
 
-
-
-// alias MonadTrans' (T: (VType -> CType) -> VType -> CType) (M: VType -> CType) : CType =
-//   codata
-//   | .monad : Monad (T M)
-//   | .lift : forall (A: VType) . Thk (M A) -> T M A
-//   end
-// end
-
-// def ! mt-exnt (E: VType) (M: VType -> CType) (mo: Thk (Monad M)) : MonadTrans' (ExnT E) M =
-//   use mo monadic
-//     let ! mo-exn : Monad (Exn E) = 
-//       // inlining `! mo-exn E`
-//       comatch
-//       | .return A a ->
-//         ret +Right(a)
-//       | .bind A A' m f ->
-//         do a? <- ! m;
-//         match a?
-//         | +Left(e) -> ret +Left(e)
-//         | +Right(a) -> ! f a
-//         end
+//   monadic
+//     // inlining `! mo-exn E`
+//     comatch
+//     | .return A a ->
+//       ret +Right(a)
+//     | .bind A A' m f ->
+//       do a? <- ! m;
+//       match a?
+//       | +Left(e) -> ret +Left(e)
+//       | +Right(a) -> ! f a
 //       end
-//     in
-//     let ! mt-exnt : MonadTrans' (ExnT E) Ret = 
-//       comatch
-//       | .monad -> ! mo-exn
-//       | .lift A m ->
-//         do a <- ! m;
-//         ! mo-exn .return A a
-//       end
-//     in
-//     ! mt-exnt
-//   end
+//     end
+//   :
+//     Monad (Exn E)
+//   end M mo
 // end
 
 
-
-
-
+def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
+  fn (M: VType -> CType) (mo: Thk (Monad M)) ->
+  let ! mt' =
+    monadic fn (E: VType) ->
+      comatch
+      | .monad -> ! mo-exn E
+      | .lift A m ->
+        do a <- ! m; ! mo-exn E .return A a
+      end
+    :
+      forall (E: VType) . codata
+      | .monad : Monad (Exn E)
+      | .lift  : forall (A: VType) . Thk (Ret A) -> Exn E A
+      end
+    end M mo E triv
+  in
+  comatch
+  | .monad -> comatch
+    | .return A -> ! mt' .monad .return A triv
+    | .bind A A' -> ! mt' .monad .bind A triv A' triv
+    end
+  | .lift A -> ! mt' .lift A triv
+  end
+end
 
 main ! exit 0 end
