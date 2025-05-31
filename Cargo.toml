@@ -45,9 +45,10 @@ once_cell = "1.21"
 sculptor = { version = "0.0.8", features = ["project_info", "file_io", "sha_snap"] }
 rand = "0.9"
 colored = "3.0"
+pretty_assertions = "1.4"
 # data structures
 sequence_trie = "0.3"
-im = "15"
+im = "15.1"
 indexmap = "2.9"
 phf = "0.11"
 # serialization
@@ -66,9 +67,11 @@ regex = "1"
 logos = "0.15"
 lalrpop = "0.22"
 lalrpop-util = "0.22"
+# pretty printing
+pretty = "0.12"
 # cli
-clap = { version = "4", features = ["derive"] }
-clap_complete = "4"
+clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4.5"
 # async
 tokio = { version = "1.45", features = ["full"] }
 # lsp
