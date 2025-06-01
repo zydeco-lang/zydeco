@@ -1774,45 +1774,84 @@ impl Tyck for TyEnvT<su::TermId> {
             | Tm::Let(term) => {
                 let su::PureBind { binder, bindee, tail } = term;
                 // first, synthesize bindee
-                let (bindee_out, bindee_ty) = {
-                    let bindee_out_ann = self.mk(bindee).tyck_k(tycker, Action::syn())?;
-                    bindee_out_ann.try_as_value(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?
-                };
-                // then, ana binder with bindee_ty
-                let binder_out_ann =
-                    self.mk(binder).tyck_k(tycker, Action::ana(bindee_ty.into()))?;
-                let (binder_out, _binder_ty) = binder_out_ann.as_value();
-                match binder_out.try_destruct_def(tycker) {
-                    | (Some(def), _) => {
-                        // consider adding it to the globals if bindee is global
-                        if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
-                            tycker.statics.global_defs.insert(def, ());
-                            // consider adding it to the inlinables as well
-                            tycker.statics.inlinables.insert(def, bindee_out);
+                let bindee_out_ann = self.mk(bindee).tyck_k(tycker, Action::syn())?;
+                match bindee_out_ann {
+                    | TermAnnId::Type(bindee_out, bindee_kd) => {
+                        // a type alias
+                        // then, ana binder with bindee_kd
+                        let binder_out_ann =
+                            self.mk(binder).tyck_k(tycker, Action::ana(bindee_kd.into()))?;
+                        let (binder_out, _binder_kd) = binder_out_ann.as_type();
+                        // and then assign bindee_out to binder_out;
+                        // the type is effectively inlined
+                        let env = self.mk(Assign(binder_out, bindee_out)).tyck_k(tycker, ())?;
+                        match binder_out.try_destruct_def(tycker) {
+                            | (Some(def), _) => {
+                                // consider adding it to the globals if bindee is global
+                                if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
+                                    tycker.statics.global_defs.insert(def, ());
+                                }
+                            }
+                            | (None, _) => {}
+                        }
+                        // finally, we tyck the tail
+                        let tail_out_ann = env.mk(tail).tyck_k(tycker, Action::switch(switch))?;
+                        match tail_out_ann {
+                            | TermAnnId::Type(tail_out, tail_kd) => {
+                                // the resulting type will be the tail
+                                TermAnnId::Type(tail_out, tail_kd)
+                            }
+                            | TermAnnId::Compu(tail_out, tail_ty) => {
+                                // the resulting computation will only be the tail
+                                TermAnnId::Compu(tail_out, tail_ty)
+                            }
+                            | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Value(_, _) => {
+                                tycker.err_k(
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?
+                            }
                         }
                     }
-                    | (None, _) => {}
+                    | TermAnnId::Value(bindee_out, bindee_ty) => {
+                        // a value alias
+                        // then, ana binder with bindee_ty
+                        let binder_out_ann =
+                            self.mk(binder).tyck_k(tycker, Action::ana(bindee_ty.into()))?;
+                        let (binder_out, _binder_ty) = binder_out_ann.as_value();
+                        match binder_out.try_destruct_def(tycker) {
+                            | (Some(def), _) => {
+                                // consider adding it to the globals if bindee is global
+                                if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
+                                    tycker.statics.global_defs.insert(def, ());
+                                    // consider adding it to the inlinables as well
+                                    tycker.statics.inlinables.insert(def, bindee_out);
+                                }
+                            }
+                            | (None, _) => {}
+                        }
+                        // finally, we tyck the tail
+                        let (tail_out, tail_ty) = {
+                            let tail_out_ann =
+                                self.mk(tail).tyck_k(tycker, Action::switch(switch))?;
+                            tail_out_ann.try_as_compu(
+                                tycker,
+                                TyckError::SortMismatch,
+                                std::panic::Location::caller(),
+                            )?
+                        };
+                        let bind_ty = tail_ty;
+                        let bind = Alloc::alloc(
+                            tycker,
+                            ss::PureBind { binder: binder_out, bindee: bindee_out, tail: tail_out },
+                            bind_ty,
+                        );
+                        TermAnnId::Compu(bind, bind_ty)
+                    }
+                    | TermAnnId::Hole(_) | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
                 }
-                // finally, we tyck the tail
-                let (tail_out, tail_ty) = {
-                    let tail_out_ann = self.mk(tail).tyck_k(tycker, Action::switch(switch))?;
-                    tail_out_ann.try_as_compu(
-                        tycker,
-                        TyckError::SortMismatch,
-                        std::panic::Location::caller(),
-                    )?
-                };
-                let bind_ty = tail_ty;
-                let bind = Alloc::alloc(
-                    tycker,
-                    ss::PureBind { binder: binder_out, bindee: bindee_out, tail: tail_out },
-                    bind_ty,
-                );
-                TermAnnId::Compu(bind, bind_ty)
             }
             | Tm::MoBlock(term) => {
                 let su::MoBlock(body) = term;
