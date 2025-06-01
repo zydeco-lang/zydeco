@@ -647,36 +647,85 @@ impl TypeId {
 }
 
 impl Tycker {
+    pub fn filling_k<R>(
+        &mut self, id: &AnnId, f_set: impl FnOnce(&mut Tycker) -> Result<R>,
+        f_kind: impl FnOnce(&mut Tycker, Kind) -> Result<R>,
+        f_type: impl FnOnce(&mut Tycker, Type) -> Result<R>,
+        f_fill: impl FnOnce(&mut Tycker, FillId) -> Result<R>,
+    ) -> ResultKont<R> {
+        let res = self.filling(id, f_set, f_kind, f_type, f_fill);
+        self.err_p_to_k(res)
+    }
+    /// internally resolves unfilled annotations; fails if the annotation has no solution.
+    /// only fills the uppermost (or head?) annotation
+    pub fn filling<R>(
+        &mut self, id: &AnnId, f_set: impl FnOnce(&mut Tycker) -> Result<R>,
+        f_kind: impl FnOnce(&mut Tycker, Kind) -> Result<R>,
+        f_type: impl FnOnce(&mut Tycker, Type) -> Result<R>,
+        f_fill: impl FnOnce(&mut Tycker, FillId) -> Result<R>,
+    ) -> Result<R> {
+        match id {
+            | AnnId::Set => f_set(self),
+            | AnnId::Kind(id) => match self.statics.kinds[id].to_owned() {
+                | Fillable::Fill(fill) => match self.statics.solus.get(&fill).cloned() {
+                    | Some(AnnId::Kind(kind)) => {
+                        self.filling(&kind.into(), f_set, f_kind, f_type, f_fill)
+                    }
+                    | Some(_) => {
+                        self.err(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                    | None => f_fill(self, fill),
+                },
+                | Fillable::Done(kind) => f_kind(self, kind),
+            },
+            | AnnId::Type(id) => match self.statics.types[id].to_owned() {
+                | Fillable::Fill(fill) => match self.statics.solus.get(&fill).cloned() {
+                    | Some(AnnId::Type(ty)) => {
+                        self.filling(&ty.into(), f_set, f_kind, f_type, f_fill)
+                    }
+                    | Some(_) => {
+                        self.err(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                    | None => f_fill(self, fill),
+                },
+                | Fillable::Done(ty) => f_type(self, ty),
+            },
+        }
+    }
+
     pub fn kind_filled_k(&mut self, id: &KindId) -> ResultKont<Kind> {
         let res = self.kind_filled(id);
         self.err_p_to_k(res)
     }
-    /// internally resolves unfilled kinds; fails if the kind has no solution
-    pub fn kind_filled(&self, id: &KindId) -> Result<Kind> {
-        match self.statics.kinds[id].to_owned() {
-            | Fillable::Fill(fill) => match self.statics.solus.get(&fill) {
-                | Some(AnnId::Kind(kind)) => self.kind_filled(kind),
-                | Some(_) => self.err(TyckError::SortMismatch, std::panic::Location::caller())?,
-                | None => self
-                    .err(TyckError::MissingSolution(vec![fill]), std::panic::Location::caller())?,
+    /// internally resolves unfilled kinds; fails if the kind has no solution.
+    /// only fills the uppermost (or head?) kind
+    pub fn kind_filled(&mut self, id: &KindId) -> Result<Kind> {
+        self.filling(
+            &id.to_owned().into(),
+            |_tycker| unreachable!(),
+            |_tycker, kd| Ok(kd),
+            |_tycker, _ty| unreachable!(),
+            |tycker, fill| {
+                tycker.err(TyckError::MissingSolution(vec![fill]), std::panic::Location::caller())
             },
-            | Fillable::Done(kind) => Ok(kind),
-        }
+        )
     }
 
     pub fn type_filled_k(&mut self, id: &TypeId) -> ResultKont<Type> {
         let res = self.type_filled(id);
         self.err_p_to_k(res)
     }
-    pub fn type_filled(&self, id: &TypeId) -> Result<Type> {
-        match self.statics.types[id].to_owned() {
-            | Fillable::Fill(fill) => match self.statics.solus.get(&fill) {
-                | Some(AnnId::Type(ty)) => self.type_filled(ty),
-                | Some(_) => self.err(TyckError::SortMismatch, std::panic::Location::caller())?,
-                | None => self
-                    .err(TyckError::MissingSolution(vec![fill]), std::panic::Location::caller())?,
+    /// internally resolves unfilled types; fails if the type has no solution.
+    /// only fills the uppermost (or head?) type
+    pub fn type_filled(&mut self, id: &TypeId) -> Result<Type> {
+        self.filling(
+            &id.to_owned().into(),
+            |_tycker| unreachable!(),
+            |_tycker, _kd| unreachable!(),
+            |_tycker, ty| Ok(ty),
+            |tycker, fill| {
+                tycker.err(TyckError::MissingSolution(vec![fill]), std::panic::Location::caller())
             },
-            | Fillable::Done(ty) => Ok(ty),
-        }
+        )
     }
 }

@@ -828,7 +828,7 @@ impl Tyck for TyEnvT<su::TermId> {
             | Tm::Sealed(_) => unreachable!(),
             | Tm::Ann(term) => {
                 let su::Ann { tm, ty } = term;
-                // if the ty is a hole, we should go synthesize
+                // if the ty is a hole, we should stay in current switch
                 match tycker.scoped.terms[&ty] {
                     | Tm::Hole(su::Hole) => {
                         let res = self.mk(tm).tyck_k(tycker, Action::switch(switch))?;
@@ -865,8 +865,8 @@ impl Tyck for TyEnvT<su::TermId> {
                     | Switch::Ana(AnnId::Kind(kd)) => {
                         // a type hole, with a specific kind in mind
                         let fill = Alloc::alloc(tycker, self.inner, ());
-                        let fill = Alloc::alloc(tycker, fill, kd);
-                        TermAnnId::Type(fill, kd)
+                        let fill_out = Alloc::alloc(tycker, fill, kd);
+                        TermAnnId::Type(fill_out, kd)
                     }
                     | Switch::Ana(AnnId::Type(ty)) => {
                         // a hole in either value or computation; like undefined in Haskell

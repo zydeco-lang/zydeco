@@ -101,7 +101,6 @@ impl<'rt> Eval<'rt> for (RcVPat, SemValue) {
         match vpat.as_ref() {
             | VPat::Hole(Hole) => {}
             | VPat::Var(def) => {
-                // println!("<== {:?}", def);
                 runtime.env += [(*def, sem)];
             }
             | VPat::Ctor(Ctor(ctor, vpat)) => match sem {
@@ -142,7 +141,7 @@ impl<'rt> Eval<'rt> for (RcVPat, SemValue) {
                 | SemValue::Thunk(_)
                 | SemValue::Ctor(_)
                 | SemValue::Triv(_)
-                | SemValue::Literal(_) => todo!(),
+                | SemValue::Literal(_) => unreachable!(),
             },
         }
         Step::Done(Ok(()))

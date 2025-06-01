@@ -27,11 +27,6 @@ pub mod syntax {
     pub struct TermLift<T> {
         pub tm: T,
     }
-    // /// monadic elaboration
-    // #[derive(Clone)]
-    // pub struct Elaboration<T> {
-    //     pub tm: T,
-    // }
 
     /// structure pattern introduction
     ///
@@ -814,23 +809,3 @@ fn computation_translation(
 
     Ok((env, res))
 }
-
-// /// Monadic Block Elaboration (Value)
-// fn value_monadic_elaboration(
-//     tycker: &mut Tycker, env: MonEnv, value: ValueId,
-// ) -> Result<(MonEnv, ValueId)> {
-//     let _ = tycker;
-//     let _ = env;
-//     let _ = value;
-//     todo!()
-// }
-
-// /// Monadic Block Elaboration (Computation)
-// fn computation_monadic_elaboration(
-//     tycker: &mut Tycker, env: MonEnv, compu: CompuId,
-// ) -> Result<(MonEnv, CompuId)> {
-//     let _ = tycker;
-//     let _ = env;
-//     let _ = compu;
-//     todo!()
-// }
