@@ -226,17 +226,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for DtorName {
     }
 }
 
-impl<'a, S, T> Ugly<'a, Formatter<'a>> for Ann<S, T>
-where
-    S: Ugly<'a, Formatter<'a>>,
-    T: Ugly<'a, Formatter<'a>>,
-{
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let Ann { tm, ty } = self;
-        format!("({} : {})", tm.ugly(f), ty.ugly(f))
-    }
-}
-
 impl<'a> Ugly<'a, Formatter<'a>> for Hole {
     fn ugly(&self, _f: &'a Formatter) -> String {
         "_".to_string()
@@ -492,7 +481,7 @@ use pretty::RcDoc;
 impl<'a> Pretty<'a, Formatter<'a>> for DefId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let name = &f.scoped.defs[self];
-        RcDoc::text(name.as_str())
+        name.pretty(f)
     }
 }
 
@@ -631,31 +620,60 @@ impl<'a> Pretty<'a, Formatter<'a>> for AbstId {
                 let hint = &f.scoped.defs[hint];
                 hint.ugly(f)
             }
-            | None => "".to_string(),
+            | None => self.concise(),
         };
         match sealed {
-            | Some(_ty) => {
-                RcDoc::text(format!("{}[sealed {}]", hint, self.concise_inner()))
-                // format!("[sealed ({}) {}]", self.concise_inner(), ty.ugly(f))
-            }
-            | None => RcDoc::text(format!("{}[abst {}]", hint, self.concise_inner())),
+            | Some(_ty) => RcDoc::text(format!("{}[sealed]", hint)),
+            | None => RcDoc::text(format!("{}", hint)),
         }
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for DataId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        // for (ctor, ty) in f.statics.datas[self].iter() {
-        //     s += &format!(" | {} : {}", ctor.ugly(f), ty.ugly(f));
-        // }
-        // RcDoc::concat([RcDoc::text("data"), RcDoc::line().nest(2), RcDoc::text("end")])
-        RcDoc::text(self.ugly(f))
+        let data = &f.statics.datas[self];
+        RcDoc::concat([
+            RcDoc::text("data"),
+            RcDoc::concat(data.iter().map(|(ctor, ty)| {
+                RcDoc::concat([
+                    RcDoc::line(),
+                    RcDoc::text("|"),
+                    RcDoc::space(),
+                    ctor.pretty(f),
+                    RcDoc::space(),
+                    RcDoc::text(":"),
+                    RcDoc::space(),
+                    ty.pretty(f),
+                ])
+            })),
+            RcDoc::line(),
+            RcDoc::text("end"),
+        ])
+        .group()
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for CoDataId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(self.ugly(f))
+        let codata = &f.statics.codatas[self];
+        RcDoc::concat([
+            RcDoc::text("codata"),
+            RcDoc::concat(codata.iter().map(|(dtor, ty)| {
+                RcDoc::concat([
+                    RcDoc::line(),
+                    RcDoc::text("|"),
+                    RcDoc::space(),
+                    dtor.pretty(f),
+                    RcDoc::space(),
+                    RcDoc::text(":"),
+                    RcDoc::space(),
+                    ty.pretty(f),
+                ])
+            })),
+            RcDoc::line(),
+            RcDoc::text("end"),
+        ])
+        .group()
     }
 }
 
@@ -674,17 +692,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for CtorName {
 impl<'a> Pretty<'a, Formatter<'a>> for DtorName {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text(self.ugly(f))
-    }
-}
-
-impl<'a, S, T> Pretty<'a, Formatter<'a>> for Ann<S, T>
-where
-    S: Pretty<'a, Formatter<'a>>,
-    T: Pretty<'a, Formatter<'a>>,
-{
-    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Ann { tm, ty } = self;
-        RcDoc::concat([tm.pretty(f), RcDoc::text(":"), RcDoc::space(), ty.pretty(f)])
     }
 }
 
@@ -707,7 +714,7 @@ where
             binder.pretty(f),
             RcDoc::space(),
             RcDoc::text("->"),
-            RcDoc::concat([RcDoc::line(), body.pretty(f)]).group().nest(2),
+            RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(2),
         ])
     }
 }
@@ -719,7 +726,7 @@ where
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let App(func, arg) = self;
-        RcDoc::concat([func.pretty(f), RcDoc::line(), arg.pretty(f).nest(2)]).group()
+        RcDoc::concat([func.pretty(f), RcDoc::line(), arg.pretty(f)]).group()
     }
 }
 
@@ -772,13 +779,11 @@ where
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Prod(head, tail) = self;
         RcDoc::concat([
-            // RcDoc::text("("),
             head.pretty(f),
             RcDoc::space(),
             RcDoc::text("*"),
             RcDoc::space(),
             tail.pretty(f),
-            // RcDoc::text(")"),
         ])
     }
 }
@@ -801,9 +806,6 @@ where
         let Thunk(t) = self;
         RcDoc::concat([
             RcDoc::text("{"),
-            // RcDoc::line(),
-            // t.pretty(f).nest(2),
-            // RcDoc::line(),
             RcDoc::space(),
             t.pretty(f),
             RcDoc::space(),
@@ -847,11 +849,10 @@ where
             binder.pretty(f),
             RcDoc::space(),
             RcDoc::text("<-"),
-            RcDoc::space(),
-            bindee.pretty(f),
-            RcDoc::text(";"),
-            RcDoc::line(),
-            tail.pretty(f),
+            RcDoc::concat([RcDoc::line(), bindee.pretty(f), RcDoc::line(), RcDoc::text(";")])
+                .group()
+                .nest(2),
+            RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
         ])
     }
 }
@@ -870,11 +871,13 @@ where
             binder.pretty(f),
             RcDoc::space(),
             RcDoc::text("="),
-            RcDoc::space(),
-            bindee.pretty(f),
-            RcDoc::text("in"),
-            RcDoc::line(),
-            tail.pretty(f),
+            RcDoc::concat([
+                RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(2),
+                RcDoc::line(),
+                RcDoc::text("in"),
+            ])
+            .group(),
+            RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
         ])
     }
 }
@@ -890,9 +893,9 @@ where
             RcDoc::text("fix"),
             RcDoc::space(),
             p.pretty(f),
-            RcDoc::text("->"),
             RcDoc::space(),
-            tm.pretty(f),
+            RcDoc::text("->"),
+            RcDoc::concat([RcDoc::line(), tm.pretty(f)]).nest(2).group(),
         ])
     }
 }
@@ -903,7 +906,7 @@ where
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Ctor(name, tail) = self;
-        RcDoc::concat([name.pretty(f), RcDoc::space(), tail.pretty(f)])
+        RcDoc::concat([name.pretty(f), RcDoc::text("("), tail.pretty(f), RcDoc::text(")")])
     }
 }
 
@@ -977,7 +980,8 @@ where
                     RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(2),
                 ])
             })),
-            RcDoc::concat([RcDoc::line(), RcDoc::text("end")]),
+            RcDoc::line(),
+            RcDoc::text("end"),
         ])
     }
 }
@@ -992,7 +996,6 @@ where
         let _ = arms;
         RcDoc::concat([
             RcDoc::text("comatch"),
-            RcDoc::space(),
             RcDoc::concat(arms.into_iter().map(|CoMatcher { dtor, tail }| {
                 RcDoc::concat([
                     RcDoc::line(),
@@ -1004,7 +1007,8 @@ where
                     RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(2),
                 ])
             })),
-            RcDoc::concat([RcDoc::line(), RcDoc::text("end")]),
+            RcDoc::line(),
+            RcDoc::text("end"),
         ])
     }
 }
