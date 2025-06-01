@@ -23,7 +23,6 @@ zydeco-utils = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }
 derive_more = { workspace = true }
-derive-where = { workspace = true }
 
 # build-time dependency on the lalrpop library:
 [build-dependencies]

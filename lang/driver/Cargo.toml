@@ -18,7 +18,6 @@ zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-dynamics = { workspace = true }
 derive_more = { workspace = true }
-derive-where = { workspace = true }
 rayon = { workspace = true }
 thiserror = { workspace = true }
 sculptor = { workspace = true }

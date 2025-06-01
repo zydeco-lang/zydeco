@@ -14,8 +14,8 @@ description = "general syntax structures for zydeco"
 zydeco-derive = { workspace = true }
 zydeco-utils = { workspace = true }
 derive_more = { workspace = true }
-derive-where = { workspace = true }
-auto_impl = { workspace = true }
+impl-tools = { workspace = true }
+pretty = { workspace = true }
 
 [lib]
 doctest = false
