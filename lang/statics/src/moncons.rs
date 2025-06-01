@@ -819,7 +819,7 @@ where
         // Fixme: is this necessary?
         // let (env, abst, body_ty) = match env.subst_abst.get(&abst).cloned() {
         //     | Some(new) => {
-        //         logg::warn!(
+        //         log::warn!(
         //             "abst hit: {} -> {}",
         //             tycker.dump_statics(abst),
         //             tycker.dump_statics(new)

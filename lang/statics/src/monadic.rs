@@ -400,7 +400,7 @@ fn structure_translation(
         | Type::Forall(ty_forall) => {
             // input: forall (X : K) . B
             // Debug: log
-            // logg::trace!("structure translation of forall: {}", tycker.dump_statics(ty));
+            // log::trace!("structure translation of forall: {}", tycker.dump_statics(ty));
             let Forall(abst, ty) = ty_forall;
             let kd = cs::TypeOf(abst);
             // output: fn (Z : VType) (mz : Thk (M Z)) (f : <f_ty>) -> <body>
@@ -410,7 +410,7 @@ fn structure_translation(
                     // substitute the abstract type `abst` with `abst_x`
                     cs::CBind::new(cs::AbstPat(abst, cs::Ann("X", kd)), move |abst_x: AbstId| {
                         // Debug: log
-                        // logg::trace!("new abstract type: {} -> {}", abst.concise(), abst_x.concise());
+                        // log::trace!("new abstract type: {} -> {}", abst.concise(), abst_x.concise());
                         // <f_ty> = Thk (Z -> forall (X : K) . Thk (Sig_K(X)) -> [B])
                         let f_ty = cs::Thk(Arrow(
                             abst_z,
@@ -478,7 +478,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             //         | Some(hint) => tycker.dump_scoped(hint),
             //         | None => "<unknown>".to_string(),
             //     };
-            //     logg::warn!(
+            //     log::warn!(
             //         "carrier translation of {}({}) may leak",
             //         tycker.dump_statics(abst),
             //         hint
@@ -493,7 +493,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
                 | None => match env.subst_abst.get(&abst).cloned() {
                     | Some(new) => (env, Alloc::alloc(tycker, new, kd)),
                     | None => {
-                        // logg::warn!(
+                        // log::warn!(
                         //     "carrier translation of {} may leak",
                         //     tycker.dump_statics(abst)
                         // );
@@ -675,10 +675,10 @@ fn computation_translation(
 
     // // Debug: print
     // {
-    //     logg::trace!("{}", ">".repeat(20));
-    //     logg::trace!("[begin] {} : {}", tycker.dump_statics(compu), tycker.dump_statics(ty));
-    //     logg::trace!("@ {}", compu.span(tycker));
-    //     logg::trace!("{}", "=".repeat(20));
+    //     log::trace!("{}", ">".repeat(20));
+    //     log::trace!("[begin] {} : {}", tycker.dump_statics(compu), tycker.dump_statics(ty));
+    //     log::trace!("@ {}", compu.span(tycker));
+    //     log::trace!("{}", "=".repeat(20));
     //     for (abst, str) in env.structure.absts.iter() {
     //         let defs = env
     //             .structure
@@ -687,14 +687,14 @@ fn computation_translation(
     //             .filter_map(|(def, a)| (a == abst).then_some(def))
     //             .map(|d| tycker.dump_statics(*d))
     //             .collect::<Vec<_>>();
-    //         logg::trace!(
+    //         log::trace!(
     //             "{} ({}) := {}",
     //             tycker.dump_statics(abst),
     //             defs.join(", "),
     //             tycker.dump_statics(str)
     //         );
     //     }
-    //     logg::trace!("{}", "<".repeat(20));
+    //     log::trace!("{}", "<".repeat(20));
     // }
 
     let (env, res) = match tycker.compu(&compu) {
@@ -794,15 +794,15 @@ fn computation_translation(
 
     // // Debug: print
     // {
-    //     logg::trace!("{}", ">".repeat(20));
-    //     logg::trace!("[end] {} : {}", tycker.dump_statics(compu), tycker.dump_statics(ty));
-    //     logg::trace!("@ {}", compu.span(tycker));
-    //     logg::trace!("{}", "=".repeat(20));
+    //     log::trace!("{}", ">".repeat(20));
+    //     log::trace!("[end] {} : {}", tycker.dump_statics(compu), tycker.dump_statics(ty));
+    //     log::trace!("@ {}", compu.span(tycker));
+    //     log::trace!("{}", "=".repeat(20));
     //     // for (abst, str) in env.structure.absts.iter() {
-    //     //     logg::trace!("{}", tycker.dump_statics(cs::Ann(abst, str)));
+    //     //     log::trace!("{}", tycker.dump_statics(cs::Ann(abst, str)));
     //     // }
-    //     logg::trace!("{}", tycker.dump_statics(res));
-    //     logg::trace!("{}", "<".repeat(20));
+    //     log::trace!("{}", tycker.dump_statics(res));
+    //     log::trace!("{}", "<".repeat(20));
     // }
 
     Ok((env, res))

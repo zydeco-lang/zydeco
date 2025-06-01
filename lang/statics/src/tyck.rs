@@ -1876,9 +1876,9 @@ impl Tyck for TyEnvT<su::TermId> {
                 // Debug: print
                 {
                     println!("{}", ">".repeat(40));
-                    println!("{}", tycker.dump_statics(body));
+                    println!("{}", tycker.pretty_statics(body));
                     println!("{}", "=".repeat(40));
-                    println!("{}", tycker.dump_statics(res_body));
+                    println!("{}", tycker.pretty_statics(res_body));
                     println!("{}", "<".repeat(40));
                 }
 
