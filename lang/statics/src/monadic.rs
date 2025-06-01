@@ -767,10 +767,17 @@ fn computation_translation(
         }
         | Compu::Match(compu) => {
             let Match { scrut, arms } = compu;
-            let scrut_ = cs::TermLift { tm: scrut };
-            let _ = arms;
-            let _ = scrut_;
-            todo!()
+            let (env, scrut_) = cs::TermLift { tm: scrut }.mbuild(tycker, env)?;
+            let arms_ = arms
+                .into_iter()
+                .map(|Matcher { binder, tail }| {
+                    let (env, binder_) = cs::TermLift { tm: binder }.mbuild(tycker, env.clone())?;
+                    let (_env, tail_) = cs::TermLift { tm: tail }.mbuild(tycker, env)?;
+                    Ok(Matcher { binder: binder_, tail: tail_ })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+            (env, Alloc::alloc(tycker, Match { scrut: scrut_, arms: arms_ }, ty_))
         }
         | Compu::CoMatch(compu) => {
             let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
