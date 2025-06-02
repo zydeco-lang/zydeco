@@ -60,6 +60,7 @@ def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
   fn (M: VType -> CType) (mo: Thk (Monad M)) ->
   let ! mt' =
     monadic fn (E: VType) ->
+      let mo-exn = mo-exn in
       comatch
       | .monad -> ! mo-exn E
       | .lift A m ->

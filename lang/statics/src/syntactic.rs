@@ -90,6 +90,9 @@ impl SyntacticallyAnnotated for su::Declaration {
     fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId> {
         use su::Declaration as Decl;
         match self {
+            | Decl::Meta(su::MetaT(_, decl)) => {
+                tycker.scoped.decls[decl].to_owned().syntactically_annotated(tycker)
+            }
             | Decl::AliasBody(su::AliasBody { binder, bindee }) => {
                 let _ = binder;
                 bindee.syntactically_annotated(tycker)

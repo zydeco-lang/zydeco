@@ -44,7 +44,6 @@ use zydeco_utils::arena::*;
 //     }
 // }
 
-
 /// Item projectors out of the statics arena.
 #[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait ArenaStatics {

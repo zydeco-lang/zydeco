@@ -90,6 +90,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
         }
         use Declaration as Decl;
         match inner {
+            | Decl::Meta(d) => s += &d.ugly(f),
             | Decl::AliasBody(d) => s += &d.ugly(f),
             | Decl::AliasHead(d) => s += &d.ugly(f),
             | Decl::Module(d) => s += &d.ugly(f),
@@ -118,6 +119,31 @@ impl<'a> Ugly<'a, Formatter<'a>> for Internal {
             | Internal::Monad => s += "Monad",
             | Internal::Algebra => s += "Algebra",
         }
+        s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Meta {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let mut s = String::new();
+        let Meta { stem, args } = self;
+        s += &stem;
+        s += "(";
+        s += &args.iter().map(|a| a.ugly(f)).collect::<Vec<_>>().join(",");
+        s += ")";
+        s
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for MetaT<T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let mut s = String::new();
+        let MetaT(meta, decl) = self;
+        s += &meta.ugly(f);
+        s += &decl.ugly(f);
         s
     }
 }

@@ -167,6 +167,11 @@ impl Resolve for DeclId {
         let local = Local { under: *self, ..Local::default() };
         let Modifiers { public: _, external: _, inner } = decl;
         match inner.clone() {
+            | Declaration::Meta(decl) => {
+                let MetaT(meta, decl) = decl;
+                let _ = meta;
+                let () = decl.resolve(resolver, global)?;
+            }
             | Declaration::AliasBody(decl) => {
                 let AliasBody { binder, bindee } = decl;
                 // resolve bindee first
@@ -493,6 +498,12 @@ impl Collect for SccDeclarations<'_> {
                     // collect context for the binder before collecting for the bindee
                     let decl = collector.decls[id].clone();
                     match decl {
+                        | Declaration::Meta(decl) => {
+                            let MetaT(meta, decl) = decl;
+                            let _ = meta;
+                            let _ = decl;
+                            todo!()
+                        }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder, bindee } = decl;
                             ctx = binder.collect(collector, ctx)?;
@@ -510,6 +521,12 @@ impl Collect for SccDeclarations<'_> {
                     // collect context for bindee before collecting for the binder
                     let decl = collector.decls[id].clone();
                     match decl {
+                        | Declaration::Meta(decl) => {
+                            let MetaT(meta, decl) = decl;
+                            let _ = meta;
+                            let _ = decl;
+                            todo!()
+                        }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder, bindee } = decl;
                             let () = bindee.collect(collector, ctx.to_owned())?;
@@ -536,6 +553,12 @@ impl Collect for SccDeclarations<'_> {
                 for decl in decls.iter() {
                     let decl = collector.decls[decl].clone();
                     match decl {
+                        | Declaration::Meta(decl) => {
+                            let MetaT(meta, decl) = decl;
+                            let _ = meta;
+                            let _ = decl;
+                            todo!()
+                        }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder, bindee: _ } = decl;
                             ctx = binder.collect(collector, ctx)?;
@@ -550,6 +573,12 @@ impl Collect for SccDeclarations<'_> {
                 for decl in decls.iter() {
                     let decl = collector.decls[decl].clone();
                     match decl {
+                        | Declaration::Meta(decl) => {
+                            let MetaT(meta, decl) = decl;
+                            let _ = meta;
+                            let _ = decl;
+                            todo!()
+                        }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder: _, bindee } = decl;
                             let () = bindee.collect(collector, ctx.to_owned())?;

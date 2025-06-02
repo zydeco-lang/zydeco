@@ -33,6 +33,10 @@ impl DocumentSymbolContext<'_> {
     fn declaration(&self, id: &b::DeclId) -> Vec<DocumentSymbol> {
         let b::Modifiers { public: _, external: _, inner } = &self.stew.arena.decls[id];
         match inner {
+            | b::Declaration::Meta(d) => {
+                let b::MetaT(_, decl) = d;
+                self.declaration(decl)
+            }
             | b::Declaration::AliasBody(d) => {
                 let b::AliasBody { binder, bindee } = d;
                 let binder = self.pattern(binder);

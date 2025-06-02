@@ -177,6 +177,7 @@ pub struct CoMatcherParam {
 
 #[derive(From, Clone, Debug)]
 pub enum Term {
+    Meta(MetaT<TermId>),
     Ann(Ann<TermId, TermId>),
     Hole(Hole),
     Var(NameRef<VarName>),
@@ -234,13 +235,6 @@ pub struct Module {
     pub top: TopLevel,
 }
 
-#[derive(Clone, Debug)]
-pub struct Layer {
-    pub name: Option<NameRef<VarName>>,
-    pub uses: Vec<Modifiers<UsePath>>,
-    pub top: TopLevel,
-}
-
 #[derive(From, Clone, Debug)]
 pub struct UseDef(pub UsePath);
 
@@ -257,6 +251,7 @@ pub struct Exec(pub TermId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
+    Meta(MetaT<DeclId>),
     DataDef(DataDef),
     CoDataDef(CoDataDef),
     Define(Define),

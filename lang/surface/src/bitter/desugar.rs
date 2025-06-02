@@ -71,6 +71,11 @@ impl Desugar for t::DeclId {
         let Modifiers { public, external, inner } = desugarer.lookup_decl(self).clone();
         use t::Declaration as Decl;
         let inner = match inner {
+            | Decl::Meta(decl) => {
+                let t::MetaT(meta, decl) = decl;
+                let decl = decl.desugar(desugarer)?;
+                b::MetaT(meta, decl).into()
+            }
             | Decl::DataDef(decl) => {
                 let t::DataDef { name, params, def: body } = decl;
                 // name -> pat
@@ -317,6 +322,14 @@ impl Desugar for t::TermId {
         let term = desugarer.lookup_term(id);
         use t::Term as Tm;
         let res = match term {
+            | Tm::Meta(term) => {
+                let t::MetaT(meta, term) = term;
+                let term = term.desugar(desugarer)?;
+                // b::MetaT(meta, term).into()
+                let _ = meta;
+                let _ = term;
+                todo!()
+            }
             | Tm::Ann(term) => {
                 let t::Ann { tm, ty } = term;
                 let tm = tm.desugar(desugarer)?;

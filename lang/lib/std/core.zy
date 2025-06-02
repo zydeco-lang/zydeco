@@ -1,9 +1,13 @@
 module Builtin where
   /// VType and CType
+  @[intrinsic(VType)]
   pub extern def VType end
+  @[intrinsic(CType)]
   pub extern def CType end
   /// Thk and Ret
+  @[intrinsic(Thk)]
   pub extern def Thk (B : CType) : VType end
+  @[intrinsic(Ret)]
   pub extern def Ret (A : VType) : CType end
   pub alias Thunk = Thk end
   pub alias U = Thk end
@@ -16,13 +20,19 @@ module Builtin where
   /// so the type is registered as a data type but the constructors
   /// are not implemented as internal constructors
 
+  @[intrinsic(Unit)]
   pub extern def Unit : VType end
+  @[intrinsic(Int)]
   pub extern def Int : VType end
+  @[intrinsic(Char)]
   pub extern def Char : VType end
+  @[intrinsic(String)]
   pub extern def String : VType end
+  @[intrinsic(OS)]
   pub extern def OS : CType end
 
   /// interface for monads and their algebras
+  @[intrinsic(Monad)]
   pub extern alias Monad (M: VType -> CType) : CType =
     codata
     | .return : forall (A: VType) .
@@ -31,6 +41,7 @@ module Builtin where
       Thk (M A) -> Thk (A -> M A') -> M A'
     end
   end
+  @[intrinsic(Algebra)]
   pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
     forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
   end

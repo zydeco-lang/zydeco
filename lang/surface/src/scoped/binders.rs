@@ -50,6 +50,11 @@ impl Resolver {
         for id in decls {
             let Modifiers { public: _, external, inner } = &self.bitter.decls[id];
             match inner {
+                | Declaration::Meta(decl) => {
+                    let MetaT(meta, decl) = decl;
+                    let _ = meta;
+                    global = self.collect_global_binders(&[*decl], global)?;
+                }
                 | Declaration::AliasBody(decl) => {
                     let AliasBody { binder, bindee: _ } = decl;
                     let binders = binder.binders(&self.bitter);

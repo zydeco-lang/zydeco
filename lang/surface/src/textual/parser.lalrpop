@@ -72,6 +72,7 @@ extern {
         "->" => Tok::Arrow,
         "<-" => Tok::Assign,
         "_" => Tok::Hole,
+        "@" => Tok::At,
     }
 }
 
@@ -143,6 +144,14 @@ Paren<T>: Paren<T> = SepByDelim<"(", ",", <T>, ")"> => Paren(<>);
 App<T>: App<T> = <T*> => Appli(<>);
 Ann<Tm, Ty>: Ann<Tm, Ty> = <tm:Tm> ":" <ty:Ty> => Ann {<>};
 Hole: Hole = "_" => Hole;
+
+//* ---------------------------------- Meta ---------------------------------- */
+
+MetaT<T>: MetaT<T> = "@" "[" <Meta> "]" <T> => MetaT(<>);
+Meta: Meta = {
+    <stem:MixedId> => Meta { stem, args: Vec::new() },
+    <stem:MixedId> "(" <args:Meta*> ")" => Meta { stem, args },
+};
 
 //* --------------------------------- Pattern -------------------------------- */
 
@@ -227,6 +236,8 @@ Term: Term = {
     // hole and variable
     <Hole> => <>.into(),
     <NameRef<VarName>> => <>.into(),
+    // meta annotated term
+    <MetaT<TermGen<Term>>> => <>.into(),
     // thunk & force
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermGen<Term>> => Force(<>).into(),
@@ -311,6 +322,7 @@ DeclarationGen<D>: DeclId = <Sp<D>> => parser.decl(<>);
 #[inline]
 DeclId: DeclId = <DeclarationGen<Modifiers<Declaration>>>;
 Declaration: Declaration = {
+    <MetaT<DeclId>> => <>.into(),
     <DataDef> => <>.into(),
     <CoDataDef> => <>.into(),
     "define" <GenBind<("=" <TermId>)?>> "end" => Define(<>).into(),

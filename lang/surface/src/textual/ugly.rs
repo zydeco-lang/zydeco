@@ -15,33 +15,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TopLevel {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         let TopLevel(decls) = self;
-        s += &decls
-            .iter()
-            .map(|decl| {
-                let Modifiers { public, external, inner } = &f.arena.decls[decl];
-                let mut s = String::new();
-                if *public {
-                    s += "pub ";
-                }
-                if *external {
-                    s += "extern ";
-                }
-                use Declaration as Decl;
-                match inner {
-                    | Decl::DataDef(d) => s += &d.ugly(f),
-                    | Decl::CoDataDef(d) => s += &d.ugly(f),
-                    | Decl::Define(d) => s += &d.ugly(f),
-                    | Decl::Alias(d) => s += &d.ugly(f),
-                    | Decl::Module(d) => s += &d.ugly(f),
-                    // Decl::Layer(d) => s += &d.ugly(f),
-                    // Decl::UseDef(d) => s += &d.ugly(f),
-                    // Decl::UseBlock(d) => s += &d.ugly(f),
-                    | Decl::Exec(d) => s += &d.ugly(f),
-                }
-                s
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+        s += &decls.iter().map(|decl| (*decl).ugly(f)).collect::<Vec<_>>().join("\n");
         s
     }
 }
@@ -86,6 +60,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
         let mut s = String::new();
         let term = &f.arena.terms[self];
         match term {
+            | Term::Meta(t) => s += &t.ugly(f),
             | Term::Ann(t) => s += &t.ugly(f),
             | Term::Hole(t) => s += &t.ugly(f),
             | Term::Var(t) => s += &t.ugly(f),
@@ -114,6 +89,45 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::CoMatch(t) => s += &t.ugly(f),
             | Term::Dtor(t) => s += &t.ugly(f),
             | Term::Lit(t) => s += &t.ugly(f),
+        }
+        s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Modifiers { public, external, inner } = &f.arena.decls[self];
+        let mut s = String::new();
+        if *public {
+            s += "pub ";
+        }
+        if *external {
+            s += "extern ";
+        }
+        use Declaration as Decl;
+        match inner {
+            | Decl::Meta(d) => s += &d.ugly(f),
+            | Decl::DataDef(d) => s += &d.ugly(f),
+            | Decl::CoDataDef(d) => s += &d.ugly(f),
+            | Decl::Define(d) => s += &d.ugly(f),
+            | Decl::Alias(d) => s += &d.ugly(f),
+            | Decl::Module(d) => s += &d.ugly(f),
+            // Decl::UseBlock(d) => s += &d.ugly(f),
+            | Decl::Exec(d) => s += &d.ugly(f),
+        }
+        s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Meta {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let mut s = String::new();
+        let Meta { stem, args } = self;
+        s += &stem;
+        if !args.is_empty() {
+            s += "(";
+            s += &args.iter().map(|a| a.ugly(f)).collect::<Vec<_>>().join(",");
+            s += ")";
         }
         s
     }
@@ -553,6 +567,22 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
     }
 }
 
+impl<'a, T> Ugly<'a, Formatter<'a>> for MetaT<T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let mut s = String::new();
+        let MetaT(meta, decl) = self;
+        s += "@[";
+        s += &meta.ugly(f);
+        s += "]";
+        s += " ";
+        s += &(*decl).ugly(f);
+        s
+    }
+}
+
 //<'a> impl Ugly<'a, Formatter<'a>> for UseBind {
 //     fn ugly(&self, f: &'a Formatter) -> String {
 //         let mut s = String::new();
@@ -597,17 +627,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
 //     }
 // }
 
-//<'a> impl Ugly<'a, Formatter<'a>> for UseDef {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let UseDef(u) = self;
-//         s += "use ";
-//         s += &u.ugly(f);
-//         s += " end";
-//         s
-//     }
-// }
-
 //<'a> impl Ugly<'a, Formatter<'a>> for UseBlock {
 //     fn ugly(&self, f: &'a Formatter) -> String {
 //         let mut s = String::new();
@@ -636,31 +655,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Module {
         s
     }
 }
-
-//<'a> impl Ugly<'a, Formatter<'a>> for Layer {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let Layer { name, uses, top } = self;
-//         if let Some(name) = name {
-//             s += "layer ";
-//             s += &name.ugly(f);
-//         }
-//         for Modifiers { public, external, inner } in uses {
-//             if *public {
-//                 s += " pub";
-//             }
-//             if *external {
-//                 s += " extern";
-//             }
-//             s += " use ";
-//             s += &inner.ugly(f);
-//         }
-//         s += " where\n";
-//         s += &top.ugly(f);
-//         s += "\nend";
-//         s
-//     }
-// }
 
 impl<'a> Ugly<'a, Formatter<'a>> for Define {
     fn ugly(&self, f: &'a Formatter) -> String {

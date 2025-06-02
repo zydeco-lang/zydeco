@@ -152,16 +152,6 @@ pub struct Module {
 }
 
 // #[derive(Clone, Debug)]
-// pub struct Layer {
-//     pub name: Option<NameRef<VarName>>,
-//     pub uses: Vec<Modifiers<UsePath>>,
-//     pub top: TopLevel,
-// }
-
-// #[derive(From, Clone, Debug)]
-// pub struct UseDef(pub UsePath);
-
-// #[derive(Clone, Debug)]
 // pub struct UseBlock {
 //     pub uses: UsePath,
 //     pub top: TopLevel,
@@ -172,11 +162,10 @@ pub struct Exec(pub TermId);
 
 #[derive(Clone, From, Debug)]
 pub enum Declaration {
+    Meta(MetaT<DeclId>),
     AliasBody(AliasBody),
     AliasHead(AliasHead),
     Module(Module),
-    // Layer(Layer),
-    // UseDef(UseDef),
     // UseBlock(UseBlock),
     Exec(Exec),
 }

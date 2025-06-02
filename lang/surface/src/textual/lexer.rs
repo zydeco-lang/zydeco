@@ -123,6 +123,8 @@ pub enum Tok<'input> {
     Assign,
     #[token("_")]
     Hole,
+    #[token("@")]
+    At,
 }
 
 impl Display for Tok<'_> {
@@ -183,6 +185,7 @@ impl Display for Tok<'_> {
             | Tok::Arrow => write!(f, "->"),
             | Tok::Assign => write!(f, "<-"),
             | Tok::Hole => write!(f, "_"),
+            | Tok::At => write!(f, "@"),
         }
     }
 }

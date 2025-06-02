@@ -63,6 +63,17 @@ pub type ProdU<T> = Prod<T, T>;
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Sealed<T>(pub T);
 
+/* ---------------------------------- Meta ---------------------------------- */
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Meta {
+    pub stem: String,
+    pub args: Vec<Meta>,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct MetaT<T>(pub Meta, pub T);
+
 /* --------------------------------- Common --------------------------------- */
 
 /// `{ b }` has type `Thk B`
