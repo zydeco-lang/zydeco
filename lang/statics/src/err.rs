@@ -41,19 +41,23 @@ impl Tycker {
                 s
             }
             | TyckError::MissingStructure(ty) => {
-                format!("Missing structure for type: {}", self.ugly_statics(ty))
+                format!("Missing structure for type: {}", self.pretty_statics_nested(ty, "\t"))
             }
             | TyckError::SortMismatch => format!("Sort mismatch"),
             | TyckError::KindMismatch => format!("Kind mismatch"),
             | TyckError::TypeMismatch { expected, found } => {
                 format!(
-                    "Type mismatch: expected `{}`, found `{}`",
-                    self.ugly_statics(expected),
-                    self.ugly_statics(found)
+                    "Type mismatch: expected {}\n, found {}",
+                    self.pretty_statics_nested(expected, "\t"),
+                    self.pretty_statics_nested(found, "\t")
                 )
             }
             | TyckError::TypeExpected { expected, found } => {
-                format!("Type expected: {}, found `{}`", expected, self.ugly_statics(found))
+                format!(
+                    "Type expected: {}, found {}",
+                    expected,
+                    self.pretty_statics_nested(found, "\t")
+                )
             }
             | TyckError::MissingDataArm(ctor) => format!("Missing data arm: {:?}", ctor),
             | TyckError::MissingCoDataArm(dtor) => format!("Missing codata arm: {:?}", dtor),
@@ -63,19 +67,27 @@ impl Tycker {
             | TyckError::Expressivity(s) => format!("{}", s),
             | TyckError::NotInlinable(def) => {
                 let span = def.span(self);
-                format!("Cannot inline definition: {} ({})", self.ugly_statics(def), span)
+                format!(
+                    "Cannot inline definition: {} ({})",
+                    self.pretty_statics_nested(def, "\t"),
+                    span
+                )
             }
             | TyckError::NotInlinableSeal(abst) => {
                 use zydeco_utils::arena::ArenaAccess;
                 let hint_msg = match self.statics.abst_hints.get(&abst) {
                     | Some(hint) => {
-                        format!(", defined by {} ({})", self.ugly_statics(hint), hint.span(self))
+                        format!(
+                            ", defined by {} ({})",
+                            self.pretty_statics_nested(hint, "\t"),
+                            hint.span(self)
+                        )
                     }
                     | None => "".to_string(),
                 };
                 format!(
                     "Cannot inline sealed abstract type: {}{}",
-                    self.ugly_statics(abst),
+                    self.pretty_statics_nested(abst, "\t"),
                     hint_msg
                 )
             }
@@ -128,7 +140,10 @@ impl Tycker {
                             s += "\t\t<< (syn)\n";
                         }
                         | Switch::Ana(ann) => {
-                            s += &format!("\t\t<< (ana) {}\n", truncated(self.ugly_statics(ann)));
+                            s += &format!(
+                                "\t\t<< (ana) {}\n",
+                                truncated(self.pretty_statics_nested(ann, "\t\t\t"))
+                            );
                         }
                     }
                 }
@@ -140,46 +155,76 @@ impl Tycker {
                             s += "\t\t<< (syn)\n";
                         }
                         | Switch::Ana(ann) => {
-                            s += &format!("\t\t<< (ana) {}\n", truncated(self.ugly_statics(ann)));
+                            s += &format!(
+                                "\t\t<< (ana) {}\n",
+                                truncated(self.pretty_statics_nested(ann, "\t\t\t"))
+                            );
                         }
                     }
                 }
                 | TyckTask::Lub(lhs, rhs) => {
                     s += "\t- when computing least upper bound:\n";
-                    s += &format!("\t\t>> {}\n", truncated(self.ugly_statics(lhs)));
-                    s += &format!("\t\t>> {}\n", truncated(self.ugly_statics(rhs)));
+                    s += &format!(
+                        "\t\t>> {}\n",
+                        truncated(self.pretty_statics_nested(lhs, "\t\t\t"))
+                    );
+                    s += &format!(
+                        "\t\t>> {}\n",
+                        truncated(self.pretty_statics_nested(rhs, "\t\t\t"))
+                    );
                 }
                 | TyckTask::SignatureGen(ann) => {
                     s += "\t- when generating signature:\n";
-                    s += &format!("\t\t>> {}\n", truncated(self.ugly_statics(ann)));
+                    s += &format!(
+                        "\t\t>> {}\n",
+                        truncated(self.pretty_statics_nested(ann, "\t\t\t"))
+                    );
                 }
                 | TyckTask::StructureGen(ann) => {
                     s += "\t- when generating structure:\n";
-                    s += &format!("\t\t>> {}\n", truncated(self.ugly_statics(ann)));
+                    s += &format!(
+                        "\t\t>> {}\n",
+                        truncated(self.pretty_statics_nested(ann, "\t\t\t"))
+                    );
                 }
                 | TyckTask::MonadicLiftPat(pat) => match pat {
                     | PatId::Type(ty) => {
                         s += "\t- when performing monadic lift of type pattern:\n";
-                        s += &format!("\t\t>> {}\n", truncated(self.ugly_statics(ty)));
+                        s += &format!(
+                            "\t\t>> {}\n",
+                            truncated(self.pretty_statics_nested(ty, "\t\t\t"))
+                        );
                     }
                     | PatId::Value(value) => {
                         s += "\t- when performing monadic lift of value pattern:\n";
-                        s += &format!("\t\t>> {}\n", truncated(self.ugly_statics(value)));
+                        s += &format!(
+                            "\t\t>> {}\n",
+                            truncated(self.pretty_statics_nested(value, "\t\t\t"))
+                        );
                     }
                 },
                 | TyckTask::MonadicLiftTerm(term) => match term {
                     | TermId::Kind(_) => unreachable!(),
                     | TermId::Type(ty) => {
                         s += "\t- when performing monadic lift of type:\n";
-                        s += &format!("\t\t>> {}\n", truncated(self.ugly_statics(ty)));
+                        s += &format!(
+                            "\t\t>> {}\n",
+                            truncated(self.pretty_statics_nested(ty, "\t\t\t"))
+                        );
                     }
                     | TermId::Value(value) => {
                         s += "\t- when performing monadic lift of value:\n";
-                        s += &format!("\t\t>> {}\n", truncated(self.ugly_statics(value)));
+                        s += &format!(
+                            "\t\t>> {}\n",
+                            truncated(self.pretty_statics_nested(value, "\t\t\t"))
+                        );
                     }
                     | TermId::Compu(compu) => {
                         s += "\t- when performing monadic lift of computation:\n";
-                        s += &format!("\t\t>> {}\n", truncated(self.ugly_statics(compu)));
+                        s += &format!(
+                            "\t\t>> {}\n",
+                            truncated(self.pretty_statics_nested(compu, "\t\t\t"))
+                        );
                     }
                 },
             }
