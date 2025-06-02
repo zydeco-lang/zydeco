@@ -642,8 +642,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for DataId {
                     ctor.pretty(f),
                     RcDoc::space(),
                     RcDoc::text(":"),
-                    RcDoc::space(),
-                    ty.pretty(f),
+                    RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(2),
                 ])
             })),
             RcDoc::line(),
@@ -666,8 +665,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for CoDataId {
                     dtor.pretty(f),
                     RcDoc::space(),
                     RcDoc::text(":"),
-                    RcDoc::space(),
-                    ty.pretty(f),
+                    RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(2),
                 ])
             })),
             RcDoc::line(),
@@ -726,7 +724,12 @@ where
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let App(func, arg) = self;
-        RcDoc::concat([func.pretty(f), RcDoc::line(), arg.pretty(f)]).group()
+        RcDoc::concat([
+            RcDoc::text("("),
+            func.pretty(f),
+            RcDoc::concat([RcDoc::line(), arg.pretty(f)]).group().nest(2),
+            RcDoc::text(")"),
+        ])
     }
 }
 
@@ -935,9 +938,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Forall {
             abst.pretty(f),
             RcDoc::space(),
             RcDoc::text("."),
-            RcDoc::space(),
-            ty.pretty(f),
+            RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(2),
         ])
+        .group()
     }
 }
 
@@ -950,9 +953,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Exists {
             tpat.pretty(f),
             RcDoc::space(),
             RcDoc::text("."),
-            RcDoc::space(),
-            ty.pretty(f),
+            RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(2),
         ])
+        .group()
     }
 }
 

@@ -1,0 +1,133 @@
+module Builtin where
+  /// VType and CType
+  pub extern def VType end
+  pub extern def CType end
+  /// Thk and Ret
+  pub extern def Thk (B : CType) : VType end
+  pub extern def Ret (A : VType) : CType end
+
+  /// primitive base types
+  pub extern def Unit : VType end
+  pub extern def Int : VType end
+  pub extern def Char : VType end
+  pub extern def String : VType end
+  pub extern def OS : CType end
+
+  /// interface for monads and their algebras
+  pub extern alias Monad (M: VType -> CType) : CType =
+    codata
+    | .return : forall (A: VType) .
+      A -> M A
+    | .bind : forall (A: VType) (A': VType) .
+      Thk (M A) -> Thk (A -> M A') -> M A'
+    end
+  end
+  pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
+    forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
+  end
+
+  /// interface for monad transformers
+  pub alias MonadTrans (T: (VType -> CType) -> VType -> CType) : CType =
+    forall (M: VType -> CType) . Thk (Monad M) -> codata
+    | .monad : Monad (T M)
+    | .lift  : forall (A: VType) . Thk (M A) -> T M A
+    end
+  end
+end
+
+module Core where
+  pub alias Empty : VType = data end end
+  pub alias Top : CType = codata end end
+
+  pub alias Option (A : VType) : VType =
+    data
+    | +None : Unit
+    | +Some : A
+    end
+  end
+
+  pub alias Either (E : VType) (A : VType) : VType =
+    data
+    | +Left : E
+    | +Right : A
+    end
+  end
+
+  pub alias Bool : VType =
+    data
+    | +True : Unit
+    | +False : Unit
+    end
+  end
+end
+
+module Arith where
+  pub extern def add : Thk(Int -> Int -> Ret Int) end
+  pub extern def sub : Thk(Int -> Int -> Ret Int) end
+  pub extern def mul : Thk(Int -> Int -> Ret Int) end
+  pub def mult = mul end
+  pub def times = mul end
+  pub extern def div : Thk(Int -> Int -> Ret Int) end
+  pub extern def mod : Thk(Int -> Int -> Ret Int) end
+
+  pub extern def int_eq : Thk(Int -> Int -> Ret Bool) end
+  pub extern def int_lt : Thk(Int -> Int -> Ret Bool) end
+  pub extern def int_gt : Thk(Int -> Int -> Ret Bool) end
+end
+
+module String where
+  pub extern def str_length : Thk(String -> Ret Int) end
+  pub extern def str_append : Thk(String -> String -> Ret String) end
+  pub extern def str_eq : Thk(String -> String -> Ret Bool) end
+  pub extern def str_index : Thk(String -> Int -> Ret Char) end
+
+  /// Conversions
+  pub def unit_to_str : Thk(Unit -> Ret String) = {
+    fn (_u : Unit) -> ret "()"
+  } end
+  pub def bool_to_str : Thk(Bool -> Ret String) = {
+    fn (b : Bool) ->
+      match b
+      | +True() -> ret "True"
+      | +False() -> ret "False"
+      end
+  } end
+  pub extern def int_to_str : Thk(Int -> Ret String) end
+  pub extern def char_to_str : Thk(Char -> Ret String) end
+  pub extern def char_to_int : Thk(Char -> Ret Int) end
+  pub extern def str_to_int : Thk(String -> Ret Int) end
+end
+
+module OS where
+  pub extern def write_str : Thk(String -> Thk(OS) -> OS) end
+  pub extern def read_line : Thk(Thk(String -> OS) -> OS) end
+  pub extern def read_line_as_int : Thk(Thk(Option Int -> OS) -> OS) end
+  pub extern def random_int : Thk(Thk(Int -> OS) -> OS) end
+  pub extern def exit : Thk(Int -> OS) end
+
+  pub def halt : Thk OS = { ! exit 0 } end
+
+  pub def panic : Thk(String -> OS) = {
+    fn (msg: String) ->
+      do msg <- ! str_append "Program panicked with message: " msg;
+      ! write_line msg { ! exit 1 }
+  } end
+
+  pub def write_line : Thk(String -> Thk(OS) -> OS) = {
+    fn (s: String) (k: Thk(OS)) ->
+      do s <- ! str_append s "\n";
+      ! write_str s k
+  } end
+
+  pub def write_int : Thk(Int -> Thk OS -> OS) = {
+    fn (i: Int) (k: Thk OS) ->
+      do s <- ! int_to_str i;
+      ! write_str s k
+  } end
+
+  pub def write_int_line : Thk(Int -> Thk OS -> OS) = {
+    fn (i: Int) (k: Thk OS) ->
+      do s <- ! int_to_str i;
+      ! write_line s k
+  } end
+end

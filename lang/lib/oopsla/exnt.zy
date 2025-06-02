@@ -4,7 +4,7 @@ alias Exn (E: VType) (A: VType) : CType =
   Ret (Either E A)
 end
 
-// Change `Ret` in Exn to `M`
+# Change `Ret` in Exn to `M`
 alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
   M (Either E A)
 end

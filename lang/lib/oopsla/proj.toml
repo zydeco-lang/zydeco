@@ -1,0 +1,23 @@
+name = "OOPSLA"
+
+deps = []
+srcs = [
+    "core.zydeco",
+    # `data.zydeco` is not used in the artifact, but it can be used as
+    # part of a minimal standard library for Zydeco.
+    # "data.zydeco",
+]
+bins = [
+    "polynomial.zydeco",
+    "sum_and_mult.zydeco",
+    "cbv.zydeco",
+    "monads.zydeco",
+    "exn.zydeco",
+    "free.zydeco",
+    "algebra.zydeco",
+    "transformers.zydeco",
+    "exnt.zydeco",
+    "exnkt.zydeco",
+]
+
+std = "NoStd"

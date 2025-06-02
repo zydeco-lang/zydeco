@@ -32,14 +32,13 @@ impl<'rt> Runtime<'rt> {
         let mut scc = self.arena.top.clone();
         let mut konts = Vec::new();
         loop {
-            // println!("{:?}", scc);
             let groups = scc.top();
             // if no more groups are at the top, we're done
             if groups.is_empty() {
                 break;
             }
             for group in groups {
-                // each group should be type checked on its own
+                // each group should be evaluated on its own
                 for decl in &group {
                     let decl = {
                         match self.arena.decls.get(decl) {

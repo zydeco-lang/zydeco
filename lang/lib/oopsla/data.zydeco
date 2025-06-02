@@ -9,6 +9,12 @@ module Identity where
 end
 
 module Pair where
+  pub alias Pair (A : VType) (A' : VType) : VType =
+    data
+    | +Cons : A * A'
+    end
+  end
+
   pub def ! pair (A : VType) (A' : VType) (x : A) (y : A') : Ret (Pair A A') = 
     ret +Cons(x, y)
   end
@@ -97,6 +103,11 @@ module Bool where
 end
 
 module Nat where
+  pub data Nat where
+    | +Z : Unit
+    | +S : Nat
+  end
+
   pub def fix iter (A : VType) (n : Nat) (x : A) (f : U (A -> F A)) : F A =
     match n
     | +Z() -> ret x
@@ -108,6 +119,11 @@ module Nat where
 end
 
 module List where
+  pub data List (A : VType) where
+    | +Nil : Unit
+    | +Cons : A * List A
+  end
+
   pub def ! match_list (A: VType) (B : CType) (xs: List A) (knil: U B) (kcons: U (A -> List A -> B)) : B =
     match xs
     | +Nil() -> ! knil
@@ -425,16 +441,6 @@ module LList where
 end
 
 module Arith where
-  pub extern def add : Thunk(Int -> Int -> Ret Int) end
-  pub extern def sub : Thunk(Int -> Int -> Ret Int) end
-  pub extern def mul : Thunk(Int -> Int -> Ret Int) end
-  pub extern def div : Thunk(Int -> Int -> Ret Int) end
-  pub extern def mod : Thunk(Int -> Int -> Ret Int) end
-
-  pub extern def int_eq : Thunk(Int -> Int -> Ret Bool) end
-  pub extern def int_lt : Thunk(Int -> Int -> Ret Bool) end
-  pub extern def int_gt : Thunk(Int -> Int -> Ret Bool) end
-
   pub def ! int_le (x: Int) (y: Int) : Ret Bool =
     ! not~ { ! int_gt x y }
   end
@@ -499,41 +505,4 @@ module String where
       ret ""
     }
   end
-
-  /// Conversions
-
-  pub def unit_to_str : Thunk(Unit -> Ret String) = {
-    fn (_u : Unit) -> ret "()"
-  } end
-  pub def bool_to_str : Thunk(Bool -> Ret String) = {
-    fn (b : Bool) ->
-      match b
-      | +True() -> ret "True"
-      | +False() -> ret "False"
-      end
-  } end
-
-  pub extern def int_to_str : Thunk(Int -> Ret String) end
-  pub extern def char_to_str : Thunk(Char -> Ret String) end
-  pub extern def char_to_int : Thunk(Char -> Ret Int) end
-  pub extern def str_to_int : Thunk(String -> Ret Int) end
-end
-
-module OS where
-  pub extern def read_till_eof : Thunk(Thunk(String -> OS) -> OS) end
-  pub extern def arg_list : Thunk(Thunk(List String -> OS) -> OS) end
-
-  pub def ! halt : OS = ! exit 0 end
-
-  pub def write_int : Thunk(Int -> Thunk(OS) -> OS) = {
-    fn (i: Int) (k: Thunk(OS)) ->
-      do s <- ! int_to_str i;
-      ! write_str s k
-  } end
-
-  pub def write_int_line : Thunk(Int -> Thunk(OS) -> OS) = {
-    fn (i: Int) (k: Thunk(OS)) ->
-      do s <- ! int_to_str i;
-      ! write_line s k
-  } end
 end

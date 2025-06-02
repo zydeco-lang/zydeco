@@ -1,0 +1,15 @@
+def poly = {
+  # f(x) = x^2 + x + 10
+  fn (x: Int) ->
+    do s <- ! times x x;
+    do y <- ! add x 10;
+    ! add s y
+};
+
+main
+  # the exit code should be 0 for the test to pass
+  do r <- ! poly 10;
+  # since f(10) = 120, we minus the result by 120 to get 0
+  do e <- ! sub r 120;
+  ! exit e
+end
