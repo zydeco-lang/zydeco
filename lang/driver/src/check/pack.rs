@@ -124,14 +124,14 @@ impl PackageScoped {
                 | Tm::Force(sc::Force(body)) => {
                     rm(body);
                 }
-                | Tm::Ret(sc::Ret(body)) => {
+                | Tm::Ret(sc::Return(body)) => {
                     rm(body);
                 }
                 | Tm::Do(sc::Bind { binder: _, bindee, tail }) => {
                     rm(bindee);
                     rm(tail);
                 }
-                | Tm::Let(sc::PureBind { binder: _, bindee, tail }) => {
+                | Tm::Let(sc::Let { binder: _, bindee, tail }) => {
                     rm(bindee);
                     rm(tail);
                 }

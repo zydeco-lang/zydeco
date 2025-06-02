@@ -149,9 +149,9 @@ impl DeepClone for b::TermId {
                 b::Force(term).into()
             }
             | b::Term::Ret(term) => {
-                let b::Ret(term) = term;
+                let b::Return(term) = term;
                 let term = term.deep_clone(desugarer);
-                b::Ret(term).into()
+                b::Return(term).into()
             }
             | b::Term::Do(term) => {
                 let b::Bind { binder, bindee, tail } = term;
@@ -161,11 +161,11 @@ impl DeepClone for b::TermId {
                 b::Bind { binder, bindee, tail }.into()
             }
             | b::Term::Let(term) => {
-                let b::PureBind { binder, bindee, tail } = term;
+                let b::Let { binder, bindee, tail } = term;
                 let binder = binder.deep_clone(desugarer);
                 let bindee = bindee.deep_clone(desugarer);
                 let tail = tail.deep_clone(desugarer);
-                b::PureBind { binder, bindee, tail }.into()
+                b::Let { binder, bindee, tail }.into()
             }
             | b::Term::MoBlock(term) => {
                 let b::MoBlock(body) = term;

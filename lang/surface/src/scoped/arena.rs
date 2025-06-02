@@ -225,7 +225,7 @@ impl LocalFoldScoped<Context<()>> for Collector {
                 self.coctxs_term_local.insert(term, co_body);
             }
             | Term::Ret(inner) => {
-                let Ret(body) = inner;
+                let Return(body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 self.coctxs_term_local.insert(term, co_body);
             }
@@ -238,7 +238,7 @@ impl LocalFoldScoped<Context<()>> for Collector {
                 self.coctxs_term_local.insert(term, co_tail - cx_binder + co_binder + co_bindee);
             }
             | Term::Let(inner) => {
-                let PureBind { binder, bindee, tail } = inner;
+                let Let { binder, bindee, tail } = inner;
                 let co_tail = self.coctxs_term_local[&tail].to_owned();
                 let cx_binder = self.ctxs_pat_local[&binder].to_owned();
                 let co_binder = self.coctxs_pat_local[&binder].to_owned();
@@ -444,7 +444,7 @@ mod impl_obverse_local_post {
                     body.obverse_local_post(f, ctx);
                 }
                 | Term::Ret(inner) => {
-                    let Ret(body) = inner;
+                    let Return(body) = inner;
                     body.obverse_local_post(f, ctx);
                 }
                 | Term::Do(inner) => {
@@ -454,7 +454,7 @@ mod impl_obverse_local_post {
                     tail.obverse_local_post(f, ctx);
                 }
                 | Term::Let(inner) => {
-                    let PureBind { binder, bindee, tail } = inner;
+                    let Let { binder, bindee, tail } = inner;
                     bindee.obverse_local_post(f, ctx);
                     binder.obverse_local_post(f, ctx);
                     tail.obverse_local_post(f, ctx);

@@ -17,7 +17,7 @@ fn mk_rc<T>(t: T) -> Rc<T> {
 
 // /* Function helpers */
 fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
-    Ok(Ret(mk_rc(value.into())).into())
+    Ok(Return(mk_rc(value.into())).into())
 }
 fn app(body: Rc<ZCompute>, arg: ZValue) -> ZCompute {
     App(body, mk_rc(arg.into())).into()

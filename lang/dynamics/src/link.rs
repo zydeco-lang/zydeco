@@ -179,9 +179,9 @@ impl Link for ss::CompuId {
                 let body = body.link(statics);
                 Force(body).into()
             }
-            | Compu::Ret(Ret(body)) => {
+            | Compu::Ret(Return(body)) => {
                 let body = body.link(statics);
-                Ret(body).into()
+                Return(body).into()
             }
             | Compu::Do(Bind { binder, bindee, tail }) => {
                 let binder = binder.link(statics);
@@ -189,11 +189,11 @@ impl Link for ss::CompuId {
                 let tail = tail.link(statics);
                 Bind { binder, bindee, tail }.into()
             }
-            | Compu::Let(PureBind { binder, bindee, tail }) => {
+            | Compu::Let(Let { binder, bindee, tail }) => {
                 let binder = binder.link(statics);
                 let bindee = bindee.link(statics);
                 let tail = tail.link(statics);
-                PureBind { binder, bindee, tail }.into()
+                Let { binder, bindee, tail }.into()
             }
             | Compu::Match(Match { scrut, arms }) => {
                 let scrut = scrut.link(statics);

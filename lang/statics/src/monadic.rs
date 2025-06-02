@@ -733,7 +733,7 @@ fn computation_translation(
             Force(cs::TermLift { tm: value }).mbuild(tycker, env)?
         }
         | Compu::Ret(compu) => {
-            let Ret(value) = compu;
+            let Return(value) = compu;
             App(
                 App(
                     cs::Dtor(Force(env.monad_impl), ".return"),
@@ -754,10 +754,10 @@ fn computation_translation(
             App(App(App(str_, cs::Ty(a_ty_)), Thunk(bindee_)), Thunk(kont)).mbuild(tycker, env)?
         }
         | Compu::Let(compu) => {
-            let PureBind { binder, bindee, tail } = compu;
+            let Let { binder, bindee, tail } = compu;
             let bindee_ = cs::TermLift { tm: bindee };
             let binder_ = cs::TermLift { tm: binder };
-            PureBind { binder: binder_, bindee: bindee_, tail: move |_| cs::TermLift { tm: tail } }
+            Let { binder: binder_, bindee: bindee_, tail: move |_| cs::TermLift { tm: tail } }
                 .mbuild(tycker, env)?
         }
         | Compu::Match(compu) => {

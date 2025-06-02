@@ -184,7 +184,7 @@ impl DocumentSymbolContext<'_> {
                 self.term(body)
             }
             | b::Term::Ret(t) => {
-                let b::Ret(body) = t;
+                let b::Return(body) = t;
                 self.term(body)
             }
             | b::Term::Do(t) => {
@@ -195,7 +195,7 @@ impl DocumentSymbolContext<'_> {
                 [].into_iter().chain(binder).chain(bindee).chain(tail).collect()
             }
             | b::Term::Let(t) => {
-                let b::PureBind { binder, bindee, tail } = t;
+                let b::Let { binder, bindee, tail } = t;
                 let binder = self.pattern(binder);
                 let bindee = self.term(bindee);
                 let tail = self.term(tail);

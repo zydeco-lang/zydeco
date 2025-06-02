@@ -372,10 +372,10 @@ impl<'a> Ugly<'a, Formatter<'a>> for Force<TermId> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Ret<TermId> {
+impl<'a> Ugly<'a, Formatter<'a>> for Return<TermId> {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        let Ret(t) = self;
+        let Return(t) = self;
         s += "ret ";
         s += &t.ugly(f);
         s
@@ -396,10 +396,10 @@ impl<'a> Ugly<'a, Formatter<'a>> for Bind<PatId, TermId, TermId> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for GenPureBind {
+impl<'a> Ugly<'a, Formatter<'a>> for GenLet {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        let GenPureBind { binding, tail } = self;
+        let GenLet { binding, tail } = self;
         s += "let ";
         s += &binding.ugly(f);
         s += " in ";

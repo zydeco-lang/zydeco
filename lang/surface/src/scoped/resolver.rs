@@ -353,7 +353,7 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::Ret(term) => {
-                let Ret(body) = &term;
+                let Return(body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
                 term.into()
             }
@@ -365,7 +365,7 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::Let(term) => {
-                let PureBind { binder, bindee, tail } = &term;
+                let Let { binder, bindee, tail } = &term;
                 let () = bindee.resolve(resolver, (local.clone(), global))?;
                 local = binder.resolve(resolver, (local.clone(), global))?;
                 let () = tail.resolve(resolver, (local, global))?;

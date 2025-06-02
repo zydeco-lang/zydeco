@@ -74,7 +74,7 @@ pub struct Force<Tm>(pub Tm);
 
 /// `ret a` has type `Ret A`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Ret<Tm>(pub Tm);
+pub struct Return<Tm>(pub Tm);
 /// `do x <- b; ...`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Bind<Br, Be, Tail> {
@@ -84,7 +84,7 @@ pub struct Bind<Br, Be, Tail> {
 }
 /// `let x = a in ...`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct PureBind<Br, Be, Tail> {
+pub struct Let<Br, Be, Tail> {
     pub binder: Br,
     pub bindee: Be,
     pub tail: Tail,

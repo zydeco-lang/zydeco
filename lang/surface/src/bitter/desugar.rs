@@ -567,10 +567,10 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Force(term).into(), self.into())
             }
             | Tm::Ret(term) => {
-                let t::Ret(body) = term;
+                let t::Return(body) = term;
                 let body = body.desugar(desugarer)?;
                 // body -> tm
-                let tm = Alloc::alloc(desugarer, b::Ret(body).into(), self.into());
+                let tm = Alloc::alloc(desugarer, b::Return(body).into(), self.into());
                 // ret & hole -> ty
                 let ret = desugarer.ret(self.into());
                 let hole = Alloc::alloc(desugarer, b::Hole.into(), self.into());
@@ -586,10 +586,10 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Bind { binder, bindee, tail }.into(), self.into())
             }
             | Tm::Let(term) => {
-                let t::GenPureBind { binding, tail } = term;
+                let t::GenLet { binding, tail } = term;
                 let (binder, bindee) = binding.desugar(desugarer)?;
                 let tail = tail.desugar(desugarer)?;
-                Alloc::alloc(desugarer, b::PureBind { binder, bindee, tail }.into(), self.into())
+                Alloc::alloc(desugarer, b::Let { binder, bindee, tail }.into(), self.into())
             }
             // Tm::UseLet(term) => {
             //     let t::UseBind { uses, tail } = term;

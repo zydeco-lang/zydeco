@@ -199,7 +199,7 @@ impl<'rt> Eval<'rt> for Computation {
                 runtime.stack.push_back(SemCompu::App(arg));
                 Step::Step(body.as_ref().clone())
             }
-            | Computation::Ret(Ret(v)) => {
+            | Computation::Ret(Return(v)) => {
                 let v = v.as_ref().clone().eval(runtime);
                 match runtime.stack.pop_back() {
                     | Some(SemCompu::Kont(comp, env, vpat)) => {
@@ -217,7 +217,7 @@ impl<'rt> Eval<'rt> for Computation {
                 runtime.env = thunk.env;
                 Step::Step(thunk.body.as_ref().clone())
             }
-            | Computation::Let(PureBind { binder, bindee, tail }) => {
+            | Computation::Let(Let { binder, bindee, tail }) => {
                 let bindee = bindee.as_ref().clone().eval(runtime);
                 let () = (binder, bindee).eval(runtime).expect("pattern match failed in let");
                 Step::Step(tail.as_ref().clone())

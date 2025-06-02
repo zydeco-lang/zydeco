@@ -323,12 +323,12 @@ where
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Ret<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Return<T>
 where
     T: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let Ret(t) = self;
+        let Return(t) = self;
         format!("ret {}", t.ugly(f))
     }
 }
@@ -345,14 +345,14 @@ where
     }
 }
 
-impl<'a, Br, Be, Tail> Ugly<'a, Formatter<'a>> for PureBind<Br, Be, Tail>
+impl<'a, Br, Be, Tail> Ugly<'a, Formatter<'a>> for Let<Br, Be, Tail>
 where
     Br: Ugly<'a, Formatter<'a>>,
     Be: Ugly<'a, Formatter<'a>>,
     Tail: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let PureBind { binder, bindee, tail } = self;
+        let Let { binder, bindee, tail } = self;
         format!("let {} = {} in {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
     }
 }
@@ -825,12 +825,12 @@ where
     }
 }
 
-impl<'a, T> Pretty<'a, Formatter<'a>> for Ret<T>
+impl<'a, T> Pretty<'a, Formatter<'a>> for Return<T>
 where
     T: Pretty<'a, Formatter<'a>>,
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Ret(t) = self;
+        let Return(t) = self;
         RcDoc::concat([RcDoc::text("ret"), RcDoc::space(), t.pretty(f)])
     }
 }
@@ -857,14 +857,14 @@ where
     }
 }
 
-impl<'a, Br, Be, Tail> Pretty<'a, Formatter<'a>> for PureBind<Br, Be, Tail>
+impl<'a, Br, Be, Tail> Pretty<'a, Formatter<'a>> for Let<Br, Be, Tail>
 where
     Br: Pretty<'a, Formatter<'a>>,
     Be: Pretty<'a, Formatter<'a>>,
     Tail: Pretty<'a, Formatter<'a>>,
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let PureBind { binder, bindee, tail } = self;
+        let Let { binder, bindee, tail } = self;
         RcDoc::concat([
             RcDoc::text("let"),
             RcDoc::space(),

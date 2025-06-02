@@ -81,13 +81,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for Computation {
             | Compu::Force(Force(body)) => {
                 format!("! {}", body.ugly(f))
             }
-            | Compu::Ret(Ret(body)) => {
+            | Compu::Ret(Return(body)) => {
                 format!("ret {}", body.ugly(f))
             }
             | Compu::Do(Bind { binder, bindee, tail }) => {
                 format!("do {} <- {}; {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
             }
-            | Compu::Let(PureBind { binder, bindee, tail }) => {
+            | Compu::Let(Let { binder, bindee, tail }) => {
                 format!("let {} = {} in {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
             }
             | Compu::Match(Match { scrut, arms }) => {

@@ -868,16 +868,16 @@ where
     }
 }
 // return
-impl<T> MonConstruct<CompuId> for Ret<T>
+impl<T> MonConstruct<CompuId> for Return<T>
 where
     T: MonConstruct<ValueId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-        let Ret(val) = self;
+        let Return(val) = self;
         let (env, val) = val.mbuild(tycker, env)?;
         let val_ty = tycker.statics.annotations_value[&val];
         let (env, ret_ty) = cs::Ret(val_ty).mbuild(tycker, env)?;
-        Ok((env, Alloc::alloc(tycker, Ret(val), ret_ty)))
+        Ok((env, Alloc::alloc(tycker, Return(val), ret_ty)))
     }
 }
 // bind
@@ -902,7 +902,7 @@ where
     }
 }
 // pure bind
-impl<P, B, F, R> MonConstruct<CompuId> for PureBind<P, B, F>
+impl<P, B, F, R> MonConstruct<CompuId> for Let<P, B, F>
 where
     P: MonConstruct<VPatId>,
     B: MonConstruct<ValueId>,
@@ -910,12 +910,12 @@ where
     R: MonConstruct<CompuId>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
-        let PureBind { binder, bindee, tail } = self;
+        let Let { binder, bindee, tail } = self;
         let (env, bindee) = bindee.mbuild(tycker, env)?;
         let (env, binder) = binder.mbuild(tycker, env)?;
         let (env, tail) = tail(binder).mbuild(tycker, env)?;
         let tail_ty = tycker.statics.annotations_compu[&tail];
-        Ok((env, Alloc::alloc(tycker, PureBind { binder, bindee, tail }, tail_ty)))
+        Ok((env, Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty)))
     }
 }
 // match

@@ -297,9 +297,9 @@ AllocComputation! {
     App<CompuId, TypeId>
     Fix<VPatId, CompuId>
     Force<ValueId>
-    Ret<ValueId>
+    Return<ValueId>
     Bind<VPatId, CompuId, CompuId>
-    PureBind<VPatId, ValueId, CompuId>
+    Let<VPatId, ValueId, CompuId>
     Match<ValueId, VPatId, CompuId>
     CoMatch<CompuId>
     Dtor<CompuId>

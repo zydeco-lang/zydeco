@@ -117,7 +117,6 @@ DtorName: DtorName = <"DtorId"> => DtorName(<>.into());
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
 PathSeg: VarName = {
     <VarName> => <>.into(),
-    // ".." => VarName(String::from("..")),
 };
 NameRef<T>: NameRef<T> = {
     <root:("root" "/")?> <path:(<VarName> "/")*> <inner:T> => {
@@ -218,7 +217,7 @@ TermAnn: Term = {
 #[inline]
 TermId: TermId = <TermGen<Term>>;
 Term: Term = {
-    // Nominal semantics subtlety:
+    // LALRPOP nominal semantics subtlety:
     // Indirect references (TermId) are full term references;
     // Direct ones (TermGen<Term>) are only atomic (precedence -= 1) terms.
 
@@ -232,7 +231,7 @@ Term: Term = {
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermGen<Term>> => Force(<>).into(),
     // ret
-    "ret" <TermGen<Term>> => Ret(<>).into(),
+    "ret" <TermGen<Term>> => Return(<>).into(),
     // monadic block
     "monadic" <TermAnnId> "end" => MoBlock(<>).into(),
     // abstraction (alternative syntax)
@@ -287,10 +286,8 @@ Term: Term = {
     },
     // pure bind
     "let" <binding:GenBindTerm> "in" <tail:TermGen<Term>> => {
-        GenPureBind {<>}.into()
+        GenLet {<>}.into()
     },
-    // // use bind
-    // "use" <uses:UsePath> "in" <tail:TermGen<Term>> => UseBind {<>}.into(),
 };
 
 pub SingleTerm: TermId = TermId;
@@ -320,7 +317,6 @@ Declaration: Declaration = {
     "alias" <GenBindTerm> "end" => Alias(<>).into(),
     "module" <name:(<NameRef<VarName>>)?>
     <top:("where" <TopLevel>)> "end" => Module {<>}.into(),
-    // "use" <UsePath> "end" => UseDef(<>).into(),
     // "use" <uses:UsePath> "where" <top:TopLevel> "end" => UseBlock {
     //     uses, top
     // }.into(),

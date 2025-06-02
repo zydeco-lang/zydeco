@@ -1708,7 +1708,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 TermAnnId::Compu(force, force_ty)
             }
             | Tm::Ret(term) => {
-                let su::Ret(body) = term;
+                let su::Return(body) = term;
                 let ana = match switch {
                     | Switch::Syn => tycker.ret_hole(&self.env, self.inner).into(),
                     | Switch::Ana(ana) => ana,
@@ -1729,7 +1729,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
                 let ret_app_body_ty = cs::Ret(body_ty).build(tycker, &self.env);
-                let ret = Alloc::alloc(tycker, ss::Ret(body_out), ret_app_body_ty);
+                let ret = Alloc::alloc(tycker, ss::Return(body_out), ret_app_body_ty);
                 TermAnnId::Compu(ret, ret_app_body_ty)
             }
             | Tm::Do(term) => {
@@ -1772,7 +1772,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 TermAnnId::Compu(bind, bind_ty)
             }
             | Tm::Let(term) => {
-                let su::PureBind { binder, bindee, tail } = term;
+                let su::Let { binder, bindee, tail } = term;
                 // first, synthesize bindee
                 let bindee_out_ann = self.mk(bindee).tyck_k(tycker, Action::syn())?;
                 match bindee_out_ann {
@@ -1843,7 +1843,7 @@ impl Tyck for TyEnvT<su::TermId> {
                         let bind_ty = tail_ty;
                         let bind = Alloc::alloc(
                             tycker,
-                            ss::PureBind { binder: binder_out, bindee: bindee_out, tail: tail_out },
+                            ss::Let { binder: binder_out, bindee: bindee_out, tail: tail_out },
                             bind_ty,
                         );
                         TermAnnId::Compu(bind, bind_ty)

@@ -323,10 +323,10 @@ impl<'a> Ugly<'a, Formatter<'a>> for Force<TermId> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Ret<TermId> {
+impl<'a> Ugly<'a, Formatter<'a>> for Return<TermId> {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        let Ret(t) = self;
+        let Return(t) = self;
         s += "ret ";
         s += &t.ugly(f);
         s
@@ -347,10 +347,10 @@ impl<'a> Ugly<'a, Formatter<'a>> for Bind<PatId, TermId, TermId> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for PureBind<PatId, TermId, TermId> {
+impl<'a> Ugly<'a, Formatter<'a>> for Let<PatId, TermId, TermId> {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        let PureBind { binder, bindee, tail } = self;
+        let Let { binder, bindee, tail } = self;
         s += "let ";
         s += &binder.ugly(f);
         s += " = ";

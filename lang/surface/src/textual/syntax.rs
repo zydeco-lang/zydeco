@@ -132,17 +132,10 @@ pub struct Exists(pub CoPatId, pub TermId);
 
 /// `let x = a in ...`
 #[derive(Clone, Debug)]
-pub struct GenPureBind {
+pub struct GenLet {
     pub binding: GenBind<TermId>,
     pub tail: TermId,
 }
-
-// /// `use let x = a in ...`
-// #[derive(Clone, Debug)]
-// pub struct UseBind {
-//     pub uses: UsePath,
-//     pub tail: TermId,
-// }
 
 /// `monadic ... end`
 #[derive(Clone, Debug)]
@@ -200,10 +193,9 @@ pub enum Term {
     Prod(ProdU<TermId>),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),
-    Ret(Ret<TermId>),
+    Ret(Return<TermId>),
     Do(Bind<PatId, TermId, TermId>),
-    Let(GenPureBind),
-    // UseLet(UseBind),
+    Let(GenLet),
     MoBlock(MoBlock),
     Data(Data),
     CoData(CoData),
@@ -252,12 +244,6 @@ pub struct Layer {
 #[derive(From, Clone, Debug)]
 pub struct UseDef(pub UsePath);
 
-// #[derive(Clone, Debug)]
-// pub struct UseBlock {
-//     pub uses: UsePath,
-//     pub top: TopLevel,
-// }
-
 // Todo: Add a way to specify the expected output of the execution
 #[derive(Clone, Debug)]
 pub enum ExecType {
@@ -276,9 +262,6 @@ pub enum Declaration {
     Define(Define),
     Alias(Alias),
     Module(Module),
-    // Layer(Layer),
-    // UseDef(UseDef),
-    // UseBlock(UseBlock),
     Exec(Exec),
 }
 
