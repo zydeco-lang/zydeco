@@ -827,8 +827,43 @@ impl Tyck for TyEnvT<su::TermId> {
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
             | Tm::Meta(term) => {
                 let su::MetaT(meta, term) = term;
-                let _ = meta;
-                self.mk(term).tyck_k(tycker, Action::switch(switch))?
+                let res = self.mk(term).tyck_k(tycker, Action::switch(switch))?;
+                if meta.stem == "debug" {
+                    print!("[debug printing] ");
+                    for ss::Meta { stem, args: _ } in meta.args {
+                        print!("{}", stem);
+                    }
+                    match res {
+                        | TermAnnId::Hole(fill) => {
+                            println!(" (hole): {}", fill.concise());
+                        }
+                        | TermAnnId::Kind(kind) => {
+                            println!(" (kind): {}", tycker.pretty_statics(kind));
+                        }
+                        | TermAnnId::Type(ty, kd) => {
+                            println!(
+                                " (type):{}\nof kind:{}",
+                                tycker.pretty_statics_nested(ty, "\t"),
+                                tycker.pretty_statics_nested(kd, "\t"),
+                            );
+                        }
+                        | TermAnnId::Value(val, ty) => {
+                            println!(
+                                " (value):{}\nof type:{}",
+                                tycker.pretty_statics_nested(val, "\t"),
+                                tycker.pretty_statics_nested(ty, "\t"),
+                            );
+                        }
+                        | TermAnnId::Compu(compu, ty) => {
+                            println!(
+                                " (computation):{}\nof type:{}",
+                                tycker.pretty_statics_nested(compu, "\t"),
+                                tycker.pretty_statics_nested(ty, "\t"),
+                            );
+                        }
+                    }
+                }
+                res
             }
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(_) => unreachable!(),
@@ -1918,14 +1953,14 @@ impl Tyck for TyEnvT<su::TermId> {
                     res_body_ty,
                 );
 
-                // Debug: print
-                {
-                    println!("{}", ">".repeat(40));
-                    println!("{}", tycker.pretty_statics(body));
-                    println!("{}", "=".repeat(40));
-                    println!("{}", tycker.pretty_statics(res_body));
-                    println!("{}", "<".repeat(40));
-                }
+                // // Debug: print
+                // {
+                //     println!("{}", ">".repeat(40));
+                //     println!("{}", tycker.pretty_statics(body));
+                //     println!("{}", "=".repeat(40));
+                //     println!("{}", tycker.pretty_statics(res_body));
+                //     println!("{}", "<".repeat(40));
+                // }
 
                 TermAnnId::Compu(res_body, res_body_ty)
             }
