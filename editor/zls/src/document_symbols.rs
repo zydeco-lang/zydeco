@@ -109,6 +109,10 @@ impl DocumentSymbolContext<'_> {
         let tid = self.stew.arena.textual.back(&(*id).into()).unwrap();
         let span = &self.stew.spans[tid];
         match term {
+            | b::Term::Meta(t) => {
+                let b::MetaT(_, term) = t;
+                self.term(term)
+            }
             | b::Term::Internal(t) => {
                 let _ = t;
                 vec![]

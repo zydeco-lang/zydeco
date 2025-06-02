@@ -144,6 +144,11 @@ impl LocalFoldScoped<Context<()>> for Collector {
         self.ctxs_term.insert(term, ctx.to_owned());
         let item = self.term(&term);
         match item {
+            | Term::Meta(inner) => {
+                let MetaT(_meta, inner) = inner;
+                let co_term = self.coctxs_term_local[&inner].to_owned();
+                self.coctxs_term_local.insert(term, co_term);
+            }
             | Term::Internal(_) => {
                 unreachable!()
             }
@@ -385,6 +390,10 @@ mod impl_obverse_local_post {
         {
             let item = f.term(&self);
             match item {
+                | Term::Meta(inner) => {
+                    let MetaT(_meta, term) = inner;
+                    term.obverse_local_post(f, ctx);
+                }
                 | Term::Internal(_) => unreachable!(),
                 | Term::Sealed(inner) => {
                     let Sealed(inner) = inner;

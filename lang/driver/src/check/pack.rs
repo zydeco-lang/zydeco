@@ -87,6 +87,11 @@ impl PackageScoped {
         for (_id, term) in &arena.terms {
             use sc::Term as Tm;
             match term {
+                | Tm::Meta(term) => {
+                    let sc::MetaT(meta, term) = term;
+                    let _ = meta;
+                    rm(term);
+                }
                 | Tm::Internal(_) => unreachable!(),
                 | Tm::Sealed(sc::Sealed(body)) => {
                     rm(body);

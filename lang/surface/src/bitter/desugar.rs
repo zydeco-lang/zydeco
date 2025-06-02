@@ -325,10 +325,7 @@ impl Desugar for t::TermId {
             | Tm::Meta(term) => {
                 let t::MetaT(meta, term) = term;
                 let term = term.desugar(desugarer)?;
-                // b::MetaT(meta, term).into()
-                let _ = meta;
-                let _ = term;
-                todo!()
+                Alloc::alloc(desugarer, b::MetaT(meta, term).into(), self.into())
             }
             | Tm::Ann(term) => {
                 let t::Ann { tm, ty } = term;

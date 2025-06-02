@@ -47,6 +47,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
         let mut s = String::new();
         let term = &f.arena.terms[self];
         match term {
+            | Term::Meta(t) => s += &t.ugly(f),
             | Term::Internal(t) => s += &t.ugly(f),
             | Term::Sealed(t) => s += &t.ugly(f),
             | Term::Ann(t) => s += &t.ugly(f),

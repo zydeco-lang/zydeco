@@ -52,6 +52,11 @@ impl DeepClone for b::TermId {
         let term = desugarer.bitter.terms[self].clone();
         let prev = *desugarer.bitter.textual.back(&(*self).into()).unwrap();
         let term = match &term {
+            | b::Term::Meta(term) => {
+                let b::MetaT(meta, term) = term;
+                let term = term.deep_clone(desugarer);
+                b::MetaT(meta.clone(), term).into()
+            }
             | b::Term::Internal(term) => {
                 use crate::syntax::Internal;
                 match term {

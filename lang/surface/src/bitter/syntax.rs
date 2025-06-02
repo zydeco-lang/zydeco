@@ -98,6 +98,7 @@ pub struct CoDataArm {
 
 #[derive(From, Clone, Debug)]
 pub enum Term<Ref> {
+    Meta(MetaT<TermId>),
     Internal(Internal),
     Sealed(Sealed<TermId>),
     Ann(Ann<TermId, TermId>),

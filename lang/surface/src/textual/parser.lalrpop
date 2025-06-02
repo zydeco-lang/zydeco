@@ -149,8 +149,9 @@ Hole: Hole = "_" => Hole;
 
 MetaT<T>: MetaT<T> = "@" "[" <Meta> "]" <T> => MetaT(<>);
 Meta: Meta = {
+    <stem:String> => Meta { stem, args: Vec::new() },
     <stem:MixedId> => Meta { stem, args: Vec::new() },
-    <stem:MixedId> "(" <args:Meta*> ")" => Meta { stem, args },
+    <stem:MixedId> <args:SepByDelim<"(", ",", <Meta>, ")">> => Meta { stem, args },
 };
 
 //* --------------------------------- Pattern -------------------------------- */
@@ -236,8 +237,6 @@ Term: Term = {
     // hole and variable
     <Hole> => <>.into(),
     <NameRef<VarName>> => <>.into(),
-    // meta annotated term
-    <MetaT<TermGen<Term>>> => <>.into(),
     // thunk & force
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermGen<Term>> => Force(<>).into(),
@@ -299,6 +298,8 @@ Term: Term = {
     "let" <binding:GenBindTerm> "in" <tail:TermGen<Term>> => {
         GenLet {<>}.into()
     },
+    // meta annotated term
+    <MetaT<TermGen<Term>>> => <>.into(),
 };
 
 pub SingleTerm: TermId = TermId;

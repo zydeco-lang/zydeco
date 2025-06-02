@@ -261,6 +261,11 @@ impl Resolve for TermId {
     ) -> Result<Self::Out> {
         let term = resolver.bitter.terms[self].clone();
         let res: Term<DefId> = match term {
+            | Term::Meta(term) => {
+                let MetaT(_, inner) = term;
+                let () = inner.resolve(resolver, (local, global))?;
+                term.into()
+            }
             | Term::Internal(_) => {
                 // internal terms should be resolved by looking up internal_to_def
                 // which has already been updated by primitives when collecting top level

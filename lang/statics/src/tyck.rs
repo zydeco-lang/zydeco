@@ -825,6 +825,11 @@ impl Tyck for TyEnvT<su::TermId> {
 
         use su::Term as Tm;
         let out_ann = match tycker.scoped.terms[&self.inner].to_owned() {
+            | Tm::Meta(term) => {
+                let su::MetaT(meta, term) = term;
+                let _ = meta;
+                self.mk(term).tyck_k(tycker, Action::switch(switch))?
+            }
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(_) => unreachable!(),
             | Tm::Ann(term) => {

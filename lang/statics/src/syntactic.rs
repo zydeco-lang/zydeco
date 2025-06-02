@@ -111,6 +111,11 @@ impl SyntacticallyAnnotated for su::TermId {
         let term = tycker.scoped.terms[self].clone();
         use su::Term as Tm;
         match term {
+            | Tm::Meta(term) => {
+                let su::MetaT(meta, term) = term;
+                let _ = meta;
+                term.syntactically_annotated(tycker)
+            }
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;
@@ -155,6 +160,11 @@ impl SyntacticallySealed for su::TermId {
         let term = tycker.scoped.terms[self].clone();
         use surface_syntax::Term as Tm;
         match term {
+            | Tm::Meta(term) => {
+                let su::MetaT(meta, term) = term;
+                let _ = meta;
+                term.syntactically_sealed(tycker)
+            }
             | Tm::Internal(_) => unreachable!(),
             | Tm::Sealed(term) => {
                 let su::Sealed(term) = term;

@@ -21,7 +21,9 @@ end
 def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
   fn (M: VType -> CType) (mo: Thk (Monad M)) ->
   let ! mt' =
+    @[debug("outer")]
     monadic fn (E: VType) ->
+      @[debug("inner")]
       let mo-exnk = mo-exnk in
       comatch
       | .monad -> ! mo-exnk E
