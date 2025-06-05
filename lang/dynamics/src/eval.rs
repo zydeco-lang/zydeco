@@ -157,6 +157,7 @@ impl<'rt> Eval<'rt> for Value {
             }
             | Value::Var(var) => {
                 // println!("==> {:?}", var);
+                // println!("==> {:?}", runtime.arena.defs[&var]);
                 Step::Done(runtime.env.get(&var).expect("variable does not exist").clone())
             }
             | Value::Thunk(Thunk(body)) => {
