@@ -28,7 +28,7 @@ impl<'rt> Runtime<'rt> {
     ) -> Self {
         Runtime { input, output, args, stack: im::Vector::new(), env: Env::new(), arena }
     }
-    pub fn run(mut self) -> ProgKont {
+    pub fn run(mut self) -> Vec<ProgKont> {
         let mut scc = self.arena.top.clone();
         let mut konts = Vec::new();
         loop {
@@ -54,10 +54,7 @@ impl<'rt> Runtime<'rt> {
                 scc.release(group);
             }
         }
-        if konts.len() != 1 {
-            panic!("{} entry points found, expected exactly 1", konts.len());
-        }
-        konts.pop().unwrap()
+        konts
     }
 }
 
@@ -71,32 +68,46 @@ impl<'rt> Eval<'rt> for Declaration {
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         match self {
             | Declaration::VAliasBody(VAliasBody { binder, bindee }) => {
-                // match binder.as_ref() {
-                //     | ValuePattern::Var(binder) => {
-                //         println!("{:?}", binder);
-                //     }
-                //     | _ => {
-                //         println!("{:?}", binder);
+                // // Debug: print
+                // {
+                //     use ValuePattern as VPat;
+                //     match binder.as_ref() {
+                //         | VPat::Hole(Hole) => println!("hole"),
+                //         | VPat::Var(def) => println!("{}", runtime.arena.defs[def]),
+                //         | _ => println!("{:?}", binder.as_ref()),
                 //     }
                 // }
+                // copy and later restore the env
+                let env = runtime.env.clone();
                 let bindee = bindee.as_ref().clone().eval(runtime);
-                let () =
-                    (binder, bindee).eval(runtime).expect("pattern match failed in definition");
+                runtime.env = env;
+                let () = Assign(binder, bindee)
+                    .eval(runtime)
+                    .expect("pattern match failed in definition");
                 Step::Done(None)
             }
             | Declaration::Exec(Exec(comp)) => {
+                // // Debug: print
+                // {
+                //     println!("main");
+                // }
+                // copy and later restore the env
+                let env = runtime.env.clone();
                 let prog_kont = comp.as_ref().clone().eval(runtime);
+                runtime.env = env;
                 Step::Done(Some(prog_kont))
             }
         }
     }
 }
 
-impl<'rt> Eval<'rt> for (RcVPat, SemValue) {
+struct Assign<S, T>(S, T);
+
+impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
     type Out = Result<(), ()>;
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out> {
         use ValuePattern as VPat;
-        let (vpat, sem) = self;
+        let Assign(vpat, sem) = self;
         match vpat.as_ref() {
             | VPat::Hole(Hole) => {}
             | VPat::Var(def) => {
@@ -107,7 +118,7 @@ impl<'rt> Eval<'rt> for (RcVPat, SemValue) {
                     if ctor != &ctor_ {
                         return Step::Done(Err(()));
                     }
-                    match (vpat.to_owned(), *body).eval(runtime) {
+                    match Assign(vpat.to_owned(), *body).eval(runtime) {
                         | Ok(()) => {}
                         | Err(()) => return Step::Done(Err(())),
                     }
@@ -128,11 +139,11 @@ impl<'rt> Eval<'rt> for (RcVPat, SemValue) {
             },
             | VPat::VCons(Cons(a, b)) => match sem {
                 | SemValue::VCons(Cons(a_, b_)) => {
-                    match (a.to_owned(), *a_).eval(runtime) {
+                    match Assign(a.to_owned(), *a_).eval(runtime) {
                         | Ok(()) => {}
                         | Err(()) => return Step::Done(Err(())),
                     }
-                    match (b.to_owned(), *b_).eval(runtime) {
+                    match Assign(b.to_owned(), *b_).eval(runtime) {
                         | Ok(()) => {}
                         | Err(()) => return Step::Done(Err(())),
                     }
@@ -156,8 +167,13 @@ impl<'rt> Eval<'rt> for Value {
                 panic!("Hole in value")
             }
             | Value::Var(var) => {
-                // println!("==> {:?}", var);
-                // println!("==> {:?}", runtime.arena.defs[&var]);
+                // // Debug: print
+                // {
+                //     for (def, _) in runtime.env.iter() {
+                //         println!("\t{}", runtime.arena.defs[def]);
+                //     }
+                //     println!("==> {}", runtime.arena.defs[&var]);
+                // }
                 Step::Done(runtime.env.get(&var).expect("variable does not exist").clone())
             }
             | Value::Thunk(Thunk(body)) => {
@@ -189,7 +205,8 @@ impl<'rt> Eval<'rt> for Computation {
             }
             | Computation::VAbs(Abs(param, body)) => match runtime.stack.pop_back() {
                 | Some(SemCompu::App(arg)) => {
-                    let () = (param, arg).eval(runtime).expect("pattern match failed in function");
+                    let () =
+                        Assign(param, arg).eval(runtime).expect("pattern match failed in function");
                     Step::Step(body.as_ref().clone())
                 }
                 | _ => panic!("App not at stacktop"),
@@ -204,7 +221,8 @@ impl<'rt> Eval<'rt> for Computation {
                 match runtime.stack.pop_back() {
                     | Some(SemCompu::Kont(comp, env, vpat)) => {
                         runtime.env = env;
-                        let () = (vpat, v).eval(runtime).expect("pattern match failed in return");
+                        let () =
+                            Assign(vpat, v).eval(runtime).expect("pattern match failed in return");
                         Step::Step(comp.as_ref().clone())
                     }
                     | None => Step::Done(ProgKont::Ret(v)),
@@ -219,7 +237,7 @@ impl<'rt> Eval<'rt> for Computation {
             }
             | Computation::Let(Let { binder, bindee, tail }) => {
                 let bindee = bindee.as_ref().clone().eval(runtime);
-                let () = (binder, bindee).eval(runtime).expect("pattern match failed in let");
+                let () = Assign(binder, bindee).eval(runtime).expect("pattern match failed in let");
                 Step::Step(tail.as_ref().clone())
             }
             | Computation::Do(Bind { binder, bindee, tail }) => {
@@ -231,7 +249,7 @@ impl<'rt> Eval<'rt> for Computation {
                     body: std::rc::Rc::new(Fix(vpat.clone(), body.clone()).into()),
                     env: runtime.env.clone(),
                 });
-                let () = (vpat, thunk).eval(runtime).expect("pattern match failed in fix");
+                let () = Assign(vpat, thunk).eval(runtime).expect("pattern match failed in fix");
                 Step::Step(body.as_ref().clone())
             }
             | Computation::Match(Match { scrut, arms }) => {
@@ -239,7 +257,7 @@ impl<'rt> Eval<'rt> for Computation {
                 let mut binders = Vec::new();
                 for Matcher { binder, tail } in arms {
                     binders.push(binder.clone());
-                    match (binder.to_owned(), scrut.clone()).eval(runtime) {
+                    match Assign(binder.to_owned(), scrut.clone()).eval(runtime) {
                         | Ok(()) => return Step::Step(tail.as_ref().clone()),
                         | Err(()) => {}
                     }

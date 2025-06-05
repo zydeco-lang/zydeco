@@ -65,8 +65,8 @@ module Arith where
   pub extern def add : Thk(Int -> Int -> Ret Int) end
   pub extern def sub : Thk(Int -> Int -> Ret Int) end
   pub extern def mul : Thk(Int -> Int -> Ret Int) end
-  // pub def mult = mul end
-  // pub def times = mul end
+  pub def mult = mul end
+  pub def times = mul end
   pub extern def div : Thk(Int -> Int -> Ret Int) end
   pub extern def mod : Thk(Int -> Int -> Ret Int) end
 

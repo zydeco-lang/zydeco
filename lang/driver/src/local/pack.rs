@@ -58,8 +58,8 @@ impl LocalPackage {
         Ok(Self {
             path: path
                 .parent()
-                .ok_or_else(|| LocalError::PackageFileNotFound(path.clone()))?
-                .to_path_buf(),
+                .map(|p| if p == PathBuf::new() { PathBuf::from(".") } else { p.to_path_buf() })
+                .ok_or_else(|| LocalError::PackageFileNotFound(path.clone()))?,
             ..FileIO::new(path.clone()).load().map_err(|e| match e.kind() {
                 | io::ErrorKind::NotFound => LocalError::PackageFileNotFound(path),
                 | _ => LocalError::PackageFileInvalid(path, e),

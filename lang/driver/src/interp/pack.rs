@@ -15,33 +15,42 @@ impl PackageRuntime {
         let mut input = std::io::stdin().lock();
         let mut output = std::io::stdout();
 
-        Runtime::new(&mut input, &mut output, args, dynamics).run()
+        let mut konts = Runtime::new(&mut input, &mut output, args, dynamics).run();
+
+        if konts.len() != 1 {
+            panic!("{} entry points executed, expected exactly 1", konts.len());
+        }
+        konts.pop().unwrap()
     }
     pub fn test(self, name: &str, aloud: bool) -> Result<()> {
         let PackageRuntime { dynamics } = self;
         let mut input = std::io::empty();
         let mut output = std::io::sink();
-        let kont = Runtime::new(&mut input, &mut output, &[], dynamics).run();
+        let konts = Runtime::new(&mut input, &mut output, &[], dynamics).run();
 
-        match kont {
-            | ProgKont::ExitCode(0) => {
-                if aloud {
-                    let mut out = std::io::stdout();
-                    use colored::Colorize;
-                    use std::io::Write;
-                    let _ = writeln!(out, "test {} ... {}", name, "ok".green());
+        for kont in konts {
+            match kont {
+                | ProgKont::ExitCode(0) => {
+                    if aloud {
+                        let mut out = std::io::stdout();
+                        use colored::Colorize;
+                        use std::io::Write;
+                        let _ = writeln!(out, "test {} ... {}", name, "ok".green());
+                    }
+                    continue;
                 }
-                Ok(())
-            }
-            | ProgKont::Dry => Ok(()),
-            | ProgKont::ExitCode(code) => {
-                let err = format!("expected exit code 0, got {}", code);
-                Err(InterpError::TestFailed(err))?
-            }
-            | ProgKont::Ret(v) => {
-                let err = format!("expected exit code 0, got a returned value: {:?}", v);
-                Err(InterpError::TestFailed(err))?
+                | ProgKont::Dry => continue,
+                | ProgKont::ExitCode(code) => {
+                    let err = format!("expected exit code 0, got {}", code);
+                    Err(InterpError::TestFailed(err))?
+                }
+                | ProgKont::Ret(v) => {
+                    let err = format!("expected exit code 0, got a returned value: {:?}", v);
+                    Err(InterpError::TestFailed(err))?
+                }
             }
         }
+
+        Ok(())
     }
 }

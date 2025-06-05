@@ -78,7 +78,7 @@ impl BuildSystem {
         log::info!("Loading configuration from `{}`.", path.display());
         let file_conf = FileIO::new(path.clone());
         let conf = file_conf.load().unwrap_or_else(|_| {
-            log::warn!("Using default configuration; suppose to find one at `{}`.", path.display());
+            log::warn!("Using default configuration; saving it to `{}`.", path.display());
             let conf: Conf = Default::default();
             file_conf.save(&conf).unwrap();
             conf
