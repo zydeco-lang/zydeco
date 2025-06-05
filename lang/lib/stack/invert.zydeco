@@ -1,10 +1,10 @@
-// a binary tree
+-- a binary tree
 data Tree (A: VType) where
 | +Leaf : Unit
 | +Node : Tree A * A * Tree A
 end
 
-// a normal invert without tail-call opt.
+-- a normal invert without tail-call opt.
 def fix invert (A: VType) (tree: Tree A) : Ret (Tree A) =
   match tree
   | +Leaf() -> ret +Leaf()
@@ -15,12 +15,12 @@ def fix invert (A: VType) (tree: Tree A) : Ret (Tree A) =
   end
 end
 
-// capture the shape of do binding with a kont type
+-- capture the shape of do binding with a kont type
 codata TreeKont (A: VType) where
 | .run : (Thk (Tree A -> Ret (Tree A))) -> Ret (Tree A)
 end
 
-// now we have the tree kont version of invert, tail recursive by default
+-- now we have the tree kont version of invert, tail recursive by default
 def fix invert_tree_kont (A: VType) (tree: Tree A) : TreeKont A =
   match tree
   | +Leaf() -> comatch .run k -> ! k +Leaf() end
@@ -36,7 +36,7 @@ def ! invert' (A: VType) (tree: Tree A) : Ret (Tree A) =
   ! invert_tree_kont A tree .run { fn t -> ret t }
 end
 
-// and below is the correct cps solution
+-- and below is the correct cps solution
 def fix invert_kont
   (A: VType) (tree: Tree A) (k: Thk (Tree A -> Ret (Tree A)))
 : Ret (Tree A) =
@@ -53,7 +53,7 @@ def ! invert'' (A: VType) (tree: Tree A) : Ret (Tree A) =
   ! invert_kont A tree { fn t -> ret t }
 end
 
-// here's a test
+-- here's a test
 def t0 : Tree Int =
   +Node(
     +Node(

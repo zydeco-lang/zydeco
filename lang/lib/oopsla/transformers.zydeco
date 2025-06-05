@@ -1,31 +1,31 @@
-// Monad transformers
-// Two flavors of exception monad transformers are presented,
-// one for the monad that uses `Ret` in its type signature,
-// and the other uses CPS (`Kont`).
+-- Monad transformers
+-- Two flavors of exception monad transformers are presented,
+-- one for the monad that uses `Ret` in its type signature,
+-- and the other uses CPS (`Kont`).
 
-// The interface for monads
-// codata Monad (M: VType -> CType) where
-//   | .return : forall (A: VType) .
-//     A -> M A
-//   | .bind : forall (A: VType) (A': VType) .
-//     Thunk (M A) -> Thunk (A -> M A') -> M A'
-// end
+-- The interface for monads
+-- codata Monad (M: VType -> CType) where
+--   | .return : forall (A: VType) .
+--     A -> M A
+--   | .bind : forall (A: VType) (A': VType) .
+--     Thunk (M A) -> Thunk (A -> M A') -> M A'
+-- end
 
-// The interface for the algebra
-// alias Algebra (M: VType -> CType) (R: CType) : CType =
-//   forall (A: VType) . Thunk (M A) -> Thunk (A -> R) -> R
-// end
+-- The interface for the algebra
+-- alias Algebra (M: VType -> CType) (R: CType) : CType =
+--   forall (A: VType) . Thunk (M A) -> Thunk (A -> R) -> R
+-- end
 
-// The interface for the monad transformer
-// codata MonadTrans (T: (VType -> CType) -> VType -> CType) where
-//   | .monad : forall (M: VType -> CType) .
-//     Thunk (Monad M) -> Monad (T M)
-//   | .lift : forall (M: VType -> CType) (A: VType) .
-//     Thunk (Monad M) -> Thunk (M A) -> T M A
-// end
+-- The interface for the monad transformer
+-- codata MonadTrans (T: (VType -> CType) -> VType -> CType) where
+--   | .monad : forall (M: VType -> CType) .
+--     Thunk (Monad M) -> Monad (T M)
+--   | .lift : forall (M: VType -> CType) (A: VType) .
+--     Thunk (Monad M) -> Thunk (M A) -> T M A
+-- end
 
 
-// Change `Ret` in Exn to `M`
+-- Change `Ret` in Exn to `M`
 codata ExnT (E: VType) (M: VType -> CType) (A: VType) where
   | .done : M (Either E A)
 end
@@ -52,7 +52,7 @@ def ! mtexn (E: VType) : MonadTrans (ExnT E) = fn M mo ->
 end
 
 
-// Add the algebra for the output type of the continuation $R$
+-- Add the algebra for the output type of the continuation $R$
 codata ExnKT (E: VType) (R: CType) (M: VType -> CType) (A: VType) where
   | .run : Thunk (Algebra M R) -> Thunk (E -> R) -> Thunk (A -> R) -> R
 end

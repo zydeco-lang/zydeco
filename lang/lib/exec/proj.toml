@@ -13,6 +13,7 @@ bins = [
     "cbpv.zy",
     "cbpv-monadic.zy",
     "choice.zy",
+    "comment.zy",
     "defunctionalization.zydeco",
     "deterministic-pushdown-automaton.zydeco",
     "even-odd-codata.zy",

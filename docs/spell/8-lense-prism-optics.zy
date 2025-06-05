@@ -1,6 +1,6 @@
-// # Chapter 8: Lense, Prism and Optics
+-- # Chapter 8: Lense, Prism and Optics
 
-// The following code is only a sketch of the idea.
+-- The following code is only a sketch of the idea.
 
 alias Lens (S : VType) (A : VType) : CType =
   forall (Fun : VType -> CType) . Thunk (A -> Fun A) -> (S -> Fun S)
@@ -26,4 +26,4 @@ main
   ! exit 0
 end
 
-// To be continued...
+-- To be continued...

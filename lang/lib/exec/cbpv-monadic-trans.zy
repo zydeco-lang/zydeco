@@ -1,9 +1,9 @@
-// A monad structure that supports fail
+-- A monad structure that supports fail
 codata MonadErr (M: VType -> CType) where
   | .fail : forall (A: VType) . Exception -> M A
 end
 
-// A monad structure that supports print
+-- A monad structure that supports print
 codata MonadPrint (M: VType -> CType) where
   | .print : String -> M Unit
 end
@@ -16,13 +16,13 @@ codata MonadReduce (M: VType -> CType) where
   | .reduce : forall (A: VType) . List (U (M A)) -> U (M A) -> M A
 end
 
-// A comonad structure
+-- A comonad structure
 codata Comonad (W: CType -> VType) where
   | .extract : forall (B: CType) . W B -> B
   | .extend : forall (B: CType) (B': CType) . W B -> U (W B -> B') -> F (W B')
 end
 
-// An algebra structure that supports fail
+-- An algebra structure that supports fail
 codata AlgebraErr (M: VType -> CType) (B: CType) where
   | .failA : Exception -> B
 end
@@ -33,7 +33,7 @@ data Exception where
   | +TypeError : Unit
 end
 
-// Continuation-based error monad
+-- Continuation-based error monad
 codata MExnOS (A: VType) where
   | .run : U (A -> OS) -> U (Exception -> OS) -> OS
 end
@@ -65,8 +65,8 @@ data SCompu where
   | +Force : SValue
   | +Rec : String * SCompu
   | +If : SValue * SCompu * SCompu
-  // | +Add : SValue * SValue
-  // | +Mul : SValue * SValue
+  -- | +Add : SValue * SValue
+  -- | +Mul : SValue * SValue
   | +Env : SCompu
 end
 
@@ -134,13 +134,13 @@ module MExnOS where
 
   def fix malg : Algebra MExnOS Compu =
     comatch
-    | .bindA A m f -> // m : U (MExnOS A), f: U (A -> Compu)
+    | .bindA A m f -> -- m : U (MExnOS A), f: U (A -> Compu)
       comatch
-      | .app a -> // goal: Compu
+      | .app a -> -- goal: Compu
         ! malg .bindA (A) m { fn v -> ! f v .app a }
-      | .bind x sc k -> // goal: Compu
+      | .bind x sc k -> -- goal: Compu
         ! malg .bindA (A) m { fn v -> ! f v .bind x sc k }
-      | .os -> // goal: MExnOS Value, use ordinary bind
+      | .os -> -- goal: MExnOS Value, use ordinary bind
         ! mexn .bind (A) (Value) m { fn x -> ! f x .os }
       end
     end
@@ -173,7 +173,7 @@ module Print where
         do i <- ! int_to_str i;
         ! write_str i kont
       | +Thunk(sc) ->
-        // Note: `do <comp1>; <comp2>` is a syntactic sugar for `<comp1> { <comp2> }`
+        -- Note: `do <comp1>; <comp2>` is a syntactic sugar for `<comp1> { <comp2> }`
         do~ ! write_str "{ ";
         do~ ! print-scbpv .compu sc;
         do~ ! write_str " }";
@@ -314,8 +314,8 @@ end
 module Trace where
   data TraceItem where
     | +App : Value
-    // | +App : SValue * Value
-    // | +Bind : U (Value -> Compu)
+    -- | +App : SValue * Value
+    -- | +Bind : U (Value -> Compu)
     | +Bind : String * SCompu * U (Value -> Compu)
   end
 
@@ -331,12 +331,12 @@ module Trace where
         do~ ! foldl (TraceItem) (U OS) items { fn item kont -> ret {
           match item
           | +App(v) ->
-          // | +App(_sv, v) ->
+          -- | +App(_sv, v) ->
             do~ ! write_str "  app ";
             do~ ! print-value v;
             do~ ! write_line ",";
             ! kont
-          // | +Bind(_k) ->
+          -- | +Bind(_k) ->
           | +Bind(x, sc, _k) ->
             do~ ! write_str "  bind ";
             do~ ! write_str x;
@@ -353,7 +353,7 @@ module Trace where
   end
 end
 
-/* Parser */
+/- Parser -/
 
 module Parser where
   codata Parser (A: VType) where
@@ -571,10 +571,10 @@ module Parser where
         in
         let ! _force =
           do _ <- ! p_char '!';
-          // do _ <- ! p_word "call";
+          -- do _ <- ! p_word "call";
           do _ <- ! p_char ' ';
           do sv <- ! p_cbpv .value;
-          // do _ <- ! p_char ')';
+          -- do _ <- ! p_char ')';
           ret +Force(sv)
         in
         let ! _if =
@@ -637,7 +637,7 @@ module Parser where
   end
 end
 
-/* Interpretor */
+/- Interpretor -/
 
 codata Interp where
   | .value : SValue -> MExnOS Value
@@ -673,7 +673,7 @@ def fix interp (env: U EnvO) : Interp =
         ! interp { ! env .extend x v } .compu sc
       | .bind _ _ k ->
         do~ ! malg .bindA (Value) type-error; fn v ->
-        // the following is unreachable
+        -- the following is unreachable
         ! k v .app v
       | .os -> ! type-error
       end
@@ -869,72 +869,72 @@ def ! demo (env: U EnvO) (src: String) (ans: Value) (k: U OS): OS =
 end
 
 main
-  // if clause
+  -- if clause
   do~ ! demo nil-env "(if true (ret true) (ret false))" +Bool(+True());
 
-  // 4 envs: first with a bind stack, second with x in env, third with an app stack, and last with only variables in env
-  // do~ ! demo nil-env "(bind (env (ret true)) x (env ((env (fn b (if b (env (ret x)) (ret false)))) true)))" +Bool(+True());
+  -- 4 envs: first with a bind stack, second with x in env, third with an app stack, and last with only variables in env
+  -- do~ ! demo nil-env "(bind (env (ret true)) x (env ((env (fn b (if b (env (ret x)) (ret false)))) true)))" +Bool(+True());
 
-  // lambda in thunk
-  // do~ ! demo nil-env "(bind (ret {(fn x (if x (ret false) (ret true)))}) not (bind (env (ret false)) x (! not x)))" +Bool(+True());
+  -- lambda in thunk
+  -- do~ ! demo nil-env "(bind (ret {(fn x (if x (ret false) (ret true)))}) not (bind (env (ret false)) x (! not x)))" +Bool(+True());
 
-  // bind to lambda should fail
-  // do~ ! demo nil-env "(bind (fn x (ret x)) f (ret true))" +Bool(+True());
+  -- bind to lambda should fail
+  -- do~ ! demo nil-env "(bind (fn x (ret x)) f (ret true))" +Bool(+True());
 
-  // apply to ret should fail
-  // do~ ! demo nil-env "((ret true) true)" +Bool(+True());
+  -- apply to ret should fail
+  -- do~ ! demo nil-env "((ret true) true)" +Bool(+True());
 
-  // call a bool should fail
-  // do~ ! demo nil-env "! true" +Bool(+True());
+  -- call a bool should fail
+  -- do~ ! demo nil-env "! true" +Bool(+True());
 
-  // test `! add 1 2`
+  -- test `! add 1 2`
   do~ ! demo-scompu cbpv-env +App(+App(+Force(+Var("add")), +Int(1)), +Int(2)) +Int(3);
 
-  // test `! mul 3 2`
+  -- test `! mul 3 2`
   do~ ! demo-scompu cbpv-env +App(+App(+Force(+Var("mul")), +Int(3)), +Int(2)) +Int(6);
 
-  // test infinite loop
-  // do~ ! demo-scompu cbpv-env +Rec("loop", +Force(+Var("loop"))) +Int(1);
+  -- test infinite loop
+  -- do~ ! demo-scompu cbpv-env +Rec("loop", +Force(+Var("loop"))) +Int(1);
 
-  // test `do x <- ! add 2 3; ! add 1 x`
+  -- test `do x <- ! add 2 3; ! add 1 x`
   do~ ! demo-scompu cbpv-env +Bind(
     +App(+App(+Force(+Var("add")), +Int(2)), +Int(3)),
     "x",
     +App(+App(+Force(+Var("add")), +Int(1)), +Var("x"))
   ) +Int(6);
 
-  // factorial, poor usage of stack
-  // do~ ! demo-scompu cbpv-env +App(+Rec("fact", +Env(+Lam("x",
-  //   +Bind(
-  //     +App(+App(+Force(+Var("eq")), +Var("x")), +Int(0)),
-  //     "b",
-  //     +If(+Var("b"), +Ret(Int(1)), +Bind(
-  //       +App(+App(+Force(+Var("add")), +Var("x")), +Int(-1)),
-  //       "y",
-  //       +Bind(
-  //         +App(+Force(+Var("fact")), +Var("y")),
-  //         "z",
-  //         +App(+App(+Force(+Var("mul")), +Var("x")), +Var("z"))
-  //       )
-  //     ))
-  //   )
-  // ))), +Int(6)) +Int(720);
+  -- factorial, poor usage of stack
+  -- do~ ! demo-scompu cbpv-env +App(+Rec("fact", +Env(+Lam("x",
+  --   +Bind(
+  --     +App(+App(+Force(+Var("eq")), +Var("x")), +Int(0)),
+  --     "b",
+  --     +If(+Var("b"), +Ret(Int(1)), +Bind(
+  --       +App(+App(+Force(+Var("add")), +Var("x")), +Int(-1)),
+  --       "y",
+  --       +Bind(
+  --         +App(+Force(+Var("fact")), +Var("y")),
+  --         "z",
+  --         +App(+App(+Force(+Var("mul")), +Var("x")), +Var("z"))
+  --       )
+  --     ))
+  --   )
+  -- ))), +Int(6)) +Int(720);
 
-  // factorial, tail call
-  // do~ ! demo-scompu cbpv-env +App(+App(+Rec("fact", +Env(+Lam("acc", +Lam("x",
-  //   +Bind(
-  //     +App(+App(+Force(+Var("eq")), +Var("x")), +Int(0)),
-  //     "b",
-  //     +If(+Var("b"), +Ret(+Var("acc")), +Bind(
-  //       +App(+App(+Force(+Var("add")), +Var("x")), +Int(-1)),
-  //       "y",
-  //       +Bind(
-  //         +App(+App(+Force(+Var("mul")), +Var("x")), +Var("acc")),
-  //         "acc",
-  //         +App(+App(+Force(+Var("fact")), +Var("acc")), +Var("y")),
-  //       )
-  //     ))
-  //   )
-  // )))), +Int(1)), +Int(6)) +Int(720);
+  -- factorial, tail call
+  -- do~ ! demo-scompu cbpv-env +App(+App(+Rec("fact", +Env(+Lam("acc", +Lam("x",
+  --   +Bind(
+  --     +App(+App(+Force(+Var("eq")), +Var("x")), +Int(0)),
+  --     "b",
+  --     +If(+Var("b"), +Ret(+Var("acc")), +Bind(
+  --       +App(+App(+Force(+Var("add")), +Var("x")), +Int(-1)),
+  --       "y",
+  --       +Bind(
+  --         +App(+App(+Force(+Var("mul")), +Var("x")), +Var("acc")),
+  --         "acc",
+  --         +App(+App(+Force(+Var("fact")), +Var("acc")), +Var("y")),
+  --       )
+  --     ))
+  --   )
+  -- )))), +Int(1)), +Int(6)) +Int(720);
   ! exit 0
 end

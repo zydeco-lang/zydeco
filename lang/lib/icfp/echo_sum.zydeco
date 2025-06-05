@@ -1,8 +1,8 @@
-// The Echo Sum Server
-// When the program starts, it waits for a number followed by a newline.
-// It then prints the sum of all numbers received so far, followed by a newline.
-// Then it loops.
-// If the input is not a number, the program exits.
+-- The Echo Sum Server
+-- When the program starts, it waits for a number followed by a newline.
+-- It then prints the sum of all numbers received so far, followed by a newline.
+-- Then it loops.
+-- If the input is not a number, the program exits.
 
 main
   (fix (loop: Thunk (Int -> OS)) ->

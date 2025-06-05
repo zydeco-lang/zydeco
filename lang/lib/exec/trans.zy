@@ -9,12 +9,12 @@ end
 def ! reader_t_monad (R: VType) (M: VType -> CType) (mo: U (Monad M)) : Monad (ReaderT R M) =
   comatch
   | .return -> fn A a ->
-    // goal: ReaderT R M A
+    -- goal: ReaderT R M A
     comatch
     | .run -> fn _ -> ! mo .return (A) a
     end
-  | .bind -> fn A A' m f -> // m: U (ReaderT R M A), f: U (A -> ReaderT R M A')
-    // goal: ReaderT R M A'
+  | .bind -> fn A A' m f -> -- m: U (ReaderT R M A), f: U (A -> ReaderT R M A')
+    -- goal: ReaderT R M A'
     comatch
     | .run -> fn r ->
       ! mo .bind (A) (A') { ! m .run r } { fn a ->
@@ -27,10 +27,10 @@ end
 def ! reader_t_trans (R: VType) : MonadTrans' (ReaderT R) =
   comatch
   | .lift -> fn M A (mo: U (Monad M)) (m: U (M A)) ->
-    // goal: ReaderT R M A
+    -- goal: ReaderT R M A
     comatch
     | .run -> fn _ -> ! m
-    // basically ignoring the reader input
+    -- basically ignoring the reader input
     end
   end
 end
@@ -42,12 +42,12 @@ end
 def ! option_t_monad (M: VType -> CType) (mo: U (Monad M)) : Monad (OptionT M) =
   comatch
   | .return -> fn A a ->
-    // goal: OptionT M A
+    -- goal: OptionT M A
     comatch
     | .run -> ! mo .return (Option A) +Some(a)
     end
-  | .bind -> fn A A' m f -> // m: U (OptionT M A), f: U (A -> OptionT M A')
-    // goal: OptionT M A'
+  | .bind -> fn A A' m f -> -- m: U (OptionT M A), f: U (A -> OptionT M A')
+    -- goal: OptionT M A'
     comatch
     | .run -> ! mo .bind (Option A) (Option A') { ! m .run } { fn a? ->
       match a?
@@ -76,9 +76,9 @@ end
 
 def ! koption_t_trans : MonadTrans' KOptionT =
   comatch
-  | .lift -> fn M A mo m -> // m : U(M A)
+  | .lift -> fn M A mo m -> -- m : U(M A)
     comatch
-    | .run -> fn R bAlg kS kE -> // kS : U(A -> R), bAlg : Algebra M B
+    | .run -> fn R bAlg kS kE -> -- kS : U(A -> R), bAlg : Algebra M B
       ! bAlg A m kS
     end
   end
@@ -91,9 +91,9 @@ def ! koption_t_monad (M : VType -> CType) (monadM : U(Monad M)) : Monad (KOptio
     | .run -> fn R bAlg kS kE ->
       ! kS a
     end
-  | .bind -> fn A A' m k -> // m : U(KOptT M A), k : U(A -> KOptT M A'), goal: KOptT M A'
+  | .bind -> fn A A' m k -> -- m : U(KOptT M A), k : U(A -> KOptT M A'), goal: KOptT M A'
     comatch
-    | .run -> fn R bAlg kS kE -> // kS : U(A' -> R), kE: U R, bAlg: Algebra M R, goal: R
+    | .run -> fn R bAlg kS kE -> -- kS : U(A' -> R), kE: U R, bAlg: Algebra M R, goal: R
       ! m .run R bAlg { fn a -> ! k a .run R bAlg kS kE } kE
     end
   end

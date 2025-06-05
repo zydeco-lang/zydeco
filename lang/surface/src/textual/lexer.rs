@@ -2,20 +2,19 @@ use logos::{Logos, SpannedIter};
 use std::fmt::{Debug, Display};
 
 #[derive(Logos, Clone, Debug, PartialEq)]
-#[logos(skip r"/\*([^*]|\*[^/])*\*/")]
-#[logos(skip r"//.*\n")]
 #[logos(skip r"#.*\n")]
+#[logos(skip r"--.*\n")]
 #[logos(skip r"[ \t\n\f]+")]
+#[logos(subpattern ident = r"[a-zA-Z0-9_]|'|\?|\+|\*|-|=|~")]
 pub enum Tok<'input> {
-    #[regex(r"[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
+    #[regex(r"[A-Z](?&ident)*")]
     UpperIdent(&'input str),
-    #[regex(r"[a-z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
-    #[regex(r"_([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)+")]
+    #[regex(r"[a-z](?&ident)*")]
+    #[regex(r"_(?&ident)+")]
     LowerIdent(&'input str),
-
-    #[regex(r"\+[A-Z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
+    #[regex(r"\+[A-Z](?&ident)*")]
     CtorIdent(&'input str),
-    #[regex(r"\.[a-z]([a-zA-Z0-9_]|'|\?|\+|\*|-|=|~)*")]
+    #[regex(r"\.[a-z](?&ident)*")]
     DtorIdent(&'input str),
 
     #[token("pub")]
@@ -125,6 +124,11 @@ pub enum Tok<'input> {
     Hole,
     #[token("@")]
     At,
+
+    #[token("/-")]
+    CommentStart,
+    #[token("-/")]
+    CommentEnd,
 }
 
 impl Display for Tok<'_> {
@@ -186,17 +190,20 @@ impl Display for Tok<'_> {
             | Tok::Assign => write!(f, "<-"),
             | Tok::Hole => write!(f, "_"),
             | Tok::At => write!(f, "@"),
+            | Tok::CommentStart => write!(f, "/-"),
+            | Tok::CommentEnd => write!(f, "-/"),
         }
     }
 }
 
 pub struct Lexer<'source> {
     inner: SpannedIter<'source, Tok<'source>>,
+    comment_depth: usize,
 }
 
 impl<'source> Lexer<'source> {
     pub fn new(source: &'source str) -> Self {
-        Self { inner: Tok::lexer(&source).spanned() }
+        Self { inner: Tok::lexer(&source).spanned(), comment_depth: 0 }
     }
 }
 
@@ -204,43 +211,49 @@ impl<'source> Iterator for Lexer<'source> {
     type Item = (usize, Tok<'source>, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.inner.next() {
-            | Some((Ok(tok), range)) => Some((range.start, tok, range.end)),
-            | _ => None,
+        loop {
+            match self.inner.next() {
+                | Some((Ok(Tok::CommentStart), _)) => {
+                    self.comment_depth += 1;
+                    continue;
+                }
+                | Some((Ok(Tok::CommentEnd), _)) => {
+                    if self.comment_depth <= 0 {
+                        break None;
+                    }
+                    self.comment_depth -= 1;
+                }
+                | Some((Ok(_tok), _)) if self.comment_depth > 0 => continue,
+                | Some((Ok(tok), range)) => break Some((range.start, tok, range.end)),
+                | _ => break None,
+            }
         }
     }
 }
 
 pub struct HashLexer<'source> {
-    inner: SpannedIter<'source, Tok<'source>>,
+    inner: Lexer<'source>,
 }
 
 impl<'source> HashLexer<'source> {
     pub fn new(source: &'source str) -> Self {
-        Self { inner: Tok::lexer(&source).spanned() }
+        Self { inner: Lexer::new(source) }
     }
-    pub fn hash_string(self, info: &zydeco_utils::span::FileInfo) -> Result<String, String> {
+    pub fn hash_string(self) -> Result<String, String> {
         let mut h = String::new();
-        for (l, t, r) in self {
-            h += &format!(
-                "{}",
-                t.map_err(|()| {
-                    let span = zydeco_utils::span::Span::new(l, r);
-                    span.set_info(&info);
-                    format!("{}", span)
-                })?
-            );
+        for (_, t, _) in self {
+            h += &format!("{}", t);
         }
         Ok(h)
     }
 }
 
 impl<'source> Iterator for HashLexer<'source> {
-    type Item = (usize, Result<Tok<'source>, ()>, usize);
+    type Item = (usize, Tok<'source>, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.inner.next() {
-            | Some((tok, range)) => Some((range.start, tok, range.end)),
+            | Some((l, tok, r)) => Some((l, tok, r)),
             | _ => None,
         }
     }

@@ -1,10 +1,10 @@
-// The Free monad
+-- The Free monad
 
 codata Kont (R: CType) (A: VType) where
   | .run : Thunk (A -> R) -> R
 end
 
-// Types of handlers
+-- Types of handlers
 alias KRead (R: CType) : VType =
   Thunk (Unit -> Kont R String)
 end
@@ -18,7 +18,7 @@ alias KFail (E: VType) (R: CType) : VType =
 end
 
 
-// A specific free monad with three handlers
+-- A specific free monad with three handlers
 codata Free (A: VType) where
   | .run : forall (R: CType) .
     KRead R -> KWrite R -> KFail String R -> Kont R A
@@ -43,7 +43,7 @@ def ! mfree : Monad Free =
 end
 
 
-// The interface for using Free
+-- The interface for using Free
 def ! read ((): Unit) : Free String =
   fn .run R read write fail -> ! read ()
 end

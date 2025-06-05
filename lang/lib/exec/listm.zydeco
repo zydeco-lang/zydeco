@@ -11,20 +11,20 @@ def fix foldr~ (A : VType) (B : CType) (ll : U(F(List~ A))) (f : U(A -> U(B) -> 
   end
 end
 
-## List~ is actually coinductive type
+-- List~ is actually coinductive type
 
 def fix loop : F(List~ Int) =
   ret +Cons(0, loop)
 end
 
-## Since it's coinductive, here's iota
+-- Since it's coinductive, here's iota
 
 def fix iota (i : Int) : F(List~ Int) =
   do i+1 <- ! add i 1;
   ret +Cons(i, { ! iota i+1 })
 end
 
-## foldr~ and an example of summing up the list and exiting with the sum
+-- foldr~ and an example of summing up the list and exiting with the sum
 
 main
   let loopy = {

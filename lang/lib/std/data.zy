@@ -1,5 +1,5 @@
 module Identity where
-  /// identity functions
+  --| identity functions
   pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
     fn A a -> ret a
   } end
@@ -25,7 +25,7 @@ module Bool where
     end
   end
 
-  /* lazy not */
+  /- lazy not -/
   pub def ! not~ (t~: Thunk(Ret Bool)) : Ret(Bool) =
     do x <- ! t~;
     match x
@@ -41,7 +41,7 @@ module Bool where
       end
   end
 
-  /* lazy, short-circuiting (left to right) and */
+  /- lazy, short-circuiting (left to right) and -/
   pub def ! and~ (b1~: Thunk (Ret Bool)) (b2~: Thunk (Ret Bool)) : Ret(Bool) =
     do b1 <- ! b1~;
     match b1
@@ -57,7 +57,7 @@ module Bool where
     end
   end
 
-  /* lazy, short-circuiting (left to right) or */
+  /- lazy, short-circuiting (left to right) or -/
   pub def ! or~ : Thunk(Ret(Bool)) -> Thunk(Ret(Bool)) -> Ret(Bool) = fn b1~ b2~ ->
     do b1 <- ! b1~;
     match b1
@@ -160,7 +160,7 @@ module List where
 end
 
 module LList where
-  /// Lazy List
+  --| Lazy List
   pub data LListV (A : VType) (B : CType) where
     | +Nil : Unit
     | +Cons : A * Thunk B
@@ -500,7 +500,7 @@ module String where
     }
   end
 
-  /// Conversions
+  --| Conversions
 
   pub def unit_to_str : Thunk(Unit -> Ret String) = {
     fn (_u : Unit) -> ret "()"

@@ -1,12 +1,12 @@
-// # Chapter 2: Data and Codata
+-- # Chapter 2: Data and Codata
 
-// A `data` declaration positively defines a value type that can be matched
-// against. It can be treated as sum types together with product types. It can
-// be introduced by data constructors (values) and eliminated with the `match`
-// computaion.
+-- A `data` declaration positively defines a value type that can be matched
+-- against. It can be treated as sum types together with product types. It can
+-- be introduced by data constructors (values) and eliminated with the `match`
+-- computaion.
 
-// System-F hasn't been formally introduced to you yet, so we'll use a trivial
-// example to illustrate; you'll see what it's all about in a week or two.
+-- System-F hasn't been formally introduced to you yet, so we'll use a trivial
+-- example to illustrate; you'll see what it's all about in a week or two.
 def hd-int : Thunk (List Int -> Ret (Option Int)) = {
   fn xs -> (
     match xs
@@ -22,11 +22,11 @@ def some-0~ : Thunk(Ret (Option Int)) = {
   ! hd-int xs
 } end
 
-// Unsurprisingly, `codata` declaration, dually, negatively defines a
-// computation type that comatches the stack. It can be introduced by comatch
-// computation and can be eliminated by codata destructors.
+-- Unsurprisingly, `codata` declaration, dually, negatively defines a
+-- computation type that comatches the stack. It can be introduced by comatch
+-- computation and can be eliminated by codata destructors.
 
-// Read how `LList`, a.k.a. lazy list, a.k.a. `CoList`, is defined in `std.zydeco`.
+-- Read how `LList`, a.k.a. lazy list, a.k.a. `CoList`, is defined in `std.zydeco`.
 
 def xs~ : Thunk (LList Int) = {
   comatch
@@ -51,22 +51,22 @@ def some-0~' : Thunk(Ret (Option Int)) = {
   end
 } end
 
-// Note that `data` can be used to naturally represent inductive types, and
-// `codata` - you tell me - can be used to represent coinductive types.
+-- Note that `data` can be used to naturally represent inductive types, and
+-- `codata` - you tell me - can be used to represent coinductive types.
 
-// The good thing about writing dual definitions (and their explanations) is
-// that it's extremely copilot-friendly.
+-- The good thing about writing dual definitions (and their explanations) is
+-- that it's extremely copilot-friendly.
 
-// Exercise `data`: implement `foldl` for `List Int`.
+-- Exercise `data`: implement `foldl` for `List Int`.
 
 def foldl'' : Thunk(Thunk (Int -> Int -> Ret Int) -> Int -> List Int -> Ret Int) = {
   fix foldl'' -> fn f -> fn acc -> fn xs -> (
-    // Todo..
+    -- Todo..
     ret 6
   )
 } end
 
-// Exercise `codata`: implement `foldr` for `LList Int`.
+-- Exercise `codata`: implement `foldr` for `LList Int`.
 
 def foldr'' : Thunk(
   Thunk (Int -> Thunk (Ret Int) -> Ret Int)
@@ -74,26 +74,26 @@ def foldr'' : Thunk(
   -> Ret Int
 ) = {
   fix foldr'' -> fn f -> fn base -> fn xs -> (
-    // Todo..
+    -- Todo..
     ret 6
   )
 } end
 
-// You may wonder what is `rec`. It's *just* `fix` in the System PCF sense. The
-// only caveat is that if the whole term is a computation of type `B`, then the
-// variable passed in is of type `Thunk B`, because variables must have value
-// types.
+-- You may wonder what is `rec`. It's *just* `fix` in the System PCF sense. The
+-- only caveat is that if the whole term is a computation of type `B`, then the
+-- variable passed in is of type `Thunk B`, because variables must have value
+-- types.
 
-// Exercise `data`-coinductive: declare the coinductive type `LList'` using only
-// `data`, yet still being "coinductive". The most important hint is that it
-// should at least be lazy.
+-- Exercise `data`-coinductive: declare the coinductive type `LList'` using only
+-- `data`, yet still being "coinductive". The most important hint is that it
+-- should at least be lazy.
 
 data LList' (A : VType) where
-  // Todo..
+  -- Todo..
 end
 
-// Exercise (optional): Read how `fold`s are implemented in `std.zydeco`, and
-// get a taste of how parametric polymorphism (template functions in C++) work.
+-- Exercise (optional): Read how `fold`s are implemented in `std.zydeco`, and
+-- get a taste of how parametric polymorphism (template functions in C++) work.
 
 main
   let ! check_res (x : Int) (y : Int) (s : String) (kont : Thunk OS) : OS =
@@ -126,5 +126,5 @@ main
   }
 end
 
-// The test bench uses more than what has been taught. It's ok if you don't
-// understand all of them, but you can make your best guess.
+-- The test bench uses more than what has been taught. It's ok if you don't
+-- understand all of them, but you can make your best guess.

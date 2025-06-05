@@ -1,5 +1,5 @@
 
-/// AvlTree
+--| AvlTree
   
 pub data Avl (A : VType) where
   | +Leaf : Unit
@@ -267,7 +267,7 @@ pub def fix pre_traversal (A : VType) (tree : Avl A) (fmt : U(A -> Ret (String))
   end
 end
 
-/// Hash
+--| Hash
 
 data Hash (K : VType) (V : VType) where
   | +Hash : Avl (K * V) * Cmp (K * V) * Cmp (K * V) * Cmp (K * V)

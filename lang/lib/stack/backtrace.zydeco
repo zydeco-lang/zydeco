@@ -1,13 +1,13 @@
-// a binary tree
+-- a binary tree
 data Tree (A: VType) where
 | +Leaf : Unit
 | +Node : Tree A * A * Tree A
 end
 
-// codata Trace (A: VType) where
-// | .done : Ret (Tree (List A))
-// | .step : A -> Trace A
-// end
+-- codata Trace (A: VType) where
+-- | .done : Ret (Tree (List A))
+-- | .step : A -> Trace A
+-- end
 
 def fix trace
   (A: VType) (t: Tree A) (stk: List A)
@@ -22,7 +22,7 @@ def fix trace
   end
 end
 
-// here's a test
+-- here's a test
 def t0 : Tree Int =
   +Node(
     +Node(

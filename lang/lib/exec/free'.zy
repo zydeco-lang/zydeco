@@ -8,9 +8,9 @@ end
 
 codata Handlers (R: CType) (K: CType) where
   | .eff :
-       U (String -> Kont R Bool) // print : String ~> Bool
-    -> U (Err -> Kont R Empty) // fail : Err ~> Empty
-    -> U (Unit -> Kont R Bool) // flip : Unit ~> Bool
+       U (String -> Kont R Bool) -- print : String ~> Bool
+    -> U (Err -> Kont R Empty) -- fail : Err ~> Empty
+    -> U (Unit -> Kont R Bool) -- flip : Unit ~> Bool
     -> K
 end
 

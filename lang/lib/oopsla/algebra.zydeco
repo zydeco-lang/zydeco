@@ -1,19 +1,19 @@
-// Algebras of relative monads
-// Implementations and examples
+-- Algebras of relative monads
+-- Implementations and examples
 
 
-// The interface for the algebra
-// codata Algebra (M: VType -> CType) (R: CType) where
-//   | .bindA : forall (A: VType) .
-//     Thunk (M A) -> Thunk (A -> R) -> R
-// end
+-- The interface for the algebra
+-- codata Algebra (M: VType -> CType) (R: CType) where
+--   | .bindA : forall (A: VType) .
+--     Thunk (M A) -> Thunk (A -> R) -> R
+-- end
 
 
 codata IO (A: VType) where
   | .run : Thunk (A -> OS) -> OS
 end
 
-// Algebra IO OS exists
+-- Algebra IO OS exists
 def ! alg_io : Algebra IO OS =
   comatch
   | .bindA A m k -> ! m .run k
@@ -21,7 +21,7 @@ def ! alg_io : Algebra IO OS =
 end
 
 
-// Algebra Ret R always exists
+-- Algebra Ret R always exists
 def ! alg_ret (R: CType): Algebra Ret R =
   comatch
   | .bindA A m k ->
@@ -30,7 +30,7 @@ def ! alg_ret (R: CType): Algebra Ret R =
 end
 
 
-// Algebra M (M V) always exists for M: Monad
+-- Algebra M (M V) always exists for M: Monad
 def ! alg_mo
   (M: VType -> CType)
   (V: VType)
@@ -43,7 +43,7 @@ def ! alg_mo
 end
 
 
-// Algebras can be defined on the arrow type
+-- Algebras can be defined on the arrow type
 def ! alg_arrow
   (M: VType -> CType) (R: CType) (A: VType)
   (alg: Thunk (Algebra M R))
@@ -60,7 +60,7 @@ codata With (L: CType) (R: CType) where
   | .r : R
 end
 
-// Algebras can be defined on the with type
+-- Algebras can be defined on the with type
 def ! alg_with
   (M: VType -> CType) (L: CType) (R: CType)
   (algl: Thunk (Algebra M L))
@@ -81,7 +81,7 @@ codata FnVar (A: VType) (B: CType) where
   | .done : B
 end
 
-// Algebras can be defined on coinductive types like FnVar
+-- Algebras can be defined on coinductive types like FnVar
 def fix alg_var (M: VType -> CType) (R: CType) (alg: Thunk (Algebra M R)) (V: VType)
                    : Algebra M (FnVar V R) =
   comatch
@@ -97,9 +97,9 @@ def fix alg_var (M: VType -> CType) (R: CType) (alg: Thunk (Algebra M R)) (V: VT
 end
 
 
-// An example program of echo sum server which may error on add_of
+-- An example program of echo sum server which may error on add_of
 
-// The defunctionalized exception type
+-- The defunctionalized exception type
 codata ExnDe (E: VType) (A: VType) where
   | .try : forall (E': VType) .
     Thunk (E -> ExnDe E' A) -> ExnDe E' A
@@ -108,12 +108,12 @@ codata ExnDe (E: VType) (A: VType) where
   | .done : Ret (Either E A)
 end
 
-// codata Monad (M: VType -> CType) where
-//   | .return : forall (A: VType) .
-//     A -> M A
-//   | .bind : forall (A: VType) (A': VType) .
-//     Thunk (M A) -> Thunk (A -> M A') -> M A'
-// end
+-- codata Monad (M: VType -> CType) where
+--   | .return : forall (A: VType) .
+--     A -> M A
+--   | .bind : forall (A: VType) (A': VType) .
+--     Thunk (M A) -> Thunk (A -> M A') -> M A'
+-- end
 
 codata MonadErr (E: VType) (M: VType -> CType) where
   | .fail : forall (A: VType) . E -> M A
@@ -143,7 +143,7 @@ def fix mexnde_err (E: VType) : MonadErr E (ExnDe E) =
   end
 end
 
-// Algebra on the defunctionalized exception type
+-- Algebra on the defunctionalized exception type
 def ! alg_exn :
   Algebra (ExnDe String) OS
 =
@@ -157,7 +157,7 @@ def ! alg_exn :
   end
 end
 
-// add_of errors if the sum >= 256 (8-bit overflow)
+-- add_of errors if the sum >= 256 (8-bit overflow)
 def ! add_of (i: Int) (sum: Int) : ExnDe String Int =
   do sum <- ! add i sum;
   ! if~ (ExnDe String Int) {

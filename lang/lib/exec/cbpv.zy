@@ -1,4 +1,4 @@
-// A monad structure that supports fail and print as well
+-- A monad structure that supports fail and print as well
 codata MonadErrPrint (M: VType -> CType) where
   | .return : forall (A: VType) . A -> M A
   | .bind   : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
@@ -11,7 +11,7 @@ data Exception where
   | +FreeVariable : Unit
 end
 
-// Continuation-based error monad
+-- Continuation-based error monad
 codata MExnOS (A: VType) where
   | .run : U (A -> OS) -> U (Exception -> OS) -> OS
 end
@@ -84,11 +84,11 @@ def ! abort (e: Exception) : Compu =
 end
 
 def fix malg : Algebra MExnOS Compu = fn A m f ->
-  // m : U (MExnOS A), f: U (A -> Compu)
+  -- m : U (MExnOS A), f: U (A -> Compu)
   comatch
-  | .app a -> // goal: Compu
+  | .app a -> -- goal: Compu
     ! malg A m { fn v -> ! f v .app a }
-  | .bind -> // goal: MExnOS Value, use ordinary bind
+  | .bind -> -- goal: MExnOS Value, use ordinary bind
     ! mexn .bind A Value m { fn x -> ! f x .bind }
   end
 end
@@ -207,10 +207,10 @@ main
       fn v -> ! value-eq v ans k
     } report
   in
-  // if true then ret true else ret false
+  -- if true then ret true else ret false
   let term1: SCompu = +If(+Bool(+True()), +Ret(+Bool(+True())), +Ret(+Bool(+False()))) in
   let ans1: Value = +Bool(+True()) in
-  // (do x <- ret True in \b -> if b then x else false) True
+  -- (do x <- ret True in \b -> if b then x else false) True
   let term2: SCompu = +App(+Bind(
     +Ret(+Bool(+True())), "x", +Lam("b", +If(+Var("b"), +Ret(+Var("x")), +Ret(+Bool(+False()))))
   ), +Bool(+True())) in

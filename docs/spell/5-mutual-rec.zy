@@ -1,9 +1,9 @@
-// # Chapter 5: Mutual Recursion
+-- # Chapter 5: Mutual Recursion
 
-// Let's take the use of `rec` to a new level. With `codata`, we can define
-// mutually recursive functions with ease. 
+-- Let's take the use of `rec` to a new level. With `codata`, we can define
+-- mutually recursive functions with ease. 
 
-// Exercise `even-odd`: Define `even` and `odd` for natural numbers.
+-- Exercise `even-odd`: Define `even` and `odd` for natural numbers.
 
 codata EvenOdd where
   | .even : Nat -> Ret Bool
@@ -11,17 +11,17 @@ codata EvenOdd where
 end
 
 def even-odd : Thunk EvenOdd = {
-  // Todo..
+  -- Todo..
   fix even-odd -> ! even-odd
 } end
 
 def even : Thunk (Nat -> Ret Bool) = {
-  // Todo..
+  -- Todo..
   fn n -> ret true
 } end
 
 def odd : Thunk (Nat -> Ret Bool) = {
-  // Todo..
+  -- Todo..
   fn n -> ret true
 } end
 
@@ -34,14 +34,14 @@ main
   ! assert { ! odd +S(+S(+S(+Z()))) } true {
   ! assert { ! even +Z() } true {
   ! assert { ! odd +S(+Z()) } true {
-  // Todo: uncomment the following lines
-  // ! assert { ! even +S(+Z()) } false {
-  // ! assert { ! odd +S(+S(+Z())) } false {
+  -- Todo: uncomment the following lines
+  -- ! assert { ! even +S(+Z()) } false {
+  -- ! assert { ! odd +S(+S(+Z())) } false {
   ! exit 0
   }}}}
-  // Todo: uncomment the following lines
-  // }}
+  -- Todo: uncomment the following lines
+  -- }}
 end
 
-// At this point, I believe that you are convinced that `codata` is a general
-// representation of computation.
+-- At this point, I believe that you are convinced that `codata` is a general
+-- representation of computation.

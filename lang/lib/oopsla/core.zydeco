@@ -1,19 +1,19 @@
 module Builtin where
-  /// VType and CType
+  --| VType and CType
   pub extern def VType end
   pub extern def CType end
-  /// Thk and Ret
+  --| Thk and Ret
   pub extern def Thk (B : CType) : VType end
   pub extern def Ret (A : VType) : CType end
 
-  /// primitive base types
+  --| primitive base types
   pub extern def Unit : VType end
   pub extern def Int : VType end
   pub extern def Char : VType end
   pub extern def String : VType end
   pub extern def OS : CType end
 
-  /// interface for monads and their algebras
+  --| interface for monads and their algebras
   pub extern alias Monad (M: VType -> CType) : CType =
     codata
     | .return : forall (A: VType) .
@@ -26,7 +26,7 @@ module Builtin where
     forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
   end
 
-  /// interface for monad transformers
+  --| interface for monad transformers
   pub alias MonadTrans (T: (VType -> CType) -> VType -> CType) : CType =
     forall (M: VType -> CType) . Thk (Monad M) -> codata
     | .monad : Monad (T M)
@@ -81,7 +81,7 @@ module String where
   pub extern def str_eq : Thk(String -> String -> Ret Bool) end
   pub extern def str_index : Thk(String -> Int -> Ret Char) end
 
-  /// Conversions
+  --| Conversions
   pub def unit_to_str : Thk(Unit -> Ret String) = {
     fn (_u : Unit) -> ret "()"
   } end

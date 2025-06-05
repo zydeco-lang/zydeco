@@ -3,14 +3,14 @@ codata Monoid (M: VType -> CType) where
   | .append : forall (A: VType) . U (M A) -> U (M A) -> M A
 end
 
-// codata Monad (M: VType -> CType) where
-//   | .return : forall (A: VType) . A -> M A
-//   | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
-// end
+-- codata Monad (M: VType -> CType) where
+--   | .return : forall (A: VType) . A -> M A
+--   | .bind : forall (A: VType) (A': VType) . U (M A) -> U (A -> M A') -> M A'
+-- end
 
 codata MList (A: VType) where
   | .done : Ret (List A)
-  // | .run : forall (R: CType) . U (U R -> A -> R) -> U R -> R
+  -- | .run : forall (R: CType) . U (U R -> A -> R) -> U R -> R
 end
 
 def ! mnlist: Monoid MList =

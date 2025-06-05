@@ -24,12 +24,12 @@ The artifact doesn't require any specific hardware dependencies. The artifact is
 ```sh
 git clone git@github.com:zydeco-lang/zydeco.git
 ```
-// TODO: update the link to Zenodo, a release tag or a commit hash
+-- TODO: update the link to Zenodo, a release tag or a commit hash
 
-2. Install the dependencies (// TODO: update docker instructions)
+2. Install the dependencies (-- TODO: update docker instructions)
 ```sh
 # install rustup
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https:--sh.rustup.rs | sh
 ```
 
 3. Run the tests under the repository root

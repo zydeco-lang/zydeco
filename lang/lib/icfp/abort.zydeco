@@ -1,24 +1,24 @@
-// Function Types and the abort example
+-- Function Types and the abort example
 
-// Funciton Type
+-- Funciton Type
 codata Fn (A: VType) (B: CType) where
   | .push (arg: A) : B
 end
 
-// Function Type with Optional Argument
+-- Function Type with Optional Argument
 codata FnOpt (A: VType) (B: CType) where
   | .some (arg: A) : B
   | .none          : B
 end
 
-// Variadic Function Type
+-- Variadic Function Type
 codata FnVar (A: VType) (B: CType) where
   | .more (arg: A) : FnVar A B
   | .done          : B
 end
 
 
-// Abort that takes the first argument and removes the rest
+-- Abort that takes the first argument and removes the rest
 def ! abort : forall (A: VType) . A -> FnVar A (Ret A) =
   fn A -> fn x -> fix unwind ->
   comatch

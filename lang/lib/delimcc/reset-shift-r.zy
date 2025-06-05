@@ -10,18 +10,18 @@ def ! shift' (A: VType) (A': VType)
   fn ka' -> ! e ka' { fn x' -> ret x' }
 end
 
-// reset' and shift' are the primitives of delimited continuations.
-// example:
+-- reset' and shift' are the primitives of delimited continuations.
+-- example:
 
-// def ! _ : F Int =
-//   ! reset' {
-//     do x <- ! shift' { fn cont ->
-//       do y <- ! cont { ret 4 };
-//       ! add 17 y
-//     };
-//     ! mul 2 x
-//   }
-// end
+-- def ! _ : F Int =
+--   ! reset' {
+--     do x <- ! shift' { fn cont ->
+--       do y <- ! cont { ret 4 };
+--       ! add 17 y
+--     };
+--     ! mul 2 x
+--   }
+-- end
 
 def ! ex : Ret Int =
   ! reset' Int {

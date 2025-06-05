@@ -3,9 +3,9 @@ codata Variadic (A: VType) (B: CType) where
   | .done : B
 end
 
-// A ->* B == List A -> B
+-- A ->* B == List A -> B
 
-// restore
+-- restore
 def fix l (A: VType) (B: CType) (fv: U (Variadic A B)): List A -> B = fn xs ->
   match xs
   | +Nil() -> ! fv .done
@@ -13,7 +13,7 @@ def fix l (A: VType) (B: CType) (fv: U (Variadic A B)): List A -> B = fn xs ->
   end
 end
 
-// capture
+-- capture
 def ! r (A: VType) (B: CType) (fl: U (List A -> B)): Variadic A B =
   let fix r (k: U (List A -> B)): Variadic A B =
     comatch
@@ -24,13 +24,13 @@ def ! r (A: VType) (B: CType) (fl: U (List A -> B)): Variadic A B =
   ! r { fn xs -> ! fl xs }
 end
 
-// continuation based mich wand
+-- continuation based mich wand
 
-// ! r (B) (A) { ! l (B) (A) fv } == fv
-// forall fv: U (Variadic A B)
+-- ! r (B) (A) { ! l (B) (A) fv } == fv
+-- forall fv: U (Variadic A B)
 
-// ! l (B) (A) { ! r (B) (A) fl } == fl
-// forall fl: U (List A -> B)
+-- ! l (B) (A) { ! r (B) (A) fl } == fl
+-- forall fl: U (List A -> B)
 
 
 def fix printl (xs: List String) (kont: U OS) : OS =

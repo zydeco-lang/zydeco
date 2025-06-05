@@ -1,5 +1,5 @@
 main
   let loop = { fix (loop: Thunk(OS)) -> ! loop } in
-  // ! loop
+  -- ! loop
   ! exit 0
 end

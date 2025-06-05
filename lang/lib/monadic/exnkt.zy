@@ -4,7 +4,7 @@ alias ExnK (E: VType) (A: VType) : CType =
   forall (R: CType) . Thk (E -> R) -> Thk (A -> R) -> R
 end
 
-// Pass the algebra of R along with the type quantifier R
+-- Pass the algebra of R along with the type quantifier R
 alias ExnKT (E: VType) (M: VType -> CType) (A: VType) : CType =
   forall (R: CType) . Thk (Algebra M R) -> Thk (E -> R) -> Thk (A -> R) -> R
 end

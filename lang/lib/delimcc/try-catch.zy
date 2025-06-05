@@ -1,10 +1,10 @@
 main
   do i <- ! try Ret mret Int Int {
     ! throw Ret mret Int Int 42
-    // fn _ -> ret 0
+    -- fn _ -> ret 0
   } { fn x -> ! sub x 42 };
   do j <- ! try Ret mret Int Int {
-    // ! throw Ret mret Int Int 42
+    -- ! throw Ret mret Int Int 42
     fn _ -> ret 0
   } { fn x -> ! sub x 42 };
   let ! is_0 (x: Int) (msg: String) (k: Thk OS) =

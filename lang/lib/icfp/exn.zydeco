@@ -1,19 +1,19 @@
-// Examples of exception monads
+-- Examples of exception monads
 
-// Interface for monads
-// codata Monad (M: VType -> CType) where
-//   | .return : forall (A: VType) .
-//     A -> M A
-//   | .bind : forall (A: VType) (A': VType) .
-//     Thunk (M A) -> Thunk (A -> M A') -> M A'
-// end
+-- Interface for monads
+-- codata Monad (M: VType -> CType) where
+--   | .return : forall (A: VType) .
+--     A -> M A
+--   | .bind : forall (A: VType) (A': VType) .
+--     Thunk (M A) -> Thunk (A -> M A') -> M A'
+-- end
 
 codata MonadErr (E: VType) (M: VType -> CType) where
   | .fail : forall (A: VType) . E -> M A
 end
 
 
-// Ret Either exception monad
+-- Ret Either exception monad
 codata Exn (E: VType) (A: VType) where
   | .done : Ret (Either E A)
 end
@@ -31,7 +31,7 @@ def ! mexn (E: VType) : Monad (Exn E) =
 end
 
 
-// Church-encoded exception monad
+-- Church-encoded exception monad
 codata ExnK (E: VType) (A: VType) where
   | .run : forall (R: CType) .
     Thunk (E -> R) -> Thunk (A -> R) -> R
@@ -50,7 +50,7 @@ def ! mexnk (E: VType) : Monad (ExnK E) =
 end
 
 
-// Defunctionalized exception monad
+-- Defunctionalized exception monad
 codata ExnDe (E: VType) (A: VType) where
   | .try : forall (E': VType) .
     Thunk (E -> ExnDe E' A) -> ExnDe E' A
@@ -84,8 +84,8 @@ def fix mexnde_err (E: VType) : MonadErr E (ExnDe E) =
 end
 
 
-// Proof of the violation of the monad laws of
-// the defunctionalized exception monad above
+-- Proof of the violation of the monad laws of
+-- the defunctionalized exception monad above
 def fix count_kont
   (E: VType) (A: VType) (i: Int)
   (fi: Thunk (Int -> ExnDe E A))
@@ -118,7 +118,7 @@ def ! bench
   end
 end
 
-// LHS and RHS of the associativity law
+-- LHS and RHS of the associativity law
 def ! lhs
   (f: Thunk (Int -> ExnDe Unit Int))
   (g: Thunk (Int -> ExnDe Unit Int))
@@ -137,7 +137,7 @@ def ! rhs
   m { fn i -> ! mexnde Unit .bind Int Int { ! f i } g }
 end
 
-// Observable violation of the monad laws because the results are different
+-- Observable violation of the monad laws because the results are different
 main
   let ! triv : Int -> ExnDe Unit Int =
     ! mexnde Unit .return Int
@@ -145,8 +145,8 @@ main
 
   do a <- ! bench { fn i -> ! lhs triv triv i };
   do b <- ! bench { fn i -> ! rhs triv triv i };
-  // syntactic sugar:
-  // do~ M; N ==> M { N }
+  -- syntactic sugar:
+  -- do~ M; N ==> M { N }
   do~ ! write_int a;
   do~ ! write_str " != ";
   do~ ! write_int b;

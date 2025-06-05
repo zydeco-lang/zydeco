@@ -1,36 +1,36 @@
-// # Chapter 4: Y Combinator
+-- # Chapter 4: Y Combinator
 
-// In the last few chapters, we saw the `rec` keyword, which allows us to define
-// recursive functions. However, it is actually possible to define recursive
-// functions without the primitive `rec` terms. This can be done by using the Y
-// combinator.
+-- In the last few chapters, we saw the `rec` keyword, which allows us to define
+-- recursive functions. However, it is actually possible to define recursive
+-- functions without the primitive `rec` terms. This can be done by using the Y
+-- combinator.
 
 codata Y (B : CType) where
   | .y : Thunk (Y B) -> B
 end
 
-// Exercise Y: Implement the Y combinator.
+-- Exercise Y: Implement the Y combinator.
 
-// Hint: In call-by-name sense, the Y combinator is given by: `Y f = f (Y f)`
-// and can be defined as `\f. (\x. f (x x)) (\x. f (x x))`. Also, note that
-// call-by-name has lazy semantics.
+-- Hint: In call-by-name sense, the Y combinator is given by: `Y f = f (Y f)`
+-- and can be defined as `\f. (\x. f (x x)) (\x. f (x x))`. Also, note that
+-- call-by-name has lazy semantics.
 
 alias FnInt = Int -> Ret Int end
 def fix' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
   fn (f : Thunk (Thunk FnInt -> FnInt)) -> (
-    // Todo..
+    -- Todo..
     ret { fn x -> ret 3628800 }
   )
 } end
 
-// The fact that we can implement the Y combinator in zydeco implies that zydeco
-// is very likely to be a partial language with turning computability. In fact,
-// this is exactly the case.
+-- The fact that we can implement the Y combinator in zydeco implies that zydeco
+-- is very likely to be a partial language with turning computability. In fact,
+-- this is exactly the case.
 
-// With a little extra effort, it is possible to implement the Y combinator in a
-// generic way. See zydeco-lang/tests/nonzero-exit-code/Y.zydeco for details.
+-- With a little extra effort, it is possible to implement the Y combinator in a
+-- generic way. See zydeco-lang/tests/nonzero-exit-code/Y.zydeco for details.
 
-// The rest is just a test bench.
+-- The rest is just a test bench.
 main
   # good old factorial
   let ! fact (f: U(Int -> F Int)) (n: Int): F Int =
@@ -72,16 +72,16 @@ main
   ! exit 0 }}
 end
 
-// Exercise (optional): Write a term that never terminates.
-// def loop : ... = ... end
+-- Exercise (optional): Write a term that never terminates.
+-- def loop : ... = ... end
 
-// Exercise (optional): Write iota, a `CoNat` that spills out infinite `Nat`s.
-// Define `CoNat` first, of course.
+-- Exercise (optional): Write iota, a `CoNat` that spills out infinite `Nat`s.
+-- Define `CoNat` first, of course.
 
 data CoNat where
-  // Todo..
+  -- Todo..
 end
 
-// `
-// def iota : Thunk CoNat = ... end
-// `
+-- `
+-- def iota : Thunk CoNat = ... end
+-- `
