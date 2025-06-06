@@ -9,4 +9,4 @@ bins = [
     "stub.zy",
 ]
 
-std = "NoStd"
+std = "nostd"

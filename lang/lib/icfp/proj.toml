@@ -13,4 +13,4 @@ bins = [
     "transformers.zydeco",
 ]
 
-std = "NoStd"
+std = "nostd"

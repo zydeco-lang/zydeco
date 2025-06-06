@@ -8,4 +8,4 @@ bins = [
     "hash.zy",
 ]
 
-std = "NoStd"
+std = "nostd"

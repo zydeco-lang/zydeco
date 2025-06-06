@@ -13,4 +13,4 @@ bins = [
     "try-catch.zy",
 ]
 
-std = "NoStd"
+std = "nostd"

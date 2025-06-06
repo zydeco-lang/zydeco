@@ -43,4 +43,4 @@ bins = [
     "Y.zydeco",
 ]
 
-std = "NoStd"
+std = "nostd"

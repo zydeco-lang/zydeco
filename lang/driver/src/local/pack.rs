@@ -18,8 +18,11 @@ use zydeco_utils::{
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub enum UseStd {
     #[default]
+    #[serde(rename = "use")]
     Use,
+    #[serde(rename = "qualified")]
     Qualified,
+    #[serde(rename = "nostd")]
     NoStd,
 }
 

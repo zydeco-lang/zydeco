@@ -5,4 +5,4 @@ srcs = [
 ]
 deps = []
 
-std = "NoStd"
+std = "nostd"

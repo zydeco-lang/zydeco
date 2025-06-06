@@ -17,4 +17,4 @@ bins = [
     "8-lense-prism-optics.zy",
 ]
 
-std = "NoStd"
+std = "nostd"

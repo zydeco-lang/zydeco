@@ -20,4 +20,4 @@ bins = [
     "exnkt.zydeco",
 ]
 
-std = "NoStd"
+std = "nostd"

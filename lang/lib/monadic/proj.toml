@@ -9,4 +9,4 @@ bins = [
     "exnkt.zy",
 ]
 
-std = "NoStd"
+std = "nostd"
