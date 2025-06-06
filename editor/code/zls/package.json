@@ -2,9 +2,9 @@
   "name": "zls",
   "displayName": "zls",
   "description": "Language support for Zydeco",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "engines": {
-    "vscode": "^1.96.0"
+    "vscode": "^1.100.0"
   },
   "repository": {
     "type": "git",
@@ -15,6 +15,7 @@
     "Programming Languages"
   ],
   "main": "./out/extension.js",
+  "activationEvents": [],
   "contributes": {
     "languages": [
       {
