@@ -1,1 +1,1 @@
-type-complexity-threshold = 500
+type-complexity-threshold = 1000
