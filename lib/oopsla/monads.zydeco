@@ -25,7 +25,7 @@ end
 
 # The kontinuation monad
 codata Kont (R: CType) (A: VType) where
-  | .run : Thunk (A -> R) -> R
+  | .run : Thk (A -> R) -> R
 end
 
 def ! mo-kont (R: CType) : Monad (Kont R) =
@@ -41,7 +41,7 @@ end
 
 # The polymorphic kontinuation monad
 codata PolyKont (A : VType) where
-  | .bind : forall (R: CType) . Thunk (A -> R) -> R
+  | .bind : forall (R: CType) . Thk (A -> R) -> R
 end
 
 def ! mo-polykont : Monad PolyKont =
@@ -56,7 +56,7 @@ end
 # The state monad
 codata State (S: VType) (A: VType) where
   | .run : forall (R: CType) .
-    S -> Thunk (S -> A -> R) -> R
+    S -> Thk (S -> A -> R) -> R
 end
 
 def ! mo-state (S: VType) : Monad (State S) =
@@ -85,7 +85,7 @@ end
 
 # The I/O monad
 codata IO (A: VType) where
-  | .run : Thunk (A -> OS) -> OS
+  | .run : Thk (A -> OS) -> OS
 end
 
 def ! mo-io : Monad IO =

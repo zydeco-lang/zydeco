@@ -1456,12 +1456,15 @@ impl Tyck for TyEnvT<su::TermId> {
                                             Alloc::alloc(tycker, ss::Forall(abst, ty_2), ctype);
                                         TermAnnId::Type(forall, ctype)
                                     }
-                                    | TermAnnId::Hole(_)
-                                    | TermAnnId::Value(_, _)
-                                    | TermAnnId::Compu(_, _) => tycker.err_k(
-                                        TyckError::SortMismatch,
+                                    | TermAnnId::Hole(_) => tycker.err_k(
+                                        TyckError::MissingAnnotation,
                                         std::panic::Location::caller(),
                                     )?,
+                                    | TermAnnId::Value(_, _) | TermAnnId::Compu(_, _) => tycker
+                                        .err_k(
+                                            TyckError::SortMismatch,
+                                            std::panic::Location::caller(),
+                                        )?,
                                 }
                             }
                             | PatAnnId::Value(vpat, ty_1) => {

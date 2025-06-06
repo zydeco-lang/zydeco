@@ -4,7 +4,7 @@ def poly = {
     do s <- ! times x x;
     do y <- ! add x 10;
     ! add s y
-};
+} end
 
 main
   # the exit code should be 0 for the test to pass

@@ -1,0 +1,11 @@
+name = "examples"
+
+deps = [{ local = "../std/proj.toml" }]
+srcs = []
+bins = [
+    "abort.zydeco",
+    "algebra.zydeco",
+    "echo_sum.zydeco",
+]
+
+std = "nostd"

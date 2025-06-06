@@ -5,12 +5,12 @@
 -- The interface for the algebra
 -- codata Algebra (M: VType -> CType) (R: CType) where
 --   | : forall (A: VType) .
---     Thk (M A) -> Thk (A -> R) -> R
+--     Thunk (M A) -> Thunk (A -> R) -> R
 -- end
 
 
 codata IO (A: VType) where
-  | .run : Thk (A -> OS) -> OS
+  | .run : Thunk (A -> OS) -> OS
 end
 
 -- Algebra IO OS exists
@@ -32,7 +32,7 @@ end
 def ! alg_mo
   (M: VType -> CType)
   (V: VType)
-  (mo: Thk (Monad M))
+  (mo: Thunk (Monad M))
 : Algebra M (M V) =
   comatch A m k ->
     ! mo .bind A V m k
@@ -43,7 +43,7 @@ end
 -- Algebras can be defined on the arrow type
 def ! alg_arrow
   (M: VType -> CType) (R: CType) (A: VType)
-  (alg: Thk (Algebra M R))
+  (alg: Thunk (Algebra M R))
 : Algebra M (A -> R) =
   comatch A' m' f -> fn a ->
     ! alg A' m' { fn a' -> ! f a' a }
@@ -59,8 +59,8 @@ end
 -- Algebras can be defined on the with type
 def ! alg_with
   (M: VType -> CType) (L: CType) (R: CType)
-  (algl: Thk (Algebra M L))
-  (algr: Thk (Algebra M R))
+  (algl: Thunk (Algebra M L))
+  (algr: Thunk (Algebra M R))
 : Algebra M (With L R) =
   comatch A m f ->
     comatch
@@ -77,10 +77,10 @@ codata FnVar (A: VType) (B: CType) where
 end
 
 -- Algebras can be defined on coinductive types like FnVar
-def fix alg_var (M: VType -> CType) (R: CType) (alg: Thk (Algebra M R)) (V: VType)
+def fix alg_var (M: VType -> CType) (R: CType) (alg: Thunk (Algebra M R)) (V: VType)
                    : Algebra M (FnVar V R) =
   comatch A m ka ->
-    let fix loop (ka: Thk (A -> FnVar V R))
+    let fix loop (ka: Thunk (A -> FnVar V R))
     : FnVar V R =
       comatch
       | .more v -> ! loop { fn a -> ! ka a .more v }
@@ -96,9 +96,9 @@ end
 -- The defunctionalized exception type
 codata ExnDe (E: VType) (A: VType) where
   | .try : forall (E': VType) .
-    Thk (E -> ExnDe E' A) -> ExnDe E' A
+    Thunk (E -> ExnDe E' A) -> ExnDe E' A
   | .kont : forall (A': VType) .
-    Thk (A -> ExnDe E A') -> ExnDe E A'
+    Thunk (A -> ExnDe E A') -> ExnDe E A'
   | .done : Ret (Either E A)
 end
 
@@ -106,7 +106,7 @@ end
 --   | .return : forall (A: VType) .
 --     A -> M A
 --   | .bind : forall (A: VType) (A': VType) .
---     Thk (M A) -> Thk (A -> M A') -> M A'
+--     Thunk (M A) -> Thunk (A -> M A') -> M A'
 -- end
 
 codata MonadErr (E: VType) (M: VType -> CType) where
@@ -153,15 +153,17 @@ end
 -- add_of errors if the sum >= 256 (8-bit overflow)
 def ! add_of (i: Int) (sum: Int) : ExnDe String Int =
   do sum <- ! add i sum;
-  do b <- ! int_lt sum 256;
-  match b
-  | +True() -> ! mexnde String .return Int sum
-  | +False() -> ! mexnde_err String .fail Int "sum >= 256"
-  end
+  ! if~ (ExnDe String Int) {
+    ! int_lt sum 256
+  } {
+    ! mexnde String .return Int sum
+  } {
+    ! mexnde_err String .fail Int "sum >= 256"
+  }
 end
 
 main
-  (fix (loop: Thk (Int -> OS)) ->
+  (fix (loop: Thunk (Int -> OS)) ->
     fn sum ->
     ! read_line_as_int { fn i? -> match i?
       | +None() -> ! exit 0

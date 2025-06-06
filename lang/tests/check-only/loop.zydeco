@@ -1,4 +1,0 @@
-def rec loop : OS = ! (loop : U OS) end
-main
-  ! loop
-end

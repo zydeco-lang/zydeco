@@ -3244,6 +3244,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zydeco-tests"
+version = "0.2.0"
+dependencies = [
+ "zydeco-driver",
+ "zydeco-dynamics",
+ "zydeco-statics",
+ "zydeco-surface",
+ "zydeco-syntax",
+ "zydeco-utils",
+]
+
+[[package]]
 name = "zydeco-utils"
 version = "0.2.0"
 dependencies = [

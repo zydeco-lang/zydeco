@@ -1,8 +1,0 @@
-main
-  do x <- (fn x -> ret 1 : Bool -> F Int) +True();
-  do y <- (fn x -> ret true : Int -> F Bool) +123;
-  do z <- (fn x -> ret true : Int -> F Bool) -123;
-  do x <- ! mul 1 -1;
-  do x <- ! add 1 x;
-  ! exit x
-end

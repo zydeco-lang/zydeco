@@ -8,6 +8,7 @@ members = [
     "lang/statics",
     "lang/dynamics",
     "lang/driver",
+    "lang/tests",
     "cli",
     "web",
     "editor/zls",

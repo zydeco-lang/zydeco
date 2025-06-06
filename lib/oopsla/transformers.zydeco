@@ -8,20 +8,20 @@
 --   | .return : forall (A: VType) .
 --     A -> M A
 --   | .bind : forall (A: VType) (A': VType) .
---     Thunk (M A) -> Thunk (A -> M A') -> M A'
+--     Thk (M A) -> Thk (A -> M A') -> M A'
 -- end
 
 -- The interface for the algebra
 -- alias Algebra (M: VType -> CType) (R: CType) : CType =
---   forall (A: VType) . Thunk (M A) -> Thunk (A -> R) -> R
+--   forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
 -- end
 
 -- The interface for the monad transformer
 -- codata MonadTrans (T: (VType -> CType) -> VType -> CType) where
 --   | .monad : forall (M: VType -> CType) .
---     Thunk (Monad M) -> Monad (T M)
+--     Thk (Monad M) -> Monad (T M)
 --   | .lift : forall (M: VType -> CType) (A: VType) .
---     Thunk (Monad M) -> Thunk (M A) -> T M A
+--     Thk (Monad M) -> Thk (M A) -> T M A
 -- end
 
 
@@ -54,7 +54,7 @@ end
 
 -- Add the algebra for the output type of the continuation $R$
 codata ExnKT (E: VType) (R: CType) (M: VType -> CType) (A: VType) where
-  | .run : Thunk (Algebra M R) -> Thunk (E -> R) -> Thunk (A -> R) -> R
+  | .run : Thk (Algebra M R) -> Thk (E -> R) -> Thk (A -> R) -> R
 end
 
 def ! mtexnk (E: VType) (R: CType) : MonadTrans (ExnKT E R) = fn M mo ->

@@ -1,5 +1,0 @@
-main
-  ! read_line { fn (input: String) ->
-  ! write_line input {
-  ! exit 0 }}
-end

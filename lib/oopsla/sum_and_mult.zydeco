@@ -18,7 +18,7 @@ codata FnVar (A: VType) (B: CType) where
 end
 
 # Type of Variadic Function with at least one argument (A ->+ B)
-alias FnVarOnce (A: VType) (B: CType) = A -> (FnVar A B)
+alias FnVarOnce (A: VType) (B: CType) : CType = A -> (FnVar A B) end
 
 # `!` is the force operator which is used to run suspended computations in thunks
 # `! { ... }` will be evaluated to `...`

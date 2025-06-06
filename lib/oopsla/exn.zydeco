@@ -5,7 +5,7 @@
 #   | .return : forall (A: VType) .
 #     A -> M A
 #   | .bind : forall (A: VType) (A': VType) .
-#     Thunk (M A) -> Thunk (A -> M A') -> M A'
+#     Thk (M A) -> Thk (A -> M A') -> M A'
 # end
 
 codata MonadErr (E: VType) (M: VType -> CType) where
@@ -34,7 +34,7 @@ end
 # Church-encoded exception monad
 codata ExnK (E: VType) (A: VType) where
   | .run : forall (R: CType) .
-    Thunk (E -> R) -> Thunk (A -> R) -> R
+    Thk (E -> R) -> Thk (A -> R) -> R
 end
 
 def ! mexnk (E: VType) : Monad (ExnK E) =
@@ -53,9 +53,9 @@ end
 # Defunctionalized exception monad
 codata ExnDe (E: VType) (A: VType) where
   | .try : forall (E': VType) .
-    Thunk (E -> ExnDe E' A) -> ExnDe E' A
+    Thk (E -> ExnDe E' A) -> ExnDe E' A
   | .kont : forall (A': VType) .
-    Thunk (A -> ExnDe E A') -> ExnDe E A'
+    Thk (A -> ExnDe E A') -> ExnDe E A'
   | .done : Ret (Either E A)
 end
 
@@ -88,7 +88,7 @@ end
 # the defunctionalized exception monad above
 def fix count_kont
   (E: VType) (A: VType) (i: Int)
-  (fi: Thunk (Int -> ExnDe E A))
+  (fi: Thk (Int -> ExnDe E A))
 : ExnDe E A =
   comatch
   | .try -> fn E' ke ->
@@ -106,7 +106,7 @@ end
 alias ExnCounter = ExnDe Unit Int end
 
 def ! bench
-  (impl: Thunk (Thunk (ExnCounter) -> ExnCounter))
+  (impl: Thk (Thk (ExnCounter) -> ExnCounter))
 : Ret Int =
   do i? <- ! impl {
     ! count_kont Unit Int 0
@@ -120,18 +120,18 @@ end
 
 # LHS and RHS of the associativity law
 def ! lhs
-  (f: Thunk (Int -> ExnDe Unit Int))
-  (g: Thunk (Int -> ExnDe Unit Int))
-  (m: Thunk (ExnDe Unit Int))
+  (f: Thk (Int -> ExnDe Unit Int))
+  (g: Thk (Int -> ExnDe Unit Int))
+  (m: Thk (ExnDe Unit Int))
 : ExnDe Unit Int =
   ! mexnde Unit .bind Int Int
   { ! mexnde Unit .bind Int Int m f } g
 end
 
 def ! rhs
-  (f: Thunk (Int -> ExnDe Unit Int))
-  (g: Thunk (Int -> ExnDe Unit Int))
-  (m: Thunk (ExnDe Unit Int))
+  (f: Thk (Int -> ExnDe Unit Int))
+  (g: Thk (Int -> ExnDe Unit Int))
+  (m: Thk (ExnDe Unit Int))
 : ExnDe Unit Int =
   ! mexnde Unit .bind Int Int
   m { fn i -> ! mexnde Unit .bind Int Int { ! f i } g }

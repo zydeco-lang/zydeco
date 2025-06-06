@@ -28,9 +28,6 @@ pub mod prelude {
     pub use zydeco_surface::textual::syntax as t;
 }
 
-#[cfg(test)]
-mod tests;
-
 pub use conf::Conf;
 pub use err::{BuildError, Result};
 use interp::pack::PackageRuntime;
