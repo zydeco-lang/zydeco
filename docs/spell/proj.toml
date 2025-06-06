@@ -2,7 +2,7 @@ name = "Spell"
 
 srcs = []
 deps = [
-    { local = "../../lang/lib/std/proj.toml" }
+    { local = "../../lib/std/proj.toml" }
 ]
 bins = [
     ".build.zy",

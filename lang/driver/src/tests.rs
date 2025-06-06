@@ -22,7 +22,7 @@ macro_rules! lib_proj_bin {
         #[test]
         fn $name() {
             let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../lib")
+                .join("../../lib")
                 .join(stringify!($proj));
             let local = dir.join("proj.toml").canonicalize().unwrap();
             let bin = {
@@ -113,7 +113,8 @@ mod spell {
 }
 
 mod monadic {
-    // lib_proj_bin!(monadic, exnt, "exnt");
+    lib_proj_bin!(monadic, exnt, "exnt");
+    lib_proj_bin!(monadic, exnkt, "exnkt");
 }
 
 mod delimcc {
