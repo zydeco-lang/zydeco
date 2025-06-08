@@ -240,7 +240,11 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
             | 1 => {
                 let id = decls.iter().next().unwrap();
                 match tycker.scoped.decls[id].clone() {
-                    | Decl::Meta(_) => unreachable!(),
+                    | Decl::Meta(decl) => {
+                        let su::MetaT(meta, decl) = decl;
+                        let _ = meta;
+                        env.mk(SccDeclarations(&[decl].into_iter().collect())).tyck_k(tycker, ())
+                    }
                     | Decl::AliasBody(_) => {
                         let uni = tycker.scoped.unis.get(id).is_some();
                         if uni {

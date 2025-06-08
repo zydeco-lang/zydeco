@@ -170,6 +170,7 @@ impl Resolve for DeclId {
             | Declaration::Meta(decl) => {
                 let MetaT(meta, decl) = decl;
                 let _ = meta;
+                resolver.deps.add(*self, [decl]);
                 let () = decl.resolve(resolver, global)?;
             }
             | Declaration::AliasBody(decl) => {
@@ -506,8 +507,8 @@ impl Collect for SccDeclarations<'_> {
                         | Declaration::Meta(decl) => {
                             let MetaT(meta, decl) = decl;
                             let _ = meta;
-                            let _ = decl;
-                            todo!()
+                            ctx = SccDeclarations(&[decl].into_iter().collect())
+                                .collect(collector, ctx)?;
                         }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder, bindee } = decl;
@@ -529,8 +530,8 @@ impl Collect for SccDeclarations<'_> {
                         | Declaration::Meta(decl) => {
                             let MetaT(meta, decl) = decl;
                             let _ = meta;
-                            let _ = decl;
-                            todo!()
+                            ctx = SccDeclarations(&[decl].into_iter().collect())
+                                .collect(collector, ctx)?;
                         }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder, bindee } = decl;
@@ -556,42 +557,44 @@ impl Collect for SccDeclarations<'_> {
             | _ => {
                 // collect context for all binders before collecting all bindees
                 for decl in decls.iter() {
-                    let decl = collector.decls[decl].clone();
-                    match decl {
-                        | Declaration::Meta(decl) => {
-                            let MetaT(meta, decl) = decl;
-                            let _ = meta;
-                            let _ = decl;
-                            todo!()
-                        }
-                        | Declaration::AliasBody(decl) => {
-                            let AliasBody { binder, bindee: _ } = decl;
-                            ctx = binder.collect(collector, ctx)?;
-                        }
-                        | Declaration::AliasHead(_)
-                        | Declaration::Module(_)
-                        | Declaration::Exec(_) => {
-                            unreachable!()
+                    let mut id = decl.to_owned();
+                    loop {
+                        match collector.decls[&id].clone() {
+                            | Declaration::Meta(decl) => {
+                                let MetaT(meta, decl) = decl;
+                                let _ = meta;
+                                id = decl;
+                            }
+                            | Declaration::AliasBody(decl) => {
+                                let AliasBody { binder, bindee: _ } = decl;
+                                break ctx = binder.collect(collector, ctx)?;
+                            }
+                            | Declaration::AliasHead(_)
+                            | Declaration::Module(_)
+                            | Declaration::Exec(_) => {
+                                unreachable!()
+                            }
                         }
                     }
                 }
                 for decl in decls.iter() {
-                    let decl = collector.decls[decl].clone();
-                    match decl {
-                        | Declaration::Meta(decl) => {
-                            let MetaT(meta, decl) = decl;
-                            let _ = meta;
-                            let _ = decl;
-                            todo!()
-                        }
-                        | Declaration::AliasBody(decl) => {
-                            let AliasBody { binder: _, bindee } = decl;
-                            let () = bindee.collect(collector, ctx.to_owned())?;
-                        }
-                        | Declaration::AliasHead(_)
-                        | Declaration::Module(_)
-                        | Declaration::Exec(_) => {
-                            unreachable!()
+                    let mut id = decl.to_owned();
+                    loop {
+                        match collector.decls[&id].clone() {
+                            | Declaration::Meta(decl) => {
+                                let MetaT(meta, decl) = decl;
+                                let _ = meta;
+                                id = decl;
+                            }
+                            | Declaration::AliasBody(decl) => {
+                                let AliasBody { binder: _, bindee } = decl;
+                                break bindee.collect(collector, ctx.to_owned())?;
+                            }
+                            | Declaration::AliasHead(_)
+                            | Declaration::Module(_)
+                            | Declaration::Exec(_) => {
+                                unreachable!()
+                            }
                         }
                     }
                 }
