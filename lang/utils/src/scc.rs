@@ -168,7 +168,12 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         let mut deps = DepGraph::new();
         for (k, scc) in &strongs {
             for id in scc {
-                for d in id_deps.query(id) {
+                let ds = id_deps.query(id);
+                if ds.is_empty() {
+                    // if one's dependency is empty, it is a root
+                    srcs.add(*k, []);
+                }
+                for d in ds {
                     let repr = belongs[&d];
                     if repr != *k {
                         srcs.add(repr, [*k]);
@@ -307,6 +312,17 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
+    #[test]
+    fn test_scc_0() {
+        let mut deps = DepGraph::new();
+        deps.add(1, []);
+        let mut scc = Kosaraju::new(&deps).run();
+        println!("{:?}", scc);
+        assert_eq!(scc.top(), vec![[1].into_iter().collect()]);
+        scc.release([1]);
+        assert_eq!(scc.top(), vec![]);
+    }
     #[test]
     fn test_scc_1() {
         let mut deps = DepGraph::new();

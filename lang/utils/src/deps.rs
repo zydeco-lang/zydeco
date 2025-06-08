@@ -9,7 +9,10 @@ pub struct DepGraph<Id: Hash + Eq + Clone> {
     pub(crate) map: HashMap<Id, HashSet<Id>>,
 }
 
-impl<Id: Hash + Eq + Clone> DepGraph<Id> {
+impl<Id: Hash + Eq + Clone> DepGraph<Id>
+// where
+//     Id: std::fmt::Debug,
+{
     pub fn new() -> Self {
         Self { map: HashMap::new() }
     }
@@ -19,11 +22,7 @@ impl<Id: Hash + Eq + Clone> DepGraph<Id> {
     }
     /// add more dependencies to a node
     pub fn add(&mut self, id: Id, deps: impl IntoIterator<Item = Id>) {
-        if let Some(ds) = self.map.get_mut(&id) {
-            ds.extend(deps);
-        } else {
-            self.map.insert(id, deps.into_iter().collect());
-        }
+        self.map.entry(id).or_insert_with(HashSet::new).extend(deps);
     }
     /// find the roots of the graph
     pub fn roots(&self) -> Vec<Id> {
@@ -66,7 +65,10 @@ pub struct SrcGraph<Id: Hash + Eq + Clone> {
     pub(crate) map: HashMap<Id, HashSet<Id>>,
 }
 
-impl<Id: Hash + Eq + Clone> SrcGraph<Id> {
+impl<Id: Hash + Eq + Clone> SrcGraph<Id>
+// where
+//     Id: std::fmt::Debug,
+{
     pub fn new() -> Self {
         Self { map: HashMap::new() }
     }
