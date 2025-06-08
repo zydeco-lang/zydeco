@@ -228,7 +228,7 @@ impl<'source> Iterator for Lexer<'source> {
                     continue;
                 }
                 | Some((Ok(Tok::CommentClose), _)) => {
-                    if self.comment_depth <= 0 {
+                    if self.comment_depth == 0 {
                         break None;
                     }
                     self.comment_depth -= 1;

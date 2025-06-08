@@ -17,4 +17,4 @@ pub enum ResolveError {
     ModuleNotFound(Sp<NameRef<VarName>>),
 }
 
-pub type Result<T> = std::result::Result<T, ResolveError>;
+pub type Result<T> = std::result::Result<T, Box<ResolveError>>;

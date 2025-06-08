@@ -263,7 +263,7 @@ impl PackageScoped {
 
                 use std::collections::BTreeSet;
                 let mut bs = BTreeSet::new();
-                for err in tycker.errors.to_vec() {
+                for err in tycker.errors.iter().cloned() {
                     bs.insert(format!("{}\n", tycker.error_entry_output(err)));
                 }
                 let mut s = String::new();

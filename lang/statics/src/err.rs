@@ -234,5 +234,5 @@ impl Tycker {
     }
 }
 
-pub type Result<T> = std::result::Result<T, TyckErrorEntry>;
+pub type Result<T> = std::result::Result<T, Box<TyckErrorEntry>>;
 pub type ResultKont<T> = std::result::Result<T, ()>;

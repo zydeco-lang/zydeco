@@ -153,7 +153,7 @@ mod impl_tycker {
             &self, error: TyckError, blame: &'static std::panic::Location<'static>,
         ) -> Result<T> {
             let stack = self.stack.clone();
-            Err(TyckErrorEntry { error, blame, stack })
+            Err(Box::new(TyckErrorEntry { error, blame, stack }))
         }
         /// Push an error entry into the error list.
         #[inline]
@@ -174,7 +174,7 @@ mod impl_tycker {
         pub(crate) fn err_p_to_k<T>(&mut self, res: Result<T>) -> ResultKont<T> {
             match res {
                 | Ok(t) => Ok(t),
-                | Err(entry) => self.push_err_entry_k(entry),
+                | Err(entry) => self.push_err_entry_k(*entry),
             }
         }
     }
