@@ -10,35 +10,3 @@ zydeco-statics = { path = "../statics" }
 zydeco-dynamics = { path = "../dynamics" }
 zydeco-syntax = { path = "../syntax" }
 zydeco-utils = { path = "../utils" }
-
-[[test]]
-name = "exec"
-path = "exec.rs"
-
-[[test]]
-name = "examples"
-path = "examples.rs"
-
-[[test]]
-name = "avl"
-path = "avl.rs"
-
-[[test]]
-name = "spell"
-path = "spell.rs"
-
-[[test]]
-name = "monadic"
-path = "monadic.rs"
-
-[[test]]
-name = "delimcc"
-path = "delimcc.rs"
-
-[[test]]
-name = "stack"
-path = "stack.rs"
-
-[[test]]
-name = "oopsla"
-path = "oopsla.rs"
