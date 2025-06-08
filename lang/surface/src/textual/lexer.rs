@@ -3,7 +3,6 @@ use std::fmt::{Debug, Display};
 
 #[derive(Logos, Clone, Debug, PartialEq)]
 #[logos(skip r"#.*\n")]
-#[logos(skip r"--.*\n")]
 #[logos(skip r"[ \t\n\f]+")]
 #[logos(subpattern ident = r"[a-zA-Z0-9_]|'|\?|\+|\*|-|=|~")]
 pub enum Tok<'input> {
@@ -125,10 +124,16 @@ pub enum Tok<'input> {
     #[token("@")]
     At,
 
+    #[regex(r"--\|.*\n")]
+    DocLine(&'input str),
+    #[regex(r"--.*\n")]
+    CommentLine(&'input str),
     #[token("/-")]
-    CommentStart,
+    CommentOpen,
     #[token("-/")]
-    CommentEnd,
+    CommentClose,
+    #[regex(".", priority = 0)]
+    Unknown(&'input str),
 }
 
 impl Display for Tok<'_> {
@@ -166,8 +171,8 @@ impl Display for Tok<'_> {
             | Tok::Sigma => write!(f, "sigma"),
             | Tok::Exists => write!(f, "exists"),
             | Tok::IntLit(s) => write!(f, "IntLit({})", s),
-            | Tok::StrLit(s) => write!(f, "StrLit({})", s),
-            | Tok::CharLit(s) => write!(f, "CharLit({})", s),
+            | Tok::StrLit(s) => write!(f, "StrLit(\"{}\")", s.escape_debug()),
+            | Tok::CharLit(s) => write!(f, "CharLit(\'{}\')", s.escape_debug()),
             | Tok::ParenOpen => write!(f, "("),
             | Tok::ParenClose => write!(f, ")"),
             | Tok::BracketOpen => write!(f, "["),
@@ -190,8 +195,11 @@ impl Display for Tok<'_> {
             | Tok::Assign => write!(f, "<-"),
             | Tok::Hole => write!(f, "_"),
             | Tok::At => write!(f, "@"),
-            | Tok::CommentStart => write!(f, "/-"),
-            | Tok::CommentEnd => write!(f, "-/"),
+            | Tok::DocLine(s) => write!(f, "DocLine(\"{}\")", s.escape_debug()),
+            | Tok::CommentLine(s) => write!(f, "CommentLine(\"{}\")", s.escape_debug()),
+            | Tok::CommentOpen => write!(f, "/-"),
+            | Tok::CommentClose => write!(f, "-/"),
+            | Tok::Unknown(s) => write!(f, "Unknown(\"{}\")", s.escape_debug()),
         }
     }
 }
@@ -213,11 +221,13 @@ impl<'source> Iterator for Lexer<'source> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.inner.next() {
-                | Some((Ok(Tok::CommentStart), _)) => {
+                | Some((Ok(Tok::DocLine(_)), _)) => continue,
+                | Some((Ok(Tok::CommentLine(_)), _)) => continue,
+                | Some((Ok(Tok::CommentOpen), _)) => {
                     self.comment_depth += 1;
                     continue;
                 }
-                | Some((Ok(Tok::CommentEnd), _)) => {
+                | Some((Ok(Tok::CommentClose), _)) => {
                     if self.comment_depth <= 0 {
                         break None;
                     }
@@ -256,5 +266,17 @@ impl<'source> Iterator for HashLexer<'source> {
             | Some((l, tok, r)) => Some((l, tok, r)),
             | _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lexer_simple() {
+        let src = "--| aeioa`s`nkl\nlet x = 1 in -- ` \n /- ` /- `x` \n-/\n\n -/ \n ret x`\n\n";
+        let toks: Vec<_> = Lexer::new(src).map(|(_, x, _)| format!("{}", x)).collect();
+        println!("{}", toks.join(", "))
     }
 }
