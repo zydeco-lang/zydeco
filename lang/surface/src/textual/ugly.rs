@@ -3,10 +3,10 @@ use crate::textual::syntax::*;
 pub use zydeco_syntax::Ugly;
 pub struct Formatter<'arena> {
     // spans: SpanArenaTextual,
-    arena: &'arena Arena,
+    arena: &'arena TextArena,
 }
 impl<'arena> Formatter<'arena> {
-    pub fn new(arena: &'arena Arena) -> Self {
+    pub fn new(arena: &'arena TextArena) -> Self {
         Formatter { arena }
     }
 }

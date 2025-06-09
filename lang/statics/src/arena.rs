@@ -4,46 +4,6 @@ use zydeco_utils::arena::*;
 
 /* ---------------------------------- Arena --------------------------------- */
 
-// /// An arena of equivalence classes, designed for types, and structurally shared
-// /// `data` and `codata` definitions.
-// #[derive(Debug)]
-// pub struct ArenaEquiv<Id, Definition, Query>
-// where
-//     Id: IndexLike<Meta = usize>,
-// {
-//     /// arena for definitions
-//     pub defs: ArenaDense<Id, Definition>,
-//     /// arena for query hashmap
-//     pub tbls: ArenaAssoc<Id, Query>,
-//     /// arena for equivalence classes
-//     pub eqs: ArenaAssoc<Query, Id>,
-// }
-// impl<Id, Definition, Query> ArenaEquiv<Id, Definition, Query>
-// where
-//     Id: IndexLike<Meta = usize>,
-//     Query: Clone + crate::Lub + std::hash::Hash,
-// {
-//     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
-//         Self {
-//             defs: ArenaDense::new(alloc.alloc()),
-//             tbls: ArenaAssoc::new(),
-//             eqs: ArenaAssoc::new(),
-//         }
-//     }
-//     pub fn lookup_or_alloc(&mut self, def: Definition, query: Query) -> Id {
-//         if let Some(id) = self.eqs.get(&query) {
-//             // if the query is already registered, just return the DataId
-//             *id
-//         } else {
-//             // else, register the query
-//             let id = self.defs.alloc(def);
-//             self.tbls.insert(id, query.clone());
-//             self.eqs.insert(query, id);
-//             id
-//         }
-//     }
-// }
-
 /// Item projectors out of the statics arena.
 #[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait ArenaStatics {

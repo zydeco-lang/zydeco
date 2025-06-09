@@ -3,7 +3,7 @@ use super::syntax::*;
 /* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Default, Debug)]
-pub struct Arena {
+pub struct TextArena {
     pub defs: ArenaAssoc<DefId, VarName>,
     pub pats: ArenaAssoc<PatId, Pattern>,
     pub copats: ArenaAssoc<CoPatId, CoPattern>,
@@ -31,6 +31,28 @@ mod impl_span_arena {
         type Output = Span;
         fn index(&self, index: &EntityId) -> &Self::Output {
             &self.0[index]
+        }
+    }
+
+    impl IntoIterator for SpanArena {
+        type Item = (EntityId, Span);
+        type IntoIter = <ArenaSparse<EntityId, Span> as IntoIterator>::IntoIter;
+        fn into_iter(self) -> Self::IntoIter {
+            self.0.into_iter()
+        }
+    }
+
+    impl<'a> IntoIterator for &'a SpanArena {
+        type Item = (&'a EntityId, &'a Span);
+        type IntoIter = <&'a ArenaSparse<EntityId, Span> as IntoIterator>::IntoIter;
+        fn into_iter(self) -> Self::IntoIter {
+            (&self.0).into_iter()
+        }
+    }
+
+    impl<'a> SpanArena {
+        pub fn iter(&'a self) -> <&'a Self as IntoIterator>::IntoIter {
+            self.into_iter()
         }
     }
 }

@@ -85,22 +85,26 @@ pub trait ArenaAccess<Id, T, Meta>: Index<Id, Output = T> + IndexMut<Id, Output 
 pub struct Forth<'a, T>(pub &'a T);
 pub struct Back<'a, T>(pub &'a T);
 
-// Fixme: shouldn't be cloneable
-#[derive(Clone, Debug)]
-// #[derive(Debug)]
+/// A dense arena with a sequential allocator.
+/// Conceptually, it owns all data stored in the arena, and data are densely allocated.
+#[derive(Debug)]
 pub struct ArenaDense<Id: IndexLike, T> {
     allocator: IndexAlloc<Id::Meta>,
     vec: Vec<T>,
     _marker: std::marker::PhantomData<Id>,
 }
 
-#[derive(Clone, Debug)]
+/// A sparse arena with a sparse allocator.
+/// Conceptually, it owns all data stored in the arena, and data are sparsely allocated.
+#[derive(Debug, Clone)]
 pub struct ArenaSparse<Id: IndexLike, T> {
     allocator: IndexAlloc<Id::Meta>,
     map: HashMap<Id, T>,
     _marker: std::marker::PhantomData<Id>,
 }
 
+/// An arena that maps keys of externally-owned data to their properties.
+/// Conceptually, it doesn't own the data, but it owns the properties bound to the data.
 #[derive(Debug, Clone)]
 pub struct ArenaAssoc<Id, T> {
     map: HashMap<Id, T>,
@@ -134,15 +138,51 @@ pub struct ArenaBipartite<P, Q> {
     backward: ArenaAssoc<Q, Vec<P>>,
 }
 
+/// An arena of equivalence classes, designed for types, and structurally shared
+/// `data` and `codata` definitions.
+pub struct ArenaEquiv<Id, Definition, Query>
+where
+    Id: IndexLike,
+{
+    /// arena for definitions
+    pub defs: ArenaDense<Id, Definition>,
+    /// arena for query hashmap
+    pub tbls: ArenaAssoc<Id, Query>,
+    /// arena for equivalence classes
+    pub eqs: ArenaAssoc<Query, Id>,
+}
+impl<Id, Definition, Query> ArenaEquiv<Id, Definition, Query>
+where
+    Id: IndexLike,
+    Id::Meta: Copy,
+    Query: Clone + Eq + std::hash::Hash,
+{
+    pub fn new_arc(alloc: IndexAlloc<Id::Meta>) -> Self {
+        Self { defs: ArenaDense::new(alloc), tbls: ArenaAssoc::new(), eqs: ArenaAssoc::new() }
+    }
+    pub fn lookup_or_alloc(&mut self, def: Definition, query: Query) -> Id {
+        if let Some(id) = self.eqs.get(&query) {
+            // if the query is already registered, just return the id
+            *id
+        } else {
+            // else, register the query
+            let id = self.defs.alloc(def);
+            self.tbls.insert(id, query.clone());
+            self.eqs.insert(query, id);
+            id
+        }
+    }
+}
+
 mod impls {
     use super::*;
 
     /* ------------------------------- ArenaDense ------------------------------- */
 
-    impl<Id, T, Meta> Default for ArenaDense<Id, T>
+    impl<Id, T> Default for ArenaDense<Id, T>
     where
-        Meta: Default,
-        Id: IndexLike<Meta = Meta>,
+        Id: IndexLike,
+        Id::Meta: Default,
     {
         fn default() -> Self {
             Self {
@@ -153,32 +193,32 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> Index<&Id> for ArenaDense<Id, T>
+    impl<Id, T> Index<&Id> for ArenaDense<Id, T>
     where
-        Meta: Copy,
-        Id: IndexLike<Meta = Meta>,
+        Id: IndexLike,
+        Id::Meta: Copy,
     {
         type Output = T;
         fn index(&self, id: &Id) -> &Self::Output {
             self.get(id).unwrap()
         }
     }
-    impl<Id, T, Meta> IndexMut<&Id> for ArenaDense<Id, T>
+    impl<Id, T> IndexMut<&Id> for ArenaDense<Id, T>
     where
-        Meta: Copy,
-        Id: IndexLike<Meta = Meta>,
+        Id: IndexLike,
+        Id::Meta: Copy,
     {
         fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
             self.get_mut(id).unwrap()
         }
     }
 
-    impl<Id, T, Meta> ArenaDense<Id, T>
+    impl<Id, T> ArenaDense<Id, T>
     where
-        Meta: Copy,
-        Id: IndexLike<Meta = Meta>,
+        Id: IndexLike,
+        Id::Meta: Copy,
     {
-        pub fn new(allocator: IndexAlloc<Meta>) -> Self {
+        pub fn new(allocator: IndexAlloc<Id::Meta>) -> Self {
             ArenaDense { allocator, vec: Vec::new(), _marker: std::marker::PhantomData }
         }
         pub fn alloc(&mut self, val: T) -> Id {
@@ -191,10 +231,10 @@ mod impls {
         }
     }
 
-    impl<Id, T, Meta> ArenaAccess<&Id, T, Meta> for ArenaDense<Id, T>
+    impl<Id, T> ArenaAccess<&Id, T, Id::Meta> for ArenaDense<Id, T>
     where
-        Meta: Copy,
-        Id: IndexLike<Meta = Meta>,
+        Id: IndexLike,
+        Id::Meta: Copy,
     {
         fn get(&self, id: &Id) -> Option<&T> {
             self.vec.get(id.index())

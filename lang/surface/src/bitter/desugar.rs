@@ -13,7 +13,7 @@ pub trait Desugar {
 
 pub struct Desugarer {
     pub spans: t::SpanArena,
-    pub textual: t::Arena,
+    pub textual: t::TextArena,
     pub bitter: b::Arena,
     pub prim: b::PrimTerms,
 }

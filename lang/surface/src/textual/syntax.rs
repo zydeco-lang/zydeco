@@ -273,12 +273,12 @@ pub struct TopLevel(pub Vec<DeclId>);
 
 pub struct Parser {
     pub spans: SpanArena,
-    pub arena: Arena,
+    pub arena: TextArena,
 }
 
 impl Parser {
     pub fn new(allocator: IndexAlloc<usize>) -> Self {
-        Self { spans: SpanArena::new(allocator), arena: Arena::default() }
+        Self { spans: SpanArena::new(allocator), arena: TextArena::default() }
     }
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.alloc(def.info).into();

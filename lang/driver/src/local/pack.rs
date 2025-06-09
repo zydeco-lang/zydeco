@@ -179,7 +179,7 @@ pub struct FileParsed {
     pub path: PathBuf,
     pub source: String,
     pub spans: t::SpanArena,
-    pub arena: t::Arena,
+    pub arena: t::TextArena,
     pub top: t::TopLevel,
 }
 

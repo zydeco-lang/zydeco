@@ -100,6 +100,9 @@ impl Span {
     pub fn get_cursor1(&self) -> (Cursor1, Cursor1) {
         self.span1
     }
+    pub fn get_path(&self) -> Option<&PathBuf> {
+        self.path.get().map(|o| o.as_ref()).flatten().map(|p| p.as_ref())
+    }
     pub fn under_loc_ctx(self, loc: &LocationCtx) -> Self {
         match loc {
             | LocationCtx::File(info) => {
