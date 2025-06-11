@@ -47,11 +47,10 @@ and the product will show up right in the folder - which is also a series of gui
 Maybe we should call it "co-literate zydeco" because it turns commented zydeco into markdown.
 
 A legacy version of the tutorial lies [here](docs/tutorial/intro_to_zydeco.md).
-With system-F_ω and type alias shipped in, ~~we'll update the tutorial shortly~~ the tutorial is briefly updated.
-If the previous `spell` guide goes too fast, then the short tutorial might be easier to understand.
+You might find the short tutorial easier to follow if the previous `spell` guide goes too fast.
 
 We will develop more introductory material on zydeco when we have
-implemented more features. For now, you can also choose to browse `lang/lib/` for
+implemented more features. For now, you can also choose to browse `lib/` for
 some example programs.
 
 To run all tests
@@ -82,7 +81,7 @@ cargo test --all
 
 - `lang/`: the library implementing the parser, type checker and
 interpreter for the Zydeco language.
-- `lang/lib/`: standard library and example code (also serving as test cases)
+- `lib/`: standard library and example code (also serving as test cases)
 - `cli/` Command-line interface
 - `web/` Web interface
 

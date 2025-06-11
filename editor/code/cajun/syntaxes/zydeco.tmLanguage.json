@@ -1,0 +1,70 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Zydeco",
+	"patterns": [
+		{
+			"include": "#keywords"
+		},
+		{
+			"include": "#strings"
+		},
+		{
+			"include": "#comment"
+		}
+	],
+	"repository": {
+		"keywords": {
+			"patterns": [
+				{
+					"name": "storage.type.zydeco",
+					"match": "\\b(module|where|end|data|codata|alias|def|define|use|begin|monadic|monadically|main|let|in|do|do~|match|comatch)\\b"
+				},
+				{
+					"name": "keyword.control.zydeco",
+					"match": "\\b(ret|forall|pi|exists|sigma|pack)\\b"
+				},
+				{
+					"name": "keyword.other.zydeco",
+					"match": "\\b(pub|ext|extern|fn|rec|fix)\\b"
+				},
+				{
+					"name": "variable.other.enummember.zydeco",
+					"match": "(\\+[A-Z][a-zA-Z_-]*)"
+				},
+				{
+					"name": "entity.name.function.zydeco",
+					"match": "(\\.[a-z_-][a-zA-Z_-]*)"
+				}
+			]
+		},
+		"strings": {
+			"name": "string.quoted.double.zydeco",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.zydeco",
+					"match": "\\\\."
+				}
+			]
+		},
+		"comment": {
+			"patterns": [
+				{
+					"name": "comment.line.double-dash",
+					"match": "--.*$"
+				},
+				{
+					"name": "comment.block.double-dash",
+					"begin": "/-",
+					"end": "-/"
+				},
+				{
+					"name": "comment.line.number-sign",
+					"match": "#.*$"
+				}
+			]
+		}
+	},
+	"scopeName": "source.zydeco"
+}
