@@ -1,14 +1,20 @@
-def ! triv : Top = comatch end end
+--| Monad transformer implementation for the `ExnK` monad
+--|
+--| This file works similar to `exnt.zydeco`, except here we're implementing
+--| for `ExnK`, which is the church encoded version of the `Exn` monad.
+--|
+--| Check `exnt.zydeco` for detailed explanation.
 
 alias ExnK (E: VType) (A: VType) : CType =
   forall (R: CType) . Thk (E -> R) -> Thk (A -> R) -> R
 end
 
--- Pass the algebra of R along with the type quantifier R
+--| Pass the algebra of `R` along with the type quantifier `R`
 alias ExnKT (E: VType) (M: VType -> CType) (A: VType) : CType =
   forall (R: CType) . Thk (Algebra M R) -> Thk (E -> R) -> Thk (A -> R) -> R
 end
 
+--| Monad implementation for `ExnK`
 def ! mo-exnk (E: VType) : Monad (ExnK E) =
   comatch
   | .return A a -> fn R ke ka ->
@@ -18,12 +24,12 @@ def ! mo-exnk (E: VType) : Monad (ExnK E) =
   end
 end
 
-def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
-  fn (M: VType -> CType) (mo: Thk (Monad M)) ->
-  let ! mt' =
-    @[debug("outer")]
+--| Automatically generated implementation of the monad transformer for `ExnKT`
+def ! mt-exnk (E: VType) : MonadTrans (ExnKT E) =
+  let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
+    @[debug("generated and applied")]
     monadic fn (E: VType) ->
-      @[debug("inner")]
+      @[debug("original")]
       let mo-exnk = mo-exnk in
       comatch
       | .monad -> ! mo-exnk E
@@ -31,18 +37,23 @@ def ! mt-exnkt (E: VType) : MonadTrans (ExnKT E) =
         do a <- ! m; ! mo-exnk E .return A a
       end
     :
-      forall (E: VType) . codata
-      | .monad : Monad (ExnK E)
-      | .lift  : forall (A: VType) . Thk (Ret A) -> ExnK E A
-      end
+      forall (E: VType) . MonadTransInner (ExnK E)
     end M mo E triv
   in
+  ! detriv-mt (ExnKT E) mt'
+end
+
+--| Manual implementation of the monad transformer for `ExnKT`
+def ! mt-exnk-manual (E: VType) : MonadTrans (ExnKT E) = fn M mo ->
   comatch
-  | .monad -> comatch
-    | .return A -> ! mt' .monad .return A triv
-    | .bind A A' -> ! mt' .monad .bind A triv A' triv
+  | .monad ->
+    comatch
+    | .return A a -> fn R alg -> fn ke ka -> ! ka a
+    | .bind A A' m f -> fn R alg -> fn ke ka' ->
+      ! m R alg ke { fn a -> ! f a R alg ke ka' }
     end
-  | .lift A -> ! mt' .lift A triv
+  | .lift A m -> fn R alg -> fn ke ka ->
+    ! alg A m ka
   end
 end
 
