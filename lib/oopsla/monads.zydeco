@@ -1,17 +1,7 @@
-# A bunch of example of monads
-# The program prints "Hello, world!" using the io monads and then exits.
+--| A bunch of example of monads
+--| The program prints "Hello, world!" using the io monads and then exits.
 
-# The interface for monads
-# alias Monad (M: VType -> CType) : CType =
-#   codata
-#   | .return : forall (A: VType) .
-#     A -> M A
-#   | .bind : forall (A: VType) (A': VType) .
-#     Thk (M A) -> Thk (A -> M A') -> M A'
-#   end
-# end
-
-# The Ret monad (mret in the paper)
+--| The Ret monad (mret in the paper)
 def ! mo-return : Monad Ret =
   comatch
   | .return A a -> ret a
@@ -23,7 +13,7 @@ end
 
 
 
-# The kontinuation monad
+--| The continuation monad
 codata Kont (R: CType) (A: VType) where
   | .run : Thk (A -> R) -> R
 end
@@ -39,7 +29,7 @@ def ! mo-kont (R: CType) : Monad (Kont R) =
 end
 
 
-# The polymorphic kontinuation monad
+--| The polymorphic continuation monad
 codata PolyKont (A : VType) where
   | .bind : forall (R: CType) . Thk (A -> R) -> R
 end
@@ -53,13 +43,26 @@ def ! mo-polykont : Monad PolyKont =
 end
 
 
-# The state monad
-codata State (S: VType) (A: VType) where
+--| The state monad
+alias State (S: VType) (A: VType) : CType =
+  S -> Ret (A * S)
+end
+
+def ! mo-state (S: VType) : Monad (State S) =
+  comatch
+  | .return A a -> fn s -> ret (a, s)
+  | .bind A A' m f -> fn s ->
+    do (a, s') <- ! m s;
+    ! f a s'
+  end
+end
+
+codata StateK (S: VType) (A: VType) where
   | .run : forall (R: CType) .
     S -> Thk (S -> A -> R) -> R
 end
 
-def ! mo-state (S: VType) : Monad (State S) =
+def ! mo-statek (S: VType) : Monad (StateK S) =
   comatch
   | .return A a -> fn .run R s k ->
     ! k s a
@@ -68,12 +71,23 @@ def ! mo-state (S: VType) : Monad (State S) =
   end
 end
 
+--| The interface for state monads
 codata MonadState (S: VType) (M: VType -> CType) where
   | .get: M S
   | .put: S -> M Unit
 end
 
-def ! mo-state-state (S: VType) : MonadState S (State S) =
+def ! state (S: VType) : MonadState S (State S) =
+  comatch
+  | .get -> fn s ->
+    ret (s, s)
+  | .put s' -> fn _ ->
+    let u = () in
+    ret (u, s')
+  end
+end
+
+def ! statek (S: VType) : MonadState S (StateK S) =
   comatch
   | .get -> fn .run R s k ->
     ! k s s
@@ -82,8 +96,7 @@ def ! mo-state-state (S: VType) : MonadState S (State S) =
   end
 end
 
-
-# The I/O monad
+--| The I/O monad
 codata IO (A: VType) where
   | .run : Thk (A -> OS) -> OS
 end
@@ -113,6 +126,5 @@ end
 
 
 main
-  do~ ! io .write "Hello, world!" .run; fn _ ->
-  ! exit 0
+  ! io .write "Hello, world!" .run { fn _ -> ! exit 0 }
 end

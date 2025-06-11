@@ -9,7 +9,7 @@ srcs = [
 ]
 bins = [
     "polynomial.zydeco",
-    "sum_and_mult.zydeco",
+    "cc.zydeco",
     "cbv.zydeco",
     "monads.zydeco",
     "exn.zydeco",

@@ -1,19 +1,19 @@
 module Builtin where
-  --| VType and CType
+  --| Value Type and Computation Type
   pub extern def VType end
   pub extern def CType end
-  --| Thk and Ret
+  --| Thunk Type and Return Type
   pub extern def Thk (B : CType) : VType end
   pub extern def Ret (A : VType) : CType end
 
-  --| primitive base types
+  --| Primitive Base Types
   pub extern def Unit : VType end
   pub extern def Int : VType end
   pub extern def Char : VType end
   pub extern def String : VType end
   pub extern def OS : CType end
 
-  --| interface for monads and their algebras
+  --| Interface for Monads and Their Algebras
   pub extern alias Monad (M: VType -> CType) : CType =
     codata
     | .return : forall (A: VType) .
@@ -29,7 +29,7 @@ end
 
 
 module Monad where
-  --| interface for monad transformers
+  --| Interface for Monad Transformers
   pub alias MonadTrans (T: (VType -> CType) -> VType -> CType) : CType =
     forall (M: VType -> CType) . Thk (Monad M) -> codata
     | .monad : Monad (T M)
@@ -37,10 +37,10 @@ module Monad where
     end
   end
   
-  --| the trivial algebra (structure)
+  --| The Trivial Algebra (Structure)
   pub def ! triv : Top = comatch end end
 
-  --| interface for monad, lifted
+  --| Interface for Monad, Lifted
   pub alias Monad' (M: VType -> CType) : CType =
     codata
     | .return : forall (A: VType) . Thk Top ->
@@ -50,7 +50,7 @@ module Monad where
     end
   end
 
-  --| remove the need of trivial algebra for generated monads
+  --| Removing the need of trivial algebra for generated monads
   pub def ! detriv-mo (M: VType -> CType) (mo: Thk (Monad' M)) : Monad M =
     comatch
     | .return A -> ! mo .return A triv
@@ -58,7 +58,7 @@ module Monad where
     end
   end
 
-  --| interface for monad transformers, used annotating terms inside the monadic block
+  --| Interface for Monad Transformers, used for annotating terms inside the monadic block
   pub alias MonadTransInner (T_M: VType -> CType): CType =
     codata
     | .monad : Monad T_M
@@ -66,7 +66,7 @@ module Monad where
     end
   end
 
-  --| interface for monad transformers, lifted
+  --| Interface for Monad Transformers, Lifted
   pub alias MonadTrans' (T: (VType -> CType) -> VType -> CType) : CType =
     forall (M: VType -> CType) . Thk (Monad M) -> codata
     | .monad : Monad' (T M)
@@ -74,7 +74,7 @@ module Monad where
     end
   end
 
-  --| remove the need of trivial algebra for generated monad transformers
+  --| Removing the need of trivial algebra for generated monad transformers
   pub def ! detriv-mt (T: (VType -> CType) -> VType -> CType) (mt: Thk (MonadTrans' T)) : MonadTrans T =
     fn (M: VType -> CType) (mo: Thk (Monad M)) -> comatch
     | .monad -> ! detriv-mo (T M) { ! mt M mo .monad }
@@ -165,8 +165,8 @@ module OS where
       ! write_line msg { ! exit 1 }
   } end
 
-  pub def write_line : Thk(String -> Thk(OS) -> OS) = {
-    fn (s: String) (k: Thk(OS)) ->
+  pub def write_line : Thk(String -> Thk OS -> OS) = {
+    fn (s: String) (k: Thk OS) ->
       do s <- ! str_append s "\n";
       ! write_str s k
   } end

@@ -4,6 +4,10 @@
 
 Zydeco is a proof-of-concept programming language based on Call-by-push-value.
 
+## OOPSLA Artifact Evaluation
+
+The instructions are located in [lib/oopsla/README.md](lib/oopsla/README.md).
+
 ## Running Zydeco
 
 Create a file `hello-world.zydeco`:

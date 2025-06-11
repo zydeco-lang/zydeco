@@ -1,6 +1,6 @@
-# This file implements an interpreter for a simple CBV language.
+--| This file implements an interpreter for a simple CBV language.
 
-# As it is a CBV language, our syntax only contains expressions.
+--| As it is a CBV language, our syntax only contains expressions.
 data Expr where
 | +Var : String
 | +Lam : String * Expr
@@ -10,7 +10,7 @@ data Expr where
 | +If : Expr * Expr * Expr
 end
 
-# Environments are implemented as association lists.
+--| Environments are implemented as association lists.
 data Env where
 | +Empty : Unit
 | +Cons : String * Value * Env
@@ -28,12 +28,12 @@ def fix lookup (x : String) (g : Env) : Ret Answer =
   end
 end
 
-# The interpreter works with semantic values, which do not include variables.
-# We use closures in the interpreter to implement semantic thunks.
+--| The interpreter works with semantic values, which do not include variables.
+--| We use closures in the interpreter to implement semantic thunks.
 data Value where
 | +True    : Unit
 | +False   : Unit
-| +Closure : Thk (Value -> Stack)
+| +Closure : Thk (Value -> Machine)
 end
 
 def ! value_to_str (v : Value) : Ret String =
@@ -44,21 +44,21 @@ def ! value_to_str (v : Value) : Ret String =
   end
 end
 
-codata Stack where
-| .fun  : Expr * Env -> Stack
-| .app  : Value -> Stack
-| .if   : Expr * Expr * Env -> Stack
+codata Machine where
+| .fun  : Expr * Env -> Machine
+| .app  : Value -> Machine
+| .if   : Expr * Expr * Env -> Machine
 | .bind : Ret Answer
 end
 
-# The "final answer" of the interpreter is either the final value or an error.
+--| The "final answer" of the interpreter is either the final value or an error.
 data Answer where
 | +Ok  : Value
 | +Err : Unit
 end
 
-# The error handler.
-def fix error: Stack =
+--| The error handler.
+def fix error: Machine =
   comatch
   | .fun _ -> ! error
   | .app _ -> ! error
@@ -67,16 +67,16 @@ def fix error: Stack =
   end
 end
 
-# The abstract machine is a codata type that describes the interpreter state:
-# either descending into an expression or ascending to return a value.
-codata Machine where
-| .descend : Expr * Env -> Stack
-| .ascend  : Value -> Stack
+--| The abstract machine is a codata type that describes the interpreter state:
+--| either descending into an expression or ascending to return a value.
+codata Interp where
+| .descend : Expr * Env -> Machine
+| .ascend  : Value -> Machine
 end
 
-# The mutually recursive functions `descend` and `ascend` are defined as a
-# codata-typed term `interp`.
-def fix interp : Machine =
+--| The mutually recursive functions `descend` and `ascend` are defined as a
+--| codata-typed term `interp`.
+def fix interp : Interp =
   comatch
   | .descend (expr, env) ->
     match expr
@@ -91,8 +91,8 @@ def fix interp : Machine =
     | +False() ->
       ! interp .ascend +False()
     | +Lam(x, expr) ->
-      # Creates a host language thunk that runs the function body with an
-      # extended environment.
+      -- creates a host language thunk that runs the function body with an
+      -- extended environment
       ! interp .ascend +Closure {
         fn v -> ! interp .descend (expr, +Cons(x, v, env))
       }
@@ -110,7 +110,7 @@ def fix interp : Machine =
       | +True  _ -> ! error
       | +False _ -> ! error
       | +Closure fun ->
-        # call the function and follow its continuation
+        -- call the function and follow its continuation
         ! fun v
       end
     | .if (t, f, env) ->
@@ -123,7 +123,7 @@ def fix interp : Machine =
   end
 end
 
-# Examples
+-- Examples
 
 def identity: Expr =
   +Lam("x", +Var("x"))
@@ -154,6 +154,7 @@ def if_true : Expr =
 end
 
 main
+  -- should return +True()
   do x <- ! interp .descend (if_true, +Empty()) .bind;
   match x
   | +Err _ -> ! panic "ERROR"
