@@ -1,4 +1,4 @@
-name = "Stub"
+name = "stub"
 # For testing minimal programs.
 
 srcs = [

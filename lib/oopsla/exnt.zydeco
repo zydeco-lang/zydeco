@@ -1,14 +1,20 @@
-def ! triv : Top = comatch end end
+--| Monad transformer implementation for the `Exn` monad
+--|
+--| This file contains the automatically generated implementation of monad transformer for `ExnT`.
+--| The reader can compare the implementation to the manually implemented implementation.
+--|
+--| Check `exnkt.zydeco` for the implementation of `ExnK`, which is the church encoded version of `Exn`.
 
 alias Exn (E: VType) (A: VType) : CType =
   Ret (Either E A)
 end
 
-# Change `Ret` in Exn to `M`
+--| Change `Ret` in `Exn` to `M`
 alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
   M (Either E A)
 end
 
+--| Monad implementation for `Exn`
 def ! mo-exn (E: VType) : Monad (Exn E) =
   comatch
   | .return A a ->
@@ -22,12 +28,20 @@ def ! mo-exn (E: VType) : Monad (Exn E) =
   end
 end
 
-def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
-  fn (M: VType -> CType) (mo: Thk (Monad M)) ->
-  let ! mt' =
-    @[debug("outer")]
+--| Automatically generated implementation of the monad transformer for `ExnT`
+--|
+--| Note that the generation for all relative monads to their transformers is
+--| done mechanically, and the same piece of stub code demonstrated here can
+--| be used for all relative monads.
+def ! mt-exn (E: VType) : MonadTrans (ExnT E) =
+  let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
+    -- The @[debug(...)] macro can be used to print the terms and their types
+    -- during compilation.
+    -- Readers can utilize this feature to observe the generated code,
+    -- and verify that the algebra translation is correct.
+    @[debug("generated and applied")]
     monadic fn (E: VType) ->
-      @[debug("inner")]
+      @[debug("original")]
       let mo-exn = mo-exn in
       comatch
       | .monad -> ! mo-exn E
@@ -35,18 +49,40 @@ def ! mt-exnt (E: VType) : MonadTrans (ExnT E) =
         do a <- ! m; ! mo-exn E .return A a
       end
     :
-      forall (E: VType) . codata
-      | .monad : Monad (Exn E)
-      | .lift  : forall (A: VType) . Thk (Ret A) -> Exn E A
-      end
+      forall (E: VType) . MonadTransInner (Exn E)
+      -- The following is what MonadTransInner gets expanded to
+      --
+      -- forall (E: VType) . codata
+      -- | .monad : Monad (Exn E)
+      -- | .lift  : forall (A: VType) . Thk (Ret A) -> Exn E A
+      -- end
     end M mo E triv
   in
+  ! detriv-mt (ExnT E) mt'
+end
+
+
+--| Manual implementation of the monad transformer for `ExnT`
+--| 
+--| Provided for reference.
+def ! mt-exn-manual (E: VType) : MonadTrans (ExnT E) = fn M mo ->
   comatch
-  | .monad -> comatch
-    | .return A -> ! mt' .monad .return A triv
-    | .bind A A' -> ! mt' .monad .bind A triv A' triv
+  | .monad ->
+    comatch
+    | .return A a ->
+      ! mo .return (Either E A) +Right(a)
+    | .bind A A' m f ->
+      ! mo .bind (Either E A) (Either E A') { ! m }
+      { fn a? ->
+          match a?
+          | +Left(e) -> ! mo .return (Either E A') +Left(e)
+          | +Right(a) -> ! f a
+          end }
     end
-  | .lift A -> ! mt' .lift A triv
+  | .lift A m ->
+    ! mo .bind A (Either E A) m
+    { fn a ->
+      ! mo .return (Either E A) +Right(a) }
   end
 end
 

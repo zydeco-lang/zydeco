@@ -1,4 +1,4 @@
-name = "Std"
+name = "std"
 
 srcs = [
     "core.zy",

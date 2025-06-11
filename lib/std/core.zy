@@ -1,13 +1,9 @@
 module Builtin where
   --| VType and CType
-  @[intrinsic(VType)]
   pub extern def VType end
-  @[intrinsic(CType)]
   pub extern def CType end
   --| Thk and Ret
-  @[intrinsic(Thk)]
   pub extern def Thk (B : CType) : VType end
-  @[intrinsic(Ret)]
   pub extern def Ret (A : VType) : CType end
   pub alias Thunk = Thk end
   pub alias U = Thk end
@@ -20,19 +16,13 @@ module Builtin where
   --| so the type is registered as a data type but the constructors
   --| are not implemented as internal constructors
 
-  @[intrinsic(Unit)]
   pub extern def Unit : VType end
-  @[intrinsic(Int)]
   pub extern def Int : VType end
-  @[intrinsic(Char)]
   pub extern def Char : VType end
-  @[intrinsic(String)]
   pub extern def String : VType end
-  @[intrinsic(OS)]
   pub extern def OS : CType end
 
   --| interface for monads and their algebras
-  @[intrinsic(Monad)]
   pub extern alias Monad (M: VType -> CType) : CType =
     codata
     | .return : forall (A: VType) .
@@ -41,11 +31,13 @@ module Builtin where
       Thk (M A) -> Thk (A -> M A') -> M A'
     end
   end
-  @[intrinsic(Algebra)]
   pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
     forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
   end
+end
 
+
+module Monad where
   --| interface for monad transformers
   pub alias MonadTrans (T: (VType -> CType) -> VType -> CType) : CType =
     forall (M: VType -> CType) . Thk (Monad M) -> codata
@@ -53,7 +45,53 @@ module Builtin where
     | .lift  : forall (A: VType) . Thk (M A) -> T M A
     end
   end
+  
+  --| the trivial algebra (structure)
+  pub def ! triv : Top = comatch end end
+
+  --| interface for monad, lifted
+  pub alias Monad' (M: VType -> CType) : CType =
+    codata
+    | .return : forall (A: VType) . Thk Top ->
+      A -> M A
+    | .bind : forall (A: VType) . Thk Top -> (forall (A': VType) . Thk Top ->
+      Thk (M A) -> Thk (A -> M A') -> M A')
+    end
+  end
+
+  --| remove the need of trivial algebra for generated monads
+  pub def ! detriv-mo (M: VType -> CType) (mo: Thk (Monad' M)) : Monad M =
+    comatch
+    | .return A -> ! mo .return A triv
+    | .bind A A' -> ! mo .bind A triv A' triv
+    end
+  end
+
+  --| interface for monad transformers, used annotating terms inside the monadic block
+  pub alias MonadTransInner (T_M: VType -> CType): CType =
+    codata
+    | .monad : Monad T_M
+    | .lift  : forall (A: VType) . Thk (Ret A) -> T_M A
+    end
+  end
+
+  --| interface for monad transformers, lifted
+  pub alias MonadTrans' (T: (VType -> CType) -> VType -> CType) : CType =
+    forall (M: VType -> CType) . Thk (Monad M) -> codata
+    | .monad : Monad' (T M)
+    | .lift  : forall (A: VType) . Thk Top -> Thk (M A) -> T M A
+    end
+  end
+
+  --| remove the need of trivial algebra for generated monad transformers
+  pub def ! detriv-mt (T: (VType -> CType) -> VType -> CType) (mt: Thk (MonadTrans' T)) : MonadTrans T =
+    fn (M: VType -> CType) (mo: Thk (Monad M)) -> comatch
+    | .monad -> ! detriv-mo (T M) { ! mt M mo .monad }
+    | .lift A -> ! mt M mo .lift A triv
+    end
+  end
 end
+
 
 module Core where
   pub alias Empty : VType = data end end
@@ -97,12 +135,14 @@ module Core where
   end
 end
 
+
 module String where
   pub extern def str_length : Thunk(String -> Ret Int) end
   pub extern def str_append : Thunk(String -> String -> Ret String) end
   pub extern def str_eq : Thunk(String -> String -> Ret Bool) end
   pub extern def str_index : Thunk(String -> Int -> Ret Char) end
 end
+
 
 module OS where
   pub extern def write_str : Thunk(String -> Thunk(OS) -> OS) end

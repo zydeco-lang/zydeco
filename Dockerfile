@@ -1,6 +1,6 @@
 FROM rust:latest
 
-WORKDIR /usr/src/app
+WORKDIR /usr/src/zydeco
 COPY . .
 
 RUN cargo build --release

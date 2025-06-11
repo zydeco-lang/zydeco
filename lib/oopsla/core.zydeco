@@ -25,7 +25,10 @@ module Builtin where
   pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
     forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
   end
+end
 
+
+module Monad where
   --| interface for monad transformers
   pub alias MonadTrans (T: (VType -> CType) -> VType -> CType) : CType =
     forall (M: VType -> CType) . Thk (Monad M) -> codata
@@ -33,7 +36,53 @@ module Builtin where
     | .lift  : forall (A: VType) . Thk (M A) -> T M A
     end
   end
+  
+  --| the trivial algebra (structure)
+  pub def ! triv : Top = comatch end end
+
+  --| interface for monad, lifted
+  pub alias Monad' (M: VType -> CType) : CType =
+    codata
+    | .return : forall (A: VType) . Thk Top ->
+      A -> M A
+    | .bind : forall (A: VType) . Thk Top -> (forall (A': VType) . Thk Top ->
+      Thk (M A) -> Thk (A -> M A') -> M A')
+    end
+  end
+
+  --| remove the need of trivial algebra for generated monads
+  pub def ! detriv-mo (M: VType -> CType) (mo: Thk (Monad' M)) : Monad M =
+    comatch
+    | .return A -> ! mo .return A triv
+    | .bind A A' -> ! mo .bind A triv A' triv
+    end
+  end
+
+  --| interface for monad transformers, used annotating terms inside the monadic block
+  pub alias MonadTransInner (T_M: VType -> CType): CType =
+    codata
+    | .monad : Monad T_M
+    | .lift  : forall (A: VType) . Thk (Ret A) -> T_M A
+    end
+  end
+
+  --| interface for monad transformers, lifted
+  pub alias MonadTrans' (T: (VType -> CType) -> VType -> CType) : CType =
+    forall (M: VType -> CType) . Thk (Monad M) -> codata
+    | .monad : Monad' (T M)
+    | .lift  : forall (A: VType) . Thk Top -> Thk (M A) -> T M A
+    end
+  end
+
+  --| remove the need of trivial algebra for generated monad transformers
+  pub def ! detriv-mt (T: (VType -> CType) -> VType -> CType) (mt: Thk (MonadTrans' T)) : MonadTrans T =
+    fn (M: VType -> CType) (mo: Thk (Monad M)) -> comatch
+    | .monad -> ! detriv-mo (T M) { ! mt M mo .monad }
+    | .lift A -> ! mt M mo .lift A triv
+    end
+  end
 end
+
 
 module Core where
   pub alias Empty : VType = data end end
@@ -61,6 +110,7 @@ module Core where
   end
 end
 
+
 module Arith where
   pub extern def add : Thk(Int -> Int -> Ret Int) end
   pub extern def sub : Thk(Int -> Int -> Ret Int) end
@@ -74,6 +124,7 @@ module Arith where
   pub extern def int_lt : Thk(Int -> Int -> Ret Bool) end
   pub extern def int_gt : Thk(Int -> Int -> Ret Bool) end
 end
+
 
 module String where
   pub extern def str_length : Thk(String -> Ret Int) end
@@ -97,6 +148,7 @@ module String where
   pub extern def char_to_int : Thk(Char -> Ret Int) end
   pub extern def str_to_int : Thk(String -> Ret Int) end
 end
+
 
 module OS where
   pub extern def write_str : Thk(String -> Thk(OS) -> OS) end

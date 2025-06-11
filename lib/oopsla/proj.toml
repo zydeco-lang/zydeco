@@ -15,7 +15,6 @@ bins = [
     "exn.zydeco",
     "free.zydeco",
     "algebra.zydeco",
-    "transformers.zydeco",
     "exnt.zydeco",
     "exnkt.zydeco",
 ]
