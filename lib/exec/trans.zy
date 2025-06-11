@@ -1,4 +1,4 @@
-codata MonadTrans' (T: (VType -> CType) -> VType -> CType) where
+codata MonadTrans'' (T: (VType -> CType) -> VType -> CType) where
   | .lift : forall (M: VType -> CType) (A: VType) . U (Monad M) -> U (M A) -> T M A
 end
 
@@ -24,7 +24,7 @@ def ! reader_t_monad (R: VType) (M: VType -> CType) (mo: U (Monad M)) : Monad (R
   end
 end
 
-def ! reader_t_trans (R: VType) : MonadTrans' (ReaderT R) =
+def ! reader_t_trans (R: VType) : MonadTrans'' (ReaderT R) =
   comatch
   | .lift -> fn M A (mo: U (Monad M)) (m: U (M A)) ->
     -- goal: ReaderT R M A
@@ -59,7 +59,7 @@ def ! option_t_monad (M: VType -> CType) (mo: U (Monad M)) : Monad (OptionT M) =
   end
 end
 
-def ! option_t_trans : MonadTrans' OptionT =
+def ! option_t_trans : MonadTrans'' OptionT =
   comatch
   | .lift -> fn M A mo m ->
     comatch
@@ -74,7 +74,7 @@ codata KOptionT (M: VType -> CType) (A: VType) where
   | .run : forall (R : CType) . U(Algebra M R) -> U(A -> R) -> U R -> R
 end
 
-def ! koption_t_trans : MonadTrans' KOptionT =
+def ! koption_t_trans : MonadTrans'' KOptionT =
   comatch
   | .lift -> fn M A mo m -> -- m : U(M A)
     comatch
