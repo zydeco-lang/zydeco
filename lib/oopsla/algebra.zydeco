@@ -102,22 +102,15 @@ codata ExnDe (E: VType) (A: VType) where
   | .done : Ret (Either E A)
 end
 
--- codata Monad (M: VType -> CType) where
---   | .return : forall (A: VType) .
---     A -> M A
---   | .bind : forall (A: VType) (A': VType) .
---     Thk (M A) -> Thk (A -> M A') -> M A'
--- end
-
 codata MonadErr (E: VType) (M: VType -> CType) where
   | .fail : forall (A: VType) . E -> M A
 end
 
-def fix mexnde (E: VType) : Monad (ExnDe E) =
+def fix mo_exnde (E: VType) : Monad (ExnDe E) =
   comatch
   | .return -> fn A a ->
     comatch
-    | .try -> fn E' k -> ! mexnde E' .return A a
+    | .try -> fn E' k -> ! mo_exnde E' .return A a
     | .kont -> fn A' k -> ! k a
     | .done -> ret +Right(a)
     end
@@ -126,18 +119,18 @@ def fix mexnde (E: VType) : Monad (ExnDe E) =
   end
 end
 
-def fix mexnde_err (E: VType) : MonadErr E (ExnDe E) =
+def fix err_exnde (E: VType) : MonadErr E (ExnDe E) =
   comatch
   | .fail -> fn A e ->
     comatch
     | .try -> fn E' k -> ! k e
-    | .kont -> fn A' k -> ! mexnde_err E .fail A' e
+    | .kont -> fn A' k -> ! err_exnde E .fail A' e
     | .done -> ret +Left(e)
     end
   end
 end
 
--- Algebra on the defunctionalized exception type
+-- Algebra of the defunctionalized exception type on OS
 def ! alg_exn :
   Algebra (ExnDe String) OS
 =
@@ -150,25 +143,6 @@ def ! alg_exn :
   end
 end
 
--- add_of errors if the sum >= 256 (8-bit overflow)
-def ! add_of (i: Int) (sum: Int) : ExnDe String Int =
-  do sum <- ! add i sum;
-  do b <- ! int_lt sum 256;
-  match b
-  | +True() -> ! mexnde String .return Int sum
-  | +False() -> ! mexnde_err String .fail Int "sum >= 256"
-  end
-end
-
 main
-  (fix (loop: Thk (Int -> OS)) ->
-    fn sum ->
-    ! read_line_as_int { fn i? -> match i?
-      | +None() -> ! exit 0
-      | +Some(i) ->
-        ! alg_exn Int { ! add_of i sum } { fn sum ->
-        ! write_int sum {
-        ! write_line " = sum" {
-        ! loop sum }}}
-      end }) 0
+  ! exit 0
 end

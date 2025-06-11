@@ -15,7 +15,7 @@ alias ExnKT (E: VType) (M: VType -> CType) (A: VType) : CType =
 end
 
 --| Monad implementation for `ExnK`
-def ! mo-exnk (E: VType) : Monad (ExnK E) =
+def ! mo_exnk (E: VType) : Monad (ExnK E) =
   comatch
   | .return A a -> fn R ke ka ->
     ! ka a
@@ -25,16 +25,16 @@ def ! mo-exnk (E: VType) : Monad (ExnK E) =
 end
 
 --| Automatically generated implementation of the monad transformer for `ExnKT`
-def ! mt-exnk (E: VType) : MonadTrans (ExnKT E) =
+def ! mt_exnk (E: VType) : MonadTrans (ExnKT E) =
   let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
     @[debug("generated and applied")]
     monadic fn (E: VType) ->
       @[debug("original")]
-      let mo-exnk = mo-exnk in
+      let mo_exnk = mo_exnk in
       comatch
-      | .monad -> ! mo-exnk E
+      | .monad -> ! mo_exnk E
       | .lift A m ->
-        do a <- ! m; ! mo-exnk E .return A a
+        do a <- ! m; ! mo_exnk E .return A a
       end
     :
       forall (E: VType) . MonadTransInner (ExnK E)
@@ -44,7 +44,7 @@ def ! mt-exnk (E: VType) : MonadTrans (ExnKT E) =
 end
 
 --| Manual implementation of the monad transformer for `ExnKT`
-def ! mt-exnk-manual (E: VType) : MonadTrans (ExnKT E) = fn M mo ->
+def ! mt_exnk_manual (E: VType) : MonadTrans (ExnKT E) = fn M mo ->
   comatch
   | .monad ->
     comatch

@@ -15,7 +15,7 @@ alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
 end
 
 --| Monad implementation for `Exn`
-def ! mo-exn (E: VType) : Monad (Exn E) =
+def ! mo_exn (E: VType) : Monad (Exn E) =
   comatch
   | .return A a ->
     ret +Right(a)
@@ -33,7 +33,7 @@ end
 --| Note that the generation for all relative monads to their transformers is
 --| done mechanically, and the same piece of stub code demonstrated here can
 --| be used for all relative monads.
-def ! mt-exn (E: VType) : MonadTrans (ExnT E) =
+def ! mt_exn (E: VType) : MonadTrans (ExnT E) =
   let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
     -- The @[debug(...)] macro can be used to print the terms and their types
     -- during compilation.
@@ -42,11 +42,11 @@ def ! mt-exn (E: VType) : MonadTrans (ExnT E) =
     @[debug("generated and applied")]
     monadic fn (E: VType) ->
       @[debug("original")]
-      let mo-exn = mo-exn in
+      let mo_exn = mo_exn in
       comatch
-      | .monad -> ! mo-exn E
+      | .monad -> ! mo_exn E
       | .lift A m ->
-        do a <- ! m; ! mo-exn E .return A a
+        do a <- ! m; ! mo_exn E .return A a
       end
     :
       forall (E: VType) . MonadTransInner (Exn E)
@@ -65,7 +65,7 @@ end
 --| Manual implementation of the monad transformer for `ExnT`
 --| 
 --| Provided for reference.
-def ! mt-exn-manual (E: VType) : MonadTrans (ExnT E) = fn M mo ->
+def ! mt_exn_manual (E: VType) : MonadTrans (ExnT E) = fn M mo ->
   comatch
   | .monad ->
     comatch

@@ -46,14 +46,14 @@ To run the examples, alias `zydeco` to the `target/release/zydeco` binary and us
 
 ```sh
 alias zydeco="target/release/zydeco"
-zydeco run lang/lib/oopsla/proj.toml --bin=<bin-name>
+zydeco run lib/oopsla/proj.toml --bin=<bin-name>
 ```
 
 All examples are located under the `lang/lib/oopsla/proj.toml` file.
 For example, to run the first example `polynomial`, run the following command:
 
 ```sh
-zydeco run lang/lib/oopsla/proj.toml --bin=polynomial
+zydeco run lib/oopsla/proj.toml --bin=polynomial
 ```
 
 ## Reusability Guide
