@@ -1,7 +1,7 @@
 use zydeco_tests::lib_proj_bin;
 
 lib_proj_bin!(oopsla, polynomial, "polynomial");
-lib_proj_bin!(oopsla, sum_and_mult, "sum_and_mult");
+lib_proj_bin!(oopsla, cc, "cc");
 lib_proj_bin!(oopsla, cbv, "cbv");
 lib_proj_bin!(oopsla, monads, "monads");
 lib_proj_bin!(oopsla, exn, "exn");
