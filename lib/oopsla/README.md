@@ -354,9 +354,9 @@ To implement the monadic blocks, in the paper we introduced the algebra translat
 
 #### Using *Global* Types and Terms in Monadic Blocks
 
-The monadic block provided in this artifact is significantly improved from its original version in the paper in that we now support direct reference to *global* types and terms within monadic blocks, whereas the original version disallowed anything defined outside the monadic blocks. Calling a type or a term "global" means that the type or term can be well-typed only using other global types and terms. Combined with the admissive weakening rule, all global types and terms can now be used anywhere in the program.
+As a programming convenience to allow for more code reuse, Zydeco's monadic blocks allow for some limited use of definitions outside the block, whereas in the paper, code inside a monadic block must be closed. We define a type or a term to be "global" when it is well-kinded/typed only using other global types and terms. So closed types and kinds are global, as well as types and kinds that only reference other globally defined types and terms. In Zydeco, the code inside a monadic block doesn't need to be closed, but instead can make use of global definitions. This can be implemented (somewhat inefficiently) as inlining the used definitions into the block, so this feature does not increase the expressive power of monadic blocks, but makes them much more convenient to use.
 
-Even though the global entities can be directly referenced inside the monadic block, they now have a different meaning from being referenced outside the monadic blocks, because the ambient monad of the global entity is now overloaded by the monadic block. When the monadic block undergoes the algebra translation, the global entity will be translated to use the user-specified ambient monad.
+When global types and terms are referenced inside the monadic block, they have a different meaning then when they are referenced outside the blocks, because the ambient monad of the global type or term is now overloaded by the monadic block. When the monadic block undergoes the algebra translation, the global type or term will be translated to use the user-specified ambient monad.
 
 As an example of using global types and terms in monadic blocks, see how `Exn` and `mo-exn` can be directly used in the monadic block in the following section. Given the definition of the `Exn` type
 ```zydeco
@@ -364,7 +364,7 @@ alias Exn (E: VType) (A: VType) : CType =
   Ret (Either E A)
 end
 ```
-where `Either` is also a global type, we can use it inside the monadic block, except that the meaning of `Ret` type will be overloaded by the monadic block. Such overloading is the reason why we can derive relative monad transformers from a relative monad instance, which is itself defined as a global Zydeco program.
+where `Either` is also a global type, we can use it inside the monadic block, except that the meaning of `Ret` type will be overloaded by the monadic block. Such overloading is the reason why we can derive relative monad transformers from a relative monad instance, which is itself defined as a global Zydeco program. Without this convenience, we would have to inline the definition of the monad inside the block.
 
 #### Deriving Relative Monad Transformers
 
