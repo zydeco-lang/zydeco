@@ -354,9 +354,17 @@ To implement the monadic blocks, in the paper we introduced the algebra translat
 
 #### Using *Global* Types and Terms in Monadic Blocks
 
-Note that the monadic blocks are significantly improved from its original version in the paper in that we now support direct reference to *global* types and terms within the monadic blocks, whereas the original version disallowed anything defined outside the monadic blocks. Calling a type or a term "global" means that the type or term can be well-typed only using other global types and terms. Combined with the admissive weakening rule, all global types and terms can now be used anywhere in the program.
+The monadic block provided in this artifact is significantly improved from its original version in the paper in that we now support direct reference to *global* types and terms within monadic blocks, whereas the original version disallowed anything defined outside the monadic blocks. Calling a type or a term "global" means that the type or term can be well-typed only using other global types and terms. Combined with the admissive weakening rule, all global types and terms can now be used anywhere in the program.
 
-As an example, see how `Exn` and `mo-exn` can be directly used in the monadic block in the following section.
+Even though the global entities can be directly referenced inside the monadic block, they now have a different meaning from being referenced outside the monadic blocks, because the ambient monad of the global entity is now overloaded by the monadic block. When the monadic block undergoes the algebra translation, the global entity will be translated to use the user-specified ambient monad.
+
+As an example of using global types and terms in monadic blocks, see how `Exn` and `mo-exn` can be directly used in the monadic block in the following section. Given the definition of the `Exn` type
+```zydeco
+alias Exn (E: VType) (A: VType) : CType =
+  Ret (Either E A)
+end
+```
+where `Either` is also a global type, we can use it inside the monadic block, except that the meaning of `Ret` type will be overloaded by the monadic block. Such overloading is the reason why we can derive relative monad transformers from a relative monad instance, which is itself defined as a global Zydeco program.
 
 #### Deriving Relative Monad Transformers
 
