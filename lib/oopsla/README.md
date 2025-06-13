@@ -12,13 +12,15 @@ This document is a high-level overview of the artifact for our OOPSLA paper "Not
 
 ## Introduction
 
-The artifact contains the implementation of a call-by-push-value (CBPV) calculus named Zydeco and examples mentioned in our OOPSLA paper. In the paper, we claimed that relative monads can model common stack-manipulating computations used in functional programming. Additionally, we described a generalized do-notation called "monadic blocks" that enables embedded CBPV programming by reinterpreting Zydeco code with any monad designated by the user. We further claimed that any user-implemented relative monad in Zydeco can have their relative monad transformers automatically derived. In the submitted artifact, we provide the supporting materials for all claims made in the paper, which are further detailed in the [Step-by-Step Instructions](#step-by-step-instructions) section.
-
-
+The artifact contains the implementation of a call-by-push-value (CBPV) calculus named Zydeco with executable examples from the paper. The artifact supports the following claims of the paper.
+- We demonstrate that relative monads can model common stack-manipulating computations used in functional programming
+- We described a generalized do-notation called "monadic blocks" that enables embedded CBPV programming by reinterpreting code to use any provided relative monad.
+- We showed that the monadic blocks allow for the automatic extension from any user-defined relative monad to a monad transformer.
+Further details are provided in the [Step-by-Step Instructions](#step-by-step-instructions) section.
 
 ## Hardware Dependencies
 
-The artifact doesn't require any specific hardware dependencies. The artifact is tested on a Linux machine, a macOS machine, and a Windows machine. Boardly speaking, the artifact can be expected to work on any machine that has tier 1 or tier 2 support by the Rust compiler.
+The artifact doesn't require any specific hardware dependencies. The artifact is tested on a Linux machine, a macOS machine, and a Windows machine. Broadly speaking, the artifact can be expected to work on any machine that has tier 1 or tier 2 support by the Rust compiler.
 
 
 
@@ -38,11 +40,9 @@ cargo test --release
 ```
 The tests perform basic sanity checks on the implementation of Zydeco, as well as all the core features mentioned in the paper.
 
-
-
 ## Step-by-Step Instructions
 
-This section shows how our artifact supports the claims made in the paper, and how the reviewers can use the artifact to run the examples and even write their own Zydeco programs to test the claims. In the following sections, we first describe Zydeco as a functional programming language in a high-level manner through examples, and then briefly describe its implementation. After that, we'll move on to relative monads and their algebras in Zydeco by demonstrating how to implement them in Zydeco and apply them in effectful Zydeco programs. Finally, we'll show how we can further extend it to support monadic blocks, and how to automatically derive relative monad transformers using monadic blocks in Zydeco.
+This section shows how our artifact supports the claims made in the paper, and how the reviewers can use the artifact to run the examples and write their own Zydeco programs to test the claims. In the following sections, we first describe Zydeco as a functional programming language in a high-level manner through examples, and then briefly describe its implementation. After that, we describe relative monads and their algebras in Zydeco and demonstrate how to implement them in Zydeco and apply them to effectful programming. Finally, we show how we can further extend it to support monadic blocks, and how to automatically derive relative monad transformers using monadic blocks in Zydeco.
 
 
 ### Running the examples
