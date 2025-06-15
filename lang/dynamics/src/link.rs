@@ -39,7 +39,7 @@ impl Link for ss::DeclId {
     type Out = Option<ds::Declaration>;
 
     fn link(&self, (statics, defs): Self::Arena<'_>) -> Self::Out {
-        let decl: &ss::Declaration = statics.decls.get(self)?;
+        let decl = statics.decls.get(self)?;
         use ss::Declaration as Decl;
         let decl = match decl {
             | Decl::TAliasBody(_) => None?,
