@@ -20,7 +20,7 @@ Further details are provided in the [Step-by-Step Instructions](#step-by-step-in
 
 ## Hardware Dependencies
 
-The artifact doesn't require any specific hardware dependencies. The artifact is tested on a Linux machine, a macOS machine, and a Windows machine. Broadly speaking, the artifact can be expected to work on any machine that has tier 1 or tier 2 support by the Rust compiler.
+The artifact doesn't require any specific hardware dependencies. The artifact is tested on a Linux machine, a macOS machine, and a Windows machine. Broadly speaking, the artifact is expected to work on any machine that has tier 1 or tier 2 support by the Rust compiler.
 
 
 
