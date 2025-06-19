@@ -12,7 +12,7 @@ This document is a high-level overview of the artifact for our OOPSLA paper "Not
 
 ## Introduction
 
-The artifact contains the implementation of a call-by-push-value (CBPV) calculus named Zydeco with executable examples from the paper. The artifact supports the following claims of the paper.
+The artifact contains the implementation of Zydeco, a call-by-push-value (CBPV) calculus with executable examples from the paper. The artifact supports the following claims of the paper.
 - We demonstrate that relative monads can model common stack-manipulating computations used in functional programming
 - We described a generalized do-notation called "monadic blocks" that enables embedded CBPV programming by reinterpreting code to use any provided relative monad.
 - We showed that the monadic blocks allow for the automatic extension from any user-defined relative monad to a monad transformer.
@@ -65,80 +65,6 @@ For example, to run the first example `polynomial`, run the following command:
 ```sh
 zydeco run lib/oopsla/proj.toml --bin=polynomial
 ```
-
-
-### Programming with the Stack in Call-by-Push-Value
-
-In Section 2 of the paper, we demonstrated how to use Zydeco to perform stack-manipulating computations. All examples are included in the `lib/oopsla` directory.
-
-#### Implementing a Polynomial Function
-The first example [`polynomial.zydeco`](polynomial.zydeco) is a simple function that computes the polynomial `f(x) = x^2 + x + 10`.
-```zydeco
-fn (x: Int) ->
-  do s <- ! times x x;
-  do y <- ! add x 10;
-  ! add s y
-```
-The first feature we may notice is **type annotations**, denoted by `:`. We are going to use them throughout the examples to show the types and kinds of the all programs.
-
-`fn` is the keyword for function. `do x <- ...; ...` is the monadic bind operator, syntactically similar to the OCaml-style monadic `let*` binding. All computations in Zydeco that returns an integer will have type `Ret Int`, and the result can only be accessed with the `do` operator. Therefore, both `! times` and `! add` computations have type `Int -> Int -> Ret Int` and the above program overall has type `Int -> Ret Int`. The force operator `! ...` runs the thunk. Thunks are typed as `Thk ...` and are written as `{ ... }`, so we have `times: Thk (Int -> Int -> Ret Int)` and `add: Thk (Int -> Int -> Ret Int)`, and forcing them will remove the thunks wrapping them.
-
-Zydeco syntactically disambiguates between values and computations. Values don't run or have side effects, and computations do. To briefly recap from the paper:
-
-+ Functions are computations because they push and pop values, interacting with the stack, thus they have side effects.
-+ Thunks are values because they suspend computations, and they will not run until the force operator `!` is used.
-+ Return values are computations because they pop a continuation from the stack and pass the result to it; the continuation is corespondingly created by the `do` operator.
-+ Lastly, variables are themselves values, because references to variables don't have side effects.
-
-The top-level in Zydeco are either declarations, definitions, or the program entry point `main`. To wrap the function above into a definition that can be reused, we'll make it a definition.
-
-```zydeco
-def poly = {
-  fn (x: Int) ->
-    do s <- ! times x x;
-    do y <- ! add x 10;
-    ! add s y
-} end
-```
-
-Here, `def x = ... end` is the syntax for definition. As mentioned, since variable `poly` is a value, and the function is computation, we need to wrap the function in a thunk using `{ ... }` and then assign it to `poly`.
-
-To make the example above into a runnable Zydeco test case, we'll wrap it in `main`, and use the exit code `0` to indicate whether the test passes.
-
-```zydeco
-main
-  -- the exit code should be 0 for the test to pass
-  do r <- ! poly 10;
-  -- since f(10) = 120, we minus the result by 120 to get 0
-  do e <- ! sub r 120;
-  ! exit e
-end
-```
-
-#### Complex Calling Conventions
-
-We include three complex calling conventions in [`cc.zydeco`](cc.zydeco). Specifically, we define the following variant function types:
-
-+ `FnOpt (A: VType) (B: CType)`: function type with optional argument (`A ->? B`)
-+ `FnVar (A: VType) (B: CType)`: variadic function type (`A ->* B`)
-+ `FnVarOnce (A: VType) (B: CType)`: variadic function type with at least one argument (`A ->+ B`)
-
-The reader is encouraged to open the file and read the comments to understand the implementation.
-
-The file also contains a simple use case of the complex calling conventions demonstrated in the paper named `sum_and_mult`. The reader is encouraged to open the file, run the example, and understand how it works though detailed comments.
-
-#### Abstract Machine Interpreter
-
-We provide a call-by-value abstract machine interpreter in [`cbv.zydeco`](cbv.zydeco), resembling the example from Figure 1 in the paper. A small difference is that we use a `codata` definition to encode the mutually recursive functions `descend` and `ascend`:
-
-```zydeco
-codata Interp where
-| .descend : Expr * Env -> Machine
-| .ascend  : Value -> Machine
-end
-```
-
-Zydeco doesn't directly support mutually recursive function definitions, however, they can be encoded using codata types. If the reader is interested in such encoding, please refer to the definition of `interp` and how it's used in the source code of this example, which demonstrates a general pattern that resolves the issue.
 
 
 ### Zydeco as a Functional Programming Language
@@ -246,6 +172,80 @@ The implementation of Zydeco is located in the `lang` directory in a modularized
 + `lang/statics`: implements the static semantics of Zydeco with a type checker; the monadic blocks are implemented as a type-directed source-to-source translation during type checking
 + `lang/dynamics`: implements the operational semantics of Zydeco with a small-step interpreter
 + `lang/driver`: includes utilities for simple Zydeco package management and driver for the pipeline
+
+
+### Programming with the Stack in Call-by-Push-Value
+
+In Section 2 of the paper, we demonstrated how to use Zydeco to perform stack-manipulating computations. All examples are included in the `lib/oopsla` directory.
+
+#### Implementing a Polynomial Function
+The first example [`polynomial.zydeco`](polynomial.zydeco) is a simple function that computes the polynomial `f(x) = x^2 + x + 10`.
+```zydeco
+fn (x: Int) ->
+  do s <- ! times x x;
+  do y <- ! add x 10;
+  ! add s y
+```
+The first feature we may notice is **type annotations**, denoted by `:`. We are going to use them throughout the examples to show the types and kinds of the all programs.
+
+`fn` is the keyword for function. `do x <- ...; ...` is the monadic bind operator, syntactically similar to the OCaml-style monadic `let*` binding. All computations in Zydeco that returns an integer will have type `Ret Int`, and the result can only be accessed with the `do` operator. Therefore, both `! times` and `! add` computations have type `Int -> Int -> Ret Int` and the above program overall has type `Int -> Ret Int`. The force operator `! ...` runs the thunk. Thunks are typed as `Thk ...` and are written as `{ ... }`, so we have `times: Thk (Int -> Int -> Ret Int)` and `add: Thk (Int -> Int -> Ret Int)`, and forcing them will remove the thunks wrapping them.
+
+Zydeco syntactically disambiguates between values and computations. Values don't run or have side effects, and computations do. To briefly recap from the paper:
+
++ Functions are computations because they push and pop values, interacting with the stack, thus they have side effects.
++ Thunks are values because they suspend computations, and they will not run until the force operator `!` is used.
++ Return values are computations because they pop a continuation from the stack and pass the result to it; the continuation is corespondingly created by the `do` operator.
++ Lastly, variables are themselves values, because references to variables don't have side effects.
+
+The top-level in Zydeco are either declarations, definitions, or the program entry point `main`. To wrap the function above into a definition that can be reused, we'll make it a definition.
+
+```zydeco
+def poly = {
+  fn (x: Int) ->
+    do s <- ! times x x;
+    do y <- ! add x 10;
+    ! add s y
+} end
+```
+
+Here, `def x = ... end` is the syntax for definition. As mentioned, since variable `poly` is a value, and the function is computation, we need to wrap the function in a thunk using `{ ... }` and then assign it to `poly`.
+
+To make the example above into a runnable Zydeco test case, we'll wrap it in `main`, and use the exit code `0` to indicate whether the test passes.
+
+```zydeco
+main
+  -- the exit code should be 0 for the test to pass
+  do r <- ! poly 10;
+  -- since f(10) = 120, we minus the result by 120 to get 0
+  do e <- ! sub r 120;
+  ! exit e
+end
+```
+
+#### Complex Calling Conventions
+
+We include three complex calling conventions in [`cc.zydeco`](cc.zydeco). Specifically, we define the following variant function types:
+
++ `FnOpt (A: VType) (B: CType)`: function type with optional argument (`A ->? B`)
++ `FnVar (A: VType) (B: CType)`: variadic function type (`A ->* B`)
++ `FnVarOnce (A: VType) (B: CType)`: variadic function type with at least one argument (`A ->+ B`)
+
+The reader is encouraged to open the file and read the comments to understand the implementation.
+
+The file also contains a simple use case of the complex calling conventions demonstrated in the paper named `sum_and_mult`. The reader is encouraged to open the file, run the example, and understand how it works though detailed comments.
+
+#### Abstract Machine Interpreter
+
+We provide a call-by-value abstract machine interpreter in [`cbv.zydeco`](cbv.zydeco), resembling the example from Figure 1 in the paper. A small difference is that we use a `codata` definition to encode the mutually recursive functions `descend` and `ascend`:
+
+```zydeco
+codata Interp where
+| .descend : Expr * Env -> Machine
+| .ascend  : Value -> Machine
+end
+```
+
+Zydeco doesn't directly support mutually recursive function definitions, however, they can be encoded using codata types. If the reader is interested in such encoding, please refer to the definition of `interp` and how it's used in the source code of this example, which demonstrates a general pattern that resolves the issue.
 
 
 ### Relative Monads in Zydeco
