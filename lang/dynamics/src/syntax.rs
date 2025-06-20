@@ -20,7 +20,6 @@ pub type DeclId = ss::DeclId;
 
 #[derive(From, Clone, Debug)]
 pub enum ValuePattern {
-    // Ann(Ann<RcVPat, TypeId>),
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<RcVPat>),
