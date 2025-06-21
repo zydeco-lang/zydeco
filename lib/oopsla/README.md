@@ -358,7 +358,23 @@ As a programming convenience to allow for more code reuse, Zydeco's monadic bloc
 
 When global types and terms are referenced inside the monadic block, they have a different meaning then when they are referenced outside the blocks, because the ambient monad of the global type or term is now overloaded by the monadic block. When the monadic block undergoes the algebra translation, the global type or term will be translated to use the user-specified ambient monad.
 
-As an example of using global types and terms in monadic blocks, see how `Exn` and `mo-exn` can be directly used in the monadic block in the following section. Given the definition of the `Exn` type
+As an example of using global types and terms in monadic blocks, we can define an identity function:
+```zydeco
+monadic
+  ! { fn (A: VType) (x: A) -> ret x }
+end
+```
+and observe how we can move the definition out of the monadic block:
+```zydeco
+let id = { fn (A: VType) (x: A) -> ret x } in
+monadic
+  ! id
+end
+```
+
+The reason why we can do this is because the definition of `id` is global, and can therefore its ambient monad can be reinterpreted according to the surrounding monadic block.
+
+To look at a more realistic use case, see how `Exn` and `mo-exn` can be directly used in the monadic block in the following section. Given the definition of the `Exn` type
 ```zydeco
 alias Exn (E: VType) (A: VType) : CType =
   Ret (Either E A)
