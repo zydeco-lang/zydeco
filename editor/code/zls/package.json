@@ -2,7 +2,7 @@
   "name": "zls",
   "displayName": "zls",
   "description": "Language support for Zydeco",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "engines": {
     "vscode": "^1.96.0"
   },
