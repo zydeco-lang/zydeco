@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 rust-version = "1.86"
 authors = ["The Zydeco Project Developers"]
 edition = "2024"

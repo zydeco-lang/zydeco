@@ -240,7 +240,7 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
 name = "cajun"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "env_logger",
  "tokio",
@@ -3098,7 +3098,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "clap_complete",
@@ -3108,7 +3108,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-derive"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "quote",
  "syn 2.0.101",
@@ -3116,7 +3116,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-driver"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "colored",
  "derive_more",
@@ -3137,7 +3137,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-dynamics"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "derive_more",
  "im",
@@ -3153,7 +3153,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-statics"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "auto_impl",
  "colored",
@@ -3171,7 +3171,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-surface"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "auto_impl",
  "derive_more",
@@ -3190,7 +3190,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-syntax"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "derive_more",
  "impl-tools",
@@ -3201,7 +3201,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-tests"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "zydeco-driver",
  "zydeco-dynamics",
@@ -3213,7 +3213,7 @@ dependencies = [
 
 [[package]]
 name = "zydeco-utils"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "im",
  "once_cell",

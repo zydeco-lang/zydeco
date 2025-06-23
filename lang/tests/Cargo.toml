@@ -1,7 +1,7 @@
 [package]
 name = "zydeco-tests"
-version = "0.2.0"
-edition = "2024"
+version = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 zydeco-driver = { path = "../driver" }
