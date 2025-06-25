@@ -30,7 +30,11 @@ This section prepares the reviewers to evaluate the artifact. Delivered as a doc
 
 1. Access the artifact by pulling the docker image and run it in a container
 ```sh
-docker run -it lighghteeloo/zydeco:latest
+docker run -it lighghteeloo/zydeco:amd64
+```
+If you are on a machine with an ARM architecture, you can pull the image from Docker Hub by running the following command:
+```sh
+docker run -it lighghteeloo/zydeco:arm64
 ```
 A shell will then be spawned in the container at `/usr/src/zydeco`, where a copy of this repository is also located.
 
@@ -67,7 +71,15 @@ zydeco run lib/oopsla/proj.toml --bin=polynomial
 ```
 
 
+### VSCode Extension
+
+Zydeco is optionally syntax-highlighted in VSCode. To install the extension, open the VSCode Extensions tab and search for "zls". 
+
+
+
 ### Zydeco as a Functional Programming Language
+
+In the following sections, we'll first introduce the grammar of Zydeco and then show example Zydeco programs in the paper.
 
 In Section 3 of the paper, we illustrated the abstract syntax and semantics of Zydeco. Specifically, Figure 2 through 6 shows the syntax and semantics of Zydeco. The following paragraphs briefly show the corresponding concrete syntax of Zydeco.
 The core standard library less than 200 lines of code is located in [`core.zydeco`](core.zydeco). After reading through this section, the reader is encouraged to browse through the file to understand all the core features of Zydeco.
@@ -104,7 +116,7 @@ The primitive value types are:
 + character type: `Char`
 + string type: `String`
 
-User-defined data types are also value types. We've seen them in the abstract machine interpreter example above.
+User-defined data types are also value types. We'll see them in the abstract machine interpreter example below.
 The following is an example of the `Either` type.
 
 ```zydeco
@@ -121,7 +133,7 @@ The primitive computation types are:
 + forall type: `forall (X: <T>) . <B>`
 + OS type: `OS`
 
-User-defined codata types are also computation types. We've seen them in the example above as well.
+User-defined codata types are also computation types. We'll see them in the calling convention example below.
 
 #### Values and Computations
 `<V>` is used to denote value terms, and `<M>` is used to denote computation terms.
@@ -155,7 +167,7 @@ Other computation terms are:
 
 Primitive functions that deal with integers, characters, strings, and operating system features are located in `lib/oopsla/core.zydeco`.
 
-It's worth mentioning that the main program is required to have type `OS`. A few crucial primitive functions related to the `OS` type are:
+The main program is required to have type `OS`. A few crucial primitive functions related to the `OS` type are:
 + `exit: Thk (Int -> OS)`: constructs a computation that exits the program with the given exit code.
 + `write_str: Thk (String -> Thk OS -> OS)`: takes a string and a continuation of type `OS`, prints the string and then runs the continuation.
 What `OS` type actually means is a computation that can run on the operating system stack and consume it. All Zydeco features that interact with the operating system are implemented using this type.
@@ -301,7 +313,7 @@ In the paper, we claimed that the algebras of relative monads extend to all type
 
 #### Monadic Blocks
 
-The monadic blocks allow the user to create a dialect of Zydeco that uses a user-specified ambient monad inside the monadic blocks. A monadic block accepts a Zydeco computation term and produces a computation term that accepts a monad instance as function argument. The syntax of monadic blocks looks like the following:
+The monadic blocks, defined in Section 5.2, allow the user to create a dialect of Zydeco that uses a user-specified ambient monad inside the monadic blocks. A monadic block accepts a Zydeco computation term and produces a computation term that accepts a monad instance as function argument. The syntax of monadic blocks looks like the following:
 
 ```zydeco
 monadic
@@ -327,7 +339,7 @@ end
 
 In such way, the user can require a monad instance that supports `raise`, and later pass in the `Exn` monad instance to the monadic block.
 
-A caveat is that the monadic blocks don't naturally support any reference to variables defined outside the monadic blocks. In the paper version of the monadic blocks, only primitive CBPV constructs like `VType`, `CType`, `Thk`, `Ret`, units and products, functions, and exists and forall types are allowed inside the monadic blocks, noticably excluding all abstract primitive types like the `String` and `OS` type. All other terms used in the monadic block must also be passed in. Below is an example of a monadic block that raises an exception:
+A caveat is that the monadic blocks don't naturally support any reference to variables defined outside the monadic blocks. Only primitive CBPV constructs like `VType`, `CType`, `Thk`, `Ret`, units and products, functions, and exists and forall types are allowed inside the monadic blocks, noticably excluding all abstract primitive types like the `String` and `OS` type. All other terms used in the monadic block must also be passed in. Below is an example of a monadic block that raises an exception:
 
 ```zydeco
 monadic fn (Str: VType) (raise: Thk (forall (A: VType) . Str -> Ret A)) (msg: Str) ->
@@ -337,8 +349,6 @@ end Exn mo-exn String triv { ! exn-raise String } "error"
 ```
 
 Observe how the implementations are passed in as function arguments in the last line. `Exn` and `mo-exn` are the monad type and its implementation, respectively. `String` and `triv` instantiate type `Str` and its algebra (introduced in the next section). `{ ! exn-raise String }` is the implementation of the `raise` function, specialized to the `String` type. `"error"` is the message to be passed to the `raise` function.
-
-Further abstractions can be made in the perspective of a language designer to simplify the "import" process of the monadic blocks; however, it's beyond the scope of this artifact.
 
 
 #### Algebra Translation
@@ -354,9 +364,9 @@ To implement the monadic blocks, in the paper we introduced the algebra translat
 
 #### Using *Global* Types and Terms in Monadic Blocks
 
-As a programming convenience to allow for more code reuse, Zydeco's monadic blocks allow for some limited use of definitions outside the block, whereas in the paper, code inside a monadic block must be closed. We define a type or a term to be "global" when it is well-kinded/typed only using other global types and terms. So closed types and kinds are global, as well as types and kinds that only reference other globally defined types and terms. In Zydeco, the code inside a monadic block doesn't need to be closed, but instead can make use of global definitions. This can be implemented (somewhat inefficiently) as inlining the used definitions into the block, so this feature does not increase the expressive power of monadic blocks, but makes them much more convenient to use.
+In the paper we claimed that the monadic blocks are required to be closed, while in the artifact we slightly improve it. As a programming convenience to allow for more code reuse, Zydeco's monadic blocks allow for some limited use of definitions outside the block, whereas in the paper, code inside a monadic block must be closed. We define a type or a term to be "global" when it is well-kinded/typed only using other global types and terms. Closed types and kinds are global, as well as types and kinds that only reference other globally defined types and terms. In Zydeco, the code inside a monadic block doesn't need to be closed, but instead can make use of global definitions. This can be implemented (somewhat inefficiently) as inlining the used definitions into the block, so this feature does not increase the expressive power of monadic blocks, but makes them much more convenient to use.
 
-When global types and terms are referenced inside the monadic block, they have a different meaning then when they are referenced outside the blocks, because the ambient monad of the global type or term is now overloaded by the monadic block. When the monadic block undergoes the algebra translation, the global type or term will be translated to use the user-specified ambient monad.
+When global types and terms are referenced inside the monadic block, they have a different meaning than when they are referenced outside the blocks, because the ambient monad of the global type or term is now overloaded by the monadic block. When the monadic block undergoes the algebra translation, the global type or term will be translated to use the user-specified ambient monad.
 
 As an example of using global types and terms in monadic blocks, we can define an identity function:
 ```zydeco
@@ -372,15 +382,15 @@ monadic
 end
 ```
 
-The reason why we can do this is because the definition of `id` is global, and can therefore its ambient monad can be reinterpreted according to the surrounding monadic block.
+The reason why we can do this is because the definition of `id` is global, and therefore its ambient monad can be reinterpreted according to the surrounding monadic block.
 
-To look at a more realistic use case, see how `Exn` and `mo-exn` can be directly used in the monadic block in the following section. Given the definition of the `Exn` type
+For a more realistic use case, refer to [`exnt.zydeco`](exnt.zydeco) and observe that variables `Exn` and `mo-exn` are directly referenced in the monadic block. Given the definition of the `Exn` type
 ```zydeco
 alias Exn (E: VType) (A: VType) : CType =
   Ret (Either E A)
 end
 ```
-where `Either` is also a global type, we can use it inside the monadic block, except that the meaning of `Ret` type will be overloaded by the monadic block. Such overloading is the reason why we can derive relative monad transformers from a relative monad instance, which is itself defined as a global Zydeco program. Without this convenience, we would have to inline the definition of the monad inside the block.
+In the definition of `Exn`, `Either` is a global type, therefore we can use `Exn` as a global type inside the monadic block, but keep in mind that the meaning of `Ret` type will be overloaded by the monadic block. Such overloading is the reason why we can derive relative monad transformers from a relative monad instance, which is itself defined as a global Zydeco program. Without this convenience, we would have to inline the definition of the monad inside the block.
 
 #### Deriving Relative Monad Transformers
 
@@ -389,9 +399,14 @@ We generate the relative monad transformer implementations for the `Exn` and `Ex
 
 ## Reusability Guide
 
-The artifact is designed to be reusable by other researchers and practitioners.
-+ The `zydeco` binary can be used to interpret Zydeco programs and perform algebra translation.
+The artifact is designed to be reusable by other researchers and practitioners. Overall, it contains the following components:
++ The source code of `zydeco` can be compiled to interpret Zydeco programs and perform algebra translation.
 + The `core.zydeco` and `data.zydeco` files implement a minimal standard library for Zydeco.
++ Examples listed under [lib](../) can be used as references to understand the implementation of Zydeco. They are also a good starting point to write new Zydeco programs, either as a library or as a starting point for standalone executables.
+
+
+
+-- In the Reusability Guide, explain which parts of your artifact constitute the core pieces which should be evaluated for reusability. Explain how to adapt the artifact to new inputs or new use cases. Provide instructions for how to find/generate/read documentation about the core artifact. Articulate any limitations to the artifact’s reusability.
 
 ### The `zydeco` binary
 
