@@ -1,5 +1,5 @@
 FROM rust:latest
-RUN apt install -y jq
+RUN apt update && apt install -y jq
 
 WORKDIR /usr/src/zydeco
 COPY . .
