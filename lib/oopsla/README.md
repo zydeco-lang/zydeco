@@ -152,14 +152,14 @@ The value terms span the following forms:
 Their elimination forms are computations:
 + forcing a thunk `v`: `! v`
 + unit `v`: `let () = v in <M>`
-+ product `v`: `let (v1, v2, ...) = v in <M>`
-+ pack `v`: `match v | (t, x) -> <M> end`
++ product `v`: `let (x1, x2, ...) = v in <M>`
++ pack `v`: `match v | (X, x) -> <M> end`
 + data constructor `v`: `match v | +Ctor1 x -> <M> | +Ctor2 x -> <M> | ... end`
 
 Other computation terms are:
 + return: `ret <V>`
 + do-binding: `do x <- <M>; <M>`
-+ term function: `fn (X: <T>) -> <M>`
++ term function: `fn (x: <T>) -> <M>`
 + type function: `fn (X: <K>) -> <M>`
 + function application: `<M> <V>` and `<M> <T>`
 + comatch (terms of codata types): `comatch | .dtor1 -> <M> | .dtor2 -> <M> | ... end`
@@ -530,14 +530,16 @@ To see the documentation of a specific package, e.g. `zydeco-statics`, run `carg
 
 ### Limitations
 
-Zydeco is a research prototype, and the following are some of the limitations of the artifact:
-+ Though designed to be an idealized intermediate representation, Zydeco is not currently compiled to any low-level language. The efficient compilation is left as future work.
+The following are some limitations of the artifact:
+
++ Though designed to be an idealized intermediate representation, Zydeco is not currently compiled to any low-level language. The efficient compilation of Zydeco is left as future work.
 + A basic package manager is implemented in [`zydeco-driver`](../../lang/driver/). However, it only supports local dependencies, and the standard library can only be manually added to the project.
++ The namespace feature is not implemented. Keywords `module`, `pub`, and `use` are reserved but they have no effect.
 + When running Zydeco in debug mode, the stack size is extended to 4MB to pass all test cases, because under debug profile Rust generates large debuginfo on the stack, causing large test cases to stack overflow. This is not a problem in release mode.
 + There're several caveats in using monadic blocks as a Zydeco programmer.
   + The monadic blocks are compiled to a function that accepts a monad instance as function argument, which is passed in at runtime. However, an efficient implementation is to inline the monad instance into the monadic block if it's known at compile time, which is feasible in most cases, but not currently supported in the artifact.
   + As mentioned in previous sections, the monadic blocks requires its inner computation to be closed in the paper. Even with the improvement in the artifact, it can only allow for the use of global types and terms.
-  + As a result, to use monad-specific features e.g. using `raise` with the `Exn` monad, the user must pass in the implementation of the `raise` function as a function argument to the monadic block, and introduce a function parameter inside the monadic block. It's therefore recommended to abstract the monad-specific features into an existential type interface, which requires the user to learn as a style of programming. Similar to the monad instance, the inline optimization oppotunity exists for the instance of the existential type interface, but just like the case of the monad instance, it's not currently supported in the artifact.
+  + As a result, to use monad-specific features e.g. using `raise` with the `Exn` monad, the user must pass in the implementation of the `raise` function as a function argument to the monadic block, and introduce a function parameter inside the monadic block. It's therefore recommended to abstract the monad-specific features into an existential type interface, which requires the user to learn as a style of programming. Similar to the monad instance, the inline optimization oppotunity exists for the instance of the existential type interface, but just like the case of the monad instance, the application of instances are not currently optimized in the artifact.
 
 
 
