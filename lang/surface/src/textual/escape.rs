@@ -2,7 +2,7 @@
 /// representation to the text it represents. The `idx0` argument should be the
 /// position in the input stream of the first character of `text`, the position
 /// after the opening double-quote.
-/// https://github.com/lalrpop/lalrpop/blob/d09a1433d181de12fd1ebfc89c2ecaeed734943c/lalrpop/src/tok/mod.rs#L749
+/// <https://github.com/lalrpop/lalrpop/blob/d09a1433d181de12fd1ebfc89c2ecaeed734943c/lalrpop/src/tok/mod.rs#L749>
 pub fn apply_string_escapes(code: &str) -> String {
     if !code.contains('\\') {
         code.into()

@@ -1,8 +1,8 @@
 //! Implementation of the monadic block via algebra translation.
-//! See the following for details:
 //!
-//! + Core Idea: [https://dl.acm.org/doi/10.1145/3720434](section 5.3 of oopsla25)
-//! + Detailed Implementation: [https://arxiv.org/abs/2502.15031](appendix D of the extended version)
+//! See the following links for details:
+//! + Core Idea: [section 5.3 of oopsla25](https://dl.acm.org/doi/10.1145/3720434)
+//! + Detailed Implementation: [appendix D of the extended version](https://arxiv.org/abs/2502.15031)
 
 use crate::{syntax::*, *};
 

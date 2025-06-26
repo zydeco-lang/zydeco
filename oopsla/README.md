@@ -177,7 +177,7 @@ What `OS` type actually means is a computation that can run on the operating sys
 
 To demonstrate that Zydeco is usable as a functional programming language, we provide a Rust implemenation of Zydeco System-Fω-style type checker, a small-step interpreter, and a minimal standard library [`core.zydeco`](core.zydeco).
 
-The implementation of Zydeco is located in the `lang` directory in a modularized manner. Among all components, the most crucial modules are:
+The implementation of Zydeco is located in the [`lang`](../../lang) directory in a modularized manner. Among all components, the most crucial modules are:
 
 + `lang/syntax`: defines the general syntax of Zydeco that are used in all passes
 + `lang/surface`: defines the surface syntax of Zydeco as well as the lexer, the parser, the desugaring pass, and the name resolution pass
@@ -404,24 +404,138 @@ The artifact is designed to be reusable by other researchers and practitioners. 
 + The `core.zydeco` and `data.zydeco` files implement a minimal standard library for Zydeco.
 + Examples listed under [lib](../) can be used as references to understand the implementation of Zydeco. They are also a good starting point to write new Zydeco programs, either as a library or as a starting point for standalone executables.
 
+### Project Structure
+
+The source code is organized into the following directories:
++ [`lang`](../../lang): the language implementation of Zydeco, including the lexer, parser, type checker, interpreter, and driver. What each modular crate does have been described in the [The Implementation of Zydeco](#the-implementation-of-zydeco) section. In addition, the common design of each phase is described in the [section below](#the-common-design-of-phases).
++ [`lib`](../): the library of Zydeco, including the standard library and code examples. All examples are made into test suites in [`lang/tests`](../../lang/tests).
+  + `std`: the standard library of Zydeco. Includes the `core.zydeco` and `data.zydeco` files. `core.zydeco` declares the primitive types and functions of Zydeco, and `data.zydeco`  implements several common data structures.
+  + `exec`: a series of batch tests designed to test the correctness of the Zydeco implementation.
+  + `spell`: a collection of literate zydeco tutorials for learning Zydeco. To generate the markdown files from the zydeco source code, run `make build` in the directory.
+  + `avl`: a simple implementation of the AVL tree data structure.
+  + `delimcc`: a tiny library implementing the `shift`/`reset` style delimited continuations. As an example use case, we implement `try` and `throw` with `shift` and `reset` operators implemented in the library.
++ [`cli`](../../cli): the command-line interface of `zydeco`. See the next section for more details about the command-line interface.
++ [`editor`](../../editor): editor plugin implementations. Currently only a simple syntax highlighter written in TextMate grammars is [implemented](../../editor/code/zls/syntaxes/zydeco.tmLanguage.json). The corresponding VSCode extension is available [here](https://marketplace.visualstudio.com/items?itemName=LitiaEeloo.zls).
+
+### Writing and Running Zydeco Programs
+
+Since Zydeco is a functional programming language, users can write new Zydeco programs and run them via a command-line interface.
+
+#### Creating a New Zydeco Project
+
+Zydeco programs are organized into projects. A project is a collection of Zydeco programs (either library or binary) and their dependencies. A project is typically defined in a `proj.toml` file. In the following paragraphs, we'll use [`lib/delimcc/proj.toml`](../../lib/delimcc/proj.toml) as an example.
+
+The following is an example project file:
+```toml
+name = "delimcc"
+
+srcs = [
+    "lib.zy",
+]
+deps = [
+    { local = "../std/proj.toml" },
+]
+bins = [
+    "reset-shift.zy",
+    "reset-shift-k.zy",
+    "try-catch.zy",
+]
+
+std = "nostd"
+```
+
+The `name` field is the name of the project. The `srcs` field is a list of Zydeco source files (called library files) in the project. The `deps` field is a list of dependencies of the project. The `bins` field is a list of binary files that includes exactaly one `main` declaration. The `std` field is the standard library to use for the project; currently, only `nostd` is supported, and the standard library should be included as a local dependency.
 
 
--- In the Reusability Guide, explain which parts of your artifact constitute the core pieces which should be evaluated for reusability. Explain how to adapt the artifact to new inputs or new use cases. Provide instructions for how to find/generate/read documentation about the core artifact. Articulate any limitations to the artifact’s reusability.
+#### Writing New Zydeco Programs
 
-### The `zydeco` binary
+We've seen the syntax of Zydeco in [Zydeco as a Functional Programming Language](#zydeco-as-a-functional-programming-language). We've also seen examples of Zydeco programs in [Programming with the Stack in Call-by-Push-Value](#programming-with-the-stack-in-call-by-push-value). More examples are available in the [lib](../) directory.
 
-When using `zydeco` as binary, it's recommended to build it under the `release` profile.
+If the reader prefers a more systematic approach to learn Zydeco, a short tutorial is available in the [`lib/spell`](../spell) directory.
+
+The easiest program we can write is a simple program that exits with exit code 42. Create a new project called `playground` in the `lib` directory.
+
+`lib/playground/proj.toml`
+```toml
+name = "playground"
+srcs = []
+deps = [
+  { local = "../std/proj.toml" },
+]
+bins = [
+    "play.zydeco",
+]
+std = "nostd"
+```
+
+`lib/playground/play.zydeco`
+```zydeco
+main
+  ! exit 42
+end
+```
+
+Run `cargo run --bin=zydeco --release -- run lib/playground/proj.toml --bin=play` to run the Zydeco program. The program should exit with exit code 42. To examine the exit code, run
+
+```sh
+echo $?
+```
+
+The output should be `42`.
+
+
+#### The Command-Line Interface of `zydeco`
+
+To run the Zydeco programs, we need to build the command-line interface of `zydeco`.
+It's recommended to build the CLI under the `release` profile.
 
 ```sh
 cargo build --bin=zydeco --release
 ```
 
-Once the build is complete, the `zydeco` binary will be located at `target/release/zydeco`. It supports the following sub-commands:
+Once the build is complete, a CLI program `zydeco` will be located at `target/release/zydeco`. It supports the following sub-commands:
 
 + `run`: run a Zydeco program or a Zydeco project
+  + `zydeco run path/to/proj.toml --bin=foo` runs the binary `foo.zy` or `foo.zydeco` in the project `path/to/proj.toml`
+  + `zydeco run --help` prints the help information about the `run` sub-command
 + `check`: check a Zydeco program or a Zydeco project
-+ `help`: print help information
++ `help`: print brief help information
 
+
+### Extending Zydeco Calculus
+
+We've seen how we can write new Zydeco programs and run them as a Zydeco language user. In this section, we are going to take the perspective of a Zydeco language developer and explore how we can extend the calculus with new features. This may be useful for a researcher who wants to extend Zydeco with new syntax and semantics, or further compile Zydeco to low-level languages for efficient execution.
+
+#### The Common Design of Phases
+
+There are 6 phases in the current implementation of Zydeco: [parsing](../../lang/surface/src/textual), [desugaring](../../lang/surface/src/bitter), [name-resolution](../../lang/surface/src/scoped), [type-checking](../../lang/statics/src), [linking](../../lang/dynamics/src), and [evaluation](../../lang/dynamics/src). They spread across 3 crates: `zydeco-surface`, `zydeco-statics`, and `zydeco-dynamics`. All phases follow the same design pattern:
++ `mod syntax` defines new pieces of syntax needed for the calculus defined in the phase.
++ `mod arena` defines the arena for the phase, if the phase uses an arena to store the intermediate results and use identifiers to refer to them.
++ `mod err` defines the error messages.
++ `mod fmt` defines the formatters for the calculus used in the phase.
++ `mod span` defines the span information for the phase, used for tracking where the error occurs in the Zydeco source code fed by the user.
+All other modules in the phase are used to implement the elaboration from a previous phase to the current phase.
+
+
+#### Generating Documentations for the Source Code
+
+To see the documentation of a specific package, e.g. `zydeco-statics`, run `cargo doc --package zydeco-statics --no-deps`. An HTML documentation will show up in `target/doc/zydeco_statics/index.html`. Append `--open` to the command to immediately open the documentation in the browser. To generate the documentations for all packages in the project, run `cargo doc`. The packages documented are listed below:
++ `zydeco-utils`
++ `zydeco-syntax`
++ `zydeco-surface`
++ `zydeco-statics`
++ `zydeco-dynamics`
+
+### Limitations
+
+Zydeco is a research prototype, and the following are some of the limitations of the artifact:
++ Though designed to be an idealized intermediate representation, Zydeco is not currently compiled to any low-level language. The efficient compilation is left as future work.
++ A basic package manager is implemented in [`zydeco-driver`](../../lang/driver/). However, it only supports local dependencies, and the standard library can only be manually added to the project.
++ When running Zydeco in debug mode, the stack size is extended to 4MB to pass all test cases, because under debug profile Rust generates large debuginfo on the stack, causing large test cases to stack overflow. This is not a problem in release mode.
++ There're several caveats in using monadic blocks as a Zydeco programmer.
+  + The monadic blocks are compiled to a function that accepts a monad instance as function argument, which is passed in at runtime. However, an efficient implementation is to inline the monad instance into the monadic block if it's known at compile time, which is feasible in most cases, but not currently supported in the artifact.
+  + As mentioned in previous sections, the monadic blocks requires its inner computation to be closed in the paper. Even with the improvement in the artifact, it can only allow for the use of global types and terms.
+  + As a result, to use monad-specific features e.g. using `raise` with the `Exn` monad, the user must pass in the implementation of the `raise` function as a function argument to the monadic block, and introduce a function parameter inside the monadic block. It's therefore recommended to abstract the monad-specific features into an existential type interface, which requires the user to learn as a style of programming. Similar to the monad instance, the inline optimization oppotunity exists for the instance of the existential type interface, but just like the case of the monad instance, it's not currently supported in the artifact.
 
 
 

@@ -1,16 +1,16 @@
 #![allow(clippy::style)]
 #![allow(clippy::useless_format)]
 
-/// defines the GenArena and the id types for all the structures
+/// Defines the GenArena and the id types for all the structures
 pub mod arena {
     pub use zydeco_utils::arena::*;
 }
 
-/// defines common syntax in the surface language
+/// Defines common syntax in the surface language
 pub mod syntax;
 
-/// lexing and parsing;
-/// introduces the surface syntax (AST);
+/// Implements lexing and parsing.
+/// Introducing the surface syntax (AST).
 pub mod textual {
     pub mod syntax;
     pub mod arena;
@@ -26,9 +26,9 @@ pub mod textual {
     pub mod err;
     pub use err::*;
 
-    /// a formatter built on top of the textual syntax;
-    /// introduces the ugly syntax;
-    /// outputs a safe surface syntax
+    /// A formatter built on top of the textual syntax.
+    /// Introduces the ugly syntax.
+    /// Outputs a safe surface syntax.
     mod ugly;
 
     // /// a formatter built on top of the textual syntax;
@@ -37,6 +37,7 @@ pub mod textual {
     // mod pretty {
     // }
 
+    /// A wrapper for the formatters.
     pub mod fmt {
         pub use super::ugly::*;
         // pub use super::pretty::*;
@@ -47,9 +48,8 @@ pub mod textual {
     mod tests;
 }
 
-/// an elaboration atop the surface syntax;
-/// introduces the desugared syntax;
-/// Angostura
+/// An elaboration atop the surface syntax.
+/// Introduces the desugared syntax.
 pub mod bitter {
     pub mod syntax;
     pub mod arena;
@@ -65,8 +65,8 @@ pub mod bitter {
     mod span;
 }
 
-/// name resolution;
-/// introduces the bound syntax (ABT);
+/// Implements name resolution.
+/// Introduces the bound syntax (ABT).
 pub mod scoped {
     pub mod syntax;
     pub mod arena;

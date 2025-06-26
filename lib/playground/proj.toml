@@ -1,0 +1,10 @@
+
+name = "playground"
+srcs = []
+deps = [
+  { local = "../std/proj.toml" },
+]
+bins = [
+    "main.zydeco",
+]
+std = "nostd"

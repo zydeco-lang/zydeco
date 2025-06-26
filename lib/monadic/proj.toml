@@ -1,4 +1,4 @@
-name = "Monadic"
+name = "monadic"
 
 srcs = []
 deps = [

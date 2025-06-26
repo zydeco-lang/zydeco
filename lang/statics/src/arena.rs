@@ -1,3 +1,7 @@
+//! The statics arena for the Zydeco type checker.
+//!
+//! See [`StaticsArena`] for documentations of each field.
+
 use crate::surface_syntax as su;
 use crate::syntax::*;
 use zydeco_utils::arena::*;
@@ -18,17 +22,24 @@ pub trait ArenaStatics {
 
 #[derive(Debug)]
 pub struct StaticsArena {
-    // arenas
+    /// kind arena
     pub kinds: ArenaSparse<KindId, Fillable<Kind>>,
+    /// type pattern arena
     pub tpats: ArenaSparse<TPatId, TypePattern>,
+    /// type arena
     pub types: ArenaSparse<TypeId, Fillable<Type>>,
+    /// value pattern arena
     pub vpats: ArenaSparse<VPatId, ValuePattern>,
+    /// value arena
     pub values: ArenaSparse<ValueId, Value>,
+    /// computation arena
     pub compus: ArenaSparse<CompuId, Computation>,
+    /// declaration arena
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
-    // untyped to typed bijective maps
+    /// untyped to typed bijective maps for patterns
     pub pats: ArenaBijective<su::PatId, PatId>,
+    /// untyped to typed bijective maps for terms
     pub terms: ArenaBijective<su::TermId, TermId>,
 
     /// arena for abstract types

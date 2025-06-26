@@ -1,3 +1,5 @@
+//! Environments used by the Zydeco type checker.
+
 use crate::{syntax::*, *};
 use derive_more::{Deref, DerefMut, From, Into};
 use std::ops::{Add, AddAssign, Deref, DerefMut, Index};

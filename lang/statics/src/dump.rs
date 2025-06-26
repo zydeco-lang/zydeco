@@ -1,3 +1,5 @@
+//! Dump scoped or statics entities in the type checker.
+
 use crate::*;
 
 mod scoped {

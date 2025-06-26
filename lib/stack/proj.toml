@@ -1,4 +1,4 @@
-name = "Stack"
+name = "stack"
 
 srcs = []
 deps = [{ local = "../std/proj.toml" }]

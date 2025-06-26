@@ -1,4 +1,4 @@
-name = "Avl"
+name = "avl"
 
 srcs = [
     "lib.zy",

@@ -1,3 +1,5 @@
+//! Methods on entities in [`StaticsArena`].
+
 use crate::{syntax::*, *};
 
 impl KindId {

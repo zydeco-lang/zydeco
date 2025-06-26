@@ -1,10 +1,9 @@
-name = "Delimcc"
+name = "delimcc"
 
 srcs = [
     "lib.zy",
 ]
 deps = [
-    # { local = "../std/core.toml" },
     { local = "../std/proj.toml" },
 ]
 bins = [

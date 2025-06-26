@@ -195,7 +195,7 @@ impl AddAssign for TopLevel {
 /// being captured by user name accidentally.
 ///
 /// To add a new primitive term, add a field here and follow instructions at
-/// [`crate::scoped::syntax::PrimDef`]
+/// [`crate::scoped::syntax::PrimDefs`]
 #[derive(Clone, Default, derive_more::AddAssign)]
 pub struct PrimTerms {
     /// VType kind

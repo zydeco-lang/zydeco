@@ -1,4 +1,4 @@
-name = "BatchTests"
+name = "batch-tests"
 
 srcs = []
 deps = [{ local = "../std/proj.toml" }]
