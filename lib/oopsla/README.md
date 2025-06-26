@@ -509,11 +509,13 @@ We've seen how we can write new Zydeco programs and run them as a Zydeco languag
 #### The Common Design of Phases
 
 There are 6 phases in the current implementation of Zydeco: [parsing](../../lang/surface/src/textual), [desugaring](../../lang/surface/src/bitter), [name-resolution](../../lang/surface/src/scoped), [type-checking](../../lang/statics/src), [linking](../../lang/dynamics/src), and [evaluation](../../lang/dynamics/src). They spread across 3 crates: `zydeco-surface`, `zydeco-statics`, and `zydeco-dynamics`. All phases follow the same design pattern:
+
 + `mod syntax` defines new pieces of syntax needed for the calculus defined in the phase.
 + `mod arena` defines the arena for the phase, if the phase uses an arena to store the intermediate results and use identifiers to refer to them.
 + `mod err` defines the error messages.
 + `mod fmt` defines the formatters for the calculus used in the phase.
 + `mod span` defines the span information for the phase, used for tracking where the error occurs in the Zydeco source code fed by the user.
+
 All other modules in the phase are used to implement the elaboration from a previous phase to the current phase.
 
 
