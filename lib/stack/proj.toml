@@ -7,4 +7,5 @@ bins = [
   "invert.zydeco",
   "backtrace.zydeco",
   "cbv.zydeco",
+  "merge.zydeco",
 ]

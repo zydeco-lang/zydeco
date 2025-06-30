@@ -1,0 +1,15 @@
+def fix merge (a: List Int) (b: List Int) : Ret (List Int) =
+  match a
+  | +Nil () -> ret b
+  | +Cons (a_head, a_tail) ->
+    match b
+    | +Nil () -> ret a
+    | +Cons (b_head, b_tail) ->
+      ! if~ (Ret (List Int)) { ! int_le a_head b_head }
+      { do res <- ! merge a_tail b ; ret +Cons (a_head, res) }
+      { do res <- ! merge a b_tail ; ret +Cons (b_head, res) }
+    end
+  end
+end
+
+main ! exit 0 end
