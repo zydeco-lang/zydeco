@@ -1,12 +1,15 @@
 name = "monadic"
 
-srcs = []
+srcs = [
+    "molib.zydeco",
+]
 deps = [
     { local = "../std/core.toml" }
 ]
 bins = [
     "exnt.zy",
     "exnkt.zy",
+    "mobin.zydeco",
 ]
 
 std = "nostd"

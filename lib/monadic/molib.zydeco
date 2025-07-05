@@ -1,0 +1,178 @@
+def ! mo-ret : Monad Ret =
+  comatch
+  | .return A a -> ret a
+  | .bind A A' m f ->
+    do a <- ! m;
+    ! f a
+  end
+end
+
+--| Exception Monad
+alias Exn (E: VType) (A: VType) : CType =
+  Ret (Either E A)
+end
+
+--| Monad impl. for `Exn`
+def ! mo-exn (E: VType) : Monad (Exn E) =
+  comatch
+  | .return A a ->
+    ret +Right(a)
+  | .bind A A' m f ->
+    do a? <- ! m;
+    match a?
+    | +Left(e) -> ret +Left(e)
+    | +Right(a) -> ! f a
+    end
+  end
+end
+
+--| The interface for raising exception.
+alias MonadError (E: VType) (M: VType -> CType) : CType =
+  codata
+  | .raise : forall (A: VType) . E -> M A
+  end
+end
+
+alias MonadError' (E: VType) (M: VType -> CType) : CType =
+  codata
+  | .raise : forall (A: VType) . Thk Top -> E -> M A
+  end
+end
+
+def ! derive-error (E: VType) (M: VType -> CType)
+  (error: Thk (MonadError' E M))
+: MonadError E M =
+  comatch
+  | .raise A -> ! error .raise A triv
+  end
+end
+
+--| `MonadError` impl. for `Exn`
+def ! error-exn (E: VType) : MonadError E (Exn E) =
+  comatch
+  | .raise A e -> ret +Left(e)
+  end
+end
+
+--| Change `Ret` in `Exn` to `M`
+alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
+  M (Either E A)
+end
+
+--| Automatically generated implementation of the monad transformer for `ExnT`
+--|
+--| Note that the generation for all relative monads to their transformers is
+--| done mechanically, and the same piece of stub code demonstrated here can
+--| be used for all relative monads.
+def ! mt-exn (E: VType) : MonadTrans (ExnT E) =
+  let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
+    monadic fn (E: VType) ->
+      let mo-exn = mo-exn in
+      comatch
+      | .monad -> ! mo-exn E
+      | .lift A m ->
+        do a <- ! m; ! mo-exn E .return A a
+      end
+    :
+      forall (E: VType) . MonadTransInner (Exn E)
+    end M mo E triv
+  in
+  ! detriv-mt (ExnT E) mt'
+end
+
+--| `MonadError` impl. for `ExnT`
+def ! error-exnt (E: VType) (M: VType -> CType) (mo: Thk (Monad M)) : MonadError E (ExnT E M) =
+  ! derive-error E (ExnT E M) {
+    monadic fn (E: VType) ->
+      ! error-exn E
+    end M mo E triv
+  }
+end
+
+
+--| State Monad
+alias Store (S: VType) (A: VType) : CType =
+  S -> Ret (A * S)
+end
+
+--| Monad impl. for `Store`
+def ! mo-store (S: VType) : Monad (Store S) =
+  comatch
+  | .return A a s -> ret (a, s)
+  | .bind A A' m f s ->
+    do (a, s) <- ! m s;
+    ! f a s
+  end
+end
+
+--| The interface for state operations.
+alias MonadState (S: VType) (M: VType -> CType) : CType =
+  codata
+  | .get : M S
+  | .put : S -> M Unit
+  end
+end
+
+def ! state-store (S: VType) : MonadState S (Store S) =
+  comatch
+  | .get s -> ret (s, s)
+  | .put s _ -> ret ((()), s)
+  end
+end
+
+alias StoreT (S: VType) (M: VType -> CType) (A: VType) : CType =
+  S -> M (A * S)
+end
+
+def ! mt-store (S: VType) : MonadTrans (StoreT S) =
+  let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
+    monadic fn (S: VType) ->
+      let mo-store = mo-store in
+      comatch
+      | .monad -> ! mo-store S
+      | .lift A m ->
+        do a <- ! m; ! mo-store S .return A a
+      end
+    :
+      forall (S: VType) . MonadTransInner (Store S)
+    end M mo S triv
+  in
+  ! detriv-mt (StoreT S) mt'
+end
+
+--| `MonadState` impl. for `StoreT`
+def ! state-storet (S: VType) (M: VType -> CType) (mo: Thk (Monad M)) : MonadState S (StoreT S M) =
+  monadic fn (S: VType) ->
+    ! state-store S
+  end M mo S triv
+end
+
+--| `MonadState` impl. for `ExnT` if implemented internally
+def ! state-exnt (E: VType) (S: VType)
+  (M: VType -> CType) (mo: Thk (Monad M))
+  (state: Thk (MonadState S M))
+: MonadState S (ExnT E M) =
+  comatch
+  | .get -> ! mt-exn E M mo .lift S { ! state .get }
+  | .put s -> ! mt-exn E M mo .lift Unit { ! state .put s }
+  end
+end
+
+
+--| Example: combine effects of exception and store
+alias ExnStore (E: VType) (S: VType) : VType -> CType =
+  ExnT E (StoreT S Ret)
+end
+
+def ! mo-exn-store (E: VType) (S: VType) : Monad (ExnStore E S) =
+  ! mt-exn E (StoreT S Ret) { ! mt-store S Ret mo-ret .monad } .monad
+end
+
+def ! error-exn-store (E: VType) (S: VType) : MonadError E (ExnStore E S) =
+  ! error-exnt E (StoreT S Ret) { ! mt-store S Ret mo-ret .monad }
+end
+
+def ! state-exn-store (E: VType) (S: VType) : MonadState S (ExnStore E S) =
+  ! state-exnt E S (StoreT S Ret) { ! mt-store S Ret mo-ret .monad }
+  { ! state-storet S Ret mo-ret }
+end
