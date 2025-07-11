@@ -5,35 +5,12 @@
 --|
 --| Check `exnkt.zydeco` for the implementation of `ExnK`, which is the church encoded version of `Exn`.
 
-alias Exn (E: VType) (A: VType) : CType =
-  Ret (Either E A)
-end
-
---| Change `Ret` in `Exn` to `M`
-alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
-  M (Either E A)
-end
-
---| Monad implementation for `Exn`
-def ! mo-exn (E: VType) : Monad (Exn E) =
-  comatch
-  | .return A a ->
-    ret +Right(a)
-  | .bind A A' m f ->
-    do a? <- ! m;
-    match a?
-    | +Left(e) -> ret +Left(e)
-    | +Right(a) -> ! f a
-    end
-  end
-end
-
 --| Automatically generated implementation of the monad transformer for `ExnT`
 --|
 --| Note that the generation for all relative monads to their transformers is
 --| done mechanically, and the same piece of stub code demonstrated here can
 --| be used for all relative monads.
-def ! mt-exn (E: VType) : MonadTrans (ExnT E) =
+def ! mt-exn-derived (E: VType) : MonadTrans (ExnT E) =
   let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
     -- The @[debug(...)] macro can be used to print the terms and their types
     -- during compilation.

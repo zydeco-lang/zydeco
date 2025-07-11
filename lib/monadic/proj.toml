@@ -1,7 +1,7 @@
 name = "monadic"
 
 srcs = [
-    "molib.zydeco",
+    "molib.zy",
 ]
 deps = [
     { local = "../std/core.toml" }
@@ -9,7 +9,7 @@ deps = [
 bins = [
     "exnt.zy",
     "exnkt.zy",
-    "mobin.zydeco",
+    "mobin.zy",
 ]
 
 std = "nostd"

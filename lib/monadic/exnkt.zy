@@ -25,7 +25,7 @@ def ! mo-exnk (E: VType) : Monad (ExnK E) =
 end
 
 --| Automatically generated implementation of the monad transformer for `ExnKT`
-def ! mt-exnk (E: VType) : MonadTrans (ExnKT E) =
+def ! mt-exnk-derived (E: VType) : MonadTrans (ExnKT E) =
   let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
     @[debug("generated and applied")]
     monadic fn (E: VType) ->
