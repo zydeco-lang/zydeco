@@ -7,6 +7,8 @@ members = [
     "lang/surface",
     "lang/statics",
     "lang/dynamics",
+    "lang/sps",
+    "lang/x86",
     "lang/driver",
     "lang/tests",
     "cli",

@@ -22,4 +22,3 @@ pub(crate) use syntax as ds;
 // Reference: https://jedsek.xyz/posts/rust-typed-magic/gats/#family-trait
 
 pub mod cps;
-pub mod sps;
