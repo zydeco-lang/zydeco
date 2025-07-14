@@ -6,8 +6,7 @@ use zydeco_utils::arena::ArenaAccess;
 
 /* -------------------------------- Formatter ------------------------------- */
 
-pub use zydeco_syntax::Ugly;
-pub use zydeco_syntax::fmt::Pretty;
+pub use zydeco_syntax::{Pretty, Ugly};
 pub struct Formatter<'arena> {
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,
