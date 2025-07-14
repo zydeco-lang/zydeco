@@ -15,10 +15,10 @@ pub struct Linker {
 }
 
 impl Link for ss::DeclId {
-    type Arena<'a> = (&'a mut ScopedArena, &'a StaticsArena);
+    type Arena<'a> = &'a StaticsArena;
     type Out = Option<Declaration>;
 
-    fn link(&self, (scoped, statics): Self::Arena<'_>) -> Self::Out {
+    fn link(&self, statics: Self::Arena<'_>) -> Self::Out {
         let decl = statics.decls[self].clone();
         use ss::Declaration as Decl;
         let decl = match decl {
@@ -27,16 +27,14 @@ impl Link for ss::DeclId {
             | Decl::VAliasBody(decl) => {
                 let ss::VAliasBody { binder, bindee } = decl;
                 let binder = binder.link(statics);
-                let bindee = bindee.link((scoped, statics));
+                let bindee = bindee.link(statics);
                 VAliasBody { binder, bindee }.into()
             }
             | Decl::Exec(decl) => {
                 let ss::Exec(body) = decl;
-                let zvar = scoped.defs.alloc(VarName("z".to_owned()));
-                let stack = Rc::new(zvar.into());
-                let body = body.link((stack, scoped, statics));
-                let stack = Rc::new(zvar.into());
-                Exec { stack, body }.into()
+                let stack = Rc::new(Current.into());
+                let body = body.link((stack, statics));
+                Exec { body }.into()
             }
         };
         Some(decl)
@@ -76,10 +74,10 @@ impl Link for ss::VPatId {
 }
 
 impl Link for ss::ValueId {
-    type Arena<'a> = (&'a mut ScopedArena, &'a StaticsArena);
+    type Arena<'a> = &'a StaticsArena;
     type Out = RcValue;
 
-    fn link(&self, (scoped, statics): Self::Arena<'_>) -> Self::Out {
+    fn link(&self, statics: Self::Arena<'_>) -> Self::Out {
         let value = statics.values[self].clone();
         use ss::Value;
         let value = match value {
@@ -87,27 +85,25 @@ impl Link for ss::ValueId {
             | Value::Var(def) => def.into(),
             | Value::Thunk(value) => {
                 let Thunk(compu) = value;
-                let zvar = scoped.defs.alloc(VarName("z".to_owned()));
-                let stack = Rc::new(zvar.into());
-                let body = compu.link((stack, scoped, statics));
-                let stack = Rc::new(zvar.into());
-                Proc { stack, body }.into()
+                let stack = Rc::new(Current.into());
+                let body = compu.link((stack, statics));
+                Thunk(body).into()
             }
             | Value::Ctor(value) => {
                 let Ctor(ctor, arg) = value;
-                let arg = arg.link((scoped, statics));
+                let arg = arg.link(statics);
                 Ctor(ctor, arg).into()
             }
             | Value::Triv(Triv) => Triv.into(),
             | Value::VCons(value) => {
                 let Cons(head, tail) = value;
-                let head = head.link((scoped, statics));
-                let tail = tail.link((scoped, statics));
+                let head = head.link(statics);
+                let tail = tail.link(statics);
                 Cons(head, tail).into()
             }
             | Value::TCons(value) => {
                 let Cons(_, tail) = value;
-                let tail = tail.link((scoped, statics));
+                let tail = tail.link(statics);
                 return tail;
             }
             | Value::Lit(literal) => literal.into(),
@@ -117,10 +113,10 @@ impl Link for ss::ValueId {
 }
 
 impl Link for ss::CompuId {
-    type Arena<'a> = (RcStack, &'a mut ScopedArena, &'a StaticsArena);
+    type Arena<'a> = (RcStack, &'a StaticsArena);
     type Out = RcCompu;
 
-    fn link(&self, (stack, scoped, statics): Self::Arena<'_>) -> Self::Out {
+    fn link(&self, (stack, statics): Self::Arena<'_>) -> Self::Out {
         let compu = statics.compus[self].clone();
         use ss::Computation as Compu;
         let compu = match compu {
@@ -129,60 +125,58 @@ impl Link for ss::CompuId {
                 let Abs(binder, body) = compu;
                 let binder = binder.link(statics);
                 let bindee = stack;
-                let zvar = scoped.defs.alloc(VarName("z".to_owned()));
-                let stack = Rc::new(zvar.into());
-                let body = body.link((stack, scoped, statics));
-                let stack = Rc::new(zvar.into());
-                LetAbs { binder, stack, bindee, body }.into()
+                let stack = Rc::new(Current.into());
+                let body = body.link((stack, statics));
+                LetAbs { binder, bindee, body }.into()
             }
             | Compu::VApp(compu) => {
                 let App(body, arg) = compu;
-                let arg = arg.link((scoped, statics));
+                let arg = arg.link(statics);
                 let stack = Rc::new(Stack::Arg(arg, stack));
-                return body.link((stack, scoped, statics));
+                return body.link((stack, statics));
             }
             | Compu::TAbs(compu) => {
                 let Abs(_, body) = compu;
-                return body.link((stack, scoped, statics));
+                return body.link((stack, statics));
             }
             | Compu::TApp(compu) => {
                 let App(body, _) = compu;
-                return body.link((stack, scoped, statics));
+                return body.link((stack, statics));
             }
             | Compu::Fix(_compu) => todo!(),
             | Compu::Force(compu) => {
                 let Force(body) = compu;
-                let thunk = body.link((scoped, statics));
+                let thunk = body.link(statics);
                 Call { thunk, stack }.into()
             }
             | Compu::Ret(compu) => {
                 let Return(value) = compu;
-                let value = value.link((scoped, statics));
+                let value = value.link(statics);
                 ReturnKont { stack, value }.into()
             }
             | Compu::Do(compu) => {
                 let Bind { binder, bindee, tail } = compu;
                 let binder = binder.link(statics);
-                let body = tail.link((stack, scoped, statics));
+                let body = tail.link((stack, statics));
                 let stack = Rc::new(Kont { binder, body }.into());
-                return bindee.link((stack, scoped, statics));
+                return bindee.link((stack, statics));
             }
             | Compu::Let(compu) => {
                 let Let { binder, bindee, tail } = compu;
                 let binder = binder.link(statics);
-                let body = tail.link((stack, scoped, statics));
+                let body = tail.link((stack, statics));
                 let stack = Rc::new(Kont { binder, body }.into());
-                let value = bindee.link((scoped, statics));
+                let value = bindee.link(statics);
                 ReturnKont { stack, value }.into()
             }
             | Compu::Match(compu) => {
                 let Match { scrut, arms } = compu;
-                let scrut = scrut.link((scoped, statics));
+                let scrut = scrut.link(statics);
                 let arms = arms
                     .iter()
                     .map(|Matcher { binder, tail }| {
                         let binder = binder.link(statics);
-                        let tail = tail.link((stack.clone(), scoped, statics));
+                        let tail = tail.link((stack.clone(), statics));
                         Matcher { binder, tail }
                     })
                     .collect();
