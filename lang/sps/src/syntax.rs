@@ -1,9 +1,9 @@
-pub use zydeco_syntax::*;
-
 use crate::statics_syntax::{self as ss, Env};
 use derive_more::From;
 use std::rc::Rc;
-use zydeco_utils::{arena::*};
+use zydeco_utils::arena::*;
+
+pub use zydeco_syntax::*;
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -13,6 +13,10 @@ pub type RcValue = Rc<Value>;
 pub type RcStack = Rc<Stack>;
 pub type RcCompu = Rc<Computation>;
 pub type DeclId = ss::DeclId;
+
+new_key_type! {
+    pub struct BlockId;
+}
 
 /* ---------------------------------- Value --------------------------------- */
 
@@ -34,7 +38,6 @@ pub enum Value {
     Triv(Triv),
     VCons(Cons<RcValue, RcValue>),
     Lit(Literal),
-    SemValue(SemValue),
 }
 
 /* ---------------------------------- Stack --------------------------------- */
@@ -88,6 +91,10 @@ pub enum Computation {
     Match(Match<RcValue, RcVPat, RcCompu>),
     CoMatch(CoMatch<RcCompu>),
     Dtor(Dtor<RcCompu>),
+}
+
+pub struct Block {
+    pub body: Computation,
 }
 
 /* ------------------------------- Declaration ------------------------------ */

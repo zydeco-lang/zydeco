@@ -1,4 +1,4 @@
-use crate::textual::syntax::*;
+use super::syntax::*;
 
 pub use zydeco_syntax::Ugly;
 pub struct Formatter<'arena> {
