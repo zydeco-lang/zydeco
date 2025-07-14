@@ -10,7 +10,6 @@ use zydeco_utils::{arena::*};
 pub type DefId = ss::DefId;
 pub type RcVPat = Rc<ValuePattern>;
 pub type RcValue = Rc<Value>;
-pub type RcSPat = Rc<StackPattern>;
 pub type RcStack = Rc<Stack>;
 pub type RcCompu = Rc<Computation>;
 pub type DeclId = ss::DeclId;
@@ -26,17 +25,11 @@ pub enum ValuePattern {
     VCons(Cons<RcVPat, RcVPat>),
 }
 
-#[derive(Clone, Debug)]
-pub struct Proc {
-    pub stack: RcSPat,
-    pub body: RcCompu,
-}
-
 #[derive(From, Clone, Debug)]
 pub enum Value {
     Hole(Hole),
     Var(DefId),
-    Proc(Proc),
+    Proc(Thunk<RcCompu>),
     Ctor(Ctor<RcValue>),
     Triv(Triv),
     VCons(Cons<RcValue, RcValue>),
@@ -47,9 +40,7 @@ pub enum Value {
 /* ---------------------------------- Stack --------------------------------- */
 
 #[derive(From, Clone, Debug)]
-pub enum StackPattern {
-    Var(DefId),
-}
+pub struct Current;
 
 #[derive(From, Clone, Debug)]
 pub struct Kont {
@@ -59,8 +50,8 @@ pub struct Kont {
 
 #[derive(From, Clone, Debug)]
 pub enum Stack {
-    Var(DefId),
     Kont(Kont),
+    Var(Current),
     Arg(RcValue, RcStack),
     Tag(DtorName, RcStack),
 }
@@ -70,7 +61,6 @@ pub enum Stack {
 #[derive(From, Clone, Debug)]
 pub struct LetAbs {
     pub binder: RcVPat,
-    pub stack: RcSPat,
     pub bindee: RcStack,
     pub body: RcCompu,
 }
@@ -91,7 +81,7 @@ pub struct ReturnKont {
 pub enum Computation {
     Hole(Hole),
     VAbs(LetAbs),
-    Fix(Fix<(RcVPat, RcSPat), RcCompu>),
+    Fix(Fix<RcVPat, RcCompu>),
     Call(Call),
     Ret(ReturnKont),
     Let(Let<RcVPat, RcValue, RcCompu>),
@@ -110,7 +100,6 @@ pub struct VAliasBody {
 
 #[derive(Clone, Debug)]
 pub struct Exec {
-    pub stack: RcSPat,
     pub body: RcCompu,
 }
 
@@ -133,7 +122,6 @@ pub struct DynamicsArena {
 #[derive(Clone, Debug)]
 pub struct SemProc {
     pub env: Env<SemValue>,
-    pub stack: RcSPat,
     pub body: RcCompu,
 }
 
@@ -149,6 +137,5 @@ pub enum SemValue {
 #[derive(From, Clone, Debug)]
 pub struct SemKont {
     pub env: Env<SemValue>,
-    pub stack: RcSPat,
     pub body: RcCompu,
 }
