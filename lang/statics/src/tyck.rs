@@ -13,7 +13,9 @@ pub struct Tycker {
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
     /// call stack for debugging tycker and error tracking
-    pub stack: im::Vector<TyckTask>,
+    pub tasks: im::Vector<TyckTask>,
+    /// meta stack
+    pub metas: im::Vector<su::Meta>,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
 }
@@ -33,7 +35,8 @@ impl Tycker {
             prim,
             scoped,
             statics: StaticsArena::new_arc(alloc),
-            stack: im::Vector::new(),
+            tasks: im::Vector::new(),
+            metas: im::Vector::new(),
             errors: Vec::new(),
         }
     }
@@ -57,7 +60,7 @@ impl Tycker {
                     | Err(()) => {
                         // mark all decls in the group and those that depend on them unreachable
                         scc.obliviate(group);
-                        self.stack.clear();
+                        self.tasks.clear();
                     }
                 }
             }
@@ -142,9 +145,9 @@ mod impl_tycker {
         /// do all administrative work before and after calling the function.
         #[inline]
         pub(crate) fn guarded<R>(&mut self, with: impl FnOnce(&mut Self) -> R) -> R {
-            let stack = self.stack.clone();
+            let stack = self.tasks.clone();
             let res = with(self);
-            self.stack = stack;
+            self.tasks = stack;
             res
         }
         /// Throw a pure error.
@@ -152,7 +155,7 @@ mod impl_tycker {
         pub(crate) fn err<T>(
             &self, error: TyckError, blame: &'static std::panic::Location<'static>,
         ) -> Result<T> {
-            let stack = self.stack.clone();
+            let stack = self.tasks.clone();
             Err(Box::new(TyckErrorEntry { error, blame, stack }))
         }
         /// Push an error entry into the error list.
@@ -166,7 +169,7 @@ mod impl_tycker {
         pub(crate) fn err_k<T>(
             &mut self, error: TyckError, blame: &'static std::panic::Location<'static>,
         ) -> ResultKont<T> {
-            let stack = self.stack.clone();
+            let stack = self.tasks.clone();
             self.push_err_entry_k(TyckErrorEntry { error, blame, stack })
         }
         /// Convert a pure result into a continuation result.
@@ -242,8 +245,12 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                 match tycker.scoped.decls[id].clone() {
                     | Decl::Meta(decl) => {
                         let su::MetaT(meta, decl) = decl;
-                        let _ = meta;
-                        env.mk(SccDeclarations(&[decl].into_iter().collect())).tyck_k(tycker, ())
+                        tycker.metas.push_back(meta);
+                        let res = env
+                            .mk(SccDeclarations(&[decl].into_iter().collect()))
+                            .tyck_k(tycker, ());
+                        tycker.metas.pop_back();
+                        res
                     }
                     | Decl::AliasBody(_) => {
                         let uni = tycker.scoped.unis.get(id).is_some();
@@ -256,7 +263,7 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                     | Decl::AliasHead(decl) => {
                         tycker.guarded(|tycker| {
                             // administrative
-                            tycker.stack.push_back(TyckTask::DeclHead(id.to_owned()));
+                            tycker.tasks.push_back(TyckTask::DeclHead(id.to_owned()));
                             env = tycker.register_prim_decl(decl, id, env)?;
                             Ok(env)
                         })
@@ -265,7 +272,7 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                     | Decl::Exec(decl) => {
                         tycker.guarded(|tycker| {
                             // administrative
-                            tycker.stack.push_back(TyckTask::Exec(id.to_owned()));
+                            tycker.tasks.push_back(TyckTask::Exec(id.to_owned()));
                             let su::Exec(term) = decl;
                             let os = ss::OSTy.build(tycker, &env.env);
                             let out_ann = env.mk(term).tyck_k(tycker, Action::ana(os.into()))?;
@@ -288,7 +295,7 @@ impl Tyck for TyEnvT<su::DeclId> {
     fn tyck_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
-            tycker.stack.push_back(TyckTask::DeclUni(self.inner.to_owned()));
+            tycker.tasks.push_back(TyckTask::DeclUni(self.inner.to_owned()));
             self.tyck_inner_k(tycker, action)
         })
     }
@@ -395,7 +402,7 @@ impl SccDeclarations<'_> {
 
         tycker.guarded(|tycker| {
             // administrative
-            tycker.stack.push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
+            tycker.tasks.push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
 
             use std::collections::HashMap;
 
@@ -481,7 +488,7 @@ impl Tyck for TyEnvT<su::PatId> {
     ) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
-            tycker.stack.push_back(TyckTask::Pat(self.inner, switch));
+            tycker.tasks.push_back(TyckTask::Pat(self.inner, switch));
             self.tyck_inner_k(tycker, Action { switch })
         })
     }
@@ -718,7 +725,7 @@ impl Tyck for TyEnvT<su::TermId> {
     ) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
-            tycker.stack.push_back(TyckTask::Term(self.inner, switch));
+            tycker.tasks.push_back(TyckTask::Term(self.inner, switch));
             self.tyck_inner_k(tycker, Action { switch })
         })
     }
