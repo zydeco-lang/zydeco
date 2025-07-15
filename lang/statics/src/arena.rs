@@ -4,9 +4,12 @@
 
 use crate::surface_syntax as su;
 use crate::syntax::*;
-use zydeco_utils::arena::*;
+
+pub use zydeco_surface::arena::*;
 
 /* ---------------------------------- Arena --------------------------------- */
+
+pub use zydeco_surface::scoped::arena::*;
 
 /// Item projectors out of the statics arena.
 #[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]

@@ -35,6 +35,7 @@ zydeco-syntax = { path = "lang/syntax" }
 zydeco-surface = { path = "lang/surface" }
 zydeco-statics = { path = "lang/statics" }
 zydeco-dynamics = { path = "lang/dynamics" }
+zydeco-x86 = { path = "lang/x86" }
 zydeco-driver = { path = "lang/driver" }
 # meta
 syn = "2.0"

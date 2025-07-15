@@ -3232,6 +3232,7 @@ dependencies = [
  "zydeco-surface",
  "zydeco-syntax",
  "zydeco-utils",
+ "zydeco-x86",
 ]
 
 [[package]]

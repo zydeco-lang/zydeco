@@ -43,4 +43,21 @@ pub enum Commands {
     //     #[arg(short, long, default_value_t = false)]
     //     verbose: bool,
     // },
+    Build {
+        /// Path to the file to compile
+        #[arg(value_name = "FILE")]
+        files: Vec<PathBuf>,
+        /// Name of the binary
+        #[arg(long)]
+        bin: Option<String>,
+        /// Target architecture
+        #[arg(short, long, default_value = "x86")]
+        target: String,
+        /// Dry run (don't execute)
+        #[arg(long, default_value_t = false)]
+        dry: bool,
+        /// Level of verbosity
+        #[arg(short, long, default_value_t = false)]
+        verbose: bool,
+    },
 }

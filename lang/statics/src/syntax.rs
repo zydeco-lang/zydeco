@@ -5,7 +5,6 @@ pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use crate::surface_syntax as su;
 use derive_more::From;
-use zydeco_utils::new_key_type;
 
 /* ------------------------------- Identifier ------------------------------- */
 

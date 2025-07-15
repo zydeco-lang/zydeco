@@ -20,6 +20,10 @@ pub mod interp {
     pub mod err;
 }
 
+pub mod x86 {
+    pub mod pack;
+}
+
 pub mod prelude {
     pub use zydeco_dynamics::syntax as d;
     pub use zydeco_statics::syntax as ss;
@@ -30,13 +34,12 @@ pub mod prelude {
 
 pub use conf::Conf;
 pub use err::{BuildError, Result};
-use interp::pack::PackageRuntime;
 pub use local::pack::LocalPackage;
 pub use package::{Dependency, Package};
 pub use zydeco_dynamics::ProgKont;
 pub use zydeco_utils::arena::ArcGlobalAlloc;
 
-use crate::check::pack::PackageStew;
+use crate::check::pack::{PackageChecked, PackageStew};
 use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::{
@@ -151,49 +154,28 @@ impl BuildSystem {
             }
         }
     }
-    pub fn run_pack(&self, pack: PackId, dry: bool, verbose: bool) -> Result<ProgKont> {
-        let runtime = self.interp_pack(pack, verbose)?;
+    pub fn run_pack(&self, pack: PackId, args: &[String], dry: bool, verbose: bool) -> Result<ProgKont> {
+        let checked = self.__tyck_pack(pack, verbose)?;
+        let name = self.packages[&pack].name();
+        let runtime = Package::link_interp(name.as_str(), checked)?;
         if dry {
             return Ok(ProgKont::Dry);
         }
-        Ok(Package::run_interp(runtime))
+        Ok(Package::run_interp(runtime, args))
     }
     pub fn test_pack(&self, pack: PackId, dry: bool) -> Result<()> {
         let name = self.packages[&pack].name();
-        let runtime = self.interp_pack(pack, false)?;
+        let checked = self.__tyck_pack(pack, false)?;
+        let runtime = Package::link_interp(name.as_str(), checked)?;
         if dry {
             return Ok(());
         }
         Package::test_interp(runtime, name.as_str(), false)
     }
-    pub fn interp_pack(&self, pack: PackId, _verbose: bool) -> Result<PackageRuntime> {
-        let alloc = ArcGlobalAlloc::new();
-        let mut scc = Kosaraju::new(&self.depends_on).run();
-        scc.keep_only([pack]);
-        let mut stew = None;
-        loop {
-            let active = scc.top();
-            if active.is_empty() {
-                break;
-            }
-            for group in active {
-                for pack in group {
-                    log::info!("Interpreting {} [{:?}]", self.packages[&pack].name(), pack);
-                    let stew_ = self.packages[&pack].parse_package(alloc.clone())?;
-                    if let Some(s) = stew {
-                        stew = Some(s + stew_);
-                    } else {
-                        stew = Some(stew_);
-                    }
-                    scc.release([pack]);
-                }
-            }
-        }
-        let name = self.packages[&pack].name();
-        let stew = stew.unwrap_or_else(|| PackageStew::new(alloc.clone()));
-        let checked = Package::check_package(alloc.clone(), name.as_str(), stew)?;
-        let runtime = Package::link_interp(name.as_str(), checked)?;
-        Ok(runtime)
+    pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
+        // let name = self.packages[&pack].name();
+        let checked = self.__tyck_pack(pack, false)?;
+        Ok(zydeco_x86::run(checked.scoped, checked.statics))
     }
 }
 
@@ -236,5 +218,34 @@ impl BuildSystem {
             .collect::<Result<Vec<_>>>()?;
         self.depends_on.add(id, deps_new.iter().cloned().chain(deps_old));
         Ok(deps_new)
+    }
+    /// type check a package
+    fn __tyck_pack(&self, pack: PackId, _verbose: bool) -> Result<PackageChecked> {
+        let alloc = ArcGlobalAlloc::new();
+        let mut scc = Kosaraju::new(&self.depends_on).run();
+        scc.keep_only([pack]);
+        let mut stew = None;
+        loop {
+            let active = scc.top();
+            if active.is_empty() {
+                break;
+            }
+            for group in active {
+                for pack in group {
+                    log::info!("Checking {}{}", self.packages[&pack].name(), pack.concise());
+                    let stew_ = self.packages[&pack].parse_package(alloc.clone())?;
+                    if let Some(s) = stew {
+                        stew = Some(s + stew_);
+                    } else {
+                        stew = Some(stew_);
+                    }
+                    scc.release([pack]);
+                }
+            }
+        }
+        let name = self.packages[&pack].name();
+        let stew = stew.unwrap_or_else(|| PackageStew::new(alloc.clone()));
+        let checked = Package::check_package(alloc.clone(), name.as_str(), stew)?;
+        Ok(checked)
     }
 }

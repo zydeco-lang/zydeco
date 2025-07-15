@@ -126,8 +126,8 @@ impl Package {
         let dynamics = pack.dynamics(name)?;
         Ok(PackageRuntime { dynamics })
     }
-    pub fn run_interp(runtime: PackageRuntime) -> ProgKont {
-        runtime.run()
+    pub fn run_interp(runtime: PackageRuntime, args: &[String]) -> ProgKont {
+        runtime.run_with_args(args)
     }
     pub fn test_interp(runtime: PackageRuntime, name: &str, aloud: bool) -> Result<()> {
         let () = runtime.test(name, aloud)?;
