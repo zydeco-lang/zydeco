@@ -23,7 +23,7 @@ impl Lub for KindId {
     fn lub(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
-            tycker.stack.push_back(TyckTask::Lub(self.into(), other.into()));
+            tycker.tasks.push_back(TyckTask::Lub(self.into(), other.into()));
             self.lub_inner(other, tycker)
         })
     }
@@ -122,7 +122,7 @@ impl Debruijn {
     fn lub(self, lhs_id: TypeId, rhs_id: TypeId, tycker: &mut Tycker) -> Result<TypeId> {
         tycker.guarded(|tycker| {
             // administrative
-            tycker.stack.push_back(TyckTask::Lub(lhs_id.into(), rhs_id.into()));
+            tycker.tasks.push_back(TyckTask::Lub(lhs_id.into(), rhs_id.into()));
             self.lub_inner(lhs_id, rhs_id, tycker)
         })
     }

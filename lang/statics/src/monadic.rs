@@ -52,7 +52,7 @@ mod syntax_impl {
                 let (env, ty) = ty.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.stack.push_back(TyckTask::SignatureGen(ty.into()));
+                tycker.tasks.push_back(TyckTask::SignatureGen(ty.into()));
                 signature_translation(tycker, env, ty)
             })
         }
@@ -69,7 +69,7 @@ mod syntax_impl {
                 let (env, ty) = ty.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.stack.push_back(TyckTask::StructureGen(ty.into()));
+                tycker.tasks.push_back(TyckTask::StructureGen(ty.into()));
                 structure_translation(tycker, env, ty)
             })
         }
@@ -86,7 +86,7 @@ mod syntax_impl {
                 let (env, ty) = ty.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.stack.push_back(TyckTask::MonadicLiftPat(ty.into()));
+                tycker.tasks.push_back(TyckTask::MonadicLiftPat(ty.into()));
                 type_pattern_translation(tycker, env, ty)
             })
         }
@@ -103,7 +103,7 @@ mod syntax_impl {
                 let (env, ty) = ty.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.stack.push_back(TyckTask::MonadicLiftTerm(ty.into()));
+                tycker.tasks.push_back(TyckTask::MonadicLiftTerm(ty.into()));
                 type_translation(tycker, env, ty)
             })
         }
@@ -120,7 +120,7 @@ mod syntax_impl {
                 let (env, tm) = tm.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.stack.push_back(TyckTask::MonadicLiftPat(tm.into()));
+                tycker.tasks.push_back(TyckTask::MonadicLiftPat(tm.into()));
                 value_pattern_translation(tycker, env, tm)
             })
         }
@@ -137,7 +137,7 @@ mod syntax_impl {
                 let (env, tm) = tm.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.stack.push_back(TyckTask::MonadicLiftTerm(tm.into()));
+                tycker.tasks.push_back(TyckTask::MonadicLiftTerm(tm.into()));
                 value_translation(tycker, env, tm)
             })
         }
@@ -154,7 +154,7 @@ mod syntax_impl {
                 let (env, tm) = tm.mbuild(tycker, env)?;
 
                 // administrative
-                tycker.stack.push_back(TyckTask::MonadicLiftTerm(tm.into()));
+                tycker.tasks.push_back(TyckTask::MonadicLiftTerm(tm.into()));
                 computation_translation(tycker, env, tm)
             })
         }
