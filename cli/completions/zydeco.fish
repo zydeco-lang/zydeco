@@ -28,6 +28,7 @@ complete -c zydeco -n "__fish_zydeco_needs_command" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_needs_command" -s V -l version -d 'Print version'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "run" -d 'Run a zydeco program'
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "check" -d 'Check a zydeco program'
+complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "build"
 complete -c zydeco -n "__fish_zydeco_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l bin -d 'Name of the binary' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -l dry -d 'Dry run (don\'t execute)'
@@ -35,6 +36,12 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s v -l verbose -d 'L
 complete -c zydeco -n "__fish_zydeco_using_subcommand run" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s v -l verbose -d 'Level of verbosity'
 complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s h -l help -d 'Print help'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check help" -f -a "run" -d 'Run a zydeco program'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check help" -f -a "check" -d 'Check a zydeco program'
-complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l bin -d 'Name of the binary' -r
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d 'Target architecture' -r
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l dry -d 'Dry run (don\'t execute)'
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s v -l verbose -d 'Level of verbosity'
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check build help" -f -a "run" -d 'Run a zydeco program'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check build help" -f -a "check" -d 'Check a zydeco program'
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check build help" -f -a "build"
+complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check build help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
