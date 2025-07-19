@@ -1,5 +1,5 @@
 [package]
-name = "zydeco-x86"
+name = "zydeco-cfg"
 version = { workspace = true }
 rust-version = { workspace = true }
 authors = { workspace = true }
@@ -8,7 +8,7 @@ edition = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 readme = { workspace = true }
-description = "x86 support for zydeco"
+description = "zydeco control flow graph"
 
 [dependencies]
 zydeco-utils = { workspace = true }

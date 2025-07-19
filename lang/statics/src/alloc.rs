@@ -18,17 +18,17 @@ use crate::{syntax::*, *};
 /// The trait is different from [`Construct`] in that [`Construct::build`] implementations
 /// are built on top of [`Alloc`] implementations, and thus are more convenient to use if
 /// the type inference is easy, i.e. the annotations are not needed.
-pub trait Alloc<T> {
+pub trait Alloc<Arena, T> {
     /// The annotation of this allocation.
     type Ann;
     /// Allocates the value in the arena in the [`Tycker`] and returns the allocated value.
     /// See the documentation of trait [`Alloc`] and [`crate::alloc`] for more details.
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> T;
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> T;
 }
 
 /* ------------------------------- Definition ------------------------------- */
 
-impl Alloc<DefId> for VarName {
+impl Alloc<Tycker, DefId> for VarName {
     type Ann = AnnId;
     fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> DefId {
         let id = tycker.scoped.defs.alloc(val);
@@ -39,7 +39,7 @@ impl Alloc<DefId> for VarName {
 
 /* -------------------------------- Abstract -------------------------------- */
 
-impl Alloc<AbstId> for DefId {
+impl Alloc<Tycker, AbstId> for DefId {
     type Ann = KindId;
     fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> AbstId {
         let abst = tycker.statics.absts.alloc(());
@@ -48,7 +48,7 @@ impl Alloc<AbstId> for DefId {
         abst
     }
 }
-impl Alloc<AbstId> for Option<DefId> {
+impl Alloc<Tycker, AbstId> for Option<DefId> {
     type Ann = KindId;
     fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> AbstId {
         let abst = tycker.statics.absts.alloc(());
@@ -59,7 +59,7 @@ impl Alloc<AbstId> for Option<DefId> {
         abst
     }
 }
-impl Alloc<AbstId> for TPatId {
+impl Alloc<Tycker, AbstId> for TPatId {
     type Ann = ();
     fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> AbstId {
         let (def, kd) = val.try_destruct_def(tycker);
@@ -69,7 +69,7 @@ impl Alloc<AbstId> for TPatId {
 
 /* ---------------------------------- Fill ---------------------------------- */
 
-impl Alloc<FillId> for su::TermId {
+impl Alloc<Tycker, FillId> for su::TermId {
     type Ann = ();
     fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> FillId {
         tycker.statics.fills.alloc(val)
@@ -78,13 +78,13 @@ impl Alloc<FillId> for su::TermId {
 
 /* ---------------------------------- Kind ---------------------------------- */
 
-impl Alloc<KindId> for FillId {
+impl Alloc<Tycker, KindId> for FillId {
     type Ann = ();
     fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
         tycker.statics.kinds.alloc(val.into())
     }
 }
-impl Alloc<KindId> for Kind {
+impl Alloc<Tycker, KindId> for Kind {
     type Ann = ();
     fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
         tycker.statics.kinds.alloc(Fillable::Done(val))
@@ -93,7 +93,7 @@ impl Alloc<KindId> for Kind {
 macro_rules! AllocKind {
     ($($t:ty)*) => {
         $(
-            impl Alloc<KindId> for $t {
+            impl Alloc<Tycker, KindId> for $t {
                 type Ann = ();
                 fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
                     Alloc::alloc(tycker, Kind::from(val), ())
@@ -110,7 +110,7 @@ AllocKind! {
 
 /* ------------------------------- TypePattern ------------------------------ */
 
-impl Alloc<TPatId> for TypePattern {
+impl Alloc<Tycker, TPatId> for TypePattern {
     type Ann = KindId;
     fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> TPatId {
         let tpat = tycker.statics.tpats.alloc(val);
@@ -121,7 +121,7 @@ impl Alloc<TPatId> for TypePattern {
 macro_rules! AllocTypePattern {
     ($($t:ty)*) => {
         $(
-            impl Alloc<TPatId> for $t {
+            impl Alloc<Tycker, TPatId> for $t {
                 type Ann = KindId;
                 fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> TPatId {
                     Alloc::alloc(tycker, TypePattern::from(val), ann)
@@ -137,7 +137,7 @@ AllocTypePattern! {
 
 /* ---------------------------------- Type ---------------------------------- */
 
-impl Alloc<TypeId> for FillId {
+impl Alloc<Tycker, TypeId> for FillId {
     type Ann = KindId;
     fn alloc(tycker: &mut Tycker, val: Self, kd: Self::Ann) -> TypeId {
         let ty = tycker.statics.types.alloc(val.into());
@@ -154,7 +154,7 @@ impl Alloc<TypeId> for FillId {
         ty
     }
 }
-impl Alloc<TypeId> for Type {
+impl Alloc<Tycker, TypeId> for Type {
     type Ann = KindId;
     fn alloc(tycker: &mut Tycker, val: Self, kd: Self::Ann) -> TypeId {
         let ty = tycker.statics.types.alloc(Fillable::Done(val));
@@ -174,7 +174,7 @@ impl Alloc<TypeId> for Type {
 macro_rules! AllocType {
     ($($t:ty)*) => {
         $(
-            impl Alloc<TypeId> for $t {
+            impl Alloc<Tycker, TypeId> for $t {
                 type Ann = KindId;
                 fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> TypeId {
                     Alloc::alloc(tycker, Type::from(val), ann)
@@ -205,7 +205,7 @@ AllocType! {
 
 /* ------------------------------ ValuePattern ------------------------------ */
 
-impl Alloc<VPatId> for ValuePattern {
+impl Alloc<Tycker, VPatId> for ValuePattern {
     type Ann = TypeId;
     fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> VPatId {
         let vpat = tycker.statics.vpats.alloc(val);
@@ -216,7 +216,7 @@ impl Alloc<VPatId> for ValuePattern {
 macro_rules! AllocValuePattern {
     ($($t:ty)*) => {
         $(
-            impl Alloc<VPatId> for $t {
+            impl Alloc<Tycker, VPatId> for $t {
                 type Ann = TypeId;
                 fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> VPatId {
                     Alloc::alloc(tycker, ValuePattern::from(val), ann)
@@ -236,7 +236,7 @@ AllocValuePattern! {
 
 /* ---------------------------------- Value --------------------------------- */
 
-impl Alloc<ValueId> for Value {
+impl Alloc<Tycker, ValueId> for Value {
     type Ann = TypeId;
     fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> ValueId {
         let value = tycker.statics.values.alloc(val);
@@ -247,7 +247,7 @@ impl Alloc<ValueId> for Value {
 macro_rules! AllocValue {
     ($($t:ty)*) => {
         $(
-            impl Alloc<ValueId> for $t {
+            impl Alloc<Tycker, ValueId> for $t {
                 type Ann = TypeId;
                 fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> ValueId {
                     Alloc::alloc(tycker, Value::from(val), ann)
@@ -269,7 +269,7 @@ AllocValue! {
 
 /* ------------------------------- Computation ------------------------------ */
 
-impl Alloc<CompuId> for Computation {
+impl Alloc<Tycker, CompuId> for Computation {
     type Ann = TypeId;
     fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> CompuId {
         let compu = tycker.statics.compus.alloc(val);
@@ -280,7 +280,7 @@ impl Alloc<CompuId> for Computation {
 macro_rules! AllocComputation {
     ($($t:ty)*) => {
         $(
-            impl Alloc<CompuId> for $t {
+            impl Alloc<Tycker, CompuId> for $t {
                 type Ann = TypeId;
                 fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> CompuId {
                     Alloc::alloc(tycker, Computation::from(val), ann)

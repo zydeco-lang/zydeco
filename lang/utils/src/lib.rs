@@ -5,6 +5,7 @@ pub mod arena;
 pub mod imc;
 pub mod cells;
 pub mod deps;
+pub mod err;
 pub mod scc;
 pub mod span;
 pub mod never;

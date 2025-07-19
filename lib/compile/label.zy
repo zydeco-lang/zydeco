@@ -1,0 +1,6 @@
+def ! id (A: VType) (a: A) = ret a end
+
+@[pure]
+main
+  ! id Int 10
+end

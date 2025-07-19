@@ -85,6 +85,13 @@ pub struct StaticsArena {
     pub annotations_value: ArenaAssoc<ValueId, TypeId>,
     /// type annotations for computations
     pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
+
+    // Todo: under which environment is something checked?
+    // pub env_tpat
+    // pub env_type
+    // pub env_vpat
+    // pub env_value
+    // pub env_compu
 }
 
 impl StaticsArena {
@@ -145,32 +152,6 @@ impl ArenaStatics for StaticsArena {
     }
     fn decl(&self, id: &DeclId) -> Declaration {
         self.decls[id].to_owned()
-    }
-}
-
-use super::Tycker;
-
-impl ArenaStatics for Tycker {
-    fn kind(&self, id: &KindId) -> Fillable<Kind> {
-        self.statics.kind(id)
-    }
-    fn tpat(&self, id: &TPatId) -> TypePattern {
-        self.statics.tpat(id)
-    }
-    fn r#type(&self, id: &TypeId) -> Fillable<Type> {
-        self.statics.r#type(id)
-    }
-    fn vpat(&self, id: &VPatId) -> ValuePattern {
-        self.statics.vpat(id)
-    }
-    fn value(&self, id: &ValueId) -> Value {
-        self.statics.value(id)
-    }
-    fn compu(&self, id: &CompuId) -> Computation {
-        self.statics.compu(id)
-    }
-    fn decl(&self, id: &DeclId) -> Declaration {
-        self.statics.decl(id)
     }
 }
 

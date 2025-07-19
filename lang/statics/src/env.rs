@@ -105,7 +105,7 @@ mod impls_ty_env {
             match ann {
                 | AnnId::Set | AnnId::Kind(_) => unreachable!(),
                 | AnnId::Type(ty) => {
-                    let ty = tycker.r#type(ty);
+                    let ty = tycker.statics.r#type(ty);
                     match ty {
                         | Fillable::Done(Type::Var(ref def)) => {
                             self.recursively_get_type(tycker, def)

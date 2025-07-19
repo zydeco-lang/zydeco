@@ -66,12 +66,13 @@ pub struct MemRef {
     pub offset: i32,
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Arg64 {
     Reg(Reg),
     Signed(i64),
     Unsigned(u64),
     Mem(MemRef),
+    Label(String),
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -88,7 +89,7 @@ pub enum Reg32 {
     Imm(i32),
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MovArgs {
     ToReg(Reg, Arg64),
     ToMem(MemRef, Reg32),
@@ -104,6 +105,12 @@ pub enum BinArgs {
 pub struct ShArgs {
     pub reg: Reg,
     pub by: u8,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum JmpArgs {
+    Label(String),
+    Reg(Reg),
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -141,11 +148,11 @@ pub enum Instr {
 
     Call(String),
     Ret,
-    Jmp(String),
+    Jmp(JmpArgs),
 
     // Conditional mov, jmp and set
     CMovCC(ConditionCode, BinArgs),
-    JCC(ConditionCode, String),
+    JCC(ConditionCode, JmpArgs),
     SetCC(ConditionCode, Reg8),
 }
 
@@ -252,6 +259,7 @@ impl fmt::Display for Arg64 {
             Arg64::Signed(i) => write!(f, "{}", i),
             Arg64::Unsigned(u) => write!(f, "0x{:016x}", u),
             Arg64::Mem(m) => write!(f, "{}", m),
+            Arg64::Label(l) => write!(f, "{}", l),
         }
     }
 }
@@ -277,6 +285,15 @@ impl fmt::Display for BinArgs {
 impl fmt::Display for ShArgs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}, {}", self.reg, self.by)
+    }
+}
+
+impl fmt::Display for JmpArgs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            JmpArgs::Label(l) => write!(f, "{}", l),
+            JmpArgs::Reg(r) => write!(f, "{}", r),
+        }
     }
 }
 

@@ -3,6 +3,8 @@
 
 use crate::{syntax::*, *};
 
+pub use zydeco_utils::err::*;
+
 #[derive(Debug, Clone)]
 pub enum TyckError {
     MissingAnnotation,
@@ -238,4 +240,3 @@ impl Tycker {
 }
 
 pub type Result<T> = std::result::Result<T, Box<TyckErrorEntry>>;
-pub type ResultKont<T> = std::result::Result<T, ()>;

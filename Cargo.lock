@@ -3196,6 +3196,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "zydeco-assembly"
+version = "0.2.2"
+dependencies = [
+ "derive_more",
+ "im",
+ "zydeco-statics",
+ "zydeco-syntax",
+ "zydeco-utils",
+ "zydeco-x86",
+]
+
+[[package]]
+name = "zydeco-cfg"
+version = "0.2.2"
+dependencies = [
+ "derive_more",
+ "im",
+ "zydeco-statics",
+ "zydeco-syntax",
+ "zydeco-utils",
+]
+
+[[package]]
 name = "zydeco-cli"
 version = "0.2.2"
 dependencies = [
@@ -3226,6 +3249,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.12",
  "toml 0.9.1",
+ "zydeco-assembly",
  "zydeco-derive",
  "zydeco-dynamics",
  "zydeco-statics",
@@ -3343,6 +3367,7 @@ name = "zydeco-x86"
 version = "0.2.2"
 dependencies = [
  "derive_more",
+ "im",
  "zydeco-statics",
  "zydeco-syntax",
  "zydeco-utils",

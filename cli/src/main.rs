@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::{fs::File, io::Write, path::PathBuf, process::Command};
 // use zydeco_cli::{Cli, Commands, Repl};
 use zydeco_cli::{Cli, Commands};
 use zydeco_driver::{BuildSystem, ProgKont};
@@ -12,8 +13,8 @@ fn main() -> Result<(), ()> {
         }
         | Commands::Check { files, verbose } => run_files(files, None, true, verbose, vec![]),
         // | Commands::Repl { .. } => Repl::launch(),
-        | Commands::Build { files, bin, target, dry, verbose } => {
-            build_files(files, bin, target, dry, verbose)
+        | Commands::Build { files, bin, target, build_dir, stub, execute, dry, verbose } => {
+            build_files(files, bin, target, build_dir, stub, execute, dry, verbose)
         }
     };
     match res {
@@ -28,8 +29,7 @@ fn main() -> Result<(), ()> {
 }
 
 fn run_files(
-    paths: Vec<std::path::PathBuf>, bin: Option<String>, dry: bool, verbose: bool,
-    args: Vec<String>,
+    paths: Vec<PathBuf>, bin: Option<String>, dry: bool, verbose: bool, args: Vec<String>,
 ) -> Result<i32, String> {
     let mut build_sys = BuildSystem::new();
     let mut packs = Vec::new();
@@ -76,7 +76,8 @@ fn run_files(
 }
 
 fn build_files(
-    paths: Vec<std::path::PathBuf>, bin: Option<String>, _target: String, _dry: bool, _verbose: bool,
+    paths: Vec<PathBuf>, bin: Option<String>, _target: String, build_dir: PathBuf, stub: PathBuf,
+    execute: bool, _dry: bool, _verbose: bool,
 ) -> Result<i32, String> {
     let mut build_sys = BuildSystem::new();
     let mut packs = Vec::new();
@@ -117,5 +118,129 @@ fn build_files(
     let pack = build_sys.pick_marked(bin).map_err(|e| e.to_string())?;
     let x86 = build_sys.codegen_x86_pack(pack).map_err(|e| e.to_string())?;
     println!("{}", x86);
+
+    let name = build_sys.packages[&pack].name();
+    // link with stub
+    link_x86(name, x86, build_dir, stub, execute)?;
     Ok(0)
+}
+
+fn link_x86(
+    name: String, assembly: String, build_dir: PathBuf, stub: PathBuf, execute: bool,
+) -> Result<(), String> {
+    // Hack: clean build dir and create it
+    // Todo: make it safer by checking build profile if not nonexistent or empty
+    std::fs::remove_dir_all(&build_dir).ok();
+    std::fs::create_dir_all(&build_dir).expect("Failed to create build dir");
+
+    // copy stub to build dir
+    let stub_path = build_dir.join(stub.file_name().unwrap());
+    std::fs::copy(&stub, &stub_path).expect("Failed to copy stub");
+
+    let (nasm_format, lib_name) = if cfg!(target_os = "linux") {
+        ("elf64", format!("libzyprog.a"))
+    } else if cfg!(target_os = "macos") {
+        ("macho64", format!("libzyprog.a"))
+    } else {
+        panic!("Runner script only supports linux and macos")
+    };
+
+    let asm_fname = build_dir.join(format!("{}.s", name));
+    let obj_fname = build_dir.join(format!("{}.o", name));
+    let lib_fname = build_dir.join(lib_name);
+    let exe_fname = build_dir.join(format!("{}.exe", name));
+
+    // remove existing files
+    std::fs::remove_file(&asm_fname).ok();
+    std::fs::remove_file(&obj_fname).ok();
+    std::fs::remove_file(&lib_fname).ok();
+    std::fs::remove_file(&exe_fname).ok();
+
+    // first put the assembly in a new file zyprog.s
+    let mut asm_file = File::create(&asm_fname).map_err(|e| e.to_string())?;
+    asm_file.write(assembly.as_bytes()).map_err(|e| e.to_string())?;
+    asm_file.flush().map_err(|e| e.to_string())?;
+
+    // nasm -fFORMAT -o zyprog.o zyprog.s
+    let nasm_out = Command::new("nasm")
+        .arg("-f")
+        .arg(nasm_format)
+        .arg("-o")
+        .arg(&obj_fname)
+        .arg(&asm_fname)
+        .output()
+        .map_err(|e| format!("nasm err: {}", e))?;
+    if !nasm_out.status.success() {
+        return Err(format!(
+            "Failure in nasm call: {}\n{}",
+            nasm_out.status,
+            std::str::from_utf8(&nasm_out.stderr).expect("nasm produced invalid UTF-8")
+        ));
+    }
+
+    // ar r libzyprog.a zyprog.o
+    let ar_out = Command::new("ar")
+        .arg("rus")
+        .arg(lib_fname)
+        .arg(&obj_fname)
+        .output()
+        .map_err(|e| (format!("ar err: {}", e)))?;
+    if !ar_out.status.success() {
+        return Err(format!(
+            "Failure in ar call:\n{}\n{}",
+            ar_out.status,
+            std::str::from_utf8(&ar_out.stderr).expect("ar produced invalid UTF-8")
+        ));
+    }
+
+    // rustc stub.rs -L build_dir
+    let rustc_out = if cfg!(target_os = "macos") {
+        Command::new("rustc")
+            .arg("-v")
+            .arg(stub_path)
+            .arg("--target")
+            .arg("x86_64-apple-darwin")
+            .arg("-C")
+            .arg("panic=abort")
+            .arg("-L")
+            .arg(build_dir)
+            .arg("-o")
+            .arg(&exe_fname)
+            .output()
+            .map_err(|e| (format!("rustc err: {}", e)))?
+    } else {
+        Command::new("rustc")
+            .arg(stub_path)
+            .arg("-L")
+            .arg(build_dir)
+            .arg("-o")
+            .arg(&exe_fname)
+            .output()
+            .map_err(|e| (format!("rustc err: {}", e)))?
+    };
+    if !rustc_out.status.success() {
+        Err(format!(
+            "Failure in rustc call: {}\n{}",
+            rustc_out.status,
+            std::str::from_utf8(&rustc_out.stderr).expect("rustc produced invalid UTF-8")
+        ))?
+    }
+
+    if !execute {
+        return Ok(());
+    }
+
+    // run the program
+    let output = Command::new(&exe_fname).output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        Err(format!(
+            "Failure in program call: {}\n{}",
+            output.status,
+            std::str::from_utf8(&output.stderr).expect("program produced invalid UTF-8")
+        ))?;
+    }
+    println!("Program output:");
+    print!("{}", std::str::from_utf8(&output.stdout).expect("program produced invalid UTF-8"));
+    std::io::stdout().flush().map_err(|e| e.to_string())?;
+    Ok(())
 }

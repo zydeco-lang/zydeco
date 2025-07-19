@@ -1,5 +1,5 @@
 [package]
-name = "zydeco-x86"
+name = "zydeco-assembly"
 version = { workspace = true }
 rust-version = { workspace = true }
 authors = { workspace = true }
@@ -8,11 +8,12 @@ edition = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 readme = { workspace = true }
-description = "x86 support for zydeco"
+description = "zydeco compiled to assembly"
 
 [dependencies]
 zydeco-utils = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-statics = { workspace = true }
+zydeco-x86 = { workspace = true }
 derive_more = { workspace = true }
 im = { workspace = true }

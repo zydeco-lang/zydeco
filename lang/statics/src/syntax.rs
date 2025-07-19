@@ -1,5 +1,5 @@
-pub use super::arena::*;
-pub use super::env::*;
+pub use crate::arena::*;
+pub use crate::env::*;
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 

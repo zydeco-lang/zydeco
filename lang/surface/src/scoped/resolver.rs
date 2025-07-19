@@ -32,6 +32,7 @@ pub struct Resolver {
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
     pub users: ArenaForth<DefId, TermId>,
+    pub metas: ArenaAssoc<DeclId, im::Vector<Meta>>,
     pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
     pub deps: DepGraph<DeclId>,
 }
@@ -58,6 +59,7 @@ impl Resolver {
             decls,
 
             users,
+            metas,
             exts,
             deps,
         } = self;
@@ -116,6 +118,7 @@ impl Resolver {
                 ctxs_pat_local,
                 coctxs_pat_local,
                 coctxs_term_local,
+                metas,
                 exts,
                 unis,
                 deps,
@@ -169,7 +172,12 @@ impl Resolve for DeclId {
         match inner.clone() {
             | Declaration::Meta(decl) => {
                 let MetaT(meta, decl) = decl;
-                let _ = meta;
+                let mut metas = im::Vector::new();
+                if let Some(old) = resolver.metas.remove(self) {
+                    metas.extend(old);
+                }
+                metas.push_back(meta);
+                resolver.metas.insert(decl, metas);
                 resolver.deps.add(*self, [decl]);
                 let () = decl.resolve(resolver, global)?;
             }

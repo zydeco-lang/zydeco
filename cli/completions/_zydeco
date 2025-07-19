@@ -53,6 +53,11 @@ _arguments "${_arguments_options[@]}" : \
 '--bin=[Name of the binary]:BIN:_default' \
 '-t+[Target architecture]:TARGET:_default' \
 '--target=[Target architecture]:TARGET:_default' \
+'-b+[Build Directory]:BUILD_DIR:_files' \
+'--build-dir=[Build Directory]:BUILD_DIR:_files' \
+'--stub=[Stub file]:STUB:_files' \
+'-x[Run the program after building]' \
+'--execute[Run the program after building]' \
 '--dry[Dry run (don'\''t execute)]' \
 '-v[Level of verbosity]' \
 '--verbose[Level of verbosity]' \

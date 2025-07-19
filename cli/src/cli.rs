@@ -53,6 +53,15 @@ pub enum Commands {
         /// Target architecture
         #[arg(short, long, default_value = "x86")]
         target: String,
+        /// Build Directory
+        #[arg(short = 'b', long, default_value = "._build")]
+        build_dir: PathBuf,
+        /// Stub file
+        #[arg(long, default_value = "runtime/stub.rs")]
+        stub: PathBuf,
+        /// Run the program after building
+        #[arg(short = 'x', long, default_value_t = false)]
+        execute: bool,
         /// Dry run (don't execute)
         #[arg(long, default_value_t = false)]
         dry: bool,

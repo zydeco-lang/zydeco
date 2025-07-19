@@ -193,10 +193,11 @@ impl Desugar for t::DeclId {
             | Decl::Exec(decl) => {
                 let t::Exec(term) = decl;
                 let term = term.desugar(desugarer)?;
-                // term -> ann
-                let os = desugarer.os(self.into());
-                let ann = Alloc::alloc(desugarer, b::Ann { tm: term, ty: os }.into(), self.into());
-                b::Exec(ann).into()
+                // // term -> ann
+                // let os = desugarer.os(self.into());
+                // let ann = Alloc::alloc(desugarer, b::Ann { tm: term, ty: os }.into(), self.into());
+                // b::Exec(ann).into()
+                b::Exec(term).into()
             }
         };
         let res = Alloc::alloc(desugarer, Modifiers { public, external, inner }, self.into());

@@ -1,0 +1,6 @@
+@[pure]
+main
+  let x = (10, 20) in
+  let (y, z) = x in
+  ret z
+end

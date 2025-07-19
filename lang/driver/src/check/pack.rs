@@ -53,6 +53,7 @@ impl PackageStew {
             decls: ArenaAssoc::default(),
 
             users: ArenaForth::default(),
+            metas: ArenaAssoc::default(),
             exts: ArenaAssoc::default(),
             deps: DepGraph::default(),
         };

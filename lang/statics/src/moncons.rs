@@ -74,7 +74,7 @@ macro_rules! impl_mon_construct_from_construct {
 impl<S, T, A, U> MonConstruct<T> for cs::Ann<S, U>
 where
     U: MonConstruct<A>,
-    S: Alloc<T, Ann = A>,
+    S: Alloc<Tycker, T, Ann = A>,
 {
     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, T)> {
         let cs::Ann(tm, ty) = self;

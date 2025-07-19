@@ -139,6 +139,7 @@ impl Tycker {
 
 mod impl_tycker {
     use super::*;
+
     impl Tycker {
         /// Generalize the administrative guards using "with" pattern by placing
         /// the body of tyck function into a closure, and the with function can
@@ -150,23 +151,29 @@ mod impl_tycker {
             self.tasks = stack;
             res
         }
-        /// Throw a pure error.
-        #[inline]
-        pub(crate) fn err<T>(
-            &self, error: TyckError, blame: &'static std::panic::Location<'static>,
-        ) -> Result<T> {
-            let stack = self.tasks.clone();
-            Err(Box::new(TyckErrorEntry { error, blame, stack }))
-        }
+
         /// Push an error entry into the error list.
         #[inline]
         fn push_err_entry_k<T>(&mut self, entry: TyckErrorEntry) -> ResultKont<T> {
             self.errors.push(entry);
             Err(())
         }
+    }
+
+    impl Errorable<TyckError> for Tycker {
+        type Entry = Box<TyckErrorEntry>;
+
+        /// Throw a pure error.
+        #[inline]
+        fn err<T>(
+            &self, error: TyckError, blame: &'static std::panic::Location<'static>,
+        ) -> Result<T> {
+            let stack = self.tasks.clone();
+            Err(Box::new(TyckErrorEntry { error, blame, stack }))
+        }
         /// Throw a continuation error.
         #[inline]
-        pub(crate) fn err_k<T>(
+        fn err_k<T>(
             &mut self, error: TyckError, blame: &'static std::panic::Location<'static>,
         ) -> ResultKont<T> {
             let stack = self.tasks.clone();
@@ -174,7 +181,7 @@ mod impl_tycker {
         }
         /// Convert a pure result into a continuation result.
         #[inline]
-        pub(crate) fn err_p_to_k<T>(&mut self, res: Result<T>) -> ResultKont<T> {
+        fn err_p_to_k<T>(&mut self, res: Result<T>) -> ResultKont<T> {
             match res {
                 | Ok(t) => Ok(t),
                 | Err(entry) => self.push_err_entry_k(*entry),
@@ -244,13 +251,16 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                 let id = decls.iter().next().unwrap();
                 match tycker.scoped.decls[id].clone() {
                     | Decl::Meta(decl) => {
-                        let su::MetaT(meta, decl) = decl;
-                        tycker.metas.push_back(meta);
-                        let res = env
-                            .mk(SccDeclarations(&[decl].into_iter().collect()))
-                            .tyck_k(tycker, ());
-                        tycker.metas.pop_back();
-                        res
+                        // let su::MetaT(meta, decl) = decl;
+                        // tycker.metas.push_back(meta);
+                        // let res = env
+                        //     .mk(SccDeclarations(&[decl].into_iter().collect()))
+                        //     .tyck_k(tycker, ());
+                        // tycker.metas.pop_back();
+                        // res
+                        // do nothing; meta is handled by scoped.metas
+                        let _ = decl;
+                        Ok(env)
                     }
                     | Decl::AliasBody(_) => {
                         let uni = tycker.scoped.unis.get(id).is_some();
@@ -274,10 +284,25 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                             // administrative
                             tycker.tasks.push_back(TyckTask::Exec(id.to_owned()));
                             let su::Exec(term) = decl;
-                            let os = ss::OSTy.build(tycker, &env.env);
-                            let out_ann = env.mk(term).tyck_k(tycker, Action::ana(os.into()))?;
-                            let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
-                            tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
+                            if let Some(meta) =
+                                tycker.scoped.metas.get(id).map(|v| v.last()).flatten()
+                                && &meta.stem == "pure"
+                            {
+                                // check with Ret
+                                let ret_app_hole = tycker.ret_hole(&self.env, term);
+                                let out_ann = env
+                                    .mk(term)
+                                    .tyck_k(tycker, Action::ana(ret_app_hole.into()))?;
+                                let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
+                                tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
+                            } else {
+                                // check with OS
+                                let os = ss::OSTy.build(tycker, &env.env);
+                                let out_ann =
+                                    env.mk(term).tyck_k(tycker, Action::ana(os.into()))?;
+                                let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
+                                tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
+                            }
                             Ok(env)
                         })
                     }

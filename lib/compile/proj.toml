@@ -1,0 +1,19 @@
+name = "compile"
+
+srcs = [
+    "prelude.zy",
+]
+deps = []
+bins = [
+    "ret.zy",
+    "env.zy",
+    "add.zy",
+    "nested.zy",
+    "nested_out.zy",
+    "label.zy",
+    "loop.zy",
+    "factorial.zy",
+    "tuple.zy",
+]
+
+std = "nostd"

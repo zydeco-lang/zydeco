@@ -1,0 +1,6 @@
+def fix loop (A: VType): Ret A = ! loop A end
+
+@[pure]
+main
+  ! loop Int
+end

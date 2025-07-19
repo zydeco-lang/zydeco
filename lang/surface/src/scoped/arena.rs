@@ -35,6 +35,8 @@ pub struct ScopedArena {
     pub coctxs_pat_local: ArenaAssoc<PatId, CoContext<()>>,
     /// variables that are free within the term
     pub coctxs_term_local: ArenaAssoc<TermId, CoContext<()>>,
+    // meta annotations to declarations
+    pub metas: ArenaAssoc<DeclId, im::Vector<Meta>>,
     /// externs to defs
     pub exts: ArenaAssoc<DeclId, (Internal, DefId)>,
     /// non-(optionally-mutual-)recursive declarations

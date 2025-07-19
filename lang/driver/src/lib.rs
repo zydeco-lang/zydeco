@@ -154,7 +154,9 @@ impl BuildSystem {
             }
         }
     }
-    pub fn run_pack(&self, pack: PackId, args: &[String], dry: bool, verbose: bool) -> Result<ProgKont> {
+    pub fn run_pack(
+        &self, pack: PackId, args: &[String], dry: bool, verbose: bool,
+    ) -> Result<ProgKont> {
         let checked = self.__tyck_pack(pack, verbose)?;
         let name = self.packages[&pack].name();
         let runtime = Package::link_interp(name.as_str(), checked)?;
@@ -175,7 +177,12 @@ impl BuildSystem {
     pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
         // let name = self.packages[&pack].name();
         let checked = self.__tyck_pack(pack, false)?;
-        Ok(zydeco_x86::run(checked.scoped, checked.statics))
+        // Ok(zydeco_x86::run(checked.scoped, checked.statics))
+        let mut instrs = Vec::new();
+        let mut emitter =
+            zydeco_assembly::Emitter::new(checked.scoped, checked.statics, &mut instrs);
+        emitter.run();
+        Ok(instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n"))
     }
 }
 

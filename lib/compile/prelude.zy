@@ -1,0 +1,35 @@
+--| VType and CType
+pub extern def VType end
+pub extern def CType end
+--| Thk and Ret
+pub extern def Thk (B : CType) : VType end
+pub extern def Ret (A : VType) : CType end
+pub alias Thunk = Thk end
+pub alias U = Thk end
+pub alias F = Ret end
+
+--| primitive base types
+
+--| we support the constructors externally because
+--| the parsers of their constructors are customized
+--| so the type is registered as a data type but the constructors
+--| are not implemented as internal constructors
+
+pub extern def Unit : VType end
+pub extern def Int : VType end
+pub extern def Char : VType end
+pub extern def String : VType end
+pub extern def OS : CType end
+
+--| interface for monads and their algebras
+pub extern alias Monad (M: VType -> CType) : CType =
+  codata
+  | .return : forall (A: VType) .
+    A -> M A
+  | .bind : forall (A: VType) (A': VType) .
+    Thk (M A) -> Thk (A -> M A') -> M A'
+  end
+end
+pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
+  forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
+end

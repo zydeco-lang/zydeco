@@ -1,0 +1,13 @@
+pub extern def add : Thk (Int -> Int -> Ret Int) end
+
+@[pure]
+main
+  do x <- ret 40;
+  do y <- ret 30;
+  do z <-
+    do a <- ! add x y;
+    do b <- ! add a 10;
+    ret b
+  ;
+  ret z
+end

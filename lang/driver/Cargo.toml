@@ -18,6 +18,7 @@ zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-dynamics = { workspace = true }
 zydeco-x86 = { workspace = true }
+zydeco-assembly = { workspace = true }
 derive_more = { workspace = true }
 rayon = { workspace = true }
 thiserror = { workspace = true }
