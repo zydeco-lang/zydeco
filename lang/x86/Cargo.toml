@@ -15,3 +15,4 @@ zydeco-utils = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-statics = { workspace = true }
 derive_more = { workspace = true }
+im = { workspace = true }

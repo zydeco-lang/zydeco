@@ -3343,6 +3343,7 @@ name = "zydeco-x86"
 version = "0.2.2"
 dependencies = [
  "derive_more",
+ "im",
  "zydeco-statics",
  "zydeco-syntax",
  "zydeco-utils",
