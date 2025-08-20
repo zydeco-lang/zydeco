@@ -13,9 +13,17 @@ fn main() -> Result<(), ()> {
         }
         | Commands::Check { files, verbose } => run_files(files, None, true, verbose, vec![]),
         // | Commands::Repl { .. } => Repl::launch(),
-        | Commands::Build { files, bin, target, build_dir, stub, execute, dry, verbose } => {
-            build_files(files, bin, target, build_dir, stub, execute, dry, verbose)
-        }
+        | Commands::Build {
+            files,
+            bin,
+            target,
+            build_dir,
+            stub,
+            link_existing,
+            execute,
+            dry,
+            verbose,
+        } => build_files(files, bin, target, build_dir, stub, link_existing, execute, dry, verbose),
     };
     match res {
         | Ok(x) => {
@@ -77,7 +85,7 @@ fn run_files(
 
 fn build_files(
     paths: Vec<PathBuf>, bin: Option<String>, _target: String, build_dir: PathBuf, stub: PathBuf,
-    execute: bool, _dry: bool, _verbose: bool,
+    link_existing: bool, execute: bool, _dry: bool, verbose: bool,
 ) -> Result<i32, String> {
     let mut build_sys = BuildSystem::new();
     let mut packs = Vec::new();
@@ -117,21 +125,27 @@ fn build_files(
     }
     let pack = build_sys.pick_marked(bin).map_err(|e| e.to_string())?;
     let x86 = build_sys.codegen_x86_pack(pack).map_err(|e| e.to_string())?;
-    println!("{}", x86);
+
+    if verbose {
+        println!("{}", x86);
+    }
 
     let name = build_sys.packages[&pack].name();
     // link with stub
-    link_x86(name, x86, build_dir, stub, execute)?;
+    link_x86(name, x86, build_dir, stub, link_existing, execute)?;
     Ok(0)
 }
 
 fn link_x86(
-    name: String, assembly: String, build_dir: PathBuf, stub: PathBuf, execute: bool,
+    name: String, assembly: String, build_dir: PathBuf, stub: PathBuf, link_existing: bool,
+    execute: bool,
 ) -> Result<(), String> {
-    // Hack: clean build dir and create it
-    // Todo: make it safer by checking build profile if not nonexistent or empty
-    std::fs::remove_dir_all(&build_dir).ok();
-    std::fs::create_dir_all(&build_dir).expect("Failed to create build dir");
+    if !link_existing {
+        // Hack: clean build dir and create it
+        // Todo: make it safer by checking build profile if not nonexistent or empty
+        std::fs::remove_dir_all(&build_dir).ok();
+        std::fs::create_dir_all(&build_dir).expect("Failed to create build dir");
+    }
 
     // copy stub to build dir
     let stub_path = build_dir.join(stub.file_name().unwrap());
@@ -151,15 +165,19 @@ fn link_x86(
     let exe_fname = build_dir.join(format!("{}.exe", name));
 
     // remove existing files
-    std::fs::remove_file(&asm_fname).ok();
+    if !link_existing {
+        std::fs::remove_file(&asm_fname).ok();
+    }
     std::fs::remove_file(&obj_fname).ok();
     std::fs::remove_file(&lib_fname).ok();
     std::fs::remove_file(&exe_fname).ok();
 
     // first put the assembly in a new file zyprog.s
-    let mut asm_file = File::create(&asm_fname).map_err(|e| e.to_string())?;
-    asm_file.write(assembly.as_bytes()).map_err(|e| e.to_string())?;
-    asm_file.flush().map_err(|e| e.to_string())?;
+    if !link_existing {
+        let mut asm_file = File::create(&asm_fname).map_err(|e| e.to_string())?;
+        asm_file.write(assembly.as_bytes()).map_err(|e| e.to_string())?;
+        asm_file.flush().map_err(|e| e.to_string())?;
+    }
 
     // nasm -fFORMAT -o zyprog.o zyprog.s
     let nasm_out = Command::new("nasm")

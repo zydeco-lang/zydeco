@@ -59,6 +59,9 @@ pub enum Commands {
         /// Stub file
         #[arg(long, default_value = "runtime/stub.rs")]
         stub: PathBuf,
+        /// Skip dumping assembly and only link existing files
+        #[arg(long, default_value_t = false)]
+        link_existing: bool,
         /// Run the program after building
         #[arg(short = 'x', long, default_value_t = false)]
         execute: bool,

@@ -40,6 +40,7 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l bin -d 'Name of 
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d 'Target architecture' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l stub -d 'Stub file' -r -F
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l link-existing -d 'Skip dumping assembly and only link existing files'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l dry -d 'Dry run (don\'t execute)'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s v -l verbose -d 'Level of verbosity'

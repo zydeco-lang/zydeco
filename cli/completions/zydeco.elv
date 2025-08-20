@@ -48,6 +48,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand -b 'Build Directory'
             cand --build-dir 'Build Directory'
             cand --stub 'Stub file'
+            cand --link-existing 'Skip dumping assembly and only link existing files'
             cand -x 'Run the program after building'
             cand --execute 'Run the program after building'
             cand --dry 'Dry run (don''t execute)'

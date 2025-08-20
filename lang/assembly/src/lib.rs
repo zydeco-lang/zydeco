@@ -115,8 +115,10 @@ impl<'e> Emitter<'e> {
             // move Rsi to R11 (heap)
             Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rsi))),
             // push entry_kont
-            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Label(lbl_entry_kont.clone()))),
+            Instr::Lea(Reg::Rdi, LeaArgs::RelLabel(lbl_entry_kont.clone())),
             Instr::Push(Arg32::Reg(Reg::Rdi)),
+            // push env
+            Instr::Push(Arg32::Reg(Reg::R10)),
         ]);
 
         // compile declarations
@@ -178,7 +180,7 @@ impl<'e> Emitter<'e> {
                         let name = self.scoped.def(&def).0;
                         let offset = env.alloc(def) as i32 * 8;
                         self.write([
-                            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Label(name))),
+                            Instr::Lea(Reg::Rax, LeaArgs::RelLabel(name)),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset },
                                 Reg32::Reg(Reg::Rax),
@@ -220,7 +222,7 @@ impl<'e> Emitter<'e> {
                 self.compu(body, env.clone());
                 self.write([
                     Instr::Label(lbl_kont.clone()),
-                    Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Label(lbl_thunk.clone()))),
+                    Instr::Lea(Reg::Rax, LeaArgs::RelLabel(lbl_thunk.clone())),
                 ]);
             }
             | Value::Ctor(Ctor(tag, _body)) => {
@@ -246,9 +248,15 @@ impl<'e> Emitter<'e> {
                     Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rax))),
                 ]);
                 self.value(a, &env);
-                self.write([Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rdi, offset: 0 }, Reg32::Reg(Reg::Rax)))]);
+                self.write([Instr::Mov(MovArgs::ToMem(
+                    MemRef { reg: Reg::Rdi, offset: 0 },
+                    Reg32::Reg(Reg::Rax),
+                ))]);
                 self.value(b, &env);
-                self.write([Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rdi, offset: 8 }, Reg32::Reg(Reg::Rax)))]);
+                self.write([Instr::Mov(MovArgs::ToMem(
+                    MemRef { reg: Reg::Rdi, offset: 8 },
+                    Reg32::Reg(Reg::Rax),
+                ))]);
                 // move the pointer to Rax
                 self.write([Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rdi)))]);
             }
@@ -303,7 +311,7 @@ impl<'e> Emitter<'e> {
                         let lbl_fix = format!("fix{}", compu.concise_inner());
                         let offset = env.alloc(def) as i32 * 8;
                         self.write([
-                            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Label(lbl_fix.clone()))),
+                            Instr::Lea(Reg::Rax, LeaArgs::RelLabel(lbl_fix.clone())),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset },
                                 Reg32::Reg(Reg::Rax),
@@ -336,7 +344,7 @@ impl<'e> Emitter<'e> {
                 // push kont
                 // and then push env
                 self.write([
-                    Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Label(lbl_kont.clone()))),
+                    Instr::Lea(Reg::Rdi, LeaArgs::RelLabel(lbl_kont.clone())),
                     Instr::Push(Arg32::Reg(Reg::Rdi)),
                     Instr::Push(Arg32::Reg(Reg::R10)),
                     // Instr::Push(Arg32::Reg(Reg::R10)),
@@ -375,25 +383,27 @@ impl<'e> Emitter<'e> {
                         self.compu(tail, env);
                     }
                     | VPat::VCons(Cons(a, b)) => {
-                        let VPat::Var(def_a) = self.statics.vpat(&a) else {
-                            unreachable!()
-                        };
-                        let VPat::Var(def_b) = self.statics.vpat(&b) else {
-                            unreachable!()
-                        };
+                        let VPat::Var(def_a) = self.statics.vpat(&a) else { unreachable!() };
+                        let VPat::Var(def_b) = self.statics.vpat(&b) else { unreachable!() };
                         let idx_a = env.alloc(def_a) as i32 * 8;
                         let idx_b = env.alloc(def_b) as i32 * 8;
                         // use Rdi as temp
                         self.write([
                             // Rax is tuple
                             // move tuple.0 to idx_a through Rdi
-                            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }))),
+                            Instr::Mov(MovArgs::ToReg(
+                                Reg::Rdi,
+                                Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }),
+                            )),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: idx_a },
                                 Reg32::Reg(Reg::Rdi),
                             )),
                             // move tuple.1 to idx_b through Rdi
-                            Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }))),
+                            Instr::Mov(MovArgs::ToReg(
+                                Reg::Rdi,
+                                Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }),
+                            )),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: idx_b },
                                 Reg32::Reg(Reg::Rdi),
