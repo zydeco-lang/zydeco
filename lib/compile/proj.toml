@@ -12,6 +12,8 @@ bins = [
     "nested_out.zy",
     "label.zy",
     "loop.zy",
+    "acc.zy",
+    "sum.zy",
     "factorial.zy",
     "tuple.zy",
 ]

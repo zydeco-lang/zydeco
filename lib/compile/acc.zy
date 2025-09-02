@@ -1,0 +1,28 @@
+alias Bool : VType =
+  data
+  | +False : Unit
+  | +True : Unit
+  end
+end
+
+extern def add : Thk (Int -> Int -> Ret Int) end
+extern def sub : Thk (Int -> Int -> Ret Int) end
+extern def mul : Thk (Int -> Int -> Ret Int) end
+extern def int_eq : Thk (Int -> Int -> Ret Bool) end
+
+def fix sum (i: Int) (acc: Int): Ret Int =
+  do zero? <- ! int_eq i 0;
+  match zero?
+  | +True _ -> ret acc
+  | +False _ ->
+    -- do i <- ret i;
+    do i' <- ! sub i 1;
+    do acc' <- ! add i acc;
+    ! sum i' acc'
+  end
+end
+
+@[pure]
+main
+  ! sum 10 0
+end
