@@ -1,0 +1,15 @@
+alias Bool : VType =
+  data
+  | +False : Unit
+  | +True : Unit
+  end
+end
+
+@[pure]
+main
+  let x: Bool = +False () in
+  match x
+  | +True _ -> ret 10
+  | +False _ -> ret 20
+  end
+end

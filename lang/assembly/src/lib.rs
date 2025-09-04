@@ -13,16 +13,34 @@ pub struct Emitter<'e> {
 }
 
 #[derive(Clone, Debug, Deref, DerefMut)]
-pub struct Env(im::HashMap<DefId, usize>);
+pub struct Env {
+    #[deref]
+    #[deref_mut]
+    map: im::HashMap<DefId, i32>,
+    next: i32,
+}
 
 impl Env {
     pub fn new() -> Self {
-        Self(im::HashMap::new())
+        Self { map: im::HashMap::new(), next: 0 }
     }
-    pub fn alloc(&mut self, def: DefId) -> usize {
-        let idx = self.len();
-        self.insert(def, idx);
+    pub fn alloc(&mut self, def: DefId) -> i32 {
+        let idx = self.next;
+        self.map.insert(def, idx);
+        self.next += 1;
         idx
+    }
+    // shift all indices by -next
+    // return the shifted length as well
+    pub fn migrate(&self) -> (i32, Self) {
+        let mut new = Self::new();
+        let shift = self.next;
+        for (def, idx) in self.iter() {
+            new.map.insert(def.clone(), idx - shift);
+        }
+        // Self::new() resets next to 0
+        // new.next = 0;
+        (shift, new)
     }
 }
 
@@ -349,7 +367,10 @@ impl<'e> Emitter<'e> {
                     Instr::Push(Arg32::Reg(Reg::R10)),
                     // Instr::Push(Arg32::Reg(Reg::R10)),
                 ]);
-                self.compu(bindee, env.clone());
+                // allocate new env stack space
+                let (len, new_env) = env.migrate();
+                self.write([Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(len * 8)))]);
+                self.compu(bindee, new_env);
                 // assume binder is a variable
                 use ValuePattern as VPat;
                 match self.statics.vpat(&binder) {
@@ -420,7 +441,7 @@ impl<'e> Emitter<'e> {
                 let Fillable::Done(Type::Data(data)) = self.statics.types[&ty] else {
                     unreachable!()
                 };
-                for (idx, Matcher { binder, tail }) in arms.into_iter().enumerate() {
+                for Matcher { binder, tail } in arms {
                     // assume only C style enums
                     use ValuePattern as VPat;
                     let VPat::Ctor(Ctor(tag, _)) = self.statics.vpat(&binder) else {
@@ -433,7 +454,7 @@ impl<'e> Emitter<'e> {
                         unreachable!()
                     };
 
-                    let lbl_kont = format!("matcher{}_{}", compu.concise_inner(), idx);
+                    let lbl_kont = format!("matcher{}_not_{}", compu.concise_inner(), tag.plain());
 
                     self.write([
                         Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Signed(i as i32))),
@@ -443,6 +464,8 @@ impl<'e> Emitter<'e> {
                     self.compu(tail, env.clone());
                     self.write([Instr::Label(lbl_kont)]);
                 }
+                // abort if no match
+                self.write([Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string()))]);
             }
             | Compu::CoMatch(CoMatch { arms }) => {
                 // skip definition of comatchers

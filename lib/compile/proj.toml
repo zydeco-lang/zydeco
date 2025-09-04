@@ -10,6 +10,8 @@ bins = [
     "add.zy",
     "nested.zy",
     "nested_out.zy",
+    "match.zy",
+    "cmp.zy",
     "label.zy",
     "loop.zy",
     "acc.zy",

@@ -15,7 +15,6 @@ def fix sum (i: Int): Ret Int =
   match zero?
   | +True _ -> ret 0
   | +False _ ->
-    -- do i <- ret i;
     do i' <- ! sub i 1;
     do acc <- ! sum i';
     ! add i acc
