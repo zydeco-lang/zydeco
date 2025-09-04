@@ -324,6 +324,9 @@ mod impls_structs {
         pub fn iter(&self) -> impl Iterator<Item = &(CtorName, TypeId)> {
             self.into_iter()
         }
+        pub fn len(&self) -> usize {
+            self.arms.len()
+        }
     }
 
     impl IntoIterator for Data {
@@ -352,6 +355,9 @@ mod impls_structs {
         }
         pub fn iter(&self) -> impl Iterator<Item = &(DtorName, TypeId)> {
             self.into_iter()
+        }
+        pub fn len(&self) -> usize {
+            self.arms.len()
         }
     }
 

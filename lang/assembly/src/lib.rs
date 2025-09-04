@@ -444,8 +444,61 @@ impl<'e> Emitter<'e> {
                     self.write([Instr::Label(lbl_kont)]);
                 }
             }
-            | Compu::CoMatch(_) => todo!(),
-            | Compu::Dtor(_) => todo!(),
+            | Compu::CoMatch(CoMatch { arms }) => {
+                // skip definition of comatchers
+                let lbl_kont = format!("comatch{}", compu.concise_inner());
+                self.write([Instr::Jmp(JmpArgs::Label(lbl_kont.clone()))]);
+                // define comatchers
+                let mut lbl_dtors = std::collections::HashMap::new();
+                for CoMatcher { dtor, tail } in arms {
+                    let lbl_dtor = format!("comatcher{}_{}", compu.concise_inner(), dtor.plain());
+                    lbl_dtors.insert(dtor.clone(), lbl_dtor.clone());
+                    self.write([Instr::Label(lbl_dtor)]);
+                    self.compu(tail, env.clone());
+                }
+                // construct the computation tuple
+                let codata = {
+                    let ty = self.statics.annotations_compu[&compu];
+                    match self.statics.types[&ty] {
+                        | Fillable::Done(Type::CoData(codata)) => {
+                            self.statics.codatas[&codata].clone()
+                        }
+                        | _ => unreachable!(),
+                    }
+                };
+                self.write([
+                    Instr::Label(lbl_kont),
+                    // pop idx from stack
+                    Instr::Pop(Loc::Reg(Reg::Rax)),
+                ]);
+
+                // jump to pointer according to idx
+                for (idx, (dtor, _)) in codata.iter().enumerate() {
+                    let lbl_dtor = &lbl_dtors[dtor];
+                    self.write([
+                        Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Signed(idx as i32))),
+                        Instr::JCC(ConditionCode::E, JmpArgs::Label(lbl_dtor.clone())),
+                    ]);
+                }
+
+                // abort if no match
+                self.write([Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string()))]);
+            }
+            | Compu::Dtor(Dtor(head, dtor)) => {
+                let codata = {
+                    let ty = self.statics.annotations_compu[&head];
+                    match self.statics.types[&ty] {
+                        | Fillable::Done(Type::CoData(codata)) => {
+                            self.statics.codatas[&codata].clone()
+                        }
+                        | _ => unreachable!(),
+                    }
+                };
+                let Some(i) = codata.iter().position(|(d, _ty)| &dtor == d) else { unreachable!() };
+                // push idx to stack
+                self.write([Instr::Push(Arg32::Signed(i as i32))]);
+                self.compu(head, env);
+            }
         }
     }
 }

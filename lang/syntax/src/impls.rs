@@ -14,3 +14,17 @@ impl VarName {
         name
     }
 }
+
+impl CtorName {
+    pub fn plain(&self) -> &str {
+        let CtorName(name) = self;
+        &name[1..]
+    }
+}
+
+impl DtorName {
+    pub fn plain(&self) -> &str {
+        let DtorName(name) = self;
+        &name[1..]
+    }
+}
