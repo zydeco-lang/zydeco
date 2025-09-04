@@ -1,0 +1,14 @@
+alias Choice : CType =
+  codata
+  | .left : Ret Int
+  | .right : Int -> Ret Int
+  end
+end
+
+@[pure]
+main
+  (comatch
+  | .left -> ret 10
+  | .right i -> ret i
+  end : Choice) .right 20
+end

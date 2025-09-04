@@ -14,6 +14,7 @@ bins = [
     "cmp.zy",
     "label.zy",
     "loop.zy",
+    "comatch.zy",
     "acc.zy",
     "sum.zy",
     "factorial.zy",
