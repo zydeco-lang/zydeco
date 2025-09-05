@@ -59,7 +59,7 @@ impl Link for ss::DeclId {
                         unreachable!()
                     }
                 };
-                let name = defs[def].as_str();
+                let name = defs[def].plain();
                 // println!("builtin: {}", name);
                 let bindee = {
                     let prim = BUILTINS[name].to_owned().into();

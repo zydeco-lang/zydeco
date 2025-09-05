@@ -235,7 +235,13 @@ impl fmt::Display for Reg {
 
 impl fmt::Display for MemRef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "QWORD [{} + {}]", self.reg, self.offset)
+        use std::cmp::Ordering;
+        let offset = match self.offset.cmp(&0) {
+            | Ordering::Less => format!(" - {}", -self.offset),
+            | Ordering::Equal => format!(""),
+            | Ordering::Greater => format!(" + {}", self.offset),
+        };
+        write!(f, "QWORD [{}{}]", self.reg, offset)
     }
 }
 

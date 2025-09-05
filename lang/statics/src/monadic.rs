@@ -288,7 +288,7 @@ fn structure_translation(
             let svar = {
                 let (tvar, _) = tpat.try_destruct_def(tycker);
                 match tvar {
-                    | Some(tvar) => format!("str_{}", tycker.scoped.defs[&tvar].as_str()),
+                    | Some(tvar) => format!("str_{}", tycker.scoped.defs[&tvar].plain()),
                     | None => "str".to_string(),
                 }
             };

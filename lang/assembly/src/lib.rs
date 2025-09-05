@@ -171,6 +171,7 @@ impl<'e> Emitter<'e> {
                         self.value(bindee, &env);
                         env.alloc(def);
                         self.write([
+                            Instr::Comment(format!("[write] def value {}", self.scoped.def(&def).plain())),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
                                 Reg32::Reg(Reg::Rax),
@@ -217,14 +218,17 @@ impl<'e> Emitter<'e> {
             }
             | Value::Var(def) => {
                 let offset = env[&def] as i32 * 8;
-                self.write([Instr::Mov(MovArgs::ToReg(
-                    Reg::Rax,
-                    Arg64::Mem(MemRef { reg: Reg::R10, offset }),
-                ))]);
+                self.write([
+                    Instr::Comment(format!("[read] variable {}", self.scoped.def(&def).plain())),
+                    Instr::Mov(MovArgs::ToReg(
+                        Reg::Rax,
+                        Arg64::Mem(MemRef { reg: Reg::R10, offset }),
+                    )),
+                ]);
             }
             | Value::Thunk(Thunk(body)) => {
                 let lbl_thunk = format!("thunk{}", value.concise_inner());
-                let lbl_kont = format!("kont{}", value.concise_inner());
+                let lbl_kont = format!("thunk_kont{}", value.concise_inner());
 
                 self.write([
                     Instr::Jmp(JmpArgs::Label(lbl_kont.clone())),
@@ -295,6 +299,10 @@ impl<'e> Emitter<'e> {
                     | VPat::Var(def) => {
                         env.alloc(def);
                         self.write([
+                            Instr::Comment(format!(
+                                "[write] function argument {}",
+                                self.scoped.def(&def).plain()
+                            )),
                             // pop argument to env
                             Instr::Pop(Loc::Mem(MemRef { reg: Reg::R10, offset: 0 })),
                             Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(8))),
@@ -323,6 +331,7 @@ impl<'e> Emitter<'e> {
                         let lbl_fix = format!("fix{}", compu.concise_inner());
                         env.alloc(def);
                         self.write([
+                            Instr::Comment(format!("[write] fix address {}", self.scoped.def(&def).plain())),
                             Instr::Lea(Reg::Rax, LeaArgs::RelLabel(lbl_fix.clone())),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
@@ -344,6 +353,7 @@ impl<'e> Emitter<'e> {
             | Compu::Ret(Return(value)) => {
                 self.value(value, &env);
                 self.write([
+                    Instr::Comment(format!("[form] ret")),
                     // pop env
                     // and then pop address and jump
                     // Instr::Pop(Loc::Reg(Reg::R10)),
@@ -357,6 +367,7 @@ impl<'e> Emitter<'e> {
                 // push kont
                 // and then push env
                 self.write([
+                    Instr::Comment(format!("[form] do")),
                     Instr::Lea(Reg::Rdi, LeaArgs::RelLabel(lbl_kont.clone())),
                     Instr::Push(Arg32::Reg(Reg::Rdi)),
                     Instr::Push(Arg32::Reg(Reg::R10)),
@@ -372,6 +383,10 @@ impl<'e> Emitter<'e> {
                         env.alloc(def);
                         // move result from rax to env
                         self.write([
+                            Instr::Comment(format!(
+                                "[write] return value {}",
+                                self.scoped.def(&def).plain()
+                            )),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
                                 Reg32::Reg(Reg::Rax),
@@ -393,6 +408,10 @@ impl<'e> Emitter<'e> {
                     | VPat::Var(def) => {
                         env.alloc(def);
                         self.write([
+                            Instr::Comment(format!(
+                                "[write] let value {}",
+                                self.scoped.def(&def).plain()
+                            )),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
                                 Reg32::Reg(Reg::Rax),
@@ -408,6 +427,11 @@ impl<'e> Emitter<'e> {
                         env.alloc(def_b);
                         // use Rdi as temp
                         self.write([
+                            Instr::Comment(format!(
+                                "[write] let tuple ({}, {})",
+                                self.scoped.def(&def_a).plain(),
+                                self.scoped.def(&def_b).plain()
+                            )),
                             // Rax is tuple
                             // move tuple.0 to idx_a through Rdi
                             Instr::Mov(MovArgs::ToReg(

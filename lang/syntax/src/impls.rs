@@ -9,7 +9,7 @@ impl fmt::Display for VarName {
 }
 
 impl VarName {
-    pub fn as_str(&self) -> &str {
+    pub fn plain(&self) -> &str {
         let VarName(name) = self;
         name
     }
