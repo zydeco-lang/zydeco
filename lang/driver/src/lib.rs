@@ -175,9 +175,7 @@ impl BuildSystem {
         Package::test_interp(runtime, name.as_str(), false)
     }
     pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
-        // let name = self.packages[&pack].name();
         let checked = self.__tyck_pack(pack, false)?;
-        // Ok(zydeco_x86::run(checked.scoped, checked.statics))
         let mut instrs = Vec::new();
         let mut emitter =
             zydeco_assembly::Emitter::new(checked.scoped, checked.statics, &mut instrs);

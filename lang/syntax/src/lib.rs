@@ -107,7 +107,7 @@ pub struct Fix<P, Tm>(pub P, pub Tm);
 
 /// `C(a_1, ...)`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Ctor<Tail>(pub CtorName, pub Tail);
+pub struct Ctor<Tail, Tag = CtorName>(pub Tag, pub Tail);
 
 /// `match a | p -> b_1 | ... end`
 #[derive(Clone, Debug)]
@@ -123,18 +123,18 @@ pub struct Matcher<Br, Tail> {
 
 /// `comatch | .d_1 -> b_1 | ... end`
 #[derive(Clone, Debug)]
-pub struct CoMatch<Tail> {
-    pub arms: Vec<CoMatcher<Tail>>,
+pub struct CoMatch<Tail, Tag = DtorName> {
+    pub arms: Vec<CoMatcher<Tail, Tag>>,
 }
 #[derive(Clone, Debug)]
-pub struct CoMatcher<Tail> {
-    pub dtor: DtorName,
+pub struct CoMatcher<Tail, Tag = DtorName> {
+    pub dtor: Tag,
     pub tail: Tail,
 }
 
 /// `b .d_i`
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Dtor<Head>(pub Head, pub DtorName);
+pub struct Dtor<Head, Tag = DtorName>(pub Head, pub Tag);
 
 /// literals in term
 #[derive(From, Clone, Debug, Hash, PartialEq, Eq)]

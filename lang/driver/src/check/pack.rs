@@ -318,19 +318,20 @@ impl PackageScoped {
 
         let _ = name;
 
-        let Tycker { spans: _, prim: _, scoped, statics, tasks: _, metas: _, errors: _ } = tycker;
-        Ok(PackageChecked { scoped, statics })
+        let Tycker { spans, prim: _, scoped, statics, tasks: _, metas: _, errors: _ } = tycker;
+        Ok(PackageChecked { spans, scoped, statics })
     }
 }
 
 pub struct PackageChecked {
+    pub spans: t::SpanArena,
     pub scoped: sc::ScopedArena,
     pub statics: ss::StaticsArena,
 }
 
 impl PackageChecked {
     pub fn dynamics(self, name: &str) -> Result<d::DynamicsArena> {
-        let PackageChecked { scoped, statics } = self;
+        let PackageChecked { spans: _, scoped, statics } = self;
         let dynamics = Linker { scoped, statics }.run();
         // // Debug: print the variable definitions in dynamics
         // if cfg!(debug_assertions) {
