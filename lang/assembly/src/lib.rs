@@ -171,7 +171,10 @@ impl<'e> Emitter<'e> {
                         self.value(bindee, &env);
                         env.alloc(def);
                         self.write([
-                            Instr::Comment(format!("[write] def value {}", self.scoped.def(&def).plain())),
+                            Instr::Comment(format!(
+                                "[write] def value {}",
+                                self.scoped.def(&def).plain()
+                            )),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
                                 Reg32::Reg(Reg::Rax),
@@ -218,8 +221,23 @@ impl<'e> Emitter<'e> {
             }
             | Value::Var(def) => {
                 let offset = env[&def] as i32 * 8;
+                let env_layout_msg = format!(
+                    "env layout: {}",
+                    env.iter()
+                        .map(|(def, offset)| (offset, def))
+                        .collect::<std::collections::BTreeMap<_, _>>()
+                        .into_iter()
+                        .map(|(offset, def)| format!(
+                            "{}: {}",
+                            self.scoped.def(&def).plain(),
+                            offset
+                        ))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
                 self.write([
                     Instr::Comment(format!("[read] variable {}", self.scoped.def(&def).plain())),
+                    Instr::Comment(env_layout_msg),
                     Instr::Mov(MovArgs::ToReg(
                         Reg::Rax,
                         Arg64::Mem(MemRef { reg: Reg::R10, offset }),
@@ -331,7 +349,10 @@ impl<'e> Emitter<'e> {
                         let lbl_fix = format!("fix{}", compu.concise_inner());
                         env.alloc(def);
                         self.write([
-                            Instr::Comment(format!("[write] fix address {}", self.scoped.def(&def).plain())),
+                            Instr::Comment(format!(
+                                "[write] fix address {}",
+                                self.scoped.def(&def).plain()
+                            )),
                             Instr::Lea(Reg::Rax, LeaArgs::RelLabel(lbl_fix.clone())),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
@@ -356,7 +377,6 @@ impl<'e> Emitter<'e> {
                     Instr::Comment(format!("[form] ret")),
                     // pop env
                     // and then pop address and jump
-                    // Instr::Pop(Loc::Reg(Reg::R10)),
                     Instr::Pop(Loc::Reg(Reg::R10)),
                     Instr::Pop(Loc::Reg(Reg::Rdi)),
                     Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
@@ -371,7 +391,6 @@ impl<'e> Emitter<'e> {
                     Instr::Lea(Reg::Rdi, LeaArgs::RelLabel(lbl_kont.clone())),
                     Instr::Push(Arg32::Reg(Reg::Rdi)),
                     Instr::Push(Arg32::Reg(Reg::R10)),
-                    // Instr::Push(Arg32::Reg(Reg::R10)),
                 ]);
                 self.compu(bindee, env.clone());
                 // assume binder is a variable
