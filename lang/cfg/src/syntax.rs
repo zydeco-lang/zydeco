@@ -43,23 +43,28 @@ pub enum ValuePattern {
 //     pub value: Value,
 // }
 
-
 /// A block contains a closed computation.
 #[derive(Clone, Debug)]
 pub struct Block<T>(pub T);
+
+#[derive(From, Clone, Debug)]
+pub struct Closure<T> {
+    pub capture: Vec<DefId>,
+    pub inner: T,
+}
 
 #[derive(From, Clone, Debug)]
 pub enum Value {
     Hole(Hole),
     Var(DefId),
     Block(Block<IndCompu>),
+    Closure(Closure<Block<IndCompu>>),
     Ctor(Ctor<IndValue, usize>),
     Triv(Triv),
     VCons(Cons<IndValue, IndValue>),
     // TCons(Cons<TypeId, IndValue>),
     Lit(Literal),
 }
-
 
 #[derive(From, Clone, Debug)]
 pub enum Computation {

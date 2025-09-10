@@ -10,7 +10,12 @@ extern def sub : Thk (Int -> Int -> Ret Int) end
 extern def mul : Thk (Int -> Int -> Ret Int) end
 extern def int_eq : Thk (Int -> Int -> Ret Bool) end
 
-def fix sum (int_eq: Thk (Int -> Int -> Ret Bool)) (add: Thk (Int -> Int -> Ret Int)) (sub: Thk (Int -> Int -> Ret Int)) (i: Int): Ret Int =
+def fix sum
+  (int_eq: Thk (Int -> Int -> Ret Bool))
+  (add: Thk (Int -> Int -> Ret Int))
+  (sub: Thk (Int -> Int -> Ret Int))
+  (i: Int)
+: Ret Int =
   do zero? <- ! int_eq i 0;
   match zero?
   | +True _ -> ret 0

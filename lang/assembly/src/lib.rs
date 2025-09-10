@@ -31,6 +31,15 @@ impl Env {
             *idx -= 1;
         });
     }
+    pub fn layout_msg(&self, scoped: &ScopedArena) -> String {
+        self.iter()
+            .map(|(def, offset)| (offset, def))
+            .collect::<std::collections::BTreeMap<_, _>>()
+            .into_iter()
+            .map(|(offset, def)| format!("{}: {}", scoped.def(&def).plain(), offset))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 pub enum CompileKont {
@@ -67,7 +76,6 @@ impl<'e> Emitter<'e> {
             Instr::Pop(Loc::Reg(Reg::Rdi)),
             Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdi))),
             // pop address and jump
-            Instr::Pop(Loc::Reg(Reg::R10)),
             Instr::Pop(Loc::Reg(Reg::Rdi)),
             Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
         ]);
@@ -79,7 +87,6 @@ impl<'e> Emitter<'e> {
             Instr::Pop(Loc::Reg(Reg::Rdi)),
             Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdi))),
             // pop address and jump
-            Instr::Pop(Loc::Reg(Reg::R10)),
             Instr::Pop(Loc::Reg(Reg::Rdi)),
             Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
         ]);
@@ -91,7 +98,6 @@ impl<'e> Emitter<'e> {
             Instr::Pop(Loc::Reg(Reg::Rdi)),
             Instr::IMul(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdi))),
             // pop address and jump
-            Instr::Pop(Loc::Reg(Reg::R10)),
             Instr::Pop(Loc::Reg(Reg::Rdi)),
             Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
         ]);
@@ -105,7 +111,6 @@ impl<'e> Emitter<'e> {
             Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(0))),
             Instr::SetCC(ConditionCode::E, Reg8::Al),
             // pop address and jump
-            Instr::Pop(Loc::Reg(Reg::R10)),
             Instr::Pop(Loc::Reg(Reg::Rdi)),
             Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
         ]);
@@ -124,8 +129,6 @@ impl<'e> Emitter<'e> {
             // push entry_kont
             Instr::Lea(Reg::Rdi, LeaArgs::RelLabel(lbl_entry_kont.clone())),
             Instr::Push(Arg32::Reg(Reg::Rdi)),
-            // push env
-            Instr::Push(Arg32::Reg(Reg::R10)),
         ]);
 
         // compile declarations
@@ -175,6 +178,7 @@ impl<'e> Emitter<'e> {
                                 "[write] def value {}",
                                 self.scoped.def(&def).plain()
                             )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
                                 Reg32::Reg(Reg::Rax),
@@ -221,23 +225,9 @@ impl<'e> Emitter<'e> {
             }
             | Value::Var(def) => {
                 let offset = env[&def] as i32 * 8;
-                let env_layout_msg = format!(
-                    "env layout: {}",
-                    env.iter()
-                        .map(|(def, offset)| (offset, def))
-                        .collect::<std::collections::BTreeMap<_, _>>()
-                        .into_iter()
-                        .map(|(offset, def)| format!(
-                            "{}: {}",
-                            self.scoped.def(&def).plain(),
-                            offset
-                        ))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
                 self.write([
                     Instr::Comment(format!("[read] variable {}", self.scoped.def(&def).plain())),
-                    Instr::Comment(env_layout_msg),
+                    Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
                     Instr::Mov(MovArgs::ToReg(
                         Reg::Rax,
                         Arg64::Mem(MemRef { reg: Reg::R10, offset }),
@@ -321,6 +311,7 @@ impl<'e> Emitter<'e> {
                                 "[write] function argument {}",
                                 self.scoped.def(&def).plain()
                             )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
                             // pop argument to env
                             Instr::Pop(Loc::Mem(MemRef { reg: Reg::R10, offset: 0 })),
                             Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(8))),
@@ -353,6 +344,7 @@ impl<'e> Emitter<'e> {
                                 "[write] fix address {}",
                                 self.scoped.def(&def).plain()
                             )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
                             Instr::Lea(Reg::Rax, LeaArgs::RelLabel(lbl_fix.clone())),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
@@ -375,9 +367,7 @@ impl<'e> Emitter<'e> {
                 self.value(value, &env);
                 self.write([
                     Instr::Comment(format!("[form] ret")),
-                    // pop env
                     // and then pop address and jump
-                    Instr::Pop(Loc::Reg(Reg::R10)),
                     Instr::Pop(Loc::Reg(Reg::Rdi)),
                     Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
                 ]);
@@ -389,8 +379,8 @@ impl<'e> Emitter<'e> {
                 self.write([
                     Instr::Comment(format!("[form] do")),
                     Instr::Lea(Reg::Rdi, LeaArgs::RelLabel(lbl_kont.clone())),
-                    Instr::Push(Arg32::Reg(Reg::Rdi)),
                     Instr::Push(Arg32::Reg(Reg::R10)),
+                    Instr::Push(Arg32::Reg(Reg::Rdi)),
                 ]);
                 self.compu(bindee, env.clone());
                 // assume binder is a variable
@@ -402,10 +392,12 @@ impl<'e> Emitter<'e> {
                         env.alloc(def);
                         // move result from rax to env
                         self.write([
+                            Instr::Pop(Loc::Reg(Reg::R10)),
                             Instr::Comment(format!(
                                 "[write] return value {}",
                                 self.scoped.def(&def).plain()
                             )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
                                 Reg32::Reg(Reg::Rax),
@@ -431,6 +423,7 @@ impl<'e> Emitter<'e> {
                                 "[write] let value {}",
                                 self.scoped.def(&def).plain()
                             )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
                             Instr::Mov(MovArgs::ToMem(
                                 MemRef { reg: Reg::R10, offset: 0 },
                                 Reg32::Reg(Reg::Rax),
@@ -451,6 +444,7 @@ impl<'e> Emitter<'e> {
                                 self.scoped.def(&def_a).plain(),
                                 self.scoped.def(&def_b).plain()
                             )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
                             // Rax is tuple
                             // move tuple.0 to idx_a through Rdi
                             Instr::Mov(MovArgs::ToReg(

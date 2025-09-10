@@ -149,7 +149,15 @@ impl Lower for ss::ValueId {
         match value {
             | Value::Hole(Hole) => Hole.into(),
             | Value::Var(def) => def.into(),
-            | Value::Thunk(_thunk) => todo!(),
+            | Value::Thunk(Thunk(body)) => {
+                let term = lowerer.statics.terms.back(&ss::TermId::Compu(body)).unwrap();
+                let coctx = lowerer.scoped.coctxs_term_local[&term]
+                    .clone()
+                    .into_iter()
+                    .map(|(def, _)| def)
+                    .collect::<Vec<_>>();
+                Closure { capture: coctx, inner: Block(IndCompu::new(body.lower(lowerer))) }.into()
+            }
             | Value::Ctor(Ctor(ctor, inner)) => {
                 // resolve tag
                 let ty = lowerer.statics.annotations_value[self];
@@ -161,7 +169,7 @@ impl Lower for ss::ValueId {
                 let inner = IndValue::new(inner.lower(lowerer));
                 Ctor(tag, inner).into()
             }
-            | Value::Triv(triv) => triv.into(),
+            | Value::Triv(Triv) => Triv.into(),
             | Value::VCons(Cons(a, b)) => {
                 let a = IndValue::new(a.lower(lowerer));
                 let b = IndValue::new(b.lower(lowerer));
@@ -176,7 +184,75 @@ impl Lower for ss::ValueId {
 impl Lower for ss::CompuId {
     type Out = Computation;
 
-    fn lower(&self, _lowerer: &mut StaticsLowerer) -> Self::Out {
-        todo!()
+    fn lower(&self, lowerer: &mut StaticsLowerer) -> Self::Out {
+        let compu = lowerer.statics.compu(self);
+        use ss::Computation as Compu;
+        match compu {
+            | Compu::Hole(Hole) => Hole.into(),
+            | Compu::VAbs(Abs(param, body)) => {
+                let param = param.lower(lowerer);
+                let body = IndCompu::new(body.lower(lowerer));
+                Abs(param, body).into()
+            }
+            | Compu::VApp(App(body, arg)) => {
+                let body = IndCompu::new(body.lower(lowerer));
+                let arg = IndValue::new(arg.lower(lowerer));
+                App(body, arg).into()
+            }
+            | Compu::TAbs(Abs(_param, body)) => body.lower(lowerer),
+            | Compu::TApp(App(body, _ty)) => body.lower(lowerer),
+            | Compu::Fix(_) => todo!(),
+            | Compu::Force(_) => todo!(),
+            | Compu::Ret(_) => todo!(),
+            | Compu::Do(_) => todo!(),
+            | Compu::Let(_) => todo!(),
+            | Compu::Match(Match { scrut, arms }) => {
+                let scrut = IndValue::new(scrut.lower(lowerer));
+                let arms = arms
+                    .into_iter()
+                    .map(|Matcher { binder, tail }| {
+                        let binder = binder.lower(lowerer);
+                        let tail = IndCompu::new(tail.lower(lowerer));
+                        Matcher { binder, tail }
+                    })
+                    .collect::<Vec<_>>();
+                Match { scrut, arms }.into()
+            }
+            | Compu::CoMatch(CoMatch { arms }) => {
+                // resolve tag
+                let ty = lowerer.statics.annotations_compu[self];
+                let codata = match lowerer.statics.r#type(&ty) {
+                    | ss::Fillable::Done(ss::Type::CoData(codata)) => {
+                        lowerer.statics.codatas[&codata].clone()
+                    }
+                    | _ => unreachable!(),
+                };
+                let arms = arms
+                    .into_iter()
+                    .map(|CoMatcher { dtor, tail }| {
+                        let tail = IndCompu::new(tail.lower(lowerer));
+                        let tag = codata
+                            .iter()
+                            .position(|(tag_branch, _ty)| &dtor == tag_branch)
+                            .unwrap();
+                        CoMatcher { dtor: tag, tail }
+                    })
+                    .collect::<Vec<_>>();
+                CoMatch { arms }.into()
+            }
+            | Compu::Dtor(Dtor(head, dtor)) => {
+                // resolve tag
+                let ty = lowerer.statics.annotations_compu[self];
+                let codata = match lowerer.statics.r#type(&ty) {
+                    | ss::Fillable::Done(ss::Type::CoData(codata)) => {
+                        lowerer.statics.codatas[&codata].clone()
+                    }
+                    | _ => unreachable!(),
+                };
+                let head = IndCompu::new(head.lower(lowerer));
+                let tag = codata.iter().position(|(tag_branch, _ty)| &dtor == tag_branch).unwrap();
+                Dtor(head, tag).into()
+            }
+        }
     }
 }
