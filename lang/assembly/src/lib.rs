@@ -517,12 +517,31 @@ impl<'e> Emitter<'e> {
                 }
                 // construct the computation tuple
                 let codata = {
-                    let ty = self.statics.annotations_compu[&compu];
-                    match self.statics.types[&ty] {
-                        | Fillable::Done(Type::CoData(codata)) => {
-                            self.statics.codatas[&codata].clone()
+                    let mut ty = self.statics.annotations_compu[&compu];
+                    loop {
+                        match self.statics.types[&ty] {
+                            | Fillable::Done(Type::CoData(codata)) => {
+                                break self.statics.codatas[&codata].clone();
+                            }
+                            | Fillable::Done(Type::Abst(abst)) => {
+                                ty = self.statics.seals[&abst].clone();
+                            }
+                            | Fillable::Done(Type::Abs(Abs(_, body))) => {
+                                ty = body;
+                            }
+                            | Fillable::Done(Type::App(App(f, _))) => {
+                                ty = f;
+                            }
+                            | Fillable::Fill(fill) => {
+                                let AnnId::Type(ty_) = self.statics.solus[&fill].clone() else {
+                                    unreachable!()
+                                };
+                                ty = ty_;
+                            }
+                            | _ => {
+                                unreachable!();
+                            }
                         }
-                        | _ => unreachable!(),
                     }
                 };
                 self.write([
@@ -545,12 +564,31 @@ impl<'e> Emitter<'e> {
             }
             | Compu::Dtor(Dtor(head, dtor)) => {
                 let codata = {
-                    let ty = self.statics.annotations_compu[&head];
-                    match self.statics.types[&ty] {
-                        | Fillable::Done(Type::CoData(codata)) => {
-                            self.statics.codatas[&codata].clone()
+                    let mut ty = self.statics.annotations_compu[&head];
+                    loop {
+                        match self.statics.types[&ty] {
+                            | Fillable::Done(Type::CoData(codata)) => {
+                                break self.statics.codatas[&codata].clone();
+                            }
+                            | Fillable::Done(Type::Abst(abst)) => {
+                                ty = self.statics.seals[&abst].clone();
+                            }
+                            | Fillable::Done(Type::Abs(Abs(_, body))) => {
+                                ty = body;
+                            }
+                            | Fillable::Done(Type::App(App(f, _))) => {
+                                ty = f;
+                            }
+                            | Fillable::Fill(fill) => {
+                                let AnnId::Type(ty_) = self.statics.solus[&fill].clone() else {
+                                    unreachable!()
+                                };
+                                ty = ty_;
+                            }
+                            | _ => {
+                                unreachable!();
+                            }
                         }
-                        | _ => unreachable!(),
                     }
                 };
                 let Some(i) = codata.iter().position(|(d, _ty)| &dtor == d) else { unreachable!() };

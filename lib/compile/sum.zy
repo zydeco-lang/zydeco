@@ -5,12 +5,24 @@ alias Bool : VType =
   end
 end
 
+codata Y (B : CType) where
+  | .y : Thk (Y B) -> B
+end
+
+def ! fix' (B : CType) (f: Thk (Thk B -> B)): Ret (Thk B) =
+  let prim : Thk (Y B) = { comatch | .y -> fn x -> ! f { ! x .y x } end } in
+  ret { ! prim .y(prim) }
+end
+
 extern def add : Thk (Int -> Int -> Ret Int) end
 extern def sub : Thk (Int -> Int -> Ret Int) end
 extern def mul : Thk (Int -> Int -> Ret Int) end
 extern def int_eq : Thk (Int -> Int -> Ret Bool) end
 
-def fix sum
+alias Sum = Thk (Int -> Int -> Ret Bool) -> Thk (Int -> Int -> Ret Int) -> Thk (Int -> Int -> Ret Int) -> Int -> Ret Int end
+
+def ! sum'
+  (sum'': Thk Sum)
   (int_eq: Thk (Int -> Int -> Ret Bool))
   (add: Thk (Int -> Int -> Ret Int))
   (sub: Thk (Int -> Int -> Ret Int))
@@ -21,12 +33,13 @@ def fix sum
   | +True _ -> ret 0
   | +False _ ->
     do i' <- ! sub i 1;
-    do acc <- ! sum int_eq add sub i';
+    do acc <- ! sum'' int_eq add sub i';
     ! add i acc
   end
 end
 
 @[pure]
 main
+  do sum <- ! fix' Sum sum';
   ! sum int_eq add sub 10
 end
