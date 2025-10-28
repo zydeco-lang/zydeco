@@ -178,7 +178,7 @@ impl BuildSystem {
         let checked = self.__tyck_pack(pack, false)?;
         let mut instrs = Vec::new();
         let mut emitter =
-            zydeco_assembly::Emitter::new(checked.scoped, checked.statics, &mut instrs);
+            zydeco_x86::Emitter::new(checked.scoped, checked.statics, &mut instrs);
         emitter.run();
         Ok(instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n"))
     }

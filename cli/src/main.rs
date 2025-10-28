@@ -202,7 +202,7 @@ fn link_x86(
         .arg(lib_fname)
         .arg(&obj_fname)
         .output()
-        .map_err(|e| (format!("ar err: {}", e)))?;
+        .map_err(|e| format!("ar err: {}", e))?;
     if !ar_out.status.success() {
         return Err(format!(
             "Failure in ar call:\n{}\n{}",
@@ -225,7 +225,7 @@ fn link_x86(
             .arg("-o")
             .arg(&exe_fname)
             .output()
-            .map_err(|e| (format!("rustc err: {}", e)))?
+            .map_err(|e| format!("rustc err: {}", e))?
     } else {
         Command::new("rustc")
             .arg(stub_path)
@@ -234,7 +234,7 @@ fn link_x86(
             .arg("-o")
             .arg(&exe_fname)
             .output()
-            .map_err(|e| (format!("rustc err: {}", e)))?
+            .map_err(|e| format!("rustc err: {}", e))?
     };
     if !rustc_out.status.success() {
         Err(format!(

@@ -42,7 +42,7 @@ pub enum Value {
 /* ------------------------------- Computation ------------------------------ */
 
 pub type PrimComp =
-    fn(Vec<SemValue>, &mut (dyn BufRead), &mut (dyn Write), &[String]) -> Result<Computation, i32>;
+    fn(Vec<SemValue>, &mut dyn BufRead, &mut dyn Write, &[String]) -> Result<Computation, i32>;
 
 #[derive(Clone, Debug)]
 pub struct Prim {
@@ -117,8 +117,8 @@ pub enum SemCompu {
 }
 
 pub struct Runtime<'rt> {
-    pub input: &'rt mut (dyn BufRead),
-    pub output: &'rt mut (dyn Write),
+    pub input: &'rt mut dyn BufRead,
+    pub output: &'rt mut dyn Write,
     pub args: &'rt [String],
     pub stack: im::Vector<SemCompu>,
     pub env: Env<SemValue>,

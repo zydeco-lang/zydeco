@@ -236,7 +236,7 @@ pub fn str_to_int(
 
 // /* IO */
 pub fn write_str(
-    args: Vec<ZValue>, _r: &mut (dyn BufRead), w: &mut (dyn Write), _: &[String],
+    args: Vec<ZValue>, _r: &mut dyn BufRead, w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(s)), e @ ZValue::Thunk(..)] => {
@@ -249,7 +249,7 @@ pub fn write_str(
 }
 
 pub fn read_line(
-    args: Vec<ZValue>, r: &mut (dyn BufRead), _w: &mut (dyn Write), _: &[String],
+    args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [e @ ZValue::Thunk(_)] => {
@@ -266,7 +266,7 @@ pub fn read_line(
 }
 
 pub fn read_line_as_int(
-    args: Vec<ZValue>, r: &mut (dyn BufRead), _w: &mut (dyn Write), _: &[String],
+    args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [e @ ZValue::Thunk(_)] => {
@@ -289,7 +289,7 @@ pub fn read_line_as_int(
 }
 
 pub fn read_till_eof(
-    args: Vec<ZValue>, r: &mut (dyn BufRead), _w: &mut (dyn Write), _: &[String],
+    args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [e @ ZValue::Thunk(_)] => {
@@ -305,7 +305,7 @@ pub fn read_till_eof(
 }
 
 pub fn arg_list(
-    args: Vec<ZValue>, _r: &mut (dyn BufRead), _w: &mut (dyn Write), argv: &[String],
+    args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, argv: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [k] => {
@@ -323,7 +323,7 @@ pub fn arg_list(
 }
 
 pub fn random_int(
-    args: Vec<ZValue>, _: &mut (dyn BufRead), _: &mut (dyn Write), _: &[String],
+    args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     use rand::Rng;
     match args.as_slice() {
@@ -337,7 +337,7 @@ pub fn random_int(
 }
 
 pub fn exit(
-    args: Vec<ZValue>, _r: &mut (dyn BufRead), _w: &mut (dyn Write), _: &[String],
+    args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::Int(a))] => Err(*a as i32),

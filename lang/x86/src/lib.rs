@@ -1,361 +1,603 @@
-//! RSP stores the control stack
-//! R10 stores the environment stack
+//! The pointer to control stack is stored in Rsp.
+//! The pointer to environment stack is stored in R10.
+//! The pointer to the heap is stored in R11.
 
 pub mod syntax;
 
-// use syntax::*;
-// use zydeco_statics::{arena::*, syntax::*};
+use derive_more::{Deref, DerefMut};
+use zydeco_statics::{arena::*, syntax::*};
+use syntax::*;
 
-// pub fn run(scoped: ScopedArena, statics: StaticsArena) -> String {
-//     let mut seq = Vec::new();
-//     let mut scc = scoped.top.clone();
-//     loop {
-//         let groups = scc.top();
-//         if groups.is_empty() {
-//             break;
-//         }
-//         for group in groups {
-//             seq.extend(group.iter().cloned());
-//             scc.release(group);
-//         }
-//     }
+pub struct Emitter<'e> {
+    pub scoped: ScopedArena,
+    pub statics: StaticsArena,
+    pub instrs: &'e mut Vec<Instr>,
+}
 
-//     // remove anything after the first exec
-//     let exec_idx = seq.iter().position(|decl| {
-//         let Some(decl) = statics.decls.get(decl) else {
-//             return false;
-//         };
-//         matches!(decl, Declaration::Exec(_))
-//     });
-//     seq.truncate(exec_idx.map(|idx| idx + 1).unwrap_or(seq.len()));
+/// A backward allocated environment stack
+#[derive(Clone, Debug, Deref, DerefMut)]
+pub struct Env {
+    #[deref]
+    #[deref_mut]
+    map: im::HashMap<DefId, i32>,
+}
 
-//     let mut res = Vec::new();
-//     let mut ext = Vec::new();
-//     gen_decls(&scoped, &statics, seq.into_iter(), &mut ext, Env::new(), &mut res);
-//     std::iter::empty()
-//         .chain([Instr::Section(".text".to_string()), Instr::Global("zydeco_start".to_string())])
-//         .chain(ext.into_iter().map(|ext| Instr::Extern(ext)))
-//         .chain([Instr::Label("zydeco_start".to_string())])
-//         .chain(res.into_iter())
-//         .map(|instr| instr.to_string())
-//         .collect::<Vec<_>>()
-//         .join("\n")
-// }
+impl Env {
+    pub fn new() -> Self {
+        Self { map: im::HashMap::new() }
+    }
+    /// Always call alloc before assigning.
+    pub fn alloc(&mut self, def: DefId) {
+        self.map.insert(def, 0);
+        self.map.iter_mut().for_each(|(_def, idx)| {
+            *idx -= 1;
+        });
+    }
+    pub fn layout_msg(&self, scoped: &ScopedArena) -> String {
+        self.iter()
+            .map(|(def, offset)| (offset, def))
+            .collect::<std::collections::BTreeMap<_, _>>()
+            .into_iter()
+            .map(|(offset, def)| format!("{}: {}", scoped.def(&def).plain(), offset))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
 
-// #[derive(Clone)]
-// pub struct Env {
-//     map: im::HashMap<DefId, ValueStore>,
-//     next: usize,
-// }
+pub enum CompileKont {
+    Next(Env),
+    Done,
+}
 
-// impl Env {
-//     fn new() -> Self {
-//         Self { map: im::HashMap::new(), next: 0 }
-//     }
-//     fn get(&self, def: &DefId) -> Option<ValueStore> {
-//         self.map.get(def).cloned()
-//     }
-// }
+impl<'e> Emitter<'e> {
+    pub fn new(scoped: ScopedArena, statics: StaticsArena, instrs: &'e mut Vec<Instr>) -> Self {
+        Self { scoped, statics, instrs }
+    }
+    pub fn write(&mut self, instrs: impl IntoIterator<Item = Instr>) {
+        self.instrs.extend(instrs);
+    }
 
-// #[derive(Clone)]
-// pub enum ValueStore {
-//     Inf,
-//     Int(Loc64),
-//     Thunk { env: Loc64, code: Loc64 },
-//     Triv,
-//     Cons(Box<ValueStore>, Box<ValueStore>),
-// }
+    pub fn run(&mut self) {
+        self.write([
+            // section .text
+            Instr::Section(".text".to_string()),
+            // global entry
+            Instr::Global("entry".to_string()),
+            // zydeco_abort
+            Instr::Extern("zydeco_abort".to_string()),
+            // zydeco_alloc
+            Instr::Extern("zydeco_alloc".to_string()),
+        ]);
 
-// // Todo: Arg64?
-// #[derive(Clone)]
-// pub enum Loc64 {
-//     Env(usize),
-//     Reg(Reg),
-//     Label(String),
-//     Signed(i64),
-// }
+        // zydeco extern implementations
+        self.write([
+            // add
+            Instr::Label("add".to_string()),
+            // pop twice and add them to rax
+            Instr::Pop(Loc::Reg(Reg::Rax)),
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+            Instr::Add(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdi))),
+            // pop address and jump
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
+        ]);
+        self.write([
+            // sub
+            Instr::Label("sub".to_string()),
+            // pop twice and add them to rax
+            Instr::Pop(Loc::Reg(Reg::Rax)),
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+            Instr::Sub(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdi))),
+            // pop address and jump
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
+        ]);
+        self.write([
+            // mul
+            Instr::Label("mul".to_string()),
+            // pop twice and add them to rax
+            Instr::Pop(Loc::Reg(Reg::Rax)),
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+            Instr::IMul(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdi))),
+            // pop address and jump
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
+        ]);
+        self.write([
+            // int_eq
+            Instr::Label("int_eq".to_string()),
+            // pop twice and add them to rax
+            Instr::Pop(Loc::Reg(Reg::Rax)),
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+            Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rdi))),
+            Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(0))),
+            Instr::SetCC(ConditionCode::E, Reg8::Al),
+            // pop address and jump
+            Instr::Pop(Loc::Reg(Reg::Rdi)),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
+        ]);
 
-// impl Loc64 {
-//     fn to_arg64(self) -> Arg64 {
-//         match self {
-//             | Loc64::Env(idx) => Arg64::Mem(MemRef { reg: Reg::R10, offset: 8 * idx as i32 }),
-//             | Loc64::Reg(reg) => Arg64::Reg(reg),
-//             | Loc64::Label(label) => Arg64::Label(label),
-//             | Loc64::Signed(n) => Arg64::Signed(n),
-//         }
-//     }
-// }
+        let lbl_entry = "entry".to_string();
+        let lbl_entry_kont = "entry_kont".to_string();
 
-// pub fn gen_decls(
-//     scoped: &ScopedArena, statics: &StaticsArena, mut decl_iter: impl Iterator<Item = DeclId>,
-//     ext: &mut Vec<String>, mut env: Env, res: &mut Vec<Instr>,
-// ) {
-//     let Some(decl) = decl_iter.next() else { return };
-//     'out: loop {
-//         let Some(decl) = statics.decls.get(&decl) else { break 'out };
-//         use Declaration as Decl;
-//         match decl {
-//             | Decl::TAliasBody(_) => break 'out,
-//             | Decl::VAliasBody(VAliasBody { binder, bindee }) => {
-//                 let bindee = gen_value(scoped, statics, *bindee, env.clone(), res);
-//                 env = gen_vpat_assign(scoped, statics, *binder, bindee, env.clone(), res);
-//                 break 'out;
-//             }
-//             | Decl::VAliasHead(VAliasHead { binder, .. }) => {
-//                 use ValuePattern as VPat;
-//                 let VPat::Var(var) = statics.vpat(binder) else { unreachable!() };
-//                 let name = scoped.defs[&var].as_str();
-//                 ext.push(name.to_string());
-//                 // Fixme: external labels should not be thunked
-//                 env.map.insert(
-//                     var,
-//                     ValueStore::Thunk {
-//                         env: Loc64::Signed(0),
-//                         code: Loc64::Label(name.to_string()),
-//                     },
-//                 );
-//                 break 'out;
-//             }
-//             | Decl::Exec(Exec(exec)) => {
-//                 gen_compu(scoped, statics, *exec, env, res);
-//                 return;
-//             }
-//         }
-//     }
-//     gen_decls(scoped, statics, decl_iter, ext, env, res)
-// }
+        // label entry
+        self.write([
+            // entry:
+            Instr::Label(lbl_entry),
+            // move Rdi to R10 (env)
+            Instr::Mov(MovArgs::ToReg(Reg::R10, Arg64::Reg(Reg::Rdi))),
+            // move Rsi to R11 (heap)
+            Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rsi))),
+            // push entry_kont
+            Instr::Lea(Reg::Rdi, LeaArgs::RelLabel(lbl_entry_kont.clone())),
+            Instr::Push(Arg32::Reg(Reg::Rdi)),
+        ]);
 
-// // pub fn type_size(scoped: &ScopedArena, statics: &StaticsArena, ty: TypeId) -> ValueStore {
-// //     let Fillable::Done(ty) = statics.r#type(&ty) else { unreachable!() };
-// //     match ty {
-// //         | Type::Var(def_id) => todo!(),
-// //         | Type::Abst(abst_id) => todo!(),
-// //         | Type::Abs(abs) => todo!(),
-// //         | Type::App(app) => todo!(),
-// //         | Type::Thk(thk_ty) => todo!(),
-// //         | Type::Ret(ret_ty) => todo!(),
-// //         | Type::Unit(unit_ty) => todo!(),
-// //         | Type::Int(int_ty) => todo!(),
-// //         | Type::Char(char_ty) => todo!(),
-// //         | Type::String(string_ty) => todo!(),
-// //         | Type::OS(osty) => todo!(),
-// //         | Type::Arrow(arrow) => todo!(),
-// //         | Type::Forall(forall) => todo!(),
-// //         | Type::Prod(prod) => todo!(),
-// //         | Type::Exists(exists) => todo!(),
-// //         | Type::Data(data_id) => todo!(),
-// //         | Type::CoData(co_data_id) => todo!(),
-// //     }
-// // }
+        // compile declarations
+        let mut scc = self.scoped.top.clone();
+        let mut env = Env::new();
+        'out: loop {
+            let frontier = scc.top();
+            if frontier.is_empty() {
+                break 'out;
+            }
+            for group in frontier {
+                for decl in group.iter() {
+                    let Some(_) = self.statics.decls.get(decl) else {
+                        continue;
+                    };
+                    match self.decl(&decl, env) {
+                        | CompileKont::Next(new_env) => env = new_env,
+                        | CompileKont::Done => break 'out,
+                    }
+                }
+                scc.release(group);
+            }
+        }
 
-// pub fn gen_vpat_assign(
-//     scoped: &ScopedArena, statics: &StaticsArena, vpat: VPatId, value: ValueStore, mut env: Env,
-//     res: &mut Vec<Instr>,
-// ) -> Env {
-//     use ValuePattern as VPat;
-//     match statics.vpat(&vpat) {
-//         | VPat::Hole(Hole) => {
-//             let ValueStore::Inf = value else { unreachable!() };
-//             env
-//         }
-//         | VPat::Var(def) => {
-//             let name = scoped.defs[&def].as_str();
-//             res.push(Instr::Comment(format!("[write] variable {}", name)));
-//             env.map.insert(def, value);
-//             env
-//         }
-//         | VPat::Ctor(ctor) => todo!(),
-//         | VPat::Triv(triv) => todo!(),
-//         | VPat::VCons(cons) => todo!(),
-//         | VPat::TCons(cons) => todo!(),
-//     }
-// }
+        // label entry_kont
+        self.write([
+            // entry_kont:
+            Instr::Label(lbl_entry_kont.clone()),
+            Instr::Ret,
+        ]);
+    }
 
-// pub fn gen_value(
-//     scoped: &ScopedArena, statics: &StaticsArena, value: ValueId, mut env: Env,
-//     res: &mut Vec<Instr>,
-// ) -> ValueStore {
-//     match statics.value(&value) {
-//         | Value::Hole(Hole) => {
-//             res.push(Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string())));
-//             ValueStore::Inf
-//         }
-//         | Value::Var(def) => {
-//             let name = scoped.defs[&def].as_str();
-//             res.push(Instr::Comment(format!("[read] variable {}", name)));
-//             let Some(store) = env.get(&def) else { unreachable!("{:?}", def) };
-//             store
-//         }
-//         | Value::Thunk(Thunk(body)) => {
-//             let kont_label = format!("kont_{}", value.concise_inner());
-//             let body_label = format!("body_{}", value.concise_inner());
-//             // copy environment to heap and store result in Rax
-//             env_to_heap(&env, res);
-//             // save environment pointer to environment stack
-//             {
-//                 let offset = 8 * env.next as i32;
-//                 res.push(Instr::Mov(MovArgs::ToMem(
-//                     MemRef { reg: Reg::R10, offset },
-//                     Reg32::Reg(Reg::Rax),
-//                 )));
-//                 env.next += 1;
-//             }
-//             res.push(Instr::Jmp(JmpArgs::Label(kont_label.clone())));
-//             // gen body
-//             res.push(Instr::Label(body_label.clone()));
-//             gen_compu(scoped, statics, body, env, res);
-//             res.push(Instr::Label(kont_label));
-//             ValueStore::Thunk { env: Loc64::Reg(Reg::Rax), code: Loc64::Label(body_label) }
-//         }
-//         | Value::Ctor(_ctor) => todo!(),
-//         | Value::Triv(Triv) => ValueStore::Triv,
-//         | Value::VCons(Cons(a, b)) => {
-//             let a = gen_value(scoped, statics, a, env.clone(), res);
-//             let b = gen_value(scoped, statics, b, env.clone(), res);
-//             ValueStore::Cons(Box::new(a), Box::new(b))
-//         }
-//         | Value::TCons(Cons(_, body)) => gen_value(scoped, statics, body, env, res),
-//         | Value::Lit(lit) => match lit {
-//             | Literal::Int(n) => ValueStore::Int(Loc64::Signed(n)),
-//             | Literal::String(_) => todo!(),
-//             | Literal::Char(_) => todo!(),
-//         },
-//     }
-// }
+    pub fn decl(&mut self, decl: &DeclId, mut env: Env) -> CompileKont {
+        use Declaration as Decl;
+        match self.statics.decl(decl) {
+            | Decl::TAliasBody(_) => CompileKont::Next(env),
+            | Decl::VAliasBody(VAliasBody { binder, bindee }) => {
+                // assume binder is a variable
+                use ValuePattern as VPat;
+                match self.statics.vpat(&binder) {
+                    | VPat::Var(def) => {
+                        // compile a value to Rax
+                        self.value(bindee, &env);
+                        env.alloc(def);
+                        self.write([
+                            Instr::Comment(format!(
+                                "[write] def value {}",
+                                self.scoped.def(&def).plain()
+                            )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
+                            Instr::Mov(MovArgs::ToMem(
+                                MemRef { reg: Reg::R10, offset: 0 },
+                                Reg32::Reg(Reg::Rax),
+                            )),
+                            Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(8))),
+                        ]);
+                        CompileKont::Next(env)
+                    }
+                    | _ => unreachable!(),
+                }
+            }
+            | Decl::VAliasHead(VAliasHead { binder, ty: _ }) => {
+                // assume it's implemented
+                use ValuePattern as VPat;
+                match self.statics.vpat(&binder) {
+                    | VPat::Var(def) => {
+                        let name = self.scoped.def(&def).0;
+                        env.alloc(def);
+                        self.write([
+                            Instr::Lea(Reg::Rax, LeaArgs::RelLabel(name)),
+                            Instr::Mov(MovArgs::ToMem(
+                                MemRef { reg: Reg::R10, offset: 0 },
+                                Reg32::Reg(Reg::Rax),
+                            )),
+                            Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(8))),
+                        ]);
+                        CompileKont::Next(env)
+                    }
+                    | _ => unreachable!(),
+                }
+            }
+            | Decl::Exec(Exec(compu)) => {
+                self.compu(compu, env);
+                CompileKont::Done
+            }
+        }
+    }
 
-// pub fn gen_compu(
-//     scoped: &ScopedArena, statics: &StaticsArena, compu: CompuId, mut env: Env,
-//     res: &mut Vec<Instr>,
-// ) {
-//     use Computation as Compu;
-//     match statics.compu(&compu) {
-//         | Compu::Hole(Hole) => {
-//             res.extend([Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string()))]);
-//         }
-//         | Compu::VAbs(Abs(param, body)) => {
-//             // Todo: assuming param is a variable
-//             let ValuePattern::Var(var) = statics.vpat(&param) else { unreachable!() };
-//             // Todo: assuming param is word-sized
-//             // pop param from control stack to environment
-//             let offset = 8 * env.next as i32;
-//             res.push(Instr::Pop(Loc::Mem(MemRef { reg: Reg::R10, offset })));
-//             env.map.insert(var, ValueStore::Int(Loc64::Env(env.next)));
-//             env.next += 1;
-//             // gen body
-//             gen_compu(scoped, statics, body, env, res);
-//         }
-//         | Compu::VApp(App(body, arg)) => {
-//             let arg = gen_value(scoped, statics, arg, env.clone(), res);
-//             // push arg to control stack
-//             fn push(arg: ValueStore, res: &mut Vec<Instr>) {
-//                 match arg {
-//                     | ValueStore::Inf => {}
-//                     | ValueStore::Int(loc) => {
-//                         // move to rax and push
-//                         res.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, loc.to_arg64())));
-//                         res.push(Instr::Push(Arg32::Reg(Reg::Rax)));
-//                     }
-//                     | ValueStore::Thunk { env, code } => todo!(),
-//                     | ValueStore::Triv => {}
-//                     | ValueStore::Cons(a, b) => {
-//                         push(*a, res);
-//                         push(*b, res);
-//                     }
-//                 }
-//             }
-//             push(arg, res);
-//             gen_compu(scoped, statics, body, env, res);
-//         }
-//         | Compu::TAbs(Abs(_, body)) => {
-//             gen_compu(scoped, statics, body, env, res);
-//         }
-//         | Compu::TApp(App(body, _)) => {
-//             gen_compu(scoped, statics, body, env, res);
-//         }
-//         | Compu::Fix(fix) => todo!(),
-//         | Compu::Force(Force(body)) => {
-//             let thunk = gen_value(scoped, statics, body, env, res);
-//             let ValueStore::Thunk { env, code } = thunk else { unreachable!() };
-//             // recover environment
-//             res.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, env.to_arg64())));
-//             env_recover(compu, res);
-//             // jump to code
-//             res.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, code.to_arg64())));
-//             res.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
-//         }
-//         | Compu::Ret(Return(arg)) => {
-//             let arg = gen_value(scoped, statics, arg, env.clone(), res);
-//             // pop the kontinuation and the environment
-//             res.push(Instr::Pop(Loc::Reg(Reg::Rax)));
-//         }
-//         | Compu::Do(bind) => todo!(),
-//         | Compu::Let(_) => todo!(),
-//         | Compu::Match(_) => todo!(),
-//         | Compu::CoMatch(co_match) => todo!(),
-//         | Compu::Dtor(dtor) => todo!(),
-//     }
-// }
+    pub fn value(&mut self, value: ValueId, env: &Env) {
+        // assume only variables and integers will present
+        match self.statics.value(&value) {
+            | Value::Hole(Hole) => {
+                self.write([Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string()))]);
+            }
+            | Value::Var(def) => {
+                let offset = env[&def] as i32 * 8;
+                self.write([
+                    Instr::Comment(format!("[read] variable {}", self.scoped.def(&def).plain())),
+                    Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
+                    Instr::Mov(MovArgs::ToReg(
+                        Reg::Rax,
+                        Arg64::Mem(MemRef { reg: Reg::R10, offset }),
+                    )),
+                ]);
+            }
+            | Value::Thunk(Thunk(body)) => {
+                let lbl_thunk = format!("thunk{}", value.concise_inner());
+                let lbl_kont = format!("thunk_kont{}", value.concise_inner());
 
-// /// Copy the environment located in [R10] to the heap.
-// /// The heap is located in [R11]; allocate enough space by incrementing R11.
-// /// Result stored in Rax.
-// fn env_to_heap(env: &Env, res: &mut Vec<Instr>) {
-//     res.push(Instr::Comment("[copy] environment".to_string()));
-//     // calculate space needed by looking at env.next
-//     let space = env.next;
-//     // save size to [R11]
-//     res.push(Instr::Mov(MovArgs::ToMem(
-//         MemRef { reg: Reg::R11, offset: 0 },
-//         Reg32::Imm(space as i32),
-//     )));
-//     // copy environment
-//     for i in 0..space {
-//         // using Rax as temporary
-//         res.push(Instr::Mov(MovArgs::ToReg(
-//             Reg::Rax,
-//             Arg64::Mem(MemRef { reg: Reg::R10, offset: i as i32 }),
-//         )));
-//         res.push(Instr::Mov(MovArgs::ToMem(
-//             MemRef { reg: Reg::R11, offset: (i + 1) as i32 },
-//             Reg32::Reg(Reg::Rax),
-//         )));
-//     }
-//     // assign result to Rax
-//     res.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::R11))));
-//     // allocate space
-//     res.push(Instr::Add(BinArgs::ToReg(Reg::R11, Arg32::Signed(8 * space as i32))));
-// }
+                self.write([
+                    Instr::Jmp(JmpArgs::Label(lbl_kont.clone())),
+                    Instr::Label(lbl_thunk.clone()),
+                ]);
+                self.compu(body, env.clone());
+                self.write([
+                    Instr::Label(lbl_kont.clone()),
+                    Instr::Lea(Reg::Rax, LeaArgs::RelLabel(lbl_thunk.clone())),
+                ]);
+            }
+            | Value::Ctor(Ctor(tag, _body)) => {
+                // assume constructors are only C style enums
+                let ty = self.statics.annotations_value[&value];
+                let Fillable::Done(Type::Data(data)) = self.statics.types[&ty] else {
+                    unreachable!()
+                };
+                let Some(i) = self.statics.datas[&data]
+                    .iter()
+                    .position(|(tag_branch, _ty)| &tag == tag_branch)
+                else {
+                    unreachable!()
+                };
+                self.write([Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(i as i64)))])
+            }
+            | Value::Triv(Triv) => {}
+            | Value::VCons(Cons(a, b)) => {
+                self.write([
+                    // allocate two slots on the heap
+                    Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Unsigned(2))),
+                    Instr::Call("zydeco_alloc".to_string()),
+                    Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::Rax))),
+                ]);
+                self.value(a, &env);
+                self.write([Instr::Mov(MovArgs::ToMem(
+                    MemRef { reg: Reg::Rdi, offset: 0 },
+                    Reg32::Reg(Reg::Rax),
+                ))]);
+                self.value(b, &env);
+                self.write([Instr::Mov(MovArgs::ToMem(
+                    MemRef { reg: Reg::Rdi, offset: 8 },
+                    Reg32::Reg(Reg::Rax),
+                ))]);
+                // move the pointer to Rax
+                self.write([Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Reg(Reg::Rdi)))]);
+            }
+            | Value::TCons(_cons) => todo!(),
+            | Value::Lit(lit) => match lit {
+                | Literal::Int(i) => {
+                    self.write([Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(i)))]);
+                }
+                | Literal::String(_) => todo!(),
+                | Literal::Char(_) => todo!(),
+            },
+        }
+    }
 
-// /// Suppose the environment pointer is in Rax.
-// /// Recover the environment pointer to R10.
-// fn env_recover(site: CompuId, res: &mut Vec<Instr>) {
-//     // using Rdi, R8 and R9 as temporary
-//     // save size to R9
-//     res.push(Instr::Mov(MovArgs::ToReg(Reg::R9, Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }))));
-//     // overwrite [R10] to be [R11 + 8]
-//     let start = format!("env_recover_loop_{}", site.concise_inner());
-//     let kont = format!("env_recover_kont_{}", site.concise_inner());
-//     res.extend([
-//         Instr::Label(start.clone()),
-//         // if size is 0, jump to label
-//         Instr::Cmp(BinArgs::ToReg(Reg::R9, Arg32::Signed(0))),
-//         Instr::JCC(ConditionCode::E, JmpArgs::Label(kont.clone())),
-//         // otherwise,
-//         // R8 = 8 * size + Rax,
-//         Instr::Mov(MovArgs::ToReg(Reg::R8, Arg64::Reg(Reg::R9))),
-//         Instr::IMul(BinArgs::ToReg(Reg::R8, Arg32::Signed(8))),
-//         Instr::Add(BinArgs::ToReg(Reg::R8, Arg32::Reg(Reg::Rax))),
-//         // R8 = [R8],
-//         Instr::Mov(MovArgs::ToReg(Reg::R8, Arg64::Mem(MemRef { reg: Reg::R8, offset: 0 }))),
-//         // size -= 1,
-//         Instr::Sub(BinArgs::ToReg(Reg::R9, Arg32::Signed(1))),
-//         // Rdi = 8 * size + R10,
-//         Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Reg(Reg::R9))),
-//         Instr::IMul(BinArgs::ToReg(Reg::Rdi, Arg32::Signed(8))),
-//         Instr::Add(BinArgs::ToReg(Reg::Rdi, Arg32::Reg(Reg::R10))),
-//         // and [Rdi] = R8
-//         Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rdi, offset: 0 }, Reg32::Reg(Reg::R8))),
-//         Instr::Jmp(JmpArgs::Label(start)),
-//         Instr::Label(kont),
-//     ])
-// }
+    pub fn compu(&mut self, compu: CompuId, mut env: Env) {
+        use Computation as Compu;
+        match self.statics.compu(&compu) {
+            | Compu::Hole(Hole) => {
+                self.write([Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string()))]);
+            }
+            | Compu::VAbs(Abs(param, body)) => {
+                // assume param is a variable
+                use ValuePattern as VPat;
+                match self.statics.vpat(&param) {
+                    | VPat::Var(def) => {
+                        env.alloc(def);
+                        self.write([
+                            Instr::Comment(format!(
+                                "[write] function argument {}",
+                                self.scoped.def(&def).plain()
+                            )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
+                            // pop argument to env
+                            Instr::Pop(Loc::Mem(MemRef { reg: Reg::R10, offset: 0 })),
+                            Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(8))),
+                        ]);
+                        self.compu(body, env);
+                    }
+                    | _ => unreachable!(),
+                }
+            }
+            | Compu::VApp(App(body, arg)) => {
+                self.value(arg, &env);
+                self.write([Instr::Push(Arg32::Reg(Reg::Rax))]);
+                self.compu(body, env);
+            }
+            | Compu::TAbs(Abs(_, body)) => {
+                self.compu(body, env);
+            }
+            | Compu::TApp(App(body, _)) => {
+                self.compu(body, env);
+            }
+            | Compu::Fix(Fix(param, body)) => {
+                // assume binder is a variable
+                use ValuePattern as VPat;
+                match self.statics.vpat(&param) {
+                    | VPat::Var(def) => {
+                        let lbl_fix = format!("fix{}", compu.concise_inner());
+                        env.alloc(def);
+                        self.write([
+                            Instr::Comment(format!(
+                                "[write] fix address {}",
+                                self.scoped.def(&def).plain()
+                            )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
+                            Instr::Lea(Reg::Rax, LeaArgs::RelLabel(lbl_fix.clone())),
+                            Instr::Mov(MovArgs::ToMem(
+                                MemRef { reg: Reg::R10, offset: 0 },
+                                Reg32::Reg(Reg::Rax),
+                            )),
+                            Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(8))),
+                            Instr::Label(lbl_fix.clone()),
+                        ]);
+                        self.compu(body, env);
+                    }
+                    | _ => unreachable!(),
+                }
+            }
+            | Compu::Force(Force(body)) => {
+                self.value(body, &env);
+                // only call to labels are allowed for now
+                self.write([Instr::Jmp(JmpArgs::Reg(Reg::Rax))])
+            }
+            | Compu::Ret(Return(value)) => {
+                self.value(value, &env);
+                self.write([
+                    Instr::Comment(format!("[form] ret")),
+                    // and then pop address and jump
+                    Instr::Pop(Loc::Reg(Reg::Rdi)),
+                    Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
+                ]);
+            }
+            | Compu::Do(Bind { binder, bindee, tail }) => {
+                let lbl_kont = format!("kont{}", compu.concise_inner());
+                // push kont
+                // and then push env
+                self.write([
+                    Instr::Comment(format!("[form] do")),
+                    Instr::Lea(Reg::Rdi, LeaArgs::RelLabel(lbl_kont.clone())),
+                    Instr::Push(Arg32::Reg(Reg::R10)),
+                    Instr::Push(Arg32::Reg(Reg::Rdi)),
+                ]);
+                self.compu(bindee, env.clone());
+                // assume binder is a variable
+                use ValuePattern as VPat;
+                match self.statics.vpat(&binder) {
+                    | VPat::Var(def) => {
+                        // label kont
+                        self.write([Instr::Label(lbl_kont.clone())]);
+                        env.alloc(def);
+                        // move result from rax to env
+                        self.write([
+                            Instr::Pop(Loc::Reg(Reg::R10)),
+                            Instr::Comment(format!(
+                                "[write] return value {}",
+                                self.scoped.def(&def).plain()
+                            )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
+                            Instr::Mov(MovArgs::ToMem(
+                                MemRef { reg: Reg::R10, offset: 0 },
+                                Reg32::Reg(Reg::Rax),
+                            )),
+                            Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(8))),
+                        ]);
+                        self.compu(tail, env);
+                    }
+                    | _ => unreachable!(),
+                }
+            }
+            | Compu::Let(Let { binder, bindee, tail }) => {
+                self.value(bindee, &env);
+                // assume binder is either:
+                // - a variable
+                // - a cons of variables
+                use ValuePattern as VPat;
+                match self.statics.vpat(&binder) {
+                    | VPat::Var(def) => {
+                        env.alloc(def);
+                        self.write([
+                            Instr::Comment(format!(
+                                "[write] let value {}",
+                                self.scoped.def(&def).plain()
+                            )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
+                            Instr::Mov(MovArgs::ToMem(
+                                MemRef { reg: Reg::R10, offset: 0 },
+                                Reg32::Reg(Reg::Rax),
+                            )),
+                            Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(8))),
+                        ]);
+                        self.compu(tail, env);
+                    }
+                    | VPat::VCons(Cons(a, b)) => {
+                        let VPat::Var(def_a) = self.statics.vpat(&a) else { unreachable!() };
+                        let VPat::Var(def_b) = self.statics.vpat(&b) else { unreachable!() };
+                        env.alloc(def_a);
+                        env.alloc(def_b);
+                        // use Rdi as temp
+                        self.write([
+                            Instr::Comment(format!(
+                                "[write] let tuple ({}, {})",
+                                self.scoped.def(&def_a).plain(),
+                                self.scoped.def(&def_b).plain()
+                            )),
+                            Instr::Comment(format!("[layout] {}", env.layout_msg(&self.scoped),)),
+                            // Rax is tuple
+                            // move tuple.0 to idx_a through Rdi
+                            Instr::Mov(MovArgs::ToReg(
+                                Reg::Rdi,
+                                Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }),
+                            )),
+                            Instr::Mov(MovArgs::ToMem(
+                                MemRef { reg: Reg::R10, offset: 0 },
+                                Reg32::Reg(Reg::Rdi),
+                            )),
+                            // move tuple.1 to idx_b through Rdi
+                            Instr::Mov(MovArgs::ToReg(
+                                Reg::Rdi,
+                                Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }),
+                            )),
+                            Instr::Mov(MovArgs::ToMem(
+                                MemRef { reg: Reg::R10, offset: 8 },
+                                Reg32::Reg(Reg::Rdi),
+                            )),
+                            Instr::Add(BinArgs::ToReg(Reg::R10, Arg32::Signed(16))),
+                        ]);
+                        self.compu(tail, env);
+                    }
+                    | _ => unreachable!(),
+                }
+            }
+            | Compu::Match(Match { scrut, arms }) => {
+                self.value(scrut, &env);
+                let ty = self.statics.annotations_value[&scrut];
+                let Fillable::Done(Type::Data(data)) = self.statics.types[&ty] else {
+                    unreachable!()
+                };
+                for Matcher { binder, tail } in arms {
+                    // assume only C style enums
+                    use ValuePattern as VPat;
+                    let VPat::Ctor(Ctor(tag, _)) = self.statics.vpat(&binder) else {
+                        unreachable!()
+                    };
+                    let Some(i) = self.statics.datas[&data]
+                        .iter()
+                        .position(|(tag_branch, _ty)| &tag == tag_branch)
+                    else {
+                        unreachable!()
+                    };
+
+                    let lbl_kont = format!("matcher{}_not_{}", compu.concise_inner(), tag.plain());
+
+                    self.write([
+                        Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Signed(i as i32))),
+                        Instr::JCC(ConditionCode::NE, JmpArgs::Label(lbl_kont.clone())),
+                    ]);
+
+                    self.compu(tail, env.clone());
+                    self.write([Instr::Label(lbl_kont)]);
+                }
+                // abort if no match
+                self.write([Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string()))]);
+            }
+            | Compu::CoMatch(CoMatch { arms }) => {
+                // skip definition of comatchers
+                let lbl_kont = format!("comatch{}", compu.concise_inner());
+                self.write([Instr::Jmp(JmpArgs::Label(lbl_kont.clone()))]);
+                // define comatchers
+                let mut lbl_dtors = std::collections::HashMap::new();
+                for CoMatcher { dtor, tail } in arms {
+                    let lbl_dtor = format!("comatcher{}_{}", compu.concise_inner(), dtor.plain());
+                    lbl_dtors.insert(dtor.clone(), lbl_dtor.clone());
+                    self.write([Instr::Label(lbl_dtor)]);
+                    self.compu(tail, env.clone());
+                }
+                // construct the computation tuple
+                let codata = {
+                    let mut ty = self.statics.annotations_compu[&compu];
+                    loop {
+                        match self.statics.types[&ty] {
+                            | Fillable::Done(Type::CoData(codata)) => {
+                                break self.statics.codatas[&codata].clone();
+                            }
+                            | Fillable::Done(Type::Abst(abst)) => {
+                                ty = self.statics.seals[&abst].clone();
+                            }
+                            | Fillable::Done(Type::Abs(Abs(_, body))) => {
+                                ty = body;
+                            }
+                            | Fillable::Done(Type::App(App(f, _))) => {
+                                ty = f;
+                            }
+                            | Fillable::Fill(fill) => {
+                                let AnnId::Type(ty_) = self.statics.solus[&fill].clone() else {
+                                    unreachable!()
+                                };
+                                ty = ty_;
+                            }
+                            | _ => {
+                                unreachable!();
+                            }
+                        }
+                    }
+                };
+                self.write([
+                    Instr::Label(lbl_kont),
+                    // pop idx from stack
+                    Instr::Pop(Loc::Reg(Reg::Rax)),
+                ]);
+
+                // jump to pointer according to idx
+                for (idx, (dtor, _)) in codata.iter().enumerate() {
+                    let lbl_dtor = &lbl_dtors[dtor];
+                    self.write([
+                        Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Signed(idx as i32))),
+                        Instr::JCC(ConditionCode::E, JmpArgs::Label(lbl_dtor.clone())),
+                    ]);
+                }
+
+                // abort if no match
+                self.write([Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string()))]);
+            }
+            | Compu::Dtor(Dtor(head, dtor)) => {
+                let codata = {
+                    let mut ty = self.statics.annotations_compu[&head];
+                    loop {
+                        match self.statics.types[&ty] {
+                            | Fillable::Done(Type::CoData(codata)) => {
+                                break self.statics.codatas[&codata].clone();
+                            }
+                            | Fillable::Done(Type::Abst(abst)) => {
+                                ty = self.statics.seals[&abst].clone();
+                            }
+                            | Fillable::Done(Type::Abs(Abs(_, body))) => {
+                                ty = body;
+                            }
+                            | Fillable::Done(Type::App(App(f, _))) => {
+                                ty = f;
+                            }
+                            | Fillable::Fill(fill) => {
+                                let AnnId::Type(ty_) = self.statics.solus[&fill].clone() else {
+                                    unreachable!()
+                                };
+                                ty = ty_;
+                            }
+                            | _ => {
+                                unreachable!();
+                            }
+                        }
+                    }
+                };
+                let Some(i) = codata.iter().position(|(d, _ty)| &dtor == d) else { unreachable!() };
+                // push idx to stack
+                self.write([Instr::Push(Arg32::Signed(i as i32))]);
+                self.compu(head, env);
+            }
+        }
+    }
+}

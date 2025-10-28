@@ -21,15 +21,22 @@ pub use syntactic::*;
 pub mod lub;
 pub use lub::*;
 pub mod norm;
-pub mod tyck;
-pub use tyck::*;
 pub mod monadic;
-// pub mod wellformed;
 pub mod err;
 pub use err::*;
 pub mod fmt;
 mod dump;
 mod span;
+
+pub mod tyck {
+    pub mod check;
+}
+pub use tyck::check::*;
+
+pub mod wf {
+    pub mod check;
+}
+// pub use wf::check::*;
 
 pub(crate) use construct::syntax as cs;
 pub(crate) use surface_syntax as su;
