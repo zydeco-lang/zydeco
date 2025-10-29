@@ -31,7 +31,7 @@ mod scoped {
 
 mod statics {
     use super::*;
-    use crate::fmt::*;
+    use tyck::fmt::*;
 
     impl Tycker {
         pub fn ugly_statics<T>(&self, item: T) -> String

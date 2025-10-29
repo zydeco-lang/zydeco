@@ -4,7 +4,10 @@ pub mod syntax;
 
 use indexmap::IndexSet;
 use syntax::*;
-use zydeco_statics::{arena::*, surface_syntax::SpanArena, syntax as ss};
+use zydeco_statics::{
+    surface_syntax::SpanArena,
+    tyck::{arena::*, syntax as ss},
+};
 
 pub struct StaticsLowerer {
     pub spans: SpanArena,

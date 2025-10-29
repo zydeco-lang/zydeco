@@ -5,8 +5,8 @@
 pub mod syntax;
 
 use derive_more::{Deref, DerefMut};
-use zydeco_statics::{arena::*, syntax::*};
 use syntax::*;
+use zydeco_statics::tyck::{arena::*, syntax::*};
 
 pub struct Emitter<'e> {
     pub scoped: ScopedArena,

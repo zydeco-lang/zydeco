@@ -1,6 +1,6 @@
 //! Formatters for scoped and statics entities in the type checker.
 
-use crate::syntax::*;
+use super::syntax::*;
 use zydeco_surface::scoped::syntax::ScopedArena;
 use zydeco_utils::arena::ArenaAccess;
 

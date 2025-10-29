@@ -26,7 +26,7 @@ pub mod x86 {
 
 pub mod prelude {
     pub use zydeco_dynamics::syntax as d;
-    pub use zydeco_statics::syntax as ss;
+    pub use zydeco_statics::tyck::syntax as ss;
     pub use zydeco_surface::bitter::syntax as b;
     pub use zydeco_surface::scoped::syntax as sc;
     pub use zydeco_surface::textual::syntax as t;
@@ -177,8 +177,7 @@ impl BuildSystem {
     pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
         let checked = self.__tyck_pack(pack, false)?;
         let mut instrs = Vec::new();
-        let mut emitter =
-            zydeco_x86::Emitter::new(checked.scoped, checked.statics, &mut instrs);
+        let mut emitter = zydeco_x86::Emitter::new(checked.scoped, checked.statics, &mut instrs);
         emitter.run();
         Ok(instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n"))
     }

@@ -1,7 +1,10 @@
 use {
+    super::{
+        syntax::{AnnId, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId, TyEnvT},
+        *,
+    },
     crate::{
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
-        syntax::{AnnId, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId, TyEnvT},
         *,
     },
     zydeco_utils::arena::{ArcGlobalAlloc, ArenaAccess},
@@ -24,7 +27,7 @@ pub struct Tycker {
 // and achieve better concurrency
 
 // Todo: implement a better coverage checker
-// Todo: use hole solution to implement the confluence checker
+// Todo: use hole solution to implement the confluence checker (well-formedness checker)
 
 impl Tycker {
     pub fn new_arc(
@@ -114,7 +117,7 @@ impl Tycker {
             };
             let site_solu = match self.statics.solus.get(&id) {
                 | Some(ann) => {
-                    use crate::fmt::*;
+                    use super::fmt::*;
                     ann.ugly(&Formatter::new(&self.scoped, &self.statics))
                 }
                 | None => "???".to_string(),
@@ -1956,7 +1959,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into());
                 let monad_impl = cs::Value(monad_impl_var).build(tycker, &self.env);
 
-                use crate::env::*;
+                use super::env::*;
                 let (_menv, body_lift) = cs::TermLift { tm: body }.mbuild_k(
                     tycker,
                     MonEnv {

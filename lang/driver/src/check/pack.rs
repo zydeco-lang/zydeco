@@ -2,7 +2,7 @@ use super::err::{CompileError, Result};
 use crate::prelude::*;
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_dynamics::Linker;
-use zydeco_statics::Tycker;
+use zydeco_statics::tyck::Tycker;
 use zydeco_surface::scoped::{ResolveOut, Resolver};
 use zydeco_utils::{arena::*, deps::DepGraph};
 

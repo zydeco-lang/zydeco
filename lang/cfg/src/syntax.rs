@@ -3,7 +3,7 @@ use indexmap::IndexSet;
 
 pub use zydeco_syntax::*;
 
-pub type DefId = zydeco_statics::syntax::DefId;
+pub type DefId = zydeco_statics::tyck::syntax::DefId;
 /// Indirect Value.
 #[derive(Deref, DerefMut, From, Clone, Debug)]
 pub struct IndValue(Box<Value>);

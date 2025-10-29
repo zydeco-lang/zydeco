@@ -1,7 +1,7 @@
 use crate::{syntax::DynamicsArena, *};
 use builtin::BUILTINS;
 use std::rc::Rc;
-use zydeco_statics::{surface_syntax::ScopedArena, syntax::StaticsArena};
+use zydeco_statics::{surface_syntax::ScopedArena, tyck::syntax::StaticsArena};
 use zydeco_syntax::*;
 use zydeco_utils::arena::{ArenaAccess, ArenaSparse};
 

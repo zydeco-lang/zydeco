@@ -5,39 +5,56 @@ pub mod surface_syntax {
     pub use zydeco_surface::scoped::syntax::*;
 }
 
-pub mod syntax;
-pub mod env;
-pub mod arena;
-pub mod prims;
-pub mod alloc;
-pub use alloc::*;
-pub mod construct;
-pub use construct::*;
-pub mod moncons;
-pub use moncons::*;
-pub mod destruct;
-pub mod syntactic;
-pub use syntactic::*;
-pub mod lub;
-pub use lub::*;
-pub mod norm;
-pub mod monadic;
-pub mod err;
-pub use err::*;
-pub mod fmt;
-mod dump;
-mod span;
-
 pub mod tyck {
-    pub mod check;
-}
-pub use tyck::check::*;
+    pub mod syntax;
+    pub mod arena;
 
-pub mod wf {
     pub mod check;
-}
-// pub use wf::check::*;
+    pub use check::*;
 
-pub(crate) use construct::syntax as cs;
+    pub mod prims;
+    pub mod env;
+    pub mod alloc;
+    pub use alloc::*;
+    pub mod construct;
+    pub use construct::*;
+    pub mod moncons;
+    pub use moncons::*;
+    pub mod destruct;
+    pub mod syntactic;
+    pub use syntactic::*;
+    pub mod lub;
+    pub use lub::*;
+    pub mod norm;
+    pub mod monadic;
+
+    pub mod err;
+    pub use err::*;
+    pub mod fmt;
+    mod dump;
+    mod span;
+
+    use crate::*;
+}
+pub use tyck::{Alloc, Construct, Lub, MonConstruct, Tycker};
+
+// pub mod wf {
+//     pub mod syntax;
+//     pub mod arena;
+
+//     pub mod check;
+//     pub use check::*;
+
+//     pub mod err;
+//     pub use err::*;
+//     pub mod fmt;
+//     mod dump;
+//     mod span;
+
+//     use crate::*;
+// }
+
 pub(crate) use surface_syntax as su;
-pub(crate) use syntax as ss;
+pub(crate) use tyck::construct::syntax as cs;
+pub(crate) use tyck::syntax as ss;
+// pub(crate) use wf::syntax as sw;

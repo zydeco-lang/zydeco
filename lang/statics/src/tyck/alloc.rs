@@ -3,7 +3,8 @@
 //! This module provides the [`Alloc`] trait and all its implementations,
 //! which provides a type-safe approach to allocate in a post-type-check arena.
 
-use crate::{syntax::*, *};
+use super::syntax::*;
+use crate::*;
 
 /// Trait for allocating entities in [`StaticsArena`].
 /// The only method provided is [`Alloc::alloc`], which takes `&mut` [`Tycker`],

@@ -54,7 +54,8 @@
 //!
 //! Good luck (つ´ω｀)つ
 
-use crate::{syntax::*, *};
+use super::syntax::*;
+use crate::*;
 
 /// Trait for constructing entities in [`Tycker`] with more type inference available.
 ///
@@ -166,7 +167,7 @@ pub mod syntax {
     /// TCons
     pub struct TCons<T, F>(pub T, pub F);
 
-    pub use crate::monadic::syntax::*;
+    pub use crate::tyck::monadic::syntax::*;
 }
 
 /// Trivial [`Construct`] construction
@@ -333,7 +334,7 @@ where
 
 #[cfg(test)]
 mod kind_test {
-    use crate::{syntax::*, *};
+    use super::super::{syntax::*, *};
 
     #[test]
     fn r#static() {

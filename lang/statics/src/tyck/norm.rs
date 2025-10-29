@@ -1,4 +1,4 @@
-use crate::{syntax::*, *};
+use super::{syntax::*, *};
 use zydeco_utils::arena::ArenaAccess;
 
 /* ------------------------------ Substitution ------------------------------ */

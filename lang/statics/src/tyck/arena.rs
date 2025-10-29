@@ -2,8 +2,8 @@
 //!
 //! See [`StaticsArena`] for documentations of each field.
 
+use super::syntax::*;
 use crate::surface_syntax as su;
-use crate::syntax::*;
 
 pub use zydeco_surface::arena::*;
 
@@ -85,7 +85,6 @@ pub struct StaticsArena {
     pub annotations_value: ArenaAssoc<ValueId, TypeId>,
     /// type annotations for computations
     pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
-
     // Todo: under which environment is something checked?
     // pub env_tpat
     // pub env_type

@@ -1,7 +1,7 @@
 //! Monadic constructors for patterns, types, and terms in [`StaticsArena`].
 //! See [`crate::construct`] for more details.
 
-use crate::{syntax::*, *};
+use super::{syntax::*, *};
 
 /// Trait for monadically constructing entities in [`Tycker`] with more type inference available.
 pub trait MonConstruct<T>: Sized {
@@ -206,7 +206,7 @@ where
 
 #[cfg(test)]
 mod kind_test {
-    use crate::{syntax::*, *};
+    use super::super::{syntax::*, *};
 
     #[test]
     fn r#static() {

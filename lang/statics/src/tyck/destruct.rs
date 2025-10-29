@@ -1,6 +1,6 @@
 //! Methods on entities in [`StaticsArena`].
 
-use crate::{syntax::*, *};
+use super::{syntax::*, *};
 
 impl KindId {
     pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(KindId, KindId)> {

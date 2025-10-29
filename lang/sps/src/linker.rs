@@ -1,7 +1,7 @@
 use crate::statics_syntax as ss;
 use crate::syntax::*;
 use std::rc::Rc;
-use zydeco_statics::{surface_syntax::ScopedArena, syntax::StaticsArena};
+use zydeco_statics::{surface_syntax::ScopedArena, tyck::syntax::StaticsArena};
 
 pub trait Link {
     type Arena<'a>;

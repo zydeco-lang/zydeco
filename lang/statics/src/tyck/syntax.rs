@@ -1,5 +1,5 @@
-pub use crate::arena::*;
-pub use crate::env::*;
+pub use super::arena::*;
+pub use super::env::*;
 pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
@@ -73,7 +73,7 @@ new_key_type! {
 }
 
 mod impls_identifiers {
-    use super::*;
+    use super::{super::*, *};
     use crate::*;
 
     impl AnnId {

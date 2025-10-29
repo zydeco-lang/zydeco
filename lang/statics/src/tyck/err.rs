@@ -1,7 +1,7 @@
 //! Error messages in the type checker.
 //! Shows the error message, where to look at in the source code, and the stack trace.
 
-use crate::{syntax::*, *};
+use super::{syntax::*, *};
 
 pub use zydeco_utils::err::*;
 
