@@ -2,6 +2,7 @@ use crate::{
     arena::IndexAlloc,
     deps::{DepGraph, SrcGraph},
 };
+use derive_more::{Deref, DerefMut, IntoIterator};
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
@@ -141,11 +142,32 @@ impl<'a, Id: Hash + Eq + Clone> Kosaraju<'a, Id>
     }
 }
 
-/// Scc graph
+#[derive(Clone, Default, Deref, DerefMut, IntoIterator, PartialEq, Eq, Debug)]
+pub struct SccGroup<Id: Hash + Eq + Clone>(pub HashSet<Id>);
+
+impl<Id: Hash + Eq + Clone> SccGroup<Id> {
+    pub fn new() -> Self {
+        Self(HashSet::new())
+    }
+}
+impl<Id: Hash + Eq + Clone> FromIterator<Id> for SccGroup<Id> {
+    fn from_iter<T: IntoIterator<Item = Id>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+impl<'a, Id: Hash + Eq + Clone> IntoIterator for &'a SccGroup<Id> {
+    type Item = &'a Id;
+    type IntoIter = std::collections::hash_set::Iter<'a, Id>;
+    fn into_iter(self) -> Self::IntoIter {
+        (&self.0).into_iter()
+    }
+}
+
+/// Strongly Connected Components graph
 #[derive(Clone, Debug)]
 pub struct SccGraph<Id: Hash + Eq + Clone> {
     /// maps scc index to the scc
-    strongs: HashMap<usize, HashSet<Id>>,
+    strongs: HashMap<usize, SccGroup<Id>>,
     /// maps each node to its scc index
     belongs: HashMap<Id, usize>,
     /// dags of sccs
@@ -162,7 +184,7 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
     pub fn new(id_deps: &DepGraph<Id>, belongs: HashMap<Id, usize>) -> Self {
         let mut strongs = HashMap::new();
         for (id, low) in &belongs {
-            strongs.entry(*low).or_insert_with(HashSet::new).insert(id.clone());
+            strongs.entry(*low).or_insert_with(SccGroup::new).insert(id.clone());
         }
         let mut srcs = SrcGraph::new();
         let mut deps = DepGraph::new();
@@ -185,7 +207,7 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         let roots = srcs.roots();
         Self { strongs, belongs, srcs, deps, roots }
     }
-    pub fn top(&self) -> Vec<HashSet<Id>> {
+    pub fn top(&self) -> Vec<SccGroup<Id>> {
         let mut top = Vec::new();
         for root in &self.roots {
             let Some(scc) = &self.strongs.get(root) else {
@@ -234,10 +256,7 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         }
         // with victims converged, remove them from deps and srcs
         for scc_id in &victims {
-            self.srcs.map = self
-                .srcs
-                .map
-                .iter()
+            self.srcs.map = (self.srcs.map.iter())
                 .filter_map(|(id, scc)| {
                     if scc_id == id {
                         None
@@ -249,10 +268,7 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
                     }
                 })
                 .collect();
-            self.deps.map = self
-                .deps
-                .map
-                .iter()
+            self.deps.map = (self.deps.map.iter())
                 .filter_map(|(id, scc)| {
                     if scc_id == id {
                         None

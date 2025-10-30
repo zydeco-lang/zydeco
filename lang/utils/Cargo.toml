@@ -13,3 +13,8 @@ description = "utilities for zydeco"
 [dependencies]
 once_cell = { workspace = true }
 im = { workspace = true }
+derive_more = { workspace = true, features = [
+    "deref",
+    "deref_mut",
+    "into_iterator",
+] }
