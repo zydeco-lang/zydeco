@@ -207,6 +207,8 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         let roots = srcs.roots();
         Self { strongs, belongs, srcs, deps, roots }
     }
+    /// Get ids at the top of the graph,
+    /// i.e. those that are not dependent on any other ids.
     pub fn top(&self) -> Vec<SccGroup<Id>> {
         let mut top = Vec::new();
         for root in &self.roots {
@@ -218,6 +220,7 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         }
         top
     }
+    /// Remove given ids from the graph.
     pub fn release(&mut self, ids: impl IntoIterator<Item = Id>) {
         let ids = ids.into_iter().collect::<HashSet<_>>();
         // println!(">>> releasing: {:?}", ids);
@@ -242,6 +245,8 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
         }
         // println!("<<<");
     }
+    /// Mark given ids and all their dependents (requiring given ids) as unreachable
+    /// and thereafter remove them from the graph.
     pub fn obliviate(&mut self, ids: impl IntoIterator<Item = Id>) {
         let ids = ids.into_iter().collect::<HashSet<_>>();
         // initial frontier is all sccs that contain the ids
@@ -294,6 +299,7 @@ impl<Id: Hash + Eq + Clone> SccGraph<Id>
             self.belongs.remove(&id);
         }
     }
+    /// Keep only the given ids and their dependencies (required by given ids) in the graph.
     pub fn keep_only(&mut self, ids: impl IntoIterator<Item = Id>) {
         let mut keep_sccs = ids.into_iter().map(|id| self.belongs[&id]).collect::<HashSet<_>>();
         // all frontiers have already been visited, but not their dependencies

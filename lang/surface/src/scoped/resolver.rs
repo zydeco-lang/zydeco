@@ -1,6 +1,10 @@
 use crate::scoped::{syntax::*, *};
 use crate::textual::syntax as t;
-use zydeco_utils::{deps::DepGraph, imc::*, scc::Kosaraju, scc::SccGraph};
+use zydeco_utils::{
+    deps::DepGraph,
+    imc::*,
+    scc::{Kosaraju, SccGraph, SccGroup},
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct Global {
@@ -479,7 +483,7 @@ impl Collector {
                 break;
             }
             for group in groups {
-                ctx = SccDeclarations(&group).collect(&mut self, ctx.clone())?;
+                ctx = group.collect(&mut self, ctx.clone())?;
                 scc.release(group)
             }
         }
@@ -497,10 +501,10 @@ trait Collect {
     fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out>;
 }
 
-impl Collect for SccDeclarations<'_> {
+impl Collect for SccGroup<DeclId> {
     type Out = Context<()>;
     fn collect(&self, collector: &mut Collector, mut ctx: Context<()>) -> Result<Self::Out> {
-        let SccDeclarations(decls) = self;
+        let SccGroup(decls) = self;
         match decls.len() {
             | 0 => Ok(ctx),
             | 1 => {
@@ -515,8 +519,8 @@ impl Collect for SccDeclarations<'_> {
                         | Declaration::Meta(decl) => {
                             let MetaT(meta, decl) = decl;
                             let _ = meta;
-                            ctx = SccDeclarations(&[decl].into_iter().collect())
-                                .collect(collector, ctx)?;
+                            ctx =
+                                SccGroup::from_iter([decl]).collect(collector, ctx)?;
                         }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder, bindee } = decl;
@@ -538,8 +542,8 @@ impl Collect for SccDeclarations<'_> {
                         | Declaration::Meta(decl) => {
                             let MetaT(meta, decl) = decl;
                             let _ = meta;
-                            ctx = SccDeclarations(&[decl].into_iter().collect())
-                                .collect(collector, ctx)?;
+                            ctx =
+                                SccGroup::from_iter([decl]).collect(collector, ctx)?;
                         }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder, bindee } = decl;

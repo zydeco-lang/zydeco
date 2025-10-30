@@ -451,8 +451,6 @@ pub enum Computation {
 
 /* -------------------------------- TopLevel -------------------------------- */
 
-pub struct SccDeclarations<'decl>(pub &'decl std::collections::HashSet<DeclId>);
-
 #[derive(Clone, Debug)]
 pub struct TAliasBody {
     pub binder: TPatId,

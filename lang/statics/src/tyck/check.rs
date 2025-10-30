@@ -1,13 +1,16 @@
 use {
     super::{
-        syntax::{AnnId, Fillable, PatAnnId, SccDeclarations, StaticsArena, TermAnnId, TyEnvT},
+        syntax::{AnnId, Fillable, PatAnnId, StaticsArena, TermAnnId, TyEnvT},
         *,
     },
     crate::{
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
         *,
     },
-    zydeco_utils::arena::{ArcGlobalAlloc, ArenaAccess},
+    zydeco_utils::{
+        arena::{ArcGlobalAlloc, ArenaAccess},
+        scc::SccGroup,
+    },
 };
 
 pub struct Tycker {
@@ -54,7 +57,7 @@ impl Tycker {
             }
             for group in groups {
                 // each group should be type checked on its own
-                match env.mk(SccDeclarations(&group)).tyck_k(self, ()) {
+                match env.mk(group.clone()).tyck_k(self, ()) {
                     | Ok(new_env) => {
                         // move on
                         env = new_env;
@@ -240,13 +243,14 @@ impl<Ann> Action<Ann> {
 }
 
 pub struct Assign<Br, Be>(pub Br, pub Be);
+pub struct FixPoint<T>(pub T);
 
-impl Tyck for TyEnvT<SccDeclarations<'_>> {
+impl Tyck for TyEnvT<SccGroup<su::DeclId>> {
     type Out = TyEnvT<()>;
     type Action = ();
     fn tyck_inner_k(&self, tycker: &mut Tycker, (): Self::Action) -> ResultKont<TyEnvT<()>> {
         let mut env = self.mk(());
-        let SccDeclarations(decls) = self.inner;
+        let decls = &self.inner;
         use su::Declaration as Decl;
         match decls.len() {
             | 0 => Ok(env),
@@ -257,7 +261,7 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                         // let su::MetaT(meta, decl) = decl;
                         // tycker.metas.push_back(meta);
                         // let res = env
-                        //     .mk(SccDeclarations(&[decl].into_iter().collect()))
+                        //     .mk(SccGroup(&[decl].into_iter().collect()))
                         //     .tyck_k(tycker, ());
                         // tycker.metas.pop_back();
                         // res
@@ -270,7 +274,7 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                         if uni {
                             env.mk(id.to_owned()).tyck_k(tycker, ())
                         } else {
-                            SccDeclarations::tyck_scc_refs([id].into_iter(), tycker, env)
+                            FixPoint(env.mk(SccGroup::from_iter([*id]))).tyck_k(tycker, ())
                         }
                     }
                     | Decl::AliasHead(decl) => {
@@ -311,7 +315,7 @@ impl Tyck for TyEnvT<SccDeclarations<'_>> {
                     }
                 }
             }
-            | _ => SccDeclarations::tyck_scc_refs(decls.into_iter(), tycker, env),
+            | _ => FixPoint(env.mk(decls.to_owned())).tyck_k(tycker, ()),
         }
     }
 }
@@ -422,88 +426,92 @@ impl Tyck for TyEnvT<su::DeclId> {
     }
 }
 
-impl SccDeclarations<'_> {
-    fn tyck_scc_refs<'f>(
-        decls: impl Iterator<Item = &'f su::DeclId>, tycker: &mut Tycker, mut env: TyEnvT<()>,
-    ) -> ResultKont<TyEnvT<()>> {
-        let decls = decls.collect::<Vec<_>>();
-
+/// Type check a group of declarations that are mutually recursive.
+impl Tyck for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
+    type Out = TyEnvT<()>;
+    type Action = ();
+    fn tyck_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out> {
+        let FixPoint(group_under_env) = self;
+        let decls = group_under_env.inner.iter().cloned().collect();
         tycker.guarded(|tycker| {
             // administrative
-            tycker.tasks.push_back(TyckTask::DeclScc(decls.iter().cloned().cloned().collect()));
-
-            use std::collections::HashMap;
-
-            let mut binder_map = HashMap::new();
-            let mut abst_map = HashMap::new();
-            for id in decls.iter() {
-                let su::AliasBody { binder, bindee } = match tycker.scoped.decls[id].clone() {
-                    | su::Declaration::AliasBody(decl) => decl,
-                    | _ => unreachable!(),
-                };
-                // the bindee must be sealed
-                let Some(bindee) = bindee.syntactically_sealed(tycker) else {
-                    tycker.err_k(TyckError::MissingSeal, std::panic::Location::caller())?
-                };
-                // the type definition is self referencing, need to get the annotation
-                let Some(syn_ann) = bindee.syntactically_annotated(tycker) else {
-                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
-                };
-                // try synthesizing the kind
-                let ann = env.mk(syn_ann).tyck_k(tycker, Action::syn())?;
-                // the binder should be a type; register it before analyzing the bindee
-                let kd = ann.try_as_kind(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
-                let binder = env.mk(binder).tyck_k(tycker, Action::ana(kd.into()))?;
-                let (binder, _kd) = binder.as_type();
-                binder_map.insert(id.to_owned(), binder);
-                // register the def with abstract type
-                let (def, kd) = binder.try_destruct_def(tycker);
-                if let Some(def) = def {
-                    let abst = tycker.statics.absts.alloc(());
-                    tycker.statics.abst_hints.insert(abst, def);
-                    let abst_ty = Alloc::alloc(tycker, abst, kd);
-                    env.env += [(def, abst_ty.into())];
-                    abst_map.insert(id.to_owned(), (abst, kd));
-                }
-            }
-            for id in decls {
-                let su::AliasBody { binder: _, bindee } = match tycker.scoped.decls[id].clone() {
-                    | su::Declaration::AliasBody(decl) => decl,
-                    | _ => unreachable!(),
-                };
-                let binder = binder_map[id];
-                // should not be added to global because they are mutually recursive
-                // match binder.try_destruct_def(tycker) {
-                //     | (Some(def), _) => {
-                //         tycker.statics.global_defs.insert(def, ());
-                //     }
-                //     | (None, _) => {}
-                // }
-                // remove seal
-                let Some(bindee) = bindee.syntactically_sealed(tycker) else { unreachable!() };
-                let bindee = env.mk(bindee).tyck_k(tycker, Action::syn())?;
-                let (bindee, _kd) = bindee.try_as_type(
-                    tycker,
-                    TyckError::SortMismatch,
-                    std::panic::Location::caller(),
-                )?;
-                // subst vars in bindee
-                let bindee_subst = bindee.subst_env_k(tycker, &env.env)?;
-                // add the types to the seal arena
-                let (abst, kd) = abst_map[id];
-                tycker.statics.seals.insert(abst, bindee_subst);
-                let abst_ty = Alloc::alloc(tycker, abst, kd);
-                // add the type into the environment
-                let TyEnvT { env: new_env, inner: () } =
-                    env.mk(Assign(binder, abst_ty)).tyck_k(tycker, ())?;
-                env.env = new_env;
-            }
-            Ok(env)
+            tycker.tasks.push_back(TyckTask::DeclScc(decls));
+            self.tyck_inner_k(tycker, action)
         })
+    }
+    fn tyck_inner_k<'f>(&self, tycker: &mut Tycker, (): Self::Action) -> ResultKont<Self::Out> {
+        let FixPoint(group_under_env) = self;
+        let decls = &group_under_env.inner;
+        let mut env = group_under_env.mk(());
+
+        use std::collections::HashMap;
+
+        let mut binder_map = HashMap::new();
+        let mut abst_map = HashMap::new();
+        for id in decls {
+            let su::AliasBody { binder, bindee } = match tycker.scoped.decls[id].clone() {
+                | su::Declaration::AliasBody(decl) => decl,
+                | _ => unreachable!(),
+            };
+            // the bindee must be sealed
+            let Some(bindee) = bindee.syntactically_sealed(tycker) else {
+                tycker.err_k(TyckError::MissingSeal, std::panic::Location::caller())?
+            };
+            // the type definition is self referencing, need to get the annotation
+            let Some(syn_ann) = bindee.syntactically_annotated(tycker) else {
+                tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
+            };
+            // try synthesizing the kind
+            let ann = env.mk(syn_ann).tyck_k(tycker, Action::syn())?;
+            // the binder should be a type; register it before analyzing the bindee
+            let kd =
+                ann.try_as_kind(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+            let binder = env.mk(binder).tyck_k(tycker, Action::ana(kd.into()))?;
+            let (binder, _kd) = binder.as_type();
+            binder_map.insert(id.to_owned(), binder);
+            // register the def with abstract type
+            let (def, kd) = binder.try_destruct_def(tycker);
+            if let Some(def) = def {
+                let abst = tycker.statics.absts.alloc(());
+                tycker.statics.abst_hints.insert(abst, def);
+                let abst_ty = Alloc::alloc(tycker, abst, kd);
+                env.env += [(def, abst_ty.into())];
+                abst_map.insert(id.to_owned(), (abst, kd));
+            }
+        }
+        for id in decls.iter() {
+            let su::AliasBody { binder: _, bindee } = match tycker.scoped.decls[id].clone() {
+                | su::Declaration::AliasBody(decl) => decl,
+                | _ => unreachable!(),
+            };
+            let binder = binder_map[id];
+            // should not be added to global because they are mutually recursive
+            // match binder.try_destruct_def(tycker) {
+            //     | (Some(def), _) => {
+            //         tycker.statics.global_defs.insert(def, ());
+            //     }
+            //     | (None, _) => {}
+            // }
+            // remove seal
+            let Some(bindee) = bindee.syntactically_sealed(tycker) else { unreachable!() };
+            let bindee = env.mk(bindee).tyck_k(tycker, Action::syn())?;
+            let (bindee, _kd) = bindee.try_as_type(
+                tycker,
+                TyckError::SortMismatch,
+                std::panic::Location::caller(),
+            )?;
+            // subst vars in bindee
+            let bindee_subst = bindee.subst_env_k(tycker, &env.env)?;
+            // add the types to the seal arena
+            let (abst, kd) = abst_map[id];
+            tycker.statics.seals.insert(abst, bindee_subst);
+            let abst_ty = Alloc::alloc(tycker, abst, kd);
+            // add the type into the environment
+            let TyEnvT { env: new_env, inner: () } =
+                env.mk(Assign(binder, abst_ty)).tyck_k(tycker, ())?;
+            env.env = new_env;
+        }
+        Ok(env)
     }
 }
 

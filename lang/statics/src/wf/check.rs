@@ -21,7 +21,7 @@ impl Tycker {
             }
             for group in groups {
                 // each group should be type checked on its own
-                match env.mk(SccDeclarations(&group)).check_k(self) {
+                match env.mk(SccGroup(&group)).check_k(self) {
                     | Ok(new_env) => {
                         // move on
                         env = new_env;
@@ -39,7 +39,7 @@ impl Tycker {
     }
 }
 
-impl WellFormed for TyEnvT<SccDeclarations<'_>> {
+impl WellFormed for TyEnvT<SccGroup<'_>> {
     type Out = TyEnvT<()>;
 
     fn check_inner_k(&self, tycker: &mut Tycker) -> ResultKont<Self::Out> {

@@ -3,7 +3,6 @@ pub use crate::bitter::syntax::*;
 pub use crate::syntax::*;
 pub use crate::textual::syntax::SpanArena;
 
-use std::collections::HashSet;
 use zydeco_utils::cells::SingCell;
 
 /* --------------------------------- Context -------------------------------- */
@@ -197,10 +196,6 @@ mod impls_co_context {
         }
     }
 }
-
-/* -------------------------------- TopLevel -------------------------------- */
-
-pub struct SccDeclarations<'decl>(pub &'decl HashSet<DeclId>);
 
 /* -------------------------------- Primitive ------------------------------- */
 
