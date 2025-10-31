@@ -10,6 +10,9 @@ pub struct Object {
     pub labels: ArenaAssoc<ProgId, Label>,
     /// Programs are annotated with the corresponding context.
     pub contexts: ArenaAssoc<ProgId, Context>,
+
+    /// The whole object has an optional entry point.
+    pub entry: Option<ProgId>,
 }
 
 impl Object {
@@ -19,6 +22,7 @@ impl Object {
             variables: ArenaSparse::new(alloc.alloc()),
             labels: ArenaAssoc::new(),
             contexts: ArenaAssoc::new(),
+            entry: None,
         }
     }
     /// Allocate a program that is named, i.e. has a meaningful label

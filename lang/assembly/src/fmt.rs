@@ -33,6 +33,8 @@ impl<'a> Ugly<'a, Formatter<'a>> for Program {
             | Program::Jump(jump) => jump.ugly(f),
             | Program::PopJump(pop_jump) => pop_jump.ugly(f),
             | Program::Branch(branch) => branch.ugly(f),
+            | Program::Return(ret) => ret.ugly(f),
+            | Program::Bind(bind) => bind.ugly(f),
             | Program::Panic(panic) => panic.ugly(f),
         }
     }
@@ -41,6 +43,26 @@ impl<'a> Ugly<'a, Formatter<'a>> for Program {
 impl<'a> Ugly<'a, Formatter<'a>> for PopJump {
     fn ugly(&self, _f: &'a Formatter) -> String {
         "popjmp".to_string()
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for Return<T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!("ret {}", self.0.ugly(f))
+    }
+}
+
+impl<'a, Br, Be, Tail> Ugly<'a, Formatter<'a>> for Bind<Br, Be, Tail>
+where
+    Br: Ugly<'a, Formatter<'a>>,
+    Be: Ugly<'a, Formatter<'a>>,
+    Tail: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!("do {} <- {}; {}", self.binder.ugly(f), self.bindee.ugly(f), self.tail.ugly(f))
     }
 }
 
@@ -161,7 +183,10 @@ mod test {
     fn test_ugly() {
         let arena = Object::new(ArcGlobalAlloc::new());
         let fmter = Formatter::new(&arena);
-        let program = Program::Instruction(Instruction::PackProduct(Pack(Product)), Box::new(Program::Panic(Panic)));
+        let program = Program::Instruction(
+            Instruction::PackProduct(Pack(Product)),
+            Box::new(Program::Panic(Panic)),
+        );
         assert_eq!(program.ugly(&fmter), "pack <product>");
     }
 }

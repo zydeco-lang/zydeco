@@ -12,12 +12,11 @@ new_key_type! {
 pub enum Program {
     Instruction(Instruction, Box<Program>),
     Jump(Jump),
-    /// Effectively an x86 return.
     PopJump(PopJump),
     Branch(Branch),
-    // Do-binding and return?
-    // Bind(Bind<VarId, ProgId, Box<Program>>),
-    // Return(Return<Atom>),
+    /// Effectively PopJump
+    Return(Return<Atom>),
+    Bind(Bind<VarId, Box<Program>, ProgId>),
     Panic(Panic),
 }
 
