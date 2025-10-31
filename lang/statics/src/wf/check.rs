@@ -22,8 +22,12 @@ impl WellFormedProgram {
                     | None => break,
                     | Some(group) => {
                         for decl in &group {
+                            use zydeco_utils::arena::ArenaAccess;
+                            let Some(decl) = tycker.statics.decls.get(decl).cloned() else {
+                                continue;
+                            };
                             use ss::Declaration as Decl;
-                            match tycker.statics.decls[decl].clone() {
+                            match decl {
                                 // nothing to do for type aliases
                                 | Decl::TAliasBody(_) => {}
                                 | Decl::VAliasBody(ss::VAliasBody { binder, bindee }) => {
@@ -117,13 +121,14 @@ impl WellFormedProgram {
             annotations_value,
             annotations_compu,
         } = statics;
-        let kinds = kinds.map(|_id, kind| match kind {
-            | ss::Fillable::Fill(_) => unreachable!(),
-            | ss::Fillable::Done(kd) => kd,
+        // Fixme: traverse to figure out all holes
+        let kinds = kinds.filter_map_value(|kind| match kind {
+            | ss::Fillable::Fill(_) => None,
+            | ss::Fillable::Done(kd) => Some(kd),
         });
-        let types = types.map(|_id, ty| match ty {
-            | ss::Fillable::Fill(_) => unreachable!(),
-            | ss::Fillable::Done(ty) => ty,
+        let types = types.filter_map_value(|ty| match ty {
+            | ss::Fillable::Fill(_) => None,
+            | ss::Fillable::Done(ty) => Some(ty),
         });
         Self {
             spans,
