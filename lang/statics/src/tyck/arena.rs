@@ -40,6 +40,10 @@ pub struct StaticsArena {
     /// declaration arena
     pub decls: ArenaAssoc<DeclId, Declaration>,
 
+    /// entry point(s), i.e. declarations that are marked as entry points;
+    /// typically the main function, which normally should only be unique
+    pub entry: ArenaAssoc<DeclId, ()>,
+
     /// untyped to typed bijective maps for patterns
     pub pats: ArenaBijective<su::PatId, PatId>,
     /// untyped to typed bijective maps for terms
@@ -103,6 +107,8 @@ impl StaticsArena {
             values: ArenaSparse::new(alloc.alloc()),
             compus: ArenaSparse::new(alloc.alloc()),
             decls: ArenaAssoc::new(),
+
+            entry: ArenaAssoc::new(),
 
             pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),

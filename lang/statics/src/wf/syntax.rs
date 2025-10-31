@@ -8,7 +8,6 @@ pub type TypeId = ss::TypeId;
 pub type VPatId = ss::VPatId;
 pub type ValueId = ss::ValueId;
 pub type CompuId = ss::CompuId;
-pub type DeclId = ss::DeclId;
 
 pub type Kind = ss::Kind;
 pub type TypePattern = ss::TypePattern;

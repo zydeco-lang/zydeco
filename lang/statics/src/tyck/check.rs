@@ -290,7 +290,10 @@ impl Tyck for TyEnvT<SccGroup<su::DeclId>> {
                         tycker.guarded(|tycker| {
                             // administrative
                             tycker.tasks.push_back(TyckTask::Exec(id.to_owned()));
+                            // mark the exec as an entry point
+                            tycker.statics.entry.insert(id.to_owned(), ());
                             let su::Exec(term) = decl;
+                            // check if the exec is annotated as pure
                             if let Some(meta) =
                                 tycker.scoped.metas.get(id).map(|v| v.last()).flatten()
                                 && &meta.stem == "pure"
