@@ -350,6 +350,8 @@ mod impls {
         }
     }
 
+    // no FromIterator for ArenaSparse because it's designed to be allocated ground up
+
     impl<Id, T> IntoIterator for ArenaSparse<Id, T>
     where
         Id: IndexLike,
@@ -536,6 +538,17 @@ mod impls {
         }
     }
 
+    impl<Id, T> FromIterator<(Id, T)> for ArenaAssoc<Id, T>
+    where
+        Id: Eq + Hash,
+    {
+        fn from_iter<I: IntoIterator<Item = (Id, T)>>(iter: I) -> Self {
+            let mut arena = Self::new();
+            arena.extend(iter);
+            arena
+        }
+    }
+
     impl<Id, T> IntoIterator for ArenaAssoc<Id, T> {
         type Item = (Id, T);
         type IntoIter = std::collections::hash_map::IntoIter<Id, T>;
@@ -657,6 +670,18 @@ mod impls {
         }
     }
 
+    impl<P, Q> FromIterator<(P, Vec<Q>)> for ArenaForth<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        fn from_iter<I: IntoIterator<Item = (P, Vec<Q>)>>(iter: I) -> Self {
+            let mut arena = Self::new();
+            arena.extend(iter);
+            arena
+        }
+    }
+
     impl<P, Q> IntoIterator for ArenaForth<P, Q> {
         type Item = (P, Vec<Q>);
         type IntoIter = std::collections::hash_map::IntoIter<P, Vec<Q>>;
@@ -775,6 +800,18 @@ mod impls {
         }
     }
 
+    impl<P, Q> FromIterator<(P, Q)> for ArenaBack<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        fn from_iter<I: IntoIterator<Item = (P, Q)>>(iter: I) -> Self {
+            let mut arena = Self::new();
+            arena.extend(iter);
+            arena
+        }
+    }
+
     impl<P, Q> IntoIterator for ArenaBack<P, Q> {
         type Item = (P, Q);
         type IntoIter = std::collections::hash_map::IntoIter<P, Q>;
@@ -888,6 +925,18 @@ mod impls {
     {
         pub fn back(&self, q: &Q) -> Option<&P> {
             self.backward.get(q)
+        }
+    }
+
+    impl<P, Q> FromIterator<(P, Q)> for ArenaBijective<P, Q>
+    where
+        P: Eq + Hash + Clone,
+        Q: Eq + Hash + Clone,
+    {
+        fn from_iter<I: IntoIterator<Item = (P, Q)>>(iter: I) -> Self {
+            let mut arena = Self::new();
+            arena.extend(iter);
+            arena
         }
     }
 

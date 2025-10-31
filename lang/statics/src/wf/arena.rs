@@ -1,7 +1,7 @@
+use super::syntax::*;
 use crate::*;
-
-pub use super::syntax::*;
 use zydeco_surface::textual::syntax as t;
+
 pub use zydeco_utils::arena::*;
 
 #[derive(Debug)]
@@ -39,7 +39,7 @@ pub struct WellFormedProgram {
     pub terms: ArenaBijective<su::TermId, ss::TermId>,
     /// declarations are now compressed into computations
     /// (especially pure `let` bindings)
-    pub decls: ArenaAssoc<ss::DeclId, CompuId>,
+    pub decls: ArenaBijective<ss::DeclId, CompuId>,
 
     /* ----------------- analytical arenas from name resolution ----------------- */
     /// def user map

@@ -1,5 +1,5 @@
-use super::arena::*;
 use super::syntax::*;
+use super::arena::*;
 use crate::*;
 
 impl WellFormedProgram {
@@ -10,6 +10,7 @@ impl WellFormedProgram {
         // Note: ignoring the (especially mutually recursive) type declarations
         let mut entry = ArenaAssoc::new();
         let mut externals = ArenaAssoc::new();
+        let mut decls = ArenaBijective::new();
         {
             let mut assignments = Vec::new();
             let mut raw_entries = Vec::new();
@@ -21,9 +22,9 @@ impl WellFormedProgram {
                     // if no more groups are at the top, we're done
                     | None => break,
                     | Some(group) => {
-                        for decl in &group {
+                        for id in &group {
                             use zydeco_utils::arena::ArenaAccess;
-                            let Some(decl) = tycker.statics.decls.get(decl).cloned() else {
+                            let Some(decl) = tycker.statics.decls.get(id).cloned() else {
                                 continue;
                             };
                             use ss::Declaration as Decl;
@@ -31,7 +32,7 @@ impl WellFormedProgram {
                                 // nothing to do for type aliases
                                 | Decl::TAliasBody(_) => {}
                                 | Decl::VAliasBody(ss::VAliasBody { binder, bindee }) => {
-                                    assignments.push((binder, bindee));
+                                    assignments.push((id.clone(), binder, bindee));
                                 }
                                 | Decl::VAliasHead(ss::VAliasHead { binder, ty: _ }) => {
                                     use ss::ValuePattern as VPat;
@@ -64,11 +65,12 @@ impl WellFormedProgram {
             }
             let mut tail = raw_entries.pop().unwrap();
             // pop all assignments and append them to the raw entry
-            while let Some((binder, bindee)) = assignments.pop() {
+            while let Some((id, binder, bindee)) = assignments.pop() {
                 use crate::Construct;
                 // Fixme: use the tracked environment
                 tail = Let { binder, bindee, tail: |_| tail }
                     .build(&mut tycker, &crate::tyck::env::TyEnv::new());
+                decls.insert(id, tail);
             }
             entry.insert(tail, ());
         }
@@ -105,9 +107,9 @@ impl WellFormedProgram {
             absts,
             seals,
             abst_hints,
-            fills,
-            solus,
-            fill_hints,
+            fills: _,
+            solus: _,
+            fill_hints: _,
             datas,
             codatas,
             inlinables,
@@ -121,6 +123,7 @@ impl WellFormedProgram {
             annotations_value,
             annotations_compu,
         } = statics;
+
         // Fixme: traverse to figure out all holes
         let kinds = kinds.filter_map_value(|kind| match kind {
             | ss::Fillable::Fill(_) => None,
@@ -130,6 +133,26 @@ impl WellFormedProgram {
             | ss::Fillable::Fill(_) => None,
             | ss::Fillable::Done(ty) => Some(ty),
         });
+
+        let users = users
+            .into_iter()
+            .map(|(def, sites)| {
+                (def, sites.into_iter().map(|site| terms.forth(&site).clone()).collect())
+            })
+            .collect();
+        let ctxs_term =
+            ctxs_term.into_iter().map(|(term, ctx)| (terms.forth(&term).clone(), ctx)).collect();
+        let ctxs_pat_local =
+            ctxs_pat_local.into_iter().map(|(pat, ctx)| (pats.forth(&pat).clone(), ctx)).collect();
+        let coctxs_pat_local = coctxs_pat_local
+            .into_iter()
+            .map(|(pat, ctx)| (pats.forth(&pat).clone(), ctx))
+            .collect();
+        let coctxs_term_local = coctxs_term_local
+            .into_iter()
+            .map(|(term, ctx)| (terms.forth(&term).clone(), ctx))
+            .collect();
+
         Self {
             spans,
             defs,
@@ -144,12 +167,12 @@ impl WellFormedProgram {
             textual,
             pats,
             terms,
-            decls: todo!(),
-            users: todo!(),
-            ctxs_term: todo!(),
-            ctxs_pat_local: todo!(),
-            coctxs_pat_local: todo!(),
-            coctxs_term_local: todo!(),
+            decls,
+            users,
+            ctxs_term,
+            ctxs_pat_local,
+            coctxs_pat_local,
+            coctxs_term_local,
             metas,
             exts,
             unis,
