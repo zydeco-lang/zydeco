@@ -23,7 +23,8 @@ pub trait ArenaStatics {
     fn decl(&self, id: &DeclId) -> Declaration;
 }
 
-#[derive(Debug)]
+// Clone is derived only for coping with wf in driver
+#[derive(Debug, Clone)]
 pub struct StaticsArena {
     /// kind arena
     pub kinds: ArenaSparse<KindId, Fillable<Kind>>,

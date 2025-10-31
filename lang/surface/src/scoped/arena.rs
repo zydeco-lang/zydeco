@@ -15,7 +15,8 @@ pub trait ArenaScoped {
     fn decl(&self, id: &DeclId) -> Declaration;
 }
 
-#[derive(Debug)]
+// Clone is derived only for coping with wf in driver
+#[derive(Debug, Clone)]
 pub struct ScopedArena {
     // arenas
     pub defs: ArenaSparse<DefId, VarName>,

@@ -2,7 +2,7 @@ use super::err::{CompileError, Result};
 use crate::prelude::*;
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_dynamics::Linker;
-use zydeco_statics::tyck::Tycker;
+use zydeco_statics::{tyck::Tycker, wf::WellFormedProgram};
 use zydeco_surface::scoped::{ResolveOut, Resolver};
 use zydeco_utils::{arena::*, deps::DepGraph};
 
@@ -318,8 +318,12 @@ impl PackageScoped {
 
         let _ = name;
 
-        let Tycker { spans, prim: _, scoped, statics, tasks: _, metas: _, errors: _ } = tycker;
-        Ok(PackageChecked { spans, scoped, statics })
+        // let Tycker { spans, prim: _, scoped, statics, tasks: _, metas: _, errors: _ } = tycker;
+        let spans = tycker.spans.clone();
+        let scoped = tycker.scoped.clone();
+        let statics = tycker.statics.clone();
+        let wf = WellFormedProgram::new(tycker);
+        Ok(PackageChecked { spans, scoped, statics, wf })
     }
 }
 
@@ -327,11 +331,12 @@ pub struct PackageChecked {
     pub spans: t::SpanArena,
     pub scoped: sc::ScopedArena,
     pub statics: ss::StaticsArena,
+    pub wf: WellFormedProgram,
 }
 
 impl PackageChecked {
     pub fn dynamics(self, name: &str) -> Result<d::DynamicsArena> {
-        let PackageChecked { spans: _, scoped, statics } = self;
+        let PackageChecked { spans: _, scoped, statics, wf: _ } = self;
         let dynamics = Linker { scoped, statics }.run();
         // // Debug: print the variable definitions in dynamics
         // if cfg!(debug_assertions) {

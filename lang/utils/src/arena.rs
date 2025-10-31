@@ -87,7 +87,7 @@ pub struct Back<'a, T>(pub &'a T);
 
 /// A dense arena with a sequential allocator.
 /// Conceptually, it owns all data stored in the arena, and data are densely allocated.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArenaDense<Id: IndexLike, T> {
     allocator: IndexAlloc<Id::Meta>,
     vec: Vec<T>,
