@@ -9,6 +9,11 @@ pub type VPatId = ss::VPatId;
 pub type ValueId = ss::ValueId;
 pub type CompuId = ss::CompuId;
 
+pub type AbstId = ss::AbstId;
+// no FillId in wellformed syntax
+pub type DataId = ss::DataId;
+pub type CoDataId = ss::CoDataId;
+
 pub type Kind = ss::Kind;
 pub type TypePattern = ss::TypePattern;
 pub type Type = ss::Type;

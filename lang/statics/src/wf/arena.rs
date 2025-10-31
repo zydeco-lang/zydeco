@@ -1,10 +1,16 @@
 use crate::*;
 
 pub use super::syntax::*;
+use zydeco_surface::textual::syntax as t;
 pub use zydeco_utils::arena::*;
 
 #[derive(Debug)]
 pub struct WellFormedProgram {
+    /* ---------------------------- principle arenas ---------------------------- */
+    pub spans: t::SpanArena,
+    /// definitions, i.e. variable names
+    pub defs: ArenaSparse<DefId, VarName>,
+
     /// kind arena
     pub kinds: ArenaSparse<KindId, Kind>,
     /// type pattern arena
@@ -17,42 +23,63 @@ pub struct WellFormedProgram {
     pub values: ArenaSparse<ValueId, Value>,
     /// computation arena
     pub compus: ArenaSparse<CompuId, Computation>,
-    /// declaration arena
-    pub decls: ArenaAssoc<DeclId, Declaration>,
 
+    /// entry point(s), i.e. declarations that are marked as entry points;
+    /// typically the main function, which normally should only be unique
+    pub entry: ArenaAssoc<CompuId, ()>,
+    /// externals declarations
+    pub externals: ArenaAssoc<DefId, ()>,
+
+    /* -------------------------- translational arenas -------------------------- */
+    /// entity maps from textural syntax
+    pub textual: ArenaForth<t::EntityId, su::EntityId>,
     /// untyped to typed bijective maps for patterns
-    pub pats: ArenaBijective<su::PatId, PatId>,
+    pub pats: ArenaBijective<su::PatId, ss::PatId>,
     /// untyped to typed bijective maps for terms
-    pub terms: ArenaBijective<su::TermId, TermId>,
+    pub terms: ArenaBijective<su::TermId, ss::TermId>,
+    /// declarations are now compressed into computations
+    /// (especially pure `let` bindings)
+    pub decls: ArenaAssoc<ss::DeclId, CompuId>,
 
+    /* ----------------- analytical arenas from name resolution ----------------- */
+    /// def user map
+    pub users: ArenaForth<DefId, ss::TermId>,
+    /// variables available upon the term
+    pub ctxs_term: ArenaAssoc<ss::TermId, su::Context<()>>,
+    /// variables that are introduced by the pattern
+    pub ctxs_pat_local: ArenaAssoc<ss::PatId, su::Context<()>>,
+    /// variables that are free within the pattern (e.g. unbound type variable in annotations)
+    pub coctxs_pat_local: ArenaAssoc<ss::PatId, su::CoContext<()>>,
+    /// variables that are free within the term
+    pub coctxs_term_local: ArenaAssoc<ss::TermId, su::CoContext<()>>,
+    // meta annotations to declarations
+    pub metas: ArenaAssoc<ss::DeclId, im::Vector<Meta>>,
+    /// externs to defs
+    pub exts: ArenaAssoc<ss::DeclId, (su::Internal, DefId)>,
+    /// non-(optionally-mutual-)recursive declarations
+    pub unis: ArenaAssoc<ss::DeclId, ()>,
+
+    /* ------------------ analytical arenas from type checking ------------------ */
     /// arena for abstract types
     pub absts: ArenaDense<AbstId, ()>,
     /// the abstract types generated from sealed types
     pub seals: ArenaAssoc<AbstId, TypeId>,
     /// name hints for abstract types
     pub abst_hints: ArenaAssoc<AbstId, DefId>,
-    /// arena for filling context-constrained holes; the [`su::TermId`] is the site;
-    /// only types and kinds are now fillable
-    pub fills: ArenaDense<FillId, su::TermId>,
-    /// arena for the solutions of fillings,
-    /// i.e. the the [`FillId`] should be assigned as the [`AnnId`]
-    pub solus: ArenaAssoc<FillId, AnnId>,
-    /// which holes are introduced by the user and should be reported
-    pub fill_hints: ArenaAssoc<FillId, ()>,
     /// arena for `data`; plural plural
-    pub datas: ArenaDense<DataId, Data>,
+    pub datas: ArenaDense<DataId, ss::Data>,
     /// arena for `codata`; plural plural
-    pub codatas: ArenaDense<CoDataId, CoData>,
+    pub codatas: ArenaDense<CoDataId, ss::CoData>,
     /// arena for inlinable definitions, typically global (necessity modality) definitions
     pub inlinables: ArenaAssoc<DefId, ValueId>,
     /// definitions that are marked global
     pub global_defs: ArenaAssoc<DefId, ()>,
     /// terms that are marked global
-    pub global_terms: ArenaAssoc<TermId, ()>,
+    pub global_terms: ArenaAssoc<ss::TermId, ()>,
 
     // the type of terms under the context it's type checked; "annotation"
     /// annotations for variable definitions
-    pub annotations_var: ArenaAssoc<DefId, AnnId>,
+    pub annotations_var: ArenaAssoc<DefId, ss::AnnId>,
     /// annotations for abstract types
     pub annotations_abst: ArenaAssoc<AbstId, KindId>,
     /// kind annotations for type patterns

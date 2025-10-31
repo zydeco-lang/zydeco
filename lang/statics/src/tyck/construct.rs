@@ -1022,23 +1022,23 @@ where
 //         Ok(Alloc::alloc(tycker, Bind { binder, bindee, tail }, tail_ty))
 //     }
 // }
-// // pure bind
-// impl<P, B, F, R> Construct<Tycker, CompuId> for PureBind<P, B, F>
-// where
-//     P: Construct<Tycker, VPatId>,
-//     B: Construct<Tycker, ValueId>,
-//     F: FnOnce(VPatId) -> R,
-//     R: Construct<Tycker, CompuId>,
-// {
-//     fn build(self, tycker: &mut Tycker, env: &TyEnv) -> Result<CompuId> {
-//         let PureBind { binder, bindee, tail } = self;
-//         let bindee = bindee.build(tycker, env)?;
-//         let binder = binder.build(tycker, env)?;
-//         let tail = tail(binder).build(tycker, env)?;
-//         let tail_ty = tycker.statics.annotations_compu[&tail];
-//         Ok(Alloc::alloc(tycker, PureBind { binder, bindee, tail }, tail_ty))
-//     }
-// }
+// pure bind
+impl<P, B, F, R> Construct<Tycker, CompuId> for Let<P, B, F>
+where
+    P: Construct<Tycker, VPatId>,
+    B: Construct<Tycker, ValueId>,
+    F: FnOnce(VPatId) -> R,
+    R: Construct<Tycker, CompuId>,
+{
+    fn build(self, tycker: &mut Tycker, env: &TyEnv) -> CompuId {
+        let Let { binder, bindee, tail } = self;
+        let bindee = bindee.build(tycker, env);
+        let binder = binder.build(tycker, env);
+        let tail = tail(binder).build(tycker, env);
+        let tail_ty = tycker.statics.annotations_compu[&tail];
+        Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty)
+    }
+}
 // // match
 // impl<T, F, R> Construct<Tycker, CompuId> for cs::Match<DataId, T, F>
 // where

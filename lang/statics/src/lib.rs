@@ -38,12 +38,12 @@ pub mod tyck {
 }
 pub use tyck::{Alloc, Construct, Lub, MonConstruct, Tycker};
 
-// pub mod wf {
-//     pub mod syntax;
-//     pub mod arena;
+pub mod wf {
+    pub mod syntax;
+    pub mod arena;
+    pub use arena::*;
 
-//     pub mod check;
-//     pub use check::*;
+    pub mod check;
 
 //     pub mod err;
 //     pub use err::*;
@@ -52,7 +52,8 @@ pub use tyck::{Alloc, Construct, Lub, MonConstruct, Tycker};
 //     mod span;
 
 //     use crate::*;
-// }
+}
+pub use wf::{WellFormedProgram};
 
 pub(crate) use surface_syntax as su;
 pub(crate) use tyck::construct::syntax as cs;
