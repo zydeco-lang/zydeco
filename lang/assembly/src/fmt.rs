@@ -29,7 +29,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for VarId {
 impl<'a> Ugly<'a, Formatter<'a>> for Program {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
-            | Program::Instruction(instr, next) => format!("{} {}", instr.ugly(f), next.ugly(f)),
+            | Program::Instruction(instr, next) => format!("{}; {}", instr.ugly(f), next.ugly(f)),
             | Program::Jump(jump) => jump.ugly(f),
             | Program::PopJump(pop_jump) => pop_jump.ugly(f),
             | Program::Branch(branch) => branch.ugly(f),
@@ -187,6 +187,6 @@ mod test {
             Instruction::PackProduct(Pack(Product)),
             Box::new(Program::Panic(Panic)),
         );
-        assert_eq!(program.ugly(&fmter), "pack <product>");
+        assert_eq!(program.ugly(&fmter), "pack <product>; panic");
     }
 }
