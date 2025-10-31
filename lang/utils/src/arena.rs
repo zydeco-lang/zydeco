@@ -668,6 +668,9 @@ mod impls {
         pub fn back(&self, q: &Q) -> Option<&P> {
             self.backward.get(q)
         }
+        pub fn try_back(&self, q: &Q) -> Option<&P> {
+            self.backward.get(q)
+        }
     }
 
     impl<P, Q> FromIterator<(P, Vec<Q>)> for ArenaForth<P, Q>
@@ -788,6 +791,9 @@ mod impls {
     {
         pub fn forth(&self, p: &P) -> &Q {
             self.forward.get(p).unwrap()
+        }
+        pub fn try_forth(&self, p: &P) -> Option<&Q> {
+            self.forward.get(p)
         }
     }
 
@@ -917,6 +923,9 @@ mod impls {
         pub fn forth(&self, p: &P) -> &Q {
             self.forward.get(p).unwrap()
         }
+        pub fn try_forth(&self, p: &P) -> Option<&Q> {
+            self.forward.get(p)
+        }
     }
 
     impl<P, Q> ArenaBijective<P, Q>
@@ -924,6 +933,9 @@ mod impls {
         Q: Eq + Hash + Clone,
     {
         pub fn back(&self, q: &Q) -> Option<&P> {
+            self.backward.get(q)
+        }
+        pub fn try_back(&self, q: &Q) -> Option<&P> {
             self.backward.get(q)
         }
     }

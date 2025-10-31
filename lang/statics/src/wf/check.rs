@@ -1,5 +1,5 @@
-use super::syntax::*;
 use super::arena::*;
+use super::syntax::*;
 use crate::*;
 
 impl WellFormedProgram {
@@ -140,17 +140,22 @@ impl WellFormedProgram {
                 (def, sites.into_iter().map(|site| terms.forth(&site).clone()).collect())
             })
             .collect();
-        let ctxs_term =
-            ctxs_term.into_iter().map(|(term, ctx)| (terms.forth(&term).clone(), ctx)).collect();
-        let ctxs_pat_local =
-            ctxs_pat_local.into_iter().map(|(pat, ctx)| (pats.forth(&pat).clone(), ctx)).collect();
+        // Fixme: figure out what's not reachable during the forth
+        let ctxs_term = ctxs_term
+            .into_iter()
+            .filter_map(|(term, ctx)| terms.try_forth(&term).map(|term| (term.clone(), ctx)))
+            .collect();
+        let ctxs_pat_local = ctxs_pat_local
+            .into_iter()
+            .filter_map(|(pat, ctx)| pats.try_forth(&pat).map(|pat| (pat.clone(), ctx)))
+            .collect();
         let coctxs_pat_local = coctxs_pat_local
             .into_iter()
-            .map(|(pat, ctx)| (pats.forth(&pat).clone(), ctx))
+            .filter_map(|(pat, ctx)| pats.try_forth(&pat).map(|pat| (pat.clone(), ctx)))
             .collect();
         let coctxs_term_local = coctxs_term_local
             .into_iter()
-            .map(|(term, ctx)| (terms.forth(&term).clone(), ctx))
+            .filter_map(|(term, ctx)| terms.try_forth(&term).map(|term| (term.clone(), ctx)))
             .collect();
 
         Self {
