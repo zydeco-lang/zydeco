@@ -157,7 +157,8 @@ impl BuildSystem {
     pub fn run_pack(
         &self, pack: PackId, args: &[String], dry: bool, verbose: bool,
     ) -> Result<ProgKont> {
-        let checked = self.__tyck_pack(pack, verbose)?;
+        let alloc = ArcGlobalAlloc::new();
+        let checked = self.__tyck_pack(pack, alloc, verbose)?;
         let name = self.packages[&pack].name();
         let runtime = Package::link_interp(name.as_str(), checked)?;
         if dry {
@@ -167,7 +168,8 @@ impl BuildSystem {
     }
     pub fn test_pack(&self, pack: PackId, dry: bool) -> Result<()> {
         let name = self.packages[&pack].name();
-        let checked = self.__tyck_pack(pack, false)?;
+        let alloc = ArcGlobalAlloc::new();
+        let checked = self.__tyck_pack(pack, alloc, false)?;
         let runtime = Package::link_interp(name.as_str(), checked)?;
         if dry {
             return Ok(());
@@ -175,11 +177,22 @@ impl BuildSystem {
         Package::test_interp(runtime, name.as_str(), false)
     }
     pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
-        let checked = self.__tyck_pack(pack, false)?;
+        let alloc = ArcGlobalAlloc::new();
+        let checked = self.__tyck_pack(pack, alloc, false)?;
         let mut instrs = Vec::new();
         let mut emitter = zydeco_x86::Emitter::new(checked.scoped, checked.statics, &mut instrs);
         emitter.run();
         Ok(instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n"))
+    }
+    pub fn codegen_zir_pack(&self, pack: PackId) -> Result<String> {
+        let alloc = ArcGlobalAlloc::new();
+        let checked = self.__tyck_pack(pack, alloc.clone(), false)?;
+        let lowerer = zydeco_assembly::Lowerer::new(alloc.clone(), &checked.wf);
+        let object = lowerer.run();
+        use zydeco_assembly::fmt::*;
+        let entry = object.entry.iter().next().unwrap().0.clone();
+        let res = entry.ugly(&Formatter::new(&object));
+        Ok(res)
     }
 }
 
@@ -224,8 +237,9 @@ impl BuildSystem {
         Ok(deps_new)
     }
     /// type check a package
-    fn __tyck_pack(&self, pack: PackId, _verbose: bool) -> Result<PackageChecked> {
-        let alloc = ArcGlobalAlloc::new();
+    fn __tyck_pack(
+        &self, pack: PackId, alloc: ArcGlobalAlloc, _verbose: bool,
+    ) -> Result<PackageChecked> {
         let mut scc = Kosaraju::new(&self.depends_on).run();
         scc.keep_only([pack]);
         let mut stew = None;

@@ -33,9 +33,10 @@ impl<'a> Ugly<'a, Formatter<'a>> for Program {
             | Program::Jump(jump) => jump.ugly(f),
             | Program::PopJump(pop_jump) => pop_jump.ugly(f),
             | Program::Branch(branch) => branch.ugly(f),
+            | Program::Panic(panic) => panic.ugly(f),
+            | Program::Call(call) => call.ugly(f),
             | Program::Return(ret) => ret.ugly(f),
             | Program::Bind(bind) => bind.ugly(f),
-            | Program::Panic(panic) => panic.ugly(f),
         }
     }
 }
@@ -43,6 +44,18 @@ impl<'a> Ugly<'a, Formatter<'a>> for Program {
 impl<'a> Ugly<'a, Formatter<'a>> for PopJump {
     fn ugly(&self, _f: &'a Formatter) -> String {
         "popjmp".to_string()
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Panic {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        "panic".to_string()
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Call {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        "call".to_string()
     }
 }
 
@@ -55,20 +68,13 @@ where
     }
 }
 
-impl<'a, Br, Be, Tail> Ugly<'a, Formatter<'a>> for Bind<Br, Be, Tail>
+impl<'a, Be, Tail> Ugly<'a, Formatter<'a>> for Bind<(), Be, Tail>
 where
-    Br: Ugly<'a, Formatter<'a>>,
     Be: Ugly<'a, Formatter<'a>>,
     Tail: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
-        format!("do {} <- {}; {}", self.binder.ugly(f), self.bindee.ugly(f), self.tail.ugly(f))
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Panic {
-    fn ugly(&self, _f: &'a Formatter) -> String {
-        "panic".to_string()
+        format!("do {}; {}", self.bindee.ugly(f), self.tail.ugly(f))
     }
 }
 
@@ -79,9 +85,11 @@ impl<'a> Ugly<'a, Formatter<'a>> for Instruction {
             | Instruction::UnpackProduct(unpack) => unpack.ugly(f),
             | Instruction::PackContext(pack) => pack.ugly(f),
             | Instruction::UnpackContext(unpack) => unpack.ugly(f),
-            | Instruction::PushArg(atom) => atom.ugly(f),
-            | Instruction::PopArg(var) => var.ugly(f),
-            | Instruction::PushTag(tag) => tag.ugly(f),
+            | Instruction::PackClosure(pack) => pack.ugly(f),
+            | Instruction::UnpackClosure(unpack) => unpack.ugly(f),
+            | Instruction::PushArg(push) => push.ugly(f),
+            | Instruction::PopArg(pop) => pop.ugly(f),
+            | Instruction::PushTag(push) => push.ugly(f),
             | Instruction::Clear(context) => context.ugly(f),
         }
     }
@@ -105,9 +113,33 @@ where
     }
 }
 
+impl<'a, T> Ugly<'a, Formatter<'a>> for Push<T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!("push {}", self.0.ugly(f))
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for Pop<T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!("pop {}", self.0.ugly(f))
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for Product {
     fn ugly(&self, _f: &'a Formatter) -> String {
         "<product>".to_string()
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Closure {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!("<closure {}>", self.0.ugly(f))
     }
 }
 
@@ -146,6 +178,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Atom {
             | Atom::Var(var) => var.ugly(f),
             | Atom::Label(prog) => f.arena.labels[&prog].0.clone(),
             | Atom::Literal(literal) => literal.ugly(f),
+            | Atom::External(ext) => ext.clone(),
         }
     }
 }
@@ -181,12 +214,13 @@ mod test {
 
     #[test]
     fn test_ugly() {
-        let arena = Object::new(ArcGlobalAlloc::new());
-        let fmter = Formatter::new(&arena);
-        let program = Program::Instruction(
-            Instruction::PackProduct(Pack(Product)),
-            Box::new(Program::Panic(Panic)),
+        let mut arena = Object::new(ArcGlobalAlloc::new());
+        let prog = arena.prog_anon(Program::Panic(Panic), Context::from_iter([]));
+        let prog = arena.prog_anon(
+            Program::Instruction(Instruction::PackProduct(Pack(Product)), prog),
+            Context::from_iter([]),
         );
-        assert_eq!(program.ugly(&fmter), "pack <product>; panic");
+        let fmter = Formatter::new(&arena);
+        assert_eq!(prog.ugly(&fmter), "pack <product>; panic");
     }
 }

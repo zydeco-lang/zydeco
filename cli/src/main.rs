@@ -124,8 +124,13 @@ fn build_files(
         }
     }
     let pack = build_sys.pick_marked(bin).map_err(|e| e.to_string())?;
-    let x86 = build_sys.codegen_x86_pack(pack).map_err(|e| e.to_string())?;
 
+    // let zir = build_sys.codegen_zir_pack(pack).map_err(|e| e.to_string())?;
+    // if verbose {
+    //     println!("{}", zir);
+    // }
+
+    let x86 = build_sys.codegen_x86_pack(pack).map_err(|e| e.to_string())?;
     if verbose {
         println!("{}", x86);
     }
