@@ -1,4 +1,6 @@
 pub use zydeco_syntax::*;
+pub use zydeco_utils::span::{LocationCtx, Sp, Span};
+
 use crate::tyck::syntax as ss;
 
 pub type DefId = ss::DefId;

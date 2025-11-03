@@ -42,14 +42,14 @@ pub mod wf {
     pub mod syntax;
     pub mod arena;
     pub use arena::*;
-
+    
     pub mod check;
-
+    
 //     pub mod err;
 //     pub use err::*;
 //     pub mod fmt;
 //     mod dump;
-//     mod span;
+    mod span;
 
 //     use crate::*;
 }
