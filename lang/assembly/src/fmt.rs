@@ -74,7 +74,7 @@ where
     Tail: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
-        format!("do {}; {}", self.bindee.ugly(f), self.tail.ugly(f))
+        format!("do ({}); {}", self.bindee.ugly(f), self.tail.ugly(f))
     }
 }
 
@@ -176,7 +176,9 @@ impl<'a> Ugly<'a, Formatter<'a>> for Atom {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | Atom::Var(var) => var.ugly(f),
-            | Atom::Label(prog) => f.arena.labels[&prog].0.clone(),
+            | Atom::Label(prog) => {
+                f.arena.labels.get(&prog).map_or_else(|| prog.concise(), |label| label.0.clone())
+            }
             | Atom::Literal(literal) => literal.ugly(f),
             | Atom::External(ext) => ext.clone(),
         }

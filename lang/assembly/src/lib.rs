@@ -5,5 +5,7 @@ pub mod syntax;
 pub mod arena;
 pub mod fmt;
 pub mod lower;
+mod norm;
 
 pub use lower::Lowerer;
+pub use norm::Normalizer;

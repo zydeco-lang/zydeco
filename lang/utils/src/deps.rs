@@ -95,4 +95,8 @@ impl<Id: Hash + Eq + Clone> SrcGraph<Id>
         }
         roots
     }
+    /// get all nodes
+    pub fn nodes(&self) -> HashSet<Id> {
+        self.map.keys().cloned().collect()
+    }
 }

@@ -12,6 +12,7 @@ bins = [
     "nested_out.zy",
     "match.zy",
     "cmp.zy",
+    "id.zy",
     "label.zy",
     "loop.zy",
     "comatch.zy",

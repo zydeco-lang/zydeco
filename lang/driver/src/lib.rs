@@ -189,6 +189,28 @@ impl BuildSystem {
         let checked = self.__tyck_pack(pack, alloc.clone(), false)?;
         let lowerer = zydeco_assembly::Lowerer::new(alloc.clone(), &checked.wf);
         let object = lowerer.run();
+        let normalizer = zydeco_assembly::Normalizer::new(object);
+        // let deps = normalizer.deps;
+        // println!("dependencies");
+        // for id in deps.nodes() {
+        //     let query = deps.query(&id);
+        //     // println!("{}: {}", id.concise(), query.len());
+        //     println!("{}", id.concise());
+        //     for dep in query {
+        //         println!("\t<- {}", dep.concise());
+        //     }
+        // }
+        // let srcs = deps.reverse();
+        // println!("sources");
+        // for id in srcs.nodes() {
+        //     let query = srcs.query(&id);
+        //     // println!("{}: {}", id.concise(), query.len());
+        //     println!("{}", id.concise());
+        //     for src in query {
+        //         println!("\t-> {}", src.concise());
+        //     }
+        // }
+        let object = normalizer.object;
         use zydeco_assembly::fmt::*;
         let entry = object.entry.iter().next().unwrap().0.clone();
         let res = entry.ugly(&Formatter::new(&object));

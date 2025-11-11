@@ -61,10 +61,39 @@ impl Lower for sw::CompuId {
             | Compu::TAbs(Abs(_param, body)) => body.lower(ctx, lo, kont),
             | Compu::TApp(App(body, _arg)) => body.lower(ctx, lo, kont),
             | Compu::Fix(Fix(param, body)) => {
-                let _ = param;
-                let _ = body;
-                // Todo: body
-                todo!()
+                // assume param is always a variable
+                let sw::ValuePattern::Var(param) = lo.wf.vpats[&param].clone() else {
+                    unreachable!()
+                };
+                let name = lo.wf.defs[&param].plain().to_string();
+                let fix = lo.object.variables.alloc(VarName(name.clone()));
+                let mut body = body.lower([fix].into_iter().chain(ctx.clone()).collect(), lo, kont);
+                let mut params = ctx.clone();
+                while let Some(var) = params.0.pop() {
+                    body = lo.prog_anon(
+                        Program::Instruction(Instr::PopArg(Pop(var)), body),
+                        params.clone(),
+                    );
+                }
+                assert!(params.0.is_empty());
+                let body = lo.prog_anon(
+                    Program::Instruction(Instr::PopArg(Pop(fix)), body),
+                    [].into_iter().collect(),
+                );
+                // the body here is the fixed point program
+                lo.object.labels.insert(body, Label(name));
+                let jmp =
+                    lo.instr(Instr::PushArg(Push(Atom::Label(body))), ctx.clone(), |ctx, lo| {
+                        lo.prog_anon(Program::Jump(Jump(body)), ctx)
+                    });
+                let args = ctx.clone();
+                let prog = args.into_iter().fold(jmp, |prog, arg| {
+                    lo.object.prog_anon(
+                        Program::Instruction(Instr::PushArg(Push(Atom::Var(arg))), prog),
+                        ctx.clone(),
+                    )
+                });
+                prog
             }
             | Compu::Force(Force(body)) => body.lower(
                 ctx,
