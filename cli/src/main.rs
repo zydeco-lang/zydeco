@@ -84,7 +84,7 @@ fn run_files(
 }
 
 fn build_files(
-    paths: Vec<PathBuf>, bin: Option<String>, _target: String, build_dir: PathBuf, stub: PathBuf,
+    paths: Vec<PathBuf>, bin: Option<String>, target: String, build_dir: PathBuf, stub: PathBuf,
     link_existing: bool, execute: bool, _dry: bool, verbose: bool,
 ) -> Result<i32, String> {
     let mut build_sys = BuildSystem::new();
@@ -125,20 +125,24 @@ fn build_files(
     }
     let pack = build_sys.pick_marked(bin).map_err(|e| e.to_string())?;
 
-    // let zir = build_sys.codegen_zir_pack(pack).map_err(|e| e.to_string())?;
-    // if verbose {
-    //     println!("{}", zir);
-    // }
-
-    let x86 = build_sys.codegen_x86_pack(pack).map_err(|e| e.to_string())?;
-    if verbose {
-        println!("{}", x86);
+    match target.as_str() {
+        | "zir" => {
+            let zir = build_sys.codegen_zir_pack(pack).map_err(|e| e.to_string())?;
+            println!("{}", zir);
+            Ok(0)
+        }
+        | "x86" => {
+            let x86 = build_sys.codegen_x86_pack(pack).map_err(|e| e.to_string())?;
+            if verbose {
+                println!("{}", x86);
+            }
+            let name = build_sys.packages[&pack].name();
+            // link with stub
+            link_x86(name, x86, build_dir, stub, link_existing, execute)?;
+            Ok(0)
+        }
+        | _ => return Err(format!("Invalid target: {}", target)),
     }
-
-    let name = build_sys.packages[&pack].name();
-    // link with stub
-    link_x86(name, x86, build_dir, stub, link_existing, execute)?;
-    Ok(0)
 }
 
 fn link_x86(
