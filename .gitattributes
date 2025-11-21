@@ -1,0 +1,5 @@
+*.zy linguist-detectable
+*.zy linguist-language=Zydeco
+
+*.zydeco linguist-detectable
+*.zydeco linguist-language=Zydeco
