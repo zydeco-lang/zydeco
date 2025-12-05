@@ -3178,18 +3178,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zydeco-cfg"
-version = "0.2.2"
-dependencies = [
- "derive_more",
- "im",
- "indexmap",
- "zydeco-statics",
- "zydeco-syntax",
- "zydeco-utils",
-]
-
-[[package]]
 name = "zydeco-cli"
 version = "0.2.2"
 dependencies = [
