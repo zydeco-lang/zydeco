@@ -6,5 +6,5 @@ pub mod statics_syntax {
 }
 
 pub mod syntax;
-pub mod linker;
+pub mod lower;
 pub mod fmt;

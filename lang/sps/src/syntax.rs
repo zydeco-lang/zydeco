@@ -52,11 +52,17 @@ pub struct Kont {
 }
 
 #[derive(From, Clone, Debug)]
+pub struct StackItem<T> {
+    pub item: T,
+    pub next: RcStack,
+}
+
+#[derive(From, Clone, Debug)]
 pub enum Stack {
     Kont(Kont),
     Var(Current),
-    Arg(RcValue, RcStack),
-    Tag(DtorName, RcStack),
+    Arg(StackItem<RcValue>),
+    Tag(StackItem<DtorName>),
 }
 
 /* ------------------------------- Computation ------------------------------ */

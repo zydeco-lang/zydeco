@@ -68,8 +68,8 @@ impl<'a> Ugly<'a, Formatter<'a>> for Stack {
         match self {
             | Stack::Kont(stk) => stk.ugly(f),
             | Stack::Var(stk) => stk.ugly(f),
-            | Stack::Arg(value, stk) => format!("{} {}", value.ugly(f), stk.ugly(f)),
-            | Stack::Tag(dtor, stk) => format!("{} {}", dtor.ugly(f), stk.ugly(f)),
+            | Stack::Arg(stk) => stk.ugly(f),
+            | Stack::Tag(stk) => stk.ugly(f),
         }
     }
 }
@@ -221,6 +221,15 @@ impl<'a> Ugly<'a, Formatter<'a>> for Kont {
     fn ugly(&self, f: &'a Formatter) -> String {
         let Kont { binder, body } = self;
         format!("kontinuation {} -> {}", binder.ugly(f), body.ugly(f))
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for StackItem<T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!("{} :: {}", self.item.ugly(f), self.next.ugly(f))
     }
 }
 
