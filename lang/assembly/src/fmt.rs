@@ -4,10 +4,10 @@ use super::syntax::*;
 
 pub use zydeco_syntax::Ugly;
 pub struct Formatter<'arena> {
-    arena: &'arena Object,
+    arena: &'arena AssemblyArena,
 }
 impl<'arena> Formatter<'arena> {
-    pub fn new(arena: &'arena Object) -> Self {
+    pub fn new(arena: &'arena AssemblyArena) -> Self {
         Formatter { arena }
     }
 }
@@ -216,7 +216,7 @@ mod test {
 
     #[test]
     fn test_ugly() {
-        let mut arena = Object::new(ArcGlobalAlloc::new());
+        let mut arena = AssemblyArena::new(ArcGlobalAlloc::new());
         let prog = arena.prog_anon(Program::Panic(Panic), Context::from_iter([]));
         let prog = arena.prog_anon(
             Program::Instruction(Instruction::PackProduct(Pack(Product)), prog),

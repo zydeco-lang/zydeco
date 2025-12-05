@@ -1,6 +1,6 @@
 use super::syntax::*;
 
-pub struct Object {
+pub struct AssemblyArena {
     /// All programs are attached with a ProgId.
     pub programs: ArenaSparse<ProgId, Program>,
     /// All variables are named.
@@ -15,7 +15,7 @@ pub struct Object {
     pub entry: ArenaAssoc<ProgId, ()>,
 }
 
-impl Object {
+impl AssemblyArena {
     pub fn new(alloc: ArcGlobalAlloc) -> Self {
         Self {
             programs: ArenaSparse::new(alloc.alloc()),
@@ -26,13 +26,13 @@ impl Object {
         }
     }
 }
-impl AsMut<Object> for Object {
-    fn as_mut(&mut self) -> &mut Object {
+impl AsMut<AssemblyArena> for AssemblyArena {
+    fn as_mut(&mut self) -> &mut AssemblyArena {
         self
     }
 }
 
-pub trait Objectable {
+pub trait AssemblyArenaLike {
     /// Allocate a program that is named, i.e. has a meaningful label
     fn prog_named(&mut self, prog: impl Into<Program>, ctx: Context, label: Label) -> ProgId;
     /// Allocate a program that is anonymous, i.e. has no meaningful label
@@ -48,9 +48,9 @@ pub trait Objectable {
     ) -> ProgId;
 }
 
-impl<T> Objectable for T
+impl<T> AssemblyArenaLike for T
 where
-    T: AsMut<Object>,
+    T: AsMut<AssemblyArena>,
 {
     fn prog_named(&mut self, prog: impl Into<Program>, ctx: Context, label: Label) -> ProgId {
         let this = &mut *self.as_mut();

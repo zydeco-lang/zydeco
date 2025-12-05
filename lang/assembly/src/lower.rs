@@ -7,34 +7,29 @@ pub trait Lower {
     type Out;
     fn lower(&self, ctx: Context, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out;
 }
-impl AsRef<Object> for Lowerer<'_> {
-    fn as_ref(&self) -> &Object {
-        &self.object
-    }
-}
-impl AsMut<Object> for Lowerer<'_> {
-    fn as_mut(&mut self) -> &mut Object {
-        &mut self.object
-    }
-}
 
 pub struct Lowerer<'a> {
-    pub object: Object,
+    pub object: AssemblyArena,
     pub wf: &'a WellFormedProgram,
     pub ctx_map: ContextMap,
 }
 
 impl<'a> Lowerer<'a> {
     pub fn new(alloc: ArcGlobalAlloc, wf: &'a WellFormedProgram) -> Self {
-        let object = Object::new(alloc);
+        let object = AssemblyArena::new(alloc);
         Self { object, wf, ctx_map: ContextMap::new() }
     }
-    pub fn run(mut self) -> Object {
+    pub fn run(mut self) -> AssemblyArena {
         for (compu, ()) in &self.wf.entry {
             let prog = compu.lower(Context::from_iter([]), &mut self, ());
             self.object.entry.insert(prog, ());
         }
         self.object
+    }
+}
+impl AsMut<AssemblyArena> for Lowerer<'_> {
+    fn as_mut(&mut self) -> &mut AssemblyArena {
+        &mut self.object
     }
 }
 

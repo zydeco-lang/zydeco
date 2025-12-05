@@ -2,17 +2,17 @@ use super::syntax::*;
 use zydeco_utils::deps::DepGraph;
 
 pub trait _Normalize: Sized {
-    fn beta(self, object: &mut Object) -> Option<Self>;
-    fn eta(self, object: &mut Object) -> Option<Self>;
+    fn beta(self, object: &mut AssemblyArena) -> Option<Self>;
+    fn eta(self, object: &mut AssemblyArena) -> Option<Self>;
 }
 
 pub struct Normalizer {
-    pub object: Object,
+    pub object: AssemblyArena,
     pub deps: DepGraph<ProgId>,
 }
 
 impl Normalizer {
-    pub fn new(object: Object) -> Self {
+    pub fn new(object: AssemblyArena) -> Self {
         let mut deps = DepGraph::new();
         for (id, prog) in object.programs.iter() {
             let id = id.clone();
