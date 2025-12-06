@@ -40,6 +40,7 @@ zydeco-statics = { path = "lang/statics" }
 zydeco-dynamics = { path = "lang/dynamics" }
 zydeco-x86 = { path = "lang/x86" }
 zydeco-assembly = { path = "lang/assembly" }
+zydeco-stack = { path = "lang/stack" }
 zydeco-driver = { path = "lang/driver" }
 # meta
 syn = "2.0"

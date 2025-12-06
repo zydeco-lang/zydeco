@@ -3211,6 +3211,7 @@ dependencies = [
  "zydeco-assembly",
  "zydeco-derive",
  "zydeco-dynamics",
+ "zydeco-stack",
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
@@ -3235,7 +3236,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zydeco-sps"
+name = "zydeco-stack"
 version = "0.2.2"
 dependencies = [
  "derive_more",

@@ -131,6 +131,11 @@ fn build_files(
             println!("{}", zir);
             Ok(0)
         }
+        | "zasm" => {
+            let zasm = build_sys.codegen_zasm_pack(pack).map_err(|e| e.to_string())?;
+            println!("{}", zasm);
+            Ok(0)
+        }
         | "x86" => {
             let x86 = build_sys.codegen_x86_pack(pack).map_err(|e| e.to_string())?;
             if verbose {

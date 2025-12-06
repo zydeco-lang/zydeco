@@ -2,8 +2,8 @@ pub use super::arena::*;
 pub use zydeco_syntax::*;
 pub use zydeco_utils::arena::*;
 
-use derive_more::From;
 use super::*;
+use derive_more::From;
 
 pub type DefId = ss::DefId;
 pub type VPatId = ss::VPatId;
@@ -83,13 +83,20 @@ pub struct SReturn {
 #[derive(From, Clone, Debug)]
 pub enum Computation {
     Hole(Hole),
-    VAbs(Abs<VPatId, CompuId>),
-    VApp(App<CompuId, ValueId>),
     Fix(Fix<VPatId, CompuId>),
     Force(SForce),
     Ret(SReturn),
     Case(Match<ValueId, VPatId, CompuId>),
+    LetValue(Let<VPatId, ValueId, CompuId>),
     LetStack(Let<Bullet, StackId, CompuId>),
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
     CoCase(CoMatch<CompuId, Cons<DtorName, Bullet>>),
+}
+
+/* ------------------------------- Declaration ------------------------------ */
+
+#[derive(From, Clone, Debug)]
+pub enum Global {
+    Extern(()),
+    Defined(ValueId),
 }

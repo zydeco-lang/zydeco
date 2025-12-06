@@ -11,12 +11,12 @@ pub struct StackArena {
     pub stacks: ArenaSparse<StackId, Stack>,
     /// computation arena
     pub compus: ArenaSparse<CompuId, Computation>,
-    /// declaration arena that are all just values
-    pub decls: ArenaAssoc<DeclId, ValueId>,
 
+    /// external or defined values
+    pub globals: ArenaAssoc<DefId, Global>,
     /// entry point(s), i.e. declarations that are marked as entry points;
     /// typically the main function, which normally should only be unique
-    pub entry: ArenaAssoc<DeclId, ()>,
+    pub entry: ArenaAssoc<CompuId, ()>,
 
     /// untyped to typed bijective maps for terms
     pub terms: ArenaBijective<ss::TermId, TermId>,
@@ -28,7 +28,7 @@ impl StackArena {
             values: ArenaSparse::new(alloc.alloc()),
             stacks: ArenaSparse::new(alloc.alloc()),
             compus: ArenaSparse::new(alloc.alloc()),
-            decls: ArenaAssoc::new(),
+            globals: ArenaAssoc::new(),
             entry: ArenaAssoc::new(),
             terms: ArenaBijective::new(),
         }

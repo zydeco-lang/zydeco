@@ -184,7 +184,7 @@ impl BuildSystem {
         emitter.run();
         Ok(instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n"))
     }
-    pub fn codegen_zir_pack(&self, pack: PackId) -> Result<String> {
+    pub fn codegen_zasm_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
         let checked = self.__tyck_pack(pack, alloc.clone(), false)?;
         let lowerer = zydeco_assembly::Lowerer::new(alloc.clone(), &checked.wf);
@@ -215,6 +215,21 @@ impl BuildSystem {
         let entry = object.entry.iter().next().unwrap().0.clone();
         let res = entry.ugly(&Formatter::new(&object));
         Ok(res)
+    }
+    pub fn codegen_zir_pack(&self, pack: PackId) -> Result<String> {
+        let alloc = ArcGlobalAlloc::new();
+        let checked = self.__tyck_pack(pack, alloc.clone(), false)?;
+        let lowerer = zydeco_stack::lower::Lowerer::new(
+            alloc.clone(),
+            &checked.spans,
+            &checked.scoped,
+            &checked.statics,
+        );
+        let arena = lowerer.run();
+        // Format the entry point computation
+        let entry = arena.entry.iter().next().unwrap().0;
+        let compu = &arena.compus[entry];
+        Ok(format!("{:#?}", compu))
     }
 }
 

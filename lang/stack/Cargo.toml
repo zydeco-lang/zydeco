@@ -1,5 +1,5 @@
 [package]
-name = "zydeco-sps"
+name = "zydeco-stack"
 version = { workspace = true }
 rust-version = { workspace = true }
 authors = { workspace = true }

@@ -1,13 +1,14 @@
 use super::arena::{StackArena, StackArenaLike};
-use super::syntax::{Computation, Stack, *};
+use super::syntax::*;
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax as t};
-use zydeco_utils::arena::{ArcGlobalAlloc, ArenaAssoc, ArenaBijective};
+use zydeco_syntax::Ugly;
+use zydeco_utils::arena::ArcGlobalAlloc;
 
 pub trait Lower {
     type Kont;
     type Out;
-    fn lower(&self, ctx: StackId, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out;
+    fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out;
 }
 
 pub struct Lowerer<'a> {
@@ -15,26 +16,104 @@ pub struct Lowerer<'a> {
     pub spans: &'a t::SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
-    pub entry: ArenaAssoc<ss::CompuId, ()>,
-    pub externals: ArenaAssoc<ss::DefId, ()>,
-    pub decls: ArenaBijective<ss::DeclId, ss::CompuId>,
 }
 
 impl<'a> Lowerer<'a> {
     pub fn new(
         alloc: ArcGlobalAlloc, spans: &'a t::SpanArena, scoped: &'a ScopedArena,
-        statics: &'a StaticsArena, entry: ArenaAssoc<ss::CompuId, ()>,
-        externals: ArenaAssoc<ss::DefId, ()>, decls: ArenaBijective<ss::DeclId, ss::CompuId>,
+        statics: &'a StaticsArena,
     ) -> Self {
         let arena = StackArena::new_arc(alloc);
-        Self { arena, spans, scoped, statics, entry, externals, decls }
+        Self { arena, spans, scoped, statics }
     }
+
     pub fn run(mut self) -> StackArena {
-        let entries: Vec<_> = self.entry.iter().map(|(compu, _)| *compu).collect();
-        for compu in entries {
-            let initial_stack = StackArenaLike::stack(&mut self.arena, Stack::Var(Bullet));
-            let _compu_id = compu.lower(initial_stack, &mut self, ());
-            // TODO: map compu back to DeclId if needed for entry
+        // Topologically traverse declarations and translate VAliasBody
+        let mut scc = self.scoped.top.clone();
+        loop {
+            let groups = scc.top();
+            if groups.is_empty() {
+                break;
+            }
+            for group in groups {
+                for decl_id in group.iter() {
+                    let Some(decl) = self.statics.decls.get(decl_id).cloned() else {
+                        continue;
+                    };
+                    use ss::Declaration as Decl;
+                    match decl {
+                        | Decl::VAliasBody(ss::VAliasBody { binder, bindee }) => {
+                            // Lower the binder (VPatId) - even though it currently does nothing
+                            let binder_vpat = binder.lower(&mut self, ());
+                            // Extract DefId from binder (should be a Var pattern)
+                            use ss::ValuePattern as VPat;
+                            let def_id = match &self.statics.vpats[&binder_vpat] {
+                                | VPat::Var(def) => *def,
+                                | _ => {
+                                    let fmt = zydeco_statics::tyck::fmt::Formatter::new(
+                                        self.scoped,
+                                        self.statics,
+                                    );
+                                    let binder_str = binder_vpat.ugly(&fmt);
+                                    panic!(
+                                        "VAliasBody binder must be a variable, found:\n{}",
+                                        binder_str
+                                    );
+                                }
+                            };
+                            let value_id = Tar::new(bindee)
+                                .lower(&mut self, Box::new(move |val_id, _lo| val_id));
+                            self.arena.globals.insert(def_id, Global::Defined(value_id));
+                        }
+                        | Decl::VAliasHead(ss::VAliasHead { binder, ty: _ }) => {
+                            // Lower the binder (VPatId) - even though it currently does nothing
+                            let binder_vpat = binder.lower(&mut self, ());
+                            // Extract DefId from binder (should be a Var pattern)
+                            use ss::ValuePattern as VPat;
+                            let def_id = match &self.statics.vpats[&binder_vpat] {
+                                | VPat::Var(def) => *def,
+                                | _ => {
+                                    let fmt = zydeco_statics::tyck::fmt::Formatter::new(
+                                        self.scoped,
+                                        self.statics,
+                                    );
+                                    let binder_str = binder_vpat.ugly(&fmt);
+                                    panic!(
+                                        "VAliasHead binder must be a variable, found:\n{}",
+                                        binder_str
+                                    );
+                                }
+                            };
+                            // Mark as external global
+                            self.arena.globals.insert(def_id, Global::Extern(()));
+                        }
+                        | Decl::TAliasBody(_) | Decl::Exec(_) => {}
+                    }
+                }
+                scc.release(group);
+            }
+        }
+
+        // Get entry declarations from statics arena
+        for decl_id in self.statics.entry.iter().map(|(decl_id, _)| *decl_id) {
+            // Get the declaration and extract the computation
+            let decl = &self.statics.decls[&decl_id];
+            use ss::Declaration as Decl;
+            let compu_id = match decl {
+                | Decl::Exec(ss::Exec(compu)) => *compu,
+                // Only Exec declarations should be entry points
+                | Decl::TAliasBody(_) | Decl::VAliasBody(_) | Decl::VAliasHead(_) => {
+                    let fmt = zydeco_statics::tyck::fmt::Formatter::new(self.scoped, self.statics);
+                    let decl_str = decl_id.ugly(&fmt);
+                    panic!("entry point must be a main declaration, found:\n{}", decl_str);
+                }
+            };
+
+            // Lower the computation
+            let lowered_compu_id = compu_id.lower(&mut self, ());
+
+            // Store the lowered computation as an entry point in the stack arena
+            self.arena.entry.insert(lowered_compu_id, ());
         }
         self.arena
     }
@@ -46,89 +125,74 @@ impl AsMut<StackArena> for Lowerer<'_> {
 }
 
 impl Lower for ss::VPatId {
-    type Kont = Box<dyn FnOnce(StackId, &mut Lowerer) -> CompuId>;
-    type Out = CompuId;
+    type Kont = ();
+    type Out = VPatId;
 
-    fn lower(&self, ctx: StackId, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
-        let vpat = lo.statics.vpats[self].clone();
-        use ss::ValuePattern as VPat;
-        match vpat {
-            | VPat::Hole(Hole) => {
-                // TODO: implement panic/hole handling
-                lo.arena.compu(Computation::Hole(Hole))
-            }
-            | VPat::Var(def) => {
-                // TODO: implement variable pattern
-                let _ = (def, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
-            }
-            | VPat::Ctor(Ctor(_ctor, _body)) => {
-                // TODO: implement constructor pattern
-                unreachable!()
-            }
-            | VPat::Triv(Triv) => {
-                // TODO: implement trivial pattern
-                let _ = (ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
-            }
-            | VPat::VCons(Cons(a, b)) => {
-                // TODO: implement value cons pattern
-                let _ = (a, b, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
-            }
-            | VPat::TCons(Cons(_ty, inner)) => {
-                // Type cons patterns are erased
-                inner.lower(ctx, lo, kont)
-            }
-        }
+    fn lower(&self, _lo: &mut Lowerer, _kont: Self::Kont) -> Self::Out {
+        // VPatIds are identical between statics and stack IR
+        *self
     }
 }
 
-impl Lower for ss::ValueId {
-    type Kont = Box<dyn FnOnce(ValueId, StackId, &mut Lowerer) -> CompuId>;
-    type Out = CompuId;
+/// A wrapper around a value that allows for lower to return a different type.
+struct Tar<'a, S, T>(S, std::marker::PhantomData<&'a T>);
+impl<'a, S, T> Tar<'a, S, T> {
+    fn new(s: S) -> Self {
+        Self(s, std::marker::PhantomData)
+    }
+}
 
-    fn lower(&self, ctx: StackId, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
-        let value = lo.statics.values[self].clone();
-        use ss::Value;
+impl<T> Lower for Tar<'static, ss::ValueId, T> {
+    type Kont = Box<dyn FnOnce(ValueId, &mut Lowerer) -> T>;
+    type Out = T;
+
+    fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
+        let value = lo.statics.values[&self.0].clone();
         match value {
-            | Value::Hole(Hole) => {
-                // TODO: implement panic/hole handling
-                lo.arena.compu(Computation::Hole(Hole))
+            | ss::Value::Hole(_) => {
+                let value_id = lo.arena.value(Hole);
+                kont(value_id, lo)
             }
-            | Value::Var(def) => {
-                // TODO: implement variable
-                let _ = (def, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+            | ss::Value::Var(def) => {
+                let value_id = lo.arena.value(def);
+                kont(value_id, lo)
             }
-            | Value::Thunk(Thunk(body)) => {
-                // TODO: implement thunk
-                let _ = (body, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+            | ss::Value::Thunk(Thunk(body)) => {
+                let body_compu = body.lower(lo, ());
+                let value_id =
+                    lo.arena.value(Clo { capture: Vec::new(), stack: Bullet, body: body_compu });
+                kont(value_id, lo)
             }
-            | Value::Ctor(Ctor(ctor, body)) => {
-                // TODO: implement constructor
-                let _ = (ctor, body, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+            | ss::Value::Ctor(Ctor(ctor, body)) => Tar::new(body).lower(
+                lo,
+                Box::new(move |body_val, lo| {
+                    let value_id = lo.arena.value(Ctor(ctor, body_val));
+                    kont(value_id, lo)
+                }),
+            ),
+            | ss::Value::Triv(_) => {
+                let value_id = lo.arena.value(Triv);
+                kont(value_id, lo)
             }
-            | Value::Triv(Triv) => {
-                // TODO: implement trivial value
-                let _ = (ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
-            }
-            | Value::VCons(Cons(a, b)) => {
-                // TODO: implement value cons
-                let _ = (a, b, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
-            }
-            | Value::TCons(Cons(_ty, inner)) => {
+            | ss::Value::VCons(Cons(a, b)) => Tar::new(a).lower(
+                lo,
+                Box::new(move |a_val, lo| {
+                    Tar::new(b).lower(
+                        lo,
+                        Box::new(move |b_val, lo| {
+                            let value_id = lo.arena.value(Cons(a_val, b_val));
+                            kont(value_id, lo)
+                        }),
+                    )
+                }),
+            ),
+            | ss::Value::TCons(Cons(_ty, inner)) => {
                 // Type cons values are erased
-                inner.lower(ctx, lo, kont)
+                Tar::new(inner).lower(lo, kont)
             }
-            | Value::Lit(lit) => {
-                // TODO: implement literal
-                let _ = (lit, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+            | ss::Value::Lit(lit) => {
+                let value_id = lo.arena.value(lit);
+                kont(value_id, lo)
             }
         }
     }
@@ -138,71 +202,116 @@ impl Lower for ss::CompuId {
     type Kont = ();
     type Out = CompuId;
 
-    fn lower(&self, ctx: StackId, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
+    fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
         let compu = lo.statics.compus[self].clone();
         use ss::Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => {
-                // TODO: implement panic/hole handling
-                lo.arena.compu(Computation::Hole(Hole))
-            }
+            | Compu::Hole(Hole) => lo.arena.compu(Hole),
             | Compu::VAbs(Abs(param, body)) => {
-                // TODO: implement value abstraction
-                let _ = (param, body, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+                let param_vpat = param.lower(lo, ());
+                let body_compu = body.lower(lo, ());
+                let stack_id = lo.arena.stack(Bullet);
+                lo.arena.compu(Let {
+                    binder: Cons(param_vpat, Bullet),
+                    bindee: stack_id,
+                    tail: body_compu,
+                })
             }
-            | Compu::VApp(App(body, arg)) => {
-                // TODO: implement value application
-                let _ = (body, arg, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
-            }
+            | Compu::VApp(App(body, arg)) => Tar::new(arg).lower(
+                lo,
+                Box::new(move |arg_val, lo| {
+                    let next_stack = lo.arena.stack(Bullet);
+                    let stack_id = lo.arena.stack(Cons(arg_val, next_stack));
+                    let body_compu = body.lower(lo, ());
+                    let let_stack = Let { binder: Bullet, bindee: stack_id, tail: body_compu };
+                    lo.arena.compu(Computation::LetStack(let_stack))
+                }),
+            ),
             | Compu::TAbs(Abs(_param, body)) => {
                 // Type abstractions are erased
-                body.lower(ctx, lo, kont)
+                body.lower(lo, kont)
             }
             | Compu::TApp(App(body, _arg)) => {
                 // Type applications are erased
-                body.lower(ctx, lo, kont)
+                body.lower(lo, kont)
             }
             | Compu::Fix(Fix(param, body)) => {
-                // TODO: implement fixpoint
-                let _ = (param, body, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+                let param_vpat = param.lower(lo, ());
+                let body_compu = body.lower(lo, ());
+                lo.arena.compu(Fix(param_vpat, body_compu))
             }
-            | Compu::Force(Force(body)) => {
-                // TODO: implement force
-                let _ = (body, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
-            }
-            | Compu::Ret(Return(body)) => {
-                // TODO: implement return
-                let _ = (body, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
-            }
+            | Compu::Force(Force(body)) => Tar::new(body).lower(
+                lo,
+                Box::new(move |thunk_val, lo| {
+                    let stack_id = lo.arena.stack(Bullet);
+                    lo.arena.compu(SForce { thunk: thunk_val, stack: stack_id })
+                }),
+            ),
+            | Compu::Ret(Return(body)) => Tar::new(body).lower(
+                lo,
+                Box::new(move |value, lo| {
+                    let stack_id = lo.arena.stack(Bullet);
+                    lo.arena.compu(SReturn { stack: stack_id, value })
+                }),
+            ),
             | Compu::Do(Bind { binder, bindee, tail }) => {
-                // TODO: implement do/bind
-                let _ = (binder, bindee, tail, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+                let binder_vpat = binder.lower(lo, ());
+                let tail_compu = tail.lower(lo, ());
+                let kont_stack_id = lo.arena.stack(Kont { binder: binder_vpat, body: tail_compu });
+                let bindee_compu = bindee.lower(lo, ());
+                lo.arena.compu(Let { binder: Bullet, bindee: kont_stack_id, tail: bindee_compu })
             }
             | Compu::Let(Let { binder, bindee, tail }) => {
-                // TODO: implement let
-                let _ = (binder, bindee, tail, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+                let binder_vpat = binder.lower(lo, ());
+                Tar::new(bindee).lower(
+                    lo,
+                    Box::new(move |bindee_val, lo| {
+                        let tail_compu = tail.lower(lo, ());
+                        lo.arena.compu(Let {
+                            binder: binder_vpat,
+                            bindee: bindee_val,
+                            tail: tail_compu,
+                        })
+                    }),
+                )
             }
             | Compu::Match(Match { scrut, arms }) => {
-                // TODO: implement match
-                let _ = (scrut, arms, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+                // Match: lower the scrutinee, then create a case statement
+                Tar::new(scrut).lower(
+                    lo,
+                    Box::new(move |scrut_val, lo| {
+                        // Lower all the arms - arms are (VPatId, CompuId) in statics
+                        let lowered_arms: Vec<_> = arms
+                            .iter()
+                            .map(|arm| {
+                                let Matcher { binder, tail } = arm;
+                                let binder_vpat = binder.lower(lo, ());
+                                let body_compu = tail.lower(lo, ());
+                                Matcher { binder: binder_vpat, tail: body_compu }
+                            })
+                            .collect();
+                        lo.arena.compu(Match { scrut: scrut_val, arms: lowered_arms })
+                    }),
+                )
             }
             | Compu::CoMatch(CoMatch { arms }) => {
-                // TODO: implement comatch
-                let _ = (arms, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+                let lowered_arms = arms
+                    .iter()
+                    .map(|arm| {
+                        let CoMatcher { dtor, tail } = arm;
+                        let body_compu = tail.lower(lo, ());
+                        CoMatcher { dtor: Cons(dtor.clone(), Bullet), tail: body_compu }
+                    })
+                    .collect();
+                lo.arena.compu(CoMatch { arms: lowered_arms })
             }
             | Compu::Dtor(Dtor(body, dtor)) => {
-                // TODO: implement destructor
-                let _ = (body, dtor, ctx, kont);
-                lo.arena.compu(Computation::Hole(Hole))
+                // Destructor: push the destructor onto the stack and continue with body
+                let next_stack = lo.arena.stack(Bullet);
+                let tag_stack_id = lo.arena.stack(Cons(dtor.clone(), next_stack));
+                let body_compu = body.lower(lo, ());
+                // Create LetStack to bind from the stack with the tag to the current stack, then run body
+                lo.arena.compu(Let { binder: Bullet, bindee: tag_stack_id, tail: body_compu })
             }
         }
     }
