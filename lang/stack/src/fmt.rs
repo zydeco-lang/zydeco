@@ -180,6 +180,34 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for StackArena {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let mut s = String::new();
+        
+        // Print all globals
+        for (def_id, global) in self.globals.iter() {
+            let VarName(varname) = &f.scoped.defs[def_id];
+            s += &format!("[def:{}]\n", varname);
+            match global {
+                | Global::Extern(_) => {
+                    s += "<extern>\n";
+                }
+                | Global::Defined(value_id) => {
+                    s += &format!("{}\n", value_id.ugly(f));
+                }
+            }
+        }
+        
+        // Print all entries
+        for (compu_id, _) in self.entry.iter() {
+            s += "[entry]\n";
+            s += &format!("{}\n", compu_id.ugly(f));
+        }
+        
+        s
+    }
+}
+
 /* --------------------------------- Pretty --------------------------------- */
 
 use pretty::RcDoc;
@@ -469,5 +497,39 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
             | TermId::Compu(c) => c.pretty(f),
             | TermId::Stack(s) => s.pretty(f),
         }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let mut doc = RcDoc::nil();
+        
+        // Print all globals
+        for (def_id, global) in self.globals.iter() {
+            let VarName(varname) = &f.scoped.defs[def_id];
+            doc = doc
+                .append(RcDoc::text(format!("[def:{}]", varname)))
+                .append(RcDoc::line());
+            match global {
+                | Global::Extern(_) => {
+                    doc = doc.append(RcDoc::text("<extern>"));
+                }
+                | Global::Defined(value_id) => {
+                    doc = doc.append(value_id.pretty(f));
+                }
+            }
+            doc = doc.append(RcDoc::line());
+        }
+        
+        // Print all entries
+        for (compu_id, _) in self.entry.iter() {
+            doc = doc
+                .append(RcDoc::text("[entry]"))
+                .append(RcDoc::line())
+                .append(compu_id.pretty(f))
+                .append(RcDoc::line());
+        }
+        
+        doc
     }
 }
