@@ -228,8 +228,9 @@ impl BuildSystem {
         let arena = lowerer.run();
         // Format the entry point computation
         let entry = arena.entry.iter().next().unwrap().0;
-        let compu = &arena.compus[entry];
-        Ok(format!("{:#?}", compu))
+        use zydeco_stack::fmt::*;
+        let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);
+        Ok(entry.ugly(&fmt))
     }
 }
 

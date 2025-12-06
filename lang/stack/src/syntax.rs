@@ -1,5 +1,5 @@
 pub use super::arena::*;
-pub use zydeco_syntax::*;
+pub use zydeco_syntax::{fmt, *};
 pub use zydeco_utils::arena::*;
 
 use super::*;

@@ -7,6 +7,7 @@ members = [
     "lang/surface",
     "lang/statics",
     "lang/dynamics",
+    # "lang/sps",
     # "lang/cfg",
     "lang/stack",
     "lang/assembly",
