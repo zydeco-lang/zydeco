@@ -230,7 +230,10 @@ impl BuildSystem {
         let entry = arena.entry.iter().next().unwrap().0;
         use zydeco_stack::fmt::*;
         let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);
-        Ok(entry.ugly(&fmt))
+        let doc = entry.pretty(&fmt);
+        let mut buf = String::new();
+        doc.render_fmt(100, &mut buf).unwrap();
+        Ok(buf)
     }
 }
 
