@@ -1,6 +1,7 @@
 pub use super::arena::*;
 pub use zydeco_syntax::{fmt, *};
 pub use zydeco_utils::arena::*;
+pub use zydeco_utils::context::Context;
 
 use super::*;
 use derive_more::From;
@@ -29,7 +30,7 @@ pub type ValuePattern = ss::ValuePattern;
 /// A closure that captures minimal environment.
 #[derive(Clone, Debug)]
 pub struct Clo {
-    pub capture: Vec<DefId>,
+    pub capture: Context<DefId>,
     pub stack: Bullet,
     pub body: CompuId,
 }
@@ -42,6 +43,7 @@ pub enum Value {
     Ctor(Ctor<ValueId>),
     Triv(Triv),
     VCons(Cons<ValueId, ValueId>),
+    Capture(Context<DefId>),
     Lit(Literal),
 }
 

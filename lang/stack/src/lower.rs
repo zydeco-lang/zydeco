@@ -4,6 +4,7 @@ use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax as t};
 use zydeco_syntax::Ugly;
 use zydeco_utils::arena::ArcGlobalAlloc;
+use zydeco_utils::context::Context;
 
 pub trait Lower {
     type Kont;
@@ -120,7 +121,7 @@ impl<'a> Lowerer<'a> {
 
     /// Compute the minimal capture list for a closure from a computation body.
     /// Filters out type and kind identifiers, keeping only term-level (value/computation) identifiers.
-    fn compute_capture(&self, body: ss::CompuId) -> Vec<DefId> {
+    fn compute_capture(&self, body: ss::CompuId) -> Context<DefId> {
         // Convert CompuId to statics TermId
         let ss_term_id = ss::TermId::Compu(body);
         // Map from statics TermId to scoped TermId
@@ -145,7 +146,7 @@ impl<'a> Lowerer<'a> {
         // Get cocontext (free variables) from scoped arena
         // This gives us the minimal set of variables that need to be captured
         let coctx = self.scoped.coctxs_term_local[su_term_id].clone();
-        // Convert CoContext to Vec<DefId>, filtering out type and kind identifiers
+        // Convert CoContext to Context<DefId>, filtering out type and kind identifiers
         // Only keep term-level (value/computation) identifiers
         coctx
             .iter()

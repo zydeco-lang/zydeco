@@ -59,7 +59,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
             | Value::Var(def) => def.ugly(f),
             | Value::Clo(Clo { capture, stack, body }) => {
                 let mut s = String::new();
-                if !capture.is_empty() {
+                if !capture.0.is_empty() {
                     s += " [";
                     s += &capture.iter().map(|d| d.ugly(f)).collect::<Vec<_>>().join(", ");
                     s += "] ";
@@ -72,6 +72,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
             }
             | Value::Triv(Triv) => "()".to_string(),
             | Value::VCons(Cons(a, b)) => format!("({}, {})", a.ugly(f), b.ugly(f)),
+            | Value::Capture(capture) => {
+                let mut s = String::new();
+                s += "[";
+                s += &capture.iter().map(|d| d.ugly(f)).collect::<Vec<_>>().join(", ");
+                s += "]";
+                s
+            }
             | Value::Lit(lit) => lit.ugly(&statics_fmt),
         }
     }
@@ -241,10 +248,10 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
             | Value::Var(def) => def.pretty(f),
             | Value::Clo(Clo { capture, stack, body }) => {
                 let mut doc = RcDoc::nil();
-                if !capture.is_empty() {
+                if !capture.0.is_empty() {
                     let capture_doc =
-                        if capture.len() == 1 {
-                            capture[0].pretty(f)
+                        if capture.0.len() == 1 {
+                            capture.0[0].pretty(f)
                         } else {
                             RcDoc::concat(
                                 capture
@@ -295,6 +302,29 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 b.pretty(f),
                 RcDoc::text(")"),
             ]),
+            | Value::Capture(capture) => {
+                if capture.0.is_empty() {
+                    RcDoc::text("[]")
+                } else if capture.0.len() == 1 {
+                    RcDoc::concat([RcDoc::text("["), capture.0[0].pretty(f), RcDoc::text("]")])
+                } else {
+                    RcDoc::concat(
+                        capture
+                            .iter()
+                            .map(|d| d.pretty(f))
+                            .enumerate()
+                            .flat_map(|(i, d)| {
+                                if i == 0 {
+                                    vec![RcDoc::text("["), d]
+                                } else {
+                                    vec![RcDoc::text(", "), d]
+                                }
+                            })
+                            .chain(std::iter::once(RcDoc::text("]")))
+                            .collect::<Vec<_>>(),
+                    )
+                }
+            }
             | Value::Lit(lit) => {
                 let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::text(lit.ugly(&statics_fmt))
