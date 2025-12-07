@@ -93,62 +93,7 @@ pub enum Atom {
 }
 
 /// Contexts are ordered sets of variables.
-#[derive(Clone, Debug)]
-pub struct Context(pub Vec<VarId>);
-mod impls_context {
-    use super::*;
-    impl FromIterator<VarId> for Context {
-        fn from_iter<T: IntoIterator<Item = VarId>>(iter: T) -> Self {
-            Context(iter.into_iter().collect())
-        }
-    }
-    impl IntoIterator for Context {
-        type Item = VarId;
-        type IntoIter = std::vec::IntoIter<VarId>;
-        fn into_iter(self) -> Self::IntoIter {
-            self.0.into_iter()
-        }
-    }
-    impl<'a> IntoIterator for &'a Context {
-        type Item = &'a VarId;
-        type IntoIter = std::slice::Iter<'a, VarId>;
-        fn into_iter(self) -> Self::IntoIter {
-            self.0.iter()
-        }
-    }
-    impl Context {
-        pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
-            self.into_iter()
-        }
-    }
-}
+pub type Context = zydeco_utils::context::Context<VarId>;
 
-#[derive(Clone, Debug)]
-pub struct CoContext(pub im::HashSet<VarId>);
-mod impls_co_context {
-    use super::*;
-    impl FromIterator<VarId> for CoContext {
-        fn from_iter<T: IntoIterator<Item = VarId>>(iter: T) -> Self {
-            CoContext(iter.into_iter().collect())
-        }
-    }
-    impl IntoIterator for CoContext {
-        type Item = VarId;
-        type IntoIter = im::hashset::ConsumingIter<VarId>;
-        fn into_iter(self) -> Self::IntoIter {
-            self.0.into_iter()
-        }
-    }
-    impl<'a> IntoIterator for &'a CoContext {
-        type Item = &'a VarId;
-        type IntoIter = im::hashset::Iter<'a, VarId>;
-        fn into_iter(self) -> Self::IntoIter {
-            self.0.iter()
-        }
-    }
-    impl CoContext {
-        pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
-            self.into_iter()
-        }
-    }
-}
+/// CoContexts are unordered sets of variables.
+pub type CoContext = zydeco_utils::context::CoContext<VarId>;

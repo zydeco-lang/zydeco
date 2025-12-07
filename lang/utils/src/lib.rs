@@ -2,6 +2,7 @@
 #![allow(clippy::useless_format)]
 
 pub mod arena;
+pub mod context;
 pub mod imc;
 pub mod cells;
 pub mod deps;
