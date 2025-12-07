@@ -42,27 +42,39 @@ impl AsMut<StackArena> for StackArena {
 
 pub trait StackArenaLike {
     /// Allocate a value.
-    fn value(&mut self, value: impl Into<Value>) -> ValueId;
+    fn value(&mut self, site: Option<ss::TermId>, value: impl Into<Value>) -> ValueId;
     /// Allocate a stack.
-    fn stack(&mut self, stack: impl Into<Stack>) -> StackId;
+    fn stack(&mut self, site: Option<ss::TermId>, stack: impl Into<Stack>) -> StackId;
     /// Allocate a computation.
-    fn compu(&mut self, compu: impl Into<Computation>) -> CompuId;
+    fn compu(&mut self, site: Option<ss::TermId>, compu: impl Into<Computation>) -> CompuId;
 }
 
 impl<T> StackArenaLike for T
 where
     T: AsMut<StackArena>,
 {
-    fn value(&mut self, value: impl Into<Value>) -> ValueId {
+    fn value(&mut self, site: Option<ss::TermId>, value: impl Into<Value>) -> ValueId {
         let this = &mut *self.as_mut();
-        this.values.alloc(value.into())
+        let value_id = this.values.alloc(value.into());
+        if let Some(site) = site {
+            this.terms.insert(site, TermId::Value(value_id));
+        }
+        value_id
     }
-    fn stack(&mut self, stack: impl Into<Stack>) -> StackId {
+    fn stack(&mut self, site: Option<ss::TermId>, stack: impl Into<Stack>) -> StackId {
         let this = &mut *self.as_mut();
-        this.stacks.alloc(stack.into())
+        let stack_id = this.stacks.alloc(stack.into());
+        if let Some(site) = site {
+            this.terms.insert(site, TermId::Stack(stack_id));
+        }
+        stack_id
     }
-    fn compu(&mut self, compu: impl Into<Computation>) -> CompuId {
+    fn compu(&mut self, site: Option<ss::TermId>, compu: impl Into<Computation>) -> CompuId {
         let this = &mut *self.as_mut();
-        this.compus.alloc(compu.into())
+        let compu_id = this.compus.alloc(compu.into());
+        if let Some(site) = site {
+            this.terms.insert(site, TermId::Compu(compu_id));
+        }
+        compu_id
     }
 }

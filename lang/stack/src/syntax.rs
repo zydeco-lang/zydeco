@@ -16,7 +16,7 @@ new_key_type! {
     pub struct StackId;
 }
 
-#[derive(From, Clone, Debug)]
+#[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum TermId {
     Value(ValueId),
     Compu(CompuId),

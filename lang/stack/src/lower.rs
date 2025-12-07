@@ -193,31 +193,32 @@ impl<T> Lower for Tar<'static, ss::ValueId, T> {
 
     fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
         let value = lo.statics.values[&self.0].clone();
+        let site = Some(ss::TermId::Value(self.0));
         match value {
             | ss::Value::Hole(_) => {
-                let value_id = lo.arena.value(Hole);
+                let value_id = lo.arena.value(site, Hole);
                 kont(value_id, lo)
             }
             | ss::Value::Var(def) => {
-                let value_id = lo.arena.value(def);
+                let value_id = lo.arena.value(site, def);
                 kont(value_id, lo)
             }
             | ss::Value::Thunk(Thunk(body)) => {
                 let body_compu = body.lower(lo, ());
                 // Get minimal capture from cocontext information
                 let capture = lo.compute_capture(body);
-                let value_id = lo.arena.value(Clo { capture, stack: Bullet, body: body_compu });
+                let value_id = lo.arena.value(site, Clo { capture, stack: Bullet, body: body_compu });
                 kont(value_id, lo)
             }
             | ss::Value::Ctor(Ctor(ctor, body)) => Tar::new(body).lower(
                 lo,
                 Box::new(move |body_val, lo| {
-                    let value_id = lo.arena.value(Ctor(ctor, body_val));
+                    let value_id = lo.arena.value(site, Ctor(ctor, body_val));
                     kont(value_id, lo)
                 }),
             ),
             | ss::Value::Triv(_) => {
-                let value_id = lo.arena.value(Triv);
+                let value_id = lo.arena.value(site, Triv);
                 kont(value_id, lo)
             }
             | ss::Value::VCons(Cons(a, b)) => Tar::new(a).lower(
@@ -226,7 +227,7 @@ impl<T> Lower for Tar<'static, ss::ValueId, T> {
                     Tar::new(b).lower(
                         lo,
                         Box::new(move |b_val, lo| {
-                            let value_id = lo.arena.value(Cons(a_val, b_val));
+                            let value_id = lo.arena.value(site, Cons(a_val, b_val));
                             kont(value_id, lo)
                         }),
                     )
@@ -237,7 +238,7 @@ impl<T> Lower for Tar<'static, ss::ValueId, T> {
                 Tar::new(inner).lower(lo, kont)
             }
             | ss::Value::Lit(lit) => {
-                let value_id = lo.arena.value(lit);
+                let value_id = lo.arena.value(site, lit);
                 kont(value_id, lo)
             }
         }
@@ -250,14 +251,15 @@ impl Lower for ss::CompuId {
 
     fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
         let compu = lo.statics.compus[self].clone();
+        let site = Some(ss::TermId::Compu(*self));
         use ss::Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => lo.arena.compu(Hole),
+            | Compu::Hole(Hole) => lo.arena.compu(site, Hole),
             | Compu::VAbs(Abs(param, body)) => {
                 let param_vpat = param.lower(lo, ());
                 let body_compu = body.lower(lo, ());
-                let stack_id = lo.arena.stack(Bullet);
-                lo.arena.compu(Let {
+                let stack_id = lo.arena.stack(site, Bullet);
+                lo.arena.compu(site, Let {
                     binder: Cons(param_vpat, Bullet),
                     bindee: stack_id,
                     tail: body_compu,
@@ -266,11 +268,11 @@ impl Lower for ss::CompuId {
             | Compu::VApp(App(body, arg)) => Tar::new(arg).lower(
                 lo,
                 Box::new(move |arg_val, lo| {
-                    let next_stack = lo.arena.stack(Bullet);
-                    let stack_id = lo.arena.stack(Cons(arg_val, next_stack));
+                    let next_stack = lo.arena.stack(site, Bullet);
+                    let stack_id = lo.arena.stack(site, Cons(arg_val, next_stack));
                     let body_compu = body.lower(lo, ());
                     let let_stack = Let { binder: Bullet, bindee: stack_id, tail: body_compu };
-                    lo.arena.compu(Computation::LetStack(let_stack))
+                    lo.arena.compu(site, Computation::LetStack(let_stack))
                 }),
             ),
             | Compu::TAbs(Abs(_param, body)) => {
@@ -300,28 +302,28 @@ impl Lower for ss::CompuId {
                 };
                 let capture = lo.compute_capture(body);
                 let body_compu = body.lower(lo, ());
-                lo.arena.compu(SFix { capture, param: def_id, body: body_compu })
+                lo.arena.compu(site, SFix { capture, param: def_id, body: body_compu })
             }
             | Compu::Force(Force(body)) => Tar::new(body).lower(
                 lo,
                 Box::new(move |thunk_val, lo| {
-                    let stack_id = lo.arena.stack(Bullet);
-                    lo.arena.compu(SForce { thunk: thunk_val, stack: stack_id })
+                    let stack_id = lo.arena.stack(site, Bullet);
+                    lo.arena.compu(site, SForce { thunk: thunk_val, stack: stack_id })
                 }),
             ),
             | Compu::Ret(Return(body)) => Tar::new(body).lower(
                 lo,
                 Box::new(move |value, lo| {
-                    let stack_id = lo.arena.stack(Bullet);
-                    lo.arena.compu(SReturn { stack: stack_id, value })
+                    let stack_id = lo.arena.stack(site, Bullet);
+                    lo.arena.compu(site, SReturn { stack: stack_id, value })
                 }),
             ),
             | Compu::Do(Bind { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
                 let tail_compu = tail.lower(lo, ());
-                let kont_stack_id = lo.arena.stack(Kont { binder: binder_vpat, body: tail_compu });
+                let kont_stack_id = lo.arena.stack(site, Kont { binder: binder_vpat, body: tail_compu });
                 let bindee_compu = bindee.lower(lo, ());
-                lo.arena.compu(Let { binder: Bullet, bindee: kont_stack_id, tail: bindee_compu })
+                lo.arena.compu(site, Let { binder: Bullet, bindee: kont_stack_id, tail: bindee_compu })
             }
             | Compu::Let(Let { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
@@ -329,7 +331,7 @@ impl Lower for ss::CompuId {
                     lo,
                     Box::new(move |bindee_val, lo| {
                         let tail_compu = tail.lower(lo, ());
-                        lo.arena.compu(Let {
+                        lo.arena.compu(site, Let {
                             binder: binder_vpat,
                             bindee: bindee_val,
                             tail: tail_compu,
@@ -352,7 +354,7 @@ impl Lower for ss::CompuId {
                                 Matcher { binder: binder_vpat, tail: body_compu }
                             })
                             .collect();
-                        lo.arena.compu(Match { scrut: scrut_val, arms: lowered_arms })
+                        lo.arena.compu(site, Match { scrut: scrut_val, arms: lowered_arms })
                     }),
                 )
             }
@@ -365,15 +367,15 @@ impl Lower for ss::CompuId {
                         CoMatcher { dtor: Cons(dtor.clone(), Bullet), tail: body_compu }
                     })
                     .collect();
-                lo.arena.compu(CoMatch { arms: lowered_arms })
+                lo.arena.compu(site, CoMatch { arms: lowered_arms })
             }
             | Compu::Dtor(Dtor(body, dtor)) => {
                 // Destructor: push the destructor onto the stack and continue with body
-                let next_stack = lo.arena.stack(Bullet);
-                let tag_stack_id = lo.arena.stack(Cons(dtor.clone(), next_stack));
+                let next_stack = lo.arena.stack(site, Bullet);
+                let tag_stack_id = lo.arena.stack(site, Cons(dtor.clone(), next_stack));
                 let body_compu = body.lower(lo, ());
                 // Create LetStack to bind from the stack with the tag to the current stack, then run body
-                lo.arena.compu(Let { binder: Bullet, bindee: tag_stack_id, tail: body_compu })
+                lo.arena.compu(site, Let { binder: Bullet, bindee: tag_stack_id, tail: body_compu })
             }
         }
     }
