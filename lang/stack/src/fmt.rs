@@ -183,27 +183,27 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
 impl<'a> Ugly<'a, Formatter<'a>> for StackArena {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        
+
         // Print all globals
         for (def_id, global) in self.globals.iter() {
             let VarName(varname) = &f.scoped.defs[def_id];
             s += &format!("[def:{}]\n", varname);
             match global {
                 | Global::Extern(_) => {
-                    s += "<extern>\n";
+                    s += "\t<extern>\n";
                 }
                 | Global::Defined(value_id) => {
-                    s += &format!("{}\n", value_id.ugly(f));
+                    s += &format!("\t{}\n", value_id.ugly(f));
                 }
             }
         }
-        
+
         // Print all entries
         for (compu_id, _) in self.entry.iter() {
             s += "[entry]\n";
-            s += &format!("{}\n", compu_id.ugly(f));
+            s += &format!("\t{}\n", compu_id.ugly(f));
         }
-        
+
         s
     }
 }
@@ -242,24 +242,21 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
             | Value::Clo(Clo { capture, stack, body }) => {
                 let mut doc = RcDoc::nil();
                 if !capture.is_empty() {
-                    let capture_doc = if capture.len() == 1 {
-                        capture[0].pretty(f)
-                    } else {
-                        RcDoc::concat(
-                            capture
-                                .iter()
-                                .map(|d| d.pretty(f))
-                                .enumerate()
-                                .flat_map(|(i, d)| {
-                                    if i == 0 {
-                                        vec![d]
-                                    } else {
-                                        vec![RcDoc::text(", "), d]
-                                    }
-                                })
-                                .collect::<Vec<_>>(),
-                        )
-                    };
+                    let capture_doc =
+                        if capture.len() == 1 {
+                            capture[0].pretty(f)
+                        } else {
+                            RcDoc::concat(
+                                capture
+                                    .iter()
+                                    .map(|d| d.pretty(f))
+                                    .enumerate()
+                                    .flat_map(|(i, d)| {
+                                        if i == 0 { vec![d] } else { vec![RcDoc::text(", "), d] }
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                        };
                     doc = doc
                         .append(RcDoc::text("["))
                         .append(capture_doc)
@@ -503,33 +500,31 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
 impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let mut doc = RcDoc::nil();
-        
+
         // Print all globals
         for (def_id, global) in self.globals.iter() {
             let VarName(varname) = &f.scoped.defs[def_id];
-            doc = doc
-                .append(RcDoc::text(format!("[def:{}]", varname)))
-                .append(RcDoc::line());
+            doc = doc.append(RcDoc::text(format!("[def:{}]", varname)));
             match global {
                 | Global::Extern(_) => {
-                    doc = doc.append(RcDoc::text("<extern>"));
+                    doc =
+                        doc.append(RcDoc::concat([RcDoc::line(), RcDoc::text("<extern>")]).nest(1));
                 }
                 | Global::Defined(value_id) => {
-                    doc = doc.append(value_id.pretty(f));
+                    doc = doc.append(RcDoc::concat([RcDoc::line(), value_id.pretty(f)]).nest(1));
                 }
             }
             doc = doc.append(RcDoc::line());
         }
-        
+
         // Print all entries
         for (compu_id, _) in self.entry.iter() {
             doc = doc
                 .append(RcDoc::text("[entry]"))
-                .append(RcDoc::line())
-                .append(compu_id.pretty(f))
+                .append(RcDoc::concat([RcDoc::line(), compu_id.pretty(f)]).nest(1))
                 .append(RcDoc::line());
         }
-        
+
         doc
     }
 }

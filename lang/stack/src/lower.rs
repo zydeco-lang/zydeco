@@ -117,6 +117,50 @@ impl<'a> Lowerer<'a> {
         }
         self.arena
     }
+
+    /// Compute the minimal capture list for a closure from a computation body.
+    /// Filters out type and kind identifiers, keeping only term-level (value/computation) identifiers.
+    fn compute_capture(&self, body: ss::CompuId) -> Vec<DefId> {
+        // Convert CompuId to statics TermId
+        let ss_term_id = ss::TermId::Compu(body);
+        // Map from statics TermId to scoped TermId
+        let su_term_id = self.statics.terms.back(&ss_term_id).unwrap_or_else(|| {
+            let fmt = zydeco_statics::tyck::fmt::Formatter::new(self.scoped, self.statics);
+            let body_str = body.ugly(&fmt);
+            // Try to get span information if we can map to scoped TermId
+            // (this will likely also fail since the mapping already failed)
+            let span_str = self
+                .statics
+                .terms
+                .back(&ss_term_id)
+                .and_then(|su_term_id| {
+                    use zydeco_surface::scoped::syntax::EntityId as SuEntityId;
+                    let entity_id: SuEntityId = (*su_term_id).into();
+                    self.scoped.textual.back(&entity_id)
+                })
+                .map(|entity| format!(" ({})", &self.spans[entity]))
+                .unwrap_or_default();
+            panic!("Failed to map statics CompuId to scoped TermId ({}):\n{}", span_str, body_str);
+        });
+        // Get cocontext (free variables) from scoped arena
+        // This gives us the minimal set of variables that need to be captured
+        let coctx = self.scoped.coctxs_term_local[su_term_id].clone();
+        // Convert CoContext to Vec<DefId>, filtering out type and kind identifiers
+        // Only keep term-level (value/computation) identifiers
+        coctx
+            .iter()
+            .cloned()
+            .filter(|def_id| {
+                // Check if this is a term-level definition (value/computation)
+                // by checking if it has a Type annotation (not Kind or Set)
+                self.statics
+                    .annotations_var
+                    .get(def_id)
+                    .map(|ann| matches!(ann, ss::AnnId::Type(_)))
+                    .unwrap_or(false)
+            })
+            .collect()
+    }
 }
 impl AsMut<StackArena> for Lowerer<'_> {
     fn as_mut(&mut self) -> &mut StackArena {
@@ -159,8 +203,9 @@ impl<T> Lower for Tar<'static, ss::ValueId, T> {
             }
             | ss::Value::Thunk(Thunk(body)) => {
                 let body_compu = body.lower(lo, ());
-                let value_id =
-                    lo.arena.value(Clo { capture: Vec::new(), stack: Bullet, body: body_compu });
+                // Get minimal capture from cocontext information
+                let capture = lo.compute_capture(body);
+                let value_id = lo.arena.value(Clo { capture, stack: Bullet, body: body_compu });
                 kont(value_id, lo)
             }
             | ss::Value::Ctor(Ctor(ctor, body)) => Tar::new(body).lower(
