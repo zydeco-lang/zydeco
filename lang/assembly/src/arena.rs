@@ -5,10 +5,11 @@ pub struct AssemblyArena {
     pub programs: ArenaSparse<ProgId, Program>,
     /// All variables are named.
     pub variables: ArenaSparse<VarId, VarName>,
+    /// All symbols are named.
+    pub symbols: ArenaSparse<SymId, Symbol>,
 
     /// Programs are (optionally) labeled.
     pub labels: ArenaAssoc<ProgId, Label>,
-
     /// The whole object has an optional entry point.
     pub entry: ArenaAssoc<ProgId, ()>,
 }
@@ -18,6 +19,7 @@ impl AssemblyArena {
         Self {
             programs: ArenaSparse::new(alloc.alloc()),
             variables: ArenaSparse::new(alloc.alloc()),
+            symbols: ArenaSparse::new(alloc.alloc()),
             labels: ArenaAssoc::new(),
             entry: ArenaAssoc::new(),
         }
@@ -40,8 +42,7 @@ pub trait AssemblyArenaLike {
     ) -> ProgId;
     /// Allocate an instruction.
     fn instr(
-        &mut self, instr: impl Into<Instruction>,
-        kont: impl FnOnce(&mut Self) -> ProgId,
+        &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
     ) -> ProgId;
 }
 
@@ -73,8 +74,7 @@ where
         id
     }
     fn instr(
-        &mut self, instr: impl Into<Instruction>,
-        kont: impl FnOnce(&mut Self) -> ProgId,
+        &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
     ) -> ProgId {
         let next = kont(self);
         let this = &mut *self.as_mut();

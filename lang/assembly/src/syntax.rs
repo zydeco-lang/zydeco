@@ -1,5 +1,5 @@
 //! There are three sorts in syntax of ZASM:
-//! 
+//!
 //! - Variables, whose values are dynamically assigned.
 //! - Symbols, whose values are statically assigned.
 //! - Programs, which are sequences of instructions.
@@ -87,9 +87,14 @@ pub struct Tag {
 #[derive(Clone, Debug)]
 pub enum Atom {
     Var(VarId),
-    Label(ProgId),
+    Symbol(SymId),
+}
+
+#[derive(Clone, Debug)]
+pub enum Symbol {
+    Label(Label),
     Literal(Literal),
-    External(String),
+    External,
 }
 
 /// Contexts are ordered sets of variables.
