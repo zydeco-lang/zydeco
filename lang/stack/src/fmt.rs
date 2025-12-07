@@ -128,7 +128,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Computation {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | Computation::Hole(Hole) => "_".to_string(),
-            | Computation::Fix(Fix(param, body)) => {
+            | Computation::Fix(SFix { param, body, .. }) => {
                 format!("fix {} -> {}", param.ugly(f), body.ugly(f))
             }
             | Computation::Force(SForce { thunk, stack }) => {
@@ -400,7 +400,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
             | Computation::Hole(Hole) => RcDoc::text("_"),
-            | Computation::Fix(Fix(param, body)) => RcDoc::concat([
+            | Computation::Fix(SFix { param, body, .. }) => RcDoc::concat([
                 RcDoc::text("fix"),
                 RcDoc::space(),
                 param.pretty(f),

@@ -282,9 +282,25 @@ impl Lower for ss::CompuId {
                 body.lower(lo, kont)
             }
             | Compu::Fix(Fix(param, body)) => {
-                let param_vpat = param.lower(lo, ());
+                // Extract DefId from binder (should be a Var pattern)
+                use ss::ValuePattern as VPat;
+                let def_id = match &lo.statics.vpats[&param] {
+                    | VPat::Var(def) => *def,
+                    | _ => {
+                        let fmt = zydeco_statics::tyck::fmt::Formatter::new(
+                            lo.scoped,
+                            lo.statics,
+                        );
+                        let param_str = param.ugly(&fmt);
+                        panic!(
+                            "Fix param must be a variable, found:\n{}",
+                            param_str
+                        );
+                    }
+                };
+                let capture = lo.compute_capture(body);
                 let body_compu = body.lower(lo, ());
-                lo.arena.compu(Fix(param_vpat, body_compu))
+                lo.arena.compu(SFix { capture, param: def_id, body: body_compu })
             }
             | Compu::Force(Force(body)) => Tar::new(body).lower(
                 lo,

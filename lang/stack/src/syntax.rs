@@ -83,11 +83,18 @@ pub struct SReturn {
 }
 
 #[derive(From, Clone, Debug)]
+pub struct SFix {
+    pub capture: Context<DefId>,
+    pub param: DefId,
+    pub body: CompuId,
+}
+
+#[derive(From, Clone, Debug)]
 pub enum Computation {
     Hole(Hole),
-    Fix(Fix<VPatId, CompuId>),
     Force(SForce),
     Ret(SReturn),
+    Fix(SFix),
     Case(Match<ValueId, VPatId, CompuId>),
     LetValue(Let<VPatId, ValueId, CompuId>),
     LetStack(Let<Bullet, StackId, CompuId>),
