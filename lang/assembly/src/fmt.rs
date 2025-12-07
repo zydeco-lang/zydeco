@@ -217,10 +217,9 @@ mod test {
     #[test]
     fn test_ugly() {
         let mut arena = AssemblyArena::new(ArcGlobalAlloc::new());
-        let prog = arena.prog_anon(Program::Panic(Panic), Context::from_iter([]));
+        let prog = arena.prog_anon(Program::Panic(Panic));
         let prog = arena.prog_anon(
             Program::Instruction(Instruction::PackProduct(Pack(Product)), prog),
-            Context::from_iter([]),
         );
         let fmter = Formatter::new(&arena);
         assert_eq!(prog.ugly(&fmter), "pack <product>; panic");

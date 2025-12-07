@@ -16,7 +16,7 @@ new_key_type! {
     pub struct ProgId;
 }
 
-/// Computations in ZIR.
+/// Computations in ZIR are programs in ZASM.
 #[derive(From, Clone, Debug)]
 pub enum Program {
     Instruction(Instruction, ProgId),
