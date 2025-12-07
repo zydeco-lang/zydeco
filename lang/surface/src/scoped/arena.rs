@@ -1,6 +1,6 @@
 use super::syntax::*;
 use crate::textual::syntax as t;
-use zydeco_utils::{deps::DepGraph, imc::ImmutableMonoidMap, monoid::Monoid, scc::SccGraph};
+use zydeco_utils::{deps::DepGraph, monoid::Monoid, scc::SccGraph};
 
 pub use crate::arena::*;
 
@@ -29,13 +29,13 @@ pub struct ScopedArena {
     /// def user map
     pub users: ArenaForth<DefId, TermId>,
     /// variables available upon the term
-    pub ctxs_term: ArenaAssoc<TermId, Context<()>>,
+    pub ctxs_term: ArenaAssoc<TermId, Context>,
     /// variables that are introduced by the pattern
-    pub ctxs_pat_local: ArenaAssoc<PatId, Context<()>>,
+    pub ctxs_pat_local: ArenaAssoc<PatId, Context>,
     /// variables that are free within the pattern (e.g. unbound type variable in annotations)
-    pub coctxs_pat_local: ArenaAssoc<PatId, CoContext<()>>,
+    pub coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
     /// variables that are free within the term
-    pub coctxs_term_local: ArenaAssoc<TermId, CoContext<()>>,
+    pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
     // meta annotations to declarations
     pub metas: ArenaAssoc<DeclId, im::Vector<Meta>>,
     /// externs to defs
@@ -91,11 +91,11 @@ pub trait LocalFoldScoped<Cx>: ArenaScoped {
     fn action_decl(&mut self, decl: DeclId, ctx: &Cx);
 }
 
-impl LocalFoldScoped<Context<()>> for Collector {
-    fn action_def(&mut self, _def: DefId, _ctx: &Context<()>) {}
+impl LocalFoldScoped<Context> for Collector {
+    fn action_def(&mut self, _def: DefId, _ctx: &Context) {}
 
     /// Updates [`Self::ctxs_pat_local`] and [`Self::coctxs_pat_local`].
-    fn action_pat(&mut self, pat: PatId, _ctx: &Context<()>) {
+    fn action_pat(&mut self, pat: PatId, _ctx: &Context) {
         let item = self.pat(&pat);
         match item {
             | Pattern::Ann(inner) => {
@@ -114,7 +114,7 @@ impl LocalFoldScoped<Context<()>> for Collector {
             }
             | Pattern::Var(inner) => {
                 let def = inner;
-                self.ctxs_pat_local.insert(pat, Context::singleton(def, ()));
+                self.ctxs_pat_local.insert(pat, Context::singleton(def));
                 self.coctxs_pat_local.insert(pat, CoContext::new());
             }
             | Pattern::Ctor(inner) => {
@@ -144,7 +144,7 @@ impl LocalFoldScoped<Context<()>> for Collector {
     }
 
     /// Updates [`Self::ctxs_term`] and [`Self::coctxs_term_local`].
-    fn action_term(&mut self, term: TermId, ctx: &Context<()>) {
+    fn action_term(&mut self, term: TermId, ctx: &Context) {
         self.ctxs_term.insert(term, ctx.to_owned());
         let item = self.term(&term);
         match item {
@@ -175,7 +175,7 @@ impl LocalFoldScoped<Context<()>> for Collector {
             }
             | Term::Var(inner) => {
                 let def = inner;
-                self.coctxs_term_local.insert(term, CoContext::singleton(def, ()));
+                self.coctxs_term_local.insert(term, CoContext::singleton(def));
             }
             | Term::Triv(inner) => {
                 let Triv = inner;
@@ -312,7 +312,7 @@ impl LocalFoldScoped<Context<()>> for Collector {
         }
     }
 
-    fn action_decl(&mut self, _decl: DeclId, _ctx: &Context<()>) {}
+    fn action_decl(&mut self, _decl: DeclId, _ctx: &Context) {}
 }
 
 /* ------------------------------ LocalPostFold ----------------------------- */

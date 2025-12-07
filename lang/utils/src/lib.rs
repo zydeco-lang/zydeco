@@ -3,7 +3,6 @@
 
 pub mod arena;
 pub mod context;
-pub mod imc;
 pub mod cells;
 pub mod deps;
 pub mod err;
@@ -19,7 +18,7 @@ pub mod prelude {
     pub use crate::{
         arena::*,
         cells::{MultiCell, SingCell},
-        imc::*,
+        context::{CoContext, Context},
         monoid::Monoid,
         never::Never,
     };

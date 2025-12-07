@@ -515,34 +515,34 @@ impl<'a> Ugly<'a, Formatter<'a>> for Exec {
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Context<T>
+impl<'a> Ugly<'a, Formatter<'a>> for Context
 where
-    T: Ugly<'a, Formatter<'a>>,
+    DefId: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let Context { defs } = self;
+        let zydeco_utils::context::Context(defs) = self;
         let mut s = String::new();
         s += &defs
             .iter()
-            .map(|(id, def)| format!("{} = {}", id.ugly(f), def.ugly(f)))
+            .map(|id| id.ugly(f))
             .collect::<Vec<_>>()
-            .join("; ");
+            .join(", ");
         s
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for CoContext<T>
+impl<'a> Ugly<'a, Formatter<'a>> for CoContext
 where
-    T: Ugly<'a, Formatter<'a>>,
+    DefId: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let CoContext { defs } = self;
+        let zydeco_utils::context::CoContext(defs) = self;
         let mut s = String::new();
         s += &defs
             .iter()
-            .map(|(id, def)| format!("{} = {}", id.ugly(f), def.ugly(f)))
+            .map(|id| id.ugly(f))
             .collect::<Vec<_>>()
-            .join("; ");
+            .join(", ");
         s
     }
 }

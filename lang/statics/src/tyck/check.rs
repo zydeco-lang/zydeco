@@ -382,7 +382,7 @@ impl Tyck for TyEnvT<su::DeclId> {
                         // coctx defines what the bindee is using that is not local
                         if (tycker.scoped.coctxs_term_local[&surface_bindee].clone())
                             .into_iter()
-                            .all(|(id, ())| tycker.statics.global_defs.get(&id).is_some())
+                            .all(|id| tycker.statics.global_defs.get(&id).is_some())
                         {
                             tycker.statics.global_defs.insert(def, ());
                         }
@@ -405,7 +405,7 @@ impl Tyck for TyEnvT<su::DeclId> {
                         // coctx defines what the bindee is using that is not local
                         if (tycker.scoped.coctxs_term_local[&surface_bindee].clone())
                             .into_iter()
-                            .all(|(id, ())| tycker.statics.global_defs.get(&id).is_some())
+                            .all(|id| tycker.statics.global_defs.get(&id).is_some())
                         {
                             tycker.statics.global_defs.insert(def, ());
                             // consider adding it to the inlinables as well
@@ -2327,7 +2327,7 @@ impl Tyck for TyEnvT<su::TermId> {
             let coctx = tycker.scoped.coctxs_term_local[&self.inner].to_owned();
 
             let mut non_global = Vec::new();
-            for (def, ()) in coctx.into_iter() {
+            for def in coctx.into_iter() {
                 if tycker.statics.global_defs.get(&def).is_none() {
                     non_global.push(def);
                 }

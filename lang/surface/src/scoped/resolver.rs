@@ -2,7 +2,6 @@ use crate::scoped::{syntax::*, *};
 use crate::textual::syntax as t;
 use zydeco_utils::{
     deps::DepGraph,
-    imc::*,
     scc::{Kosaraju, SccGraph, SccGroup},
 };
 
@@ -463,10 +462,10 @@ pub struct Collector {
     pub textual: ArenaForth<t::EntityId, EntityId>,
 
     pub users: ArenaForth<DefId, TermId>,
-    pub ctxs_term: ArenaAssoc<TermId, Context<()>>,
-    pub ctxs_pat_local: ArenaAssoc<PatId, Context<()>>,
-    pub coctxs_pat_local: ArenaAssoc<PatId, CoContext<()>>,
-    pub coctxs_term_local: ArenaAssoc<TermId, CoContext<()>>,
+    pub ctxs_term: ArenaAssoc<TermId, Context>,
+    pub ctxs_pat_local: ArenaAssoc<PatId, Context>,
+    pub coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
+    pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
 
     pub unis: ArenaAssoc<DeclId, ()>,
     pub deps: DepGraph<DeclId>,
@@ -498,12 +497,12 @@ impl Collector {
 /// 2. Within each declaration, collects variables according to the declaration's recursiveness.
 trait Collect {
     type Out;
-    fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out>;
+    fn collect(&self, collector: &mut Collector, ctx: Context) -> Result<Self::Out>;
 }
 
 impl Collect for SccGroup<DeclId> {
-    type Out = Context<()>;
-    fn collect(&self, collector: &mut Collector, mut ctx: Context<()>) -> Result<Self::Out> {
+    type Out = Context;
+    fn collect(&self, collector: &mut Collector, mut ctx: Context) -> Result<Self::Out> {
         let SccGroup(decls) = self;
         match decls.len() {
             | 0 => Ok(ctx),
@@ -617,8 +616,8 @@ impl Collect for SccGroup<DeclId> {
 }
 
 impl Collect for PatId {
-    type Out = Context<()>;
-    fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
+    type Out = Context;
+    fn collect(&self, collector: &mut Collector, ctx: Context) -> Result<Self::Out> {
         let () = self.obverse_local_post(collector, &ctx);
         Ok(ctx + collector.ctxs_pat_local[self].to_owned())
     }
@@ -626,7 +625,7 @@ impl Collect for PatId {
 
 impl Collect for TermId {
     type Out = ();
-    fn collect(&self, collector: &mut Collector, ctx: Context<()>) -> Result<Self::Out> {
+    fn collect(&self, collector: &mut Collector, ctx: Context) -> Result<Self::Out> {
         // very important! this is where we update term contexts.
         self.obverse_local_post(collector, &ctx);
         Ok(())

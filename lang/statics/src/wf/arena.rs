@@ -45,13 +45,13 @@ pub struct WellFormedProgram {
     /// def user map
     pub users: ArenaForth<DefId, ss::TermId>,
     /// variables available upon the term
-    pub ctxs_term: ArenaAssoc<ss::TermId, su::Context<()>>,
+    pub ctxs_term: ArenaAssoc<ss::TermId, su::Context>,
     /// variables that are introduced by the pattern
-    pub ctxs_pat_local: ArenaAssoc<ss::PatId, su::Context<()>>,
+    pub ctxs_pat_local: ArenaAssoc<ss::PatId, su::Context>,
     /// variables that are free within the pattern (e.g. unbound type variable in annotations)
-    pub coctxs_pat_local: ArenaAssoc<ss::PatId, su::CoContext<()>>,
+    pub coctxs_pat_local: ArenaAssoc<ss::PatId, su::CoContext>,
     /// variables that are free within the term
-    pub coctxs_term_local: ArenaAssoc<ss::TermId, su::CoContext<()>>,
+    pub coctxs_term_local: ArenaAssoc<ss::TermId, su::CoContext>,
     // meta annotations to declarations
     pub metas: ArenaAssoc<ss::DeclId, im::Vector<Meta>>,
     /// externs to defs

@@ -30,6 +30,30 @@ impl<T> Context<T> {
     pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
         self.into_iter()
     }
+
+    pub fn new() -> Self {
+        Context(Vec::new())
+    }
+
+    pub fn singleton(item: T) -> Self {
+        Context::from_iter([item])
+    }
+}
+
+impl<T> Default for Context<T> {
+    fn default() -> Self {
+        Context::new()
+    }
+}
+
+impl<T> std::ops::Add for Context<T>
+where
+    T: Clone,
+{
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Context::from_iter(self.0.into_iter().chain(other.0.into_iter()))
+    }
 }
 
 /// CoContexts are unordered sets of elements.
@@ -74,4 +98,63 @@ where
     pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
         self.into_iter()
     }
+
+    pub fn new() -> Self {
+        CoContext(im::HashSet::new())
+    }
+
+    pub fn singleton(item: T) -> Self
+    where
+        T: Clone,
+    {
+        CoContext::from_iter([item])
+    }
 }
+
+impl<T> Default for CoContext<T>
+where
+    T: std::hash::Hash + Eq,
+{
+    fn default() -> Self {
+        CoContext::new()
+    }
+}
+
+impl<T> std::ops::Add for CoContext<T>
+where
+    T: std::hash::Hash + Eq + Clone,
+{
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        let mut set = self.0;
+        set.extend(other.0);
+        CoContext(set)
+    }
+}
+
+impl<T> std::ops::Sub<&T> for CoContext<T>
+where
+    T: std::hash::Hash + Eq + Clone,
+{
+    type Output = Self;
+    fn sub(self, item: &T) -> Self {
+        let mut set = self.0;
+        set.remove(item);
+        CoContext(set)
+    }
+}
+
+impl<T> std::ops::Sub<Context<T>> for CoContext<T>
+where
+    T: std::hash::Hash + Eq + Clone,
+{
+    type Output = Self;
+    fn sub(mut self, ctx: Context<T>) -> Self {
+        for item in ctx.0 {
+            self = self - &item;
+        }
+        self
+    }
+}
+
+impl<T> crate::monoid::Monoid for CoContext<T> where T: std::hash::Hash + Eq + Clone {}
