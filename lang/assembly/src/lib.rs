@@ -4,5 +4,5 @@
 pub mod syntax;
 pub mod arena;
 pub mod fmt;
-pub mod lower_legacy;
+pub mod lower;
 pub mod norm;

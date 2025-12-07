@@ -18,7 +18,7 @@ pub struct StackArena {
     /// typically the main function, which normally should only be unique
     pub entry: ArenaAssoc<CompuId, ()>,
 
-    /// untyped to typed bijective maps for terms
+    /// (WIP) untyped to typed bijective maps for terms
     pub terms: ArenaBijective<ss::TermId, TermId>,
 }
 

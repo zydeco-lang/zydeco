@@ -1,3 +1,9 @@
+//! There are three sorts in syntax of ZASM:
+//! 
+//! - Variables, whose values are dynamically assigned.
+//! - Symbols, whose values are statically assigned.
+//! - Programs, which are sequences of instructions.
+
 pub use super::arena::*;
 pub use zydeco_syntax::*;
 pub use zydeco_utils::arena::*;
@@ -6,6 +12,7 @@ use derive_more::From;
 
 new_key_type! {
     pub struct VarId;
+    pub struct SymId;
     pub struct ProgId;
 }
 

@@ -14,6 +14,8 @@ description = "zydeco compiled to assembly"
 zydeco-utils = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-statics = { workspace = true }
+zydeco-stack = { workspace = true }
+zydeco-surface = { workspace = true }
 derive_more = { workspace = true }
 im = { workspace = true }
 rustc-hash = { workspace = true }

@@ -196,35 +196,36 @@ impl BuildSystem {
     }
     pub fn codegen_zasm_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
-        let checked = self.__tyck_pack(pack, alloc.clone(), false)?;
-        let lowerer = zydeco_assembly::lower_legacy::Lowerer::new(alloc.clone(), &checked.wf);
-        let object = lowerer.run();
-        let normalizer = zydeco_assembly::norm::Normalizer::new(object);
-        // let deps = normalizer.deps;
-        // println!("dependencies");
-        // for id in deps.nodes() {
-        //     let query = deps.query(&id);
-        //     // println!("{}: {}", id.concise(), query.len());
-        //     println!("{}", id.concise());
-        //     for dep in query {
-        //         println!("\t<- {}", dep.concise());
-        //     }
-        // }
-        // let srcs = deps.reverse();
-        // println!("sources");
-        // for id in srcs.nodes() {
-        //     let query = srcs.query(&id);
-        //     // println!("{}: {}", id.concise(), query.len());
-        //     println!("{}", id.concise());
-        //     for src in query {
-        //         println!("\t-> {}", src.concise());
-        //     }
-        // }
-        let arena = normalizer.arena;
-        use zydeco_assembly::fmt::*;
-        let entry = arena.entry.iter().next().unwrap().0.clone();
-        let res = entry.ugly(&Formatter::new(&arena));
-        Ok(res)
+        let _checked = self.__tyck_pack(pack, alloc.clone(), false)?;
+        // let lowerer = zydeco_assembly::lower_legacy::Lowerer::new(alloc.clone(), &checked.wf);
+        // let object = lowerer.run();
+        // let normalizer = zydeco_assembly::norm::Normalizer::new(object);
+        // // let deps = normalizer.deps;
+        // // println!("dependencies");
+        // // for id in deps.nodes() {
+        // //     let query = deps.query(&id);
+        // //     // println!("{}: {}", id.concise(), query.len());
+        // //     println!("{}", id.concise());
+        // //     for dep in query {
+        // //         println!("\t<- {}", dep.concise());
+        // //     }
+        // // }
+        // // let srcs = deps.reverse();
+        // // println!("sources");
+        // // for id in srcs.nodes() {
+        // //     let query = srcs.query(&id);
+        // //     // println!("{}: {}", id.concise(), query.len());
+        // //     println!("{}", id.concise());
+        // //     for src in query {
+        // //         println!("\t-> {}", src.concise());
+        // //     }
+        // // }
+        // let arena = normalizer.arena;
+        // use zydeco_assembly::fmt::*;
+        // let entry = arena.entry.iter().next().unwrap().0.clone();
+        // let res = entry.ugly(&Formatter::new(&arena));
+        // Ok(res)
+        todo!()
     }
     pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
