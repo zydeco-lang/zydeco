@@ -9,3 +9,5 @@ pub mod fmt;
 pub mod lower;
 
 use zydeco_statics::tyck::syntax as ss;
+
+pub use lower::Lowerer;

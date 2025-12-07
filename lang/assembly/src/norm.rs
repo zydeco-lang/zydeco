@@ -7,7 +7,7 @@ pub trait _Normalize: Sized {
 }
 
 pub struct Normalizer {
-    pub object: AssemblyArena,
+    pub arena: AssemblyArena,
     pub deps: DepGraph<ProgId>,
 }
 
@@ -31,6 +31,6 @@ impl Normalizer {
                 }
             }
         }
-        Self { object, deps }
+        Self { arena: object, deps }
     }
 }

@@ -1,11 +1,8 @@
-//! This crate implements the Zydeco-Intermediate-Representation (ZIR),
-//! a low-level IR abstraction over stack mechanisms.
+//! This crate implements the Zydeco-Assembly Stack Machine (ZASM),
+//! a low-level assembly language for the Zydeco-Intermediate-Representation (ZIR).
 
 pub mod syntax;
 pub mod arena;
 pub mod fmt;
-pub mod lower;
-mod norm;
-
-pub use lower::Lowerer;
-pub use norm::Normalizer;
+pub mod lower_legacy;
+pub mod norm;

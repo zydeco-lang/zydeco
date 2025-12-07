@@ -1,3 +1,6 @@
+//! A legacy implementation of lowerer that lowers from
+//! [`zydeco_statics::WellFormedProgram`] to [`AssemblyArena`].
+
 use super::syntax::{Instruction as Instr, *};
 use zydeco_statics::{WellFormedProgram, wf::syntax as sw};
 pub type ContextMap = std::collections::HashMap<sw::DefId, VarId>;

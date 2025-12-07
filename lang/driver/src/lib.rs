@@ -176,20 +176,30 @@ impl BuildSystem {
         }
         Package::test_interp(runtime, name.as_str(), false)
     }
-    pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
+    pub fn codegen_zir_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
-        let checked = self.__tyck_pack(pack, alloc, false)?;
-        let mut instrs = Vec::new();
-        let mut emitter = zydeco_x86::Emitter::new(checked.scoped, checked.statics, &mut instrs);
-        emitter.run();
-        Ok(instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n"))
+        let checked = self.__tyck_pack(pack, alloc.clone(), false)?;
+        let lowerer = zydeco_stack::Lowerer::new(
+            alloc.clone(),
+            &checked.spans,
+            &checked.scoped,
+            &checked.statics,
+        );
+        let arena = lowerer.run();
+        // Format the whole program
+        use zydeco_stack::fmt::*;
+        let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);
+        let doc = arena.pretty(&fmt);
+        let mut buf = String::new();
+        doc.render_fmt(100, &mut buf).unwrap();
+        Ok(buf)
     }
     pub fn codegen_zasm_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
         let checked = self.__tyck_pack(pack, alloc.clone(), false)?;
-        let lowerer = zydeco_assembly::Lowerer::new(alloc.clone(), &checked.wf);
+        let lowerer = zydeco_assembly::lower_legacy::Lowerer::new(alloc.clone(), &checked.wf);
         let object = lowerer.run();
-        let normalizer = zydeco_assembly::Normalizer::new(object);
+        let normalizer = zydeco_assembly::norm::Normalizer::new(object);
         // let deps = normalizer.deps;
         // println!("dependencies");
         // for id in deps.nodes() {
@@ -210,29 +220,19 @@ impl BuildSystem {
         //         println!("\t-> {}", src.concise());
         //     }
         // }
-        let object = normalizer.object;
+        let arena = normalizer.arena;
         use zydeco_assembly::fmt::*;
-        let entry = object.entry.iter().next().unwrap().0.clone();
-        let res = entry.ugly(&Formatter::new(&object));
+        let entry = arena.entry.iter().next().unwrap().0.clone();
+        let res = entry.ugly(&Formatter::new(&arena));
         Ok(res)
     }
-    pub fn codegen_zir_pack(&self, pack: PackId) -> Result<String> {
+    pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
-        let checked = self.__tyck_pack(pack, alloc.clone(), false)?;
-        let lowerer = zydeco_stack::lower::Lowerer::new(
-            alloc.clone(),
-            &checked.spans,
-            &checked.scoped,
-            &checked.statics,
-        );
-        let arena = lowerer.run();
-        // Format the whole program
-        use zydeco_stack::fmt::*;
-        let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);
-        let doc = arena.pretty(&fmt);
-        let mut buf = String::new();
-        doc.render_fmt(100, &mut buf).unwrap();
-        Ok(buf)
+        let checked = self.__tyck_pack(pack, alloc, false)?;
+        let mut instrs = Vec::new();
+        let mut emitter = zydeco_x86::Emitter::new(checked.scoped, checked.statics, &mut instrs);
+        emitter.run();
+        Ok(instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n"))
     }
 }
 
