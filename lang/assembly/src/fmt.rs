@@ -137,6 +137,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for Product {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for ContextMarker {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        "<context>".to_string()
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for Closure {
     fn ugly(&self, f: &'a Formatter) -> String {
         format!("<closure {}>", self.0.ugly(f))

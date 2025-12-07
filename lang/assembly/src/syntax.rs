@@ -37,12 +37,12 @@ pub struct PopJump;
 pub struct Panic;
 
 /// Stack transformations in ZIR.
-#[derive(Clone, Debug)]
+#[derive(From, Clone, Debug)]
 pub enum Instruction {
     PackProduct(Pack<Product>),
     UnpackProduct(Unpack<Product>),
-    PackContext(Pack<Context>),
-    UnpackContext(Unpack<Context>),
+    PackContext(Pack<ContextMarker>),
+    UnpackContext(Unpack<ContextMarker>),
     PackClosure(Pack<Closure>),
     UnpackClosure(Unpack<Closure>),
     PushArg(Push<Atom>),
@@ -63,6 +63,9 @@ pub struct Pop<T>(pub T);
 
 #[derive(Clone, Debug)]
 pub struct Product;
+
+#[derive(Clone, Debug)]
+pub struct ContextMarker;
 
 #[derive(Clone, Debug)]
 pub struct Closure(pub Context);
