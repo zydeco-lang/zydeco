@@ -178,14 +178,26 @@ impl BuildSystem {
     }
     pub fn codegen_zir_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
-        let checked = self.__tyck_pack(pack, alloc.clone(), false)?;
+        let mut checked = self.__tyck_pack(pack, alloc.clone(), false)?;
         let lowerer = zydeco_stack::Lowerer::new(
             alloc.clone(),
             &checked.spans,
             &checked.scoped,
             &checked.statics,
         );
-        let arena = lowerer.run();
+        let mut arena = lowerer.run();
+        // Log the arena after lowering
+        {
+            use zydeco_stack::fmt::*;
+            let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);
+            let doc = arena.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            log::trace!("ZIR right after lowering:\n{}", buf);
+        }
+        // Perform closure conversion
+        zydeco_stack::ClosureConverter::new(&mut arena, &mut checked.scoped, &checked.statics)
+            .convert();
         // Format the whole program
         use zydeco_stack::fmt::*;
         let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);

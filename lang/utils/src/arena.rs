@@ -436,8 +436,8 @@ mod impls {
         pub fn len(&self) -> usize {
             self.map.len()
         }
-        pub fn replace(&mut self, id: Id, val: T) {
-            let Some(_) = self.map.insert(id, val) else { panic!("key not found") };
+        pub fn replace(&mut self, id: Id, val: impl Into<T>) {
+            let Some(_) = self.map.insert(id, val.into()) else { panic!("key not found") };
         }
     }
 

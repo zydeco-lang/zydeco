@@ -12,4 +12,5 @@ pub mod clocon;
 use zydeco_statics::tyck::syntax as ss;
 
 pub use arena::*;
+pub use clocon::ClosureConverter;
 pub use lower::Lowerer;
