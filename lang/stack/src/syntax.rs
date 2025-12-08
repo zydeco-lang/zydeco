@@ -50,7 +50,6 @@ pub enum Value {
     Ctor(Ctor<ValueId>),
     Triv(Triv),
     VCons(Cons<ValueId, ValueId>),
-    Capture(Context<DefId>),
     Lit(Literal),
 }
 
