@@ -5,6 +5,8 @@ use super::{syntax::*, *};
 /// [`zydeco_statics::tyck::syntax::StaticsArena`].
 #[derive(Debug)]
 pub struct StackArena {
+    /// value pattern arena
+    pub vpats: ArenaSparse<VPatId, ValuePattern>,
     /// value arena
     pub values: ArenaSparse<ValueId, Value>,
     /// stack arena
@@ -18,18 +20,22 @@ pub struct StackArena {
     /// typically the main function, which normally should only be unique
     pub entry: ArenaAssoc<CompuId, ()>,
 
-    /// (WIP) untyped to typed bijective maps for terms
+    /// untyped to typed bijective maps for patterns
+    pub pats: ArenaBijective<ss::PatId, VPatId>,
+    /// untyped to typed bijective maps for terms
     pub terms: ArenaBijective<ss::TermId, TermId>,
 }
 
 impl StackArena {
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
         Self {
+            vpats: ArenaSparse::new(alloc.alloc()),
             values: ArenaSparse::new(alloc.alloc()),
             stacks: ArenaSparse::new(alloc.alloc()),
             compus: ArenaSparse::new(alloc.alloc()),
             globals: ArenaAssoc::new(),
             entry: ArenaAssoc::new(),
+            pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),
         }
     }
@@ -41,6 +47,8 @@ impl AsMut<StackArena> for StackArena {
 }
 
 pub trait StackArenaLike {
+    /// Allocate a value pattern.
+    fn vpat(&mut self, site: Option<ss::PatId>, vpat: impl Into<ValuePattern>) -> VPatId;
     /// Allocate a value.
     fn value(&mut self, site: Option<ss::TermId>, value: impl Into<Value>) -> ValueId;
     /// Allocate a stack.
@@ -53,6 +61,14 @@ impl<T> StackArenaLike for T
 where
     T: AsMut<StackArena>,
 {
+    fn vpat(&mut self, site: Option<ss::PatId>, vpat: impl Into<ValuePattern>) -> VPatId {
+        let this = &mut *self.as_mut();
+        let vpat_id = this.vpats.alloc(vpat.into());
+        if let Some(site) = site {
+            this.pats.insert(site, vpat_id);
+        }
+        vpat_id
+    }
     fn value(&mut self, site: Option<ss::TermId>, value: impl Into<Value>) -> ValueId {
         let this = &mut *self.as_mut();
         let value_id = this.values.alloc(value.into());

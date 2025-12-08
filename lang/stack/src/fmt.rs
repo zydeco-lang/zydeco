@@ -18,10 +18,6 @@ impl<'arena> Formatter<'arena> {
     ) -> Self {
         Formatter { arena, scoped, statics }
     }
-
-    fn statics_fmt(&self) -> zydeco_statics::tyck::fmt::Formatter<'arena> {
-        zydeco_statics::tyck::fmt::Formatter::new(self.scoped, self.statics)
-    }
 }
 
 /* ---------------------------------- Ugly ---------------------------------- */
@@ -30,7 +26,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for DefId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         let name = &f.scoped.defs[self];
-        let statics_fmt = f.statics_fmt();
+        let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
         s += &name.ugly(&statics_fmt);
         s += &self.concise();
         s
@@ -39,8 +35,21 @@ impl<'a> Ugly<'a, Formatter<'a>> for DefId {
 
 impl<'a> Ugly<'a, Formatter<'a>> for VPatId {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let statics_fmt = f.statics_fmt();
-        self.ugly(&statics_fmt)
+        let vpat = &f.arena.vpats[self];
+        use super::syntax::{Cons, Ctor, ValuePattern as VPat};
+        match vpat {
+            | VPat::Hole(_) => "_".to_string(),
+            | VPat::Var(def) => def.ugly(f),
+            | VPat::Ctor(Ctor(name, tail)) => {
+                use zydeco_syntax::CtorName;
+                let CtorName(name_str) = &name;
+                format!("{} {}", name_str, tail.ugly(f))
+            }
+            | VPat::Triv(_) => "()".to_string(),
+            | VPat::VCons(Cons(a, b)) => {
+                format!("({}, {})", a.ugly(f), b.ugly(f))
+            }
+        }
     }
 }
 
@@ -53,7 +62,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for ValueId {
 
 impl<'a> Ugly<'a, Formatter<'a>> for Value {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let statics_fmt = f.statics_fmt();
+        let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
         match self {
             | Value::Hole(Hole) => "_".to_string(),
             | Value::Var(def) => def.ugly(f),
@@ -91,7 +100,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for StackId {
 
 impl<'a> Ugly<'a, Formatter<'a>> for Stack {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let statics_fmt = f.statics_fmt();
+        let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
         match self {
             | Stack::Kont(s) => format!("({})", s.ugly(f)),
             | Stack::Var(s) => s.ugly(f),
@@ -167,7 +176,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Computation {
             }
             | Computation::CoCase(CoMatch { arms }) => {
                 let mut s = String::new();
-                let statics_fmt = f.statics_fmt();
+                let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 s += "cocase";
                 for CoMatcher { dtor, tail } in arms.iter() {
                     let Cons(dtor_name, Bullet) = dtor;
@@ -232,8 +241,31 @@ impl<'a> Pretty<'a, Formatter<'a>> for DefId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
-        RcDoc::text(self.ugly(&statics_fmt))
+        let vpat = &f.arena.vpats[self];
+        use super::syntax::{Cons, Ctor, ValuePattern as VPat};
+        match vpat {
+            | VPat::Hole(_) => RcDoc::text("_"),
+            | VPat::Var(def) => def.pretty(f),
+            | VPat::Ctor(Ctor(name, tail)) => {
+                use zydeco_syntax::CtorName;
+                let CtorName(name_str) = &name;
+                RcDoc::concat([
+                    RcDoc::text(name_str.clone()),
+                    RcDoc::text("("),
+                    tail.pretty(f),
+                    RcDoc::text(")"),
+                ])
+            }
+            | VPat::Triv(_) => RcDoc::text("()"),
+            | VPat::VCons(Cons(a, b)) => RcDoc::concat([
+                RcDoc::text("("),
+                a.pretty(f),
+                RcDoc::text(","),
+                RcDoc::space(),
+                b.pretty(f),
+                RcDoc::text(")"),
+            ]),
+        }
     }
 }
 

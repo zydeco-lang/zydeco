@@ -7,10 +7,10 @@ use super::*;
 use derive_more::From;
 
 pub type DefId = ss::DefId;
-pub type VPatId = ss::VPatId;
 pub type DeclId = ss::DeclId;
 
 new_key_type! {
+    pub struct VPatId;
     pub struct ValueId;
     pub struct CompuId;
     pub struct StackId;
@@ -25,7 +25,14 @@ pub enum TermId {
 
 /* ---------------------------------- Value --------------------------------- */
 
-pub type ValuePattern = ss::ValuePattern;
+#[derive(From, Clone, Debug)]
+pub enum ValuePattern {
+    Hole(Hole),
+    Var(DefId),
+    Ctor(Ctor<VPatId>),
+    Triv(Triv),
+    VCons(Cons<VPatId, VPatId>),
+}
 
 /// A closure that captures minimal environment.
 #[derive(Clone, Debug)]

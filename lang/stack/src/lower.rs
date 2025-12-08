@@ -44,14 +44,15 @@ impl<'a> Lowerer<'a> {
                     use ss::Declaration as Decl;
                     match decl {
                         | Decl::VAliasBody(ss::VAliasBody { binder, bindee }) => {
-                            // Lower the binder (VPatId) - even though it currently does nothing
+                            // Lower the binder (VPatId) - creates new VPatId and stores mapping
                             let binder_vpat = binder.lower(&mut self, ());
                             // Extract DefId from binder (should be a Var pattern)
-                            use ss::ValuePattern as VPat;
-                            let def_id = match &self.statics.vpats[&binder_vpat] {
+                            use ValuePattern as VPat;
+                            let def_id = match &self.arena.vpats[&binder_vpat] {
                                 | VPat::Var(def) => *def,
                                 | _ => {
-                                    let fmt = zydeco_statics::tyck::fmt::Formatter::new(
+                                    let fmt = super::fmt::Formatter::new(
+                                        &self.arena,
                                         self.scoped,
                                         self.statics,
                                     );
@@ -67,14 +68,15 @@ impl<'a> Lowerer<'a> {
                             self.arena.globals.insert(def_id, Global::Defined(value_id));
                         }
                         | Decl::VAliasHead(ss::VAliasHead { binder, ty: _ }) => {
-                            // Lower the binder (VPatId) - even though it currently does nothing
+                            // Lower the binder (VPatId) - creates new VPatId and stores mapping
                             let binder_vpat = binder.lower(&mut self, ());
                             // Extract DefId from binder (should be a Var pattern)
-                            use ss::ValuePattern as VPat;
-                            let def_id = match &self.statics.vpats[&binder_vpat] {
+                            use ValuePattern as VPat;
+                            let def_id = match &self.arena.vpats[&binder_vpat] {
                                 | VPat::Var(def) => *def,
                                 | _ => {
-                                    let fmt = zydeco_statics::tyck::fmt::Formatter::new(
+                                    let fmt = super::fmt::Formatter::new(
+                                        &self.arena,
                                         self.scoped,
                                         self.statics,
                                     );
@@ -173,9 +175,37 @@ impl Lower for ss::VPatId {
     type Kont = ();
     type Out = VPatId;
 
-    fn lower(&self, _lo: &mut Lowerer, _kont: Self::Kont) -> Self::Out {
-        // VPatIds are identical between statics and stack IR
-        *self
+    fn lower(&self, lo: &mut Lowerer, _kont: Self::Kont) -> Self::Out {
+        // Get the pattern from statics arena
+        let ss_vpat = lo.statics.vpats[self].clone();
+        // Map from ss::VPatId to ss::PatId
+        let ss_pat_id = ss::PatId::Value(*self);
+        // Convert statics ValuePattern to stack ValuePattern
+        use super::syntax::ValuePattern as StackVPat;
+        use ss::ValuePattern as SSVPat;
+        let stack_vpat: StackVPat = match ss_vpat {
+            | SSVPat::Hole(hole) => hole.into(),
+            | SSVPat::Var(def) => def.into(),
+            | SSVPat::Ctor(ctor) => {
+                use zydeco_syntax::Ctor;
+                let Ctor(name, tail) = ctor;
+                let tail_vpat = tail.lower(lo, ());
+                Ctor(name, tail_vpat).into()
+            }
+            | SSVPat::Triv(triv) => triv.into(),
+            | SSVPat::VCons(cons) => {
+                use zydeco_syntax::Cons;
+                let Cons(a, b) = cons;
+                let a_vpat = a.lower(lo, ());
+                let b_vpat = b.lower(lo, ());
+                Cons(a_vpat, b_vpat).into()
+            }
+            | SSVPat::TCons(_) => {
+                panic!("TCons patterns should not appear in stack IR")
+            }
+        };
+        // Create new VPatId in stack arena and store the mapping
+        lo.arena.vpat(Some(ss_pat_id), stack_vpat)
     }
 }
 
@@ -207,7 +237,8 @@ impl<T> Lower for Tar<'static, ss::ValueId, T> {
                 let body_compu = body.lower(lo, ());
                 // Get minimal capture from cocontext information
                 let capture = lo.compute_capture(body);
-                let value_id = lo.arena.value(site, Clo { capture, stack: Bullet, body: body_compu });
+                let value_id =
+                    lo.arena.value(site, Clo { capture, stack: Bullet, body: body_compu });
                 kont(value_id, lo)
             }
             | ss::Value::Ctor(Ctor(ctor, body)) => Tar::new(body).lower(
@@ -259,11 +290,10 @@ impl Lower for ss::CompuId {
                 let param_vpat = param.lower(lo, ());
                 let body_compu = body.lower(lo, ());
                 let stack_id = lo.arena.stack(site, Bullet);
-                lo.arena.compu(site, Let {
-                    binder: Cons(param_vpat, Bullet),
-                    bindee: stack_id,
-                    tail: body_compu,
-                })
+                lo.arena.compu(
+                    site,
+                    Let { binder: Cons(param_vpat, Bullet), bindee: stack_id, tail: body_compu },
+                )
             }
             | Compu::VApp(App(body, arg)) => Tar::new(arg).lower(
                 lo,
@@ -289,15 +319,9 @@ impl Lower for ss::CompuId {
                 let def_id = match &lo.statics.vpats[&param] {
                     | VPat::Var(def) => *def,
                     | _ => {
-                        let fmt = zydeco_statics::tyck::fmt::Formatter::new(
-                            lo.scoped,
-                            lo.statics,
-                        );
+                        let fmt = zydeco_statics::tyck::fmt::Formatter::new(lo.scoped, lo.statics);
                         let param_str = param.ugly(&fmt);
-                        panic!(
-                            "Fix param must be a variable, found:\n{}",
-                            param_str
-                        );
+                        panic!("Fix param must be a variable, found:\n{}", param_str);
                     }
                 };
                 let capture = lo.compute_capture(body);
@@ -321,9 +345,11 @@ impl Lower for ss::CompuId {
             | Compu::Do(Bind { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
                 let tail_compu = tail.lower(lo, ());
-                let kont_stack_id = lo.arena.stack(site, Kont { binder: binder_vpat, body: tail_compu });
+                let kont_stack_id =
+                    lo.arena.stack(site, Kont { binder: binder_vpat, body: tail_compu });
                 let bindee_compu = bindee.lower(lo, ());
-                lo.arena.compu(site, Let { binder: Bullet, bindee: kont_stack_id, tail: bindee_compu })
+                lo.arena
+                    .compu(site, Let { binder: Bullet, bindee: kont_stack_id, tail: bindee_compu })
             }
             | Compu::Let(Let { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
@@ -331,11 +357,10 @@ impl Lower for ss::CompuId {
                     lo,
                     Box::new(move |bindee_val, lo| {
                         let tail_compu = tail.lower(lo, ());
-                        lo.arena.compu(site, Let {
-                            binder: binder_vpat,
-                            bindee: bindee_val,
-                            tail: tail_compu,
-                        })
+                        lo.arena.compu(
+                            site,
+                            Let { binder: binder_vpat, bindee: bindee_val, tail: tail_compu },
+                        )
                     }),
                 )
             }
