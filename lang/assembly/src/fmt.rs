@@ -182,7 +182,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Atom {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | Atom::Var(var) => var.ugly(f),
-            | Atom::Symbol(sym_id) => {
+            | Atom::Sym(sym_id) => {
                 match &f.arena.symbols[sym_id] {
                     | Symbol::Label(label) => label.ugly(f),
                     | Symbol::Literal(literal) => literal.ugly(f),

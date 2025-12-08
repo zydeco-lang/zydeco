@@ -8,6 +8,9 @@ pub struct AssemblyArena {
     /// All symbols are named.
     pub symbols: ArenaSparse<SymId, Symbol>,
 
+    /// Map from DefId to VarId or SymId
+    pub defs: ArenaBijective<zydeco_stack::syntax::DefId, DefId>,
+
     /// Programs are (optionally) labeled.
     pub labels: ArenaAssoc<ProgId, Label>,
     /// The whole object has an optional entry point.
@@ -20,6 +23,7 @@ impl AssemblyArena {
             programs: ArenaSparse::new(alloc.alloc()),
             variables: ArenaSparse::new(alloc.alloc()),
             symbols: ArenaSparse::new(alloc.alloc()),
+            defs: ArenaBijective::new(),
             labels: ArenaAssoc::new(),
             entry: ArenaAssoc::new(),
         }

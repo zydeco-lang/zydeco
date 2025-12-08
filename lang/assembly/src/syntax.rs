@@ -16,6 +16,12 @@ new_key_type! {
     pub struct ProgId;
 }
 
+#[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum DefId {
+    Var(VarId),
+    Sym(SymId),
+}
+
 /// Computations in ZIR are programs in ZASM.
 #[derive(From, Clone, Debug)]
 pub enum Program {
@@ -90,7 +96,7 @@ pub struct Tag {
 #[derive(Clone, Debug)]
 pub enum Atom {
     Var(VarId),
-    Symbol(SymId),
+    Sym(SymId),
 }
 
 #[derive(Clone, Debug)]
