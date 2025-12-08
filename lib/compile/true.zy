@@ -1,4 +1,4 @@
-def x: Int = 100 end
+def x = 100 end
 
 def ! true (A: VType) (A': VType) (a: A) (_: A') =
   let _ = x in

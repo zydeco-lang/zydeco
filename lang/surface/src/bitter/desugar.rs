@@ -673,7 +673,16 @@ impl Desugar for t::TermId {
                 let term = term.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Dtor(term, name).into(), self.into())
             }
-            | Tm::Lit(term) => Alloc::alloc(desugarer, term.into(), self.into()),
+            | Tm::Lit(term) => {
+                use zydeco_syntax::Literal as Lit;
+                let lit_term = Alloc::alloc(desugarer, term.clone().into(), self.into());
+                let ty = match term {
+                    | Lit::Int(_) => desugarer.int(self.into()),
+                    | Lit::String(_) => desugarer.string(self.into()),
+                    | Lit::Char(_) => desugarer.char(self.into()),
+                };
+                Alloc::alloc(desugarer, b::Ann { tm: lit_term, ty }.into(), self.into())
+            }
         };
         Ok(res)
     }
