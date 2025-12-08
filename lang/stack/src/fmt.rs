@@ -58,14 +58,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
             | Value::Hole(Hole) => "_".to_string(),
             | Value::Var(def) => def.ugly(f),
             | Value::Clo(Clo { capture, stack, body }) => {
-                let mut s = String::new();
-                if !capture.0.is_empty() {
-                    s += " [";
-                    s += &capture.iter().map(|d| d.ugly(f)).collect::<Vec<_>>().join(", ");
-                    s += "] ";
-                }
-                s += &format!("{{ {} -> {} }}", stack.ugly(f), body.ugly(f));
-                s
+                format!(
+                    "[{}] {{ {} -> {} }}",
+                    capture.iter().map(|d| d.ugly(f)).collect::<Vec<_>>().join(", "),
+                    stack.ugly(f),
+                    body.ugly(f)
+                )
             }
             | Value::Ctor(Ctor(name, val)) => {
                 format!("{}({})", name.ugly(&statics_fmt), val.ugly(f))
@@ -128,8 +126,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for Computation {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | Computation::Hole(Hole) => "_".to_string(),
-            | Computation::Fix(SFix { param, body, .. }) => {
-                format!("fix {} -> {}", param.ugly(f), body.ugly(f))
+            | Computation::Fix(SFix { capture, param, body }) => {
+                format!(
+                    "[{}] fix {} -> {}",
+                    capture.iter().map(|d| d.ugly(f)).collect::<Vec<_>>().join(", "),
+                    param.ugly(f),
+                    body.ugly(f)
+                )
             }
             | Computation::Force(SForce { thunk, stack }) => {
                 format!("{} ! {}", thunk.ugly(f), stack.ugly(f))
@@ -248,28 +251,23 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
             | Value::Var(def) => def.pretty(f),
             | Value::Clo(Clo { capture, stack, body }) => {
                 let mut doc = RcDoc::nil();
-                if !capture.0.is_empty() {
-                    let capture_doc =
-                        if capture.0.len() == 1 {
-                            capture.0[0].pretty(f)
-                        } else {
-                            RcDoc::concat(
-                                capture
-                                    .iter()
-                                    .map(|d| d.pretty(f))
-                                    .enumerate()
-                                    .flat_map(|(i, d)| {
-                                        if i == 0 { vec![d] } else { vec![RcDoc::text(", "), d] }
-                                    })
-                                    .collect::<Vec<_>>(),
-                            )
-                        };
-                    doc = doc
-                        .append(RcDoc::text("["))
-                        .append(capture_doc)
-                        .append(RcDoc::text("] "))
-                        .group();
-                }
+                let capture_doc = RcDoc::concat(
+                    capture
+                        .iter()
+                        .map(|d| d.pretty(f))
+                        .enumerate()
+                        .flat_map(
+                            |(i, d)| {
+                                if i == 0 { vec![d] } else { vec![RcDoc::text(", "), d] }
+                            },
+                        )
+                        .collect::<Vec<_>>(),
+                );
+                doc = doc
+                    .append(RcDoc::text("["))
+                    .append(capture_doc)
+                    .append(RcDoc::text("] "))
+                    .group();
                 doc.append(
                     RcDoc::concat([
                         RcDoc::text("{"),
@@ -400,14 +398,32 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
             | Computation::Hole(Hole) => RcDoc::text("_"),
-            | Computation::Fix(SFix { param, body, .. }) => RcDoc::concat([
-                RcDoc::text("fix"),
-                RcDoc::space(),
-                param.pretty(f),
-                RcDoc::space(),
-                RcDoc::text("->"),
-                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(2).group(),
-            ]),
+            | Computation::Fix(SFix { capture, param, body }) => {
+                let capture_doc = RcDoc::concat(
+                    capture
+                        .iter()
+                        .map(|d| d.pretty(f))
+                        .enumerate()
+                        .flat_map(
+                            |(i, d)| {
+                                if i == 0 { vec![d] } else { vec![RcDoc::text(", "), d] }
+                            },
+                        )
+                        .collect::<Vec<_>>(),
+                );
+                RcDoc::concat([
+                    RcDoc::text("["),
+                    capture_doc,
+                    RcDoc::text("]"),
+                    RcDoc::space(),
+                    RcDoc::text("fix"),
+                    RcDoc::space(),
+                    param.pretty(f),
+                    RcDoc::space(),
+                    RcDoc::text("->"),
+                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(2).group(),
+                ])
+            }
             | Computation::Force(SForce { thunk, stack }) => RcDoc::concat([
                 thunk.pretty(f),
                 RcDoc::space(),

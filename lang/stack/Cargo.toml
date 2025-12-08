@@ -17,3 +17,4 @@ zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 derive_more = { workspace = true }
 pretty = { workspace = true }
+log = { workspace = true }
