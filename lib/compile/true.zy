@@ -1,0 +1,15 @@
+def x: Int = 100 end
+
+def ! true (A: VType) (A': VType) (a: A) (_: A') =
+  let _ = x in
+  ret a
+end
+
+def ! one =
+  ! true Int Int 10
+end
+
+@[pure]
+main
+  ! one 20
+end

@@ -13,6 +13,7 @@ bins = [
     "match.zy",
     "cmp.zy",
     "id.zy",
+    "true.zy",
     "label.zy",
     "loop.zy",
     "comatch.zy",
