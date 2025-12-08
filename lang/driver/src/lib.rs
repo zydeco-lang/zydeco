@@ -186,15 +186,15 @@ impl BuildSystem {
             &checked.statics,
         );
         let mut arena = lowerer.run();
-        // Log the arena after lowering
-        {
-            use zydeco_stack::fmt::*;
-            let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);
-            let doc = arena.pretty(&fmt);
-            let mut buf = String::new();
-            doc.render_fmt(100, &mut buf).unwrap();
-            log::trace!("ZIR right after lowering:\n{}", buf);
-        }
+        // // Log the arena after lowering
+        // {
+        //     use zydeco_stack::fmt::*;
+        //     let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);
+        //     let doc = arena.pretty(&fmt);
+        //     let mut buf = String::new();
+        //     doc.render_fmt(100, &mut buf).unwrap();
+        //     log::trace!("ZIR right after lowering:\n{}", buf);
+        // }
         // Perform closure conversion
         zydeco_stack::ClosureConverter::new(&mut arena, &mut checked.scoped, &checked.statics)
             .convert();
