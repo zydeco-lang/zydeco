@@ -38,7 +38,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Program {
             | Program::Instruction(instr, next) => format!("{}; {}", instr.ugly(f), next.ugly(f)),
             | Program::Jump(jump) => jump.ugly(f),
             | Program::PopJump(pop_jump) => pop_jump.ugly(f),
-            | Program::Branch(branch) => branch.ugly(f),
+            | Program::PopBranch(branch) => branch.ugly(f),
             | Program::Panic(panic) => panic.ugly(f),
             // | Program::Call(call) => call.ugly(f),
             // | Program::Return(ret) => ret.ugly(f),
@@ -91,8 +91,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Instruction {
             | Instruction::UnpackProduct(unpack) => unpack.ugly(f),
             | Instruction::PackContext(pack) => pack.ugly(f),
             | Instruction::UnpackContext(unpack) => unpack.ugly(f),
-            | Instruction::PackClosure(pack) => pack.ugly(f),
-            | Instruction::UnpackClosure(unpack) => unpack.ugly(f),
             | Instruction::PushArg(push) => push.ugly(f),
             | Instruction::PopArg(pop) => pop.ugly(f),
             | Instruction::PushTag(push) => push.ugly(f),
@@ -149,19 +147,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for ContextMarker {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Closure {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        format!("<closure {}>", self.0.ugly(f))
-    }
-}
-
 impl<'a> Ugly<'a, Formatter<'a>> for Jump {
     fn ugly(&self, f: &'a Formatter) -> String {
         format!("jmp {}", f.arena.labels[&self.0].0)
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Branch {
+impl<'a> Ugly<'a, Formatter<'a>> for PopBranch {
     fn ugly(&self, f: &'a Formatter) -> String {
         format!(
             "br {{{}}}",

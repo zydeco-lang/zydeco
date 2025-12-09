@@ -28,7 +28,7 @@ pub enum Program {
     Instruction(Instruction, ProgId),
     Jump(Jump),
     PopJump(PopJump),
-    Branch(Branch),
+    PopBranch(PopBranch),
     Panic(Panic),
     /* ----------------------- these will be compiled away ---------------------- */
     // Call(Call),
@@ -36,25 +36,24 @@ pub enum Program {
     // Bind(Bind<(), ProgId, ProgId>),
 }
 
-#[derive(Clone, Debug)]
-pub struct PopJump;
-
-#[derive(Clone, Debug)]
-pub struct Panic;
-
 /// Stack transformations in ZIR.
 #[derive(From, Clone, Debug)]
 pub enum Instruction {
+    /// Construct a pair. Pop two values off the stack, and push one "pair" value onto the stack.
     PackProduct(Pack<Product>),
+    /// Destruct a pair. Pop a "pair" value off the stack, and push two values back onto the stack.
     UnpackProduct(Unpack<Product>),
+    /// Save current context. Push the pointer to the current context onto the stack.
     PackContext(Pack<ContextMarker>),
+    /// Restore current context. Pop a pointer to the context off the stack, and replace the current context with it.
     UnpackContext(Unpack<ContextMarker>),
-    PackClosure(Pack<Closure>),
-    UnpackClosure(Unpack<Closure>),
+    /// Function application. Push the argument onto the stack.
     PushArg(Push<Atom>),
+    /// Function abstraction. Pop an argument off the stack, and include it into the context.
     PopArg(Pop<VarId>),
-    /// Destructed by [`Branch`]
+    /// Push a tag onto the stack. Destructed by [`Branch`].
     PushTag(Push<Tag>),
+    /// Clear specified variables from the current context.
     Clear(Context),
 }
 
@@ -69,20 +68,20 @@ pub struct Pop<T>(pub T);
 
 #[derive(Clone, Debug)]
 pub struct Product;
-
 #[derive(Clone, Debug)]
 pub struct ContextMarker;
-
-#[derive(Clone, Debug)]
-pub struct Closure(pub Context);
-
 #[derive(Clone, Debug)]
 pub struct Call;
+
 
 #[derive(Clone, Debug)]
 pub struct Jump(pub ProgId);
 #[derive(Clone, Debug)]
-pub struct Branch(pub Vec<(Tag, ProgId)>);
+pub struct PopJump;
+#[derive(Clone, Debug)]
+pub struct PopBranch(pub Vec<(Tag, ProgId)>);
+#[derive(Clone, Debug)]
+pub struct Panic;
 
 #[derive(Clone, Debug)]
 pub struct Label(pub String);
