@@ -37,6 +37,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Program {
         match self {
             | Program::Instruction(instr, next) => format!("{}; {}", instr.ugly(f), next.ugly(f)),
             | Program::Jump(jump) => jump.ugly(f),
+            | Program::EqJump(eq_jump) => eq_jump.ugly(f),
             | Program::PopJump(pop_jump) => pop_jump.ugly(f),
             | Program::PopBranch(branch) => branch.ugly(f),
             | Program::Panic(panic) => panic.ugly(f),
@@ -47,9 +48,34 @@ impl<'a> Ugly<'a, Formatter<'a>> for Program {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for Jump {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!("jmp {}", f.arena.labels[&self.0].0)
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for EqJump {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!("eqjmp {}", self.0.ugly(f))
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for PopJump {
     fn ugly(&self, _f: &'a Formatter) -> String {
         "popjmp".to_string()
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for PopBranch {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        format!(
+            "br {{{}}}",
+            self.0
+                .iter()
+                .map(|(tag, prog)| format!("{} {}", tag.ugly(f), prog.ugly(f)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
@@ -151,25 +177,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Product {
 impl<'a> Ugly<'a, Formatter<'a>> for ContextMarker {
     fn ugly(&self, _f: &'a Formatter) -> String {
         "<context>".to_string()
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Jump {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        format!("jmp {}", f.arena.labels[&self.0].0)
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for PopBranch {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        format!(
-            "br {{{}}}",
-            self.0
-                .iter()
-                .map(|(tag, prog)| format!("{} {}", tag.ugly(f), prog.ugly(f)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
     }
 }
 

@@ -26,9 +26,16 @@ pub enum DefId {
 #[derive(From, Clone, Debug)]
 pub enum Program {
     Instruction(Instruction, ProgId),
+    /// Unconditional jump to a program.
     Jump(Jump),
+    /// Pop two values off the stack, compare them, and
+    /// jump to the target program if they are equal.
+    EqJump(EqJump),
+    /// Pop the top value off the stack, and dynamically jump to it.
     PopJump(PopJump),
+    /// A jump table.
     PopBranch(PopBranch),
+    /// Panic.
     Panic(Panic),
     /* ----------------------- these will be compiled away ---------------------- */
     // Call(Call),
@@ -48,10 +55,12 @@ pub enum Instruction {
     /// Restore current context. Pop a pointer to the context off the stack, and replace the current context with it.
     UnpackContext(Unpack<ContextMarker>),
     /// Function application. Push the argument onto the stack.
+    /// Destructed by [`Instruction::PopArg`].
     PushArg(Push<Atom>),
     /// Function abstraction. Pop an argument off the stack, and include it into the context.
     PopArg(Pop<VarId>),
-    /// Push a tag onto the stack. Destructed by [`Branch`].
+    /// Push a tag onto the stack.
+    /// Destructed by [`PopBranch`].
     PushTag(Push<Tag>),
     /// Swap the top two values on the stack.
     Swap(Swap),
@@ -80,6 +89,8 @@ pub struct Call;
 
 #[derive(Clone, Debug)]
 pub struct Jump(pub ProgId);
+#[derive(Clone, Debug)]
+pub struct EqJump(pub ProgId);
 #[derive(Clone, Debug)]
 pub struct PopJump;
 #[derive(Clone, Debug)]
