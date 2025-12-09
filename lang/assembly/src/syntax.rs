@@ -53,6 +53,8 @@ pub enum Instruction {
     PopArg(Pop<VarId>),
     /// Push a tag onto the stack. Destructed by [`Branch`].
     PushTag(Push<Tag>),
+    /// Swap the top two values on the stack.
+    Swap(Swap),
     /// Clear specified variables from the current context.
     Clear(Context),
 }
@@ -65,6 +67,8 @@ pub struct Unpack<T>(pub T);
 pub struct Push<T>(pub T);
 #[derive(Clone, Debug)]
 pub struct Pop<T>(pub T);
+#[derive(Clone, Debug)]
+pub struct Swap;
 
 #[derive(Clone, Debug)]
 pub struct Product;
@@ -85,6 +89,11 @@ pub struct Panic;
 
 #[derive(Clone, Debug)]
 pub struct Label(pub String);
+impl From<&str> for Label {
+    fn from(name: &str) -> Self {
+        Label(name.to_string())
+    }
+}
 #[derive(Clone, Debug)]
 pub struct Tag {
     pub idx: usize,
@@ -100,6 +109,7 @@ pub enum Atom {
 
 #[derive(From, Clone, Debug)]
 pub enum Symbol {
+    Triv(Triv),
     Prog(ProgId),
     Extern(Extern),
     Literal(Literal),

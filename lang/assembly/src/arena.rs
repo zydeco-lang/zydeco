@@ -10,7 +10,7 @@ pub struct AssemblyArena {
     pub symbols: ArenaSparse<SymId, Symbol>,
 
     /// Map from DefId to VarId or SymId
-    pub defs: ArenaBijective<zydeco_stack::syntax::DefId, DefId>,
+    pub defs: ArenaBijective<sk::DefId, DefId>,
 
     /// Programs are (optionally) labeled.
     pub labels: ArenaAssoc<ProgId, Label>,
@@ -42,12 +42,12 @@ pub trait AssemblyArenaLike {
     /// Allocate a symbol.
     fn sym(&mut self, site: Option<sk::DefId>, sym: impl Into<Symbol>) -> SymId;
     /// Allocate a program that is named, i.e. has a meaningful label
-    fn prog_named(&mut self, prog: impl Into<Program>, label: Label) -> ProgId;
+    fn prog_named(&mut self, label: impl Into<Label>, prog: impl Into<Program>) -> ProgId;
     /// Allocate a program that is anonymous, i.e. has no meaningful label
     fn prog_anon(&mut self, prog: impl Into<Program>) -> ProgId;
     /// Allocate a fix point program, e.g. a recursive function.
     fn prog_fix_point(
-        &mut self, prog: impl FnOnce(ProgId, &mut Self) -> Program, label: Label,
+        &mut self, label: Label, prog: impl FnOnce(ProgId, &mut Self) -> Program,
     ) -> ProgId;
     /// Allocate an instruction.
     fn instr(
@@ -75,10 +75,10 @@ where
         }
         id
     }
-    fn prog_named(&mut self, prog: impl Into<Program>, label: Label) -> ProgId {
+    fn prog_named(&mut self, label: impl Into<Label>, prog: impl Into<Program>) -> ProgId {
         let this = &mut *self.as_mut();
         let id = this.programs.alloc(prog.into());
-        this.labels.insert(id, label);
+        this.labels.insert(id, label.into());
         id
     }
     fn prog_anon(&mut self, prog: impl Into<Program>) -> ProgId {
@@ -87,7 +87,7 @@ where
         id
     }
     fn prog_fix_point(
-        &mut self, prog: impl FnOnce(ProgId, &mut Self) -> Program, label: Label,
+        &mut self, label: Label, prog: impl FnOnce(ProgId, &mut Self) -> Program,
     ) -> ProgId {
         let this = &mut *self.as_mut();
         let id = this.programs.alloc(Program::Panic(Panic));

@@ -1,6 +1,11 @@
 use crate::*;
 use std::fmt;
 
+impl From<&str> for VarName {
+    fn from(name: &str) -> Self {
+        VarName(name.to_string())
+    }
+}
 impl fmt::Display for VarName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let VarName(name) = self;

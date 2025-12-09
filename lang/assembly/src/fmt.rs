@@ -94,6 +94,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Instruction {
             | Instruction::PushArg(push) => push.ugly(f),
             | Instruction::PopArg(pop) => pop.ugly(f),
             | Instruction::PushTag(push) => push.ugly(f),
+            | Instruction::Swap(swap) => swap.ugly(f),
             | Instruction::Clear(context) => context.ugly(f),
         }
     }
@@ -132,6 +133,12 @@ where
 {
     fn ugly(&self, f: &'a Formatter) -> String {
         format!("pop {}", self.0.ugly(f))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Swap {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        "swap".to_string()
     }
 }
 
@@ -179,10 +186,17 @@ impl<'a> Ugly<'a, Formatter<'a>> for Tag {
 impl<'a> Ugly<'a, Formatter<'a>> for Symbol {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
+            | Symbol::Triv(triv) => triv.ugly(f),
             | Symbol::Prog(prog_id) => format!("{}", f.arena.labels[prog_id].0),
             | Symbol::Literal(literal) => literal.ugly(f),
             | Symbol::Extern(ext) => ext.ugly(f),
         }
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Triv {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        "()".to_string()
     }
 }
 
