@@ -115,12 +115,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for Instruction {
         match self {
             | Instruction::PackProduct(pack) => pack.ugly(f),
             | Instruction::UnpackProduct(unpack) => unpack.ugly(f),
-            | Instruction::PackContext(pack) => pack.ugly(f),
-            | Instruction::UnpackContext(unpack) => unpack.ugly(f),
+            | Instruction::PushContext(pack) => pack.ugly(f),
+            | Instruction::PopContext(unpack) => unpack.ugly(f),
             | Instruction::PushArg(push) => push.ugly(f),
             | Instruction::PopArg(pop) => pop.ugly(f),
             | Instruction::PushTag(push) => push.ugly(f),
-            | Instruction::Swap(swap) => swap.ugly(f),
+            | Instruction::Rotate(rotate) => rotate.ugly(f),
             | Instruction::Clear(context) => context.ugly(f),
         }
     }
@@ -162,9 +162,9 @@ where
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Swap {
+impl<'a> Ugly<'a, Formatter<'a>> for Rotate {
     fn ugly(&self, _f: &'a Formatter) -> String {
-        "swap".to_string()
+        format!("rotate {}", self.0)
     }
 }
 

@@ -51,9 +51,9 @@ pub enum Instruction {
     /// Destruct a pair. Pop a "pair" value off the stack, and push two values back onto the stack.
     UnpackProduct(Unpack<Product>),
     /// Save current context. Push the pointer to the current context onto the stack.
-    PackContext(Pack<ContextMarker>),
+    PushContext(Push<ContextMarker>),
     /// Restore current context. Pop a pointer to the context off the stack, and replace the current context with it.
-    UnpackContext(Unpack<ContextMarker>),
+    PopContext(Pop<ContextMarker>),
     /// Function application. Push the argument onto the stack.
     /// Destructed by [`Instruction::PopArg`].
     PushArg(Push<Atom>),
@@ -62,8 +62,13 @@ pub enum Instruction {
     /// Push a tag onto the stack.
     /// Destructed by [`PopBranch`].
     PushTag(Push<Tag>),
-    /// Swap the top two values on the stack.
-    Swap(Swap),
+    /// Rotate the top values on the stack, moving the most top values to the bottom of the range.
+    /// The offset is always one.
+    ///
+    /// e.g. top [a, b, c, d] bottom with `rotate 3` becomes top [b, c, a, d] bottom.
+    ///
+    /// In our implementation, the only range used is three, which appears during return to a continuation.
+    Rotate(Rotate),
     /// Clear specified variables from the current context.
     Clear(Context),
 }
@@ -76,8 +81,11 @@ pub struct Unpack<T>(pub T);
 pub struct Push<T>(pub T);
 #[derive(Clone, Debug)]
 pub struct Pop<T>(pub T);
+/// The number of values to rotate, i.e. the range of rotation.
+///
+/// The offset is always one.
 #[derive(Clone, Debug)]
-pub struct Swap;
+pub struct Rotate(pub usize);
 
 #[derive(Clone, Debug)]
 pub struct Product;
@@ -85,7 +93,6 @@ pub struct Product;
 pub struct ContextMarker;
 #[derive(Clone, Debug)]
 pub struct Call;
-
 
 #[derive(Clone, Debug)]
 pub struct Jump(pub ProgId);

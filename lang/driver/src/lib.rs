@@ -208,9 +208,25 @@ impl BuildSystem {
     }
     pub fn codegen_zasm_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
-        let _checked = self.__tyck_pack(pack, alloc.clone(), false)?;
-        // let lowerer = zydeco_assembly::lower_legacy::Lowerer::new(alloc.clone(), &checked.wf);
-        // let object = lowerer.run();
+        let mut checked = self.__tyck_pack(pack, alloc.clone(), false)?;
+        let mut stack = zydeco_stack::Lowerer::new(
+            alloc.clone(),
+            &checked.spans,
+            &checked.scoped,
+            &checked.statics,
+        )
+        .run();
+        // Perform closure conversion
+        zydeco_stack::ClosureConverter::new(&mut stack, &mut checked.scoped, &checked.statics)
+            .convert();
+        let assembly = zydeco_assembly::lower::Lowerer::new(
+            alloc.clone(),
+            &checked.spans,
+            &checked.scoped,
+            &checked.statics,
+            &stack,
+        )
+        .run();
         // let normalizer = zydeco_assembly::norm::Normalizer::new(object);
         // // let deps = normalizer.deps;
         // // println!("dependencies");
@@ -237,7 +253,10 @@ impl BuildSystem {
         // let entry = arena.entry.iter().next().unwrap().0.clone();
         // let res = entry.ugly(&Formatter::new(&arena));
         // Ok(res)
-        todo!()
+        use zydeco_assembly::fmt::*;
+        let entry = assembly.entry.iter().next().unwrap().0.clone();
+        let res = entry.ugly(&Formatter::new(&assembly));
+        Ok(res)
     }
     pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
