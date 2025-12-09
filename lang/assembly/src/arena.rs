@@ -1,4 +1,5 @@
 use super::syntax::*;
+use zydeco_stack::syntax as sk;
 
 pub struct AssemblyArena {
     /// All programs are attached with a ProgId.
@@ -48,6 +49,8 @@ pub trait AssemblyArenaLike {
     fn instr(
         &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
     ) -> ProgId;
+    fn sym(&mut self, site: Option<sk::DefId>, sym: impl Into<Symbol>) -> SymId;
+    fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId;
 }
 
 impl<T> AssemblyArenaLike for T
@@ -83,6 +86,22 @@ where
         let next = kont(self);
         let this = &mut *self.as_mut();
         let id = this.prog_anon(Program::Instruction(instr.into(), next));
+        id
+    }
+    fn sym(&mut self, site: Option<sk::DefId>, sym: impl Into<Symbol>) -> SymId {
+        let this = &mut *self.as_mut();
+        let id = this.symbols.alloc(sym.into());
+        if let Some(site) = site {
+            this.defs.insert(site, DefId::Sym(id));
+        }
+        id
+    }
+    fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId {
+        let this = &mut *self.as_mut();
+        let id = this.variables.alloc(var.into());
+        if let Some(site) = site {
+            this.defs.insert(site, DefId::Var(id));
+        }
         id
     }
 }

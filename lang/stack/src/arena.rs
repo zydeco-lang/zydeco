@@ -16,6 +16,8 @@ pub struct StackArena {
 
     /// external or defined values
     pub globals: ArenaAssoc<DefId, Global>,
+    /// the initialization sequence of globals
+    pub global_seq: Vec<DefId>,
     /// entry point(s), i.e. declarations that are marked as entry points;
     /// typically the main function, which normally should only be unique
     pub entry: ArenaAssoc<CompuId, ()>,
@@ -34,6 +36,7 @@ impl StackArena {
             stacks: ArenaSparse::new(alloc.alloc()),
             compus: ArenaSparse::new(alloc.alloc()),
             globals: ArenaAssoc::new(),
+            global_seq: Vec::new(),
             entry: ArenaAssoc::new(),
             pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),

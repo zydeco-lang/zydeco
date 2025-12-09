@@ -5,6 +5,7 @@ use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax as t};
 use zydeco_syntax::Ugly;
 use zydeco_utils::arena::ArcGlobalAlloc;
 use zydeco_utils::context::Context;
+use zydeco_utils::phantom::Phantom;
 
 pub trait Lower {
     type Kont;
@@ -63,8 +64,9 @@ impl<'a> Lowerer<'a> {
                                     );
                                 }
                             };
-                            let value_id = Tar::new(bindee)
+                            let value_id = Phantom::new(bindee)
                                 .lower(&mut self, Box::new(move |val_id, _lo| val_id));
+                            self.arena.global_seq.push(def_id);
                             self.arena.globals.insert(def_id, Global::Defined(value_id));
                         }
                         | Decl::VAliasHead(ss::VAliasHead { binder, ty: _ }) => {
@@ -87,8 +89,9 @@ impl<'a> Lowerer<'a> {
                                     );
                                 }
                             };
+                            self.arena.global_seq.push(def_id);
                             // Mark as external global
-                            self.arena.globals.insert(def_id, Global::Extern(()));
+                            self.arena.globals.insert(def_id, Global::Extern(Extern));
                         }
                         | Decl::TAliasBody(_) | Decl::Exec(_) => {}
                     }
@@ -209,21 +212,13 @@ impl Lower for ss::VPatId {
     }
 }
 
-/// A wrapper around a value that allows for lower to return a different type.
-struct Tar<'a, S, T>(S, std::marker::PhantomData<&'a T>);
-impl<'a, S, T> Tar<'a, S, T> {
-    fn new(s: S) -> Self {
-        Self(s, std::marker::PhantomData)
-    }
-}
-
-impl<T> Lower for Tar<'static, ss::ValueId, T> {
+impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
     type Kont = Box<dyn FnOnce(ValueId, &mut Lowerer) -> T>;
     type Out = T;
 
     fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
-        let value = lo.statics.values[&self.0].clone();
-        let site = Some(ss::TermId::Value(self.0));
+        let value = lo.statics.values[self.as_ref()].clone();
+        let site = Some(ss::TermId::Value(self.clone_inner()));
         match value {
             | ss::Value::Hole(_) => {
                 let value_id = lo.arena.value(site, Hole);
@@ -241,7 +236,7 @@ impl<T> Lower for Tar<'static, ss::ValueId, T> {
                     lo.arena.value(site, Clo { capture, stack: Bullet, body: body_compu });
                 kont(value_id, lo)
             }
-            | ss::Value::Ctor(Ctor(ctor, body)) => Tar::new(body).lower(
+            | ss::Value::Ctor(Ctor(ctor, body)) => Phantom::new(body).lower(
                 lo,
                 Box::new(move |body_val, lo| {
                     let value_id = lo.arena.value(site, Ctor(ctor, body_val));
@@ -252,10 +247,10 @@ impl<T> Lower for Tar<'static, ss::ValueId, T> {
                 let value_id = lo.arena.value(site, Triv);
                 kont(value_id, lo)
             }
-            | ss::Value::VCons(Cons(a, b)) => Tar::new(a).lower(
+            | ss::Value::VCons(Cons(a, b)) => Phantom::new(a).lower(
                 lo,
                 Box::new(move |a_val, lo| {
-                    Tar::new(b).lower(
+                    Phantom::new(b).lower(
                         lo,
                         Box::new(move |b_val, lo| {
                             let value_id = lo.arena.value(site, Cons(a_val, b_val));
@@ -266,7 +261,7 @@ impl<T> Lower for Tar<'static, ss::ValueId, T> {
             ),
             | ss::Value::TCons(Cons(_ty, inner)) => {
                 // Type cons values are erased
-                Tar::new(inner).lower(lo, kont)
+                Phantom::new(inner).lower(lo, kont)
             }
             | ss::Value::Lit(lit) => {
                 let value_id = lo.arena.value(site, lit);
@@ -295,7 +290,7 @@ impl Lower for ss::CompuId {
                     Let { binder: Cons(param_vpat, Bullet), bindee: stack_id, tail: body_compu },
                 )
             }
-            | Compu::VApp(App(body, arg)) => Tar::new(arg).lower(
+            | Compu::VApp(App(body, arg)) => Phantom::new(arg).lower(
                 lo,
                 Box::new(move |arg_val, lo| {
                     let next_stack = lo.arena.stack(site, Bullet);
@@ -328,14 +323,14 @@ impl Lower for ss::CompuId {
                 let body_compu = body.lower(lo, ());
                 lo.arena.compu(site, SFix { capture, param: def_id, body: body_compu })
             }
-            | Compu::Force(Force(body)) => Tar::new(body).lower(
+            | Compu::Force(Force(body)) => Phantom::new(body).lower(
                 lo,
                 Box::new(move |thunk_val, lo| {
                     let stack_id = lo.arena.stack(site, Bullet);
                     lo.arena.compu(site, SForce { thunk: thunk_val, stack: stack_id })
                 }),
             ),
-            | Compu::Ret(Return(body)) => Tar::new(body).lower(
+            | Compu::Ret(Return(body)) => Phantom::new(body).lower(
                 lo,
                 Box::new(move |value, lo| {
                     let stack_id = lo.arena.stack(site, Bullet);
@@ -353,7 +348,7 @@ impl Lower for ss::CompuId {
             }
             | Compu::Let(Let { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
-                Tar::new(bindee).lower(
+                Phantom::new(bindee).lower(
                     lo,
                     Box::new(move |bindee_val, lo| {
                         let tail_compu = tail.lower(lo, ());
@@ -366,7 +361,7 @@ impl Lower for ss::CompuId {
             }
             | Compu::Match(Match { scrut, arms }) => {
                 // Match: lower the scrutinee, then create a case statement
-                Tar::new(scrut).lower(
+                Phantom::new(scrut).lower(
                     lo,
                     Box::new(move |scrut_val, lo| {
                         // Lower all the arms - arms are (VPatId, CompuId) in statics

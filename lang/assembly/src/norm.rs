@@ -24,11 +24,11 @@ impl Normalizer {
                     deps.add(id, brs.iter().map(|(_, dep)| dep.clone()))
                 }
                 | Program::Panic(Panic) => {}
-                | Program::Call(Call) => {}
-                | Program::Return(Return(_)) => {}
-                | Program::Bind(Bind { binder: _, bindee: a, tail: b }) => {
-                    deps.add(id, [a, b]);
-                }
+                // | Program::Call(Call) => {}
+                // | Program::Return(Return(_)) => {}
+                // | Program::Bind(Bind { binder: _, bindee: a, tail: b }) => {
+                //     deps.add(id, [a, b]);
+                // }
             }
         }
         Self { arena: object, deps }

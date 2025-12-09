@@ -31,9 +31,9 @@ pub enum Program {
     Branch(Branch),
     Panic(Panic),
     /* ----------------------- these will be compiled away ---------------------- */
-    Call(Call),
-    Return(Return<Atom>),
-    Bind(Bind<(), ProgId, ProgId>),
+    // Call(Call),
+    // Return(Return<Atom>),
+    // Bind(Bind<(), ProgId, ProgId>),
 }
 
 #[derive(Clone, Debug)]
@@ -99,12 +99,15 @@ pub enum Atom {
     Sym(SymId),
 }
 
-#[derive(Clone, Debug)]
+#[derive(From, Clone, Debug)]
 pub enum Symbol {
-    Label(Label),
+    Prog(ProgId),
+    Extern(Extern),
     Literal(Literal),
-    External,
 }
+
+#[derive(Clone, Debug)]
+pub struct Extern;
 
 /// Contexts are ordered sets of variables.
 pub type Context = zydeco_utils::context::Context<VarId>;

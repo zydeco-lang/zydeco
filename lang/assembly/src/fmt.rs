@@ -26,6 +26,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for VarId {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for SymId {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        f.arena.symbols[self].ugly(f)
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for Program {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
@@ -34,9 +40,9 @@ impl<'a> Ugly<'a, Formatter<'a>> for Program {
             | Program::PopJump(pop_jump) => pop_jump.ugly(f),
             | Program::Branch(branch) => branch.ugly(f),
             | Program::Panic(panic) => panic.ugly(f),
-            | Program::Call(call) => call.ugly(f),
-            | Program::Return(ret) => ret.ugly(f),
-            | Program::Bind(bind) => bind.ugly(f),
+            // | Program::Call(call) => call.ugly(f),
+            // | Program::Return(ret) => ret.ugly(f),
+            // | Program::Bind(bind) => bind.ugly(f),
         }
     }
 }
@@ -178,17 +184,21 @@ impl<'a> Ugly<'a, Formatter<'a>> for Tag {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for Symbol {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        match self {
+            | Symbol::Prog(prog_id) => format!("{}", f.arena.labels[prog_id].0),
+            | Symbol::Literal(literal) => literal.ugly(f),
+            | Symbol::Extern(ext) => ext.ugly(f),
+        }
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for Atom {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | Atom::Var(var) => var.ugly(f),
-            | Atom::Sym(sym_id) => {
-                match &f.arena.symbols[sym_id] {
-                    | Symbol::Label(label) => label.ugly(f),
-                    | Symbol::Literal(literal) => literal.ugly(f),
-                    | Symbol::External => "<external>".to_string(),
-                }
-            }
+            | Atom::Sym(sym_id) => sym_id.ugly(f),
         }
     }
 }
@@ -212,6 +222,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for Extern {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        "<extern>".to_string()
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for Context {
     fn ugly(&self, f: &'a Formatter) -> String {
         format!("{{{}}}", self.0.iter().map(|var| var.ugly(f)).collect::<Vec<_>>().join(", "))
@@ -226,9 +242,8 @@ mod test {
     fn test_ugly() {
         let mut arena = AssemblyArena::new(ArcGlobalAlloc::new());
         let prog = arena.prog_anon(Program::Panic(Panic));
-        let prog = arena.prog_anon(
-            Program::Instruction(Instruction::PackProduct(Pack(Product)), prog),
-        );
+        let prog =
+            arena.prog_anon(Program::Instruction(Instruction::PackProduct(Pack(Product)), prog));
         let fmter = Formatter::new(&arena);
         assert_eq!(prog.ugly(&fmter), "pack <product>; panic");
     }

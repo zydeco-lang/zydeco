@@ -112,6 +112,9 @@ pub enum Computation {
 
 #[derive(From, Clone, Debug)]
 pub enum Global {
-    Extern(()),
+    Extern(Extern),
     Defined(ValueId),
 }
+
+#[derive(Clone, Debug)]
+pub struct Extern;

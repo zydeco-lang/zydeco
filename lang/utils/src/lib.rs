@@ -10,6 +10,7 @@ pub mod scc;
 pub mod span;
 pub mod never;
 pub mod monoid;
+pub mod phantom;
 
 pub mod prelude {
     /// Source code location.
@@ -21,6 +22,7 @@ pub mod prelude {
         context::{CoContext, Context},
         monoid::Monoid,
         never::Never,
+        phantom::Phantom,
     };
     /// SCC Graphs.
     pub use crate::{
