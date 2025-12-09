@@ -140,7 +140,19 @@ impl<'a> Lowerer<'a> {
         let ty = self.statics.annotations_compu[&compu].clone();
         // Get the codata type
         let ss::Fillable::Done(ss::Type::CoData(codata)) = self.statics.types[&ty].clone() else {
-            unreachable!("Computation type is not a codata type in statics")
+            let span = self
+                .statics
+                .terms
+                .back(&ss::TermId::Compu(compu))
+                .and_then(|su_term_id| self.scoped.textual.back(&(*su_term_id).into()))
+                .map(|entity_id| &self.spans[entity_id])
+                .map(|span| format!(" @ {}", span))
+                .unwrap_or_default();
+            let ty_str = {
+                use zydeco_statics::tyck::fmt::*;
+                ty.ugly(&Formatter::new(self.scoped, self.statics))
+            };
+            unreachable!("Computation type {} is not a codata type in statics{}", ty_str, span)
         };
         // Find the index of the destructor tag
         self.statics.codatas[&codata]
@@ -366,7 +378,7 @@ impl Lower for sk::StackId {
             }
             | Stack::Tag(Cons(dtor, stack)) => {
                 // Finish the stack first
-                let stack_codata = *self;
+                let stack_codata = stack;
                 stack.lower(
                     lo,
                     Box::new(move |lo| {

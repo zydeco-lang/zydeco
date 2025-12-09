@@ -391,7 +391,7 @@ impl Lower for ss::CompuId {
             }
             | Compu::Dtor(Dtor(body, dtor)) => {
                 // Destructor: push the destructor onto the stack and continue with body
-                let next_stack = lo.arena.stack(site, Bullet);
+                let next_stack = lo.arena.stack(Some(ss::TermId::Compu(body)), Bullet);
                 let tag_stack_id = lo.arena.stack(site, Cons(dtor.clone(), next_stack));
                 let body_compu = body.lower(lo, ());
                 // Create LetStack to bind from the stack with the tag to the current stack, then run body
