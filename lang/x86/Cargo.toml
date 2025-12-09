@@ -19,3 +19,4 @@ zydeco-stack = { workspace = true }
 zydeco-assembly = { workspace = true }
 derive_more = { workspace = true }
 im = { workspace = true }
+log = { workspace = true }

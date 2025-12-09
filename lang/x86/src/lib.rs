@@ -1,3 +1,5 @@
+//! The x86-64 backend for the Zydeco-Intermediate-Representation (ZIR).
+//!
 //! The pointer to control stack is stored in Rsp.
 //! The pointer to environment stack is stored in R10.
 //! The pointer to the heap is stored in R11.

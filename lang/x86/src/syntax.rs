@@ -67,6 +67,14 @@ pub struct MemRef {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+/// [rel label + reg * scale]
+pub struct RelLabel {
+    pub label: String,
+    /// register and offset, if any
+    pub offset: Option<(Reg, i32)>,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Arg64 {
     Reg(Reg),
     Signed(i64),
@@ -98,7 +106,7 @@ pub enum MovArgs {
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LeaArgs {
     Displace { base: Reg, scaled_index: Option<(Reg, i32)>, offset: Option<i32> },
-    RelLabel(String),
+    RelLabel(RelLabel),
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -117,6 +125,7 @@ pub struct ShArgs {
 pub enum JmpArgs {
     Label(String),
     Reg(Reg),
+    RelLabel(RelLabel),
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -161,6 +170,9 @@ pub enum Instr {
     CMovCC(ConditionCode, BinArgs),
     JCC(ConditionCode, JmpArgs),
     SetCC(ConditionCode, Reg8),
+
+    // Define data
+    Dq(String),
 }
 
 impl fmt::Display for ConditionCode {
@@ -245,6 +257,15 @@ impl fmt::Display for MemRef {
     }
 }
 
+impl fmt::Display for RelLabel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.offset {
+            | Some((reg, offset)) => write!(f, "[rel {} + {} * {}]", self.label, reg, offset),
+            | None => write!(f, "[rel {}]", self.label),
+        }
+    }
+}
+
 impl fmt::Display for Reg32 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -298,7 +319,7 @@ impl fmt::Display for LeaArgs {
 
                 write!(f, "[{}{}{}]", base, scaled_index, offset)
             }
-            | LeaArgs::RelLabel(l) => write!(f, "[rel {}]", l),
+            | LeaArgs::RelLabel(rl) => write!(f, "{}", rl),
         }
     }
 }
@@ -323,6 +344,7 @@ impl fmt::Display for JmpArgs {
         match self {
             | JmpArgs::Label(l) => write!(f, "{}", l),
             | JmpArgs::Reg(r) => write!(f, "{}", r),
+            | JmpArgs::RelLabel(rl) => write!(f, "{}", rl),
         }
     }
 }
@@ -422,6 +444,9 @@ impl fmt::Display for Instr {
             }
             | Instr::SetCC(cc, a) => {
                 write!(f, "        set{} {}", cc, a)
+            }
+            | Instr::Dq(s) => {
+                write!(f, "        dq {}", s)
             }
         }
     }

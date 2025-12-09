@@ -272,6 +272,14 @@ impl BuildSystem {
             &stack,
         )
         .run();
+        {
+            use zydeco_assembly::fmt::*;
+            let formatter = Formatter::new(&assembly);
+            let doc = assembly.pretty(&formatter);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            log::trace!("ZASM:\n{}", buf);
+        }
         let instrs = zydeco_x86::Emitter::new(
             &checked.spans,
             &checked.scoped,

@@ -124,6 +124,15 @@ pub enum Atom {
     Sym(SymId),
 }
 
+/// Symbols represent statically determined values.
+/// 
+/// In our implementation, we track the following statically known symbols:
+/// - Triv, the unit value
+/// - Program, which are labelled blocks
+/// - External functions
+/// - Literals
+/// 
+/// Symbols are guaranteed to be evaluated and generated at compile time.
 #[derive(From, Clone, Debug)]
 pub enum Symbol {
     Triv(Triv),
