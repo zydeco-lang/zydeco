@@ -20,7 +20,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for AssemblyArena {
 
         // Print all programs
         for (prog_id, prog) in self.programs.iter() {
-            if let Some(label) = self.labels.get(prog_id) {
+            if let Some(label) = self.block_name(*prog_id) {
                 s += &format!("[label:{}{}]\n", label.0, prog_id.concise());
                 s += &format!("\t{}\n", prog.ugly(f));
             }
@@ -28,10 +28,16 @@ impl<'a> Ugly<'a, Formatter<'a>> for AssemblyArena {
 
         // Print all symbols
         for (sym_id, sym) in self.symbols.iter() {
-            s += &format!("[sym{}] {}\n", sym_id.concise(), sym.ugly(f));
-            if let Symbol::Prog(prog_id) = sym {
-                s += &format!("\t{}\n", f.arena.programs[prog_id].ugly(f));
-            }
+            s += &format!(
+                "[sym{}] {}{}\n",
+                sym_id.concise(),
+                sym.ugly(f),
+                if let Symbol::Prog(prog_id) = sym {
+                    format!(" (label: {})", prog_id.ugly(f))
+                } else {
+                    String::new()
+                }
+            );
         }
 
         // Print entry point
@@ -50,7 +56,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for AssemblyArena {
 
 impl<'a> Ugly<'a, Formatter<'a>> for ProgId {
     fn ugly(&self, f: &'a Formatter) -> String {
-        f.arena.programs[self].ugly(f)
+        // If the program is nominated, we should stop here and use the label.
+        if let Some(label) = f.arena.block_name(*self) {
+            label.ugly(f)
+        } else {
+            f.arena.programs[self].ugly(f)
+        }
     }
 }
 
@@ -103,10 +114,10 @@ impl<'a> Ugly<'a, Formatter<'a>> for PopJump {
 impl<'a> Ugly<'a, Formatter<'a>> for PopBranch {
     fn ugly(&self, f: &'a Formatter) -> String {
         format!(
-            "br {{{}}}",
+            "popbr {{{}}}",
             self.0
                 .iter()
-                .map(|(tag, prog)| format!("{} {}", tag.ugly(f), prog.ugly(f)))
+                .map(|(tag, prog)| format!("{} -> {}", tag.ugly(f), prog.ugly(f)))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -299,9 +310,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
 
         // Print all programs
         for (prog_id, prog) in self.programs.iter() {
-            if let Some(label) = self.labels.get(prog_id) {
+            if let Some(label) = self.block_name(*prog_id) {
                 doc = doc
-                    .append(RcDoc::text(format!("[label:{}{}]", label.0, prog_id.concise(),)))
+                    .append(RcDoc::text(format!("[label:{}]", label.ugly(f))))
                     .append(RcDoc::concat([RcDoc::line(), prog.pretty(f)]).nest(1))
                     .append(RcDoc::line());
             }
@@ -315,9 +326,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
                 .append(RcDoc::space())
                 .append(sym.pretty(f));
             if let Symbol::Prog(prog_id) = sym {
-                doc = doc.append(
-                    RcDoc::concat([RcDoc::line(), f.arena.programs[prog_id].pretty(f)]).nest(1),
-                );
+                doc = doc.append(RcDoc::concat([
+                    RcDoc::space(),
+                    RcDoc::text("(label: "),
+                    prog_id.pretty(f),
+                    RcDoc::text(")"),
+                ]));
             }
             doc = doc.append(RcDoc::line());
         }
@@ -325,7 +339,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
         // Print entry point
         for (prog_id, _) in self.entry.iter() {
             doc = doc.append(RcDoc::text("[entry]"));
-            if let Some(label) = self.labels.get(prog_id) {
+            if let Some(label) = self.block_name(*prog_id) {
                 doc = doc
                     .append(RcDoc::concat([RcDoc::line(), RcDoc::text(label.0.clone())]).nest(1));
             } else {
@@ -340,7 +354,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ProgId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        f.arena.programs[self].pretty(f)
+        // If the program is nominated, we should stop here and use the label.
+        if let Some(label) = f.arena.block_name(*self) {
+            label.pretty(f)
+        } else {
+            f.arena.programs[self].pretty(f)
+        }
     }
 }
 
@@ -398,26 +417,25 @@ impl<'a> Pretty<'a, Formatter<'a>> for PopBranch {
         let branches: Vec<_> = self
             .0
             .iter()
-            .map(|(tag, prog)| RcDoc::concat([tag.pretty(f), RcDoc::space(), prog.pretty(f)]))
+            .map(|(tag, prog)| {
+                RcDoc::concat([
+                    tag.pretty(f),
+                    RcDoc::space(),
+                    RcDoc::text("->"),
+                    RcDoc::space(),
+                    prog.pretty(f),
+                ])
+            })
             .collect();
         RcDoc::concat([
-            RcDoc::text("br"),
-            RcDoc::space(),
-            RcDoc::text("{"),
+            RcDoc::text("popbr"),
             RcDoc::concat(
                 branches
                     .iter()
-                    .enumerate()
-                    .flat_map(|(i, doc)| {
-                        if i == 0 {
-                            vec![doc.clone()]
-                        } else {
-                            vec![RcDoc::text(", "), doc.clone()]
-                        }
-                    })
+                    .flat_map(|doc| vec![RcDoc::line(), doc.clone()])
                     .collect::<Vec<_>>(),
-            ),
-            RcDoc::text("}"),
+            )
+            .nest(1),
         ])
     }
 }
@@ -631,8 +649,8 @@ mod test {
     fn test_ugly() {
         let mut arena = AssemblyArena::new(ArcGlobalAlloc::new());
         let prog = arena.prog_anon(Program::Panic(Panic));
-        let prog =
-            arena.prog_anon(Program::Instruction(Instruction::PackProduct(Pack(ProductMarker)), prog));
+        let prog = arena
+            .prog_anon(Program::Instruction(Instruction::PackProduct(Pack(ProductMarker)), prog));
         let fmter = Formatter::new(&arena);
         assert_eq!(prog.ugly(&fmter), "pack <product>; panic");
     }

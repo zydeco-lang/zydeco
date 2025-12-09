@@ -235,32 +235,6 @@ impl BuildSystem {
             &stack,
         )
         .run();
-        // let normalizer = zydeco_assembly::norm::Normalizer::new(object);
-        // // let deps = normalizer.deps;
-        // // println!("dependencies");
-        // // for id in deps.nodes() {
-        // //     let query = deps.query(&id);
-        // //     // println!("{}: {}", id.concise(), query.len());
-        // //     println!("{}", id.concise());
-        // //     for dep in query {
-        // //         println!("\t<- {}", dep.concise());
-        // //     }
-        // // }
-        // // let srcs = deps.reverse();
-        // // println!("sources");
-        // // for id in srcs.nodes() {
-        // //     let query = srcs.query(&id);
-        // //     // println!("{}: {}", id.concise(), query.len());
-        // //     println!("{}", id.concise());
-        // //     for src in query {
-        // //         println!("\t-> {}", src.concise());
-        // //     }
-        // // }
-        // let arena = normalizer.arena;
-        // use zydeco_assembly::fmt::*;
-        // let entry = arena.entry.iter().next().unwrap().0.clone();
-        // let res = entry.ugly(&Formatter::new(&arena));
-        // Ok(res)
         use zydeco_assembly::fmt::*;
         use zydeco_syntax::Pretty;
         let formatter = Formatter::new(&assembly);

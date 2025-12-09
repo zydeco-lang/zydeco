@@ -4,7 +4,7 @@
 //!   compiled into programs that pushes the value onto the stack.
 //! - All computations and stacks are compiled into programs.
 
-use super::arena::{AssemblyArena, AssemblyArenaLike};
+use super::arena::{AssemblyArena, AssemblyArenaMutLike};
 use super::syntax::*;
 use zydeco_stack::arena::StackArena;
 use zydeco_stack::syntax as sk;
@@ -277,6 +277,11 @@ impl<'a> Lowerer<'a> {
     }
 }
 
+impl AsRef<AssemblyArena> for Lowerer<'_> {
+    fn as_ref(&self) -> &AssemblyArena {
+        &self.arena
+    }
+}
 impl AsMut<AssemblyArena> for Lowerer<'_> {
     fn as_mut(&mut self) -> &mut AssemblyArena {
         &mut self.arena
@@ -540,6 +545,7 @@ impl Lower for sk::CompuId {
                 let body_prog = body.lower(lo, ());
                 // Label the body code
                 let name = lo.scoped.defs[&param].plain();
+                let _sym = lo.arena.sym(None, Symbol::Prog(body_prog));
                 lo.arena.labels.insert(body_prog, Label::from(name));
                 // Jump to the body
                 lo.prog_anon(Jump(body_prog))
@@ -574,6 +580,9 @@ impl Lower for sk::CompuId {
                                         let tag = Tag { idx, name: Some(name) };
                                         // Lower the tail
                                         let tail_prog = tail.lower(lo, ());
+                                        // Nominate the tail program
+                                        let _sym = lo.arena.sym(None, Symbol::Prog(tail_prog));
+                                        // Add to the jump table
                                         lowered_arms.push((tag, tail_prog));
                                     }
                                     | _ => {
@@ -644,6 +653,9 @@ impl Lower for sk::CompuId {
                     let idx = lo.find_dtor_tag_idx_from_compu(compu_id, &dtor);
                     let name = dtor.plain().to_string();
                     let tag = Tag { idx, name: Some(name) };
+                    // Nominate the tail program
+                    let _sym = lo.arena.sym(None, Symbol::Prog(tail_prog));
+                    // Add to the jump table
                     lowered_arms.push((tag, tail_prog));
                 }
                 // Create the co-case program

@@ -112,6 +112,11 @@ impl From<&str> for Label {
         Label(name.to_string())
     }
 }
+impl Label {
+    pub fn plain(&self) -> &str {
+        &self.0
+    }
+}
 #[derive(Clone, Debug)]
 pub struct Tag {
     pub idx: usize,

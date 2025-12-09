@@ -36,13 +36,23 @@ impl AssemblyArena {
         }
     }
 }
+impl AsRef<AssemblyArena> for AssemblyArena {
+    fn as_ref(&self) -> &AssemblyArena {
+        self
+    }
+}
 impl AsMut<AssemblyArena> for AssemblyArena {
     fn as_mut(&mut self) -> &mut AssemblyArena {
         self
     }
 }
 
-pub trait AssemblyArenaLike {
+pub trait AssemblyArenaRefLike {
+    /// Find out if a program is nominated as an individual block, and decide what label to use.
+    fn block_name(&self, prog: ProgId) -> Option<Label>;
+}
+
+pub trait AssemblyArenaMutLike {
     /// Allocate a variable.
     fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId;
     /// Allocate a symbol.
@@ -53,11 +63,28 @@ pub trait AssemblyArenaLike {
     fn instr(
         &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
     ) -> ProgId;
-    /// Find out if a program is nominated as an individual block, and decide what label to use.
-    fn block_name(&mut self, prog: ProgId) -> Option<Label>;
 }
 
-impl<T> AssemblyArenaLike for T
+impl<T> AssemblyArenaRefLike for T
+where
+    T: AsRef<AssemblyArena>,
+{
+    fn block_name(&self, prog: ProgId) -> Option<Label> {
+        let this = &self.as_ref();
+        let count = *this.blocks.get(&prog)?;
+        if count < 2 {
+            return None;
+        }
+        let uniquifier = |name: &str| format!("{}_{}", name, prog.concise_inner());
+        let label = match this.labels.get(&prog) {
+            | Some(label) => uniquifier(label.plain()),
+            | None => uniquifier("block"),
+        };
+        Some(Label(label))
+    }
+}
+
+impl<T> AssemblyArenaMutLike for T
 where
     T: AsMut<AssemblyArena>,
 {
@@ -111,17 +138,5 @@ where
         let this = &mut *self.as_mut();
         let id = this.prog_anon(Program::Instruction(instr.into(), next));
         id
-    }
-    fn block_name(&mut self, prog: ProgId) -> Option<Label> {
-        let this = &mut *self.as_mut();
-        let count = *this.blocks.get(&prog)?;
-        if count < 2 {
-            return None;
-        }
-        let label = match this.labels.get(&prog) {
-            | Some(label) => label.clone(),
-            | None => Label(format!("block_{}", prog.concise_inner())),
-        };
-        Some(label)
     }
 }
