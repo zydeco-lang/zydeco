@@ -3254,7 +3254,10 @@ version = "0.2.2"
 dependencies = [
  "derive_more",
  "im",
+ "zydeco-assembly",
+ "zydeco-stack",
  "zydeco-statics",
+ "zydeco-surface",
  "zydeco-syntax",
  "zydeco-utils",
 ]
