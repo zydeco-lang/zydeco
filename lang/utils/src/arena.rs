@@ -470,6 +470,9 @@ mod impls {
             let Some(val) = self.map.insert(id, val) else { panic!("key not found") };
             val
         }
+        pub fn entry(&mut self, id: Id) -> std::collections::hash_map::Entry<'_, Id, T> {
+            self.map.entry(id)
+        }
         pub fn insert_or_else<E>(
             &mut self, id: Id, val: T, f: impl FnOnce(T, T) -> Result<T, E>,
         ) -> Result<(), E> {
@@ -490,14 +493,10 @@ mod impls {
         pub fn remove(&mut self, id: &Id) -> Option<T> {
             self.map.remove(id)
         }
-    }
-
-    impl<Id, T> ArenaAssoc<Id, T>
-    where
-        Id: Eq + Hash,
-        T: Clone,
-    {
-        pub fn insert_or_get(&mut self, id: Id, val: T) -> Option<T> {
+        pub fn insert_or_get(&mut self, id: Id, val: T) -> Option<T>
+        where
+            T: Clone,
+        {
             if let Some(val) = self.map.get(&id) {
                 Some(val.clone())
             } else {

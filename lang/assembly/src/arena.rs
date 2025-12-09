@@ -53,6 +53,8 @@ pub trait AssemblyArenaLike {
     fn instr(
         &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
     ) -> ProgId;
+    /// Find out if a program is nominated as an individual block, and decide what label to use.
+    fn block_name(&mut self, prog: ProgId) -> Option<Label>;
 }
 
 impl<T> AssemblyArenaLike for T
@@ -69,7 +71,12 @@ where
     }
     fn sym(&mut self, site: Option<sk::DefId>, sym: impl Into<Symbol>) -> SymId {
         let this = &mut *self.as_mut();
-        let id = this.symbols.alloc(sym.into());
+        let symbol = sym.into();
+        // Strongly nominate the symbol if it is a program, ensuring a block.
+        if let Symbol::Prog(prog_id) = symbol {
+            *this.blocks.entry(prog_id).or_insert(0) += 2;
+        }
+        let id = this.symbols.alloc(symbol);
         if let Some(site) = site {
             this.defs.insert(site, DefId::Sym(id));
         }
@@ -77,7 +84,24 @@ where
     }
     fn prog_anon(&mut self, prog: impl Into<Program>) -> ProgId {
         let this = &mut *self.as_mut();
-        let id = this.programs.alloc(prog.into());
+        let program = prog.into();
+        // Nominate inner programs if they are mentioned in the program.
+        let mut nominate = |&prog| {
+            *this.blocks.entry(prog).or_insert(0) += 1;
+        };
+        match &program {
+            | Program::Instruction(_, prog_id) => nominate(prog_id),
+            | Program::Jump(Jump(prog_id)) => nominate(prog_id),
+            | Program::EqJump(EqJump(prog_id)) => nominate(prog_id),
+            | Program::PopJump(PopJump) => {}
+            | Program::PopBranch(PopBranch(brs)) => {
+                for (_, prog_id) in brs {
+                    nominate(prog_id);
+                }
+            }
+            | Program::Panic(Panic) => {}
+        }
+        let id = this.programs.alloc(program);
         id
     }
     fn instr(
@@ -87,5 +111,17 @@ where
         let this = &mut *self.as_mut();
         let id = this.prog_anon(Program::Instruction(instr.into(), next));
         id
+    }
+    fn block_name(&mut self, prog: ProgId) -> Option<Label> {
+        let this = &mut *self.as_mut();
+        let count = *this.blocks.get(&prog)?;
+        if count < 2 {
+            return None;
+        }
+        let label = match this.labels.get(&prog) {
+            | Some(label) => label.clone(),
+            | None => Label(format!("block_{}", prog.concise_inner())),
+        };
+        Some(label)
     }
 }
