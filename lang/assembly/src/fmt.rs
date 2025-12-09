@@ -5,10 +5,11 @@ use super::syntax::*;
 pub use zydeco_syntax::{Pretty, Ugly};
 pub struct Formatter<'arena> {
     arena: &'arena AssemblyArena,
+    pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
     pub fn new(arena: &'arena AssemblyArena) -> Self {
-        Formatter { arena }
+        Formatter { arena, indent: 2 }
     }
 }
 
@@ -313,7 +314,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
             if let Some(label) = self.block_name(*prog_id) {
                 doc = doc
                     .append(RcDoc::text(format!("[label:{}]", label.ugly(f))))
-                    .append(RcDoc::concat([RcDoc::line(), prog.pretty(f)]).nest(1))
+                    .append(RcDoc::concat([RcDoc::line(), prog.pretty(f)]).nest(f.indent))
                     .append(RcDoc::line());
             }
         }
@@ -341,9 +342,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
             doc = doc.append(RcDoc::text("[entry]"));
             if let Some(label) = self.block_name(*prog_id) {
                 doc = doc
-                    .append(RcDoc::concat([RcDoc::line(), RcDoc::text(label.0.clone())]).nest(1));
+                    .append(RcDoc::concat([RcDoc::line(), RcDoc::text(label.0.clone())]).nest(f.indent));
             } else {
-                doc = doc.append(RcDoc::concat([RcDoc::line(), prog_id.pretty(f)]).nest(1));
+                doc = doc.append(RcDoc::concat([RcDoc::line(), prog_id.pretty(f)]).nest(f.indent));
             }
             doc = doc.append(RcDoc::line());
         }
@@ -435,7 +436,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for PopBranch {
                     .flat_map(|doc| vec![RcDoc::line(), doc.clone()])
                     .collect::<Vec<_>>(),
             )
-            .nest(1),
+            .nest(f.indent),
         ])
     }
 }

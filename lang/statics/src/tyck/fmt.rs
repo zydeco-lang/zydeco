@@ -10,10 +10,11 @@ pub use zydeco_syntax::{Pretty, Ugly};
 pub struct Formatter<'arena> {
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,
+    pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
     pub fn new(scoped: &'arena ScopedArena, statics: &'arena StaticsArena) -> Self {
-        Formatter { scoped, statics }
+        Formatter { scoped, statics, indent: 2 }
     }
 }
 
@@ -643,7 +644,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for DataId {
                     ctor.pretty(f),
                     RcDoc::space(),
                     RcDoc::text(":"),
-                    RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(2),
+                    RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
                 ])
             })),
             RcDoc::line(),
@@ -666,7 +667,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for CoDataId {
                     dtor.pretty(f),
                     RcDoc::space(),
                     RcDoc::text(":"),
-                    RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(2),
+                    RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
                 ])
             })),
             RcDoc::line(),
@@ -713,7 +714,7 @@ where
             binder.pretty(f),
             RcDoc::space(),
             RcDoc::text("->"),
-            RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(2),
+            RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent),
         ])
     }
 }
@@ -728,7 +729,7 @@ where
         RcDoc::concat([
             RcDoc::text("("),
             func.pretty(f),
-            RcDoc::concat([RcDoc::line(), arg.pretty(f)]).group().nest(2),
+            RcDoc::concat([RcDoc::line(), arg.pretty(f)]).group().nest(f.indent),
             RcDoc::text(")"),
         ])
     }
@@ -855,7 +856,7 @@ where
             RcDoc::text("<-"),
             RcDoc::concat([RcDoc::line(), bindee.pretty(f), RcDoc::line(), RcDoc::text(";")])
                 .group()
-                .nest(2),
+                .nest(f.indent),
             RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
         ])
     }
@@ -876,7 +877,7 @@ where
             RcDoc::space(),
             RcDoc::text("="),
             RcDoc::concat([
-                RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(2),
+                RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(f.indent),
                 RcDoc::line(),
                 RcDoc::text("in"),
             ])
@@ -899,7 +900,7 @@ where
             p.pretty(f),
             RcDoc::space(),
             RcDoc::text("->"),
-            RcDoc::concat([RcDoc::line(), tm.pretty(f)]).nest(2).group(),
+            RcDoc::concat([RcDoc::line(), tm.pretty(f)]).nest(f.indent).group(),
         ])
     }
 }
@@ -939,7 +940,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Forall {
             abst.pretty(f),
             RcDoc::space(),
             RcDoc::text("."),
-            RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(2),
+            RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
         ])
         .group()
     }
@@ -954,7 +955,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Exists {
             tpat.pretty(f),
             RcDoc::space(),
             RcDoc::text("."),
-            RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(2),
+            RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
         ])
         .group()
     }
@@ -981,7 +982,7 @@ where
                     binder.pretty(f),
                     RcDoc::space(),
                     RcDoc::text("->"),
-                    RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(2),
+                    RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
                 ])
             })),
             RcDoc::line(),
@@ -1008,7 +1009,7 @@ where
                     dtor.pretty(f),
                     RcDoc::space(),
                     RcDoc::text("->"),
-                    RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(2),
+                    RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
                 ])
             })),
             RcDoc::line(),

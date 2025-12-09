@@ -11,12 +11,13 @@ pub struct Formatter<'arena> {
     arena: &'arena StackArena,
     scoped: &'arena ScopedArena,
     statics: &'arena ss::StaticsArena,
+    pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
     pub fn new(
         arena: &'arena StackArena, scoped: &'arena ScopedArena, statics: &'arena ss::StaticsArena,
     ) -> Self {
-        Formatter { arena, scoped, statics }
+        Formatter { arena, scoped, statics, indent: 2 }
     }
 }
 
@@ -301,7 +302,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                         stack.pretty(f),
                         RcDoc::space(),
                         RcDoc::text("->"),
-                        RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(2).group(),
+                        RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
                         RcDoc::space(),
                         RcDoc::text("}"),
                     ])
@@ -385,7 +386,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Kont {
             self.binder.pretty(f),
             RcDoc::space(),
             RcDoc::text("->"),
-            RcDoc::concat([RcDoc::line(), self.body.pretty(f)]).nest(2).group(),
+            RcDoc::concat([RcDoc::line(), self.body.pretty(f)]).nest(f.indent).group(),
         ])
     }
 }
@@ -424,7 +425,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     param.pretty(f),
                     RcDoc::space(),
                     RcDoc::text("->"),
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(2).group(),
+                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
                 ])
             }
             | Computation::Force(SForce { thunk, stack }) => RcDoc::concat([
@@ -453,7 +454,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                         binder.pretty(f),
                         RcDoc::space(),
                         RcDoc::text("->"),
-                        RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(2),
+                        RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
                     ])
                 })),
                 RcDoc::line(),
@@ -466,7 +467,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 RcDoc::space(),
                 RcDoc::text("="),
                 RcDoc::concat([
-                    RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(2),
+                    RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(f.indent),
                     RcDoc::line(),
                     RcDoc::text("in"),
                 ])
@@ -480,7 +481,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 RcDoc::space(),
                 RcDoc::text("="),
                 RcDoc::concat([
-                    RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(2),
+                    RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(f.indent),
                     RcDoc::line(),
                     RcDoc::text("in"),
                 ])
@@ -502,7 +503,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::space(),
                     RcDoc::text("="),
                     RcDoc::concat([
-                        RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(2),
+                        RcDoc::concat([RcDoc::line(), bindee.pretty(f)]).nest(f.indent),
                         RcDoc::line(),
                         RcDoc::text("in"),
                     ])
@@ -525,7 +526,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                             RcDoc::text(")"),
                             RcDoc::space(),
                             RcDoc::text("->"),
-                            RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(2),
+                            RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),
                         ])
                     })),
                     RcDoc::line(),
@@ -558,10 +559,10 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
             match global {
                 | Global::Extern(_) => {
                     doc =
-                        doc.append(RcDoc::concat([RcDoc::line(), RcDoc::text("<extern>")]).nest(1));
+                        doc.append(RcDoc::concat([RcDoc::line(), RcDoc::text("<extern>")]).nest(f.indent));
                 }
                 | Global::Defined(value_id) => {
-                    doc = doc.append(RcDoc::concat([RcDoc::line(), value_id.pretty(f)]).nest(1));
+                    doc = doc.append(RcDoc::concat([RcDoc::line(), value_id.pretty(f)]).nest(f.indent));
                 }
             }
             doc = doc.append(RcDoc::line());
@@ -571,7 +572,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
         for (compu_id, _) in self.entry.iter() {
             doc = doc
                 .append(RcDoc::text("[entry]"))
-                .append(RcDoc::concat([RcDoc::line(), compu_id.pretty(f)]).nest(1))
+                .append(RcDoc::concat([RcDoc::line(), compu_id.pretty(f)]).nest(f.indent))
                 .append(RcDoc::line());
         }
 
