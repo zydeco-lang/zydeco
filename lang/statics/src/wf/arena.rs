@@ -1,6 +1,5 @@
 use super::syntax::*;
 use crate::*;
-use zydeco_surface::textual::syntax as t;
 
 pub use zydeco_utils::arena::*;
 

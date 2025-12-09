@@ -55,6 +55,7 @@ pub mod wf {
 }
 pub use wf::{WellFormedProgram};
 
+pub(crate) use zydeco_surface::textual::syntax as t;
 pub(crate) use surface_syntax as su;
 pub(crate) use tyck::construct::syntax as cs;
 pub(crate) use tyck::syntax as ss;

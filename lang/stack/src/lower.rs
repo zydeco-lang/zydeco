@@ -1,7 +1,7 @@
 use super::arena::{StackArena, StackArenaLike};
 use super::syntax::*;
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
-use zydeco_surface::{scoped::arena::ScopedArena, textual::syntax as t};
+use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::Ugly;
 use zydeco_utils::arena::ArcGlobalAlloc;
 use zydeco_utils::context::Context;
@@ -15,14 +15,14 @@ pub trait Lower {
 
 pub struct Lowerer<'a> {
     pub arena: StackArena,
-    pub spans: &'a t::SpanArena,
+    pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
 }
 
 impl<'a> Lowerer<'a> {
     pub fn new(
-        alloc: ArcGlobalAlloc, spans: &'a t::SpanArena, scoped: &'a ScopedArena,
+        alloc: ArcGlobalAlloc, spans: &'a SpanArena, scoped: &'a ScopedArena,
         statics: &'a StaticsArena,
     ) -> Self {
         let arena = StackArena::new_arc(alloc);

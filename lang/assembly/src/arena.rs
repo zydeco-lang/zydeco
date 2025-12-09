@@ -37,26 +37,44 @@ impl AsMut<AssemblyArena> for AssemblyArena {
 }
 
 pub trait AssemblyArenaLike {
+    /// Allocate a variable.
+    fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId;
+    /// Allocate a symbol.
+    fn sym(&mut self, site: Option<sk::DefId>, sym: impl Into<Symbol>) -> SymId;
     /// Allocate a program that is named, i.e. has a meaningful label
     fn prog_named(&mut self, prog: impl Into<Program>, label: Label) -> ProgId;
     /// Allocate a program that is anonymous, i.e. has no meaningful label
     fn prog_anon(&mut self, prog: impl Into<Program>) -> ProgId;
     /// Allocate a fix point program, e.g. a recursive function.
     fn prog_fix_point(
-        &mut self, prog: impl FnOnce(&mut Self, ProgId) -> Program, label: Label,
+        &mut self, prog: impl FnOnce(ProgId, &mut Self) -> Program, label: Label,
     ) -> ProgId;
     /// Allocate an instruction.
     fn instr(
         &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
     ) -> ProgId;
-    fn sym(&mut self, site: Option<sk::DefId>, sym: impl Into<Symbol>) -> SymId;
-    fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId;
 }
 
 impl<T> AssemblyArenaLike for T
 where
     T: AsMut<AssemblyArena>,
 {
+    fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId {
+        let this = &mut *self.as_mut();
+        let id = this.variables.alloc(var.into());
+        if let Some(site) = site {
+            this.defs.insert(site, DefId::Var(id));
+        }
+        id
+    }
+    fn sym(&mut self, site: Option<sk::DefId>, sym: impl Into<Symbol>) -> SymId {
+        let this = &mut *self.as_mut();
+        let id = this.symbols.alloc(sym.into());
+        if let Some(site) = site {
+            this.defs.insert(site, DefId::Sym(id));
+        }
+        id
+    }
     fn prog_named(&mut self, prog: impl Into<Program>, label: Label) -> ProgId {
         let this = &mut *self.as_mut();
         let id = this.programs.alloc(prog.into());
@@ -69,12 +87,11 @@ where
         id
     }
     fn prog_fix_point(
-        &mut self, prog: impl FnOnce(&mut Self, ProgId) -> Program, label: Label,
+        &mut self, prog: impl FnOnce(ProgId, &mut Self) -> Program, label: Label,
     ) -> ProgId {
         let this = &mut *self.as_mut();
-        let prog = prog;
         let id = this.programs.alloc(Program::Panic(Panic));
-        let prog = prog(self, id);
+        let prog = prog(id, self);
         let this = &mut *self.as_mut();
         this.labels.insert(id, label);
         this.programs[&id] = prog;
@@ -86,22 +103,6 @@ where
         let next = kont(self);
         let this = &mut *self.as_mut();
         let id = this.prog_anon(Program::Instruction(instr.into(), next));
-        id
-    }
-    fn sym(&mut self, site: Option<sk::DefId>, sym: impl Into<Symbol>) -> SymId {
-        let this = &mut *self.as_mut();
-        let id = this.symbols.alloc(sym.into());
-        if let Some(site) = site {
-            this.defs.insert(site, DefId::Sym(id));
-        }
-        id
-    }
-    fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId {
-        let this = &mut *self.as_mut();
-        let id = this.variables.alloc(var.into());
-        if let Some(site) = site {
-            this.defs.insert(site, DefId::Var(id));
-        }
         id
     }
 }
