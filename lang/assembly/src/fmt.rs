@@ -202,7 +202,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Rotate {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Product {
+impl<'a> Ugly<'a, Formatter<'a>> for ProductMarker {
     fn ugly(&self, _f: &'a Formatter) -> String {
         "<product>".to_string()
     }
@@ -520,7 +520,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Rotate {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Product {
+impl<'a> Pretty<'a, Formatter<'a>> for ProductMarker {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text("<product>")
     }
@@ -632,7 +632,7 @@ mod test {
         let mut arena = AssemblyArena::new(ArcGlobalAlloc::new());
         let prog = arena.prog_anon(Program::Panic(Panic));
         let prog =
-            arena.prog_anon(Program::Instruction(Instruction::PackProduct(Pack(Product)), prog));
+            arena.prog_anon(Program::Instruction(Instruction::PackProduct(Pack(ProductMarker)), prog));
         let fmter = Formatter::new(&arena);
         assert_eq!(prog.ugly(&fmter), "pack <product>; panic");
     }

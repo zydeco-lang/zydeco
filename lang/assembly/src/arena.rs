@@ -14,6 +14,11 @@ pub struct AssemblyArena {
 
     /// Programs are (optionally) labeled.
     pub labels: ArenaAssoc<ProgId, Label>,
+    /// Number of nominations of a program as an individual block.
+    /// - If 0 / unexist, the program should be obliviated.
+    /// - If 1, the program is inlined.
+    /// - If > 1, the program is a block.
+    pub blocks: ArenaAssoc<ProgId, usize>,
     /// The whole object has an optional entry point.
     pub entry: ArenaAssoc<ProgId, ()>,
 }
@@ -25,6 +30,7 @@ impl AssemblyArena {
             variables: ArenaSparse::new(alloc.alloc()),
             symbols: ArenaSparse::new(alloc.alloc()),
             defs: ArenaBijective::new(),
+            blocks: ArenaAssoc::new(),
             labels: ArenaAssoc::new(),
             entry: ArenaAssoc::new(),
         }
@@ -41,14 +47,8 @@ pub trait AssemblyArenaLike {
     fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId;
     /// Allocate a symbol.
     fn sym(&mut self, site: Option<sk::DefId>, sym: impl Into<Symbol>) -> SymId;
-    /// Allocate a program that is named, i.e. has a meaningful label
-    fn prog_named(&mut self, label: impl Into<Label>, prog: impl Into<Program>) -> ProgId;
-    /// Allocate a program that is anonymous, i.e. has no meaningful label
+    /// Allocate a program that is anonymous, i.e. has no meaningful label.
     fn prog_anon(&mut self, prog: impl Into<Program>) -> ProgId;
-    /// Allocate a fix point program, e.g. a recursive function.
-    fn prog_fix_point(
-        &mut self, label: Label, prog: impl FnOnce(ProgId, &mut Self) -> Program,
-    ) -> ProgId;
     /// Allocate an instruction.
     fn instr(
         &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
@@ -75,26 +75,9 @@ where
         }
         id
     }
-    fn prog_named(&mut self, label: impl Into<Label>, prog: impl Into<Program>) -> ProgId {
-        let this = &mut *self.as_mut();
-        let id = this.programs.alloc(prog.into());
-        this.labels.insert(id, label.into());
-        id
-    }
     fn prog_anon(&mut self, prog: impl Into<Program>) -> ProgId {
         let this = &mut *self.as_mut();
         let id = this.programs.alloc(prog.into());
-        id
-    }
-    fn prog_fix_point(
-        &mut self, label: Label, prog: impl FnOnce(ProgId, &mut Self) -> Program,
-    ) -> ProgId {
-        let this = &mut *self.as_mut();
-        let id = this.programs.alloc(Program::Panic(Panic));
-        let prog = prog(id, self);
-        let this = &mut *self.as_mut();
-        this.labels.insert(id, label);
-        this.programs[&id] = prog;
         id
     }
     fn instr(

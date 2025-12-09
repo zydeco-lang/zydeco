@@ -302,7 +302,7 @@ impl Lower for sk::VPatId {
                 let vpat_data = *self;
                 // Unpack the pair value
                 lo.instr(
-                    Unpack(Product),
+                    Unpack(ProductMarker),
                     Box::new(move |lo: &mut Lowerer| {
                         // Compile the remaining pattern
                         let res = param.lower(lo, kont);
@@ -328,7 +328,7 @@ impl Lower for sk::VPatId {
             | VPat::VCons(Cons(a, b)) => {
                 // Unpack the pair value from the stack, and then process a and b
                 lo.instr(
-                    Unpack(Product),
+                    Unpack(ProductMarker),
                     Box::new(move |lo: &mut Lowerer| {
                         a.lower(lo, Box::new(move |lo| b.lower(lo, kont)))
                     }),
@@ -381,7 +381,7 @@ impl Lower for sk::ValueId {
                             Push(tag),
                             Box::new(move |lo: &mut Lowerer| {
                                 // Pack them into a pair value
-                                lo.instr(Pack(Product), kont)
+                                lo.instr(Pack(ProductMarker), kont)
                             }),
                         )
                     }),
@@ -401,7 +401,7 @@ impl Lower for sk::ValueId {
                             lo,
                             Box::new(move |lo| {
                                 // and then pack the pair value
-                                lo.instr(Pack(Product), kont)
+                                lo.instr(Pack(ProductMarker), kont)
                             }),
                         )
                     }),
@@ -583,7 +583,7 @@ impl Lower for sk::CompuId {
                             }
                             // Unpack the value
                             lo.instr(
-                                Unpack(Product),
+                                Unpack(ProductMarker),
                                 Box::new(move |lo: &mut Lowerer| {
                                     // Jump table
                                     lo.prog_anon(PopBranch(lowered_arms))
