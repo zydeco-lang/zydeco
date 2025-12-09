@@ -219,6 +219,14 @@ impl BuildSystem {
         // Perform closure conversion
         zydeco_stack::ClosureConverter::new(&mut stack, &mut checked.scoped, &checked.statics)
             .convert();
+        {
+            use zydeco_stack::fmt::*;
+            let fmt = Formatter::new(&stack, &checked.scoped, &checked.statics);
+            let doc = stack.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            log::trace!("ZIR after closure conversion:\n{}", buf);
+        }
         let assembly = zydeco_assembly::lower::Lowerer::new(
             alloc.clone(),
             &checked.spans,
@@ -254,9 +262,12 @@ impl BuildSystem {
         // let res = entry.ugly(&Formatter::new(&arena));
         // Ok(res)
         use zydeco_assembly::fmt::*;
-        let entry = assembly.entry.iter().next().unwrap().0.clone();
-        let res = entry.ugly(&Formatter::new(&assembly));
-        Ok(res)
+        use zydeco_syntax::Pretty;
+        let formatter = Formatter::new(&assembly);
+        let doc = assembly.pretty(&formatter);
+        let mut buf = String::new();
+        doc.render_fmt(100, &mut buf).unwrap();
+        Ok(buf)
     }
     pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();

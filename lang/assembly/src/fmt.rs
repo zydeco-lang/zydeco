@@ -2,7 +2,7 @@
 
 use super::syntax::*;
 
-pub use zydeco_syntax::Ugly;
+pub use zydeco_syntax::{Pretty, Ugly};
 pub struct Formatter<'arena> {
     arena: &'arena AssemblyArena,
 }
@@ -14,6 +14,40 @@ impl<'arena> Formatter<'arena> {
 
 /* ---------------------------------- Ugly ---------------------------------- */
 
+impl<'a> Ugly<'a, Formatter<'a>> for AssemblyArena {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let mut s = String::new();
+
+        // Print all programs
+        for (prog_id, prog) in self.programs.iter() {
+            if let Some(label) = self.labels.get(prog_id) {
+                s += &format!("[label:{}{}]\n", label.0, prog_id.concise());
+                s += &format!("\t{}\n", prog.ugly(f));
+            }
+        }
+
+        // Print all symbols
+        for (sym_id, sym) in self.symbols.iter() {
+            s += &format!("[sym{}] {}\n", sym_id.concise(), sym.ugly(f));
+            if let Symbol::Prog(prog_id) = sym {
+                s += &format!("\t{}\n", f.arena.programs[prog_id].ugly(f));
+            }
+        }
+
+        // Print entry point
+        for (prog_id, _) in self.entry.iter() {
+            s += "[entry]\n";
+            if let Some(label) = self.labels.get(prog_id) {
+                s += &format!("\t{}\n", label.0);
+            } else {
+                s += &format!("\t{}\n", prog_id.ugly(f));
+            }
+        }
+
+        s
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for ProgId {
     fn ugly(&self, f: &'a Formatter) -> String {
         f.arena.programs[self].ugly(f)
@@ -22,7 +56,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for ProgId {
 
 impl<'a> Ugly<'a, Formatter<'a>> for VarId {
     fn ugly(&self, f: &'a Formatter) -> String {
-        format!("{}", f.arena.variables[self])
+        format!("{}{}", f.arena.variables[self], self.concise())
     }
 }
 
@@ -194,7 +228,15 @@ impl<'a> Ugly<'a, Formatter<'a>> for Symbol {
     fn ugly(&self, f: &'a Formatter) -> String {
         match self {
             | Symbol::Triv(triv) => triv.ugly(f),
-            | Symbol::Prog(prog_id) => format!("{}", f.arena.labels[prog_id].0),
+            | Symbol::Prog(prog_id) => {
+                let label_part = f
+                    .arena
+                    .labels
+                    .get(prog_id)
+                    .map(|label| label.0.clone())
+                    .unwrap_or_else(|| "<prog>".to_string());
+                format!("{}{}", label_part, prog_id.concise())
+            }
             | Symbol::Literal(literal) => literal.ugly(f),
             | Symbol::Extern(ext) => ext.ugly(f),
         }
@@ -244,6 +286,340 @@ impl<'a> Ugly<'a, Formatter<'a>> for Extern {
 impl<'a> Ugly<'a, Formatter<'a>> for Context {
     fn ugly(&self, f: &'a Formatter) -> String {
         format!("{{{}}}", self.0.iter().map(|var| var.ugly(f)).collect::<Vec<_>>().join(", "))
+    }
+}
+
+/* --------------------------------- Pretty --------------------------------- */
+
+use pretty::RcDoc;
+
+impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let mut doc = RcDoc::nil();
+
+        // Print all programs
+        for (prog_id, prog) in self.programs.iter() {
+            if let Some(label) = self.labels.get(prog_id) {
+                doc = doc
+                    .append(RcDoc::text(format!("[label:{}{}]", label.0, prog_id.concise(),)))
+                    .append(RcDoc::concat([RcDoc::line(), prog.pretty(f)]).nest(1))
+                    .append(RcDoc::line());
+            }
+        }
+
+        // Print all symbols
+        for (sym_id, sym) in self.symbols.iter() {
+            doc = doc
+                .append(RcDoc::text(format!("[sym{}", sym_id.concise(),)))
+                .append(RcDoc::text("]"))
+                .append(RcDoc::space())
+                .append(sym.pretty(f));
+            if let Symbol::Prog(prog_id) = sym {
+                doc = doc.append(
+                    RcDoc::concat([RcDoc::line(), f.arena.programs[prog_id].pretty(f)]).nest(1),
+                );
+            }
+            doc = doc.append(RcDoc::line());
+        }
+
+        // Print entry point
+        for (prog_id, _) in self.entry.iter() {
+            doc = doc.append(RcDoc::text("[entry]"));
+            if let Some(label) = self.labels.get(prog_id) {
+                doc = doc
+                    .append(RcDoc::concat([RcDoc::line(), RcDoc::text(label.0.clone())]).nest(1));
+            } else {
+                doc = doc.append(RcDoc::concat([RcDoc::line(), prog_id.pretty(f)]).nest(1));
+            }
+            doc = doc.append(RcDoc::line());
+        }
+
+        doc
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for ProgId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        f.arena.programs[self].pretty(f)
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for VarId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text(format!("{}{}", f.arena.variables[self], self.concise()))
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for SymId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        f.arena.symbols[self].pretty(f)
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Program {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | Program::Instruction(instr, next) => {
+                RcDoc::concat([instr.pretty(f), RcDoc::text(";"), RcDoc::line(), next.pretty(f)])
+            }
+            | Program::Jump(jump) => jump.pretty(f),
+            | Program::EqJump(eq_jump) => eq_jump.pretty(f),
+            | Program::PopJump(pop_jump) => pop_jump.pretty(f),
+            | Program::PopBranch(branch) => branch.pretty(f),
+            | Program::Panic(panic) => panic.pretty(f),
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Jump {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([
+            RcDoc::text("jmp"),
+            RcDoc::space(),
+            RcDoc::text(f.arena.labels[&self.0].0.clone()),
+        ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for EqJump {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([RcDoc::text("eqjmp"), RcDoc::space(), self.0.pretty(f)])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for PopJump {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("popjmp")
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for PopBranch {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let branches: Vec<_> = self
+            .0
+            .iter()
+            .map(|(tag, prog)| RcDoc::concat([tag.pretty(f), RcDoc::space(), prog.pretty(f)]))
+            .collect();
+        RcDoc::concat([
+            RcDoc::text("br"),
+            RcDoc::space(),
+            RcDoc::text("{"),
+            RcDoc::concat(
+                branches
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(i, doc)| {
+                        if i == 0 {
+                            vec![doc.clone()]
+                        } else {
+                            vec![RcDoc::text(", "), doc.clone()]
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            RcDoc::text("}"),
+        ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Panic {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("panic")
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Call {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("call")
+    }
+}
+
+impl<'a, T> Pretty<'a, Formatter<'a>> for Return<T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([RcDoc::text("ret"), RcDoc::space(), self.0.pretty(f)])
+    }
+}
+
+impl<'a, Be, Tail> Pretty<'a, Formatter<'a>> for Bind<(), Be, Tail>
+where
+    Be: Pretty<'a, Formatter<'a>>,
+    Tail: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([
+            RcDoc::text("do"),
+            RcDoc::space(),
+            RcDoc::text("("),
+            self.bindee.pretty(f),
+            RcDoc::text(")"),
+            RcDoc::text(";"),
+            RcDoc::space(),
+            self.tail.pretty(f),
+        ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | Instruction::PackProduct(pack) => pack.pretty(f),
+            | Instruction::UnpackProduct(unpack) => unpack.pretty(f),
+            | Instruction::PushContext(pack) => pack.pretty(f),
+            | Instruction::PopContext(unpack) => unpack.pretty(f),
+            | Instruction::PushArg(push) => push.pretty(f),
+            | Instruction::PopArg(pop) => pop.pretty(f),
+            | Instruction::PushTag(push) => push.pretty(f),
+            | Instruction::Rotate(rotate) => rotate.pretty(f),
+            | Instruction::Clear(context) => context.pretty(f),
+        }
+    }
+}
+
+impl<'a, T> Pretty<'a, Formatter<'a>> for Pack<T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([RcDoc::text("pack"), RcDoc::space(), self.0.pretty(f)])
+    }
+}
+
+impl<'a, T> Pretty<'a, Formatter<'a>> for Unpack<T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([RcDoc::text("unpack"), RcDoc::space(), self.0.pretty(f)])
+    }
+}
+
+impl<'a, T> Pretty<'a, Formatter<'a>> for Push<T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([RcDoc::text("push"), RcDoc::space(), self.0.pretty(f)])
+    }
+}
+
+impl<'a, T> Pretty<'a, Formatter<'a>> for Pop<T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([RcDoc::text("pop"), RcDoc::space(), self.0.pretty(f)])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Rotate {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([RcDoc::text("rotate"), RcDoc::space(), RcDoc::text(self.0.to_string())])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Product {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("<product>")
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for ContextMarker {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("<context>")
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Tag {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        match &self.name {
+            | Some(name) => RcDoc::concat([
+                RcDoc::text(self.idx.to_string()),
+                RcDoc::text(":"),
+                RcDoc::text(name.clone()),
+            ]),
+            | None => RcDoc::text(self.idx.to_string()),
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Symbol {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | Symbol::Triv(triv) => triv.pretty(f),
+            | Symbol::Prog(prog_id) => {
+                let label_part = f
+                    .arena
+                    .labels
+                    .get(prog_id)
+                    .map(|label| label.0.clone())
+                    .unwrap_or_else(|| "<prog>".to_string());
+                RcDoc::concat([RcDoc::text(label_part), RcDoc::text(prog_id.concise())])
+            }
+            | Symbol::Literal(literal) => literal.pretty(f),
+            | Symbol::Extern(ext) => ext.pretty(f),
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Triv {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("()")
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Atom {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | Atom::Var(var) => var.pretty(f),
+            | Atom::Sym(sym_id) => sym_id.pretty(f),
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Label {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text(self.0.clone())
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Literal {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | Literal::Int(i) => RcDoc::text(format!("{:?}", i)),
+            | Literal::String(str) => RcDoc::text(format!("{:?}", str)),
+            | Literal::Char(c) => RcDoc::text(format!("{:?}", c)),
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Extern {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("<extern>")
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Context {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let vars: Vec<_> = self.0.iter().map(|var| var.pretty(f)).collect();
+        RcDoc::concat([
+            RcDoc::text("{"),
+            RcDoc::concat(
+                vars.iter()
+                    .enumerate()
+                    .flat_map(|(i, doc)| {
+                        if i == 0 {
+                            vec![doc.clone()]
+                        } else {
+                            vec![RcDoc::text(", "), doc.clone()]
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            RcDoc::text("}"),
+        ])
     }
 }
 
