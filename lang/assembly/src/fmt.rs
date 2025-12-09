@@ -131,12 +131,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Panic {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Call {
-    fn ugly(&self, _f: &'a Formatter) -> String {
-        "call".to_string()
-    }
-}
-
 impl<'a, T> Ugly<'a, Formatter<'a>> for Return<T>
 where
     T: Ugly<'a, Formatter<'a>>,
@@ -341,8 +335,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
         for (prog_id, _) in self.entry.iter() {
             doc = doc.append(RcDoc::text("[entry]"));
             if let Some(label) = self.block_name(*prog_id) {
-                doc = doc
-                    .append(RcDoc::concat([RcDoc::line(), RcDoc::text(label.0.clone())]).nest(f.indent));
+                doc = doc.append(
+                    RcDoc::concat([RcDoc::line(), RcDoc::text(label.0.clone())]).nest(f.indent),
+                );
             } else {
                 doc = doc.append(RcDoc::concat([RcDoc::line(), prog_id.pretty(f)]).nest(f.indent));
             }
@@ -444,12 +439,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for PopBranch {
 impl<'a> Pretty<'a, Formatter<'a>> for Panic {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text("panic")
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for Call {
-    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text("call")
     }
 }
 

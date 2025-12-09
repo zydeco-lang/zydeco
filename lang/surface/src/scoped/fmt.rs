@@ -522,11 +522,7 @@ where
     fn ugly(&self, f: &'a Formatter) -> String {
         let zydeco_utils::context::Context(defs) = self;
         let mut s = String::new();
-        s += &defs
-            .iter()
-            .map(|id| id.ugly(f))
-            .collect::<Vec<_>>()
-            .join(", ");
+        s += &defs.iter().map(|id| id.ugly(f)).collect::<Vec<_>>().join(", ");
         s
     }
 }
@@ -538,11 +534,7 @@ where
     fn ugly(&self, f: &'a Formatter) -> String {
         let zydeco_utils::context::CoContext(defs) = self;
         let mut s = String::new();
-        s += &defs
-            .iter()
-            .map(|id| id.ugly(f))
-            .collect::<Vec<_>>()
-            .join(", ");
+        s += &defs.iter().map(|id| id.ugly(f)).collect::<Vec<_>>().join(", ");
         s
     }
 }

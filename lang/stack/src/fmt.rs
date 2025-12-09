@@ -558,11 +558,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
             doc = doc.append(RcDoc::text(format!("[def:{}]", varname)));
             match global {
                 | Global::Extern(_) => {
-                    doc =
-                        doc.append(RcDoc::concat([RcDoc::line(), RcDoc::text("<extern>")]).nest(f.indent));
+                    doc = doc.append(
+                        RcDoc::concat([RcDoc::line(), RcDoc::text("<extern>")]).nest(f.indent),
+                    );
                 }
                 | Global::Defined(value_id) => {
-                    doc = doc.append(RcDoc::concat([RcDoc::line(), value_id.pretty(f)]).nest(f.indent));
+                    doc = doc
+                        .append(RcDoc::concat([RcDoc::line(), value_id.pretty(f)]).nest(f.indent));
                 }
             }
             doc = doc.append(RcDoc::line());

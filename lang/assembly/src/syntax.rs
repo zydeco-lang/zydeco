@@ -37,10 +37,6 @@ pub enum Program {
     PopBranch(PopBranch),
     /// Panic.
     Panic(Panic),
-    /* ----------------------- these will be compiled away ---------------------- */
-    // Call(Call),
-    // Return(Return<Atom>),
-    // Bind(Bind<(), ProgId, ProgId>),
 }
 
 /// Stack transformations in ZIR.
@@ -91,8 +87,6 @@ pub struct Rotate(pub usize);
 pub struct ProductMarker;
 #[derive(Clone, Debug)]
 pub struct ContextMarker;
-#[derive(Clone, Debug)]
-pub struct Call;
 
 #[derive(Clone, Debug)]
 pub struct Jump(pub ProgId);

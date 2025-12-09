@@ -2,7 +2,7 @@ use clap::Parser;
 use std::{fs::File, io::Write, path::PathBuf, process::Command};
 // use zydeco_cli::{Cli, Commands, Repl};
 use zydeco_cli::{Cli, Commands};
-use zydeco_driver::{BuildSystem, ProgKont, PackId};
+use zydeco_driver::{BuildSystem, PackId, ProgKont};
 
 fn main() -> Result<(), ()> {
     env_logger::init();
@@ -36,11 +36,13 @@ fn main() -> Result<(), ()> {
     }
 }
 
-fn setup_build_system(paths: Vec<PathBuf>, bin: Option<String>) -> Result<(BuildSystem, PackId), String> {
+fn setup_build_system(
+    paths: Vec<PathBuf>, bin: Option<String>,
+) -> Result<(BuildSystem, PackId), String> {
     let mut build_sys = BuildSystem::new();
     let mut packs = Vec::new();
     let mut files = Vec::new();
-    
+
     for path in paths {
         // for dir, try finding "proj.toml" under it
         if path.is_dir() {
@@ -64,7 +66,7 @@ fn setup_build_system(paths: Vec<PathBuf>, bin: Option<String>) -> Result<(Build
             }
         }
     }
-    
+
     if files.is_empty() {
         for pack in packs {
             build_sys.add_binary_in_package(pack).map_err(|e| e.to_string())?;
@@ -75,7 +77,7 @@ fn setup_build_system(paths: Vec<PathBuf>, bin: Option<String>) -> Result<(Build
             build_sys.mark(pack).map_err(|e| e.to_string())?;
         }
     }
-    
+
     let pack = build_sys.pick_marked(bin).map_err(|e| e.to_string())?;
     Ok((build_sys, pack))
 }

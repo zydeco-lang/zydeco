@@ -518,8 +518,7 @@ impl Collect for SccGroup<DeclId> {
                         | Declaration::Meta(decl) => {
                             let MetaT(meta, decl) = decl;
                             let _ = meta;
-                            ctx =
-                                SccGroup::from_iter([decl]).collect(collector, ctx)?;
+                            ctx = SccGroup::from_iter([decl]).collect(collector, ctx)?;
                         }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder, bindee } = decl;
@@ -541,8 +540,7 @@ impl Collect for SccGroup<DeclId> {
                         | Declaration::Meta(decl) => {
                             let MetaT(meta, decl) = decl;
                             let _ = meta;
-                            ctx =
-                                SccGroup::from_iter([decl]).collect(collector, ctx)?;
+                            ctx = SccGroup::from_iter([decl]).collect(collector, ctx)?;
                         }
                         | Declaration::AliasBody(decl) => {
                             let AliasBody { binder, bindee } = decl;
