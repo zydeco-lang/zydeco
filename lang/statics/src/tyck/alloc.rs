@@ -29,75 +29,99 @@ pub trait Alloc<Arena, T> {
 
 /* ------------------------------- Definition ------------------------------- */
 
-impl Alloc<Tycker, DefId> for VarName {
+impl<Arena> Alloc<Arena, DefId> for VarName
+where
+    Arena: AsMut<ScopedArena> + AsMut<StaticsArena>,
+{
     type Ann = AnnId;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> DefId {
-        let id = tycker.scoped.defs.alloc(val);
-        tycker.statics.annotations_var.insert(id, ann);
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> DefId {
+        let id = AsMut::<ScopedArena>::as_mut(arena).defs.alloc(val);
+        AsMut::<StaticsArena>::as_mut(arena).annotations_var.insert(id, ann);
         id
     }
 }
 
 /* -------------------------------- Abstract -------------------------------- */
 
-impl Alloc<Tycker, AbstId> for DefId {
+impl<Arena> Alloc<Arena, AbstId> for DefId
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = KindId;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> AbstId {
-        let abst = tycker.statics.absts.alloc(());
-        tycker.statics.annotations_abst.insert(abst, ann);
-        tycker.statics.abst_hints.insert(abst, val);
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> AbstId {
+        let abst = arena.as_mut().absts.alloc(());
+        arena.as_mut().annotations_abst.insert(abst, ann);
+        arena.as_mut().abst_hints.insert(abst, val);
         abst
     }
 }
-impl Alloc<Tycker, AbstId> for Option<DefId> {
+impl<Arena> Alloc<Arena, AbstId> for Option<DefId>
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = KindId;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> AbstId {
-        let abst = tycker.statics.absts.alloc(());
-        tycker.statics.annotations_abst.insert(abst, ann);
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> AbstId {
+        let abst = arena.as_mut().absts.alloc(());
+        arena.as_mut().annotations_abst.insert(abst, ann);
         if let Some(def) = val {
-            tycker.statics.abst_hints.insert(abst, def);
+            arena.as_mut().abst_hints.insert(abst, def);
         }
         abst
     }
 }
-impl Alloc<Tycker, AbstId> for TPatId {
+impl<Arena> Alloc<Arena, AbstId> for TPatId
+where
+    Arena: AsMut<StaticsArena> + AsRef<StaticsArena>,
+{
     type Ann = ();
-    fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> AbstId {
-        let (def, kd) = val.try_destruct_def(tycker);
-        Alloc::alloc(tycker, def, kd)
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> AbstId {
+        let (def, kd) = val.try_destruct_def(arena);
+        Alloc::alloc(arena, def, kd)
     }
 }
 
 /* ---------------------------------- Fill ---------------------------------- */
 
-impl Alloc<Tycker, FillId> for su::TermId {
+impl<Arena> Alloc<Arena, FillId> for su::TermId
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = ();
-    fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> FillId {
-        tycker.statics.fills.alloc(val)
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> FillId {
+        arena.as_mut().fills.alloc(val)
     }
 }
 
 /* ---------------------------------- Kind ---------------------------------- */
 
-impl Alloc<Tycker, KindId> for FillId {
+impl<Arena> Alloc<Arena, KindId> for FillId
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = ();
-    fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
-        tycker.statics.kinds.alloc(val.into())
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> KindId {
+        arena.as_mut().kinds.alloc(val.into())
     }
 }
-impl Alloc<Tycker, KindId> for Kind {
+impl<Arena> Alloc<Arena, KindId> for Kind
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = ();
-    fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
-        tycker.statics.kinds.alloc(Fillable::Done(val))
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> KindId {
+        arena.as_mut().kinds.alloc(Fillable::Done(val))
     }
 }
 macro_rules! AllocKind {
     ($($t:ty)*) => {
         $(
-            impl Alloc<Tycker, KindId> for $t {
+            impl<Arena> Alloc<Arena, KindId> for $t
+            where
+                Arena: AsMut<StaticsArena>,
+            {
                 type Ann = ();
-                fn alloc(tycker: &mut Tycker, val: Self, (): Self::Ann) -> KindId {
-                    Alloc::alloc(tycker, Kind::from(val), ())
+                fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> KindId {
+                    Alloc::alloc(arena, Kind::from(val), ())
                 }
             }
         )*
@@ -111,21 +135,27 @@ AllocKind! {
 
 /* ------------------------------- TypePattern ------------------------------ */
 
-impl Alloc<Tycker, TPatId> for TypePattern {
+impl<Arena> Alloc<Arena, TPatId> for TypePattern
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = KindId;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> TPatId {
-        let tpat = tycker.statics.tpats.alloc(val);
-        tycker.statics.annotations_tpat.insert(tpat, ann);
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> TPatId {
+        let tpat = arena.as_mut().tpats.alloc(val);
+        arena.as_mut().annotations_tpat.insert(tpat, ann);
         tpat
     }
 }
 macro_rules! AllocTypePattern {
     ($($t:ty)*) => {
         $(
-            impl Alloc<Tycker, TPatId> for $t {
+            impl<Arena> Alloc<Arena, TPatId> for $t
+            where
+                Arena: AsMut<StaticsArena>,
+            {
                 type Ann = KindId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> TPatId {
-                    Alloc::alloc(tycker, TypePattern::from(val), ann)
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> TPatId {
+                    Alloc::alloc(arena, TypePattern::from(val), ann)
                 }
             }
         )*
@@ -138,12 +168,15 @@ AllocTypePattern! {
 
 /* ---------------------------------- Type ---------------------------------- */
 
-impl Alloc<Tycker, TypeId> for FillId {
+impl<Arena> Alloc<Arena, TypeId> for FillId
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = KindId;
-    fn alloc(tycker: &mut Tycker, val: Self, kd: Self::Ann) -> TypeId {
-        let ty = tycker.statics.types.alloc(val.into());
-        tycker
-            .statics
+    fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann) -> TypeId {
+        let ty = arena.as_mut().types.alloc(val.into());
+        arena
+            .as_mut()
             .annotations_type
             .insert_or_else(ty, kd, |_old, _new| -> std::result::Result<KindId, ()> {
                 panic!("duplicate keys: {:?} = {:?}, {:?}", ty, _old, _new)
@@ -155,12 +188,15 @@ impl Alloc<Tycker, TypeId> for FillId {
         ty
     }
 }
-impl Alloc<Tycker, TypeId> for Type {
+impl<Arena> Alloc<Arena, TypeId> for Type
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = KindId;
-    fn alloc(tycker: &mut Tycker, val: Self, kd: Self::Ann) -> TypeId {
-        let ty = tycker.statics.types.alloc(Fillable::Done(val));
-        tycker
-            .statics
+    fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann) -> TypeId {
+        let ty = arena.as_mut().types.alloc(Fillable::Done(val));
+        arena
+            .as_mut()
             .annotations_type
             .insert_or_else(ty, kd, |_old, _new| -> std::result::Result<KindId, ()> {
                 panic!("duplicate keys: {:?} = {:?}, {:?}", ty, _old, _new)
@@ -175,10 +211,13 @@ impl Alloc<Tycker, TypeId> for Type {
 macro_rules! AllocType {
     ($($t:ty)*) => {
         $(
-            impl Alloc<Tycker, TypeId> for $t {
+            impl<Arena> Alloc<Arena, TypeId> for $t
+            where
+                Arena: AsMut<StaticsArena>,
+            {
                 type Ann = KindId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> TypeId {
-                    Alloc::alloc(tycker, Type::from(val), ann)
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> TypeId {
+                    Alloc::alloc(arena, Type::from(val), ann)
                 }
             }
         )*
@@ -206,21 +245,27 @@ AllocType! {
 
 /* ------------------------------ ValuePattern ------------------------------ */
 
-impl Alloc<Tycker, VPatId> for ValuePattern {
+impl<Arena> Alloc<Arena, VPatId> for ValuePattern
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = TypeId;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> VPatId {
-        let vpat = tycker.statics.vpats.alloc(val);
-        tycker.statics.annotations_vpat.insert(vpat, ann);
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> VPatId {
+        let vpat = arena.as_mut().vpats.alloc(val);
+        arena.as_mut().annotations_vpat.insert(vpat, ann);
         vpat
     }
 }
 macro_rules! AllocValuePattern {
     ($($t:ty)*) => {
         $(
-            impl Alloc<Tycker, VPatId> for $t {
+            impl<Arena> Alloc<Arena, VPatId> for $t
+            where
+                Arena: AsMut<StaticsArena>,
+            {
                 type Ann = TypeId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> VPatId {
-                    Alloc::alloc(tycker, ValuePattern::from(val), ann)
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> VPatId {
+                    Alloc::alloc(arena, ValuePattern::from(val), ann)
                 }
             }
         )*
@@ -237,21 +282,27 @@ AllocValuePattern! {
 
 /* ---------------------------------- Value --------------------------------- */
 
-impl Alloc<Tycker, ValueId> for Value {
+impl<Arena> Alloc<Arena, ValueId> for Value
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = TypeId;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> ValueId {
-        let value = tycker.statics.values.alloc(val);
-        tycker.statics.annotations_value.insert(value, ann);
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> ValueId {
+        let value = arena.as_mut().values.alloc(val);
+        arena.as_mut().annotations_value.insert(value, ann);
         value
     }
 }
 macro_rules! AllocValue {
     ($($t:ty)*) => {
         $(
-            impl Alloc<Tycker, ValueId> for $t {
+            impl<Arena> Alloc<Arena, ValueId> for $t
+            where
+                Arena: AsMut<StaticsArena>,
+            {
                 type Ann = TypeId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> ValueId {
-                    Alloc::alloc(tycker, Value::from(val), ann)
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> ValueId {
+                    Alloc::alloc(arena, Value::from(val), ann)
                 }
             }
         )*
@@ -270,21 +321,27 @@ AllocValue! {
 
 /* ------------------------------- Computation ------------------------------ */
 
-impl Alloc<Tycker, CompuId> for Computation {
+impl<Arena> Alloc<Arena, CompuId> for Computation
+where
+    Arena: AsMut<StaticsArena>,
+{
     type Ann = TypeId;
-    fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> CompuId {
-        let compu = tycker.statics.compus.alloc(val);
-        tycker.statics.annotations_compu.insert(compu, ann);
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> CompuId {
+        let compu = arena.as_mut().compus.alloc(val);
+        arena.as_mut().annotations_compu.insert(compu, ann);
         compu
     }
 }
 macro_rules! AllocComputation {
     ($($t:ty)*) => {
         $(
-            impl Alloc<Tycker, CompuId> for $t {
+            impl<Arena> Alloc<Arena, CompuId> for $t
+            where
+                Arena: AsMut<StaticsArena>,
+            {
                 type Ann = TypeId;
-                fn alloc(tycker: &mut Tycker, val: Self, ann: Self::Ann) -> CompuId {
-                    Alloc::alloc(tycker, Computation::from(val), ann)
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> CompuId {
+                    Alloc::alloc(arena, Computation::from(val), ann)
                 }
             }
         )*

@@ -25,6 +25,26 @@ pub struct Tycker {
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
 }
+impl AsRef<ScopedArena> for Tycker {
+    fn as_ref(&self) -> &ScopedArena {
+        &self.scoped
+    }
+}
+impl AsMut<ScopedArena> for Tycker {
+    fn as_mut(&mut self) -> &mut ScopedArena {
+        &mut self.scoped
+    }
+}
+impl AsRef<StaticsArena> for Tycker {
+    fn as_ref(&self) -> &StaticsArena {
+        &self.statics
+    }
+}
+impl AsMut<StaticsArena> for Tycker {
+    fn as_mut(&mut self) -> &mut StaticsArena {
+        &mut self.statics
+    }
+}
 
 // Todo: use async to cut all tycker functions into small segments (returning futures)
 // and achieve better concurrency

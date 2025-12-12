@@ -13,10 +13,13 @@ impl KindId {
 }
 
 impl TPatId {
-    pub fn try_destruct_def(&self, tycker: &mut Tycker) -> (Option<DefId>, KindId) {
+    pub fn try_destruct_def<Arena>(&self, arena: &Arena) -> (Option<DefId>, KindId)
+    where
+        Arena: AsRef<StaticsArena>,
+    {
         use TypePattern as TPat;
-        let kd = tycker.statics.annotations_tpat[self].to_owned();
-        match tycker.statics.tpats[self].to_owned() {
+        let kd = arena.as_ref().annotations_tpat[self].to_owned();
+        match arena.as_ref().tpats[self].to_owned() {
             | TPat::Hole(Hole) => (None, kd),
             | TPat::Var(def) => (Some(def), kd),
         }
