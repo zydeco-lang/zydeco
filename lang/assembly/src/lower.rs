@@ -59,7 +59,8 @@ impl<'a> Lowerer<'a> {
                         | sk::Global::Extern(sk::Extern) => {
                             // Extern: wrap continuation to create symbol, then continue
                             Box::new(move |lo: &mut Lowerer| {
-                                let _sym = lo.arena.sym(Some(def_id), Symbol::Extern(Extern));
+                                let name = lo.scoped.defs[&def_id].clone();
+                                lo.sym(Some(def_id), name.plain(), Extern);
                                 kont(lo)
                             })
                         }
@@ -366,9 +367,8 @@ impl Lower for sk::ValueId {
                 assert!(capture.iter().count() == 0, "Capture is not empty");
                 let body = body.lower(lo, ());
                 // Label the closure code
-                lo.arena.labels.insert(body, Label::from("clo"));
+                let sym = lo.sym(None, "clo", body);
                 // Push the atom to the stack
-                let sym = lo.arena.sym(None, Symbol::Prog(body));
                 let atom = Atom::Sym(sym);
                 lo.instr(Push(atom), kont)
             }
@@ -394,7 +394,7 @@ impl Lower for sk::ValueId {
             }
             | Value::Triv(Triv) => {
                 // Push the trivial value onto the stack
-                let atom = Atom::Sym(lo.arena.sym(None, Symbol::Triv(Triv)));
+                let atom = Atom::Sym(lo.arena.sym(None, "", Triv));
                 lo.instr(Push(atom), kont)
             }
             | Value::VCons(Cons(a, b)) => {
@@ -414,7 +414,7 @@ impl Lower for sk::ValueId {
             }
             | Value::Lit(lit) => {
                 // Push the literal value onto the stack
-                let atom = Atom::Sym(lo.arena.sym(None, Symbol::Literal(lit)));
+                let atom = Atom::Sym(lo.arena.sym(None, "", lit));
                 lo.instr(Push(atom), kont)
             }
         }
@@ -440,7 +440,7 @@ impl Lower for sk::StackId {
                         binder.lower(lo, Box::new(move |lo| body.lower(lo, ())))
                     }),
                 );
-                let sym = lo.arena.sym(None, Symbol::Prog(code));
+                let sym = lo.arena.sym(None, "kont", code);
                 // Push the context pointer, and then the code
                 lo.instr(
                     Push(ContextMarker),
@@ -545,8 +545,7 @@ impl Lower for sk::CompuId {
                 let body_prog = body.lower(lo, ());
                 // Label the body code
                 let name = lo.scoped.defs[&param].plain();
-                let _sym = lo.arena.sym(None, Symbol::Prog(body_prog));
-                lo.arena.labels.insert(body_prog, Label::from(name));
+                let _sym = lo.arena.sym(None, name, body_prog);
                 // Jump to the body
                 lo.prog_anon(Jump(body_prog))
             }
@@ -581,7 +580,7 @@ impl Lower for sk::CompuId {
                                         // Lower the tail
                                         let tail_prog = tail.lower(lo, ());
                                         // Nominate the tail program
-                                        let _sym = lo.arena.sym(None, Symbol::Prog(tail_prog));
+                                        let _sym = lo.arena.sym(None, "arm", tail_prog);
                                         // Add to the jump table
                                         lowered_arms.push((tag, tail_prog));
                                     }
@@ -654,7 +653,7 @@ impl Lower for sk::CompuId {
                     let name = dtor.plain().to_string();
                     let tag = Tag { idx, name: Some(name) };
                     // Nominate the tail program
-                    let _sym = lo.arena.sym(None, Symbol::Prog(tail_prog));
+                    let _sym = lo.arena.sym(None, "coarm", tail_prog);
                     // Add to the jump table
                     lowered_arms.push((tag, tail_prog));
                 }

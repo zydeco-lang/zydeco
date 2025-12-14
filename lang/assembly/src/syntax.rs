@@ -133,8 +133,13 @@ pub enum Atom {
 /// - Literals
 /// 
 /// Symbols are guaranteed to be evaluated and generated at compile time.
+#[derive(Clone, Debug)]
+pub struct Symbol {
+    pub name: String,
+    pub inner: SymbolInner,
+}
 #[derive(From, Clone, Debug)]
-pub enum Symbol {
+pub enum SymbolInner {
     Triv(Triv),
     Prog(ProgId),
     Extern(Extern),

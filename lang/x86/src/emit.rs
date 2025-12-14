@@ -2,7 +2,7 @@ use super::syntax::*;
 use derive_more::{Deref, DerefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use zydeco_assembly::arena::{AssemblyArena, AssemblyArenaRefLike};
-use zydeco_assembly::syntax::{self as sa, Atom, Instruction, ProgId, Program, Symbol};
+use zydeco_assembly::syntax::{self as sa, Atom, Instruction, ProgId, Program, SymbolInner};
 use zydeco_stack::arena::StackArena;
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
@@ -65,8 +65,8 @@ impl<'e> Emitter<'e> {
 
         // Emit the named blocks
         for (prog_id, _) in &self.assembly.programs {
-            if let Some(label) = self.assembly.block_name(*prog_id) {
-                self.instrs.push(Instr::Label(label.plain().to_string()));
+            if let Some(label) = self.assembly.prog_label(prog_id) {
+                self.instrs.push(Instr::Label(label));
                 prog_id.emit(EnvMap::new(), &mut self);
             }
         }
@@ -85,8 +85,8 @@ impl<'e> Emitter<'e> {
                     name.clone().unwrap_or_else(|| format!("#{}", idx)),
                     prog_id.concise()
                 ))]);
-                let arm_label = self.assembly.block_name(*prog_id).expect("block name not found");
-                self.instrs.push(Instr::Dq(arm_label.plain().to_string()));
+                let arm_label = self.assembly.prog_label(prog_id).expect("block name not found");
+                self.instrs.push(Instr::Dq(arm_label));
             }
         }
 
@@ -135,10 +135,10 @@ impl<'a> Emit<'a> for ProgId {
                 next.emit(env, em);
             }
             | Program::Jump(sa::Jump(target)) => {
-                match em.assembly.block_name(*target) {
+                match em.assembly.prog_label(target) {
                     | Some(label) => {
                         // if the target is a named block, then jump to the label
-                        em.instrs.push(Instr::Jmp(JmpArgs::Label(label.plain().to_string())));
+                        em.instrs.push(Instr::Jmp(JmpArgs::Label(label)));
                     }
                     | None => {
                         // otherwise, directly emit the target program
@@ -159,10 +159,10 @@ impl<'a> Emit<'a> for ProgId {
                 em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rcx)));
                 // then compare
                 em.instrs.push(Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
-                match em.assembly.block_name(*target) {
+                match em.assembly.prog_label(target) {
                     | Some(label) => {
                         // then jump to target if equal
-                        em.instrs.push(Instr::JCC(ConditionCode::E, JmpArgs::Label(label.0)));
+                        em.instrs.push(Instr::JCC(ConditionCode::E, JmpArgs::Label(label)));
                     }
                     | None => {
                         let label = format!("eq_jump_skip_{}", target.concise_inner());
@@ -357,36 +357,33 @@ impl<'a> Emit<'a> for Atom {
             }
             | Atom::Sym(sym_id) => {
                 let symbol = &em.assembly.symbols[sym_id];
-                match symbol {
-                    | Symbol::Prog(prog_id) => {
+                match symbol.inner.clone() {
+                    | SymbolInner::Prog(prog_id) => {
                         em.instrs.push(Instr::Comment("push_sym_prog".to_string()));
                         // push the program id
-                        let label = em.assembly.block_name(*prog_id).expect("block name not found");
+                        let label = em.assembly.prog_label(&prog_id).expect("block name not found");
                         em.write([
                             Instr::Lea(
                                 Reg::Rax,
-                                LeaArgs::RelLabel(RelLabel {
-                                    label: label.plain().to_string(),
-                                    offset: None,
-                                }),
+                                LeaArgs::RelLabel(RelLabel { label, offset: None }),
                             ),
                             Instr::Push(Arg32::Reg(Reg::Rax)),
                         ]);
                     }
-                    | Symbol::Extern(_) => {
+                    | SymbolInner::Extern(_) => {
                         em.instrs.push(Instr::Comment("push_sym_extern".to_string()));
                         // TODO: Push extern symbol
                         todo!()
                     }
-                    | Symbol::Triv(_) => {
+                    | SymbolInner::Triv(_) => {
                         em.instrs.push(Instr::Comment("push_sym_triv".to_string()));
                         em.write([Instr::Push(Arg32::Signed(0))]);
                     }
-                    | Symbol::Literal(lit) => {
+                    | SymbolInner::Literal(lit) => {
                         em.instrs.push(Instr::Comment(format!("push_sym_lit {:?}", lit)));
                         match lit {
                             | Literal::Int(i) => {
-                                em.write([Instr::Push(Arg32::Signed(*i as i32))]);
+                                em.write([Instr::Push(Arg32::Signed(i as i32))]);
                             }
                             | _ => todo!(),
                         }
