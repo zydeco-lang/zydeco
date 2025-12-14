@@ -18,6 +18,11 @@ pub struct ClosureConverter<'a> {
     statics: &'a StaticsArena,
     fix_force_visited: HashSet<CompuId>,
 }
+impl AsMut<StackArena> for ClosureConverter<'_> {
+    fn as_mut(&mut self) -> &mut StackArena {
+        self.arena
+    }
+}
 
 impl<'a> ClosureConverter<'a> {
     pub fn new(
