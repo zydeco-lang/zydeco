@@ -8,6 +8,7 @@ pub mod arena;
 pub mod fmt;
 pub mod lower;
 pub mod clocon;
+pub mod free;
 
 use zydeco_statics::tyck::syntax as ss;
 
