@@ -61,7 +61,12 @@ impl<'a> Lowerer<'a> {
                             Box::new(move |lo: &mut Lowerer| {
                                 let name = lo.scoped.defs[&def_id].clone();
                                 let _sym = lo.sym(Some(def_id), name.plain(), Extern);
-                                // log::trace!("lowered extern: {}{} => {}", name.plain(), def_id.concise(), _sym.concise());
+                                // log::trace!(
+                                //     "lowered extern: {}{} => {}",
+                                //     name.plain(),
+                                //     def_id.concise(),
+                                //     _sym.concise()
+                                // );
                                 kont(lo)
                             })
                         }
@@ -357,6 +362,8 @@ impl Lower for sk::ValueId {
             | Value::Hole(Hole) => lo.prog_anon(Panic),
             | Value::Var(def_id) => {
                 // Retrieve the variable from the context
+                let _name = lo.scoped.defs[&def_id].clone();
+                // log::trace!("lowering var: {}{}", _name.plain(), def_id.concise());
                 let atom = match lo.arena.defs.forth(&def_id).clone() {
                     | DefId::Var(var_id) => Atom::Var(var_id),
                     | DefId::Sym(sym_id) => Atom::Sym(sym_id),
@@ -540,11 +547,18 @@ impl Lower for sk::CompuId {
                     capture.iter().count() == 0,
                     "ZASM requires empty capture. Please perform closure conversion first."
                 );
-                // Lower the body
-                let body_prog = body.lower(lo, ());
                 // Label the body code
                 let name = lo.scoped.defs[&param].plain();
-                let _sym = lo.arena.sym(None, name, body_prog);
+                let sym = lo.arena.sym(Some(param), name, Extern);
+                // Lower the body
+                let body_prog = body.lower(lo, ());
+                // Nominate the body program
+                *lo.arena.blocks.entry(body_prog).or_insert(0) += 2;
+                lo.arena.symbols.replace(
+                    sym,
+                    Symbol { name: name.to_string(), inner: SymbolInner::Prog(body_prog) },
+                );
+                lo.arena.labels.insert(body_prog, sym);
                 // Jump to the body
                 lo.prog_anon(Jump(body_prog))
             }
