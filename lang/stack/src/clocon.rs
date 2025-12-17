@@ -169,86 +169,47 @@ impl<'a> ClosureConverter<'a> {
             };
             subst_map.insert(old_def, new_value_id);
         }
-        {
-            let body_id = fix.body;
-            body_id.substitute_in_place(&mut *self.arena, &subst_map);
-        }
-        let transformed_body_inner =
-            self.convert_fix_force(fix.body, fix.param, &renamed_captures);
+        fix.body.substitute_in_place(&mut *self.arena, &subst_map);
+        let transformed_body_inner = self.convert_fix_force(fix.body, fix.param, &renamed_captures);
 
         // 3. Wrap body in a let arg to retrieve captures from stack
         // Create a nested value pattern to destructure all captures from a nested pair
         // Build nested Cons pattern: Cons(capture1, Cons(capture2, ... Cons(captureN, Triv)))
-        let mut capture_pattern = {
-            let this = &mut *self.arena;
-            Triv.build(this, None)
-        };
+        let mut capture_pattern = Triv.build(self, None);
         for &capture in free_vars.iter().rev() {
             let capture_vpat = {
-                let this = &mut *self.arena;
                 let vpat = *free_var_renames.get(&capture).unwrap();
-                vpat.build(this, None)
+                vpat.build(self, None)
             };
-            capture_pattern = {
-                let this = &mut *self.arena;
-                let vpat = Cons(capture_vpat, capture_pattern);
-                vpat.build(this, None)
-            };
+            capture_pattern = Cons(capture_vpat, capture_pattern).build(self, None);
         }
         // Use a single LetArg to extract all captures from the stack
-        let capture_stack = {
-            let this = &mut *self.arena;
-            Bullet.build(this, site)
-        };
-        let transformed_body = {
-            let this = &mut *self.arena;
-            let compu = Let {
-                binder: Cons(capture_pattern, Bullet),
-                bindee: capture_stack,
-                tail: transformed_body_inner,
-            };
-            compu.build(this, site)
-        };
+        let capture_stack = Bullet.build(self, site);
+        let transformed_body = Let {
+            binder: Cons(capture_pattern, Bullet),
+            bindee: capture_stack,
+            tail: transformed_body_inner,
+        }
+        .build(self, site);
 
         // 4. Push the capture list onto the stack first, then run the fix.
         // Build the capture pair value from free_vars
-        let mut capture_pair: ValueId = {
-            let this = &mut *self.arena;
-            Triv.build(this, site)
-        };
+        let mut capture_pair: ValueId = Triv.build(self, site);
         for &capture in free_vars.iter().rev() {
-            let capture_val = {
-                let this = &mut *self.arena;
-                capture.build(this, site)
-            };
-            capture_pair = {
-                let this = &mut *self.arena;
-                let value = Cons(capture_val, capture_pair);
-                value.build(this, site)
-            };
+            let capture_val = capture.build(self, site);
+            capture_pair = Cons(capture_val, capture_pair).build(self, site);
         }
         // Push the capture pair onto the stack
-        let bullet_stack = {
-            let this = &mut *self.arena;
-            Bullet.build(this, site)
-        };
-        let capture_stack = {
-            let this = &mut *self.arena;
-            let stack = Cons(capture_pair, bullet_stack);
-            stack.build(this, site)
-        };
+        let bullet_stack = Bullet.build(self, site);
+        let capture_stack = Cons(capture_pair, bullet_stack).build(self, site);
         // Create the Fix computation
-        let fix_compu = {
-            let this = &mut *self.arena;
-            let compu = SFix { capture: Context::new(), param: fix.param, body: transformed_body };
-            compu.build(this, site)
-        };
+        let fix_compu = SFix { capture: Context::new(), param: fix.param, body: transformed_body }
+            .build(self, site);
         // Wrap the Fix in a LetStack that pushes captures, then runs the Fix
         // Update the Fix in place with the wrapped computation
-        self.arena.compus.replace(
-            old_compu_id,
-            Computation::LetStack(Let { binder: Bullet, bindee: capture_stack, tail: fix_compu }),
-        );
+        self.arena
+            .compus
+            .replace(old_compu_id, Let { binder: Bullet, bindee: capture_stack, tail: fix_compu });
     }
 
     /// Replace all occurrences of param in body with application of param to captures.
@@ -279,11 +240,7 @@ impl<'a> ClosureConverter<'a> {
                     self.convert_fix_force_in_value(thunk, param, captures, &mut HashSet::new());
                 let new_stack =
                     self.convert_fix_force_in_stack(stack, param, captures, &mut HashSet::new());
-                {
-                    let this = &mut *self.arena;
-                    let compu = SForce { thunk: new_thunk, stack: new_stack };
-                    compu.build(this, site)
-                }
+                SForce { thunk: new_thunk, stack: new_stack }.build(self, site)
             }
             | Computation::Ret(SReturn { stack, value }) => {
                 let new_stack =
@@ -550,25 +507,11 @@ impl<'a> ClosureConverter<'a> {
             let new_def = self.scoped.defs.alloc(VarName(format!("{original_name}#cap")));
             free_var_renames.insert(capture, new_def);
 
-            let capture_val = {
-                let this = &mut *self.arena;
-                capture.build(this, site)
-            };
-            capture_pair = {
-                let this = &mut *self.arena;
-                let value = Cons(capture_val, capture_pair);
-                value.build(this, site)
-            };
+            let capture_val = capture.build(self, site);
+            capture_pair = Cons(capture_val, capture_pair).build(self, site);
 
-            let capture_vpat = {
-                let this = &mut *self.arena;
-                new_def.build(this, None)
-            };
-            capture_pattern = {
-                let this = &mut *self.arena;
-                let vpat = Cons(capture_vpat, capture_pattern);
-                vpat.build(this, None)
-            };
+            let capture_vpat = new_def.build(self, None);
+            capture_pattern = Cons(capture_vpat, capture_pattern).build(self, None);
         }
 
         // Substitute free variables in the closure body to refer to the freshly
@@ -576,45 +519,29 @@ impl<'a> ClosureConverter<'a> {
         // Convert HashMap<DefId, DefId> to HashMap<DefId, ValueId> for substitution
         let mut subst_map = HashMap::new();
         for (&old_def, &new_def) in free_var_renames.iter() {
-            let new_value_id = {
-                let this = &mut *self.arena;
-                new_def.build(this, None)
-            };
+            let new_value_id = new_def.build(self, None);
             subst_map.insert(old_def, new_value_id);
         }
         {
-            let body_id = clo.body;
-            body_id.substitute_in_place(&mut *self.arena, &subst_map);
+            clo.body.substitute_in_place(&mut *self.arena, &subst_map);
         }
 
         // Use a single LetArg to extract all captures from the stack
-        let capture_stack = {
-            let this = &mut *self.arena;
-            Bullet.build(this, site)
-        };
-        let transformed_body = {
-            let this = &mut *self.arena;
-            let compu = Let {
-                binder: Cons(capture_pattern, Bullet),
-                bindee: capture_stack,
-                tail: clo.body,
-            };
-            compu.build(this, site)
-        };
+        let capture_stack = Bullet.build(self, site);
+        let transformed_body =
+            Let { binder: Cons(capture_pattern, Bullet), bindee: capture_stack, tail: clo.body }
+                .build(self, site);
 
         // The body is already a computation that can be wrapped in a closure
         // We'll store it as a closure that takes the captures as argument
         // The pair will be: (capture_values, body_closure)
         // where body_closure is a closure whose body is the original body
-        let body_closure = {
-            let this = &mut *self.arena;
-            let value = Clo {
-                capture: Context(vec![]), // Body closure doesn't need additional captures
-                stack: Bullet,
-                body: transformed_body,
-            };
-            value.build(this, site)
-        };
+        let body_closure = Clo {
+            capture: Context(vec![]), // Body closure doesn't need additional captures
+            stack: Bullet,
+            body: transformed_body,
+        }
+        .build(self, site);
 
         // Update the value in place with the pair: (captures, body_closure)
         self.arena.values.replace(old_value_id, Cons(capture_pair, body_closure));
@@ -636,53 +563,26 @@ impl<'a> ClosureConverter<'a> {
         let body_closure_def = self.scoped.defs.alloc(VarName("__code__".into()));
 
         // Create Var patterns to bind the destructured values
-        let capture_pair_vpat = {
-            let this = &mut *self.arena;
-            capture_pair_def.build(this, None)
-        };
-        let body_closure_vpat = {
-            let this = &mut *self.arena;
-            body_closure_def.build(this, None)
-        };
-        let pair_pattern = {
-            let this = &mut *self.arena;
-            let vpat = Cons(capture_pair_vpat, body_closure_vpat);
-            vpat.build(this, None)
-        };
+        let capture_pair_vpat = capture_pair_def.build(self, None);
+        let body_closure_vpat = body_closure_def.build(self, None);
+        let pair_pattern = Cons(capture_pair_vpat, body_closure_vpat).build(self, None);
 
         // After destructuring with LetValue, we need to:
         // 1. Push capture_pair onto the stack
         // 2. Force body_closure
         // Reference the pattern-bound values using Value::Var
-        let capture_pair_val: ValueId = {
-            let this = &mut *self.arena;
-            capture_pair_def.build(this, site)
-        };
-        let body_closure_val = {
-            let this = &mut *self.arena;
-            body_closure_def.build(this, site)
-        };
+        let capture_pair_val: ValueId = capture_pair_def.build(self, site);
+        let body_closure_val = body_closure_def.build(self, site);
 
-        let capture_pair_stack = {
-            let this = &mut *self.arena;
-            let stack = Cons(capture_pair_val, force.stack);
-            stack.build(this, site)
-        };
-        let force_body = {
-            let this = &mut *self.arena;
-            let compu = SForce { thunk: body_closure_val, stack: capture_pair_stack };
-            compu.build(this, site)
-        };
+        let capture_pair_stack = Cons(capture_pair_val, force.stack).build(self, site);
+        let force_body =
+            SForce { thunk: body_closure_val, stack: capture_pair_stack }.build(self, site);
 
         // LetValue to destructure: let Cons(capture_pair, body_closure) = thunk in ...
         // This will destructure the pair at runtime.
-        let transformed_force_compu = Computation::LetValue(Let {
-            binder: pair_pattern,
-            bindee: force.thunk,
-            tail: force_body,
-        });
-
         // Replace the original Force with the transformed computation
-        self.arena.compus.replace(compu_id, transformed_force_compu);
+        self.arena
+            .compus
+            .replace(compu_id, Let { binder: pair_pattern, bindee: force.thunk, tail: force_body });
     }
 }
