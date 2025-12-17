@@ -21,6 +21,7 @@ bins = [
     "sum.zy",
     "factorial.zy",
     "tuple.zy",
+    "echo.zy",
 ]
 
 std = "nostd"

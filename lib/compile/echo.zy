@@ -1,0 +1,10 @@
+pub extern def read_line : Thk (Thk (String -> OS) -> OS) end
+pub extern def write_line : Thunk(String -> Thk OS -> OS) end
+
+main
+  fix (loop : Thk OS) ->
+  ! read_line {
+    fn (line: String) ->
+    ! write_line line loop
+  }
+end
