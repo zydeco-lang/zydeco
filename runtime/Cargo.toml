@@ -1,0 +1,11 @@
+[package]
+name = "zydeco-runtime"
+version = "0.0.0"
+edition = "2024"
+build = "build.rs"
+
+[[bin]]
+name = "zyprog"
+path = "stub.rs"
+
+[dependencies]

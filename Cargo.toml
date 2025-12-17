@@ -13,7 +13,8 @@ members = [
     "lang/driver",
     "lang/tests",
     "cli",
-    "web",
+    # "web",
+    "runtime",
     "editor/zls",
     "editor/cajun",
 ]
