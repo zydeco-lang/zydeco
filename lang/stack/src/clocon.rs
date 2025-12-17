@@ -4,7 +4,7 @@
 
 use super::arena::*;
 use super::syntax::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_statics::tyck::syntax as ss;
 use zydeco_surface::scoped::arena::ScopedArena;
@@ -64,6 +64,148 @@ impl<'a> ClosureConverter<'a> {
             .collect();
         for (compu_id, force) in forces {
             self.convert_clo_force(compu_id, &force);
+        }
+    }
+
+    /// Substitute free variable references in a computation according to `subst`.
+    fn substitute_free_vars_compu(
+        &mut self, compu_id: CompuId, subst: &HashMap<DefId, DefId>,
+        visited: &mut HashSet<CompuId>,
+    ) -> CompuId {
+        if !visited.insert(compu_id) {
+            return compu_id;
+        }
+
+        let site = self.get_compu_site(compu_id);
+        let compu = self.arena.compus[&compu_id].clone();
+        match compu {
+            | Computation::Hole(h) => self.arena.compu(site, h),
+            | Computation::Force(SForce { thunk, stack }) => {
+                let new_thunk =
+                    self.substitute_free_vars_in_value(thunk, subst, &mut HashSet::new());
+                let new_stack =
+                    self.substitute_free_vars_in_stack(stack, subst, &mut HashSet::new());
+                self.arena.compu(site, SForce { thunk: new_thunk, stack: new_stack })
+            }
+            | Computation::Ret(SReturn { stack, value }) => {
+                let new_stack =
+                    self.substitute_free_vars_in_stack(stack, subst, &mut HashSet::new());
+                let new_value =
+                    self.substitute_free_vars_in_value(value, subst, &mut HashSet::new());
+                self.arena.compu(site, SReturn { stack: new_stack, value: new_value })
+            }
+            | Computation::Fix(fix) => {
+                let new_body =
+                    self.substitute_free_vars_compu(fix.body, subst, visited);
+                self.arena.compu(
+                    site,
+                    SFix { capture: fix.capture, param: fix.param, body: new_body },
+                )
+            }
+            | Computation::Case(Match { scrut, arms }) => {
+                let new_scrut =
+                    self.substitute_free_vars_in_value(scrut, subst, &mut HashSet::new());
+                let new_arms = arms
+                    .into_iter()
+                    .map(|arm| Matcher {
+                        binder: arm.binder,
+                        tail: self.substitute_free_vars_compu(arm.tail, subst, visited),
+                    })
+                    .collect();
+                self.arena.compu(site, Match { scrut: new_scrut, arms: new_arms })
+            }
+            | Computation::LetValue(Let { binder, bindee, tail }) => {
+                let new_bindee =
+                    self.substitute_free_vars_in_value(bindee, subst, &mut HashSet::new());
+                let new_tail = self.substitute_free_vars_compu(tail, subst, visited);
+                self.arena.compu(site, Let { binder, bindee: new_bindee, tail: new_tail })
+            }
+            | Computation::LetStack(Let { binder, bindee, tail }) => {
+                let new_bindee =
+                    self.substitute_free_vars_in_stack(bindee, subst, &mut HashSet::new());
+                let new_tail = self.substitute_free_vars_compu(tail, subst, visited);
+                self.arena.compu(site, Let { binder, bindee: new_bindee, tail: new_tail })
+            }
+            | Computation::LetArg(Let { binder, bindee, tail }) => {
+                let new_bindee =
+                    self.substitute_free_vars_in_stack(bindee, subst, &mut HashSet::new());
+                let new_tail = self.substitute_free_vars_compu(tail, subst, visited);
+                self.arena.compu(site, Let { binder, bindee: new_bindee, tail: new_tail })
+            }
+            | Computation::CoCase(CoMatch { arms }) => {
+                let new_arms = arms
+                    .into_iter()
+                    .map(|arm| CoMatcher {
+                        dtor: arm.dtor,
+                        tail: self.substitute_free_vars_compu(arm.tail, subst, visited),
+                    })
+                    .collect();
+                self.arena.compu(site, CoMatch { arms: new_arms })
+            }
+        }
+    }
+
+    fn substitute_free_vars_in_value(
+        &mut self, value_id: ValueId, subst: &HashMap<DefId, DefId>,
+        visited: &mut HashSet<ValueId>,
+    ) -> ValueId {
+        if !visited.insert(value_id) {
+            return value_id;
+        }
+
+        let site = self.get_value_site(value_id);
+        let value = self.arena.values[&value_id].clone();
+        match value {
+            | Value::Var(def) => {
+                let def = subst.get(&def).copied().unwrap_or(def);
+                self.arena.value(site, def)
+            }
+            | Value::Clo(Clo { capture, stack, body }) => {
+                let new_body =
+                    self.substitute_free_vars_compu(body, subst, &mut HashSet::new());
+                self.arena.value(site, Clo { capture, stack, body: new_body })
+            }
+            | Value::Ctor(Ctor(ctor, body)) => {
+                let new_body = self.substitute_free_vars_in_value(body, subst, visited);
+                self.arena.value(site, Ctor(ctor, new_body))
+            }
+            | Value::VCons(Cons(a, b)) => {
+                let new_a = self.substitute_free_vars_in_value(a, subst, visited);
+                let new_b = self.substitute_free_vars_in_value(b, subst, visited);
+                self.arena.value(site, Cons(new_a, new_b))
+            }
+            | other => self.arena.value(site, other),
+        }
+    }
+
+    fn substitute_free_vars_in_stack(
+        &mut self, stack_id: StackId, subst: &HashMap<DefId, DefId>,
+        visited: &mut HashSet<StackId>,
+    ) -> StackId {
+        if !visited.insert(stack_id) {
+            return stack_id;
+        }
+
+        let site = self.get_stack_site(stack_id);
+        let stack = self.arena.stacks[&stack_id].clone();
+        match stack {
+            | Stack::Kont(Kont { binder, body }) => {
+                let new_body =
+                    self.substitute_free_vars_compu(body, subst, &mut HashSet::new());
+                self.arena.stack(site, Kont { binder, body: new_body })
+            }
+            | Stack::Arg(Cons(val, stack)) => {
+                let mut val_visited = HashSet::new();
+                let new_val =
+                    self.substitute_free_vars_in_value(val, subst, &mut val_visited);
+                let new_stack = self.substitute_free_vars_in_stack(stack, subst, visited);
+                self.arena.stack(site, Cons(new_val, new_stack))
+            }
+            | Stack::Tag(Cons(dtor, stack)) => {
+                let new_stack = self.substitute_free_vars_in_stack(stack, subst, visited);
+                self.arena.stack(site, Cons(dtor, new_stack))
+            }
+            | Stack::Var(bullet) => self.arena.stack(site, bullet),
         }
     }
 
@@ -147,22 +289,32 @@ impl<'a> ClosureConverter<'a> {
 
         // 1. Compute capture list for body (excluding param)
         let free_vars: Vec<DefId> = self.free_vars_compu(old_compu_id).into_iter().collect();
+        let mut free_var_renames = HashMap::new();
+        let mut renamed_captures = Vec::with_capacity(free_vars.len());
+        for &capture in free_vars.iter() {
+            let VarName(original_name) = self.scoped.defs[&capture].clone();
+            let new_def = self.scoped.defs.alloc(VarName(format!("{original_name}#cap")));
+            free_var_renames.insert(capture, new_def);
+            renamed_captures.push(new_def);
+        }
 
-        // 2. Transform body: replace all occurrences of param with param applied to captures
-        // In stack style: when param is used, push captures on stack, then use param
-        let transformed_body_inner = self.convert_fix_force(fix.body, fix.param, &free_vars);
+        // 2. Substitute free variables in the body to use freshly bound capture vars,
+        //    then replace all occurrences of param with param applied to captures.
+        //    In stack style: when param is used, push captures on stack, then use param.
+        let mut compu_visited = HashSet::new();
+        let substituted_body =
+            self.substitute_free_vars_compu(fix.body, &free_var_renames, &mut compu_visited);
+        let transformed_body_inner =
+            self.convert_fix_force(substituted_body, fix.param, &renamed_captures);
 
         // 3. Wrap body in a let arg to retrieve captures from stack
-        let capture_pattern = {
-            // Create a nested value pattern to destructure all captures from a nested pair
-            // Build nested Cons pattern: Cons(capture1, Cons(capture2, ... Cons(captureN, Triv)))
-            let mut pattern_vpat = self.arena.vpat(None, Triv);
-            for &capture in free_vars.iter().rev() {
-                let capture_vpat = self.arena.vpat(None, capture);
-                pattern_vpat = self.arena.vpat(None, Cons(capture_vpat, pattern_vpat));
-            }
-            pattern_vpat
-        };
+        // Create a nested value pattern to destructure all captures from a nested pair
+        // Build nested Cons pattern: Cons(capture1, Cons(capture2, ... Cons(captureN, Triv)))
+        let mut capture_pattern = self.arena.vpat(None, Triv);
+        for &capture in free_vars.iter().rev() {
+            let capture_vpat = self.arena.vpat(None, *free_var_renames.get(&capture).unwrap());
+            capture_pattern = self.arena.vpat(None, Cons(capture_vpat, capture_pattern));
+        }
         // Use a single LetArg to extract all captures from the stack
         let capture_stack = self.arena.stack(site, Bullet);
         let transformed_body = self.arena.compu(
@@ -390,31 +542,39 @@ impl<'a> ClosureConverter<'a> {
 
         // 1. Capture the environment (free variables in body)
         let free_vars: Vec<DefId> = self.free_vars_compu(clo.body).into_iter().collect();
+        let mut free_var_renames = HashMap::new();
 
         // 2. Make the closure a pair of (capture list, body function)
         // Build the capture pair value from free_vars
         let mut capture_pair = self.arena.value(site, Triv);
+        let mut capture_pattern = self.arena.vpat(None, Triv);
         for &capture in free_vars.iter().rev() {
+            let VarName(original_name) = self.scoped.defs[&capture].clone();
+            let new_def = self.scoped.defs.alloc(VarName(format!("{original_name}#cap")));
+            free_var_renames.insert(capture, new_def);
+
             let capture_val = self.arena.value(site, capture);
             capture_pair = self.arena.value(site, Cons(capture_val, capture_pair));
+
+            let capture_vpat = self.arena.vpat(None, new_def);
+            capture_pattern = self.arena.vpat(None, Cons(capture_vpat, capture_pattern));
         }
 
-        // Wrap body in a let arg to retrieve captures from stack
-        let capture_pattern = {
-            // Create a nested value pattern to destructure all captures from a nested pair
-            // Build nested Cons pattern: Cons(capture1, Cons(capture2, ... Cons(captureN, Triv)))
-            let mut pattern_vpat = self.arena.vpat(None, Triv);
-            for &capture in free_vars.iter().rev() {
-                let capture_vpat = self.arena.vpat(None, capture);
-                pattern_vpat = self.arena.vpat(None, Cons(capture_vpat, pattern_vpat));
-            }
-            pattern_vpat
-        };
+        // Substitute free variables in the closure body to refer to the freshly
+        // bound capture variables.
+        let mut compu_visited = HashSet::new();
+        let substituted_body =
+            self.substitute_free_vars_compu(clo.body, &free_var_renames, &mut compu_visited);
+
         // Use a single LetArg to extract all captures from the stack
         let capture_stack = self.arena.stack(site, Bullet);
         let transformed_body = self.arena.compu(
             site,
-            Let { binder: Cons(capture_pattern, Bullet), bindee: capture_stack, tail: clo.body },
+            Let {
+                binder: Cons(capture_pattern, Bullet),
+                bindee: capture_stack,
+                tail: substituted_body,
+            },
         );
 
         // The body is already a computation that can be wrapped in a closure
