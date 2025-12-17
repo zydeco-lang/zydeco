@@ -201,7 +201,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for StackArena {
         for def_id in self.global_seq.iter() {
             let global = &self.globals[def_id];
             let VarName(varname) = &f.scoped.defs[def_id];
-            s += &format!("[def:{}]\n", varname);
+            s += &format!("[def:{}{}]\n", varname, def_id.concise());
             match global {
                 | Global::Extern(_) => {
                     s += "\t<extern>\n";
@@ -555,7 +555,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
         for def_id in self.global_seq.iter() {
             let global = &self.globals[def_id];
             let VarName(varname) = &f.scoped.defs[def_id];
-            doc = doc.append(RcDoc::text(format!("[def:{}]", varname)));
+            doc = doc.append(RcDoc::text(format!("[def:{}{}]", varname, def_id.concise())));
             match global {
                 | Global::Extern(_) => {
                     doc = doc.append(

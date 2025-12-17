@@ -2372,6 +2372,7 @@ version = "0.2.2"
 dependencies = [
  "derive_more",
  "im",
+ "log",
  "pretty",
  "rustc-hash",
  "zydeco-stack",

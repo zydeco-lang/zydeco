@@ -42,12 +42,9 @@ impl<'e> Emitter<'e> {
             visited: HashSet::new(),
         }
     }
-    pub fn write(&mut self, instrs: impl IntoIterator<Item = Instr>) {
-        self.instrs.extend(instrs);
-    }
 
     pub fn run(mut self) -> Vec<Instr> {
-        self.write([
+        self.instrs.extend([
             // section .text
             Instr::Section(".text".to_string()),
             // global entry
@@ -57,6 +54,16 @@ impl<'e> Emitter<'e> {
             // zydeco_alloc
             Instr::Extern("zydeco_alloc".to_string()),
         ]);
+        // Emit the externs
+        for (_, symbol) in &self.assembly.symbols {
+            match symbol.inner.clone() {
+                | SymbolInner::Extern(sa::Extern) => {
+                    self.instrs.push(Instr::Extern(symbol.name.clone()));
+                }
+                | SymbolInner::Triv(_) | SymbolInner::Prog(_) | SymbolInner::Literal(_) => {}
+            }
+        }
+
         self.instrs.push(Instr::Comment("entry".to_string()));
         // Assert that there's only one entry point, and emit it
         assert_eq!(self.assembly.entry.len(), 1, "expected exactly one entry point");
@@ -71,7 +78,7 @@ impl<'e> Emitter<'e> {
             }
         }
 
-        self.write([Instr::Section(".rodata".to_string())]);
+        self.instrs.push(Instr::Section(".rodata".to_string()));
         // Emit the jump tables
         for table in &self.tables {
             let label = table.rodata_label();
@@ -228,7 +235,7 @@ impl<'a> Emit<'a> for Instruction {
         match self {
             | Instruction::PackProduct(sa::Pack(sa::ProductMarker)) => {
                 // Pack two values into a pair
-                em.write([
+                em.instrs.extend([
                     Instr::Comment("pack_product".to_string()),
                     Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
                     Instr::Call("zydeco_alloc".to_string()),
@@ -251,7 +258,7 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::UnpackProduct(sa::Unpack(sa::ProductMarker)) => {
                 // Unpack a pair into two values
-                em.write([
+                em.instrs.extend([
                     Instr::Comment("unpack_product".to_string()),
                     Instr::Pop(Loc::Reg(Reg::Rax)),
                     // load [rax + 8] and push
@@ -270,14 +277,14 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::PushContext(sa::Push(sa::ContextMarker)) => {
                 // Push context pointer onto stack
-                em.write([
+                em.instrs.extend([
                     Instr::Comment("push_context".to_string()),
                     Instr::Push(Arg32::Reg(Reg::R10)),
                 ]);
             }
             | Instruction::PopContext(sa::Pop(sa::ContextMarker)) => {
                 // Pop context pointer from stack
-                em.write([
+                em.instrs.extend([
                     Instr::Comment("pop_context".to_string()),
                     Instr::Pop(Loc::Reg(Reg::R10)),
                 ]);
@@ -291,7 +298,7 @@ impl<'a> Emit<'a> for Instruction {
                 let var_id = pop.0;
                 let var_name = &em.assembly.variables[&var_id];
                 let idx = env.alloc(var_id);
-                em.write([
+                em.instrs.extend([
                     Instr::Comment(format!("pop_arg {}", var_name.plain())),
                     // pop from stack
                     Instr::Pop(Loc::Reg(Reg::Rax)),
@@ -304,7 +311,7 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::PushTag(sa::Push(tag)) => {
                 // Push tag onto stack
-                em.write([
+                em.instrs.extend([
                     Instr::Comment(format!("push_tag {}", tag.idx)),
                     // push tag to stack
                     Instr::Push(Arg32::Signed(tag.idx as i32)),
@@ -312,7 +319,7 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::Swap(sa::Swap) => {
                 // Swap the top two values on the stack
-                em.write([
+                em.instrs.extend([
                     Instr::Pop(Loc::Reg(Reg::Rax)),
                     Instr::Pop(Loc::Reg(Reg::Rcx)),
                     Instr::Push(Arg32::Reg(Reg::Rax)),
@@ -336,9 +343,14 @@ impl<'a> Emit<'a> for Atom {
             | Atom::Var(var_id) => {
                 let var_name = &em.assembly.variables[var_id];
                 em.instrs.push(Instr::Comment(format!("push_var {}", var_name.plain())));
+                // println!("instrs:");
+                // for instr in em.instrs.iter() {
+                //     println!("\t{}", instr);
+                // }
+                // println!("var: {}{}", var_name.plain(), var_id.concise());
                 let idx = env.get(var_id).expect("variable not found");
                 // load [r10 + 8 * idx] and push
-                em.write([
+                em.instrs.extend([
                     Instr::Mov(MovArgs::ToReg(
                         Reg::Rax,
                         Arg64::Mem(MemRef { reg: Reg::R10, offset: 8 * idx }),
@@ -353,7 +365,7 @@ impl<'a> Emit<'a> for Atom {
                         em.instrs.push(Instr::Comment("push_sym_prog".to_string()));
                         // push the program id
                         let label = em.assembly.prog_label(&prog_id).expect("block name not found");
-                        em.write([
+                        em.instrs.extend([
                             Instr::Lea(
                                 Reg::Rax,
                                 LeaArgs::RelLabel(RelLabel { label, offset: None }),
@@ -361,20 +373,16 @@ impl<'a> Emit<'a> for Atom {
                             Instr::Push(Arg32::Reg(Reg::Rax)),
                         ]);
                     }
-                    | SymbolInner::Extern(_) => {
-                        em.instrs.push(Instr::Comment("push_sym_extern".to_string()));
-                        // TODO: Push extern symbol
-                        todo!()
-                    }
+                    | SymbolInner::Extern(_) => {}
                     | SymbolInner::Triv(_) => {
                         em.instrs.push(Instr::Comment("push_sym_triv".to_string()));
-                        em.write([Instr::Push(Arg32::Signed(0))]);
+                        em.instrs.extend([Instr::Push(Arg32::Signed(0))]);
                     }
                     | SymbolInner::Literal(lit) => {
                         em.instrs.push(Instr::Comment(format!("push_sym_lit {:?}", lit)));
                         match lit {
                             | Literal::Int(i) => {
-                                em.write([Instr::Push(Arg32::Signed(i as i32))]);
+                                em.instrs.extend([Instr::Push(Arg32::Signed(i as i32))]);
                             }
                             | _ => todo!(),
                         }

@@ -60,7 +60,8 @@ impl<'a> Lowerer<'a> {
                             // Extern: wrap continuation to create symbol, then continue
                             Box::new(move |lo: &mut Lowerer| {
                                 let name = lo.scoped.defs[&def_id].clone();
-                                lo.sym(Some(def_id), name.plain(), Extern);
+                                let _sym = lo.sym(Some(def_id), name.plain(), Extern);
+                                // log::trace!("lowered extern: {}{} => {}", name.plain(), def_id.concise(), _sym.concise());
                                 kont(lo)
                             })
                         }
