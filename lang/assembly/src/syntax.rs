@@ -31,8 +31,10 @@ pub enum Program {
     /// Pop two values off the stack, compare them, and
     /// jump to the target program if they are equal.
     EqJump(EqJump),
-    /// Pop the top value off the stack, and dynamically jump to it.
+    /// Pop the top value (an address) off the stack, and dynamically jump to it.
     PopJump(PopJump),
+    /// Pop-jump the second value off the stack, keeping the first value at the top.
+    LeapJump(LeapJump),
     /// A jump table.
     PopBranch(PopBranch),
     /// Panic.
@@ -58,13 +60,8 @@ pub enum Instruction {
     /// Push a tag onto the stack.
     /// Destructed by [`PopBranch`].
     PushTag(Push<Tag>),
-    /// Rotate the top values on the stack, moving the most top values to the bottom of the range.
-    /// The offset is always one.
-    ///
-    /// e.g. top [a, b, c, d] bottom with `rotate 3` becomes top [b, c, a, d] bottom.
-    ///
-    /// In our implementation, the only range used is three, which appears during return to a continuation.
-    Rotate(Rotate),
+    /// Swap the top two values on the stack.
+    Swap(Swap),
     /// Clear specified variables from the current context.
     Clear(Context),
 }
@@ -77,11 +74,8 @@ pub struct Unpack<T>(pub T);
 pub struct Push<T>(pub T);
 #[derive(Clone, Debug)]
 pub struct Pop<T>(pub T);
-/// The number of values to rotate, i.e. the range of rotation.
-///
-/// The offset is always one.
 #[derive(Clone, Debug)]
-pub struct Rotate(pub usize);
+pub struct Swap;
 
 #[derive(Clone, Debug)]
 pub struct ProductMarker;
@@ -94,6 +88,8 @@ pub struct Jump(pub ProgId);
 pub struct EqJump(pub ProgId);
 #[derive(Clone, Debug)]
 pub struct PopJump;
+#[derive(Clone, Debug)]
+pub struct LeapJump;
 #[derive(Clone, Debug)]
 pub struct PopBranch(pub Vec<(Tag, ProgId)>);
 #[derive(Clone, Debug)]
@@ -125,13 +121,13 @@ pub enum Atom {
 }
 
 /// Symbols represent statically determined values.
-/// 
+///
 /// In our implementation, we track the following statically known symbols:
 /// - Triv, the unit value
 /// - Program, which are labelled blocks
 /// - External functions
 /// - Literals
-/// 
+///
 /// Symbols are guaranteed to be evaluated and generated at compile time.
 #[derive(Clone, Debug)]
 pub struct Symbol {

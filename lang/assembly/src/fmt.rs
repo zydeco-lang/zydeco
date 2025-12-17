@@ -71,6 +71,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Program {
             | Program::Jump(jump) => jump.pretty(f),
             | Program::EqJump(eq_jump) => eq_jump.pretty(f),
             | Program::PopJump(pop_jump) => pop_jump.pretty(f),
+            | Program::LeapJump(leap_jump) => leap_jump.pretty(f),
             | Program::PopBranch(branch) => branch.pretty(f),
             | Program::Panic(panic) => panic.pretty(f),
         }
@@ -96,6 +97,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for EqJump {
 impl<'a> Pretty<'a, Formatter<'a>> for PopJump {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text("popjmp")
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for LeapJump {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("leapjmp")
     }
 }
 
@@ -152,7 +159,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
             | Instruction::PushArg(push) => push.pretty(f),
             | Instruction::PopArg(pop) => pop.pretty(f),
             | Instruction::PushTag(push) => push.pretty(f),
-            | Instruction::Rotate(rotate) => rotate.pretty(f),
+            | Instruction::Swap(swap) => swap.pretty(f),
             | Instruction::Clear(context) => context.pretty(f),
         }
     }
@@ -194,9 +201,9 @@ where
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Rotate {
+impl<'a> Pretty<'a, Formatter<'a>> for Swap {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::concat([RcDoc::text("rotate"), RcDoc::space(), RcDoc::text(self.0.to_string())])
+        RcDoc::text("swap")
     }
 }
 

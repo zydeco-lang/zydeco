@@ -150,6 +150,7 @@ where
             | Program::Jump(Jump(prog_id)) => nominate(prog_id),
             | Program::EqJump(EqJump(prog_id)) => nominate(prog_id),
             | Program::PopJump(PopJump) => {}
+            | Program::LeapJump(LeapJump) => {}
             | Program::PopBranch(PopBranch(brs)) => {
                 for (_, prog_id) in brs {
                     nominate(prog_id);

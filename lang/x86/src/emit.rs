@@ -179,6 +179,16 @@ impl<'a> Emit<'a> for ProgId {
                 em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rax)));
                 em.instrs.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
             }
+            | Program::LeapJump(sa::LeapJump) => {
+                // pop value
+                em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rcx)));
+                // pop address
+                em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rax)));
+                // push the value back
+                em.instrs.push(Instr::Push(Arg32::Reg(Reg::Rcx)));
+                // jump to the address
+                em.instrs.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
+            }
             | Program::PopBranch(sa::PopBranch(arms)) => {
                 // pop tag and jump to the corresponding program
                 em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rax)));
@@ -300,33 +310,14 @@ impl<'a> Emit<'a> for Instruction {
                     Instr::Push(Arg32::Signed(tag.idx as i32)),
                 ]);
             }
-            | Instruction::Rotate(sa::Rotate(rotate)) => {
-                // Rotate stack values
+            | Instruction::Swap(sa::Swap) => {
+                // Swap the top two values on the stack
                 em.write([
-                    // save the top of the stack [rsp]
-                    Instr::Mov(MovArgs::ToReg(
-                        Reg::Rax,
-                        Arg64::Mem(MemRef { reg: Reg::Rsp, offset: 0 }),
-                    )),
+                    Instr::Pop(Loc::Reg(Reg::Rax)),
+                    Instr::Pop(Loc::Reg(Reg::Rcx)),
+                    Instr::Push(Arg32::Reg(Reg::Rax)),
+                    Instr::Push(Arg32::Reg(Reg::Rcx)),
                 ]);
-                for i in 0..*rotate as i32 {
-                    // move [rsp + 8 * (i + 1)] to [rsp + 8 * i]
-                    em.write([
-                        Instr::Mov(MovArgs::ToReg(
-                            Reg::Rcx,
-                            Arg64::Mem(MemRef { reg: Reg::Rsp, offset: 8 * (i + 1) }),
-                        )),
-                        Instr::Mov(MovArgs::ToMem(
-                            MemRef { reg: Reg::Rsp, offset: 8 * i },
-                            Reg32::Reg(Reg::Rcx),
-                        )),
-                    ]);
-                }
-                // move the saved top of the stack to the bottom of the stack
-                em.write([Instr::Mov(MovArgs::ToMem(
-                    MemRef { reg: Reg::Rsp, offset: 8 * *rotate as i32 },
-                    Reg32::Reg(Reg::Rax),
-                ))]);
             }
             | Instruction::Clear(_) => {
                 // Clear variables from context

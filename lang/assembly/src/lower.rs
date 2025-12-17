@@ -432,12 +432,17 @@ impl Lower for sk::StackId {
         match stack {
             | Stack::Kont(sk::Kont { binder, body }) => {
                 // Lower the continuation code into a symbol
-                // which is `pop ctx; [[binder]]; [[body]]`
-                // The stack shape: [context, return value]
+                // which is `swap; pop ctx; [[binder]]; [[body]]`
+                // The stack shape: [return value, context]
                 let code = lo.instr(
-                    Pop(ContextMarker),
+                    Swap,
                     Box::new(move |lo: &mut Lowerer| {
-                        binder.lower(lo, Box::new(move |lo| body.lower(lo, ())))
+                        lo.instr(
+                            Pop(ContextMarker),
+                            Box::new(move |lo: &mut Lowerer| {
+                                binder.lower(lo, Box::new(move |lo| body.lower(lo, ())))
+                            }),
+                        )
                     }),
                 );
                 let sym = lo.arena.sym(None, "kont", code);
@@ -522,15 +527,8 @@ impl Lower for sk::CompuId {
                             lo,
                             Box::new(move |lo| {
                                 // The stack shape: [return value, return address, context]
-                                // rotate of range 3 to move the return value to the bottom
-                                lo.instr(
-                                    Rotate(3),
-                                    Box::new(move |lo: &mut Lowerer| {
-                                        // The stack shape: [return address, context, return value]
-                                        // Jump to the continuation
-                                        lo.prog_anon(PopJump)
-                                    }),
-                                )
+                                // Leap jump to the continuation
+                                lo.prog_anon(LeapJump)
                             }),
                         )
                     }),
