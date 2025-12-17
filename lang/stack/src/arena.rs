@@ -1,4 +1,4 @@
-//! Arenas and [Construct] traits for the stack-passing style ZIR.
+//! Arenas and [`Construct`] trait for the stack-passing style ZIR.
 
 use super::{syntax::*, *};
 
