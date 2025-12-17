@@ -1,4 +1,4 @@
-//! Arenas and [Alloc] traits for the stack-passing style ZIR.
+//! Arenas and [Construct] traits for the stack-passing style ZIR.
 
 use super::{syntax::*, *};
 
@@ -24,9 +24,9 @@ pub struct StackArena {
     /// typically the main function, which normally should only be unique
     pub entry: ArenaAssoc<CompuId, ()>,
 
-    /// untyped to typed bijective maps for patterns
+    /// Zydeco to ZIR bijective maps for patterns
     pub pats: ArenaBijective<ss::PatId, VPatId>,
-    /// untyped to typed bijective maps for terms
+    /// Zydeco to ZIR bijective maps for terms
     pub terms: ArenaBijective<ss::TermId, TermId>,
 }
 
@@ -51,19 +51,20 @@ impl AsMut<StackArena> for StackArena {
     }
 }
 
-pub trait Alloc<Arena, T>: Sized {
+pub trait Construct<S, T, Arena>: Sized + Into<S> {
     type Site;
-    fn alloc(arena: &mut Arena, site: Option<Self::Site>, val: impl Into<Self>) -> T;
+    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> T;
 }
 
-impl<Arena> Alloc<Arena, VPatId> for ValuePattern
+impl<S, Arena> Construct<ValuePattern, VPatId, Arena> for S
 where
     Arena: AsMut<StackArena>,
+    S: Into<ValuePattern>,
 {
     type Site = ss::PatId;
-    fn alloc(arena: &mut Arena, site: Option<Self::Site>, val: impl Into<ValuePattern>) -> VPatId {
+    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> VPatId {
         let this = &mut *arena.as_mut();
-        let vpat_id = this.vpats.alloc(val.into());
+        let vpat_id = this.vpats.alloc(self.into());
         if let Some(site) = site {
             this.pats.insert(site, vpat_id);
         }
@@ -71,14 +72,15 @@ where
     }
 }
 
-impl<Arena> Alloc<Arena, ValueId> for Value
+impl<S, Arena> Construct<Value, ValueId, Arena> for S
 where
     Arena: AsMut<StackArena>,
+    S: Into<Value>,
 {
     type Site = ss::TermId;
-    fn alloc(arena: &mut Arena, site: Option<Self::Site>, val: impl Into<Value>) -> ValueId {
+    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> ValueId {
         let this = &mut *arena.as_mut();
-        let value_id = this.values.alloc(val.into());
+        let value_id = this.values.alloc(self.into());
         if let Some(site) = site {
             this.terms.insert(site, TermId::Value(value_id));
         }
@@ -86,60 +88,34 @@ where
     }
 }
 
-impl<Arena> Alloc<Arena, StackId> for Stack
+impl<S, Arena> Construct<Stack, StackId, Arena> for S
 where
     Arena: AsMut<StackArena>,
+    S: Into<Stack>,
 {
     type Site = ss::TermId;
-    fn alloc(arena: &mut Arena, site: Option<Self::Site>, val: impl Into<Stack>) -> StackId {
+    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> StackId {
         let this = &mut *arena.as_mut();
-        let stack_id = this.stacks.alloc(val.into());
+        let stack_id = this.stacks.alloc(self.into());
         if let Some(site) = site {
             this.terms.insert(site, TermId::Stack(stack_id));
         }
         stack_id
     }
 }
-impl<Arena> Alloc<Arena, CompuId> for Computation
+
+impl<S, Arena> Construct<Computation, CompuId, Arena> for S
 where
     Arena: AsMut<StackArena>,
+    S: Into<Computation>,
 {
     type Site = ss::TermId;
-    fn alloc(arena: &mut Arena, site: Option<Self::Site>, val: impl Into<Computation>) -> CompuId {
+    fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {
         let this = &mut *arena.as_mut();
-        let compu_id = this.compus.alloc(val.into());
+        let compu_id = this.compus.alloc(self.into());
         if let Some(site) = site {
             this.terms.insert(site, TermId::Compu(compu_id));
         }
         compu_id
-    }
-}
-
-pub trait StackArenaLike {
-    /// Allocate a value pattern.
-    fn vpat(&mut self, site: Option<ss::PatId>, vpat: impl Into<ValuePattern>) -> VPatId;
-    /// Allocate a value.
-    fn value(&mut self, site: Option<ss::TermId>, value: impl Into<Value>) -> ValueId;
-    /// Allocate a stack.
-    fn stack(&mut self, site: Option<ss::TermId>, stack: impl Into<Stack>) -> StackId;
-    /// Allocate a computation.
-    fn compu(&mut self, site: Option<ss::TermId>, compu: impl Into<Computation>) -> CompuId;
-}
-
-impl<T> StackArenaLike for T
-where
-    T: AsMut<StackArena>,
-{
-    fn vpat(&mut self, site: Option<ss::PatId>, vpat: impl Into<ValuePattern>) -> VPatId {
-        Alloc::alloc(self, site, vpat)
-    }
-    fn value(&mut self, site: Option<ss::TermId>, value: impl Into<Value>) -> ValueId {
-        Alloc::alloc(self, site, value)
-    }
-    fn stack(&mut self, site: Option<ss::TermId>, stack: impl Into<Stack>) -> StackId {
-        Alloc::alloc(self, site, stack)
-    }
-    fn compu(&mut self, site: Option<ss::TermId>, compu: impl Into<Computation>) -> CompuId {
-        Alloc::alloc(self, site, compu)
     }
 }

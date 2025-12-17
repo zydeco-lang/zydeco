@@ -1,4 +1,4 @@
-use super::arena::{StackArena, StackArenaLike};
+use super::arena::StackArena;
 use super::syntax::*;
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
@@ -208,7 +208,7 @@ impl Lower for ss::VPatId {
             }
         };
         // Create new VPatId in stack arena and store the mapping
-        lo.arena.vpat(Some(ss_pat_id), stack_vpat)
+        stack_vpat.build(lo, Some(ss_pat_id))
     }
 }
 
@@ -221,30 +221,29 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
         let site = Some(ss::TermId::Value(self.clone_inner()));
         match value {
             | ss::Value::Hole(_) => {
-                let value_id = lo.arena.value(site, Hole);
+                let value_id = Hole.build(lo, site);
                 kont(value_id, lo)
             }
             | ss::Value::Var(def) => {
-                let value_id = lo.arena.value(site, def);
+                let value_id = def.build(lo, site);
                 kont(value_id, lo)
             }
             | ss::Value::Thunk(Thunk(body)) => {
                 let body_compu = body.lower(lo, ());
                 // Get minimal capture from cocontext information
                 let capture = lo.compute_capture(body);
-                let value_id =
-                    lo.arena.value(site, Clo { capture, stack: Bullet, body: body_compu });
+                let value_id = Clo { capture, stack: Bullet, body: body_compu }.build(lo, site);
                 kont(value_id, lo)
             }
             | ss::Value::Ctor(Ctor(ctor, body)) => Phantom::new(body).lower(
                 lo,
                 Box::new(move |body_val, lo| {
-                    let value_id = lo.arena.value(site, Ctor(ctor, body_val));
+                    let value_id = Ctor(ctor, body_val).build(lo, site);
                     kont(value_id, lo)
                 }),
             ),
             | ss::Value::Triv(_) => {
-                let value_id = lo.arena.value(site, Triv);
+                let value_id = Triv.build(lo, site);
                 kont(value_id, lo)
             }
             | ss::Value::VCons(Cons(a, b)) => Phantom::new(a).lower(
@@ -253,7 +252,7 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
                     Phantom::new(b).lower(
                         lo,
                         Box::new(move |b_val, lo| {
-                            let value_id = lo.arena.value(site, Cons(a_val, b_val));
+                            let value_id = Cons(a_val, b_val).build(lo, site);
                             kont(value_id, lo)
                         }),
                     )
@@ -264,7 +263,7 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
                 Phantom::new(inner).lower(lo, kont)
             }
             | ss::Value::Lit(lit) => {
-                let value_id = lo.arena.value(site, lit);
+                let value_id = lit.build(lo, site);
                 kont(value_id, lo)
             }
         }
@@ -280,24 +279,22 @@ impl Lower for ss::CompuId {
         let site = Some(ss::TermId::Compu(*self));
         use ss::Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => lo.arena.compu(site, Hole),
+            | Compu::Hole(Hole) => Hole.build(lo, site),
             | Compu::VAbs(Abs(param, body)) => {
                 let param_vpat = param.lower(lo, ());
                 let body_compu = body.lower(lo, ());
-                let stack_id = lo.arena.stack(site, Bullet);
-                lo.arena.compu(
-                    site,
-                    Let { binder: Cons(param_vpat, Bullet), bindee: stack_id, tail: body_compu },
-                )
+                let stack_id = Bullet.build(lo, site);
+                Let { binder: Cons(param_vpat, Bullet), bindee: stack_id, tail: body_compu }
+                    .build(lo, site)
             }
             | Compu::VApp(App(body, arg)) => Phantom::new(arg).lower(
                 lo,
                 Box::new(move |arg_val, lo| {
-                    let next_stack = lo.arena.stack(site, Bullet);
-                    let stack_id = lo.arena.stack(site, Cons(arg_val, next_stack));
+                    let next_stack = Bullet.build(lo, site);
+                    let stack_id = Cons(arg_val, next_stack).build(lo, site);
                     let body_compu = body.lower(lo, ());
                     let let_stack = Let { binder: Bullet, bindee: stack_id, tail: body_compu };
-                    lo.arena.compu(site, Computation::LetStack(let_stack))
+                    let_stack.build(lo, site)
                 }),
             ),
             | Compu::TAbs(Abs(_param, body)) => {
@@ -321,30 +318,27 @@ impl Lower for ss::CompuId {
                 };
                 let capture = lo.compute_capture(body);
                 let body_compu = body.lower(lo, ());
-                lo.arena.compu(site, SFix { capture, param: def_id, body: body_compu })
+                SFix { capture, param: def_id, body: body_compu }.build(lo, site)
             }
             | Compu::Force(Force(body)) => Phantom::new(body).lower(
                 lo,
                 Box::new(move |thunk_val, lo| {
-                    let stack_id = lo.arena.stack(site, Bullet);
-                    lo.arena.compu(site, SForce { thunk: thunk_val, stack: stack_id })
+                    SForce { thunk: thunk_val, stack: Bullet.build(lo, site) }.build(lo, site)
                 }),
             ),
             | Compu::Ret(Return(body)) => Phantom::new(body).lower(
                 lo,
                 Box::new(move |value, lo| {
-                    let stack_id = lo.arena.stack(site, Bullet);
-                    lo.arena.compu(site, SReturn { stack: stack_id, value })
+                    let stack_id = Bullet.build(lo, site);
+                    SReturn { stack: stack_id, value }.build(lo, site)
                 }),
             ),
             | Compu::Do(Bind { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
                 let tail_compu = tail.lower(lo, ());
-                let kont_stack_id =
-                    lo.arena.stack(site, Kont { binder: binder_vpat, body: tail_compu });
+                let kont_stack_id = Kont { binder: binder_vpat, body: tail_compu }.build(lo, site);
                 let bindee_compu = bindee.lower(lo, ());
-                lo.arena
-                    .compu(site, Let { binder: Bullet, bindee: kont_stack_id, tail: bindee_compu })
+                Let { binder: Bullet, bindee: kont_stack_id, tail: bindee_compu }.build(lo, site)
             }
             | Compu::Let(Let { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
@@ -352,10 +346,8 @@ impl Lower for ss::CompuId {
                     lo,
                     Box::new(move |bindee_val, lo| {
                         let tail_compu = tail.lower(lo, ());
-                        lo.arena.compu(
-                            site,
-                            Let { binder: binder_vpat, bindee: bindee_val, tail: tail_compu },
-                        )
+                        Let { binder: binder_vpat, bindee: bindee_val, tail: tail_compu }
+                            .build(lo, site)
                     }),
                 )
             }
@@ -374,7 +366,7 @@ impl Lower for ss::CompuId {
                                 Matcher { binder: binder_vpat, tail: body_compu }
                             })
                             .collect();
-                        lo.arena.compu(site, Match { scrut: scrut_val, arms: lowered_arms })
+                        Match { scrut: scrut_val, arms: lowered_arms }.build(lo, site)
                     }),
                 )
             }
@@ -387,15 +379,15 @@ impl Lower for ss::CompuId {
                         CoMatcher { dtor: Cons(dtor.clone(), Bullet), tail: body_compu }
                     })
                     .collect();
-                lo.arena.compu(site, CoMatch { arms: lowered_arms })
+                CoMatch { arms: lowered_arms }.build(lo, site)
             }
             | Compu::Dtor(Dtor(body, dtor)) => {
                 // Destructor: push the destructor onto the stack and continue with body
-                let next_stack = lo.arena.stack(Some(ss::TermId::Compu(body)), Bullet);
-                let tag_stack_id = lo.arena.stack(site, Cons(dtor.clone(), next_stack));
+                let next_stack = Bullet.build(lo, Some(ss::TermId::Compu(body)));
+                let tag_stack_id = Cons(dtor.clone(), next_stack).build(lo, site);
                 let body_compu = body.lower(lo, ());
                 // Create LetStack to bind from the stack with the tag to the current stack, then run body
-                lo.arena.compu(site, Let { binder: Bullet, bindee: tag_stack_id, tail: body_compu })
+                Let { binder: Bullet, bindee: tag_stack_id, tail: body_compu }.build(lo, site)
             }
         }
     }
