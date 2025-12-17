@@ -64,7 +64,7 @@ impl<'a> ClosureConverter<'a> {
             })
             .collect();
         for (compu_id, force) in forces {
-            self.convert_clo_force(compu_id, &force);
+            self.convert_force(compu_id, &force);
         }
     }
 
@@ -76,11 +76,6 @@ impl<'a> ClosureConverter<'a> {
     /// Get the ss::TermId site for a ValueId, if it exists.
     fn get_value_site(&self, value_id: ValueId) -> Option<ss::TermId> {
         self.arena.terms.back(&TermId::Value(value_id)).copied()
-    }
-
-    /// Get the ss::TermId site for a StackId, if it exists.
-    fn get_stack_site(&self, stack_id: StackId) -> Option<ss::TermId> {
-        self.arena.terms.back(&TermId::Stack(stack_id)).copied()
     }
 
     /// Compute free variables in a computation using cocontext from scoped.
@@ -170,7 +165,6 @@ impl<'a> ClosureConverter<'a> {
             subst_map.insert(old_def, new_value_id);
         }
         fix.body.substitute_in_place(&mut *self.arena, &subst_map);
-        let transformed_body_inner = self.convert_fix_force(fix.body, fix.param, &renamed_captures);
 
         // 3. Wrap body in a let arg to retrieve captures from stack
         // Create a nested value pattern to destructure all captures from a nested pair
@@ -185,12 +179,9 @@ impl<'a> ClosureConverter<'a> {
         }
         // Use a single LetArg to extract all captures from the stack
         let capture_stack = Bullet.build(self, site);
-        let transformed_body = Let {
-            binder: Cons(capture_pattern, Bullet),
-            bindee: capture_stack,
-            tail: transformed_body_inner,
-        }
-        .build(self, site);
+        let transformed_body =
+            Let { binder: Cons(capture_pattern, Bullet), bindee: capture_stack, tail: fix.body }
+                .build(self, site);
 
         // 4. Push the capture list onto the stack first, then run the fix.
         // Build the capture pair value from free_vars
@@ -210,277 +201,6 @@ impl<'a> ClosureConverter<'a> {
         self.arena
             .compus
             .replace(old_compu_id, Let { binder: Bullet, bindee: capture_stack, tail: fix_compu });
-    }
-
-    /// Replace all occurrences of param in body with application of param to captures.
-    fn convert_fix_force(&mut self, body: CompuId, param: DefId, captures: &[DefId]) -> CompuId {
-        // Traverse body and replace Value::Var(param) with application
-        // Application in stack style: push captures onto stack, then call param
-        self.convert_fix_force_rec(body, param, captures, &mut HashSet::new())
-    }
-
-    fn convert_fix_force_rec(
-        &mut self, compu_id: CompuId, param: DefId, captures: &[DefId],
-        visited: &mut HashSet<CompuId>,
-    ) -> CompuId {
-        if !visited.insert(compu_id) {
-            return compu_id;
-        }
-
-        // Preserve the site from the original computation
-        let site = self.get_compu_site(compu_id);
-        let compu = self.arena.compus[&compu_id].clone();
-        match compu {
-            | Computation::Hole(h) => {
-                let this = &mut *self.arena;
-                h.build(this, site)
-            }
-            | Computation::Force(SForce { thunk, stack }) => {
-                let new_thunk =
-                    self.convert_fix_force_in_value(thunk, param, captures, &mut HashSet::new());
-                let new_stack =
-                    self.convert_fix_force_in_stack(stack, param, captures, &mut HashSet::new());
-                SForce { thunk: new_thunk, stack: new_stack }.build(self, site)
-            }
-            | Computation::Ret(SReturn { stack, value }) => {
-                let new_stack =
-                    self.convert_fix_force_in_stack(stack, param, captures, &mut HashSet::new());
-                let new_value =
-                    self.convert_fix_force_in_value(value, param, captures, &mut HashSet::new());
-                {
-                    let this = &mut *self.arena;
-                    let compu = SReturn { stack: new_stack, value: new_value };
-                    compu.build(this, site)
-                }
-            }
-            | Computation::Fix(fix) => {
-                // Don't replace param if it's the same as the fix param (shadowing)
-                if fix.param == param {
-                    {
-                        let this = &mut *self.arena;
-                        fix.build(this, site)
-                    }
-                } else {
-                    let new_body = self.convert_fix_force_rec(fix.body, param, captures, visited);
-                    {
-                        let this = &mut *self.arena;
-                        let compu = SFix { capture: fix.capture, param: fix.param, body: new_body };
-                        compu.build(this, site)
-                    }
-                }
-            }
-            | Computation::Case(Match { scrut, arms }) => {
-                let new_scrut =
-                    self.convert_fix_force_in_value(scrut, param, captures, &mut HashSet::new());
-                let new_arms = arms
-                    .into_iter()
-                    .map(|arm| Matcher {
-                        binder: arm.binder,
-                        tail: self.convert_fix_force_rec(arm.tail, param, captures, visited),
-                    })
-                    .collect();
-                {
-                    let this = &mut *self.arena;
-                    let compu = Match { scrut: new_scrut, arms: new_arms };
-                    compu.build(this, site)
-                }
-            }
-            | Computation::LetValue(Let { binder, bindee, tail }) => {
-                let new_bindee =
-                    self.convert_fix_force_in_value(bindee, param, captures, &mut HashSet::new());
-                let new_tail = self.convert_fix_force_rec(tail, param, captures, visited);
-                {
-                    let this = &mut *self.arena;
-                    let compu = Let { binder, bindee: new_bindee, tail: new_tail };
-                    compu.build(this, site)
-                }
-            }
-            | Computation::LetStack(Let { binder, bindee, tail }) => {
-                let new_bindee =
-                    self.convert_fix_force_in_stack(bindee, param, captures, &mut HashSet::new());
-                let new_tail = self.convert_fix_force_rec(tail, param, captures, visited);
-                {
-                    let this = &mut *self.arena;
-                    let compu = Let { binder, bindee: new_bindee, tail: new_tail };
-                    compu.build(this, site)
-                }
-            }
-            | Computation::LetArg(Let { binder, bindee, tail }) => {
-                let new_bindee =
-                    self.convert_fix_force_in_stack(bindee, param, captures, &mut HashSet::new());
-                let new_tail = self.convert_fix_force_rec(tail, param, captures, visited);
-                {
-                    let this = &mut *self.arena;
-                    let compu = Let { binder, bindee: new_bindee, tail: new_tail };
-                    compu.build(this, site)
-                }
-            }
-            | Computation::CoCase(CoMatch { arms }) => {
-                let new_arms = arms
-                    .into_iter()
-                    .map(|arm| CoMatcher {
-                        dtor: arm.dtor,
-                        tail: self.convert_fix_force_rec(arm.tail, param, captures, visited),
-                    })
-                    .collect();
-                {
-                    let this = &mut *self.arena;
-                    let compu = CoMatch { arms: new_arms };
-                    compu.build(this, site)
-                }
-            }
-        }
-    }
-
-    fn convert_fix_force_in_value(
-        &mut self, value_id: ValueId, param: DefId, captures: &[DefId],
-        visited: &mut HashSet<ValueId>,
-    ) -> ValueId {
-        if !visited.insert(value_id) {
-            return value_id;
-        }
-
-        // Preserve the site from the original value
-        let site = self.get_value_site(value_id);
-        let value = self.arena.values[&value_id].clone();
-        match value {
-            | Value::Var(def) if def == param => {
-                // When param is used, we need to apply it to captures
-                // Param is a thunk that expects captures on the stack (via LetArg)
-                // In stack style: push captures on stack, then force param
-                // Since we're in a value context, we create a thunk that does this application
-                // The thunk, when forced, will push captures and then force param
-                // Create a nested pair value from all captures
-                let mut capture_pair: ValueId = {
-                    let this = &mut *self.arena;
-                    Triv.build(this, site)
-                };
-                for &capture in captures.iter().rev() {
-                    let capture_val = {
-                        let this = &mut *self.arena;
-                        capture.build(this, site)
-                    };
-                    capture_pair = {
-                        let this = &mut *self.arena;
-                        let value = Cons(capture_val, capture_pair);
-                        value.build(this, site)
-                    };
-                }
-
-                // Push the capture pair onto the stack, then force param
-                let bullet_stack = {
-                    let this = &mut *self.arena;
-                    Bullet.build(this, site)
-                };
-                let stack_with_captures = {
-                    let this = &mut *self.arena;
-                    let stack = Cons(capture_pair, bullet_stack);
-                    stack.build(this, site)
-                };
-                let param_val = {
-                    let this = &mut *self.arena;
-                    param.build(this, site)
-                };
-
-                // Force param with captures on the stack
-                let force_param_compu = {
-                    let this = &mut *self.arena;
-                    let compu = SForce { thunk: param_val, stack: stack_with_captures };
-                    compu.build(this, site)
-                };
-
-                // Track that we're forcing the fix param
-                self.fix_force_visited.insert(force_param_compu);
-
-                // Wrap in a thunk/closure that will do the application when forced
-                {
-                    let this = &mut *self.arena;
-                    let value = Clo {
-                        capture: Context(vec![]), // No additional captures needed
-                        stack: Bullet,
-                        body: force_param_compu,
-                    };
-                    value.build(this, site)
-                }
-            }
-            | Value::Clo(Clo { capture, stack: _, body }) => {
-                let new_body =
-                    self.convert_fix_force_rec(body, param, captures, &mut HashSet::new());
-                {
-                    let this = &mut *self.arena;
-                    let value = Clo { capture, stack: Bullet, body: new_body };
-                    value.build(this, site)
-                }
-            }
-            | Value::Ctor(Ctor(ctor, body)) => {
-                let new_body = self.convert_fix_force_in_value(body, param, captures, visited);
-                {
-                    let this = &mut *self.arena;
-                    let value = Ctor(ctor, new_body);
-                    value.build(this, site)
-                }
-            }
-            | Value::VCons(Cons(a, b)) => {
-                let new_a = self.convert_fix_force_in_value(a, param, captures, visited);
-                let new_b = self.convert_fix_force_in_value(b, param, captures, visited);
-                {
-                    let this = &mut *self.arena;
-                    let value = Cons(new_a, new_b);
-                    value.build(this, site)
-                }
-            }
-            | other => {
-                let this = &mut *self.arena;
-                other.build(this, site)
-            }
-        }
-    }
-
-    fn convert_fix_force_in_stack(
-        &mut self, stack_id: StackId, param: DefId, captures: &[DefId],
-        visited: &mut HashSet<StackId>,
-    ) -> StackId {
-        if !visited.insert(stack_id) {
-            return stack_id;
-        }
-
-        // Preserve the site from the original stack
-        let site = self.get_stack_site(stack_id);
-        let stack = self.arena.stacks[&stack_id].clone();
-        match stack {
-            | Stack::Kont(Kont { binder, body }) => {
-                let new_body =
-                    self.convert_fix_force_rec(body, param, captures, &mut HashSet::new());
-                {
-                    let this = &mut *self.arena;
-                    let stack = Kont { binder, body: new_body };
-                    stack.build(this, site)
-                }
-            }
-            | Stack::Arg(Cons(val, stack)) => {
-                let mut val_visited = HashSet::new();
-                let new_val =
-                    self.convert_fix_force_in_value(val, param, captures, &mut val_visited);
-                let new_stack = self.convert_fix_force_in_stack(stack, param, captures, visited);
-                {
-                    let this = &mut *self.arena;
-                    let stack = Cons(new_val, new_stack);
-                    stack.build(this, site)
-                }
-            }
-            | Stack::Tag(Cons(dtor, stack)) => {
-                let new_stack = self.convert_fix_force_in_stack(stack, param, captures, visited);
-                {
-                    let this = &mut *self.arena;
-                    let stack = Cons(dtor, new_stack);
-                    stack.build(this, site)
-                }
-            }
-            | Stack::Var(_) => {
-                let this = &mut *self.arena;
-                Bullet.build(this, site)
-            }
-        }
     }
 
     /// Convert a Clo (thunk) to explicit closure form.
@@ -548,7 +268,7 @@ impl<'a> ClosureConverter<'a> {
     }
 
     /// Convert a Force computation to handle converted closures.
-    fn convert_clo_force(&mut self, compu_id: CompuId, force: &SForce) {
+    fn convert_force(&mut self, compu_id: CompuId, force: &SForce) {
         // Skip forces that are visited by fix (these are forces of fix params with captures)
         if self.fix_force_visited.contains(&compu_id) {
             return;
