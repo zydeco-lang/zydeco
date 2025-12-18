@@ -119,14 +119,39 @@ impl<'a> ClosureConverter<'a> {
         // Create a nested value pattern to destructure all captures from a nested pair
         // Build nested Cons pattern: Cons(capture1, Cons(capture2, ... Cons(captureN, Triv)))
         let mut capture_pattern = Triv.build(self, None);
+        let mut capture_pack = Triv.build(self, None);
         for &capture in free_vars.iter().rev() {
-            let capture_vpat = (*free_var_renames.get(&capture).unwrap()).build(self, None);
+            let capture_var = *free_var_renames.get(&capture).unwrap();
+            let capture_vpat = capture_var.build(self, None);
             capture_pattern = Cons(capture_vpat, capture_pattern).build(self, None);
+            let capture_valu = capture_var.build(self, None);
+            capture_pack = Cons(capture_valu, capture_pack).build(self, None);
         }
+
+        // Add a variable that re-packs the captures and the param into a thunk pair
+        let param_value: ValueId = fix.param.build(self, site);
+        let closure_pair = Cons(capture_pack, param_value).build(self, site);
+        let closure_def = {
+            let original_name = self.scoped.defs[&fix.param].clone();
+            self.scoped.defs.alloc(VarName(format!("{original_name}#clo")))
+        };
+        let closure_vpat = closure_def.build(self, None);
+        let transformed_body = {
+            // Substitute the closure def into the transformed body to replace fix.param
+            let closure_def_value: ValueId = closure_def.build(self, site);
+            let mut subst_map = HashMap::new();
+            subst_map.insert(fix.param, closure_def_value);
+            fix.body.substitute_in_place(self, &subst_map);
+            fix.body
+        };
+        // LetValue the closure pair to a closure definition
+        let transformed_let_body =
+            Let { binder: closure_vpat, bindee: closure_pair, tail: transformed_body }
+                .build(self, site);
         // Use a single LetArg to extract all captures from the stack
         let capture_stack = Bullet.build(self, site);
-        let transformed_body =
-            Let { binder: Cons(capture_pattern, Bullet), bindee: capture_stack, tail: fix.body }
+        let transformed_arg_body =
+            Let { binder: Cons(capture_pattern, Bullet), bindee: capture_stack, tail: transformed_let_body }
                 .build(self, site);
 
         // 4. Push the capture list onto the stack first, then run the fix.
@@ -140,8 +165,9 @@ impl<'a> ClosureConverter<'a> {
         let bullet_stack = Bullet.build(self, site);
         let capture_stack = Cons(capture_pair, bullet_stack).build(self, site);
         // Create the Fix computation
-        let fix_compu = SFix { capture: Context::new(), param: fix.param, body: transformed_body }
-            .build(self, site);
+        let fix_compu =
+            SFix { capture: Context::new(), param: fix.param, body: transformed_arg_body }
+                .build(self, site);
         // Wrap the Fix in a LetStack that pushes captures, then runs the Fix
         // Update the Fix in place with the wrapped computation
         self.arena
