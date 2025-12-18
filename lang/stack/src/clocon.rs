@@ -5,7 +5,7 @@
 use super::arena::*;
 use super::subst::SubstitutionInPlace;
 use super::syntax::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_statics::tyck::syntax as ss;
 use zydeco_surface::scoped::arena::ScopedArena;
@@ -18,7 +18,6 @@ pub struct ClosureConverter<'a> {
     arena: &'a mut StackArena,
     scoped: &'a mut ScopedArena,
     _statics: &'a StaticsArena,
-    fix_force_visited: HashSet<CompuId>,
 }
 impl AsRef<StackArena> for ClosureConverter<'_> {
     fn as_ref(&self) -> &StackArena {
@@ -35,7 +34,7 @@ impl<'a> ClosureConverter<'a> {
     pub fn new(
         arena: &'a mut StackArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
     ) -> Self {
-        Self { arena, scoped, _statics: statics, fix_force_visited: HashSet::new() }
+        Self { arena, scoped, _statics: statics }
     }
 
     pub fn convert(&mut self) {
@@ -114,7 +113,7 @@ impl<'a> ClosureConverter<'a> {
             let new_value_id = new_def.build(self, None);
             subst_map.insert(old_def, new_value_id);
         }
-        fix.body.substitute_in_place(&mut *self.arena, &subst_map);
+        fix.body.substitute_in_place(self, &subst_map);
 
         // 3. Wrap body in a let arg to retrieve captures from stack
         // Create a nested value pattern to destructure all captures from a nested pair
@@ -161,14 +160,8 @@ impl<'a> ClosureConverter<'a> {
 
         // 2. Make the closure a pair of (capture list, body function)
         // Build the capture pair value from free_vars
-        let mut capture_pair = {
-            let this = &mut *self.arena;
-            Triv.build(this, site)
-        };
-        let mut capture_pattern = {
-            let this = &mut *self.arena;
-            Triv.build(this, None)
-        };
+        let mut capture_pair = Triv.build(self, site);
+        let mut capture_pattern = Triv.build(self, None);
         for &capture in free_vars.iter().rev() {
             let VarName(original_name) = self.scoped.defs[&capture].clone();
             let new_def = self.scoped.defs.alloc(VarName(format!("{original_name}#cap")));
@@ -189,9 +182,7 @@ impl<'a> ClosureConverter<'a> {
             let new_value_id = new_def.build(self, None);
             subst_map.insert(old_def, new_value_id);
         }
-        {
-            clo.body.substitute_in_place(&mut *self.arena, &subst_map);
-        }
+        clo.body.substitute_in_place(self, &subst_map);
 
         // Use a single LetArg to extract all captures from the stack
         let capture_stack = Bullet.build(self, site);
@@ -216,11 +207,6 @@ impl<'a> ClosureConverter<'a> {
 
     /// Convert a Force computation to handle converted closures.
     fn convert_force(&mut self, compu_id: CompuId, force: &SForce) {
-        // Skip forces that are visited by fix (these are forces of fix params with captures)
-        if self.fix_force_visited.contains(&compu_id) {
-            return;
-        }
-
         // Always destructure the thunk as a pair at runtime using LetValue
         // The thunk should be a pair (capture_pair, body_closure) from converted closures
         let site = self.get_compu_site(compu_id);
