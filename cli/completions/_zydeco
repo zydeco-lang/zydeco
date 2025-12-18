@@ -55,7 +55,8 @@ _arguments "${_arguments_options[@]}" : \
 '--target=[Target architecture]:TARGET:_default' \
 '-b+[Build Directory]:BUILD_DIR:_files' \
 '--build-dir=[Build Directory]:BUILD_DIR:_files' \
-'--stub=[Stub file]:STUB:_files' \
+'-r+[Runtime directory]:RUNTIME_DIR:_files' \
+'--runtime-dir=[Runtime directory]:RUNTIME_DIR:_files' \
 '--link-existing[Skip dumping assembly and only link existing files]' \
 '-x[Run the program after building]' \
 '--execute[Run the program after building]' \

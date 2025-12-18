@@ -64,7 +64,11 @@ impl<'e> Emitter<'e> {
             }
         }
 
-        self.instrs.push(Instr::Comment("entry".to_string()));
+        self.instrs.push(Instr::Label("entry".to_string()));
+        // initialize the environment and the heap
+        self.instrs.push(Instr::Comment("initialize environment and heap".to_string()));
+        self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R10, Arg64::Reg(Reg::Rdi))));
+        self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rsi))));
         // Assert that there's only one entry point, and emit it
         assert_eq!(self.assembly.entry.len(), 1, "expected exactly one entry point");
         let (entry, ()) = self.assembly.entry.iter().next().unwrap();

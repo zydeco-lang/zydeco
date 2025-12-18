@@ -5,7 +5,7 @@ edition = "2024"
 build = "build.rs"
 
 [[bin]]
-name = "zyprog"
+name = "main"
 path = "stub.rs"
 
 [dependencies]

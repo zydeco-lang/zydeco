@@ -18,12 +18,22 @@ fn main() -> Result<(), ()> {
             bin,
             target,
             build_dir,
-            stub,
+            runtime_dir,
             link_existing,
             execute,
             dry,
             verbose,
-        } => build_files(files, bin, target, build_dir, stub, link_existing, execute, dry, verbose),
+        } => build_files(
+            files,
+            bin,
+            target,
+            build_dir,
+            runtime_dir,
+            link_existing,
+            execute,
+            dry,
+            verbose,
+        ),
     };
     match res {
         | Ok(x) => {
@@ -94,8 +104,8 @@ fn run_files(
 }
 
 fn build_files(
-    paths: Vec<PathBuf>, bin: Option<String>, target: String, build_dir: PathBuf, stub: PathBuf,
-    link_existing: bool, execute: bool, _dry: bool, verbose: bool,
+    paths: Vec<PathBuf>, bin: Option<String>, target: String, build_dir: PathBuf,
+    runtime_dir: PathBuf, link_existing: bool, execute: bool, _dry: bool, verbose: bool,
 ) -> Result<i32, String> {
     let (build_sys, pack) = setup_build_system(paths, bin)?;
 
@@ -117,7 +127,7 @@ fn build_files(
             }
             let name = build_sys.packages[&pack].name();
             // link with stub
-            link_x86(name, x86, build_dir, stub, link_existing, execute)?;
+            link_x86(name, x86, build_dir, runtime_dir, link_existing, execute)?;
             Ok(0)
         }
         | _ => return Err(format!("Invalid target: {}", target)),
@@ -125,7 +135,7 @@ fn build_files(
 }
 
 fn link_x86(
-    name: String, assembly: String, build_dir: PathBuf, stub: PathBuf, link_existing: bool,
+    name: String, assembly: String, build_dir: PathBuf, runtime_dir: PathBuf, link_existing: bool,
     execute: bool,
 ) -> Result<(), String> {
     if !link_existing {
@@ -135,21 +145,27 @@ fn link_x86(
         std::fs::create_dir_all(&build_dir).expect("Failed to create build dir");
     }
 
-    // copy stub to build dir
-    let stub_path = build_dir.join(stub.file_name().unwrap());
-    std::fs::copy(&stub, &stub_path).expect("Failed to copy stub");
+    // copy everything in runtime dir to build dir
+    for entry in std::fs::read_dir(&runtime_dir).expect("Failed to read runtime dir") {
+        let entry = entry.expect("Failed to read entry");
+        let path = entry.path();
+        let target = build_dir.join(path.file_name().unwrap());
+        std::fs::copy(&path, &target).expect("Failed to copy entry");
+    }
 
-    let (nasm_format, lib_name) = if cfg!(target_os = "linux") {
-        ("elf64", format!("libzyprog.a"))
+    let lib_name = "zyprog";
+
+    let (nasm_format, lib_name_full) = if cfg!(target_os = "linux") {
+        ("elf64", format!("lib{}.a", lib_name))
     } else if cfg!(target_os = "macos") {
-        ("macho64", format!("libzyprog.a"))
+        ("macho64", format!("lib{}.a", lib_name))
     } else {
         panic!("Runner script only supports linux and macos")
     };
 
     let asm_fname = build_dir.join(format!("{}.s", name));
     let obj_fname = build_dir.join(format!("{}.o", name));
-    let lib_fname = build_dir.join(lib_name);
+    let lib_fname = build_dir.join(lib_name_full.as_str());
     let exe_fname = build_dir.join(format!("{}.exe", name));
 
     // remove existing files
@@ -200,29 +216,57 @@ fn link_x86(
     }
 
     // rustc stub.rs -L build_dir
+    // use cargo instead of rustc directly
     let rustc_out = if cfg!(target_os = "macos") {
-        Command::new("rustc")
-            .arg("-v")
-            .arg(stub_path)
+        // Command::new("rustc")
+        //     .arg("-v")
+        //     .arg(stub_path)
+        //     .arg("--target")
+        //     .arg("x86_64-apple-darwin")
+        //     .arg("-C")
+        //     .arg("panic=abort")
+        //     .arg("-L")
+        //     .arg(build_dir)
+        //     .arg("-o")
+        //     .arg(&exe_fname)
+        //     .output()
+        //     .map_err(|e| format!("rustc err: {}", e))?
+
+        // add "ZYDECO_STATIC_LIB" environment variable to the command
+        Command::new("cargo")
+            .env("ZYDECO_STATIC_LIB", lib_name)
+            .env("ZYDECO_LIB_DIR", ".")
+            .env("RUSTFLAGS", "-C panic=abort")
+            .arg("build")
+            .arg("--manifest-path")
+            .arg(build_dir.join("Cargo.toml"))
             .arg("--target")
             .arg("x86_64-apple-darwin")
-            .arg("-C")
-            .arg("panic=abort")
-            .arg("-L")
-            .arg(build_dir)
-            .arg("-o")
-            .arg(&exe_fname)
+            .arg("-p")
+            .arg("zydeco-runtime")
+            // .arg("--release")
             .output()
-            .map_err(|e| format!("rustc err: {}", e))?
+            .map_err(|e| format!("cargo err: {}", e))?
     } else {
-        Command::new("rustc")
-            .arg(stub_path)
-            .arg("-L")
-            .arg(build_dir)
-            .arg("-o")
-            .arg(&exe_fname)
+        // Command::new("rustc")
+        //     .arg(stub_path)
+        //     .arg("-L")
+        //     .arg(build_dir)
+        //     .arg("-o")
+        //     .arg(&exe_fname)
+        //     .output()
+        //     .map_err(|e| format!("rustc err: {}", e))?
+        Command::new("cargo")
+            .env("ZYDECO_STATIC_LIB", lib_name)
+            .env("ZYDECO_LIB_DIR", ".")
+            .arg("build")
+            .arg("--manifest-path")
+            .arg(build_dir.join("Cargo.toml"))
+            .arg("-p")
+            .arg("zydeco-runtime")
+            // .arg("--release")
             .output()
-            .map_err(|e| format!("rustc err: {}", e))?
+            .map_err(|e| format!("cargo err: {}", e))?
     };
     if !rustc_out.status.success() {
         Err(format!(
@@ -231,6 +275,13 @@ fn link_x86(
             std::str::from_utf8(&rustc_out.stderr).expect("rustc produced invalid UTF-8")
         ))?
     }
+    // copy the cargo generated executable to the build dir
+    let cargo_exe_fname = if cfg!(target_os = "macos") {
+        build_dir.join("target/x86_64-apple-darwin/debug/main")
+    } else {
+        build_dir.join("target/debug/main")
+    };
+    std::fs::copy(&cargo_exe_fname, &exe_fname).map_err(|e| e.to_string())?;
 
     if !execute {
         return Ok(());

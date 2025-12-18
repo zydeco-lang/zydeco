@@ -61,7 +61,7 @@ _zydeco() {
             return 0
             ;;
         zydeco__build)
-            opts="-t -b -x -v -h --bin --target --build-dir --stub --link-existing --execute --dry --verbose --help [FILE]..."
+            opts="-t -b -r -x -v -h --bin --target --build-dir --runtime-dir --link-existing --execute --dry --verbose --help [FILE]..."
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -87,7 +87,11 @@ _zydeco() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
-                --stub)
+                --runtime-dir)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -r)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

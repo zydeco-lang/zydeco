@@ -56,9 +56,9 @@ pub enum Commands {
         /// Build Directory
         #[arg(short = 'b', long, default_value = "._build")]
         build_dir: PathBuf,
-        /// Stub file
-        #[arg(long, default_value = "runtime/stub.rs")]
-        stub: PathBuf,
+        /// Runtime directory
+        #[arg(short = 'r', long, default_value = "runtime")]
+        runtime_dir: PathBuf,
         /// Skip dumping assembly and only link existing files
         #[arg(long, default_value_t = false)]
         link_existing: bool,
