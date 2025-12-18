@@ -54,14 +54,77 @@ impl<'e> Emitter<'e> {
             // zydeco_alloc
             Instr::Extern("zydeco_alloc".to_string()),
         ]);
+
         // Emit the externs
+        let mut mentioned_externs = Vec::new();
         for (_, symbol) in &self.assembly.symbols {
             match symbol.inner.clone() {
                 | SymbolInner::Extern(sa::Extern) => {
-                    self.instrs.push(Instr::Extern(symbol.name.clone()));
+                    mentioned_externs.push(symbol.name.clone());
+                    let label = format!("zydeco_{}", symbol.name);
+                    self.instrs.push(Instr::Extern(label));
                 }
                 | SymbolInner::Triv(_) | SymbolInner::Prog(_) | SymbolInner::Literal(_) => {}
             }
+        }
+
+        // Emit wrappers for externs
+        for extern_name in mentioned_externs {
+            let zydeco_extern_name = format!("zydeco_{}", extern_name);
+            let wrapper_inner_name = format!("wrapper_{}", extern_name);
+            let num_args: usize = match extern_name.as_str() {
+                | "read_line" => 1,
+                | "write_line" => 2,
+                | _ => todo!("unhandled extern: {}", extern_name),
+            };
+
+            // emit the wrapper inner
+            self.instrs.extend([
+                Instr::Label(wrapper_inner_name.clone()),
+                // remove the empty __env__ passed
+                Instr::Pop(Loc::Reg(Reg::Rax)),
+            ]);
+            for i in 1..=num_args {
+                // place the arguments accordingly
+                // using system V AMD64 ABI
+                if i <= 6 {
+                    let reg = match i {
+                        | 1 => Reg::Rdi,
+                        | 2 => Reg::Rsi,
+                        | 3 => Reg::Rdx,
+                        | 4 => Reg::Rcx,
+                        | 5 => Reg::R8,
+                        | 6 => Reg::R9,
+                        | _ => unreachable!(),
+                    };
+                    self.instrs.push(Instr::Pop(Loc::Reg(reg)));
+                } else {
+                    // load to stack
+                    todo!()
+                }
+            }
+            self.instrs.push(Instr::Call(zydeco_extern_name));
+
+            // emit the wrapper outer
+            self.instrs.extend([
+                Instr::Label(format!("{}", extern_name)),
+                // alloc 2
+                Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(2))),
+                Instr::Call("zydeco_alloc".to_string()),
+                // put __env__ (which is triv, which is 0) into the first slot
+                Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rax, offset: 0 }, Reg32::Imm(0))),
+                // put __code__ (which is the wrapper_inner_name) into the second slot
+                Instr::Lea(
+                    Reg::Rcx,
+                    LeaArgs::RelLabel(RelLabel { label: wrapper_inner_name, offset: None }),
+                ),
+                Instr::Mov(MovArgs::ToMem(
+                    MemRef { reg: Reg::Rax, offset: 8 },
+                    Reg32::Reg(Reg::Rcx),
+                )),
+                // push the pointer back to stack
+                Instr::Push(Arg32::Reg(Reg::Rax)),
+            ])
         }
 
         self.instrs.push(Instr::Label("entry".to_string()));
@@ -377,7 +440,17 @@ impl<'a> Emit<'a> for Atom {
                             Instr::Push(Arg32::Reg(Reg::Rax)),
                         ]);
                     }
-                    | SymbolInner::Extern(_) => {}
+                    | SymbolInner::Extern(_) => {
+                        em.instrs.push(Instr::Comment("push_sym_extern".to_string()));
+                        let label = symbol.name.clone();
+                        em.instrs.extend([
+                            Instr::Lea(
+                                Reg::Rax,
+                                LeaArgs::RelLabel(RelLabel { label, offset: None }),
+                            ),
+                            Instr::Push(Arg32::Reg(Reg::Rax)),
+                        ]);
+                    }
                     | SymbolInner::Triv(_) => {
                         em.instrs.push(Instr::Comment("push_sym_triv".to_string()));
                         em.instrs.extend([Instr::Push(Arg32::Signed(0))]);

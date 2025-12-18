@@ -17,6 +17,28 @@ extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
     })
 }
 
+#[unsafe(export_name = "\x01zydeco_read_line")]
+extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line).unwrap();
+    line.pop();
+    unsafe {
+        let env: *mut u8 = std::mem::transmute(*kont);
+        let code: fn(*mut u8) -> fn(Box<String>) = std::mem::transmute(*kont.add(8));
+        (code(env))(Box::new(line))
+    }
+}
+
+#[unsafe(export_name = "\x01zydeco_write_line")]
+extern "sysv64" fn zydeco_write_line(line: Box<String>, kont: *mut *mut u8) {
+    println!("{}", line);
+    unsafe {
+        let env: *mut u8 = std::mem::transmute(*kont);
+        let code: fn(*mut u8) = std::mem::transmute(*kont.add(8));
+        code(env)
+    }
+}
+
 unsafe extern "sysv64" {
     #[link_name = "\x01entry"]
     fn entry(env: *mut u8, heap: *mut u8) -> i64;
