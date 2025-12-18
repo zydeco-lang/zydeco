@@ -11,17 +11,23 @@ use zydeco_statics::tyck::syntax as ss;
 use zydeco_surface::scoped::arena::ScopedArena;
 use zydeco_syntax::VarName;
 use zydeco_utils::context::Context;
+use zydeco_utils::prelude::CoContext;
 
 /// Perform closure conversion on the stack arena.
 pub struct ClosureConverter<'a> {
     arena: &'a mut StackArena,
     scoped: &'a mut ScopedArena,
-    statics: &'a StaticsArena,
+    _statics: &'a StaticsArena,
     fix_force_visited: HashSet<CompuId>,
+}
+impl AsRef<StackArena> for ClosureConverter<'_> {
+    fn as_ref(&self) -> &StackArena {
+        &self.arena
+    }
 }
 impl AsMut<StackArena> for ClosureConverter<'_> {
     fn as_mut(&mut self) -> &mut StackArena {
-        self.arena
+        &mut self.arena
     }
 }
 
@@ -29,7 +35,7 @@ impl<'a> ClosureConverter<'a> {
     pub fn new(
         arena: &'a mut StackArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
     ) -> Self {
-        Self { arena, scoped, statics, fix_force_visited: HashSet::new() }
+        Self { arena, scoped, _statics: statics, fix_force_visited: HashSet::new() }
     }
 
     pub fn convert(&mut self) {
@@ -79,62 +85,9 @@ impl<'a> ClosureConverter<'a> {
     }
 
     /// Compute free variables in a computation using cocontext from scoped.
-    fn free_vars_compu(&self, compu_id: CompuId) -> HashSet<DefId> {
-        // Map from CompuId to ss::TermId via arena.terms
-        let ss_term_id = match self.get_compu_site(compu_id) {
-            | Some(ss_term_id) => ss_term_id,
-            | None => {
-                // If no mapping exists, fall back to empty set
-                // This can happen for terms created during closure conversion
-                log::warn!(
-                    "No site mapping found for CompuId {:?}, falling back to empty free vars set",
-                    compu_id
-                );
-                return HashSet::new();
-            }
-        };
-
-        // Map from ss::TermId to su::TermId via statics.terms
-        let su_term_id = match self.statics.terms.back(&ss_term_id) {
-            | Some(su_term_id) => *su_term_id,
-            | None => {
-                // If no mapping exists, fall back to empty set
-                log::warn!(
-                    "No scoped TermId mapping found for ss::TermId {:?}, falling back to empty free vars set",
-                    ss_term_id
-                );
-                return HashSet::new();
-            }
-        };
-
-        // Get cocontext (free variables) from scoped arena
-        let coctx = match self.scoped.coctxs_term_local.get(&su_term_id) {
-            | Some(coctx) => coctx.clone(),
-            | None => {
-                // If no cocontext exists, fall back to empty set
-                log::warn!(
-                    "No cocontext found for scoped TermId {:?}, falling back to empty free vars set",
-                    su_term_id
-                );
-                return HashSet::new();
-            }
-        };
-
-        // Convert CoContext to HashSet<DefId>, filtering out type and kind identifiers
-        // Only keep term-level (value/computation) identifiers, and exclude bound variables
-        coctx
-            .iter()
-            .cloned()
-            .filter(|def_id| {
-                // Check if this is a term-level definition (value/computation)
-                // by checking if it has a Type annotation (not Kind or Set)
-                self.statics
-                    .annotations_var
-                    .get(def_id)
-                    .map(|ann| matches!(ann, ss::AnnId::Type(_)))
-                    .unwrap_or(false)
-            })
-            .collect()
+    fn free_vars_compu(&self, compu_id: CompuId) -> CoContext<DefId> {
+        use super::free::FreeVars;
+        compu_id.free_vars(&self)
     }
 
     /// Convert a Fix computation to explicit closure form.
@@ -158,10 +111,7 @@ impl<'a> ClosureConverter<'a> {
         // Convert HashMap<DefId, DefId> to HashMap<DefId, ValueId> for substitution
         let mut subst_map = HashMap::new();
         for (&old_def, &new_def) in free_var_renames.iter() {
-            let new_value_id = {
-                let this = &mut *self.arena;
-                new_def.build(this, None)
-            };
+            let new_value_id = new_def.build(self, None);
             subst_map.insert(old_def, new_value_id);
         }
         fix.body.substitute_in_place(&mut *self.arena, &subst_map);
@@ -171,10 +121,7 @@ impl<'a> ClosureConverter<'a> {
         // Build nested Cons pattern: Cons(capture1, Cons(capture2, ... Cons(captureN, Triv)))
         let mut capture_pattern = Triv.build(self, None);
         for &capture in free_vars.iter().rev() {
-            let capture_vpat = {
-                let vpat = *free_var_renames.get(&capture).unwrap();
-                vpat.build(self, None)
-            };
+            let capture_vpat = (*free_var_renames.get(&capture).unwrap()).build(self, None);
             capture_pattern = Cons(capture_vpat, capture_pattern).build(self, None);
         }
         // Use a single LetArg to extract all captures from the stack
