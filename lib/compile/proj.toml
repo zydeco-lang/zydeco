@@ -16,6 +16,7 @@ bins = [
     "true.zy",
     "label.zy",
     "loop.zy",
+    "looping.zy",
     "comatch.zy",
     "acc.zy",
     "sum.zy",

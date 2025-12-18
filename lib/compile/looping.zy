@@ -1,0 +1,3 @@
+main
+  fix (loop: Thk OS) -> ! loop
+end
