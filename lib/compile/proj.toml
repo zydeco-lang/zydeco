@@ -22,6 +22,7 @@ bins = [
     "sum.zy",
     "factorial.zy",
     "tuple.zy",
+    "exit.zy",
     "echo.zy",
 ]
 

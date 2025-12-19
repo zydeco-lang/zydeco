@@ -17,6 +17,11 @@ extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
     })
 }
 
+#[unsafe(export_name = "\x01zydeco_exit")]
+extern "sysv64" fn zydeco_exit(code: i64) {
+    std::process::exit(code as i32);
+}
+
 #[unsafe(export_name = "\x01zydeco_read_line")]
 extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
     let mut line = String::new();
