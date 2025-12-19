@@ -69,7 +69,7 @@ impl<'e> Emitter<'e> {
         }
 
         // Emit wrappers for externs
-        for extern_name in mentioned_externs {
+        for extern_name in mentioned_externs.iter() {
             let zydeco_extern_name = format!("zydeco_{}", extern_name);
             let wrapper_inner_name = format!("wrapper_{}", extern_name);
             let num_args: usize = match extern_name.as_str() {
@@ -105,8 +105,16 @@ impl<'e> Emitter<'e> {
                 }
             }
             self.instrs.push(Instr::Call(zydeco_extern_name));
+        }
 
-            // emit the wrapper outer
+        self.instrs.push(Instr::Label("entry".to_string()));
+        // initialize the environment and the heap
+        self.instrs.push(Instr::Comment("initialize environment and heap".to_string()));
+        self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R10, Arg64::Reg(Reg::Rdi))));
+        self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rsi))));
+        // initialize the externs
+        for extern_name in mentioned_externs.iter() {
+            let wrapper_inner_name = format!("wrapper_{}", extern_name);
             self.instrs.extend([
                 Instr::Label(format!("{}", extern_name)),
                 // alloc 2
@@ -128,11 +136,6 @@ impl<'e> Emitter<'e> {
             ])
         }
 
-        self.instrs.push(Instr::Label("entry".to_string()));
-        // initialize the environment and the heap
-        self.instrs.push(Instr::Comment("initialize environment and heap".to_string()));
-        self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R10, Arg64::Reg(Reg::Rdi))));
-        self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rsi))));
         // Assert that there's only one entry point, and emit it
         assert_eq!(self.assembly.entry.len(), 1, "expected exactly one entry point");
         let (entry, ()) = self.assembly.entry.iter().next().unwrap();

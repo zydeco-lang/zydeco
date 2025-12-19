@@ -125,12 +125,11 @@ where
             | SymbolInner::Prog(prog_id) => Some(prog_id),
             | _ => None,
         };
+        let id = this.symbols.alloc(symbol);
         if let Some(prog_id) = is_prog {
             // Strongly nominate the symbol if it is a program, ensuring a block.
             *this.blocks.entry(prog_id).or_insert(0) += 2;
-        }
-        let id = this.symbols.alloc(symbol);
-        if let Some(prog_id) = is_prog {
+            // Add a label to the program.
             this.labels.insert(prog_id, id);
         }
         if let Some(site) = site {
