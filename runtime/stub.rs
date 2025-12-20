@@ -49,7 +49,7 @@ unsafe extern "sysv64" {
 }
 
 const BUFFER_SIZE: usize = 1024 * 1024;
-const ALIGNMENT: usize = 16;
+const ALIGNMENT: usize = 8;
 
 use std::cell::UnsafeCell;
 thread_local! {
@@ -69,13 +69,10 @@ fn init_buffer() -> *mut u8 {
 }
 
 fn main() {
-    println!("static");
     ENV.with(|env| {
         HEAP.with(|heap| unsafe {
             let env_ptr = *env.get();
             let heap_ptr = *heap.get();
-            println!("env_ptr: {:p}", env_ptr);
-            println!("heap_ptr: {:p}", heap_ptr);
             let output = entry(env_ptr, heap_ptr);
             println!("{}", output);
         })
