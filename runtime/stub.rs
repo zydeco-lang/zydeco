@@ -1,5 +1,3 @@
-use std::cell::UnsafeCell;
-
 #[unsafe(export_name = "\x01zydeco_abort")]
 extern "sysv64" fn zydeco_abort() {
     panic!("Aborted");
@@ -9,9 +7,9 @@ extern "sysv64" fn zydeco_abort() {
 extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
     HEAP.with(|heap| {
         HEAP_SIZE.with(|heap_size| unsafe {
-            let heap_ptr = heap.get();
+            let heap_ptr = *heap.get();
             let heap_size_ptr = heap_size.get();
-            let ptr = (*heap_ptr).as_mut_ptr().add(*heap_size_ptr);
+            let ptr = heap_ptr.add(*heap_size_ptr);
             *heap_size_ptr += size * 8 * 8;
             ptr
         })
@@ -50,17 +48,34 @@ unsafe extern "sysv64" {
     fn entry(env: *mut u8, heap: *mut u8) -> i64;
 }
 
+const BUFFER_SIZE: usize = 1024 * 1024;
+const ALIGNMENT: usize = 16;
+
+use std::cell::UnsafeCell;
 thread_local! {
-    static ENV: UnsafeCell<[u8; 1024 * 1024]> = UnsafeCell::new([0; 1024 * 1024]);
-    static HEAP: UnsafeCell<[u8; 1024 * 1024]> = UnsafeCell::new([0; 1024 * 1024]);
+    static ENV: UnsafeCell<*mut u8> = UnsafeCell::new(init_buffer());
+    static HEAP: UnsafeCell<*mut u8> = UnsafeCell::new(init_buffer());
     static HEAP_SIZE: UnsafeCell<usize> = UnsafeCell::new(0);
 }
 
+fn init_buffer() -> *mut u8 {
+    use std::alloc::{Layout, alloc};
+    unsafe {
+        let layout = Layout::from_size_align(BUFFER_SIZE, ALIGNMENT).unwrap();
+        let ptr = alloc(layout);
+        ptr.write_bytes(0, BUFFER_SIZE);
+        ptr
+    }
+}
+
 fn main() {
+    println!("static");
     ENV.with(|env| {
         HEAP.with(|heap| unsafe {
-            let env_ptr = (*env.get()).as_mut_ptr();
-            let heap_ptr = (*heap.get()).as_mut_ptr();
+            let env_ptr = *env.get();
+            let heap_ptr = *heap.get();
+            println!("env_ptr: {:p}", env_ptr);
+            println!("heap_ptr: {:p}", heap_ptr);
             let output = entry(env_ptr, heap_ptr);
             println!("{}", output);
         })
