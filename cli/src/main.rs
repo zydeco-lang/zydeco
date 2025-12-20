@@ -289,6 +289,8 @@ fn link_x86(
 
     // run the program
     let output = Command::new(&exe_fname).output().map_err(|e| e.to_string())?;
+    println!("Program output:");
+    print!("{}", std::str::from_utf8(&output.stdout).expect("program produced invalid UTF-8"));
     if !output.status.success() {
         Err(format!(
             "Failure in program call: {}\n{}",
@@ -296,8 +298,6 @@ fn link_x86(
             std::str::from_utf8(&output.stderr).expect("program produced invalid UTF-8")
         ))?;
     }
-    println!("Program output:");
-    print!("{}", std::str::from_utf8(&output.stdout).expect("program produced invalid UTF-8"));
     std::io::stdout().flush().map_err(|e| e.to_string())?;
     Ok(())
 }
