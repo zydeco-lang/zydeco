@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 
 #[unsafe(export_name = "\x01zydeco_abort")]
 extern "sysv64" fn zydeco_abort() {
@@ -8,10 +8,11 @@ extern "sysv64" fn zydeco_abort() {
 #[unsafe(export_name = "\x01zydeco_alloc")]
 extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
     HEAP.with(|heap| {
-        HEAP_SIZE.with(|heap_size| {
-            let mut heap_size_ref = heap_size.borrow_mut();
-            let ptr = unsafe { heap.borrow_mut().as_mut_ptr().add(*heap_size_ref) };
-            *heap_size_ref += size * 8;
+        HEAP_SIZE.with(|heap_size| unsafe {
+            let heap_ptr = heap.get();
+            let heap_size_ptr = heap_size.get();
+            let ptr = (*heap_ptr).as_mut_ptr().add(*heap_size_ptr);
+            *heap_size_ptr += size * 8 * 8;
             ptr
         })
     })
@@ -50,17 +51,17 @@ unsafe extern "sysv64" {
 }
 
 thread_local! {
-    static ENV: RefCell<[u8; 1024 * 1024]> = RefCell::new([0; 1024 * 1024]);
-    static HEAP: RefCell<[u8; 1024 * 1024]> = RefCell::new([0; 1024 * 1024]);
-    static HEAP_SIZE: RefCell<usize> = RefCell::new(0);
+    static ENV: UnsafeCell<[u8; 1024 * 1024]> = UnsafeCell::new([0; 1024 * 1024]);
+    static HEAP: UnsafeCell<[u8; 1024 * 1024]> = UnsafeCell::new([0; 1024 * 1024]);
+    static HEAP_SIZE: UnsafeCell<usize> = UnsafeCell::new(0);
 }
 
 fn main() {
     ENV.with(|env| {
-        HEAP.with(|heap| {
-            let mut env_ref = env.borrow_mut();
-            let mut heap_ref = heap.borrow_mut();
-            let output = unsafe { entry(env_ref.as_mut_ptr(), heap_ref.as_mut_ptr()) };
+        HEAP.with(|heap| unsafe {
+            let env_ptr = (*env.get()).as_mut_ptr();
+            let heap_ptr = (*heap.get()).as_mut_ptr();
+            let output = entry(env_ptr, heap_ptr);
             println!("{}", output);
         })
     });

@@ -57,16 +57,22 @@ impl<'e> Emitter<'e> {
 
         // Emit the externs
         let mut mentioned_externs = Vec::new();
-        for (_, symbol) in &self.assembly.symbols {
-            match symbol.inner.clone() {
-                | SymbolInner::Extern(sa::Extern) => {
-                    mentioned_externs.push(symbol.name.clone());
-                    let label = format!("zydeco_{}", symbol.name);
-                    self.instrs.push(Instr::Extern(label));
-                }
-                | SymbolInner::Triv(_) | SymbolInner::Prog(_) | SymbolInner::Literal(_) => {}
-            }
+        for (var_id, ()) in &self.assembly.externs {
+            let var_name = &self.assembly.variables[var_id];
+            mentioned_externs.push(var_name.plain().to_string());
+            let label = format!("zydeco_{}", var_name);
+            self.instrs.push(Instr::Extern(label));
         }
+        // for (_, symbol) in &self.assembly.symbols {
+        //     match symbol.inner.clone() {
+        //         | SymbolInner::Extern(sa::Extern) => {
+        //             mentioned_externs.push(symbol.name.clone());
+        //             let label = format!("zydeco_{}", symbol.name);
+        //             self.instrs.push(Instr::Extern(label));
+        //         }
+        //         | SymbolInner::Triv(_) | SymbolInner::Prog(_) | SymbolInner::Literal(_) => {}
+        //     }
+        // }
 
         // Emit wrappers for externs
         for extern_name in mentioned_externs.iter() {
@@ -118,7 +124,7 @@ impl<'e> Emitter<'e> {
             self.instrs.extend([
                 Instr::Label(format!("{}", extern_name)),
                 // alloc 2
-                Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(2))),
+                Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
                 Instr::Call("zydeco_alloc".to_string()),
                 // put __env__ (which is triv, which is 0) into the first slot
                 Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rax, offset: 0 }, Reg32::Imm(0))),
