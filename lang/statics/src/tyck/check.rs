@@ -7,7 +7,7 @@ use {
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
         *,
     },
-    zydeco_utils::prelude::{ArcGlobalAlloc, ArenaAccess, SccGroup},
+    zydeco_utils::prelude::{ArcGlobalAlloc, ArenaAccess, CompilerPass, SccGroup},
 };
 
 pub struct Tycker {
@@ -63,7 +63,7 @@ impl Tycker {
             errors: Vec::new(),
         }
     }
-    pub fn run(&mut self) -> ResultKont<()> {
+    pub fn run_k(&mut self) -> ResultKont<()> {
         let mut scc = self.scoped.top.clone();
         let mut env = TyEnvT::new(());
         loop {
@@ -157,6 +157,16 @@ impl Tycker {
             Err(())?
         }
         Ok(())
+    }
+}
+
+impl CompilerPass for Tycker {
+    type Arena = StaticsArena;
+    type Input = ();
+    type Output = ();
+    type Error = ();
+    fn run(mut self, (): Self::Input) -> std::result::Result<Self::Output, Self::Error> {
+        self.run_k()
     }
 }
 

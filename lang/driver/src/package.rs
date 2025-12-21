@@ -11,6 +11,7 @@ use zydeco_surface::{
 };
 use zydeco_utils::{
     arena::*,
+    pass::CompilerPass,
     span::{FileInfo, LocationCtx},
 };
 
@@ -99,9 +100,9 @@ impl Package {
             })?;
 
         let t::Parser { spans, arena: textual } = parser;
-        let bitter = b::Arena::new_arc(alloc.clone());
-        let desugarer = Desugarer { spans, textual, bitter, prim: b::PrimTerms::default() };
-        let DesugarOut { spans, arena, prim: prim_term, top } =
+        let bitter = b::BitterArena::new_arc(alloc.clone());
+        let desugarer = Desugarer::new(&spans, textual, bitter);
+        let DesugarOut { arena, prim: prim_term, top } =
             desugarer.run(top).map_err(|err| LocalError::DesugarError(err.to_string()))?;
 
         Ok(PackageStew {

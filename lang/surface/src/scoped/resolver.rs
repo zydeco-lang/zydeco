@@ -19,7 +19,7 @@ pub struct Local {
 
 pub struct Resolver {
     pub spans: SpanArena,
-    pub bitter: Arena,
+    pub bitter: BitterArena,
     pub prim_term: PrimTerms,
     pub prim_def: PrimDefs,
     /// all internal definitions mapped to a corresponding def

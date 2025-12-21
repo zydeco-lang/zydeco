@@ -10,7 +10,7 @@ use zydeco_utils::prelude::{ArcGlobalAlloc, ArenaAssoc, ArenaForth, DepGraph, In
 pub struct PackageStew {
     pub sources: HashMap<PathBuf, String>,
     pub spans: t::SpanArena,
-    pub arena: b::Arena,
+    pub arena: b::BitterArena,
     pub prim_term: b::PrimTerms,
     pub top: b::TopLevel,
 }
@@ -33,7 +33,7 @@ impl PackageStew {
         PackageStew {
             sources: HashMap::new(),
             spans: t::SpanArena::new(alloc.alloc()),
-            arena: b::Arena::new_arc(alloc.clone()),
+            arena: b::BitterArena::new_arc(alloc.clone()),
             prim_term: b::PrimTerms::default(),
             top: b::TopLevel(Vec::new()),
         }
@@ -247,7 +247,7 @@ impl PackageScoped {
         // type-checking
         let PackageScoped { sources: _, spans, prim, arena: scoped } = self;
         let mut tycker = Tycker::new_arc(spans, prim, scoped, alloc);
-        match tycker.run() {
+        match tycker.run_k() {
             | Ok(()) => {}
             | Err(()) => {
                 // // Debug: print the declarations

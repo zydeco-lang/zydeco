@@ -8,7 +8,7 @@ pub trait Binders {
 }
 
 impl Binders for PatId {
-    type Arena = Arena;
+    type Arena = BitterArena;
     fn binders(&self, arena: &Self::Arena) -> im::HashMap<VarName, DefId> {
         let pat = &arena.pats[self];
         match pat {

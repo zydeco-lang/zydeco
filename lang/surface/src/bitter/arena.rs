@@ -4,7 +4,7 @@ use crate::textual::syntax as t;
 /* ---------------------------------- Arena --------------------------------- */
 
 #[derive(Clone, Debug, derive_more::AddAssign)]
-pub struct Arena {
+pub struct BitterArena {
     // arenas
     pub defs: ArenaSparse<DefId, VarName>,
     pub pats: ArenaSparse<PatId, Pattern>,
@@ -15,9 +15,9 @@ pub struct Arena {
     pub textual: ArenaForth<t::EntityId, EntityId>,
 }
 
-impl Arena {
+impl BitterArena {
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
-        Arena {
+        BitterArena {
             defs: ArenaSparse::new(alloc.alloc()),
             pats: ArenaSparse::new(alloc.alloc()),
             terms: ArenaSparse::new(alloc.alloc()),

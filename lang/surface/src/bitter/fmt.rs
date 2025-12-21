@@ -2,10 +2,10 @@ use super::syntax::*;
 
 pub use zydeco_syntax::Ugly;
 pub struct Formatter<'arena> {
-    arena: &'arena Arena,
+    arena: &'arena BitterArena,
 }
 impl<'arena> Formatter<'arena> {
-    pub fn new(arena: &'arena Arena) -> Self {
+    pub fn new(arena: &'arena BitterArena) -> Self {
         Formatter { arena }
     }
 }

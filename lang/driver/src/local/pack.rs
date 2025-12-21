@@ -12,6 +12,7 @@ use zydeco_surface::{
 };
 use zydeco_utils::{
     arena::*,
+    pass::CompilerPass,
     span::{FileInfo, LocationCtx},
 };
 
@@ -92,7 +93,7 @@ impl LocalPackage {
                 //     println!("{}", f.top.ugly(&Formatter::new(&f.arena)));
                 //     println!("<<< [{}]", f.path.display());
                 // }
-                let f = f.desugar(b::Arena::new_arc(alloc.clone()))?;
+                let f = f.desugar(b::BitterArena::new_arc(alloc.clone()))?;
                 // // Debug: print the desugared package
                 // if cfg!(debug_assertions) {
                 //     use zydeco_surface::bitter::fmt::*;
@@ -184,10 +185,10 @@ pub struct FileParsed {
 }
 
 impl FileParsed {
-    pub fn desugar(self, bitter: b::Arena) -> Result<FileBitter> {
+    pub fn desugar(self, bitter: b::BitterArena) -> Result<FileBitter> {
         let FileParsed { path, source, spans, arena: textual, top } = self;
-        let desugarer = Desugarer { spans, textual, bitter, prim: b::PrimTerms::default() };
-        let DesugarOut { spans, arena, prim: prim_term, top } =
+        let desugarer = Desugarer::new(&spans, textual, bitter);
+        let DesugarOut { arena, prim: prim_term, top } =
             desugarer.run(top).map_err(|err| LocalError::DesugarError(err.to_string()))?;
         Ok(FileBitter { path, source, spans, arena, prim_term, top })
     }
@@ -197,7 +198,7 @@ pub struct FileBitter {
     pub path: PathBuf,
     pub source: String,
     pub spans: t::SpanArena,
-    pub arena: b::Arena,
+    pub arena: b::BitterArena,
     pub prim_term: b::PrimTerms,
     pub top: b::TopLevel,
 }

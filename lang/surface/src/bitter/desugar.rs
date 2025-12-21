@@ -1,36 +1,54 @@
-use zydeco_syntax::SpanView;
-
 use crate::{
     bitter::{syntax as b, *},
     syntax::*,
     textual::syntax::{self as t, GenBind},
 };
+use zydeco_syntax::SpanView;
+use zydeco_utils::prelude::CompilerPass;
 
 pub trait Desugar {
     type Out;
     fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out>;
 }
 
-pub struct Desugarer {
-    pub spans: t::SpanArena,
+pub struct Desugarer<'a> {
+    pub spans: &'a t::SpanArena,
     pub textual: t::TextArena,
-    pub bitter: b::Arena,
+    pub bitter: b::BitterArena,
     pub prim: b::PrimTerms,
+}
+impl<'a> Desugarer<'a> {
+    pub fn new(spans: &'a t::SpanArena, textual: t::TextArena, bitter: b::BitterArena) -> Self {
+        Self { spans, textual, bitter, prim: b::PrimTerms::default() }
+    }
+}
+impl AsRef<b::BitterArena> for Desugarer<'_> {
+    fn as_ref(&self) -> &b::BitterArena {
+        &self.bitter
+    }
+}
+impl AsMut<b::BitterArena> for Desugarer<'_> {
+    fn as_mut(&mut self) -> &mut b::BitterArena {
+        &mut self.bitter
+    }
 }
 
 pub struct DesugarOut {
-    pub spans: t::SpanArena,
-    pub arena: b::Arena,
+    pub arena: b::BitterArena,
     pub prim: b::PrimTerms,
     pub top: b::TopLevel,
 }
 
-impl Desugarer {
-    pub fn run(self, top: t::TopLevel) -> Result<DesugarOut> {
+impl CompilerPass for Desugarer<'_> {
+    type Arena = b::BitterArena;
+    type Input = t::TopLevel;
+    type Output = DesugarOut;
+    type Error = DesugarError;
+    fn run(self, top: t::TopLevel) -> Result<DesugarOut> {
         let mut desugarer = self;
         let top = top.desugar(&mut desugarer)?;
-        let Desugarer { spans, bitter: arena, prim, .. } = desugarer;
-        Ok(DesugarOut { spans, arena, prim, top })
+        let Desugarer { bitter: arena, prim, .. } = desugarer;
+        Ok(DesugarOut { arena, prim, top })
     }
 }
 
@@ -807,7 +825,7 @@ impl Desugar for (t::CoData, t::EntityId) {
 mod impls {
     use super::*;
 
-    impl Desugarer {
+    impl Desugarer<'_> {
         pub fn lookup_def(&self, id: t::DefId) -> t::VarName {
             self.textual.defs[&id].clone()
         }
@@ -825,7 +843,7 @@ mod impls {
         }
     }
 
-    impl Desugarer {
+    impl Desugarer<'_> {
         pub(crate) fn vtype(&mut self, prev: t::EntityId) -> b::TermId {
             let term = Alloc::alloc(self, b::Internal::VType.into(), prev);
             *self.prim.vtype.extend_one(term)
