@@ -2,16 +2,14 @@
 //!
 //! After this pass, there will be no implicit captures.
 
-use super::arena::*;
-use super::subst::SubstitutionInPlace;
-use super::syntax::*;
+use super::{arena::*, substitution::SubstitutionInPlace, syntax::*};
 use std::collections::HashMap;
-use zydeco_statics::tyck::arena::StaticsArena;
-use zydeco_statics::tyck::syntax as ss;
-use zydeco_surface::scoped::arena::ScopedArena;
-use zydeco_syntax::VarName;
-use zydeco_utils::context::Context;
-use zydeco_utils::prelude::CoContext;
+use {
+    zydeco_statics::tyck::{arena::StaticsArena, syntax as ss},
+    zydeco_surface::scoped::arena::ScopedArena,
+    zydeco_syntax::VarName,
+    zydeco_utils::prelude::{CoContext, Context},
+};
 
 /// Perform closure conversion on the stack arena.
 pub struct ClosureConverter<'a> {
@@ -150,9 +148,12 @@ impl<'a> ClosureConverter<'a> {
                 .build(self, site);
         // Use a single LetArg to extract all captures from the stack
         let capture_stack = Bullet.build(self, site);
-        let transformed_arg_body =
-            Let { binder: Cons(capture_pattern, Bullet), bindee: capture_stack, tail: transformed_let_body }
-                .build(self, site);
+        let transformed_arg_body = Let {
+            binder: Cons(capture_pattern, Bullet),
+            bindee: capture_stack,
+            tail: transformed_let_body,
+        }
+        .build(self, site);
 
         // 4. Push the capture list onto the stack first, then run the fix.
         // Build the capture pair value from free_vars
