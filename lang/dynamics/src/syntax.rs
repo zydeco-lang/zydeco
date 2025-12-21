@@ -6,7 +6,7 @@ use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_utils::{arena::*, scc::SccGraph};
+use zydeco_utils::prelude::{ArenaSparse, SccGraph};
 
 /* ------------------------------- Identifier ------------------------------- */
 

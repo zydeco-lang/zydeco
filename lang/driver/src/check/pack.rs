@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::PathBuf};
 use zydeco_dynamics::Linker;
 use zydeco_statics::{tyck::Tycker, wf::WellFormedProgram};
 use zydeco_surface::scoped::{ResolveOut, Resolver};
-use zydeco_utils::{arena::*, deps::DepGraph};
+use zydeco_utils::prelude::{ArcGlobalAlloc, ArenaAssoc, ArenaForth, DepGraph, IndexAlloc};
 
 #[derive(Clone)]
 pub struct PackageStew {

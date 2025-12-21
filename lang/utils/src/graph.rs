@@ -1,12 +1,107 @@
-use crate::{
-    arena::IndexAlloc,
-    deps::{DepGraph, SrcGraph},
-};
+use crate::arena::IndexAlloc;
 use derive_more::{Deref, DerefMut, IntoIterator};
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
 };
+
+/// dependency graph; LHS depends on all RHSs
+#[derive(Clone, Debug, Default)]
+pub struct DepGraph<Id: Hash + Eq + Clone> {
+    pub(crate) map: HashMap<Id, HashSet<Id>>,
+}
+
+impl<Id: Hash + Eq + Clone> DepGraph<Id>
+// where
+//     Id: std::fmt::Debug,
+{
+    pub fn new() -> Self {
+        Self { map: HashMap::new() }
+    }
+    /// check if the graph is empty
+    pub fn empty(&self) -> bool {
+        self.map.is_empty()
+    }
+    /// add more dependencies to a node
+    pub fn add(&mut self, id: Id, deps: impl IntoIterator<Item = Id>) {
+        self.map.entry(id).or_insert_with(HashSet::new).extend(deps);
+    }
+    /// find the roots of the graph
+    pub fn roots(&self) -> Vec<Id> {
+        let mut roots = Vec::new();
+        for (id, deps) in &self.map {
+            if deps.is_empty() {
+                roots.push(id.clone());
+            }
+        }
+        roots
+    }
+    /// get all nodes
+    pub fn nodes(&self) -> HashSet<Id> {
+        self.map.keys().cloned().collect()
+    }
+    /// get all nodes in an order
+    pub fn order(&self) -> Vec<Id> {
+        self.map.keys().cloned().collect()
+    }
+    /// query the dependencies of a node
+    pub fn query(&self, id: &Id) -> Vec<Id> {
+        self.map.get(id).map(|s| s.iter().cloned().collect::<Vec<_>>()).unwrap_or_default()
+    }
+    /// reverse the graph
+    pub fn reverse(&self) -> SrcGraph<Id> {
+        let mut rdeps = SrcGraph::new();
+        for (id, deps) in &self.map {
+            rdeps.add(id.clone(), []);
+            for dep in deps {
+                rdeps.add(dep.clone(), [id.clone()]);
+            }
+        }
+        rdeps
+    }
+}
+
+/// co-dependency graph
+#[derive(Clone, Debug, Default)]
+pub struct SrcGraph<Id: Hash + Eq + Clone> {
+    pub(crate) map: HashMap<Id, HashSet<Id>>,
+}
+
+impl<Id: Hash + Eq + Clone> SrcGraph<Id>
+// where
+//     Id: std::fmt::Debug,
+{
+    pub fn new() -> Self {
+        Self { map: HashMap::new() }
+    }
+    /// add more sources to a node
+    pub fn add(&mut self, id: Id, srcs: impl IntoIterator<Item = Id>) {
+        if let Some(ss) = self.map.get_mut(&id) {
+            ss.extend(srcs);
+        } else {
+            self.map.insert(id, srcs.into_iter().collect());
+        }
+    }
+    /// query the sources of a node
+    pub fn query(&self, id: &Id) -> Vec<Id> {
+        self.map.get(id).map(|s| s.iter().cloned().collect::<Vec<_>>()).unwrap_or_default()
+    }
+    /// roots of the graph
+    pub fn roots(&self) -> HashSet<Id> {
+        let mut roots = self.map.keys().cloned().collect::<HashSet<_>>();
+        for (_, src) in &self.map {
+            for s in src {
+                roots.remove(s);
+            }
+            // roots = roots.difference(src).cloned().collect();
+        }
+        roots
+    }
+    /// get all nodes
+    pub fn nodes(&self) -> HashSet<Id> {
+        self.map.keys().cloned().collect()
+    }
+}
 
 // /// Tarjan's algorithm
 // pub struct Tarjan<'a, Id: Hash + Eq + Clone> {

@@ -1,6 +1,6 @@
 use super::syntax::*;
 use crate::textual::syntax as t;
-use zydeco_utils::{deps::DepGraph, monoid::Monoid, scc::SccGraph};
+use zydeco_utils::prelude::{DepGraph, SccGraph};
 
 pub use crate::arena::*;
 
@@ -261,18 +261,16 @@ impl LocalFoldScoped<Context> for Collector {
             }
             | Term::Data(inner) => {
                 let Data { arms } = inner;
-                let co_arms =
-                    CoContext::concat(arms.into_iter().map(|DataArm { name: _, param }| {
-                        self.coctxs_term_local[&param].to_owned()
-                    }));
+                let co_arms = CoContext::from_iter(arms.into_iter().flat_map(
+                    |DataArm { name: _, param }| self.coctxs_term_local[&param].to_owned(),
+                ));
                 self.coctxs_term_local.insert(term, co_arms);
             }
             | Term::CoData(inner) => {
                 let CoData { arms } = inner;
-                let co_arms = CoContext::concat(
-                    arms.into_iter()
-                        .map(|CoDataArm { name: _, out }| self.coctxs_term_local[&out].to_owned()),
-                );
+                let co_arms = CoContext::from_iter(arms.into_iter().flat_map(
+                    |CoDataArm { name: _, out }| self.coctxs_term_local[&out].to_owned(),
+                ));
                 self.coctxs_term_local.insert(term, co_arms);
             }
             | Term::Ctor(inner) => {
@@ -283,7 +281,7 @@ impl LocalFoldScoped<Context> for Collector {
             | Term::Match(inner) => {
                 let Match { scrut, arms } = inner;
                 let co_arms =
-                    CoContext::concat(arms.into_iter().map(|Matcher { binder, tail }| {
+                    CoContext::from_iter(arms.into_iter().flat_map(|Matcher { binder, tail }| {
                         let cx_binder = self.ctxs_pat_local[&binder].to_owned();
                         let co_binder = self.coctxs_pat_local[&binder].to_owned();
                         let co_tail = self.coctxs_term_local[&tail].to_owned();
@@ -294,10 +292,9 @@ impl LocalFoldScoped<Context> for Collector {
             }
             | Term::CoMatch(inner) => {
                 let CoMatch { arms } = inner;
-                let co_arms =
-                    CoContext::concat(arms.into_iter().map(|CoMatcher { dtor: _, tail }| {
-                        self.coctxs_term_local[&tail].to_owned()
-                    }));
+                let co_arms = CoContext::from_iter(arms.into_iter().flat_map(
+                    |CoMatcher { dtor: _, tail }| self.coctxs_term_local[&tail].to_owned(),
+                ));
                 self.coctxs_term_local.insert(term, co_arms);
             }
             | Term::Dtor(inner) => {

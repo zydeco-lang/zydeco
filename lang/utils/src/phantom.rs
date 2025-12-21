@@ -19,6 +19,11 @@ impl<S, T> Phantom<S, T> {
         self.0.clone()
     }
 }
+impl<S, T> From<S> for Phantom<S, T> {
+    fn from(s: S) -> Self {
+        Self::new(s)
+    }
+}
 impl<S, T> AsRef<S> for Phantom<S, T> {
     fn as_ref(&self) -> &S {
         &self.0

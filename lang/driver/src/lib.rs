@@ -42,11 +42,7 @@ pub use zydeco_utils::arena::ArcGlobalAlloc;
 use crate::check::pack::{PackageChecked, PackageStew};
 use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
-use zydeco_utils::{
-    arena::{ArenaDense, new_key_type},
-    deps::DepGraph,
-    scc::Kosaraju,
-};
+use zydeco_utils::prelude::{ArenaDense, DepGraph, Kosaraju, new_key_type};
 
 new_key_type! {
     pub struct PackId<()>;

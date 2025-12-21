@@ -1,5 +1,5 @@
-use once_cell::unsync::OnceCell;
 use std::{
+    cell::OnceCell,
     fmt::{Debug, Display},
     hash::Hash,
     path::PathBuf,

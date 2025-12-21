@@ -156,5 +156,3 @@ where
         self
     }
 }
-
-impl<T> crate::monoid::Monoid for CoContext<T> where T: std::hash::Hash + Eq + Clone {}

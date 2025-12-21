@@ -1,5 +1,3 @@
-use std::ops::AddAssign;
-
 /// An option wrapper that can be set once and then read many times.
 ///
 /// `init` meaning the cell is empty and we're inserting the value
@@ -12,13 +10,6 @@ pub struct SingCell<T> {
 impl<T> SingCell<T> {
     pub fn new() -> Self {
         Self { cell: None }
-    }
-    /// Initialize the cell if it is empty, and return a reference to the value.
-    pub fn init_or_get(&mut self, init: impl FnOnce() -> T) -> &T {
-        if self.cell.is_none() {
-            self.cell = Some(init())
-        }
-        self.cell.as_ref().unwrap()
     }
     /// Initialize the cell if it is empty, and return a reference to the value.
     /// If the cell is not empty, return an error.
@@ -52,7 +43,7 @@ impl<T> Default for SingCell<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct MultiCell<T> {
     cells: Vec<T>,
 }
@@ -79,13 +70,7 @@ impl<T> MultiCell<T> {
     }
 }
 
-impl<T> Default for MultiCell<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T> AddAssign for MultiCell<T> {
+impl<T> std::ops::AddAssign for MultiCell<T> {
     fn add_assign(&mut self, rhs: MultiCell<T>) {
         self.cells.extend(rhs.cells);
     }

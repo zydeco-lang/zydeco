@@ -7,10 +7,7 @@ use {
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
         *,
     },
-    zydeco_utils::{
-        arena::{ArcGlobalAlloc, ArenaAccess},
-        scc::SccGroup,
-    },
+    zydeco_utils::prelude::{ArcGlobalAlloc, ArenaAccess, SccGroup},
 };
 
 pub struct Tycker {
