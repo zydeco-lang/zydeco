@@ -7,12 +7,19 @@ extern "sysv64" fn zydeco_abort() {
 extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
     HEAP.with(|heap| {
         HEAP_SIZE.with(|heap_size| unsafe {
+            println!("[zydeco_alloc]");
             let heap_ptr = *heap.get();
             // align the heap pointer to the next 8-byte boundary
-            *heap_ptr += *heap_ptr % 8;
+            // this line should not be needed
+            // *heap_ptr += *heap_ptr % 8;
+            assert_eq!(*heap_ptr % 8, 0, "heap pointer is not aligned to 8-byte boundary");
             let heap_size_ptr = heap_size.get();
             let ptr = heap_ptr.add(*heap_size_ptr);
-            *heap_size_ptr += size * 8 * 8;
+            *heap_size_ptr += size * 8;
+            println!(
+                "[zydeco_alloc] ptr: {:p}, heap_ptr: {:p}, heap_size: 0x{:x}",
+                ptr, heap_ptr, *heap_size_ptr
+            );
             ptr
         })
     })
@@ -25,9 +32,15 @@ extern "sysv64" fn zydeco_exit(code: i64) {
 
 #[unsafe(export_name = "\x01zydeco_read_line")]
 extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
+    println!("[zydeco_read_line]");
     let mut line = String::new();
-    std::io::stdin().read_line(&mut line).unwrap();
+    {
+        use std::io::BufRead;
+        let mut stdin = std::io::stdin().lock();
+        stdin.read_line(&mut line).unwrap();
+    }
     line.pop();
+    println!("[zydeco_read_line] line: {}", line);
     unsafe {
         let env: *mut u8 = std::mem::transmute(*kont);
         let code: fn(*mut u8) -> fn(Box<String>) = std::mem::transmute(*kont.add(8));
@@ -37,7 +50,13 @@ extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
 
 #[unsafe(export_name = "\x01zydeco_write_line")]
 extern "sysv64" fn zydeco_write_line(line: Box<String>, kont: *mut *mut u8) {
-    println!("{}", line);
+    println!("[zydeco_write_line]");
+    {
+        use std::io::Write;
+        let mut stdout = std::io::stdout();
+        stdout.write_all(line.as_bytes()).unwrap();
+        stdout.flush().unwrap();
+    }
     unsafe {
         let env: *mut u8 = std::mem::transmute(*kont);
         let code: fn(*mut u8) = std::mem::transmute(*kont.add(8));
@@ -71,10 +90,12 @@ fn init_buffer() -> *mut u8 {
 }
 
 fn main() {
+    println!("[main]");
     ENV.with(|env| {
         HEAP.with(|heap| unsafe {
             let env_ptr = *env.get();
             let heap_ptr = *heap.get();
+            println!("[env_ptr: {:p}, heap_ptr: {:p}]", env_ptr, heap_ptr);
             let output = entry(env_ptr, heap_ptr);
             println!("{}", output);
         })

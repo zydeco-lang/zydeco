@@ -59,7 +59,7 @@ impl<'e> Emitter<'e> {
         let mut mentioned_externs = Vec::new();
         for (var_id, ()) in &self.assembly.externs {
             let var_name = &self.assembly.variables[var_id];
-            mentioned_externs.push(var_name.plain().to_string());
+            mentioned_externs.push(var_id.to_owned());
             let label = format!("zydeco_{}", var_name);
             self.instrs.push(Instr::Extern(label));
         }
@@ -75,10 +75,11 @@ impl<'e> Emitter<'e> {
         // }
 
         // Emit wrappers for externs
-        for extern_name in mentioned_externs.iter() {
+        for var_id in mentioned_externs.iter() {
+            let extern_name = &self.assembly.variables[var_id];
             let zydeco_extern_name = format!("zydeco_{}", extern_name);
             let wrapper_inner_name = format!("wrapper_{}", extern_name);
-            let num_args: usize = match extern_name.as_str() {
+            let num_args: usize = match extern_name.plain() {
                 | "exit" => 1,
                 | "read_line" => 1,
                 | "write_line" => 2,
@@ -113,13 +114,15 @@ impl<'e> Emitter<'e> {
             self.instrs.push(Instr::Call(zydeco_extern_name));
         }
 
+        let mut globals = EnvMap::new();
         self.instrs.push(Instr::Label("entry".to_string()));
         // initialize the environment and the heap
         self.instrs.push(Instr::Comment("initialize environment and heap".to_string()));
         self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R10, Arg64::Reg(Reg::Rdi))));
         self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rsi))));
         // initialize the externs
-        for extern_name in mentioned_externs.iter() {
+        for var_id in mentioned_externs.iter() {
+            let extern_name = &self.assembly.variables[var_id];
             let wrapper_inner_name = format!("wrapper_{}", extern_name);
             self.instrs.extend([
                 Instr::Label(format!("{}", extern_name)),
@@ -137,17 +140,22 @@ impl<'e> Emitter<'e> {
                     MemRef { reg: Reg::Rax, offset: 8 },
                     Reg32::Reg(Reg::Rcx),
                 )),
-                // push the pointer back to stack
-                Instr::Push(Arg32::Reg(Reg::Rax)),
-            ])
+            ]);
+            let idx = globals.alloc(*var_id);
+            // push the pointer to the environment
+            self.instrs.push(Instr::Mov(MovArgs::ToMem(
+                MemRef { reg: Reg::R10, offset: 8 * idx },
+                Reg32::Reg(Reg::Rax),
+            )));
         }
 
         // Assert that there's only one entry point, and emit it
         assert_eq!(self.assembly.entry.len(), 1, "expected exactly one entry point");
         let (entry, ()) = self.assembly.entry.iter().next().unwrap();
-        entry.emit(EnvMap::new(), &mut self);
+        entry.emit(globals.clone(), &mut self);
 
         // Emit the named blocks
+        // Todo: context of blocks should be passed from ZASM
         for (prog_id, _) in &self.assembly.programs {
             if let Some(label) = self.assembly.prog_label(prog_id) {
                 self.instrs.push(Instr::Label(label));

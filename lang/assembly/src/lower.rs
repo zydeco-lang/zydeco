@@ -71,7 +71,7 @@ impl<'a> Lowerer<'a> {
                                 // Don't make it a symbol. Instead, just make it a variable.
                                 let var = lo.arena.var(Some(def_id), name);
                                 lo.arena.externs.insert(var, ());
-                                lo.instr(Pop(var), kont)
+                                kont(lo)
                             })
                         }
                         | sk::Global::Defined(body) => {

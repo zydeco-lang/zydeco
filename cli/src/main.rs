@@ -1,5 +1,10 @@
 use clap::Parser;
-use std::{fs::File, io::Write, path::PathBuf, process::Command};
+use std::{
+    fs::File,
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 // use zydeco_cli::{Cli, Commands, Repl};
 use zydeco_cli::{Cli, Commands};
 use zydeco_driver::{BuildSystem, PackId, ProgKont};
@@ -287,17 +292,17 @@ fn link_x86(
         return Ok(());
     }
 
-    // run the program
-    let output = Command::new(&exe_fname).output().map_err(|e| e.to_string())?;
-    println!("Program output:");
-    print!("{}", std::str::from_utf8(&output.stdout).expect("program produced invalid UTF-8"));
-    if !output.status.success() {
-        Err(format!(
-            "Failure in program call: {}\n{}",
-            output.status,
-            std::str::from_utf8(&output.stderr).expect("program produced invalid UTF-8")
-        ))?;
+    // run the program with interactive I/O
+    let mut child = Command::new(&exe_fname)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    println!("child: {:?}", child);
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if !status.success() {
+        Err(format!("Failure in program call: {}", status))?;
     }
-    std::io::stdout().flush().map_err(|e| e.to_string())?;
     Ok(())
 }
