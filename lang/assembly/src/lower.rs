@@ -307,7 +307,10 @@ impl Lower for sk::VPatId {
         let vpat = lo.stack.vpats[self].clone();
         use sk::ValuePattern as VPat;
         match vpat {
-            | VPat::Hole(Hole) => kont(lo),
+            | VPat::Hole(Hole) => {
+                let var = lo.arena.var(None, VarName::from("_"));
+                lo.instr(Pop(var), kont)
+            }
             | VPat::Var(def_id) => {
                 // Pop the value from the stack into the variable
                 let name = lo.scoped.defs[&def_id].clone();
