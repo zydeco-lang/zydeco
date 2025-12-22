@@ -47,8 +47,6 @@ impl<'e> Emitter<'e> {
         self.instrs.extend([
             // section .text
             Instr::Section(".text".to_string()),
-            // global entry
-            Instr::Global("entry".to_string()),
             // zydeco_abort
             Instr::Extern("zydeco_abort".to_string()),
             // zydeco_alloc
@@ -73,6 +71,30 @@ impl<'e> Emitter<'e> {
         //         | SymbolInner::Triv(_) | SymbolInner::Prog(_) | SymbolInner::Literal(_) => {}
         //     }
         // }
+
+        // Emit rust_call_zydeco functions
+        self.instrs.extend([
+            Instr::Global("rust_call_zydeco_0".to_string()),
+            Instr::Label("rust_call_zydeco_0".to_string()),
+            Instr::Comment("discard the return address that is not needed".to_string()),
+            Instr::Pop(Loc::Reg(Reg::Rax)),
+            Instr::Comment("push the __env__ (which is in rsi) to the stack".to_string()),
+            Instr::Push(Arg32::Reg(Reg::Rsi)),
+            Instr::Comment("call the zydeco function __code__ (which is in rdi)".to_string()),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
+        ]);
+        self.instrs.extend([
+            Instr::Global("rust_call_zydeco_1".to_string()),
+            Instr::Label("rust_call_zydeco_1".to_string()),
+            Instr::Comment("discard the return address that is not needed".to_string()),
+            Instr::Pop(Loc::Reg(Reg::Rax)),
+            Instr::Comment("push the argument 0 (which is in rdx) to the stack".to_string()),
+            Instr::Push(Arg32::Reg(Reg::Rdx)),
+            Instr::Comment("push the __env__ (which is in rsi) to the stack".to_string()),
+            Instr::Push(Arg32::Reg(Reg::Rsi)),
+            Instr::Comment("call the zydeco function __code__ (which is in rdi)".to_string()),
+            Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
+        ]);
 
         // Emit wrappers for externs
         for var_id in mentioned_externs.iter() {
@@ -115,7 +137,7 @@ impl<'e> Emitter<'e> {
         }
 
         let mut globals = EnvMap::new();
-        self.instrs.push(Instr::Label("entry".to_string()));
+        self.instrs.extend([Instr::Global("entry".to_string()), Instr::Label("entry".to_string())]);
         // initialize the environment and the heap
         self.instrs.push(Instr::Comment("initialize environment and heap".to_string()));
         self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R10, Arg64::Reg(Reg::Rdi))));

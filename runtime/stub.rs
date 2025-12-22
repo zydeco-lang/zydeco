@@ -25,6 +25,13 @@ extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
     })
 }
 
+unsafe extern "sysv64" {
+    #[link_name = "\x01rust_call_zydeco_0"]
+    fn rust_call_zydeco_0(code: *mut u8, env: *mut u8);
+    #[link_name = "\x01rust_call_zydeco_1"]
+    fn rust_call_zydeco_1(code: *mut u8, env: *mut u8, arg0: *mut u8);
+}
+
 #[unsafe(export_name = "\x01zydeco_exit")]
 extern "sysv64" fn zydeco_exit(code: i64) {
     std::process::exit(code as i32);
@@ -43,8 +50,13 @@ extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
     println!("[zydeco_read_line] line: {}", line);
     unsafe {
         let env: *mut u8 = std::mem::transmute(*kont);
-        let code: fn(*mut u8) -> fn(Box<String>) = std::mem::transmute(*kont.add(8));
-        (code(env))(Box::new(line))
+        let code: *mut u8 = std::mem::transmute(*kont.add(8));
+        let arg0: *mut u8 = std::mem::transmute(Box::new(line));
+        println!(
+            "[zydeco_read_line] kont: {:p}, env: {:p}, code: {:p}, arg0: {:p}",
+            kont, env, code, arg0
+        );
+        rust_call_zydeco_1(code, env, arg0)
     }
 }
 
@@ -58,9 +70,13 @@ extern "sysv64" fn zydeco_write_line(line: Box<String>, kont: *mut *mut u8) {
         stdout.flush().unwrap();
     }
     unsafe {
+        let code: *mut u8 = std::mem::transmute(*kont);
+        let env: *mut u8 = std::mem::transmute(*kont.add(8));
+        println!("[zydeco_write_line] kont: {:p}, env: {:p}, code: {:p}", kont, env, code);
         let env: *mut u8 = std::mem::transmute(*kont);
-        let code: fn(*mut u8) = std::mem::transmute(*kont.add(8));
-        code(env)
+        let code: *mut u8 = std::mem::transmute(*kont.add(8));
+        println!("[zydeco_write_line] kont: {:p}, env: {:p}, code: {:p}", kont, env, code);
+        rust_call_zydeco_0(code, env)
     }
 }
 
