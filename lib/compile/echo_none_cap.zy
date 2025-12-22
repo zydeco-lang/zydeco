@@ -1,0 +1,10 @@
+pub extern def read_line : Thk (Thk (String -> OS) -> OS) end
+pub extern def exit : Thunk(Int -> OS) end
+
+main
+  ! read_line {
+    fn line ->
+      let ! f (z: Int) = let line = line in ! exit z in
+      ! f 0
+  }
+end
