@@ -52,7 +52,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for ProgId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for VarId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(format!("{}{}", f.arena.variables[self], self.concise()))
+        let trailing = f
+            .arena
+            .defs
+            .back(&DefId::Var(*self))
+            .map_or_else(|| String::new(), |def| format!("/{}", def.concise_inner()));
+        RcDoc::text(format!("{}[{}{}]", f.arena.variables[self], self.concise_inner(), trailing))
     }
 }
 

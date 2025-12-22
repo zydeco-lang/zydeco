@@ -41,6 +41,9 @@ unsafe extern "sysv64" {
     fn rust_call_zydeco_0(code: *mut u8, env: *mut u8);
     #[link_name = "\x01rust_call_zydeco_1"]
     fn rust_call_zydeco_1(code: *mut u8, env: *mut u8, arg0: *mut u8);
+    // variadic function call in C-style and is FFI-safe
+    // #[link_name = "\x01rust_call_zydeco"]
+    // fn rust_call_zydeco(code: *mut u8, env: *mut u8, num: usize, args: *const *mut u8);
 }
 
 #[unsafe(export_name = "\x01zydeco_exit")]
