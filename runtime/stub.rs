@@ -12,14 +12,14 @@ extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
             println!("[zydeco_alloc]");
             let heap_ptr = *heap.get();
             let heap_size_ptr = heap_size.get();
-            let ptr = heap_ptr.add(*heap_size_ptr * 8);
+            let ptr = heap_ptr.add(*heap_size_ptr);
             // check that the allocated pointer is aligned
             assert!(
                 ptr as usize % ALIGNMENT == 0,
                 "allocated pointer is not aligned to {}-byte boundary",
                 ALIGNMENT
             );
-            *heap_size_ptr += size;
+            *heap_size_ptr += size * 8;
             #[cfg(feature = "log_rt")]
             log::trace!(
                 "[zydeco_alloc] ptr: {:p}, heap_ptr: {:p}, heap_size: 0x{:x}",
