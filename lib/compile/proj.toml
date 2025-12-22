@@ -24,6 +24,7 @@ bins = [
     "tuple.zy",
     "exit.zy",
     "echo.zy",
+    "echo_none.zy",
     "echo_once.zy",
 ]
 
