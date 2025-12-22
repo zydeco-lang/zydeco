@@ -1,0 +1,10 @@
+extern def exit : Thk (Int -> OS) end
+
+def ! apply (A: VType) (B: CType) (f: Thk (A -> B)) (x: A) : B =
+  ! f x
+end
+
+main
+  do x <- ! apply Int (Ret Int) { fn x -> ret x } 1;
+  ! exit x
+end

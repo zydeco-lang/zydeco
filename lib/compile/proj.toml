@@ -30,6 +30,7 @@ bins = [
     "echo_none_cap.zy",
     "echo_none_twice.zy",
     "echo_once.zy",
+    "hof.zy",
 ]
 
 std = "nostd"
