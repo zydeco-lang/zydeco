@@ -8,6 +8,8 @@ extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
     HEAP.with(|heap| {
         HEAP_SIZE.with(|heap_size| unsafe {
             let heap_ptr = *heap.get();
+            // align the heap pointer to the next 8-byte boundary
+            *heap_ptr += *heap_ptr % 8;
             let heap_size_ptr = heap_size.get();
             let ptr = heap_ptr.add(*heap_size_ptr);
             *heap_size_ptr += size * 8 * 8;
