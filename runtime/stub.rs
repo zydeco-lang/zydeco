@@ -49,8 +49,8 @@ extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
     line.pop();
     println!("[zydeco_read_line] line: {}", line);
     unsafe {
-        let code: *mut u8 = std::mem::transmute(*kont);
-        let env: *mut u8 = std::mem::transmute(*kont.add(8));
+        let env: *mut u8 = std::mem::transmute(*kont);
+        let code: *mut u8 = std::mem::transmute(*kont.add(1));
         let arg0: *mut u8 = std::mem::transmute(Box::new(line));
         println!(
             "[zydeco_read_line] kont: {:p}, env: {:p}, code: {:p}, arg0: {:p}",
@@ -70,8 +70,8 @@ extern "sysv64" fn zydeco_write_line(line: Box<String>, kont: *mut *mut u8) {
         stdout.flush().unwrap();
     }
     unsafe {
-        let code: *mut u8 = std::mem::transmute(*kont);
-        let env: *mut u8 = std::mem::transmute(*kont.add(8));
+        let env: *mut u8 = std::mem::transmute(*kont);
+        let code: *mut u8 = std::mem::transmute(*kont.add(1));
         println!("[zydeco_write_line] kont: {:p}, env: {:p}, code: {:p}", kont, env, code);
         rust_call_zydeco_0(code, env)
     }
