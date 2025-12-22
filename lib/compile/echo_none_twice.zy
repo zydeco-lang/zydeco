@@ -3,7 +3,8 @@ pub extern def exit : Thunk(Int -> OS) end
 
 main
   ! read_line {
-    fn _ ->
-    ! exit 0
+    fn _ -> ! read_line {
+      fn _ -> ! exit 0
+    }
   }
 end
