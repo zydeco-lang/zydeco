@@ -298,7 +298,7 @@ fn link_x86(
         .stderr(Stdio::inherit())
         .spawn()
         .map_err(|e| e.to_string())?;
-    println!("child: {:?}", child);
+    // println!("child: {:?}", child);
     let status = child.wait().map_err(|e| e.to_string())?;
     if !status.success() {
         Err(format!("Failure in program call: {}", status))?;

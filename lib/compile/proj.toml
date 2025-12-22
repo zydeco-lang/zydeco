@@ -23,6 +23,7 @@ bins = [
     "factorial.zy",
     "tuple.zy",
     "tuple_do.zy",
+    "triple.zy",
     "exit.zy",
     "echo.zy",
     "echo_none.zy",

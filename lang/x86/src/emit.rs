@@ -454,11 +454,11 @@ impl<'a> Emit<'a> for Atom {
                     var_name.plain(),
                     var_id.concise()
                 )));
-                // println!("instrs:");
+                // log::trace!("instrs:");
                 // for instr in em.instrs.iter() {
-                //     println!("\t{}", instr);
+                //     log::trace!("\t{}", instr);
                 // }
-                println!("var: {}{}", var_name.plain(), var_id.concise());
+                // log::trace!("var: {}{}", var_name.plain(), var_id.concise());
                 let idx = env.get(var_id).expect("variable not found");
                 // load [r10 + 8 * idx] and push
                 em.instrs.extend([
