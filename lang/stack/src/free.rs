@@ -67,19 +67,17 @@ impl FreeVars for CompuId {
                 scrut.free_vars(arena)
                     + arms
                         .into_iter()
-                        .map(|Matcher { binder, tail }| {
-                            tail.free_vars(arena) - binder.vars(arena)
-                        })
+                        .map(|Matcher { binder, tail }| tail.free_vars(arena) - binder.vars(arena))
                         .fold(CoContext::new(), |acc, x| acc + x)
             }
             | Compu::LetValue(Let { binder, bindee, tail }) => {
-                bindee.free_vars(arena) - binder.vars(arena) + tail.free_vars(arena)
+                tail.free_vars(arena) - binder.vars(arena) + bindee.free_vars(arena)
             }
             | Compu::LetStack(Let { binder: Bullet, bindee, tail }) => {
                 bindee.free_vars(arena) + tail.free_vars(arena)
             }
             | Compu::LetArg(Let { binder: Cons(param, Bullet), bindee, tail }) => {
-                bindee.free_vars(arena) + tail.free_vars(arena) - param.vars(arena)
+                tail.free_vars(arena) - param.vars(arena) + bindee.free_vars(arena)
             }
             | Compu::CoCase(CoMatch { arms }) => arms
                 .into_iter()
