@@ -198,7 +198,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for StackArena {
         let mut s = String::new();
 
         // Print all globals
-        for def_id in self.global_seq.iter() {
+        for def_id in self.sequence.iter() {
             let global = &self.globals[def_id];
             let VarName(varname) = &f.scoped.defs[def_id];
             s += &format!("[def:{}{}]\n", varname, def_id.concise());
@@ -552,7 +552,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
         let mut doc = RcDoc::nil();
 
         // Print all globals
-        for def_id in self.global_seq.iter() {
+        for def_id in self.sequence.iter() {
             let global = &self.globals[def_id];
             let VarName(varname) = &f.scoped.defs[def_id];
             doc = doc.append(RcDoc::text(format!("[def:{}{}]", varname, def_id.concise())));

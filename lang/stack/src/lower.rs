@@ -66,7 +66,7 @@ impl<'a> Lowerer<'a> {
                             };
                             let value_id = Phantom::new(bindee)
                                 .lower(&mut self, Box::new(move |val_id, _lo| val_id));
-                            self.arena.global_seq.push(def_id);
+                            self.arena.sequence.push(def_id);
                             self.arena.globals.insert(def_id, Global::Defined(value_id));
                         }
                         | Decl::VAliasHead(ss::VAliasHead { binder, ty: _ }) => {
@@ -89,7 +89,7 @@ impl<'a> Lowerer<'a> {
                                     );
                                 }
                             };
-                            self.arena.global_seq.push(def_id);
+                            self.arena.sequence.push(def_id);
                             // Mark as external global
                             self.arena.globals.insert(def_id, Global::Extern(Extern));
                         }

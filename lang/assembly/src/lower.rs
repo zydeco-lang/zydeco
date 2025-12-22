@@ -43,7 +43,7 @@ impl<'a> Lowerer<'a> {
 
             // All globals are statically known, so compile them as symbols.
             // Collect globals with their def_ids for unified processing
-            let globals: Vec<_> = (self.stack.global_seq.clone().iter())
+            let globals: Vec<_> = (self.stack.sequence.clone().iter())
                 .rev()
                 .map(|&def_id| (def_id, self.stack.globals[&def_id].clone()))
                 .collect();
