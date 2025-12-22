@@ -231,7 +231,7 @@ struct JumpTable {
 }
 impl JumpTable {
     fn rodata_label(&self) -> String {
-        format!("jump_table_{}", self.id.concise_inner())
+        format!("jump_table_{}", self.id.concise_inner().replace('#', "_"))
     }
 }
 
@@ -279,7 +279,8 @@ impl<'a> Emit<'a> for ProgId {
                         em.instrs.push(Instr::JCC(ConditionCode::E, JmpArgs::Label(label)));
                     }
                     | None => {
-                        let label = format!("eq_jump_skip_{}", target.concise_inner());
+                        let label =
+                            format!("eq_jump_skip_{}", target.concise_inner().replace('#', "_"));
                         // otherwise, directly emit the target program
                         em.instrs
                             .push(Instr::JCC(ConditionCode::NE, JmpArgs::Label(label.clone())));
@@ -400,13 +401,12 @@ impl<'a> Emit<'a> for Instruction {
                 // Push argument onto stack
                 atom.emit(env, em);
             }
-            | Instruction::PopArg(pop) => {
+            | Instruction::PopArg(sa::Pop(var_id)) => {
                 // Pop argument from stack into variable
-                let var_id = pop.0;
                 let var_name = &em.assembly.variables[&var_id];
-                let idx = env.alloc(var_id);
+                let idx = env.alloc(*var_id);
                 em.instrs.extend([
-                    Instr::Comment(format!("pop_arg {}", var_name.plain())),
+                    Instr::Comment(format!("pop_arg {}{}", var_name.plain(), var_id.concise())),
                     // pop from stack
                     Instr::Pop(Loc::Reg(Reg::Rax)),
                     // store to [r10 + 8 * idx]
@@ -449,7 +449,11 @@ impl<'a> Emit<'a> for Atom {
         match self {
             | Atom::Var(var_id) => {
                 let var_name = &em.assembly.variables[var_id];
-                em.instrs.push(Instr::Comment(format!("push_var {}", var_name.plain())));
+                em.instrs.push(Instr::Comment(format!(
+                    "push_var {}{}",
+                    var_name.plain(),
+                    var_id.concise()
+                )));
                 // println!("instrs:");
                 // for instr in em.instrs.iter() {
                 //     println!("\t{}", instr);
@@ -469,7 +473,11 @@ impl<'a> Emit<'a> for Atom {
                 let symbol = &em.assembly.symbols[sym_id];
                 match symbol.inner.clone() {
                     | SymbolInner::Prog(prog_id) => {
-                        em.instrs.push(Instr::Comment("push_sym_prog".to_string()));
+                        em.instrs.push(Instr::Comment(format!(
+                            "push_sym_prog {}{}",
+                            symbol.name.clone(),
+                            sym_id.concise()
+                        )));
                         // push the program id
                         let label = em.assembly.prog_label(&prog_id).expect("block name not found");
                         em.instrs.extend([

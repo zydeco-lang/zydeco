@@ -61,7 +61,7 @@ where
 {
     fn sym_label(&self, sym: &SymId) -> String {
         let this = self.as_ref();
-        format!("{}_{}", this.symbols[&sym].name, sym.concise_inner())
+        format!("{}_{}", this.symbols[&sym].name, sym.concise_inner().replace('#', "_"))
     }
     fn prog_label(&self, prog: &ProgId) -> Option<String> {
         let this = self.as_ref();
