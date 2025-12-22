@@ -21,7 +21,9 @@ extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
             #[cfg(feature = "log_rt")]
             log::trace!(
                 "[zydeco_alloc] ptr: {:p}, heap_ptr: {:p}, heap_size: 0x{:x}",
-                ptr, heap_ptr, *heap_size_ptr
+                ptr,
+                heap_ptr,
+                *heap_size_ptr
             );
             println!(
                 "[zydeco_alloc] ptr: {:p}, heap_ptr: {:p}, heap_size: 0x{:x}",
@@ -66,7 +68,10 @@ extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
         #[cfg(feature = "log_rt")]
         log::trace!(
             "[zydeco_read_line] kont: {:p}, env: {:p}, code: {:p}, arg0: {:p}",
-            kont, env, code, arg0
+            kont,
+            env,
+            code,
+            arg0
         );
         println!(
             "[zydeco_read_line] kont: {:p}, env: {:p}, code: {:p}, arg0: {:p}",
@@ -85,6 +90,7 @@ extern "sysv64" fn zydeco_write_line(line: Box<String>, kont: *mut *mut u8) {
         use std::io::Write;
         let mut stdout = std::io::stdout();
         stdout.write_all(line.as_bytes()).unwrap();
+        stdout.write_all(b"\n").unwrap();
         stdout.flush().unwrap();
     }
     unsafe {
