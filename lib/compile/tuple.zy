@@ -1,6 +1,7 @@
-@[pure]
+extern def exit : Thk (Int -> OS) end
+
 main
-  let x = (10, 20) in
+  let x = (10, 0) in
   let (y, z) = x in
-  ret z
+  ! exit z
 end
