@@ -8,4 +8,10 @@ build = "build.rs"
 name = "main"
 path = "stub.rs"
 
+[features]
+default = []
+log_rt = ["dep:log", "dep:env_logger"]
+
 [dependencies]
+log = { version = "0.4", optional = true }
+env_logger = { version = "0.11", optional = true }

@@ -7,6 +7,8 @@ extern "sysv64" fn zydeco_abort() {
 extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
     HEAP.with(|heap| {
         HEAP_SIZE.with(|heap_size| unsafe {
+            #[cfg(feature = "log_rt")]
+            log::trace!("[zydeco_alloc]");
             println!("[zydeco_alloc]");
             let heap_ptr = *heap.get();
             // align the heap pointer to the next 8-byte boundary
@@ -16,6 +18,11 @@ extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
             let heap_size_ptr = heap_size.get();
             let ptr = heap_ptr.add(*heap_size_ptr);
             *heap_size_ptr += size * 8;
+            #[cfg(feature = "log_rt")]
+            log::trace!(
+                "[zydeco_alloc] ptr: {:p}, heap_ptr: {:p}, heap_size: 0x{:x}",
+                ptr, heap_ptr, *heap_size_ptr
+            );
             println!(
                 "[zydeco_alloc] ptr: {:p}, heap_ptr: {:p}, heap_size: 0x{:x}",
                 ptr, heap_ptr, *heap_size_ptr
@@ -39,6 +46,8 @@ extern "sysv64" fn zydeco_exit(code: i64) {
 
 #[unsafe(export_name = "\x01zydeco_read_line")]
 extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
+    #[cfg(feature = "log_rt")]
+    log::trace!("[zydeco_read_line]");
     println!("[zydeco_read_line]");
     let mut line = String::new();
     {
@@ -47,11 +56,18 @@ extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
         stdin.read_line(&mut line).unwrap();
     }
     line.pop();
+    #[cfg(feature = "log_rt")]
+    log::trace!("[zydeco_read_line] line: {}", line);
     println!("[zydeco_read_line] line: {}", line);
     unsafe {
         let env: *mut u8 = std::mem::transmute(*kont);
         let code: *mut u8 = std::mem::transmute(*kont.add(1));
         let arg0: *mut u8 = std::mem::transmute(Box::new(line));
+        #[cfg(feature = "log_rt")]
+        log::trace!(
+            "[zydeco_read_line] kont: {:p}, env: {:p}, code: {:p}, arg0: {:p}",
+            kont, env, code, arg0
+        );
         println!(
             "[zydeco_read_line] kont: {:p}, env: {:p}, code: {:p}, arg0: {:p}",
             kont, env, code, arg0
@@ -62,6 +78,8 @@ extern "sysv64" fn zydeco_read_line(kont: *mut *mut u8) {
 
 #[unsafe(export_name = "\x01zydeco_write_line")]
 extern "sysv64" fn zydeco_write_line(line: Box<String>, kont: *mut *mut u8) {
+    #[cfg(feature = "log_rt")]
+    log::trace!("[zydeco_write_line]");
     println!("[zydeco_write_line]");
     {
         use std::io::Write;
@@ -72,6 +90,8 @@ extern "sysv64" fn zydeco_write_line(line: Box<String>, kont: *mut *mut u8) {
     unsafe {
         let env: *mut u8 = std::mem::transmute(*kont);
         let code: *mut u8 = std::mem::transmute(*kont.add(1));
+        #[cfg(feature = "log_rt")]
+        log::trace!("[zydeco_write_line] kont: {:p}, env: {:p}, code: {:p}", kont, env, code);
         println!("[zydeco_write_line] kont: {:p}, env: {:p}, code: {:p}", kont, env, code);
         rust_call_zydeco_0(code, env)
     }
@@ -103,11 +123,17 @@ fn init_buffer() -> *mut u8 {
 }
 
 fn main() {
+    #[cfg(feature = "log_rt")]
+    env_logger::init();
+    #[cfg(feature = "log_rt")]
+    log::trace!("[main]");
     println!("[main]");
     ENV.with(|env| {
         HEAP.with(|heap| unsafe {
             let env_ptr = *env.get();
             let heap_ptr = *heap.get();
+            #[cfg(feature = "log_rt")]
+            log::trace!("[env_ptr: {:p}, heap_ptr: {:p}]", env_ptr, heap_ptr);
             println!("[env_ptr: {:p}, heap_ptr: {:p}]", env_ptr, heap_ptr);
             let output = entry(env_ptr, heap_ptr);
             println!("{}", output);

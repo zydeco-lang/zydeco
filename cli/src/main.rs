@@ -247,8 +247,7 @@ fn link_x86(
             .arg(build_dir.join("Cargo.toml"))
             .arg("--target")
             .arg("x86_64-apple-darwin")
-            .arg("-p")
-            .arg("zydeco-runtime")
+            // .arg("--features=log_rt")
             // .arg("--release")
             .output()
             .map_err(|e| format!("cargo err: {}", e))?
@@ -267,8 +266,7 @@ fn link_x86(
             .arg("build")
             .arg("--manifest-path")
             .arg(build_dir.join("Cargo.toml"))
-            .arg("-p")
-            .arg("zydeco-runtime")
+            // .arg("--features=log_rt")
             // .arg("--release")
             .output()
             .map_err(|e| format!("cargo err: {}", e))?
@@ -294,6 +292,7 @@ fn link_x86(
 
     // run the program with interactive I/O
     let mut child = Command::new(&exe_fname)
+        // .env("RUST_LOG", "trace")
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())

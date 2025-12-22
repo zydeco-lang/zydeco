@@ -2443,6 +2443,10 @@ dependencies = [
 [[package]]
 name = "zydeco-runtime"
 version = "0.0.0"
+dependencies = [
+ "env_logger",
+ "log",
+]
 
 [[package]]
 name = "zydeco-stack"
