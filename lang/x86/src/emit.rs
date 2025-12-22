@@ -181,7 +181,7 @@ impl<'e> Emitter<'e> {
         for (prog_id, _) in &self.assembly.programs {
             if let Some(label) = self.assembly.prog_label(prog_id) {
                 self.instrs.push(Instr::Label(label));
-                prog_id.emit(EnvMap::new(), &mut self);
+                prog_id.emit(globals.clone(), &mut self);
             }
         }
 
@@ -458,7 +458,7 @@ impl<'a> Emit<'a> for Atom {
                 // for instr in em.instrs.iter() {
                 //     println!("\t{}", instr);
                 // }
-                // println!("var: {}{}", var_name.plain(), var_id.concise());
+                println!("var: {}{}", var_name.plain(), var_id.concise());
                 let idx = env.get(var_id).expect("variable not found");
                 // load [r10 + 8 * idx] and push
                 em.instrs.extend([

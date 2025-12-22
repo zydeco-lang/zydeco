@@ -1,0 +1,7 @@
+extern def exit : Thk (Int -> OS) end
+
+main
+  do x <- ret (10, 0);
+  do (y, z) <- ret x;
+  ! exit z
+end
