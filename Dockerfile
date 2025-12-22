@@ -5,6 +5,6 @@ WORKDIR /usr/src/zydeco
 COPY . .
 
 RUN cargo build --release
-RUN cargo test --release
+RUN cargo test-all --release
 
 ENV PATH="/usr/src/zydeco/target/release:$PATH"

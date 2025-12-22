@@ -40,7 +40,7 @@ A shell will then be spawned in the container at `/usr/src/zydeco`, where a copy
 
 2. Run the tests on Zydeco inside the docker container
 ```sh
-cargo test --release
+cargo test-all --release
 ```
 The tests perform basic sanity checks on the implementation of Zydeco, as well as all the core features mentioned in the paper.
 
