@@ -2375,6 +2375,7 @@ dependencies = [
  "log",
  "pretty",
  "rustc-hash",
+ "thiserror",
  "zydeco-stack",
  "zydeco-statics",
  "zydeco-surface",

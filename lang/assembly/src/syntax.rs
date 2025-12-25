@@ -30,6 +30,7 @@ pub enum Program {
     Jump(Jump),
     /// Pop two values off the stack, compare them, and
     /// jump to the target program if they are equal.
+    /// The only intended use case is for tag comparisons.
     EqJump(EqJump),
     /// Pop the top value (an address) off the stack, and dynamically jump to it.
     PopJump(PopJump),

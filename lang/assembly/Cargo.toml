@@ -21,3 +21,4 @@ im = { workspace = true }
 pretty = { workspace = true }
 rustc-hash = { workspace = true }
 log = { workspace = true }
+thiserror = { workspace = true }
