@@ -22,7 +22,7 @@ auto_impl = { workspace = true }
 zydeco-utils = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }
-derive_more = { workspace = true }
+derive_more = { workspace = true, features = ["add_assign"] }
 
 # build-time dependency on the lalrpop library:
 [build-dependencies]

@@ -15,7 +15,14 @@ zydeco-utils = { workspace = true }
 zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }
 zydeco-surface = { workspace = true }
-derive_more = { workspace = true }
+derive_more = { workspace = true, features = [
+    "from",
+    "into",
+    "deref",
+    "deref_mut",
+    "index",
+    "index_mut",
+] }
 auto_impl = { workspace = true }
 im = { workspace = true }
 indexmap = { workspace = true }

@@ -13,7 +13,7 @@ description = "general syntax structures for zydeco"
 [dependencies]
 zydeco-derive = { workspace = true }
 zydeco-utils = { workspace = true }
-derive_more = { workspace = true }
+derive_more = { workspace = true, features = ["from"] }
 impl-tools = { workspace = true }
 pretty = { workspace = true }
 

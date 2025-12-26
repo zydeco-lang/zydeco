@@ -124,9 +124,9 @@ pub enum Tok<'input> {
     #[token("@")]
     At,
 
-    #[regex(r"--\|.*\n")]
+    #[regex(r"--\|.*?\n")]
     DocLine(&'input str),
-    #[regex(r"--.*\n")]
+    #[regex(r"--.*?\n")]
     CommentLine(&'input str),
     #[token("/-")]
     CommentOpen,

@@ -1,11 +1,11 @@
 //! Environments used by the Zydeco type checker.
 
 use super::{syntax::*, *};
-use derive_more::{Deref, DerefMut, From, Into};
-use std::ops::{Add, AddAssign, Index};
-use zydeco_utils::with::With;
+use derive_more::{Deref, DerefMut, From, Index, IndexMut, Into, IntoIterator};
+use std::ops::{Add, AddAssign};
+use zydeco_utils::prelude::With;
 
-#[derive(Clone, Debug, From, Into, Deref, DerefMut)]
+#[derive(Clone, Debug, From, Into, Deref, DerefMut, Index, IndexMut, IntoIterator)]
 pub struct Env<T>(im::HashMap<DefId, T>);
 
 mod impls_env {
@@ -46,31 +46,12 @@ mod impls_env {
             Self::new()
         }
     }
-    impl<T> Index<&DefId> for Env<T>
-    where
-        T: Clone,
-    {
-        type Output = T;
-        fn index(&self, def: &DefId) -> &T {
-            &self.0[def]
-        }
-    }
     impl<T> FromIterator<(DefId, T)> for Env<T>
     where
         T: Clone,
     {
         fn from_iter<I: IntoIterator<Item = (DefId, T)>>(iter: I) -> Self {
             Self(iter.into_iter().collect())
-        }
-    }
-    impl<T> IntoIterator for Env<T>
-    where
-        T: Clone,
-    {
-        type Item = (DefId, T);
-        type IntoIter = im::hashmap::ConsumingIter<(DefId, T)>;
-        fn into_iter(self) -> Self::IntoIter {
-            self.0.into_iter()
         }
     }
 }
