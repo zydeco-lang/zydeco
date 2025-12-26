@@ -14,12 +14,15 @@ pub trait Desugar {
 pub struct Desugarer<'a> {
     pub spans: &'a t::SpanArena,
     pub textual: t::TextArena,
+    pub top: t::TopLevel,
     pub bitter: b::BitterArena,
     pub prim: b::PrimTerms,
 }
 impl<'a> Desugarer<'a> {
-    pub fn new(spans: &'a t::SpanArena, textual: t::TextArena, bitter: b::BitterArena) -> Self {
-        Self { spans, textual, bitter, prim: b::PrimTerms::default() }
+    pub fn new(
+        spans: &'a t::SpanArena, textual: t::TextArena, top: t::TopLevel, bitter: b::BitterArena,
+    ) -> Self {
+        Self { spans, textual, top, bitter, prim: b::PrimTerms::default() }
     }
 }
 impl AsRef<b::BitterArena> for Desugarer<'_> {
@@ -41,12 +44,11 @@ pub struct DesugarOut {
 
 impl CompilerPass for Desugarer<'_> {
     type Arena = b::BitterArena;
-    type Input = t::TopLevel;
-    type Output = DesugarOut;
+    type Out = DesugarOut;
     type Error = DesugarError;
-    fn run(self, top: t::TopLevel) -> Result<DesugarOut> {
+    fn run(self) -> Result<DesugarOut> {
         let mut desugarer = self;
-        let top = top.desugar(&mut desugarer)?;
+        let top = desugarer.top.clone().desugar(&mut desugarer)?;
         let Desugarer { bitter: arena, prim, .. } = desugarer;
         Ok(DesugarOut { arena, prim, top })
     }

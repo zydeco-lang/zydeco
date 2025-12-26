@@ -162,10 +162,9 @@ impl Tycker {
 
 impl CompilerPass for Tycker {
     type Arena = StaticsArena;
-    type Input = ();
-    type Output = ();
+    type Out = ();
     type Error = ();
-    fn run(mut self, (): Self::Input) -> std::result::Result<Self::Output, Self::Error> {
+    fn run(mut self) -> std::result::Result<Self::Out, Self::Error> {
         self.run_k()
     }
 }

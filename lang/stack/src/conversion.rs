@@ -2,8 +2,10 @@
 //!
 //! After this pass, there will be no implicit captures.
 
+use zydeco_utils::pass::CompilerPass;
+
 use super::{arena::*, substitution::SubstitutionInPlace, syntax::*};
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::Infallible};
 use {
     zydeco_statics::tyck::{arena::StaticsArena, syntax as ss},
     zydeco_surface::scoped::arena::ScopedArena,
@@ -28,6 +30,16 @@ impl AsMut<StackArena> for ClosureConverter<'_> {
     }
 }
 
+impl<'a> CompilerPass for ClosureConverter<'a> {
+    type Arena = StackArena;
+    type Out = ();
+    type Error = Infallible;
+    fn run(self) -> Result<Self::Out, Self::Error> {
+        self.convert();
+        Ok(())
+    }
+}
+
 impl<'a> ClosureConverter<'a> {
     pub fn new(
         arena: &'a mut StackArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
@@ -35,7 +47,7 @@ impl<'a> ClosureConverter<'a> {
         Self { arena, scoped, _statics: statics }
     }
 
-    pub fn convert(&mut self) {
+    pub fn convert(mut self) {
         // Transform Fix computations
         let fixes: Vec<_> = (self.arena.compus.iter())
             .filter_map(|(id, compu)| match compu {

@@ -3,8 +3,7 @@ where
     Self: AsRef<Self::Arena> + AsMut<Self::Arena>,
 {
     type Arena;
-    type Input;
-    type Output;
+    type Out;
     type Error;
-    fn run(self, input: Self::Input) -> Result<Self::Output, Self::Error>;
+    fn run(self) -> Result<Self::Out, Self::Error>;
 }

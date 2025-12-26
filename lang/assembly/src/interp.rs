@@ -54,18 +54,14 @@ pub enum Error {
     StackUnderflow,
     #[error("Type error: {0}")]
     TypeError(String),
-    #[error("No entry point")]
-    NoEntryPoint,
 }
 
 impl CompilerPass for Interpreter {
     type Arena = AssemblyArena;
-    type Input = ();
-    type Output = Output;
+    type Out = Output;
     type Error = Error;
-    fn run(mut self, (): Self::Input) -> Result<Self::Output, Self::Error> {
-        let entry =
-            self.arena.entry.iter().map(|(prog, _)| *prog).next().ok_or(Error::NoEntryPoint)?;
+    fn run(mut self) -> Result<Self::Out, Self::Error> {
+        let entry = self.arena.entry.iter().map(|(prog, _)| *prog).next().expect("no entry point");
         entry.eval(&mut self)
     }
 }
