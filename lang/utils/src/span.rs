@@ -1,3 +1,4 @@
+use crate::with::With;
 use std::{
     cell::OnceCell,
     fmt::{Debug, Display},
@@ -157,11 +158,13 @@ impl Display for Cursor2 {
     }
 }
 
-#[derive(Default, Clone, Debug)]
-pub struct Sp<T> {
-    pub inner: T,
-    pub info: Span,
-}
+pub type Sp<T> = With<Span, T>;
+
+// #[derive(Default, Clone, Debug)]
+// pub struct Sp<T> {
+//     pub inner: T,
+//     pub info: Span,
+// }
 
 // impl<T: Clone> Sp<T> {
 //     #[inline]

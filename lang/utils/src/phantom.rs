@@ -7,7 +7,12 @@ use std::{
 ///
 /// - S: The source type.
 /// - T: The phantom target type.
-pub struct Phantom<S, T>(S, std::marker::PhantomData<T>);
+pub struct Phantom<S, T>(
+    S,
+    /// A phantom type that is used to track the associated type.
+    /// The `fn() -> T` is used because `Phantom` doesn't logically store `T`.
+    std::marker::PhantomData<fn() -> T>,
+);
 impl<S, T> Phantom<S, T> {
     pub fn new(s: S) -> Self {
         Self(s, std::marker::PhantomData)

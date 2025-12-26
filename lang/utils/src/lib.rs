@@ -9,10 +9,16 @@ pub mod graph;
 pub mod err;
 pub mod pass;
 pub mod phantom;
+pub mod with;
 
 pub mod prelude {
     /// Source code location.
     pub use crate::span::{Sp, Span};
+    /// Design patterns.
+    pub use crate::{
+        with::With,
+        phantom::Phantom,
+    };
     /// Data structures.
     pub use crate::{
         arena::*,
@@ -20,6 +26,5 @@ pub mod prelude {
         context::{CoContext, Context},
         graph::{DepGraph, Kosaraju, SccGraph, SccGroup, SrcGraph},
         pass::CompilerPass,
-        phantom::Phantom,
     };
 }
