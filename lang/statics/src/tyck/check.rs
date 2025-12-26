@@ -65,7 +65,7 @@ impl Tycker {
     }
     pub fn run_k(&mut self) -> ResultKont<()> {
         let mut scc = self.scoped.top.clone();
-        let mut env = TyEnvT::new(());
+        let mut env = TyEnvT::new(Default::default(), ());
         loop {
             let groups = scc.top();
             // if no more groups are at the top, we're done
@@ -326,7 +326,7 @@ impl Tyck for TyEnvT<SccGroup<su::DeclId>> {
                                 && &meta.stem == "pure"
                             {
                                 // check with Ret
-                                let ret_app_hole = tycker.ret_hole(&self.env, term);
+                                let ret_app_hole = tycker.ret_hole(&self.info, term);
                                 let out_ann = env
                                     .mk(term)
                                     .tyck_k(tycker, Action::ana(ret_app_hole.into()))?;
@@ -334,7 +334,7 @@ impl Tyck for TyEnvT<SccGroup<su::DeclId>> {
                                 tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
                             } else {
                                 // check with OS
-                                let os = ss::OSTy.build(tycker, &env.env);
+                                let os = ss::OSTy.build(tycker, &env.info);
                                 let out_ann =
                                     env.mk(term).tyck_k(tycker, Action::ana(os.into()))?;
                                 let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
@@ -396,9 +396,9 @@ impl Tyck for TyEnvT<su::DeclId> {
                 };
 
                 // add the type into the environment
-                let TyEnvT { env: new_env, inner: () } =
+                let TyEnvT { info: new_env, inner: () } =
                     env.mk(Assign(binder, bindee)).tyck_k(tycker, ())?;
-                env.env = new_env;
+                env.info = new_env;
                 tycker
                     .statics
                     .decls
@@ -505,7 +505,7 @@ impl Tyck for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
                 let abst = tycker.statics.absts.alloc(());
                 tycker.statics.abst_hints.insert(abst, def);
                 let abst_ty = Alloc::alloc(tycker, abst, kd);
-                env.env += [(def, abst_ty.into())];
+                env.info += [(def, abst_ty.into())];
                 abst_map.insert(id.to_owned(), (abst, kd));
             }
         }
@@ -531,15 +531,15 @@ impl Tyck for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
                 std::panic::Location::caller(),
             )?;
             // subst vars in bindee
-            let bindee_subst = bindee.subst_env_k(tycker, &env.env)?;
+            let bindee_subst = bindee.subst_env_k(tycker, &env.info)?;
             // add the types to the seal arena
             let (abst, kd) = abst_map[id];
             tycker.statics.seals.insert(abst, bindee_subst);
             let abst_ty = Alloc::alloc(tycker, abst, kd);
             // add the type into the environment
-            let TyEnvT { env: new_env, inner: () } =
+            let TyEnvT { info: new_env, inner: () } =
                 env.mk(Assign(binder, abst_ty)).tyck_k(tycker, ())?;
-            env.env = new_env;
+            env.info = new_env;
         }
         Ok(env)
     }
@@ -624,7 +624,7 @@ impl Tyck for TyEnvT<su::PatId> {
                     | AnnId::Set => unreachable!(),
                     | AnnId::Kind(kd) => kd.into(),
                     | AnnId::Type(ty) => {
-                        let vtype = ss::VType.build(tycker, &self.env);
+                        let vtype = ss::VType.build(tycker, &self.info);
                         let kd = tycker.statics.annotations_type[&ty].to_owned();
                         Lub::lub_k(vtype, kd, tycker)?;
                         ty.into()
@@ -645,7 +645,7 @@ impl Tyck for TyEnvT<su::PatId> {
                     let AnnId::Type(ann_ty) = ann else {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     };
-                    let ann_ty_unroll = ann_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
+                    let ann_ty_unroll = ann_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
                     let ss::Type::Data(data_id) = &tycker.type_filled_k(&ann_ty_unroll)? else {
                         tycker.err_k(
                             TyckError::TypeExpected {
@@ -679,7 +679,7 @@ impl Tyck for TyEnvT<su::PatId> {
             },
             | Pat::Triv(pat) => {
                 let su::Triv = pat;
-                let ann = ss::UnitTy.build(tycker, &self.env);
+                let ann = ss::UnitTy.build(tycker, &self.info);
                 let triv = Alloc::alloc(tycker, ss::Triv, ann);
                 match switch {
                     | Switch::Syn => PatAnnId::Value(triv, ann),
@@ -710,7 +710,7 @@ impl Tyck for TyEnvT<su::PatId> {
                                     self.mk(b).tyck_k(tycker, Action::ana(ty_b.into()))?;
                                 let (a_out, a_ann) = a_out_ann.as_value();
                                 let (b_out, b_ann) = b_out_ann.as_value();
-                                let vtype = ss::VType.build(tycker, &self.env);
+                                let vtype = ss::VType.build(tycker, &self.info);
                                 let ann = Alloc::alloc(tycker, ss::Prod(a_ann, b_ann), vtype);
                                 let pat = Alloc::alloc(tycker, ss::Cons(a_out, b_out), ann);
                                 PatAnnId::Value(pat, ann)
@@ -727,10 +727,10 @@ impl Tyck for TyEnvT<su::PatId> {
                                     subst_vec.push((def, ty_abst.into()));
                                 }
                                 let b_out_ann = self
-                                    .mk_ext(subst_vec, b)
+                                    .mk_add(subst_vec, b)
                                     .tyck_k(tycker, Action::ana(ty_body.into()))?;
                                 let (b_out, ty_body) = b_out_ann.as_value();
-                                let vtype = ss::VType.build(tycker, &self.env);
+                                let vtype = ss::VType.build(tycker, &self.info);
                                 let ann = Alloc::alloc(tycker, ss::Exists(abst, ty_body), vtype);
                                 let pat = Alloc::alloc(tycker, ss::Cons(a_out, b_out), ann);
                                 PatAnnId::Value(pat, ann)
@@ -774,9 +774,9 @@ impl Tyck for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
                 // def_kd should correctly be the type of assignee
                 let assignee_kd = { tycker.statics.annotations_type[&assignee].to_owned() };
                 Lub::lub_k(def_kd, assignee_kd, tycker)?;
-                let mut env = self.env.clone();
+                let mut env = self.info.clone();
                 env += [(def, assignee.into())];
-                Ok(TyEnvT { env, inner: () })
+                Ok(TyEnvT { info: env, inner: () })
             }
         }
     }
@@ -869,7 +869,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     | _ => {
                         let kd = tycker.statics.annotations_type[&ty].to_owned();
                         switch = Switch::Ana(
-                            ty.subst_env_k(tycker, &self.env)?.normalize_k(tycker, kd)?.into(),
+                            ty.subst_env_k(tycker, &self.info)?.normalize_k(tycker, kd)?.into(),
                         )
                     }
                 },
@@ -1023,11 +1023,11 @@ impl Tyck for TyEnvT<su::TermId> {
                 };
                 match ann {
                     | AnnId::Set => {
-                        let ann = self.env[&def];
+                        let ann = self.info[&def];
                         let AnnId::Kind(kd) = ann else { unreachable!() };
                         TermAnnId::Kind(kd)
                     }
-                    | AnnId::Kind(kd) => match self.env.recursively_get_type(tycker, &def) {
+                    | AnnId::Kind(kd) => match self.info.recursively_get_type(tycker, &def) {
                         | Some(&ann) => {
                             let AnnId::Type(ty) = ann else { unreachable!() };
                             TermAnnId::Type(ty, kd)
@@ -1045,7 +1045,7 @@ impl Tyck for TyEnvT<su::TermId> {
             }
             | Tm::Triv(term) => {
                 let su::Triv = term;
-                let unit = ss::UnitTy.build(tycker, &self.env);
+                let unit = ss::UnitTy.build(tycker, &self.info);
                 let triv = Alloc::alloc(tycker, ss::Triv, unit);
                 match switch {
                     | Switch::Syn => TermAnnId::Value(triv, unit),
@@ -1083,7 +1083,7 @@ impl Tyck for TyEnvT<su::TermId> {
                             TyckError::SortMismatch,
                             std::panic::Location::caller(),
                         )?;
-                        let vtype = ss::VType.build(tycker, &self.env);
+                        let vtype = ss::VType.build(tycker, &self.info);
                         let prod = Alloc::alloc(tycker, ss::Prod(a_ty, b_ty), vtype);
                         let cons = Alloc::alloc(tycker, ss::Cons(a_out, b_out), prod);
                         TermAnnId::Value(cons, prod)
@@ -1111,7 +1111,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
                                 )?;
-                                let vtype = ss::VType.build(tycker, &self.env);
+                                let vtype = ss::VType.build(tycker, &self.info);
                                 let prod = Alloc::alloc(tycker, ss::Prod(a_ty, b_ty), vtype);
                                 let cons = Alloc::alloc(tycker, ss::Cons(a_out, b_out), prod);
                                 TermAnnId::Value(cons, prod)
@@ -1166,7 +1166,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                     subst_vec
                                 };
                                 let body_out_ann =
-                                    self.mk_ext(subst_vec, body).tyck_k(tycker, Action::syn())?;
+                                    self.mk_add(subst_vec, body).tyck_k(tycker, Action::syn())?;
                                 match body_out_ann {
                                     | TermAnnId::Type(ty, body_kd) => {
                                         // a type function
@@ -1185,7 +1185,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                     }
                                     | TermAnnId::Compu(compu, body_ty) => {
                                         // a type-polymorphic function
-                                        let ctype = ss::CType.build(tycker, &self.env);
+                                        let ctype = ss::CType.build(tycker, &self.info);
                                         let ann =
                                             Alloc::alloc(tycker, ss::Forall(abst, body_ty), ctype);
                                         let abs = Alloc::alloc(tycker, ss::Abs(tpat, compu), ann);
@@ -1207,7 +1207,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
                                 )?;
-                                let ctype = ss::CType.build(tycker, &self.env);
+                                let ctype = ss::CType.build(tycker, &self.info);
                                 let ann = Alloc::alloc(tycker, ss::Arrow(ty, body_ty), ctype);
                                 let abs = Alloc::alloc(tycker, ss::Abs(vpat, compu), ann);
                                 TermAnnId::Compu(abs, ann)
@@ -1269,7 +1269,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                             TyckError::SortMismatch,
                                             std::panic::Location::caller(),
                                         )?;
-                                        let ctype = ss::CType.build(tycker, &self.env);
+                                        let ctype = ss::CType.build(tycker, &self.info);
                                         let ann = Alloc::alloc(
                                             tycker,
                                             ss::Arrow(binder_ty, body_ty),
@@ -1291,12 +1291,12 @@ impl Tyck for TyEnvT<su::TermId> {
                                         )?;
                                         let (def_binder, binder_kd) =
                                             binder.try_destruct_def(tycker);
-                                        let mut env = self.env.clone();
+                                        let mut env = self.info.clone();
                                         if let Some(def) = def_binder {
                                             let abst_ty = Alloc::alloc(tycker, abst, binder_kd);
                                             env += [(def, abst_ty.into())];
                                         }
-                                        let body_out_ann = TyEnvT { env, inner: body }
+                                        let body_out_ann = TyEnvT { info: env, inner: body }
                                             .tyck_k(tycker, Action::ana(ty_body.into()))?;
                                         // throwing _body_ty away because it has been substituted
                                         // Todo: reuse _body_ty by substituting abst back
@@ -1305,7 +1305,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                             TyckError::SortMismatch,
                                             std::panic::Location::caller(),
                                         )?;
-                                        let ctype = ss::CType.build(tycker, &self.env);
+                                        let ctype = ss::CType.build(tycker, &self.info);
                                         let ann =
                                             Alloc::alloc(tycker, ss::Forall(abst, body_ty), ctype);
                                         let abs =
@@ -1463,7 +1463,8 @@ impl Tyck for TyEnvT<su::TermId> {
                     let switch = {
                         match switch {
                             | Switch::Ana(AnnId::Type(ty)) => {
-                                let thunk_app_ty: ss::TypeId = cs::Thk(ty).build(tycker, &self.env);
+                                let thunk_app_ty: ss::TypeId =
+                                    cs::Thk(ty).build(tycker, &self.info);
                                 Switch::Ana(thunk_app_ty.into())
                             }
                             | _ => switch,
@@ -1509,7 +1510,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                     subst_vec
                                 };
                                 let body =
-                                    self.mk_ext(subst_vec, body).tyck_k(tycker, Action::syn())?;
+                                    self.mk_add(subst_vec, body).tyck_k(tycker, Action::syn())?;
                                 match body {
                                     | TermAnnId::Kind(kd_2) => {
                                         // kind arrow; no tpat should be used
@@ -1527,7 +1528,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                     | TermAnnId::Type(ty_2, kd_2) => {
                                         // Fixme: I forgor; is it really just forall?
                                         // forall; kd_2 should be ctype
-                                        let ctype = ss::CType.build(tycker, &self.env);
+                                        let ctype = ss::CType.build(tycker, &self.info);
                                         Lub::lub_k(ctype, kd_2, tycker)?;
                                         let forall =
                                             Alloc::alloc(tycker, ss::Forall(abst, ty_2), ctype);
@@ -1556,7 +1557,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                 }
                                 let kd_1 = tycker.statics.annotations_type[&ty_1].to_owned();
                                 // kd_1 should be of vtype
-                                let vtype = ss::VType.build(tycker, &self.env);
+                                let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, kd_1, tycker)?;
                                 let ty_2 = self.mk(body).tyck_k(tycker, Action::syn())?;
                                 let (ty_2, kd_2) = ty_2.try_as_type(
@@ -1565,7 +1566,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                     std::panic::Location::caller(),
                                 )?;
                                 // kd_2 should be of ctype
-                                let ctype = ss::CType.build(tycker, &self.env);
+                                let ctype = ss::CType.build(tycker, &self.info);
                                 Lub::lub_k(ctype, kd_2, tycker)?;
                                 let arr = Alloc::alloc(tycker, ss::Arrow(ty_1, ty_2), ctype);
                                 TermAnnId::Type(arr, ctype)
@@ -1590,7 +1591,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                     match binder_out_ann {
                                         | PatAnnId::Type(tpat, _kd_1) => {
                                             // forall
-                                            let ctype = ss::CType.build(tycker, &self.env);
+                                            let ctype = ss::CType.build(tycker, &self.info);
                                             let abst = Alloc::alloc(tycker, tpat, ());
                                             let subst_vec = {
                                                 let mut subst_vec = Vec::new();
@@ -1603,7 +1604,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                                 subst_vec
                                             };
                                             let ty_2 = self
-                                                .mk_ext(subst_vec, body)
+                                                .mk_add(subst_vec, body)
                                                 .tyck_k(tycker, Action::ana(ctype.into()))?;
                                             let (ty_2, _ctype) = ty_2.try_as_type(
                                                 tycker,
@@ -1627,10 +1628,10 @@ impl Tyck for TyEnvT<su::TermId> {
                                             let kd_1 =
                                                 tycker.statics.annotations_type[&ty_1].to_owned();
                                             // kd_1 should be of vtype
-                                            let vtype = ss::VType.build(tycker, &self.env);
+                                            let vtype = ss::VType.build(tycker, &self.info);
                                             Lub::lub_k(vtype, kd_1, tycker)?;
                                             // synthesize the body as ty_2, which should be of ctype
-                                            let ctype = ss::CType.build(tycker, &self.env);
+                                            let ctype = ss::CType.build(tycker, &self.info);
                                             let ty_2 = self
                                                 .mk(body)
                                                 .tyck_k(tycker, Action::ana(ctype.into()))?;
@@ -1639,7 +1640,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                                 TyckError::SortMismatch,
                                                 std::panic::Location::caller(),
                                             )?;
-                                            let ctype = ss::CType.build(tycker, &self.env);
+                                            let ctype = ss::CType.build(tycker, &self.info);
                                             let arr =
                                                 Alloc::alloc(tycker, ss::Arrow(ty_1, ty_2), ctype);
                                             TermAnnId::Type(arr, ctype)
@@ -1703,14 +1704,14 @@ impl Tyck for TyEnvT<su::TermId> {
                                     subst_vec
                                 };
                                 let body =
-                                    self.mk_ext(subst_vec, body).tyck_k(tycker, Action::syn())?;
+                                    self.mk_add(subst_vec, body).tyck_k(tycker, Action::syn())?;
                                 let (body_ty, body_kd) = body.try_as_type(
                                     tycker,
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
                                 )?;
                                 // body_kd should be of vtype
-                                let vtype = ss::VType.build(tycker, &self.env);
+                                let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, body_kd, tycker)?;
                                 let exists = Alloc::alloc(tycker, ss::Exists(abst, body_ty), vtype);
                                 TermAnnId::Type(exists, vtype)
@@ -1727,7 +1728,7 @@ impl Tyck for TyEnvT<su::TermId> {
                                 }
                                 // ty should be of vtype
                                 let kd_1 = tycker.statics.annotations_type[&ty_1].to_owned();
-                                let vtype = ss::VType.build(tycker, &self.env);
+                                let vtype = ss::VType.build(tycker, &self.info);
                                 Lub::lub_k(vtype, kd_1, tycker)?;
                                 let ty_2 = self.mk(body).tyck_k(tycker, Action::syn())?;
                                 let (ty_2, kd_2) = ty_2.try_as_type(
@@ -1744,7 +1745,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     }
                     | Switch::Ana(ana) => match ana {
                         | AnnId::Kind(kd) => {
-                            let vtype = ss::VType.build(tycker, &self.env);
+                            let vtype = ss::VType.build(tycker, &self.info);
                             // prod or exists; should be of vtype
                             Lub::lub_k(vtype, kd, tycker)?;
                             // just synthesize the whole thing
@@ -1759,13 +1760,13 @@ impl Tyck for TyEnvT<su::TermId> {
             | Tm::Thunk(term) => {
                 let su::Thunk(body) = term;
                 let ana = match switch {
-                    | Switch::Syn => tycker.thk_hole(&self.env, self.inner).into(),
+                    | Switch::Syn => tycker.thk_hole(&self.info, self.inner).into(),
                     | Switch::Ana(ana) => ana,
                 };
                 let AnnId::Type(ana_ty) = ana else {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
-                let thunk_app_hole = tycker.thk_hole(&self.env, body);
+                let thunk_app_hole = tycker.thk_hole(&self.info, body);
                 let ty = Lub::lub_k(ana_ty, thunk_app_hole, tycker)?;
                 let ss::Type::App(thunk_app_body_ty) = tycker.type_filled_k(&ty)?.to_owned() else {
                     unreachable!()
@@ -1777,7 +1778,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let thunk_app_body_ty = cs::Thk(body_ty).build(tycker, &self.env);
+                let thunk_app_body_ty = cs::Thk(body_ty).build(tycker, &self.info);
                 let thunk = Alloc::alloc(tycker, ss::Thunk(body_out), thunk_app_body_ty);
                 TermAnnId::Value(thunk, thunk_app_body_ty)
             }
@@ -1787,7 +1788,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     match switch {
                         | Switch::Syn => {
                             // if syn, then ana the body with thunk_app_hole
-                            let thunk_app_hole = tycker.thk_hole(&self.env, body);
+                            let thunk_app_hole = tycker.thk_hole(&self.info, body);
                             thunk_app_hole
                         }
                         | Switch::Ana(ana) => {
@@ -1799,11 +1800,11 @@ impl Tyck for TyEnvT<su::TermId> {
                                 | AnnId::Type(ty) => ty,
                             };
                             // check ana_ty is computation type
-                            let ctype = ss::CType.build(tycker, &self.env);
+                            let ctype = ss::CType.build(tycker, &self.info);
                             let ana_ty_kd = tycker.statics.annotations_type[&ana_ty].to_owned();
                             Lub::lub_k(ctype, ana_ty_kd, tycker)?;
                             // if ana, then ana the body with thunked body_ty
-                            cs::Thk(ana_ty).build(tycker, &self.env)
+                            cs::Thk(ana_ty).build(tycker, &self.info)
                         }
                     }
                 };
@@ -1831,13 +1832,13 @@ impl Tyck for TyEnvT<su::TermId> {
             | Tm::Ret(term) => {
                 let su::Return(body) = term;
                 let ana = match switch {
-                    | Switch::Syn => tycker.ret_hole(&self.env, self.inner).into(),
+                    | Switch::Syn => tycker.ret_hole(&self.info, self.inner).into(),
                     | Switch::Ana(ana) => ana,
                 };
                 let AnnId::Type(ana_ty) = ana else {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
-                let ret_app_hole = tycker.ret_hole(&self.env, self.inner);
+                let ret_app_hole = tycker.ret_hole(&self.info, self.inner);
                 let ty = Lub::lub_k(ana_ty, ret_app_hole, tycker)?;
                 let ss::Type::App(ret_app_body_ty) = tycker.type_filled_k(&ty)?.to_owned() else {
                     unreachable!()
@@ -1849,7 +1850,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let ret_app_body_ty = cs::Ret(body_ty).build(tycker, &self.env);
+                let ret_app_body_ty = cs::Ret(body_ty).build(tycker, &self.info);
                 let ret = Alloc::alloc(tycker, ss::Return(body_out), ret_app_body_ty);
                 TermAnnId::Compu(ret, ret_app_body_ty)
             }
@@ -1857,7 +1858,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 let su::Bind { binder, bindee, tail } = term;
                 // first, ana bindee with ret_app_hole, and we get a compu that should be ret_app_body_ty
                 let (bindee_out, bindee_ty) = {
-                    let ret_app_hole = tycker.ret_hole(&self.env, bindee);
+                    let ret_app_hole = tycker.ret_hole(&self.info, bindee);
                     let bindee_out_ann =
                         self.mk(bindee).tyck_k(tycker, Action::ana(ret_app_hole.into()))?;
                     bindee_out_ann.try_as_compu(
@@ -1978,24 +1979,24 @@ impl Tyck for TyEnvT<su::TermId> {
                 let su::MoBlock(body) = term;
 
                 // tyck the body with an (almost) empty env
-                let ty_env = TyEnv::monadic_new(tycker, &self.env);
-                let body_out_ann =
-                    TyEnvT { env: ty_env.to_owned(), inner: body }.tyck_k(tycker, Action::syn())?;
+                let ty_env = TyEnv::monadic_new(tycker, &self.info);
+                let body_out_ann = TyEnvT { info: ty_env.to_owned(), inner: body }
+                    .tyck_k(tycker, Action::syn())?;
                 let (body, _body_ty) = body_out_ann.try_as_compu(
                     tycker,
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
 
-                let monad_ty_kd = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.env);
+                let monad_ty_kd = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.info);
                 let monad_ty_var =
                     Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into());
                 let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd);
-                let monad_ty = cs::Type(cs::Ann(abst, monad_ty_kd)).build(tycker, &self.env);
-                let monad_impl_ty = cs::Thk(cs::Monad(monad_ty)).build(tycker, &self.env);
+                let monad_ty = cs::Type(cs::Ann(abst, monad_ty_kd)).build(tycker, &self.info);
+                let monad_impl_ty = cs::Thk(cs::Monad(monad_ty)).build(tycker, &self.info);
                 let monad_impl_var =
                     Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into());
-                let monad_impl = cs::Value(monad_impl_var).build(tycker, &self.env);
+                let monad_impl = cs::Value(monad_impl_var).build(tycker, &self.info);
 
                 use super::env::*;
                 let (_menv, body_lift) = cs::TermLift { tm: body }.mbuild_k(
@@ -2009,12 +2010,12 @@ impl Tyck for TyEnvT<su::TermId> {
                         monad_impl,
                     },
                 )?;
-                let body_lift_ty = cs::TypeOf(body_lift).build(tycker, &self.env);
+                let body_lift_ty = cs::TypeOf(body_lift).build(tycker, &self.info);
 
                 // <monad_impl_to_body_lift> = fn (mo: Thk (Monad M)) -> Lift(body)
                 let monad_impl_vpat: ss::VPatId =
                     Alloc::alloc(tycker, monad_impl_var, monad_impl_ty);
-                let ctype = ss::CType.build(tycker, &self.env);
+                let ctype = ss::CType.build(tycker, &self.info);
                 let monad_impl_to_body_lift_ty =
                     Alloc::alloc(tycker, ss::Arrow(monad_impl_ty, body_lift_ty), ctype);
                 let monad_impl_to_body_lift = Alloc::alloc(
@@ -2046,7 +2047,7 @@ impl Tyck for TyEnvT<su::TermId> {
             }
             | Tm::Data(term) => {
                 let su::Data { arms } = term;
-                let vtype = ss::VType.build(tycker, &self.env);
+                let vtype = ss::VType.build(tycker, &self.info);
                 let vtype = match switch {
                     | Switch::Syn => vtype,
                     | Switch::Ana(ann) => {
@@ -2070,7 +2071,7 @@ impl Tyck for TyEnvT<su::TermId> {
             }
             | Tm::CoData(term) => {
                 let su::CoData { arms } = term;
-                let ctype = ss::CType.build(tycker, &self.env);
+                let ctype = ss::CType.build(tycker, &self.info);
                 let ctype = match switch {
                     | Switch::Syn => ctype,
                     | Switch::Ana(ann) => {
@@ -2102,7 +2103,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 let AnnId::Type(ana_ty) = ana_ty else {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
-                let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
+                let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
                 let ss::Type::Data(data_id) = &tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
@@ -2141,7 +2142,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 //         scrut_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
                 //     );
                 // }
-                let scrut_ty_unroll = scrut_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
+                let scrut_ty_unroll = scrut_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
                 // // Debug: print
                 // {
                 //     use crate::fmt::*;
@@ -2228,7 +2229,7 @@ impl Tyck for TyEnvT<su::TermId> {
                         | AnnId::Type(ana_ty) => ana_ty,
                     },
                 };
-                let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
+                let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
                 let ss::Type::CoData(codata_id) = &tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
@@ -2273,7 +2274,7 @@ impl Tyck for TyEnvT<su::TermId> {
                 let TermAnnId::Compu(body, ty_body) = body_out_ann else {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
-                let ty_body_unroll = ty_body.unroll_k(tycker)?.subst_env_k(tycker, &self.env)?;
+                let ty_body_unroll = ty_body.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
                 let ss::Type::CoData(codata_id) = &tycker.type_filled_k(&ty_body_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
@@ -2326,17 +2327,17 @@ impl Tyck for TyEnvT<su::TermId> {
                 use zydeco_syntax::Literal as Lit;
                 let (lit, ty) = match lit {
                     | Lit::Int(i) => {
-                        let ty = ss::IntTy.build(tycker, &self.env);
+                        let ty = ss::IntTy.build(tycker, &self.info);
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Int(i), ty)
                     }
                     | Lit::String(s) => {
-                        let ty = ss::StringTy.build(tycker, &self.env);
+                        let ty = ss::StringTy.build(tycker, &self.info);
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::String(s), ty)
                     }
                     | Lit::Char(c) => {
-                        let ty = ss::CharTy.build(tycker, &self.env);
+                        let ty = ss::CharTy.build(tycker, &self.info);
                         let ty = check_against_ty(tycker, switch, ty)?;
                         (Lit::Char(c), ty)
                     }

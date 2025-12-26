@@ -2,7 +2,8 @@
 
 use super::{syntax::*, *};
 use derive_more::{Deref, DerefMut, From, Into};
-use std::ops::{Add, AddAssign, Deref, DerefMut, Index};
+use std::ops::{Add, AddAssign, Index};
+use zydeco_utils::with::With;
 
 #[derive(Clone, Debug, From, Into, Deref, DerefMut)]
 pub struct Env<T>(im::HashMap<DefId, T>);
@@ -121,101 +122,14 @@ mod impls_ty_env {
 /// substituting types for type variables;
 /// S for substitution / statics
 /// PLEASE NOTE: when performing substitution, the environment should be applied one by one
-pub struct TyEnvT<T> {
-    /// the environment of type variables; should be applied from the first to the last
-    // Note: should be ordered?
-    pub env: TyEnv,
-    pub inner: T,
-}
-
-mod impls_ty_env_t {
-    use super::*;
-
-    impl<T> TyEnvT<T> {
-        pub fn new(inner: T) -> Self {
-            Self { env: Env::new(), inner }
-        }
-        pub fn mk<S>(&self, inner: S) -> TyEnvT<S> {
-            TyEnvT { env: self.env.clone(), inner }
-        }
-        pub fn mk_ext<S>(
-            &self, iter: impl IntoIterator<Item = (DefId, AnnId)>, inner: S,
-        ) -> TyEnvT<S> {
-            TyEnvT { env: self.env.clone() + iter, inner }
-        }
-    }
-
-    impl<T> AsRef<TyEnv> for TyEnvT<T> {
-        fn as_ref(&self) -> &TyEnv {
-            &self.env
-        }
-    }
-
-    impl<T> AsMut<TyEnv> for TyEnvT<T> {
-        fn as_mut(&mut self) -> &mut TyEnv {
-            &mut self.env
-        }
-    }
-
-    impl<T> Deref for TyEnvT<T> {
-        type Target = T;
-        fn deref(&self) -> &Self::Target {
-            &self.inner
-        }
-    }
-
-    impl<T> DerefMut for TyEnvT<T> {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.inner
-        }
-    }
-}
+///
+/// `.info`: the environment of type variables; should be applied from the first to the last
+// Note: should be ordered?
+pub type TyEnvT<T> = With<TyEnv, T>;
 
 pub type SubstEnv = Env<DefId>;
 pub type SubstAbstEnv = im::HashMap<AbstId, AbstId>;
-
-pub struct SubstEnvT<T> {
-    pub env: SubstEnv,
-    pub inner: T,
-}
-
-mod impls_subst_env_t {
-    use super::*;
-
-    impl<T> SubstEnvT<T> {
-        pub fn new(inner: T) -> Self {
-            Self { env: SubstEnv::new(), inner }
-        }
-        pub fn mk<S>(&self, inner: S) -> SubstEnvT<S> {
-            SubstEnvT { env: self.env.clone(), inner }
-        }
-    }
-
-    impl<T> AsRef<SubstEnv> for SubstEnvT<T> {
-        fn as_ref(&self) -> &SubstEnv {
-            &self.env
-        }
-    }
-
-    impl<T> AsMut<SubstEnv> for SubstEnvT<T> {
-        fn as_mut(&mut self) -> &mut SubstEnv {
-            &mut self.env
-        }
-    }
-
-    impl<T> Deref for SubstEnvT<T> {
-        type Target = T;
-        fn deref(&self) -> &Self::Target {
-            &self.inner
-        }
-    }
-
-    impl<T> DerefMut for SubstEnvT<T> {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.inner
-        }
-    }
-}
+pub type SubstEnvT<T> = With<SubstEnv, T>;
 
 #[derive(Clone)]
 pub struct StrEnv {
@@ -246,48 +160,7 @@ mod impls_str_env {
     }
 }
 
-pub struct StrEnvT<T> {
-    pub env: StrEnv,
-    pub inner: T,
-}
-
-mod impls_str_env_t {
-    use super::*;
-
-    impl<T> StrEnvT<T> {
-        pub fn new(inner: T) -> Self {
-            Self { env: StrEnv::new(), inner }
-        }
-        pub fn mk<S>(&self, inner: S) -> StrEnvT<S> {
-            StrEnvT { env: self.env.clone(), inner }
-        }
-    }
-
-    impl<T> AsRef<StrEnv> for StrEnvT<T> {
-        fn as_ref(&self) -> &StrEnv {
-            &self.env
-        }
-    }
-
-    impl<T> AsMut<StrEnv> for StrEnvT<T> {
-        fn as_mut(&mut self) -> &mut StrEnv {
-            &mut self.env
-        }
-    }
-
-    impl<T> Deref for StrEnvT<T> {
-        type Target = T;
-        fn deref(&self) -> &Self::Target {
-            &self.inner
-        }
-    }
-
-    impl<T> DerefMut for StrEnvT<T> {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.inner
-        }
-    }
-}
+pub type StrEnvT<T> = With<StrEnv, T>;
 
 #[derive(Clone)]
 pub struct MonEnv {

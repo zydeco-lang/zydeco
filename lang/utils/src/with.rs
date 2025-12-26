@@ -1,3 +1,8 @@
+use std::{
+    borrow::{Borrow, BorrowMut},
+    ops::{Deref, DerefMut},
+};
+
 /// A value of type `A` paired with attached metadata `M`.
 ///
 /// `With<M, A>` is a lightweight, transparent product type meant for *decorating* a value
@@ -47,6 +52,34 @@ pub struct With<M, A> {
     pub info: M,
     pub inner: A,
 }
+
+impl<M, A> With<M, A> {
+    pub fn new(info: M, inner: A) -> Self {
+        Self { info, inner }
+    }
+    pub fn mk<B>(&self, inner: B) -> With<M, B>
+    where
+        M: Clone,
+    {
+        With { info: self.info.clone(), inner }
+    }
+    pub fn mk_add<B, T>(&self, other: T, inner: B) -> With<M, B>
+    where
+        M: Clone + std::ops::Add<T, Output = M>,
+    {
+        With { info: self.info.clone() + other, inner }
+    }
+    pub fn mk_ext<B, Iter, Item>(&self, iter: Iter, inner: B) -> With<M, B>
+    where
+        M: Clone + Extend<Item>,
+        Iter: IntoIterator<Item = Item>,
+    {
+        let mut info = self.info.clone();
+        info.extend(iter);
+        With { info, inner }
+    }
+}
+
 impl<M, A> AsRef<A> for With<M, A> {
     fn as_ref(&self) -> &A {
         &self.inner
@@ -54,6 +87,27 @@ impl<M, A> AsRef<A> for With<M, A> {
 }
 impl<M, A> AsMut<A> for With<M, A> {
     fn as_mut(&mut self) -> &mut A {
+        &mut self.inner
+    }
+}
+impl<M, A> Deref for With<M, A> {
+    type Target = A;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+impl<M, A> DerefMut for With<M, A> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+impl<M, A> Borrow<A> for With<M, A> {
+    fn borrow(&self) -> &A {
+        &self.inner
+    }
+}
+impl<M, A> BorrowMut<A> for With<M, A> {
+    fn borrow_mut(&mut self) -> &mut A {
         &mut self.inner
     }
 }

@@ -14,11 +14,6 @@ pub mod with;
 pub mod prelude {
     /// Source code location.
     pub use crate::span::{Sp, Span};
-    /// Design patterns.
-    pub use crate::{
-        with::With,
-        phantom::Phantom,
-    };
     /// Data structures.
     pub use crate::{
         arena::*,
@@ -27,4 +22,6 @@ pub mod prelude {
         graph::{DepGraph, Kosaraju, SccGraph, SccGroup, SrcGraph},
         pass::CompilerPass,
     };
+    /// Design patterns.
+    pub use crate::{phantom::Phantom, with::With};
 }

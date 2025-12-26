@@ -13,7 +13,7 @@ impl Tycker {
         };
         let ty = Alloc::alloc(self, prim, kd);
         self.statics.annotations_var.insert(def, kd.into());
-        env.env += [(def, ty.into())];
+        env.info += [(def, ty.into())];
         Ok(env)
     }
     pub fn register_prim_decl(
@@ -28,14 +28,14 @@ impl Tycker {
                     | su::Internal::VType => {
                         let kd = Alloc::alloc(self, VType, ());
                         self.statics.annotations_var.insert(def, AnnId::Set);
-                        env.env += [(def, kd.into())];
+                        env.info += [(def, kd.into())];
                         // should also be added to global
                         self.statics.global_defs.insert(def, ());
                     }
                     | su::Internal::CType => {
                         let kd = Alloc::alloc(self, CType, ());
                         self.statics.annotations_var.insert(def, AnnId::Set);
-                        env.env += [(def, kd.into())];
+                        env.info += [(def, kd.into())];
                         // should also be added to global
                         self.statics.global_defs.insert(def, ());
                     }
