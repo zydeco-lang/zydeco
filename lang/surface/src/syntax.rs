@@ -104,7 +104,7 @@ mod impls {
     impl IntoIterator for NameRef<VarName> {
         type Item = VarName;
 
-        type IntoIter = std::vec::IntoIter<Self::Item>;
+        type IntoIter = <Vec<VarName> as IntoIterator>::IntoIter;
 
         fn into_iter(self) -> Self::IntoIter {
             let NameRef(_, mut path, name) = self;

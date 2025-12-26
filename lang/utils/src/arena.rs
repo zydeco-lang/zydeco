@@ -249,7 +249,7 @@ mod impls {
         Id: IndexLike,
     {
         type Item = (Id, T);
-        type IntoIter = std::vec::IntoIter<(Id, T)>;
+        type IntoIter = <Vec<(Id, T)> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.vec
                 .into_iter()
@@ -268,7 +268,7 @@ mod impls {
         Id: IndexLike,
     {
         type Item = (Id, &'a T);
-        type IntoIter = std::vec::IntoIter<(Id, &'a T)>;
+        type IntoIter = <Vec<(Id, &'a T)> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.vec
                 .iter()
@@ -357,7 +357,7 @@ mod impls {
         Id: IndexLike,
     {
         type Item = (Id, T);
-        type IntoIter = std::collections::hash_map::IntoIter<Id, T>;
+        type IntoIter = <HashMap<Id, T> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.map.into_iter()
         }
@@ -367,7 +367,7 @@ mod impls {
         Id: IndexLike,
     {
         type Item = (&'a Id, &'a T);
-        type IntoIter = std::collections::hash_map::Iter<'a, Id, T>;
+        type IntoIter = <&'a HashMap<Id, T> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.map.iter()
         }
@@ -550,14 +550,14 @@ mod impls {
 
     impl<Id, T> IntoIterator for ArenaAssoc<Id, T> {
         type Item = (Id, T);
-        type IntoIter = std::collections::hash_map::IntoIter<Id, T>;
+        type IntoIter = <HashMap<Id, T> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.map.into_iter()
         }
     }
     impl<'a, Id, T> IntoIterator for &'a ArenaAssoc<Id, T> {
         type Item = (&'a Id, &'a T);
-        type IntoIter = std::collections::hash_map::Iter<'a, Id, T>;
+        type IntoIter = <&'a HashMap<Id, T> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.map.iter()
         }
@@ -686,7 +686,7 @@ mod impls {
 
     impl<P, Q> IntoIterator for ArenaForth<P, Q> {
         type Item = (P, Vec<Q>);
-        type IntoIter = std::collections::hash_map::IntoIter<P, Vec<Q>>;
+        type IntoIter = <HashMap<P, Vec<Q>> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.forward.map.into_iter()
         }
@@ -694,7 +694,7 @@ mod impls {
 
     impl<'a, P, Q> IntoIterator for &'a ArenaForth<P, Q> {
         type Item = (&'a P, &'a Vec<Q>);
-        type IntoIter = std::collections::hash_map::Iter<'a, P, Vec<Q>>;
+        type IntoIter = <&'a HashMap<P, Vec<Q>> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.forward.map.iter()
         }
@@ -819,7 +819,7 @@ mod impls {
 
     impl<P, Q> IntoIterator for ArenaBack<P, Q> {
         type Item = (P, Q);
-        type IntoIter = std::collections::hash_map::IntoIter<P, Q>;
+        type IntoIter = <HashMap<P, Q> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.forward.map.into_iter()
         }
@@ -827,7 +827,7 @@ mod impls {
 
     impl<'a, P, Q> IntoIterator for &'a ArenaBack<P, Q> {
         type Item = (&'a P, &'a Q);
-        type IntoIter = std::collections::hash_map::Iter<'a, P, Q>;
+        type IntoIter = <&'a HashMap<P, Q> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.forward.map.iter()
         }
@@ -953,7 +953,7 @@ mod impls {
 
     impl<P, Q> IntoIterator for ArenaBijective<P, Q> {
         type Item = (P, Q);
-        type IntoIter = std::collections::hash_map::IntoIter<P, Q>;
+        type IntoIter = <HashMap<P, Q> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.forward.map.into_iter()
         }
@@ -961,7 +961,7 @@ mod impls {
 
     impl<'a, P, Q> IntoIterator for &'a ArenaBijective<P, Q> {
         type Item = (&'a P, &'a Q);
-        type IntoIter = std::collections::hash_map::Iter<'a, P, Q>;
+        type IntoIter = <&'a HashMap<P, Q> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.forward.map.iter()
         }
@@ -1069,7 +1069,7 @@ mod impls {
 
     impl<P, Q> IntoIterator for ArenaBipartite<P, Q> {
         type Item = (P, Vec<Q>);
-        type IntoIter = std::collections::hash_map::IntoIter<P, Vec<Q>>;
+        type IntoIter = <HashMap<P, Vec<Q>> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.forward.map.into_iter()
         }
@@ -1077,7 +1077,7 @@ mod impls {
 
     impl<'a, P, Q> IntoIterator for &'a ArenaBipartite<P, Q> {
         type Item = (&'a P, &'a Vec<Q>);
-        type IntoIter = std::collections::hash_map::Iter<'a, P, Vec<Q>>;
+        type IntoIter = <&'a HashMap<P, Vec<Q>> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.forward.map.iter()
         }

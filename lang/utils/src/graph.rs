@@ -252,7 +252,7 @@ impl<Id: Hash + Eq + Clone> FromIterator<Id> for SccGroup<Id> {
 }
 impl<'a, Id: Hash + Eq + Clone> IntoIterator for &'a SccGroup<Id> {
     type Item = &'a Id;
-    type IntoIter = std::collections::hash_set::Iter<'a, Id>;
+    type IntoIter = <&'a HashSet<Id> as IntoIterator>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
         (&self.0).into_iter()
     }

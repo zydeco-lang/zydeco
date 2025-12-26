@@ -181,7 +181,7 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> Result<TypeId> {
-        self.subst_env(tycker, &Env::from_iter([(var, with.into())]))
+        self.subst_env(tycker, &TyEnv::from_iter([(var, with.into())]))
     }
 }
 

@@ -331,7 +331,7 @@ mod impls_structs {
 
     impl IntoIterator for Data {
         type Item = (CtorName, TypeId);
-        type IntoIter = im::vector::ConsumingIter<(CtorName, TypeId)>;
+        type IntoIter = <im::Vector<(CtorName, TypeId)> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.arms.into_iter()
         }
@@ -339,7 +339,7 @@ mod impls_structs {
 
     impl<'a> IntoIterator for &'a Data {
         type Item = &'a (CtorName, TypeId);
-        type IntoIter = im::vector::Iter<'a, (CtorName, TypeId)>;
+        type IntoIter = <&'a im::Vector<(CtorName, TypeId)> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.arms.iter()
         }
@@ -363,7 +363,7 @@ mod impls_structs {
 
     impl IntoIterator for CoData {
         type Item = (DtorName, TypeId);
-        type IntoIter = im::vector::ConsumingIter<(DtorName, TypeId)>;
+        type IntoIter = <im::Vector<(DtorName, TypeId)> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.arms.into_iter()
         }
@@ -371,7 +371,7 @@ mod impls_structs {
 
     impl<'a> IntoIterator for &'a CoData {
         type Item = &'a (DtorName, TypeId);
-        type IntoIter = im::vector::Iter<'a, (DtorName, TypeId)>;
+        type IntoIter = <&'a im::Vector<(DtorName, TypeId)> as IntoIterator>::IntoIter;
         fn into_iter(self) -> Self::IntoIter {
             self.arms.iter()
         }

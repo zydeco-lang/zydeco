@@ -10,9 +10,10 @@ impl<T> FromIterator<T> for Context<T> {
     }
 }
 
+// Note: can we derive this, as well as as_ref, as_mut, deref, deref_mut, and borrow?
 impl<T> IntoIterator for Context<T> {
     type Item = T;
-    type IntoIter = std::vec::IntoIter<T>;
+    type IntoIter = <Vec<T> as IntoIterator>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
@@ -20,7 +21,7 @@ impl<T> IntoIterator for Context<T> {
 
 impl<'a, T> IntoIterator for &'a Context<T> {
     type Item = &'a T;
-    type IntoIter = std::slice::Iter<'a, T>;
+    type IntoIter = <&'a Vec<T> as IntoIterator>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
@@ -46,13 +47,14 @@ impl<T> Default for Context<T> {
     }
 }
 
-impl<T> std::ops::Add for Context<T>
+impl<T, Iter> std::ops::Add<Iter> for Context<T>
 where
     T: Clone,
+    Iter: IntoIterator<Item = T>,
 {
     type Output = Self;
-    fn add(self, other: Self) -> Self {
-        Context::from_iter(self.0.into_iter().chain(other.0.into_iter()))
+    fn add(self, other: Iter) -> Self {
+        Context::from_iter(self.0.into_iter().chain(other.into_iter()))
     }
 }
 
@@ -120,14 +122,15 @@ where
     }
 }
 
-impl<T> std::ops::Add for CoContext<T>
+impl<T, Iter> std::ops::Add<Iter> for CoContext<T>
 where
     T: std::hash::Hash + Eq + Clone,
+    Iter: IntoIterator<Item = T>,
 {
     type Output = Self;
-    fn add(self, other: Self) -> Self {
+    fn add(self, other: Iter) -> Self {
         let mut set = self.0;
-        set.extend(other.0);
+        set.extend(other);
         CoContext(set)
     }
 }
