@@ -1,7 +1,7 @@
 use std::{
     cell::OnceCell,
     fmt::{Debug, Display},
-    hash::Hash,
+    // hash::Hash,
     path::PathBuf,
     rc::Rc,
     sync::Arc,
@@ -163,80 +163,80 @@ pub struct Sp<T> {
     pub info: Span,
 }
 
-impl<T: Clone> Sp<T> {
-    #[inline]
-    pub fn inner_clone(&self) -> T {
-        self.inner.clone()
-    }
-}
+// impl<T: Clone> Sp<T> {
+//     #[inline]
+//     pub fn inner_clone(&self) -> T {
+//         self.inner.clone()
+//     }
+// }
 
-impl<T> Sp<T> {
-    #[inline]
-    pub fn inner_ref(&self) -> &T {
-        &self.inner
-    }
-    #[inline]
-    pub fn inner(self) -> T {
-        self.inner
-    }
+// impl<T> Sp<T> {
+//     #[inline]
+//     pub fn inner_ref(&self) -> &T {
+//         &self.inner
+//     }
+//     #[inline]
+//     pub fn inner(self) -> T {
+//         self.inner
+//     }
 
-    pub fn map_rc<F, U>(&self, f: F) -> Rc<Sp<U>>
-    where
-        F: FnOnce(&T) -> U,
-    {
-        Rc::new(self.info.make(f(&self.inner)))
-    }
-    pub fn map_ref<F, U>(&self, f: F) -> Sp<U>
-    where
-        F: FnOnce(&T) -> U,
-    {
-        self.info.to_owned().make(f(&self.inner))
-    }
-    pub fn map<F, U>(self, f: F) -> Sp<U>
-    where
-        F: FnOnce(T) -> U,
-    {
-        self.info.to_owned().make(f(self.inner))
-    }
-    pub fn try_map<F, U, E>(self, f: F) -> Result<Sp<U>, E>
-    where
-        F: FnOnce(T) -> Result<U, E>,
-    {
-        Ok(self.info.make(f(self.inner)?))
-    }
-    pub fn try_map_rc<F, U, E>(self, f: F) -> Result<Rc<Sp<U>>, E>
-    where
-        F: FnOnce(T) -> Result<U, E>,
-    {
-        Ok(Rc::new(self.info.make(f(self.inner)?)))
-    }
-    pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Sp<U>, E>
-    where
-        F: FnOnce(&T) -> Result<U, E>,
-    {
-        Ok(self.info.make(f(&self.inner)?))
-    }
-    pub fn try_map_rc_ref<F, U, E>(&self, f: F) -> Result<Rc<Sp<U>>, E>
-    where
-        F: FnOnce(&T) -> Result<U, E>,
-    {
-        Ok(Rc::new(self.info.make(f(&self.inner)?)))
-    }
-}
+//     pub fn map_rc<F, U>(&self, f: F) -> Rc<Sp<U>>
+//     where
+//         F: FnOnce(&T) -> U,
+//     {
+//         Rc::new(self.info.make(f(&self.inner)))
+//     }
+//     pub fn map_ref<F, U>(&self, f: F) -> Sp<U>
+//     where
+//         F: FnOnce(&T) -> U,
+//     {
+//         self.info.to_owned().make(f(&self.inner))
+//     }
+//     pub fn map<F, U>(self, f: F) -> Sp<U>
+//     where
+//         F: FnOnce(T) -> U,
+//     {
+//         self.info.to_owned().make(f(self.inner))
+//     }
+//     pub fn try_map<F, U, E>(self, f: F) -> Result<Sp<U>, E>
+//     where
+//         F: FnOnce(T) -> Result<U, E>,
+//     {
+//         Ok(self.info.make(f(self.inner)?))
+//     }
+//     pub fn try_map_rc<F, U, E>(self, f: F) -> Result<Rc<Sp<U>>, E>
+//     where
+//         F: FnOnce(T) -> Result<U, E>,
+//     {
+//         Ok(Rc::new(self.info.make(f(self.inner)?)))
+//     }
+//     pub fn try_map_ref<F, U, E>(&self, f: F) -> Result<Sp<U>, E>
+//     where
+//         F: FnOnce(&T) -> Result<U, E>,
+//     {
+//         Ok(self.info.make(f(&self.inner)?))
+//     }
+//     pub fn try_map_rc_ref<F, U, E>(&self, f: F) -> Result<Rc<Sp<U>>, E>
+//     where
+//         F: FnOnce(&T) -> Result<U, E>,
+//     {
+//         Ok(Rc::new(self.info.make(f(&self.inner)?)))
+//     }
+// }
 
-impl<T: PartialEq> PartialEq for Sp<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner.eq(&other.inner)
-    }
-}
+// impl<T: PartialEq> PartialEq for Sp<T> {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.inner.eq(&other.inner)
+//     }
+// }
 
-impl<T: Eq> Eq for Sp<T> {}
+// impl<T: Eq> Eq for Sp<T> {}
 
-impl<T: Hash> Hash for Sp<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.inner.hash(state);
-    }
-}
+// impl<T: Hash> Hash for Sp<T> {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.inner.hash(state);
+//     }
+// }
 
 impl<T: Display> Display for Sp<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
