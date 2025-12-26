@@ -123,9 +123,9 @@ impl Eval for Program {
                 prog.eval(interp)
             }
             | Program::PopBranch(PopBranch(arms)) => {
-                let tag = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                let Value::Tag(tag) = tag else {
-                    Err(Error::TypeError(format!("expected tag, got {:?}", tag)))?
+                let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
+                let Value::Tag(tag) = value else {
+                    Err(Error::TypeError(format!("expected tag, got {:?}", value)))?
                 };
                 let arm = arms.iter().find(|(t, _)| t.idx == tag.idx).unwrap();
                 arm.1.eval(interp)

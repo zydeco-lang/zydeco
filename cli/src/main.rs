@@ -116,13 +116,11 @@ fn build_files(
 
     match target.as_str() {
         | "zir" => {
-            let zir = build_sys.codegen_zir_pack(pack).map_err(|e| e.to_string())?;
-            println!("{}", zir);
+            build_sys.codegen_zir_pack(pack).map_err(|e| e.to_string())?;
             Ok(0)
         }
         | "zasm" => {
-            let zasm = build_sys.codegen_zasm_pack(pack).map_err(|e| e.to_string())?;
-            println!("{}", zasm);
+            build_sys.codegen_zasm_pack(pack, execute, verbose).map_err(|e| e.to_string())?;
             Ok(0)
         }
         | "x86" => {

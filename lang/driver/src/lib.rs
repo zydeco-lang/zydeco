@@ -20,16 +20,35 @@ pub mod interp {
     pub mod err;
 }
 
+pub mod zir {
+    pub mod pack;
+}
+
+pub mod zasm {
+    pub mod pack;
+    pub mod err;
+}
+
 pub mod x86 {
     pub mod pack;
 }
 
+/// Namespaces for the Zydeco language ecosystem.
+/// Newlines are added to prevent reordering of the imports.
 pub mod prelude {
-    pub use zydeco_dynamics::syntax as d;
-    pub use zydeco_statics::tyck::syntax as ss;
-    pub use zydeco_surface::bitter::syntax as b;
-    pub use zydeco_surface::scoped::syntax as sc;
     pub use zydeco_surface::textual::syntax as t;
+
+    pub use zydeco_surface::bitter::syntax as b;
+
+    pub use zydeco_surface::scoped::syntax as sc;
+
+    pub use zydeco_statics::tyck::syntax as ss;
+
+    pub use zydeco_dynamics::syntax as d;
+
+    pub use zydeco_stack::syntax as sk;
+
+    pub use zydeco_assembly::syntax as sa;
 }
 
 pub use conf::Conf;
@@ -38,8 +57,13 @@ pub use local::pack::LocalPackage;
 pub use package::{Dependency, Package};
 pub use zydeco_dynamics::ProgKont;
 pub use zydeco_utils::arena::ArcGlobalAlloc;
+pub use zydeco_utils::pass::CompilerPass;
 
-use crate::check::pack::{PackageChecked, PackageStew};
+use crate::{
+    check::pack::{PackageChecked, PackageStew},
+    zasm::pack::PackageAssembly,
+    zir::pack::PackageStack,
+};
 use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
 use zydeco_utils::prelude::{ArenaDense, DepGraph, Kosaraju, new_key_type};
@@ -172,80 +196,39 @@ impl BuildSystem {
         }
         Package::test_interp(runtime, name.as_str(), false)
     }
-    pub fn codegen_zir_pack(&self, pack: PackId) -> Result<String> {
-        let alloc = ArcGlobalAlloc::new();
-        let mut checked = self.__tyck_pack(pack, alloc.clone(), false)?;
-        let lowerer = zydeco_stack::Lowerer::new(
-            alloc.clone(),
-            &checked.spans,
-            &checked.scoped,
-            &checked.statics,
-        );
-        let mut arena = lowerer.run();
-        // Log the arena after lowering
-        {
-            use zydeco_stack::fmt::*;
-            let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);
-            let doc = arena.pretty(&fmt);
-            let mut buf = String::new();
-            doc.render_fmt(100, &mut buf).unwrap();
-            log::trace!("ZIR right after lowering:\n{}", buf);
-        }
-        // Perform closure conversion
-        zydeco_stack::ClosureConverter::new(&mut arena, &mut checked.scoped, &checked.statics)
-            .convert();
-        // Format the whole program
+    pub fn codegen_zir_pack(&self, pack: PackId) -> Result<()> {
+        let PackageStack { stack, scoped, statics, .. } =
+            self.__compile_zir_pack(pack, ArcGlobalAlloc::new(), false)?;
+        // pretty print the ZIR
         use zydeco_stack::fmt::*;
-        let fmt = Formatter::new(&arena, &checked.scoped, &checked.statics);
-        let doc = arena.pretty(&fmt);
+        let fmt = Formatter::new(&stack, &scoped, &statics);
+        let doc = stack.pretty(&fmt);
         let mut buf = String::new();
         doc.render_fmt(100, &mut buf).unwrap();
-        Ok(buf)
+        println!("{}", buf);
+        Ok(())
     }
-    pub fn codegen_zasm_pack(&self, pack: PackId) -> Result<String> {
-        let alloc = ArcGlobalAlloc::new();
-        let mut checked = self.__tyck_pack(pack, alloc.clone(), false)?;
-        let mut stack = zydeco_stack::Lowerer::new(
-            alloc.clone(),
-            &checked.spans,
-            &checked.scoped,
-            &checked.statics,
-        )
-        .run();
-        {
-            use zydeco_stack::fmt::*;
-            let fmt = Formatter::new(&stack, &checked.scoped, &checked.statics);
-            let doc = stack.pretty(&fmt);
+    pub fn codegen_zasm_pack(&self, pack: PackId, execute: bool, verbose: bool) -> Result<()> {
+        let PackageAssembly { assembly, .. } =
+            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
+        if execute {
+            let interpreter = zydeco_assembly::interp::Interpreter::new(assembly);
+            let output = interpreter.run()?;
+            let msg = match output {
+                | zydeco_assembly::interp::Output::Exit => format!("Program exited with code 0"),
+                | zydeco_assembly::interp::Output::Panic => format!("Program panicked"),
+            };
+            println!("{}", msg);
+        } else {
+            // pretty print the ZASM
+            use zydeco_assembly::fmt::*;
+            let fmt = Formatter::new(&assembly);
+            let doc = assembly.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
-            log::trace!("ZIR before closure conversion:\n{}", buf);
+            println!("{}", buf);
         }
-        // Perform closure conversion
-        zydeco_stack::ClosureConverter::new(&mut stack, &mut checked.scoped, &checked.statics)
-            .convert();
-        {
-            use zydeco_stack::fmt::*;
-            let fmt = Formatter::new(&stack, &checked.scoped, &checked.statics);
-            let doc = stack.pretty(&fmt);
-            let mut buf = String::new();
-            doc.render_fmt(100, &mut buf).unwrap();
-            log::trace!("ZIR after closure conversion:\n{}", buf);
-        }
-        let assembly = zydeco_assembly::lower::Lowerer::new(
-            alloc.clone(),
-            &checked.spans,
-            &checked.scoped,
-            &checked.statics,
-            &stack,
-        )
-        .run();
-        use zydeco_assembly::fmt::*;
-        use zydeco_syntax::Pretty;
-        let formatter = Formatter::new(&assembly);
-        let doc = assembly.pretty(&formatter);
-        let mut buf = String::new();
-        doc.render_fmt(100, &mut buf).unwrap();
-        Ok(buf)
+        Ok(())
     }
     pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
@@ -365,5 +348,56 @@ impl BuildSystem {
         let stew = stew.unwrap_or_else(|| PackageStew::new(alloc.clone()));
         let checked = Package::check_package(alloc.clone(), name.as_str(), stew)?;
         Ok(checked)
+    }
+    /// compile a package to ZIR
+    fn __compile_zir_pack(
+        &self, pack: PackId, alloc: ArcGlobalAlloc, verbose: bool,
+    ) -> Result<PackageStack> {
+        let PackageChecked { spans, mut scoped, statics, wf: _ } =
+            self.__tyck_pack(pack, alloc.clone(), verbose)?;
+        let mut stack = zydeco_stack::Lowerer::new(alloc.clone(), &spans, &scoped, &statics).run();
+        {
+            use zydeco_stack::fmt::*;
+            let fmt = Formatter::new(&stack, &scoped, &statics);
+            let doc = stack.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            if verbose {
+                log::trace!("ZIR right after lowering:\n{}", buf);
+            }
+        }
+        zydeco_stack::ClosureConverter::new(&mut stack, &mut scoped, &statics).convert();
+        {
+            use zydeco_stack::fmt::*;
+            let fmt = Formatter::new(&stack, &scoped, &statics);
+            let doc = stack.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            if verbose {
+                log::trace!("ZIR after closure conversion:\n{}", buf);
+            }
+        }
+        Ok(PackageStack { spans, scoped, statics, stack })
+    }
+    /// compile a package to ZASM
+    fn __compile_zasm_pack(
+        &self, pack: PackId, alloc: ArcGlobalAlloc, verbose: bool,
+    ) -> Result<PackageAssembly> {
+        let PackageStack { spans, scoped, statics, stack } =
+            self.__compile_zir_pack(pack, alloc.clone(), verbose)?;
+        let assembly =
+            zydeco_assembly::lower::Lowerer::new(alloc.clone(), &spans, &scoped, &statics, &stack)
+                .run();
+        {
+            use zydeco_assembly::fmt::*;
+            let fmt = Formatter::new(&assembly);
+            let doc = assembly.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            if verbose {
+                log::trace!("ZASM:\n{}", buf);
+            }
+        }
+        Ok(PackageAssembly { spans, scoped, statics, stack, assembly })
     }
 }

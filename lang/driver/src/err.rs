@@ -10,6 +10,8 @@ pub enum BuildError {
     CompileError(#[from] crate::check::err::CompileError),
     #[error("{0}")]
     InterpError(#[from] crate::interp::err::InterpError),
+    #[error("{0}")]
+    AssemblyInterpError(#[from] crate::zasm::err::AssemblyInterpError),
     #[error("Duplicate package marked name: {0}")]
     DuplicateMark(String),
     #[error("No suitable marked binary to run: wanted: {0}, available: {1:#?}")]
