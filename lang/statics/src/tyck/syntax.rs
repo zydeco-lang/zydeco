@@ -4,7 +4,7 @@ pub use zydeco_syntax::*;
 pub use zydeco_utils::span::{LocationCtx, Sp, Span};
 
 use crate::surface_syntax as su;
-use derive_more::From;
+use derive_more::{From, IntoIterator};
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -299,14 +299,16 @@ pub struct Forall(pub AbstId, pub TypeId);
 pub struct Exists(pub AbstId, pub TypeId);
 
 /// data | C_1 ty | ... end
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, IntoIterator)]
 pub struct Data {
+    #[into_iterator(owned, ref)]
     arms: im::Vector<(CtorName, TypeId)>,
 }
 
 /// `codata | .d_1 cp : ty | ... end`
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, IntoIterator)]
 pub struct CoData {
+    #[into_iterator(owned, ref)]
     arms: im::Vector<(DtorName, TypeId)>,
 }
 
@@ -329,22 +331,6 @@ mod impls_structs {
         }
     }
 
-    impl IntoIterator for Data {
-        type Item = (CtorName, TypeId);
-        type IntoIter = <im::Vector<(CtorName, TypeId)> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.arms.into_iter()
-        }
-    }
-
-    impl<'a> IntoIterator for &'a Data {
-        type Item = &'a (CtorName, TypeId);
-        type IntoIter = <&'a im::Vector<(CtorName, TypeId)> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.arms.iter()
-        }
-    }
-
     impl CoData {
         pub fn new(arms: impl IntoIterator<Item = (DtorName, TypeId)>) -> Self {
             Self { arms: arms.into_iter().collect() }
@@ -358,22 +344,6 @@ mod impls_structs {
         }
         pub fn len(&self) -> usize {
             self.arms.len()
-        }
-    }
-
-    impl IntoIterator for CoData {
-        type Item = (DtorName, TypeId);
-        type IntoIter = <im::Vector<(DtorName, TypeId)> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.arms.into_iter()
-        }
-    }
-
-    impl<'a> IntoIterator for &'a CoData {
-        type Item = &'a (DtorName, TypeId);
-        type IntoIter = <&'a im::Vector<(DtorName, TypeId)> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.arms.iter()
         }
     }
 }

@@ -238,7 +238,7 @@ impl<'a, Id: Hash + Eq + Clone> Kosaraju<'a, Id>
 }
 
 #[derive(Clone, Default, Deref, DerefMut, IntoIterator, PartialEq, Eq, Debug)]
-pub struct SccGroup<Id: Hash + Eq + Clone>(pub HashSet<Id>);
+pub struct SccGroup<Id: Hash + Eq + Clone>(#[into_iterator(owned, ref)] pub HashSet<Id>);
 
 impl<Id: Hash + Eq + Clone> SccGroup<Id> {
     pub fn new() -> Self {
@@ -248,13 +248,6 @@ impl<Id: Hash + Eq + Clone> SccGroup<Id> {
 impl<Id: Hash + Eq + Clone> FromIterator<Id> for SccGroup<Id> {
     fn from_iter<T: IntoIterator<Item = Id>>(iter: T) -> Self {
         Self(iter.into_iter().collect())
-    }
-}
-impl<'a, Id: Hash + Eq + Clone> IntoIterator for &'a SccGroup<Id> {
-    type Item = &'a Id;
-    type IntoIter = <&'a HashSet<Id> as IntoIterator>::IntoIter;
-    fn into_iter(self) -> Self::IntoIter {
-        (&self.0).into_iter()
     }
 }
 

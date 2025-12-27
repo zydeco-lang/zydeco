@@ -1,4 +1,5 @@
 use super::syntax::*;
+use derive_more::{AddAssign, Index, IntoIterator};
 
 /* ---------------------------------- Arena --------------------------------- */
 
@@ -11,12 +12,11 @@ pub struct TextArena {
     pub decls: ArenaAssoc<DeclId, Modifiers<Declaration>>,
 }
 
-#[derive(Clone, Debug, derive_more::AddAssign)]
-pub struct SpanArena(ArenaSparse<EntityId, Span>);
+#[derive(Clone, Debug, AddAssign, Index, IntoIterator)]
+pub struct SpanArena(#[into_iterator(owned, ref, ref_mut)] ArenaSparse<EntityId, Span>);
 
 mod impl_span_arena {
     use super::*;
-    use std::ops::Index;
 
     impl SpanArena {
         pub fn new(allocator: IndexAlloc<usize>) -> Self {
@@ -24,29 +24,6 @@ mod impl_span_arena {
         }
         pub fn alloc(&mut self, span: Span) -> EntityId {
             self.0.alloc(span)
-        }
-    }
-
-    impl Index<&EntityId> for SpanArena {
-        type Output = Span;
-        fn index(&self, index: &EntityId) -> &Self::Output {
-            &self.0[index]
-        }
-    }
-
-    impl IntoIterator for SpanArena {
-        type Item = (EntityId, Span);
-        type IntoIter = <ArenaSparse<EntityId, Span> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.0.into_iter()
-        }
-    }
-
-    impl<'a> IntoIterator for &'a SpanArena {
-        type Item = (&'a EntityId, &'a Span);
-        type IntoIter = <&'a ArenaSparse<EntityId, Span> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            (&self.0).into_iter()
         }
     }
 

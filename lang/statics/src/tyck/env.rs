@@ -6,7 +6,7 @@ use std::ops::{Add, AddAssign};
 use zydeco_utils::prelude::With;
 
 #[derive(Clone, Debug, From, Into, Deref, DerefMut, Index, IndexMut, IntoIterator)]
-pub struct Env<T>(im::HashMap<DefId, T>);
+pub struct Env<T>(#[into_iterator(owned, ref, ref_mut)] im::HashMap<DefId, T>);
 
 mod impls_env {
     use super::*;
