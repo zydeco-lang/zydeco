@@ -1,11 +1,12 @@
 //! Arenas and [`Construct`] trait for the stack-passing style ZIR.
 
 use super::{syntax::*, *};
+use derive_more::{AsMut, AsRef};
 
 /// All arenas for the stack-passing style ZIR.
 /// The definitions and patterns are equivalent to the ones in
 /// [`zydeco_statics::tyck::syntax::StaticsArena`].
-#[derive(Debug)]
+#[derive(Debug, AsRef, AsMut)]
 pub struct StackArena {
     /// value pattern arena
     pub vpats: ArenaSparse<VPatId, ValuePattern>,
@@ -43,6 +44,11 @@ impl StackArena {
             pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),
         }
+    }
+}
+impl AsRef<StackArena> for StackArena {
+    fn as_ref(&self) -> &StackArena {
+        self
     }
 }
 impl AsMut<StackArena> for StackArena {

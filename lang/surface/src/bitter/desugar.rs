@@ -3,6 +3,7 @@ use crate::{
     syntax::*,
     textual::syntax::{self as t, GenBind},
 };
+use derive_more::{AsMut, AsRef};
 use zydeco_syntax::SpanView;
 use zydeco_utils::prelude::CompilerPass;
 
@@ -11,10 +12,13 @@ pub trait Desugar {
     fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out>;
 }
 
+#[derive(AsRef, AsMut)]
 pub struct Desugarer<'a> {
     pub spans: &'a t::SpanArena,
     pub textual: t::TextArena,
     pub top: t::TopLevel,
+    #[as_ref(b::BitterArena)]
+    #[as_mut(b::BitterArena)]
     pub bitter: b::BitterArena,
     pub prim: b::PrimTerms,
 }
@@ -23,16 +27,6 @@ impl<'a> Desugarer<'a> {
         spans: &'a t::SpanArena, textual: t::TextArena, top: t::TopLevel, bitter: b::BitterArena,
     ) -> Self {
         Self { spans, textual, top, bitter, prim: b::PrimTerms::default() }
-    }
-}
-impl AsRef<b::BitterArena> for Desugarer<'_> {
-    fn as_ref(&self) -> &b::BitterArena {
-        &self.bitter
-    }
-}
-impl AsMut<b::BitterArena> for Desugarer<'_> {
-    fn as_mut(&mut self) -> &mut b::BitterArena {
-        &mut self.bitter
     }
 }
 

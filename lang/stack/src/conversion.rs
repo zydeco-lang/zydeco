@@ -2,32 +2,24 @@
 //!
 //! After this pass, there will be no implicit captures.
 
-use zydeco_utils::pass::CompilerPass;
-
 use super::{arena::*, substitution::SubstitutionInPlace, syntax::*};
+use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible};
 use {
     zydeco_statics::tyck::{arena::StaticsArena, syntax as ss},
     zydeco_surface::scoped::arena::ScopedArena,
     zydeco_syntax::VarName,
-    zydeco_utils::prelude::{CoContext, Context},
+    zydeco_utils::prelude::{CoContext, CompilerPass, Context},
 };
 
 /// Perform closure conversion on the stack arena.
+#[derive(AsRef, AsMut)]
 pub struct ClosureConverter<'a> {
+    #[as_ref(StackArena)]
+    #[as_mut(StackArena)]
     arena: &'a mut StackArena,
     scoped: &'a mut ScopedArena,
     _statics: &'a StaticsArena,
-}
-impl AsRef<StackArena> for ClosureConverter<'_> {
-    fn as_ref(&self) -> &StackArena {
-        &self.arena
-    }
-}
-impl AsMut<StackArena> for ClosureConverter<'_> {
-    fn as_mut(&mut self) -> &mut StackArena {
-        &mut self.arena
-    }
 }
 
 impl<'a> CompilerPass for ClosureConverter<'a> {

@@ -1,3 +1,4 @@
+use derive_more::{AsMut, AsRef};
 use {
     super::{
         syntax::{AnnId, Fillable, PatAnnId, StaticsArena, TermAnnId, TyEnvT},
@@ -10,10 +11,15 @@ use {
     zydeco_utils::prelude::{ArcGlobalAlloc, ArenaAccess, CompilerPass, SccGroup},
 };
 
+#[derive(AsRef, AsMut)]
 pub struct Tycker {
     pub spans: SpanArena,
     pub prim: PrimDefs,
+    #[as_ref(ScopedArena)]
+    #[as_mut(ScopedArena)]
     pub scoped: ScopedArena,
+    #[as_ref(StaticsArena)]
+    #[as_mut(StaticsArena)]
     pub statics: StaticsArena,
     /// call stack for debugging tycker and error tracking
     pub tasks: im::Vector<TyckTask>,
@@ -21,26 +27,6 @@ pub struct Tycker {
     pub metas: im::Vector<su::Meta>,
     /// a writer monad for error handling
     pub errors: Vec<TyckErrorEntry>,
-}
-impl AsRef<ScopedArena> for Tycker {
-    fn as_ref(&self) -> &ScopedArena {
-        &self.scoped
-    }
-}
-impl AsMut<ScopedArena> for Tycker {
-    fn as_mut(&mut self) -> &mut ScopedArena {
-        &mut self.scoped
-    }
-}
-impl AsRef<StaticsArena> for Tycker {
-    fn as_ref(&self) -> &StaticsArena {
-        &self.statics
-    }
-}
-impl AsMut<StaticsArena> for Tycker {
-    fn as_mut(&mut self) -> &mut StaticsArena {
-        &mut self.statics
-    }
 }
 
 // Todo: use async to cut all tycker functions into small segments (returning futures)

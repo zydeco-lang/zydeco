@@ -1,8 +1,12 @@
 use super::syntax::*;
+use derive_more::{AsMut, AsRef};
 use thiserror::Error;
 use zydeco_utils::pass::CompilerPass;
 
+#[derive(AsRef, AsMut)]
 pub struct Interpreter {
+    #[as_ref]
+    #[as_mut]
     pub arena: AssemblyArena,
     pub runtime: Runtime,
 }
@@ -10,16 +14,6 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new(arena: AssemblyArena) -> Self {
         Self { arena, runtime: Runtime::new() }
-    }
-}
-impl AsRef<AssemblyArena> for Interpreter {
-    fn as_ref(&self) -> &AssemblyArena {
-        &self.arena
-    }
-}
-impl AsMut<AssemblyArena> for Interpreter {
-    fn as_mut(&mut self) -> &mut AssemblyArena {
-        &mut self.arena
     }
 }
 

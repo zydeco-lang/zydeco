@@ -16,7 +16,7 @@ zydeco-syntax = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-stack = { workspace = true }
 zydeco-surface = { workspace = true }
-derive_more = { workspace = true }
+derive_more = { workspace = true, features = ["as_ref"] }
 im = { workspace = true }
 pretty = { workspace = true }
 rustc-hash = { workspace = true }

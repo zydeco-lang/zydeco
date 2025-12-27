@@ -39,6 +39,7 @@ impl AssemblyArena {
         }
     }
 }
+// Note: These can not be derived currently by derive_more.
 impl AsRef<AssemblyArena> for AssemblyArena {
     fn as_ref(&self) -> &AssemblyArena {
         self

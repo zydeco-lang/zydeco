@@ -6,6 +6,7 @@
 
 use super::arena::{AssemblyArena, AssemblyArenaMutLike};
 use super::syntax::*;
+use derive_more::{AsMut, AsRef};
 use zydeco_stack::arena::StackArena;
 use zydeco_stack::syntax as sk;
 use zydeco_statics::tyck::arena::StaticsArena;
@@ -19,7 +20,10 @@ pub trait Lower {
     fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out;
 }
 
+#[derive(AsRef, AsMut)]
 pub struct Lowerer<'a> {
+    #[as_ref]
+    #[as_mut]
     pub arena: AssemblyArena,
     pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
@@ -285,17 +289,6 @@ impl<'a> Lowerer<'a> {
             unreachable!("Stack is not a computation in statics")
         };
         self.find_dtor_tag_idx(*compu, dtor_name)
-    }
-}
-
-impl AsRef<AssemblyArena> for Lowerer<'_> {
-    fn as_ref(&self) -> &AssemblyArena {
-        &self.arena
-    }
-}
-impl AsMut<AssemblyArena> for Lowerer<'_> {
-    fn as_mut(&mut self) -> &mut AssemblyArena {
-        &mut self.arena
     }
 }
 
