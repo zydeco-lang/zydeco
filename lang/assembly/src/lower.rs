@@ -73,7 +73,7 @@ impl<'a> Lowerer<'a> {
                                 // let _sym = lo.sym(Some(def_id), name.plain(), Extern);
                                 // kont(lo)
                                 // Don't make it a symbol. Instead, just make it a variable.
-                                let var = lo.arena.var(Some(def_id), name);
+                                let var = VarName::from(name).build(lo, Some(def_id));
                                 lo.arena.externs.insert(var, ());
                                 kont(lo)
                             })
@@ -86,7 +86,7 @@ impl<'a> Lowerer<'a> {
                                     lo,
                                     Box::new(move |lo| {
                                         let name = lo.scoped.defs[&def_id].clone();
-                                        let var = lo.arena.var(Some(def_id), name);
+                                        let var = VarName::from(name).build(lo, Some(def_id));
                                         lo.instr(Pop(var), kont)
                                     }),
                                 )
@@ -301,13 +301,13 @@ impl Lower for sk::VPatId {
         use sk::ValuePattern as VPat;
         match vpat {
             | VPat::Hole(Hole) => {
-                let var = lo.arena.var(None, VarName::from("_"));
+                let var = VarName::from("_").build(lo, None);
                 lo.instr(Pop(var), kont)
             }
             | VPat::Var(def_id) => {
                 // Pop the value from the stack into the variable
                 let name = lo.scoped.defs[&def_id].clone();
-                let var = lo.arena.var(Some(def_id), name);
+                let var = VarName::from(name).build(lo, Some(def_id));
                 lo.instr(Pop(var), kont)
             }
             | VPat::Ctor(Ctor(ctor, param)) => {
@@ -326,7 +326,7 @@ impl Lower for sk::VPatId {
                             Push(tag),
                             Box::new(move |lo: &mut Lowerer| {
                                 // Compare the tag with the constructor
-                                lo.prog_anon(EqJump(res))
+                                EqJump(res).build(lo, ())
                             }),
                         )
                     }),
@@ -334,7 +334,7 @@ impl Lower for sk::VPatId {
             }
             | VPat::Triv(Triv) => {
                 // Pop and do nothing
-                let var = lo.arena.var(None, VarName::from("_"));
+                let var = VarName::from("_").build(lo, None);
                 lo.instr(Pop(var), kont)
             }
             | VPat::VCons(Cons(a, b)) => {
@@ -359,7 +359,7 @@ impl Lower for sk::ValueId {
         let value = lo.stack.values[self].clone();
         use sk::Value;
         match value {
-            | Value::Hole(Hole) => lo.prog_anon(Panic),
+            | Value::Hole(Hole) => Panic.build(lo, ()),
             | Value::Var(def_id) => {
                 // Retrieve the variable from the context
                 let _name = lo.scoped.defs[&def_id].clone();
@@ -375,7 +375,7 @@ impl Lower for sk::ValueId {
                 assert!(capture.iter().count() == 0, "Capture is not empty");
                 let body = body.lower(lo, ());
                 // Label the closure code
-                let sym = lo.sym(None, "clo", body);
+                let sym = body.build(lo, (Some(String::from("clo")), None));
                 // Push the atom to the stack
                 let atom = Atom::Sym(sym);
                 lo.instr(Push(atom), kont)
@@ -402,7 +402,7 @@ impl Lower for sk::ValueId {
             }
             | Value::Triv(Triv) => {
                 // Push the trivial value onto the stack
-                let atom = Atom::Sym(lo.arena.sym(None, "", Triv));
+                let atom = Atom::Sym(Triv.build(lo, (Some(String::from("")), None)));
                 lo.instr(Push(atom), kont)
             }
             | Value::VCons(Cons(a, b)) => {
@@ -422,7 +422,7 @@ impl Lower for sk::ValueId {
             }
             | Value::Lit(lit) => {
                 // Push the literal value onto the stack
-                let atom = Atom::Sym(lo.arena.sym(None, "", lit));
+                let atom = Atom::Sym(lit.build(lo, (Some(String::from("")), None)));
                 lo.instr(Push(atom), kont)
             }
         }
@@ -453,7 +453,7 @@ impl Lower for sk::StackId {
                         )
                     }),
                 );
-                let sym = lo.arena.sym(None, "kont", code);
+                let sym = code.build(lo, (Some(String::from("kont")), None));
                 // Push the context pointer, and then the code
                 lo.instr(
                     Push(ContextMarker),
@@ -508,7 +508,7 @@ impl Lower for sk::CompuId {
         let compu = lo.stack.compus[self].clone();
         use sk::Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => lo.prog_anon(Panic),
+            | Compu::Hole(Hole) => Panic.build(lo, ()),
             | Compu::Force(sk::SForce { thunk, stack }) => {
                 // Lower the stack first
                 stack.lower(
@@ -519,7 +519,7 @@ impl Lower for sk::CompuId {
                             lo,
                             Box::new(move |lo| {
                                 // PopJump to the thunk
-                                lo.prog_anon(PopJump)
+                                PopJump.build(lo, ())
                             }),
                         )
                     }),
@@ -536,7 +536,7 @@ impl Lower for sk::CompuId {
                             Box::new(move |lo| {
                                 // The stack shape: [return value, return address, context]
                                 // Leap jump to the continuation
-                                lo.prog_anon(LeapJump)
+                                LeapJump.build(lo, ())
                             }),
                         )
                     }),
@@ -549,7 +549,7 @@ impl Lower for sk::CompuId {
                 );
                 // Label the body code
                 let name = lo.scoped.defs[&param].plain();
-                let sym = lo.arena.sym(Some(param), name, Extern);
+                let sym = Extern.build(lo, (Some(name.to_string()), Some(param)));
                 // Lower the body
                 let body_prog = body.lower(lo, ());
                 // Nominate the body program
@@ -560,7 +560,7 @@ impl Lower for sk::CompuId {
                 );
                 lo.arena.labels.insert(body_prog, sym);
                 // Jump to the body
-                lo.prog_anon(Jump(body_prog))
+                Jump(body_prog).build(lo, ())
             }
             | Compu::Case(Match { scrut, arms }) => {
                 let value_data = scrut;
@@ -593,7 +593,8 @@ impl Lower for sk::CompuId {
                                         // Lower the tail
                                         let tail_prog = tail.lower(lo, ());
                                         // Nominate the tail program
-                                        let _sym = lo.arena.sym(None, "arm", tail_prog);
+                                        let _sym =
+                                            tail_prog.build(lo, (Some(String::from("arm")), None));
                                         // Add to the jump table
                                         lowered_arms.push((tag, tail_prog));
                                     }
@@ -607,7 +608,7 @@ impl Lower for sk::CompuId {
                                 Unpack(ProductMarker),
                                 Box::new(move |lo: &mut Lowerer| {
                                     // Jump table
-                                    lo.prog_anon(PopBranch(lowered_arms))
+                                    PopBranch(lowered_arms).build(lo, ())
                                 }),
                             )
                         }
@@ -666,12 +667,12 @@ impl Lower for sk::CompuId {
                     let name = dtor.plain().to_string();
                     let tag = Tag { idx, name: Some(name) };
                     // Nominate the tail program
-                    let _sym = lo.arena.sym(None, "coarm", tail_prog);
+                    let _sym = tail_prog.build(lo, (Some(String::from("coarm")), None));
                     // Add to the jump table
                     lowered_arms.push((tag, tail_prog));
                 }
                 // Create the co-case program
-                lo.prog_anon(PopBranch(lowered_arms))
+                PopBranch(lowered_arms).build(lo, ())
             }
         }
     }

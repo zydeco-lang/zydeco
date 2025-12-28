@@ -73,58 +73,42 @@ where
 pub trait AssemblyArenaMutLike {
     /// Find out if a program is nominated as an individual block, and decide what label to use.
     fn block_name(&mut self, prog: ProgId) -> Option<SymId>;
-    /// Allocate a variable.
-    fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId;
-    /// Allocate a symbol.
-    fn sym(
-        &mut self, site: Option<sk::DefId>, name: impl Into<String>, inner: impl Into<SymbolInner>,
-    ) -> SymId;
-    /// Allocate a program that is anonymous, i.e. has no meaningful label.
-    fn prog_anon(&mut self, prog: impl Into<Program>) -> ProgId;
     /// Allocate an instruction.
     fn instr(
         &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
     ) -> ProgId;
 }
 
-impl<T> AssemblyArenaMutLike for T
+pub trait Construct<S, T, Arena>: Sized + Into<S> {
+    type Site;
+    fn build(self, arena: &mut Arena, site: Self::Site) -> T;
+}
+
+impl<U, Arena> Construct<VarName, VarId, Arena> for U
 where
-    T: AsMut<AssemblyArena>,
+    Arena: AsMut<AssemblyArena>,
+    U: Into<VarName>,
 {
-    fn block_name(&mut self, prog: ProgId) -> Option<SymId> {
-        let this = self.as_mut();
-        let count = *this.blocks.get(&prog)?;
-        if count < 2 {
-            return None;
-        }
-        // let uniquifier = |name: &str| format!("{}_{}", name, prog.concise_inner());
-        // let label = match this.labels.get(&prog) {
-        //     | Some(label) => uniquifier(label.plain()),
-        //     | None => uniquifier("block"),
-        // };
-        // Some(Label(label))
-        let sym = match this.labels.get(&prog).cloned() {
-            | Some(sym) => sym,
-            | None => this.symbols.alloc(Symbol {
-                name: format!("block_{}", prog.concise_inner()),
-                inner: SymbolInner::Prog(prog),
-            }),
-        };
-        Some(sym)
-    }
-    fn var(&mut self, site: Option<sk::DefId>, var: impl Into<VarName>) -> VarId {
-        let this = &mut *self.as_mut();
-        let id = this.variables.alloc(var.into());
+    type Site = Option<sk::DefId>;
+    fn build(self, arena: &mut Arena, site: Self::Site) -> VarId {
+        let this = &mut *arena.as_mut();
+        let id = this.variables.alloc(self.into());
         if let Some(site) = site {
             this.defs.insert(site, DefId::Var(id));
         }
         id
     }
-    fn sym(
-        &mut self, site: Option<sk::DefId>, name: impl Into<String>, inner: impl Into<SymbolInner>,
-    ) -> SymId {
-        let this = &mut *self.as_mut();
-        let symbol = Symbol { name: name.into(), inner: inner.into() };
+}
+
+impl<U, Arena> Construct<SymbolInner, SymId, Arena> for U
+where
+    Arena: AsMut<AssemblyArena>,
+    U: Into<SymbolInner>,
+{
+    type Site = (Option<String>, Option<sk::DefId>);
+    fn build(self, arena: &mut Arena, (name, site): Self::Site) -> SymId {
+        let this = &mut *arena.as_mut();
+        let symbol = Symbol { name: name.unwrap_or_default(), inner: self.into() };
         let is_prog = match symbol.inner {
             | SymbolInner::Prog(prog_id) => Some(prog_id),
             | _ => None,
@@ -141,9 +125,18 @@ where
         }
         id
     }
-    fn prog_anon(&mut self, prog: impl Into<Program>) -> ProgId {
-        let this = &mut *self.as_mut();
-        let program = prog.into();
+}
+
+/// Allocate a program that is anonymous, i.e. has no meaningful label.
+impl<U, Arena> Construct<Program, ProgId, Arena> for U
+where
+    Arena: AsMut<AssemblyArena>,
+    U: Into<Program>,
+{
+    type Site = ();
+    fn build(self, arena: &mut Arena, (): Self::Site) -> ProgId {
+        let this = &mut *arena.as_mut();
+        let program = self.into();
         // Nominate inner programs if they are mentioned in the program.
         let mut nominate = |&prog| {
             *this.blocks.entry(prog).or_insert(0) += 1;
@@ -164,12 +157,32 @@ where
         let id = this.programs.alloc(program);
         id
     }
+}
+
+impl<T> AssemblyArenaMutLike for T
+where
+    T: AsMut<AssemblyArena>,
+{
+    fn block_name(&mut self, prog: ProgId) -> Option<SymId> {
+        let this = self.as_mut();
+        let count = *this.blocks.get(&prog)?;
+        if count < 2 {
+            return None;
+        }
+        let sym = match this.labels.get(&prog).cloned() {
+            | Some(sym) => sym,
+            | None => this.symbols.alloc(Symbol {
+                name: format!("block_{}", prog.concise_inner()),
+                inner: SymbolInner::Prog(prog),
+            }),
+        };
+        Some(sym)
+    }
     fn instr(
         &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
     ) -> ProgId {
         let next = kont(self);
-        let this = &mut *self.as_mut();
-        let id = this.prog_anon(Program::Instruction(instr.into(), next));
+        let id = Program::Instruction(instr.into(), next).build(self, ());
         id
     }
 }

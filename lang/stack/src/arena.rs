@@ -62,10 +62,10 @@ pub trait Construct<S, T, Arena>: Sized + Into<S> {
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> T;
 }
 
-impl<S, Arena> Construct<ValuePattern, VPatId, Arena> for S
+impl<U, Arena> Construct<ValuePattern, VPatId, Arena> for U
 where
     Arena: AsMut<StackArena>,
-    S: Into<ValuePattern>,
+    U: Into<ValuePattern>,
 {
     type Site = ss::PatId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> VPatId {
@@ -78,10 +78,10 @@ where
     }
 }
 
-impl<S, Arena> Construct<Value, ValueId, Arena> for S
+impl<U, Arena> Construct<Value, ValueId, Arena> for U
 where
     Arena: AsMut<StackArena>,
-    S: Into<Value>,
+    U: Into<Value>,
 {
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> ValueId {
@@ -94,10 +94,10 @@ where
     }
 }
 
-impl<S, Arena> Construct<Stack, StackId, Arena> for S
+impl<U, Arena> Construct<Stack, StackId, Arena> for U
 where
     Arena: AsMut<StackArena>,
-    S: Into<Stack>,
+    U: Into<Stack>,
 {
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> StackId {
@@ -110,10 +110,10 @@ where
     }
 }
 
-impl<S, Arena> Construct<Computation, CompuId, Arena> for S
+impl<U, Arena> Construct<Computation, CompuId, Arena> for U
 where
     Arena: AsMut<StackArena>,
-    S: Into<Computation>,
+    U: Into<Computation>,
 {
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {
