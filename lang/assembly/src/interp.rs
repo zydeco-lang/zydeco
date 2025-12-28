@@ -80,8 +80,12 @@ impl Eval for Program {
                 let () = instr.eval(interp)?;
                 next.eval(interp)
             }
-            | Program::Jump(Jump(prog)) => prog.eval(interp),
+            | Program::Jump(Jump(prog)) => {
+                log::trace!("jump: {:?}", prog);
+                prog.eval(interp)
+            }
             | Program::EqJump(EqJump(prog)) => {
+                log::trace!("eqjump: {:?}", prog);
                 let a = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Tag(a) = a else {
                     Err(Error::TypeError(format!("expected tag, got {:?}", a)))?
@@ -93,6 +97,7 @@ impl Eval for Program {
                 if a.idx == b.idx { prog.eval(interp) } else { todo!() }
             }
             | Program::PopJump(PopJump) => {
+                log::trace!("popjump");
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Atom(Atom::Sym(sym)) = value else {
                     Err(Error::TypeError(format!("expected symbol, got {:?}", value)))?
@@ -104,6 +109,7 @@ impl Eval for Program {
                 prog.eval(interp)
             }
             | Program::LeapJump(LeapJump) => {
+                log::trace!("leapjmp");
                 let kept = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let address = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 interp.runtime.stack.push(kept);
@@ -117,6 +123,7 @@ impl Eval for Program {
                 prog.eval(interp)
             }
             | Program::PopBranch(PopBranch(arms)) => {
+                log::trace!("popbranch");
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Tag(tag) = value else {
                     Err(Error::TypeError(format!("expected tag, got {:?}", value)))?
@@ -134,6 +141,7 @@ impl Eval for Instruction {
     fn eval(self, interp: &mut Interpreter) -> Result<Self::Output, Error> {
         match self {
             | Instruction::PackProduct(Pack(ProductMarker)) => {
+                log::trace!("packproduct");
                 let pointer = interp.runtime.heap.len();
                 let a = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let b = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
@@ -143,6 +151,7 @@ impl Eval for Instruction {
                 Ok(())
             }
             | Instruction::UnpackProduct(Unpack(ProductMarker)) => {
+                log::trace!("unpackproduct");
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Pointer(pointer) = value else {
                     Err(Error::TypeError(format!("expected pointer, got {:?}", value)))?
@@ -153,22 +162,32 @@ impl Eval for Instruction {
                 interp.runtime.stack.push(a);
                 Ok(())
             }
-            | Instruction::PushContext(Push(ContextMarker)) => todo!(),
-            | Instruction::PopContext(Pop(ContextMarker)) => todo!(),
+            | Instruction::PushContext(Push(ContextMarker)) => {
+                log::trace!("pushcontext");
+                todo!()
+            }
+            | Instruction::PopContext(Pop(ContextMarker)) => {
+                log::trace!("popcontext");
+                todo!()
+            }
             | Instruction::PushArg(Push(atom)) => {
+                log::trace!("pusharg: {:?}", atom);
                 interp.runtime.stack.push(Value::Atom(atom));
                 Ok(())
             }
             | Instruction::PopArg(Pop(var)) => {
+                log::trace!("poparg: {:?}", var);
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 interp.runtime.context.insert(var, value);
                 Ok(())
             }
             | Instruction::PushTag(Push(tag)) => {
+                log::trace!("pushtag: {:?}", tag);
                 interp.runtime.stack.push(Value::Tag(tag));
                 Ok(())
             }
             | Instruction::Swap(Swap) => {
+                log::trace!("swap");
                 let a = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let b = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 interp.runtime.stack.push(b);
@@ -176,6 +195,7 @@ impl Eval for Instruction {
                 Ok(())
             }
             | Instruction::Clear(context) => {
+                log::trace!("clear: {:?}", context);
                 for var in context {
                     interp.runtime.context.remove(&var);
                 }
