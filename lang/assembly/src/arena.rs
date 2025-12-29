@@ -1,6 +1,8 @@
 use super::syntax::*;
+use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_stack::syntax as sk;
 
+#[derive(AsRefSelf, AsMutSelf)]
 pub struct AssemblyArena {
     /// All programs are attached with a ProgId.
     pub programs: ArenaSparse<ProgId, Program>,
@@ -39,17 +41,7 @@ impl AssemblyArena {
         }
     }
 }
-// Note: These can not be derived currently by derive_more.
-impl AsRef<AssemblyArena> for AssemblyArena {
-    fn as_ref(&self) -> &AssemblyArena {
-        self
-    }
-}
-impl AsMut<AssemblyArena> for AssemblyArena {
-    fn as_mut(&mut self) -> &mut AssemblyArena {
-        self
-    }
-}
+
 
 pub trait AssemblyArenaRefLike {
     fn sym_label(&self, sym: &SymId) -> String;

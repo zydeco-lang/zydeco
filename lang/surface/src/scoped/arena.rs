@@ -1,5 +1,6 @@
 use super::syntax::*;
 use crate::textual::syntax as t;
+use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_utils::prelude::{DepGraph, SccGraph};
 
 pub use crate::arena::*;
@@ -17,7 +18,7 @@ pub trait ArenaScoped {
 
 /// Resolved arena plus name-resolution metadata and dependency/context analysis.
 // Clone is derived only for coping with wf in driver
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AsRefSelf, AsMutSelf)]
 pub struct ScopedArena {
     // arenas
     pub defs: ArenaSparse<DefId, VarName>,

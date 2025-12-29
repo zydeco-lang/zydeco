@@ -2,11 +2,12 @@
 
 use super::{syntax::*, *};
 use derive_more::{AsMut, AsRef};
+use zydeco_derive::{AsMutSelf, AsRefSelf};
 
 /// All arenas for the stack-passing style ZIR.
 /// The definitions and patterns are equivalent to the ones in
 /// [`zydeco_statics::tyck::syntax::StaticsArena`].
-#[derive(Debug, AsRef, AsMut)]
+#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct StackArena {
     /// value pattern arena
     pub vpats: ArenaSparse<VPatId, ValuePattern>,
@@ -46,16 +47,7 @@ impl StackArena {
         }
     }
 }
-impl AsRef<StackArena> for StackArena {
-    fn as_ref(&self) -> &StackArena {
-        self
-    }
-}
-impl AsMut<StackArena> for StackArena {
-    fn as_mut(&mut self) -> &mut StackArena {
-        self
-    }
-}
+
 
 pub trait Construct<S, T, Arena>: Sized + Into<S> {
     type Site;

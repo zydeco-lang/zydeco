@@ -1,11 +1,9 @@
 use super::arena::StackArena;
 use super::syntax::*;
+use derive_more::{AsMut, AsRef};
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_syntax::Ugly;
-use zydeco_utils::arena::ArcGlobalAlloc;
-use zydeco_utils::context::Context;
-use zydeco_utils::phantom::Phantom;
+use zydeco_utils::{arena::ArcGlobalAlloc, context::Context, phantom::Phantom};
 
 pub trait Lower {
     type Kont;
@@ -13,7 +11,10 @@ pub trait Lower {
     fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out;
 }
 
+#[derive(AsRef, AsMut)]
 pub struct Lowerer<'a> {
+    #[as_ref]
+    #[as_mut]
     pub arena: StackArena,
     pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
@@ -168,11 +169,6 @@ impl<'a> Lowerer<'a> {
             })
             .filter(|def_id| param.map(|param| *def_id != param).unwrap_or(true))
             .collect()
-    }
-}
-impl AsMut<StackArena> for Lowerer<'_> {
-    fn as_mut(&mut self) -> &mut StackArena {
-        &mut self.arena
     }
 }
 

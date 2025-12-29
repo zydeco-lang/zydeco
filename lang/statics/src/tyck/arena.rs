@@ -5,6 +5,7 @@
 use super::syntax::*;
 use crate::surface_syntax as su;
 
+use zydeco_derive::{AsMutSelf, AsRefSelf};
 pub use zydeco_surface::arena::*;
 
 /* ---------------------------------- Arena --------------------------------- */
@@ -25,7 +26,7 @@ pub trait ArenaStatics {
 
 /// Typed arena plus annotation tables and translation metadata.
 // Clone is derived only for coping with wf in driver
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AsRefSelf, AsMutSelf)]
 pub struct StaticsArena {
     /// kind arena
     pub kinds: ArenaSparse<KindId, Fillable<Kind>>,
