@@ -1,4 +1,4 @@
-//! Lower from [`zydeco_stack::StackArena`] to [`AssemblyArena`].
+//! Lower from [`zydeco_stackir::StackArena`] to [`AssemblyArena`].
 //!
 //! - All global variables and all values are
 //!   compiled into programs that pushes the value onto the stack.
@@ -7,8 +7,8 @@
 use super::arena::{AssemblyArena, AssemblyArenaMutLike};
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
-use zydeco_stack::arena::StackArena;
-use zydeco_stack::syntax as sk;
+use zydeco_stackir::arena::StackArena;
+use zydeco_stackir::syntax as sk;
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_statics::tyck::syntax as ss;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};

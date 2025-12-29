@@ -7,6 +7,7 @@ use zydeco_surface::scoped::syntax::ScopedArena;
 /* -------------------------------- Formatter ------------------------------- */
 
 pub use zydeco_syntax::{Pretty, Ugly};
+/// Formatter for stack IR using scoped and statics naming.
 pub struct Formatter<'arena> {
     arena: &'arena StackArena,
     scoped: &'arena ScopedArena,

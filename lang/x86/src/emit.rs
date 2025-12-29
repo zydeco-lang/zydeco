@@ -3,7 +3,7 @@ use derive_more::{Deref, DerefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use zydeco_assembly::arena::{AssemblyArena, AssemblyArenaRefLike};
 use zydeco_assembly::syntax::{self as sa, Atom, Instruction, ProgId, Program, SymbolInner};
-use zydeco_stack::arena::StackArena;
+use zydeco_stackir::arena::StackArena;
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;

@@ -2324,7 +2324,7 @@ dependencies = [
  "rustc-hash",
  "thiserror",
  "zydeco-derive",
- "zydeco-stack",
+ "zydeco-stackir",
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
@@ -2365,7 +2365,7 @@ dependencies = [
  "zydeco-assembly",
  "zydeco-derive",
  "zydeco-dynamics",
- "zydeco-stack",
+ "zydeco-stackir",
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",
@@ -2398,7 +2398,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zydeco-stack"
+name = "zydeco-stackir"
 version = "0.2.2"
 dependencies = [
  "derive_more",
@@ -2488,7 +2488,7 @@ dependencies = [
  "im",
  "log",
  "zydeco-assembly",
- "zydeco-stack",
+ "zydeco-stackir",
  "zydeco-statics",
  "zydeco-surface",
  "zydeco-syntax",

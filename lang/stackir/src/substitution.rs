@@ -1,6 +1,7 @@
 use super::syntax::*;
 use std::collections::HashMap;
 
+/// In-place substitution for stack IR nodes.
 pub trait SubstitutionInPlace {
     /// Substitute the free variables in the term in place.
     ///

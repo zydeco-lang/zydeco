@@ -49,8 +49,10 @@ impl StackArena {
 }
 
 
+/// Build a stack IR node and optionally record its source site mapping.
 pub trait Construct<S, T, Arena>: Sized + Into<S> {
     type Site;
+    /// Allocate the node in the arena, recording a typed-site mapping if provided.
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> T;
 }
 

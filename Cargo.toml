@@ -7,7 +7,7 @@ members = [
     "lang/surface",
     "lang/statics",
     "lang/dynamics",
-    "lang/stack",
+    "lang/stackir",
     "lang/assembly",
     "lang/x86",
     "lang/driver",
@@ -40,7 +40,7 @@ zydeco-statics = { path = "lang/statics" }
 zydeco-dynamics = { path = "lang/dynamics" }
 zydeco-x86 = { path = "lang/x86" }
 zydeco-assembly = { path = "lang/assembly" }
-zydeco-stack = { path = "lang/stack" }
+zydeco-stackir = { path = "lang/stackir" }
 zydeco-driver = { path = "lang/driver" }
 # meta
 syn = "2.0"

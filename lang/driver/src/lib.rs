@@ -46,7 +46,7 @@ pub mod prelude {
 
     pub use zydeco_dynamics::syntax as d;
 
-    pub use zydeco_stack::syntax as sk;
+    pub use zydeco_stackir::syntax as sk;
 
     pub use zydeco_assembly::syntax as sa;
 }
@@ -200,7 +200,7 @@ impl BuildSystem {
         let PackageStack { stack, scoped, statics, .. } =
             self.__compile_zir_pack(pack, ArcGlobalAlloc::new(), false)?;
         // pretty print the ZIR
-        use zydeco_stack::fmt::*;
+        use zydeco_stackir::fmt::*;
         let fmt = Formatter::new(&stack, &scoped, &statics);
         let doc = stack.pretty(&fmt);
         let mut buf = String::new();
@@ -233,7 +233,7 @@ impl BuildSystem {
     pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
         let alloc = ArcGlobalAlloc::new();
         let mut checked = self.__tyck_pack(pack, alloc.clone(), false)?;
-        let mut stack = zydeco_stack::Lowerer::new(
+        let mut stack = zydeco_stackir::Lowerer::new(
             alloc.clone(),
             &checked.spans,
             &checked.scoped,
@@ -241,10 +241,10 @@ impl BuildSystem {
         )
         .run();
         // Perform closure conversion
-        zydeco_stack::ClosureConverter::new(&mut stack, &mut checked.scoped, &checked.statics)
+        zydeco_stackir::ClosureConverter::new(&mut stack, &mut checked.scoped, &checked.statics)
             .convert();
         {
-            use zydeco_stack::fmt::*;
+            use zydeco_stackir::fmt::*;
             let fmt = Formatter::new(&stack, &checked.scoped, &checked.statics);
             let doc = stack.pretty(&fmt);
             let mut buf = String::new();
@@ -355,9 +355,10 @@ impl BuildSystem {
     ) -> Result<PackageStack> {
         let PackageChecked { spans, mut scoped, statics, wf: _ } =
             self.__tyck_pack(pack, alloc.clone(), verbose)?;
-        let mut stack = zydeco_stack::Lowerer::new(alloc.clone(), &spans, &scoped, &statics).run();
+        let mut stack =
+            zydeco_stackir::Lowerer::new(alloc.clone(), &spans, &scoped, &statics).run();
         {
-            use zydeco_stack::fmt::*;
+            use zydeco_stackir::fmt::*;
             let fmt = Formatter::new(&stack, &scoped, &statics);
             let doc = stack.pretty(&fmt);
             let mut buf = String::new();
@@ -366,9 +367,9 @@ impl BuildSystem {
                 log::trace!("ZIR right after lowering:\n{}", buf);
             }
         }
-        zydeco_stack::ClosureConverter::new(&mut stack, &mut scoped, &statics).convert();
+        zydeco_stackir::ClosureConverter::new(&mut stack, &mut scoped, &statics).convert();
         {
-            use zydeco_stack::fmt::*;
+            use zydeco_stackir::fmt::*;
             let fmt = Formatter::new(&stack, &scoped, &statics);
             let doc = stack.pretty(&fmt);
             let mut buf = String::new();

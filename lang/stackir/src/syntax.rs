@@ -16,6 +16,7 @@ new_key_type! {
     pub struct StackId;
 }
 
+/// Dispatcher for stack terms (value, computation, or stack).
 #[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum TermId {
     Value(ValueId),
@@ -66,6 +67,7 @@ pub struct Kont {
     pub body: CompuId,
 }
 
+/// Stack cells used by continuations.
 #[derive(From, Clone, Debug)]
 pub enum Stack {
     Kont(Kont),

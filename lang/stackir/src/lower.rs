@@ -5,12 +5,14 @@ use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::{arena::ArcGlobalAlloc, context::Context, phantom::Phantom};
 
+/// Lower typed syntax nodes into stack IR.
 pub trait Lower {
     type Kont;
     type Out;
     fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out;
 }
 
+/// Stateful lowering pass from typed syntax into stack IR.
 #[derive(AsRef, AsMut)]
 pub struct Lowerer<'a> {
     #[as_ref]
@@ -22,6 +24,7 @@ pub struct Lowerer<'a> {
 }
 
 impl<'a> Lowerer<'a> {
+    /// Create a new lowerer with fresh stack arenas.
     pub fn new(
         alloc: ArcGlobalAlloc, spans: &'a SpanArena, scoped: &'a ScopedArena,
         statics: &'a StaticsArena,
@@ -30,6 +33,7 @@ impl<'a> Lowerer<'a> {
         Self { arena, spans, scoped, statics }
     }
 
+    /// Lower the full program into a stack arena.
     pub fn run(mut self) -> StackArena {
         // Topologically traverse declarations and translate VAliasBody
         let mut scc = self.scoped.top.clone();

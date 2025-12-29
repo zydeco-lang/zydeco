@@ -1,6 +1,7 @@
 use super::syntax::*;
 use zydeco_utils::prelude::CoContext;
 
+/// Collect bound variables from patterns.
 pub trait Vars {
     fn vars(self, arena: &impl AsRef<StackArena>) -> Context<DefId>;
 }
@@ -19,6 +20,7 @@ impl Vars for VPatId {
     }
 }
 
+/// Collect free variables from stack IR nodes.
 pub trait FreeVars {
     fn free_vars(self, arena: &impl AsRef<StackArena>) -> CoContext<DefId>;
 }

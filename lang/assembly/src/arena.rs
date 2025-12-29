@@ -1,6 +1,6 @@
 use super::syntax::*;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
-use zydeco_stack::syntax as sk;
+use zydeco_stackir::syntax as sk;
 
 #[derive(AsRefSelf, AsMutSelf)]
 pub struct AssemblyArena {
