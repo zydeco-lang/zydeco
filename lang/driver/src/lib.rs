@@ -230,51 +230,10 @@ impl BuildSystem {
         }
         Ok(())
     }
-    pub fn codegen_x86_pack(&self, pack: PackId) -> Result<String> {
-        let alloc = ArcGlobalAlloc::new();
-        let mut checked = self.__tyck_pack(pack, alloc.clone(), false)?;
-        let mut stack = zydeco_stackir::Lowerer::new(
-            alloc.clone(),
-            &checked.spans,
-            &checked.scoped,
-            &checked.statics,
-        )
-        .run();
-        // Perform closure conversion
-        zydeco_stackir::ClosureConverter::new(&mut stack, &mut checked.scoped, &checked.statics)
-            .convert();
-        {
-            use zydeco_stackir::fmt::*;
-            let fmt = Formatter::new(&stack, &checked.scoped, &checked.statics);
-            let doc = stack.pretty(&fmt);
-            let mut buf = String::new();
-            doc.render_fmt(100, &mut buf).unwrap();
-            log::trace!("ZIR after closure conversion:\n{}", buf);
-        }
-        let assembly = zydeco_assembly::lower::Lowerer::new(
-            alloc.clone(),
-            &checked.spans,
-            &checked.scoped,
-            &checked.statics,
-            &stack,
-        )
-        .run();
-        {
-            use zydeco_assembly::fmt::*;
-            let formatter = Formatter::new(&assembly);
-            let doc = assembly.pretty(&formatter);
-            let mut buf = String::new();
-            doc.render_fmt(100, &mut buf).unwrap();
-            log::trace!("ZASM:\n{}", buf);
-        }
-        let instrs = zydeco_x86::Emitter::new(
-            &checked.spans,
-            &checked.scoped,
-            &checked.statics,
-            &stack,
-            &assembly,
-        )
-        .run();
+    pub fn codegen_x86_pack(&self, pack: PackId, verbose: bool) -> Result<String> {
+        let PackageAssembly { spans, scoped, statics, stack, assembly } =
+            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
+        let instrs = zydeco_x86::Emitter::new(&spans, &scoped, &statics, &stack, &assembly).run();
         Ok(instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n"))
     }
 }

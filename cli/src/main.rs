@@ -124,7 +124,7 @@ fn build_files(
             Ok(0)
         }
         | "x86" => {
-            let x86 = build_sys.codegen_x86_pack(pack).map_err(|e| e.to_string())?;
+            let x86 = build_sys.codegen_x86_pack(pack, verbose).map_err(|e| e.to_string())?;
             if verbose {
                 println!("{}", x86);
             }
