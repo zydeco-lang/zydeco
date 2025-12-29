@@ -2,7 +2,7 @@ use clap::Parser;
 use std::path::PathBuf;
 // use zydeco_cli::{Cli, Commands, Repl};
 use zydeco_cli::{Cli, Commands};
-use zydeco_driver::{x86::PackageX86, BuildSystem, PackId, ProgKont};
+use zydeco_driver::{BuildConf, BuildSystem, PackId, ProgKont};
 
 fn main() -> Result<(), ()> {
     env_logger::init();
@@ -47,7 +47,7 @@ fn main() -> Result<(), ()> {
 }
 
 fn setup_build_system(
-    paths: Vec<PathBuf>, bin: Option<String>,
+    paths: Vec<PathBuf>, bin: Option<String>, build_config: Option<BuildConf>,
 ) -> Result<(BuildSystem, PackId), String> {
     let mut build_sys = BuildSystem::new();
     let mut packs = Vec::new();
@@ -89,13 +89,17 @@ fn setup_build_system(
     }
 
     let pack = build_sys.pick_marked(bin).map_err(|e| e.to_string())?;
+    // setup build configuration for the marked package
+    if let Some(build_config) = build_config {
+        build_sys.build_confs.insert(pack, build_config);
+    }
     Ok((build_sys, pack))
 }
 
 fn run_files(
     paths: Vec<PathBuf>, bin: Option<String>, dry: bool, verbose: bool, args: Vec<String>,
 ) -> Result<i32, String> {
-    let (build_sys, pack) = setup_build_system(paths, bin)?;
+    let (build_sys, pack) = setup_build_system(paths, bin, None)?;
     match build_sys.run_pack(pack, &args, dry, verbose).map_err(|e| e.to_string())? {
         | ProgKont::Dry => Ok(0),
         | ProgKont::Ret(_) => unreachable!(),
@@ -107,7 +111,11 @@ fn build_files(
     paths: Vec<PathBuf>, bin: Option<String>, target: String, build_dir: PathBuf,
     runtime_dir: PathBuf, link_existing: bool, execute: bool, _dry: bool, verbose: bool,
 ) -> Result<i32, String> {
-    let (build_sys, pack) = setup_build_system(paths, bin)?;
+    let build_config = match target.as_str() {
+        | "x86" => Some(BuildConf { build_dir, runtime_dir, link_existing, execute }),
+        | _ => None,
+    };
+    let (build_sys, pack) = setup_build_system(paths, bin, build_config)?;
 
     match target.as_str() {
         | "zir" => {
@@ -120,13 +128,8 @@ fn build_files(
         }
         | "x86" => {
             let x86 = build_sys.codegen_x86_pack(pack, verbose).map_err(|e| e.to_string())?;
-            if verbose {
-                println!("{}", x86);
-            }
-            let name = build_sys.packages[&pack].name();
             // link with stub
-            PackageX86 { name, assembly: x86, build_dir, runtime_dir, link_existing, execute }
-                .link()?;
+            x86.link()?;
             Ok(0)
         }
         | _ => return Err(format!("Invalid target: {}", target)),

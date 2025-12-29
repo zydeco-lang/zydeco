@@ -18,3 +18,22 @@ impl AppAuthor for Conf {
         "LitiaEeloo"
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct BuildConf {
+    pub build_dir: PathBuf,
+    pub runtime_dir: PathBuf,
+    pub link_existing: bool,
+    pub execute: bool,
+}
+
+impl Default for BuildConf {
+    fn default() -> Self {
+        Self {
+            build_dir: PathBuf::from("._build"),
+            runtime_dir: PathBuf::from("runtime"),
+            link_existing: false,
+            execute: false,
+        }
+    }
+}

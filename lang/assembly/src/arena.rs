@@ -42,7 +42,6 @@ impl AssemblyArena {
     }
 }
 
-
 pub trait AssemblyArenaRefLike {
     fn sym_label(&self, sym: &SymId) -> String;
     fn prog_label(&self, prog: &ProgId) -> Option<String>;

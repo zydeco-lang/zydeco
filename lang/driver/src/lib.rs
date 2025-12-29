@@ -52,13 +52,11 @@ pub mod prelude {
     pub use zydeco_assembly::syntax as sa;
 }
 
-pub use conf::Conf;
+pub use conf::{BuildConf, Conf};
 pub use err::{BuildError, Result};
 pub use local::pack::LocalPackage;
 pub use package::{Dependency, Package};
 pub use zydeco_dynamics::ProgKont;
-pub use zydeco_utils::arena::ArcGlobalAlloc;
-pub use zydeco_utils::pass::CompilerPass;
 
 use crate::{
     check::pack::{PackageChecked, PackageStew},
@@ -67,9 +65,11 @@ use crate::{
 };
 use sculptor::{FileIO, ProjectInfo};
 use std::{collections::HashMap, path::PathBuf};
-use zydeco_utils::prelude::{ArenaDense, DepGraph, Kosaraju, new_key_type};
+use zydeco_utils::prelude::{
+    ArcGlobalAlloc, ArenaAccess, ArenaAssoc, ArenaDense, CompilerPass, DepGraph, Kosaraju,
+};
 
-new_key_type! {
+zydeco_utils::new_key_type! {
     pub struct PackId<()>;
 }
 
@@ -84,6 +84,8 @@ pub struct BuildSystem {
     pub marked: HashMap<String, PackId>,
     /// dependency graph, key depends on value
     pub depends_on: DepGraph<PackId>,
+    /// per-package build config overrides
+    pub build_confs: ArenaAssoc<PackId, BuildConf>,
 }
 
 impl Default for BuildSystem {
@@ -110,6 +112,7 @@ impl BuildSystem {
             seen: HashMap::new(),
             marked: HashMap::new(),
             depends_on: DepGraph::new(),
+            build_confs: ArenaAssoc::default(),
         };
         for path in build_sys.conf.default_packages.clone() {
             build_sys.add_local_package(path.clone()).unwrap();
@@ -231,11 +234,21 @@ impl BuildSystem {
         }
         Ok(())
     }
-    pub fn codegen_x86_pack(&self, pack: PackId, verbose: bool) -> Result<String> {
+    pub fn codegen_x86_pack(&self, pack: PackId, verbose: bool) -> Result<x86::PackageX86> {
         let PackageAssembly { spans, scoped, statics, stack, assembly } =
             self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
         let instrs = zydeco_x86::Emitter::new(&spans, &scoped, &statics, &stack, &assembly).run();
-        Ok(instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n"))
+        let assembly =
+            instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n");
+        if verbose {
+            println!("{}", &assembly);
+        }
+        let build_conf = self
+            .build_confs
+            .get(&pack)
+            .cloned()
+            .ok_or_else(|| BuildError::MissingBuildConfig(self.packages[&pack].name()))?;
+        Ok(x86::PackageX86 { name: self.packages[&pack].name(), assembly, build_conf })
     }
 }
 

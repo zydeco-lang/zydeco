@@ -48,7 +48,6 @@ impl StackArena {
     }
 }
 
-
 /// Build a stack IR node and optionally record its source site mapping.
 pub trait Construct<S, T, Arena>: Sized + Into<S> {
     type Site;

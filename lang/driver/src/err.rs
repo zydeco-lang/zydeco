@@ -18,6 +18,8 @@ pub enum BuildError {
     NoSuitableMark(String, Vec<String>),
     #[error("Can't determine a suitable marked binary to run from: {0:#?}")]
     AmbiguousMark(Vec<String>),
+    #[error("Missing build config for package: {0}")]
+    MissingBuildConfig(String),
 }
 
 pub type Result<T> = std::result::Result<T, BuildError>;

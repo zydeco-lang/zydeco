@@ -1,22 +1,20 @@
+use crate::BuildConf;
 use std::{
     fs::File,
     io::Write,
-    path::PathBuf,
     process::{Command, Stdio},
 };
 
 pub struct PackageX86 {
     pub name: String,
     pub assembly: String,
-    pub build_dir: PathBuf,
-    pub runtime_dir: PathBuf,
-    pub link_existing: bool,
-    pub execute: bool,
+    pub build_conf: BuildConf,
 }
 
 impl PackageX86 {
     pub fn link(self) -> Result<(), String> {
-        let PackageX86 { name, assembly, build_dir, runtime_dir, link_existing, execute } = self;
+        let PackageX86 { name, assembly, build_conf } = self;
+        let BuildConf { build_dir, runtime_dir, link_existing, execute } = build_conf;
         if !link_existing {
             // Hack: clean build dir and create it
             // Todo: make it safer by checking build profile if not nonexistent or empty

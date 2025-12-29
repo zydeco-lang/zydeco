@@ -24,7 +24,8 @@ pub trait Alloc<Arena, T> {
     type Ann;
     /// Allocates the value in the arena in the [`Tycker`] and returns the allocated value.
     /// See the documentation of trait [`Alloc`] and [`crate::tyck::alloc`] for more details.
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> T; }
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> T;
+}
 
 /* ------------------------------- Definition ------------------------------- */
 
