@@ -31,6 +31,7 @@ pub mod zasm {
 
 pub mod x86 {
     pub mod pack;
+    pub use pack::PackageX86;
 }
 
 /// Namespaces for the Zydeco language ecosystem.
