@@ -74,6 +74,7 @@ mod impl_span_arena {
     }
 
     impl TextArena {
+        /// Classify an entity ID by which arena it belongs to.
         fn get_category(&self, id: EntityId) -> Category {
             use zydeco_utils::arena::ArenaAccess;
             if self.defs.get(&id.into()).is_some() {
@@ -89,8 +90,7 @@ mod impl_span_arena {
             }
         }
 
-        /// The input entities are sorted by relevance, meaning it has the most precise category:
-        /// Definition > Pattern > Term > Declaration
+        /// Sort entities by precision: Definition > Pattern > Term > Declaration.
         pub fn order_entities_by_precision(&self, entities: Vec<EntityId>) -> Vec<EntityId> {
             let mut hit: Vec<_> =
                 entities.into_iter().map(|id| (id, self.get_category(id))).collect();

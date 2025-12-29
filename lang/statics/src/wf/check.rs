@@ -3,6 +3,7 @@ use super::syntax::*;
 use crate::*;
 
 impl WellFormedProgram {
+    /// Build a well-formed program from the type checker output.
     pub fn new(mut tycker: Tycker) -> Self {
         // first, fill all the holes (assume done)
 

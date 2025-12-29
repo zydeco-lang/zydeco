@@ -1,3 +1,5 @@
+//! Span lookup for well-formed program IDs.
+
 use super::syntax::*;
 use crate::*;
 

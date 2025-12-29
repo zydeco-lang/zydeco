@@ -1,6 +1,7 @@
 use super::syntax::*;
 
 pub use zydeco_syntax::Ugly;
+/// Formatter for textual syntax using the "ugly" surface form.
 pub struct Formatter<'arena> {
     // spans: SpanArenaTextual,
     arena: &'arena TextArena,

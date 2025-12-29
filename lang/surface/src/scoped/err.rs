@@ -1,6 +1,7 @@
 use crate::bitter::syntax::*;
 use thiserror::Error;
 
+/// Errors reported during name resolution.
 #[derive(Error, Debug, Clone)]
 pub enum ResolveError {
     #[error("Unbound variable: {0}")]
@@ -17,4 +18,5 @@ pub enum ResolveError {
     ModuleNotFound(Sp<NameRef<VarName>>),
 }
 
+/// Name-resolution result with boxed error for cheap cloning.
 pub type Result<T> = std::result::Result<T, Box<ResolveError>>;

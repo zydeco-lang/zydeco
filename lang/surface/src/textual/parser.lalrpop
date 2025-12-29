@@ -2,6 +2,7 @@ use crate::textual::{
     syntax::*, lexer::*, escape::self,
 };
 
+// LALRPOP grammar for the textual surface syntax.
 grammar<'input, 'arena>(
     input: &'input str,
     loc: &'input LocationCtx,
@@ -13,6 +14,7 @@ grammar<'input, 'arena>(
 extern {
     type Location = usize;
     
+    // Token mapping must stay in sync with `textual::lexer::Tok`.
     enum Tok<'input> {
         "UpperId" => Tok::UpperIdent(<&'input str>),
         "LowerId" => Tok::LowerIdent(<&'input str>),
@@ -78,10 +80,12 @@ extern {
 
 //* -------------------------------- Utilities ------------------------------- */
 
+// Attach a span to a parsed node using the current location context.
 Sp<T>: Sp<T> = <l:@L> <inner:T> <r:@R> => Sp {
     info: Span::new(l, r).under_loc_ctx(loc), inner,
 };
 
+// Parse a delimited sequence with optional trailing item.
 SepByDelim<Start, Sep, T, End>: Vec<T> = {
     Start <mut v: (<T> Sep)*> <last: T?> End => {
         match last {
@@ -119,6 +123,7 @@ NameDef<T>: NameDef<T> = <T> => NameDef(<>);
 PathSeg: VarName = {
     <VarName> => <>.into(),
 };
+// `root/` is an optional prefix; paths use `/` separators.
 NameRef<T>: NameRef<T> = {
     <root:("root" "/")?> <path:(<VarName> "/")*> <inner:T> => {
         NameRef(root.is_some(), path, inner)
@@ -188,6 +193,7 @@ CoPatternAtom: CoPattern = {
 
 TermGen<T>: TermId = <Sp<T>> => parser.term(<>);
 
+// Bindings may have optional `!`/`fix` modifiers, parameters, and annotations.
 GenBind<T>: GenBind<T> = {
     <comp:"!"?> <fix:"fix"?> <binder:PatId> <params:CoPatId?>
     <ty:(":" <TermId>)?> <bindee:T> => GenBind {
@@ -231,6 +237,10 @@ Term: Term = {
     // Indirect references (TermId) are full term references;
     // Direct ones (TermGen<Term>) are only atomic (precedence -= 1) terms.
 
+    // Precedence summary (tightest -> loosest):
+    // level 0 (atom) < level 1 (app/dtor) < level 2 (*) < level 3 (->)
+    // < level 4 (pi/forall/sigma/exists) < level 5 (binders/blocks).
+
     #[precedence(level="0")]
     // parentheses
     <Paren<TermAnnId>> => <>.into(),
@@ -257,20 +267,24 @@ Term: Term = {
     "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {<>}.into(),
     <Literal> => <>.into(),
 
+    // Application binds tighter than operators to avoid extra parens.
     #[precedence(level="1")] #[assoc(side="left")]
     // application
     <term:TermGen<Term>> <arg:TermGen<Term>> => Appli(vec![<>]).into(),
     // destructor
     <term:TermGen<Term>> <name:DtorName> => Dtor(<>).into(),
 
+    // Product associates to the right: A * B * C == A * (B * C).
     #[precedence(level="2")] #[assoc(side="right")]
     // product
     <ty_l:TermGen<Term>> "*" <ty_r:TermGen<Term>> => Prod(<>).into(),
     
+    // Arrow associates to the right: A -> B -> C == A -> (B -> C).
     #[precedence(level="3")] #[assoc(side="right")]
     // arrow
     <ty_in:TermGen<Term>> "->" <ty_out:TermGen<Term>> => Arrow(<>).into(),
 
+    // Quantifiers/types bind looser than arrows/products, tighter than binders.
     #[precedence(level="4")]
     // pi
     "pi" <params:CoPatId> "." <term:TermGen<Term>> => Pi(<>).into(),
@@ -281,6 +295,7 @@ Term: Term = {
     // exists
     "exists" <params:CoPatId> "." <ty:TermGen<Term>> => Exists(<>).into(),
 
+    // Bindings are loosest to capture the largest possible tail.
     #[precedence(level="5")]
     // abstraction
     "fn" <params:CoPatId> "->" <term:TermGen<Term>> => Abs(<>).into(),

@@ -2,6 +2,7 @@ use super::lexer::Tok;
 use std::fmt::Display;
 use zydeco_utils::span::{Cursor1, FileInfo};
 
+/// Wrapper around LALRPOP parse errors with file context.
 pub struct ParseError<'input> {
     pub error: lalrpop_util::ParseError<Cursor1, Tok<'input>, &'input str>,
     pub file_info: &'input FileInfo,

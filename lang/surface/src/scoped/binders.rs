@@ -2,6 +2,7 @@ use crate::arena::*;
 use crate::scoped::{syntax::*, *};
 use zydeco_utils::cells::{MultiCell, SingCell};
 
+/// Extract binder definitions introduced by a pattern.
 pub trait Binders {
     type Arena;
     fn binders(&self, arena: &Self::Arena) -> im::HashMap<VarName, DefId>;
@@ -44,6 +45,7 @@ impl Binders for PatId {
 }
 
 impl Resolver {
+    /// Collect global binders and record primitive definitions.
     pub(super) fn collect_global_binders(
         &mut self, decls: &[DeclId], mut global: Global,
     ) -> Result<Global> {

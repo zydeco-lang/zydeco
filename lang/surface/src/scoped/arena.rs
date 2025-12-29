@@ -15,6 +15,7 @@ pub trait ArenaScoped {
     fn decl(&self, id: &DeclId) -> Declaration;
 }
 
+/// Resolved arena plus name-resolution metadata and dependency/context analysis.
 // Clone is derived only for coping with wf in driver
 #[derive(Debug, Clone)]
 pub struct ScopedArena {

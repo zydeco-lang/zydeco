@@ -11,6 +11,7 @@ use {
     zydeco_utils::prelude::{ArcGlobalAlloc, ArenaAccess, CompilerPass, SccGroup},
 };
 
+/// Type-checking driver that consumes scoped syntax and produces typed arenas.
 #[derive(AsRef, AsMut)]
 pub struct Tycker {
     pub spans: SpanArena,
@@ -36,6 +37,7 @@ pub struct Tycker {
 // Todo: use hole solution to implement the confluence checker (well-formedness checker)
 
 impl Tycker {
+    /// Create a type checker with fresh statics arenas.
     pub fn new_arc(
         spans: SpanArena, prim: PrimDefs, scoped: ScopedArena, alloc: ArcGlobalAlloc,
     ) -> Self {
@@ -49,6 +51,7 @@ impl Tycker {
             errors: Vec::new(),
         }
     }
+    /// Type-check all top-level declarations, then resolve and report holes.
     pub fn run_k(&mut self) -> ResultKont<()> {
         let mut scc = self.scoped.top.clone();
         let mut env = TyEnvT::new(Default::default(), ());
@@ -211,18 +214,22 @@ mod impl_tycker {
 pub trait Tyck {
     type Out;
     type Action;
+    /// Entry point for type checking with optional administrative wrapping.
     fn tyck_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out> {
         self.tyck_inner_k(tycker, action)
     }
+    /// Core implementation for type checking.
     fn tyck_inner_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out>;
 }
 
+/// Synthesis or analysis mode, optionally with an expected annotation.
 #[derive(Clone, Copy, Debug)]
 pub enum Switch<Ann> {
     Syn,
     Ana(Ann),
 }
 
+/// Task-stack entries used to enrich error reports.
 #[derive(Clone, Debug)]
 pub enum TyckTask {
     DeclHead(su::DeclId),
@@ -238,6 +245,7 @@ pub enum TyckTask {
     MonadicLiftTerm(ss::TermId),
 }
 
+/// Wrapper for passing synthesis/analysis mode into `Tyck`.
 pub struct Action<Ann> {
     pub switch: Switch<Ann>,
 }

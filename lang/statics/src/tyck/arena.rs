@@ -23,6 +23,7 @@ pub trait ArenaStatics {
     fn decl(&self, id: &DeclId) -> Declaration;
 }
 
+/// Typed arena plus annotation tables and translation metadata.
 // Clone is derived only for coping with wf in driver
 #[derive(Debug, Clone)]
 pub struct StaticsArena {

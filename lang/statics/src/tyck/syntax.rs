@@ -233,6 +233,7 @@ pub use su::Context;
 
 /* -------------------------------- Fillable -------------------------------- */
 
+/// A value that is either complete or a fillable hole.
 #[derive(Clone, Debug, From, Hash, PartialEq, Eq)]
 pub enum Fillable<T> {
     Fill(FillId),

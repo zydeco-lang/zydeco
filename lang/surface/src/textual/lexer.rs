@@ -1,6 +1,7 @@
 use logos::{Logos, SpannedIter};
 use std::fmt::{Debug, Display};
 
+/// Tokens produced by the surface lexer.
 #[derive(Logos, Clone, Debug, PartialEq)]
 #[logos(skip r"#.*\n")]
 #[logos(skip r"[ \t\n\f]+")]
@@ -204,12 +205,14 @@ impl Display for Tok<'_> {
     }
 }
 
+/// Streaming lexer that skips comments and nested block comments.
 pub struct Lexer<'source> {
     inner: SpannedIter<'source, Tok<'source>>,
     comment_depth: usize,
 }
 
 impl<'source> Lexer<'source> {
+    /// Create a new lexer for a source string.
     pub fn new(source: &'source str) -> Self {
         Self { inner: Tok::lexer(&source).spanned(), comment_depth: 0 }
     }
@@ -241,14 +244,17 @@ impl<'source> Iterator for Lexer<'source> {
     }
 }
 
+/// Token stream wrapper that formats tokens into a deterministic string.
 pub struct HashLexer<'source> {
     inner: Lexer<'source>,
 }
 
 impl<'source> HashLexer<'source> {
+    /// Create a new hashing lexer for a source string.
     pub fn new(source: &'source str) -> Self {
         Self { inner: Lexer::new(source) }
     }
+    /// Serialize the token stream into a single string.
     pub fn hash_string(self) -> Result<String, String> {
         let mut h = String::new();
         for (_, t, _) in self {

@@ -101,11 +101,17 @@ pub enum CoPattern {
 /// general binding structure
 #[derive(Clone, Debug)]
 pub struct GenBind<Bindee> {
+    /// Whether this binding uses `fix`.
     pub fix: bool,
+    /// Whether this binding is a computation binding (`!`).
     pub comp: bool,
+    /// Binder pattern.
     pub binder: PatId,
+    /// Optional parameter list (curried).
     pub params: Option<CoPatId>,
+    /// Optional type annotation.
     pub ty: Option<TermId>,
+    /// Bound term or placeholder for externs.
     pub bindee: Bindee,
 }
 
@@ -277,29 +283,35 @@ pub struct Parser {
 }
 
 impl Parser {
+    /// Create a parser with arenas backed by the given allocator.
     pub fn new(allocator: IndexAlloc<usize>) -> Self {
         Self { spans: SpanArena::new(allocator), arena: TextArena::default() }
     }
+    /// Allocate a definition node and record its span.
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
         let id = self.spans.alloc(def.info).into();
         self.arena.defs.insert(id, def.inner);
         id
     }
+    /// Allocate a pattern node and record its span.
     pub fn pat(&mut self, pat: Sp<Pattern>) -> PatId {
         let id = self.spans.alloc(pat.info).into();
         self.arena.pats.insert(id, pat.inner);
         id
     }
+    /// Allocate a copattern node and record its span.
     pub fn copat(&mut self, copat: Sp<CoPattern>) -> CoPatId {
         let id = self.spans.alloc(copat.info).into();
         self.arena.copats.insert(id, copat.inner);
         id
     }
+    /// Allocate a term node and record its span.
     pub fn term(&mut self, term: Sp<Term>) -> TermId {
         let id = self.spans.alloc(term.info).into();
         self.arena.terms.insert(id, term.inner);
         id
     }
+    /// Allocate a declaration node and record its span.
     pub fn decl(&mut self, decl: Sp<Modifiers<Declaration>>) -> DeclId {
         let id = self.spans.alloc(decl.info).into();
         self.arena.decls.insert(id, decl.inner);

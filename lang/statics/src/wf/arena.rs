@@ -3,6 +3,7 @@ use crate::*;
 
 pub use zydeco_utils::arena::*;
 
+/// Post-processed program data after type checking and hole resolution.
 #[derive(Debug)]
 pub struct WellFormedProgram {
     /* ---------------------------- principle arenas ---------------------------- */

@@ -1,3 +1,5 @@
+//! Span lookup for scoped IDs via textual back-mapping.
+
 use super::{Resolver, syntax::*};
 use crate::textual::syntax::SpanArena;
 

@@ -2,6 +2,7 @@ use crate::scoped::{syntax::*, *};
 use crate::textual::syntax as t;
 use zydeco_utils::prelude::{DepGraph, Kosaraju, SccGraph, SccGroup};
 
+/// Global name environment collected from top-level binders.
 #[derive(Clone, Debug, Default)]
 pub struct Global {
     /// map from variable names to their definitions
@@ -9,6 +10,7 @@ pub struct Global {
     /// map from definitions to their global declarations
     pub(super) under_map: im::HashMap<DefId, DeclId>,
 }
+/// Local name environment built from pattern binders.
 #[derive(Clone, Debug, Default)]
 pub struct Local {
     /// which global declaration is the local scope checking in
@@ -17,6 +19,7 @@ pub struct Local {
     var_to_def: im::HashMap<VarName, DefId>,
 }
 
+/// Name-resolution state and accumulators.
 pub struct Resolver {
     pub spans: SpanArena,
     pub bitter: BitterArena,
@@ -37,6 +40,7 @@ pub struct Resolver {
     pub deps: DepGraph<DeclId>,
 }
 
+/// Output of the name-resolution pass.
 pub struct ResolveOut {
     pub spans: SpanArena,
     pub prim: PrimDefs,
@@ -44,6 +48,7 @@ pub struct ResolveOut {
 }
 
 impl Resolver {
+    /// Run name resolution and context collection over the top-level program.
     pub fn run(mut self, top: &TopLevel) -> Result<ResolveOut> {
         top.resolve(&mut self, ())?;
         let Resolver {
@@ -128,7 +133,7 @@ impl Resolver {
     }
 }
 
-/// Performs name resolution, effectively turning all `VarName`s back to `DefId`s.
+/// Performs name resolution, turning `VarName`s into `DefId`s with dependency tracking.
 pub trait Resolve {
     type Out;
     type Lookup<'a>;

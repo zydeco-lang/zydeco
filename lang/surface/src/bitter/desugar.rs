@@ -7,11 +7,13 @@ use derive_more::{AsMut, AsRef};
 use zydeco_syntax::SpanView;
 use zydeco_utils::prelude::CompilerPass;
 
+/// Desugar a textual node into bitter syntax using a shared `Desugarer`.
 pub trait Desugar {
     type Out;
     fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out>;
 }
 
+/// Stateful desugaring pass from textual to bitter syntax.
 #[derive(AsRef, AsMut)]
 pub struct Desugarer<'a> {
     pub spans: &'a t::SpanArena,
@@ -30,6 +32,7 @@ impl<'a> Desugarer<'a> {
     }
 }
 
+/// Output of the desugaring pass.
 pub struct DesugarOut {
     pub arena: b::BitterArena,
     pub prim: b::PrimTerms,

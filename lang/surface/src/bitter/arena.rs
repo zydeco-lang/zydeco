@@ -3,6 +3,7 @@ use crate::textual::syntax as t;
 
 /* ---------------------------------- Arena --------------------------------- */
 
+/// Storage for all bitter syntax nodes plus a back-map into textual entities.
 #[derive(Clone, Debug, derive_more::AddAssign)]
 pub struct BitterArena {
     // arenas

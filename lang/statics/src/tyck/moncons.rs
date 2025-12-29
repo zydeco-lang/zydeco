@@ -1,6 +1,5 @@
 //! Monadic constructors for patterns, types, and terms in [`StaticsArena`].
-//! See [`crate::construct`] for more details.
-
+//! See [`crate::tyck::construct`] for more details.
 use super::{syntax::*, *};
 
 /// Trait for monadically constructing entities in [`Tycker`] with more type inference available.

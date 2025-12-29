@@ -5,6 +5,7 @@ use derive_more::{Deref, DerefMut, From, Index, IndexMut, Into, IntoIterator};
 use std::ops::{Add, AddAssign};
 use zydeco_utils::prelude::With;
 
+/// Environment mapping definitions to annotations or substitutions.
 #[derive(Clone, Debug, From, Into, Deref, DerefMut, Index, IndexMut, IntoIterator)]
 pub struct Env<T>(#[into_iterator(owned, ref, ref_mut)] im::HashMap<DefId, T>);
 
@@ -56,6 +57,7 @@ mod impls_env {
     }
 }
 
+/// Typing environment mapping defs to annotations.
 pub type TyEnv = Env<AnnId>;
 
 mod impls_ty_env {
@@ -106,12 +108,16 @@ mod impls_ty_env {
 ///
 /// `.info`: the environment of type variables; should be applied from the first to the last
 // Note: should be ordered?
+/// A typed payload paired with a typing environment.
 pub type TyEnvT<T> = With<TyEnv, T>;
 
+/// Substitution environment mapping defs to defs.
 pub type SubstEnv = Env<DefId>;
+/// Substitution environment for abstract types.
 pub type SubstAbstEnv = im::HashMap<AbstId, AbstId>;
 pub type SubstEnvT<T> = With<SubstEnv, T>;
 
+/// Structure environment used during algebra translation.
 #[derive(Clone)]
 pub struct StrEnv {
     // Todo: remove this useless non-sense
@@ -141,8 +147,10 @@ mod impls_str_env {
     }
 }
 
+/// A payload paired with a structure environment.
 pub type StrEnvT<T> = With<StrEnv, T>;
 
+/// Monadic translation environment (types, substitutions, and structure state).
 #[derive(Clone)]
 pub struct MonEnv {
     pub ty: TyEnv,

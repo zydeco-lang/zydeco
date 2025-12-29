@@ -44,6 +44,7 @@ mod impls {
     use super::*;
     use crate::scoped::err::*;
     impl PrimDefs {
+        /// Ensure all primitive definitions are provided by extern declarations.
         pub fn check(&self) -> Result<()> {
             self.vtype.get_or_else(|| ResolveError::MissingPrim("VType"))?;
             self.ctype.get_or_else(|| ResolveError::MissingPrim("CType"))?;

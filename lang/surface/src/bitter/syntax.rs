@@ -1,5 +1,3 @@
-//! Desugaring of the zydeco surface syntax.
-
 pub use super::arena::*;
 pub use crate::{arena::*, syntax::*};
 pub use zydeco_syntax::*;
@@ -20,6 +18,7 @@ new_key_type! {
 }
 
 #[derive(From, Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+/// Identifier for any bitter entity, used for back-mapping spans to textual IDs.
 pub enum EntityId {
     Def(DefId),
     Pat(PatId),
@@ -72,6 +71,7 @@ pub struct Sigma(pub PatId, pub TermId);
 
 /// `monadic ... end`
 #[derive(Clone, Debug)]
+/// Monadic block body kept as a single node until later translation.
 pub struct MoBlock(pub TermId);
 
 /// data | C_1 ty | ... end
@@ -187,15 +187,13 @@ impl AddAssign for TopLevel {
 
 /* -------------------------------- Primitive ------------------------------- */
 
-/// Primitive Terms
+/// Primitive terms injected by desugaring.
 ///
-/// Collects those terms that are `Internal` within the bitter syntax.
-/// Will be used to guide the name resolution of those internal terms.
-/// The whole point of this is to avoid references introduced by our desugaring
-/// being captured by user name accidentally.
+/// Collects those terms that are `Internal` within the bitter syntax so name
+/// resolution can treat them as primitives and avoid accidental capture.
 ///
 /// To add a new primitive term, add a field here and follow instructions at
-/// [`crate::scoped::syntax::PrimDefs`]
+/// [`crate::scoped::syntax::PrimDefs`].
 #[derive(Clone, Default, derive_more::AddAssign)]
 pub struct PrimTerms {
     /// VType kind
