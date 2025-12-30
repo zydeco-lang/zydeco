@@ -6,3 +6,4 @@ rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
 
 [alias]
 test-all = "test --all --exclude zydeco-runtime"
+build-all = "build --all --exclude zydeco-runtime"

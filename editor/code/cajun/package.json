@@ -51,6 +51,12 @@
       "type": "object",
       "title": "zydeco-language-server",
       "properties": {
+        "zydeco-language-server.server.path": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "description": "Path to the Zydeco language server executable. Leave empty to use PATH or SERVER_PATH."
+        },
         "zydeco-language-server.trace.server": {
           "type": "string",
           "scope": "window",

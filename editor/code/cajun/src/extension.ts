@@ -39,7 +39,9 @@ let client: LanguageClient;
 export async function activate(context: ExtensionContext) {
   const traceOutputChannel = window.createOutputChannel("Zydeco Language Server Trace");
 
-  const command = process.env.SERVER_PATH || "cajun";
+  const config = workspace.getConfiguration("zydeco-language-server");
+  const configuredPath = config.get<string>("server.path");
+  const command = configuredPath || process.env.SERVER_PATH || "cajun";
 
   if (!(await isLanguageServerInstalled(command))) {
     try {
@@ -78,7 +80,7 @@ export async function activate(context: ExtensionContext) {
   };
 
   // Create the language client and start the client.
-  client = new LanguageClient("zydeco-language-server", "zydeco language server", serverOptions, clientOptions);
+  client = new LanguageClient("zydeco-language-server", "Zydeco Language Server", serverOptions, clientOptions);
   client.start();
 }
 
