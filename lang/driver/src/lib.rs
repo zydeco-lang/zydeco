@@ -60,6 +60,7 @@ pub use zydeco_dynamics::ProgKont;
 
 use crate::{
     check::pack::{PackageChecked, PackageStew},
+    x86::PackageX86,
     zasm::pack::PackageAssembly,
     zir::pack::PackageStack,
 };
@@ -234,7 +235,7 @@ impl BuildSystem {
         }
         Ok(())
     }
-    pub fn codegen_x86_pack(&self, pack: PackId, verbose: bool) -> Result<x86::PackageX86> {
+    pub fn codegen_x86_pack(&self, pack: PackId, verbose: bool) -> Result<PackageX86> {
         let PackageAssembly { spans, scoped, statics, stack, assembly } =
             self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
         let instrs = zydeco_x86::Emitter::new(&spans, &scoped, &statics, &stack, &assembly).run();
