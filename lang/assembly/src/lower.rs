@@ -425,6 +425,32 @@ impl Lower for sk::ValueId {
                 let atom = Atom::Sym(lit.build(lo, (Some(String::from("")), None)));
                 lo.instr(Push(atom), kont)
             }
+            | Value::Complex(sk::Complex { operator, operands }) => {
+                let _ = operator;
+                let _ = operands;
+                // // Lower all operands onto the stack
+                // let mut kont = kont;
+                // for operand in operands.into_iter().rev() {
+                //     kont = Box::new(move |lo: &mut Lowerer| {
+                //         operand.lower(
+                //             lo,
+                //             Box::new(move |lo| {
+                //                 // After lowering the operand, continue with the previous kont
+                //                 kont(lo)
+                //             }),
+                //         )
+                //     });
+                // }
+                // // After all operands are on the stack, perform the operation
+                // lo.instr(
+                //     Operate(operator),
+                //     Box::new(move |lo: &mut Lowerer| {
+                //         // Continue with the original kont
+                //         kont(lo)
+                //     }),
+                // )
+                todo!()
+            }
         }
     }
 }

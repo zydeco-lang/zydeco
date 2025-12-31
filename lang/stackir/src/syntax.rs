@@ -44,6 +44,18 @@ pub struct Clo {
 }
 
 #[derive(From, Clone, Debug)]
+pub struct Operator {
+    pub name: SymName,
+    pub arity: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct Complex {
+    pub operator: Operator,
+    pub operands: Vec<ValueId>,
+}
+
+#[derive(From, Clone, Debug)]
 pub enum Value {
     Hole(Hole),
     Var(DefId),
@@ -52,6 +64,7 @@ pub enum Value {
     Triv(Triv),
     VCons(Cons<ValueId, ValueId>),
     Lit(Literal),
+    Complex(Complex),
 }
 
 /* ---------------------------------- Stack --------------------------------- */

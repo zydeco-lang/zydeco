@@ -1,35 +1,32 @@
 use crate::*;
 use std::fmt;
 
-impl From<&str> for VarName {
-    fn from(name: &str) -> Self {
-        VarName(name.to_string())
-    }
+macro_rules! impl_name {
+    ($name:ident, $plain:expr) => {
+        impl $name {
+            pub fn plain(&self) -> &str {
+                let $name(name) = self;
+                $plain(name)
+            }
+        }
+        impl From<&str> for $name {
+            fn from(name: &str) -> Self {
+                $name(name.to_string())
+            }
+        }
+        impl fmt::Display for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}", self.plain())
+            }
+        }
+    };
 }
-impl fmt::Display for VarName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let VarName(name) = self;
-        write!(f, "{}", name)
-    }
+#[inline]
+fn remove_prefix(name: &str) -> &str {
+    &name[1..]
 }
 
-impl VarName {
-    pub fn plain(&self) -> &str {
-        let VarName(name) = self;
-        name
-    }
-}
-
-impl CtorName {
-    pub fn plain(&self) -> &str {
-        let CtorName(name) = self;
-        &name[1..]
-    }
-}
-
-impl DtorName {
-    pub fn plain(&self) -> &str {
-        let DtorName(name) = self;
-        &name[1..]
-    }
-}
+impl_name!(VarName, |name| name);
+impl_name!(SymName, |name| name);
+impl_name!(CtorName, remove_prefix);
+impl_name!(DtorName, remove_prefix);

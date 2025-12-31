@@ -37,6 +37,12 @@ impl SubstitutionInPlace for ValueId {
                 a.substitute_in_place(&mut arena_mut, map);
                 b.substitute_in_place(&mut arena_mut, map);
             }
+            | Value::Complex(Complex { operator: _, operands }) => {
+                // Recursively substitute in all operands
+                operands.into_iter().for_each(|operand| {
+                    operand.substitute_in_place(&mut arena_mut, map);
+                });
+            }
             | Value::Hole(Hole) | Value::Triv(Triv) | Value::Lit(_) => {}
         }
     }

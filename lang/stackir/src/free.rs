@@ -33,6 +33,10 @@ impl FreeVars for ValueId {
             | Value::Clo(Clo { capture: _, stack: Bullet, body }) => body.free_vars(arena),
             | Value::Ctor(Ctor(_ctor, body)) => body.free_vars(arena),
             | Value::VCons(Cons(a, b)) => a.free_vars(arena) + b.free_vars(arena),
+            | Value::Complex(Complex { operator: _, operands }) => operands
+                .into_iter()
+                .map(|operand| operand.free_vars(arena))
+                .fold(CoContext::new(), |acc, x| acc + x),
             | Value::Hole(Hole) | Value::Triv(Triv) | Value::Lit(_) => CoContext::new(),
         }
     }

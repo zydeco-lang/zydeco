@@ -82,6 +82,11 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
             | Value::Triv(Triv) => "()".to_string(),
             | Value::VCons(Cons(a, b)) => format!("({}, {})", a.ugly(f), b.ugly(f)),
             | Value::Lit(lit) => lit.ugly(&statics_fmt),
+            | Value::Complex(Complex { operator, operands }) => {
+                let SymName(op_str) = &operator.name;
+                let ops_str = operands.iter().map(|op| op.ugly(f)).collect::<Vec<_>>().join(", ");
+                format!("{}({})", op_str, ops_str)
+            }
         }
     }
 }
@@ -331,6 +336,27 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
             | Value::Lit(lit) => {
                 let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::text(lit.ugly(&statics_fmt))
+            }
+            | Value::Complex(Complex { operator, operands }) => {
+                let SymName(op_str) = &operator.name;
+                let ops_doc = RcDoc::concat(
+                    operands
+                        .iter()
+                        .map(|op| op.pretty(f))
+                        .enumerate()
+                        .flat_map(
+                            |(i, d)| {
+                                if i == 0 { vec![d] } else { vec![RcDoc::text(", "), d] }
+                            },
+                        )
+                        .collect::<Vec<_>>(),
+                );
+                RcDoc::concat([
+                    RcDoc::text(op_str.clone()),
+                    RcDoc::text("("),
+                    ops_doc,
+                    RcDoc::text(")"),
+                ])
             }
         }
     }
