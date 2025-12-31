@@ -7,21 +7,26 @@ use std::{
 type ZValue = SemValue;
 type ZCompute = Computation;
 
+/// Box helper for constructing semantic values.
 fn mk_box<T>(t: T) -> Box<T> {
     Box::new(t)
 }
 #[inline]
+/// Rc helper for constructing shared computations.
 fn mk_rc<T>(t: T) -> Rc<T> {
     Rc::new(t)
 }
 
 // /* Function helpers */
+/// Wrap a value in a return computation.
 fn ret<E>(value: ZValue) -> Result<ZCompute, E> {
     Ok(Return(mk_rc(value.into())).into())
 }
+/// Apply a computation to an argument value.
 fn app(body: Rc<ZCompute>, arg: ZValue) -> ZCompute {
     App(body, mk_rc(arg.into())).into()
 }
+/// Construct a constructor value from a list of arguments.
 fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
     let args = match args.len() {
         | 0 => mk_box(Triv.into()),
@@ -44,11 +49,13 @@ fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
     Ctor(CtorName(ctor.to_string()), args).into()
 }
 #[allow(unused)]
+/// Apply a destructor to a computation.
 fn dtor(body: Rc<ZCompute>, dtor: &str) -> ZCompute {
     Dtor(body, DtorName(dtor.to_string())).into()
 }
 
 // /* Bool */
+/// Encode a Rust boolean as a Zydeco boolean constructor.
 fn bool(b: bool) -> ZValue {
     let b = match b {
         | true => "+True",
@@ -58,6 +65,7 @@ fn bool(b: bool) -> ZValue {
 }
 
 // /* Arithmetic */
+/// Generate arithmetic primitives that operate on integer literals.
 macro_rules! arith {
     ( $name:ident, $op:tt ) => {
         pub fn $name(
@@ -80,6 +88,7 @@ arith!(mul, *);
 arith!(div, /);
 arith!(modulo, %);
 
+/// Generate integer comparison primitives.
 macro_rules! intcomp {
     ( $name:ident, $op:tt ) => {
         pub fn $name(
@@ -101,6 +110,7 @@ intcomp!(int_lt, <);
 intcomp!(int_gt, >);
 
 // /* Strings */
+/// Return the length of a string as an integer literal.
 pub fn str_length(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -110,6 +120,7 @@ pub fn str_length(
     }
 }
 
+/// Concatenate two string literals.
 pub fn str_append(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -123,6 +134,7 @@ pub fn str_append(
     }
 }
 
+/// Split a string once on the given delimiter, returning an option pair.
 pub fn str_split_once(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -146,6 +158,7 @@ pub fn str_split_once(
     }
 }
 
+/// Split a string at index `n`, returning an option pair.
 pub fn str_split_n(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -170,6 +183,7 @@ pub fn str_split_n(
     }
 }
 
+/// Test two strings for equality.
 pub fn str_eq(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -181,6 +195,7 @@ pub fn str_eq(
     }
 }
 
+/// Index a string by position and return the character literal.
 pub fn str_index(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -192,6 +207,7 @@ pub fn str_index(
     }
 }
 
+/// Convert an integer literal to its string representation.
 pub fn int_to_str(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -203,6 +219,7 @@ pub fn int_to_str(
     }
 }
 
+/// Convert a character literal to a single-character string.
 pub fn char_to_str(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -214,6 +231,7 @@ pub fn char_to_str(
     }
 }
 
+/// Convert a character literal to its integer codepoint.
 pub fn char_to_int(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -223,6 +241,7 @@ pub fn char_to_int(
     }
 }
 
+/// Parse a string literal into an integer literal.
 pub fn str_to_int(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -235,6 +254,7 @@ pub fn str_to_int(
 }
 
 // /* IO */
+/// Write a string to output and then force the provided continuation.
 pub fn write_str(
     args: Vec<ZValue>, _r: &mut dyn BufRead, w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -248,6 +268,7 @@ pub fn write_str(
     }
 }
 
+/// Read a line from input and pass it to the continuation.
 pub fn read_line(
     args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -265,6 +286,7 @@ pub fn read_line(
     }
 }
 
+/// Read a line and attempt to parse it as an integer.
 pub fn read_line_as_int(
     args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -288,6 +310,7 @@ pub fn read_line_as_int(
     }
 }
 
+/// Read all remaining input and pass it to the continuation.
 pub fn read_till_eof(
     args: Vec<ZValue>, r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -304,6 +327,7 @@ pub fn read_till_eof(
     }
 }
 
+/// Build a Zydeco list of command-line arguments and pass it to the continuation.
 pub fn arg_list(
     args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, argv: &[String],
 ) -> Result<ZCompute, i32> {
@@ -322,6 +346,7 @@ pub fn arg_list(
     }
 }
 
+/// Produce a random integer literal and pass it to the continuation.
 pub fn random_int(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
@@ -336,6 +361,7 @@ pub fn random_int(
     }
 }
 
+/// Exit evaluation with the provided integer exit code.
 pub fn exit(
     args: Vec<ZValue>, _r: &mut dyn BufRead, _w: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {

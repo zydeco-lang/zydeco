@@ -2,9 +2,11 @@ use crate::{statics_syntax::Env, syntax::*};
 use std::io::{BufRead, Write};
 use zydeco_utils::arena::ArenaAccess;
 
+/// Trait for stepping a term until a result is produced.
 pub trait Eval<'rt>: Sized {
     type Out;
     fn step<'e>(self, runtime: &'e mut Runtime<'rt>) -> Step<Self, Self::Out>;
+    /// Evaluate by repeatedly stepping until a final result is returned.
     fn eval<'e>(self, runtime: &'e mut Runtime<'rt>) -> Self::Out {
         let mut res = self;
         loop {
@@ -16,18 +18,21 @@ pub trait Eval<'rt>: Sized {
     }
 }
 
+/// A single evaluation step: either done or produce a new term to step.
 pub enum Step<T, Out> {
     Done(Out),
     Step(T),
 }
 
 impl<'rt> Runtime<'rt> {
+    /// Construct a new runtime with empty environment and stack.
     pub fn new(
         input: &'rt mut dyn BufRead, output: &'rt mut dyn Write, args: &'rt [String],
         arena: DynamicsArena,
     ) -> Self {
         Runtime { input, output, args, stack: im::Vector::new(), env: Env::new(), arena }
     }
+    /// Evaluate all declarations in topological order and collect entry points.
     pub fn run(mut self) -> Vec<ProgKont> {
         let mut scc = self.arena.top.clone();
         let mut konts = Vec::new();
@@ -101,6 +106,7 @@ impl<'rt> Eval<'rt> for Declaration {
     }
 }
 
+/// Helper to bind a runtime value to a value pattern.
 struct Assign<S, T>(S, T);
 
 impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {

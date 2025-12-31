@@ -2,6 +2,7 @@ use crate::syntax::*;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
+/// Mapping from builtin names to their primitive implementations.
 pub static BUILTINS: Lazy<HashMap<&'static str, Prim>> = {
     Lazy::new(|| {
         use crate::impls::*;
@@ -38,6 +39,7 @@ pub static BUILTINS: Lazy<HashMap<&'static str, Prim>> = {
     })
 };
 
+/// Metadata used to build a `Prim` entry for the builtin registry.
 pub struct Builtin {
     name: &'static str,
     arity: u64,
@@ -45,9 +47,11 @@ pub struct Builtin {
 }
 
 impl Builtin {
+    /// Construct a new builtin declaration.
     fn new(name: &'static str, arity: u64, behavior: PrimComp) -> Self {
         Builtin { name, arity, behavior }
     }
+    /// Convert the builtin metadata into a `Prim` entry for the registry.
     fn generate(self) -> (&'static str, Prim) {
         let Builtin { name, arity, behavior } = self;
         (name, Prim { arity, body: behavior })

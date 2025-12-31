@@ -1,10 +1,12 @@
 use crate::syntax::*;
 
 pub use zydeco_syntax::Ugly;
+/// Formatter that owns the dynamic arena for name resolution.
 pub struct Formatter<'arena> {
     arena: &'arena DynamicsArena,
 }
 impl<'arena> Formatter<'arena> {
+    /// Create a formatter bound to the given dynamic arena.
     pub fn new(arena: &'arena DynamicsArena) -> Self {
         Formatter { arena }
     }

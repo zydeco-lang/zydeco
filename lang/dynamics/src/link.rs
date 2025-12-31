@@ -5,18 +5,21 @@ use zydeco_statics::{surface_syntax::ScopedArena, tyck::syntax::StaticsArena};
 use zydeco_syntax::*;
 use zydeco_utils::arena::{ArenaAccess, ArenaSparse};
 
+/// Trait for translating statics syntax nodes into dynamic syntax nodes.
 pub trait Link {
     type Arena<'a>;
     type Out;
     fn link(&self, arena: Self::Arena<'_>) -> Self::Out;
 }
 
+/// Entry point for linking a type-checked package.
 pub struct Linker {
     pub scoped: ScopedArena,
     pub statics: StaticsArena,
 }
 
 impl Linker {
+    /// Lower all statics declarations into the dynamic arena.
     pub fn run(self) -> DynamicsArena {
         let Linker { scoped, statics } = self;
         let defs = scoped.defs;
