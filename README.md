@@ -8,6 +8,11 @@ Zydeco is a proof-of-concept programming language based on Call-by-push-value.
 
 The instructions are located in [lib/oopsla/README.md](lib/oopsla/README.md).
 
+## Documentation
+
+- [DESIGN.md](DESIGN.md): language model and implementation architecture
+- [CONTRIBUTE.md](CONTRIBUTE.md): build, test, and development workflows
+
 ## Running Zydeco
 
 Create a file `hello-world.zydeco`:
@@ -61,6 +66,19 @@ To run all tests
 ```bash
 cargo test-all
 ```
+
+## Editor Support
+
+Zydeco is optionally syntax-highlighted in VSCode. Open the Extensions tab and
+search for "zls".
+
+## Rust API Docs
+
+To generate documentation for a package:
+```bash
+cargo doc --package zydeco-statics --no-deps
+```
+The output is written to `target/doc/`.
 
 ## Repository Structure
 
