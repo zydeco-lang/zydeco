@@ -8,7 +8,7 @@ produce program continuations or exit codes.
 
 ## Role in the pipeline
 
-```
+```markdown
 textual -> bitter -> scoped -> tyck -> dynamics
 ```
 

@@ -6,7 +6,7 @@ on producing a clean arena layout for downstream consumers.
 
 ## Role in the pipeline
 
-```
+```markdown
 textual -> bitter -> scoped -> tyck -> wf
 ```
 

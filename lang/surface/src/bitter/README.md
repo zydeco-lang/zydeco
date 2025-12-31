@@ -10,7 +10,7 @@ phases can report accurate spans.
 
 The surface pipeline looks like:
 
-```
+```markdown
 textual (parser output) -> bitter (desugared surface) -> scoped (name resolution)
 ```
 

@@ -6,7 +6,7 @@ nodes in arenas keyed by lightweight IDs.
 
 ## Role in the pipeline
 
-```
+```markdown
 textual -> bitter -> scoped -> statics
 ```
 

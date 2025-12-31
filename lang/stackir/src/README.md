@@ -6,7 +6,7 @@ preserving a close mapping to Zydeco terms.
 
 ## Role in the pipeline
 
-```
+```markdown
 textual -> bitter -> scoped -> tyck -> stack
 ```
 

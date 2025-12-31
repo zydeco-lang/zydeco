@@ -6,7 +6,7 @@ builds a `ScopedArena` enriched with dependency graphs and local contexts.
 
 ## Role in the pipeline
 
-```
+```markdown
 textual -> bitter -> scoped -> statics
 ```
 

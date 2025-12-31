@@ -6,7 +6,7 @@ and records the resulting annotations in a `StaticsArena`.
 
 ## Role in the pipeline
 
-```
+```markdown
 textual -> bitter -> scoped -> tyck -> wf
 ```
 
