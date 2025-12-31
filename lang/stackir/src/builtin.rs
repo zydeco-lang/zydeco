@@ -1,65 +1,64 @@
+#![allow(unused)]
+
 use crate::syntax::*;
-use std::{collections::HashMap, sync::LazyLock};
+use std::collections::HashMap;
+use zydeco_statics::surface_syntax::ScopedArena;
 
-/// Mapping from builtin names to their primitive implementations.
-pub static BUILTINS: LazyLock<HashMap<&'static str, ()>> = {
-    LazyLock::new(|| {
-        // use crate::impls::*;
-        // [
-        //     Builtin::new("add", 2, add),
-        //     Builtin::new("sub", 2, sub),
-        //     Builtin::new("mul", 2, mul),
-        //     Builtin::new("div", 2, div),
-        //     Builtin::new("mod", 2, modulo),
-        //     Builtin::new("int_eq", 2, int_eq),
-        //     Builtin::new("int_lt", 2, int_lt),
-        //     Builtin::new("int_gt", 2, int_gt),
-        //     Builtin::new("str_length", 1, str_length),
-        //     Builtin::new("str_append", 2, str_append),
-        //     Builtin::new("str_split_once", 2, str_split_once),
-        //     Builtin::new("str_split_n", 2, str_split_n),
-        //     Builtin::new("str_eq", 2, str_eq),
-        //     Builtin::new("str_index", 2, str_index),
-        //     Builtin::new("int_to_str", 1, int_to_str),
-        //     Builtin::new("char_to_str", 1, char_to_str),
-        //     Builtin::new("char_to_int", 1, char_to_int),
-        //     Builtin::new("str_to_int", 1, str_to_int),
-        //     Builtin::new("write_str", 2, write_str),
-        //     Builtin::new("read_line", 1, read_line),
-        //     Builtin::new("read_line_as_int", 1, read_line_as_int),
-        //     Builtin::new("read_till_eof", 1, read_till_eof),
-        //     Builtin::new("arg_list", 1, arg_list),
-        //     Builtin::new("random_int", 1, random_int),
-        //     Builtin::new("exit", 1, exit),
-        // ]
-        // .into_iter()
-        // .map(Builtin::generate)
-        // .collect()
-        todo!()
-    })
-};
-
-// /// Metadata used to build a `Prim` entry for the builtin registry.
-// pub struct Builtin {
-//     name: &'static str,
-//     arity: u64,
-//     behavior: PrimComp,
+// pub trait BuiltinRegistry<Arena>
+// where
+//     Arena: AsMut<StackArena>,
+// {
+//     fn register(&self, arena: &mut Arena) -> ValueId;
 // }
 
-// impl Builtin {
-//     /// Construct a new builtin declaration.
-//     fn new(name: &'static str, arity: u64, behavior: PrimComp) -> Self {
-//         Builtin { name, arity, behavior }
-//     }
-//     /// Convert the builtin metadata into a `Prim` entry for the registry.
-//     fn generate(self) -> (&'static str, Prim) {
-//         let Builtin { name, arity, behavior } = self;
-//         (name, Prim { arity, body: behavior })
-//     }
-//     // fn generate(self) -> (&'static str, RcValue) {
-//     //     let Builtin { name, arity, behavior } = self;
-//     //     let prim = Prim { arity, body: *behavior }.into();
-//     //     let thunk = Thunk(Rc::new(prim)).into();
-//     //     (name, Rc::new(thunk))
-//     // }
-// }
+pub type BuiltinMap = HashMap<&'static str, Builtin>;
+
+pub struct Builtin {
+    name: &'static str,
+    arity: usize,
+    // registry: Box<dyn BuiltinRegistry<StackArena>>,
+}
+
+impl Builtin {
+    pub fn all() -> BuiltinMap {
+        [Builtin::new("add", 2)].into_iter().map(Self::generate).collect()
+    }
+    pub fn new(name: &'static str, arity: usize) -> Self {
+        Builtin { name, arity }
+    }
+    fn generate<'a>(self) -> (&'a str, Self) {
+        (self.name, self)
+    }
+
+    /// Turn a builtin operator definition into returning a complex CBPV value,
+    /// pop parameters from stack (CBPV function), and finally wrap it with closure.
+    pub fn make_operator<Arena>(self, arena: &mut Arena) -> ValueId
+    where
+        Arena: AsMut<StackArena> + AsMut<ScopedArena>,
+    {
+        let op = Operator { name: SymName::from(self.name), arity: self.arity };
+        // make fresh variables as operands
+        let params: Vec<_> = (0..self.arity)
+            .map(|i| {
+                let param = VarName::from(format!("param_{}", i));
+                let scoped: &mut ScopedArena = arena.as_mut();
+                scoped.defs.alloc(param)
+            })
+            .collect();
+        let operands = params.iter().map(|def| def.build(arena, None)).collect();
+        // construct the complex value
+        let complex = Complex { operator: op, operands }.build(arena, None);
+        // construct the computation of returning the complex value
+        let stack = Bullet.build(arena, None);
+        let mut tail = SReturn { stack, value: complex }.build(arena, None);
+        // construct the let-argument (CBPV function) wrapping the return computation
+        for def in params.into_iter().rev() {
+            let vpat = def.build(arena, None);
+            let binder = Cons(vpat, Bullet);
+            let bindee = Bullet.build(arena, None);
+            tail = Computation::LetArg(Let { binder, bindee, tail }).build(arena, None);
+        }
+        // construct the closure wrapping the whole computation
+        Closure { capture: Context::new(), stack: Bullet, body: tail }.build(arena, None)
+    }
+}

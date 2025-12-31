@@ -20,5 +20,6 @@ pub mod builtin;
 use zydeco_statics::tyck::syntax as ss;
 
 pub use arena::*;
+pub use builtin::*;
 pub use convert::ClosureConverter;
 pub use lower::Lowerer;

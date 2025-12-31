@@ -1,4 +1,3 @@
-use super::arena::StackArena;
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
@@ -21,6 +20,7 @@ pub struct Lowerer<'a> {
     pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
+    pub builtins: BuiltinMap,
 }
 
 impl<'a> Lowerer<'a> {
@@ -30,7 +30,7 @@ impl<'a> Lowerer<'a> {
         statics: &'a StaticsArena,
     ) -> Self {
         let arena = StackArena::new_arc(alloc);
-        Self { arena, spans, scoped, statics }
+        Self { arena, spans, scoped, statics, builtins: Builtin::all() }
     }
 
     /// Lower the full program into a stack arena.
@@ -49,55 +49,8 @@ impl<'a> Lowerer<'a> {
                     };
                     use ss::Declaration as Decl;
                     match decl {
-                        | Decl::VAliasBody(ss::VAliasBody { binder, bindee }) => {
-                            // Lower the binder (VPatId) - creates new VPatId and stores mapping
-                            let binder_vpat = binder.lower(&mut self, ());
-                            // Extract DefId from binder (should be a Var pattern)
-                            use ValuePattern as VPat;
-                            let def_id = match &self.arena.vpats[&binder_vpat] {
-                                | VPat::Var(def) => *def,
-                                | _ => {
-                                    let fmt = super::fmt::Formatter::new(
-                                        &self.arena,
-                                        self.scoped,
-                                        self.statics,
-                                    );
-                                    let binder_str = binder_vpat.ugly(&fmt);
-                                    panic!(
-                                        "VAliasBody binder must be a variable, found:\n{}",
-                                        binder_str
-                                    );
-                                }
-                            };
-                            let value_id = Phantom::new(bindee)
-                                .lower(&mut self, Box::new(move |val_id, _lo| val_id));
-                            self.arena.sequence.push(def_id);
-                            self.arena.globals.insert(def_id, Global::Defined(value_id));
-                        }
-                        | Decl::VAliasHead(ss::VAliasHead { binder, ty: _ }) => {
-                            // Lower the binder (VPatId) - creates new VPatId and stores mapping
-                            let binder_vpat = binder.lower(&mut self, ());
-                            // Extract DefId from binder (should be a Var pattern)
-                            use ValuePattern as VPat;
-                            let def_id = match &self.arena.vpats[&binder_vpat] {
-                                | VPat::Var(def) => *def,
-                                | _ => {
-                                    let fmt = super::fmt::Formatter::new(
-                                        &self.arena,
-                                        self.scoped,
-                                        self.statics,
-                                    );
-                                    let binder_str = binder_vpat.ugly(&fmt);
-                                    panic!(
-                                        "VAliasHead binder must be a variable, found:\n{}",
-                                        binder_str
-                                    );
-                                }
-                            };
-                            self.arena.sequence.push(def_id);
-                            // Mark as external global
-                            self.arena.globals.insert(def_id, Global::Extern(Extern));
-                        }
+                        | Decl::VAliasBody(valias_body) => valias_body.lower(&mut self, ()),
+                        | Decl::VAliasHead(valias_head) => valias_head.lower(&mut self, ()),
                         | Decl::TAliasBody(_) | Decl::Exec(_) => {}
                     }
                 }
@@ -176,6 +129,63 @@ impl<'a> Lowerer<'a> {
     }
 }
 
+impl Lower for ss::VAliasBody {
+    type Kont = ();
+    type Out = ();
+
+    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
+        let ss::VAliasBody { binder, bindee } = self.clone();
+        // Lower the binder (VPatId) - creates new VPatId and stores mapping
+        let binder_vpat = binder.lower(lo, ());
+        // Extract DefId from binder (should be a Var pattern)
+        use ValuePattern as VPat;
+        let def_id = match lo.arena.vpats[&binder_vpat] {
+            | VPat::Var(def) => def,
+            | _ => {
+                let fmt = super::fmt::Formatter::new(&lo.arena, lo.scoped, lo.statics);
+                let binder_doc = binder_vpat.pretty(&fmt);
+                let mut binder_str = String::new();
+                binder_doc.render_fmt(80, &mut binder_str).unwrap();
+                panic!("VAliasBody binder must be a variable, found:\n{}", binder_str);
+            }
+        };
+        let value_id = Phantom::new(bindee).lower(lo, Box::new(move |val_id, _lo| val_id));
+        lo.arena.sequence.push(def_id);
+        lo.arena.globals.insert(def_id, Global::Defined(value_id));
+    }
+}
+
+impl Lower for ss::VAliasHead {
+    type Kont = ();
+    type Out = ();
+
+    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
+        let ss::VAliasHead { binder, ty: _ } = self.clone();
+        // Lower the binder (VPatId) - creates new VPatId and stores mapping
+        let binder_vpat = binder.lower(lo, ());
+        // Extract DefId from binder (should be a Var pattern)
+        use ValuePattern as VPat;
+        let def = match &lo.arena.vpats[&binder_vpat] {
+            | VPat::Var(def) => *def,
+            | _ => {
+                let fmt = super::fmt::Formatter::new(&lo.arena, lo.scoped, lo.statics);
+                let binder_doc = binder_vpat.pretty(&fmt);
+                let mut binder_str = String::new();
+                binder_doc.render_fmt(80, &mut binder_str).unwrap();
+                panic!("VAliasHead binder must be a variable, found:\n{}", binder_str);
+            }
+        };
+        lo.arena.sequence.push(def);
+        let name = lo.scoped.defs[&def].plain();
+        let Some(builtin) = lo.builtins.get(name.as_str()) else {
+            panic!("Undefined builtin extern:\n{}", name);
+        };
+        let _ = builtin;
+        // Mark as external global
+        lo.arena.globals.insert(def, Global::Extern(Extern));
+    }
+}
+
 impl Lower for ss::VPatId {
     type Kont = ();
     type Out = VPatId;
@@ -234,7 +244,7 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
                 let body_compu = body.lower(lo, ());
                 // Get minimal capture from cocontext information
                 let capture = lo.compute_capture(body, None);
-                let value_id = Clo { capture, stack: Bullet, body: body_compu }.build(lo, site);
+                let value_id = Closure { capture, stack: Bullet, body: body_compu }.build(lo, site);
                 kont(value_id, lo)
             }
             | ss::Value::Ctor(Ctor(ctor, body)) => Phantom::new(body).lower(

@@ -1,7 +1,6 @@
-pub use super::arena::*;
+pub use super::{arena::*, builtin::*};
 pub use zydeco_syntax::{fmt, *};
-pub use zydeco_utils::arena::*;
-pub use zydeco_utils::context::Context;
+pub use zydeco_utils::{arena::*, context::Context};
 
 use super::*;
 use derive_more::From;
@@ -37,7 +36,7 @@ pub enum ValuePattern {
 
 /// A closure that captures minimal environment.
 #[derive(Clone, Debug)]
-pub struct Clo {
+pub struct Closure {
     pub capture: Context<DefId>,
     pub stack: Bullet,
     pub body: CompuId,
@@ -59,11 +58,11 @@ pub struct Complex {
 pub enum Value {
     Hole(Hole),
     Var(DefId),
-    Clo(Clo),
+    Closure(Closure),
     Ctor(Ctor<ValueId>),
     Triv(Triv),
     VCons(Cons<ValueId, ValueId>),
-    Lit(Literal),
+    Literal(Literal),
     Complex(Complex),
 }
 
@@ -91,23 +90,30 @@ pub enum Stack {
 
 /* ------------------------------- Computation ------------------------------ */
 
-#[derive(From, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct SForce {
     pub thunk: ValueId,
     pub stack: StackId,
 }
 
-#[derive(From, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct SReturn {
     pub stack: StackId,
     pub value: ValueId,
 }
 
-#[derive(From, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct SFix {
     pub capture: Context<DefId>,
     pub param: DefId,
     pub body: CompuId,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExternCall {
+    pub name: SymName,
+    pub arity: usize,
+    pub stack: Bullet,
 }
 
 #[derive(From, Clone, Debug)]
@@ -121,6 +127,7 @@ pub enum Computation {
     LetStack(Let<Bullet, StackId, CompuId>),
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
     CoCase(CoMatch<CompuId, Cons<DtorName, Bullet>>),
+    ExternCall(ExternCall),
 }
 
 /* ------------------------------- Declaration ------------------------------ */

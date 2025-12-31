@@ -30,14 +30,14 @@ impl FreeVars for ValueId {
         let value = arena.as_ref().values[&self].clone();
         match value {
             | Value::Var(def_id) => CoContext::singleton(def_id),
-            | Value::Clo(Clo { capture: _, stack: Bullet, body }) => body.free_vars(arena),
+            | Value::Closure(Closure { capture: _, stack: Bullet, body }) => body.free_vars(arena),
             | Value::Ctor(Ctor(_ctor, body)) => body.free_vars(arena),
             | Value::VCons(Cons(a, b)) => a.free_vars(arena) + b.free_vars(arena),
             | Value::Complex(Complex { operator: _, operands }) => operands
                 .into_iter()
                 .map(|operand| operand.free_vars(arena))
                 .fold(CoContext::new(), |acc, x| acc + x),
-            | Value::Hole(Hole) | Value::Triv(Triv) | Value::Lit(_) => CoContext::new(),
+            | Value::Hole(Hole) | Value::Triv(Triv) | Value::Literal(_) => CoContext::new(),
         }
     }
 }
@@ -89,6 +89,9 @@ impl FreeVars for CompuId {
                 .into_iter()
                 .map(|CoMatcher { dtor: _, tail }| tail.free_vars(arena))
                 .fold(CoContext::new(), |acc, x| acc + x),
+            | Compu::ExternCall(ExternCall { name: _, arity: _, stack: Bullet }) => {
+                CoContext::new()
+            }
         }
     }
 }

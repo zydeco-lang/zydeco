@@ -101,7 +101,7 @@ impl<'e> Emitter<'e> {
             let extern_name = &self.assembly.variables[var_id];
             let zydeco_extern_name = format!("zydeco_{}", extern_name);
             let wrapper_inner_name = format!("wrapper_{}", extern_name);
-            let num_args: usize = match extern_name.plain() {
+            let num_args: usize = match extern_name.plain().as_str() {
                 | "exit" => 1,
                 | "read_line" => 1,
                 | "write_line" => 2,

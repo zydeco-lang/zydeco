@@ -6,7 +6,7 @@ use zydeco_surface::scoped::syntax::ScopedArena;
 
 /* -------------------------------- Formatter ------------------------------- */
 
-pub use zydeco_syntax::{Pretty, Ugly};
+pub use zydeco_syntax::Pretty;
 /// Formatter for stack IR using scoped and statics naming.
 pub struct Formatter<'arena> {
     arena: &'arena StackArena,
@@ -19,212 +19,6 @@ impl<'arena> Formatter<'arena> {
         arena: &'arena StackArena, scoped: &'arena ScopedArena, statics: &'arena ss::StaticsArena,
     ) -> Self {
         Formatter { arena, scoped, statics, indent: 2 }
-    }
-}
-
-/* ---------------------------------- Ugly ---------------------------------- */
-
-impl<'a> Ugly<'a, Formatter<'a>> for DefId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let name = &f.scoped.defs[self];
-        let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
-        s += &name.ugly(&statics_fmt);
-        s += &self.concise();
-        s
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for VPatId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let vpat = &f.arena.vpats[self];
-        use super::syntax::{Cons, Ctor, ValuePattern as VPat};
-        match vpat {
-            | VPat::Hole(_) => "_".to_string(),
-            | VPat::Var(def) => def.ugly(f),
-            | VPat::Ctor(Ctor(name, tail)) => {
-                use zydeco_syntax::CtorName;
-                let CtorName(name_str) = &name;
-                format!("{} {}", name_str, tail.ugly(f))
-            }
-            | VPat::Triv(_) => "()".to_string(),
-            | VPat::VCons(Cons(a, b)) => {
-                format!("({}, {})", a.ugly(f), b.ugly(f))
-            }
-        }
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for ValueId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let value = &f.arena.values[self];
-        value.ugly(f)
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Value {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
-        match self {
-            | Value::Hole(Hole) => "_".to_string(),
-            | Value::Var(def) => def.ugly(f),
-            | Value::Clo(Clo { capture, stack, body }) => {
-                format!(
-                    "[{}] {{ {} -> {} }}",
-                    capture.iter().map(|d| d.ugly(f)).collect::<Vec<_>>().join(", "),
-                    stack.ugly(f),
-                    body.ugly(f)
-                )
-            }
-            | Value::Ctor(Ctor(name, val)) => {
-                format!("{}({})", name.ugly(&statics_fmt), val.ugly(f))
-            }
-            | Value::Triv(Triv) => "()".to_string(),
-            | Value::VCons(Cons(a, b)) => format!("({}, {})", a.ugly(f), b.ugly(f)),
-            | Value::Lit(lit) => lit.ugly(&statics_fmt),
-            | Value::Complex(Complex { operator, operands }) => {
-                let SymName(op_str) = &operator.name;
-                let ops_str = operands.iter().map(|op| op.ugly(f)).collect::<Vec<_>>().join(", ");
-                format!("{}({})", op_str, ops_str)
-            }
-        }
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for StackId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let stack = &f.arena.stacks[self];
-        stack.ugly(f)
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Stack {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
-        match self {
-            | Stack::Kont(s) => format!("({})", s.ugly(f)),
-            | Stack::Var(s) => s.ugly(f),
-            | Stack::Arg(Cons(val, stack)) => format!("arg({}) :: {}", val.ugly(f), stack.ugly(f)),
-            | Stack::Tag(Cons(dtor, stack)) => {
-                format!("tag({}) :: {}", dtor.ugly(&statics_fmt), stack.ugly(f))
-            }
-        }
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Bullet {
-    fn ugly(&self, _f: &'a Formatter) -> String {
-        "•".to_string()
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Kont {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        format!("kont {} -> {}", self.binder.ugly(f), self.body.ugly(f))
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for CompuId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let compu = &f.arena.compus[self];
-        compu.ugly(f)
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for Computation {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        match self {
-            | Computation::Hole(Hole) => "_".to_string(),
-            | Computation::Fix(SFix { capture, param, body }) => {
-                format!(
-                    "[{}] fix {} -> {}",
-                    capture.iter().map(|d| d.ugly(f)).collect::<Vec<_>>().join(", "),
-                    param.ugly(f),
-                    body.ugly(f)
-                )
-            }
-            | Computation::Force(SForce { thunk, stack }) => {
-                format!("{} ! {}", thunk.ugly(f), stack.ugly(f))
-            }
-            | Computation::Ret(SReturn { stack, value }) => {
-                format!("{} @ {}", stack.ugly(f), value.ugly(f))
-            }
-            | Computation::Case(Match { scrut, arms }) => {
-                let mut s = String::new();
-                s += &format!("case {}", scrut.ugly(f));
-                for Matcher { binder, tail } in arms.iter() {
-                    s += &format!(" | {} -> {}", binder.ugly(f), tail.ugly(f));
-                }
-                s += " end";
-                s
-            }
-            | Computation::LetValue(Let { binder, bindee, tail }) => {
-                format!("let {} = {} in {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
-            }
-            | Computation::LetStack(Let { binder, bindee, tail }) => {
-                format!("let {} = {} in {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
-            }
-            | Computation::LetArg(Let { binder, bindee, tail }) => {
-                let Cons(param, Bullet) = binder;
-                format!(
-                    "let arg({}) :: {} = {} in {}",
-                    param.ugly(f),
-                    Bullet.ugly(f),
-                    bindee.ugly(f),
-                    tail.ugly(f)
-                )
-            }
-            | Computation::CoCase(CoMatch { arms }) => {
-                let mut s = String::new();
-                let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
-                s += "cocase";
-                for CoMatcher { dtor, tail } in arms.iter() {
-                    let Cons(dtor_name, Bullet) = dtor;
-                    s += &format!(" | tag({}) -> {}", dtor_name.ugly(&statics_fmt), tail.ugly(f));
-                }
-                s += " end";
-                s
-            }
-        }
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for TermId {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        match self {
-            | TermId::Value(v) => v.ugly(f),
-            | TermId::Compu(c) => c.ugly(f),
-            | TermId::Stack(s) => s.ugly(f),
-        }
-    }
-}
-
-impl<'a> Ugly<'a, Formatter<'a>> for StackArena {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-
-        // Print all globals
-        for def_id in self.sequence.iter() {
-            let global = &self.globals[def_id];
-            let VarName(varname) = &f.scoped.defs[def_id];
-            s += &format!("[def:{}{}]\n", varname, def_id.concise());
-            match global {
-                | Global::Extern(_) => {
-                    s += "\t<extern>\n";
-                }
-                | Global::Defined(value_id) => {
-                    s += &format!("\t{}\n", value_id.ugly(f));
-                }
-            }
-        }
-
-        // Print all entries
-        for (compu_id, _) in self.entry.iter() {
-            s += "[entry]\n";
-            s += &format!("\t{}\n", compu_id.ugly(f));
-        }
-
-        s
     }
 }
 
@@ -282,7 +76,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
         match self {
             | Value::Hole(Hole) => RcDoc::text("_"),
             | Value::Var(def) => def.pretty(f),
-            | Value::Clo(Clo { capture, stack, body }) => {
+            | Value::Closure(Closure { capture, stack, body }) => {
                 let mut doc = RcDoc::nil();
                 let capture_doc = RcDoc::concat(
                     capture
@@ -333,7 +127,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 b.pretty(f),
                 RcDoc::text(")"),
             ]),
-            | Value::Lit(lit) => {
+            | Value::Literal(lit) => {
                 let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::text(lit.ugly(&statics_fmt))
             }
@@ -560,6 +354,11 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::text("end"),
                 ])
             }
+            | Computation::ExternCall(ExternCall { name, arity: _, stack }) => RcDoc::concat([
+                RcDoc::text(format!("{}", name.plain())),
+                RcDoc::space(),
+                stack.pretty(f),
+            ]),
         }
     }
 }

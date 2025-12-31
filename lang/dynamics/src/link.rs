@@ -65,7 +65,7 @@ impl Link for ss::DeclId {
                 let name = defs[def].plain();
                 // println!("builtin: {}", name);
                 let bindee = {
-                    let prim = BUILTINS[name].to_owned().into();
+                    let prim = BUILTINS[name.as_str()].to_owned().into();
                     let thunk = Thunk(Rc::new(prim)).into();
                     Rc::new(thunk)
                 };

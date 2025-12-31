@@ -54,7 +54,7 @@ impl<'a> ClosureConverter<'a> {
         // Transform Clo values (thunks)
         let clos: Vec<_> = (self.arena.values.iter())
             .filter_map(|(id, value)| match value {
-                | Value::Clo(clo) => Some((*id, clo.clone())),
+                | Value::Closure(clo) => Some((*id, clo.clone())),
                 | _ => None,
             })
             .collect();
@@ -181,7 +181,7 @@ impl<'a> ClosureConverter<'a> {
     }
 
     /// Convert a Clo (thunk) to explicit closure form.
-    fn convert_clo(&mut self, old_value_id: ValueId, clo: &Clo) {
+    fn convert_clo(&mut self, old_value_id: ValueId, clo: &Closure) {
         // Preserve the site from the original value
         let site = self.get_value_site(old_value_id);
 
@@ -225,7 +225,7 @@ impl<'a> ClosureConverter<'a> {
         // We'll store it as a closure that takes the captures as argument
         // The pair will be: (capture_values, body_closure)
         // where body_closure is a closure whose body is the original body
-        let body_closure = Clo {
+        let body_closure = Closure {
             capture: Context(vec![]), // Body closure doesn't need additional captures
             stack: Bullet,
             body: transformed_body,

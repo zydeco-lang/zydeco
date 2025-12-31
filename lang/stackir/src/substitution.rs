@@ -24,7 +24,7 @@ impl SubstitutionInPlace for ValueId {
                 }
                 | None => {}
             },
-            | Value::Clo(Clo { capture: _, stack: Bullet, body }) => {
+            | Value::Closure(Closure { capture: _, stack: Bullet, body }) => {
                 // Recursively substitute in the body
                 body.substitute_in_place(&mut arena_mut, map)
             }
@@ -43,7 +43,7 @@ impl SubstitutionInPlace for ValueId {
                     operand.substitute_in_place(&mut arena_mut, map);
                 });
             }
-            | Value::Hole(Hole) | Value::Triv(Triv) | Value::Lit(_) => {}
+            | Value::Hole(Hole) | Value::Triv(Triv) | Value::Literal(_) => {}
         }
     }
 }
@@ -128,6 +128,7 @@ impl SubstitutionInPlace for CompuId {
                     tail.substitute_in_place(&mut arena_mut, map);
                 });
             }
+            | Computation::ExternCall(ExternCall { name: _, arity: _, stack: Bullet }) => {}
         }
     }
 }

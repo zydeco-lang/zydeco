@@ -371,7 +371,7 @@ impl Lower for sk::ValueId {
                 // Push the atom onto the stack
                 lo.instr(Push(atom), kont)
             }
-            | Value::Clo(sk::Clo { capture, stack: sk::Bullet, body }) => {
+            | Value::Closure(sk::Closure { capture, stack: sk::Bullet, body }) => {
                 assert!(capture.iter().count() == 0, "Capture is not empty");
                 let body = body.lower(lo, ());
                 // Label the closure code
@@ -420,7 +420,7 @@ impl Lower for sk::ValueId {
                     }),
                 )
             }
-            | Value::Lit(lit) => {
+            | Value::Literal(lit) => {
                 // Push the literal value onto the stack
                 let atom = Atom::Sym(lit.build(lo, (Some(String::from("")), None)));
                 lo.instr(Push(atom), kont)
@@ -699,6 +699,9 @@ impl Lower for sk::CompuId {
                 }
                 // Create the co-case program
                 PopBranch(lowered_arms).build(lo, ())
+            }
+            | Compu::ExternCall(sk::ExternCall { name: _, arity: _, stack: sk::Bullet }) => {
+                todo!()
             }
         }
     }
