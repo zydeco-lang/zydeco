@@ -14,6 +14,8 @@ pub mod convert;
 pub mod substitution;
 /// Free-variable analysis for stack IR.
 pub mod free;
+/// Builtin definitions for externs in stack IR.
+pub mod builtin;
 
 use zydeco_statics::tyck::syntax as ss;
 

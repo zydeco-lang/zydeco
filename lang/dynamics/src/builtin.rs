@@ -1,10 +1,9 @@
 use crate::syntax::*;
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 
 /// Mapping from builtin names to their primitive implementations.
-pub static BUILTINS: Lazy<HashMap<&'static str, Prim>> = {
-    Lazy::new(|| {
+pub static BUILTINS: LazyLock<HashMap<&'static str, Prim>> = {
+    LazyLock::new(|| {
         use crate::impls::*;
         [
             Builtin::new("add", 2, add),
