@@ -8,7 +8,7 @@ use derive_more::From;
 pub type DefId = ss::DefId;
 pub type DeclId = ss::DeclId;
 
-new_key_type! {
+zydeco_utils::new_key_type! {
     pub struct VPatId;
     pub struct ValueId;
     pub struct CompuId;

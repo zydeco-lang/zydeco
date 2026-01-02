@@ -10,7 +10,7 @@ use derive_more::{From, IntoIterator};
 
 pub type DefId = su::DefId;
 // PatId and TermId are unsorted, so we've got the following:
-new_key_type! {
+zydeco_utils::new_key_type! {
     pub struct KindId;
     pub struct TPatId;
     pub struct TypeId;
@@ -59,7 +59,7 @@ pub enum TermAnnId {
 /// The declaration identifiers are the same of the surface syntax.
 pub type DeclId = su::DeclId;
 
-new_key_type! {
+zydeco_utils::new_key_type! {
     /// Identifier for abstract types, including:
     /// 1. sealed types, and
     /// 2. type instantiations for forall and exists.

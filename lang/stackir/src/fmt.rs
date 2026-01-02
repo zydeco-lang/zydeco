@@ -377,22 +377,24 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let mut doc = RcDoc::nil();
 
+        // Print all externs
+        for (def_id, builtin) in self.externs.iter() {
+            let VarName(varname) = &f.scoped.defs[def_id];
+            doc = doc.append(RcDoc::text(format!(
+                "[extern:{}{}] {}",
+                varname,
+                def_id.concise(),
+                builtin
+            )));
+            doc = doc.append(RcDoc::line());
+        }
+
         // Print all globals
         for def_id in self.sequence.iter() {
             let global = &self.globals[def_id];
             let VarName(varname) = &f.scoped.defs[def_id];
             doc = doc.append(RcDoc::text(format!("[def:{}{}]", varname, def_id.concise())));
-            match global {
-                | Global::Extern(_) => {
-                    doc = doc.append(
-                        RcDoc::concat([RcDoc::line(), RcDoc::text("<extern>")]).nest(f.indent),
-                    );
-                }
-                | Global::Defined(value_id) => {
-                    doc = doc
-                        .append(RcDoc::concat([RcDoc::line(), value_id.pretty(f)]).nest(f.indent));
-                }
-            }
+            doc = doc.append(RcDoc::concat([RcDoc::line(), global.pretty(f)]).nest(f.indent));
             doc = doc.append(RcDoc::line());
         }
 

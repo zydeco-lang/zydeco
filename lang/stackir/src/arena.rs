@@ -18,8 +18,10 @@ pub struct StackArena {
     /// computation arena
     pub compus: ArenaSparse<CompuId, Computation>,
 
-    /// external or defined values
-    pub globals: ArenaAssoc<DefId, Global>,
+    /// external functions
+    pub externs: ArenaAssoc<DefId, Builtin>,
+    /// globally defined values
+    pub globals: ArenaAssoc<DefId, ValueId>,
     /// the initialization sequence of globals
     pub sequence: Vec<DefId>,
     /// entry point(s), i.e. declarations that are marked as entry points;
@@ -39,6 +41,7 @@ impl StackArena {
             values: ArenaSparse::new(alloc.alloc()),
             stacks: ArenaSparse::new(alloc.alloc()),
             compus: ArenaSparse::new(alloc.alloc()),
+            externs: ArenaAssoc::new(),
             globals: ArenaAssoc::new(),
             sequence: Vec::new(),
             entry: ArenaAssoc::new(),

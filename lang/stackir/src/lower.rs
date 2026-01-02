@@ -151,7 +151,7 @@ impl Lower for ss::VAliasBody {
         };
         let value_id = Phantom::new(bindee).lower(lo, Box::new(move |val_id, _lo| val_id));
         lo.arena.sequence.push(def_id);
-        lo.arena.globals.insert(def_id, Global::Defined(value_id));
+        lo.arena.globals.insert(def_id, value_id);
     }
 }
 
@@ -175,14 +175,12 @@ impl Lower for ss::VAliasHead {
                 panic!("VAliasHead binder must be a variable, found:\n{}", binder_str);
             }
         };
-        lo.arena.sequence.push(def);
         let name = lo.scoped.defs[&def].plain();
         let Some(builtin) = lo.builtins.get(name.as_str()) else {
             panic!("Undefined builtin extern:\n{}", name);
         };
-        let _ = builtin;
         // Mark as external global
-        lo.arena.globals.insert(def, Global::Extern(Extern));
+        lo.arena.externs.insert(def, builtin.clone());
     }
 }
 

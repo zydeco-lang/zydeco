@@ -9,7 +9,7 @@ use derive_more::From;
 
 /* ------------------------------- Identifier ------------------------------- */
 
-new_key_type! {
+zydeco_utils::new_key_type! {
     pub struct DefId;
     pub struct PatId;
     pub struct CoPatId;

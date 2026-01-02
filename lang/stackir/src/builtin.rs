@@ -13,18 +13,40 @@ use zydeco_statics::surface_syntax::ScopedArena;
 
 pub type BuiltinMap = HashMap<&'static str, Builtin>;
 
+#[derive(Clone, Debug)]
 pub struct Builtin {
-    name: &'static str,
-    arity: usize,
-    // registry: Box<dyn BuiltinRegistry<StackArena>>,
+    pub name: &'static str,
+    pub arity: usize,
+    pub sort: BuiltinSort,
+}
+
+#[derive(Clone, Debug)]
+pub enum BuiltinSort {
+    Operator,
+    Function,
+}
+
+impl std::fmt::Display for Builtin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.name, self.arity)
+    }
 }
 
 impl Builtin {
     pub fn all() -> BuiltinMap {
-        [Builtin::new("add", 2)].into_iter().map(Self::generate).collect()
+        use BuiltinSort::*;
+        [
+            Builtin::new("add", 2, Operator),
+            Builtin::new("sub", 2, Operator),
+            Builtin::new("mul", 2, Operator),
+            Builtin::new("div", 2, Operator),
+        ]
+        .into_iter()
+        .map(Self::generate)
+        .collect()
     }
-    pub fn new(name: &'static str, arity: usize) -> Self {
-        Builtin { name, arity }
+    pub fn new(name: &'static str, arity: usize, sort: BuiltinSort) -> Self {
+        Builtin { name, arity, sort }
     }
     fn generate<'a>(self) -> (&'a str, Self) {
         (self.name, self)

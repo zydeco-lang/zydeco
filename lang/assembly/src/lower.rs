@@ -41,6 +41,29 @@ impl<'a> Lowerer<'a> {
     }
 
     pub fn run(mut self) -> AssemblyArena {
+        // Lower all extern builtins
+        for (def, builtin) in self.stack.externs.iter() {
+            let name = builtin.name;
+            // Make it a symbol
+            SymbolInner::Extern(Extern).build(&mut self, (Some(name.to_owned()), Some(*def)));
+        }
+
+        // Box::new(move |lo: &mut Lowerer| {
+        //     let name = lo.scoped.defs[&def_id].clone();
+        //     // log::trace!(
+        //     //     "lowered extern: {}{} => {}",
+        //     //     name.plain(),
+        //     //     def_id.concise(),
+        //     //     _sym.concise()
+        //     // );
+        //     // let _sym = lo.sym(Some(def_id), name.plain(), Extern);
+        //     // kont(lo)
+        //     // Don't make it a symbol. Instead, just make it a variable.
+        //     let var = VarName::from(name).build(lo, Some(def_id));
+        //     lo.arena.externs.insert(var, ());
+        //     kont(lo)
+        // })
+
         // Lower entry points from StackArena to AssemblyArena
         for (compu_id, ()) in &self.stack.entry {
             let compu_id = *compu_id;
@@ -58,41 +81,19 @@ impl<'a> Lowerer<'a> {
                     // After all globals are initialized, lower the entry point
                     compu_id.lower(lo, ())
                 }),
-                |kont, (def_id, global)| {
-                    match global {
-                        | sk::Global::Extern(sk::Extern) => {
-                            // Extern: wrap continuation to create symbol, then continue
-                            Box::new(move |lo: &mut Lowerer| {
+                |kont, (def_id, body)| {
+                    // wrap continuation with lowering logic
+                    let def_id = def_id;
+                    Box::new(move |lo: &mut Lowerer| {
+                        body.lower(
+                            lo,
+                            Box::new(move |lo| {
                                 let name = lo.scoped.defs[&def_id].clone();
-                                // log::trace!(
-                                //     "lowered extern: {}{} => {}",
-                                //     name.plain(),
-                                //     def_id.concise(),
-                                //     _sym.concise()
-                                // );
-                                // let _sym = lo.sym(Some(def_id), name.plain(), Extern);
-                                // kont(lo)
-                                // Don't make it a symbol. Instead, just make it a variable.
                                 let var = VarName::from(name).build(lo, Some(def_id));
-                                lo.arena.externs.insert(var, ());
-                                kont(lo)
-                            })
-                        }
-                        | sk::Global::Defined(body) => {
-                            // Defined: wrap continuation with lowering logic
-                            let def_id = def_id;
-                            Box::new(move |lo: &mut Lowerer| {
-                                body.lower(
-                                    lo,
-                                    Box::new(move |lo| {
-                                        let name = lo.scoped.defs[&def_id].clone();
-                                        let var = VarName::from(name).build(lo, Some(def_id));
-                                        lo.instr(Pop(var), kont)
-                                    }),
-                                )
-                            })
-                        }
-                    }
+                                lo.instr(Pop(var), kont)
+                            }),
+                        )
+                    })
                 },
             );
 
