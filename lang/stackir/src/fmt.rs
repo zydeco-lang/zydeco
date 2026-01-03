@@ -132,7 +132,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 RcDoc::text(lit.ugly(&statics_fmt))
             }
             | Value::Complex(Complex { operator, operands }) => {
-                let SymName(op_str) = &operator.name;
+                let op_str =
+                    serde_plain::to_string(operator).expect("failed to serialize operator");
                 let ops_doc = RcDoc::concat(
                     operands
                         .iter()

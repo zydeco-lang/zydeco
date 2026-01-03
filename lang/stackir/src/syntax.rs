@@ -1,4 +1,5 @@
 pub use super::{arena::*, builtin::*};
+use serde::{Deserialize, Serialize};
 pub use zydeco_syntax::{fmt, *};
 pub use zydeco_utils::{arena::*, context::Context};
 
@@ -40,12 +41,6 @@ pub struct Closure {
     pub capture: Context<DefId>,
     pub stack: Bullet,
     pub body: CompuId,
-}
-
-#[derive(From, Clone, Debug)]
-pub struct Operator {
-    pub name: SymName,
-    pub arity: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -130,13 +125,36 @@ pub enum Computation {
     ExternCall(ExternCall),
 }
 
-/* ------------------------------- Declaration ------------------------------ */
+/* -------------------------------- Intrinsic ------------------------------- */
 
-#[derive(From, Clone, Debug)]
-pub enum Global {
-    Extern(Extern),
-    Defined(ValueId),
+/// External Operators (e.g., arithmetic instructions).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Operator {
+    #[serde(rename = "add")]
+    Add,
+    #[serde(rename = "sub")]
+    Sub,
+    #[serde(rename = "mul")]
+    Mul,
+    #[serde(rename = "div")]
+    Div,
+    #[serde(rename = "eq")]
+    Eq,
+    #[serde(rename = "lt")]
+    Lt,
+    #[serde(rename = "gt")]
+    Gt,
+    // Add more extern ops as needed
 }
 
-#[derive(Clone, Debug)]
-pub struct Extern;
+/// External function calls (e.g., to x86 runtime).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Function {
+    #[serde(rename = "exit")]
+    Exit,
+    #[serde(rename = "read_line")]
+    ReadLine,
+    #[serde(rename = "write_str")]
+    WriteStr,
+    // Add more externs as needed
+}

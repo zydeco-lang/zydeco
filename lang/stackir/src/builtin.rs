@@ -58,7 +58,7 @@ impl Builtin {
     where
         Arena: AsMut<StackArena> + AsMut<ScopedArena>,
     {
-        let op = Operator { name: SymName::from(self.name), arity: self.arity };
+        let op = serde_plain::from_str::<Operator>(self.name).unwrap();
         // make fresh variables as operands
         let params: Vec<_> = (0..self.arity)
             .map(|i| {

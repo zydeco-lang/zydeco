@@ -19,3 +19,5 @@ zydeco-derive = { workspace = true }
 derive_more = { workspace = true }
 pretty = { workspace = true }
 log = { workspace = true }
+serde = { workspace = true }
+serde_plain = { workspace = true }
