@@ -1,11 +1,10 @@
 use crate::with::With;
 use std::{
-    cell::OnceCell,
     fmt::{Debug, Display},
     // hash::Hash,
     path::PathBuf,
     rc::Rc,
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 #[derive(Clone, Debug)]
@@ -16,28 +15,31 @@ pub enum LocationCtx {
 
 #[derive(Clone, Debug)]
 pub struct FileInfo {
-    newlines: Vec<usize>,
+    line_starts: Vec<usize>,
+    text_len: usize,
     path: Option<Arc<PathBuf>>,
 }
 impl FileInfo {
     pub fn new(s: &str, path: Option<Arc<PathBuf>>) -> Self {
-        let mut newlines = vec![0];
+        let mut line_starts = vec![0];
         for (i, c) in s.char_indices() {
             if c == '\n' {
-                newlines.push(i);
+                line_starts.push(i + 1);
             }
         }
-        newlines.push(s.len());
-        FileInfo { newlines, path }
+        let text_len = s.len();
+        FileInfo { line_starts, text_len, path }
     }
     pub fn trans_span2(&self, offset: usize) -> Cursor2 {
-        // [x0, x1, (offset <= x2), x3]
+        if offset > self.text_len {
+            panic!("Span: offset {} is not in {:?}", offset, self)
+        }
         let idx = {
             let mut l = 0;
-            let mut r = self.newlines.len();
+            let mut r = self.line_starts.len();
             while l < r {
                 let mid = l + (r - l) / 2;
-                if offset <= self.newlines[mid] {
+                if self.line_starts[mid] > offset {
                     r = mid;
                 } else {
                     l = mid + 1;
@@ -45,14 +47,41 @@ impl FileInfo {
             }
             l
         };
-        if idx < self.newlines.len() {
-            Cursor2 {
-                line: idx,
-                column: offset - self.newlines[if idx > 0 { idx - 1 } else { idx }],
-            }
-        } else {
-            panic!("Span: offset {} is not in {:?}", offset, self)
+        let line = idx.saturating_sub(1);
+        Cursor2 { line, column: offset - self.line_starts[line] }
+    }
+    pub fn trans_span1(&self, source: &str, cursor2: Cursor2) -> Option<Cursor1> {
+        let Cursor2 { line, column } = cursor2;
+        let line_start = *self.line_starts.get(line)?;
+        if line_start > source.len() {
+            return None;
         }
+        let line_end = self.line_starts.get(line + 1).copied().unwrap_or(self.text_len);
+        let line_text = &source[line_start..line_end];
+        let byte_count = line_text.chars().take(column).map(|c| c.len_utf8()).sum::<usize>();
+        let offset = line_start + byte_count;
+        (offset <= line_end).then_some(offset)
+    }
+    pub fn trans_span1_utf16(&self, source: &str, cursor2: Cursor2) -> Option<Cursor1> {
+        let Cursor2 { line, column } = cursor2;
+        let line_start = *self.line_starts.get(line)?;
+        if line_start > source.len() {
+            return None;
+        }
+        let line_end = self.line_starts.get(line + 1).copied().unwrap_or(self.text_len);
+        let line_text = &source[line_start..line_end];
+        let mut utf16_count = 0usize;
+        let mut byte_count = 0usize;
+        for ch in line_text.chars() {
+            let units = ch.len_utf16();
+            if utf16_count + units > column {
+                break;
+            }
+            utf16_count += units;
+            byte_count += ch.len_utf8();
+        }
+        let offset = if column > utf16_count { line_end } else { line_start + byte_count };
+        (offset <= line_end).then_some(offset)
     }
     pub fn path(&self) -> PathBuf {
         self.path.as_ref().map(|p| p.to_path_buf()).unwrap_or_default()
@@ -62,13 +91,13 @@ impl FileInfo {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Span {
     span1: (Cursor1, Cursor1),
-    span2: OnceCell<(Cursor2, Cursor2)>,
-    path: OnceCell<Option<Arc<PathBuf>>>,
+    span2: OnceLock<(Cursor2, Cursor2)>,
+    path: OnceLock<Option<Arc<PathBuf>>>,
 }
 
 impl Span {
     pub fn new(l: usize, r: usize) -> Span {
-        Span { span1: (l, r), span2: OnceCell::new(), path: OnceCell::new() }
+        Span { span1: (l, r), span2: OnceLock::new(), path: OnceLock::new() }
     }
     pub fn dummy() -> Span {
         Span::new(0, 0)
@@ -154,7 +183,7 @@ pub struct Cursor2 {
 impl Display for Cursor2 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Cursor2 { line, column } = self;
-        write!(f, "{line}:{column}",)
+        write!(f, "{}:{}", line + 1, column + 1)
     }
 }
 
