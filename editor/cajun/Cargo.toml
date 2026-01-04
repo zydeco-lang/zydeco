@@ -20,4 +20,3 @@ zydeco-driver = { workspace = true }
 env_logger = { workspace = true }
 tokio = { workspace = true }
 tower-lsp = { workspace = true }
-dashmap = { workspace = true }
