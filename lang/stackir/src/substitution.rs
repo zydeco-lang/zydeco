@@ -128,7 +128,7 @@ impl SubstitutionInPlace for CompuId {
                     tail.substitute_in_place(&mut arena_mut, map);
                 });
             }
-            | Computation::ExternCall(ExternCall { name: _, arity: _, stack: Bullet }) => {}
+            | Computation::ExternCall(ExternCall { function: _, arity: _, stack: Bullet }) => {}
         }
     }
 }

@@ -701,7 +701,7 @@ impl Lower for sk::CompuId {
                 // Create the co-case program
                 PopBranch(lowered_arms).build(lo, ())
             }
-            | Compu::ExternCall(sk::ExternCall { name: _, arity: _, stack: sk::Bullet }) => {
+            | Compu::ExternCall(sk::ExternCall { function: _, arity: _, stack: sk::Bullet }) => {
                 todo!()
             }
         }

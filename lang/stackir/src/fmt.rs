@@ -355,11 +355,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::text("end"),
                 ])
             }
-            | Computation::ExternCall(ExternCall { name, arity: _, stack }) => RcDoc::concat([
-                RcDoc::text(format!("{}", name.plain())),
-                RcDoc::space(),
-                stack.pretty(f),
-            ]),
+            | Computation::ExternCall(ExternCall { function, arity: _, stack }) => {
+                RcDoc::concat([function.pretty(f), RcDoc::space(), stack.pretty(f)])
+            }
         }
     }
 }
@@ -371,6 +369,20 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
             | TermId::Compu(c) => c.pretty(f),
             | TermId::Stack(s) => s.pretty(f),
         }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Operator {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        let op_str = serde_plain::to_string(self).expect("failed to serialize operator");
+        RcDoc::text(op_str)
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Function {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        let func_str = serde_plain::to_string(self).expect("failed to serialize function");
+        RcDoc::text(func_str)
     }
 }
 

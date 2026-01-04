@@ -4,13 +4,6 @@ use crate::syntax::*;
 use std::collections::HashMap;
 use zydeco_statics::surface_syntax::ScopedArena;
 
-// pub trait BuiltinRegistry<Arena>
-// where
-//     Arena: AsMut<StackArena>,
-// {
-//     fn register(&self, arena: &mut Arena) -> ValueId;
-// }
-
 pub type BuiltinMap = HashMap<&'static str, Builtin>;
 
 #[derive(Clone, Debug)]
@@ -83,4 +76,66 @@ impl Builtin {
         // construct the closure wrapping the whole computation
         Closure { capture: Context::new(), stack: Bullet, body: tail }.build(arena, None)
     }
+
+    /// Wrap a builtin function definition with closure.
+    pub fn make_function<Arena>(self, arena: &mut Arena) -> ValueId
+    where
+        Arena: AsMut<StackArena> + AsMut<ScopedArena>,
+    {
+        let function = serde_plain::from_str::<Function>(self.name).unwrap();
+        let body = ExternCall { function, arity: self.arity, stack: Bullet }.build(arena, None);
+        Closure { capture: Context::new(), stack: Bullet, body }.build(arena, None)
+    }
 }
+
+// // Alternative trait-based implementation
+
+// pub trait BuiltinImpl<Arena> {
+//     fn make(self, arena: &mut Arena) -> ValueId
+//     where
+//         Arena: AsMut<StackArena> + AsMut<ScopedArena>;
+// }
+
+// pub trait IntrinsicOperator: Into<Operator> {}
+// impl<I, Arena> BuiltinImpl<Arena> for I
+// where
+//     I: IntrinsicOperator,
+// {
+//     fn make(self, arena: &mut Arena) -> ValueId
+//     where
+//         Arena: AsMut<StackArena> + AsMut<ScopedArena>,
+//     {
+//         let op = self.into();
+//         // make fresh variables as operands
+//         let params: Vec<_> = (0..2)
+//             .map(|i| {
+//                 let param = VarName::from(format!("param_{}", i));
+//                 let scoped: &mut ScopedArena = arena.as_mut();
+//                 scoped.defs.alloc(param)
+//             })
+//             .collect();
+//         let operands = params.iter().map(|def| def.build(arena, None)).collect();
+//         // construct the complex value
+//         let complex = Complex { operator: op, operands }.build(arena, None);
+//         // construct the computation of returning the complex value
+//         let stack = Bullet.build(arena, None);
+//         let mut tail = SReturn { stack, value: complex }.build(arena, None);
+//         // construct the let-argument (CBPV function) wrapping the return computation
+//         for def in params.into_iter().rev() {
+//             let vpat = def.build(arena, None);
+//             let binder = Cons(vpat, Bullet);
+//             let bindee = Bullet.build(arena, None);
+//             tail = Computation::LetArg(Let { binder, bindee, tail }).build(arena, None);
+//         }
+//         // construct the closure wrapping the whole computation
+//         Closure { capture: Context::new(), stack: Bullet, body: tail }.build(arena, None)
+//     }
+// }
+
+// pub struct IntrinsicAdd;
+// impl Into<Operator> for IntrinsicAdd {
+//     fn into(self) -> Operator {
+//         Operator::Add
+//     }
+// }
+// impl IntrinsicOperator for IntrinsicAdd {}

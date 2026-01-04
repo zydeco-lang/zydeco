@@ -106,7 +106,7 @@ pub struct SFix {
 
 #[derive(Clone, Debug)]
 pub struct ExternCall {
-    pub name: SymName,
+    pub function: Function,
     pub arity: usize,
     pub stack: Bullet,
 }

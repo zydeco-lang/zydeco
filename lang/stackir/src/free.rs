@@ -89,7 +89,7 @@ impl FreeVars for CompuId {
                 .into_iter()
                 .map(|CoMatcher { dtor: _, tail }| tail.free_vars(arena))
                 .fold(CoContext::new(), |acc, x| acc + x),
-            | Compu::ExternCall(ExternCall { name: _, arity: _, stack: Bullet }) => {
+            | Compu::ExternCall(ExternCall { function: _, arity: _, stack: Bullet }) => {
                 CoContext::new()
             }
         }
