@@ -8,11 +8,13 @@ pub mod package;
 pub mod local {
     pub mod pack;
     pub mod err;
+    pub use pack::LocalPackage;
 }
 
 pub mod check {
     pub mod pack;
     pub mod err;
+    pub use pack::{PackageChecked, PackageStew};
 }
 
 pub mod interp {
@@ -22,15 +24,18 @@ pub mod interp {
 
 pub mod zir {
     pub mod pack;
+    pub use pack::PackageStack;
 }
 
 pub mod zasm {
     pub mod pack;
     pub mod err;
+    pub use pack::PackageAssembly;
 }
 
 pub mod x86 {
     pub mod pack;
+    pub mod err;
     pub use pack::PackageX86;
 }
 
@@ -54,12 +59,12 @@ pub mod prelude {
 
 pub use conf::{BuildConf, Conf};
 pub use err::{BuildError, Result};
-pub use local::pack::LocalPackage;
+pub use local::LocalPackage;
 pub use package::{Dependency, Package};
 pub use zydeco_dynamics::ProgKont;
 
 use crate::{
-    check::pack::{PackageChecked, PackageStew},
+    check::{PackageChecked, PackageStew},
     x86::PackageX86,
     zasm::pack::PackageAssembly,
     zir::pack::PackageStack,
@@ -72,6 +77,55 @@ use zydeco_utils::prelude::{
 
 zydeco_utils::new_key_type! {
     pub struct PackId<()>;
+}
+
+pub struct Driver {
+    pub build_sys: BuildSystem,
+}
+
+impl Driver {
+    pub fn setup(paths: Vec<PathBuf>) -> Result<Self> {
+        let mut build_sys = BuildSystem::new();
+        let mut packs = Vec::new();
+        let mut files = Vec::new();
+
+        for path in paths {
+            // for dir, try finding "proj.toml" under it
+            if path.is_dir() {
+                let proj = path.join("proj.toml");
+                if proj.exists() {
+                    let pack = build_sys.add_local_package(proj)?;
+                    packs.push(pack);
+                    continue;
+                }
+                // fallback to adding the dir itself
+            }
+            match path.extension() {
+                | Some(ext) if ext == "toml" => {
+                    // package
+                    let pack = build_sys.add_local_package(path)?;
+                    packs.push(pack);
+                }
+                | Some(_) | None => {
+                    // single file
+                    files.push(path);
+                }
+            }
+        }
+
+        if files.is_empty() {
+            for pack in packs {
+                build_sys.add_binary_in_package(pack)?;
+            }
+        } else {
+            for file in files.iter() {
+                let pack = build_sys.add_orphan_file(file)?;
+                build_sys.mark(pack)?;
+            }
+        }
+
+        Ok(Self { build_sys })
+    }
 }
 
 pub struct BuildSystem {

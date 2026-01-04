@@ -1,3 +1,4 @@
+use super::err::{LinkError, Result};
 use crate::BuildConf;
 use std::{
     fs::File,
@@ -12,7 +13,7 @@ pub struct PackageX86 {
 }
 
 impl PackageX86 {
-    pub fn link(self) -> Result<(), String> {
+    pub fn link(self) -> Result<()> {
         let PackageX86 { name, assembly, build_conf } = self;
         let BuildConf { build_dir, runtime_dir, link_existing, execute } = build_conf;
         if !link_existing {
@@ -55,9 +56,9 @@ impl PackageX86 {
 
         // first put the assembly in a new file zyprog.s
         if !link_existing {
-            let mut asm_file = File::create(&asm_fname).map_err(|e| e.to_string())?;
-            asm_file.write(assembly.as_bytes()).map_err(|e| e.to_string())?;
-            asm_file.flush().map_err(|e| e.to_string())?;
+            let mut asm_file = File::create(&asm_fname).map_err(LinkError::AssemblyWriteError)?;
+            asm_file.write(assembly.as_bytes()).map_err(LinkError::AssemblyWriteError)?;
+            asm_file.flush().map_err(LinkError::AssemblyWriteError)?;
         }
 
         // nasm -fFORMAT -o zyprog.o zyprog.s
@@ -68,13 +69,13 @@ impl PackageX86 {
             .arg(&obj_fname)
             .arg(&asm_fname)
             .output()
-            .map_err(|e| format!("nasm err: {}", e))?;
+            .map_err(LinkError::NasmRunError)?;
         if !nasm_out.status.success() {
-            return Err(format!(
-                "Failure in nasm call: {}\n{}",
+            Err(LinkError::NasmOutputError(format!(
+                "{}\n{}",
                 nasm_out.status,
                 std::str::from_utf8(&nasm_out.stderr).expect("nasm produced invalid UTF-8")
-            ));
+            )))?
         }
 
         // ar r libzyprog.a zyprog.o
@@ -83,18 +84,17 @@ impl PackageX86 {
             .arg(lib_fname)
             .arg(&obj_fname)
             .output()
-            .map_err(|e| format!("ar err: {}", e))?;
+            .map_err(LinkError::ArRunError)?;
         if !ar_out.status.success() {
-            return Err(format!(
-                "Failure in ar call:\n{}\n{}",
+            Err(LinkError::ArOutputError(format!(
+                "{}\n{}",
                 ar_out.status,
                 std::str::from_utf8(&ar_out.stderr).expect("ar produced invalid UTF-8")
-            ));
+            )))?
         }
 
-        // rustc stub.rs -L build_dir
-        // use cargo instead of rustc directly
-        let rustc_out = if cfg!(target_os = "macos") {
+        // cargo build
+        let cargo_out = if cfg!(target_os = "macos") {
             // Command::new("rustc")
             //     .arg("-v")
             //     .arg(stub_path)
@@ -122,7 +122,7 @@ impl PackageX86 {
                 // .arg("--features=log_rt")
                 // .arg("--release")
                 .output()
-                .map_err(|e| format!("cargo err: {}", e))?
+                .map_err(LinkError::CargoRunError)?
         } else {
             // Command::new("rustc")
             //     .arg(stub_path)
@@ -141,14 +141,14 @@ impl PackageX86 {
                 // .arg("--features=log_rt")
                 // .arg("--release")
                 .output()
-                .map_err(|e| format!("cargo err: {}", e))?
+                .map_err(LinkError::CargoRunError)?
         };
-        if !rustc_out.status.success() {
-            Err(format!(
-                "Failure in rustc call: {}\n{}",
-                rustc_out.status,
-                std::str::from_utf8(&rustc_out.stderr).expect("rustc produced invalid UTF-8")
-            ))?
+        if !cargo_out.status.success() {
+            Err(LinkError::CargoOutputError(format!(
+                "{}\n{}",
+                cargo_out.status,
+                std::str::from_utf8(&cargo_out.stderr).expect("rustc produced invalid UTF-8")
+            )))?
         }
         // copy the cargo generated executable to the build dir
         let cargo_exe_fname = if cfg!(target_os = "macos") {
@@ -156,7 +156,7 @@ impl PackageX86 {
         } else {
             build_dir.join("target/debug/main")
         };
-        std::fs::copy(&cargo_exe_fname, &exe_fname).map_err(|e| e.to_string())?;
+        std::fs::copy(&cargo_exe_fname, &exe_fname).map_err(LinkError::ExecutableCopyError)?;
 
         if !execute {
             return Ok(());
@@ -169,11 +169,11 @@ impl PackageX86 {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .map_err(LinkError::ExecutableRunError)?;
         // println!("child: {:?}", child);
-        let status = child.wait().map_err(|e| e.to_string())?;
+        let status = child.wait().map_err(LinkError::ExecutableRunError)?;
         if !status.success() {
-            Err(format!("Failure in program call: {}", status))?;
+            Err(LinkError::ProgramCallError(status))?
         }
         Ok(())
     }

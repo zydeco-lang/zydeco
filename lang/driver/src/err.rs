@@ -9,6 +9,8 @@ pub enum BuildError {
     #[error("{0}")]
     CompileError(#[from] crate::check::err::CompileError),
     #[error("{0}")]
+    LinkError(#[from] crate::x86::err::LinkError),
+    #[error("{0}")]
     InterpError(#[from] crate::interp::err::InterpError),
     #[error("{0}")]
     AssemblyInterpError(#[from] crate::zasm::err::AssemblyInterpError),
@@ -20,6 +22,8 @@ pub enum BuildError {
     AmbiguousMark(Vec<String>),
     #[error("Missing build config for package: {0}")]
     MissingBuildConfig(String),
+    #[error("Unsupported target: {0}")]
+    UnsupportedTarget(String),
 }
 
 pub type Result<T> = std::result::Result<T, BuildError>;

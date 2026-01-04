@@ -2,7 +2,7 @@ use clap::Parser;
 use std::path::PathBuf;
 // use zydeco_cli::{Cli, Commands, Repl};
 use zydeco_cli::{Cli, Commands};
-use zydeco_driver::{BuildConf, BuildSystem, PackId, ProgKont};
+use zydeco_driver::{BuildConf, Driver, ProgKont};
 
 fn main() -> Result<(), ()> {
     env_logger::init();
@@ -46,61 +46,13 @@ fn main() -> Result<(), ()> {
     }
 }
 
-fn setup_build_system(
-    paths: Vec<PathBuf>, bin: Option<String>, build_config: Option<BuildConf>,
-) -> Result<(BuildSystem, PackId), String> {
-    let mut build_sys = BuildSystem::new();
-    let mut packs = Vec::new();
-    let mut files = Vec::new();
-
-    for path in paths {
-        // for dir, try finding "proj.toml" under it
-        if path.is_dir() {
-            let proj = path.join("proj.toml");
-            if proj.exists() {
-                let pack = build_sys.add_local_package(proj).map_err(|e| e.to_string())?;
-                packs.push(pack);
-                continue;
-            }
-            // fallback to adding the dir itself
-        }
-        match path.extension() {
-            | Some(ext) if ext == "toml" => {
-                // package
-                let pack = build_sys.add_local_package(path).map_err(|e| e.to_string())?;
-                packs.push(pack);
-            }
-            | Some(_) | None => {
-                // single file
-                files.push(path);
-            }
-        }
-    }
-
-    if files.is_empty() {
-        for pack in packs {
-            build_sys.add_binary_in_package(pack).map_err(|e| e.to_string())?;
-        }
-    } else {
-        for file in files.iter() {
-            let pack = build_sys.add_orphan_file(file).map_err(|e| e.to_string())?;
-            build_sys.mark(pack).map_err(|e| e.to_string())?;
-        }
-    }
-
-    let pack = build_sys.pick_marked(bin).map_err(|e| e.to_string())?;
-    // setup build configuration for the marked package
-    if let Some(build_config) = build_config {
-        build_sys.build_confs.insert(pack, build_config);
-    }
-    Ok((build_sys, pack))
-}
-
 fn run_files(
     paths: Vec<PathBuf>, bin: Option<String>, dry: bool, verbose: bool, args: Vec<String>,
-) -> Result<i32, String> {
-    let (build_sys, pack) = setup_build_system(paths, bin, None)?;
-    match build_sys.run_pack(pack, &args, dry, verbose).map_err(|e| e.to_string())? {
+) -> zydeco_driver::Result<i32> {
+    let Driver { build_sys } = Driver::setup(paths)?;
+
+    let pack = build_sys.pick_marked(bin)?;
+    match build_sys.run_pack(pack, &args, dry, verbose)? {
         | ProgKont::Dry => Ok(0),
         | ProgKont::Ret(_) => unreachable!(),
         | ProgKont::ExitCode(code) => Ok(code),
@@ -110,28 +62,33 @@ fn run_files(
 fn build_files(
     paths: Vec<PathBuf>, bin: Option<String>, target: String, build_dir: PathBuf,
     runtime_dir: PathBuf, link_existing: bool, execute: bool, _dry: bool, verbose: bool,
-) -> Result<i32, String> {
+) -> zydeco_driver::Result<i32> {
     let build_config = match target.as_str() {
         | "x86" => Some(BuildConf { build_dir, runtime_dir, link_existing, execute }),
         | _ => None,
     };
-    let (build_sys, pack) = setup_build_system(paths, bin, build_config)?;
+    let Driver { mut build_sys } = Driver::setup(paths)?;
+    let pack = build_sys.pick_marked(bin)?;
+    // set build configuration for the marked package
+    if let Some(build_config) = build_config {
+        build_sys.build_confs.insert(pack, build_config);
+    }
 
     match target.as_str() {
         | "zir" => {
-            build_sys.codegen_zir_pack(pack).map_err(|e| e.to_string())?;
+            build_sys.codegen_zir_pack(pack)?;
             Ok(0)
         }
         | "zasm" => {
-            build_sys.codegen_zasm_pack(pack, execute, verbose).map_err(|e| e.to_string())?;
+            build_sys.codegen_zasm_pack(pack, execute, verbose)?;
             Ok(0)
         }
         | "x86" => {
-            let x86 = build_sys.codegen_x86_pack(pack, verbose).map_err(|e| e.to_string())?;
+            let x86 = build_sys.codegen_x86_pack(pack, verbose)?;
             // link with stub
             x86.link()?;
             Ok(0)
         }
-        | _ => return Err(format!("Invalid target: {}", target)),
+        | _ => Err(zydeco_driver::err::BuildError::UnsupportedTarget(target)),
     }
 }
