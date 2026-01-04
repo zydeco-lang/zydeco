@@ -70,7 +70,10 @@ use crate::{
     zir::pack::PackageStack,
 };
 use sculptor::{FileIO, ProjectInfo};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use zydeco_utils::prelude::{
     ArcGlobalAlloc, ArenaAccess, ArenaAssoc, ArenaDense, CompilerPass, DepGraph, Kosaraju,
 };
@@ -125,6 +128,46 @@ impl Driver {
         }
 
         Ok(Self { build_sys })
+    }
+
+    pub fn pack_for_project_path(&self, path: impl AsRef<Path>) -> Option<PackId> {
+        let path = path.as_ref();
+        let key = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        self.build_sys.seen.get(&key).copied()
+    }
+
+    pub fn packages_with_deps(&self, root: PackId) -> Vec<PackId> {
+        let mut stack = vec![root];
+        let mut seen = std::collections::HashSet::new();
+        let mut order = Vec::new();
+        while let Some(pack) = stack.pop() {
+            if !seen.insert(pack) {
+                continue;
+            }
+            order.push(pack);
+            for dep in self.build_sys.depends_on.query(&pack) {
+                stack.push(dep);
+            }
+        }
+        order
+    }
+
+    pub fn find_project_toml(path: impl AsRef<Path>) -> Option<PathBuf> {
+        // TODO: remove this workaround after stablizing how Zydeco projects are managed
+        let mut dir = {
+            let path = path.as_ref();
+            if path.is_dir() { path.to_path_buf() } else { path.parent()?.to_path_buf() }
+        };
+        loop {
+            let candidate = dir.join("proj.toml");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+            if !dir.pop() {
+                break;
+            }
+        }
+        None
     }
 }
 

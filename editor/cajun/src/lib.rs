@@ -14,13 +14,16 @@ use tower_lsp::{
     jsonrpc::Result,
     lsp_types::{notification::Notification, *},
 };
-use zydeco_driver::{BuildSystem, PackId, Package, check::PackageStew, check::pack::PackageScoped};
+use zydeco_driver::{Driver, Package, check::PackageStew, check::pack::PackageScoped};
 use zydeco_surface::scoped::{
     arena::ArenaScoped,
     syntax::{DefId, Term, TermId},
 };
 use zydeco_syntax::SpanView;
-use zydeco_utils::{arena::ArcGlobalAlloc, span::FileInfo};
+use zydeco_utils::{
+    arena::ArcGlobalAlloc,
+    span::{Cursor2, FileInfo},
+};
 
 /// Parsed project information
 /// SAFETY: This is marked as Sync even though Span contains OnceCell.
@@ -30,8 +33,6 @@ struct ProjectState {
     scoped: PackageScoped,
     file_infos: HashMap<PathBuf, FileInfo>,
 }
-
-unsafe impl Sync for ProjectState {}
 
 /// The state and main struct for the Cajun Zydeco Language Server.
 pub struct Cajun {
@@ -60,7 +61,7 @@ impl Cajun {
             open_docs.clone()
         };
 
-        if let Some(proj_toml) = find_project_toml(&path) {
+        if let Some(proj_toml) = Driver::find_project_toml(&path) {
             let proj_toml = normalize_path(&proj_toml);
             let project = self.build_project_state(&proj_toml, &path, &overrides)?;
             let mut projects = self.projects.write().await;
@@ -78,14 +79,17 @@ impl Cajun {
     ) -> std::result::Result<ProjectState, String> {
         let proj_toml = normalize_path(proj_toml);
         let focus_path = normalize_path(focus_path);
-        let mut build_sys = BuildSystem::new();
-        let root_pack =
-            build_sys.add_local_package(&proj_toml).map_err(|e| format!("Build error: {}", e))?;
+        let driver =
+            Driver::setup(vec![proj_toml.clone()]).map_err(|e| format!("Build error: {}", e))?;
+        let build_sys = &driver.build_sys;
+        let root_pack = driver
+            .pack_for_project_path(&proj_toml)
+            .ok_or_else(|| format!("Build error: missing project pack {}", proj_toml.display()))?;
         let root_name = build_sys.packages[&root_pack].name();
 
         let mut stew: Option<PackageStew> = None;
         let mut included = HashSet::new();
-        for pack in collect_packages(&build_sys, root_pack) {
+        for pack in driver.packages_with_deps(root_pack) {
             let Package::Local(local) = &build_sys.packages[&pack] else {
                 continue;
             };
@@ -95,9 +99,8 @@ impl Cajun {
                     continue;
                 }
                 let source = read_source(&path, overrides)?;
-                let part =
-                    Package::parse_source(self.alloc.clone(), source, Some(path.clone()))
-                        .map_err(|e| format!("Parse error: {}", e))?;
+                let part = Package::parse_source(self.alloc.clone(), source, Some(path.clone()))
+                    .map_err(|e| format!("Parse error: {}", e))?;
                 stew = Some(match stew {
                     | Some(s) => s + part,
                     | None => part,
@@ -107,12 +110,8 @@ impl Cajun {
 
         if !included.contains(&focus_path) {
             let source = read_source(&focus_path, overrides)?;
-            let part = Package::parse_source(
-                self.alloc.clone(),
-                source,
-                Some(focus_path.clone()),
-            )
-            .map_err(|e| format!("Parse error: {}", e))?;
+            let part = Package::parse_source(self.alloc.clone(), source, Some(focus_path.clone()))
+                .map_err(|e| format!("Parse error: {}", e))?;
             stew = Some(match stew {
                 | Some(s) => s + part,
                 | None => part,
@@ -133,9 +132,58 @@ impl Cajun {
         &self, file_path: &Path, overrides: &HashMap<PathBuf, String>,
     ) -> std::result::Result<ProjectState, String> {
         let file_path = normalize_path(file_path);
-        let source = read_source(&file_path, overrides)?;
-        let stew = Package::parse_source(self.alloc.clone(), source, Some(file_path.clone()))
-            .map_err(|e| format!("Parse error: {}", e))?;
+        let driver =
+            Driver::setup(vec![file_path.clone()]).map_err(|e| format!("Build error: {}", e))?;
+        let build_sys = &driver.build_sys;
+        let root_pack = build_sys.pick_marked(None).map_err(|e| format!("Build error: {}", e))?;
+        let mut stew: Option<PackageStew> = None;
+        let mut included = HashSet::new();
+        for pack in driver.packages_with_deps(root_pack) {
+            match &build_sys.packages[&pack] {
+                | Package::Local(local) => {
+                    for src in &local.srcs {
+                        let path = normalize_path(&local.path.join(src));
+                        if !included.insert(path.clone()) {
+                            continue;
+                        }
+                        let source = read_source(&path, overrides)?;
+                        let part =
+                            Package::parse_source(self.alloc.clone(), source, Some(path.clone()))
+                                .map_err(|e| format!("Parse error: {}", e))?;
+                        stew = Some(match stew {
+                            | Some(s) => s + part,
+                            | None => part,
+                        });
+                    }
+                }
+                | Package::Binary(path) => {
+                    let path = normalize_path(path);
+                    if !included.insert(path.clone()) {
+                        continue;
+                    }
+                    let source = read_source(&path, overrides)?;
+                    let part =
+                        Package::parse_source(self.alloc.clone(), source, Some(path.clone()))
+                            .map_err(|e| format!("Parse error: {}", e))?;
+                    stew = Some(match stew {
+                        | Some(s) => s + part,
+                        | None => part,
+                    });
+                }
+                | Package::Repl(_) => {}
+            }
+        }
+        if !included.contains(&file_path) {
+            let source = read_source(&file_path, overrides)?;
+            let part = Package::parse_source(self.alloc.clone(), source, Some(file_path.clone()))
+                .map_err(|e| format!("Parse error: {}", e))?;
+            stew = Some(match stew {
+                | Some(s) => s + part,
+                | None => part,
+            });
+        }
+
+        let stew = stew.unwrap_or_else(|| PackageStew::new(self.alloc.clone()));
         let scoped = stew
             .resolve(self.alloc.alloc())
             .map_err(|e| format!("Resolve error: {}", e))?
@@ -151,10 +199,15 @@ impl Cajun {
         // Convert LSP position to byte offset
         let file_path = normalize_path(file_path);
         let source = project.scoped.sources.get(&file_path)?;
-        let offset = position_to_offset(source, line, character)?;
+        let file_info = project.file_infos.get(&file_path)?;
+        let offset = file_info.trans_span1_utf16(
+            source,
+            Cursor2 { line: line as usize, column: character as usize },
+        )?;
 
         // Find the term that contains this offset
         let span_arena_pair = (&project.scoped.spans, &project.scoped.arena);
+        let mut best: Option<(usize, TermId)> = None;
         for (term_id, _) in project.scoped.arena.terms.iter() {
             let span = term_id.span(&span_arena_pair);
             let Some(span_path) = span.get_path() else {
@@ -164,11 +217,61 @@ impl Cajun {
                 continue;
             }
             let (start, end) = span.get_cursor1();
-            if offset >= start && offset < end {
-                return Some(*term_id);
+            if offset < start || offset >= end {
+                continue;
+            }
+            let span_len = end.saturating_sub(start);
+            let replace = match best {
+                | Some((best_len, _)) => span_len < best_len,
+                | None => true,
+            };
+            if replace {
+                best = Some((span_len, *term_id));
             }
         }
-        None
+        best.map(|(_, term_id)| term_id)
+    }
+
+    fn find_var_at_position(
+        &self, project: &ProjectState, file_path: &Path, line: u32, character: u32,
+    ) -> Option<DefId> {
+        // Convert LSP position to byte offset
+        let file_path = normalize_path(file_path);
+        let source = project.scoped.sources.get(&file_path)?;
+        let file_info = project.file_infos.get(&file_path)?;
+        let offset = file_info.trans_span1_utf16(
+            source,
+            Cursor2 { line: line as usize, column: character as usize },
+        )?;
+
+        // Prefer the smallest variable span containing the cursor.
+        let span_arena_pair = (&project.scoped.spans, &project.scoped.arena);
+        let mut best: Option<(usize, DefId)> = None;
+        for (term_id, term) in project.scoped.arena.terms.iter() {
+            let Term::Var(def_id) = term else {
+                continue;
+            };
+            let span = term_id.span(&span_arena_pair);
+            let Some(span_path) = span.get_path() else {
+                continue;
+            };
+            if span_path != &file_path {
+                continue;
+            }
+            let (start, end) = span.get_cursor1();
+            if offset < start || offset >= end {
+                continue;
+            }
+            let span_len = end.saturating_sub(start);
+            let replace = match best {
+                | Some((best_len, _)) => span_len < best_len,
+                | None => true,
+            };
+            if replace {
+                best = Some((span_len, *def_id));
+            }
+        }
+        best.map(|(_, def_id)| def_id)
     }
 
     fn find_def_location(&self, project: &ProjectState, def_id: DefId) -> Option<Location> {
@@ -195,28 +298,6 @@ impl Cajun {
             },
         })
     }
-}
-
-fn position_to_offset(text: &str, line: u32, character: u32) -> Option<usize> {
-    let mut current_line = 0;
-    let mut line_start = 0;
-
-    for (i, c) in text.char_indices() {
-        if current_line == line {
-            // We're on the target line, find the character position
-            let line_text = &text[line_start..];
-            let char_count =
-                line_text.chars().take(character as usize).map(|c| c.len_utf8()).sum::<usize>();
-            return Some(line_start + char_count);
-        }
-        if c == '\n' {
-            current_line += 1;
-            line_start = i + 1;
-        }
-    }
-
-    // Handle end of file
-    if current_line == line { Some(text.len()) } else { None }
 }
 
 #[tower_lsp::async_trait]
@@ -347,30 +428,55 @@ impl LanguageServer for Cajun {
             | Ok(path) => normalize_path(&path),
             | Err(_) => return Ok(None),
         };
-        let project_key = find_project_toml(&path)
+        let project_key = Driver::find_project_toml(&path)
             .map(|proj| normalize_path(&proj))
             .unwrap_or_else(|| path.clone());
-        let projects = self.projects.read().await;
-        let project = match projects.get(&project_key) {
-            | Some(project) => project,
-            | None => return Ok(None),
-        };
-
-        // Find the term at the cursor position
-        let term_id = match self.find_term_at_position(project, &path, position.line, position.character) {
-            | Some(id) => id,
-            | None => return Ok(None),
-        };
-
-        // Get the term and check if it's a variable reference
-        let term = project.scoped.arena.term(&term_id);
-        let def_id = match term {
-            | Term::Var(def_id) => def_id,
-            | _ => return Ok(None),
-        };
-
-        // Find the location of the definition
-        let location = match self.find_def_location(project, def_id) {
+        let mut location = None;
+        let mut missing_project = false;
+        let mut refresh_attempted = false;
+        loop {
+            let found = {
+                let projects = self.projects.read().await;
+                match projects.get(&project_key) {
+                    | Some(project) => {
+                        let def_id = self.find_var_at_position(
+                            project,
+                            &path,
+                            position.line,
+                            position.character,
+                        );
+                        location =
+                            def_id.and_then(|def_id| self.find_def_location(project, def_id));
+                        missing_project = false;
+                        true
+                    }
+                    | None => {
+                        missing_project = true;
+                        false
+                    }
+                }
+            };
+            if found {
+                break;
+            }
+            if refresh_attempted {
+                break;
+            }
+            refresh_attempted = true;
+            if let Err(e) = self.refresh_project_for_uri(&uri).await {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("Failed to refresh project for definition: {}", e),
+                    )
+                    .await;
+                break;
+            }
+        }
+        if missing_project {
+            return Ok(None);
+        }
+        let location = match location {
             | Some(loc) => loc,
             | None => return Ok(None),
         };
@@ -397,30 +503,13 @@ impl LanguageServer for Cajun {
     }
 }
 
-fn collect_packages(build_sys: &BuildSystem, root: PackId) -> Vec<PackId> {
-    let mut stack = vec![root];
-    let mut seen = HashSet::new();
-    let mut order = Vec::new();
-    while let Some(pack) = stack.pop() {
-        if !seen.insert(pack) {
-            continue;
-        }
-        order.push(pack);
-        for dep in build_sys.depends_on.query(&pack) {
-            stack.push(dep);
-        }
-    }
-    order
-}
-
 fn read_source(
     path: &Path, overrides: &HashMap<PathBuf, String>,
 ) -> std::result::Result<String, String> {
     if let Some(text) = overrides.get(path) {
         return Ok(text.clone());
     }
-    std::fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read {}: {}", path.display(), e))
+    std::fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {}", path.display(), e))
 }
 
 fn build_file_infos(scoped: &PackageScoped) -> HashMap<PathBuf, FileInfo> {
@@ -431,20 +520,6 @@ fn build_file_infos(scoped: &PackageScoped) -> HashMap<PathBuf, FileInfo> {
         file_infos.insert(path, info);
     }
     file_infos
-}
-
-fn find_project_toml(path: &Path) -> Option<PathBuf> {
-    let mut dir = if path.is_dir() { path.to_path_buf() } else { path.parent()?.to_path_buf() };
-    loop {
-        let candidate = dir.join("proj.toml");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-        if !dir.pop() {
-            break;
-        }
-    }
-    None
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
