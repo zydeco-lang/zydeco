@@ -18,19 +18,19 @@ pub struct Lowerer<'a> {
     #[as_mut]
     pub arena: StackArena,
     pub spans: &'a SpanArena,
-    pub scoped: &'a ScopedArena,
+    #[as_mut(ScopedArena)]
+    pub scoped: &'a mut ScopedArena,
     pub statics: &'a StaticsArena,
-    pub builtins: BuiltinMap,
 }
 
 impl<'a> Lowerer<'a> {
     /// Create a new lowerer with fresh stack arenas.
     pub fn new(
-        alloc: ArcGlobalAlloc, spans: &'a SpanArena, scoped: &'a ScopedArena,
+        alloc: ArcGlobalAlloc, spans: &'a SpanArena, scoped: &'a mut ScopedArena,
         statics: &'a StaticsArena,
     ) -> Self {
         let arena = StackArena::new_arc(alloc);
-        Self { arena, spans, scoped, statics, builtins: Builtin::all() }
+        Self { arena, spans, scoped, statics }
     }
 
     /// Lower the full program into a stack arena.
@@ -171,16 +171,21 @@ impl Lower for ss::VAliasHead {
                 let fmt = super::fmt::Formatter::new(&lo.arena, lo.scoped, lo.statics);
                 let binder_doc = binder_vpat.pretty(&fmt);
                 let mut binder_str = String::new();
-                binder_doc.render_fmt(80, &mut binder_str).unwrap();
+                binder_doc.render_fmt(usize::MAX, &mut binder_str).unwrap();
                 panic!("VAliasHead binder must be a variable, found:\n{}", binder_str);
             }
         };
         let name = lo.scoped.defs[&def].plain();
-        let Some(builtin) = lo.builtins.get(name.as_str()) else {
+        let Some(builtin) = lo.arena.builtins.get(name.as_str()).cloned() else {
             panic!("Undefined builtin extern:\n{}", name);
         };
-        // Mark as external global
-        lo.arena.externs.insert(def, builtin.clone());
+        // Create the builtin value and store it in globals
+        let value = match builtin.sort {
+            | BuiltinSort::Operator => builtin.make_operator(lo),
+            | BuiltinSort::Function => builtin.make_function(lo),
+        };
+        lo.arena.sequence.push(def);
+        lo.arena.globals.insert(def, value);
     }
 }
 

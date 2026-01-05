@@ -427,7 +427,7 @@ impl BuildSystem {
         let PackageChecked { spans, mut scoped, statics, wf: _ } =
             self.__tyck_pack(pack, alloc.clone(), verbose)?;
         let mut stack =
-            zydeco_stackir::Lowerer::new(alloc.clone(), &spans, &scoped, &statics).run();
+            zydeco_stackir::Lowerer::new(alloc.clone(), &spans, &mut scoped, &statics).run();
         {
             use zydeco_stackir::fmt::*;
             let fmt = Formatter::new(&stack, &scoped, &statics);

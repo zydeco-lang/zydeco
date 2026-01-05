@@ -41,12 +41,12 @@ impl<'a> Lowerer<'a> {
     }
 
     pub fn run(mut self) -> AssemblyArena {
-        // Lower all extern builtins
-        for (def, builtin) in self.stack.externs.iter() {
-            let name = builtin.name;
-            // Make it a symbol
-            SymbolInner::Extern(Extern).build(&mut self, (Some(name.to_owned()), Some(*def)));
-        }
+        // // Lower all extern builtins
+        // for (def, builtin) in self.stack.externs.iter() {
+        //     let name = builtin.name;
+        //     // Make it a symbol
+        //     SymbolInner::Extern(Extern).build(&mut self, (Some(name.to_owned()), Some(*def)));
+        // }
 
         // Box::new(move |lo: &mut Lowerer| {
         //     let name = lo.scoped.defs[&def_id].clone();
@@ -701,7 +701,7 @@ impl Lower for sk::CompuId {
                 // Create the co-case program
                 PopBranch(lowered_arms).build(lo, ())
             }
-            | Compu::ExternCall(sk::ExternCall { function: _, arity: _, stack: sk::Bullet }) => {
+            | Compu::ExternCall(sk::ExternCall { function: _, stack: sk::Bullet }) => {
                 todo!()
             }
         }

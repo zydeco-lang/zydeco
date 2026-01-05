@@ -46,6 +46,7 @@ pub enum Program {
 #[derive(From, Clone, Debug)]
 pub enum Instruction {
     /// Construct a pair. Pop two values off the stack, and push one "pair" value onto the stack.
+    /// Destructed by [`Instruction::UnpackProduct`].
     PackProduct(Pack<ProductMarker>),
     /// Destruct a pair. Pop a "pair" value off the stack, and push two values back onto the stack.
     UnpackProduct(Unpack<ProductMarker>),

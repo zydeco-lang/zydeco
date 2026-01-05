@@ -18,8 +18,8 @@ pub struct StackArena {
     /// computation arena
     pub compus: ArenaSparse<CompuId, Computation>,
 
-    /// external functions
-    pub externs: ArenaAssoc<DefId, Builtin>,
+    /// builtin operators and functions
+    pub builtins: BuiltinMap,
     /// globally defined values
     pub globals: ArenaAssoc<DefId, ValueId>,
     /// the initialization sequence of globals
@@ -41,7 +41,7 @@ impl StackArena {
             values: ArenaSparse::new(alloc.alloc()),
             stacks: ArenaSparse::new(alloc.alloc()),
             compus: ArenaSparse::new(alloc.alloc()),
-            externs: ArenaAssoc::new(),
+            builtins: Builtin::all(),
             globals: ArenaAssoc::new(),
             sequence: Vec::new(),
             entry: ArenaAssoc::new(),

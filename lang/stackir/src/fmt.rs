@@ -132,8 +132,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 RcDoc::text(lit.ugly(&statics_fmt))
             }
             | Value::Complex(Complex { operator, operands }) => {
-                let op_str =
-                    serde_plain::to_string(operator).expect("failed to serialize operator");
                 let ops_doc = RcDoc::concat(
                     operands
                         .iter()
@@ -146,12 +144,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                         )
                         .collect::<Vec<_>>(),
                 );
-                RcDoc::concat([
-                    RcDoc::text(op_str.clone()),
-                    RcDoc::text("("),
-                    ops_doc,
-                    RcDoc::text(")"),
-                ])
+                RcDoc::concat([RcDoc::text(*operator), RcDoc::text("("), ops_doc, RcDoc::text(")")])
             }
         }
     }
@@ -355,8 +348,8 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                     RcDoc::text("end"),
                 ])
             }
-            | Computation::ExternCall(ExternCall { function, arity: _, stack }) => {
-                RcDoc::concat([function.pretty(f), RcDoc::space(), stack.pretty(f)])
+            | Computation::ExternCall(ExternCall { function, stack }) => {
+                RcDoc::concat([RcDoc::text(*function), RcDoc::space(), stack.pretty(f)])
             }
         }
     }
@@ -372,33 +365,21 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Operator {
-    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        let op_str = serde_plain::to_string(self).expect("failed to serialize operator");
-        RcDoc::text(op_str)
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for Function {
-    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        let func_str = serde_plain::to_string(self).expect("failed to serialize function");
-        RcDoc::text(func_str)
-    }
-}
-
 impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let mut doc = RcDoc::nil();
 
-        // Print all externs
-        for (def_id, builtin) in self.externs.iter() {
-            let VarName(varname) = &f.scoped.defs[def_id];
-            doc = doc.append(RcDoc::text(format!(
-                "[extern:{}{}] {}",
-                varname,
-                def_id.concise(),
-                builtin
-            )));
+        // Print all builtins
+        for (name, builtin) in
+            self.builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Operator)
+        {
+            doc = doc.append(RcDoc::text(format!("[operator:{}] {}", name, builtin)));
+            doc = doc.append(RcDoc::line());
+        }
+        for (name, builtin) in
+            self.builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Function)
+        {
+            doc = doc.append(RcDoc::text(format!("[function:{}] {}", name, builtin)));
             doc = doc.append(RcDoc::line());
         }
 
