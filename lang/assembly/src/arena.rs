@@ -64,10 +64,6 @@ where
 pub trait AssemblyArenaMutLike {
     /// Find out if a program is nominated as an individual block, and decide what label to use.
     fn block_name(&mut self, prog: ProgId) -> Option<SymId>;
-    /// Allocate an instruction.
-    fn instr(
-        &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
-    ) -> ProgId;
 }
 
 pub trait Construct<S, T, Arena>: Sized + Into<S> {
@@ -150,6 +146,21 @@ where
     }
 }
 
+impl<U, Arena> Construct<Instruction, ProgId, Arena> for U
+where
+    Arena: AsMut<AssemblyArena>,
+    U: Into<Instruction>,
+{
+    /// The continuation.
+    type Site = Box<dyn FnOnce(&mut Arena) -> ProgId>;
+    fn build(self, arena: &mut Arena, kont: Self::Site) -> ProgId {
+        let instr = self.into();
+        let next = kont(arena);
+        let id = Program::Instruction(instr, next).build(arena, ());
+        id
+    }
+}
+
 impl<T> AssemblyArenaMutLike for T
 where
     T: AsMut<AssemblyArena>,
@@ -168,12 +179,5 @@ where
             }),
         };
         Some(sym)
-    }
-    fn instr(
-        &mut self, instr: impl Into<Instruction>, kont: impl FnOnce(&mut Self) -> ProgId,
-    ) -> ProgId {
-        let next = kont(self);
-        let id = Program::Instruction(instr.into(), next).build(self, ());
-        id
     }
 }

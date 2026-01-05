@@ -4,7 +4,7 @@
 //!   compiled into programs that pushes the value onto the stack.
 //! - All computations and stacks are compiled into programs.
 
-use super::arena::{AssemblyArena, AssemblyArenaMutLike};
+use super::arena::AssemblyArena;
 use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use zydeco_stackir::arena::StackArena;
@@ -90,7 +90,7 @@ impl<'a> Lowerer<'a> {
                             Box::new(move |lo| {
                                 let name = lo.scoped.defs[&def_id].clone();
                                 let var = VarName::from(name).build(lo, Some(def_id));
-                                lo.instr(Pop(var), kont)
+                                Pop(var).build(lo, kont)
                             }),
                         )
                     })
@@ -303,19 +303,19 @@ impl Lower for sk::VPatId {
         match vpat {
             | VPat::Hole(Hole) => {
                 let var = VarName::from("_").build(lo, None);
-                lo.instr(Pop(var), kont)
+                Pop(var).build(lo, kont)
             }
             | VPat::Var(def_id) => {
                 // Pop the value from the stack into the variable
                 let name = lo.scoped.defs[&def_id].clone();
                 let var = VarName::from(name).build(lo, Some(def_id));
-                lo.instr(Pop(var), kont)
+                Pop(var).build(lo, kont)
             }
             | VPat::Ctor(Ctor(ctor, param)) => {
                 let vpat_data = *self;
                 // Unpack the pair value
-                lo.instr(
-                    Unpack(ProductMarker),
+                Unpack(ProductMarker).build(
+                    lo,
                     Box::new(move |lo: &mut Lowerer| {
                         // Compile the remaining pattern
                         let res = param.lower(lo, kont);
@@ -323,8 +323,8 @@ impl Lower for sk::VPatId {
                         let idx = lo.find_ctor_tag_idx_from_vpat(vpat_data, &ctor);
                         let name = ctor.plain().to_string();
                         let tag = Tag { idx, name: Some(name) };
-                        lo.instr(
-                            Push(tag),
+                        Push(tag).build(
+                            lo,
                             Box::new(move |lo: &mut Lowerer| {
                                 // Compare the tag with the constructor
                                 EqJump(res).build(lo, ())
@@ -336,12 +336,12 @@ impl Lower for sk::VPatId {
             | VPat::Triv(Triv) => {
                 // Pop and do nothing
                 let var = VarName::from("_").build(lo, None);
-                lo.instr(Pop(var), kont)
+                Pop(var).build(lo, kont)
             }
             | VPat::VCons(Cons(a, b)) => {
                 // Unpack the pair value from the stack, and then process a and b
-                lo.instr(
-                    Unpack(ProductMarker),
+                Unpack(ProductMarker).build(
+                    lo,
                     Box::new(move |lo: &mut Lowerer| {
                         a.lower(lo, Box::new(move |lo| b.lower(lo, kont)))
                     }),
@@ -370,7 +370,7 @@ impl Lower for sk::ValueId {
                     | DefId::Sym(sym_id) => Atom::Sym(sym_id),
                 };
                 // Push the atom onto the stack
-                lo.instr(Push(atom), kont)
+                Push(atom).build(lo, kont)
             }
             | Value::Closure(sk::Closure { capture, stack: sk::Bullet, body }) => {
                 assert!(capture.iter().count() == 0, "Capture is not empty");
@@ -379,7 +379,7 @@ impl Lower for sk::ValueId {
                 let sym = body.build(lo, (Some(String::from("clo")), None));
                 // Push the atom to the stack
                 let atom = Atom::Sym(sym);
-                lo.instr(Push(atom), kont)
+                Push(atom).build(lo, kont)
             }
             | Value::Ctor(Ctor(ctor, body)) => {
                 // Push the body onto the stack
@@ -391,11 +391,11 @@ impl Lower for sk::ValueId {
                         let idx = lo.find_ctor_tag_idx_from_value(value_data, &ctor);
                         let name = ctor.plain().to_string();
                         let tag = Tag { idx, name: Some(name) };
-                        lo.instr(
-                            Push(tag),
+                        Push(tag).build(
+                            lo,
                             Box::new(move |lo: &mut Lowerer| {
                                 // Pack them into a pair value
-                                lo.instr(Pack(ProductMarker), kont)
+                                Pack(ProductMarker).build(lo, kont)
                             }),
                         )
                     }),
@@ -404,7 +404,7 @@ impl Lower for sk::ValueId {
             | Value::Triv(Triv) => {
                 // Push the trivial value onto the stack
                 let atom = Atom::Sym(Triv.build(lo, (Some(String::from("")), None)));
-                lo.instr(Push(atom), kont)
+                Push(atom).build(lo, kont)
             }
             | Value::VCons(Cons(a, b)) => {
                 // Push b and then a onto the stack
@@ -415,7 +415,7 @@ impl Lower for sk::ValueId {
                             lo,
                             Box::new(move |lo| {
                                 // and then pack the pair value
-                                lo.instr(Pack(ProductMarker), kont)
+                                Pack(ProductMarker).build(lo, kont)
                             }),
                         )
                     }),
@@ -424,7 +424,7 @@ impl Lower for sk::ValueId {
             | Value::Literal(lit) => {
                 // Push the literal value onto the stack
                 let atom = Atom::Sym(lit.build(lo, (Some(String::from("")), None)));
-                lo.instr(Push(atom), kont)
+                Push(atom).build(lo, kont)
             }
             | Value::Complex(sk::Complex { operator, operands }) => {
                 let _ = operator;
@@ -469,11 +469,11 @@ impl Lower for sk::StackId {
                 // Lower the continuation code into a symbol
                 // which is `swap; pop ctx; [[binder]]; [[body]]`
                 // The stack shape: [return value, context]
-                let code = lo.instr(
-                    Swap,
+                let code = Swap.build(
+                    lo,
                     Box::new(move |lo: &mut Lowerer| {
-                        lo.instr(
-                            Pop(ContextMarker),
+                        Pop(ContextMarker).build(
+                            lo,
                             Box::new(move |lo: &mut Lowerer| {
                                 binder.lower(lo, Box::new(move |lo| body.lower(lo, ())))
                             }),
@@ -482,11 +482,11 @@ impl Lower for sk::StackId {
                 );
                 let sym = code.build(lo, (Some(String::from("kont")), None));
                 // Push the context pointer, and then the code
-                lo.instr(
-                    Push(ContextMarker),
+                Push(ContextMarker).build(
+                    lo,
                     Box::new(move |lo: &mut Lowerer| {
-                        lo.instr(
-                            Push(Atom::Sym(sym)),
+                        Push(Atom::Sym(sym)).build(
+                            lo,
                             Box::new(move |lo: &mut Lowerer| {
                                 // Finally, we do the rest
                                 kont(lo)
@@ -519,7 +519,7 @@ impl Lower for sk::StackId {
                         let idx = lo.find_dtor_tag_idx_from_stack(stack_codata, &dtor);
                         let name = dtor.plain().to_string();
                         let tag = Tag { idx, name: Some(name) };
-                        lo.instr(Push(tag), kont)
+                        Push(tag).build(lo, kont)
                     }),
                 )
             }
@@ -631,8 +631,8 @@ impl Lower for sk::CompuId {
                                 }
                             }
                             // Unpack the value
-                            lo.instr(
-                                Unpack(ProductMarker),
+                            Unpack(ProductMarker).build(
+                                lo,
                                 Box::new(move |lo: &mut Lowerer| {
                                     // Jump table
                                     PopBranch(lowered_arms).build(lo, ())
