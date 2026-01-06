@@ -519,25 +519,43 @@ impl<'a> Emit<'a> for Intrinsic {
                 em.asm
                     .text
                     .extend([Instr::Pop(Loc::Reg(Reg::Rax)), Instr::Pop(Loc::Reg(Reg::Rcx))]);
-                let bin_args = BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx));
+                fn emit_ba(op: fn(BinArgs) -> Instr, em: &mut Emitter) {
+                    em.asm.text.push(op(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
+                }
+                fn emit_cc(cc: ConditionCode, em: &mut Emitter) {
+                    em.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(0))));
+                    em.asm.text.push(Instr::SetCC(cc, Reg8::Al));
+                }
                 match *name {
                     | "add" => {
-                        em.asm.text.push(Instr::Add(bin_args));
+                        emit_ba(Instr::Add, em);
                     }
                     | "sub" => {
-                        em.asm.text.push(Instr::Sub(bin_args));
+                        emit_ba(Instr::Sub, em);
                     }
                     | "mul" => {
-                        em.asm.text.push(Instr::IMul(bin_args));
+                        emit_ba(Instr::IMul, em);
                     }
                     | "and" => {
-                        em.asm.text.push(Instr::And(bin_args));
+                        emit_ba(Instr::And, em);
                     }
                     | "or" => {
-                        em.asm.text.push(Instr::Or(bin_args));
+                        emit_ba(Instr::Or, em);
                     }
                     | "xor" => {
-                        em.asm.text.push(Instr::Xor(bin_args));
+                        emit_ba(Instr::Xor, em);
+                    }
+                    | "int_eq" => {
+                        emit_ba(Instr::Cmp, em);
+                        emit_cc(ConditionCode::E, em);
+                    }
+                    | "int_lt" => {
+                        emit_ba(Instr::Cmp, em);
+                        emit_cc(ConditionCode::L, em);
+                    }
+                    | "int_gt" => {
+                        emit_ba(Instr::Cmp, em);
+                        emit_cc(ConditionCode::G, em);
                     }
                     | _ => {
                         unimplemented!("intrinsic {} with arity {} not implemented", name, arity)
