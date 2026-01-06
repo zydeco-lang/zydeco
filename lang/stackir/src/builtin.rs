@@ -35,7 +35,7 @@ impl Builtin {
             Builtin::new("div", 2, Operator),
             Builtin::new("exit", 1, Function),
             Builtin::new("read_line", 1, Function),
-            Builtin::new("write_line", 1, Function),
+            Builtin::new("write_line", 2, Function),
         ]
         .into_iter()
         .map(Self::generate)

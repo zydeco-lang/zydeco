@@ -38,28 +38,12 @@ impl<'a> Lowerer<'a> {
     }
 
     pub fn run(mut self) -> AssemblyArena {
-        // // Lower all extern builtins
-        // for (def, builtin) in self.stack.externs.iter() {
-        //     let name = builtin.name;
-        //     // Make it a symbol
-        //     SymbolInner::Extern(Extern).build(&mut self, (Some(name.to_owned()), Some(*def)));
-        // }
-
-        // Box::new(move |lo: &mut Lowerer| {
-        //     let name = lo.scoped.defs[&def_id].clone();
-        //     // log::trace!(
-        //     //     "lowered extern: {}{} => {}",
-        //     //     name.plain(),
-        //     //     def_id.concise(),
-        //     //     _sym.concise()
-        //     // );
-        //     // let _sym = lo.sym(Some(def_id), name.plain(), Extern);
-        //     // kont(lo)
-        //     // Don't make it a symbol. Instead, just make it a variable.
-        //     let var = VarName::from(name).build(lo, Some(def_id));
-        //     lo.arena.externs.insert(var, ());
-        //     kont(lo)
-        // })
+        // Lower all builtins
+        for (name, builtin) in self.stack.builtins.iter() {
+            if builtin.sort == sk::BuiltinSort::Function {
+                self.arena.externs.push(name);
+            }
+        }
 
         // Lower entry points from StackArena to AssemblyArena
         for (compu_id, ()) in &self.stack.entry {

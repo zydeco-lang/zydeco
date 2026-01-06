@@ -17,7 +17,7 @@ pub struct AssemblyArena {
     /// Programs are (optionally) labeled.
     pub labels: ArenaAssoc<ProgId, SymId>,
     /// Externs that are variables.
-    pub externs: ArenaAssoc<VarId, ()>,
+    pub externs: Vec<&'static str>,
     /// Number of nominations of a program as an individual block.
     /// - If 0 / unexist, the program should be obliviated.
     /// - If 1, the program is inlined.
@@ -35,7 +35,7 @@ impl AssemblyArena {
             symbols: ArenaSparse::new(alloc.alloc()),
             defs: ArenaBijective::new(),
             labels: ArenaAssoc::new(),
-            externs: ArenaAssoc::new(),
+            externs: Vec::new(),
             blocks: ArenaAssoc::new(),
             entry: ArenaAssoc::new(),
         }
