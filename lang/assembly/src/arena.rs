@@ -139,6 +139,7 @@ where
                     nominate(prog_id);
                 }
             }
+            | Program::Extern(Extern { .. }) => {}
             | Program::Panic(Panic) => {}
         }
         let id = this.programs.alloc(program);

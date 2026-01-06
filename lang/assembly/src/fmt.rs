@@ -78,6 +78,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Program {
             | Program::PopJump(pop_jump) => pop_jump.pretty(f),
             | Program::LeapJump(leap_jump) => leap_jump.pretty(f),
             | Program::PopBranch(branch) => branch.pretty(f),
+            | Program::Extern(ext) => ext.pretty(f),
             | Program::Panic(panic) => panic.pretty(f),
         }
     }
@@ -164,6 +165,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
             | Instruction::PushArg(push) => push.pretty(f),
             | Instruction::PopArg(pop) => pop.pretty(f),
             | Instruction::PushTag(push) => push.pretty(f),
+            | Instruction::Intrinsic(builtin) => builtin.pretty(f),
             | Instruction::Swap(swap) => swap.pretty(f),
             | Instruction::Clear(context) => context.pretty(f),
         }
@@ -272,6 +274,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for Label {
     }
 }
 
+impl<'a> Pretty<'a, Formatter<'a>> for Intrinsic {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text(self.name)
+    }
+}
+
 impl<'a> Pretty<'a, Formatter<'a>> for Literal {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         match self {
@@ -284,7 +292,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Literal {
 
 impl<'a> Pretty<'a, Formatter<'a>> for Extern {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text("<extern>")
+        RcDoc::text(format!("<extern:{}/{}>", self.name, self.arity))
     }
 }
 

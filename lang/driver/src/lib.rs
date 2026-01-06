@@ -335,9 +335,9 @@ impl BuildSystem {
     pub fn codegen_x86_pack(&self, pack: PackId, verbose: bool) -> Result<PackageX86> {
         let PackageAssembly { spans, scoped, statics, stack, assembly } =
             self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
-        let instrs = zydeco_x86::Emitter::new(&spans, &scoped, &statics, &stack, &assembly).run();
-        let assembly =
-            instrs.into_iter().map(|instr| instr.to_string()).collect::<Vec<_>>().join("\n");
+        let assembly = zydeco_x86::Emitter::new(&spans, &scoped, &statics, &stack, &assembly)
+            .run()
+            .to_string();
         if verbose {
             println!("{}", &assembly);
         }

@@ -40,6 +40,8 @@ pub enum Program {
     PopBranch(PopBranch),
     /// Panic.
     Panic(Panic),
+    /// Call an external function.
+    Extern(Extern),
 }
 
 /// Stack transformations in ZIR.
@@ -62,6 +64,8 @@ pub enum Instruction {
     /// Push a tag onto the stack.
     /// Destructed by [`PopBranch`].
     PushTag(Push<Tag>),
+    /// Builtin instructions.
+    Intrinsic(Intrinsic),
     /// Swap the top two values on the stack.
     Swap(Swap),
     /// Clear specified variables from the current context.
@@ -145,7 +149,16 @@ pub enum SymbolInner {
 }
 
 #[derive(Clone, Debug)]
-pub struct Extern;
+pub struct Intrinsic {
+    pub name: &'static str,
+    pub arity: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct Extern {
+    pub name: &'static str,
+    pub arity: usize,
+}
 
 /// Contexts are ordered sets of variables.
 pub type Context = zydeco_utils::context::Context<VarId>;

@@ -158,7 +158,6 @@ pub enum Instr {
 
     Label(String),
     Comment(String),
-    Section(String),
     Global(String),
     Extern(String),
 
@@ -173,6 +172,41 @@ pub enum Instr {
 
     // Define data
     Dq(String),
+}
+
+/// Represents a complete x86-64 assembly file organized by ELF sections.
+///
+/// This struct organizes x86 assembly instructions into the standard ELF sections
+/// used by linkers and loaders:
+///
+/// - **`.text`**: Executable code (instructions). This is where all program logic lives.
+/// - **`.data`**: Initialized writable data (global variables with non-zero initial values).
+/// - **`.rodata`**: Read-only data (constants, string literals, jump tables). The linker
+///   places this in a read-only memory segment.
+/// - **`.bss`**: Uninitialized writable data (zero-initialized globals). The linker
+///   reserves space but doesn't store data in the object file.
+///
+/// # x86-64 Context
+///
+/// This abstraction targets x86-64 (64-bit) assembly using Intel syntax.
+/// The instructions in each section are expected to be valid x86-64 instructions
+/// that can be assembled by NASM or compatible assemblers.
+#[derive(Default, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AsmFile {
+    /// Instructions for the `.text` section (executable code).
+    pub text: Vec<Instr>,
+    /// Instructions and data for the `.data` section (initialized writable data).
+    pub data: Vec<Instr>,
+    /// Instructions and data for the `.rodata` section (read-only data).
+    pub rodata: Vec<Instr>,
+    /// Instructions and data for the `.bss` section (uninitialized writable data).
+    pub bss: Vec<Instr>,
+}
+
+impl AsmFile {
+    pub fn new() -> Self {
+        Self { text: Vec::new(), data: Vec::new(), rodata: Vec::new(), bss: Vec::new() }
+    }
 }
 
 impl fmt::Display for ConditionCode {
@@ -418,9 +452,6 @@ impl fmt::Display for Instr {
             | Instr::Comment(s) => {
                 write!(f, ";;; {}", s)
             }
-            | Instr::Section(s) => {
-                write!(f, "section {}", s)
-            }
             | Instr::Global(s) => {
                 write!(f, "        global {}", s)
             }
@@ -449,5 +480,40 @@ impl fmt::Display for Instr {
                 write!(f, "        dq {}", s)
             }
         }
+    }
+}
+
+impl fmt::Display for AsmFile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Emit sections in standard ELF order: .text, .data, .rodata, .bss
+        if !self.text.is_empty() {
+            writeln!(f, "section .text")?;
+            for instr in &self.text {
+                writeln!(f, "{}", instr)?;
+            }
+        }
+
+        if !self.data.is_empty() {
+            writeln!(f, "section .data")?;
+            for instr in &self.data {
+                writeln!(f, "{}", instr)?;
+            }
+        }
+
+        if !self.rodata.is_empty() {
+            writeln!(f, "section .rodata")?;
+            for instr in &self.rodata {
+                writeln!(f, "{}", instr)?;
+            }
+        }
+
+        if !self.bss.is_empty() {
+            writeln!(f, "section .bss")?;
+            for instr in &self.bss {
+                writeln!(f, "{}", instr)?;
+            }
+        }
+
+        Ok(())
     }
 }

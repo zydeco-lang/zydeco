@@ -4,13 +4,10 @@
 //!   compiled into programs that pushes the value onto the stack.
 //! - All computations and stacks are compiled into programs.
 
-use super::arena::AssemblyArena;
-use super::syntax::*;
+use super::{arena::AssemblyArena, syntax::*};
 use derive_more::{AsMut, AsRef};
-use zydeco_stackir::arena::StackArena;
-use zydeco_stackir::syntax as sk;
-use zydeco_statics::tyck::arena::StaticsArena;
-use zydeco_statics::tyck::syntax as ss;
+use zydeco_stackir::{arena::StackArena, syntax as sk};
+use zydeco_statics::tyck::{arena::StaticsArena, syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::arena::ArcGlobalAlloc;
 
@@ -427,30 +424,17 @@ impl Lower for sk::ValueId {
                 Push(atom).build(lo, kont)
             }
             | Value::Complex(sk::Complex { operator, operands }) => {
-                let _ = operator;
-                let _ = operands;
-                // // Lower all operands onto the stack
-                // let mut kont = kont;
-                // for operand in operands.into_iter().rev() {
-                //     kont = Box::new(move |lo: &mut Lowerer| {
-                //         operand.lower(
-                //             lo,
-                //             Box::new(move |lo| {
-                //                 // After lowering the operand, continue with the previous kont
-                //                 kont(lo)
-                //             }),
-                //         )
-                //     });
-                // }
-                // // After all operands are on the stack, perform the operation
-                // lo.instr(
-                //     Operate(operator),
-                //     Box::new(move |lo: &mut Lowerer| {
-                //         // Continue with the original kont
-                //         kont(lo)
-                //     }),
-                // )
-                todo!()
+                // Lower all operands onto the stack
+                let arity = operands.len();
+                let kont: Box<dyn FnOnce(&mut Lowerer) -> ProgId> =
+                    Box::new(move |lo| Intrinsic { name: operator, arity }.build(lo, kont));
+                let kont = operands.into_iter().rev().fold(
+                    kont,
+                    |kont: Box<dyn FnOnce(&mut Lowerer) -> ProgId>, operand: sk::ValueId| {
+                        Box::new(move |lo| operand.lower(lo, kont))
+                    },
+                );
+                kont(lo)
             }
         }
     }
@@ -574,9 +558,9 @@ impl Lower for sk::CompuId {
                     capture.iter().count() == 0,
                     "ZASM requires empty capture. Please perform closure conversion first."
                 );
-                // Label the body code
+                // Label the body code; using trivial value as a placeholder
                 let name = lo.scoped.defs[&param].plain();
-                let sym = Extern.build(lo, (Some(name.to_string()), Some(param)));
+                let sym = Triv.build(lo, (Some(name.to_string()), Some(param)));
                 // Lower the body
                 let body_prog = body.lower(lo, ());
                 // Nominate the body program
@@ -701,8 +685,8 @@ impl Lower for sk::CompuId {
                 // Create the co-case program
                 PopBranch(lowered_arms).build(lo, ())
             }
-            | Compu::ExternCall(sk::ExternCall { function: _, stack: sk::Bullet }) => {
-                todo!()
+            | Compu::ExternCall(sk::ExternCall { function, stack: sk::Bullet }) => {
+                Extern { name: function, arity: 0 }.build(lo, ())
             }
         }
     }

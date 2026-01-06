@@ -131,6 +131,10 @@ impl Eval for Program {
                 let arm = arms.iter().find(|(t, _)| t.idx == tag.idx).unwrap();
                 arm.1.eval(interp)
             }
+            | Program::Extern(Extern { name, arity }) => {
+                log::trace!("extern: {:?}, {:?}", name, arity);
+                todo!()
+            }
             | Program::Panic(Panic) => todo!(),
         }
     }
@@ -185,6 +189,11 @@ impl Eval for Instruction {
                 log::trace!("pushtag: {:?}", tag);
                 interp.runtime.stack.push(Value::Tag(tag));
                 Ok(())
+            }
+            | Instruction::Intrinsic(Intrinsic { name, arity }) => {
+                let _ = name;
+                let _ = arity;
+                todo!()
             }
             | Instruction::Swap(Swap) => {
                 log::trace!("swap");

@@ -2,7 +2,9 @@ use super::syntax::*;
 use derive_more::{Deref, DerefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use zydeco_assembly::arena::{AssemblyArena, AssemblyArenaRefLike};
-use zydeco_assembly::syntax::{self as sa, Atom, Instruction, ProgId, Program, SymbolInner};
+use zydeco_assembly::syntax::{
+    self as sa, Atom, Instruction, Intrinsic, ProgId, Program, SymbolInner,
+};
 use zydeco_stackir::arena::StackArena;
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
@@ -20,7 +22,7 @@ pub struct Emitter<'e> {
     pub stack: &'e StackArena,
     pub assembly: &'e AssemblyArena,
 
-    pub instrs: Vec<Instr>,
+    pub asm: AsmFile,
 
     tables: Vec<JumpTable>,
     visited: HashSet<ProgId>,
@@ -37,16 +39,14 @@ impl<'e> Emitter<'e> {
             statics,
             stack,
             assembly,
-            instrs: Vec::new(),
+            asm: AsmFile::new(),
             tables: Vec::new(),
             visited: HashSet::new(),
         }
     }
 
-    pub fn run(mut self) -> Vec<Instr> {
-        self.instrs.extend([
-            // section .text
-            Instr::Section(".text".to_string()),
+    pub fn run(mut self) -> AsmFile {
+        self.asm.text.extend([
             // zydeco_abort
             Instr::Extern("zydeco_abort".to_string()),
             // zydeco_alloc
@@ -59,7 +59,7 @@ impl<'e> Emitter<'e> {
             let var_name = &self.assembly.variables[var_id];
             mentioned_externs.push(var_id.to_owned());
             let label = format!("zydeco_{}", var_name);
-            self.instrs.push(Instr::Extern(label));
+            self.asm.text.push(Instr::Extern(label));
         }
         // for (_, symbol) in &self.assembly.symbols {
         //     match symbol.inner.clone() {
@@ -73,7 +73,7 @@ impl<'e> Emitter<'e> {
         // }
 
         // Emit rust_call_zydeco functions
-        self.instrs.extend([
+        self.asm.text.extend([
             Instr::Global("rust_call_zydeco_0".to_string()),
             Instr::Label("rust_call_zydeco_0".to_string()),
             Instr::Comment("discard the return address that is not needed".to_string()),
@@ -83,7 +83,7 @@ impl<'e> Emitter<'e> {
             Instr::Comment("call the zydeco function __code__ (which is in rdi)".to_string()),
             Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
         ]);
-        self.instrs.extend([
+        self.asm.text.extend([
             Instr::Global("rust_call_zydeco_1".to_string()),
             Instr::Label("rust_call_zydeco_1".to_string()),
             Instr::Comment("discard the return address that is not needed".to_string()),
@@ -109,7 +109,7 @@ impl<'e> Emitter<'e> {
             };
 
             // emit the wrapper inner
-            self.instrs.extend([
+            self.asm.text.extend([
                 Instr::Label(wrapper_inner_name.clone()),
                 // remove the empty __env__ passed
                 Instr::Pop(Loc::Reg(Reg::Rax)),
@@ -127,26 +127,28 @@ impl<'e> Emitter<'e> {
                         | 6 => Reg::R9,
                         | _ => unreachable!(),
                     };
-                    self.instrs.push(Instr::Pop(Loc::Reg(reg)));
+                    self.asm.text.push(Instr::Pop(Loc::Reg(reg)));
                 } else {
                     // load to stack
                     todo!()
                 }
             }
-            self.instrs.push(Instr::Call(zydeco_extern_name));
+            self.asm.text.push(Instr::Call(zydeco_extern_name));
         }
 
         let mut globals = EnvMap::new();
-        self.instrs.extend([Instr::Global("entry".to_string()), Instr::Label("entry".to_string())]);
+        self.asm
+            .text
+            .extend([Instr::Global("entry".to_string()), Instr::Label("entry".to_string())]);
         // initialize the environment and the heap
-        self.instrs.push(Instr::Comment("initialize environment and heap".to_string()));
-        self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R10, Arg64::Reg(Reg::Rdi))));
-        self.instrs.push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rsi))));
+        self.asm.text.push(Instr::Comment("initialize environment and heap".to_string()));
+        self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R10, Arg64::Reg(Reg::Rdi))));
+        self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rsi))));
         // initialize the externs
         for var_id in mentioned_externs.iter() {
             let extern_name = &self.assembly.variables[var_id];
             let wrapper_inner_name = format!("wrapper_{}", extern_name);
-            self.instrs.extend([
+            self.asm.text.extend([
                 Instr::Label(format!("{}", extern_name)),
                 // alloc 2
                 Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
@@ -165,7 +167,7 @@ impl<'e> Emitter<'e> {
             ]);
             let idx = globals.alloc(*var_id);
             // push the pointer to the environment
-            self.instrs.push(Instr::Mov(MovArgs::ToMem(
+            self.asm.text.push(Instr::Mov(MovArgs::ToMem(
                 MemRef { reg: Reg::R10, offset: 8 * idx },
                 Reg32::Reg(Reg::Rax),
             )));
@@ -180,31 +182,30 @@ impl<'e> Emitter<'e> {
         // Todo: context of blocks should be passed from ZASM
         for (prog_id, _) in &self.assembly.programs {
             if let Some(label) = self.assembly.prog_label(prog_id) {
-                self.instrs.push(Instr::Label(label));
+                self.asm.text.push(Instr::Label(label));
                 prog_id.emit(globals.clone(), &mut self);
             }
         }
 
-        self.instrs.push(Instr::Section(".rodata".to_string()));
         // Emit the jump tables
         for table in &self.tables {
             let label = table.rodata_label();
-            self.instrs.extend([
+            self.asm.rodata.extend([
                 Instr::Comment(format!("jump table for {}", table.id.concise_inner())),
                 Instr::Label(label.clone()),
             ]);
             for (idx, (name, prog_id)) in table.arms.iter().enumerate() {
-                self.instrs.extend([Instr::Comment(format!(
+                self.asm.rodata.extend([Instr::Comment(format!(
                     "arm {} for {}",
                     name.clone().unwrap_or_else(|| format!("#{}", idx)),
                     prog_id.concise()
                 ))]);
                 let arm_label = self.assembly.prog_label(prog_id).expect("block name not found");
-                self.instrs.push(Instr::Dq(arm_label));
+                self.asm.rodata.push(Instr::Dq(arm_label));
             }
         }
 
-        self.instrs
+        self.asm
     }
 }
 
@@ -252,11 +253,11 @@ impl<'a> Emit<'a> for ProgId {
                 match em.assembly.prog_label(target) {
                     | Some(label) => {
                         // if the target is a named block, then jump to the label
-                        em.instrs.push(Instr::Jmp(JmpArgs::Label(label)));
+                        em.asm.text.push(Instr::Jmp(JmpArgs::Label(label)));
                     }
                     | None => {
                         // otherwise, directly emit the target program
-                        em.instrs.push(Instr::Comment(format!(
+                        em.asm.text.push(Instr::Comment(format!(
                             "inlined jump to {}",
                             target.concise_inner()
                         )));
@@ -269,44 +270,45 @@ impl<'a> Emit<'a> for ProgId {
                 // if target is not a named block, we skip it instead
 
                 // first, pop two values
-                em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rax)));
-                em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rcx)));
+                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
+                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rcx)));
                 // then compare
-                em.instrs.push(Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
+                em.asm.text.push(Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
                 match em.assembly.prog_label(target) {
                     | Some(label) => {
                         // then jump to target if equal
-                        em.instrs.push(Instr::JCC(ConditionCode::E, JmpArgs::Label(label)));
+                        em.asm.text.push(Instr::JCC(ConditionCode::E, JmpArgs::Label(label)));
                     }
                     | None => {
                         let label =
                             format!("eq_jump_skip_{}", target.concise_inner().replace('#', "_"));
                         // otherwise, directly emit the target program
-                        em.instrs
+                        em.asm
+                            .text
                             .push(Instr::JCC(ConditionCode::NE, JmpArgs::Label(label.clone())));
                         target.emit(EnvMap::new(), em);
-                        em.instrs.push(Instr::Label(label));
+                        em.asm.text.push(Instr::Label(label));
                     }
                 }
             }
             | Program::PopJump(sa::PopJump) => {
                 // pop value and jump to it
-                em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rax)));
-                em.instrs.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
+                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
+                em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
             }
             | Program::LeapJump(sa::LeapJump) => {
                 // pop value
-                em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rcx)));
+                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rcx)));
                 // pop address
-                em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rax)));
+                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
                 // push the value back
-                em.instrs.push(Instr::Push(Arg32::Reg(Reg::Rcx)));
+                em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rcx)));
                 // jump to the address
-                em.instrs.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
+                em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
             }
             | Program::PopBranch(sa::PopBranch(arms)) => {
                 // pop tag and jump to the corresponding program
-                em.instrs.push(Instr::Pop(Loc::Reg(Reg::Rax)));
+                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
                 // register the jump table
                 let sorted_arms: BTreeMap<_, _> = arms
                     .iter()
@@ -323,13 +325,17 @@ impl<'a> Emit<'a> for ProgId {
                 em.tables.push(table);
                 // emit jump to the jump table arm
                 // jmp     [rel jumptable + rax * 8]
-                em.instrs.push(Instr::Jmp(JmpArgs::RelLabel(RelLabel {
+                em.asm.text.push(Instr::Jmp(JmpArgs::RelLabel(RelLabel {
                     label,
                     offset: Some((Reg::Rax, 8)),
                 })));
             }
+            | Program::Extern(sa::Extern { name, arity }) => {
+                em.asm.text.push(Instr::Comment(format!("extern: {:?}, {:?}", name, arity)));
+                em.asm.text.extend([Instr::Jmp(JmpArgs::Label(format!("zydeco_{}", name)))]);
+            }
             | Program::Panic(_) => {
-                em.instrs.push(Instr::Comment("panic".to_string()));
+                em.asm.text.push(Instr::Comment("panic".to_string()));
                 // TODO: Implement panic
                 todo!()
             }
@@ -343,7 +349,7 @@ impl<'a> Emit<'a> for Instruction {
         match self {
             | Instruction::PackProduct(sa::Pack(sa::ProductMarker)) => {
                 // Pack two values into a pair
-                em.instrs.extend([
+                em.asm.text.extend([
                     Instr::Comment("pack_product".to_string()),
                     Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
                     Instr::Call("zydeco_alloc".to_string()),
@@ -366,7 +372,7 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::UnpackProduct(sa::Unpack(sa::ProductMarker)) => {
                 // Unpack a pair into two values
-                em.instrs.extend([
+                em.asm.text.extend([
                     Instr::Comment("unpack_product".to_string()),
                     Instr::Pop(Loc::Reg(Reg::Rax)),
                     // load [rax + 8] and push
@@ -385,14 +391,14 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::PushContext(sa::Push(sa::ContextMarker)) => {
                 // Push context pointer onto stack
-                em.instrs.extend([
+                em.asm.text.extend([
                     Instr::Comment("push_context".to_string()),
                     Instr::Push(Arg32::Reg(Reg::R10)),
                 ]);
             }
             | Instruction::PopContext(sa::Pop(sa::ContextMarker)) => {
                 // Pop context pointer from stack
-                em.instrs.extend([
+                em.asm.text.extend([
                     Instr::Comment("pop_context".to_string()),
                     Instr::Pop(Loc::Reg(Reg::R10)),
                 ]);
@@ -405,7 +411,7 @@ impl<'a> Emit<'a> for Instruction {
                 // Pop argument from stack into variable
                 let var_name = &em.assembly.variables[&var_id];
                 let idx = env.alloc(*var_id);
-                em.instrs.extend([
+                em.asm.text.extend([
                     Instr::Comment(format!("pop_arg {}{}", var_name.plain(), var_id.concise())),
                     // pop from stack
                     Instr::Pop(Loc::Reg(Reg::Rax)),
@@ -418,15 +424,18 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::PushTag(sa::Push(tag)) => {
                 // Push tag onto stack
-                em.instrs.extend([
+                em.asm.text.extend([
                     Instr::Comment(format!("push_tag {}", tag.idx)),
                     // push tag to stack
                     Instr::Push(Arg32::Signed(tag.idx as i32)),
                 ]);
             }
+            | Instruction::Intrinsic(intrinsic) => {
+                intrinsic.emit((), em);
+            }
             | Instruction::Swap(sa::Swap) => {
                 // Swap the top two values on the stack
-                em.instrs.extend([
+                em.asm.text.extend([
                     Instr::Pop(Loc::Reg(Reg::Rax)),
                     Instr::Pop(Loc::Reg(Reg::Rcx)),
                     Instr::Push(Arg32::Reg(Reg::Rax)),
@@ -435,7 +444,7 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::Clear(_) => {
                 // Clear variables from context
-                em.instrs.push(Instr::Comment("clear".to_string()));
+                em.asm.text.push(Instr::Comment("clear".to_string()));
                 // TODO: Implement context clearing
                 todo!()
             }
@@ -449,7 +458,7 @@ impl<'a> Emit<'a> for Atom {
         match self {
             | Atom::Var(var_id) => {
                 let var_name = &em.assembly.variables[var_id];
-                em.instrs.push(Instr::Comment(format!(
+                em.asm.text.push(Instr::Comment(format!(
                     "push_var {}{}",
                     var_name.plain(),
                     var_id.concise()
@@ -461,7 +470,7 @@ impl<'a> Emit<'a> for Atom {
                 // log::trace!("var: {}{}", var_name.plain(), var_id.concise());
                 let idx = env.get(var_id).expect("variable not found");
                 // load [r10 + 8 * idx] and push
-                em.instrs.extend([
+                em.asm.text.extend([
                     Instr::Mov(MovArgs::ToReg(
                         Reg::Rax,
                         Arg64::Mem(MemRef { reg: Reg::R10, offset: 8 * idx }),
@@ -473,14 +482,14 @@ impl<'a> Emit<'a> for Atom {
                 let symbol = &em.assembly.symbols[sym_id];
                 match symbol.inner.clone() {
                     | SymbolInner::Prog(prog_id) => {
-                        em.instrs.push(Instr::Comment(format!(
+                        em.asm.text.push(Instr::Comment(format!(
                             "push_sym_prog {}{}",
                             symbol.name.clone(),
                             sym_id.concise()
                         )));
                         // push the program id
                         let label = em.assembly.prog_label(&prog_id).expect("block name not found");
-                        em.instrs.extend([
+                        em.asm.text.extend([
                             Instr::Lea(
                                 Reg::Rax,
                                 LeaArgs::RelLabel(RelLabel { label, offset: None }),
@@ -489,9 +498,9 @@ impl<'a> Emit<'a> for Atom {
                         ]);
                     }
                     | SymbolInner::Extern(_) => {
-                        em.instrs.push(Instr::Comment("push_sym_extern".to_string()));
+                        em.asm.text.push(Instr::Comment("push_sym_extern".to_string()));
                         let label = symbol.name.clone();
-                        em.instrs.extend([
+                        em.asm.text.extend([
                             Instr::Lea(
                                 Reg::Rax,
                                 LeaArgs::RelLabel(RelLabel { label, offset: None }),
@@ -500,20 +509,59 @@ impl<'a> Emit<'a> for Atom {
                         ]);
                     }
                     | SymbolInner::Triv(_) => {
-                        em.instrs.push(Instr::Comment("push_sym_triv".to_string()));
-                        em.instrs.extend([Instr::Push(Arg32::Signed(0))]);
+                        em.asm.text.push(Instr::Comment("push_sym_triv".to_string()));
+                        em.asm.text.extend([Instr::Push(Arg32::Signed(0))]);
                     }
                     | SymbolInner::Literal(lit) => {
-                        em.instrs.push(Instr::Comment(format!("push_sym_lit {:?}", lit)));
+                        em.asm.text.push(Instr::Comment(format!("push_sym_lit {:?}", lit)));
                         match lit {
                             | Literal::Int(i) => {
-                                em.instrs.extend([Instr::Push(Arg32::Signed(i as i32))]);
+                                em.asm.text.extend([Instr::Push(Arg32::Signed(i as i32))]);
                             }
                             | _ => todo!(),
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+impl<'a> Emit<'a> for Intrinsic {
+    type Env = ();
+    fn emit(&self, (): Self::Env, em: &mut Emitter) {
+        let Intrinsic { name, arity } = self;
+        match (*name, arity) {
+            | (_, 2) => {
+                em.asm
+                    .text
+                    .extend([Instr::Pop(Loc::Reg(Reg::Rax)), Instr::Pop(Loc::Reg(Reg::Rcx))]);
+                let bin_args = BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx));
+                match *name {
+                    | "add" => {
+                        em.asm.text.push(Instr::Add(bin_args));
+                    }
+                    | "sub" => {
+                        em.asm.text.push(Instr::Sub(bin_args));
+                    }
+                    | "mul" => {
+                        em.asm.text.push(Instr::IMul(bin_args));
+                    }
+                    | "and" => {
+                        em.asm.text.push(Instr::And(bin_args));
+                    }
+                    | "or" => {
+                        em.asm.text.push(Instr::Or(bin_args));
+                    }
+                    | "xor" => {
+                        em.asm.text.push(Instr::Xor(bin_args));
+                    }
+                    | _ => {
+                        unimplemented!("intrinsic {} with arity {} not implemented", name, arity)
+                    }
+                }
+            }
+            | _ => unimplemented!("intrinsic {} with arity {} not implemented", name, arity),
         }
     }
 }

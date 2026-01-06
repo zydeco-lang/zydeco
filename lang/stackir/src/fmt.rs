@@ -132,6 +132,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 RcDoc::text(lit.ugly(&statics_fmt))
             }
             | Value::Complex(Complex { operator, operands }) => {
+                let op_str = format!("<operator:{}>", operator);
                 let ops_doc = RcDoc::concat(
                     operands
                         .iter()
@@ -144,7 +145,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                         )
                         .collect::<Vec<_>>(),
                 );
-                RcDoc::concat([RcDoc::text(*operator), RcDoc::text("("), ops_doc, RcDoc::text(")")])
+                RcDoc::concat([RcDoc::text(op_str), RcDoc::text("("), ops_doc, RcDoc::text(")")])
             }
         }
     }
@@ -349,7 +350,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 ])
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
-                RcDoc::concat([RcDoc::text(*function), RcDoc::space(), stack.pretty(f)])
+                let arity = f.arena.builtins[function].arity;
+                let fun_str = format!("<extern:{}/{}>", function, arity);
+                RcDoc::concat([RcDoc::text(fun_str), RcDoc::space(), stack.pretty(f)])
             }
         }
     }
