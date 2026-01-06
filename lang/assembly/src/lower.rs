@@ -39,9 +39,10 @@ impl<'a> Lowerer<'a> {
 
     pub fn run(mut self) -> AssemblyArena {
         // Lower all builtins
-        for (name, builtin) in self.stack.builtins.iter() {
-            if builtin.sort == sk::BuiltinSort::Function {
-                self.arena.externs.push(name);
+        for (_, builtin) in self.stack.builtins.iter() {
+            let sk::Builtin { name, arity, sort } = builtin.clone();
+            if sort == sk::BuiltinSort::Function {
+                self.arena.externs.push(Extern { name, arity });
             }
         }
 

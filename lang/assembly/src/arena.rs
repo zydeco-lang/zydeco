@@ -17,7 +17,7 @@ pub struct AssemblyArena {
     /// Programs are (optionally) labeled.
     pub labels: ArenaAssoc<ProgId, SymId>,
     /// Externs that are variables.
-    pub externs: Vec<&'static str>,
+    pub externs: Vec<Extern>,
     /// Number of nominations of a program as an individual block.
     /// - If 0 / unexist, the program should be obliviated.
     /// - If 1, the program is inlined.
@@ -59,11 +59,6 @@ where
         let this = self.as_ref();
         this.labels.get(&prog).map(|sym| this.sym_label(sym))
     }
-}
-
-pub trait AssemblyArenaMutLike {
-    /// Find out if a program is nominated as an individual block, and decide what label to use.
-    fn block_name(&mut self, prog: ProgId) -> Option<SymId>;
 }
 
 pub trait Construct<S, T, Arena>: Sized + Into<S> {
@@ -159,26 +154,5 @@ where
         let next = kont(arena);
         let id = Program::Instruction(instr, next).build(arena, ());
         id
-    }
-}
-
-impl<T> AssemblyArenaMutLike for T
-where
-    T: AsMut<AssemblyArena>,
-{
-    fn block_name(&mut self, prog: ProgId) -> Option<SymId> {
-        let this = self.as_mut();
-        let count = *this.blocks.get(&prog)?;
-        if count < 2 {
-            return None;
-        }
-        let sym = match this.labels.get(&prog).cloned() {
-            | Some(sym) => sym,
-            | None => this.symbols.alloc(Symbol {
-                name: format!("block_{}", prog.concise_inner()),
-                inner: SymbolInner::Prog(prog),
-            }),
-        };
-        Some(sym)
     }
 }

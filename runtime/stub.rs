@@ -110,7 +110,7 @@ extern "sysv64" fn zydeco_write_line(line: Box<String>, kont: *mut *mut u8) {
 
 unsafe extern "sysv64" {
     #[link_name = "\x01entry"]
-    fn entry(env: *mut u8, heap: *mut u8) -> i64;
+    fn entry(env: *mut u8) -> i64;
 }
 
 const BUFFER_SIZE: usize = 1024 * 1024;
@@ -146,7 +146,7 @@ fn main() {
             #[cfg(feature = "log_rt")]
             log::trace!("[env_ptr: {:p}, heap_ptr: {:p}]", env_ptr, heap_ptr);
             println!("[env_ptr: {:p}, heap_ptr: {:p}]", env_ptr, heap_ptr);
-            let output = entry(env_ptr, heap_ptr);
+            let output = entry(env_ptr);
             println!("{}", output);
         })
     });

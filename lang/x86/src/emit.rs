@@ -1,14 +1,16 @@
 use super::syntax::*;
 use derive_more::{Deref, DerefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use zydeco_assembly::arena::{AssemblyArena, AssemblyArenaRefLike};
-use zydeco_assembly::syntax::{
-    self as sa, Atom, Instruction, Intrinsic, ProgId, Program, SymbolInner,
+use zydeco_assembly::{
+    arena::{AssemblyArena, AssemblyArenaRefLike},
+    syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, SymbolInner},
 };
 use zydeco_stackir::arena::StackArena;
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
+
+pub const ENV_REG: Reg = Reg::Rbp;
 
 pub trait Emit<'a> {
     type Env;
@@ -54,7 +56,7 @@ impl<'e> Emitter<'e> {
         ]);
 
         // Emit the externs
-        for name in &self.assembly.externs {
+        for sa::Extern { name, .. } in self.assembly.externs.iter() {
             let label = format!("zydeco_{}", name);
             self.asm.text.push(Instr::Extern(label));
         }
@@ -83,81 +85,43 @@ impl<'e> Emitter<'e> {
             Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
         ]);
 
-        // Emit wrappers for externs
-        // for var_id in mentioned_externs.iter() {
-        //     let extern_name = &self.assembly.variables[var_id];
-        //     let zydeco_extern_name = format!("zydeco_{}", extern_name);
-        //     let wrapper_inner_name = format!("wrapper_{}", extern_name);
-        //     let num_args: usize = match extern_name.plain().as_str() {
-        //         | "exit" => 1,
-        //         | "read_line" => 1,
-        //         | "write_line" => 2,
-        //         | _ => todo!("unhandled extern: {}", extern_name),
-        //     };
+        // Emit wrappers for externs that converts from Zydeco calling convention to x86-64 calling convention
+        for sa::Extern { name, arity } in self.assembly.externs.iter() {
+            let zydeco_extern_name = format!("zydeco_{}", name);
+            let wrapper_inner_name = format!("wrapper_{}", name);
+            self.asm.text.push(Instr::Label(wrapper_inner_name.clone()));
+            for i in 1..=*arity {
+                // place the arguments accordingly
+                // using system V AMD64 ABI
+                if i <= 6 {
+                    let reg = match i {
+                        | 1 => Reg::Rdi,
+                        | 2 => Reg::Rsi,
+                        | 3 => Reg::Rdx,
+                        | 4 => Reg::Rcx,
+                        | 5 => Reg::R8,
+                        | 6 => Reg::R9,
+                        | _ => unreachable!(),
+                    };
+                    self.asm.text.push(Instr::Pop(Loc::Reg(reg)));
+                } else {
+                    // load to stack - but it's already on the stack
+                    // we just need to make sure the position is correct
+                    todo!()
+                }
+            }
+            // Todo: a jump or a call? Maybe we should group the externs by
+            // whether it's tail called or not?
+            self.asm.text.push(Instr::Call(zydeco_extern_name));
+        }
 
-        //     // emit the wrapper inner
-        //     self.asm.text.extend([
-        //         Instr::Label(wrapper_inner_name.clone()),
-        //         // remove the empty __env__ passed
-        //         Instr::Pop(Loc::Reg(Reg::Rax)),
-        //     ]);
-        //     for i in 1..=num_args {
-        //         // place the arguments accordingly
-        //         // using system V AMD64 ABI
-        //         if i <= 6 {
-        //             let reg = match i {
-        //                 | 1 => Reg::Rdi,
-        //                 | 2 => Reg::Rsi,
-        //                 | 3 => Reg::Rdx,
-        //                 | 4 => Reg::Rcx,
-        //                 | 5 => Reg::R8,
-        //                 | 6 => Reg::R9,
-        //                 | _ => unreachable!(),
-        //             };
-        //             self.asm.text.push(Instr::Pop(Loc::Reg(reg)));
-        //         } else {
-        //             // load to stack
-        //             todo!()
-        //         }
-        //     }
-        //     self.asm.text.push(Instr::Call(zydeco_extern_name));
-        // }
-
-        self.asm
-            .text
-            .extend([Instr::Global("entry".to_string()), Instr::Label("entry".to_string())]);
-        // initialize the environment and the heap
-        self.asm.text.push(Instr::Comment("initialize environment and heap".to_string()));
-        self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R10, Arg64::Reg(Reg::Rdi))));
-        self.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::R11, Arg64::Reg(Reg::Rsi))));
-        // // initialize the externs
-        // for var_id in mentioned_externs.iter() {
-        //     let extern_name = &self.assembly.variables[var_id];
-        //     let wrapper_inner_name = format!("wrapper_{}", extern_name);
-        //     self.asm.text.extend([
-        //         Instr::Label(format!("{}", extern_name)),
-        //         // alloc 2
-        //         Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
-        //         Instr::Call("zydeco_alloc".to_string()),
-        //         // put __env__ (which is triv, which is 0) into the first slot
-        //         Instr::Mov(MovArgs::ToMem(MemRef { reg: Reg::Rax, offset: 0 }, Reg32::Imm(0))),
-        //         // put __code__ (which is the wrapper_inner_name) into the second slot
-        //         Instr::Lea(
-        //             Reg::Rcx,
-        //             LeaArgs::RelLabel(RelLabel { label: wrapper_inner_name, offset: None }),
-        //         ),
-        //         Instr::Mov(MovArgs::ToMem(
-        //             MemRef { reg: Reg::Rax, offset: 8 },
-        //             Reg32::Reg(Reg::Rcx),
-        //         )),
-        //     ]);
-        //     let idx = globals.alloc(*var_id);
-        //     // push the pointer to the environment
-        //     self.asm.text.push(Instr::Mov(MovArgs::ToMem(
-        //         MemRef { reg: Reg::R10, offset: 8 * idx },
-        //         Reg32::Reg(Reg::Rax),
-        //     )));
-        // }
+        self.asm.text.extend([
+            Instr::Global("entry".to_string()),
+            Instr::Label("entry".to_string()),
+            Instr::Comment("initialize environment".to_string()),
+            // initialize the environment
+            Instr::Mov(MovArgs::ToReg(ENV_REG, Arg64::Reg(Reg::Rdi))),
+        ]);
 
         // Assert that there's only one entry point, and emit it
         assert_eq!(self.assembly.entry.len(), 1, "expected exactly one entry point");
@@ -165,11 +129,13 @@ impl<'e> Emitter<'e> {
         entry.emit(EnvMap::new(), &mut self);
 
         // Emit the named blocks
-        // Todo: context of blocks should be passed from ZASM
         for (prog_id, _) in &self.assembly.programs {
+            // Todo: context of blocks should be passed from ZASM
+            // let context = sa::Context::new();
+            let env = EnvMap::new();
             if let Some(label) = self.assembly.prog_label(prog_id) {
                 self.asm.text.push(Instr::Label(label));
-                prog_id.emit(EnvMap::new(), &mut self);
+                prog_id.emit(env, &mut self);
             }
         }
 
@@ -318,7 +284,7 @@ impl<'a> Emit<'a> for ProgId {
             }
             | Program::Extern(sa::Extern { name, arity }) => {
                 em.asm.text.push(Instr::Comment(format!("extern: {:?}, {:?}", name, arity)));
-                em.asm.text.extend([Instr::Jmp(JmpArgs::Label(format!("zydeco_{}", name)))]);
+                em.asm.text.extend([Instr::Jmp(JmpArgs::Label(format!("wrapper_{}", name)))]);
             }
             | Program::Panic(_) => {
                 em.asm.text.push(Instr::Comment("panic".to_string()));
@@ -379,14 +345,14 @@ impl<'a> Emit<'a> for Instruction {
                 // Push context pointer onto stack
                 em.asm.text.extend([
                     Instr::Comment("push_context".to_string()),
-                    Instr::Push(Arg32::Reg(Reg::R10)),
+                    Instr::Push(Arg32::Reg(ENV_REG)),
                 ]);
             }
             | Instruction::PopContext(sa::Pop(sa::ContextMarker)) => {
                 // Pop context pointer from stack
                 em.asm.text.extend([
                     Instr::Comment("pop_context".to_string()),
-                    Instr::Pop(Loc::Reg(Reg::R10)),
+                    Instr::Pop(Loc::Reg(ENV_REG)),
                 ]);
             }
             | Instruction::PushArg(sa::Push(atom)) => {
@@ -403,7 +369,7 @@ impl<'a> Emit<'a> for Instruction {
                     Instr::Pop(Loc::Reg(Reg::Rax)),
                     // store to [r10 + 8 * idx]
                     Instr::Mov(MovArgs::ToMem(
-                        MemRef { reg: Reg::R10, offset: 8 * idx },
+                        MemRef { reg: ENV_REG, offset: 8 * idx },
                         Reg32::Reg(Reg::Rax),
                     )),
                 ])
@@ -459,7 +425,7 @@ impl<'a> Emit<'a> for Atom {
                 em.asm.text.extend([
                     Instr::Mov(MovArgs::ToReg(
                         Reg::Rax,
-                        Arg64::Mem(MemRef { reg: Reg::R10, offset: 8 * idx }),
+                        Arg64::Mem(MemRef { reg: ENV_REG, offset: 8 * idx }),
                     )),
                     Instr::Push(Arg32::Reg(Reg::Rax)),
                 ]);
