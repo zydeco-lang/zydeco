@@ -102,18 +102,6 @@ pub struct PopBranch(pub Vec<(Tag, ProgId)>);
 pub struct Panic;
 
 #[derive(Clone, Debug)]
-pub struct Label(pub String);
-impl From<&str> for Label {
-    fn from(name: &str) -> Self {
-        Label(name.to_string())
-    }
-}
-impl Label {
-    pub fn plain(&self) -> &str {
-        &self.0
-    }
-}
-#[derive(Clone, Debug)]
 pub struct Tag {
     pub idx: usize,
     pub name: Option<String>,
@@ -124,6 +112,7 @@ pub struct Tag {
 pub enum Atom {
     Var(VarId),
     Sym(SymId),
+    Imm(Imm),
 }
 
 /// Symbols represent statically determined values.
@@ -142,10 +131,19 @@ pub struct Symbol {
 }
 #[derive(From, Clone, Debug)]
 pub enum SymbolInner {
-    Triv(Triv),
+    Undefined(Undefined),
     Prog(ProgId),
-    Extern(Extern),
-    Literal(Literal),
+    String(Vec<char>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Undefined;
+
+#[derive(Clone, Debug)]
+pub enum Imm {
+    Triv(Triv),
+    Int(i64),
+    Char(char),
 }
 
 #[derive(Clone, Debug)]

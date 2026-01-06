@@ -483,32 +483,29 @@ impl<'a> Emit<'a> for Atom {
                             Instr::Push(Arg32::Reg(Reg::Rax)),
                         ]);
                     }
-                    | SymbolInner::Extern(_) => {
-                        em.asm.text.push(Instr::Comment("push_sym_extern".to_string()));
-                        let label = symbol.name.clone();
-                        em.asm.text.extend([
-                            Instr::Lea(
-                                Reg::Rax,
-                                LeaArgs::RelLabel(RelLabel { label, offset: None }),
-                            ),
-                            Instr::Push(Arg32::Reg(Reg::Rax)),
-                        ]);
+                    | SymbolInner::Undefined(sa::Undefined) => {
+                        unreachable!("undefined symbol should never be emitted")
                     }
-                    | SymbolInner::Triv(_) => {
-                        em.asm.text.push(Instr::Comment("push_sym_triv".to_string()));
-                        em.asm.text.extend([Instr::Push(Arg32::Signed(0))]);
-                    }
-                    | SymbolInner::Literal(lit) => {
-                        em.asm.text.push(Instr::Comment(format!("push_sym_lit {:?}", lit)));
-                        match lit {
-                            | Literal::Int(i) => {
-                                em.asm.text.extend([Instr::Push(Arg32::Signed(i as i32))]);
-                            }
-                            | _ => todo!(),
-                        }
+                    | SymbolInner::String(s) => {
+                        em.asm.text.push(Instr::Comment(format!("push_sym_str {:?}", s)));
+                        todo!()
                     }
                 }
             }
+            | Atom::Imm(imm) => match imm.clone() {
+                | sa::Imm::Triv(Triv) => {
+                    em.asm.text.push(Instr::Comment("push_imm_triv".to_string()));
+                    em.asm.text.extend([Instr::Push(Arg32::Signed(0))]);
+                }
+                | sa::Imm::Int(i) => {
+                    em.asm.text.push(Instr::Comment(format!("push_imm_int {:?}", i)));
+                    em.asm.text.extend([Instr::Push(Arg32::Signed(i as i32))]);
+                }
+                | sa::Imm::Char(c) => {
+                    em.asm.text.push(Instr::Comment(format!("push_imm_char {:?}", c)));
+                    em.asm.text.extend([Instr::Push(Arg32::Signed(c as i32))]);
+                }
+            },
         }
     }
 }

@@ -384,7 +384,7 @@ impl Lower for sk::ValueId {
             }
             | Value::Triv(Triv) => {
                 // Push the trivial value onto the stack
-                let atom = Atom::Sym(Triv.build(lo, (Some(String::from("")), None)));
+                let atom = Atom::Imm(Imm::Triv(Triv));
                 Push(atom).build(lo, kont)
             }
             | Value::VCons(Cons(a, b)) => {
@@ -402,9 +402,19 @@ impl Lower for sk::ValueId {
                     }),
                 )
             }
-            | Value::Literal(lit) => {
+            | Value::Literal(Literal::Int(i)) => {
                 // Push the literal value onto the stack
-                let atom = Atom::Sym(lit.build(lo, (Some(String::from("")), None)));
+                let atom = Atom::Imm(Imm::Int(i));
+                Push(atom).build(lo, kont)
+            }
+            | Value::Literal(Literal::Char(c)) => {
+                // Push the literal value onto the stack
+                let atom = Atom::Imm(Imm::Char(c));
+                Push(atom).build(lo, kont)
+            }
+            | Value::Literal(Literal::String(s)) => {
+                // Push the literal value onto the stack
+                let atom = Atom::Sym(s.build(lo, (Some(String::from("")), None)));
                 Push(atom).build(lo, kont)
             }
             | Value::Complex(sk::Complex { operator, operands }) => {
@@ -544,7 +554,7 @@ impl Lower for sk::CompuId {
                 );
                 // Label the body code; using trivial value as a placeholder
                 let name = lo.scoped.defs[&param].plain();
-                let sym = Triv.build(lo, (Some(name.to_string()), Some(param)));
+                let sym = Undefined.build(lo, (Some(name.to_string()), Some(param)));
                 // Lower the body
                 let body_prog = body.lower(lo, ());
                 // Nominate the body program

@@ -242,14 +242,19 @@ impl<'a> Pretty<'a, Formatter<'a>> for Tag {
 impl<'a> Pretty<'a, Formatter<'a>> for SymbolInner {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | SymbolInner::Triv(triv) => triv.pretty(f),
+            | SymbolInner::Undefined(undefined) => undefined.pretty(f),
             | SymbolInner::Prog(prog_id) => {
                 let label = f.arena.prog_label(prog_id).unwrap();
                 RcDoc::text(format!("<label:{}>", label))
             }
-            | SymbolInner::Literal(literal) => literal.pretty(f),
-            | SymbolInner::Extern(ext) => ext.pretty(f),
+            | SymbolInner::String(s) => RcDoc::text(format!("{:?}", s)),
         }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Undefined {
+    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text("<undefined>")
     }
 }
 
@@ -264,13 +269,18 @@ impl<'a> Pretty<'a, Formatter<'a>> for Atom {
         match self {
             | Atom::Var(var) => var.pretty(f),
             | Atom::Sym(sym_id) => sym_id.pretty(f),
+            | Atom::Imm(imm) => imm.pretty(f),
         }
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Label {
-    fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text(self.0.clone())
+impl<'a> Pretty<'a, Formatter<'a>> for Imm {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | Imm::Triv(triv) => triv.pretty(f),
+            | Imm::Int(i) => RcDoc::text(format!("{:?}", i)),
+            | Imm::Char(c) => RcDoc::text(format!("{:?}", c)),
+        }
     }
 }
 
