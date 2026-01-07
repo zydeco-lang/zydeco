@@ -9,11 +9,13 @@ pub struct AssemblyArena {
     /// All variables are named.
     pub variables: ArenaSparse<VarId, VarName>,
     /// All symbols are named.
-    pub symbols: ArenaSparse<SymId, Symbol>,
+    pub symbols: ArenaSparse<SymId, NamedSymbol>,
 
     /// Map from DefId to VarId or SymId
     pub defs: ArenaBijective<sk::DefId, DefId>,
 
+    /// All programs have a context that they depend on.
+    pub contexts: ArenaAssoc<ProgId, Context>,
     /// Programs are (optionally) labeled.
     pub labels: ArenaAssoc<ProgId, SymId>,
     /// Externs that are variables.
@@ -34,6 +36,7 @@ impl AssemblyArena {
             variables: ArenaSparse::new(alloc.alloc()),
             symbols: ArenaSparse::new(alloc.alloc()),
             defs: ArenaBijective::new(),
+            contexts: ArenaAssoc::new(),
             labels: ArenaAssoc::new(),
             externs: Vec::new(),
             blocks: ArenaAssoc::new(),
@@ -82,17 +85,17 @@ where
     }
 }
 
-impl<U, Arena> Construct<SymbolInner, SymId, Arena> for U
+impl<U, Arena> Construct<Symbol, SymId, Arena> for U
 where
     Arena: AsMut<AssemblyArena>,
-    U: Into<SymbolInner>,
+    U: Into<Symbol>,
 {
     type Site = (Option<String>, Option<sk::DefId>);
     fn build(self, arena: &mut Arena, (name, site): Self::Site) -> SymId {
         let this = &mut *arena.as_mut();
-        let symbol = Symbol { name: name.unwrap_or_default(), inner: self.into() };
+        let symbol = NamedSymbol { name: name.unwrap_or_default(), inner: self.into() };
         let is_prog = match symbol.inner {
-            | SymbolInner::Prog(prog_id) => Some(prog_id),
+            | Symbol::Prog(prog_id) => Some(prog_id),
             | _ => None,
         };
         let id = this.symbols.alloc(symbol);

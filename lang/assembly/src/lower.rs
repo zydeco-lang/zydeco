@@ -296,7 +296,7 @@ impl Lower for sk::VPatId {
             | VPat::Ctor(Ctor(ctor, param)) => {
                 let _ = ctor;
                 let _ = param;
-                unreachable!("Ctor patterns should not directly appear in stack IR");
+                unreachable!("Ctor patterns should not directly appear in ZASM");
                 // let vpat_data = *self;
                 // // Unpack the pair value
                 // Unpack(ProductMarker).build(
@@ -565,7 +565,7 @@ impl Lower for sk::CompuId {
                 *lo.arena.blocks.entry(body_prog).or_insert(0) += 2;
                 lo.arena.symbols.replace(
                     sym,
-                    Symbol { name: name.to_string(), inner: SymbolInner::Prog(body_prog) },
+                    NamedSymbol { name: name.to_string(), inner: Symbol::Prog(body_prog) },
                 );
                 lo.arena.labels.insert(body_prog, sym);
                 // Jump to the body

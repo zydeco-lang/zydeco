@@ -3,7 +3,7 @@ use derive_more::{Deref, DerefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike},
-    syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, SymbolInner},
+    syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol},
 };
 use zydeco_stackir::arena::StackArena;
 use zydeco_statics::tyck::arena::StaticsArena;
@@ -421,7 +421,7 @@ impl<'a> Emit<'a> for Atom {
             | Atom::Sym(sym_id) => {
                 let symbol = &em.assembly.symbols[sym_id];
                 match symbol.inner.clone() {
-                    | SymbolInner::Prog(prog_id) => {
+                    | Symbol::Prog(prog_id) => {
                         em.asm.text.push(Instr::Comment(format!(
                             "push_sym_prog {}{}",
                             symbol.name.clone(),
@@ -437,10 +437,10 @@ impl<'a> Emit<'a> for Atom {
                             Instr::Push(Arg32::Reg(Reg::Rax)),
                         ]);
                     }
-                    | SymbolInner::Undefined(sa::Undefined) => {
+                    | Symbol::Undefined(sa::Undefined) => {
                         unreachable!("undefined symbol should never be emitted")
                     }
-                    | SymbolInner::String(s) => {
+                    | Symbol::StringLiteral(s) => {
                         em.asm.text.push(Instr::Comment(format!("push_sym_str {:?}", s)));
                         todo!()
                     }

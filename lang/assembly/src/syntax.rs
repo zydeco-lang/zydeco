@@ -119,15 +119,15 @@ pub enum Atom {
 ///
 /// Symbols are guaranteed to be evaluated and generated at compile time.
 #[derive(Clone, Debug)]
-pub struct Symbol {
+pub struct NamedSymbol {
     pub name: String,
-    pub inner: SymbolInner,
+    pub inner: Symbol,
 }
 #[derive(From, Clone, Debug)]
-pub enum SymbolInner {
+pub enum Symbol {
     Undefined(Undefined),
     Prog(ProgId),
-    String(Vec<char>),
+    StringLiteral(Vec<char>),
 }
 
 #[derive(Clone, Debug)]

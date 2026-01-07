@@ -27,7 +27,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
                 .append(RcDoc::text(format!("[sym:{}{}]", sym.name, sym_id.concise(),)))
                 .append(RcDoc::space())
                 .append(sym.inner.pretty(f));
-            if let SymbolInner::Prog(prog_id) = sym.inner {
+            if let Symbol::Prog(prog_id) = sym.inner {
                 doc = doc.append(RcDoc::concat([RcDoc::line(), prog_id.pretty(f)]).nest(f.indent));
             }
             doc = doc.append(RcDoc::line());
@@ -232,15 +232,15 @@ impl<'a> Pretty<'a, Formatter<'a>> for Tag {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for SymbolInner {
+impl<'a> Pretty<'a, Formatter<'a>> for Symbol {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | SymbolInner::Undefined(undefined) => undefined.pretty(f),
-            | SymbolInner::Prog(prog_id) => {
+            | Symbol::Undefined(undefined) => undefined.pretty(f),
+            | Symbol::Prog(prog_id) => {
                 let label = f.arena.prog_label(prog_id).unwrap();
                 RcDoc::text(format!("<label:{}>", label))
             }
-            | SymbolInner::String(s) => RcDoc::text(format!("{:?}", s)),
+            | Symbol::StringLiteral(s) => RcDoc::text(format!("{:?}", s)),
         }
     }
 }

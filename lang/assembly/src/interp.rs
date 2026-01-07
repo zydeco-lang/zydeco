@@ -91,7 +91,7 @@ impl Eval for Program {
                     Err(Error::TypeError(format!("expected symbol, got {:?}", value)))?
                 };
                 let symbol = interp.arena.symbols[&sym].clone();
-                let SymbolInner::Prog(prog) = symbol.inner else {
+                let Symbol::Prog(prog) = symbol.inner else {
                     Err(Error::TypeError(format!("expected program, got {:?}", symbol.inner)))?
                 };
                 prog.eval(interp)
@@ -105,7 +105,7 @@ impl Eval for Program {
                     Err(Error::TypeError(format!("expected symbol, got {:?}", address)))?
                 };
                 let symbol = interp.arena.symbols[&sym].clone();
-                let SymbolInner::Prog(prog) = symbol.inner else {
+                let Symbol::Prog(prog) = symbol.inner else {
                     Err(Error::TypeError(format!("expected program, got {:?}", symbol.inner)))?
                 };
                 prog.eval(interp)
