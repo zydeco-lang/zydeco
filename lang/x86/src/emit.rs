@@ -3,7 +3,7 @@ use derive_more::{Deref, DerefMut};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike},
-    syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol},
+    syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
 use zydeco_stackir::arena::StackArena;
 use zydeco_statics::tyck::arena::StaticsArena;
@@ -197,11 +197,20 @@ impl<'a> Emit<'a> for ProgId {
 
         // Emit the program
         match &em.assembly.programs[self] {
+            | Program::Terminator(terminator) => terminator.emit((*self, &env), em),
             | Program::Instruction(instr, next) => {
                 instr.emit(&mut env, em);
                 next.emit(env, em);
             }
-            | Program::Jump(sa::Jump(target)) => {
+        }
+    }
+}
+
+impl<'a> Emit<'a> for Terminator {
+    type Env = (ProgId, &'a EnvMap);
+    fn emit(&self, (id, _env): Self::Env, em: &mut Emitter) {
+        match self {
+            | Terminator::Jump(sa::Jump(target)) => {
                 match em.assembly.prog_label(target) {
                     | Some(label) => {
                         // if the target is a named block, then jump to the label
@@ -217,12 +226,12 @@ impl<'a> Emit<'a> for ProgId {
                     }
                 }
             }
-            | Program::PopJump(sa::PopJump) => {
+            | Terminator::PopJump(sa::PopJump) => {
                 // pop value and jump to it
                 em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
                 em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
             }
-            | Program::LeapJump(sa::LeapJump) => {
+            | Terminator::LeapJump(sa::LeapJump) => {
                 // pop value
                 em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rcx)));
                 // pop address
@@ -232,7 +241,7 @@ impl<'a> Emit<'a> for ProgId {
                 // jump to the address
                 em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
             }
-            | Program::PopBranch(sa::PopBranch(arms)) => {
+            | Terminator::PopBranch(sa::PopBranch(arms)) => {
                 // pop tag and jump to the corresponding program
                 em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
                 // register the jump table
@@ -241,7 +250,7 @@ impl<'a> Emit<'a> for ProgId {
                     .map(|(sa::Tag { idx, name }, prog_id)| (idx, (name, prog_id)))
                     .collect();
                 let table = JumpTable {
-                    id: *self,
+                    id,
                     arms: sorted_arms
                         .into_iter()
                         .map(|(_, (name, prog_id))| (name.clone(), prog_id.clone()))
@@ -256,11 +265,11 @@ impl<'a> Emit<'a> for ProgId {
                     offset: Some((Reg::Rax, 8)),
                 })));
             }
-            | Program::Extern(sa::Extern { name, arity }) => {
+            | Terminator::Extern(sa::Extern { name, arity }) => {
                 em.asm.text.push(Instr::Comment(format!("extern: {:?}, {:?}", name, arity)));
                 em.asm.text.extend([Instr::Jmp(JmpArgs::Label(format!("wrapper_{}", name)))]);
             }
-            | Program::Panic(_) => {
+            | Terminator::Panic(_) => {
                 em.asm.text.push(Instr::Comment("panic".to_string()));
                 // TODO: Implement panic
                 todo!()

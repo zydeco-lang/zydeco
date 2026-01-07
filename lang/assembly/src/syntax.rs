@@ -25,7 +25,13 @@ pub enum DefId {
 /// Computations in ZIR are programs in ZASM.
 #[derive(From, Clone, Debug)]
 pub enum Program {
+    Terminator(Terminator),
     Instruction(Instruction, ProgId),
+}
+
+/// Terminator programs are programs that can be used as the last program in a block.
+#[derive(From, Clone, Debug)]
+pub enum Terminator {
     /// Unconditional jump to a program.
     Jump(Jump),
     /// Pop the top value (an address) off the stack, and dynamically jump to it.

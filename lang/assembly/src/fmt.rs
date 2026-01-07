@@ -73,12 +73,20 @@ impl<'a> Pretty<'a, Formatter<'a>> for Program {
             | Program::Instruction(instr, next) => {
                 RcDoc::concat([instr.pretty(f), RcDoc::text(";"), RcDoc::line(), next.pretty(f)])
             }
-            | Program::Jump(jump) => jump.pretty(f),
-            | Program::PopJump(pop_jump) => pop_jump.pretty(f),
-            | Program::LeapJump(leap_jump) => leap_jump.pretty(f),
-            | Program::PopBranch(branch) => branch.pretty(f),
-            | Program::Extern(ext) => ext.pretty(f),
-            | Program::Panic(panic) => panic.pretty(f),
+            | Program::Terminator(t) => t.pretty(f),
+        }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Terminator {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | Terminator::Jump(jump) => jump.pretty(f),
+            | Terminator::PopJump(pop_jump) => pop_jump.pretty(f),
+            | Terminator::LeapJump(leap_jump) => leap_jump.pretty(f),
+            | Terminator::PopBranch(branch) => branch.pretty(f),
+            | Terminator::Extern(ext) => ext.pretty(f),
+            | Terminator::Panic(panic) => panic.pretty(f),
         }
     }
 }

@@ -128,18 +128,34 @@ where
         };
         match &program {
             | Program::Instruction(_, prog_id) => nominate(prog_id),
-            | Program::Jump(Jump(prog_id)) => nominate(prog_id),
-            | Program::PopJump(PopJump) => {}
-            | Program::LeapJump(LeapJump) => {}
-            | Program::PopBranch(PopBranch(brs)) => {
-                for (_, prog_id) in brs {
-                    nominate(prog_id);
+            | Program::Terminator(t) => match t {
+                | Terminator::Jump(Jump(prog_id)) => nominate(prog_id),
+                | Terminator::PopJump(PopJump) => {}
+                | Terminator::LeapJump(LeapJump) => {}
+                | Terminator::PopBranch(PopBranch(brs)) => {
+                    for (_, prog_id) in brs {
+                        nominate(prog_id);
+                    }
                 }
-            }
-            | Program::Extern(Extern { .. }) => {}
-            | Program::Panic(Panic) => {}
+                | Terminator::Extern(Extern { .. }) => {}
+                | Terminator::Panic(Panic) => {}
+            },
         }
         let id = this.programs.alloc(program);
+        id
+    }
+}
+
+impl<U, Arena> Construct<Terminator, ProgId, Arena> for U
+where
+    Arena: AsMut<AssemblyArena>,
+    U: Into<Terminator>,
+{
+    type Site = ();
+    fn build(self, arena: &mut Arena, (): Self::Site) -> ProgId {
+        let this = &mut *arena.as_mut();
+        let terminator = self.into();
+        let id = this.programs.alloc(Program::Terminator(terminator));
         id
     }
 }

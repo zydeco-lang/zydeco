@@ -76,15 +76,24 @@ impl Eval for Program {
     type Output = Output;
     fn eval(self, interp: &mut Interpreter) -> Result<Self::Output, Error> {
         match self {
+            | Program::Terminator(terminator) => terminator.eval(interp),
             | Program::Instruction(instr, next) => {
                 let () = instr.eval(interp)?;
                 next.eval(interp)
             }
-            | Program::Jump(Jump(prog)) => {
+        }
+    }
+}
+
+impl Eval for Terminator {
+    type Output = Output;
+    fn eval(self, interp: &mut Interpreter) -> Result<Self::Output, Error> {
+        match self {
+            | Terminator::Jump(Jump(prog)) => {
                 log::trace!("jump: {:?}", prog);
                 prog.eval(interp)
             }
-            | Program::PopJump(PopJump) => {
+            | Terminator::PopJump(PopJump) => {
                 log::trace!("popjump");
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Atom(Atom::Sym(sym)) = value else {
@@ -96,7 +105,7 @@ impl Eval for Program {
                 };
                 prog.eval(interp)
             }
-            | Program::LeapJump(LeapJump) => {
+            | Terminator::LeapJump(LeapJump) => {
                 log::trace!("leapjmp");
                 let kept = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let address = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
@@ -110,7 +119,7 @@ impl Eval for Program {
                 };
                 prog.eval(interp)
             }
-            | Program::PopBranch(PopBranch(arms)) => {
+            | Terminator::PopBranch(PopBranch(arms)) => {
                 log::trace!("popbranch");
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Tag(tag) = value else {
@@ -119,11 +128,11 @@ impl Eval for Program {
                 let arm = arms.iter().find(|(t, _)| t.idx == tag.idx).unwrap();
                 arm.1.eval(interp)
             }
-            | Program::Extern(Extern { name, arity }) => {
+            | Terminator::Extern(Extern { name, arity }) => {
                 log::trace!("extern: {:?}, {:?}", name, arity);
                 todo!()
             }
-            | Program::Panic(Panic) => todo!(),
+            | Terminator::Panic(Panic) => todo!(),
         }
     }
 }
