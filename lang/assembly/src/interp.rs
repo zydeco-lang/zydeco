@@ -84,18 +84,6 @@ impl Eval for Program {
                 log::trace!("jump: {:?}", prog);
                 prog.eval(interp)
             }
-            | Program::EqJump(EqJump(prog)) => {
-                log::trace!("eqjump: {:?}", prog);
-                let a = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                let Value::Tag(a) = a else {
-                    Err(Error::TypeError(format!("expected tag, got {:?}", a)))?
-                };
-                let b = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                let Value::Tag(b) = b else {
-                    Err(Error::TypeError(format!("expected tag, got {:?}", b)))?
-                };
-                if a.idx == b.idx { prog.eval(interp) } else { todo!() }
-            }
             | Program::PopJump(PopJump) => {
                 log::trace!("popjump");
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;

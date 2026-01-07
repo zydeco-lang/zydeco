@@ -28,10 +28,6 @@ pub enum Program {
     Instruction(Instruction, ProgId),
     /// Unconditional jump to a program.
     Jump(Jump),
-    /// Pop two values off the stack, compare them, and
-    /// jump to the target program if they are equal.
-    /// The only intended use case is for tag comparisons.
-    EqJump(EqJump),
     /// Pop the top value (an address) off the stack, and dynamically jump to it.
     PopJump(PopJump),
     /// Pop-jump the second value off the stack, keeping the first value at the top.
@@ -90,8 +86,6 @@ pub struct ContextMarker;
 
 #[derive(Clone, Debug)]
 pub struct Jump(pub ProgId);
-#[derive(Clone, Debug)]
-pub struct EqJump(pub ProgId);
 #[derive(Clone, Debug)]
 pub struct PopJump;
 #[derive(Clone, Debug)]

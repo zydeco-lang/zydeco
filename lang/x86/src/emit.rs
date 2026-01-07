@@ -217,32 +217,6 @@ impl<'a> Emit<'a> for ProgId {
                     }
                 }
             }
-            | Program::EqJump(sa::EqJump(target)) => {
-                // pop two values, compare, and jump to target if equal
-                // if target is not a named block, we skip it instead
-
-                // first, pop two values
-                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
-                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rcx)));
-                // then compare
-                em.asm.text.push(Instr::Cmp(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
-                match em.assembly.prog_label(target) {
-                    | Some(label) => {
-                        // then jump to target if equal
-                        em.asm.text.push(Instr::JCC(ConditionCode::E, JmpArgs::Label(label)));
-                    }
-                    | None => {
-                        let label =
-                            format!("eq_jump_skip_{}", target.concise_inner().replace('#', "_"));
-                        // otherwise, directly emit the target program
-                        em.asm
-                            .text
-                            .push(Instr::JCC(ConditionCode::NE, JmpArgs::Label(label.clone())));
-                        target.emit(EnvMap::new(), em);
-                        em.asm.text.push(Instr::Label(label));
-                    }
-                }
-            }
             | Program::PopJump(sa::PopJump) => {
                 // pop value and jump to it
                 em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
@@ -367,7 +341,7 @@ impl<'a> Emit<'a> for Instruction {
                     Instr::Comment(format!("pop_arg {}{}", var_name.plain(), var_id.concise())),
                     // pop from stack
                     Instr::Pop(Loc::Reg(Reg::Rax)),
-                    // store to [r10 + 8 * idx]
+                    // store to [rbp + 8 * idx]
                     Instr::Mov(MovArgs::ToMem(
                         MemRef { reg: ENV_REG, offset: 8 * idx },
                         Reg32::Reg(Reg::Rax),
@@ -415,13 +389,27 @@ impl<'a> Emit<'a> for Atom {
                     var_name.plain(),
                     var_id.concise()
                 )));
+                // log::trace!("varmap: {{ {} }}", {
+                //     env.0
+                //         .iter()
+                //         .map(|(var_id, idx)| {
+                //             format!(
+                //                 "{}{}={}",
+                //                 em.assembly.variables[var_id].plain(),
+                //                 var_id.concise(),
+                //                 idx
+                //             )
+                //         })
+                //         .collect::<Vec<_>>()
+                //         .join(", ")
+                // });
                 // log::trace!("instrs:");
-                // for instr in em.instrs.iter() {
+                // for instr in em.asm.text.iter() {
                 //     log::trace!("\t{}", instr);
                 // }
                 // log::trace!("var: {}{}", var_name.plain(), var_id.concise());
                 let idx = env.get(var_id).expect("variable not found");
-                // load [r10 + 8 * idx] and push
+                // load [rbp + 8 * idx] and push
                 em.asm.text.extend([
                     Instr::Mov(MovArgs::ToReg(
                         Reg::Rax,

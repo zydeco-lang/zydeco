@@ -74,7 +74,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for Program {
                 RcDoc::concat([instr.pretty(f), RcDoc::text(";"), RcDoc::line(), next.pretty(f)])
             }
             | Program::Jump(jump) => jump.pretty(f),
-            | Program::EqJump(eq_jump) => eq_jump.pretty(f),
             | Program::PopJump(pop_jump) => pop_jump.pretty(f),
             | Program::LeapJump(leap_jump) => leap_jump.pretty(f),
             | Program::PopBranch(branch) => branch.pretty(f),
@@ -91,12 +90,6 @@ impl<'a> Pretty<'a, Formatter<'a>> for Jump {
             RcDoc::space(),
             RcDoc::text(f.arena.prog_label(&self.0).unwrap_or_else(|| self.0.concise())),
         ])
-    }
-}
-
-impl<'a> Pretty<'a, Formatter<'a>> for EqJump {
-    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::concat([RcDoc::text("eqjmp"), RcDoc::space(), self.0.pretty(f)])
     }
 }
 

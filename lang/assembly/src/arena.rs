@@ -126,7 +126,6 @@ where
         match &program {
             | Program::Instruction(_, prog_id) => nominate(prog_id),
             | Program::Jump(Jump(prog_id)) => nominate(prog_id),
-            | Program::EqJump(EqJump(prog_id)) => nominate(prog_id),
             | Program::PopJump(PopJump) => {}
             | Program::LeapJump(LeapJump) => {}
             | Program::PopBranch(PopBranch(brs)) => {

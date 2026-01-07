@@ -169,20 +169,20 @@ impl<'a> Lowerer<'a> {
         self.find_ctor_tag_idx(ty, ctor_name)
     }
 
-    /// Find the constructor tag index in a data type, given a stack value pattern
-    fn find_ctor_tag_idx_from_vpat(
-        &self, vpat_id: sk::VPatId, ctor_name: &zydeco_syntax::CtorName,
-    ) -> usize {
-        // Get the corresponding statics pattern
-        let ss::PatId::Value(vpat) =
-            self.stack.pats.back(&vpat_id).expect("Constructor pattern not found")
-        else {
-            unreachable!("Constructor is not a value pattern in statics")
-        };
-        // Get the type annotation
-        let ty = self.statics.annotations_vpat[&vpat].clone();
-        self.find_ctor_tag_idx(ty, ctor_name)
-    }
+    // /// Find the constructor tag index in a data type, given a stack value pattern
+    // fn find_ctor_tag_idx_from_vpat(
+    //     &self, vpat_id: sk::VPatId, ctor_name: &zydeco_syntax::CtorName,
+    // ) -> usize {
+    //     // Get the corresponding statics pattern
+    //     let ss::PatId::Value(vpat) =
+    //         self.stack.pats.back(&vpat_id).expect("Constructor pattern not found")
+    //     else {
+    //         unreachable!("Constructor is not a value pattern in statics")
+    //     };
+    //     // Get the type annotation
+    //     let ty = self.statics.annotations_vpat[&vpat].clone();
+    //     self.find_ctor_tag_idx(ty, ctor_name)
+    // }
 
     /// Get the codata type from a computation's type annotation
     fn find_dtor_tag_idx(&self, compu: ss::CompuId, dtor_name: &zydeco_syntax::DtorName) -> usize {
@@ -294,26 +294,29 @@ impl Lower for sk::VPatId {
                 Pop(var).build(lo, kont)
             }
             | VPat::Ctor(Ctor(ctor, param)) => {
-                let vpat_data = *self;
-                // Unpack the pair value
-                Unpack(ProductMarker).build(
-                    lo,
-                    Box::new(move |lo: &mut Lowerer| {
-                        // Compile the remaining pattern
-                        let res = param.lower(lo, kont);
-                        // Push a tag and see if the constructor is the same
-                        let idx = lo.find_ctor_tag_idx_from_vpat(vpat_data, &ctor);
-                        let name = ctor.plain().to_string();
-                        let tag = Tag { idx, name: Some(name) };
-                        Push(tag).build(
-                            lo,
-                            Box::new(move |lo: &mut Lowerer| {
-                                // Compare the tag with the constructor
-                                EqJump(res).build(lo, ())
-                            }),
-                        )
-                    }),
-                )
+                let _ = ctor;
+                let _ = param;
+                unreachable!("Ctor patterns should not directly appear in stack IR");
+                // let vpat_data = *self;
+                // // Unpack the pair value
+                // Unpack(ProductMarker).build(
+                //     lo,
+                //     Box::new(move |lo: &mut Lowerer| {
+                //         // Compile the remaining pattern
+                //         let res = param.lower(lo, kont);
+                //         // Push a tag and see if the constructor is the same
+                //         let idx = lo.find_ctor_tag_idx_from_vpat(vpat_data, &ctor);
+                //         let name = ctor.plain().to_string();
+                //         let tag = Tag { idx, name: Some(name) };
+                //         Push(tag).build(
+                //             lo,
+                //             Box::new(move |lo: &mut Lowerer| {
+                //                 // Compare the tag with the constructor
+                //                 EqJump(res).build(lo, ())
+                //             }),
+                //         )
+                //     }),
+                // )
             }
             | VPat::Triv(Triv) => {
                 // Pop and do nothing
