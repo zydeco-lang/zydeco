@@ -1,6 +1,7 @@
 use super::syntax::*;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_stackir::syntax as sk;
+use zydeco_utils::with::With;
 
 #[derive(AsRefSelf, AsMutSelf)]
 pub struct AssemblyArena {
@@ -64,18 +65,18 @@ where
     }
 }
 
-pub trait Construct<S, T, Arena>: Sized + Into<S> {
+pub trait Construct<'a, S, T, Arena>: Sized + Into<S> {
     type Site;
-    fn build(self, arena: &mut Arena, site: Self::Site) -> T;
+    fn build<'f: 'a>(self, arena: &'f mut Arena, site: Self::Site) -> T;
 }
 
-impl<U, Arena> Construct<VarName, VarId, Arena> for U
+impl<'a, U, Arena> Construct<'a, VarName, VarId, Arena> for U
 where
     Arena: AsMut<AssemblyArena>,
     U: Into<VarName>,
 {
     type Site = Option<sk::DefId>;
-    fn build(self, arena: &mut Arena, site: Self::Site) -> VarId {
+    fn build<'f: 'a>(self, arena: &'f mut Arena, site: Self::Site) -> VarId {
         let this = &mut *arena.as_mut();
         let id = this.variables.alloc(self.into());
         if let Some(site) = site {
@@ -85,13 +86,13 @@ where
     }
 }
 
-impl<U, Arena> Construct<Symbol, SymId, Arena> for U
+impl<'a, U, Arena> Construct<'a, Symbol, SymId, Arena> for U
 where
     Arena: AsMut<AssemblyArena>,
     U: Into<Symbol>,
 {
     type Site = (Option<String>, Option<sk::DefId>);
-    fn build(self, arena: &mut Arena, (name, site): Self::Site) -> SymId {
+    fn build<'f: 'a>(self, arena: &'f mut Arena, (name, site): Self::Site) -> SymId {
         let this = &mut *arena.as_mut();
         let symbol = NamedSymbol { name: name.unwrap_or_default(), inner: self.into() };
         let is_prog = match symbol.inner {
@@ -112,14 +113,28 @@ where
     }
 }
 
+pub type Kont<'a, Arena> = Box<dyn for<'b> FnOnce(&'b mut Arena, Context) -> ProgId + 'a>;
+
+pub struct CxKont<'a, Arena> {
+    pub incr: Box<dyn FnOnce(&Context) -> Context>,
+    pub kont: Kont<'a, Arena>,
+}
+
+impl<'a, Arena> CxKont<'a, Arena> {
+    /// No new binders are created, make [`Self::incr`] to be the identity function.
+    pub fn same(kont: Kont<'a, Arena>) -> Self {
+        Self { incr: Box::new(|cx| cx.clone()), kont }
+    }
+}
+
 /// Allocate a program that is anonymous, i.e. has no meaningful label.
-impl<U, Arena> Construct<Program, ProgId, Arena> for U
+impl<'a, U, Arena> Construct<'a, Program, ProgId, Arena> for U
 where
     Arena: AsMut<AssemblyArena>,
     U: Into<Program>,
 {
-    type Site = ();
-    fn build(self, arena: &mut Arena, (): Self::Site) -> ProgId {
+    type Site = Context;
+    fn build<'f: 'a>(self, arena: &'f mut Arena, cx: Self::Site) -> ProgId {
         let this = &mut *arena.as_mut();
         let program = self.into();
         // Nominate inner programs if they are mentioned in the program.
@@ -142,35 +157,40 @@ where
             },
         }
         let id = this.programs.alloc(program);
+        this.contexts.insert(id, cx);
         id
     }
 }
 
-impl<U, Arena> Construct<Terminator, ProgId, Arena> for U
+impl<'a, U, Arena> Construct<'a, Terminator, ProgId, Arena> for U
 where
     Arena: AsMut<AssemblyArena>,
     U: Into<Terminator>,
 {
-    type Site = ();
-    fn build(self, arena: &mut Arena, (): Self::Site) -> ProgId {
+    type Site = Context;
+    fn build<'f: 'a>(self, arena: &'f mut Arena, cx: Self::Site) -> ProgId {
         let this = &mut *arena.as_mut();
         let terminator = self.into();
         let id = this.programs.alloc(Program::Terminator(terminator));
+        this.contexts.insert(id, cx);
         id
     }
 }
 
-impl<U, Arena> Construct<Instruction, ProgId, Arena> for U
+impl<'a, U, Arena> Construct<'a, Instruction, ProgId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena>,
+    Arena: AsMut<AssemblyArena> + 'a,
     U: Into<Instruction>,
 {
     /// The continuation.
-    type Site = Box<dyn FnOnce(&mut Arena) -> ProgId>;
-    fn build(self, arena: &mut Arena, kont: Self::Site) -> ProgId {
+    type Site = With<Context, CxKont<'a, Arena>>;
+    fn build<'f: 'a>(
+        self, arena: &'f mut Arena, With { info: cx, inner: CxKont { incr, kont } }: Self::Site,
+    ) -> ProgId {
         let instr = self.into();
-        let next = kont(arena);
-        let id = Program::Instruction(instr, next).build(arena, ());
+        let cx_incr = incr(&cx);
+        let next = kont(arena, cx_incr);
+        let id = Program::Instruction(instr, next).build(arena, cx);
         id
     }
 }
