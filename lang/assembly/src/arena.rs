@@ -1,7 +1,7 @@
 use super::syntax::*;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_stackir::syntax as sk;
-use zydeco_utils::with::With;
+use zydeco_utils::{graph::DepGraph, with::With};
 
 #[derive(AsRefSelf, AsMutSelf)]
 pub struct AssemblyArena {
@@ -17,6 +17,10 @@ pub struct AssemblyArena {
 
     /// All programs have a context that they depend on.
     pub contexts: ArenaAssoc<ProgId, Context>,
+    /// Dependencies of programs; LHS depends on all RHSs.
+    /// 
+    /// In our case, a program depends on all the programs that jumps to it.
+    pub deps: DepGraph<ProgId>,
     /// Programs are (optionally) labeled.
     pub labels: ArenaAssoc<ProgId, SymId>,
     /// Externs that are variables.
@@ -38,6 +42,7 @@ impl AssemblyArena {
             symbols: ArenaSparse::new(alloc.alloc()),
             defs: ArenaBijective::new(),
             contexts: ArenaAssoc::new(),
+            deps: DepGraph::new(),
             labels: ArenaAssoc::new(),
             externs: Vec::new(),
             blocks: ArenaAssoc::new(),
@@ -156,8 +161,26 @@ where
                 | Terminator::Panic(Panic) => {}
             },
         }
-        let id = this.programs.alloc(program);
+        let id = this.programs.alloc(program.clone());
         this.contexts.insert(id, cx);
+
+        // Update dependencies.
+        match program {
+            | Program::Instruction(_, prog_id) => this.deps.add(prog_id, [id]),
+            | Program::Terminator(t) => match t {
+                | Terminator::Jump(Jump(prog_id)) => this.deps.add(id, [prog_id]),
+                | Terminator::PopJump(PopJump) => {}
+                | Terminator::LeapJump(LeapJump) => {}
+                | Terminator::PopBranch(PopBranch(brs)) => {
+                    for (_, prog_id) in brs {
+                        this.deps.add(id, [prog_id]);
+                    }
+                }
+                | Terminator::Extern(Extern { .. }) => {}
+                | Terminator::Panic(Panic) => {}
+            },
+        }
+
         id
     }
 }
@@ -169,10 +192,8 @@ where
 {
     type Site = Context;
     fn build<'f: 'a>(self, arena: &'f mut Arena, cx: Self::Site) -> ProgId {
-        let this = &mut *arena.as_mut();
         let terminator = self.into();
-        let id = this.programs.alloc(Program::Terminator(terminator));
-        this.contexts.insert(id, cx);
+        let id = Program::Terminator(terminator).build(arena, cx);
         id
     }
 }

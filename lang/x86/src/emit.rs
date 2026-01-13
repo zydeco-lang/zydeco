@@ -128,6 +128,33 @@ impl<'e> Emitter<'e> {
         let (entry, ()) = self.assembly.entry.iter().next().unwrap();
         entry.emit(EnvMap::new(), &mut self);
 
+        // Debug print the scc graph
+        let mut scc = zydeco_utils::graph::Kosaraju::new(&self.assembly.deps).run();
+        let mut count = 0;
+        loop {
+            let query = scc.top().into_iter().flatten().collect::<Vec<_>>();
+            for prog in query.iter() {
+                if let Some(label) = self.assembly.prog_label(prog) {
+                    println!("{}:", label);
+                }
+                let mut buf = String::new();
+                use zydeco_assembly::fmt::*;
+                let fmter = Formatter::new(&self.assembly);
+                let doc = match &self.assembly.programs[prog] {
+                    | Program::Terminator(terminator) => terminator.pretty(&fmter),
+                    | Program::Instruction(instruction, _) => instruction.pretty(&fmter),
+                };
+                doc.render_fmt(usize::MAX, &mut buf).unwrap();
+                println!("{} - {}", count, buf);
+                count += 1;
+            }
+            if query.is_empty() {
+                break;
+            } else {
+                scc.release(query);
+            }
+        }
+
         // Emit the named blocks
         for (prog_id, _) in &self.assembly.programs {
             // Todo: context of blocks should be passed from ZASM
