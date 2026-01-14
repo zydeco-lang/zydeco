@@ -268,11 +268,33 @@ impl<'a> Emit<'a> for Terminator {
                 let label = table.rodata_label();
                 em.tables.push(table);
                 // emit jump to the jump table arm
-                // jmp     [rel jumptable + rax * 8]
-                em.asm.text.push(Instr::Jmp(JmpArgs::RelLabel(RelLabel {
-                    label,
-                    offset: Some((Reg::Rax, 8)),
-                })));
+                // Mach-O doesn't support [rel label + reg * scale], so we need:
+                // 1. lea rcx, [rel jump_table] - load jump table base address
+                // 2. lea rcx, [rcx + rax * 8] - compute address of table entry
+                // 3. mov rcx, [rcx] - load target address from table entry
+                // 4. jmp rcx - jump to target
+                em.asm.text.push(Instr::Lea(
+                    Reg::Rcx,
+                    LeaArgs::RelLabel(RelLabel { label, offset: None }),
+                ));
+                em.asm.text.push(Instr::Lea(
+                    Reg::Rcx,
+                    LeaArgs::Displace {
+                        base: Reg::Rcx,
+                        scaled_index: Some((Reg::Rax, 8)),
+                        offset: None,
+                    },
+                ));
+                em.asm.text.push(Instr::Mov(
+                    MovArgs::ToReg(
+                        Reg::Rcx,
+                        Arg64::Mem(MemRef {
+                            reg: Reg::Rcx,
+                            offset: 0,
+                        }),
+                    ),
+                ));
+                em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rcx)));
             }
             | Terminator::Extern(sa::Extern { name, arity }) => {
                 em.asm.text.push(Instr::Comment(format!("extern: {:?}, {:?}", name, arity)));
