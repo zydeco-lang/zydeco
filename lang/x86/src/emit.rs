@@ -347,6 +347,14 @@ impl<'a> Emit<'a> for Instruction {
                     Instr::Pop(Loc::Reg(ENV_REG)),
                 ]);
             }
+            | Instruction::AllocContext(sa::Alloc(sa::ContextMarker)) => {
+                // Allocate new context
+                let frame = em.assembly.contexts[&id].iter().len() as i32;
+                em.asm.text.extend([
+                    Instr::Comment("alloc_context".to_string()),
+                    Instr::Add(BinArgs::ToReg(Reg::Rbp, Arg32::Signed(8 * frame))),
+                ]);
+            }
             | Instruction::PushArg(sa::Push(atom)) => {
                 // Push argument onto stack
                 atom.emit(id, em);

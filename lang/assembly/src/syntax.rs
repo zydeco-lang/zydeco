@@ -58,6 +58,8 @@ pub enum Instruction {
     PushContext(Push<ContextMarker>),
     /// Restore current context. Pop a pointer to the context off the stack, and replace the current context with it.
     PopContext(Pop<ContextMarker>),
+    /// Create a new context. Move beyond the end of the last stack frame and start a new one.
+    AllocContext(Alloc<ContextMarker>),
     /// Function application. Push the argument onto the stack.
     /// Destructed by [`Instruction::PopArg`].
     PushArg(Push<Atom>),
@@ -82,6 +84,8 @@ pub struct Unpack<T>(pub T);
 pub struct Push<T>(pub T);
 #[derive(Clone, Debug)]
 pub struct Pop<T>(pub T);
+#[derive(Clone, Debug)]
+pub struct Alloc<T>(pub T);
 #[derive(Clone, Debug)]
 pub struct Swap;
 

@@ -593,8 +593,17 @@ impl<'a> Lower<'a> for sk::CompuId {
                                 With {
                                     info: cx,
                                     inner: Box::new(move |lo, cx| {
-                                        // PopJump to the thunk
-                                        PopJump.build(lo, cx)
+                                        // Allocate a new context
+                                        Alloc(ContextMarker).build(
+                                            lo,
+                                            With {
+                                                info: cx,
+                                                inner: CxKont::same(Box::new(move |lo, cx| {
+                                                    // PopJump to the thunk
+                                                    PopJump.build(lo, cx)
+                                                })),
+                                            },
+                                        )
                                     }),
                                 },
                             )

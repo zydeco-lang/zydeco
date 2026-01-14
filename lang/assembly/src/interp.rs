@@ -171,6 +171,10 @@ impl Eval for Instruction {
                 log::trace!("popcontext");
                 todo!()
             }
+            | Instruction::AllocContext(Alloc(ContextMarker)) => {
+                log::trace!("alloccontext");
+                todo!()
+            }
             | Instruction::PushArg(Push(atom)) => {
                 log::trace!("pusharg: {:?}", atom);
                 interp.runtime.stack.push(Value::Atom(atom));

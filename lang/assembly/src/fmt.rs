@@ -163,6 +163,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Instruction {
             | Instruction::UnpackProduct(unpack) => unpack.pretty(f),
             | Instruction::PushContext(pack) => pack.pretty(f),
             | Instruction::PopContext(unpack) => unpack.pretty(f),
+            | Instruction::AllocContext(alloc) => alloc.pretty(f),
             | Instruction::PushArg(push) => push.pretty(f),
             | Instruction::PopArg(pop) => pop.pretty(f),
             | Instruction::PushTag(push) => push.pretty(f),
@@ -206,6 +207,15 @@ where
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::concat([RcDoc::text("pop"), RcDoc::space(), self.0.pretty(f)])
+    }
+}
+
+impl<'a, T> Pretty<'a, Formatter<'a>> for Alloc<T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::concat([RcDoc::text("alloc"), RcDoc::space(), self.0.pretty(f)])
     }
 }
 
