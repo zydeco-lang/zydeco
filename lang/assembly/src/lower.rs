@@ -71,16 +71,15 @@ impl<'a> Lowerer<'a> {
                     Box::new(move |lo: &mut Lowerer, cx| {
                         body.lower(
                             lo,
-                            With {
-                                info: cx,
-                                inner: Box::new(move |lo: &mut Lowerer, cx| {
+                            With::new(
+                                cx,
+                                Box::new(move |lo: &mut Lowerer, cx| {
                                     let name = lo.scoped.defs[&def_id].clone();
                                     let var = VarName::from(name).build(lo, Some(def_id));
                                     let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
-                                    Pop(var)
-                                        .build(lo, With { info: cx, inner: CxKont { incr, kont } })
+                                    Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
                                 }),
-                            },
+                            ),
                         )
                     })
                 },
@@ -293,14 +292,14 @@ impl<'a> Lower<'a> for sk::VPatId {
             | VPat::Hole(Hole) => {
                 let var = VarName::from("_").build(lo, None);
                 let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
-                Pop(var).build(lo, With { info: cx, inner: CxKont { incr, kont } })
+                Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
             }
             | VPat::Var(def_id) => {
                 // Pop the value from the stack into the variable
                 let name = lo.scoped.defs[&def_id].clone();
                 let var = VarName::from(name).build(lo, Some(def_id));
                 let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
-                Pop(var).build(lo, With { info: cx, inner: CxKont { incr, kont } })
+                Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
             }
             | VPat::Ctor(Ctor(ctor, param)) => {
                 let _ = ctor;
@@ -331,24 +330,24 @@ impl<'a> Lower<'a> for sk::VPatId {
                 // Pop and do nothing
                 let var = VarName::from("_").build(lo, None);
                 let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
-                Pop(var).build(lo, With { info: cx, inner: CxKont { incr, kont } })
+                Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
             }
             | VPat::VCons(Cons(a, b)) => {
                 // Unpack the pair value from the stack, and then process a and b
                 Unpack(ProductMarker).build(lo, {
-                    With {
-                        info: cx,
-                        inner: CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
+                    With::new(
+                        cx,
+                        CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
                             a.lower(lo, {
-                                With {
-                                    info: cx,
-                                    inner: Box::new(move |lo: &mut Lowerer, cx| {
-                                        b.lower(lo, With { info: cx, inner: kont })
+                                With::new(
+                                    cx,
+                                    Box::new(move |lo: &mut Lowerer, cx| {
+                                        b.lower(lo, With::new(cx, kont))
                                     }),
-                                }
+                                )
                             })
                         })),
-                    }
+                    )
                 })
             }
         }
@@ -374,7 +373,7 @@ impl<'a> Lower<'a> for sk::ValueId {
                     | DefId::Sym(sym_id) => Atom::Sym(sym_id),
                 };
                 // Push the atom onto the stack
-                Push(atom).build(lo, With { info: cx, inner: CxKont::same(kont) })
+                Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::Closure(sk::Closure { capture, stack: sk::Bullet, body }) => {
                 assert!(capture.iter().count() == 0, "Capture is not empty");
@@ -383,88 +382,87 @@ impl<'a> Lower<'a> for sk::ValueId {
                 let sym = body.build(lo, (Some(String::from("clo")), None));
                 // Push the atom to the stack
                 let atom = Atom::Sym(sym);
-                Push(atom).build(lo, With { info: cx, inner: CxKont::same(kont) })
+                Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::Ctor(Ctor(ctor, body)) => {
                 // Push the body onto the stack
                 let value_data = *self;
                 body.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             // Push the constructor tag onto the stack
                             let idx = lo.find_ctor_tag_idx_from_value(value_data, &ctor);
                             let name = ctor.plain().to_string();
                             let tag = Tag { idx, name: Some(name) };
                             Push(tag).build(
                                 lo,
-                                With {
-                                    info: cx,
-                                    inner: CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
+                                With::new(
+                                    cx,
+                                    CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
                                         // Pack them into a pair value
                                         Pack(ProductMarker)
-                                            .build(lo, With { info: cx, inner: CxKont::same(kont) })
+                                            .build(lo, With::new(cx, CxKont::same(kont)))
                                     })),
-                                },
+                                ),
                             )
                         }),
-                    },
+                    ),
                 )
             }
             | Value::Triv(Triv) => {
                 // Push the trivial value onto the stack
                 let atom = Atom::Imm(Imm::Triv(Triv));
-                Push(atom).build(lo, With { info: cx, inner: CxKont::same(kont) })
+                Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::VCons(Cons(a, b)) => {
                 // Push b and then a onto the stack
                 b.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             a.lower(
                                 lo,
-                                With {
-                                    info: cx,
-                                    inner: Box::new(move |lo, cx| {
+                                With::new(
+                                    cx,
+                                    Box::new(move |lo, cx| {
                                         // and then pack the pair value
                                         Pack(ProductMarker)
-                                            .build(lo, With { info: cx, inner: CxKont::same(kont) })
+                                            .build(lo, With::new(cx, CxKont::same(kont)))
                                     }),
-                                },
+                                ),
                             )
                         }),
-                    },
+                    ),
                 )
             }
             | Value::Literal(Literal::Int(i)) => {
                 // Push the literal value onto the stack
                 let atom = Atom::Imm(Imm::Int(i));
-                Push(atom).build(lo, With { info: cx, inner: CxKont::same(kont) })
+                Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::Literal(Literal::Char(c)) => {
                 // Push the literal value onto the stack
                 let atom = Atom::Imm(Imm::Char(c));
-                Push(atom).build(lo, With { info: cx, inner: CxKont::same(kont) })
+                Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::Literal(Literal::String(s)) => {
                 // Push the literal value onto the stack
                 let atom = Atom::Sym(s.build(lo, (Some(String::from("")), None)));
-                Push(atom).build(lo, With { info: cx, inner: CxKont::same(kont) })
+                Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
             | Value::Complex(sk::Complex { operator, operands }) => {
                 // Lower all operands onto the stack
                 let arity = operands.len();
                 let kont: Kont<'_, Lowerer<'_>> = Box::new(move |lo, cx| {
-                    Intrinsic { name: operator, arity }
-                        .build(lo, With { info: cx, inner: CxKont::same(kont) })
+                    Intrinsic { name: operator, arity }.build(lo, With::new(cx, CxKont::same(kont)))
                 });
                 let kont = operands.into_iter().fold(
                     kont,
                     |kont: Kont<'_, Lowerer<'_>>, operand: sk::ValueId| {
-                        Box::new(move |lo, cx| operand.lower(lo, With { info: cx, inner: kont }))
+                        Box::new(move |lo, cx| operand.lower(lo, With::new(cx, kont)))
                     },
                 );
                 kont(lo, cx)
@@ -489,52 +487,50 @@ impl<'a> Lower<'a> for sk::StackId {
                 // The stack shape: [return value, context]
                 let code = Swap.build(
                     lo,
-                    With {
-                        info: Context::new(),
-                        inner: CxKont::same(Box::new(move |lo, _| {
+                    With::new(
+                        Context::new(),
+                        CxKont::same(Box::new(move |lo, _| {
                             Pop(ContextMarker).build(
                                 lo,
-                                With {
-                                    info: Context::new(),
-                                    inner: CxKont {
+                                With::new(
+                                    Context::new(),
+                                    CxKont {
                                         // Restore the original context
-                                        incr: Box::new(move |_| original_cx.clone()),
+                                        incr: Box::new(move |_| original_cx),
                                         kont: Box::new(move |lo, cx| {
                                             binder.lower(
                                                 lo,
-                                                With {
-                                                    info: cx,
-                                                    inner: Box::new(move |lo, cx| {
-                                                        body.lower(lo, cx)
-                                                    }),
-                                                },
+                                                With::new(
+                                                    cx,
+                                                    Box::new(move |lo, cx| body.lower(lo, cx)),
+                                                ),
                                             )
                                         }),
                                     },
-                                },
+                                ),
                             )
                         })),
-                    },
+                    ),
                 );
                 let sym = code.build(lo, (Some(String::from("kont")), None));
                 // Push the context pointer, and then the code
                 Push(ContextMarker).build(
                     lo,
-                    With {
-                        info: cx,
-                        inner: CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
+                    With::new(
+                        cx,
+                        CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
                             Push(Atom::Sym(sym)).build(
                                 lo,
-                                With {
-                                    info: cx,
-                                    inner: CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
+                                With::new(
+                                    cx,
+                                    CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
                                         // Finally, we do the rest
                                         kont(lo, cx)
                                     })),
-                                },
+                                ),
                             )
                         })),
-                    },
+                    ),
                 )
             }
             | Stack::Var(sk::Bullet) => {
@@ -545,13 +541,13 @@ impl<'a> Lower<'a> for sk::StackId {
                 // Finish the stack first
                 stack.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             // Push the value onto the stack
-                            value.lower(lo, With { info: cx, inner: kont })
+                            value.lower(lo, With::new(cx, kont))
                         }),
-                    },
+                    ),
                 )
             }
             | Stack::Tag(Cons(dtor, stack)) => {
@@ -559,16 +555,16 @@ impl<'a> Lower<'a> for sk::StackId {
                 let stack_codata = stack;
                 stack.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             // Push the destructor tag onto the stack
                             let idx = lo.find_dtor_tag_idx_from_stack(stack_codata, &dtor);
                             let name = dtor.plain().to_string();
                             let tag = Tag { idx, name: Some(name) };
-                            Push(tag).build(lo, With { info: cx, inner: CxKont::same(kont) })
+                            Push(tag).build(lo, With::new(cx, CxKont::same(kont)))
                         }),
-                    },
+                    ),
                 )
             }
         }
@@ -588,59 +584,54 @@ impl<'a> Lower<'a> for sk::CompuId {
                 // Lower the stack first
                 stack.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             // Lower the thunk to a value on the stack
                             thunk.lower(
                                 lo,
-                                With {
-                                    info: cx,
-                                    inner: Box::new(move |lo, cx| {
+                                With::new(
+                                    cx,
+                                    Box::new(move |lo, cx| {
                                         // Allocate a new context
                                         Alloc(ContextMarker).build(
                                             lo,
-                                            With {
-                                                info: cx,
-                                                inner: CxKont {
-                                                    incr: Box::new(move |_: &Context| {
-                                                        Context::new()
-                                                    }),
-                                                    kont: Box::new(move |lo, cx| {
-                                                        // PopJump to the thunk
-                                                        PopJump.build(lo, cx)
-                                                    }),
-                                                },
-                                            },
+                                            With::new(
+                                                cx,
+                                                CxKont::clean(Box::new(move |lo, cx| {
+                                                    // PopJump to the thunk
+                                                    PopJump.build(lo, cx)
+                                                })),
+                                            ),
                                         )
                                     }),
-                                },
+                                ),
                             )
                         }),
-                    },
+                    ),
                 )
             }
             | Compu::Ret(sk::SReturn { stack, value }) => {
                 // Lower the stack first
                 stack.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             // Lower the value
                             value.lower(
                                 lo,
-                                With {
-                                    info: cx,
-                                    inner: Box::new(move |lo, cx| {
+                                With::new(
+                                    cx,
+                                    Box::new(move |lo, cx| {
                                         // The stack shape: [return value, return address, context]
                                         // Leap jump to the continuation
                                         LeapJump.build(lo, cx)
                                     }),
-                                },
+                                ),
                             )
                         }),
-                    },
+                    ),
                 )
             }
             | Compu::Fix(sk::SFix { capture, param, body }) => {
@@ -668,21 +659,21 @@ impl<'a> Lower<'a> for sk::CompuId {
                 // Lower the scrutinee
                 scrut.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             if arms.len() == 1 {
                                 let Matcher { binder, tail } = arms[0];
                                 // Basically same as let value
                                 binder.lower(
                                     lo,
-                                    With {
-                                        info: cx,
-                                        inner: Box::new(move |lo, cx| {
+                                    With::new(
+                                        cx,
+                                        Box::new(move |lo, cx| {
                                             // Lower the tail
                                             tail.lower(lo, cx)
                                         }),
-                                    },
+                                    ),
                                 )
                             } else {
                                 // Optimization: compile to a jump table
@@ -716,76 +707,74 @@ impl<'a> Lower<'a> for sk::CompuId {
                                 // Unpack the value
                                 Unpack(ProductMarker).build(
                                     lo,
-                                    With {
-                                        info: cx,
-                                        inner: CxKont::same(Box::new(
-                                            move |lo: &mut Lowerer, cx| {
-                                                // Jump table
-                                                PopBranch(lowered_arms).build(lo, cx)
-                                            },
-                                        )),
-                                    },
+                                    With::new(
+                                        cx,
+                                        CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
+                                            // Jump table
+                                            PopBranch(lowered_arms).build(lo, cx)
+                                        })),
+                                    ),
                                 )
                             }
                         }),
-                    },
+                    ),
                 )
             }
             | Compu::LetValue(Let { binder, bindee, tail }) => {
                 // Lower the bindee
                 bindee.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             // Lower the binder
                             binder.lower(
                                 lo,
-                                With {
-                                    info: cx,
-                                    inner: Box::new(move |lo, cx| {
+                                With::new(
+                                    cx,
+                                    Box::new(move |lo, cx| {
                                         // Lower the tail
                                         tail.lower(lo, cx)
                                     }),
-                                },
+                                ),
                             )
                         }),
-                    },
+                    ),
                 )
             }
             | Compu::LetStack(Let { binder: sk::Bullet, bindee, tail }) => {
                 // Lower the bindee
                 bindee.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             // Lower the tail
                             tail.lower(lo, cx)
                         }),
-                    },
+                    ),
                 )
             }
             | Compu::LetArg(Let { binder: Cons(param, sk::Bullet), bindee, tail }) => {
                 // Lower the bindee
                 bindee.lower(
                     lo,
-                    With {
-                        info: cx,
-                        inner: Box::new(move |lo, cx| {
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| {
                             // Lower the param
                             param.lower(
                                 lo,
-                                With {
-                                    info: cx,
-                                    inner: Box::new(move |lo, cx| {
+                                With::new(
+                                    cx,
+                                    Box::new(move |lo, cx| {
                                         // Lower the tail
                                         tail.lower(lo, cx)
                                     }),
-                                },
+                                ),
                             )
                         }),
-                    },
+                    ),
                 )
             }
             | Compu::CoCase(CoMatch { arms }) => {
