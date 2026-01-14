@@ -18,7 +18,7 @@ pub struct AssemblyArena {
     /// All programs have a context that they depend on.
     pub contexts: ArenaAssoc<ProgId, Context>,
     /// Dependencies of programs; LHS depends on all RHSs.
-    /// 
+    ///
     /// In our case, a program depends on all the programs that jumps to it.
     pub deps: DepGraph<ProgId>,
     /// Programs are (optionally) labeled.
@@ -129,6 +129,10 @@ impl<'a, Arena> CxKont<'a, Arena> {
     /// No new binders are created, make [`Self::incr`] to be the identity function.
     pub fn same(kont: Kont<'a, Arena>) -> Self {
         Self { incr: Box::new(|cx| cx.clone()), kont }
+    }
+    /// Start with a clean slate.
+    pub fn clean(kont: Kont<'a, Arena>) -> Self {
+        Self { incr: Box::new(|_: &Context| Context::new()), kont }
     }
 }
 

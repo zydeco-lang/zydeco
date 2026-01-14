@@ -602,10 +602,15 @@ impl<'a> Lower<'a> for sk::CompuId {
                                             lo,
                                             With {
                                                 info: cx,
-                                                inner: CxKont::same(Box::new(move |lo, cx| {
-                                                    // PopJump to the thunk
-                                                    PopJump.build(lo, cx)
-                                                })),
+                                                inner: CxKont {
+                                                    incr: Box::new(move |_: &Context| {
+                                                        Context::new()
+                                                    }),
+                                                    kont: Box::new(move |lo, cx| {
+                                                        // PopJump to the thunk
+                                                        PopJump.build(lo, cx)
+                                                    }),
+                                                },
                                             },
                                         )
                                     }),
