@@ -14,7 +14,7 @@ bins = [
     "match.zy",
     "cmp.zy",
     "id.zy",
-    "true.zy",
+    "const.zy",
     "label.zy",
     "loop.zy",
     "looping.zy",

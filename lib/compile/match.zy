@@ -1,3 +1,5 @@
+extern def exit : Thk (Int -> OS) end
+
 alias Bool : VType =
   data
   | +False : Unit
@@ -5,11 +7,10 @@ alias Bool : VType =
   end
 end
 
-@[pure]
 main
   let x: Bool = +False () in
   match x
-  | +True _ -> ret 10
-  | +False _ -> ret 20
+  | +True _ -> ! exit 10
+  | +False _ -> ! exit 20
   end
 end
