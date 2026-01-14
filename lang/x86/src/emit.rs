@@ -1,6 +1,5 @@
 use super::syntax::*;
-use derive_more::{Deref, DerefMut};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
@@ -126,26 +125,28 @@ impl<'e> Emitter<'e> {
         // Assert that there's only one entry point, and emit it
         assert_eq!(self.assembly.entry.len(), 1, "expected exactly one entry point");
         let (entry, ()) = self.assembly.entry.iter().next().unwrap();
-        entry.emit(EnvMap::new(), &mut self);
+        entry.emit((), &mut self);
 
         // Debug print the scc graph
+        let mut buf = String::new();
         let mut scc = zydeco_utils::graph::Kosaraju::new(&self.assembly.deps).run();
         let mut count = 0;
         loop {
+            use std::fmt::Write;
             let query = scc.top().into_iter().flatten().collect::<Vec<_>>();
             for prog in query.iter() {
                 if let Some(label) = self.assembly.prog_label(prog) {
-                    println!("{}:", label);
+                    writeln!(&mut buf, "{}:", label).unwrap();
                 }
-                let mut buf = String::new();
+                let mut buf_doc = String::new();
                 use zydeco_assembly::fmt::*;
                 let fmter = Formatter::new(&self.assembly);
                 let doc = match &self.assembly.programs[prog] {
                     | Program::Terminator(terminator) => terminator.pretty(&fmter),
                     | Program::Instruction(instruction, _) => instruction.pretty(&fmter),
                 };
-                doc.render_fmt(usize::MAX, &mut buf).unwrap();
-                println!("{} - {}", count, buf);
+                doc.render_fmt(usize::MAX, &mut buf_doc).unwrap();
+                writeln!(&mut buf, "{} - {}", count, buf_doc).unwrap();
                 count += 1;
             }
             if query.is_empty() {
@@ -154,15 +155,13 @@ impl<'e> Emitter<'e> {
                 scc.release(query);
             }
         }
+        log::trace!("{}", buf);
 
         // Emit the named blocks
         for (prog_id, _) in &self.assembly.programs {
-            // Todo: context of blocks should be passed from ZASM
-            // let context = sa::Context::new();
-            let env = EnvMap::new();
             if let Some(label) = self.assembly.prog_label(prog_id) {
                 self.asm.text.push(Instr::Label(label));
-                prog_id.emit(env, &mut self);
+                prog_id.emit((), &mut self);
             }
         }
 
@@ -188,23 +187,6 @@ impl<'e> Emitter<'e> {
     }
 }
 
-#[derive(Debug, Clone, Deref, DerefMut)]
-pub struct EnvMap(
-    #[deref]
-    #[deref_mut]
-    HashMap<sa::VarId, i32>,
-);
-impl EnvMap {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-    fn alloc(&mut self, var_id: sa::VarId) -> i32 {
-        let cur = self.len() as i32;
-        self.0.insert(var_id, cur);
-        cur
-    }
-}
-
 struct JumpTable {
     id: ProgId,
     arms: Vec<(Option<String>, ProgId)>,
@@ -216,26 +198,26 @@ impl JumpTable {
 }
 
 impl<'a> Emit<'a> for ProgId {
-    type Env = EnvMap;
-    fn emit(&self, mut env: Self::Env, em: &mut Emitter) {
+    type Env = ();
+    fn emit(&self, (): Self::Env, em: &mut Emitter) {
         // Avoid infinite loops
         assert!(!em.visited.contains(self), "infinite loop detected");
         em.visited.insert(*self);
 
         // Emit the program
         match &em.assembly.programs[self] {
-            | Program::Terminator(terminator) => terminator.emit((*self, &env), em),
+            | Program::Terminator(terminator) => terminator.emit(*self, em),
             | Program::Instruction(instr, next) => {
-                instr.emit(&mut env, em);
-                next.emit(env, em);
+                instr.emit(*self, em);
+                next.emit((), em);
             }
         }
     }
 }
 
 impl<'a> Emit<'a> for Terminator {
-    type Env = (ProgId, &'a EnvMap);
-    fn emit(&self, (id, _env): Self::Env, em: &mut Emitter) {
+    type Env = ProgId;
+    fn emit(&self, id: Self::Env, em: &mut Emitter) {
         match self {
             | Terminator::Jump(sa::Jump(target)) => {
                 match em.assembly.prog_label(target) {
@@ -249,7 +231,7 @@ impl<'a> Emit<'a> for Terminator {
                             "inlined jump to {}",
                             target.concise_inner()
                         )));
-                        target.emit(EnvMap::new(), em);
+                        target.emit((), em);
                     }
                 }
             }
@@ -306,8 +288,8 @@ impl<'a> Emit<'a> for Terminator {
 }
 
 impl<'a> Emit<'a> for Instruction {
-    type Env = &'a mut EnvMap;
-    fn emit(&self, env: Self::Env, em: &mut Emitter) {
+    type Env = ProgId;
+    fn emit(&self, id: Self::Env, em: &mut Emitter) {
         match self {
             | Instruction::PackProduct(sa::Pack(sa::ProductMarker)) => {
                 // Pack two values into a pair
@@ -367,12 +349,12 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::PushArg(sa::Push(atom)) => {
                 // Push argument onto stack
-                atom.emit(env, em);
+                atom.emit(id, em);
             }
             | Instruction::PopArg(sa::Pop(var_id)) => {
                 // Pop argument from stack into variable
                 let var_name = &em.assembly.variables[&var_id];
-                let idx = env.alloc(*var_id);
+                let idx = em.assembly.contexts[&id].iter().len() as i32;
                 em.asm.text.extend([
                     Instr::Comment(format!("pop_arg {}{}", var_name.plain(), var_id.concise())),
                     // pop from stack
@@ -415,8 +397,8 @@ impl<'a> Emit<'a> for Instruction {
 }
 
 impl<'a> Emit<'a> for Atom {
-    type Env = &'a EnvMap;
-    fn emit(&self, env: Self::Env, em: &mut Emitter) {
+    type Env = ProgId;
+    fn emit(&self, id: Self::Env, em: &mut Emitter) {
         match self {
             | Atom::Var(var_id) => {
                 let var_name = &em.assembly.variables[var_id];
@@ -444,7 +426,10 @@ impl<'a> Emit<'a> for Atom {
                 //     log::trace!("\t{}", instr);
                 // }
                 // log::trace!("var: {}{}", var_name.plain(), var_id.concise());
-                let idx = env.get(var_id).expect("variable not found");
+                let idx = em.assembly.contexts[&id]
+                    .iter()
+                    .position(|var| var == var_id)
+                    .expect("variable not found") as i32;
                 // load [rbp + 8 * idx] and push
                 em.asm.text.extend([
                     Instr::Mov(MovArgs::ToReg(
@@ -551,6 +536,7 @@ impl<'a> Emit<'a> for Intrinsic {
                         unimplemented!("intrinsic {} with arity {} not implemented", name, arity)
                     }
                 }
+                em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
             }
             | _ => unimplemented!("intrinsic {} with arity {} not implemented", name, arity),
         }

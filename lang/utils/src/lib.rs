@@ -23,5 +23,8 @@ pub mod prelude {
         pass::CompilerPass,
     };
     /// Design patterns.
-    pub use crate::{phantom::Phantom, with::With};
+    pub use crate::{
+        phantom::Phantom,
+        with::{Apply as _, With, WithInfo},
+    };
 }

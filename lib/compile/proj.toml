@@ -7,6 +7,7 @@ deps = []
 bins = [
     "ret.zy",
     "env.zy",
+    "add_0.zy",
     "add.zy",
     "nested.zy",
     "nested_out.zy",

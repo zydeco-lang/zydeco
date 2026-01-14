@@ -457,7 +457,7 @@ impl<'a> Lower<'a> for sk::ValueId {
                     Intrinsic { name: operator, arity }
                         .build(lo, With { info: cx, inner: CxKont::same(kont) })
                 });
-                let kont = operands.into_iter().rev().fold(
+                let kont = operands.into_iter().fold(
                     kont,
                     |kont: Kont<'_, Lowerer<'_>>, operand: sk::ValueId| {
                         Box::new(move |lo, cx| operand.lower(lo, With { info: cx, inner: kont }))
@@ -479,27 +479,34 @@ impl<'a> Lower<'a> for sk::StackId {
         use sk::Stack;
         match stack {
             | Stack::Kont(sk::Kont { binder, body }) => {
+                let original_cx = cx.clone();
                 // Lower the continuation code into a symbol
                 // which is `swap; pop ctx; [[binder]]; [[body]]`
                 // The stack shape: [return value, context]
                 let code = Swap.build(
                     lo,
                     With {
-                        info: cx.clone(),
-                        inner: CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
+                        info: Context::new(),
+                        inner: CxKont::same(Box::new(move |lo, _| {
                             Pop(ContextMarker).build(
                                 lo,
                                 With {
-                                    info: cx,
-                                    inner: CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
-                                        binder.lower(
-                                            lo,
-                                            With {
-                                                info: cx,
-                                                inner: Box::new(move |lo, cx| body.lower(lo, cx)),
-                                            },
-                                        )
-                                    })),
+                                    info: Context::new(),
+                                    inner: CxKont {
+                                        // Restore the original context
+                                        incr: Box::new(move |_| original_cx.clone()),
+                                        kont: Box::new(move |lo, cx| {
+                                            binder.lower(
+                                                lo,
+                                                With {
+                                                    info: cx,
+                                                    inner: Box::new(move |lo, cx| {
+                                                        body.lower(lo, cx)
+                                                    }),
+                                                },
+                                            )
+                                        }),
+                                    },
                                 },
                             )
                         })),

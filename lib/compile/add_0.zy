@@ -2,8 +2,6 @@ pub extern def add : Thk (Int -> Int -> Ret Int) end
 pub extern def exit : Thk (Int -> OS) end
 
 main
-  do x <- ret 40;
-  do y <- ret -40;
-  do z <- ! add x y;
+  do z <- ! add 10 -10;
   ! exit z
 end
