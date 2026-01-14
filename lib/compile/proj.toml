@@ -9,6 +9,7 @@ bins = [
     "env.zy",
     "add_0.zy",
     "add.zy",
+    "sub.zy",
     "nested.zy",
     "nested_out.zy",
     "match.zy",

@@ -1,14 +1,15 @@
+extern def exit : Thk (Int -> OS) end
+
 alias Choice : CType =
   codata
-  | .left : Ret Int
-  | .right : Int -> Ret Int
+  | .left : OS
+  | .right : Int -> OS
   end
 end
 
-@[pure]
 main
   (comatch
-  | .left -> ret 10
-  | .right i -> ret i
+  | .left -> ! exit 10
+  | .right i -> ! exit i
   end : Choice) .right 20
 end

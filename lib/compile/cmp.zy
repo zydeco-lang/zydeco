@@ -1,3 +1,5 @@
+extern def exit : Thk (Int -> OS) end
+
 alias Bool : VType =
   data
   | +False : Unit
@@ -7,11 +9,10 @@ end
 
 extern def int_eq : Thk (Int -> Int -> Ret Bool) end
 
-@[pure]
 main
   do x <- ! int_eq 10 10;
   match x
-  | +True _ -> ret 10
-  | +False _ -> ret 20
+  | +True _ -> ! exit 0
+  | +False _ -> ! exit 1
   end
 end
