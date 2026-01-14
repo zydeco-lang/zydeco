@@ -111,7 +111,7 @@ impl<'e> Emitter<'e> {
             }
             // Todo: a jump or a call? Maybe we should group the externs by
             // whether it's tail called or not?
-            self.asm.text.push(Instr::Call(zydeco_extern_name));
+            self.asm.text.push(Instr::Call(JmpArgs::Label(zydeco_extern_name)));
         }
 
         self.asm.text.extend([
@@ -271,8 +271,7 @@ impl<'a> Emit<'a> for Terminator {
                 // Mach-O doesn't support [rel label + reg * scale], so we need:
                 // 1. lea rcx, [rel jump_table] - load jump table base address
                 // 2. lea rcx, [rcx + rax * 8] - compute address of table entry
-                // 3. mov rcx, [rcx] - load target address from table entry
-                // 4. jmp rcx - jump to target
+                // 3. jmp [rcx] - jump to target (indirect jump through memory)
                 em.asm.text.push(Instr::Lea(
                     Reg::Rcx,
                     LeaArgs::RelLabel(RelLabel { label, offset: None }),
@@ -285,16 +284,7 @@ impl<'a> Emit<'a> for Terminator {
                         offset: None,
                     },
                 ));
-                em.asm.text.push(Instr::Mov(
-                    MovArgs::ToReg(
-                        Reg::Rcx,
-                        Arg64::Mem(MemRef {
-                            reg: Reg::Rcx,
-                            offset: 0,
-                        }),
-                    ),
-                ));
-                em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rcx)));
+                em.asm.text.push(Instr::Jmp(JmpArgs::Mem(MemRef { reg: Reg::Rcx, offset: 0 })));
             }
             | Terminator::Extern(sa::Extern { name, arity }) => {
                 em.asm.text.push(Instr::Comment(format!("extern: {:?}, {:?}", name, arity)));
@@ -318,7 +308,7 @@ impl<'a> Emit<'a> for Instruction {
                 em.asm.text.extend([
                     Instr::Comment("pack_product".to_string()),
                     Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
-                    Instr::Call("zydeco_alloc".to_string()),
+                    Instr::Call(JmpArgs::Label("zydeco_alloc".to_string())),
                     // returned pointer is in rax
                     // pop, and store to [rax]
                     Instr::Pop(Loc::Reg(Reg::Rcx)),

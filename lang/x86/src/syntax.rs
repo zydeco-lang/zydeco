@@ -125,6 +125,7 @@ pub struct ShArgs {
 pub enum JmpArgs {
     Label(String),
     Reg(Reg),
+    Mem(MemRef),
     RelLabel(RelLabel),
 }
 
@@ -161,9 +162,9 @@ pub enum Instr {
     Global(String),
     Extern(String),
 
-    Call(String),
-    Ret,
     Jmp(JmpArgs),
+    Call(JmpArgs),
+    Ret,
 
     // Conditional mov, jmp and set
     CMovCC(ConditionCode, BinArgs),
@@ -287,7 +288,7 @@ impl fmt::Display for MemRef {
             | Ordering::Equal => format!(""),
             | Ordering::Greater => format!(" + {}", self.offset),
         };
-        write!(f, "QWORD [{}{}]", self.reg, offset)
+        write!(f, "[{}{}]", self.reg, offset)
     }
 }
 
@@ -315,7 +316,7 @@ impl fmt::Display for Arg32 {
             | Arg32::Reg(r) => write!(f, "{}", r),
             | Arg32::Signed(i) => write!(f, "{}", i),
             | Arg32::Unsigned(u) => write!(f, "0x{:08x}", u),
-            | Arg32::Mem(m) => write!(f, "{}", m),
+            | Arg32::Mem(m) => write!(f, "QWORD {}", m),
         }
     }
 }
@@ -326,7 +327,7 @@ impl fmt::Display for Arg64 {
             | Arg64::Reg(r) => write!(f, "{}", r),
             | Arg64::Signed(i) => write!(f, "{}", i),
             | Arg64::Unsigned(u) => write!(f, "0x{:016x}", u),
-            | Arg64::Mem(m) => write!(f, "{}", m),
+            | Arg64::Mem(m) => write!(f, "QWORD {}", m),
             | Arg64::Label(l) => write!(f, "{}", l),
         }
     }
@@ -336,7 +337,7 @@ impl fmt::Display for MovArgs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             | MovArgs::ToReg(r, arg) => write!(f, "{}, {}", r, arg),
-            | MovArgs::ToMem(mem, arg) => write!(f, "{}, {}", mem, arg),
+            | MovArgs::ToMem(mem, arg) => write!(f, "QWORD {}, {}", mem, arg),
         }
     }
 }
@@ -362,7 +363,7 @@ impl fmt::Display for BinArgs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             | BinArgs::ToReg(r, arg) => write!(f, "{}, {}", r, arg),
-            | BinArgs::ToMem(mem, arg) => write!(f, "{}, {}", mem, arg),
+            | BinArgs::ToMem(mem, arg) => write!(f, "QWORD {}, {}", mem, arg),
         }
     }
 }
@@ -378,6 +379,7 @@ impl fmt::Display for JmpArgs {
         match self {
             | JmpArgs::Label(l) => write!(f, "{}", l),
             | JmpArgs::Reg(r) => write!(f, "{}", r),
+            | JmpArgs::Mem(m) => write!(f, "{}", m),
             | JmpArgs::RelLabel(rl) => write!(f, "{}", rl),
         }
     }
@@ -387,7 +389,7 @@ impl fmt::Display for Loc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             | Loc::Reg(r) => write!(f, "{}", r),
-            | Loc::Mem(m) => write!(f, "{}", m),
+            | Loc::Mem(m) => write!(f, "QWORD {}", m),
         }
     }
 }
@@ -458,6 +460,9 @@ impl fmt::Display for Instr {
             | Instr::Extern(s) => {
                 write!(f, "        extern {}", s)
             }
+            | Instr::Jmp(s) => {
+                write!(f, "        jmp {}", s)
+            }
             | Instr::Call(s) => {
                 write!(f, "        call {}", s)
             }
@@ -466,9 +471,6 @@ impl fmt::Display for Instr {
             }
             | Instr::CMovCC(cc, args) => {
                 write!(f, "        cmov{} {}", cc, args)
-            }
-            | Instr::Jmp(s) => {
-                write!(f, "        jmp {}", s)
             }
             | Instr::JCC(cc, l) => {
                 write!(f, "        j{} {}", cc, l)
