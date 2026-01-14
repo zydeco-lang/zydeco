@@ -123,17 +123,31 @@ impl<'a> Lowerer<'a> {
                         | Fillable::Done(Type::Abst(abst)) => {
                             ty = self.statics.seals[&abst].clone();
                         }
-                        | Fillable::Done(Type::Abs(Abs(_, body))) => {
-                            ty = body;
+                        | Fillable::Done(Type::Abs(Abs(_, _body))) => {
+                            // ty = body;
+                            unreachable!(
+                                "unexpected type abstraction in data type {}",
+                                ty.ugly(&zydeco_statics::tyck::fmt::Formatter::new(
+                                    self.scoped,
+                                    self.statics
+                                ))
+                            );
                         }
-                        | Fillable::Done(Type::App(App(f, _))) => {
-                            ty = f;
+                        | Fillable::Done(Type::App(App(_f, _))) => {
+                            // ty = f;
+                            unreachable!(
+                                "unexpected type application in data type {}",
+                                ty.ugly(&zydeco_statics::tyck::fmt::Formatter::new(
+                                    self.scoped,
+                                    self.statics
+                                ))
+                            );
                         }
                         | Fillable::Fill(fill) => {
                             let AnnId::Type(ty_) = self.statics.solus[&fill].clone() else {
                                 let (span_str, ty_str) = err_msg();
                                 unreachable!(
-                                    "Computation type {} is not a codata type in statics{}",
+                                    "Value type {} is not a type in statics{}",
                                     ty_str, span_str
                                 )
                             };
@@ -142,7 +156,7 @@ impl<'a> Lowerer<'a> {
                         | _ => {
                             let (span_str, ty_str) = err_msg();
                             unreachable!(
-                                "Computation type {} is not a codata type in statics{}",
+                                "Value type {} is not a data type in statics{}",
                                 ty_str, span_str
                             );
                         }
@@ -220,17 +234,31 @@ impl<'a> Lowerer<'a> {
                     | Fillable::Done(Type::Abst(abst)) => {
                         ty = self.statics.seals[&abst].clone();
                     }
-                    | Fillable::Done(Type::Abs(Abs(_, body))) => {
-                        ty = body;
+                    | Fillable::Done(Type::Abs(Abs(_, _body))) => {
+                        // ty = body;
+                        unreachable!(
+                            "unexpected type abstraction in codata type {}",
+                            ty.ugly(&zydeco_statics::tyck::fmt::Formatter::new(
+                                self.scoped,
+                                self.statics
+                            ))
+                        );
                     }
-                    | Fillable::Done(Type::App(App(f, _))) => {
-                        ty = f;
+                    | Fillable::Done(Type::App(App(_f, _))) => {
+                        // ty = f;
+                        unreachable!(
+                            "unexpected type application in codata type {}",
+                            ty.ugly(&zydeco_statics::tyck::fmt::Formatter::new(
+                                self.scoped,
+                                self.statics
+                            ))
+                        );
                     }
                     | Fillable::Fill(fill) => {
                         let AnnId::Type(ty_) = self.statics.solus[&fill].clone() else {
                             let (span_str, ty_str) = err_msg();
                             unreachable!(
-                                "Computation type {} is not a codata type in statics{}",
+                                "Computation type {} is not a type in statics{}",
                                 ty_str, span_str
                             )
                         };
