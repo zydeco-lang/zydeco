@@ -5,5 +5,7 @@ RUST_MIN_STACK = "4194304"
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
 
 [alias]
-test-all = "test --all --exclude zydeco-runtime"
 build-all = "build --all --exclude zydeco-runtime"
+test-all = "test --all --exclude zydeco-runtime"
+clippy-all = "clippy --all --exclude zydeco-runtime"
+fix-all = "fix --all --exclude zydeco-runtime"

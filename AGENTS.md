@@ -28,7 +28,7 @@ cargo fmt --all
 ```
 Lint the codebase:
 ```sh
-cargo clippy --all --exclude zydeco-runtime
+cargo clippy-all
 ```
 
 Run a Zydeco program:

@@ -5,7 +5,7 @@ use std::{
 
 /// A value of type `A` paired with attached metadata `M`.
 ///
-/// `With<M, A>` is a lightweight, transparent product type meant for *decorating* a value
+/// [`With<M, A>`] is a lightweight, transparent product type meant for *decorating* a value
 /// with extra information—without turning it into an opaque "wrapper object".
 ///
 /// The intended convention is:
@@ -43,10 +43,9 @@ use std::{
 ///
 /// # Notes on semantics
 ///
-/// If you implement a `map`/`fmap`-style operation (directly or via a trait), the usual
-/// law-abiding behavior is to apply the function to the `A` field while leaving `M`
-/// untouched. If you later add sequencing/composition that *combines* metadata, `M`
-/// often naturally takes on "log/writer" semantics (e.g. requires some kind of append).
+/// Map-style operations on `With` apply the function to the `A` field while leaving `M`
+/// untouched (see [`With::mk`]). When sequencing/composition combines metadata,
+/// `M` takes on "log/writer" semantics (e.g. requires some kind of append).
 #[derive(Default, Clone, Debug)]
 pub struct With<M, A> {
     pub info: M,
