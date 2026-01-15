@@ -711,14 +711,18 @@ impl<'a> Lower<'a> for sk::CompuId {
                                     use sk::ValuePattern as VPat;
                                     match lo.stack.vpats[&binder].clone() {
                                         | VPat::Ctor(Ctor(ctor, binder)) => {
-                                            // Todo: handle the binder
-                                            let _ = binder;
                                             let idx =
                                                 lo.find_ctor_tag_idx_from_value(value_data, &ctor);
                                             let name = ctor.plain().to_string();
                                             let tag = Tag { idx, name: Some(name) };
                                             // Lower the tail
-                                            let tail_prog = tail.lower(lo, cx.clone());
+                                            let tail_prog = binder.lower(
+                                                lo,
+                                                With::new(
+                                                    cx.clone(),
+                                                    Box::new(move |lo, cx| tail.lower(lo, cx)),
+                                                ),
+                                            );
                                             // Nominate the tail program
                                             let _sym = tail_prog
                                                 .build(lo, (Some(String::from("arm")), None));
