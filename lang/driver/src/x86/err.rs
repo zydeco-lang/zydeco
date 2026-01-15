@@ -21,8 +21,6 @@ pub enum LinkError {
     ExecutableCopyError(std::io::Error),
     #[error("Failed to run executable: {0}")]
     ExecutableRunError(std::io::Error),
-    #[error("Program exited with status: {0}")]
-    ProgramCallError(std::process::ExitStatus),
 }
 
 pub type Result<T> = std::result::Result<T, LinkError>;

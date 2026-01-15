@@ -3,7 +3,8 @@ use crate::BuildConf;
 use std::{
     fs::File,
     io::Write,
-    process::{Command, Stdio},
+    path::PathBuf,
+    process::{Command, ExitStatus, Stdio},
 };
 
 pub struct PackageX86 {
@@ -13,9 +14,9 @@ pub struct PackageX86 {
 }
 
 impl PackageX86 {
-    pub fn link(self) -> Result<()> {
+    pub fn link(self) -> Result<PackageX86Executable> {
         let PackageX86 { name, assembly, build_conf } = self;
-        let BuildConf { build_dir, runtime_dir, link_existing, execute } = build_conf;
+        let BuildConf { build_dir, runtime_dir, link_existing } = build_conf;
         if !link_existing {
             // Hack: clean build dir and create it
             // Todo: make it safer by checking build profile if not nonexistent or empty
@@ -158,23 +159,29 @@ impl PackageX86 {
         };
         std::fs::copy(&cargo_exe_fname, &exe_fname).map_err(LinkError::ExecutableCopyError)?;
 
-        if !execute {
-            return Ok(());
-        }
+        let executable = PackageX86Executable { name, executable: exe_fname };
+        Ok(executable)
+    }
+}
 
+pub struct PackageX86Executable {
+    pub name: String,
+    pub executable: PathBuf,
+}
+
+impl PackageX86Executable {
+    pub fn run(self) -> Result<ExitStatus> {
+        let PackageX86Executable { name, executable } = self;
+        log::info!("Running program: {}", name);
         // run the program with interactive I/O
-        let mut child = Command::new(&exe_fname)
+        let mut child = Command::new(&executable)
             // .env("RUST_LOG", "trace")
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
             .map_err(LinkError::ExecutableRunError)?;
-        // println!("child: {:?}", child);
         let status = child.wait().map_err(LinkError::ExecutableRunError)?;
-        if !status.success() {
-            Err(LinkError::ProgramCallError(status))?
-        }
-        Ok(())
+        Ok(status)
     }
 }

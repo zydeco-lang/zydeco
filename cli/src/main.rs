@@ -64,7 +64,7 @@ fn build_files(
     runtime_dir: PathBuf, link_existing: bool, execute: bool, _dry: bool, verbose: bool,
 ) -> zydeco_driver::Result<i32> {
     let build_config = match target.as_str() {
-        | "x86" => Some(BuildConf { build_dir, runtime_dir, link_existing, execute }),
+        | "x86" => Some(BuildConf { build_dir, runtime_dir, link_existing }),
         | _ => None,
     };
     let Driver { mut build_sys } = Driver::setup(paths)?;
@@ -86,7 +86,12 @@ fn build_files(
         | "x86" => {
             let x86 = build_sys.codegen_x86_pack(pack, verbose)?;
             // link with stub
-            x86.link()?;
+            let executable = x86.link()?;
+            if !execute {
+                return Ok(0);
+            }
+            let status = executable.run()?;
+            println!("Program exited with {}", status);
             Ok(0)
         }
         | _ => Err(zydeco_driver::err::BuildError::UnsupportedTarget(target)),
