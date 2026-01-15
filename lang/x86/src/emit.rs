@@ -520,8 +520,27 @@ impl<'a> Emit<'a> for Intrinsic {
                     em.asm.text.push(op(BinArgs::ToReg(Reg::Rax, Arg32::Reg(Reg::Rcx))));
                 }
                 fn emit_cc(cc: ConditionCode, em: &mut Emitter) {
-                    em.asm.text.push(Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(0))));
-                    em.asm.text.push(Instr::SetCC(cc, Reg8::Al));
+                    em.asm.text.extend([
+                        Instr::Mov(MovArgs::ToReg(Reg::Rax, Arg64::Signed(0))),
+                        Instr::SetCC(cc, Reg8::Al),
+                        // temporarily store the result on the stack
+                        Instr::Push(Arg32::Reg(Reg::Rax)),
+                        // make boolean
+                        Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
+                        Instr::Call(JmpArgs::Label("zydeco_alloc".to_string())),
+                        Instr::Pop(Loc::Reg(Reg::Rcx)),
+                        // store the result in the allocated memory
+                        // [rax] = rcx
+                        Instr::Mov(MovArgs::ToMem(
+                            MemRef { reg: Reg::Rax, offset: 0 },
+                            Reg32::Reg(Reg::Rcx),
+                        )),
+                        // [rax + 8] = 0
+                        Instr::Mov(MovArgs::ToMem(
+                            MemRef { reg: Reg::Rax, offset: 8 },
+                            Reg32::Imm(0),
+                        )),
+                    ]);
                 }
                 match *name {
                     | "add" => {
