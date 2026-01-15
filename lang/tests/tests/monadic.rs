@@ -1,5 +1,5 @@
-use zydeco_tests::lib_proj_bin;
+use zydeco_tests::interp_proj_bin;
 
-lib_proj_bin!(monadic, exnt, "exnt");
-lib_proj_bin!(monadic, exnkt, "exnkt");
-lib_proj_bin!(monadic, mobin, "mobin");
+interp_proj_bin!(monadic, exnt, "exnt");
+interp_proj_bin!(monadic, exnkt, "exnkt");
+interp_proj_bin!(monadic, mobin, "mobin");

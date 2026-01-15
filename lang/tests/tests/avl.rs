@@ -1,3 +1,3 @@
-use zydeco_tests::lib_proj_bin;
+use zydeco_tests::interp_proj_bin;
 
-lib_proj_bin!(avl, hash, "hash");
+interp_proj_bin!(avl, hash, "hash");

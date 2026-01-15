@@ -182,6 +182,7 @@ impl PackageX86Executable {
             .spawn()
             .map_err(LinkError::ExecutableRunError)?;
         let status = child.wait().map_err(LinkError::ExecutableRunError)?;
+        log::info!("Program exited with {}", status);
         Ok(status)
     }
 }

@@ -4,9 +4,5 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-zydeco-driver = { path = "../driver" }
-zydeco-surface = { path = "../surface" }
-zydeco-statics = { path = "../statics" }
-zydeco-dynamics = { path = "../dynamics" }
-zydeco-syntax = { path = "../syntax" }
-zydeco-utils = { path = "../utils" }
+zydeco-driver = { workspace = true }
+tempfile = { workspace = true }

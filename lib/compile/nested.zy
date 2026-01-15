@@ -11,5 +11,5 @@ main
     ret b
   ;
   do r <- ! sub z 80;
-  ! exit z
+  ! exit r
 end

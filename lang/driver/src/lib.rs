@@ -182,7 +182,7 @@ pub struct BuildSystem {
     pub marked: HashMap<String, PackId>,
     /// dependency graph, key depends on value
     pub depends_on: DepGraph<PackId>,
-    /// per-package build config overrides
+    /// per-package build config
     pub build_confs: ArenaAssoc<PackId, BuildConf>,
 }
 
@@ -347,6 +347,12 @@ impl BuildSystem {
             .cloned()
             .ok_or_else(|| BuildError::MissingBuildConfig(self.packages[&pack].name()))?;
         Ok(x86::PackageX86 { name: self.packages[&pack].name(), assembly, build_conf })
+    }
+    pub fn test_x86_pack(&self, pack: PackId, verbose: bool) -> Result<()> {
+        let x86 = self.codegen_x86_pack(pack, verbose)?;
+        let executable = x86.link()?;
+        let status = executable.run()?;
+        if status.success() { Ok(()) } else { Err(BuildError::X86RunError(status)) }
     }
 }
 

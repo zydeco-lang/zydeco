@@ -58,6 +58,7 @@ sculptor = { version = "0.0.10", features = [
 rand = "0.9"
 colored = "3.0"
 pretty_assertions = "1.4"
+tempfile = "3.24"
 # data structures
 sequence_trie = "0.3"
 im = "15.1"

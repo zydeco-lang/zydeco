@@ -1,5 +1,5 @@
-use zydeco_tests::lib_proj_bin;
+use zydeco_tests::interp_proj_bin;
 
-lib_proj_bin!(stack, invert, "invert");
-lib_proj_bin!(stack, backtrace, "backtrace");
-lib_proj_bin!(stack, cbv, "cbv");
+interp_proj_bin!(stack, invert, "invert");
+interp_proj_bin!(stack, backtrace, "backtrace");
+interp_proj_bin!(stack, cbv, "cbv");

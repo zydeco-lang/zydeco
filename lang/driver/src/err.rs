@@ -9,9 +9,11 @@ pub enum BuildError {
     #[error("{0}")]
     CompileError(#[from] crate::check::err::CompileError),
     #[error("{0}")]
-    LinkError(#[from] crate::x86::err::LinkError),
-    #[error("{0}")]
     InterpError(#[from] crate::interp::err::InterpError),
+    #[error("{0}")]
+    X86LinkError(#[from] crate::x86::err::LinkError),
+    #[error("Program terminated with {0}")]
+    X86RunError(std::process::ExitStatus),
     #[error("{0}")]
     AssemblyInterpError(#[from] crate::zasm::err::AssemblyInterpError),
     #[error("Duplicate package marked name: {0}")]

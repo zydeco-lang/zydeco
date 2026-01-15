@@ -91,8 +91,7 @@ fn build_files(
                 return Ok(0);
             }
             let status = executable.run()?;
-            println!("Program exited with {}", status);
-            Ok(0)
+            Ok(status.code().unwrap_or(0))
         }
         | _ => Err(zydeco_driver::err::BuildError::UnsupportedTarget(target)),
     }
