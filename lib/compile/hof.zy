@@ -5,6 +5,6 @@ def ! apply (A: VType) (B: CType) (f: Thk (A -> B)) (x: A) : B =
 end
 
 main
-  do x <- ! apply Int (Ret Int) { fn x -> ret x } 1;
+  do x <- ! apply Int (Ret Int) { fn x -> ret x } 0;
   ! exit x
 end

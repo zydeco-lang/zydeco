@@ -1,0 +1,7 @@
+pub extern def mul : Thk (Int -> Int -> Ret Int) end
+pub extern def exit : Thk (Int -> OS) end
+
+main
+  do z <- ! mul 10 10;
+  ! exit z
+end

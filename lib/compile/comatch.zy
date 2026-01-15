@@ -11,5 +11,5 @@ main
   (comatch
   | .left -> ! exit 10
   | .right i -> ! exit i
-  end : Choice) .right 20
+  end : Choice) .right 0
 end

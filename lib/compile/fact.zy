@@ -1,3 +1,5 @@
+extern def exit : Thk (Int -> OS) end
+
 alias Bool : VType =
   data
   | +False : Unit
@@ -5,24 +7,25 @@ alias Bool : VType =
   end
 end
 
-extern def add : Thk (Int -> Int -> Ret Int) end
+-- extern def add : Thk (Int -> Int -> Ret Int) end
 extern def sub : Thk (Int -> Int -> Ret Int) end
 extern def mul : Thk (Int -> Int -> Ret Int) end
 extern def int_eq : Thk (Int -> Int -> Ret Bool) end
 
-def fix sum (i: Int) (acc: Int): Ret Int =
+def fix fact (i: Int): Ret Int =
   do zero? <- ! int_eq i 0;
   match zero?
-  | +True _ -> ret acc
+  | +True _ -> ret 1
   | +False _ ->
     -- do i <- ret i;
     do i' <- ! sub i 1;
-    do acc' <- ! add i acc;
-    ! sum i' acc'
+    do acc <- ! fact i';
+    ! mul i acc
   end
 end
 
-@[pure]
 main
-  ! sum 10 0
+  do x <- ! fact 10;
+  do r <- ! sub x 3628800;
+  ! exit r
 end

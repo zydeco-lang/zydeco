@@ -2,6 +2,7 @@ pub extern def sub : Thk (Int -> Int -> Ret Int) end
 pub extern def exit : Thk (Int -> OS) end
 
 main
-  do z <- ! sub 10 5;
+  do x <- ! sub 10 4;
+  do z <- ! sub x 6;
   ! exit z
 end

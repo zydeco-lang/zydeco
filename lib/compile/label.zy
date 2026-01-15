@@ -1,6 +1,7 @@
+pub extern def exit : Thk (Int -> OS) end
 def ! id (A: VType) (a: A) = ret a end
 
-@[pure]
 main
-  ! id Int 10
+  do x <- ! id Int 0;
+  ! exit x
 end

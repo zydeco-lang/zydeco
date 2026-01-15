@@ -1,6 +1,5 @@
-def fix loop (A: VType): Ret A = ! loop A end
+def fix loop : OS = ! loop end
 
-@[pure]
 main
-  ! loop Int
+  ! loop
 end

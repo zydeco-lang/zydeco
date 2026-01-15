@@ -1,0 +1,23 @@
+pub extern def exit : Thk (Int -> OS) end
+
+alias Bool : VType =
+  data
+  | +False : Unit
+  | +True : Unit
+  end
+end
+
+extern def int_eq : Thk (Int -> Int -> Ret Bool) end
+
+def ! f (x: Int): Ret Int =
+  do zero? <- ! int_eq x 0;
+  match zero?
+  | +True _ -> ret 0
+  | +False _ -> ret 1
+  end
+end
+
+main
+  do z <- ! f 0;
+  ! exit z
+end

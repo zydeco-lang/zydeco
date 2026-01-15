@@ -1,4 +1,0 @@
-@[pure]
-main
-  ret 0
-end

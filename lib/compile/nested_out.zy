@@ -1,5 +1,6 @@
 extern def exit : Thk (Int -> OS) end
 pub extern def add : Thk (Int -> Int -> Ret Int) end
+pub extern def sub : Thk (Int -> Int -> Ret Int) end
 
 main
   do x <- ret 40;
@@ -9,5 +10,6 @@ main
     do b <- ! add a 10;
     ret x
   ;
-  ! exit z
+  do r <- ! sub z 40;
+  ! exit r
 end

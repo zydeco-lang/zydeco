@@ -11,6 +11,6 @@ main
   let x: Bool = +False () in
   match x
   | +True _ -> ! exit 10
-  | +False _ -> ! exit 20
+  | +False _ -> ! exit 0
   end
 end

@@ -7,7 +7,7 @@ def ! const (A: VType) (A': VType) (a: A) (_: A') =
 end
 
 def ! one =
-  ! const Int Int 10
+  ! const Int Int 0
 end
 
 main

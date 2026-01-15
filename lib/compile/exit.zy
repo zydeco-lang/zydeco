@@ -1,5 +1,5 @@
 extern def exit : Thk (Int -> OS) end
 
 main
-  ! exit 42
+  ! exit 0
 end
