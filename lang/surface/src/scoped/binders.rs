@@ -44,7 +44,7 @@ impl Binders for PatId {
     }
 }
 
-impl Resolver {
+impl<'a> Resolver<'a> {
     /// Collect global binders and record primitive definitions.
     pub(super) fn collect_global_binders(
         &mut self, decls: &[DeclId], mut global: Global,

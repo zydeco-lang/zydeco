@@ -26,7 +26,7 @@ impl_span_view_pair! {
 macro_rules! impl_span_view_resolver {
     ($($ty:ty)*) => {
         $(
-            impl<'a> SpanView<'a, Resolver> for $ty {
+            impl<'a> SpanView<'a, Resolver<'a>> for $ty {
                 fn span(&self, resolver: &'a Resolver) -> &'a Span {
                     let entity = resolver.bitter.textual.back(&(*self).into()).unwrap();
                     &resolver.spans[&entity]

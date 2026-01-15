@@ -20,8 +20,8 @@ pub struct Local {
 }
 
 /// Name-resolution state and accumulators.
-pub struct Resolver {
-    pub spans: SpanArena,
+pub struct Resolver<'a> {
+    pub spans: &'a SpanArena,
     pub bitter: BitterArena,
     pub prim_term: PrimTerms,
     pub prim_def: PrimDefs,
@@ -42,17 +42,35 @@ pub struct Resolver {
 
 /// Output of the name-resolution pass.
 pub struct ResolveOut {
-    pub spans: SpanArena,
     pub prim: PrimDefs,
     pub arena: ScopedArena,
 }
 
-impl Resolver {
+impl<'a> Resolver<'a> {
+    pub fn new(spans: &'a SpanArena, bitter: BitterArena, prim_term: PrimTerms) -> Self {
+        Self {
+            spans,
+            bitter,
+            prim_term,
+            prim_def: PrimDefs::default(),
+            internal_to_def: ArenaAssoc::default(),
+
+            defs: ArenaAssoc::default(),
+            pats: ArenaAssoc::default(),
+            terms: ArenaAssoc::default(),
+            decls: ArenaAssoc::default(),
+
+            users: ArenaForth::default(),
+            metas: ArenaAssoc::default(),
+            exts: ArenaAssoc::default(),
+            deps: DepGraph::default(),
+        }
+    }
     /// Run name resolution and context collection over the top-level program.
     pub fn run(mut self, top: &TopLevel) -> Result<ResolveOut> {
         top.resolve(&mut self, ())?;
         let Resolver {
-            spans,
+            spans: _,
             bitter,
             prim_term: _,
             prim_def: prim,
@@ -110,7 +128,6 @@ impl Resolver {
         }
         .run()?;
         Ok(ResolveOut {
-            spans,
             prim,
             arena: ScopedArena {
                 defs,

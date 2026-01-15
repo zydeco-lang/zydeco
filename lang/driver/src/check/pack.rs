@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::PathBuf};
 use zydeco_dynamics::Linker;
 use zydeco_statics::{tyck::Tycker, wf::WellFormedProgram};
 use zydeco_surface::scoped::{ResolveOut, Resolver};
-use zydeco_utils::prelude::{ArcGlobalAlloc, ArenaAssoc, ArenaForth, DepGraph, IndexAlloc};
+use zydeco_utils::prelude::{ArcGlobalAlloc, IndexAlloc};
 
 #[derive(Clone)]
 pub struct PackageStew {
@@ -40,24 +40,8 @@ impl PackageStew {
     }
     pub fn resolve(self, _alloc: IndexAlloc<usize>) -> Result<PackageScoped> {
         let PackageStew { sources, spans, arena: bitter, prim_term, top } = self;
-        let resolver = Resolver {
-            spans,
-            bitter,
-            prim_term,
-            prim_def: sc::PrimDefs::default(),
-            internal_to_def: ArenaAssoc::default(),
-
-            defs: ArenaAssoc::default(),
-            pats: ArenaAssoc::default(),
-            terms: ArenaAssoc::default(),
-            decls: ArenaAssoc::default(),
-
-            users: ArenaForth::default(),
-            metas: ArenaAssoc::default(),
-            exts: ArenaAssoc::default(),
-            deps: DepGraph::default(),
-        };
-        let ResolveOut { spans, prim, arena } =
+        let resolver = Resolver::new(&spans, bitter, prim_term);
+        let ResolveOut { prim, arena } =
             resolver.run(&top).map_err(|err| CompileError::ResolveError(err.to_string()))?;
         Ok(PackageScoped { sources, spans, prim, arena })
     }
