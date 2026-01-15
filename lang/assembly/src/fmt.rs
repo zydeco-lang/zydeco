@@ -56,7 +56,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VarId {
             .arena
             .defs
             .back(&DefId::Var(*self))
-            .map_or_else(|| String::new(), |def| format!("/{}", def.concise_inner()));
+            .map_or_else(String::new, |def| format!("/{}", def.concise_inner()));
         RcDoc::text(format!("{}[{}{}]", f.arena.variables[self], self.concise_inner(), trailing))
     }
 }

@@ -285,7 +285,7 @@ impl fmt::Display for MemRef {
         use std::cmp::Ordering;
         let offset = match self.offset.cmp(&0) {
             | Ordering::Less => format!(" - {}", -self.offset),
-            | Ordering::Equal => format!(""),
+            | Ordering::Equal => String::new(),
             | Ordering::Greater => format!(" + {}", self.offset),
         };
         write!(f, "[{}{}]", self.reg, offset)
@@ -346,11 +346,9 @@ impl fmt::Display for LeaArgs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             | LeaArgs::Displace { base, scaled_index, offset } => {
-                let scaled_index = scaled_index.map_or_else(
-                    || format!(""),
-                    |(index, scale)| format!(" + {}*{}", index, scale),
-                );
-                let offset = offset.map_or_else(|| format!(""), |offset| format!(" + {}", offset));
+                let scaled_index = scaled_index
+                    .map_or_else(String::new, |(index, scale)| format!(" + {}*{}", index, scale));
+                let offset = offset.map_or_else(String::new, |offset| format!(" + {}", offset));
 
                 write!(f, "[{}{}{}]", base, scaled_index, offset)
             }

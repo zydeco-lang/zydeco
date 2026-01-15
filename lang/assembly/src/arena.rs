@@ -62,11 +62,11 @@ where
 {
     fn sym_label(&self, sym: &SymId) -> String {
         let this = self.as_ref();
-        format!("{}_{}", this.symbols[&sym].name, sym.concise_inner().replace('#', "_"))
+        format!("{}_{}", this.symbols[sym].name, sym.concise_inner().replace('#', "_"))
     }
     fn prog_label(&self, prog: &ProgId) -> Option<String> {
         let this = self.as_ref();
-        this.labels.get(&prog).map(|sym| this.sym_label(sym))
+        this.labels.get(prog).map(|sym| this.sym_label(sym))
     }
 }
 
@@ -197,8 +197,7 @@ where
     type Site = Context;
     fn build<'f: 'a>(self, arena: &'f mut Arena, cx: Self::Site) -> ProgId {
         let terminator = self.into();
-        let id = Program::Terminator(terminator).build(arena, cx);
-        id
+        Program::Terminator(terminator).build(arena, cx)
     }
 }
 
@@ -215,7 +214,6 @@ where
         let instr = self.into();
         let cx_incr = incr(&cx);
         let next = kont(arena, cx_incr);
-        let id = Program::Instruction(instr, next).build(arena, cx);
-        id
+        Program::Instruction(instr, next).build(arena, cx)
     }
 }

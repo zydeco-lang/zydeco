@@ -57,7 +57,7 @@ impl<'a> Lowerer<'a> {
             // Collect globals with their def_ids for unified processing
             let globals: Vec<_> = (self.stack.sequence.clone().iter())
                 .rev()
-                .map(|&def_id| (def_id, self.stack.globals[&def_id].clone()))
+                .map(|&def_id| (def_id, self.stack.globals[&def_id]))
                 .collect();
 
             // Build a continuation that initializes all globals in order
@@ -75,7 +75,7 @@ impl<'a> Lowerer<'a> {
                                 cx,
                                 Box::new(move |lo: &mut Lowerer, cx| {
                                     let name = lo.scoped.defs[&def_id].clone();
-                                    let var = VarName::from(name).build(lo, Some(def_id));
+                                    let var = name.build(lo, Some(def_id));
                                     let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
                                     Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
                                 }),
@@ -121,7 +121,7 @@ impl<'a> Lowerer<'a> {
                             break data;
                         }
                         | Fillable::Done(Type::Abst(abst)) => {
-                            ty = self.statics.seals[&abst].clone();
+                            ty = self.statics.seals[&abst];
                         }
                         | Fillable::Done(Type::Abs(Abs(_, _body))) => {
                             // ty = body;
@@ -144,7 +144,7 @@ impl<'a> Lowerer<'a> {
                             );
                         }
                         | Fillable::Fill(fill) => {
-                            let AnnId::Type(ty_) = self.statics.solus[&fill].clone() else {
+                            let AnnId::Type(ty_) = self.statics.solus[&fill] else {
                                 let (span_str, ty_str) = err_msg();
                                 unreachable!(
                                     "Value type {} is not a type in statics{}",
@@ -185,7 +185,7 @@ impl<'a> Lowerer<'a> {
             unreachable!("Constructor is not a value in statics")
         };
         // Get the type annotation
-        let ty = self.statics.annotations_value[value].clone();
+        let ty = self.statics.annotations_value[value];
         self.find_ctor_tag_idx(ty, ctor_name)
     }
 
@@ -232,7 +232,7 @@ impl<'a> Lowerer<'a> {
                         break codata;
                     }
                     | Fillable::Done(Type::Abst(abst)) => {
-                        ty = self.statics.seals[&abst].clone();
+                        ty = self.statics.seals[&abst];
                     }
                     | Fillable::Done(Type::Abs(Abs(_, _body))) => {
                         // ty = body;
@@ -255,7 +255,7 @@ impl<'a> Lowerer<'a> {
                         );
                     }
                     | Fillable::Fill(fill) => {
-                        let AnnId::Type(ty_) = self.statics.solus[&fill].clone() else {
+                        let AnnId::Type(ty_) = self.statics.solus[&fill] else {
                             let (span_str, ty_str) = err_msg();
                             unreachable!(
                                 "Computation type {} is not a type in statics{}",
@@ -325,7 +325,7 @@ impl<'a> Lower<'a> for sk::VPatId {
             | VPat::Var(def_id) => {
                 // Pop the value from the stack into the variable
                 let name = lo.scoped.defs[&def_id].clone();
-                let var = VarName::from(name).build(lo, Some(def_id));
+                let var = name.build(lo, Some(def_id));
                 let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
                 Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
             }

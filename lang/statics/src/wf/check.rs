@@ -33,7 +33,7 @@ impl WellFormedProgram {
                                 // nothing to do for type aliases
                                 | Decl::TAliasBody(_) => {}
                                 | Decl::VAliasBody(ss::VAliasBody { binder, bindee }) => {
-                                    assignments.push((id.clone(), binder, bindee));
+                                    assignments.push((*id, binder, bindee));
                                 }
                                 | Decl::VAliasHead(ss::VAliasHead { binder, ty: _ }) => {
                                     use ss::ValuePattern as VPat;
@@ -137,26 +137,24 @@ impl WellFormedProgram {
 
         let users = users
             .into_iter()
-            .map(|(def, sites)| {
-                (def, sites.into_iter().map(|site| terms.forth(&site).clone()).collect())
-            })
+            .map(|(def, sites)| (def, sites.into_iter().map(|site| *terms.forth(&site)).collect()))
             .collect();
         // Fixme: figure out what's not reachable during the forth
         let ctxs_term = ctxs_term
             .into_iter()
-            .filter_map(|(term, ctx)| terms.try_forth(&term).map(|term| (term.clone(), ctx)))
+            .filter_map(|(term, ctx)| terms.try_forth(&term).map(|term| (*term, ctx)))
             .collect();
         let ctxs_pat_local = ctxs_pat_local
             .into_iter()
-            .filter_map(|(pat, ctx)| pats.try_forth(&pat).map(|pat| (pat.clone(), ctx)))
+            .filter_map(|(pat, ctx)| pats.try_forth(&pat).map(|pat| (*pat, ctx)))
             .collect();
         let coctxs_pat_local = coctxs_pat_local
             .into_iter()
-            .filter_map(|(pat, ctx)| pats.try_forth(&pat).map(|pat| (pat.clone(), ctx)))
+            .filter_map(|(pat, ctx)| pats.try_forth(&pat).map(|pat| (*pat, ctx)))
             .collect();
         let coctxs_term_local = coctxs_term_local
             .into_iter()
-            .filter_map(|(term, ctx)| terms.try_forth(&term).map(|term| (term.clone(), ctx)))
+            .filter_map(|(term, ctx)| terms.try_forth(&term).map(|term| (*term, ctx)))
             .collect();
 
         Self {

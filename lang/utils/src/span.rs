@@ -131,7 +131,7 @@ impl Span {
         self.span1
     }
     pub fn get_path(&self) -> Option<&PathBuf> {
-        self.path.get().map(|o| o.as_ref()).flatten().map(|p| p.as_ref())
+        self.path.get().and_then(|o| o.as_ref()).map(|p| p.as_ref())
     }
     pub fn under_loc_ctx(self, loc: &LocationCtx) -> Self {
         match loc {

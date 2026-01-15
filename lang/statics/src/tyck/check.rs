@@ -314,8 +314,7 @@ impl Tyck for TyEnvT<SccGroup<su::DeclId>> {
                             tycker.statics.entry.insert(id.to_owned(), ());
                             let su::Exec(term) = decl;
                             // check if the exec is annotated as pure
-                            if let Some(meta) =
-                                tycker.scoped.metas.get(id).map(|v| v.last()).flatten()
+                            if let Some(meta) = tycker.scoped.metas.get(id).and_then(|v| v.last())
                                 && &meta.stem == "pure"
                             {
                                 // check with Ret

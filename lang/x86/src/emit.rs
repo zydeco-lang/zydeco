@@ -142,7 +142,7 @@ impl<'e> Emitter<'e> {
                     }
                     let mut buf_doc = String::new();
                     use zydeco_assembly::fmt::*;
-                    let fmter = Formatter::new(&self.assembly);
+                    let fmter = Formatter::new(self.assembly);
                     let doc = match &self.assembly.programs[prog] {
                         | Program::Terminator(terminator) => terminator.pretty(&fmter),
                         | Program::Instruction(instruction, _) => instruction.pretty(&fmter),
@@ -264,7 +264,7 @@ impl<'a> Emit<'a> for Terminator {
                     id,
                     arms: sorted_arms
                         .into_iter()
-                        .map(|(_, (name, prog_id))| (name.clone(), prog_id.clone()))
+                        .map(|(_, (name, prog_id))| (name.clone(), *prog_id))
                         .collect(),
                 };
                 let label = table.rodata_label();
@@ -375,7 +375,7 @@ impl<'a> Emit<'a> for Instruction {
             }
             | Instruction::PopArg(sa::Pop(var_id)) => {
                 // Pop argument from stack into variable
-                let var_name = &em.assembly.variables[&var_id];
+                let var_name = &em.assembly.variables[var_id];
                 let idx = em.assembly.contexts[&id].iter().len() as i32;
                 em.asm.text.extend([
                     Instr::Comment(format!("pop_arg {}{}", var_name.plain(), var_id.concise())),

@@ -276,7 +276,7 @@ impl Cajun {
 
     fn find_def_location(&self, project: &ProjectState, def_id: DefId) -> Option<Location> {
         let entity = project.scoped.arena.textual.back(&def_id.into())?;
-        let span = &project.scoped.spans[&entity];
+        let span = &project.scoped.spans[entity];
         let (start, end) = span.get_cursor1();
         let path = span.get_path()?;
         let path = normalize_path(path);

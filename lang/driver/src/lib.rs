@@ -317,8 +317,8 @@ impl BuildSystem {
             let interpreter = zydeco_assembly::interp::Interpreter::new(assembly);
             let output = interpreter.run()?;
             let msg = match output {
-                | zydeco_assembly::interp::Output::Exit => format!("Program exited with code 0"),
-                | zydeco_assembly::interp::Output::Panic => format!("Program panicked"),
+                | zydeco_assembly::interp::Output::Exit => "Program exited with code 0".to_string(),
+                | zydeco_assembly::interp::Output::Panic => "Program panicked".to_string(),
             };
             println!("{}", msg);
         } else {

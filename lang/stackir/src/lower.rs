@@ -289,7 +289,7 @@ impl Lower for ss::CompuId {
     type Kont = ();
     type Out = CompuId;
 
-    fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
+    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
         let compu = lo.statics.compus[self].clone();
         let site = Some(ss::TermId::Compu(*self));
         use ss::Computation as Compu;
@@ -314,11 +314,11 @@ impl Lower for ss::CompuId {
             ),
             | Compu::TAbs(Abs(_param, body)) => {
                 // Type abstractions are erased
-                body.lower(lo, kont)
+                body.lower(lo, ())
             }
             | Compu::TApp(App(body, _arg)) => {
                 // Type applications are erased
-                body.lower(lo, kont)
+                body.lower(lo, ())
             }
             | Compu::Fix(Fix(param, body)) => {
                 // Extract DefId from binder (should be a Var pattern)

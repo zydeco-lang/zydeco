@@ -19,7 +19,7 @@ impl SubstitutionInPlace for ValueId {
         match value {
             | Value::Var(def_id) => match map.get(&def_id) {
                 | Some(new_value_id) => {
-                    let new_value = arena_mut.values[&new_value_id].clone();
+                    let new_value = arena_mut.values[new_value_id].clone();
                     arena_mut.values.replace(self, new_value)
                 }
                 | None => {}

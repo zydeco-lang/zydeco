@@ -54,7 +54,7 @@ where
 {
     type Output = Self;
     fn add(self, other: Iter) -> Self {
-        Context::from_iter(self.0.into_iter().chain(other.into_iter()))
+        Context::from_iter(self.0.into_iter().chain(other))
     }
 }
 

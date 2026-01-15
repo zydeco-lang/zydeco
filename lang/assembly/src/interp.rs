@@ -41,6 +41,11 @@ impl Runtime {
         Self { stack: Vec::new(), heap: Vec::new(), context: im::HashMap::new() }
     }
 }
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
