@@ -128,35 +128,37 @@ impl<'e> Emitter<'e> {
         entry.emit((), &mut self);
 
         // Debug print the scc graph
-        let mut buf = String::new();
-        let mut scc = zydeco_utils::graph::Kosaraju::new(&self.assembly.deps).run();
-        let mut count = 0;
-        loop {
+        {
             use std::fmt::Write;
-            let query = scc.top().into_iter().flatten().collect::<Vec<_>>();
-            for prog in query.iter() {
-                if let Some(label) = self.assembly.prog_label(prog) {
-                    writeln!(&mut buf, "{}:", label).unwrap();
+            let mut buf = String::new();
+            let mut scc = zydeco_utils::graph::Kosaraju::new(&self.assembly.deps).run();
+            let mut count = 0;
+            writeln!(&mut buf, "instruction SCC graph:").unwrap();
+            loop {
+                let query = scc.top().into_iter().flatten().collect::<Vec<_>>();
+                for prog in query.iter() {
+                    if let Some(label) = self.assembly.prog_label(prog) {
+                        writeln!(&mut buf, "{}:", label).unwrap();
+                    }
+                    let mut buf_doc = String::new();
+                    use zydeco_assembly::fmt::*;
+                    let fmter = Formatter::new(&self.assembly);
+                    let doc = match &self.assembly.programs[prog] {
+                        | Program::Terminator(terminator) => terminator.pretty(&fmter),
+                        | Program::Instruction(instruction, _) => instruction.pretty(&fmter),
+                    };
+                    doc.render_fmt(usize::MAX, &mut buf_doc).unwrap();
+                    writeln!(&mut buf, "{} - {}", count, buf_doc).unwrap();
+                    count += 1;
                 }
-                let mut buf_doc = String::new();
-                use zydeco_assembly::fmt::*;
-                let fmter = Formatter::new(&self.assembly);
-                let doc = match &self.assembly.programs[prog] {
-                    | Program::Terminator(terminator) => terminator.pretty(&fmter),
-                    | Program::Instruction(instruction, _) => instruction.pretty(&fmter),
-                };
-                doc.render_fmt(usize::MAX, &mut buf_doc).unwrap();
-                writeln!(&mut buf, "{} - {}", count, buf_doc).unwrap();
-                count += 1;
+                if query.is_empty() {
+                    break;
+                } else {
+                    scc.release(query);
+                }
             }
-            if query.is_empty() {
-                break;
-            } else {
-                scc.release(query);
-            }
+            log::trace!("{}", buf);
         }
-        log::trace!("{}", buf);
-
         // Emit the named blocks
         for (prog_id, _) in &self.assembly.programs {
             if let Some(label) = self.assembly.prog_label(prog_id) {

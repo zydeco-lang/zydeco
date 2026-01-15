@@ -339,7 +339,7 @@ impl BuildSystem {
             .run()
             .to_string();
         if verbose {
-            log::trace!("X86 assembly:\n{}", &assembly);
+            log::trace!("x86 assembly:\n{}", &assembly);
         }
         let build_conf = self
             .build_confs
