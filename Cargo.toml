@@ -22,7 +22,7 @@ exclude = ["build"]
 
 [workspace.package]
 version = "0.2.2"
-rust-version = "1.90"
+rust-version = "1.92"
 authors = ["The Zydeco Project Developers"]
 edition = "2024"
 # homepage = "https://zydeco-lang.github.io"

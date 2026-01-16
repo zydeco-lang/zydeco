@@ -15,7 +15,6 @@
     "Programming Languages"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [],
   "contributes": {
     "languages": [
       {
@@ -49,10 +48,10 @@
     "publish": "vsce publish --no-dependencies"
   },
   "devDependencies": {
-    "@types/node": "^24.0.3",
-    "@types/vscode": "^1.96.0",
-    "esbuild": "^0.27.1",
-    "typescript": "^5.8.3"
+    "@types/node": "^25.0.9",
+    "@types/vscode": "^1.108.1",
+    "esbuild": "^0.27.2",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
