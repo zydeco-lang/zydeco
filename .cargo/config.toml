@@ -8,4 +8,4 @@ rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
 build-all = "build --all --exclude zydeco-runtime"
 test-all = "test --all --exclude zydeco-runtime"
 clippy-all = "clippy --all --exclude zydeco-runtime"
-fix-all = "fix --all --exclude zydeco-runtime"
+clippy-fix-all = "clippy --all --exclude zydeco-runtime --fix"
