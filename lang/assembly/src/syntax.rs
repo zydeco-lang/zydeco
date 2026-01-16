@@ -40,8 +40,8 @@ pub enum Terminator {
     LeapJump(LeapJump),
     /// A jump table.
     PopBranch(PopBranch),
-    /// Panic.
-    Panic(Panic),
+    /// Abort.
+    Abort(Abort),
     /// Call an external function.
     Extern(Extern),
 }
@@ -103,7 +103,7 @@ pub struct LeapJump;
 #[derive(Clone, Debug)]
 pub struct PopBranch(pub Vec<(Tag, ProgId)>);
 #[derive(Clone, Debug)]
-pub struct Panic;
+pub struct Abort;
 
 #[derive(Clone, Debug)]
 pub struct Tag {

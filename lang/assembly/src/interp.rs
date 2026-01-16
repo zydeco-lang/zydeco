@@ -137,7 +137,7 @@ impl Eval for Terminator {
                 log::trace!("extern: {:?}, {:?}", name, arity);
                 todo!()
             }
-            | Terminator::Panic(Panic) => todo!(),
+            | Terminator::Abort(Abort) => todo!(),
         }
     }
 }

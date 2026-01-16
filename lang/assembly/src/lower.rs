@@ -391,7 +391,7 @@ impl<'a> Lower<'a> for sk::ValueId {
         let value = lo.stack.values[self].clone();
         use sk::Value;
         match value {
-            | Value::Hole(Hole) => Panic.build(lo, cx),
+            | Value::Hole(Hole) => Abort.build(lo, cx),
             | Value::Var(def_id) => {
                 // Retrieve the variable from the context
                 let _name = lo.scoped.defs[&def_id].clone();
@@ -607,7 +607,7 @@ impl<'a> Lower<'a> for sk::CompuId {
         let compu = lo.stack.compus[self].clone();
         use sk::Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => Panic.build(lo, cx),
+            | Compu::Hole(Hole) => Abort.build(lo, cx),
             | Compu::Force(sk::SForce { thunk, stack }) => {
                 // Lower the stack first
                 stack.lower(

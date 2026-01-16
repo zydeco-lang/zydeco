@@ -162,7 +162,7 @@ where
                     }
                 }
                 | Terminator::Extern(Extern { .. }) => {}
-                | Terminator::Panic(Panic) => {}
+                | Terminator::Abort(Abort) => {}
             },
         }
         let id = this.programs.alloc(program.clone());
@@ -181,7 +181,7 @@ where
                     }
                 }
                 | Terminator::Extern(Extern { .. }) => {}
-                | Terminator::Panic(Panic) => {}
+                | Terminator::Abort(Abort) => {}
             },
         }
 

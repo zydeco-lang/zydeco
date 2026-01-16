@@ -86,7 +86,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Terminator {
             | Terminator::LeapJump(leap_jump) => leap_jump.pretty(f),
             | Terminator::PopBranch(branch) => branch.pretty(f),
             | Terminator::Extern(ext) => ext.pretty(f),
-            | Terminator::Panic(panic) => panic.pretty(f),
+            | Terminator::Abort(panic) => panic.pretty(f),
         }
     }
 }
@@ -141,7 +141,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for PopBranch {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Panic {
+impl<'a> Pretty<'a, Formatter<'a>> for Abort {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text("panic")
     }

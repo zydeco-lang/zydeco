@@ -292,10 +292,9 @@ impl<'a> Emit<'a> for Terminator {
                 em.asm.text.push(Instr::Comment(format!("extern: {:?}, {:?}", name, arity)));
                 em.asm.text.extend([Instr::Jmp(JmpArgs::Label(format!("wrapper_{}", name)))]);
             }
-            | Terminator::Panic(_) => {
-                em.asm.text.push(Instr::Comment("panic".to_string()));
-                // TODO: Implement panic
-                todo!()
+            | Terminator::Abort(sa::Abort) => {
+                em.asm.text.push(Instr::Comment("abort".to_string()));
+                em.asm.text.push(Instr::Jmp(JmpArgs::Label("zydeco_abort".to_string())));
             }
         }
     }
