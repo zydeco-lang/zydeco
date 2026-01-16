@@ -2,6 +2,10 @@
 
 This file is guidance for automated assistants working in this repository.
 
+## Adding a Dependency
+
+All Rust dependencies are managed in the top-level `Cargo.toml` file, under `[workspace.dependencies]`. All crates then use `dependency = { workspace = true }` to refer to the workspace-registered dependencies in their own `Cargo.toml`.
+
 ## Project Snapshot
 
 - Zydeco is a proof-of-concept programming language based on call-by-push-value.

@@ -98,7 +98,7 @@ mod impls_identifiers {
                 | PatAnnId::Value(pat, _) => PatId::Value(pat),
             }
         }
-        pub fn mk_hole(tycker: &mut Tycker, ann: AnnId) -> Self {
+        pub fn mk_hole(tycker: &mut Tycker<'_>, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
@@ -111,7 +111,7 @@ mod impls_identifiers {
                 }
             }
         }
-        pub fn mk_var(tycker: &mut Tycker, def: DefId, ann: AnnId) -> Self {
+        pub fn mk_var(tycker: &mut Tycker<'_>, def: DefId, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
@@ -137,7 +137,7 @@ mod impls_identifiers {
             }
         }
         pub fn try_as_type(
-            self, tycker: &mut Tycker, err: TyckError,
+            self, tycker: &mut Tycker<'_>, err: TyckError,
             blame: &'static std::panic::Location<'static>,
         ) -> ResultKont<(TPatId, KindId)> {
             match self {
@@ -146,7 +146,7 @@ mod impls_identifiers {
             }
         }
         pub fn try_as_value(
-            self, tycker: &mut Tycker, err: TyckError,
+            self, tycker: &mut Tycker<'_>, err: TyckError,
             blame: &'static std::panic::Location<'static>,
         ) -> ResultKont<(VPatId, TypeId)> {
             match self {
@@ -177,7 +177,7 @@ mod impls_identifiers {
             }
         }
         pub fn try_as_kind(
-            self, tycker: &mut Tycker, err: TyckError,
+            self, tycker: &mut Tycker<'_>, err: TyckError,
             blame: &'static std::panic::Location<'static>,
         ) -> ResultKont<KindId> {
             match self {
@@ -189,7 +189,7 @@ mod impls_identifiers {
             }
         }
         pub fn try_as_type(
-            self, tycker: &mut Tycker, err: TyckError,
+            self, tycker: &mut Tycker<'_>, err: TyckError,
             blame: &'static std::panic::Location<'static>,
         ) -> ResultKont<(TypeId, KindId)> {
             match self {
@@ -201,7 +201,7 @@ mod impls_identifiers {
             }
         }
         pub fn try_as_value(
-            self, tycker: &mut Tycker, err: TyckError,
+            self, tycker: &mut Tycker<'_>, err: TyckError,
             blame: &'static std::panic::Location<'static>,
         ) -> ResultKont<(ValueId, TypeId)> {
             match self {
@@ -213,7 +213,7 @@ mod impls_identifiers {
             }
         }
         pub fn try_as_compu(
-            self, tycker: &mut Tycker, err: TyckError,
+            self, tycker: &mut Tycker<'_>, err: TyckError,
             blame: &'static std::panic::Location<'static>,
         ) -> ResultKont<(CompuId, TypeId)> {
             match self {

@@ -7,18 +7,18 @@ pub trait MonConstruct<T>: Sized {
     /// Build the term with the given type checker and environment.
     ///
     /// See [`MonConstruct`] level documentation for more details.
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, T)>;
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, T)>;
 
     /// Turn the result of [`MonConstruct::mbuild`] into a [`ResultKont`].
     /// Eaiser to use under a `_k` context.
-    fn mbuild_k(self, tycker: &mut Tycker, env: MonEnv) -> ResultKont<(MonEnv, T)> {
+    fn mbuild_k(self, tycker: &mut Tycker<'_>, env: MonEnv) -> ResultKont<(MonEnv, T)> {
         let res = self.mbuild(tycker, env);
         tycker.err_p_to_k(res)
     }
 }
 
 // impl<C, T> MonConstruct<T> for C where C: Construct<T> {
-//     fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, T)> {
+//     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, T)> {
 //         let res = self.build(tycker, &env.ty);
 //         Ok((env, res))
 //     }
@@ -48,7 +48,7 @@ macro_rules! impl_mon_construct_from_construct {
     ) => {
         impl<$($ty_params),*> MonConstruct<$dst> for $src
         {
-            fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, $dst)> {
+            fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, $dst)> {
                 let res = self.build(tycker, &env.ty);
                 Ok((env, res))
             }
@@ -60,7 +60,7 @@ macro_rules! impl_mon_construct_from_construct {
     ) => {
         impl<$($ty_params),*> MonConstruct<$dst> for & $src
         {
-            fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, $dst)> {
+            fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, $dst)> {
                 let res = self.build(tycker, &env.ty);
                 Ok((env, res))
             }
@@ -73,9 +73,9 @@ macro_rules! impl_mon_construct_from_construct {
 impl<S, T, A, U> MonConstruct<T> for cs::Ann<S, U>
 where
     U: MonConstruct<A>,
-    S: Alloc<Tycker, T, Ann = A>,
+    for<'a> S: Alloc<Tycker<'a>, T, Ann = A>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, T)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, T)> {
         let cs::Ann(tm, ty) = self;
         let (env, ty) = ty.mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, tm, ty)))
@@ -90,7 +90,7 @@ where
     F: FnOnce(I) -> O,
     O: MonConstruct<R>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, R)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, R)> {
         let cs::CBind(input, _, f) = self;
         let (env, input) = input.mbuild(tycker, env)?;
         let (env, output) = f(input).mbuild(tycker, env)?;
@@ -113,7 +113,7 @@ impl_mon_construct_from_construct! {
 }
 // need to perform substitution whenever necessary
 impl MonConstruct<DefId> for DefId {
-    fn mbuild(self, _tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, DefId)> {
+    fn mbuild(self, _tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, DefId)> {
         match env.subst.get(&self).cloned() {
             | Some(new) => Ok((env, new)),
             | None => Ok((env, self)),
@@ -121,7 +121,7 @@ impl MonConstruct<DefId> for DefId {
     }
 }
 impl MonConstruct<AbstId> for AbstId {
-    fn mbuild(self, _tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
+    fn mbuild(self, _tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, AbstId)> {
         match env.subst_abst.get(&self).cloned() {
             | Some(new) => Ok((env, new)),
             | None => Ok((env, self)),
@@ -155,7 +155,7 @@ impl<K> MonConstruct<AbstId> for cs::Ann<VarName, K>
 where
     K: MonConstruct<KindId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, AbstId)> {
         let cs::Ann(var, kd) = self;
         let (env, kd) = kd.mbuild(tycker, env)?;
         let def = Alloc::alloc(tycker, var, kd.into());
@@ -166,7 +166,7 @@ impl<K> MonConstruct<AbstId> for cs::Ann<String, K>
 where
     K: MonConstruct<KindId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, AbstId)> {
         let cs::Ann(tm, kd) = self;
         cs::Ann(VarName(tm), kd).mbuild(tycker, env)
     }
@@ -175,7 +175,7 @@ impl<K> MonConstruct<AbstId> for cs::Ann<&str, K>
 where
     K: MonConstruct<KindId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, AbstId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, AbstId)> {
         let cs::Ann(tm, kd) = self;
         cs::Ann(tm.to_string(), kd).mbuild(tycker, env)
     }
@@ -195,7 +195,7 @@ where
     S: MonConstruct<KindId>,
     T: MonConstruct<KindId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, KindId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, KindId)> {
         let Arrow(k1, k2) = self;
         let (env, k1) = k1.mbuild(tycker, env)?;
         let (env, k2) = k2.mbuild(tycker, env)?;
@@ -209,7 +209,7 @@ mod kind_test {
 
     #[test]
     fn r#static() {
-        fn _f(tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, KindId)> {
+        fn _f(tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, KindId)> {
             // VType -> (CType -> CType)
             Arrow(VType, Arrow(CType, CType)).mbuild(tycker, env)
         }
@@ -222,7 +222,7 @@ impl<K> MonConstruct<TPatId> for cs::Pat<Hole, K>
 where
     K: MonConstruct<KindId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TPatId)> {
         let cs::Pat(Hole, kd) = self;
         let (env, kd) = kd.mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, Hole, kd)))
@@ -232,7 +232,7 @@ impl<K> MonConstruct<TPatId> for cs::Pat<DefId, K>
 where
     K: MonConstruct<KindId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TPatId)> {
         let cs::Pat(def, kd) = self;
         let (mut env, kd) = kd.mbuild(tycker, env)?;
         use zydeco_surface::scoped::arena::ArenaScoped;
@@ -248,7 +248,7 @@ impl<K> MonConstruct<TPatId> for cs::Pat<Option<DefId>, K>
 where
     K: MonConstruct<KindId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TPatId)> {
         let cs::Pat(tm, kd) = self;
         match tm {
             | Some(def) => cs::Pat(def, kd).mbuild(tycker, env),
@@ -261,7 +261,7 @@ where
     V: MonConstruct<VarName>,
     K: MonConstruct<KindId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TPatId)> {
         let cs::Pat(var, kd) = self;
         let (env, var) = var.mbuild(tycker, env)?;
         let (env, ty) = kd.mbuild(tycker, env)?;
@@ -276,7 +276,7 @@ impl<T> MonConstruct<TypeId> for cs::Type<T>
 where
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Type(ty) = self;
         ty.mbuild(tycker, env)
     }
@@ -290,7 +290,7 @@ impl<K> MonConstruct<TypeId> for cs::Ann<Hole, (K, su::TermId)>
 where
     K: MonConstruct<KindId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Ann(Hole, (kd, site)) = self;
         let (env, kd) = kd.mbuild(tycker, env)?;
         let fill = tycker.statics.fills.alloc(site);
@@ -298,7 +298,7 @@ where
     }
 }
 impl MonConstruct<TypeId> for DefId {
-    fn mbuild(self, _tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, _tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         // need to first substitute in the subst environment
         let Some(ty) = env.subst.get(&self) else { unreachable!() };
         let AnnId::Type(ty) = env.ty[&ty] else { unreachable!() };
@@ -314,7 +314,7 @@ where
     F: FnOnce(TPatId, DefId, KindId) -> T,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let Abs(param, ty) = self;
         let (env, tpat) = param.mbuild(tycker, env)?;
         let (def, param_kd) = tpat.destruct_def(tycker);
@@ -328,7 +328,7 @@ where
     S: MonConstruct<TypeId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let App(ty_1, ty_2) = self;
         let (env, ty_1) = ty_1.mbuild(tycker, env)?;
         let kd_1 = tycker.statics.annotations_type[&ty_1];
@@ -355,7 +355,7 @@ impl<T> MonConstruct<TypeId> for cs::Thk<T>
 where
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Thk(arg) = self;
         let (env, thk) = ThkTy.mbuild(tycker, env)?;
         let (env, arg) = arg.mbuild(tycker, env)?;
@@ -368,7 +368,7 @@ where
     F: Clone + FnOnce(CtorName, TypeId) -> T,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Data(data, f) = self;
         let arms = tycker.statics.datas[&data].clone();
         let arms_ = arms
@@ -388,7 +388,7 @@ where
     S: MonConstruct<TypeId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let Prod(ty_1, ty_2) = self;
         let (env, ty_1) = ty_1.mbuild(tycker, env)?;
         let (env, ty_2) = ty_2.mbuild(tycker, env)?;
@@ -402,7 +402,7 @@ where
     A: MonConstruct<AbstId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Exists(abst, ty) = self;
         let (env, abst) = abst.mbuild(tycker, env)?;
         let (env, ty) = ty(abst).mbuild(tycker, env)?;
@@ -419,7 +419,7 @@ where
     F: Clone + FnOnce(DtorName, TypeId) -> T,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::CoData(coda, f) = self;
         let arms = tycker.statics.codatas[&coda].clone();
         let arms_ = arms
@@ -439,7 +439,7 @@ where
     S: MonConstruct<TypeId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let Arrow(ty_1, ty_2) = self;
         let (env, ty_1) = ty_1.mbuild(tycker, env)?;
         let (env, ty_2) = ty_2.mbuild(tycker, env)?;
@@ -453,7 +453,7 @@ where
     A: MonConstruct<AbstId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Forall(abst, ty) = self;
         let (env, abst) = abst.mbuild(tycker, env)?;
         let (env, ty) = ty(abst).mbuild(tycker, env)?;
@@ -470,7 +470,7 @@ impl<T> MonConstruct<TypeId> for cs::Ret<T>
 where
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Ret(arg) = self;
         let (env, ret) = RetTy.mbuild(tycker, env)?;
         let (env, arg) = arg.mbuild(tycker, env)?;
@@ -482,7 +482,7 @@ impl<M> MonConstruct<TypeId> for cs::Monad<M>
 where
     M: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Monad(monad_ty) = self;
         App(cs::MonadTy, monad_ty).mbuild(tycker, env)
     }
@@ -492,7 +492,7 @@ where
     M: MonConstruct<TypeId>,
     R: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, TypeId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         let cs::Algebra(monad_ty, carrier) = self;
         App(App(cs::AlgebraTy, monad_ty), carrier).mbuild(tycker, env)
     }
@@ -504,7 +504,7 @@ impl<T> MonConstruct<VPatId> for cs::Pat<Hole, T>
 where
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(Hole, ty) = self;
         let (env, ty) = ty.mbuild(tycker, env)?;
         cs::Ann(Hole, ty).mbuild(tycker, env)
@@ -514,7 +514,7 @@ impl<T> MonConstruct<VPatId> for cs::Pat<DefId, T>
 where
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(def, ty) = self;
         let (mut env, ty) = ty.mbuild(tycker, env)?;
         use zydeco_surface::scoped::arena::ArenaScoped;
@@ -530,7 +530,7 @@ impl<T> MonConstruct<VPatId> for cs::Pat<Option<DefId>, T>
 where
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(tm, ty) = self;
         match tm {
             | Some(def) => cs::Pat(def, ty).mbuild(tycker, env),
@@ -543,7 +543,7 @@ where
     V: MonConstruct<VarName>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(var, ty) = self;
         let (env, ty) = ty.mbuild(tycker, env)?;
         let (env, var) = var.mbuild(tycker, env)?;
@@ -557,7 +557,7 @@ where
     V: MonConstruct<VPatId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(cs::Ctor(ctor, body), ty) = self;
         let (env, ctor) = ctor.mbuild(tycker, env)?;
         let (env, body) = body.mbuild(tycker, env)?;
@@ -566,7 +566,7 @@ where
     }
 }
 impl MonConstruct<VPatId> for Triv {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let Triv = self;
         let (env, ty) = UnitTy.mbuild(tycker, env)?;
         cs::Ann(Triv, ty).mbuild(tycker, env)
@@ -577,7 +577,7 @@ where
     S: MonConstruct<VPatId>,
     T: MonConstruct<VPatId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let Cons(a, b) = self;
         let (env, a) = a.mbuild(tycker, env)?;
         let a_ty = tycker.statics.annotations_vpat[&a];
@@ -594,7 +594,7 @@ where
     V: MonConstruct<VPatId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
         let cs::Pat(cs::TCons(a, f), ty) = self;
         let (env, ty) = ty.mbuild(tycker, env)?;
         let Some((abst, _)) = ty.destruct_exists(tycker) else { unreachable!() };
@@ -616,20 +616,20 @@ impl<T> MonConstruct<ValueId> for cs::Value<T>
 where
     T: MonConstruct<ValueId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         let cs::Value(arg) = self;
         arg.mbuild(tycker, env)
     }
 }
 impl MonConstruct<ValueId> for cs::Value<VPatId> {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         let cs::Value(vpat) = self;
         let value = vpat.reify(tycker);
         Ok((env, value))
     }
 }
 impl MonConstruct<ValueId> for DefId {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         // substitute according to the environment
         let def = env.subst.get(&self).cloned().unwrap_or(self);
         // and then get the type
@@ -638,7 +638,7 @@ impl MonConstruct<ValueId> for DefId {
     }
 }
 impl MonConstruct<ValueId> for Option<DefId> {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         let Some(def) = self else { unreachable!() };
         def.mbuild(tycker, env)
     }
@@ -647,7 +647,7 @@ impl<T> MonConstruct<ValueId> for Thunk<T>
 where
     T: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         let Thunk(body) = self;
         let (env, body) = body.mbuild(tycker, env)?;
         let body_ty = tycker.statics.annotations_compu[&body];
@@ -656,7 +656,7 @@ where
     }
 }
 impl MonConstruct<ValueId> for Triv {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         let (env, ty) = UnitTy.mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, Triv, ty)))
     }
@@ -666,7 +666,7 @@ where
     S: MonConstruct<ValueId>,
     T: MonConstruct<ValueId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         let Cons(a, b) = self;
         let (env, a) = a.mbuild(tycker, env)?;
         let a_ty = tycker.statics.annotations_value[&a];
@@ -682,7 +682,7 @@ where
     V: MonConstruct<ValueId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         let cs::Ann(Cons(cs::Ty(a), b), ty) = self;
         let (env, a) = a.mbuild(tycker, env)?;
         let (env, b) = b.mbuild(tycker, env)?;
@@ -696,7 +696,7 @@ where
     V: MonConstruct<ValueId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, ValueId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, ValueId)> {
         let cs::Ann(cs::Ctor(ctor, body), ty) = self;
         let (env, ctor) = ctor.mbuild(tycker, env)?;
         let (env, body) = body.mbuild(tycker, env)?;
@@ -711,7 +711,7 @@ impl<T> MonConstruct<CompuId> for cs::Compu<T>
 where
     T: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let cs::Compu(arg) = self;
         arg.mbuild(tycker, env)
     }
@@ -723,7 +723,7 @@ where
     F: FnOnce(VPatId) -> T,
     T: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Abs(vpat, body) = self;
         let (env, vpat): (_, VPatId) = vpat.mbuild(tycker, env)?;
         let param_ty = tycker.statics.annotations_vpat[&vpat];
@@ -740,7 +740,7 @@ where
     F: FnOnce(TPatId, AbstId) -> T,
     T: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Abs(cs::Ty(tpat), body) = self;
         let (env, tpat): (_, TPatId) = tpat.mbuild(tycker, env)?;
         let (def, param_kd) = tpat.try_destruct_def(tycker);
@@ -758,7 +758,7 @@ where
     F: FnOnce(Option<DefId>, AbstId) -> T,
     T: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Abs(cs::Ty(abst), body) = self;
         use zydeco_utils::arena::ArenaAccess;
         let def = tycker.statics.abst_hints.get(&abst).cloned();
@@ -777,7 +777,7 @@ where
     F: FnOnce(TPatId, AbstId) -> T,
     T: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Abs(cs::Ty((tpat, abst)), body) = self;
         let (env, tpat): (_, TPatId) = tpat.mbuild(tycker, env)?;
         let (env, body) = body(tpat, abst).mbuild(tycker, env)?;
@@ -793,7 +793,7 @@ where
     S: MonConstruct<CompuId>,
     T: MonConstruct<ValueId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let App(abs, arg) = self;
         let (env, abs) = abs.mbuild(tycker, env)?;
         let abs_ty = tycker.statics.annotations_compu[&abs];
@@ -810,7 +810,7 @@ where
     S: MonConstruct<CompuId>,
     T: MonConstruct<TypeId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let App(abs, cs::Ty(arg)) = self;
         let (env, abs) = abs.mbuild(tycker, env)?;
         let abs_ty = tycker.statics.annotations_compu[&abs];
@@ -845,7 +845,7 @@ where
     F: FnOnce(VPatId) -> T,
     T: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Fix(vpat, body) = self;
         let (env, vpat) = vpat.mbuild(tycker, env)?;
         let (env, body) = body(vpat).mbuild(tycker, env)?;
@@ -858,7 +858,7 @@ impl<T> MonConstruct<CompuId> for Force<T>
 where
     T: MonConstruct<ValueId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Force(thk) = self;
         let (env, thk) = thk.mbuild(tycker, env)?;
         let thk_ty = tycker.statics.annotations_value[&thk];
@@ -871,7 +871,7 @@ impl<T> MonConstruct<CompuId> for Return<T>
 where
     T: MonConstruct<ValueId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Return(val) = self;
         let (env, val) = val.mbuild(tycker, env)?;
         let val_ty = tycker.statics.annotations_value[&val];
@@ -887,7 +887,7 @@ where
     F: FnOnce(DefId) -> R,
     R: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Bind { binder, bindee, tail } = self;
         let (env, bindee) = bindee.mbuild(tycker, env)?;
         let bindee_ty = tycker.statics.annotations_compu[&bindee];
@@ -908,7 +908,7 @@ where
     F: FnOnce(VPatId) -> R,
     R: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Let { binder, bindee, tail } = self;
         let (env, bindee) = bindee.mbuild(tycker, env)?;
         let (env, binder) = binder.mbuild(tycker, env)?;
@@ -924,7 +924,7 @@ where
     F: Clone + FnOnce(CtorName, DefId, TypeId) -> R,
     R: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let cs::Match(scrut, arm) = self;
         let (env, scrut) = scrut.mbuild(tycker, env)?;
         let scrut_ty = tycker.statics.annotations_value[&scrut];
@@ -951,7 +951,7 @@ where
     F: Clone + FnOnce(DtorName, TypeId) -> R,
     R: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let cs::CoMatch(coda_id, arm) = self;
         let coda = tycker.statics.codatas[&coda_id].to_owned();
         let arms = (coda.into_iter())
@@ -972,7 +972,7 @@ impl<T> MonConstruct<CompuId> for Dtor<T>
 where
     T: MonConstruct<CompuId>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let Dtor(head, dtor) = self;
         let (env, head) = head.mbuild(tycker, env)?;
         let head_ty = tycker.statics.annotations_compu[&head];
@@ -986,7 +986,7 @@ where
     T: MonConstruct<CompuId>,
     D: MonConstruct<DtorName>,
 {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let cs::Dtor(head, dtor) = self;
         let (env, dtor) = dtor.mbuild(tycker, env)?;
         Dtor(head, dtor).mbuild(tycker, env)
@@ -994,7 +994,7 @@ where
 }
 // top
 impl MonConstruct<CompuId> for cs::Top {
-    fn mbuild(self, tycker: &mut Tycker, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let (env, top) = cs::TopTy.mbuild(tycker, env)?;
         Ok((env, Alloc::alloc(tycker, CoMatch { arms: Vec::new() }, top)))
     }

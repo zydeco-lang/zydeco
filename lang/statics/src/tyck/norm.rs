@@ -4,11 +4,11 @@ use zydeco_utils::arena::ArenaAccess;
 /* ------------------------------ Substitution ------------------------------ */
 
 impl TypeId {
-    pub fn subst_env_k(&self, tycker: &mut Tycker, env: &TyEnv) -> ResultKont<TypeId> {
+    pub fn subst_env_k(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> ResultKont<TypeId> {
         let res = self.subst_env(tycker, env);
         tycker.err_p_to_k(res)
     }
-    pub fn subst_env(&self, tycker: &mut Tycker, env: &TyEnv) -> Result<TypeId> {
+    pub fn subst_env(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[self];
         let ty = tycker.statics.types[&self].to_owned();
         let ty = match ty {
@@ -176,23 +176,23 @@ impl TypeId {
         let ty = ty.normalize(tycker, kd)?;
         Ok(ty)
     }
-    pub fn subst_k(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> ResultKont<TypeId> {
+    pub fn subst_k(&self, tycker: &mut Tycker<'_>, var: DefId, with: TypeId) -> ResultKont<TypeId> {
         let res = self.subst(tycker, var, with);
         tycker.err_p_to_k(res)
     }
-    pub fn subst(&self, tycker: &mut Tycker, var: DefId, with: TypeId) -> Result<TypeId> {
+    pub fn subst(&self, tycker: &mut Tycker<'_>, var: DefId, with: TypeId) -> Result<TypeId> {
         self.subst_env(tycker, &TyEnv::from_iter([(var, with.into())]))
     }
 }
 
 impl TypeId {
     pub fn subst_abst_k(
-        &self, tycker: &mut Tycker, assign: (AbstId, TypeId),
+        &self, tycker: &mut Tycker<'_>, assign: (AbstId, TypeId),
     ) -> ResultKont<TypeId> {
         let res = self.subst_abst(tycker, assign);
         tycker.err_p_to_k(res)
     }
-    pub fn subst_abst(&self, tycker: &mut Tycker, assign: (AbstId, TypeId)) -> Result<TypeId> {
+    pub fn subst_abst(&self, tycker: &mut Tycker<'_>, assign: (AbstId, TypeId)) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[self];
         let ty = match tycker.statics.types[self].to_owned() {
             // Todo: add subst obligation to fills
@@ -310,11 +310,11 @@ impl TypeId {
 /* --------------------------- Unroll Sealed Types -------------------------- */
 
 impl TypeId {
-    pub fn unroll_k(self, tycker: &mut Tycker) -> ResultKont<TypeId> {
+    pub fn unroll_k(self, tycker: &mut Tycker<'_>) -> ResultKont<TypeId> {
         let res = self.unroll(tycker);
         tycker.err_p_to_k(res)
     }
-    pub fn unroll(self, tycker: &mut Tycker) -> Result<TypeId> {
+    pub fn unroll(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[&self];
         let res = match tycker.type_filled(&self)?.to_owned() {
             | Type::Abst(abst) => {
@@ -361,11 +361,11 @@ impl TypeId {
 /* ------------------------------ Normalization ----------------------------- */
 
 impl TypeId {
-    pub fn normalize_k(self, tycker: &mut Tycker, kd: KindId) -> ResultKont<TypeId> {
+    pub fn normalize_k(self, tycker: &mut Tycker<'_>, kd: KindId) -> ResultKont<TypeId> {
         let res = self.normalize(tycker, kd);
         tycker.err_p_to_k(res)
     }
-    pub fn normalize(self, tycker: &mut Tycker, kd: KindId) -> Result<TypeId> {
+    pub fn normalize(self, tycker: &mut Tycker<'_>, kd: KindId) -> Result<TypeId> {
         let res = match tycker.statics.types[&self].to_owned() {
             | Fillable::Fill(_) => self,
             | Fillable::Done(ty) => match ty {
@@ -407,12 +407,12 @@ impl TypeId {
         Ok(res)
     }
     pub fn normalize_app_k(
-        self, tycker: &mut Tycker, a_ty: TypeId, kd: KindId,
+        self, tycker: &mut Tycker<'_>, a_ty: TypeId, kd: KindId,
     ) -> ResultKont<TypeId> {
         let res = self.normalize_app(tycker, a_ty, kd);
         tycker.err_p_to_k(res)
     }
-    pub fn normalize_app(self, tycker: &mut Tycker, a_ty: TypeId, kd: KindId) -> Result<TypeId> {
+    pub fn normalize_app(self, tycker: &mut Tycker<'_>, a_ty: TypeId, kd: KindId) -> Result<TypeId> {
         let res = match tycker.statics.types[&self].to_owned() {
             | Fillable::Fill(_) => self,
             | Fillable::Done(ty) => match ty {
@@ -435,11 +435,11 @@ impl TypeId {
         };
         Ok(res)
     }
-    pub fn normalize_apps_k(self, tycker: &mut Tycker, a_tys: Vec<TypeId>) -> ResultKont<TypeId> {
+    pub fn normalize_apps_k(self, tycker: &mut Tycker<'_>, a_tys: Vec<TypeId>) -> ResultKont<TypeId> {
         let res = self.normalize_apps(tycker, a_tys);
         tycker.err_p_to_k(res)
     }
-    pub fn normalize_apps(self, tycker: &mut Tycker, a_tys: Vec<TypeId>) -> Result<TypeId> {
+    pub fn normalize_apps(self, tycker: &mut Tycker<'_>, a_tys: Vec<TypeId>) -> Result<TypeId> {
         let res = a_tys.into_iter().try_fold(self, |f_ty, a_ty| {
             let abs_kd = tycker.statics.annotations_type[&f_ty];
             let kd = match tycker.kind_filled(&abs_kd)?.to_owned() {
@@ -459,11 +459,11 @@ impl TypeId {
 /* ------------------------- Hole Filling & Solution ------------------------ */
 
 impl FillId {
-    pub fn fill_k(&self, tycker: &mut Tycker, ann: AnnId) -> ResultKont<AnnId> {
+    pub fn fill_k(&self, tycker: &mut Tycker<'_>, ann: AnnId) -> ResultKont<AnnId> {
         let res = self.fill(tycker, ann);
         tycker.err_p_to_k(res)
     }
-    pub fn fill(&self, tycker: &mut Tycker, mut ann: AnnId) -> Result<AnnId> {
+    pub fn fill(&self, tycker: &mut Tycker<'_>, mut ann: AnnId) -> Result<AnnId> {
         if let Some(ann_) = tycker.statics.solus.insert_or_get(*self, ann) {
             ann = Lub::lub(ann, ann_, tycker)?;
             tycker.statics.solus.replace(*self, ann);
@@ -473,12 +473,12 @@ impl FillId {
 }
 
 impl TypeId {
-    pub fn solution_k(&self, tycker: &mut Tycker) -> ResultKont<(TypeId, Vec<FillId>)> {
+    pub fn solution_k(&self, tycker: &mut Tycker<'_>) -> ResultKont<(TypeId, Vec<FillId>)> {
         let res = self.solution(tycker);
         tycker.err_p_to_k(res)
     }
     /// Solve unfilled types as much as possible; returns the final type and the unfilled holes
-    pub fn solution(&self, tycker: &mut Tycker) -> Result<(TypeId, Vec<FillId>)> {
+    pub fn solution(&self, tycker: &mut Tycker<'_>) -> Result<(TypeId, Vec<FillId>)> {
         let mut res = *self;
         let mut fills = Vec::new();
         while let Fillable::Fill(fill) = tycker.statics.types[&res].to_owned() {
@@ -646,12 +646,12 @@ impl TypeId {
     }
 }
 
-impl Tycker {
+impl<'a> Tycker<'a> {
     pub fn filling_k<R>(
-        &mut self, id: &AnnId, f_set: impl FnOnce(&mut Tycker) -> Result<R>,
-        f_kind: impl FnOnce(&mut Tycker, Kind) -> Result<R>,
-        f_type: impl FnOnce(&mut Tycker, Type) -> Result<R>,
-        f_fill: impl FnOnce(&mut Tycker, FillId) -> Result<R>,
+        &mut self, id: &AnnId, f_set: impl FnOnce(&mut Tycker<'a>) -> Result<R>,
+        f_kind: impl FnOnce(&mut Tycker<'a>, Kind) -> Result<R>,
+        f_type: impl FnOnce(&mut Tycker<'a>, Type) -> Result<R>,
+        f_fill: impl FnOnce(&mut Tycker<'a>, FillId) -> Result<R>,
     ) -> ResultKont<R> {
         let res = self.filling(id, f_set, f_kind, f_type, f_fill);
         self.err_p_to_k(res)
@@ -659,10 +659,10 @@ impl Tycker {
     /// internally resolves unfilled annotations; fails if the annotation has no solution.
     /// only fills the uppermost (or head?) annotation
     pub fn filling<R>(
-        &mut self, id: &AnnId, f_set: impl FnOnce(&mut Tycker) -> Result<R>,
-        f_kind: impl FnOnce(&mut Tycker, Kind) -> Result<R>,
-        f_type: impl FnOnce(&mut Tycker, Type) -> Result<R>,
-        f_fill: impl FnOnce(&mut Tycker, FillId) -> Result<R>,
+        &mut self, id: &AnnId, f_set: impl FnOnce(&mut Tycker<'a>) -> Result<R>,
+        f_kind: impl FnOnce(&mut Tycker<'a>, Kind) -> Result<R>,
+        f_type: impl FnOnce(&mut Tycker<'a>, Type) -> Result<R>,
+        f_fill: impl FnOnce(&mut Tycker<'a>, FillId) -> Result<R>,
     ) -> Result<R> {
         match id {
             | AnnId::Set => f_set(self),

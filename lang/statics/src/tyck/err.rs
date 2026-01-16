@@ -31,8 +31,8 @@ pub struct TyckErrorEntry {
     // Todo: dump related arena entries if needed
 }
 
-impl Tycker {
-    fn error_output(&self, error: TyckError) -> String {
+impl<'a> Tycker<'a> {
+    fn error_output(&'a self, error: TyckError) -> String {
         match error {
             | TyckError::MissingAnnotation => format!("Missing annotation"),
             | TyckError::MissingSeal => format!("Missing seal"),

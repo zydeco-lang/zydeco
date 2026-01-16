@@ -3,7 +3,7 @@ use zydeco_utils::arena::ArenaAccess;
 
 /* ---------------------------------- Term ---------------------------------- */
 
-impl Tycker {
+impl Tycker<'_> {
     pub fn register_prim_ty(
         &mut self, mut env: TyEnvT<()>, def: DefId, prim: Type, syn_kd: su::TermId,
     ) -> ResultKont<TyEnvT<()>> {

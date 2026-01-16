@@ -13,12 +13,12 @@ use {
 
 /// Type-checking driver that consumes scoped syntax and produces typed arenas.
 #[derive(AsRef, AsMut)]
-pub struct Tycker {
-    pub spans: SpanArena,
+pub struct Tycker<'a> {
+    pub spans: &'a SpanArena,
     pub prim: PrimDefs,
     #[as_ref(ScopedArena)]
     #[as_mut(ScopedArena)]
-    pub scoped: ScopedArena,
+    pub scoped: &'a mut ScopedArena,
     #[as_ref(StaticsArena)]
     #[as_mut(StaticsArena)]
     pub statics: StaticsArena,
@@ -36,10 +36,10 @@ pub struct Tycker {
 // Todo: implement a better coverage checker
 // Todo: use hole solution to implement the confluence checker (well-formedness checker)
 
-impl Tycker {
+impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
     pub fn new_arc(
-        spans: SpanArena, prim: PrimDefs, scoped: ScopedArena, alloc: ArcGlobalAlloc,
+        spans: &'a SpanArena, prim: PrimDefs, scoped: &'a mut ScopedArena, alloc: ArcGlobalAlloc,
     ) -> Self {
         Self {
             spans,
@@ -149,19 +149,22 @@ impl Tycker {
     }
 }
 
-impl CompilerPass for Tycker {
+impl<'a> CompilerPass for Tycker<'a> {
     type Arena = StaticsArena;
     type Out = ();
-    type Error = ();
+    type Error = Vec<TyckErrorEntry>;
     fn run(mut self) -> std::result::Result<Self::Out, Self::Error> {
-        self.run_k()
+        match self.run_k() {
+            | Ok(()) => Ok(()),
+            | Err(()) => Err(self.errors),
+        }
     }
 }
 
 mod impl_tycker {
     use super::*;
 
-    impl Tycker {
+    impl<'a> Tycker<'a> {
         /// Generalize the administrative guards using "with" pattern by placing
         /// the body of tyck function into a closure, and the with function can
         /// do all administrative work before and after calling the function.
@@ -181,7 +184,7 @@ mod impl_tycker {
         }
     }
 
-    impl Errorable<TyckError> for Tycker {
+    impl<'a> Errorable<TyckError> for Tycker<'a> {
         type Entry = Box<TyckErrorEntry>;
 
         /// Throw a pure error.
@@ -211,15 +214,15 @@ mod impl_tycker {
     }
 }
 
-pub trait Tyck {
+pub trait Tyck<'a> {
     type Out;
     type Action;
     /// Entry point for type checking with optional administrative wrapping.
-    fn tyck_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         self.tyck_inner_k(tycker, action)
     }
     /// Core implementation for type checking.
-    fn tyck_inner_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out>;
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out>;
 }
 
 /// Synthesis or analysis mode, optionally with an expected annotation.
@@ -265,10 +268,10 @@ impl<Ann> Action<Ann> {
 pub struct Assign<Br, Be>(pub Br, pub Be);
 pub struct FixPoint<T>(pub T);
 
-impl Tyck for TyEnvT<SccGroup<su::DeclId>> {
+impl<'a> Tyck<'a> for TyEnvT<SccGroup<su::DeclId>> {
     type Out = TyEnvT<()>;
     type Action = ();
-    fn tyck_inner_k(&self, tycker: &mut Tycker, (): Self::Action) -> ResultKont<TyEnvT<()>> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<TyEnvT<()>> {
         let mut env = self.mk(());
         let decls = &self.inner;
         use su::Declaration as Decl;
@@ -343,17 +346,17 @@ impl Tyck for TyEnvT<SccGroup<su::DeclId>> {
 }
 
 /// Type check a single declaration (uni ref)
-impl Tyck for TyEnvT<su::DeclId> {
+impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
     type Out = TyEnvT<()>;
     type Action = ();
-    fn tyck_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
             tycker.tasks.push_back(TyckTask::DeclUni(self.inner.to_owned()));
             self.tyck_inner_k(tycker, action)
         })
     }
-    fn tyck_inner_k(&self, tycker: &mut Tycker, (): Self::Action) -> ResultKont<TyEnvT<()>> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<TyEnvT<()>> {
         let id = self.inner;
         let mut env = self.mk(());
 
@@ -449,10 +452,10 @@ impl Tyck for TyEnvT<su::DeclId> {
 }
 
 /// Type check a group of declarations that are mutually recursive.
-impl Tyck for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
+impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
     type Out = TyEnvT<()>;
     type Action = ();
-    fn tyck_k(&self, tycker: &mut Tycker, action: Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         let FixPoint(group_under_env) = self;
         let decls = group_under_env.inner.iter().cloned().collect();
         tycker.guarded(|tycker| {
@@ -461,7 +464,7 @@ impl Tyck for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
             self.tyck_inner_k(tycker, action)
         })
     }
-    fn tyck_inner_k<'f>(&self, tycker: &mut Tycker, (): Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_inner_k<'f>(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
         let FixPoint(group_under_env) = self;
         let decls = &group_under_env.inner;
         let mut env = group_under_env.mk(());
@@ -537,12 +540,12 @@ impl Tyck for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
     }
 }
 
-impl Tyck for TyEnvT<su::PatId> {
+impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
     type Out = PatAnnId;
     type Action = Action<AnnId>;
 
     fn tyck_k(
-        &self, tycker: &mut Tycker, Action { switch }: Self::Action,
+        &self, tycker: &mut Tycker<'a>, Action { switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
@@ -552,7 +555,7 @@ impl Tyck for TyEnvT<su::PatId> {
     }
 
     fn tyck_inner_k(
-        &self, tycker: &mut Tycker, Action { switch }: Self::Action,
+        &self, tycker: &mut Tycker<'a>, Action { switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
         // // Debug: print
         // {
@@ -747,11 +750,11 @@ impl Tyck for TyEnvT<su::PatId> {
     }
 }
 
-impl Tyck for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
+impl<'a> Tyck<'a> for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
     type Out = TyEnvT<()>;
     type Action = ();
 
-    fn tyck_inner_k(&self, tycker: &mut Tycker, (): Self::Action) -> ResultKont<Self::Out> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
         use ss::TypePattern as TPat;
         let Assign(assigner, assignee) = self.inner;
         let pat = tycker.statics.tpats[&assigner].to_owned();
@@ -774,12 +777,12 @@ impl Tyck for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
     }
 }
 
-impl Tyck for TyEnvT<su::TermId> {
+impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
     type Out = TermAnnId;
     type Action = Action<AnnId>;
 
     fn tyck_k(
-        &self, tycker: &mut Tycker, Action { switch }: Self::Action,
+        &self, tycker: &mut Tycker<'a>, Action { switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
@@ -789,7 +792,7 @@ impl Tyck for TyEnvT<su::TermId> {
     }
 
     fn tyck_inner_k(
-        &self, tycker: &mut Tycker, Action { mut switch }: Self::Action,
+        &self, tycker: &mut Tycker<'a>, Action { mut switch }: Self::Action,
     ) -> ResultKont<Self::Out> {
         // // Debug: print
         // {
@@ -1980,7 +1983,7 @@ impl Tyck for TyEnvT<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
 
-                let monad_ty_kd = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.info);
+                let monad_ty_kd: ss::KindId = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.info);
                 let monad_ty_var =
                     Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into());
                 let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd);
@@ -2299,8 +2302,8 @@ impl Tyck for TyEnvT<su::TermId> {
                 }
             }
             | Tm::Lit(lit) => {
-                fn check_against_ty(
-                    tycker: &mut Tycker, switch: Switch<AnnId>, ty: ss::TypeId,
+                fn check_against_ty<'a>(
+                    tycker: &mut Tycker<'a>, switch: Switch<AnnId>, ty: ss::TypeId,
                 ) -> ResultKont<ss::TypeId> {
                     match switch {
                         | Switch::Syn => Ok(ty),

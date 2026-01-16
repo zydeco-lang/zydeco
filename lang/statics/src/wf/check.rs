@@ -4,7 +4,7 @@ use crate::*;
 
 impl WellFormedProgram {
     /// Build a well-formed program from the type checker output.
-    pub fn new(mut tycker: Tycker) -> Self {
+    pub fn new<'a>(mut tycker: Tycker<'a>) -> Self {
         // first, fill all the holes (assume done)
 
         // second, turn declarations into pure let bindings
@@ -76,7 +76,11 @@ impl WellFormedProgram {
             entry.insert(tail, ());
         }
         // finally, unpack all arenas
-        let Tycker { spans, prim: _, scoped, statics, tasks: _, metas: _, errors: _ } = tycker;
+        // Clone scoped since it's now a reference in Tycker
+        let spans = tycker.spans.clone();
+        let scoped = tycker.scoped.clone();
+        let Tycker { spans: _, prim: _, scoped: _, statics, tasks: _, metas: _, errors: _ } =
+            tycker;
         let su::ScopedArena {
             defs,
             pats: _,

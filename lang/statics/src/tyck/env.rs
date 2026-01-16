@@ -64,7 +64,7 @@ mod impls_ty_env {
     use super::*;
 
     impl TyEnv {
-        pub fn monadic_new(tycker: &mut Tycker, ori: &TyEnv) -> Self {
+        pub fn monadic_new(tycker: &mut Tycker<'_>, ori: &TyEnv) -> Self {
             let mut env = Env::new();
             env += [
                 (tycker.prim.vtype.get().to_owned(), VType.build(tycker, ori).into()),
@@ -84,7 +84,7 @@ mod impls_ty_env {
             }
             env
         }
-        pub fn recursively_get_type(&self, tycker: &Tycker, def: &DefId) -> Option<&AnnId> {
+        pub fn recursively_get_type(&self, tycker: &Tycker<'_>, def: &DefId) -> Option<&AnnId> {
             let ann = self.0.get(def)?;
             match ann {
                 | AnnId::Set | AnnId::Kind(_) => unreachable!(),

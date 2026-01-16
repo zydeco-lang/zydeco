@@ -229,8 +229,8 @@ impl PackageScoped {
 
     pub fn tyck(self, alloc: ArcGlobalAlloc, name: &str) -> Result<PackageChecked> {
         // type-checking
-        let PackageScoped { sources: _, spans, prim, arena: scoped } = self;
-        let mut tycker = Tycker::new_arc(spans, prim, scoped, alloc);
+        let PackageScoped { sources: _, spans, prim, arena: mut scoped } = self;
+        let mut tycker = Tycker::new_arc(&spans, prim, &mut scoped, alloc);
         match tycker.run_k() {
             | Ok(()) => {}
             | Err(()) => {
@@ -304,7 +304,6 @@ impl PackageScoped {
 
         // let Tycker { spans, prim: _, scoped, statics, tasks: _, metas: _, errors: _ } = tycker;
         let spans = tycker.spans.clone();
-        let scoped = tycker.scoped.clone();
         let statics = tycker.statics.clone();
         let wf = WellFormedProgram::new(tycker);
         Ok(PackageChecked { spans, scoped, statics, wf })

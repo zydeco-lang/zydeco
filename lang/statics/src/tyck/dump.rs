@@ -6,7 +6,7 @@ mod scoped {
     use super::*;
     use zydeco_surface::scoped::fmt::*;
 
-    impl Tycker {
+    impl Tycker<'_> {
         pub fn ugly_scoped<T>(&self, item: T) -> String
         where
             T: for<'f> Ugly<'f, Formatter<'f>>,
@@ -33,7 +33,7 @@ mod statics {
     use super::*;
     use tyck::fmt::*;
 
-    impl Tycker {
+    impl Tycker<'_> {
         pub fn ugly_statics<T>(&self, item: T) -> String
         where
             T: for<'f> Ugly<'f, Formatter<'f>>,
