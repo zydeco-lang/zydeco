@@ -54,11 +54,11 @@ pub enum Commands {
         #[arg(short, long, default_value = "x86")]
         target: String,
         /// Build Directory
-        #[arg(short = 'b', long, default_value = "._build")]
-        build_dir: PathBuf,
+        #[arg(short = 'b', long)]
+        build_dir: Option<PathBuf>,
         /// Runtime directory
-        #[arg(short = 'r', long, default_value = "runtime")]
-        runtime_dir: PathBuf,
+        #[arg(short = 'r', long)]
+        runtime_dir: Option<PathBuf>,
         /// Skip dumping assembly and only link existing files
         #[arg(long, default_value_t = false)]
         link_existing: bool,

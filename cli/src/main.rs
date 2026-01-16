@@ -23,17 +23,13 @@ fn main() -> Result<(), ()> {
             execute,
             dry,
             verbose,
-        } => build_files(
-            files,
-            bin,
-            target,
-            build_dir,
-            runtime_dir,
-            link_existing,
-            execute,
-            dry,
-            verbose,
-        ),
+        } => {
+            let build_conf = BuildConf::default()
+                .with_build_dir(build_dir)
+                .with_runtime_dir(runtime_dir)
+                .with_link_existing(link_existing);
+            build_files(files, bin, target, build_conf, execute, dry, verbose)
+        }
     };
     match res {
         | Ok(x) => {
@@ -60,17 +56,17 @@ fn run_files(
 }
 
 fn build_files(
-    paths: Vec<PathBuf>, bin: Option<String>, target: String, build_dir: PathBuf,
-    runtime_dir: PathBuf, link_existing: bool, execute: bool, _dry: bool, verbose: bool,
+    paths: Vec<PathBuf>, bin: Option<String>, target: String, build_conf: BuildConf, execute: bool,
+    _dry: bool, verbose: bool,
 ) -> zydeco_driver::Result<i32> {
-    let build_config = match target.as_str() {
-        | "x86" => Some(BuildConf { build_dir, runtime_dir, link_existing }),
+    let build_conf = match target.as_str() {
+        | "x86" => Some(build_conf),
         | _ => None,
     };
     let Driver { mut build_sys } = Driver::setup(paths)?;
     let pack = build_sys.pick_marked(bin)?;
     // set build configuration for the marked package
-    if let Some(build_config) = build_config {
+    if let Some(build_config) = build_conf {
         build_sys.build_confs.insert(pack, build_config);
     }
 

@@ -18,7 +18,7 @@ members = [
     "editor/zls",
     "editor/cajun",
 ]
-exclude = ["._build"]
+exclude = ["build"]
 
 [workspace.package]
 version = "0.2.2"
