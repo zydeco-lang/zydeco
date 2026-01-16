@@ -133,6 +133,26 @@ impl Span {
     pub fn get_path(&self) -> Option<&PathBuf> {
         self.path.get().and_then(|o| o.as_ref()).map(|p| p.as_ref())
     }
+    /// Convert a span to an Ariadne-compatible span identifier.
+    ///
+    /// Returns `(file_path, byte_range)` tuple suitable for use with Ariadne's `Report::build()`.
+    /// For dummy spans (those without a file path), returns `("<internal>", 0..0)`.
+    pub fn to_ariadne_span(&self) -> (String, std::ops::Range<usize>) {
+        let (start, end) = self.get_cursor1();
+        let path = self
+            .get_path()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "<internal>".to_string());
+        (path, start..end)
+    }
+    /// Convert a span to an Ariadne-compatible span identifier, returning an option.
+    ///
+    /// Returns `None` for dummy spans without a file path.
+    pub fn to_ariadne_span_opt(&self) -> Option<(String, std::ops::Range<usize>)> {
+        let (start, end) = self.get_cursor1();
+        let path = self.get_path()?;
+        Some((path.to_string_lossy().to_string(), start..end))
+    }
     pub fn under_loc_ctx(self, loc: &LocationCtx) -> Self {
         match loc {
             | LocationCtx::File(info) => {

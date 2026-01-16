@@ -44,8 +44,11 @@ impl PackageStew {
     pub fn resolve(self, _alloc: IndexAlloc<usize>) -> Result<PackageScoped> {
         let PackageStew { sources, spans, arena: bitter, prim_term, top } = self;
         let resolver = Resolver::new(&spans, bitter, prim_term);
-        let ResolveOut { prim, arena } =
-            resolver.run(&top).map_err(|err| CompileError::ResolveError(err.to_string()))?;
+        let sources_clone = sources.clone();
+        let ResolveOut { prim, arena } = resolver.run(&top).map_err(|err| {
+            let report = err.to_report();
+            CompileError::ResolveErrorReport { report, sources: sources_clone }
+        })?;
         Ok(PackageScoped { sources, spans, prim, arena })
     }
 }
@@ -232,7 +235,7 @@ impl PackageScoped {
 
     pub fn tyck(self, alloc: ArcGlobalAlloc, name: &str) -> Result<PackageChecked> {
         // type-checking
-        let PackageScoped { sources: _, spans, prim, arena: mut scoped } = self;
+        let PackageScoped { sources, spans, prim, arena: mut scoped } = self;
         let tycker = Tycker::new_arc(&spans, &prim, &mut scoped, alloc);
         let statics = match tycker.run() {
             | Ok(statics) => statics,
@@ -249,17 +252,8 @@ impl PackageScoped {
                 //     println!("<<< [{}]", name);
                 // }
 
-                use std::collections::BTreeSet;
-                let mut bs = BTreeSet::new();
-                let len = errors.len();
-                for err in errors {
-                    bs.insert(err);
-                }
-                let mut s = String::new();
-                for b in bs {
-                    s += &b;
-                }
-                s += &format!("Total: {} errors\n", len);
+                // Errors are already Ariadne reports created in statics
+                let reports = errors;
 
                 // // Debug: print the variable annotations
                 // if cfg!(debug_assertions) {
@@ -300,7 +294,8 @@ impl PackageScoped {
                 //     println!("<<< [{}]", name);
                 // }
 
-                Err(CompileError::TyckErrors(s))?
+                let sources_clone = sources.clone();
+                Err(CompileError::TyckErrorReports { reports, sources: sources_clone })?
             }
         };
 

@@ -153,16 +153,29 @@ impl<'a> Tycker<'a> {
 impl<'a> CompilerPass for Tycker<'a> {
     type Arena = StaticsArena;
     type Out = StaticsArena;
-    type Error = Vec<String>;
+    type Error = Vec<ariadne::Report<'static, (String, std::ops::Range<usize>)>>;
     fn run(mut self) -> std::result::Result<Self::Out, Self::Error> {
         match self.run_k() {
             | Ok(()) => Ok(self.statics),
-            | Err(()) => Err(self
-                .errors
-                .clone()
-                .into_iter()
-                .map(|e| format!("{}\n", self.error_entry_output(e)))
-                .collect()),
+            | Err(()) => {
+                // Deduplicate errors using a set (convert to comparable format first)
+                use std::collections::HashSet;
+                let mut seen = HashSet::new();
+                let mut unique_errors = Vec::new();
+                for err in self.errors.clone() {
+                    // Use blame location as a simple deduplication key
+                    let key = (err.blame.file(), err.blame.line(), err.blame.column());
+                    if seen.insert(key) {
+                        unique_errors.push(err);
+                    }
+                }
+                // Create Ariadne reports while we still have access to self (tycker)
+                let reports: Vec<_> = unique_errors
+                    .iter()
+                    .map(|entry| self.error_entry_report(entry.clone()))
+                    .collect();
+                Err(reports)
+            }
         }
     }
 }

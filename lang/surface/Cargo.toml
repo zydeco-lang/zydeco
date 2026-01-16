@@ -18,6 +18,7 @@ sequence_trie = { workspace = true }
 im = { workspace = true }
 unindent = { workspace = true }
 thiserror = { workspace = true }
+ariadne = { workspace = true }
 auto_impl = { workspace = true }
 zydeco-utils = { workspace = true }
 zydeco-derive = { workspace = true }

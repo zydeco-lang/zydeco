@@ -1,0 +1,6 @@
+main
+  match +True ()
+  | +True () -> ! exit 0
+  | +False () -> ! exit 1
+  end
+end

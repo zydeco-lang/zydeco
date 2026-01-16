@@ -40,7 +40,7 @@ fn main() -> Result<(), ()> {
             std::process::exit(x);
         }
         | Err(e) => {
-            eprintln!("{}", e);
+            e.print_ariadne();
             Ok(())
         }
     }

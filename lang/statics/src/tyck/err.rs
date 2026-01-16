@@ -2,6 +2,8 @@
 //! Shows the error message, where to look at in the source code, and the stack trace.
 
 use super::{syntax::*, *};
+use ariadne::{Label, Report, ReportKind};
+use std::ops::Range;
 
 pub use zydeco_utils::err::*;
 
@@ -236,6 +238,265 @@ impl<'a> Tycker<'a> {
         }
         s += &format!("Error: {}\n", self.error_output(error));
         s
+    }
+
+
+    /// Get the primary span for an error (where the error actually occurred).
+    fn error_primary_span(&self, error: &TyckError) -> Option<(String, Range<usize>)> {
+        match error {
+            | TyckError::TypeMismatch { expected: _, found } => {
+                // Use the found type's span as primary
+                Some(found.span(self).to_ariadne_span())
+            }
+            | TyckError::TypeExpected { found, .. } => {
+                Some(found.span(self).to_ariadne_span())
+            }
+            | TyckError::MissingStructure(ty) => {
+                Some(ty.span(self).to_ariadne_span())
+            }
+            | TyckError::MissingSolution(fills) => {
+                fills.first().map(|fill| {
+                    let site = self.statics.fills[fill];
+                    site.span(self).to_ariadne_span()
+                })
+            }
+            | TyckError::NotInlinable(def) => {
+                Some(def.span(self).to_ariadne_span())
+            }
+            | TyckError::NotInlinableSeal(abst) => {
+                // AbstId doesn't have a direct span, but we can get it from the hint if available
+                use zydeco_utils::arena::ArenaAccess;
+                self.statics.abst_hints.get(abst)
+                    .map(|hint| hint.span(self).to_ariadne_span())
+            }
+            | _ => None,
+        }
+    }
+
+    /// Get the error message text.
+    fn error_message(&self, error: &TyckError) -> String {
+        match error {
+            | TyckError::MissingAnnotation => "Missing annotation".to_string(),
+            | TyckError::MissingSeal => "Missing seal".to_string(),
+            | TyckError::MissingSolution(fills) => {
+                format!("Missing solution for {} hole(s)", fills.len())
+            }
+            | TyckError::MissingStructure(_) => "Missing structure for type".to_string(),
+            | TyckError::SortMismatch => "Sort mismatch".to_string(),
+            | TyckError::KindMismatch => "Kind mismatch".to_string(),
+            | TyckError::TypeMismatch { expected, found } => {
+                format!(
+                    "Type mismatch: expected {}, found {}",
+                    self.pretty_statics_nested(*expected, ""),
+                    self.pretty_statics_nested(*found, "")
+                )
+            }
+            | TyckError::TypeExpected { expected, found } => {
+                format!(
+                    "Type expected: {}, found {}",
+                    expected,
+                    self.pretty_statics_nested(*found, "")
+                )
+            }
+            | TyckError::MissingDataArm(ctor) => format!("Missing data arm: {:?}", ctor),
+            | TyckError::MissingCoDataArm(dtor) => format!("Missing codata arm: {:?}", dtor),
+            | TyckError::NonExhaustiveCoDataArms(arms) => {
+                format!("Non-exhaustive codata arms: {} missing", arms.len())
+            }
+            | TyckError::Expressivity(s) => s.to_string(),
+            | TyckError::NotInlinable(_) => "Cannot inline definition".to_string(),
+            | TyckError::NotInlinableSeal(_) => "Cannot inline sealed abstract type".to_string(),
+        }
+    }
+
+    /// Create an Ariadne report for this error entry.
+    pub fn error_entry_report(
+        &self, TyckErrorEntry { error, blame, stack }: TyckErrorEntry,
+    ) -> Report<'static, (String, Range<usize>)> {
+        use ariadne::ColorGenerator;
+        let mut colors = ColorGenerator::new();
+        let primary_color = colors.next();
+
+        // Determine primary span (where the error occurred)
+        let primary_span = self
+            .error_primary_span(&error)
+            .or_else(|| {
+                // If no primary span in error, try to get from the last stack frame
+                stack.last().and_then(|task| match task {
+                    | TyckTask::Pat(pat, _) => Some(pat.span(self).to_ariadne_span()),
+                    | TyckTask::Term(term, _) => Some(term.span(self).to_ariadne_span()),
+                    | TyckTask::DeclHead(decl) | TyckTask::DeclUni(decl) | TyckTask::Exec(decl) => {
+                        Some(decl.span(self).to_ariadne_span())
+                    }
+                    | TyckTask::DeclScc(decls) => decls.first().map(|decl| decl.span(self).to_ariadne_span()),
+                    | _ => None,
+                })
+            })
+            .unwrap_or_else(|| ("<internal>".to_string(), 0..0));
+
+        let error_msg = self.error_message(&error);
+        let (primary_file, primary_offset) = (primary_span.0.clone(), primary_span.1.start);
+        let mut report = Report::build(ReportKind::Error, primary_file, primary_offset)
+            .with_message(&error_msg);
+
+        // Add labels for the error itself if we have specific error spans
+        match &error {
+            | TyckError::TypeMismatch { expected, found } => {
+                let expected_span = expected.span(self).to_ariadne_span();
+                let found_span = found.span(self).to_ariadne_span();
+                if expected_span.0 == found_span.0 {
+                    // Same file
+                    report = report.with_label(
+                        Label::new(found_span.clone())
+                            .with_message("found this type")
+                            .with_color(primary_color),
+                    );
+                    let secondary_color = colors.next();
+                    report = report.with_label(
+                        Label::new(expected_span)
+                            .with_message("expected this type")
+                            .with_color(secondary_color),
+                    );
+                } else {
+                    // Different files
+                    report = report
+                        .with_label(
+                            Label::new(found_span)
+                                .with_message("found this type")
+                                .with_color(primary_color),
+                        )
+                        .with_label(
+                            Label::new(expected_span)
+                                .with_message("expected this type")
+                                .with_color(primary_color),
+                        );
+                }
+            }
+            | TyckError::MissingSolution(fills) => {
+                for fill in fills.iter() {
+                    let site = self.statics.fills[fill];
+                    let site_span = site.span(self).to_ariadne_span();
+                    report = report.with_label(
+                        Label::new(site_span)
+                            .with_message("hole needs a solution")
+                            .with_color(primary_color),
+                    );
+                }
+            }
+            | TyckError::NotInlinableSeal(abst) => {
+                use zydeco_utils::arena::ArenaAccess;
+                if let Some(hint) = self.statics.abst_hints.get(abst) {
+                    let hint_span = hint.span(self).to_ariadne_span();
+                    report = report.with_label(
+                        Label::new(hint_span)
+                            .with_message("defined here")
+                            .with_color(colors.next()),
+                    );
+                }
+            }
+            | _ => {
+                // Add a label for the primary span if we have one
+                if primary_span.0 != "<internal>" {
+                    report = report.with_label(
+                        Label::new(primary_span.clone())
+                            .with_message("error occurred here")
+                            .with_color(primary_color),
+                    );
+                }
+            }
+        }
+
+        // Add stack trace as labels (context)
+        for task in stack.iter().rev() {
+            let task_label = match task {
+                | TyckTask::DeclHead(decl) => {
+                    let span = decl.span(self).to_ariadne_span();
+                    Some(Label::new(span).with_message("when tycking external declaration"))
+                }
+                | TyckTask::DeclUni(decl) => {
+                    let span = decl.span(self).to_ariadne_span();
+                    Some(Label::new(span).with_message("when tycking single declaration"))
+                }
+                | TyckTask::DeclScc(decls) => {
+                    // Use the first declaration as the span
+                    decls.first().map(|decl| {
+                        let span = decl.span(self).to_ariadne_span();
+                        Label::new(span).with_message(format!("when tycking {} declarations", decls.len()))
+                    })
+                }
+                | TyckTask::Exec(exec) => {
+                    let span = exec.span(self).to_ariadne_span();
+                    Some(Label::new(span).with_message("when tycking execution"))
+                }
+                | TyckTask::Pat(pat, _switch) => {
+                    let span = pat.span(self).to_ariadne_span();
+                    Some(Label::new(span).with_message("when tycking pattern"))
+                }
+                | TyckTask::Term(term, _switch) => {
+                    let span = term.span(self).to_ariadne_span();
+                    Some(Label::new(span).with_message("when tycking term"))
+                }
+                | TyckTask::Lub(lhs, _rhs) => {
+                    // AnnId can be Set, Kind, or Type - extract span if possible
+                    match lhs {
+                        | AnnId::Set => None,
+                        | AnnId::Kind(kd) => Some(kd.span(self).to_ariadne_span()),
+                        | AnnId::Type(ty) => Some(ty.span(self).to_ariadne_span()),
+                    }.map(|span| Label::new(span).with_message("when computing least upper bound"))
+                }
+                | TyckTask::SignatureGen(ann) => {
+                    // AnnId can be Set, Kind, or Type - extract span if possible
+                    match ann {
+                        | AnnId::Set => None,
+                        | AnnId::Kind(kd) => Some(kd.span(self).to_ariadne_span()),
+                        | AnnId::Type(ty) => Some(ty.span(self).to_ariadne_span()),
+                    }.map(|span| Label::new(span).with_message("when generating signature"))
+                }
+                | TyckTask::StructureGen(ann) => {
+                    // AnnId can be Set, Kind, or Type - extract span if possible
+                    match ann {
+                        | AnnId::Set => None,
+                        | AnnId::Kind(kd) => Some(kd.span(self).to_ariadne_span()),
+                        | AnnId::Type(ty) => Some(ty.span(self).to_ariadne_span()),
+                    }.map(|span| Label::new(span).with_message("when generating structure"))
+                }
+                | TyckTask::MonadicLiftPat(pat) => match pat {
+                    | PatId::Type(ty) => {
+                        let span = ty.span(self).to_ariadne_span();
+                        Some(Label::new(span).with_message("when performing monadic lift of type pattern"))
+                    }
+                    | PatId::Value(value) => {
+                        let span = value.span(self).to_ariadne_span();
+                        Some(Label::new(span).with_message("when performing monadic lift of value pattern"))
+                    }
+                },
+                | TyckTask::MonadicLiftTerm(term) => match term {
+                    | TermId::Kind(_) => None,
+                    | TermId::Type(ty) => {
+                        let span = ty.span(self).to_ariadne_span();
+                        Some(Label::new(span).with_message("when performing monadic lift of type"))
+                    }
+                    | TermId::Value(value) => {
+                        let span = value.span(self).to_ariadne_span();
+                        Some(Label::new(span).with_message("when performing monadic lift of value"))
+                    }
+                    | TermId::Compu(compu) => {
+                        let span = compu.span(self).to_ariadne_span();
+                        Some(Label::new(span).with_message("when performing monadic lift of computation"))
+                    }
+                },
+            };
+
+            if let Some(mut label) = task_label {
+                label = label.with_color(colors.next());
+                report = report.with_label(label);
+            }
+        }
+
+        // Add note about blame location for debugging
+        report = report.with_note(format!("Error location: {}", blame));
+
+        report.finish()
     }
 }
 

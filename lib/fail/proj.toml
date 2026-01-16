@@ -1,0 +1,10 @@
+name = "fail"
+
+deps = [{ local = "../std/proj.toml" }]
+srcs = []
+bins = [
+    "unbound.zy",
+    "annotation.zy",
+]
+
+std = "nostd"

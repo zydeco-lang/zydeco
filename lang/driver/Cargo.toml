@@ -23,6 +23,7 @@ zydeco-stackir = { workspace = true }
 derive_more = { workspace = true }
 rayon = { workspace = true }
 thiserror = { workspace = true }
+ariadne = { workspace = true }
 sculptor = { workspace = true }
 serde = { workspace = true }
 toml = { workspace = true }
