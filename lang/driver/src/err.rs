@@ -32,14 +32,20 @@ impl BuildError {
     /// Print this error using Ariadne reports if available, otherwise use standard Display.
     pub fn print_ariadne(&self) {
         match self {
-            | BuildError::CompileError(crate::check::err::CompileError::TyckErrorReports { reports, sources }) => {
+            | BuildError::CompileError(crate::check::err::CompileError::TyckErrorReports {
+                reports,
+                sources,
+            }) => {
                 use crate::diagnostics::create_source_cache;
                 for report in reports.iter() {
                     let cache = create_source_cache(sources);
                     let _ = report.eprint(cache);
                 }
             }
-            | BuildError::CompileError(crate::check::err::CompileError::ResolveErrorReport { report, sources }) => {
+            | BuildError::CompileError(crate::check::err::CompileError::ResolveErrorReport {
+                report,
+                sources,
+            }) => {
                 use crate::diagnostics::create_source_cache;
                 let cache = create_source_cache(sources);
                 let _ = report.eprint(cache);

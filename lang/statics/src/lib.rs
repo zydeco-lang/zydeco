@@ -57,7 +57,6 @@ pub mod tyck {
 }
 pub use tyck::{Alloc, Construct, Lub, MonConstruct, Tycker};
 
-
 pub(crate) use surface_syntax as su;
 pub(crate) use tyck::construct::syntax as cs;
 pub(crate) use tyck::syntax as ss;

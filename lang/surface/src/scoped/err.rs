@@ -94,12 +94,13 @@ impl ResolveError {
                 }
                 report.finish()
             }
-            | ResolveError::MissingPrim(name) => {
-                Report::build(ReportKind::Error, (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0))
-                    .with_message(format!("Missing primitive: {}", name))
-                    .with_note(format!("The primitive `{}` must be defined but is missing", name))
-                    .finish()
-            }
+            | ResolveError::MissingPrim(name) => Report::build(
+                ReportKind::Error,
+                (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0),
+            )
+            .with_message(format!("Missing primitive: {}", name))
+            .with_note(format!("The primitive `{}` must be defined but is missing", name))
+            .finish(),
             | ResolveError::ModuleNotFound(module_ref) => {
                 let (file_path, range) = module_ref.info.to_ariadne_span();
                 Report::build(ReportKind::Error, (file_path.clone(), range.clone()))

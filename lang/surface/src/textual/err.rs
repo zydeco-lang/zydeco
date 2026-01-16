@@ -17,12 +17,13 @@ impl ParseError<'_> {
         let file_path = PathDisplay::from(info.path());
 
         match error {
-            | User { error } => {
-                Report::build(ReportKind::Error, (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0))
-                    .with_message("Parse error")
-                    .with_note(error.to_string())
-                    .finish()
-            }
+            | User { error } => Report::build(
+                ReportKind::Error,
+                (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0),
+            )
+            .with_message("Parse error")
+            .with_note(error.to_string())
+            .finish(),
             | InvalidToken { location } => {
                 let location_str = info.trans_span2(*location);
                 Report::build(ReportKind::Error, (file_path.clone(), *location..*location))
@@ -36,12 +37,14 @@ impl ParseError<'_> {
             | UnrecognizedEof { location, expected } => {
                 let location_str = info.trans_span2(*location);
                 let expected_msg = fmt_expected(expected);
-                let mut report = Report::build(ReportKind::Error, (file_path.clone(), *location..*location))
-                    .with_message("Unrecognized EOF")
-                    .with_label(
-                        Label::new((file_path.clone(), *location..*location))
-                            .with_message(format!("unexpected end of file at {}", location_str)),
-                    );
+                let mut report =
+                    Report::build(ReportKind::Error, (file_path.clone(), *location..*location))
+                        .with_message("Unrecognized EOF")
+                        .with_label(
+                            Label::new((file_path.clone(), *location..*location)).with_message(
+                                format!("unexpected end of file at {}", location_str),
+                            ),
+                        );
                 if !expected_msg.is_empty() {
                     report = report.with_note(expected_msg);
                 }
@@ -51,12 +54,15 @@ impl ParseError<'_> {
                 let start_str = info.trans_span2(*start);
                 let end_str = info.trans_span2(*end);
                 let expected_msg = fmt_expected(expected);
-                let mut report = Report::build(ReportKind::Error, (file_path.clone(), *start..*end))
-                    .with_message(format!("Unrecognized token `{}`", token))
-                    .with_label(
-                        Label::new((file_path.clone(), *start..*end))
-                            .with_message(format!("unrecognized token `{}` found at {} - {}", token, start_str, end_str)),
-                    );
+                let mut report =
+                    Report::build(ReportKind::Error, (file_path.clone(), *start..*end))
+                        .with_message(format!("Unrecognized token `{}`", token))
+                        .with_label(Label::new((file_path.clone(), *start..*end)).with_message(
+                            format!(
+                                "unrecognized token `{}` found at {} - {}",
+                                token, start_str, end_str
+                            ),
+                        ));
                 if !expected_msg.is_empty() {
                     report = report.with_note(expected_msg);
                 }
@@ -67,10 +73,9 @@ impl ParseError<'_> {
                 let end_str = info.trans_span2(*end);
                 Report::build(ReportKind::Error, (file_path.clone(), *start..*end))
                     .with_message(format!("Extra token `{}`", token))
-                    .with_label(
-                        Label::new((file_path.clone(), *start..*end))
-                            .with_message(format!("extra token `{}` found at {} - {}", token, start_str, end_str)),
-                    )
+                    .with_label(Label::new((file_path.clone(), *start..*end)).with_message(
+                        format!("extra token `{}` found at {} - {}", token, start_str, end_str),
+                    ))
                     .finish()
             }
         }

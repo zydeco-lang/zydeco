@@ -241,7 +241,6 @@ impl<'a> Tycker<'a> {
         s
     }
 
-
     /// Get the primary span for an error (where the error actually occurred).
     fn error_primary_span(&self, error: &TyckError) -> Option<(PathDisplay, Range<usize>)> {
         match error {
@@ -249,26 +248,17 @@ impl<'a> Tycker<'a> {
                 // Use the found type's span as primary
                 Some(found.span(self).to_ariadne_span())
             }
-            | TyckError::TypeExpected { found, .. } => {
-                Some(found.span(self).to_ariadne_span())
-            }
-            | TyckError::MissingStructure(ty) => {
-                Some(ty.span(self).to_ariadne_span())
-            }
-            | TyckError::MissingSolution(fills) => {
-                fills.first().map(|fill| {
-                    let site = self.statics.fills[fill];
-                    site.span(self).to_ariadne_span()
-                })
-            }
-            | TyckError::NotInlinable(def) => {
-                Some(def.span(self).to_ariadne_span())
-            }
+            | TyckError::TypeExpected { found, .. } => Some(found.span(self).to_ariadne_span()),
+            | TyckError::MissingStructure(ty) => Some(ty.span(self).to_ariadne_span()),
+            | TyckError::MissingSolution(fills) => fills.first().map(|fill| {
+                let site = self.statics.fills[fill];
+                site.span(self).to_ariadne_span()
+            }),
+            | TyckError::NotInlinable(def) => Some(def.span(self).to_ariadne_span()),
             | TyckError::NotInlinableSeal(abst) => {
                 // AbstId doesn't have a direct span, but we can get it from the hint if available
                 use zydeco_utils::arena::ArenaAccess;
-                self.statics.abst_hints.get(abst)
-                    .map(|hint| hint.span(self).to_ariadne_span())
+                self.statics.abst_hints.get(abst).map(|hint| hint.span(self).to_ariadne_span())
             }
             | _ => None,
         }
@@ -329,15 +319,17 @@ impl<'a> Tycker<'a> {
                     | TyckTask::DeclHead(decl) | TyckTask::DeclUni(decl) | TyckTask::Exec(decl) => {
                         Some(decl.span(self).to_ariadne_span())
                     }
-                    | TyckTask::DeclScc(decls) => decls.first().map(|decl| decl.span(self).to_ariadne_span()),
+                    | TyckTask::DeclScc(decls) => {
+                        decls.first().map(|decl| decl.span(self).to_ariadne_span())
+                    }
                     | _ => None,
                 })
             })
             .unwrap_or_else(|| (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0));
 
         let error_msg = self.error_message(&error);
-        let mut report = Report::build(ReportKind::Error, primary_span.clone())
-            .with_message(&error_msg);
+        let mut report =
+            Report::build(ReportKind::Error, primary_span.clone()).with_message(&error_msg);
 
         // Add labels for the error itself if we have specific error spans
         match &error {
@@ -421,7 +413,8 @@ impl<'a> Tycker<'a> {
                     // Use the first declaration as the span
                     decls.first().map(|decl| {
                         let span = decl.span(self).to_ariadne_span();
-                        Label::new(span).with_message(format!("when tycking {} declarations", decls.len()))
+                        Label::new(span)
+                            .with_message(format!("when tycking {} declarations", decls.len()))
                     })
                 }
                 | TyckTask::Exec(exec) => {
@@ -442,7 +435,8 @@ impl<'a> Tycker<'a> {
                         | AnnId::Set => None,
                         | AnnId::Kind(kd) => Some(kd.span(self).to_ariadne_span()),
                         | AnnId::Type(ty) => Some(ty.span(self).to_ariadne_span()),
-                    }.map(|span| Label::new(span).with_message("when computing least upper bound"))
+                    }
+                    .map(|span| Label::new(span).with_message("when computing least upper bound"))
                 }
                 | TyckTask::SignatureGen(ann) => {
                     // AnnId can be Set, Kind, or Type - extract span if possible
@@ -450,7 +444,8 @@ impl<'a> Tycker<'a> {
                         | AnnId::Set => None,
                         | AnnId::Kind(kd) => Some(kd.span(self).to_ariadne_span()),
                         | AnnId::Type(ty) => Some(ty.span(self).to_ariadne_span()),
-                    }.map(|span| Label::new(span).with_message("when generating signature"))
+                    }
+                    .map(|span| Label::new(span).with_message("when generating signature"))
                 }
                 | TyckTask::StructureGen(ann) => {
                     // AnnId can be Set, Kind, or Type - extract span if possible
@@ -458,16 +453,23 @@ impl<'a> Tycker<'a> {
                         | AnnId::Set => None,
                         | AnnId::Kind(kd) => Some(kd.span(self).to_ariadne_span()),
                         | AnnId::Type(ty) => Some(ty.span(self).to_ariadne_span()),
-                    }.map(|span| Label::new(span).with_message("when generating structure"))
+                    }
+                    .map(|span| Label::new(span).with_message("when generating structure"))
                 }
                 | TyckTask::MonadicLiftPat(pat) => match pat {
                     | PatId::Type(ty) => {
                         let span = ty.span(self).to_ariadne_span();
-                        Some(Label::new(span).with_message("when performing monadic lift of type pattern"))
+                        Some(
+                            Label::new(span)
+                                .with_message("when performing monadic lift of type pattern"),
+                        )
                     }
                     | PatId::Value(value) => {
                         let span = value.span(self).to_ariadne_span();
-                        Some(Label::new(span).with_message("when performing monadic lift of value pattern"))
+                        Some(
+                            Label::new(span)
+                                .with_message("when performing monadic lift of value pattern"),
+                        )
                     }
                 },
                 | TyckTask::MonadicLiftTerm(term) => match term {
@@ -482,7 +484,10 @@ impl<'a> Tycker<'a> {
                     }
                     | TermId::Compu(compu) => {
                         let span = compu.span(self).to_ariadne_span();
-                        Some(Label::new(span).with_message("when performing monadic lift of computation"))
+                        Some(
+                            Label::new(span)
+                                .with_message("when performing monadic lift of computation"),
+                        )
                     }
                 },
             };

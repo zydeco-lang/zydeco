@@ -14,7 +14,11 @@ use zydeco_utils::span::PathDisplay;
 /// files to be on disk.
 pub fn create_source_cache(
     sources: &HashMap<PathBuf, String>,
-) -> FnCache<PathDisplay, impl FnMut(&PathDisplay) -> Result<String, Box<dyn std::fmt::Debug>>, String> {
+) -> FnCache<
+    PathDisplay,
+    impl FnMut(&PathDisplay) -> Result<String, Box<dyn std::fmt::Debug>>,
+    String,
+> {
     let sources_clone = sources.clone();
     FnCache::new(move |path: &PathDisplay| {
         let path_buf = path.as_path();

@@ -412,7 +412,9 @@ impl TypeId {
         let res = self.normalize_app(tycker, a_ty, kd);
         tycker.err_p_to_k(res)
     }
-    pub fn normalize_app(self, tycker: &mut Tycker<'_>, a_ty: TypeId, kd: KindId) -> Result<TypeId> {
+    pub fn normalize_app(
+        self, tycker: &mut Tycker<'_>, a_ty: TypeId, kd: KindId,
+    ) -> Result<TypeId> {
         let res = match tycker.statics.types[&self].to_owned() {
             | Fillable::Fill(_) => self,
             | Fillable::Done(ty) => match ty {
@@ -435,7 +437,9 @@ impl TypeId {
         };
         Ok(res)
     }
-    pub fn normalize_apps_k(self, tycker: &mut Tycker<'_>, a_tys: Vec<TypeId>) -> ResultKont<TypeId> {
+    pub fn normalize_apps_k(
+        self, tycker: &mut Tycker<'_>, a_tys: Vec<TypeId>,
+    ) -> ResultKont<TypeId> {
         let res = self.normalize_apps(tycker, a_tys);
         tycker.err_p_to_k(res)
     }
