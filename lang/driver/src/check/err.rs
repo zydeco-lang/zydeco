@@ -1,6 +1,7 @@
 use ariadne::Report;
 use std::{collections::HashMap, ops::Range, path::PathBuf};
 use thiserror::Error;
+use zydeco_utils::span::PathDisplay;
 
 #[derive(Error, Debug)]
 pub enum CompileError {
@@ -11,13 +12,13 @@ pub enum CompileError {
     /// Ariadne reports for better error display (replaces TyckErrors)
     #[error("Type checking errors")]
     TyckErrorReports {
-        reports: Vec<Report<'static, (String, Range<usize>)>>,
+        reports: Vec<Report<'static, (PathDisplay, Range<usize>)>>,
         sources: HashMap<PathBuf, String>,
     },
     /// Ariadne report for resolve error (replaces ResolveError)
     #[error("Resolve error")]
     ResolveErrorReport {
-        report: Report<'static, (String, Range<usize>)>,
+        report: Report<'static, (PathDisplay, Range<usize>)>,
         sources: HashMap<PathBuf, String>,
     },
 }

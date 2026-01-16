@@ -153,7 +153,8 @@ impl<'a> Tycker<'a> {
 impl<'a> CompilerPass for Tycker<'a> {
     type Arena = StaticsArena;
     type Out = StaticsArena;
-    type Error = Vec<ariadne::Report<'static, (String, std::ops::Range<usize>)>>;
+    type Error =
+        Vec<ariadne::Report<'static, (zydeco_utils::span::PathDisplay, std::ops::Range<usize>)>>;
     fn run(mut self) -> std::result::Result<Self::Out, Self::Error> {
         match self.run_k() {
             | Ok(()) => Ok(self.statics),

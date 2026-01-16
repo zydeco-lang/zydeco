@@ -136,22 +136,22 @@ impl Span {
     /// Convert a span to an Ariadne-compatible span identifier.
     ///
     /// Returns `(file_path, byte_range)` tuple suitable for use with Ariadne's `Report::build()`.
-    /// For dummy spans (those without a file path), returns `("<internal>", 0..0)`.
-    pub fn to_ariadne_span(&self) -> (String, std::ops::Range<usize>) {
+    /// For dummy spans (those without a file path), returns `(PathDisplay::from(PathBuf::from("<internal>")), 0..0)`.
+    pub fn to_ariadne_span(&self) -> (PathDisplay, std::ops::Range<usize>) {
         let (start, end) = self.get_cursor1();
         let path = self
             .get_path()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|| "<internal>".to_string());
+            .map(|p| PathDisplay::from(p))
+            .unwrap_or_else(|| PathDisplay::from(PathBuf::from("<internal>")));
         (path, start..end)
     }
     /// Convert a span to an Ariadne-compatible span identifier, returning an option.
     ///
     /// Returns `None` for dummy spans without a file path.
-    pub fn to_ariadne_span_opt(&self) -> Option<(String, std::ops::Range<usize>)> {
+    pub fn to_ariadne_span_opt(&self) -> Option<(PathDisplay, std::ops::Range<usize>)> {
         let (start, end) = self.get_cursor1();
         let path = self.get_path()?;
-        Some((path.to_string_lossy().to_string(), start..end))
+        Some((PathDisplay::from(path), start..end))
     }
     pub fn under_loc_ctx(self, loc: &LocationCtx) -> Self {
         match loc {
@@ -295,5 +295,41 @@ impl<T: Display> Display for Sp<T> {
         let info =
             if self.info.is_dummy() { format!("<internal>") } else { format!("{}", self.info) };
         write!(f, "{} ({})", self.inner, info)
+    }
+}
+
+/// A wrapper around `PathBuf` that implements `Display` for use with ariadne's `Cache` trait.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PathDisplay(PathBuf);
+
+impl PathDisplay {
+    pub fn new(path: PathBuf) -> Self {
+        PathDisplay(path)
+    }
+
+    pub fn as_path(&self) -> &PathBuf {
+        &self.0
+    }
+
+    pub fn into_path_buf(self) -> PathBuf {
+        self.0
+    }
+}
+
+impl Display for PathDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.display())
+    }
+}
+
+impl From<PathBuf> for PathDisplay {
+    fn from(path: PathBuf) -> Self {
+        PathDisplay(path)
+    }
+}
+
+impl From<&PathBuf> for PathDisplay {
+    fn from(path: &PathBuf) -> Self {
+        PathDisplay(path.clone())
     }
 }

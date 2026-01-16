@@ -2,6 +2,7 @@ use crate::bitter::syntax::*;
 use ariadne::{Label, Report, ReportKind};
 use std::ops::Range;
 use thiserror::Error;
+use zydeco_utils::span::PathDisplay;
 
 /// Errors reported during name resolution.
 #[derive(Error, Debug, Clone)]
@@ -22,11 +23,11 @@ pub enum ResolveError {
 
 impl ResolveError {
     /// Create an Ariadne report for this resolve error.
-    pub fn to_report(&self) -> Report<'static, (String, Range<usize>)> {
+    pub fn to_report(&self) -> Report<'static, (PathDisplay, Range<usize>)> {
         match self {
             | ResolveError::UnboundVar(var) => {
                 let (file_path, range) = var.info.to_ariadne_span();
-                Report::build(ReportKind::Error, file_path.clone(), range.start)
+                Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                     .with_message("Unbound variable")
                     .with_label(
                         Label::new((file_path, range))
@@ -37,12 +38,12 @@ impl ResolveError {
             | ResolveError::DuplicateDefinition(var1, var2) => {
                 let (file_path1, range1) = var1.info.to_ariadne_span();
                 let (file_path2, range2) = var2.info.to_ariadne_span();
-                let (primary_file, primary_offset) = if file_path1 == file_path2 {
-                    (file_path1.clone(), range1.start)
+                let primary_span = if file_path1 == file_path2 {
+                    (file_path1.clone(), range1.clone())
                 } else {
-                    (file_path1.clone(), range1.start)
+                    (file_path1.clone(), range1.clone())
                 };
-                let mut report = Report::build(ReportKind::Error, primary_file, primary_offset)
+                let mut report = Report::build(ReportKind::Error, primary_span)
                     .with_message("Duplicate definition")
                     .with_label(
                         Label::new((file_path1.clone(), range1))
@@ -63,7 +64,7 @@ impl ResolveError {
             }
             | ResolveError::UndefinedPrimitive(var) => {
                 let (file_path, range) = var.info.to_ariadne_span();
-                Report::build(ReportKind::Error, file_path.clone(), range.start)
+                Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                     .with_message("Undefined primitive")
                     .with_label(
                         Label::new((file_path, range))
@@ -75,7 +76,7 @@ impl ResolveError {
                 let (file_path1, range1) = var1.info.to_ariadne_span();
                 let (file_path2, range2) = var2.info.to_ariadne_span();
                 let mut report =
-                    Report::build(ReportKind::Error, file_path1.clone(), range1.start)
+                    Report::build(ReportKind::Error, (file_path1.clone(), range1.clone()))
                         .with_message("Duplicate primitive")
                         .with_label(Label::new((file_path1.clone(), range1)).with_message(
                             format!("first definition of primitive `{}`", var1.inner),
@@ -94,14 +95,14 @@ impl ResolveError {
                 report.finish()
             }
             | ResolveError::MissingPrim(name) => {
-                Report::build(ReportKind::Error, "<internal>".to_string(), 0)
+                Report::build(ReportKind::Error, (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0))
                     .with_message(format!("Missing primitive: {}", name))
                     .with_note(format!("The primitive `{}` must be defined but is missing", name))
                     .finish()
             }
             | ResolveError::ModuleNotFound(module_ref) => {
                 let (file_path, range) = module_ref.info.to_ariadne_span();
-                Report::build(ReportKind::Error, file_path.clone(), range.start)
+                Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
                     .with_message("Module not found")
                     .with_label(
                         Label::new((file_path, range)).with_message(format!(

@@ -4,6 +4,7 @@
 use super::{syntax::*, *};
 use ariadne::{Label, Report, ReportKind};
 use std::ops::Range;
+use zydeco_utils::span::PathDisplay;
 
 pub use zydeco_utils::err::*;
 
@@ -242,7 +243,7 @@ impl<'a> Tycker<'a> {
 
 
     /// Get the primary span for an error (where the error actually occurred).
-    fn error_primary_span(&self, error: &TyckError) -> Option<(String, Range<usize>)> {
+    fn error_primary_span(&self, error: &TyckError) -> Option<(PathDisplay, Range<usize>)> {
         match error {
             | TyckError::TypeMismatch { expected: _, found } => {
                 // Use the found type's span as primary
@@ -312,7 +313,7 @@ impl<'a> Tycker<'a> {
     /// Create an Ariadne report for this error entry.
     pub fn error_entry_report(
         &self, TyckErrorEntry { error, blame, stack }: TyckErrorEntry,
-    ) -> Report<'static, (String, Range<usize>)> {
+    ) -> Report<'static, (PathDisplay, Range<usize>)> {
         use ariadne::ColorGenerator;
         let mut colors = ColorGenerator::new();
         let primary_color = colors.next();
@@ -332,11 +333,10 @@ impl<'a> Tycker<'a> {
                     | _ => None,
                 })
             })
-            .unwrap_or_else(|| ("<internal>".to_string(), 0..0));
+            .unwrap_or_else(|| (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0));
 
         let error_msg = self.error_message(&error);
-        let (primary_file, primary_offset) = (primary_span.0.clone(), primary_span.1.start);
-        let mut report = Report::build(ReportKind::Error, primary_file, primary_offset)
+        let mut report = Report::build(ReportKind::Error, primary_span.clone())
             .with_message(&error_msg);
 
         // Add labels for the error itself if we have specific error spans
@@ -396,7 +396,7 @@ impl<'a> Tycker<'a> {
             }
             | _ => {
                 // Add a label for the primary span if we have one
-                if primary_span.0 != "<internal>" {
+                if primary_span.0.as_path() != &std::path::PathBuf::from("<internal>") {
                     report = report.with_label(
                         Label::new(primary_span.clone())
                             .with_message("error occurred here")

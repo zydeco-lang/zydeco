@@ -1,7 +1,7 @@
 use super::lexer::Tok;
 use ariadne::{Label, Report, ReportKind};
 use std::fmt::Display;
-use zydeco_utils::span::{Cursor1, FileInfo};
+use zydeco_utils::span::{Cursor1, FileInfo, PathDisplay};
 
 /// Wrapper around LALRPOP parse errors with file context.
 pub struct ParseError<'input> {
@@ -11,21 +11,21 @@ pub struct ParseError<'input> {
 
 impl ParseError<'_> {
     /// Create an Ariadne report for this parse error.
-    pub fn to_report(&self) -> Report<'static, (String, std::ops::Range<usize>)> {
+    pub fn to_report(&self) -> Report<'static, (PathDisplay, std::ops::Range<usize>)> {
         use lalrpop_util::ParseError::*;
         let ParseError { error, file_info: info } = self;
-        let file_path = info.path().to_string_lossy().to_string();
+        let file_path = PathDisplay::from(info.path());
 
         match error {
             | User { error } => {
-                Report::build(ReportKind::Error, "<internal>".to_string(), 0)
+                Report::build(ReportKind::Error, (PathDisplay::from(std::path::PathBuf::from("<internal>")), 0..0))
                     .with_message("Parse error")
                     .with_note(error.to_string())
                     .finish()
             }
             | InvalidToken { location } => {
                 let location_str = info.trans_span2(*location);
-                Report::build(ReportKind::Error, file_path.clone(), *location)
+                Report::build(ReportKind::Error, (file_path.clone(), *location..*location))
                     .with_message("Invalid token")
                     .with_label(
                         Label::new((file_path.clone(), *location..*location))
@@ -36,7 +36,7 @@ impl ParseError<'_> {
             | UnrecognizedEof { location, expected } => {
                 let location_str = info.trans_span2(*location);
                 let expected_msg = fmt_expected(expected);
-                let mut report = Report::build(ReportKind::Error, file_path.clone(), *location)
+                let mut report = Report::build(ReportKind::Error, (file_path.clone(), *location..*location))
                     .with_message("Unrecognized EOF")
                     .with_label(
                         Label::new((file_path.clone(), *location..*location))
@@ -51,7 +51,7 @@ impl ParseError<'_> {
                 let start_str = info.trans_span2(*start);
                 let end_str = info.trans_span2(*end);
                 let expected_msg = fmt_expected(expected);
-                let mut report = Report::build(ReportKind::Error, file_path.clone(), *start)
+                let mut report = Report::build(ReportKind::Error, (file_path.clone(), *start..*end))
                     .with_message(format!("Unrecognized token `{}`", token))
                     .with_label(
                         Label::new((file_path.clone(), *start..*end))
@@ -65,7 +65,7 @@ impl ParseError<'_> {
             | ExtraToken { token: (start, token, end) } => {
                 let start_str = info.trans_span2(*start);
                 let end_str = info.trans_span2(*end);
-                Report::build(ReportKind::Error, file_path.clone(), *start)
+                Report::build(ReportKind::Error, (file_path.clone(), *start..*end))
                     .with_message(format!("Extra token `{}`", token))
                     .with_label(
                         Label::new((file_path.clone(), *start..*end))
