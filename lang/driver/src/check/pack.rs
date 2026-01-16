@@ -4,7 +4,10 @@ use std::{collections::HashMap, path::PathBuf};
 use zydeco_dynamics::Linker;
 use zydeco_statics::tyck::Tycker;
 use zydeco_surface::scoped::{ResolveOut, Resolver};
-use zydeco_utils::prelude::{ArcGlobalAlloc, IndexAlloc};
+use zydeco_utils::{
+    pass::CompilerPass,
+    prelude::{ArcGlobalAlloc, IndexAlloc},
+};
 
 #[derive(Clone)]
 pub struct PackageStew {
@@ -230,10 +233,10 @@ impl PackageScoped {
     pub fn tyck(self, alloc: ArcGlobalAlloc, name: &str) -> Result<PackageChecked> {
         // type-checking
         let PackageScoped { sources: _, spans, prim, arena: mut scoped } = self;
-        let mut tycker = Tycker::new_arc(&spans, prim, &mut scoped, alloc);
-        match tycker.run_k() {
-            | Ok(()) => {}
-            | Err(()) => {
+        let tycker = Tycker::new_arc(&spans, &prim, &mut scoped, alloc);
+        let statics = match tycker.run() {
+            | Ok(statics) => statics,
+            | Err(errors) => {
                 // // Debug: print the declarations
                 // if cfg!(debug_assertions) {
                 //     use std::collections::BTreeMap;
@@ -248,14 +251,15 @@ impl PackageScoped {
 
                 use std::collections::BTreeSet;
                 let mut bs = BTreeSet::new();
-                for err in tycker.errors.iter().cloned() {
-                    bs.insert(format!("{}\n", tycker.error_entry_output(err)));
+                let len = errors.len();
+                for err in errors {
+                    bs.insert(err);
                 }
                 let mut s = String::new();
                 for b in bs {
                     s += &b;
                 }
-                s += &format!("Total: {} errors\n", tycker.errors.len());
+                s += &format!("Total: {} errors\n", len);
 
                 // // Debug: print the variable annotations
                 // if cfg!(debug_assertions) {
@@ -296,15 +300,12 @@ impl PackageScoped {
                 //     println!("<<< [{}]", name);
                 // }
 
-                Err(CompileError::TyckErrors(s))?;
+                Err(CompileError::TyckErrors(s))?
             }
-        }
+        };
 
         let _ = name;
 
-        // let Tycker { spans, prim: _, scoped, statics, tasks: _, metas: _, errors: _ } = tycker;
-        let spans = tycker.spans.clone();
-        let statics = tycker.statics.clone();
         Ok(PackageChecked { spans, scoped, statics })
     }
 }

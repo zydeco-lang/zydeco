@@ -15,7 +15,7 @@ use {
 #[derive(AsRef, AsMut)]
 pub struct Tycker<'a> {
     pub spans: &'a SpanArena,
-    pub prim: PrimDefs,
+    pub prim: &'a PrimDefs,
     #[as_ref(ScopedArena)]
     #[as_mut(ScopedArena)]
     pub scoped: &'a mut ScopedArena,
@@ -39,7 +39,8 @@ pub struct Tycker<'a> {
 impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
     pub fn new_arc(
-        spans: &'a SpanArena, prim: PrimDefs, scoped: &'a mut ScopedArena, alloc: ArcGlobalAlloc,
+        spans: &'a SpanArena, prim: &'a PrimDefs, scoped: &'a mut ScopedArena,
+        alloc: ArcGlobalAlloc,
     ) -> Self {
         Self {
             spans,
@@ -151,12 +152,17 @@ impl<'a> Tycker<'a> {
 
 impl<'a> CompilerPass for Tycker<'a> {
     type Arena = StaticsArena;
-    type Out = ();
-    type Error = Vec<TyckErrorEntry>;
+    type Out = StaticsArena;
+    type Error = Vec<String>;
     fn run(mut self) -> std::result::Result<Self::Out, Self::Error> {
         match self.run_k() {
-            | Ok(()) => Ok(()),
-            | Err(()) => Err(self.errors),
+            | Ok(()) => Ok(self.statics),
+            | Err(()) => Err(self
+                .errors
+                .clone()
+                .into_iter()
+                .map(|e| format!("{}\n", self.error_entry_output(e)))
+                .collect()),
         }
     }
 }
@@ -1983,7 +1989,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
 
-                let monad_ty_kd: ss::KindId = ss::Arrow(ss::VType, ss::CType).build(tycker, &self.info);
+                let monad_ty_kd: ss::KindId =
+                    ss::Arrow(ss::VType, ss::CType).build(tycker, &self.info);
                 let monad_ty_var =
                     Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into());
                 let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd);
