@@ -57,30 +57,9 @@ pub mod tyck {
 }
 pub use tyck::{Alloc, Construct, Lub, MonConstruct, Tycker};
 
-#[doc = include_str!("wf/README.md")]
-pub mod wf {
-    /// Typed syntax aliases used in the well-formed program.
-    pub mod syntax;
-    /// Well-formed program arena and metadata.
-    pub mod arena;
-    pub use arena::*;
-
-    /// Builder that assembles a `WellFormedProgram` from type-checker output.
-    pub mod check;
-
-    //     pub mod err;
-    //     pub use err::*;
-    //     pub mod fmt;
-    //     mod dump;
-    /// Span lookup for well-formed entities.
-    mod span;
-
-    //     use crate::*;
-}
-pub use wf::WellFormedProgram;
 
 pub(crate) use surface_syntax as su;
 pub(crate) use tyck::construct::syntax as cs;
 pub(crate) use tyck::syntax as ss;
-pub(crate) use zydeco_surface::textual::syntax as t;
+// pub(crate) use zydeco_surface::textual::syntax as t;
 // pub(crate) use wf::syntax as sw;

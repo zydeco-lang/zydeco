@@ -430,7 +430,7 @@ impl BuildSystem {
     fn __compile_zir_pack(
         &self, pack: PackId, alloc: ArcGlobalAlloc, verbose: bool,
     ) -> Result<PackageStack> {
-        let PackageChecked { spans, mut scoped, statics, wf: _ } =
+        let PackageChecked { spans, mut scoped, statics } =
             self.__tyck_pack(pack, alloc.clone(), verbose)?;
         let mut stack =
             zydeco_stackir::Lowerer::new(alloc.clone(), &spans, &mut scoped, &statics).run();
