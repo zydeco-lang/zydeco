@@ -94,9 +94,6 @@ impl PackageX86 {
             )))?
         }
 
-        // Use absolute path for ZYDECO_LIB_DIR to ensure Cargo can find the library
-        // regardless of where it's invoked from
-        let lib_dir = build_dir.canonicalize().unwrap_or_else(|_| build_dir.clone());
         // cargo build
         let cargo_out = if cfg!(target_os = "macos") {
             // Command::new("rustc")
@@ -116,7 +113,7 @@ impl PackageX86 {
             // add "ZYDECO_STATIC_LIB" environment variable to the command
             Command::new("cargo")
                 .env("ZYDECO_STATIC_LIB", lib_name)
-                .env("ZYDECO_LIB_DIR", lib_dir.to_string_lossy().as_ref())
+                .env("ZYDECO_LIB_DIR", ".")
                 .env("RUSTFLAGS", "-C panic=abort")
                 .arg("build")
                 .arg("--manifest-path")
@@ -138,7 +135,7 @@ impl PackageX86 {
             //     .map_err(|e| format!("rustc err: {}", e))?
             Command::new("cargo")
                 .env("ZYDECO_STATIC_LIB", lib_name)
-                .env("ZYDECO_LIB_DIR", lib_dir.to_string_lossy().as_ref())
+                .env("ZYDECO_LIB_DIR", ".")
                 .arg("build")
                 .arg("--manifest-path")
                 .arg(build_dir.join("Cargo.toml"))
