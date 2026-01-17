@@ -159,6 +159,12 @@ impl PackageX86 {
         };
         std::fs::copy(&cargo_exe_fname, &exe_fname).map_err(LinkError::ExecutableCopyError)?;
 
+        // Hack: avoid text file busy error on linux
+        #[cfg(target_os = "linux")]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+
         let executable = PackageX86Executable { name, executable: exe_fname };
         Ok(executable)
     }
