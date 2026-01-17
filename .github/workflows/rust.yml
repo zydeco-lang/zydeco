@@ -21,6 +21,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y nasm binutils
     - name: Build
-      run: cargo build --verbose
+      run: cargo build-all --verbose
     - name: Run Tests
       run: cargo test-all --verbose
