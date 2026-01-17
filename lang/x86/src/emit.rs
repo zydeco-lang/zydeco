@@ -8,6 +8,7 @@ use zydeco_stackir::arena::StackArena;
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
+use zydeco_utils::pass::CompilerPass;
 
 pub const ENV_REG: Reg = Reg::Rbp;
 
@@ -29,6 +30,18 @@ pub struct Emitter<'e> {
     visited: HashSet<ProgId>,
 }
 
+impl<'e> AsRef<AsmFile> for Emitter<'e> {
+    fn as_ref(&self) -> &AsmFile {
+        &self.asm
+    }
+}
+
+impl<'e> AsMut<AsmFile> for Emitter<'e> {
+    fn as_mut(&mut self) -> &mut AsmFile {
+        &mut self.asm
+    }
+}
+
 impl<'e> Emitter<'e> {
     pub fn new(
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
@@ -45,8 +58,13 @@ impl<'e> Emitter<'e> {
             visited: HashSet::new(),
         }
     }
+}
 
-    pub fn run(mut self) -> AsmFile {
+impl<'e> CompilerPass for Emitter<'e> {
+    type Arena = AsmFile;
+    type Out = AsmFile;
+    type Error = std::convert::Infallible;
+    fn run(mut self) -> Result<Self::Out, Self::Error> {
         self.asm.text.extend([
             // zydeco_abort
             Instr::Extern("zydeco_abort".to_string()),
@@ -83,36 +101,6 @@ impl<'e> Emitter<'e> {
             Instr::Comment("call the zydeco function __code__ (which is in rdi)".to_string()),
             Instr::Jmp(JmpArgs::Reg(Reg::Rdi)),
         ]);
-
-        // Emit wrappers for externs that converts from Zydeco calling convention to x86-64 calling convention
-        for sa::Extern { name, arity } in self.assembly.externs.iter() {
-            let zydeco_extern_name = format!("zydeco_{}", name);
-            let wrapper_inner_name = format!("wrapper_{}", name);
-            self.asm.text.push(Instr::Label(wrapper_inner_name.clone()));
-            for i in 1..=*arity {
-                // place the arguments accordingly
-                // using system V AMD64 ABI
-                if i <= 6 {
-                    let reg = match i {
-                        | 1 => Reg::Rdi,
-                        | 2 => Reg::Rsi,
-                        | 3 => Reg::Rdx,
-                        | 4 => Reg::Rcx,
-                        | 5 => Reg::R8,
-                        | 6 => Reg::R9,
-                        | _ => unreachable!(),
-                    };
-                    self.asm.text.push(Instr::Pop(Loc::Reg(reg)));
-                } else {
-                    // load to stack - but it's already on the stack
-                    // we just need to make sure the position is correct
-                    todo!()
-                }
-            }
-            // Todo: a jump or a call? Maybe we should group the externs by
-            // whether it's tail called or not?
-            self.asm.text.push(Instr::Call(JmpArgs::Label(zydeco_extern_name)));
-        }
 
         self.asm.text.extend([
             Instr::Global("entry".to_string()),
@@ -185,7 +173,7 @@ impl<'e> Emitter<'e> {
             }
         }
 
-        self.asm
+        Ok(self.asm)
     }
 }
 
@@ -289,8 +277,41 @@ impl<'a> Emit<'a> for Terminator {
                 em.asm.text.push(Instr::Jmp(JmpArgs::Mem(MemRef { reg: Reg::Rcx, offset: 0 })));
             }
             | Terminator::Extern(sa::Extern { name, arity }) => {
-                em.asm.text.push(Instr::Comment(format!("extern: {:?}, {:?}", name, arity)));
-                em.asm.text.extend([Instr::Jmp(JmpArgs::Label(format!("wrapper_{}", name)))]);
+                em.asm.text.push(Instr::Comment(format!("extern: {}/{}", name, arity)));
+
+                let zydeco_extern_name = format!("zydeco_{}", name);
+                for i in 1..=*arity {
+                    // place the arguments accordingly
+                    // using system V AMD64 ABI
+                    if i <= 6 {
+                        let reg = match i {
+                            | 1 => Reg::Rdi,
+                            | 2 => Reg::Rsi,
+                            | 3 => Reg::Rdx,
+                            | 4 => Reg::Rcx,
+                            | 5 => Reg::R8,
+                            | 6 => Reg::R9,
+                            | _ => unreachable!(),
+                        };
+                        em.asm.text.push(Instr::Pop(Loc::Reg(reg)));
+                    } else {
+                        // load to stack - but it's already on the stack
+                        // we just need to make sure the position is correct
+                        todo!()
+                    }
+                }
+                // add padding to the stack
+                let frame = em.assembly.contexts[&id].iter().len() as i32;
+                let padding = 8 * ((frame + 1) % 2);
+                if padding > 0 {
+                    em.asm.text.push(Instr::Sub(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(padding))));
+                }
+                // All externs must be non-tail called so that we can restore the padding from the stack.
+                em.asm.text.push(Instr::Call(JmpArgs::Label(zydeco_extern_name)));
+                // Restore the padding from the stack
+                if padding > 0 {
+                    em.asm.text.push(Instr::Add(BinArgs::ToReg(Reg::Rsp, Arg32::Signed(padding))));
+                }
             }
             | Terminator::Abort(sa::Abort) => {
                 em.asm.text.push(Instr::Comment("abort".to_string()));

@@ -26,6 +26,8 @@ pub enum BuildError {
     MissingBuildConfig(String),
     #[error("Unsupported target: {0}")]
     UnsupportedTarget(String),
+    #[error("Infallible error: {0}")]
+    Infallible(#[from] std::convert::Infallible),
 }
 
 impl BuildError {

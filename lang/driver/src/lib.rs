@@ -337,7 +337,7 @@ impl BuildSystem {
         let PackageAssembly { spans, scoped, statics, stack, assembly } =
             self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
         let assembly = zydeco_x86::Emitter::new(&spans, &scoped, &statics, &stack, &assembly)
-            .run()
+            .run()?
             .to_string();
         if verbose {
             log::trace!("x86 assembly:\n{}", &assembly);
