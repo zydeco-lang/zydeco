@@ -6,6 +6,7 @@ _*/
 
 # Editors
 .vscode
+.cursor
 
 # Folder config files
 .directory
