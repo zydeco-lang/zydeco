@@ -485,6 +485,8 @@ impl fmt::Display for Instr {
 
 impl fmt::Display for AsmFile {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Use RIP-relative addressing by default for position-independent code
+        writeln!(f, "default rel")?;
         // Emit sections in standard ELF order: .text, .data, .rodata, .bss
         if !self.text.is_empty() {
             writeln!(f, "section .text")?;

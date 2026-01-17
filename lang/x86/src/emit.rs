@@ -169,7 +169,9 @@ impl<'e> CompilerPass for Emitter<'e> {
                     prog_id.concise()
                 ))]);
                 let arm_label = self.assembly.prog_label(prog_id).expect("block name not found");
-                self.asm.rodata.push(Instr::Dq(arm_label));
+                // Store relative offset from current entry to target for position-independent code
+                // Using "label - $" computes the offset from the current dq entry to the target label
+                self.asm.rodata.push(Instr::Dq(format!("{} - $", arm_label)));
             }
         }
 
@@ -258,10 +260,13 @@ impl<'a> Emit<'a> for Terminator {
                 let label = table.rodata_label();
                 em.tables.push(table);
                 // emit jump to the jump table arm
+                // For position-independent code, jump table stores relative offsets
                 // Mach-O doesn't support [rel label + reg * scale], so we need:
                 // 1. lea rcx, [rel jump_table] - load jump table base address
                 // 2. lea rcx, [rcx + rax * 8] - compute address of table entry
-                // 3. jmp [rcx] - jump to target (indirect jump through memory)
+                // 3. mov rax, [rcx] - load relative offset from entry to target
+                // 4. add rcx, rax - compute target address (entry + offset)
+                // 5. jmp rcx - jump to target
                 em.asm.text.push(Instr::Lea(
                     Reg::Rcx,
                     LeaArgs::RelLabel(RelLabel { label, offset: None }),
@@ -274,7 +279,12 @@ impl<'a> Emit<'a> for Terminator {
                         offset: None,
                     },
                 ));
-                em.asm.text.push(Instr::Jmp(JmpArgs::Mem(MemRef { reg: Reg::Rcx, offset: 0 })));
+                em.asm.text.push(Instr::Mov(MovArgs::ToReg(
+                    Reg::Rax,
+                    Arg64::Mem(MemRef { reg: Reg::Rcx, offset: 0 }),
+                )));
+                em.asm.text.push(Instr::Add(BinArgs::ToReg(Reg::Rcx, Arg32::Reg(Reg::Rax))));
+                em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rcx)));
             }
             | Terminator::Extern(sa::Extern { name, arity }) => {
                 em.asm.text.push(Instr::Comment(format!("extern: {}/{}", name, arity)));
