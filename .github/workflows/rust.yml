@@ -16,6 +16,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Install build tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nasm binutils
     - name: Build
       run: cargo build --verbose
     - name: Run Tests
