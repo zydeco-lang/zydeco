@@ -22,9 +22,11 @@ use crate::*;
 pub trait Alloc<Arena, T> {
     /// The annotation of this allocation.
     type Ann;
+    /// The environment of this allocation.
+    type Env;
     /// Allocates the value in the arena in the [`Tycker`] and returns the allocated value.
     /// See the documentation of trait [`Alloc`] and [`crate::tyck::alloc`] for more details.
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> T;
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> T;
 }
 
 /* ------------------------------- Definition ------------------------------- */
@@ -34,7 +36,8 @@ where
     Arena: AsMut<ScopedArena> + AsMut<StaticsArena>,
 {
     type Ann = AnnId;
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> DefId {
+    type Env = ();
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, _env: &Self::Env) -> DefId {
         let id = AsMut::<ScopedArena>::as_mut(arena).defs.alloc(val);
         AsMut::<StaticsArena>::as_mut(arena).annotations_var.insert(id, ann);
         id
@@ -48,7 +51,8 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = KindId;
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> AbstId {
+    type Env = ();
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, _env: &Self::Env) -> AbstId {
         let abst = arena.as_mut().absts.alloc(());
         arena.as_mut().annotations_abst.insert(abst, ann);
         arena.as_mut().abst_hints.insert(abst, val);
@@ -60,7 +64,8 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = KindId;
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> AbstId {
+    type Env = ();
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, _env: &Self::Env) -> AbstId {
         let abst = arena.as_mut().absts.alloc(());
         arena.as_mut().annotations_abst.insert(abst, ann);
         if let Some(def) = val {
@@ -74,9 +79,10 @@ where
     Arena: AsMut<StaticsArena> + AsRef<StaticsArena>,
 {
     type Ann = ();
-    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> AbstId {
+    type Env = ();
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, env: &Self::Env) -> AbstId {
         let (def, kd) = val.try_destruct_def(arena);
-        Alloc::alloc(arena, def, kd)
+        Alloc::alloc(arena, def, kd, env)
     }
 }
 
@@ -87,7 +93,8 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = ();
-    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> FillId {
+    type Env = ();
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, _env: &Self::Env) -> FillId {
         arena.as_mut().fills.alloc(val)
     }
 }
@@ -99,7 +106,8 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = ();
-    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> KindId {
+    type Env = ();
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, _env: &Self::Env) -> KindId {
         arena.as_mut().kinds.alloc(val.into())
     }
 }
@@ -108,7 +116,8 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = ();
-    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> KindId {
+    type Env = ();
+    fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, _env: &Self::Env) -> KindId {
         arena.as_mut().kinds.alloc(Fillable::Done(val))
     }
 }
@@ -120,8 +129,9 @@ macro_rules! AllocKind {
                 Arena: AsMut<StaticsArena>,
             {
                 type Ann = ();
-                fn alloc(arena: &mut Arena, val: Self, (): Self::Ann) -> KindId {
-                    Alloc::alloc(arena, Kind::from(val), ())
+                type Env = ();
+                fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, env: &Self::Env) -> KindId {
+                    Alloc::alloc(arena, Kind::from(val), (), env)
                 }
             }
         )*
@@ -140,9 +150,11 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = KindId;
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> TPatId {
+    type Env = TyEnv;
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> TPatId {
         let tpat = arena.as_mut().tpats.alloc(val);
         arena.as_mut().annotations_tpat.insert(tpat, ann);
+        arena.as_mut().env_tpat.insert(tpat, env.clone());
         tpat
     }
 }
@@ -154,8 +166,9 @@ macro_rules! AllocTypePattern {
                 Arena: AsMut<StaticsArena>,
             {
                 type Ann = KindId;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> TPatId {
-                    Alloc::alloc(arena, TypePattern::from(val), ann)
+                type Env = TyEnv;
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> TPatId {
+                    Alloc::alloc(arena, TypePattern::from(val), ann, env)
                 }
             }
         )*
@@ -173,7 +186,8 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = KindId;
-    fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann) -> TypeId {
+    type Env = TyEnv;
+    fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann, env: &Self::Env) -> TypeId {
         let ty = arena.as_mut().types.alloc(val.into());
         arena
             .as_mut()
@@ -185,6 +199,7 @@ where
                 // res
             })
             .unwrap();
+        arena.as_mut().env_type.insert(ty, env.clone());
         ty
     }
 }
@@ -193,7 +208,8 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = KindId;
-    fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann) -> TypeId {
+    type Env = TyEnv;
+    fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann, env: &Self::Env) -> TypeId {
         let ty = arena.as_mut().types.alloc(Fillable::Done(val));
         arena
             .as_mut()
@@ -205,6 +221,7 @@ where
                 // res
             })
             .unwrap();
+        arena.as_mut().env_type.insert(ty, env.clone());
         ty
     }
 }
@@ -216,8 +233,9 @@ macro_rules! AllocType {
                 Arena: AsMut<StaticsArena>,
             {
                 type Ann = KindId;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> TypeId {
-                    Alloc::alloc(arena, Type::from(val), ann)
+                type Env = TyEnv;
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> TypeId {
+                    Alloc::alloc(arena, Type::from(val), ann, env)
                 }
             }
         )*
@@ -250,9 +268,11 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = TypeId;
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> VPatId {
+    type Env = TyEnv;
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> VPatId {
         let vpat = arena.as_mut().vpats.alloc(val);
         arena.as_mut().annotations_vpat.insert(vpat, ann);
+        arena.as_mut().env_vpat.insert(vpat, env.clone());
         vpat
     }
 }
@@ -264,8 +284,9 @@ macro_rules! AllocValuePattern {
                 Arena: AsMut<StaticsArena>,
             {
                 type Ann = TypeId;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> VPatId {
-                    Alloc::alloc(arena, ValuePattern::from(val), ann)
+                type Env = TyEnv;
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> VPatId {
+                    Alloc::alloc(arena, ValuePattern::from(val), ann, env)
                 }
             }
         )*
@@ -287,9 +308,11 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = TypeId;
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> ValueId {
+    type Env = TyEnv;
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> ValueId {
         let value = arena.as_mut().values.alloc(val);
         arena.as_mut().annotations_value.insert(value, ann);
+        arena.as_mut().env_value.insert(value, env.clone());
         value
     }
 }
@@ -301,8 +324,9 @@ macro_rules! AllocValue {
                 Arena: AsMut<StaticsArena>,
             {
                 type Ann = TypeId;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> ValueId {
-                    Alloc::alloc(arena, Value::from(val), ann)
+                type Env = TyEnv;
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> ValueId {
+                    Alloc::alloc(arena, Value::from(val), ann, env)
                 }
             }
         )*
@@ -326,9 +350,11 @@ where
     Arena: AsMut<StaticsArena>,
 {
     type Ann = TypeId;
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> CompuId {
+    type Env = TyEnv;
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> CompuId {
         let compu = arena.as_mut().compus.alloc(val);
         arena.as_mut().annotations_compu.insert(compu, ann);
+        arena.as_mut().env_compu.insert(compu, env.clone());
         compu
     }
 }
@@ -340,8 +366,9 @@ macro_rules! AllocComputation {
                 Arena: AsMut<StaticsArena>,
             {
                 type Ann = TypeId;
-                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann) -> CompuId {
-                    Alloc::alloc(arena, Computation::from(val), ann)
+                type Env = TyEnv;
+                fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> CompuId {
+                    Alloc::alloc(arena, Computation::from(val), ann, env)
                 }
             }
         )*

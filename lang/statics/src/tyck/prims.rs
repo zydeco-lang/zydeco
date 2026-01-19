@@ -11,7 +11,7 @@ impl Tycker<'_> {
             | AnnId::Kind(kd) => kd,
             | AnnId::Set | AnnId::Type(_) => unreachable!(),
         };
-        let ty = Alloc::alloc(self, prim, kd);
+        let ty = Alloc::alloc(self, prim, kd, &env.info);
         self.statics.annotations_var.insert(def, kd.into());
         env.info += [(def, ty.into())];
         Ok(env)
@@ -26,14 +26,14 @@ impl Tycker<'_> {
                 // the alias head is a internal type / kind
                 match internal {
                     | su::Internal::VType => {
-                        let kd = Alloc::alloc(self, VType, ());
+                        let kd = Alloc::alloc(self, VType, (), &());
                         self.statics.annotations_var.insert(def, AnnId::Set);
                         env.info += [(def, kd.into())];
                         // should also be added to global
                         self.statics.global_defs.insert(def, ());
                     }
                     | su::Internal::CType => {
-                        let kd = Alloc::alloc(self, CType, ());
+                        let kd = Alloc::alloc(self, CType, (), &());
                         self.statics.annotations_var.insert(def, AnnId::Set);
                         env.info += [(def, kd.into())];
                         // should also be added to global

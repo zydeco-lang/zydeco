@@ -197,7 +197,7 @@ mod syntax_impl {
             let (env, abst) = abst.mbuild(tycker, env)?;
             let (env, ty) = cs::Thk(cs::Signature { ty: cs::Type(abst) }).mbuild(tycker, env)?;
             let (env, var) = var.mbuild(tycker, env)?;
-            let def = Alloc::alloc(tycker, var, ty.into());
+            let def = Alloc::alloc(tycker, var, ty.into(), &());
             let (env, str) = cs::Value(def).mbuild(tycker, env)?;
             let (env, tvar) = tvar.mbuild(tycker, env)?;
             let mut env = env;
@@ -460,7 +460,8 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let Some(def_) = env.subst.get(&def).cloned() else {
                 tycker.err(TyckError::NotInlinable(def), std::panic::Location::caller())?
             };
-            (env, Alloc::alloc(tycker, def_, kd))
+            let alloc = Alloc::alloc(tycker, def_, kd, &env.ty);
+            (env, alloc)
         }
         | Type::Abst(abst) => {
             // only types that are not sealed are allowed here
@@ -470,13 +471,17 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
                     tycker.err(TyckError::NotInlinableSeal(abst), std::panic::Location::caller())?
                 }
                 | None => match env.subst_abst.get(&abst).cloned() {
-                    | Some(new) => (env, Alloc::alloc(tycker, new, kd)),
+                    | Some(new) => {
+                        let alloc = Alloc::alloc(tycker, new, kd, &env.ty);
+                        (env, alloc)
+                    }
                     | None => {
                         // log::warn!(
                         //     "carrier translation of {} may leak",
                         //     tycker.dump_statics(abst)
                         // );
-                        (env, Alloc::alloc(tycker, abst, kd))
+                        let alloc = Alloc::alloc(tycker, abst, kd, &env.ty);
+                        (env, alloc)
                     }
                 },
             }
@@ -493,7 +498,10 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let ty_a_ = cs::TypeLift { ty: ty_a };
             App(ty_f_, ty_a_).mbuild(tycker, env)?
         }
-        | Type::Thk(ThkTy) => (env, Alloc::alloc(tycker, ThkTy, kd)),
+        | Type::Thk(ThkTy) => {
+            let alloc = Alloc::alloc(tycker, ThkTy, kd, &env.ty);
+            (env, alloc)
+        }
         // primitive types are not allowed in monadic blocks
         | ty @ (Type::Int(_) | Type::Char(_) | Type::String(_)) => {
             let def = {
@@ -604,7 +612,8 @@ fn value_translation(
             match env.subst.get(&def).cloned() {
                 | Some(def_) => {
                     // the definition is closed in this monadic block
-                    (env, Alloc::alloc(tycker, def_, ty_))
+                    let alloc = Alloc::alloc(tycker, def_, ty_, &env.ty);
+                    (env, alloc)
                 }
                 | None => {
                     use zydeco_utils::arena::ArenaAccess;
@@ -732,7 +741,8 @@ fn computation_translation(
                 })
                 .collect::<Result<Vec<_>>>()?;
             let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
-            (env, Alloc::alloc(tycker, Match { scrut: scrut_, arms: arms_ }, ty_))
+            let alloc = Alloc::alloc(tycker, Match { scrut: scrut_, arms: arms_ }, ty_, &env.ty);
+            (env, alloc)
         }
         | Compu::CoMatch(compu) => {
             let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;

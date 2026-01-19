@@ -92,12 +92,16 @@ pub struct StaticsArena {
     pub annotations_value: ArenaAssoc<ValueId, TypeId>,
     /// type annotations for computations
     pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
-    // Todo: under which environment is something checked?
-    // pub env_tpat
-    // pub env_type
-    // pub env_vpat
-    // pub env_value
-    // pub env_compu
+    /// typing environments for type patterns
+    pub env_tpat: ArenaAssoc<TPatId, TyEnv>,
+    /// typing environments for types
+    pub env_type: ArenaAssoc<TypeId, TyEnv>,
+    /// typing environments for value patterns
+    pub env_vpat: ArenaAssoc<VPatId, TyEnv>,
+    /// typing environments for values
+    pub env_value: ArenaAssoc<ValueId, TyEnv>,
+    /// typing environments for computations
+    pub env_compu: ArenaAssoc<CompuId, TyEnv>,
 }
 
 impl StaticsArena {
@@ -135,6 +139,11 @@ impl StaticsArena {
             annotations_vpat: ArenaAssoc::new(),
             annotations_value: ArenaAssoc::new(),
             annotations_compu: ArenaAssoc::new(),
+            env_tpat: ArenaAssoc::new(),
+            env_type: ArenaAssoc::new(),
+            env_vpat: ArenaAssoc::new(),
+            env_value: ArenaAssoc::new(),
+            env_compu: ArenaAssoc::new(),
         }
     }
 }

@@ -53,11 +53,11 @@ impl Lub for KindId {
             | (Fillable::Fill(lhs), _) => fill_kd(tycker, lhs, other)?,
             | (Fillable::Done(lhs), Fillable::Done(rhs)) => match (lhs, rhs) {
                 | (Kind::VType(VType), Kind::VType(VType)) => {
-                    let kd = Alloc::alloc(tycker, VType, ());
+                    let kd = Alloc::alloc(tycker, VType, (), &());
                     kd
                 }
                 | (Kind::CType(CType), Kind::CType(CType)) => {
-                    let kd = Alloc::alloc(tycker, CType, ());
+                    let kd = Alloc::alloc(tycker, CType, (), &());
                     kd
                 }
                 | (Kind::Arrow(lhs), Kind::Arrow(rhs)) => {
@@ -65,7 +65,7 @@ impl Lub for KindId {
                     let Arrow(rin, rout) = rhs;
                     let kd_in = lin.lub(rin, tycker)?;
                     let kd_out = lout.lub(rout, tycker)?;
-                    let kd = Alloc::alloc(tycker, Arrow(kd_in, kd_out), ());
+                    let kd = Alloc::alloc(tycker, Arrow(kd_in, kd_out), (), &());
                     kd
                 }
                 | (Kind::VType(_), _) | (Kind::CType(_), _) | (Kind::Arrow(_), _) => {
@@ -129,6 +129,7 @@ impl Debruijn {
     fn lub_inner(self, lhs_id: TypeId, rhs_id: TypeId, tycker: &mut Tycker) -> Result<TypeId> {
         let lhs = tycker.statics.types[&lhs_id].clone();
         let rhs = tycker.statics.types[&rhs_id].clone();
+        let env = tycker.statics.env_type[&lhs_id].clone();
         fn fill_ty(tycker: &mut Tycker, fill: FillId, ty: TypeId) -> Result<TypeId> {
             match tycker.statics.solus.remove(&fill) {
                 | Some(old) => match old {
@@ -192,7 +193,7 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let abs = Alloc::alloc(tycker, Abs(lpat, body), kd);
+                        let abs = Alloc::alloc(tycker, Abs(lpat, body), kd, &env);
                         abs
                     }
                 }
@@ -207,7 +208,7 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let app = Alloc::alloc(tycker, App(f, a), kd);
+                        let app = Alloc::alloc(tycker, App(f, a), kd, &env);
                         app.normalize(tycker, kd)?
                     }
                 }
@@ -257,7 +258,7 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let arrow = Alloc::alloc(tycker, Arrow(a, b), kd);
+                        let arrow = Alloc::alloc(tycker, Arrow(a, b), kd, &env);
                         arrow
                     }
                 }
@@ -274,7 +275,7 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let forall = Alloc::alloc(tycker, Forall(labst, body), kd);
+                        let forall = Alloc::alloc(tycker, Forall(labst, body), kd, &env);
                         forall
                     }
                 }
@@ -289,7 +290,7 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let prod = Alloc::alloc(tycker, Prod(a, b), kd);
+                        let prod = Alloc::alloc(tycker, Prod(a, b), kd, &env);
                         prod
                     }
                 }
@@ -306,7 +307,7 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let exists = Alloc::alloc(tycker, Exists(labst, body), kd);
+                        let exists = Alloc::alloc(tycker, Exists(labst, body), kd, &env);
                         exists
                     }
                 }

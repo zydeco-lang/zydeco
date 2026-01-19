@@ -25,6 +25,7 @@ zydeco-derive = { workspace = true }
 zydeco-syntax = { workspace = true }
 derive_more = { workspace = true, features = [
     "add_assign",
+    "as_ref",
     "index",
     "into_iterator",
 ] }

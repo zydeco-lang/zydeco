@@ -98,28 +98,28 @@ mod impls_identifiers {
                 | PatAnnId::Value(pat, _) => PatId::Value(pat),
             }
         }
-        pub fn mk_hole(tycker: &mut Tycker<'_>, ann: AnnId) -> Self {
+        pub fn mk_hole(tycker: &mut Tycker<'_>, env: &TyEnv, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, Hole, kd);
+                    let tm = Alloc::alloc(tycker, Hole, kd, env);
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, Hole, ty);
+                    let tm = Alloc::alloc(tycker, Hole, ty, env);
                     PatAnnId::Value(tm, ty)
                 }
             }
         }
-        pub fn mk_var(tycker: &mut Tycker<'_>, def: DefId, ann: AnnId) -> Self {
+        pub fn mk_var(tycker: &mut Tycker<'_>, env: &TyEnv, def: DefId, ann: AnnId) -> Self {
             match ann {
                 | ss::AnnId::Set => unreachable!(),
                 | ss::AnnId::Kind(kd) => {
-                    let tm = Alloc::alloc(tycker, def, kd);
+                    let tm = Alloc::alloc(tycker, def, kd, env);
                     PatAnnId::Type(tm, kd)
                 }
                 | ss::AnnId::Type(ty) => {
-                    let tm = Alloc::alloc(tycker, def, ty);
+                    let tm = Alloc::alloc(tycker, def, ty, env);
                     PatAnnId::Value(tm, ty)
                 }
             }

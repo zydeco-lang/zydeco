@@ -187,12 +187,12 @@ macro_rules! impl_construct_trivial {
 impl<'a, S, T, A, U> Construct<Tycker<'a>, T> for cs::Ann<S, U>
 where
     U: Construct<Tycker<'a>, A>,
-    S: Alloc<Tycker<'a>, T, Ann = A>,
+    S: Alloc<Tycker<'a>, T, Ann = A, Env = TyEnv>,
 {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> T {
+    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> T {
         let cs::Ann(tm, ty) = self;
-        let ty = ty.build(tycker, _env);
-        Alloc::alloc(tycker, tm, ty)
+        let ty = ty.build(tycker, env);
+        Alloc::alloc(tycker, tm, ty, env)
     }
 }
 
@@ -264,8 +264,8 @@ where
     fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> AbstId {
         let cs::Ann(var, kd) = self;
         let kd = kd.build(tycker, _env);
-        let def = Alloc::alloc(tycker, var, kd.into());
-        Alloc::alloc(tycker, def, kd)
+        let def = Alloc::alloc(tycker, var, kd.into(), &());
+        Alloc::alloc(tycker, def, kd, &())
     }
 }
 impl<'a, K> Construct<Tycker<'a>, AbstId> for cs::Ann<String, K>
@@ -328,7 +328,7 @@ where
         let Arrow(k1, k2) = self;
         let k1 = k1.build(tycker, env);
         let k2 = k2.build(tycker, env);
-        Alloc::alloc(tycker, Arrow(k1, k2), ())
+        Alloc::alloc(tycker, Arrow(k1, k2), (), &())
     }
 }
 
@@ -363,7 +363,7 @@ where
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TPatId {
         let cs::Ann(var, kd) = self;
         let ty = kd.build(tycker, env);
-        let def = Alloc::alloc(tycker, var, ty.into());
+        let def = Alloc::alloc(tycker, var, ty.into(), &());
         cs::Ann(def, ty).build(tycker, env)
     }
 }
@@ -376,7 +376,7 @@ where
         let cs::Pat(var, kd) = self;
         let var = var.build(tycker, env);
         let ty = kd.build(tycker, env);
-        let def = Alloc::alloc(tycker, var, ty.into());
+        let def = Alloc::alloc(tycker, var, ty.into(), &());
         cs::Ann(def, ty).build(tycker, env)
     }
 }
@@ -418,7 +418,7 @@ where
         let cs::Ann(Hole, (kd, site)) = self;
         let kd = kd.build(tycker, env);
         let fill = tycker.statics.fills.alloc(site);
-        Alloc::alloc(tycker, fill, kd)
+        Alloc::alloc(tycker, fill, kd, env)
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for DefId {
@@ -429,9 +429,9 @@ impl<'a> Construct<Tycker<'a>, TypeId> for DefId {
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for AbstId {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> TypeId {
+    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
         let kd = tycker.statics.annotations_abst[&self];
-        Alloc::alloc(tycker, self, kd)
+        Alloc::alloc(tycker, self, kd, env)
     }
 }
 impl<'a, T> Construct<Tycker<'a>, TypeId> for cs::Ty<T>
@@ -456,7 +456,7 @@ where
         let (def, param_kd) = tpat.destruct_def(tycker);
         let body = ty(tpat, def, param_kd).build(tycker, env);
         let kd = Arrow(param_kd, cs::TypeOf(body)).build(tycker, env);
-        Alloc::alloc(tycker, Abs(tpat, body), kd)
+        Alloc::alloc(tycker, Abs(tpat, body), kd, env)
     }
 }
 impl<'a, S, T> Construct<Tycker<'a>, TypeId> for App<S, T>
@@ -473,7 +473,7 @@ where
         // let kd_2 = tycker.statics.annotations_type[&ty_2];
         // let Ok(_) = Lub::lub(kd_a, kd_2, tycker) else { unreachable!() };
         // Note: note that the resulting type application of [`Construct::build`] is not normalized
-        Alloc::alloc(tycker, App(ty_1, ty_2), kd_b)
+        Alloc::alloc(tycker, App(ty_1, ty_2), kd_b, env)
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for IntTy {
@@ -509,7 +509,7 @@ where
         let thk = ThkTy.build(tycker, env);
         let arg = arg.build(tycker, env);
         let vtype = VType.build(tycker, env);
-        Alloc::alloc(tycker, App(thk, arg), vtype)
+        Alloc::alloc(tycker, App(thk, arg), vtype, env)
     }
 }
 impl<'a, F, T> Construct<Tycker<'a>, TypeId> for cs::Data<DataId, F>
@@ -529,7 +529,7 @@ where
             .collect::<im::Vector<_>>();
         let data = tycker.statics.datas.alloc(Data::new(arms_));
         let kd = VType.build(tycker, env);
-        Alloc::alloc(tycker, data, kd)
+        Alloc::alloc(tycker, data, kd, env)
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for UnitTy {
@@ -548,7 +548,7 @@ where
         let ty_1 = ty_1.build(tycker, env);
         let ty_2 = ty_2.build(tycker, env);
         let vtype = VType.build(tycker, env);
-        Alloc::alloc(tycker, Prod(ty_1, ty_2), vtype)
+        Alloc::alloc(tycker, Prod(ty_1, ty_2), vtype, env)
     }
 }
 impl<'a, F, A, T> Construct<Tycker<'a>, TypeId> for cs::Exists<A, F>
@@ -562,7 +562,7 @@ where
         let abst = abst.build(tycker, env);
         let ty = ty(abst).build(tycker, env);
         let vtype = VType.build(tycker, env);
-        Alloc::alloc(tycker, Exists(abst, ty), vtype)
+        Alloc::alloc(tycker, Exists(abst, ty), vtype, env)
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for OSTy {
@@ -573,9 +573,9 @@ impl<'a> Construct<Tycker<'a>, TypeId> for OSTy {
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for cs::TopTy {
     fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
-        let ctype = CType.build(tycker, &env);
+        let ctype = CType.build(tycker, env);
         let coda = tycker.statics.codatas.alloc(CoData::new([]));
-        Alloc::alloc(tycker, coda, ctype)
+        Alloc::alloc(tycker, coda, ctype, env)
     }
 }
 impl<'a, F, T> Construct<Tycker<'a>, TypeId> for cs::CoData<CoDataId, F>
@@ -595,7 +595,7 @@ where
             .collect::<im::Vector<_>>();
         let coda = tycker.statics.codatas.alloc(CoData::new(arms_));
         let kd = CType.build(tycker, env);
-        Alloc::alloc(tycker, coda, kd)
+        Alloc::alloc(tycker, coda, kd, env)
     }
 }
 impl<'a, S, T> Construct<Tycker<'a>, TypeId> for Arrow<S, T>
@@ -608,7 +608,7 @@ where
         let ty_1 = ty_1.build(tycker, env);
         let ty_2 = ty_2.build(tycker, env);
         let ctype = CType.build(tycker, env);
-        Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype)
+        Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype, env)
     }
 }
 impl<'a, F, A, T> Construct<Tycker<'a>, TypeId> for cs::Forall<A, F>
@@ -622,7 +622,7 @@ where
         let abst = abst.build(tycker, env);
         let ty = ty(abst).build(tycker, env);
         let ctype = CType.build(tycker, env);
-        Alloc::alloc(tycker, Forall(abst, ty), ctype)
+        Alloc::alloc(tycker, Forall(abst, ty), ctype, env)
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for RetTy {
@@ -640,7 +640,7 @@ where
         let ret = RetTy.build(tycker, env);
         let arg = arg.build(tycker, env);
         let ctype = CType.build(tycker, env);
-        Alloc::alloc(tycker, App(ret, arg), ctype)
+        Alloc::alloc(tycker, App(ret, arg), ctype, env)
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for syntax::MonadTy {
@@ -765,9 +765,9 @@ where
     }
 }
 impl<'a> Construct<Tycker<'a>, ValueId> for DefId {
-    fn build(self, tycker: &mut Tycker<'a>, _env: &TyEnv) -> ValueId {
+    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> ValueId {
         let AnnId::Type(ty) = tycker.statics.annotations_var[&self] else { unreachable!() };
-        Alloc::alloc(tycker, self, ty)
+        Alloc::alloc(tycker, self, ty, env)
     }
 }
 // impl<'a> Construct<Tycker<'a>, ValueId> for Option<DefId> {
@@ -1036,7 +1036,7 @@ where
         let binder = binder.build(tycker, env);
         let tail = tail(binder).build(tycker, env);
         let tail_ty = tycker.statics.annotations_compu[&tail];
-        Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty)
+        Alloc::alloc(tycker, Let { binder, bindee, tail }, tail_ty, env)
     }
 }
 // // match

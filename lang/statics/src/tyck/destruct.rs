@@ -29,7 +29,7 @@ impl TPatId {
         match def {
             | Some(def) => (def, kd),
             | None => {
-                let def = Alloc::alloc(tycker, VarName("_".to_owned()), kd.into());
+                let def = Alloc::alloc(tycker, VarName("_".to_owned()), kd.into(), &());
                 (def, kd)
             }
         }
@@ -37,11 +37,12 @@ impl TPatId {
     pub fn reify(&self, tycker: &mut Tycker) -> TypeId {
         use TypePattern as TPat;
         let kd = tycker.statics.annotations_tpat[self].to_owned();
+        let env = tycker.statics.env_tpat[self].clone();
         match tycker.statics.tpats[self].to_owned() {
             | TPat::Hole(Hole) => {
                 unreachable!("type pattern hole can't be reified")
             }
-            | TPat::Var(def) => Alloc::alloc(tycker, def, kd),
+            | TPat::Var(def) => Alloc::alloc(tycker, def, kd, &env),
         }
     }
 }
@@ -221,29 +222,30 @@ impl VPatId {
     pub fn reify(&self, tycker: &mut Tycker) -> ValueId {
         use ValuePattern as VPat;
         let ty = tycker.statics.annotations_vpat[self].to_owned();
+        let env = tycker.statics.env_vpat[self].clone();
         match tycker.statics.vpats[self].to_owned() {
-            | VPat::Hole(Hole) => Alloc::alloc(tycker, Hole, ty),
-            | VPat::Var(def) => Alloc::alloc(tycker, def, ty),
+            | VPat::Hole(Hole) => Alloc::alloc(tycker, Hole, ty, &env),
+            | VPat::Var(def) => Alloc::alloc(tycker, def, ty, &env),
             | VPat::Ctor(vpat) => {
                 let Ctor(ctor, vpat) = vpat;
                 let vpat_ = vpat.reify(tycker);
-                Alloc::alloc(tycker, Ctor(ctor, vpat_), ty)
+                Alloc::alloc(tycker, Ctor(ctor, vpat_), ty, &env)
             }
             | VPat::Triv(vpat) => {
                 let Triv = vpat;
-                Alloc::alloc(tycker, Triv, ty)
+                Alloc::alloc(tycker, Triv, ty, &env)
             }
             | VPat::VCons(vpat) => {
                 let Cons(a, b) = vpat;
                 let a_ = a.reify(tycker);
                 let b_ = b.reify(tycker);
-                Alloc::alloc(tycker, Cons(a_, b_), ty)
+                Alloc::alloc(tycker, Cons(a_, b_), ty, &env)
             }
             | VPat::TCons(vpat) => {
                 let Cons(a, b) = vpat;
                 let a_ = a.reify(tycker);
                 let b_ = b.reify(tycker);
-                Alloc::alloc(tycker, Cons(a_, b_), ty)
+                Alloc::alloc(tycker, Cons(a_, b_), ty, &env)
             }
         }
     }
