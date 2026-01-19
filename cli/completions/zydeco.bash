@@ -61,13 +61,21 @@ _zydeco() {
             return 0
             ;;
         zydeco__build)
-            opts="-t -b -r -x -v -h --bin --target --build-dir --runtime-dir --link-existing --execute --dry --verbose --help [FILE]..."
+            opts="-t -b -r -x -v -h --bin --target-os --target-arch --target --build-dir --runtime-dir --link-existing --execute --dry --verbose --help [FILE]..."
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --bin)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --target-os)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --target-arch)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

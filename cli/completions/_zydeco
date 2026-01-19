@@ -51,8 +51,10 @@ _arguments "${_arguments_options[@]}" : \
 (build)
 _arguments "${_arguments_options[@]}" : \
 '--bin=[Name of the binary]:BIN:_default' \
-'-t+[Target architecture]:TARGET:_default' \
-'--target=[Target architecture]:TARGET:_default' \
+'--target-os=[Target OS (defaults to host OS)]:TARGET_OS:_default' \
+'--target-arch=[Target architecture]:TARGET_ARCH:_default' \
+'-t+[Target backend (zir, zasm, asm/x86)]:TARGET:_default' \
+'--target=[Target backend (zir, zasm, asm/x86)]:TARGET:_default' \
 '-b+[Build Directory]:BUILD_DIR:_files' \
 '--build-dir=[Build Directory]:BUILD_DIR:_files' \
 '-r+[Runtime directory]:RUNTIME_DIR:_files' \

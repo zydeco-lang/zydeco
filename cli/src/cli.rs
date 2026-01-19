@@ -50,8 +50,14 @@ pub enum Commands {
         /// Name of the binary
         #[arg(long)]
         bin: Option<String>,
+        /// Target OS (defaults to host OS)
+        #[arg(long)]
+        target_os: Option<String>,
         /// Target architecture
-        #[arg(short, long, default_value = "x86")]
+        #[arg(long)]
+        target_arch: Option<String>,
+        /// Target backend (zir, zasm, asm/x86)
+        #[arg(short, long, default_value = "asm")]
         target: String,
         /// Build Directory
         #[arg(short = 'b', long)]

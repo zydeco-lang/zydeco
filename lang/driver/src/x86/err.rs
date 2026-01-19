@@ -3,6 +3,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum LinkError {
+    #[error("Unsupported target architecture: {0}")]
+    UnsupportedTargetArch(String),
+    #[error("Unsupported target OS: {0}")]
+    UnsupportedTargetOs(String),
     #[error("Failed to write to assembly file: {0}")]
     AssemblyWriteError(io::Error),
     #[error("Failed to run nasm: {0}")]

@@ -43,8 +43,10 @@ set edit:completion:arg-completer[zydeco] = {|@words|
         }
         &'zydeco;build'= {
             cand --bin 'Name of the binary'
-            cand -t 'Target architecture'
-            cand --target 'Target architecture'
+            cand --target-os 'Target OS (defaults to host OS)'
+            cand --target-arch 'Target architecture'
+            cand -t 'Target backend (zir, zasm, asm/x86)'
+            cand --target 'Target backend (zir, zasm, asm/x86)'
             cand -b 'Build Directory'
             cand --build-dir 'Build Directory'
             cand -r 'Runtime directory'

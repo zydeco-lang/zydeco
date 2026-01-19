@@ -22,8 +22,13 @@ pub mod utils {
         let dir = ::std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let build_dir = tempfile::tempdir().unwrap().keep();
         println!("build_dir: {}", build_dir.display());
-        let build_conf =
-            BuildConf { build_dir, runtime_dir: dir.join("../../runtime"), link_existing: false };
+        let build_conf = BuildConf {
+            build_dir,
+            runtime_dir: dir.join("../../runtime"),
+            target_arch: "x86_64".to_string(),
+            target_os: std::env::consts::OS.to_string(),
+            link_existing: false,
+        };
         build_sys.build_confs.insert(pack, build_conf);
         match build_sys.test_x86_pack(pack, true) {
             | Ok(_) => {}

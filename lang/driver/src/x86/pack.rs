@@ -16,7 +16,11 @@ pub struct PackageX86 {
 impl PackageX86 {
     pub fn link(self) -> Result<PackageX86Executable> {
         let PackageX86 { name, assembly, build_conf } = self;
-        let BuildConf { build_dir, runtime_dir, link_existing } = build_conf;
+        let BuildConf { build_dir, runtime_dir, link_existing, target_arch, target_os } =
+            build_conf;
+        if target_arch != "x86_64" {
+            return Err(LinkError::UnsupportedTargetArch(target_arch));
+        }
         if !link_existing {
             // Hack: clean build dir and create it
             // Todo: make it safer by checking build profile if not nonexistent or empty
@@ -34,13 +38,12 @@ impl PackageX86 {
 
         let lib_name = "zyprog";
 
-        let (nasm_format, lib_name_full) = if cfg!(target_os = "linux") {
-            ("elf64", format!("lib{}.a", lib_name))
-        } else if cfg!(target_os = "macos") {
-            ("macho64", format!("lib{}.a", lib_name))
-        } else {
-            panic!("Runner script only supports linux and macos")
+        let (nasm_format, cargo_target) = match target_os.as_str() {
+            | "linux" => ("elf64", format!("{target_arch}-unknown-linux-gnu")),
+            | "macos" | "darwin" => ("macho64", format!("{target_arch}-apple-darwin")),
+            | _ => return Err(LinkError::UnsupportedTargetOs(target_os)),
         };
+        let lib_name_full = format!("lib{}.a", lib_name);
 
         let asm_fname = build_dir.join(format!("{}.s", name));
         let obj_fname = build_dir.join(format!("{}.o", name));
@@ -95,55 +98,22 @@ impl PackageX86 {
         }
 
         // cargo build
-        let cargo_out = if cfg!(target_os = "macos") {
-            // Command::new("rustc")
-            //     .arg("-v")
-            //     .arg(stub_path)
-            //     .arg("--target")
-            //     .arg("x86_64-apple-darwin")
-            //     .arg("-C")
-            //     .arg("panic=abort")
-            //     .arg("-L")
-            //     .arg(build_dir)
-            //     .arg("-o")
-            //     .arg(&exe_fname)
-            //     .output()
-            //     .map_err(|e| format!("rustc err: {}", e))?
+        let mut cargo_cmd = Command::new("cargo");
+        cargo_cmd
+            .env("ZYDECO_STATIC_LIB", lib_name)
+            .env("ZYDECO_LIB_DIR", ".")
+            .arg("build")
+            .arg("--manifest-path")
+            .arg(build_dir.join("Cargo.toml"))
+            // .arg("--release")
+            // .arg("features=log_rt")
+            .arg("--target")
+            .arg(&cargo_target);
+        if target_os == "macos" || target_os == "darwin" {
+            cargo_cmd.env("RUSTFLAGS", "-C panic=abort");
+        }
+        let cargo_out = cargo_cmd.output().map_err(LinkError::CargoRunError)?;
 
-            // add "ZYDECO_STATIC_LIB" environment variable to the command
-            Command::new("cargo")
-                .env("ZYDECO_STATIC_LIB", lib_name)
-                .env("ZYDECO_LIB_DIR", ".")
-                .env("RUSTFLAGS", "-C panic=abort")
-                .arg("build")
-                .arg("--manifest-path")
-                .arg(build_dir.join("Cargo.toml"))
-                .arg("--target")
-                .arg("x86_64-apple-darwin")
-                // .arg("--features=log_rt")
-                // .arg("--release")
-                .output()
-                .map_err(LinkError::CargoRunError)?
-        } else {
-            // Command::new("rustc")
-            //     .arg(stub_path)
-            //     .arg("-L")
-            //     .arg(build_dir)
-            //     .arg("-o")
-            //     .arg(&exe_fname)
-            //     .output()
-            //     .map_err(|e| format!("rustc err: {}", e))?
-            Command::new("cargo")
-                .env("ZYDECO_STATIC_LIB", lib_name)
-                .env("ZYDECO_LIB_DIR", ".")
-                .arg("build")
-                .arg("--manifest-path")
-                .arg(build_dir.join("Cargo.toml"))
-                // .arg("--features=log_rt")
-                // .arg("--release")
-                .output()
-                .map_err(LinkError::CargoRunError)?
-        };
         if !cargo_out.status.success() {
             Err(LinkError::CargoOutputError(format!(
                 "{}\n{}",
@@ -152,11 +122,7 @@ impl PackageX86 {
             )))?
         }
         // copy the cargo generated executable to the build dir
-        let cargo_exe_fname = if cfg!(target_os = "macos") {
-            build_dir.join("target/x86_64-apple-darwin/debug/main")
-        } else {
-            build_dir.join("target/debug/main")
-        };
+        let cargo_exe_fname = build_dir.join(format!("target/{}/debug/main", cargo_target));
         std::fs::copy(&cargo_exe_fname, &exe_fname).map_err(LinkError::ExecutableCopyError)?;
 
         // Hack: avoid text file busy error on linux
