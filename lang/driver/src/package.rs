@@ -101,7 +101,7 @@ impl Package {
 
         let t::Parser { spans, arena: textual } = parser;
         let bitter = b::BitterArena::new_arc(alloc.clone());
-        let desugarer = Desugarer::new(&spans, textual, top, bitter);
+        let desugarer = Desugarer::new(&spans, &textual, top, bitter);
         let DesugarOut { arena, prim: prim_term, top } =
             desugarer.run().map_err(|err| LocalError::DesugarError(err.to_string()))?;
 

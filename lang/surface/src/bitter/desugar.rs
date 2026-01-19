@@ -17,7 +17,7 @@ pub trait Desugar {
 #[derive(AsRef, AsMut)]
 pub struct Desugarer<'a> {
     pub spans: &'a t::SpanArena,
-    pub textual: t::TextArena,
+    pub textual: &'a t::TextArena,
     pub top: t::TopLevel,
     #[as_ref(b::BitterArena)]
     #[as_mut(b::BitterArena)]
@@ -26,7 +26,7 @@ pub struct Desugarer<'a> {
 }
 impl<'a> Desugarer<'a> {
     pub fn new(
-        spans: &'a t::SpanArena, textual: t::TextArena, top: t::TopLevel, bitter: b::BitterArena,
+        spans: &'a t::SpanArena, textual: &'a t::TextArena, top: t::TopLevel, bitter: b::BitterArena,
     ) -> Self {
         Self { spans, textual, top, bitter, prim: b::PrimTerms::default() }
     }

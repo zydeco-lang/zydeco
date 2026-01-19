@@ -187,7 +187,7 @@ pub struct FileParsed {
 impl FileParsed {
     pub fn desugar(self, bitter: b::BitterArena) -> Result<FileBitter> {
         let FileParsed { path, source, spans, arena: textual, top } = self;
-        let desugarer = Desugarer::new(&spans, textual, top, bitter);
+        let desugarer = Desugarer::new(&spans, &textual, top, bitter);
         let DesugarOut { arena, prim: prim_term, top } =
             desugarer.run().map_err(|err| LocalError::DesugarError(err.to_string()))?;
         Ok(FileBitter { path, source, spans, arena, prim_term, top })
