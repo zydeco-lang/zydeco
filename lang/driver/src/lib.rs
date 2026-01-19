@@ -75,6 +75,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
+use zydeco_x86::TargetFormat;
 use zydeco_utils::prelude::{
     ArcGlobalAlloc, ArenaAccess, ArenaAssoc, ArenaDense, CompilerPass, DepGraph, Kosaraju,
 };
@@ -334,19 +335,31 @@ impl BuildSystem {
         Ok(())
     }
     pub fn codegen_x86_pack(&self, pack: PackId, verbose: bool) -> Result<PackageX86> {
-        let PackageAssembly { spans, scoped, statics, stack, assembly } =
-            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
-        let assembly = zydeco_x86::Emitter::new(&spans, &scoped, &statics, &stack, &assembly)
-            .run()?
-            .to_string();
-        if verbose {
-            log::trace!("x86 assembly:\n{}", &assembly);
-        }
         let build_conf = self
             .build_confs
             .get(&pack)
             .cloned()
             .ok_or_else(|| BuildError::MissingBuildConfig(self.packages[&pack].name()))?;
+        let target_format = match build_conf.target_os.as_str() {
+            | "linux" => TargetFormat::Elf,
+            | "macos" | "darwin" => TargetFormat::MachO,
+            | other => return Err(BuildError::UnsupportedTargetOs(other.to_string())),
+        };
+        let PackageAssembly { spans, scoped, statics, stack, assembly } =
+            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
+        let assembly = zydeco_x86::Emitter::new(
+            &spans,
+            &scoped,
+            &statics,
+            &stack,
+            &assembly,
+            target_format,
+        )
+            .run()?
+            .to_string();
+        if verbose {
+            log::trace!("x86 assembly:\n{}", &assembly);
+        }
         Ok(x86::PackageX86 { name: self.packages[&pack].name(), assembly, build_conf })
     }
     pub fn test_x86_pack(&self, pack: PackId, verbose: bool) -> Result<()> {

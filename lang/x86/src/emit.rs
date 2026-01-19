@@ -12,6 +12,12 @@ use zydeco_utils::pass::CompilerPass;
 
 pub const ENV_REG: Reg = Reg::Rbp;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetFormat {
+    Elf,
+    MachO,
+}
+
 pub trait Emit<'a> {
     type Env;
     fn emit(&self, env: Self::Env, em: &mut Emitter);
@@ -26,6 +32,7 @@ pub struct Emitter<'e> {
 
     pub asm: AsmFile,
 
+    target_format: TargetFormat,
     tables: Vec<JumpTable>,
     visited: HashSet<ProgId>,
 }
@@ -45,7 +52,7 @@ impl<'e> AsMut<AsmFile> for Emitter<'e> {
 impl<'e> Emitter<'e> {
     pub fn new(
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
-        stack: &'e StackArena, assembly: &'e AssemblyArena,
+        stack: &'e StackArena, assembly: &'e AssemblyArena, target_format: TargetFormat,
     ) -> Self {
         Self {
             spans,
@@ -54,6 +61,7 @@ impl<'e> Emitter<'e> {
             stack,
             assembly,
             asm: AsmFile::new(),
+            target_format,
             tables: Vec::new(),
             visited: HashSet::new(),
         }
@@ -169,9 +177,16 @@ impl<'e> CompilerPass for Emitter<'e> {
                     prog_id.concise()
                 ))]);
                 let arm_label = self.assembly.prog_label(prog_id).expect("block name not found");
-                // Store relative offset from current entry to target for position-independent code
-                // Using "label - $" computes the offset from the current dq entry to the target label
-                self.asm.rodata.push(Instr::Dq(format!("{} - $", arm_label)));
+                match self.target_format {
+                    | TargetFormat::Elf => {
+                        // Store relative offset from current entry to target for PIC.
+                        self.asm.rodata.push(Instr::Dq(format!("{} - $", arm_label)));
+                    }
+                    | TargetFormat::MachO => {
+                        // Store the absolute label; Mach-O relocates the pointer.
+                        self.asm.rodata.push(Instr::Dq(arm_label));
+                    }
+                }
             }
         }
 
@@ -260,13 +275,10 @@ impl<'a> Emit<'a> for Terminator {
                 let label = table.rodata_label();
                 em.tables.push(table);
                 // emit jump to the jump table arm
-                // For position-independent code, jump table stores relative offsets
                 // Mach-O doesn't support [rel label + reg * scale], so we need:
                 // 1. lea rcx, [rel jump_table] - load jump table base address
                 // 2. lea rcx, [rcx + rax * 8] - compute address of table entry
-                // 3. mov rax, [rcx] - load relative offset from entry to target
-                // 4. add rcx, rax - compute target address (entry + offset)
-                // 5. jmp rcx - jump to target
+                // 3. mov rax, [rcx] - load entry payload (offset for ELF, address for Mach-O)
                 em.asm.text.push(Instr::Lea(
                     Reg::Rcx,
                     LeaArgs::RelLabel(RelLabel { label, offset: None }),
@@ -283,8 +295,17 @@ impl<'a> Emit<'a> for Terminator {
                     Reg::Rax,
                     Arg64::Mem(MemRef { reg: Reg::Rcx, offset: 0 }),
                 )));
-                em.asm.text.push(Instr::Add(BinArgs::ToReg(Reg::Rcx, Arg32::Reg(Reg::Rax))));
-                em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rcx)));
+                match em.target_format {
+                    | TargetFormat::Elf => {
+                        // table entry is a relative offset from the entry address
+                        em.asm.text.push(Instr::Add(BinArgs::ToReg(Reg::Rcx, Arg32::Reg(Reg::Rax))));
+                        em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rcx)));
+                    }
+                    | TargetFormat::MachO => {
+                        // table entry is the absolute target address
+                        em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rax)));
+                    }
+                }
             }
             | Terminator::Extern(sa::Extern { name, arity }) => {
                 em.asm.text.push(Instr::Comment(format!("extern: {}/{}", name, arity)));
