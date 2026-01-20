@@ -93,9 +93,9 @@ pub struct StaticsArena {
     pub env_compu: ArenaAssoc<CompuId, TyEnv>,
 
     /// normalized kind free of holes
-    pub kinds_normalized: ArenaAssoc<KindId, KindId>,
+    pub kinds_normalized: ArenaAssoc<KindId, Kind>,
     /// normalized type free of holes
-    pub types_normalized: ArenaAssoc<TypeId, TypeId>,
+    pub types_normalized: ArenaAssoc<TypeId, Type>,
 }
 
 impl StaticsArena {

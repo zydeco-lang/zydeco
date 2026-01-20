@@ -759,17 +759,26 @@ impl<'a> Tycker<'a> {
 /* ------------------------------ Normalization ----------------------------- */
 
 impl KindId {
-    pub fn normalize_filled_k(self, tycker: &mut Tycker<'_>) -> ResultKont<KindId> {
-        let res = self.normalize_filled(tycker);
+    pub fn do_normalize_filled_k(self, tycker: &mut Tycker<'_>) -> ResultKont<()> {
+        let res = self.do_normalize_filled(tycker);
         tycker.err_p_to_k(res)
     }
-    pub fn normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<KindId> {
-        if let Some(norm) = tycker.statics.kinds_normalized.get(&self).cloned() {
+    pub fn do_normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<()> {
+        let mut memo = std::collections::HashMap::new();
+        let _ = self.filled_norm_id(tycker, &mut memo)?;
+        Ok(())
+    }
+    fn filled_norm_id(
+        self,
+        tycker: &mut Tycker<'_>,
+        memo: &mut std::collections::HashMap<KindId, KindId>,
+    ) -> Result<KindId> {
+        if let Some(norm) = memo.get(&self).cloned() {
             return Ok(norm);
         }
         let res = match tycker.statics.kinds_pre[&self].to_owned() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
-                | Some(AnnId::Kind(kd)) => kd.normalize_filled(tycker)?,
+                | Some(AnnId::Kind(kd)) => kd.filled_norm_id(tycker, memo)?,
                 | Some(AnnId::Set | AnnId::Type(_)) => {
                     let _: ResultKont<()> =
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
@@ -786,8 +795,8 @@ impl KindId {
             | Fillable::Done(kind) => match kind {
                 | Kind::VType(VType) | Kind::CType(CType) => self,
                 | Kind::Arrow(Arrow(from, to)) => {
-                    let from_norm = from.normalize_filled(tycker)?;
-                    let to_norm = to.normalize_filled(tycker)?;
+                    let from_norm = from.filled_norm_id(tycker, memo)?;
+                    let to_norm = to.filled_norm_id(tycker, memo)?;
                     if from_norm == from && to_norm == to {
                         self
                     } else {
@@ -796,27 +805,42 @@ impl KindId {
                 }
             },
         };
-        tycker.statics.kinds_normalized.insert(self, res);
-        tycker.statics.kinds_normalized.insert(res, res);
+        memo.insert(self, res);
+        memo.insert(res, res);
+        if let Fillable::Done(kind) = tycker.statics.kinds_pre[&res].to_owned() {
+            tycker.statics.kinds_normalized.insert(self, kind.clone());
+            tycker.statics.kinds_normalized.insert(res, kind);
+        }
         Ok(res)
     }
 }
 
 impl TypeId {
-    pub fn normalize_filled_k(self, tycker: &mut Tycker<'_>) -> ResultKont<TypeId> {
-        let res = self.normalize_filled(tycker);
+    pub fn do_normalize_filled_k(self, tycker: &mut Tycker<'_>) -> ResultKont<()> {
+        let res = self.do_normalize_filled(tycker);
         tycker.err_p_to_k(res)
     }
-    pub fn normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
-        if let Some(norm) = tycker.statics.types_normalized.get(&self).cloned() {
+    pub fn do_normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<()> {
+        let mut memo = std::collections::HashMap::new();
+        let mut memo_kd = std::collections::HashMap::new();
+        let _ = self.filled_norm_id(tycker, &mut memo, &mut memo_kd)?;
+        Ok(())
+    }
+    fn filled_norm_id(
+        self,
+        tycker: &mut Tycker<'_>,
+        memo: &mut std::collections::HashMap<TypeId, TypeId>,
+        memo_kd: &mut std::collections::HashMap<KindId, KindId>,
+    ) -> Result<TypeId> {
+        if let Some(norm) = memo.get(&self).cloned() {
             return Ok(norm);
         }
         let kd = tycker.statics.annotations_type[&self];
-        let kd_norm = kd.normalize_filled(tycker)?;
+        let kd_norm = kd.filled_norm_id(tycker, memo_kd)?;
         let env = tycker.statics.env_type[&self].clone();
         let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
-                | Some(AnnId::Type(ty)) => ty.normalize_filled(tycker)?,
+                | Some(AnnId::Type(ty)) => ty.filled_norm_id(tycker, memo, memo_kd)?,
                 | Some(AnnId::Set | AnnId::Kind(_)) => {
                     let _: ResultKont<()> =
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
@@ -847,7 +871,7 @@ impl TypeId {
                 }
                 | Type::Abs(abs) => {
                     let Abs(tpat, body) = abs;
-                    let body_norm = body.normalize_filled(tycker)?;
+                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
                     if body_norm == body && kd_norm == kd {
                         self
                     } else {
@@ -856,8 +880,8 @@ impl TypeId {
                 }
                 | Type::App(app) => {
                     let App(f_ty, a_ty) = app;
-                    let f_norm = f_ty.normalize_filled(tycker)?;
-                    let a_norm = a_ty.normalize_filled(tycker)?;
+                    let f_norm = f_ty.filled_norm_id(tycker, memo, memo_kd)?;
+                    let a_norm = a_ty.filled_norm_id(tycker, memo, memo_kd)?;
                     match tycker.statics.types_pre[&f_norm].to_owned() {
                         | Fillable::Done(Type::Abs(abs)) => {
                             let Abs(tpat, body) = abs;
@@ -870,7 +894,7 @@ impl TypeId {
                             if body_subst == self {
                                 self
                             } else {
-                                body_subst.normalize_filled(tycker)?
+                                body_subst.filled_norm_id(tycker, memo, memo_kd)?
                             }
                         }
                         | _ => {
@@ -933,8 +957,8 @@ impl TypeId {
                 }
                 | Type::Arrow(arr) => {
                     let Arrow(ty1, ty2) = arr;
-                    let ty1_norm = ty1.normalize_filled(tycker)?;
-                    let ty2_norm = ty2.normalize_filled(tycker)?;
+                    let ty1_norm = ty1.filled_norm_id(tycker, memo, memo_kd)?;
+                    let ty2_norm = ty2.filled_norm_id(tycker, memo, memo_kd)?;
                     if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
                         self
                     } else {
@@ -943,7 +967,7 @@ impl TypeId {
                 }
                 | Type::Forall(forall) => {
                     let Forall(abst, body) = forall;
-                    let body_norm = body.normalize_filled(tycker)?;
+                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
                     if body_norm == body && kd_norm == kd {
                         self
                     } else {
@@ -952,8 +976,8 @@ impl TypeId {
                 }
                 | Type::Prod(prod) => {
                     let Prod(ty1, ty2) = prod;
-                    let ty1_norm = ty1.normalize_filled(tycker)?;
-                    let ty2_norm = ty2.normalize_filled(tycker)?;
+                    let ty1_norm = ty1.filled_norm_id(tycker, memo, memo_kd)?;
+                    let ty2_norm = ty2.filled_norm_id(tycker, memo, memo_kd)?;
                     if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
                         self
                     } else {
@@ -962,7 +986,7 @@ impl TypeId {
                 }
                 | Type::Exists(exists) => {
                     let Exists(abst, body) = exists;
-                    let body_norm = body.normalize_filled(tycker)?;
+                    let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
                     if body_norm == body && kd_norm == kd {
                         self
                     } else {
@@ -985,8 +1009,12 @@ impl TypeId {
                 }
             },
         };
-        tycker.statics.types_normalized.insert(self, res);
-        tycker.statics.types_normalized.insert(res, res);
+        memo.insert(self, res);
+        memo.insert(res, res);
+        if let Fillable::Done(ty) = tycker.statics.types_pre[&res].to_owned() {
+            tycker.statics.types_normalized.insert(self, ty.clone());
+            tycker.statics.types_normalized.insert(res, ty);
+        }
         Ok(res)
     }
 }

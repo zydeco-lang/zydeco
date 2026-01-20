@@ -110,10 +110,39 @@ impl<'a> Tycker<'a> {
                         );
                     }
                 },
-                | _ => {}
+                | Fillable::Done(_) => {}
             }
         }
         // and also, print all hole solutions as a reference for the user
+        self.do_print_hole_solutions();
+        // normalize all kinds
+        {
+            let mut kind_ids = Vec::new();
+            for (id, _) in &self.statics.kinds_pre {
+                kind_ids.push(id.to_owned());
+            }
+            for id in kind_ids {
+                id.do_normalize_filled_k(self)?;
+            }
+        }
+        // normalize all types
+        {
+            let mut type_ids = Vec::new();
+            for (id, _) in &self.statics.types_pre {
+                type_ids.push(id.to_owned());
+            }
+            for id in type_ids {
+                id.do_normalize_filled_k(self)?;
+            }
+        }
+        if !self.errors.is_empty() {
+            Err(())?
+        }
+        Ok(())
+    }
+    /// Print all hole solutions as a reference for the user.
+    #[inline]
+    pub fn do_print_hole_solutions(&self) {
         if self.statics.fill_hints.len() > 0 {
             println!("Hole Solutions:");
         }
@@ -145,30 +174,6 @@ impl<'a> Tycker<'a> {
                 site_solu
             );
         }
-        // normalize all kinds
-        {
-            let mut kind_ids = Vec::new();
-            for (id, _) in &self.statics.kinds_pre {
-                kind_ids.push(id.to_owned());
-            }
-            for id in kind_ids {
-                id.normalize_filled_k(self)?;
-            }
-        }
-        // normalize all types
-        {
-            let mut type_ids = Vec::new();
-            for (id, _) in &self.statics.types_pre {
-                type_ids.push(id.to_owned());
-            }
-            for id in type_ids {
-                id.normalize_filled_k(self)?;
-            }
-        }
-        if !self.errors.is_empty() {
-            Err(())?
-        }
-        Ok(())
     }
 }
 
