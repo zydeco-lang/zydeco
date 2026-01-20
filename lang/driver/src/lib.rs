@@ -34,10 +34,10 @@ pub mod zasm {
     pub use pack::PackageAssembly;
 }
 
-pub mod x86 {
+pub mod amd64 {
     pub mod pack;
     pub mod err;
-    pub use pack::PackageX86;
+    pub use pack::PackageAmd64;
 }
 
 /// Namespaces for the Zydeco language ecosystem.
@@ -65,8 +65,8 @@ pub use package::{Dependency, Package};
 pub use zydeco_dynamics::ProgKont;
 
 use crate::{
+    amd64::PackageAmd64,
     check::{PackageChecked, PackageStew},
-    x86::PackageX86,
     zasm::pack::PackageAssembly,
     zir::pack::PackageStack,
 };
@@ -75,7 +75,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use zydeco_x86::TargetFormat;
+use zydeco_amd64::TargetFormat;
 use zydeco_utils::prelude::{
     ArcGlobalAlloc, ArenaAccess, ArenaAssoc, ArenaDense, CompilerPass, DepGraph, Kosaraju,
 };
@@ -334,12 +334,12 @@ impl BuildSystem {
         }
         Ok(())
     }
-    pub fn codegen_x86_pack(&self, pack: PackId, verbose: bool) -> Result<PackageX86> {
+    pub fn codegen_amd64_pack(&self, pack: PackId, verbose: bool) -> Result<PackageAmd64> {
         let build_conf = self
             .build_confs
             .get(&pack)
             .cloned()
-            .ok_or_else(|| BuildError::MissingBuildConfig(self.packages[&pack].name()))?;
+            .ok_or_else(|| BuildError::MissingBuildConf(self.packages[&pack].name()))?;
         let target_format = match build_conf.target_os.as_str() {
             | "linux" => TargetFormat::Elf,
             | "macos" | "darwin" => TargetFormat::MachO,
@@ -347,26 +347,20 @@ impl BuildSystem {
         };
         let PackageAssembly { spans, scoped, statics, stack, assembly } =
             self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
-        let assembly = zydeco_x86::Emitter::new(
-            &spans,
-            &scoped,
-            &statics,
-            &stack,
-            &assembly,
-            target_format,
-        )
-            .run()?
-            .to_string();
+        let assembly =
+            zydeco_amd64::Emitter::new(&spans, &scoped, &statics, &stack, &assembly, target_format)
+                .run()?
+                .to_string();
         if verbose {
-            log::trace!("x86 assembly:\n{}", &assembly);
+            log::trace!("amd64 assembly:\n{}", &assembly);
         }
-        Ok(x86::PackageX86 { name: self.packages[&pack].name(), assembly, build_conf })
+        Ok(amd64::PackageAmd64 { name: self.packages[&pack].name(), assembly, build_conf })
     }
-    pub fn test_x86_pack(&self, pack: PackId, verbose: bool) -> Result<()> {
-        let x86 = self.codegen_x86_pack(pack, verbose)?;
-        let executable = x86.link()?;
+    pub fn test_amd64_pack(&self, pack: PackId, verbose: bool) -> Result<()> {
+        let amd64 = self.codegen_amd64_pack(pack, verbose)?;
+        let executable = amd64.link()?;
         let status = executable.run()?;
-        if status.success() { Ok(()) } else { Err(BuildError::X86RunError(status)) }
+        if status.success() { Ok(()) } else { Err(BuildError::Amd64RunError(status)) }
     }
 }
 

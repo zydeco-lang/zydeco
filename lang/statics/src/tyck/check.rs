@@ -727,12 +727,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 let (a_out, a_ann) = a_out_ann.as_value();
                                 let (b_out, b_ann) = b_out_ann.as_value();
                                 let vtype = ss::VType.build(tycker, &self.info);
-                                let ann = Alloc::alloc(
-                                    tycker,
-                                    ss::Prod(a_ann, b_ann),
-                                    vtype,
-                                    &self.info,
-                                );
+                                let ann =
+                                    Alloc::alloc(tycker, ss::Prod(a_ann, b_ann), vtype, &self.info);
                                 let pat =
                                     Alloc::alloc(tycker, ss::Cons(a_out, b_out), ann, &self.info);
                                 PatAnnId::Value(pat, ann)
@@ -1112,10 +1108,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             std::panic::Location::caller(),
                         )?;
                         let vtype = ss::VType.build(tycker, &self.info);
-                        let prod =
-                            Alloc::alloc(tycker, ss::Prod(a_ty, b_ty), vtype, &self.info);
-                        let cons =
-                            Alloc::alloc(tycker, ss::Cons(a_out, b_out), prod, &self.info);
+                        let prod = Alloc::alloc(tycker, ss::Prod(a_ty, b_ty), vtype, &self.info);
+                        let cons = Alloc::alloc(tycker, ss::Cons(a_out, b_out), prod, &self.info);
                         TermAnnId::Value(cons, prod)
                     }
                     | Switch::Ana(ana) => {
@@ -1144,12 +1138,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 let vtype = ss::VType.build(tycker, &self.info);
                                 let prod =
                                     Alloc::alloc(tycker, ss::Prod(a_ty, b_ty), vtype, &self.info);
-                                let cons = Alloc::alloc(
-                                    tycker,
-                                    ss::Cons(a_out, b_out),
-                                    prod,
-                                    &self.info,
-                                );
+                                let cons =
+                                    Alloc::alloc(tycker, ss::Cons(a_out, b_out), prod, &self.info);
                                 TermAnnId::Value(cons, prod)
                             }
                             | ss::Type::Exists(ty) => {
@@ -1197,8 +1187,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 let subst_vec = {
                                     let mut subst_vec = Vec::new();
                                     if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
-                                        let ty_abst =
-                                            Alloc::alloc(tycker, abst, kd, &self.info);
+                                        let ty_abst = Alloc::alloc(tycker, abst, kd, &self.info);
                                         subst_vec.push((def, ty_abst.into()));
                                     }
                                     subst_vec
@@ -1214,8 +1203,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         let ty = if let (Some(def), _kd) =
                                             tpat.try_destruct_def(tycker)
                                         {
-                                            let def_ty =
-                                                Alloc::alloc(tycker, def, kd, &self.info);
+                                            let def_ty = Alloc::alloc(tycker, def, kd, &self.info);
                                             ty.subst_abst_k(tycker, (abst, def_ty))?
                                         } else {
                                             ty
@@ -1262,12 +1250,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     std::panic::Location::caller(),
                                 )?;
                                 let ctype = ss::CType.build(tycker, &self.info);
-                                let ann = Alloc::alloc(
-                                    tycker,
-                                    ss::Arrow(ty, body_ty),
-                                    ctype,
-                                    &self.info,
-                                );
+                                let ann =
+                                    Alloc::alloc(tycker, ss::Arrow(ty, body_ty), ctype, &self.info);
                                 let abs =
                                     Alloc::alloc(tycker, ss::Abs(vpat, compu), ann, &self.info);
                                 TermAnnId::Compu(abs, ann)
@@ -1485,12 +1469,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 //             .ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
                                 //     );
                                 // }
-                                let app = Alloc::alloc(
-                                    tycker,
-                                    ss::App(f_out, a_out),
-                                    ty_out,
-                                    &self.info,
-                                );
+                                let app =
+                                    Alloc::alloc(tycker, ss::App(f_out, a_out), ty_out, &self.info);
                                 TermAnnId::Compu(app, ty_out)
                             }
                             | ss::Type::Forall(ty) => {
@@ -1528,12 +1508,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         },
                                     }
                                 };
-                                let app = Alloc::alloc(
-                                    tycker,
-                                    ss::App(f_out, a_ty),
-                                    ty_out,
-                                    &self.info,
-                                );
+                                let app =
+                                    Alloc::alloc(tycker, ss::App(f_out, a_ty), ty_out, &self.info);
                                 TermAnnId::Compu(app, body_ty_subst)
                             }
                             | _ => tycker.err_k(
@@ -1580,8 +1556,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                let fix =
-                    Alloc::alloc(tycker, ss::Fix(binder, body_out), fix_ty, &self.info);
+                let fix = Alloc::alloc(tycker, ss::Fix(binder, body_out), fix_ty, &self.info);
                 TermAnnId::Compu(fix, fix_ty)
             }
             | Tm::Pi(term) => {
@@ -1595,8 +1570,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 let subst_vec = {
                                     let mut subst_vec = Vec::new();
                                     if let (Some(def), kd) = tpat.try_destruct_def(tycker) {
-                                        let ty_abst =
-                                            Alloc::alloc(tycker, abst, kd, &self.info);
+                                        let ty_abst = Alloc::alloc(tycker, abst, kd, &self.info);
                                         subst_vec.push((def, ty_abst.into()));
                                     }
                                     subst_vec
@@ -1665,12 +1639,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 // kd_2 should be of ctype
                                 let ctype = ss::CType.build(tycker, &self.info);
                                 Lub::lub_k(ctype, kd_2, tycker)?;
-                                let arr = Alloc::alloc(
-                                    tycker,
-                                    ss::Arrow(ty_1, ty_2),
-                                    ctype,
-                                    &self.info,
-                                );
+                                let arr =
+                                    Alloc::alloc(tycker, ss::Arrow(ty_1, ty_2), ctype, &self.info);
                                 TermAnnId::Type(arr, ctype)
                             }
                         }
@@ -1785,8 +1755,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         TyckError::SortMismatch,
                                         std::panic::Location::caller(),
                                     )?;
-                                    let arr =
-                                        Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2), (), &());
+                                    let arr = Alloc::alloc(tycker, ss::Arrow(kd_1, kd_2), (), &());
                                     TermAnnId::Kind(arr)
                                 }
                             }
@@ -1897,12 +1866,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
                 let thunk_app_body_ty = cs::Thk(body_ty).build(tycker, &self.info);
-                let thunk = Alloc::alloc(
-                    tycker,
-                    ss::Thunk(body_out),
-                    thunk_app_body_ty,
-                    &self.info,
-                );
+                let thunk =
+                    Alloc::alloc(tycker, ss::Thunk(body_out), thunk_app_body_ty, &self.info);
                 TermAnnId::Value(thunk, thunk_app_body_ty)
             }
             | Tm::Force(term) => {
@@ -1974,12 +1939,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
                 let ret_app_body_ty = cs::Ret(body_ty).build(tycker, &self.info);
-                let ret = Alloc::alloc(
-                    tycker,
-                    ss::Return(body_out),
-                    ret_app_body_ty,
-                    &self.info,
-                );
+                let ret = Alloc::alloc(tycker, ss::Return(body_out), ret_app_body_ty, &self.info);
                 TermAnnId::Compu(ret, ret_app_body_ty)
             }
             | Tm::Do(term) => {
@@ -2120,21 +2080,13 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 
                 let monad_ty_kd: ss::KindId =
                     ss::Arrow(ss::VType, ss::CType).build(tycker, &self.info);
-                let monad_ty_var = Alloc::alloc(
-                    tycker,
-                    ss::VarName("M".to_string()),
-                    monad_ty_kd.into(),
-                    &(),
-                );
+                let monad_ty_var =
+                    Alloc::alloc(tycker, ss::VarName("M".to_string()), monad_ty_kd.into(), &());
                 let abst: ss::AbstId = Alloc::alloc(tycker, monad_ty_var, monad_ty_kd, &());
                 let monad_ty = cs::Type(cs::Ann(abst, monad_ty_kd)).build(tycker, &self.info);
                 let monad_impl_ty = cs::Thk(cs::Monad(monad_ty)).build(tycker, &self.info);
-                let monad_impl_var = Alloc::alloc(
-                    tycker,
-                    ss::VarName("mo".to_string()),
-                    monad_impl_ty.into(),
-                    &(),
-                );
+                let monad_impl_var =
+                    Alloc::alloc(tycker, ss::VarName("mo".to_string()), monad_impl_ty.into(), &());
                 let monad_impl = cs::Value(monad_impl_var).build(tycker, &self.info);
 
                 use super::env::*;
@@ -2268,8 +2220,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 };
                 let arg_out_ann = self.mk(arg).tyck_k(tycker, Action::ana(arg_ty.into()))?;
                 let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
-                let ctor =
-                    Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), arg), ana_ty, &self.info);
+                let ctor = Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), arg), ana_ty, &self.info);
                 TermAnnId::Value(ctor, ana_ty)
             }
             | Tm::Match(term) => {
@@ -2417,12 +2368,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         std::panic::Location::caller(),
                     )?
                 }
-                let whole_term = Alloc::alloc(
-                    tycker,
-                    ss::CoMatch { arms: comatchers_new },
-                    ana_ty,
-                    &self.info,
-                );
+                let whole_term =
+                    Alloc::alloc(tycker, ss::CoMatch { arms: comatchers_new }, ana_ty, &self.info);
                 TermAnnId::Compu(whole_term, ana_ty)
             }
             | Tm::Dtor(term) => {

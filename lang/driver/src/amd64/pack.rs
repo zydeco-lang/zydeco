@@ -7,20 +7,21 @@ use std::{
     process::{Command, ExitStatus, Stdio},
 };
 
-pub struct PackageX86 {
+pub struct PackageAmd64 {
     pub name: String,
     pub assembly: String,
     pub build_conf: BuildConf,
 }
 
-impl PackageX86 {
-    pub fn link(self) -> Result<PackageX86Executable> {
-        let PackageX86 { name, assembly, build_conf } = self;
+impl PackageAmd64 {
+    pub fn link(self) -> Result<PackageAmd64Executable> {
+        let PackageAmd64 { name, assembly, build_conf } = self;
         let BuildConf { build_dir, runtime_dir, link_existing, target_arch, target_os } =
             build_conf;
-        if target_arch != "x86_64" {
-            return Err(LinkError::UnsupportedTargetArch(target_arch));
-        }
+        let target_arch = match target_arch.as_str() {
+            | "x86" | "x86_64" | "amd64" => "x86_64",
+            | _ => return Err(LinkError::UnsupportedTargetArch(target_arch)),
+        };
         if !link_existing {
             // Hack: clean build dir and create it
             // Todo: make it safer by checking build profile if not nonexistent or empty
@@ -36,14 +37,14 @@ impl PackageX86 {
             std::fs::copy(&path, &target).expect("Failed to copy entry");
         }
 
-        let lib_name = "zyprog";
+        let lib_name = format!("zy{}", name);
 
         let (nasm_format, cargo_target) = match target_os.as_str() {
             | "linux" => ("elf64", format!("{target_arch}-unknown-linux-gnu")),
             | "macos" | "darwin" => ("macho64", format!("{target_arch}-apple-darwin")),
             | _ => return Err(LinkError::UnsupportedTargetOs(target_os)),
         };
-        let lib_name_full = format!("lib{}.a", lib_name);
+        let lib_name_full = format!("{}{}.a", std::env::consts::DLL_PREFIX, lib_name);
 
         let asm_fname = build_dir.join(format!("{}.s", name));
         let obj_fname = build_dir.join(format!("{}.o", name));
@@ -131,19 +132,19 @@ impl PackageX86 {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
-        let executable = PackageX86Executable { name, executable: exe_fname };
+        let executable = PackageAmd64Executable { name, executable: exe_fname };
         Ok(executable)
     }
 }
 
-pub struct PackageX86Executable {
+pub struct PackageAmd64Executable {
     pub name: String,
     pub executable: PathBuf,
 }
 
-impl PackageX86Executable {
+impl PackageAmd64Executable {
     pub fn run(self) -> Result<ExitStatus> {
-        let PackageX86Executable { name, executable } = self;
+        let PackageAmd64Executable { name, executable } = self;
         log::info!("Running program: {}", name);
         // run the program with interactive I/O
         let mut child = Command::new(&executable)

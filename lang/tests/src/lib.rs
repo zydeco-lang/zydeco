@@ -15,7 +15,7 @@ pub mod utils {
         }
     }
 
-    pub fn x86_proj_bin_aux(proj_path: impl Into<PathBuf>, bin_path: impl Into<PathBuf>) {
+    pub fn amd64_proj_bin_aux(proj_path: impl Into<PathBuf>, bin_path: impl Into<PathBuf>) {
         let Driver { mut build_sys } = Driver::setup(vec![proj_path.into()]).unwrap();
         let name = bin_path.into().file_stem().unwrap().to_string_lossy().to_string();
         let pack = build_sys.pick_marked(Some(name.clone())).unwrap();
@@ -30,7 +30,7 @@ pub mod utils {
             link_existing: false,
         };
         build_sys.build_confs.insert(pack, build_conf);
-        match build_sys.test_x86_pack(pack, true) {
+        match build_sys.test_amd64_pack(pack, true) {
             | Ok(_) => {}
             | Err(err) => {
                 eprintln!("{}", err);
@@ -77,12 +77,12 @@ macro_rules! interp_proj_bin {
 }
 
 #[macro_export]
-macro_rules! x86_proj_bin {
+macro_rules! amd64_proj_bin {
     ($proj:ident, $name:ident, $binary:expr) => {
         #[test]
         fn $name() {
             let (local, bin) = ::zydeco_tests::__proj_path!($proj, $name, $binary);
-            ::zydeco_tests::utils::x86_proj_bin_aux(local, bin);
+            ::zydeco_tests::utils::amd64_proj_bin_aux(local, bin);
         }
     };
 }

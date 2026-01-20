@@ -175,9 +175,9 @@ pub enum Instr {
     Dq(String),
 }
 
-/// Represents a complete x86-64 assembly file organized by ELF sections.
+/// Represents a complete amd64 assembly file organized by ELF sections.
 ///
-/// This struct organizes x86 assembly instructions into the standard ELF sections
+/// This struct organizes amd64 assembly instructions into the standard ELF sections
 /// used by linkers and loaders:
 ///
 /// - **`.text`**: Executable code (instructions). This is where all program logic lives.
@@ -187,10 +187,10 @@ pub enum Instr {
 /// - **`.bss`**: Uninitialized writable data (zero-initialized globals). The linker
 ///   reserves space but doesn't store data in the object file.
 ///
-/// # x86-64 Context
+/// # amd64 Context
 ///
-/// This abstraction targets x86-64 (64-bit) assembly using Intel syntax.
-/// The instructions in each section are expected to be valid x86-64 instructions
+/// This abstraction targets amd64 (64-bit) assembly using Intel syntax.
+/// The instructions in each section are expected to be valid amd64 instructions
 /// that can be assembled by NASM or compatible assemblers.
 #[derive(Default, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AsmFile {

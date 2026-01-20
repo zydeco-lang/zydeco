@@ -239,7 +239,11 @@ impl TypeId {
                 | Type::Forall(forall) => {
                     let Forall(tpat, ty) = forall;
                     let ty_ = ty.subst_abst(tycker, assign)?;
-                    if ty == ty_ { *self } else { Alloc::alloc(tycker, Forall(tpat, ty_), kd, &env) }
+                    if ty == ty_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, Forall(tpat, ty_), kd, &env)
+                    }
                 }
                 | Type::Prod(prod) => {
                     let Prod(ty1, ty2) = prod;
@@ -254,7 +258,11 @@ impl TypeId {
                 | Type::Exists(exists) => {
                     let Exists(tpat, ty) = exists;
                     let ty_ = ty.subst_abst(tycker, assign)?;
-                    if ty == ty_ { *self } else { Alloc::alloc(tycker, Exists(tpat, ty_), kd, &env) }
+                    if ty == ty_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, Exists(tpat, ty_), kd, &env)
+                    }
                 }
                 | Type::Data(id) => {
                     let arms = tycker.statics.datas[&id].clone();

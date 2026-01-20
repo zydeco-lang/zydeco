@@ -53,11 +53,11 @@ pub enum Commands {
         /// Target OS (defaults to host OS)
         #[arg(long)]
         target_os: Option<String>,
-        /// Target architecture
+        /// Target architecture (defaults to host architecture)
         #[arg(long)]
         target_arch: Option<String>,
-        /// Target backend (zir, zasm, asm/x86)
-        #[arg(short, long, default_value = "asm")]
+        /// Target backend (zir, zasm, asm, exe)
+        #[arg(short, long, default_value = "exe")]
         target: String,
         /// Build Directory
         #[arg(short = 'b', long)]

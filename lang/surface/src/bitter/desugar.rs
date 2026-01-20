@@ -26,7 +26,8 @@ pub struct Desugarer<'a> {
 }
 impl<'a> Desugarer<'a> {
     pub fn new(
-        spans: &'a t::SpanArena, textual: &'a t::TextArena, top: t::TopLevel, bitter: b::BitterArena,
+        spans: &'a t::SpanArena, textual: &'a t::TextArena, top: t::TopLevel,
+        bitter: b::BitterArena,
     ) -> Self {
         Self { spans, textual, top, bitter, prim: b::PrimTerms::default() }
     }

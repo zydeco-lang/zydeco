@@ -64,7 +64,7 @@ fn build_files(
     _dry: bool, verbose: bool,
 ) -> zydeco_driver::Result<i32> {
     let build_conf = match target.as_str() {
-        | "x86" | "asm" => Some(build_conf),
+        | "asm" | "exe" => Some(build_conf),
         | _ => None,
     };
     let Driver { mut build_sys } = Driver::setup(paths)?;
@@ -83,10 +83,14 @@ fn build_files(
             build_sys.codegen_zasm_pack(pack, execute, verbose)?;
             Ok(0)
         }
-        | "x86" | "asm" => {
-            let x86 = build_sys.codegen_x86_pack(pack, verbose)?;
+        | "asm" => {
+            build_sys.codegen_amd64_pack(pack, verbose)?;
+            Ok(0)
+        }
+        | "exe" => {
+            let amd64 = build_sys.codegen_amd64_pack(pack, verbose)?;
             // link with stub
-            let executable = x86.link()?;
+            let executable = amd64.link()?;
             if !execute {
                 return Ok(0);
             }

@@ -50,9 +50,9 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
         'zydeco;build' {
             [CompletionResult]::new('--bin', '--bin', [CompletionResultType]::ParameterName, 'Name of the binary')
             [CompletionResult]::new('--target-os', '--target-os', [CompletionResultType]::ParameterName, 'Target OS (defaults to host OS)')
-            [CompletionResult]::new('--target-arch', '--target-arch', [CompletionResultType]::ParameterName, 'Target architecture')
-            [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Target backend (zir, zasm, asm/x86)')
-            [CompletionResult]::new('--target', '--target', [CompletionResultType]::ParameterName, 'Target backend (zir, zasm, asm/x86)')
+            [CompletionResult]::new('--target-arch', '--target-arch', [CompletionResultType]::ParameterName, 'Target architecture (defaults to host architecture)')
+            [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Target backend (zir, zasm, asm, exe)')
+            [CompletionResult]::new('--target', '--target', [CompletionResultType]::ParameterName, 'Target backend (zir, zasm, asm, exe)')
             [CompletionResult]::new('-b', '-b', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('--build-dir', '--build-dir', [CompletionResultType]::ParameterName, 'Build Directory')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Runtime directory')

@@ -2463,6 +2463,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd8f3f50b848df28f887acb68e41201b5aea6bc8a8dacc00fb40635ff9a72fea"
 
 [[package]]
+name = "zydeco-amd64"
+version = "0.2.2"
+dependencies = [
+ "derive_more",
+ "im",
+ "log",
+ "zydeco-assembly",
+ "zydeco-stackir",
+ "zydeco-statics",
+ "zydeco-surface",
+ "zydeco-syntax",
+ "zydeco-utils",
+]
+
+[[package]]
 name = "zydeco-assembly"
 version = "0.2.2"
 dependencies = [
@@ -2512,6 +2527,7 @@ dependencies = [
  "serde",
  "thiserror",
  "toml",
+ "zydeco-amd64",
  "zydeco-assembly",
  "zydeco-derive",
  "zydeco-dynamics",
@@ -2520,7 +2536,6 @@ dependencies = [
  "zydeco-surface",
  "zydeco-syntax",
  "zydeco-utils",
- "zydeco-x86",
 ]
 
 [[package]]
@@ -2626,19 +2641,4 @@ version = "0.2.2"
 dependencies = [
  "derive_more",
  "im",
-]
-
-[[package]]
-name = "zydeco-x86"
-version = "0.2.2"
-dependencies = [
- "derive_more",
- "im",
- "log",
- "zydeco-assembly",
- "zydeco-stackir",
- "zydeco-statics",
- "zydeco-surface",
- "zydeco-syntax",
- "zydeco-utils",
 ]

@@ -298,7 +298,9 @@ impl<'a> Emit<'a> for Terminator {
                 match em.target_format {
                     | TargetFormat::Elf => {
                         // table entry is a relative offset from the entry address
-                        em.asm.text.push(Instr::Add(BinArgs::ToReg(Reg::Rcx, Arg32::Reg(Reg::Rax))));
+                        em.asm
+                            .text
+                            .push(Instr::Add(BinArgs::ToReg(Reg::Rcx, Arg32::Reg(Reg::Rax))));
                         em.asm.text.push(Instr::Jmp(JmpArgs::Reg(Reg::Rcx)));
                     }
                     | TargetFormat::MachO => {

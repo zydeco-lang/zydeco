@@ -33,7 +33,7 @@ impl Default for BuildConf {
         Self {
             build_dir: PathBuf::from("build"),
             runtime_dir: PathBuf::from("runtime"),
-            target_arch: "x86_64".to_string(),
+            target_arch: std::env::consts::ARCH.to_string(),
             target_os: std::env::consts::OS.to_string(),
             link_existing: false,
         }
