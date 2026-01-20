@@ -9,15 +9,18 @@ pub trait Errorable<E> {
     type Entry;
 
     /// Throw a pure error.
+    #[must_use]
     fn err<T>(
         &self, error: E, blame: &'static std::panic::Location<'static>,
     ) -> Result<T, Self::Entry>;
 
     /// Throw a continuation error (used by `_k` APIs).
+    #[must_use]
     fn err_k<T>(
         &mut self, error: E, blame: &'static std::panic::Location<'static>,
-    ) -> Result<T, ()>;
+    ) -> ResultKont<T>;
 
     /// Convert a pure result into a continuation result (used by `_k` APIs).
-    fn err_p_to_k<T>(&mut self, res: Result<T, Self::Entry>) -> Result<T, ()>;
+    #[must_use]
+    fn err_p_to_k<T>(&mut self, res: Result<T, Self::Entry>) -> ResultKont<T>;
 }

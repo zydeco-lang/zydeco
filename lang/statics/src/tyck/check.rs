@@ -143,6 +143,26 @@ impl<'a> Tycker<'a> {
                 site_solu
             );
         }
+        // normalize all kinds
+        {
+            let mut kind_ids = Vec::new();
+            for (id, _) in &self.statics.kinds {
+                kind_ids.push(id.to_owned());
+            }
+            for id in kind_ids {
+                id.normalize_filled_k(self)?;
+            }
+        }
+        // normalize all types
+        {
+            let mut type_ids = Vec::new();
+            for (id, _) in &self.statics.types {
+                type_ids.push(id.to_owned());
+            }
+            for id in type_ids {
+                id.normalize_filled_k(self)?;
+            }
+        }
         if !self.errors.is_empty() {
             Err(())?
         }

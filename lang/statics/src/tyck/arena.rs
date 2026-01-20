@@ -102,6 +102,10 @@ pub struct StaticsArena {
     pub env_value: ArenaAssoc<ValueId, TyEnv>,
     /// typing environments for computations
     pub env_compu: ArenaAssoc<CompuId, TyEnv>,
+    /// normalized kind free of holes
+    pub normalized_kind: ArenaAssoc<KindId, KindId>,
+    /// normalized type free of holes
+    pub normalized_type: ArenaAssoc<TypeId, TypeId>,
 }
 
 impl StaticsArena {
@@ -144,6 +148,8 @@ impl StaticsArena {
             env_vpat: ArenaAssoc::new(),
             env_value: ArenaAssoc::new(),
             env_compu: ArenaAssoc::new(),
+            normalized_kind: ArenaAssoc::new(),
+            normalized_type: ArenaAssoc::new(),
         }
     }
 }

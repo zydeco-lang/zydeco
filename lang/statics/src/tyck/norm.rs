@@ -755,3 +755,238 @@ impl<'a> Tycker<'a> {
         )
     }
 }
+
+/* ------------------------------ Normalization ----------------------------- */
+
+impl KindId {
+    pub fn normalize_filled_k(self, tycker: &mut Tycker<'_>) -> ResultKont<KindId> {
+        let res = self.normalize_filled(tycker);
+        tycker.err_p_to_k(res)
+    }
+    pub fn normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<KindId> {
+        if let Some(norm) = tycker.statics.normalized_kind.get(&self).cloned() {
+            return Ok(norm);
+        }
+        let res = match tycker.statics.kinds[&self].to_owned() {
+            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
+                | Some(AnnId::Kind(kd)) => kd.normalize_filled(tycker)?,
+                | Some(AnnId::Set | AnnId::Type(_)) => {
+                    let _: ResultKont<()> =
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
+                    self
+                }
+                | None => {
+                    let _: ResultKont<()> = tycker.err_k(
+                        TyckError::MissingSolution(vec![fill]),
+                        std::panic::Location::caller(),
+                    );
+                    self
+                }
+            },
+            | Fillable::Done(kind) => match kind {
+                | Kind::VType(VType) | Kind::CType(CType) => self,
+                | Kind::Arrow(Arrow(from, to)) => {
+                    let from_norm = from.normalize_filled(tycker)?;
+                    let to_norm = to.normalize_filled(tycker)?;
+                    if from_norm == from && to_norm == to {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, Arrow(from_norm, to_norm), (), &())
+                    }
+                }
+            },
+        };
+        tycker.statics.normalized_kind.insert(self, res);
+        tycker.statics.normalized_kind.insert(res, res);
+        Ok(res)
+    }
+}
+
+impl TypeId {
+    pub fn normalize_filled_k(self, tycker: &mut Tycker<'_>) -> ResultKont<TypeId> {
+        let res = self.normalize_filled(tycker);
+        tycker.err_p_to_k(res)
+    }
+    pub fn normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
+        if let Some(norm) = tycker.statics.normalized_type.get(&self).cloned() {
+            return Ok(norm);
+        }
+        let kd = tycker.statics.annotations_type[&self];
+        let kd_norm = kd.normalize_filled(tycker)?;
+        let env = tycker.statics.env_type[&self].clone();
+        let res = match tycker.statics.types[&self].to_owned() {
+            | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
+                | Some(AnnId::Type(ty)) => ty.normalize_filled(tycker)?,
+                | Some(AnnId::Set | AnnId::Kind(_)) => {
+                    let _: ResultKont<()> =
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller());
+                    self
+                }
+                | None => {
+                    let _: ResultKont<()> = tycker.err_k(
+                        TyckError::MissingSolution(vec![fill]),
+                        std::panic::Location::caller(),
+                    );
+                    self
+                }
+            },
+            | Fillable::Done(ty) => match ty {
+                | Type::Var(def) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, def, kd_norm, &env)
+                    }
+                }
+                | Type::Abst(abst) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, abst, kd_norm, &env)
+                    }
+                }
+                | Type::Abs(abs) => {
+                    let Abs(tpat, body) = abs;
+                    let body_norm = body.normalize_filled(tycker)?;
+                    if body_norm == body && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, Abs(tpat, body_norm), kd_norm, &env)
+                    }
+                }
+                | Type::App(app) => {
+                    let App(f_ty, a_ty) = app;
+                    let f_norm = f_ty.normalize_filled(tycker)?;
+                    let a_norm = a_ty.normalize_filled(tycker)?;
+                    match tycker.statics.types[&f_norm].to_owned() {
+                        | Fillable::Done(Type::Abs(abs)) => {
+                            let Abs(tpat, body) = abs;
+                            let (def, _) = tpat.try_destruct_def(tycker);
+                            let body_subst = if let Some(def) = def {
+                                body.subst(tycker, def, a_norm)?
+                            } else {
+                                body
+                            };
+                            if body_subst == self {
+                                self
+                            } else {
+                                body_subst.normalize_filled(tycker)?
+                            }
+                        }
+                        | _ => {
+                            if f_norm == f_ty && a_norm == a_ty && kd_norm == kd {
+                                self
+                            } else {
+                                Alloc::alloc(tycker, App(f_norm, a_norm), kd_norm, &env)
+                            }
+                        }
+                    }
+                }
+                | Type::Thk(ThkTy) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, ThkTy, kd_norm, &env)
+                    }
+                }
+                | Type::Ret(RetTy) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, RetTy, kd_norm, &env)
+                    }
+                }
+                | Type::Unit(UnitTy) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, UnitTy, kd_norm, &env)
+                    }
+                }
+                | Type::Int(IntTy) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, IntTy, kd_norm, &env)
+                    }
+                }
+                | Type::Char(CharTy) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, CharTy, kd_norm, &env)
+                    }
+                }
+                | Type::String(StringTy) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, StringTy, kd_norm, &env)
+                    }
+                }
+                | Type::OS(OSTy) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, OSTy, kd_norm, &env)
+                    }
+                }
+                | Type::Arrow(arr) => {
+                    let Arrow(ty1, ty2) = arr;
+                    let ty1_norm = ty1.normalize_filled(tycker)?;
+                    let ty2_norm = ty2.normalize_filled(tycker)?;
+                    if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, Arrow(ty1_norm, ty2_norm), kd_norm, &env)
+                    }
+                }
+                | Type::Forall(forall) => {
+                    let Forall(abst, body) = forall;
+                    let body_norm = body.normalize_filled(tycker)?;
+                    if body_norm == body && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, Forall(abst, body_norm), kd_norm, &env)
+                    }
+                }
+                | Type::Prod(prod) => {
+                    let Prod(ty1, ty2) = prod;
+                    let ty1_norm = ty1.normalize_filled(tycker)?;
+                    let ty2_norm = ty2.normalize_filled(tycker)?;
+                    if ty1_norm == ty1 && ty2_norm == ty2 && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, Prod(ty1_norm, ty2_norm), kd_norm, &env)
+                    }
+                }
+                | Type::Exists(exists) => {
+                    let Exists(abst, body) = exists;
+                    let body_norm = body.normalize_filled(tycker)?;
+                    if body_norm == body && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, Exists(abst, body_norm), kd_norm, &env)
+                    }
+                }
+                | Type::Data(data) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, data, kd_norm, &env)
+                    }
+                }
+                | Type::CoData(codata) => {
+                    if kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, codata, kd_norm, &env)
+                    }
+                }
+            },
+        };
+        tycker.statics.normalized_type.insert(self, res);
+        tycker.statics.normalized_type.insert(res, res);
+        Ok(res)
+    }
+}
