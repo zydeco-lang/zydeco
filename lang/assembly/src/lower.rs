@@ -92,78 +92,9 @@ impl<'a> Lowerer<'a> {
         self.arena
     }
 
-    /// Find the constructor tag index in a data type
-    fn find_ctor_tag_idx(&self, ty: ss::TypeId, ctor_name: &zydeco_syntax::CtorName) -> usize {
+    fn find_ctor_tag_idx(&self, value: &ss::ValueId, ctor_name: &zydeco_syntax::CtorName) -> usize {
         // Get the data type
-        let data = {
-            {
-                use zydeco_statics::tyck::syntax::*;
-                // Get the type annotation
-                let mut ty = ty;
-                loop {
-                    let err_msg = || {
-                        let span_str = self
-                            .statics
-                            .terms
-                            .back(&ss::TermId::Type(ty))
-                            .and_then(|su_term_id| self.scoped.textual.back(&(*su_term_id).into()))
-                            .map(|entity_id| &self.spans[entity_id])
-                            .map(|span| format!(" @ {}", span))
-                            .unwrap_or_default();
-                        let ty_str = {
-                            use zydeco_statics::tyck::fmt::*;
-                            ty.ugly(&Formatter::new(self.scoped, self.statics))
-                        };
-                        (span_str, ty_str)
-                    };
-                    match self.statics.types_pre[&ty] {
-                        | Fillable::Done(Type::Data(data)) => {
-                            break data;
-                        }
-                        | Fillable::Done(Type::Abst(abst)) => {
-                            ty = self.statics.seals[&abst];
-                        }
-                        | Fillable::Done(Type::Abs(Abs(_, _body))) => {
-                            // ty = body;
-                            unreachable!(
-                                "unexpected type abstraction in data type {}",
-                                ty.ugly(&zydeco_statics::tyck::fmt::Formatter::new(
-                                    self.scoped,
-                                    self.statics
-                                ))
-                            );
-                        }
-                        | Fillable::Done(Type::App(App(_f, _))) => {
-                            // ty = f;
-                            unreachable!(
-                                "unexpected type application in data type {}",
-                                ty.ugly(&zydeco_statics::tyck::fmt::Formatter::new(
-                                    self.scoped,
-                                    self.statics
-                                ))
-                            );
-                        }
-                        | Fillable::Fill(fill) => {
-                            let AnnId::Type(ty_) = self.statics.solus[&fill] else {
-                                let (span_str, ty_str) = err_msg();
-                                unreachable!(
-                                    "Value type {} is not a type in statics{}",
-                                    ty_str, span_str
-                                )
-                            };
-                            ty = ty_;
-                        }
-                        | _ => {
-                            let (span_str, ty_str) = err_msg();
-                            unreachable!(
-                                "Value type {} is not a data type in statics{}",
-                                ty_str, span_str
-                            );
-                        }
-                    }
-                }
-            }
-        };
+        let data = self.statics.data_hints[value];
         // Find the index of the constructor tag
         self.statics.datas[&data]
             .iter()
@@ -184,96 +115,13 @@ impl<'a> Lowerer<'a> {
         else {
             unreachable!("Constructor is not a value in statics")
         };
-        // Get the type annotation
-        let ty = self.statics.annotations_value[value];
-        self.find_ctor_tag_idx(ty, ctor_name)
+        self.find_ctor_tag_idx(value, ctor_name)
     }
 
-    // /// Find the constructor tag index in a data type, given a stack value pattern
-    // fn find_ctor_tag_idx_from_vpat(
-    //     &self, vpat_id: sk::VPatId, ctor_name: &zydeco_syntax::CtorName,
-    // ) -> usize {
-    //     // Get the corresponding statics pattern
-    //     let ss::PatId::Value(vpat) =
-    //         self.stack.pats.back(&vpat_id).expect("Constructor pattern not found")
-    //     else {
-    //         unreachable!("Constructor is not a value pattern in statics")
-    //     };
-    //     // Get the type annotation
-    //     let ty = self.statics.annotations_vpat[&vpat].clone();
-    //     self.find_ctor_tag_idx(ty, ctor_name)
-    // }
-
     /// Get the codata type from a computation's type annotation
-    fn find_dtor_tag_idx(&self, compu: ss::CompuId, dtor_name: &zydeco_syntax::DtorName) -> usize {
+    fn find_dtor_tag_idx(&self, compu: &ss::CompuId, dtor_name: &zydeco_syntax::DtorName) -> usize {
         // Get the codata type
-        let codata = {
-            use zydeco_statics::tyck::syntax::*;
-            // Get the type annotation
-            let mut ty = self.statics.annotations_compu[&compu];
-            loop {
-                let err_msg = || {
-                    let span_str = self
-                        .statics
-                        .terms
-                        .back(&ss::TermId::Compu(compu))
-                        .and_then(|su_term_id| self.scoped.textual.back(&(*su_term_id).into()))
-                        .map(|entity_id| &self.spans[entity_id])
-                        .map(|span| format!(" @ {}", span))
-                        .unwrap_or_default();
-                    let ty_str = {
-                        use zydeco_statics::tyck::fmt::*;
-                        ty.ugly(&Formatter::new(self.scoped, self.statics))
-                    };
-                    (span_str, ty_str)
-                };
-                match self.statics.types_pre[&ty] {
-                    | Fillable::Done(Type::CoData(codata)) => {
-                        break codata;
-                    }
-                    | Fillable::Done(Type::Abst(abst)) => {
-                        ty = self.statics.seals[&abst];
-                    }
-                    | Fillable::Done(Type::Abs(Abs(_, _body))) => {
-                        // ty = body;
-                        unreachable!(
-                            "unexpected type abstraction in codata type {}",
-                            ty.ugly(&zydeco_statics::tyck::fmt::Formatter::new(
-                                self.scoped,
-                                self.statics
-                            ))
-                        );
-                    }
-                    | Fillable::Done(Type::App(App(_f, _))) => {
-                        // ty = f;
-                        unreachable!(
-                            "unexpected type application in codata type {}",
-                            ty.ugly(&zydeco_statics::tyck::fmt::Formatter::new(
-                                self.scoped,
-                                self.statics
-                            ))
-                        );
-                    }
-                    | Fillable::Fill(fill) => {
-                        let AnnId::Type(ty_) = self.statics.solus[&fill] else {
-                            let (span_str, ty_str) = err_msg();
-                            unreachable!(
-                                "Computation type {} is not a type in statics{}",
-                                ty_str, span_str
-                            )
-                        };
-                        ty = ty_;
-                    }
-                    | _ => {
-                        let (span_str, ty_str) = err_msg();
-                        unreachable!(
-                            "Computation type {} is not a codata type in statics{}",
-                            ty_str, span_str
-                        );
-                    }
-                }
-            }
-        };
+        let codata = self.statics.codata_hints[compu];
         // Find the index of the destructor tag
         self.statics.codatas[&codata]
             .iter()
@@ -291,7 +139,7 @@ impl<'a> Lowerer<'a> {
         else {
             unreachable!("Computation is not a computation in statics")
         };
-        self.find_dtor_tag_idx(*compu, dtor_name)
+        self.find_dtor_tag_idx(compu, dtor_name)
     }
 
     /// Find the destructor tag index in a codata type, given a stack
@@ -305,7 +153,7 @@ impl<'a> Lowerer<'a> {
         else {
             unreachable!("Stack is not a computation in statics")
         };
-        self.find_dtor_tag_idx(*compu, dtor_name)
+        self.find_dtor_tag_idx(compu, dtor_name)
     }
 }
 
