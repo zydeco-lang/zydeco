@@ -84,7 +84,7 @@ impl<'a> Tycker<'a> {
         // before we go, fill all holes with solutions
         // Note: since all types are checked and solved, all holes are filled, no need for recursive filling
         let mut types = Vec::new();
-        for (id, ty) in &self.statics.types {
+        for (id, ty) in &self.statics.types_pre {
             types.push((id.to_owned(), ty.to_owned()));
         }
         for (id, ty) in types {
@@ -97,7 +97,9 @@ impl<'a> Tycker<'a> {
                                 self.err_k(TyckError::SortMismatch, std::panic::Location::caller());
                         }
                         | AnnId::Type(ty) => {
-                            self.statics.types.replace(id, self.statics.types[ty].to_owned());
+                            self.statics
+                                .types_pre
+                                .replace(id, self.statics.types_pre[ty].to_owned());
                         }
                     },
                     | None => {
@@ -146,7 +148,7 @@ impl<'a> Tycker<'a> {
         // normalize all kinds
         {
             let mut kind_ids = Vec::new();
-            for (id, _) in &self.statics.kinds {
+            for (id, _) in &self.statics.kinds_pre {
                 kind_ids.push(id.to_owned());
             }
             for id in kind_ids {
@@ -156,7 +158,7 @@ impl<'a> Tycker<'a> {
         // normalize all types
         {
             let mut type_ids = Vec::new();
-            for (id, _) in &self.statics.types {
+            for (id, _) in &self.statics.types_pre {
                 type_ids.push(id.to_owned());
             }
             for id in type_ids {
@@ -881,7 +883,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             | Switch::Syn => {}
             | Switch::Ana(ana) => match ana {
                 | AnnId::Set => {}
-                | AnnId::Kind(kd) => match tycker.statics.kinds[&kd].to_owned() {
+                | AnnId::Kind(kd) => match tycker.statics.kinds_pre[&kd].to_owned() {
                     | Fillable::Fill(fill) => match self.tyck_k(tycker, Action::syn())? {
                         | TermAnnId::Type(ty, kd) => {
                             tycker.statics.solus.insert(fill, kd.into());
@@ -896,7 +898,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     },
                     | _ => {}
                 },
-                | AnnId::Type(ty) => match tycker.statics.types[&ty].to_owned() {
+                | AnnId::Type(ty) => match tycker.statics.types_pre[&ty].to_owned() {
                     | Fillable::Fill(fill) => match self.tyck_k(tycker, Action::syn())? {
                         | TermAnnId::Value(v, ty) => {
                             let ty = fill.fill_k(tycker, ty.into())?.as_type();

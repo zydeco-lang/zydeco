@@ -108,7 +108,7 @@ where
     type Ann = ();
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, _env: &Self::Env) -> KindId {
-        arena.as_mut().kinds.alloc(val.into())
+        arena.as_mut().kinds_pre.alloc(val.into())
     }
 }
 impl<Arena> Alloc<Arena, KindId> for Kind
@@ -118,7 +118,7 @@ where
     type Ann = ();
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, (): Self::Ann, _env: &Self::Env) -> KindId {
-        arena.as_mut().kinds.alloc(Fillable::Done(val))
+        arena.as_mut().kinds_pre.alloc(Fillable::Done(val))
     }
 }
 macro_rules! AllocKind {
@@ -188,7 +188,7 @@ where
     type Ann = KindId;
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann, env: &Self::Env) -> TypeId {
-        let ty = arena.as_mut().types.alloc(val.into());
+        let ty = arena.as_mut().types_pre.alloc(val.into());
         arena
             .as_mut()
             .annotations_type
@@ -210,7 +210,7 @@ where
     type Ann = KindId;
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann, env: &Self::Env) -> TypeId {
-        let ty = arena.as_mut().types.alloc(Fillable::Done(val));
+        let ty = arena.as_mut().types_pre.alloc(Fillable::Done(val));
         arena
             .as_mut()
             .annotations_type

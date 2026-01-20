@@ -16,12 +16,12 @@ pub use zydeco_surface::scoped::arena::*;
 // Clone is derived only for coping with wf in driver
 #[derive(Debug, Clone, AsRefSelf, AsMutSelf)]
 pub struct StaticsArena {
-    /// kind arena
-    pub kinds: ArenaSparse<KindId, Fillable<Kind>>,
+    /// kind arena before normalization
+    pub kinds_pre: ArenaSparse<KindId, Fillable<Kind>>,
     /// type pattern arena
     pub tpats: ArenaSparse<TPatId, TypePattern>,
-    /// type arena
-    pub types: ArenaSparse<TypeId, Fillable<Type>>,
+    /// type arena before normalization
+    pub types_pre: ArenaSparse<TypeId, Fillable<Type>>,
     /// value pattern arena
     pub vpats: ArenaSparse<VPatId, ValuePattern>,
     /// value arena
@@ -80,6 +80,7 @@ pub struct StaticsArena {
     pub annotations_value: ArenaAssoc<ValueId, TypeId>,
     /// type annotations for computations
     pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
+
     /// typing environments for type patterns
     pub env_tpat: ArenaAssoc<TPatId, TyEnv>,
     /// typing environments for types
@@ -90,18 +91,19 @@ pub struct StaticsArena {
     pub env_value: ArenaAssoc<ValueId, TyEnv>,
     /// typing environments for computations
     pub env_compu: ArenaAssoc<CompuId, TyEnv>,
+
     /// normalized kind free of holes
-    pub normalized_kind: ArenaAssoc<KindId, KindId>,
+    pub kinds_normalized: ArenaAssoc<KindId, KindId>,
     /// normalized type free of holes
-    pub normalized_type: ArenaAssoc<TypeId, TypeId>,
+    pub types_normalized: ArenaAssoc<TypeId, TypeId>,
 }
 
 impl StaticsArena {
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
         Self {
-            kinds: ArenaSparse::new(alloc.alloc()),
+            kinds_pre: ArenaSparse::new(alloc.alloc()),
             tpats: ArenaSparse::new(alloc.alloc()),
-            types: ArenaSparse::new(alloc.alloc()),
+            types_pre: ArenaSparse::new(alloc.alloc()),
             vpats: ArenaSparse::new(alloc.alloc()),
             values: ArenaSparse::new(alloc.alloc()),
             compus: ArenaSparse::new(alloc.alloc()),
@@ -136,8 +138,8 @@ impl StaticsArena {
             env_vpat: ArenaAssoc::new(),
             env_value: ArenaAssoc::new(),
             env_compu: ArenaAssoc::new(),
-            normalized_kind: ArenaAssoc::new(),
-            normalized_type: ArenaAssoc::new(),
+            kinds_normalized: ArenaAssoc::new(),
+            types_normalized: ArenaAssoc::new(),
         }
     }
 }

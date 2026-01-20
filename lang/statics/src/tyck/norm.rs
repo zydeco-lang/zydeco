@@ -10,7 +10,7 @@ impl TypeId {
     }
     pub fn subst_env(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[self];
-        let ty = tycker.statics.types[&self].to_owned();
+        let ty = tycker.statics.types_pre[&self].to_owned();
         let ty = match ty {
             // Fixme: should invoke substitution once the type is filled
             | Fillable::Fill(_) => *self,
@@ -195,7 +195,7 @@ impl TypeId {
     pub fn subst_abst(&self, tycker: &mut Tycker<'_>, assign: (AbstId, TypeId)) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[self];
         let env = tycker.statics.env_type[self].clone();
-        let ty = match tycker.statics.types[self].to_owned() {
+        let ty = match tycker.statics.types_pre[self].to_owned() {
             // Todo: add subst obligation to fills
             | Fillable::Fill(_) => *self,
             | Fillable::Done(ty) => match ty {
@@ -376,7 +376,7 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn normalize(self, tycker: &mut Tycker<'_>, kd: KindId) -> Result<TypeId> {
-        let res = match tycker.statics.types[&self].to_owned() {
+        let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(_) => self,
             | Fillable::Done(ty) => match ty {
                 | Type::App(app) => {
@@ -426,7 +426,7 @@ impl TypeId {
         self, tycker: &mut Tycker<'_>, a_ty: TypeId, kd: KindId,
     ) -> Result<TypeId> {
         let env = tycker.statics.env_type[&self].clone();
-        let res = match tycker.statics.types[&self].to_owned() {
+        let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(_) => self,
             | Fillable::Done(ty) => match ty {
                 | Type::Abs(abs) => {
@@ -496,7 +496,7 @@ impl TypeId {
     pub fn solution(&self, tycker: &mut Tycker<'_>) -> Result<(TypeId, Vec<FillId>)> {
         let mut res = *self;
         let mut fills = Vec::new();
-        while let Fillable::Fill(fill) = tycker.statics.types[&res].to_owned() {
+        while let Fillable::Fill(fill) = tycker.statics.types_pre[&res].to_owned() {
             let solu = match tycker.statics.solus.get(&fill).cloned() {
                 | None => break,
                 | Some(AnnId::Type(ty)) => ty,
@@ -507,7 +507,7 @@ impl TypeId {
             res = solu;
         }
         let env = tycker.statics.env_type[&res].clone();
-        let res = match tycker.statics.types[&res].to_owned() {
+        let res = match tycker.statics.types_pre[&res].to_owned() {
             | Fillable::Fill(fill) => {
                 fills.push(fill);
                 res
@@ -692,7 +692,7 @@ impl<'a> Tycker<'a> {
     ) -> Result<R> {
         match id {
             | AnnId::Set => f_set(self),
-            | AnnId::Kind(id) => match self.statics.kinds[id].to_owned() {
+            | AnnId::Kind(id) => match self.statics.kinds_pre[id].to_owned() {
                 | Fillable::Fill(fill) => match self.statics.solus.get(&fill).cloned() {
                     | Some(AnnId::Kind(kind)) => {
                         self.filling(&kind.into(), f_set, f_kind, f_type, f_fill)
@@ -704,7 +704,7 @@ impl<'a> Tycker<'a> {
                 },
                 | Fillable::Done(kind) => f_kind(self, kind),
             },
-            | AnnId::Type(id) => match self.statics.types[id].to_owned() {
+            | AnnId::Type(id) => match self.statics.types_pre[id].to_owned() {
                 | Fillable::Fill(fill) => match self.statics.solus.get(&fill).cloned() {
                     | Some(AnnId::Type(ty)) => {
                         self.filling(&ty.into(), f_set, f_kind, f_type, f_fill)
@@ -764,10 +764,10 @@ impl KindId {
         tycker.err_p_to_k(res)
     }
     pub fn normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<KindId> {
-        if let Some(norm) = tycker.statics.normalized_kind.get(&self).cloned() {
+        if let Some(norm) = tycker.statics.kinds_normalized.get(&self).cloned() {
             return Ok(norm);
         }
-        let res = match tycker.statics.kinds[&self].to_owned() {
+        let res = match tycker.statics.kinds_pre[&self].to_owned() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
                 | Some(AnnId::Kind(kd)) => kd.normalize_filled(tycker)?,
                 | Some(AnnId::Set | AnnId::Type(_)) => {
@@ -796,8 +796,8 @@ impl KindId {
                 }
             },
         };
-        tycker.statics.normalized_kind.insert(self, res);
-        tycker.statics.normalized_kind.insert(res, res);
+        tycker.statics.kinds_normalized.insert(self, res);
+        tycker.statics.kinds_normalized.insert(res, res);
         Ok(res)
     }
 }
@@ -808,13 +808,13 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn normalize_filled(self, tycker: &mut Tycker<'_>) -> Result<TypeId> {
-        if let Some(norm) = tycker.statics.normalized_type.get(&self).cloned() {
+        if let Some(norm) = tycker.statics.types_normalized.get(&self).cloned() {
             return Ok(norm);
         }
         let kd = tycker.statics.annotations_type[&self];
         let kd_norm = kd.normalize_filled(tycker)?;
         let env = tycker.statics.env_type[&self].clone();
-        let res = match tycker.statics.types[&self].to_owned() {
+        let res = match tycker.statics.types_pre[&self].to_owned() {
             | Fillable::Fill(fill) => match tycker.statics.solus.get(&fill).cloned() {
                 | Some(AnnId::Type(ty)) => ty.normalize_filled(tycker)?,
                 | Some(AnnId::Set | AnnId::Kind(_)) => {
@@ -858,7 +858,7 @@ impl TypeId {
                     let App(f_ty, a_ty) = app;
                     let f_norm = f_ty.normalize_filled(tycker)?;
                     let a_norm = a_ty.normalize_filled(tycker)?;
-                    match tycker.statics.types[&f_norm].to_owned() {
+                    match tycker.statics.types_pre[&f_norm].to_owned() {
                         | Fillable::Done(Type::Abs(abs)) => {
                             let Abs(tpat, body) = abs;
                             let (def, _) = tpat.try_destruct_def(tycker);
@@ -985,8 +985,8 @@ impl TypeId {
                 }
             },
         };
-        tycker.statics.normalized_type.insert(self, res);
-        tycker.statics.normalized_type.insert(res, res);
+        tycker.statics.types_normalized.insert(self, res);
+        tycker.statics.types_normalized.insert(res, res);
         Ok(res)
     }
 }

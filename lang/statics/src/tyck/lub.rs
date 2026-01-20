@@ -28,8 +28,8 @@ impl Lub for KindId {
         })
     }
     fn lub_inner(self, other: Self, tycker: &mut Tycker) -> Result<Self::Out> {
-        let lhs = tycker.statics.kinds[&self].clone();
-        let rhs = tycker.statics.kinds[&other].clone();
+        let lhs = tycker.statics.kinds_pre[&self].clone();
+        let rhs = tycker.statics.kinds_pre[&other].clone();
         fn fill_kd(tycker: &mut Tycker, fill: FillId, kd: KindId) -> Result<KindId> {
             match tycker.statics.solus.remove(&fill) {
                 | Some(old) => match old {
@@ -127,8 +127,8 @@ impl Debruijn {
         })
     }
     fn lub_inner(self, lhs_id: TypeId, rhs_id: TypeId, tycker: &mut Tycker) -> Result<TypeId> {
-        let lhs = tycker.statics.types[&lhs_id].clone();
-        let rhs = tycker.statics.types[&rhs_id].clone();
+        let lhs = tycker.statics.types_pre[&lhs_id].clone();
+        let rhs = tycker.statics.types_pre[&rhs_id].clone();
         let env = tycker.statics.env_type[&lhs_id].clone();
         fn fill_ty(tycker: &mut Tycker, fill: FillId, ty: TypeId) -> Result<TypeId> {
             match tycker.statics.solus.remove(&fill) {

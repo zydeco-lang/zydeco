@@ -116,7 +116,7 @@ impl<'a> Lowerer<'a> {
                         };
                         (span_str, ty_str)
                     };
-                    match self.statics.types[&ty] {
+                    match self.statics.types_pre[&ty] {
                         | Fillable::Done(Type::Data(data)) => {
                             break data;
                         }
@@ -227,7 +227,7 @@ impl<'a> Lowerer<'a> {
                     };
                     (span_str, ty_str)
                 };
-                match self.statics.types[&ty] {
+                match self.statics.types_pre[&ty] {
                     | Fillable::Done(Type::CoData(codata)) => {
                         break codata;
                     }

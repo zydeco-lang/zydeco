@@ -32,7 +32,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for DefId {
 
 impl<'a> Ugly<'a, Formatter<'a>> for KindId {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let kd = &f.statics.kinds[self];
+        let kd = &f.statics.kinds_pre[self];
         match kd {
             | Fillable::Fill(fill) => {
                 format!("[fill-kd {}]", fill.concise_inner())
@@ -58,7 +58,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TPatId {
 
 impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let ty = &f.statics.types[self];
+        let ty = &f.statics.types_pre[self];
         match ty {
             | Fillable::Fill(fill) => {
                 format!("[fill-ty {}]", fill.concise_inner())
@@ -489,7 +489,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for DefId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for KindId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let kd = &f.statics.kinds[self];
+        let kd = &f.statics.kinds_pre[self];
         match kd {
             | Fillable::Fill(fill) => RcDoc::text(format!("[fill-kd {}]", fill.concise_inner())),
             | Fillable::Done(kind) => match kind {
@@ -513,7 +513,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TPatId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let ty = &f.statics.types[self];
+        let ty = &f.statics.types_pre[self];
         match ty {
             | Fillable::Fill(fill) => RcDoc::text(format!("[fill-ty {}]", fill.concise_inner())),
             | Fillable::Done(ty) => match ty {
