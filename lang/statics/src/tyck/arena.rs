@@ -12,18 +12,6 @@ pub use zydeco_surface::arena::*;
 
 pub use zydeco_surface::scoped::arena::*;
 
-/// Item projectors out of the statics arena.
-#[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
-pub trait ArenaStatics {
-    fn kind(&self, id: &KindId) -> Fillable<Kind>;
-    fn tpat(&self, id: &TPatId) -> TypePattern;
-    fn r#type(&self, id: &TypeId) -> Fillable<Type>;
-    fn vpat(&self, id: &VPatId) -> ValuePattern;
-    fn value(&self, id: &ValueId) -> Value;
-    fn compu(&self, id: &CompuId) -> Computation;
-    fn decl(&self, id: &DeclId) -> Declaration;
-}
-
 /// Typed arena plus annotation tables and translation metadata.
 // Clone is derived only for coping with wf in driver
 #[derive(Debug, Clone, AsRefSelf, AsMutSelf)]
@@ -154,35 +142,11 @@ impl StaticsArena {
     }
 }
 
-impl ArenaStatics for StaticsArena {
-    fn kind(&self, id: &KindId) -> Fillable<Kind> {
-        self.kinds[id].to_owned()
-    }
-    fn tpat(&self, id: &TPatId) -> TypePattern {
-        self.tpats[id].to_owned()
-    }
-    fn r#type(&self, id: &TypeId) -> Fillable<Type> {
-        self.types[id].to_owned()
-    }
-    fn vpat(&self, id: &VPatId) -> ValuePattern {
-        self.vpats[id].to_owned()
-    }
-    fn value(&self, id: &ValueId) -> Value {
-        self.values[id].to_owned()
-    }
-    fn compu(&self, id: &CompuId) -> Computation {
-        self.compus[id].to_owned()
-    }
-    fn decl(&self, id: &DeclId) -> Declaration {
-        self.decls[id].to_owned()
-    }
-}
-
 /* -------------------------------- LocalFold ------------------------------- */
 
 /// A set of local actions on static arena items.
 #[auto_impl::auto_impl(&mut, Box)]
-pub trait LocalFoldStatics<Cx>: ArenaStatics {
+pub trait LocalFoldStatics<Cx> {
     fn action_kind(&mut self, kind: KindId, ctx: &Cx);
     fn action_tpat(&mut self, tpat: TPatId, ctx: &Cx);
     fn action_type(&mut self, r#type: TypeId, ctx: &Cx);

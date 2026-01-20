@@ -443,7 +443,7 @@ fn type_pattern_translation(
 ) -> Result<(MonEnv, TPatId)> {
     use TypePattern as TPat;
     let (env, kd) = cs::TypeOf(tpat).mbuild(tycker, env)?;
-    let (env, tpat_) = match tycker.statics.tpat(&tpat) {
+    let (env, tpat_) = match tycker.statics.tpats[&tpat].to_owned() {
         | TPat::Hole(hole) => cs::Pat(hole, kd).mbuild(tycker, env)?,
         | TPat::Var(def) => cs::Pat(def, kd).mbuild(tycker, env)?,
     };
@@ -565,7 +565,7 @@ fn value_pattern_translation(
     use ValuePattern as VPat;
     let (env, ty) = cs::TypeOf(vpat).mbuild(tycker, env)?;
     let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
-    let (env, vpat_) = match tycker.statics.vpat(&vpat) {
+    let (env, vpat_) = match tycker.statics.vpats[&vpat].to_owned() {
         | VPat::Hole(hole) => cs::Pat(hole, ty_).mbuild(tycker, env)?,
         | VPat::Var(def) => {
             // create a fresh variable, and track the substitution
@@ -603,7 +603,7 @@ fn value_translation(
 ) -> Result<(MonEnv, ValueId)> {
     let (env, ty) = cs::TypeOf(value).mbuild(tycker, env)?;
     let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
-    let (env, res) = match tycker.statics.value(&value).to_owned() {
+    let (env, res) = match tycker.statics.values[&value].to_owned() {
         | Value::Hole(Hole) => cs::Ann(Hole, ty_).mbuild(tycker, env)?,
         // figure out how to handle literals
         | Value::Lit(_) => unreachable!(),
@@ -661,7 +661,7 @@ fn computation_translation(
     use Computation as Compu;
     let (env, ty) = cs::TypeOf(compu).mbuild(tycker, env)?;
 
-    let (env, res) = match tycker.statics.compu(&compu) {
+    let (env, res) = match tycker.statics.compus[&compu].to_owned() {
         | Compu::Hole(Hole) => {
             let (env, ty_) = cs::TypeLift { ty }.mbuild(tycker, env)?;
             cs::Ann(Hole, ty_).mbuild(tycker, env)?
