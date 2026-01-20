@@ -92,20 +92,16 @@ impl<'a> Lowerer<'a> {
         self.arena
     }
 
-    fn find_ctor_tag_idx(&self, value: &ss::ValueId, ctor_name: &zydeco_syntax::CtorName) -> usize {
-        // Get the data type
-        let data = self.statics.data_hints[value];
+    fn find_ctor_tag_idx(&self, data: &ss::DataId, ctor_name: &zydeco_syntax::CtorName) -> usize {
         // Find the index of the constructor tag
-        self.statics.datas[&data]
+        self.statics.datas[data]
             .iter()
             .position(|(tag_branch, _ty)| tag_branch == ctor_name)
             .expect("Constructor tag not found")
     }
 
     /// Find the constructor tag index in a data type, given a stack value
-    fn find_ctor_tag_idx_from_value(
-        &self, value_id: sk::ValueId, ctor_name: &zydeco_syntax::CtorName,
-    ) -> usize {
+    fn find_data_from_value(&self, value_id: sk::ValueId) -> Option<&ss::DataId> {
         // Get the corresponding statics value
         let ss::TermId::Value(value) = self
             .stack
@@ -115,15 +111,16 @@ impl<'a> Lowerer<'a> {
         else {
             unreachable!("Constructor is not a value in statics")
         };
-        self.find_ctor_tag_idx(value, ctor_name)
+        // Get the data type
+        self.statics.data_hints.get(&value)
     }
 
     /// Get the codata type from a computation's type annotation
-    fn find_dtor_tag_idx(&self, compu: &ss::CompuId, dtor_name: &zydeco_syntax::DtorName) -> usize {
-        // Get the codata type
-        let codata = self.statics.codata_hints[compu];
+    fn find_dtor_tag_idx(
+        &self, codata: &ss::CoDataId, dtor_name: &zydeco_syntax::DtorName,
+    ) -> usize {
         // Find the index of the destructor tag
-        self.statics.codatas[&codata]
+        self.statics.codatas[codata]
             .iter()
             .position(|(dtor_branch, _ty)| dtor_branch == dtor_name)
             .expect("Destructor tag not found")
@@ -139,7 +136,9 @@ impl<'a> Lowerer<'a> {
         else {
             unreachable!("Computation is not a computation in statics")
         };
-        self.find_dtor_tag_idx(compu, dtor_name)
+        // Get the codata type
+        let codata = &self.statics.codata_hints[compu];
+        self.find_dtor_tag_idx(codata, dtor_name)
     }
 
     /// Find the destructor tag index in a codata type, given a stack
@@ -153,7 +152,9 @@ impl<'a> Lowerer<'a> {
         else {
             unreachable!("Stack is not a computation in statics")
         };
-        self.find_dtor_tag_idx(compu, dtor_name)
+        // Get the codata type
+        let codata = &self.statics.codata_hints[compu];
+        self.find_dtor_tag_idx(codata, dtor_name)
     }
 }
 
@@ -269,7 +270,10 @@ impl<'a> Lower<'a> for sk::ValueId {
                         cx,
                         Box::new(move |lo, cx| {
                             // Push the constructor tag onto the stack
-                            let idx = lo.find_ctor_tag_idx_from_value(value_data, &ctor);
+                            let data = lo
+                                .find_data_from_value(value_data)
+                                .expect("constructor is not hinted with a data type");
+                            let idx = lo.find_ctor_tag_idx(data, &ctor);
                             let name = ctor.plain().to_string();
                             let tag = Tag { idx, name: Some(name) };
                             Push(tag).build(
@@ -538,63 +542,68 @@ impl<'a> Lower<'a> for sk::CompuId {
                     With::new(
                         cx,
                         Box::new(move |lo, cx| {
-                            if arms.len() == 1 {
-                                let Matcher { binder, tail } = arms[0];
-                                // Basically same as let value
-                                binder.lower(
-                                    lo,
-                                    With::new(
-                                        cx,
-                                        Box::new(move |lo, cx| {
-                                            // Lower the tail
-                                            tail.lower(lo, cx)
-                                        }),
-                                    ),
-                                )
-                            } else {
-                                // Optimization: compile to a jump table
-                                let mut lowered_arms = Vec::new();
-                                for Matcher { binder, tail } in arms {
-                                    // The binder is a constructor or other things.
-                                    use sk::ValuePattern as VPat;
-                                    match lo.stack.vpats[&binder].clone() {
-                                        | VPat::Ctor(Ctor(ctor, binder)) => {
-                                            let idx =
-                                                lo.find_ctor_tag_idx_from_value(value_data, &ctor);
-                                            let name = ctor.plain().to_string();
-                                            let tag = Tag { idx, name: Some(name) };
-                                            // Lower the tail
-                                            let tail_prog = binder.lower(
-                                                lo,
-                                                With::new(
-                                                    cx.clone(),
-                                                    Box::new(move |lo, cx| tail.lower(lo, cx)),
-                                                ),
-                                            );
-                                            // Nominate the tail program
-                                            let _sym = tail_prog
-                                                .build(lo, (Some(String::from("arm")), None));
-                                            // Add to the jump table
-                                            lowered_arms.push((tag, tail_prog));
-                                        }
-                                        | _ => {
-                                            panic!(
-                                                "Inrefutable pattern matcher must be unique in ZASM"
-                                            )
+                            match lo.find_data_from_value(value_data) {
+                                | Some(data) => {
+                                    let data = data.to_owned();
+                                    // Optimization: compile to a jump table
+                                    let mut lowered_arms = Vec::new();
+                                    for Matcher { binder, tail } in arms {
+                                        // The binder is a constructor or other things.
+                                        use sk::ValuePattern as VPat;
+                                        match lo.stack.vpats[&binder].clone() {
+                                            | VPat::Ctor(Ctor(ctor, binder)) => {
+                                                let idx =
+                                                    lo.find_ctor_tag_idx(&data, &ctor);
+                                                let name = ctor.plain().to_string();
+                                                let tag = Tag { idx, name: Some(name) };
+                                                // Lower the tail
+                                                let tail_prog = binder.lower(
+                                                    lo,
+                                                    With::new(
+                                                        cx.clone(),
+                                                        Box::new(move |lo, cx| tail.lower(lo, cx)),
+                                                    ),
+                                                );
+                                                // Nominate the tail program
+                                                let _sym = tail_prog
+                                                    .build(lo, (Some(String::from("arm")), None));
+                                                // Add to the jump table
+                                                lowered_arms.push((tag, tail_prog));
+                                            }
+                                            | _ => {
+                                                panic!(
+                                                    "Inrefutable pattern matcher must be unique in ZASM"
+                                                )
+                                            }
                                         }
                                     }
+                                    // Unpack the value
+                                    Unpack(ProductMarker).build(
+                                        lo,
+                                        With::new(
+                                            cx,
+                                            CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
+                                                // Jump table
+                                                PopBranch(lowered_arms).build(lo, cx)
+                                            })),
+                                        ),
+                                    )
                                 }
-                                // Unpack the value
-                                Unpack(ProductMarker).build(
-                                    lo,
-                                    With::new(
-                                        cx,
-                                        CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
-                                            // Jump table
-                                            PopBranch(lowered_arms).build(lo, cx)
-                                        })),
-                                    ),
-                                )
+                                | None => {
+                                    assert!(arms.len() == 1, "Inrefutable pattern matcher must be unique in ZASM");
+                                    let Matcher { binder, tail } = arms[0];
+                                    // Basically same as let value
+                                    binder.lower(
+                                        lo,
+                                        With::new(
+                                            cx,
+                                            Box::new(move |lo, cx| {
+                                                // Lower the tail
+                                                tail.lower(lo, cx)
+                                            }),
+                                        ),
+                                    )
+                                }
                             }
                         }),
                     ),
