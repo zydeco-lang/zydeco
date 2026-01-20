@@ -20,9 +20,7 @@ mod impls_env {
         type Output = Self;
         fn add(self, iter: Iter) -> Self {
             let Env(mut defs) = self;
-            for (def, t) in iter {
-                defs.insert(def, t);
-            }
+            defs.extend(iter);
             Self(defs)
         }
     }
@@ -32,9 +30,8 @@ mod impls_env {
         Iter: IntoIterator<Item = (DefId, T)>,
     {
         fn add_assign(&mut self, iter: Iter) {
-            for (def, t) in iter {
-                self.0.insert(def, t);
-            }
+            let Env(defs) = self;
+            defs.extend(iter);
         }
     }
     impl<T> Env<T> {
