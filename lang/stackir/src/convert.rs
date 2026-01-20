@@ -15,15 +15,15 @@ use {
 /// Perform closure conversion on the stack arena.
 #[derive(AsRef, AsMut)]
 pub struct ClosureConverter<'a> {
-    #[as_ref(StackArena)]
-    #[as_mut(StackArena)]
-    arena: &'a mut StackArena,
+    #[as_ref(StackirArena)]
+    #[as_mut(StackirArena)]
+    arena: &'a mut StackirArena,
     scoped: &'a mut ScopedArena,
     _statics: &'a StaticsArena,
 }
 
 impl<'a> CompilerPass for ClosureConverter<'a> {
-    type Arena = StackArena;
+    type Arena = StackirArena;
     type Out = ();
     type Error = Infallible;
     fn run(self) -> Result<Self::Out, Self::Error> {
@@ -34,7 +34,7 @@ impl<'a> CompilerPass for ClosureConverter<'a> {
 
 impl<'a> ClosureConverter<'a> {
     pub fn new(
-        arena: &'a mut StackArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
+        arena: &'a mut StackirArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
     ) -> Self {
         Self { arena, scoped, _statics: statics }
     }

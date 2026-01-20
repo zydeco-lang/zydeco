@@ -9,7 +9,7 @@ use super::{
     syntax::*,
 };
 use derive_more::{AsMut, AsRef};
-use zydeco_stackir::{arena::StackArena, syntax as sk};
+use zydeco_stackir::{arena::StackirArena, syntax as sk};
 use zydeco_statics::tyck::{arena::StaticsArena, syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_utils::{arena::ArcGlobalAlloc, with::With};
@@ -28,21 +28,21 @@ pub struct Lowerer<'a> {
     pub spans: &'a SpanArena,
     pub scoped: &'a ScopedArena,
     pub statics: &'a StaticsArena,
-    pub stack: &'a StackArena,
+    pub stackir: &'a StackirArena,
 }
 
 impl<'a> Lowerer<'a> {
     pub fn new(
         alloc: ArcGlobalAlloc, spans: &'a SpanArena, scoped: &'a ScopedArena,
-        statics: &'a StaticsArena, stack: &'a StackArena,
+        statics: &'a StaticsArena, stackir: &'a StackirArena,
     ) -> Self {
         let arena = AssemblyArena::new(alloc);
-        Self { arena, spans, scoped, statics, stack }
+        Self { arena, spans, scoped, statics, stackir }
     }
 
     pub fn run(mut self) -> AssemblyArena {
         // Lower all builtins
-        for (_, builtin) in self.stack.builtins.iter() {
+        for (_, builtin) in self.stackir.builtins.iter() {
             let sk::Builtin { name, arity, sort } = builtin.clone();
             if sort == sk::BuiltinSort::Function {
                 self.arena.externs.push(Extern { name, arity });
@@ -50,14 +50,14 @@ impl<'a> Lowerer<'a> {
         }
 
         // Lower entry points from StackArena to AssemblyArena
-        for (compu_id, ()) in &self.stack.entry {
+        for (compu_id, ()) in &self.stackir.entry {
             let compu_id = *compu_id;
 
             // All globals are statically known, so compile them as symbols.
             // Collect globals with their def_ids for unified processing
-            let globals: Vec<_> = (self.stack.sequence.clone().iter())
+            let globals: Vec<_> = (self.stackir.sequence.clone().iter())
                 .rev()
-                .map(|&def_id| (def_id, self.stack.globals[&def_id]))
+                .map(|&def_id| (def_id, self.stackir.globals[&def_id]))
                 .collect();
 
             // Build a continuation that initializes all globals in order
@@ -104,7 +104,7 @@ impl<'a> Lowerer<'a> {
     fn find_data_from_value(&self, value_id: sk::ValueId) -> Option<&ss::DataId> {
         // Get the corresponding statics value
         let ss::TermId::Value(value) = self
-            .stack
+            .stackir
             .terms
             .back(&sk::TermId::Value(value_id))
             .expect("Constructor value not found")
@@ -132,7 +132,7 @@ impl<'a> Lowerer<'a> {
     ) -> usize {
         // Get the corresponding statics computation
         let ss::TermId::Compu(compu) =
-            self.stack.terms.back(&sk::TermId::Compu(compu_id)).expect("Computation not found")
+            self.stackir.terms.back(&sk::TermId::Compu(compu_id)).expect("Computation not found")
         else {
             unreachable!("Computation is not a computation in statics")
         };
@@ -148,7 +148,7 @@ impl<'a> Lowerer<'a> {
     ) -> usize {
         // Get the corresponding statics stack
         let ss::TermId::Compu(compu) =
-            self.stack.terms.back(&sk::TermId::Stack(stack_id)).expect("Stack not found")
+            self.stackir.terms.back(&sk::TermId::Stack(stack_id)).expect("Stack not found")
         else {
             unreachable!("Stack is not a computation in statics")
         };
@@ -163,7 +163,7 @@ impl<'a> Lower<'a> for sk::VPatId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
-        let vpat = lo.stack.vpats[self].clone();
+        let vpat = lo.stackir.vpats[self].clone();
         use sk::ValuePattern as VPat;
         match vpat {
             | VPat::Hole(Hole) => {
@@ -237,7 +237,7 @@ impl<'a> Lower<'a> for sk::ValueId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
-        let value = lo.stack.values[self].clone();
+        let value = lo.stackir.values[self].clone();
         use sk::Value;
         match value {
             | Value::Hole(Hole) => Abort.build(lo, cx),
@@ -357,7 +357,7 @@ impl<'a> Lower<'a> for sk::StackId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
-        let stack = lo.stack.stacks[self].clone();
+        let stack = lo.stackir.stacks[self].clone();
         use sk::Stack;
         match stack {
             | Stack::Kont(sk::Kont { binder, body }) => {
@@ -456,7 +456,7 @@ impl<'a> Lower<'a> for sk::CompuId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, cx: Self::Kont) -> Self::Out {
-        let compu = lo.stack.compus[self].clone();
+        let compu = lo.stackir.compus[self].clone();
         use sk::Computation as Compu;
         match compu {
             | Compu::Hole(Hole) => Abort.build(lo, cx),
@@ -550,7 +550,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                                     for Matcher { binder, tail } in arms {
                                         // The binder is a constructor or other things.
                                         use sk::ValuePattern as VPat;
-                                        match lo.stack.vpats[&binder].clone() {
+                                        match lo.stackir.vpats[&binder].clone() {
                                             | VPat::Ctor(Ctor(ctor, binder)) => {
                                                 let idx =
                                                     lo.find_ctor_tag_idx(&data, &ctor);

@@ -6,12 +6,14 @@ pub trait SubstitutionInPlace {
     /// Substitute the free variables in the term in place.
     ///
     /// The [`DefId`]s in the map are guaranteed to be free.
-    fn substitute_in_place(self, arena: &mut impl AsMut<StackArena>, map: &HashMap<DefId, ValueId>);
+    fn substitute_in_place(
+        self, arena: &mut impl AsMut<StackirArena>, map: &HashMap<DefId, ValueId>,
+    );
 }
 
 impl SubstitutionInPlace for ValueId {
     fn substitute_in_place(
-        self, arena: &mut impl AsMut<StackArena>, map: &HashMap<DefId, ValueId>,
+        self, arena: &mut impl AsMut<StackirArena>, map: &HashMap<DefId, ValueId>,
     ) {
         let mut arena_mut = arena.as_mut();
         let value = arena_mut.values[&self].clone();
@@ -50,7 +52,7 @@ impl SubstitutionInPlace for ValueId {
 
 impl SubstitutionInPlace for StackId {
     fn substitute_in_place(
-        self, arena: &mut impl AsMut<StackArena>, map: &HashMap<DefId, ValueId>,
+        self, arena: &mut impl AsMut<StackirArena>, map: &HashMap<DefId, ValueId>,
     ) {
         let mut arena_mut = arena.as_mut();
         let stack = arena_mut.stacks[&self].clone();
@@ -78,7 +80,7 @@ impl SubstitutionInPlace for StackId {
 
 impl SubstitutionInPlace for CompuId {
     fn substitute_in_place(
-        self, arena: &mut impl AsMut<StackArena>, map: &HashMap<DefId, ValueId>,
+        self, arena: &mut impl AsMut<StackirArena>, map: &HashMap<DefId, ValueId>,
     ) {
         let mut arena_mut = arena.as_mut();
         let compu = arena_mut.compus[&self].clone();

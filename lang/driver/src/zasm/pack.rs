@@ -4,6 +4,6 @@ pub struct PackageAssembly {
     pub spans: t::SpanArena,
     pub scoped: sc::ScopedArena,
     pub statics: ss::StaticsArena,
-    pub stack: sk::StackArena,
+    pub stackir: sk::StackirArena,
     pub assembly: sa::AssemblyArena,
 }

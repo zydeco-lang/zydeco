@@ -9,14 +9,14 @@ use zydeco_surface::scoped::syntax::ScopedArena;
 pub use zydeco_syntax::Pretty;
 /// Formatter for stack IR using scoped and statics naming.
 pub struct Formatter<'arena> {
-    arena: &'arena StackArena,
+    arena: &'arena StackirArena,
     scoped: &'arena ScopedArena,
     statics: &'arena ss::StaticsArena,
     pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
     pub fn new(
-        arena: &'arena StackArena, scoped: &'arena ScopedArena, statics: &'arena ss::StaticsArena,
+        arena: &'arena StackirArena, scoped: &'arena ScopedArena, statics: &'arena ss::StaticsArena,
     ) -> Self {
         Formatter { arena, scoped, statics, indent: 2 }
     }
@@ -368,7 +368,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for StackArena {
+impl<'a> Pretty<'a, Formatter<'a>> for StackirArena {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let mut doc = RcDoc::nil();
 

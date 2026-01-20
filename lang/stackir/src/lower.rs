@@ -16,7 +16,7 @@ pub trait Lower {
 pub struct Lowerer<'a> {
     #[as_ref]
     #[as_mut]
-    pub arena: StackArena,
+    pub arena: StackirArena,
     pub spans: &'a SpanArena,
     #[as_mut(ScopedArena)]
     pub scoped: &'a mut ScopedArena,
@@ -29,12 +29,12 @@ impl<'a> Lowerer<'a> {
         alloc: ArcGlobalAlloc, spans: &'a SpanArena, scoped: &'a mut ScopedArena,
         statics: &'a StaticsArena,
     ) -> Self {
-        let arena = StackArena::new_arc(alloc);
+        let arena = StackirArena::new_arc(alloc);
         Self { arena, spans, scoped, statics }
     }
 
     /// Lower the full program into a stack arena.
-    pub fn run(mut self) -> StackArena {
+    pub fn run(mut self) -> StackirArena {
         // Topologically traverse declarations and translate VAliasBody
         let mut scc = self.scoped.top.clone();
         loop {

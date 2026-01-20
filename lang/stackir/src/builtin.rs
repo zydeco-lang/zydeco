@@ -69,7 +69,7 @@ impl Builtin {
     /// pop parameters from stack (CBPV function), and finally wrap it with closure.
     pub fn make_operator<Arena>(&self, arena: &mut Arena) -> ValueId
     where
-        Arena: AsMut<StackArena> + AsMut<ScopedArena>,
+        Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
     {
         let op = self.name;
         // make fresh variables as operands
@@ -100,7 +100,7 @@ impl Builtin {
     /// Wrap a builtin function definition with closure.
     pub fn make_function<Arena>(&self, arena: &mut Arena) -> ValueId
     where
-        Arena: AsMut<StackArena> + AsMut<ScopedArena>,
+        Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
     {
         let function = self.name;
         let body = ExternCall { function, stack: Bullet }.build(arena, None);

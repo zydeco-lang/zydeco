@@ -3,11 +3,11 @@ use zydeco_utils::prelude::CoContext;
 
 /// Collect bound variables from patterns.
 pub trait Vars {
-    fn vars(self, arena: &impl AsRef<StackArena>) -> Context<DefId>;
+    fn vars(self, arena: &impl AsRef<StackirArena>) -> Context<DefId>;
 }
 
 impl Vars for VPatId {
-    fn vars(self, arena: &impl AsRef<StackArena>) -> Context<DefId> {
+    fn vars(self, arena: &impl AsRef<StackirArena>) -> Context<DefId> {
         let vpat = arena.as_ref().vpats[&self].clone();
         use ValuePattern as VPat;
         match vpat {
@@ -22,11 +22,11 @@ impl Vars for VPatId {
 
 /// Collect free variables from stack IR nodes.
 pub trait FreeVars {
-    fn free_vars(self, arena: &impl AsRef<StackArena>) -> CoContext<DefId>;
+    fn free_vars(self, arena: &impl AsRef<StackirArena>) -> CoContext<DefId>;
 }
 
 impl FreeVars for ValueId {
-    fn free_vars(self, arena: &impl AsRef<StackArena>) -> CoContext<DefId> {
+    fn free_vars(self, arena: &impl AsRef<StackirArena>) -> CoContext<DefId> {
         let value = arena.as_ref().values[&self].clone();
         match value {
             | Value::Var(def_id) => CoContext::singleton(def_id),
@@ -43,7 +43,7 @@ impl FreeVars for ValueId {
 }
 
 impl FreeVars for StackId {
-    fn free_vars(self, arena: &impl AsRef<StackArena>) -> CoContext<DefId> {
+    fn free_vars(self, arena: &impl AsRef<StackirArena>) -> CoContext<DefId> {
         let stack = arena.as_ref().stacks[&self].clone();
         match stack {
             | Stack::Kont(Kont { binder, body }) => body.free_vars(arena) - binder.vars(arena),
@@ -55,7 +55,7 @@ impl FreeVars for StackId {
 }
 
 impl FreeVars for CompuId {
-    fn free_vars(self, arena: &impl AsRef<StackArena>) -> CoContext<DefId> {
+    fn free_vars(self, arena: &impl AsRef<StackirArena>) -> CoContext<DefId> {
         let compu = arena.as_ref().compus[&self].clone();
         use Computation as Compu;
         match compu {

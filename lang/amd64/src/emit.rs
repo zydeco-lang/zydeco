@@ -4,7 +4,7 @@ use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
-use zydeco_stackir::arena::StackArena;
+use zydeco_stackir::arena::StackirArena;
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
@@ -27,7 +27,7 @@ pub struct Emitter<'e> {
     pub spans: &'e SpanArena,
     pub scoped: &'e ScopedArena,
     pub statics: &'e StaticsArena,
-    pub stack: &'e StackArena,
+    pub stackir: &'e StackirArena,
     pub assembly: &'e AssemblyArena,
 
     pub asm: AsmFile,
@@ -52,13 +52,13 @@ impl<'e> AsMut<AsmFile> for Emitter<'e> {
 impl<'e> Emitter<'e> {
     pub fn new(
         spans: &'e SpanArena, scoped: &'e ScopedArena, statics: &'e StaticsArena,
-        stack: &'e StackArena, assembly: &'e AssemblyArena, target_format: TargetFormat,
+        stackir: &'e StackirArena, assembly: &'e AssemblyArena, target_format: TargetFormat,
     ) -> Self {
         Self {
             spans,
             scoped,
             statics,
-            stack,
+            stackir,
             assembly,
             asm: AsmFile::new(),
             target_format,

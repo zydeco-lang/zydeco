@@ -8,7 +8,7 @@ use zydeco_derive::{AsMutSelf, AsRefSelf};
 /// The definitions and patterns are equivalent to the ones in
 /// [`zydeco_statics::tyck::syntax::StaticsArena`].
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
-pub struct StackArena {
+pub struct StackirArena {
     /// value pattern arena
     pub vpats: ArenaSparse<VPatId, ValuePattern>,
     /// value arena
@@ -34,7 +34,7 @@ pub struct StackArena {
     pub terms: ArenaBijective<ss::TermId, TermId>,
 }
 
-impl StackArena {
+impl StackirArena {
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
         Self {
             vpats: ArenaSparse::new(alloc.alloc()),
@@ -60,7 +60,7 @@ pub trait Construct<S, T, Arena>: Sized + Into<S> {
 
 impl<U, Arena> Construct<ValuePattern, VPatId, Arena> for U
 where
-    Arena: AsMut<StackArena>,
+    Arena: AsMut<StackirArena>,
     U: Into<ValuePattern>,
 {
     type Site = ss::PatId;
@@ -76,7 +76,7 @@ where
 
 impl<U, Arena> Construct<Value, ValueId, Arena> for U
 where
-    Arena: AsMut<StackArena>,
+    Arena: AsMut<StackirArena>,
     U: Into<Value>,
 {
     type Site = ss::TermId;
@@ -92,7 +92,7 @@ where
 
 impl<U, Arena> Construct<Stack, StackId, Arena> for U
 where
-    Arena: AsMut<StackArena>,
+    Arena: AsMut<StackirArena>,
     U: Into<Stack>,
 {
     type Site = ss::TermId;
@@ -108,7 +108,7 @@ where
 
 impl<U, Arena> Construct<Computation, CompuId, Arena> for U
 where
-    Arena: AsMut<StackArena>,
+    Arena: AsMut<StackirArena>,
     U: Into<Computation>,
 {
     type Site = ss::TermId;

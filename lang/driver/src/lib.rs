@@ -301,12 +301,12 @@ impl BuildSystem {
         Package::test_interp(runtime, name.as_str(), false)
     }
     pub fn codegen_zir_pack(&self, pack: PackId) -> Result<()> {
-        let PackageStack { stack, scoped, statics, .. } =
+        let PackageStack { stackir, scoped, statics, .. } =
             self.__compile_zir_pack(pack, ArcGlobalAlloc::new(), false)?;
         // pretty print the ZIR
         use zydeco_stackir::fmt::*;
-        let fmt = Formatter::new(&stack, &scoped, &statics);
-        let doc = stack.pretty(&fmt);
+        let fmt = Formatter::new(&stackir, &scoped, &statics);
+        let doc = stackir.pretty(&fmt);
         let mut buf = String::new();
         doc.render_fmt(100, &mut buf).unwrap();
         println!("{}", buf);
@@ -345,12 +345,18 @@ impl BuildSystem {
             | "macos" | "darwin" => TargetFormat::MachO,
             | other => return Err(BuildError::UnsupportedTargetOs(other.to_string())),
         };
-        let PackageAssembly { spans, scoped, statics, stack, assembly } =
+        let PackageAssembly { spans, scoped, statics, stackir, assembly } =
             self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
-        let assembly =
-            zydeco_amd64::Emitter::new(&spans, &scoped, &statics, &stack, &assembly, target_format)
-                .run()?
-                .to_string();
+        let assembly = zydeco_amd64::Emitter::new(
+            &spans,
+            &scoped,
+            &statics,
+            &stackir,
+            &assembly,
+            target_format,
+        )
+        .run()?
+        .to_string();
         if verbose {
             log::trace!("amd64 assembly:\n{}", &assembly);
         }
@@ -440,40 +446,45 @@ impl BuildSystem {
     ) -> Result<PackageStack> {
         let PackageChecked { spans, mut scoped, statics } =
             self.__tyck_pack(pack, alloc.clone(), verbose)?;
-        let mut stack =
+        let mut stackir =
             zydeco_stackir::Lowerer::new(alloc.clone(), &spans, &mut scoped, &statics).run();
         {
             use zydeco_stackir::fmt::*;
-            let fmt = Formatter::new(&stack, &scoped, &statics);
-            let doc = stack.pretty(&fmt);
+            let fmt = Formatter::new(&stackir, &scoped, &statics);
+            let doc = stackir.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
             if verbose {
                 log::trace!("ZIR right after lowering:\n{}", buf);
             }
         }
-        zydeco_stackir::ClosureConverter::new(&mut stack, &mut scoped, &statics).convert();
+        zydeco_stackir::ClosureConverter::new(&mut stackir, &mut scoped, &statics).convert();
         {
             use zydeco_stackir::fmt::*;
-            let fmt = Formatter::new(&stack, &scoped, &statics);
-            let doc = stack.pretty(&fmt);
+            let fmt = Formatter::new(&stackir, &scoped, &statics);
+            let doc = stackir.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
             if verbose {
                 log::trace!("ZIR after closure conversion:\n{}", buf);
             }
         }
-        Ok(PackageStack { spans, scoped, statics, stack })
+        Ok(PackageStack { spans, scoped, statics, stackir })
     }
     /// compile a package to ZASM
     fn __compile_zasm_pack(
         &self, pack: PackId, alloc: ArcGlobalAlloc, verbose: bool,
     ) -> Result<PackageAssembly> {
-        let PackageStack { spans, scoped, statics, stack } =
+        let PackageStack { spans, scoped, statics, stackir } =
             self.__compile_zir_pack(pack, alloc.clone(), verbose)?;
-        let assembly =
-            zydeco_assembly::lower::Lowerer::new(alloc.clone(), &spans, &scoped, &statics, &stack)
-                .run();
+        let assembly = zydeco_assembly::lower::Lowerer::new(
+            alloc.clone(),
+            &spans,
+            &scoped,
+            &statics,
+            &stackir,
+        )
+        .run();
         {
             use zydeco_assembly::fmt::*;
             let fmt = Formatter::new(&assembly);
@@ -484,6 +495,6 @@ impl BuildSystem {
                 log::trace!("ZASM:\n{}", buf);
             }
         }
-        Ok(PackageAssembly { spans, scoped, statics, stack, assembly })
+        Ok(PackageAssembly { spans, scoped, statics, stackir, assembly })
     }
 }
