@@ -107,6 +107,7 @@ impl<'a> Tycker<'a> {
         Ok(())
     }
     /// Resolve all holes with solutions (including nested ones).
+    #[inline]
     pub fn do_resolve_holes(&mut self) {
         let type_ids: Vec<_> = self.statics.types_pre.iter().map(|(id, _)| id.to_owned()).collect();
         for id in type_ids {
@@ -2214,7 +2215,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
                 let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                let ss::Type::Data(data_id) = &tycker.type_filled_k(&ana_ty_unroll)? else {
+                let ss::Type::Data(data_id) = tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
                             expected: format!("data type definition"),
@@ -2233,6 +2234,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let arg_out_ann = self.mk(arg).tyck_k(tycker, Action::ana(arg_ty.into()))?;
                 let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
                 let ctor = Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), arg), ana_ty, &self.info);
+                // hint the ctor to be associated with the definition name
+                tycker.statics.data_hints.insert(ctor, data_id);
                 TermAnnId::Value(ctor, ana_ty)
             }
             | Tm::Match(term) => {
@@ -2243,24 +2246,14 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     TyckError::SortMismatch,
                     std::panic::Location::caller(),
                 )?;
-                // // Debug: print
-                // {
-                //     use crate::fmt::*;
-                //     println!(
-                //         "scrut = {} : {}",
-                //         scrut.ugly(&Formatter::new(&tycker.scoped, &tycker.statics)),
-                //         scrut_ty.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                //     );
-                // }
                 let scrut_ty_unroll = scrut_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                // // Debug: print
-                // {
-                //     use crate::fmt::*;
-                //     println!(
-                //         "scrut_ty_unroll: {}",
-                //         scrut_ty_unroll.ugly(&Formatter::new(&tycker.scoped, &tycker.statics))
-                //     );
-                // }
+                // hint the scrut to be associated with the data type
+                match tycker.type_filled_k(&scrut_ty_unroll)? {
+                    | ss::Type::Data(data_id) => {
+                        tycker.statics.data_hints.insert(scrut, data_id);
+                    }
+                    | _ => {}
+                }
                 let mut matchers = Vec::new();
                 let mut arms_ty = Vec::new();
                 for su::Matcher { binder, tail } in arms {
@@ -2345,7 +2338,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     },
                 };
                 let ana_ty_unroll = ana_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                let ss::Type::CoData(codata_id) = &tycker.type_filled_k(&ana_ty_unroll)? else {
+                let ss::Type::CoData(codata_id) = tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
                             expected: format!("codata type definition"),
@@ -2355,7 +2348,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     )?
                 };
                 use std::collections::HashMap;
-                let mut arms = tycker.statics.codatas[codata_id]
+                let mut arms = tycker.statics.codatas[&codata_id]
                     .clone()
                     .into_iter()
                     .collect::<HashMap<_, _>>();
@@ -2382,6 +2375,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 }
                 let whole_term =
                     Alloc::alloc(tycker, ss::CoMatch { arms: comatchers_new }, ana_ty, &self.info);
+                // hint the whole computation to be associated with the codata type
+                tycker.statics.codata_hints.insert(whole_term, codata_id);
                 TermAnnId::Compu(whole_term, ana_ty)
             }
             | Tm::Dtor(term) => {
@@ -2391,7 +2386,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                 };
                 let ty_body_unroll = ty_body.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                let ss::Type::CoData(codata_id) = &tycker.type_filled_k(&ty_body_unroll)? else {
+                let ss::Type::CoData(codata_id) = tycker.type_filled_k(&ty_body_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
                             expected: format!("codata type definition"),
@@ -2400,7 +2395,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         std::panic::Location::caller(),
                     )?
                 };
-                let whole_ty = match tycker.statics.codatas[codata_id].get(&dtor) {
+                // hint the body to be associated with the codata type
+                tycker.statics.codata_hints.insert(body, codata_id);
+                let whole_ty = match tycker.statics.codatas[&codata_id].get(&dtor) {
                     | Some(ty) => ty.to_owned(),
                     | None => tycker.err_k(
                         TyckError::MissingCoDataArm(dtor.clone()),

@@ -58,12 +58,18 @@ pub struct StaticsArena {
     pub datas: ArenaDense<DataId, Data>,
     /// arena for `codata`; plural plural
     pub codatas: ArenaDense<CoDataId, CoData>,
+    /// hints for values that need data annotations
+    pub data_hints: ArenaAssoc<ValueId, DataId>,
+    /// hints for computations that need codata annotations
+    pub codata_hints: ArenaAssoc<CompuId, CoDataId>,
     /// arena for inlinable definitions, typically global (necessity modality) definitions
     pub inlinables: ArenaAssoc<DefId, ValueId>,
     /// definitions that are marked global
     pub global_defs: ArenaAssoc<DefId, ()>,
     /// terms that are marked global
     pub global_terms: ArenaAssoc<TermId, ()>,
+    /// TODO: hints for all sorts of terms that can be associated with a definition name
+    pub def_hints: ArenaAssoc<TermId, DefId>,
 
     // the type of terms under the context it's type checked; "annotation"
     /// annotations for variable definitions
@@ -81,6 +87,7 @@ pub struct StaticsArena {
     /// type annotations for computations
     pub annotations_compu: ArenaAssoc<CompuId, TypeId>,
 
+    // typing environments during type checking
     /// typing environments for type patterns
     pub env_tpat: ArenaAssoc<TPatId, TyEnv>,
     /// typing environments for types
@@ -92,6 +99,7 @@ pub struct StaticsArena {
     /// typing environments for computations
     pub env_compu: ArenaAssoc<CompuId, TyEnv>,
 
+    // normalized kinds and types after type checking
     /// normalized kind free of holes
     pub kinds_normalized: ArenaAssoc<KindId, Kind>,
     /// normalized type free of holes
@@ -122,9 +130,12 @@ impl StaticsArena {
             fill_hints: ArenaAssoc::new(),
             datas: ArenaDense::new(alloc.alloc()),
             codatas: ArenaDense::new(alloc.alloc()),
+            data_hints: ArenaAssoc::new(),
+            codata_hints: ArenaAssoc::new(),
             inlinables: ArenaAssoc::new(),
             global_defs: ArenaAssoc::new(),
             global_terms: ArenaAssoc::new(),
+            def_hints: ArenaAssoc::new(),
 
             annotations_var: ArenaAssoc::new(),
             annotations_abst: ArenaAssoc::new(),
@@ -133,11 +144,13 @@ impl StaticsArena {
             annotations_vpat: ArenaAssoc::new(),
             annotations_value: ArenaAssoc::new(),
             annotations_compu: ArenaAssoc::new(),
+
             env_tpat: ArenaAssoc::new(),
             env_type: ArenaAssoc::new(),
             env_vpat: ArenaAssoc::new(),
             env_value: ArenaAssoc::new(),
             env_compu: ArenaAssoc::new(),
+
             kinds_normalized: ArenaAssoc::new(),
             types_normalized: ArenaAssoc::new(),
         }
