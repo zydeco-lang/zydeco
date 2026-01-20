@@ -496,6 +496,7 @@ impl TypeId {
     pub fn solution(&self, tycker: &mut Tycker<'_>) -> Result<(TypeId, Vec<FillId>)> {
         let mut res = *self;
         let mut fills = Vec::new();
+        // recursively lookup unfilled types as much as possible
         while let Fillable::Fill(fill) = tycker.statics.types_pre[&res].to_owned() {
             let solu = match tycker.statics.solus.get(&fill).cloned() {
                 | None => break,
@@ -769,9 +770,7 @@ impl KindId {
         Ok(())
     }
     fn filled_norm_id(
-        self,
-        tycker: &mut Tycker<'_>,
-        memo: &mut std::collections::HashMap<KindId, KindId>,
+        self, tycker: &mut Tycker<'_>, memo: &mut std::collections::HashMap<KindId, KindId>,
     ) -> Result<KindId> {
         if let Some(norm) = memo.get(&self).cloned() {
             return Ok(norm);
@@ -827,9 +826,7 @@ impl TypeId {
         Ok(())
     }
     fn filled_norm_id(
-        self,
-        tycker: &mut Tycker<'_>,
-        memo: &mut std::collections::HashMap<TypeId, TypeId>,
+        self, tycker: &mut Tycker<'_>, memo: &mut std::collections::HashMap<TypeId, TypeId>,
         memo_kd: &mut std::collections::HashMap<KindId, KindId>,
     ) -> Result<TypeId> {
         if let Some(norm) = memo.get(&self).cloned() {

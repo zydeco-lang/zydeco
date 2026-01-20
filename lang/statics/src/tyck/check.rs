@@ -81,56 +81,22 @@ impl<'a> Tycker<'a> {
         if !self.errors.is_empty() {
             Err(())?
         }
-        // before we go, fill all holes with solutions
-        // Note: since all types are checked and solved, all holes are filled, no need for recursive filling
-        let mut types = Vec::new();
-        for (id, ty) in &self.statics.types_pre {
-            types.push((id.to_owned(), ty.to_owned()));
-        }
-        for (id, ty) in types {
-            match ty {
-                | Fillable::Fill(fill) => match self.statics.solus.get(&fill) {
-                    | Some(ann) => match ann {
-                        | AnnId::Set | AnnId::Kind(_) => {
-                            // keep running tycker even after unsuccessful solving hole
-                            let _: ResultKont<()> =
-                                self.err_k(TyckError::SortMismatch, std::panic::Location::caller());
-                        }
-                        | AnnId::Type(ty) => {
-                            self.statics
-                                .types_pre
-                                .replace(id, self.statics.types_pre[ty].to_owned());
-                        }
-                    },
-                    | None => {
-                        // keep running tycker even after unsuccessful solving hole
-                        let _: ResultKont<()> = self.err_k(
-                            TyckError::MissingSolution(vec![fill]),
-                            std::panic::Location::caller(),
-                        );
-                    }
-                },
-                | Fillable::Done(_) => {}
-            }
-        }
+        // before we go, resolve all holes with solutions (including nested ones)
+        self.do_resolve_holes();
         // and also, print all hole solutions as a reference for the user
         self.do_print_hole_solutions();
         // normalize all kinds
         {
-            let mut kind_ids = Vec::new();
-            for (id, _) in &self.statics.kinds_pre {
-                kind_ids.push(id.to_owned());
-            }
+            let kind_ids: Vec<_> =
+                self.statics.kinds_pre.iter().map(|(id, _)| id.to_owned()).collect();
             for id in kind_ids {
                 id.do_normalize_filled_k(self)?;
             }
         }
         // normalize all types
         {
-            let mut type_ids = Vec::new();
-            for (id, _) in &self.statics.types_pre {
-                type_ids.push(id.to_owned());
-            }
+            let type_ids: Vec<_> =
+                self.statics.types_pre.iter().map(|(id, _)| id.to_owned()).collect();
             for id in type_ids {
                 id.do_normalize_filled_k(self)?;
             }
@@ -139,6 +105,25 @@ impl<'a> Tycker<'a> {
             Err(())?
         }
         Ok(())
+    }
+    /// Resolve all holes with solutions (including nested ones).
+    pub fn do_resolve_holes(&mut self) {
+        let type_ids: Vec<_> = self.statics.types_pre.iter().map(|(id, _)| id.to_owned()).collect();
+        for id in type_ids {
+            let (solu, mut fills) = match id.solution_k(self) {
+                | Ok(res) => res,
+                | Err(()) => continue,
+            };
+            if !fills.is_empty() {
+                fills.sort_unstable();
+                fills.dedup();
+                // keep running tycker even after unsuccessful solving hole
+                let _: ResultKont<()> =
+                    self.err_k(TyckError::MissingSolution(fills), std::panic::Location::caller());
+            }
+            let ty = self.statics.types_pre[&solu].to_owned();
+            self.statics.types_pre.replace(id, ty);
+        }
     }
     /// Print all hole solutions as a reference for the user.
     #[inline]
