@@ -37,7 +37,7 @@ where
 {
     type Ann = AnnId;
     type Env = ();
-    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, _env: &Self::Env) -> DefId {
+    fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, (): &Self::Env) -> DefId {
         let id = AsMut::<ScopedArena>::as_mut(arena).defs.alloc(val);
         AsMut::<StaticsArena>::as_mut(arena).annotations_var.insert(id, ann);
         id
