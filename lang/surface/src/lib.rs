@@ -1,6 +1,3 @@
-#![allow(clippy::style)]
-#![allow(clippy::useless_format)]
-
 /// Defines the GenArena and the id types for all the structures
 pub mod arena {
     pub use zydeco_utils::arena::*;

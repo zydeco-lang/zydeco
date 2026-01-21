@@ -1,6 +1,3 @@
-#![allow(clippy::style)]
-#![allow(clippy::useless_format)]
-
 /// Re-exports of scoped surface syntax used as tyck input.
 pub mod surface_syntax {
     pub use zydeco_surface::scoped::syntax::*;
@@ -60,5 +57,3 @@ pub use tyck::{Alloc, Construct, Lub, MonConstruct, Tycker};
 pub(crate) use surface_syntax as su;
 pub(crate) use tyck::construct::syntax as cs;
 pub(crate) use tyck::syntax as ss;
-// pub(crate) use zydeco_surface::textual::syntax as t;
-// pub(crate) use wf::syntax as sw;
