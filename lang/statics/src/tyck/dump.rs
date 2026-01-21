@@ -11,9 +11,9 @@ mod scoped {
         where
             T: for<'f> Ugly<'f, Formatter<'f>>,
         {
-            let fmt = Formatter::new(&self.scoped);
+            let fmt = Formatter::new(self.scoped);
             let res = item.ugly(&fmt);
-            format!("{}", res)
+            res.to_string()
         }
 
         // pub fn pretty_scoped<T>(&self, item: T) -> String
@@ -38,16 +38,16 @@ mod statics {
         where
             T: for<'f> Ugly<'f, Formatter<'f>>,
         {
-            let fmt = Formatter::new(&self.scoped, &self.statics);
+            let fmt = Formatter::new(self.scoped, &self.statics);
             let res = item.ugly(&fmt);
-            format!("{}", res)
+            res.to_string()
         }
 
         pub fn pretty_statics<T>(&self, item: T) -> String
         where
             T: for<'f> Pretty<'f, Formatter<'f>>,
         {
-            let fmt = Formatter::new(&self.scoped, &self.statics);
+            let fmt = Formatter::new(self.scoped, &self.statics);
             let res = item.pretty(&fmt);
             let mut buf = String::new();
             res.render_fmt(100, &mut buf).unwrap();
@@ -58,7 +58,7 @@ mod statics {
         where
             T: for<'f> Pretty<'f, Formatter<'f>>,
         {
-            let fmt = Formatter::new(&self.scoped, &self.statics);
+            let fmt = Formatter::new(self.scoped, &self.statics);
             let res = item.pretty(&fmt);
             let mut buf = String::new();
             buf += "\n";

@@ -214,7 +214,7 @@ pub struct Lexer<'source> {
 impl<'source> Lexer<'source> {
     /// Create a new lexer for a source string.
     pub fn new(source: &'source str) -> Self {
-        Self { inner: Tok::lexer(&source).spanned(), comment_depth: 0 }
+        Self { inner: Tok::lexer(source).spanned(), comment_depth: 0 }
     }
 }
 

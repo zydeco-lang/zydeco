@@ -112,17 +112,17 @@ impl TypeId {
         Some(res)
     }
     pub fn destruct_top(&self, _env: &TyEnv, tycker: &mut Tycker) -> Option<()> {
-        let res = match tycker.type_filled(&self).ok()?.to_owned() {
+        match tycker.type_filled(self).ok()?.to_owned() {
             | Type::CoData(coda) => {
                 let coda = tycker.statics.codatas[&coda].to_owned();
-                (coda.into_iter().count() == 0).then(|| ())?
+                (coda.into_iter().count() == 0).then_some(())?
             }
             | _ => None?,
         };
-        Some(res)
+        Some(())
     }
     pub fn destruct_arrow(&self, tycker: &mut Tycker) -> Option<(TypeId, TypeId)> {
-        let res = match tycker.type_filled(&self).ok()?.to_owned() {
+        let res = match tycker.type_filled(self).ok()?.to_owned() {
             | Type::Arrow(ty) => {
                 let Arrow(from, to) = ty;
                 (from, to)
@@ -132,13 +132,13 @@ impl TypeId {
         Some(res)
     }
     pub fn destruct_forall(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
-        match tycker.type_filled(&self).ok()?.to_owned() {
+        match tycker.type_filled(self).ok()?.to_owned() {
             | Type::Forall(Forall(abst, ty)) => Some((abst, ty)),
             | _ => None,
         }
     }
     pub fn destruct_exists(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
-        match tycker.type_filled(&self).ok()?.to_owned() {
+        match tycker.type_filled(self).ok()?.to_owned() {
             | Type::Exists(Exists(abst, ty)) => Some((abst, ty)),
             | _ => None,
         }
@@ -188,14 +188,14 @@ impl TypeId {
     }
     pub fn destruct_data<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t Data> {
         use zydeco_utils::arena::ArenaAccess;
-        match tycker.type_filled(&self).ok()?.to_owned() {
+        match tycker.type_filled(self).ok()?.to_owned() {
             | Type::Data(data) => tycker.statics.datas.get(&data),
             | _ => None,
         }
     }
     pub fn destruct_codata<'t>(&self, _env: &TyEnv, tycker: &'t mut Tycker) -> Option<&'t CoData> {
         use zydeco_utils::arena::ArenaAccess;
-        match tycker.type_filled(&self).ok()?.to_owned() {
+        match tycker.type_filled(self).ok()?.to_owned() {
             | Type::CoData(coda) => tycker.statics.codatas.get(&coda),
             | _ => None,
         }

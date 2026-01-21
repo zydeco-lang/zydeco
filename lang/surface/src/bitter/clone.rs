@@ -180,7 +180,7 @@ impl DeepClone for b::TermId {
             | b::Term::Data(term) => {
                 let b::Data { arms } = term;
                 let arms = arms
-                    .into_iter()
+                    .iter()
                     .map(|b::DataArm { name, param }| {
                         let name = name.clone();
                         let param = param.deep_clone(desugarer);
@@ -192,7 +192,7 @@ impl DeepClone for b::TermId {
             | b::Term::CoData(term) => {
                 let b::CoData { arms } = term;
                 let arms = arms
-                    .into_iter()
+                    .iter()
                     .map(|b::CoDataArm { name, out }| {
                         let name = name.clone();
                         let out = out.deep_clone(desugarer);
@@ -211,7 +211,7 @@ impl DeepClone for b::TermId {
                 let b::Match { scrut, arms } = term;
                 let scrut = scrut.deep_clone(desugarer);
                 let arms = arms
-                    .into_iter()
+                    .iter()
                     .map(|b::Matcher { binder, tail }| {
                         let binder = binder.deep_clone(desugarer);
                         let tail = tail.deep_clone(desugarer);
@@ -223,7 +223,7 @@ impl DeepClone for b::TermId {
             | b::Term::CoMatch(term) => {
                 let b::CoMatch { arms } = term;
                 let arms = arms
-                    .into_iter()
+                    .iter()
                     .map(|b::CoMatcher { dtor, tail }| {
                         let dtor = dtor.clone();
                         let tail = tail.deep_clone(desugarer);

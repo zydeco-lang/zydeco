@@ -14,6 +14,8 @@ extern "sysv64" fn zydeco_alloc(size: usize) -> *mut u8 {
             let ptr = heap_ptr.add(*heap_size_ptr);
             // check that the allocated pointer is aligned
             assert!(
+                // Fixme: should be correct but somehow not working
+                // (ptr as usize).is_multiple_of(ALIGNMENT),
                 ptr as usize % ALIGNMENT == 0,
                 "allocated pointer is not aligned to {}-byte boundary",
                 ALIGNMENT
@@ -107,7 +109,7 @@ use std::cell::UnsafeCell;
 thread_local! {
     static ENV: UnsafeCell<*mut u8> = UnsafeCell::new(init_buffer());
     static HEAP: UnsafeCell<*mut u8> = UnsafeCell::new(init_buffer());
-    static HEAP_SIZE: UnsafeCell<usize> = UnsafeCell::new(0);
+    static HEAP_SIZE: UnsafeCell<usize> = const { UnsafeCell::new(0) };
 }
 
 fn init_buffer() -> *mut u8 {

@@ -72,7 +72,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("Monad".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -87,7 +87,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("Algebra".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -113,7 +113,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("VType".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -128,7 +128,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("CType".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -143,7 +143,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("Thk".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -158,7 +158,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("Ret".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -173,7 +173,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("Unit".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -188,7 +188,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("Int".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -203,7 +203,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("Char".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -218,7 +218,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("String".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -233,7 +233,7 @@ impl<'a> Resolver<'a> {
                         }
                         if let Some(def) = binders.get(&VarName("OS".into())) {
                             Resolver::alloc_prim(
-                                &self.spans,
+                                self.spans,
                                 &self.bitter.textual,
                                 &mut self.exts,
                                 &mut self.internal_to_def,
@@ -301,7 +301,7 @@ impl<'a> Resolver<'a> {
             )
             .cloned()?;
         exts.insert(*decl, (internal, prim));
-        internal_to_def.extend(mc.all().into_iter().map(|term| (*term, prim)));
+        internal_to_def.extend(mc.all().iter().map(|term| (*term, prim)));
         Ok(prim)
     }
 }

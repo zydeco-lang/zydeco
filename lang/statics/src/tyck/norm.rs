@@ -10,7 +10,7 @@ impl TypeId {
     }
     pub fn subst_env(&self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<TypeId> {
         let kd = tycker.statics.annotations_type[self];
-        let ty = tycker.statics.types_pre[&self].to_owned();
+        let ty = tycker.statics.types_pre[self].to_owned();
         let ty = match ty {
             // Fixme: should invoke substitution once the type is filled
             | Fillable::Fill(_) => *self,
@@ -34,10 +34,10 @@ impl TypeId {
                 | Type::Abs(abs) => {
                     let Abs(tpat, ty) = abs;
                     let (def, _) = tpat.try_destruct_def(tycker);
-                    if let Some(def) = def {
-                        if let Some(_with) = env.get(&def) {
-                            unreachable!()
-                        }
+                    if let Some(def) = def
+                        && let Some(_with) = env.get(&def)
+                    {
+                        unreachable!()
                     }
                     let ty_ = ty.subst_env(tycker, env)?;
                     if ty == ty_ { *self } else { Alloc::alloc(tycker, Abs(tpat, ty_), kd, env) }
@@ -433,12 +433,8 @@ impl TypeId {
                     // if f_ty is an abstraction, apply it
                     let Abs(binder, body_ty) = abs;
                     let (def, _) = binder.try_destruct_def(tycker);
-                    let body_ty_subst = if let Some(def) = def {
-                        body_ty.subst(tycker, def, a_ty)?
-                    } else {
-                        body_ty
-                    };
-                    body_ty_subst
+
+                    if let Some(def) = def { body_ty.subst(tycker, def, a_ty)? } else { body_ty }
                 }
                 | _ => {
                     // else, the app is already normalized

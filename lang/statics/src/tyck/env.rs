@@ -125,6 +125,12 @@ pub struct StrEnv {
 mod impls_str_env {
     use super::*;
 
+    impl Default for StrEnv {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl StrEnv {
         pub fn new() -> Self {
             Self { def_map: im::HashMap::new(), absts: im::HashMap::new() }

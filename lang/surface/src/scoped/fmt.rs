@@ -125,7 +125,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Meta {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let mut s = String::new();
         let Meta { stem, args } = self;
-        s += &stem;
+        s += stem;
         s += "(";
         s += &args.iter().map(|a| a.ugly(_f)).collect::<Vec<_>>().join(",");
         s += ")";

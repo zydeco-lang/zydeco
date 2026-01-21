@@ -112,7 +112,7 @@ impl<'a> Lowerer<'a> {
             unreachable!("Constructor is not a value in statics")
         };
         // Get the data type
-        self.statics.data_hints.get(&value)
+        self.statics.data_hints.get(value)
     }
 
     /// Get the codata type from a computation's type annotation

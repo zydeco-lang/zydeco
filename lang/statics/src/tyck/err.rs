@@ -37,13 +37,13 @@ pub struct TyckErrorEntry {
 impl<'a> Tycker<'a> {
     fn error_output(&'a self, error: TyckError) -> String {
         match error {
-            | TyckError::MissingAnnotation => format!("Missing annotation"),
-            | TyckError::MissingSeal => format!("Missing seal"),
+            | TyckError::MissingAnnotation => "Missing annotation".to_string(),
+            | TyckError::MissingSeal => "Missing seal".to_string(),
             | TyckError::MissingSolution(fills) => {
                 let mut s = String::new();
                 s += "Missing solution for:";
                 for fill in fills.iter() {
-                    let site = self.statics.fills[&fill];
+                    let site = self.statics.fills[fill];
                     s += &format!("\n\t>> {} ({})", self.ugly_scoped(site), site.span(self))
                 }
                 s
@@ -51,8 +51,8 @@ impl<'a> Tycker<'a> {
             | TyckError::MissingStructure(ty) => {
                 format!("Missing structure for type: {}", self.pretty_statics_nested(ty, "\t"))
             }
-            | TyckError::SortMismatch => format!("Sort mismatch"),
-            | TyckError::KindMismatch => format!("Kind mismatch"),
+            | TyckError::SortMismatch => "Sort mismatch".to_string(),
+            | TyckError::KindMismatch => "Kind mismatch".to_string(),
             | TyckError::TypeMismatch { expected, found } => {
                 format!(
                     "Type mismatch: expected {}\n, found {}",
@@ -72,7 +72,7 @@ impl<'a> Tycker<'a> {
             | TyckError::NonExhaustiveCoDataArms(arms) => {
                 format!("Non-exhaustive data arms: {:?}", arms)
             }
-            | TyckError::Expressivity(s) => format!("{}", s),
+            | TyckError::Expressivity(s) => s.to_string(),
             | TyckError::NotInlinable(def) => {
                 let span = def.span(self);
                 format!(

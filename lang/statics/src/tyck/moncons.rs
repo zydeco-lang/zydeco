@@ -315,7 +315,7 @@ impl MonConstruct<TypeId> for DefId {
     fn mbuild(self, _tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, TypeId)> {
         // need to first substitute in the subst environment
         let Some(ty) = env.subst.get(&self) else { unreachable!() };
-        let AnnId::Type(ty) = env.ty[&ty] else { unreachable!() };
+        let AnnId::Type(ty) = env.ty[ty] else { unreachable!() };
         Ok((env, ty))
     }
 }
@@ -970,7 +970,7 @@ where
         let mut ty_ = None;
         let arms = (data.into_iter())
             .map(|(ctor, ty)| {
-                let var = VarName(format!("{}", ctor.0.trim_start_matches("+").to_lowercase()));
+                let var = VarName(ctor.0.trim_start_matches("+").to_lowercase().to_string());
                 let def = Alloc::alloc(tycker, var, ty.into(), &());
                 let (env, binder) = cs::Ann(def, ty).mbuild(tycker, env.clone())?;
                 let (_, tail) = (arm.clone())(ctor, def, ty).mbuild(tycker, env)?;

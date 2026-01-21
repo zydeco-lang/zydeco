@@ -136,16 +136,16 @@ impl<'a> Tycker<'a> {
             let site = self.statics.fills[id];
             let site_text = {
                 use zydeco_surface::scoped::fmt::*;
-                site.ugly(&Formatter::new(&self.scoped))
+                site.ugly(&Formatter::new(self.scoped))
             };
             let site_span = {
                 use zydeco_syntax::*;
                 site.span(self)
             };
-            let site_solu = match self.statics.solus.get(&id) {
+            let site_solu = match self.statics.solus.get(id) {
                 | Some(ann) => {
                     use super::fmt::*;
-                    ann.ugly(&Formatter::new(&self.scoped, &self.statics))
+                    ann.ugly(&Formatter::new(self.scoped, &self.statics))
                 }
                 | None => "???".to_string(),
             };
@@ -620,14 +620,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     }
                 };
                 match switch {
-                    | Switch::Syn => {
-                        let pat_ctx = self.mk(tm).tyck_k(tycker, Action::ana(ty_tm))?;
-                        pat_ctx
-                    }
+                    | Switch::Syn => self.mk(tm).tyck_k(tycker, Action::ana(ty_tm))?,
                     | Switch::Ana(ty_ana) => {
                         let ty = Lub::lub_k(ty_tm, ty_ana, tycker)?;
-                        let pat_ctx = self.mk(tm).tyck_k(tycker, Action::ana(ty))?;
-                        pat_ctx
+
+                        self.mk(tm).tyck_k(tycker, Action::ana(ty))?
                     }
                 }
             }
@@ -774,7 +771,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             }
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {
-                                    expected: format!("one of `_ * _` or `exists _ . _`"),
+                                    expected: "one of `_ * _` or `exists _ . _`".to_string(),
                                     found: ann_ty,
                                 },
                                 std::panic::Location::caller(),
@@ -1003,8 +1000,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     | Switch::Syn => ty_ann,
                     | Switch::Ana(ty_ana) => Lub::lub_k(ty_ann, ty_ana, tycker)?,
                 };
-                let tm_out_ann = self.mk(tm).tyck_k(tycker, Action::ana(ann))?;
-                tm_out_ann
+
+                self.mk(tm).tyck_k(tycker, Action::ana(ann))?
             }
             | Tm::Hole(term) => {
                 let su::Hole = term;
@@ -1179,7 +1176,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             }
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {
-                                    expected: format!("one of `_ * _` or `exists _ . _`"),
+                                    expected: "one of `_ * _` or `exists _ . _`".to_string(),
                                     found: ana_ty,
                                 },
                                 std::panic::Location::caller(),
@@ -1391,7 +1388,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     }
                                     | _ => tycker.err_k(
                                         TyckError::TypeExpected {
-                                            expected: format!("one of `_ -> _` or `forall _ . _`",),
+                                            expected: "one of `_ -> _` or `forall _ . _`"
+                                                .to_string(),
                                             found: ty,
                                         },
                                         std::panic::Location::caller(),
@@ -1527,7 +1525,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             }
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {
-                                    expected: format!("one of `_ -> _` or `forall _ . _`"),
+                                    expected: "one of `_ -> _` or `forall _ . _`".to_string(),
                                     found: f_ty,
                                 },
                                 std::panic::Location::caller(),
@@ -1889,8 +1887,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     match switch {
                         | Switch::Syn => {
                             // if syn, then ana the body with thunk_app_hole
-                            let thunk_app_hole = tycker.thk_hole(&self.info, body);
-                            thunk_app_hole
+
+                            tycker.thk_hole(&self.info, body)
                         }
                         | Switch::Ana(ana) => {
                             let ana_ty = match ana {
@@ -2218,7 +2216,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let ss::Type::Data(data_id) = tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
-                            expected: format!("data type definition"),
+                            expected: "data type definition".to_string(),
                             found: ana_ty_unroll,
                         },
                         std::panic::Location::caller(),
@@ -2341,7 +2339,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let ss::Type::CoData(codata_id) = tycker.type_filled_k(&ana_ty_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
-                            expected: format!("codata type definition"),
+                            expected: "codata type definition".to_string(),
                             found: ana_ty_unroll,
                         },
                         std::panic::Location::caller(),
@@ -2389,7 +2387,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let ss::Type::CoData(codata_id) = tycker.type_filled_k(&ty_body_unroll)? else {
                     tycker.err_k(
                         TyckError::TypeExpected {
-                            expected: format!("codata type definition"),
+                            expected: "codata type definition".to_string(),
                             found: ty_body_unroll,
                         },
                         std::panic::Location::caller(),

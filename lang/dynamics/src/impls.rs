@@ -140,7 +140,7 @@ pub fn str_split_once(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(s)), ZValue::Literal(Literal::Char(p))] => {
-            match s.into_iter().collect::<String>().split_once(p.to_owned()) {
+            match s.iter().collect::<String>().split_once(p.to_owned()) {
                 | Some((a, b)) => ret(ctor(
                     "+Some",
                     vec![mk_rc(ctor(
@@ -201,7 +201,7 @@ pub fn str_index(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(a)), ZValue::Literal(Literal::Int(b))] => {
-            ret(Literal::Char(*a.into_iter().nth(*b as usize).unwrap()).into())
+            ret(Literal::Char(*a.iter().nth(*b as usize).unwrap()).into())
         }
         | _ => unreachable!(""),
     }
@@ -247,7 +247,7 @@ pub fn str_to_int(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(s))] => {
-            ret(Literal::Int(s.into_iter().collect::<String>().parse().unwrap()).into())
+            ret(Literal::Int(s.iter().collect::<String>().parse().unwrap()).into())
         }
         | _ => unreachable!(""),
     }
@@ -260,7 +260,7 @@ pub fn write_str(
 ) -> Result<ZCompute, i32> {
     match args.as_slice() {
         | [ZValue::Literal(Literal::String(s)), e @ ZValue::Thunk(..)] => {
-            write!(w, "{}", s.into_iter().collect::<String>()).unwrap();
+            write!(w, "{}", s.iter().collect::<String>()).unwrap();
             w.flush().unwrap();
             Ok(Force(mk_rc(e.clone().into())).into())
         }

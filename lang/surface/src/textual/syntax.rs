@@ -26,9 +26,9 @@ mod impls_identifier {
             EntityId::new(meta, idx)
         }
     }
-    impl Into<DefId> for EntityId {
-        fn into(self) -> DefId {
-            let EntityId(meta, idx) = self;
+    impl From<EntityId> for DefId {
+        fn from(val: EntityId) -> Self {
+            let EntityId(meta, idx) = val;
             DefId::new(meta, idx)
         }
     }
@@ -37,9 +37,9 @@ mod impls_identifier {
             EntityId::new(meta, idx)
         }
     }
-    impl Into<PatId> for EntityId {
-        fn into(self) -> PatId {
-            let EntityId(meta, idx) = self;
+    impl From<EntityId> for PatId {
+        fn from(val: EntityId) -> Self {
+            let EntityId(meta, idx) = val;
             PatId::new(meta, idx)
         }
     }
@@ -48,9 +48,9 @@ mod impls_identifier {
             EntityId::new(meta, idx)
         }
     }
-    impl Into<CoPatId> for EntityId {
-        fn into(self) -> CoPatId {
-            let EntityId(meta, idx) = self;
+    impl From<EntityId> for CoPatId {
+        fn from(val: EntityId) -> Self {
+            let EntityId(meta, idx) = val;
             CoPatId::new(meta, idx)
         }
     }
@@ -59,9 +59,9 @@ mod impls_identifier {
             EntityId::new(meta, idx)
         }
     }
-    impl Into<TermId> for EntityId {
-        fn into(self) -> TermId {
-            let EntityId(meta, idx) = self;
+    impl From<EntityId> for TermId {
+        fn from(val: EntityId) -> Self {
+            let EntityId(meta, idx) = val;
             TermId::new(meta, idx)
         }
     }
@@ -70,9 +70,9 @@ mod impls_identifier {
             EntityId::new(meta, idx)
         }
     }
-    impl Into<DeclId> for EntityId {
-        fn into(self) -> DeclId {
-            let EntityId(meta, idx) = self;
+    impl From<EntityId> for DeclId {
+        fn from(val: EntityId) -> Self {
+            let EntityId(meta, idx) = val;
             DeclId::new(meta, idx)
         }
     }

@@ -129,9 +129,9 @@ impl Display for ParseError<'_> {
 }
 
 fn fmt_expected(expected: &[String]) -> String {
-    let mut res = format!("");
+    let mut res = String::new();
     if !expected.is_empty() {
-        res += &format!("; ");
+        res += &"; ".to_string();
         for (i, e) in expected.iter().enumerate() {
             let sep = match i {
                 | 0 => "Expected one of",

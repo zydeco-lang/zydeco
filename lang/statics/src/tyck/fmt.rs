@@ -68,13 +68,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
                 | Type::Abst(abst) => abst.ugly(f),
                 | Type::Abs(ty) => ty.ugly(f),
                 | Type::App(ty) => ty.ugly(f),
-                | Type::Thk(ThkTy) => format!("Thk"),
-                | Type::Ret(RetTy) => format!("Ret"),
-                | Type::Unit(UnitTy) => format!("Unit"),
-                | Type::Int(IntTy) => format!("Int"),
-                | Type::Char(CharTy) => format!("Char"),
-                | Type::String(StringTy) => format!("String"),
-                | Type::OS(OSTy) => format!("OS"),
+                | Type::Thk(ThkTy) => "Thk".to_string(),
+                | Type::Ret(RetTy) => "Ret".to_string(),
+                | Type::Unit(UnitTy) => "Unit".to_string(),
+                | Type::Int(IntTy) => "Int".to_string(),
+                | Type::Char(CharTy) => "Char".to_string(),
+                | Type::String(StringTy) => "String".to_string(),
+                | Type::OS(OSTy) => "OS".to_string(),
                 | Type::Arrow(ty) => ty.ugly(f),
                 | Type::Forall(ty) => ty.ugly(f),
                 | Type::Prod(ty) => ty.ugly(f),
@@ -186,11 +186,11 @@ impl<'a> Ugly<'a, Formatter<'a>> for AbstId {
 impl<'a> Ugly<'a, Formatter<'a>> for DataId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        s += &format!("data");
+        s += &"data".to_string();
         for (ctor, ty) in f.statics.datas[self].iter() {
             s += &format!(" | {} : {}", ctor.ugly(f), ty.ugly(f));
         }
-        s += &format!(" end");
+        s += &" end".to_string();
         s
     }
 }
@@ -198,11 +198,11 @@ impl<'a> Ugly<'a, Formatter<'a>> for DataId {
 impl<'a> Ugly<'a, Formatter<'a>> for CoDataId {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
-        s += &format!("codata");
+        s += &"codata".to_string();
         for (dtor, ty) in f.statics.codatas[self].iter() {
             s += &format!(" | {} : {}", dtor.ugly(f), ty.ugly(f));
         }
-        s += &format!(" end");
+        s += &" end".to_string();
         s
     }
 }
@@ -430,7 +430,7 @@ where
         for Matcher { binder, tail } in arms.iter() {
             s += &format!(" | {} -> {}", binder.ugly(f), tail.ugly(f));
         }
-        s += &format!(" end");
+        s += &" end".to_string();
         s
     }
 }
@@ -442,11 +442,11 @@ where
     fn ugly(&self, f: &'a Formatter) -> String {
         let CoMatch { arms } = self;
         let mut s = String::new();
-        s += &format!("comatch");
+        s += &"comatch".to_string();
         for CoMatcher { dtor, tail } in arms.iter() {
             s += &format!(" | {} -> {}", dtor.ugly(f), tail.ugly(f));
         }
-        s += &format!(" end");
+        s += &" end".to_string();
         s
     }
 }
@@ -626,7 +626,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for AbstId {
         };
         match sealed {
             | Some(_ty) => RcDoc::text(format!("{}[sealed]", hint)),
-            | None => RcDoc::text(format!("{}", hint)),
+            | None => RcDoc::text(hint.to_string()),
         }
     }
 }
@@ -974,7 +974,7 @@ where
             RcDoc::text("match"),
             RcDoc::space(),
             scrut.pretty(f),
-            RcDoc::concat(arms.into_iter().map(|Matcher { binder, tail }| {
+            RcDoc::concat(arms.iter().map(|Matcher { binder, tail }| {
                 RcDoc::concat([
                     RcDoc::line(),
                     RcDoc::text("|"),
@@ -1001,7 +1001,7 @@ where
         let _ = arms;
         RcDoc::concat([
             RcDoc::text("comatch"),
-            RcDoc::concat(arms.into_iter().map(|CoMatcher { dtor, tail }| {
+            RcDoc::concat(arms.iter().map(|CoMatcher { dtor, tail }| {
                 RcDoc::concat([
                     RcDoc::line(),
                     RcDoc::text("|"),

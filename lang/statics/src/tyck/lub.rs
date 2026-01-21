@@ -52,21 +52,15 @@ impl Lub for KindId {
             | (_, Fillable::Fill(rhs)) => fill_kd(tycker, rhs, self)?,
             | (Fillable::Fill(lhs), _) => fill_kd(tycker, lhs, other)?,
             | (Fillable::Done(lhs), Fillable::Done(rhs)) => match (lhs, rhs) {
-                | (Kind::VType(VType), Kind::VType(VType)) => {
-                    let kd = Alloc::alloc(tycker, VType, (), &());
-                    kd
-                }
-                | (Kind::CType(CType), Kind::CType(CType)) => {
-                    let kd = Alloc::alloc(tycker, CType, (), &());
-                    kd
-                }
+                | (Kind::VType(VType), Kind::VType(VType)) => Alloc::alloc(tycker, VType, (), &()),
+                | (Kind::CType(CType), Kind::CType(CType)) => Alloc::alloc(tycker, CType, (), &()),
                 | (Kind::Arrow(lhs), Kind::Arrow(rhs)) => {
                     let Arrow(lin, lout) = lhs;
                     let Arrow(rin, rout) = rhs;
                     let kd_in = lin.lub(rin, tycker)?;
                     let kd_out = lout.lub(rout, tycker)?;
-                    let kd = Alloc::alloc(tycker, Arrow(kd_in, kd_out), (), &());
-                    kd
+
+                    Alloc::alloc(tycker, Arrow(kd_in, kd_out), (), &())
                 }
                 | (Kind::VType(_), _) | (Kind::CType(_), _) | (Kind::Arrow(_), _) => {
                     tycker.err(TyckError::KindMismatch, std::panic::Location::caller())?
@@ -193,8 +187,8 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let abs = Alloc::alloc(tycker, Abs(lpat, body), kd, &env);
-                        abs
+
+                        Alloc::alloc(tycker, Abs(lpat, body), kd, &env)
                     }
                 }
                 | (Type::Abs(_), _) => tycker.err(
@@ -258,8 +252,8 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let arrow = Alloc::alloc(tycker, Arrow(a, b), kd, &env);
-                        arrow
+
+                        Alloc::alloc(tycker, Arrow(a, b), kd, &env)
                     }
                 }
                 | (Type::Arrow(_), _) => tycker.err(
@@ -275,8 +269,8 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let forall = Alloc::alloc(tycker, Forall(labst, body), kd, &env);
-                        forall
+
+                        Alloc::alloc(tycker, Forall(labst, body), kd, &env)
                     }
                 }
                 | (Type::Forall(_), _) => tycker.err(
@@ -290,8 +284,8 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let prod = Alloc::alloc(tycker, Prod(a, b), kd, &env);
-                        prod
+
+                        Alloc::alloc(tycker, Prod(a, b), kd, &env)
                     }
                 }
                 | (Type::Prod(_), _) => tycker.err(
@@ -307,8 +301,8 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        let exists = Alloc::alloc(tycker, Exists(labst, body), kd, &env);
-                        exists
+
+                        Alloc::alloc(tycker, Exists(labst, body), kd, &env)
                     }
                 }
                 | (Type::Exists(_), _) => tycker.err(
