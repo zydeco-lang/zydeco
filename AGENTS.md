@@ -75,3 +75,39 @@ modules.
 - Keep doc examples consistent with CLI flags and scripts in the repo.
 - If you add new example projects under `lib/`, consider wiring them into
   `lang/tests`.
+
+## Rust Code Style Guideline
+
+Always prefer typed data structures over strings + parsers, and
+Never be afraid of defining too many types.
+For examples,
+- Include specific types of errors when creating an error type, not just strings.
+- User input should be parsed to be structured data as soon as possible.
+- Never use strings to represent states in the software's state machine.
+- Never pass strings between internal components when the message could be typed.
+- Whenever a hashmap of strings is created, think twice.
+  Is it really relying on string deduplication?
+  Or it's actually a "dynamic object", that might be concluded by a few traits?
+
+Prefer to use structs to pack a group of useful functions; prefer methods over functions.
+Rust structs have better namespace-ish features than Rust modules.
+Never write plain functions that are not wrapped in a struct with your best effort
+unless there's no way around otherwise.
+When wrapping the functions, abide by the following rules:
+- Mention `self` in the signature if the methods are built around the struct type.
+  - Take ownership (`self`) if being the elimination form of the struct type,
+    namely consuming the struct.
+  - Take reference (`&self` or `&mut self`) if the struct only needs to be borrowed.
+- Use associated functions (similar to static methods) when the struct is purely a namespace;
+  specifically, write `fn new` for "constructors" with no perspective,
+  and `fn with_*` for "constructors" that hints how the struct is created.
+
+For builder patterns, pick receivers based on whether the finalizer must move owned fields out.
+If build/finish consumes,
+- Use `fn build(self) -> T` for the builder.
+- Make all setter methods take and return self `fn with_*(mut self, ...) -> Self` for easy chaining.
+If build can borrow,
+- Prefer setters `fn set_*(&mut self, ...) -> &mut Self`, and
+- Prefer a finalizer `fn build(&self) -> T` so the builder can be reused.
+Expose an associated entry point `fn new(required, ...)`,
+and use `with_*/set_*` names consistently for optional configuration.
