@@ -1,6 +1,6 @@
 use super::syntax::*;
 use zydeco_derive::{AsMutSelf, AsRefSelf};
-use zydeco_stackir::syntax as sk;
+use zydeco_stackir::sps::syntax as sk;
 use zydeco_utils::{graph::DepGraph, with::With};
 
 #[derive(AsRefSelf, AsMutSelf)]

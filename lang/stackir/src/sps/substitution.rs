@@ -1,25 +1,32 @@
 use super::syntax::*;
 use std::collections::HashMap;
 
+pub struct SubstitutionMap {
+    pub values: HashMap<DefId, ValueId>,
+    pub stack: Option<StackId>,
+}
+
+impl SubstitutionMap {
+    pub fn new() -> Self {
+        Self { values: HashMap::new(), stack: None }
+    }
+}
+
 /// In-place substitution for stack IR nodes.
 pub trait SubstitutionInPlace {
     /// Substitute the free variables in the term in place.
     ///
     /// The [`DefId`]s in the map are guaranteed to be free.
-    fn substitute_in_place(
-        self, arena: &mut impl AsMut<StackirArena>, map: &HashMap<DefId, ValueId>,
-    );
+    fn substitute_in_place(self, arena: &mut impl AsMut<StackirArena>, map: &SubstitutionMap);
 }
 
 impl SubstitutionInPlace for ValueId {
-    fn substitute_in_place(
-        self, arena: &mut impl AsMut<StackirArena>, map: &HashMap<DefId, ValueId>,
-    ) {
+    fn substitute_in_place(self, arena: &mut impl AsMut<StackirArena>, map: &SubstitutionMap) {
         let mut arena_mut = arena.as_mut();
         let value = arena_mut.values[&self].clone();
 
         match value {
-            | Value::Var(def_id) => match map.get(&def_id) {
+            | Value::Var(def_id) => match map.values.get(&def_id) {
                 | Some(new_value_id) => {
                     let new_value = arena_mut.values[new_value_id].clone();
                     arena_mut.values.replace(self, new_value)
@@ -51,9 +58,7 @@ impl SubstitutionInPlace for ValueId {
 }
 
 impl SubstitutionInPlace for StackId {
-    fn substitute_in_place(
-        self, arena: &mut impl AsMut<StackirArena>, map: &HashMap<DefId, ValueId>,
-    ) {
+    fn substitute_in_place(self, arena: &mut impl AsMut<StackirArena>, map: &SubstitutionMap) {
         let mut arena_mut = arena.as_mut();
         let stack = arena_mut.stacks[&self].clone();
 
@@ -71,17 +76,19 @@ impl SubstitutionInPlace for StackId {
                 // Recursively substitute in the rest of the stack
                 stack.substitute_in_place(&mut arena_mut, map);
             }
-            | Stack::Var(Bullet) => {
-                // No substitution needed for the bullet
-            }
+            | Stack::Var(Bullet) => match &map.stack {
+                | Some(new_stack_id) => {
+                    let new_stack = arena_mut.stacks[new_stack_id].clone();
+                    arena_mut.stacks.replace(self, new_stack)
+                }
+                | None => {}
+            },
         }
     }
 }
 
 impl SubstitutionInPlace for CompuId {
-    fn substitute_in_place(
-        self, arena: &mut impl AsMut<StackirArena>, map: &HashMap<DefId, ValueId>,
-    ) {
+    fn substitute_in_place(self, arena: &mut impl AsMut<StackirArena>, map: &SubstitutionMap) {
         let mut arena_mut = arena.as_mut();
         let compu = arena_mut.compus[&self].clone();
 

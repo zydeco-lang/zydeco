@@ -53,7 +53,7 @@ pub mod prelude {
 
     pub use zydeco_dynamics::syntax as d;
 
-    pub use zydeco_stackir::syntax as sk;
+    pub use zydeco_stackir::sps::syntax as sk;
 
     pub use zydeco_assembly::syntax as sa;
 }
@@ -304,7 +304,7 @@ impl BuildSystem {
         let PackageStack { stackir, scoped, statics, .. } =
             self.__compile_zir_pack(pack, ArcGlobalAlloc::new(), false)?;
         // pretty print the ZIR
-        use zydeco_stackir::fmt::*;
+        use zydeco_stackir::sps::fmt::*;
         let fmt = Formatter::new(&stackir, &scoped, &statics);
         let doc = stackir.pretty(&fmt);
         let mut buf = String::new();
@@ -449,7 +449,7 @@ impl BuildSystem {
         let mut stackir =
             zydeco_stackir::Lowerer::new(alloc.clone(), &spans, &mut scoped, &statics).run();
         {
-            use zydeco_stackir::fmt::*;
+            use zydeco_stackir::sps::fmt::*;
             let fmt = Formatter::new(&stackir, &scoped, &statics);
             let doc = stackir.pretty(&fmt);
             let mut buf = String::new();
@@ -460,7 +460,7 @@ impl BuildSystem {
         }
         zydeco_stackir::ClosureConverter::new(&mut stackir, &mut scoped, &statics).convert();
         {
-            use zydeco_stackir::fmt::*;
+            use zydeco_stackir::sps::fmt::*;
             let fmt = Formatter::new(&stackir, &scoped, &statics);
             let doc = stackir.pretty(&fmt);
             let mut buf = String::new();

@@ -4,7 +4,7 @@ use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
 };
-use zydeco_stackir::arena::StackirArena;
+use zydeco_stackir::StackirArena;
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
 use zydeco_syntax::*;
