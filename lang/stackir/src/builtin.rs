@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use super::syntax::*;
+use super::{syntax::*, arena::*};
 use std::collections::HashMap;
 use zydeco_statics::surface_syntax::ScopedArena;
 

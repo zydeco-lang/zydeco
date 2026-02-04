@@ -2566,6 +2566,7 @@ name = "zydeco-stackir"
 version = "0.2.2"
 dependencies = [
  "derive_more",
+ "indexmap",
  "log",
  "pretty",
  "serde",

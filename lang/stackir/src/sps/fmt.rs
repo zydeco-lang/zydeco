@@ -1,8 +1,8 @@
 //! Formatters for the Zydeco Intermediate Representation (ZIR).
 
 use super::syntax::*;
-use zydeco_statics::tyck::syntax as ss;
 use zydeco_surface::scoped::syntax::ScopedArena;
+use zydeco_statics::tyck::arena::StaticsArena;
 
 /* -------------------------------- Formatter ------------------------------- */
 
@@ -11,12 +11,12 @@ pub use zydeco_syntax::Pretty;
 pub struct Formatter<'arena> {
     arena: &'arena StackirArena,
     scoped: &'arena ScopedArena,
-    statics: &'arena ss::StaticsArena,
+    statics: &'arena StaticsArena,
     pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
     pub fn new(
-        arena: &'arena StackirArena, scoped: &'arena ScopedArena, statics: &'arena ss::StaticsArena,
+        arena: &'arena StackirArena, scoped: &'arena ScopedArena, statics: &'arena StaticsArena,
     ) -> Self {
         Formatter { arena, scoped, statics, indent: 2 }
     }

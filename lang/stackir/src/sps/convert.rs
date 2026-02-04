@@ -2,7 +2,7 @@
 //!
 //! After this pass, there will be no implicit captures.
 
-use super::{arena::*, substitution::*, syntax::*};
+use super::{arena::*, substitute::*, syntax::*};
 use derive_more::{AsMut, AsRef};
 use std::{collections::HashMap, convert::Infallible};
 use {
@@ -110,12 +110,12 @@ impl<'a> ClosureConverter<'a> {
         //    then replace all occurrences of param with param applied to captures.
         //    In stack style: when param is used, push captures on stack, then use param.
         // Convert HashMap<DefId, DefId> to HashMap<DefId, ValueId> for substitution
-        let mut subst_map = SubstitutionMap::new();
+        let mut subst_map = SubstVarMap::new();
         for (&old_def, &new_def) in free_var_renames.iter() {
             let new_value_id = new_def.build(self, None);
             subst_map.values.insert(old_def, new_value_id);
         }
-        fix.body.substitute_in_place(self, &subst_map);
+        fix.body.subst_var_in_place(self, &subst_map);
 
         // 3. Wrap body in a let arg to retrieve captures from stack
         // Create a nested value pattern to destructure all captures from a nested pair
@@ -141,9 +141,9 @@ impl<'a> ClosureConverter<'a> {
         let transformed_body = {
             // Substitute the closure def into the transformed body to replace fix.param
             let closure_def_value: ValueId = closure_def.build(self, site);
-            let mut subst_map = SubstitutionMap::new();
+            let mut subst_map = SubstVarMap::new();
             subst_map.values.insert(fix.param, closure_def_value);
-            fix.body.substitute_in_place(self, &subst_map);
+            fix.body.subst_var_in_place(self, &subst_map);
             fix.body
         };
         // LetValue the closure pair to a closure definition
@@ -213,12 +213,12 @@ impl<'a> ClosureConverter<'a> {
         // Substitute free variables in the closure body to refer to the freshly
         // bound capture variables.
         // Convert HashMap<DefId, DefId> to HashMap<DefId, ValueId> for substitution
-        let mut subst_map = SubstitutionMap::new();
+        let mut subst_map = SubstVarMap::new();
         for (&old_def, &new_def) in free_var_renames.iter() {
             let new_value_id = new_def.build(self, None);
             subst_map.values.insert(old_def, new_value_id);
         }
-        clo.body.substitute_in_place(self, &subst_map);
+        clo.body.subst_var_in_place(self, &subst_map);
 
         // Use a single LetArg to extract all captures from the stack
         let capture_stack = Bullet.build(self, site);

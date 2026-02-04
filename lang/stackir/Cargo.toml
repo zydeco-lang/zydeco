@@ -21,3 +21,4 @@ pretty = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_plain = { workspace = true }
+indexmap = { workspace = true }

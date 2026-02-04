@@ -1,8 +1,9 @@
 //! Arenas and [`Construct`] trait for the stack-passing style ZIR.
 
-use super::{syntax::*, *};
+use super::{syntax::*};
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
+use crate::static_syntax as ss;
 
 /// All arenas for the stack-passing style ZIR.
 /// The definitions and patterns are equivalent to the ones in

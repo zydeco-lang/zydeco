@@ -1,12 +1,11 @@
-pub use super::{arena::*, builtin::*};
+pub use super::{builtin::*, arena::*};
 pub use zydeco_syntax::{fmt, *};
 pub use zydeco_utils::{arena::*, context::Context};
 
-use super::*;
+use crate::static_syntax as ss;
 use derive_more::From;
 
 pub type DefId = ss::DefId;
-pub type DeclId = ss::DeclId;
 
 zydeco_utils::new_key_type! {
     pub struct VPatId;

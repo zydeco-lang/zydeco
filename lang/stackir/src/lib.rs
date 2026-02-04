@@ -1,10 +1,19 @@
 #![doc = include_str!("README.md")]
 
+use zydeco_statics::tyck::syntax as static_syntax;
+
+/// Stack IR syntax and identifiers.
+pub mod syntax;
+/// Arenas and builders for stack IR nodes.
+pub mod arena;
+/// Builtin definitions for externs in stack IR.
+pub mod builtin;
+pub use builtin::*;
+
+/// Passes and utilities specific to stack IR.
 pub mod sps {
-    /// Stack IR syntax and identifiers.
-    pub mod syntax;
-    /// Arenas and builders for stack IR nodes.
-    pub mod arena;
+    pub use crate::syntax;
+    pub use crate::arena;
     /// Pretty/ugly formatters for stack IR.
     pub mod fmt;
     /// Lowering from typed syntax into stack IR.
@@ -12,15 +21,22 @@ pub mod sps {
     /// Closure conversion over stack IR.
     pub mod convert;
     /// In-place substitution helpers for stack IR.
-    pub mod substitution;
+    pub mod substitute;
     /// Free-variable analysis for stack IR.
     pub mod free;
-    /// Builtin definitions for externs in stack IR.
-    pub mod builtin;
-
-    use zydeco_statics::tyck::syntax as ss;
 }
 
-pub use sps::{arena::*, builtin::*, convert::ClosureConverter, lower::Lowerer};
+pub use sps::{arena::*, convert::ClosureConverter, lower::Lowerer};
 
-pub mod norm {}
+pub mod norm {
+    /// Extra syntax for normalization.
+    pub mod syntax;
+    /// Arenas and builders for normalized stack IR.
+    pub mod arena;
+    /// Pretty/ugly formatters for normalized stack IR.
+    pub mod fmt;
+    /// Elaboration pass from stack IR into normalized stack IR.
+    pub mod elaborate;
+    /// In-place substitution helpers for normalized stack IR.
+    pub mod substitute;
+}

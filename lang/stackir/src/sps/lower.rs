@@ -2,7 +2,7 @@ use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_utils::{arena::ArcGlobalAlloc, context::Context, phantom::Phantom};
+use zydeco_utils::{arena::ArcGlobalAlloc, context::Context, pass::CompilerPass, phantom::Phantom};
 
 /// Lower typed syntax nodes into stack IR.
 pub trait Lower {
@@ -31,55 +31,6 @@ impl<'a> Lowerer<'a> {
     ) -> Self {
         let arena = StackirArena::new_arc(alloc);
         Self { arena, spans, scoped, statics }
-    }
-
-    /// Lower the full program into a stack arena.
-    pub fn run(mut self) -> StackirArena {
-        // Topologically traverse declarations and translate VAliasBody
-        let mut scc = self.scoped.top.clone();
-        loop {
-            let groups = scc.top();
-            if groups.is_empty() {
-                break;
-            }
-            for group in groups {
-                for decl_id in group.iter() {
-                    let Some(decl) = self.statics.decls.get(decl_id).cloned() else {
-                        continue;
-                    };
-                    use ss::Declaration as Decl;
-                    match decl {
-                        | Decl::VAliasBody(valias_body) => valias_body.lower(&mut self, ()),
-                        | Decl::VAliasHead(valias_head) => valias_head.lower(&mut self, ()),
-                        | Decl::TAliasBody(_) | Decl::Exec(_) => {}
-                    }
-                }
-                scc.release(group);
-            }
-        }
-
-        // Get entry declarations from statics arena
-        for decl_id in self.statics.entry.iter().map(|(decl_id, _)| *decl_id) {
-            // Get the declaration and extract the computation
-            let decl = &self.statics.decls[&decl_id];
-            use ss::Declaration as Decl;
-            let compu_id = match decl {
-                | Decl::Exec(ss::Exec(compu)) => *compu,
-                // Only Exec declarations should be entry points
-                | Decl::TAliasBody(_) | Decl::VAliasBody(_) | Decl::VAliasHead(_) => {
-                    let fmt = zydeco_statics::tyck::fmt::Formatter::new(self.scoped, self.statics);
-                    let decl_str = decl_id.ugly(&fmt);
-                    panic!("entry point must be a main declaration, found:\n{}", decl_str);
-                }
-            };
-
-            // Lower the computation
-            let lowered_compu_id = compu_id.lower(&mut self, ());
-
-            // Store the lowered computation as an entry point in the stack arena
-            self.arena.entry.insert(lowered_compu_id, ());
-        }
-        self.arena
     }
 
     /// Compute the minimal capture list for a closure from a computation body.
@@ -126,6 +77,60 @@ impl<'a> Lowerer<'a> {
             })
             .filter(|def_id| param.map(|param| *def_id != param).unwrap_or(true))
             .collect()
+    }
+}
+
+impl<'a> CompilerPass for Lowerer<'a> {
+    type Arena = StackirArena;
+    type Out = StackirArena;
+    type Error = std::convert::Infallible;
+    /// Lower the full program into a stack arena.
+    fn run(mut self) -> Result<StackirArena, Self::Error> {
+        // Topologically traverse declarations and translate VAliasBody
+        let mut scc = self.scoped.top.clone();
+        loop {
+            let groups = scc.top();
+            if groups.is_empty() {
+                break;
+            }
+            for group in groups {
+                for decl_id in group.iter() {
+                    let Some(decl) = self.statics.decls.get(decl_id).cloned() else {
+                        continue;
+                    };
+                    use ss::Declaration as Decl;
+                    match decl {
+                        | Decl::VAliasBody(valias_body) => valias_body.lower(&mut self, ()),
+                        | Decl::VAliasHead(valias_head) => valias_head.lower(&mut self, ()),
+                        | Decl::TAliasBody(_) | Decl::Exec(_) => {}
+                    }
+                }
+                scc.release(group);
+            }
+        }
+
+        // Get entry declarations from statics arena
+        for decl_id in self.statics.entry.iter().map(|(decl_id, _)| *decl_id) {
+            // Get the declaration and extract the computation
+            let decl = &self.statics.decls[&decl_id];
+            use ss::Declaration as Decl;
+            let compu_id = match decl {
+                | Decl::Exec(ss::Exec(compu)) => *compu,
+                // Only Exec declarations should be entry points
+                | Decl::TAliasBody(_) | Decl::VAliasBody(_) | Decl::VAliasHead(_) => {
+                    let fmt = zydeco_statics::tyck::fmt::Formatter::new(self.scoped, self.statics);
+                    let decl_str = decl_id.ugly(&fmt);
+                    panic!("entry point must be a main declaration, found:\n{}", decl_str);
+                }
+            };
+
+            // Lower the computation
+            let lowered_compu_id = compu_id.lower(&mut self, ());
+
+            // Store the lowered computation as an entry point in the stack arena
+            self.arena.entry.insert(lowered_compu_id, ());
+        }
+        Ok(self.arena)
     }
 }
 
