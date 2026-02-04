@@ -116,12 +116,12 @@ impl SubstitutionInPlace for CompuId {
                     tail.substitute_in_place(&mut arena_mut, map);
                 });
             }
-            | Computation::LetValue(Let { binder: _, bindee, tail }) => {
+            | Computation::Join(LetJoin::Value(Let { binder: _, bindee, tail })) => {
                 // Recursively substitute in the bindee and tail
                 bindee.substitute_in_place(&mut arena_mut, map);
                 tail.substitute_in_place(&mut arena_mut, map);
             }
-            | Computation::LetStack(Let { binder: Bullet, bindee, tail }) => {
+            | Computation::Join(LetJoin::Stack(Let { binder: Bullet, bindee, tail })) => {
                 // Recursively substitute in the bindee and tail
                 bindee.substitute_in_place(&mut arena_mut, map);
                 tail.substitute_in_place(&mut arena_mut, map);

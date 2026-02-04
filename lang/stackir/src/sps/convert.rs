@@ -175,9 +175,14 @@ impl<'a> ClosureConverter<'a> {
                 .build(self, site);
         // Wrap the Fix in a LetStack that pushes captures, then runs the Fix
         // Update the Fix in place with the wrapped computation
-        self.arena
-            .compus
-            .replace(old_compu_id, Let { binder: Bullet, bindee: capture_stack, tail: fix_compu });
+        self.arena.compus.replace(
+            old_compu_id,
+            Computation::Join(LetJoin::Stack(Let {
+                binder: Bullet,
+                bindee: capture_stack,
+                tail: fix_compu,
+            })),
+        );
     }
 
     /// Convert a Clo (thunk) to explicit closure form.
@@ -265,8 +270,13 @@ impl<'a> ClosureConverter<'a> {
         // LetValue to destructure: let Cons(capture_pair, body_closure) = thunk in ...
         // This will destructure the pair at runtime.
         // Replace the original Force with the transformed computation
-        self.arena
-            .compus
-            .replace(compu_id, Let { binder: pair_pattern, bindee: force.thunk, tail: force_body });
+        self.arena.compus.replace(
+            compu_id,
+            Computation::Join(LetJoin::Value(Let {
+                binder: pair_pattern,
+                bindee: force.thunk,
+                tail: force_body,
+            })),
+        );
     }
 }

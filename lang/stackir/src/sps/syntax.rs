@@ -112,15 +112,30 @@ pub struct ExternCall {
 }
 
 #[derive(From, Clone, Debug)]
-pub enum Computation {
+pub enum Computation<Join> {
     Hole(Hole),
     Force(SForce),
     Ret(SReturn),
     Fix(SFix),
     Case(Match<ValueId, VPatId, CompuId>),
-    LetValue(Let<VPatId, ValueId, CompuId>),
-    LetStack(Let<Bullet, StackId, CompuId>),
+    #[from(ignore)]
+    Join(Join),
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
     CoCase(CoMatch<CompuId, Cons<DtorName, Bullet>>),
     ExternCall(ExternCall),
+}
+
+#[derive(From, Clone, Debug)]
+pub enum LetJoin {
+    Value(Let<VPatId, ValueId, CompuId>),
+    Stack(Let<Bullet, StackId, CompuId>),
+}
+
+impl<T> From<T> for Computation<LetJoin>
+where
+    T: Into<LetJoin>,
+{
+    fn from(j: T) -> Self {
+        Computation::Join(j.into())
+    }
 }

@@ -16,7 +16,7 @@ pub struct StackirArena {
     /// stack arena
     pub stacks: ArenaSparse<StackId, Stack>,
     /// computation arena
-    pub compus: ArenaSparse<CompuId, Computation>,
+    pub compus: ArenaSparse<CompuId, Computation<LetJoin>>,
 
     /// builtin operators and functions
     pub builtins: BuiltinMap,
@@ -106,10 +106,10 @@ where
     }
 }
 
-impl<U, Arena> Construct<Computation, CompuId, Arena> for U
+impl<U, Arena> Construct<Computation<LetJoin>, CompuId, Arena> for U
 where
     Arena: AsMut<StackirArena>,
-    U: Into<Computation>,
+    U: Into<Computation<LetJoin>>,
 {
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {

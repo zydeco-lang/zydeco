@@ -609,7 +609,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
-            | Compu::LetValue(Let { binder, bindee, tail }) => {
+            | Compu::Join(sk::LetJoin::Value(Let { binder, bindee, tail })) => {
                 // Lower the bindee
                 bindee.lower(
                     lo,
@@ -631,7 +631,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
-            | Compu::LetStack(Let { binder: sk::Bullet, bindee, tail }) => {
+            | Compu::Join(sk::LetJoin::Stack(Let { binder: sk::Bullet, bindee, tail })) => {
                 // Lower the bindee
                 bindee.lower(
                     lo,

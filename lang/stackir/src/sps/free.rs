@@ -76,10 +76,10 @@ impl FreeVars for CompuId {
                         .map(|Matcher { binder, tail }| tail.free_vars(arena) - binder.vars(arena))
                         .fold(CoContext::new(), |acc, x| acc + x)
             }
-            | Compu::LetValue(Let { binder, bindee, tail }) => {
+            | Compu::Join(LetJoin::Value(Let { binder, bindee, tail })) => {
                 tail.free_vars(arena) - binder.vars(arena) + bindee.free_vars(arena)
             }
-            | Compu::LetStack(Let { binder: Bullet, bindee, tail }) => {
+            | Compu::Join(LetJoin::Stack(Let { binder: Bullet, bindee, tail })) => {
                 bindee.free_vars(arena) + tail.free_vars(arena)
             }
             | Compu::LetArg(Let { binder: Cons(param, Bullet), bindee, tail }) => {

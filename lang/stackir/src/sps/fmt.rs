@@ -214,7 +214,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for Computation {
+impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
             | Computation::Hole(Hole) => RcDoc::text("_"),
@@ -276,7 +276,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 RcDoc::line(),
                 RcDoc::text("end"),
             ]),
-            | Computation::LetValue(Let { binder, bindee, tail }) => RcDoc::concat([
+            | Computation::Join(LetJoin::Value(Let { binder, bindee, tail })) => RcDoc::concat([
                 RcDoc::text("let"),
                 RcDoc::space(),
                 binder.pretty(f),
@@ -290,7 +290,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation {
                 .group(),
                 RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
             ]),
-            | Computation::LetStack(Let { binder, bindee, tail }) => RcDoc::concat([
+            | Computation::Join(LetJoin::Stack(Let { binder, bindee, tail })) => RcDoc::concat([
                 RcDoc::text("let"),
                 RcDoc::space(),
                 binder.pretty(f),
