@@ -1,9 +1,9 @@
 //! Arenas and [`Construct`] trait for the stack-passing style ZIR.
 
-use super::{syntax::*};
+use super::syntax::*;
+use crate::static_syntax as ss;
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
-use crate::static_syntax as ss;
 
 /// All arenas for the stack-passing style ZIR.
 /// The definitions and patterns are equivalent to the ones in
@@ -14,13 +14,13 @@ pub struct StackirArena {
     pub allocator: IndexAlloc<usize>,
 
     /// value pattern arena
-    pub vpats: ArenaSparse<VPatId, ValuePattern>,
+    pub vpats: ArenaAssoc<VPatId, ValuePattern>,
     /// value arena
-    pub values: ArenaSparse<ValueId, Value>,
+    pub values: ArenaAssoc<ValueId, Value>,
     /// stack arena
-    pub stacks: ArenaSparse<StackId, Stack>,
+    pub stacks: ArenaAssoc<StackId, Stack>,
     /// computation arena
-    pub compus: ArenaSparse<CompuId, Computation<LetJoin>>,
+    pub compus: ArenaAssoc<CompuId, Computation<LetJoin>>,
 
     /// builtin operators and functions
     pub builtins: BuiltinMap,
@@ -42,10 +42,10 @@ impl StackirArena {
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
         Self {
             allocator: alloc.alloc(),
-            vpats: ArenaSparse::new(alloc.alloc()),
-            values: ArenaSparse::new(alloc.alloc()),
-            stacks: ArenaSparse::new(alloc.alloc()),
-            compus: ArenaSparse::new(alloc.alloc()),
+            vpats: ArenaAssoc::new(),
+            values: ArenaAssoc::new(),
+            stacks: ArenaAssoc::new(),
+            compus: ArenaAssoc::new(),
             builtins: Builtin::all(),
             globals: ArenaAssoc::new(),
             sequence: Vec::new(),
@@ -71,7 +71,8 @@ where
     type Site = ss::PatId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> VPatId {
         let this = &mut *arena.as_mut();
-        let vpat_id = this.vpats.alloc(self.into());
+        let vpat_id = this.allocator.alloc();
+        this.vpats.insert(vpat_id, self.into());
         if let Some(site) = site {
             this.pats.insert(site, vpat_id);
         }
@@ -87,7 +88,8 @@ where
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> ValueId {
         let this = &mut *arena.as_mut();
-        let value_id = this.values.alloc(self.into());
+        let value_id = this.allocator.alloc();
+        this.values.insert(value_id, self.into());
         if let Some(site) = site {
             this.terms.insert(site, TermId::Value(value_id));
         }
@@ -103,7 +105,8 @@ where
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> StackId {
         let this = &mut *arena.as_mut();
-        let stack_id = this.stacks.alloc(self.into());
+        let stack_id = this.allocator.alloc();
+        this.stacks.insert(stack_id, self.into());
         if let Some(site) = site {
             this.terms.insert(site, TermId::Stack(stack_id));
         }
@@ -119,7 +122,8 @@ where
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {
         let this = &mut *arena.as_mut();
-        let compu_id = this.compus.alloc(self.into());
+        let compu_id = this.allocator.alloc();
+        this.compus.insert(compu_id, self.into());
         if let Some(site) = site {
             this.terms.insert(site, TermId::Compu(compu_id));
         }

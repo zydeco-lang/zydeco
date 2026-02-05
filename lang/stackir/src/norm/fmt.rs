@@ -1,5 +1,4 @@
 //! Formatters for normalized stack IR.
 
-// use super::syntax::*;
+use super::syntax::*;
 
-// pub use zydeco_syntax::Pretty;

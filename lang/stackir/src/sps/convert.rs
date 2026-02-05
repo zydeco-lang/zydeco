@@ -238,7 +238,7 @@ impl<'a> ClosureConverter<'a> {
         .build(self, site);
 
         // Update the value in place with the pair: (captures, body_closure)
-        self.arena.values.replace(old_value_id, Cons(capture_pair, body_closure));
+        self.arena.values.replace_into(old_value_id, Cons(capture_pair, body_closure));
     }
 
     /// Convert a Force computation to handle converted closures.

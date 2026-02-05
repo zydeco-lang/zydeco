@@ -46,6 +46,12 @@ impl<Meta: Copy> Iterator for IndexAlloc<Meta> {
         Some((*meta, old))
     }
 }
+impl<Meta: Copy> IndexAlloc<Meta> {
+    pub fn alloc<I: IndexLike<Meta = Meta>>(&mut self) -> I {
+        let id = self.next().unwrap();
+        IndexLike::new(id.0, id.1)
+    }
+}
 
 pub struct GlobalAlloc(IndexAlloc<()>);
 impl GlobalAlloc {
@@ -466,8 +472,14 @@ mod impls {
             let None = self.map.insert(id, val) else { return };
             // let None = self.map.insert(id, val) else { panic!("duplicate key") };
         }
+        /// Replace the value at the given id with the given value. Returns the old value.
         pub fn replace(&mut self, id: Id, val: T) -> T {
             let Some(val) = self.map.insert(id, val) else { panic!("key not found") };
+            val
+        }
+        /// Replace the value at the given id with the given value. Returns the old value.
+        pub fn replace_into(&mut self, id: Id, val: impl Into<T>) -> T {
+            let Some(val) = self.map.insert(id, val.into()) else { panic!("key not found") };
             val
         }
         pub fn entry(&mut self, id: Id) -> std::collections::hash_map::Entry<'_, Id, T> {
