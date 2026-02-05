@@ -10,6 +10,9 @@ use crate::static_syntax as ss;
 /// [`zydeco_statics::tyck::syntax::StaticsArena`].
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct StackirArena {
+    /// arena allocator
+    pub allocator: IndexAlloc<usize>,
+
     /// value pattern arena
     pub vpats: ArenaSparse<VPatId, ValuePattern>,
     /// value arena
@@ -38,6 +41,7 @@ pub struct StackirArena {
 impl StackirArena {
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
         Self {
+            allocator: alloc.alloc(),
             vpats: ArenaSparse::new(alloc.alloc()),
             values: ArenaSparse::new(alloc.alloc()),
             stacks: ArenaSparse::new(alloc.alloc()),
