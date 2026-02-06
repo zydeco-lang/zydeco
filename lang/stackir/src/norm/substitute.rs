@@ -15,12 +15,12 @@ pub struct SubstPatMap {
     /// The order is from innermost to outermost.
     /// 
     /// Reversed stack-let bindings similar to reversed value-let bindings [`Self::values`].
-    stack: Vec<StackId>,
+    stacks: Vec<StackId>,
 }
 
 impl SubstPatMap {
     pub fn new() -> Self {
-        Self { values: indexmap::IndexMap::new(), stack: Vec::new() }
+        Self { values: indexmap::IndexMap::new(), stacks: Vec::new() }
     }
     /// Substitute a pattern for a value.
     pub fn cascade_value(&mut self, pat: VPatId, value: ValueId) {
@@ -29,7 +29,7 @@ impl SubstPatMap {
     /// Add another layer of stack on top of the current stack,
     /// semantically substituting the current bullet for the new (prev) stack.
     pub fn cascade_stack(&mut self, prev: StackId) {
-        self.stack.push(prev);
+        self.stacks.push(prev);
     }
     /// Iterate over value pattern substitutions.
     pub fn values(&self) -> impl Iterator<Item = (&VPatId, &ValueId)> {
@@ -37,7 +37,7 @@ impl SubstPatMap {
     }
     /// Iterate over stack substitutions.
     pub fn stacks(&self) -> impl Iterator<Item = &StackId> {
-        self.stack.iter()
+        self.stacks.iter()
     }
 }
 

@@ -10,6 +10,9 @@ pub struct SNormArena {
     pub sstacks: ArenaAssoc<StackId, Stack>,
     pub scompus: ArenaAssoc<CompuId, SComputation>,
 
+    // users
+    pub users: ArenaAssoc<DefId, usize>,
+
     // globals and entry points
     pub sequence: Vec<DefId>,
     pub globals: ArenaAssoc<DefId, ValueId>,
@@ -23,6 +26,7 @@ impl SNormArena {
             svalues: ArenaAssoc::new(),
             sstacks: ArenaAssoc::new(),
             scompus: ArenaAssoc::new(),
+            users: ArenaAssoc::new(),
             sequence: Vec::new(),
             globals: ArenaAssoc::new(),
             entry: ArenaAssoc::new(),

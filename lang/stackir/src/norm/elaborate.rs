@@ -87,7 +87,11 @@ impl<'a> Elaborate for ValueId {
         let value = el.stackir.values[&self].clone();
         match value {
             | Value::Hole(Hole) => Hole.sbuild(el, self, ()),
-            | Value::Var(def) => def.sbuild(el, self, ()),
+            | Value::Var(def) => {
+                let user = el.arena.users.entry(def).or_insert(0);
+                *user += 1;
+                def.sbuild(el, self, ())
+            }
             | Value::Closure(Closure { capture, stack: Bullet, body }) => {
                 assert!(capture.iter().count() == 0, "capture must be empty");
                 let body = body.elaborate(el);
