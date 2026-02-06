@@ -40,3 +40,5 @@ pub mod norm {
     /// In-place substitution helpers for normalized stack IR.
     pub mod substitute;
 }
+
+pub use norm::elaborate::Elaborator;

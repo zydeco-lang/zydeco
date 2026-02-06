@@ -469,6 +469,7 @@ impl BuildSystem {
                 log::trace!("ZIR after closure conversion:\n{}", buf);
             }
         }
+        let snorm = zydeco_stackir::Elaborator::new(&spans, &statics, &mut stackir).run()?;
         Ok(PackageStack { spans, scoped, statics, stackir })
     }
     /// compile a package to ZASM
