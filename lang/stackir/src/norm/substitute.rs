@@ -8,12 +8,12 @@ pub struct SubstPatMap {
     /// - we should apply the substitution to the underlying body from the innermost to the outermost.
     /// - or equivalently, we should apply the outermost substitution to both all inner substitutions
     ///   and the underlying body, and then take one step inner, and so on.
-    /// 
+    ///
     /// If you feel confused, simply think of it as a bunch of reversed let bindings.
     values: indexmap::IndexMap<VPatId, ValueId>,
     /// Ordered list of stacks substitutions.
     /// The order is from innermost to outermost.
-    /// 
+    ///
     /// Reversed stack-let bindings similar to reversed value-let bindings [`Self::values`].
     stacks: Vec<StackId>,
 }

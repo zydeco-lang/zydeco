@@ -17,6 +17,10 @@ pub struct Lowerer<'a> {
     #[as_ref]
     #[as_mut]
     pub arena: StackirArena,
+    /// initialization order of globals (built during lowering, folded into entry lets at end)
+    pub sequence: Vec<DefId>,
+    /// global def -> value (built during lowering, folded into entry lets at end)
+    pub globals: ArenaAssoc<DefId, ValueId>,
     pub spans: &'a SpanArena,
     #[as_mut(ScopedArena)]
     pub scoped: &'a mut ScopedArena,
@@ -30,7 +34,7 @@ impl<'a> Lowerer<'a> {
         statics: &'a StaticsArena,
     ) -> Self {
         let arena = StackirArena::new_arc(alloc);
-        Self { arena, spans, scoped, statics }
+        Self { arena, sequence: Vec::new(), globals: ArenaAssoc::new(), spans, scoped, statics }
     }
 
     /// Compute the minimal capture list for a closure from a computation body.
@@ -109,12 +113,12 @@ impl<'a> CompilerPass for Lowerer<'a> {
             }
         }
 
-        // Get entry declarations from statics arena
+        // Get entry declarations from statics arena; lower each and wrap in global lets
         for decl_id in self.statics.entry.iter().map(|(decl_id, _)| *decl_id) {
             // Get the declaration and extract the computation
             let decl = &self.statics.decls[&decl_id];
             use ss::Declaration as Decl;
-            let compu_id = match decl {
+            let entry = match decl {
                 | Decl::Exec(ss::Exec(compu)) => *compu,
                 // Only Exec declarations should be entry points
                 | Decl::TAliasBody(_) | Decl::VAliasBody(_) | Decl::VAliasHead(_) => {
@@ -125,10 +129,21 @@ impl<'a> CompilerPass for Lowerer<'a> {
             };
 
             // Lower the computation
-            let lowered_compu_id = compu_id.lower(&mut self, ());
+            let lowered = entry.lower(&mut self, ());
 
-            // Store the lowered computation as an entry point in the stack arena
-            self.arena.entry.insert(lowered_compu_id, ());
+            // Wrap in let bindings for all globals (in sequence order)
+            let wrapped = {
+                let mut tail = lowered;
+                for &def in self.sequence.iter().rev() {
+                    let bindee = self.globals[&def];
+                    let binder = ValuePattern::Var(def).build(&mut self.arena, None);
+                    tail = Let { binder, bindee, tail }.build(&mut self.arena, None);
+                }
+                tail
+            };
+
+            // Register as entry point
+            self.arena.entry.insert(wrapped, ());
         }
         Ok(self.arena)
     }
@@ -155,8 +170,8 @@ impl Lower for ss::VAliasBody {
             }
         };
         let value_id = Phantom::new(bindee).lower(lo, Box::new(move |val_id, _lo| val_id));
-        lo.arena.sequence.push(def_id);
-        lo.arena.globals.insert(def_id, value_id);
+        lo.sequence.push(def_id);
+        lo.globals.insert(def_id, value_id);
     }
 }
 
@@ -189,8 +204,8 @@ impl Lower for ss::VAliasHead {
             | BuiltinSort::Operator => builtin.make_operator(lo),
             | BuiltinSort::Function => builtin.make_function(lo),
         };
-        lo.arena.sequence.push(def);
-        lo.arena.globals.insert(def, value);
+        lo.sequence.push(def);
+        lo.globals.insert(def, value);
     }
 }
 

@@ -358,16 +358,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SNormArena {
             doc = doc.append(RcDoc::line());
         }
 
-        // Print all globals (same as sps Formatter)
-        for def_id in self.sequence.iter() {
-            let global = &self.globals[def_id];
-            let VarName(varname) = &f.scoped.defs[def_id];
-            doc = doc.append(RcDoc::text(format!("[def:{}{}]", varname, def_id.concise())));
-            doc = doc.append(RcDoc::concat([RcDoc::line(), global.pretty(f)]).nest(f.indent));
-            doc = doc.append(RcDoc::line());
-        }
-
-        // Print all entries (same as sps Formatter)
+        // Print all entries (each entry compu may start with let chain)
         for (compu_id, _) in self.entry.iter() {
             doc = doc
                 .append(RcDoc::text("[entry]"))

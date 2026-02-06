@@ -13,9 +13,7 @@ pub struct SNormArena {
     // users
     pub users: ArenaAssoc<DefId, usize>,
 
-    // globals and entry points
-    pub sequence: Vec<DefId>,
-    pub globals: ArenaAssoc<DefId, ValueId>,
+    // entry points (each compu may start with a let chain binding former globals)
     pub entry: ArenaAssoc<CompuId, ()>,
 }
 
@@ -27,8 +25,6 @@ impl SNormArena {
             sstacks: ArenaAssoc::new(),
             scompus: ArenaAssoc::new(),
             users: ArenaAssoc::new(),
-            sequence: Vec::new(),
-            globals: ArenaAssoc::new(),
             entry: ArenaAssoc::new(),
         }
     }

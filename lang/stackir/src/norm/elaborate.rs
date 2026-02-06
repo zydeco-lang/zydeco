@@ -36,18 +36,6 @@ impl<'a> CompilerPass for Elaborator<'a> {
     type Out = SNormArena;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<SNormArena, Self::Error> {
-        self.arena.sequence = self
-            .stackir
-            .sequence
-            .clone()
-            .into_iter()
-            .map(|def| {
-                // Update the globals as well
-                let value = self.stackir.globals[&def].elaborate(&mut self);
-                self.arena.globals.insert(def, value);
-                def
-            })
-            .collect();
         self.arena.entry = self
             .stackir
             .entry

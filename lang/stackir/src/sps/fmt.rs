@@ -1,8 +1,8 @@
 //! Formatters for the Zydeco Intermediate Representation (ZIR).
 
 use super::syntax::*;
-use zydeco_surface::scoped::syntax::ScopedArena;
 use zydeco_statics::tyck::arena::StaticsArena;
+use zydeco_surface::scoped::syntax::ScopedArena;
 
 /* -------------------------------- Formatter ------------------------------- */
 
@@ -386,16 +386,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for StackirArena {
             doc = doc.append(RcDoc::line());
         }
 
-        // Print all globals
-        for def_id in self.sequence.iter() {
-            let global = &self.globals[def_id];
-            let VarName(varname) = &f.scoped.defs[def_id];
-            doc = doc.append(RcDoc::text(format!("[def:{}{}]", varname, def_id.concise())));
-            doc = doc.append(RcDoc::concat([RcDoc::line(), global.pretty(f)]).nest(f.indent));
-            doc = doc.append(RcDoc::line());
-        }
-
-        // Print all entries
+        // Print all entries (each entry compu is let g1 = v1 in ... in body)
         for (compu_id, _) in self.entry.iter() {
             doc = doc
                 .append(RcDoc::text("[entry]"))

@@ -479,6 +479,17 @@ impl BuildSystem {
             if verbose {
                 log::trace!("Normalized ZIR:\n{}", buf);
             }
+            if verbose {
+                let users = snorm.users.iter().collect::<Vec<_>>();
+                let users = users
+                    .iter()
+                    .map(|(def, user)| {
+                        let name = &scoped.defs[def];
+                        format!("{}{}: {}", name.0, def.concise(), user)
+                    })
+                    .collect::<Vec<_>>();
+                log::trace!("Normalized ZIR users:\n{}", users.join("\n"));
+            }
         }
         Ok(PackageStack { spans, scoped, statics, stackir })
     }

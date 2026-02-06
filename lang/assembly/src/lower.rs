@@ -49,44 +49,10 @@ impl<'a> Lowerer<'a> {
             }
         }
 
-        // Lower entry points from StackArena to AssemblyArena
+        // Lower entry points from StackArena to AssemblyArena.
+        // Each entry compu is already let g1 = v1 in ... in body, so lowering it handles globals.
         for (compu_id, ()) in &self.stackir.entry {
-            let compu_id = *compu_id;
-
-            // All globals are statically known, so compile them as symbols.
-            // Collect globals with their def_ids for unified processing
-            let globals: Vec<_> = (self.stackir.sequence.clone().iter())
-                .rev()
-                .map(|&def_id| (def_id, self.stackir.globals[&def_id]))
-                .collect();
-
-            // Build a continuation that initializes all globals in order
-            let kont: Kont<'_, Lowerer<'_>> = globals.into_iter().fold(
-                Box::new(move |lo: &mut Lowerer, cx| {
-                    // After all globals are initialized, lower the entry point
-                    compu_id.lower(lo, cx)
-                }),
-                |kont, (def_id, body)| {
-                    // wrap continuation with lowering logic
-                    Box::new(move |lo: &mut Lowerer, cx| {
-                        body.lower(
-                            lo,
-                            With::new(
-                                cx,
-                                Box::new(move |lo: &mut Lowerer, cx| {
-                                    let name = lo.scoped.defs[&def_id].clone();
-                                    let var = name.build(lo, Some(def_id));
-                                    let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
-                                    Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
-                                }),
-                            ),
-                        )
-                    })
-                },
-            );
-
-            // Execute the initialization chain
-            let whole = kont(&mut self, Context::new());
+            let whole = (*compu_id).lower(&mut self, Context::new());
             self.arena.entry.insert(whole, ());
         }
         self.arena

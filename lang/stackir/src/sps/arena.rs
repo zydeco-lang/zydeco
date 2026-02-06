@@ -24,11 +24,8 @@ pub struct StackirArena {
 
     /// builtin operators and functions
     pub builtins: BuiltinMap,
-    /// globally defined values
-    pub globals: ArenaAssoc<DefId, ValueId>,
-    /// the initialization sequence of globals
-    pub sequence: Vec<DefId>,
     /// entry point(s), i.e. declarations that are marked as entry points;
+    /// each entry compu is wrapped in a let chain binding globals (in order) then the body
     /// typically the main function, which normally should only be unique
     pub entry: ArenaAssoc<CompuId, ()>,
 
@@ -47,8 +44,6 @@ impl StackirArena {
             stacks: ArenaAssoc::new(),
             compus: ArenaAssoc::new(),
             builtins: Builtin::all(),
-            globals: ArenaAssoc::new(),
-            sequence: Vec::new(),
             entry: ArenaAssoc::new(),
             pats: ArenaBijective::new(),
             terms: ArenaBijective::new(),
