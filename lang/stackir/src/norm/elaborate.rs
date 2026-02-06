@@ -35,12 +35,25 @@ impl<'a> CompilerPass for Elaborator<'a> {
     type Out = SNormArena;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<SNormArena, Self::Error> {
-        for def in self.stackir.sequence.clone() {
-            self.stackir.globals[&def].elaborate(&mut self);
-        }
-        for (compu_id, ()) in self.stackir.entry.clone() {
-            compu_id.elaborate(&mut self);
-        }
+        self.arena.sequence = self
+            .stackir
+            .sequence
+            .clone()
+            .into_iter()
+            .map(|def| {
+                // Update the globals as well
+                let value = self.stackir.globals[&def].elaborate(&mut self);
+                self.arena.globals.insert(def, value);
+                def
+            })
+            .collect();
+        self.arena.entry = self
+            .stackir
+            .entry
+            .clone()
+            .into_iter()
+            .map(|(compu_id, ())| (compu_id.elaborate(&mut self), ()))
+            .collect();
         Ok(self.arena)
     }
 }
@@ -49,7 +62,20 @@ impl<'a> Elaborate for VPatId {
     type Out = Self;
     fn elaborate(self, el: &mut Elaborator) -> Self::Out {
         let vpat = el.stackir.vpats[&self].clone();
-        vpat.sbuild(el, self, ())
+        match vpat {
+            | ValuePattern::Hole(Hole) => Hole.sbuild(el, self, ()),
+            | ValuePattern::Var(def_id) => def_id.sbuild(el, self, ()),
+            | ValuePattern::Ctor(Ctor(name, tail)) => {
+                let tail = tail.elaborate(el);
+                Ctor(name, tail).sbuild(el, self, ())
+            }
+            | ValuePattern::Triv(Triv) => Triv.sbuild(el, self, ()),
+            | ValuePattern::VCons(Cons(a, b)) => {
+                let a = a.elaborate(el);
+                let b = b.elaborate(el);
+                Cons(a, b).sbuild(el, self, ())
+            }
+        }
     }
 }
 

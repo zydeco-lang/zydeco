@@ -30,6 +30,14 @@ impl SubstPatMap {
     pub fn cascade_stack(&mut self, prev: StackId) {
         self.stack.push(prev);
     }
+    /// Iterate over value pattern substitutions.
+    pub fn values(&self) -> impl Iterator<Item = (&VPatId, &ValueId)> {
+        self.values.iter()
+    }
+    /// Iterate over stack substitutions.
+    pub fn stacks(&self) -> impl Iterator<Item = &StackId> {
+        self.stack.iter()
+    }
 }
 
 /// In-place substitution for normalized stack IR nodes.

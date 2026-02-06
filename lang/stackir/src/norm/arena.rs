@@ -4,10 +4,16 @@ use zydeco_derive::{AsMutSelf, AsRefSelf};
 
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SNormArena {
+    // arenas
     pub svpats: ArenaAssoc<VPatId, ValuePattern>,
     pub svalues: ArenaAssoc<ValueId, Value>,
     pub sstacks: ArenaAssoc<StackId, Stack>,
     pub scompus: ArenaAssoc<CompuId, SComputation>,
+
+    // globals and entry points
+    pub sequence: Vec<DefId>,
+    pub globals: ArenaAssoc<DefId, ValueId>,
+    pub entry: ArenaAssoc<CompuId, ()>,
 }
 
 impl SNormArena {
@@ -17,6 +23,9 @@ impl SNormArena {
             svalues: ArenaAssoc::new(),
             sstacks: ArenaAssoc::new(),
             scompus: ArenaAssoc::new(),
+            sequence: Vec::new(),
+            globals: ArenaAssoc::new(),
+            entry: ArenaAssoc::new(),
         }
     }
 }

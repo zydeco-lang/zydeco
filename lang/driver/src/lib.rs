@@ -300,9 +300,9 @@ impl BuildSystem {
         }
         Package::test_interp(runtime, name.as_str(), false)
     }
-    pub fn codegen_zir_pack(&self, pack: PackId) -> Result<()> {
+    pub fn codegen_zir_pack(&self, pack: PackId, verbose: bool) -> Result<()> {
         let PackageStack { stackir, scoped, statics, .. } =
-            self.__compile_zir_pack(pack, ArcGlobalAlloc::new(), false)?;
+            self.__compile_zir_pack(pack, ArcGlobalAlloc::new(), verbose)?;
         // pretty print the ZIR
         use zydeco_stackir::sps::fmt::*;
         let fmt = Formatter::new(&stackir, &scoped, &statics);
@@ -470,6 +470,16 @@ impl BuildSystem {
             }
         }
         let snorm = zydeco_stackir::Elaborator::new(&spans, &statics, &mut stackir).run()?;
+        {
+            use zydeco_stackir::norm::fmt::*;
+            let fmt = Formatter::new(&snorm, &stackir, &scoped, &statics);
+            let doc = snorm.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            if verbose {
+                log::trace!("Normalized ZIR:\n{}", buf);
+            }
+        }
         Ok(PackageStack { spans, scoped, statics, stackir })
     }
     /// compile a package to ZASM

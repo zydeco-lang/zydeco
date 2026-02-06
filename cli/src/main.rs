@@ -76,7 +76,7 @@ fn build_files(
 
     match target.as_str() {
         | "zir" => {
-            build_sys.codegen_zir_pack(pack)?;
+            build_sys.codegen_zir_pack(pack, verbose)?;
             Ok(0)
         }
         | "zasm" => {
