@@ -38,6 +38,9 @@ impl<'a> CompilerPass for Elaborator<'a> {
         for def in self.stackir.sequence.clone() {
             self.stackir.globals[&def].elaborate(&mut self);
         }
+        for (compu_id, ()) in self.stackir.entry.clone() {
+            compu_id.elaborate(&mut self);
+        }
         Ok(self.arena)
     }
 }
