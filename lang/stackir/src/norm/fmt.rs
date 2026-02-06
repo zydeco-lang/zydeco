@@ -1,7 +1,7 @@
 //! Formatters for normalized stack IR.
 
 use super::syntax::*;
-use crate::sps::fmt as sps_fmt;
+use crate::sps::{fmt as sps_fmt, syntax::*};
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::scoped::syntax::ScopedArena;
 

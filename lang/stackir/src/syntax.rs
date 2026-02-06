@@ -1,4 +1,4 @@
-pub use super::{builtin::*, arena::*};
+pub use super::builtin::*;
 pub use zydeco_syntax::{fmt, *};
 pub use zydeco_utils::{arena::*, context::Context};
 
@@ -122,19 +122,4 @@ pub enum Computation<Join> {
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
     CoCase(CoMatch<CompuId, Cons<DtorName, Bullet>>),
     ExternCall(ExternCall),
-}
-
-#[derive(From, Clone, Debug)]
-pub enum LetJoin {
-    Value(Let<VPatId, ValueId, CompuId>),
-    Stack(Let<Bullet, StackId, CompuId>),
-}
-
-impl<T> From<T> for Computation<LetJoin>
-where
-    T: Into<LetJoin>,
-{
-    fn from(j: T) -> Self {
-        Computation::Join(j.into())
-    }
 }

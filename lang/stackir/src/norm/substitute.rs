@@ -1,4 +1,5 @@
 use super::syntax::*;
+use crate::sps::syntax::*;
 
 #[derive(Clone, Debug)]
 pub struct SubstPatMap {
