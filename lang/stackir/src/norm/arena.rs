@@ -30,7 +30,7 @@ impl SNormArena {
     }
 }
 
-pub trait Construct<S, T, Arena>: Sized + Into<S> {
+pub trait SConstruct<S, T, Arena>: Sized + Into<S> {
     /// The previous id of the node.
     type Id;
     /// The associated structure of the node.
@@ -39,7 +39,7 @@ pub trait Construct<S, T, Arena>: Sized + Into<S> {
     fn sbuild(self, arena: &mut Arena, id: Self::Id, structure: Self::Structure) -> T;
 }
 
-impl<U, Arena> Construct<ValuePattern, VPatId, Arena> for U
+impl<U, Arena> SConstruct<ValuePattern, VPatId, Arena> for U
 where
     Arena: AsMut<SNormArena>,
     U: Into<ValuePattern>,
@@ -53,7 +53,7 @@ where
     }
 }
 
-impl<U, Arena> Construct<Value, ValueId, Arena> for U
+impl<U, Arena> SConstruct<Value, ValueId, Arena> for U
 where
     Arena: AsMut<SNormArena>,
     U: Into<Value>,
@@ -67,7 +67,7 @@ where
     }
 }
 
-impl<U, Arena> Construct<Stack, StackId, Arena> for U
+impl<U, Arena> SConstruct<Stack, StackId, Arena> for U
 where
     Arena: AsMut<SNormArena>,
     U: Into<Stack>,
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<U, Arena> Construct<Computation<NonJoin>, CompuId, Arena> for U
+impl<U, Arena> SConstruct<Computation<NonJoin>, CompuId, Arena> for U
 where
     Arena: AsMut<SNormArena>,
     U: Into<Computation<NonJoin>>,

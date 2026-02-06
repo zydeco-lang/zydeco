@@ -1,9 +1,6 @@
 pub use super::{arena::*, substitute::*};
 pub use crate::sps::syntax::*;
-pub use zydeco_utils::{
-    arena::*,
-    context::{CoContext, Context},
-};
+pub use zydeco_utils::context::{CoContext, Context};
 
 #[derive(Clone, Debug)]
 pub enum NonJoin {}
