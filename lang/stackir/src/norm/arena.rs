@@ -2,15 +2,32 @@ use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 
+/// Arena for substitution normal form of stack IR.
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SNormArena {
-    // arenas
+    /// administrative arena
+    #[as_ref]
+    #[as_mut]
+    pub admin: AdminArena,
+
+    /// inner arena that stores the nodes and associated properties
+    #[as_ref]
+    #[as_mut]
+    pub inner: SNormInnerArena,
+}
+
+#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
+pub struct SNormInnerArena {
+    /// value pattern arena
     pub svpats: ArenaAssoc<VPatId, ValuePattern>,
+    /// value arena
     pub svalues: ArenaAssoc<ValueId, Value>,
+    /// stack arena
     pub sstacks: ArenaAssoc<StackId, Stack>,
+    /// computation arena
     pub scompus: ArenaAssoc<CompuId, SComputation>,
 
-    // users
+    // users of variables
     pub users: ArenaAssoc<DefId, usize>,
 
     // entry points (each compu may start with a let chain binding former globals)
@@ -18,14 +35,17 @@ pub struct SNormArena {
 }
 
 impl SNormArena {
-    pub fn new() -> Self {
+    pub fn new(admin: AdminArena) -> Self {
         Self {
-            svpats: ArenaAssoc::new(),
-            svalues: ArenaAssoc::new(),
-            sstacks: ArenaAssoc::new(),
-            scompus: ArenaAssoc::new(),
-            users: ArenaAssoc::new(),
-            entry: ArenaAssoc::new(),
+            admin,
+            inner: SNormInnerArena {
+                svpats: ArenaAssoc::new(),
+                svalues: ArenaAssoc::new(),
+                sstacks: ArenaAssoc::new(),
+                scompus: ArenaAssoc::new(),
+                users: ArenaAssoc::new(),
+                entry: ArenaAssoc::new(),
+            },
         }
     }
 }
@@ -48,7 +68,7 @@ where
     type Structure = ();
     fn sbuild(self, arena: &mut Arena, id: Self::Id, (): Self::Structure) -> VPatId {
         let this = &mut *arena.as_mut();
-        this.svpats.insert(id, self.into());
+        this.inner.svpats.insert(id, self.into());
         id
     }
 }
@@ -62,7 +82,7 @@ where
     type Structure = ();
     fn sbuild(self, arena: &mut Arena, id: Self::Id, (): Self::Structure) -> ValueId {
         let this = &mut *arena.as_mut();
-        this.svalues.insert(id, self.into());
+        this.inner.svalues.insert(id, self.into());
         id
     }
 }
@@ -76,7 +96,7 @@ where
     type Structure = ();
     fn sbuild(self, arena: &mut Arena, id: Self::Id, (): Self::Structure) -> StackId {
         let this = &mut *arena.as_mut();
-        this.sstacks.insert(id, self.into());
+        this.inner.sstacks.insert(id, self.into());
         id
     }
 }
@@ -90,7 +110,7 @@ where
     type Structure = SubstPatMap;
     fn sbuild(self, arena: &mut Arena, id: Self::Id, map: Self::Structure) -> CompuId {
         let this = &mut *arena.as_mut();
-        this.scompus.insert(id, SComputation { compu: self.into(), map });
+        this.inner.scompus.insert(id, SComputation { compu: self.into(), map });
         id
     }
 }

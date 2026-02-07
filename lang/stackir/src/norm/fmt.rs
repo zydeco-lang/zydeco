@@ -40,7 +40,7 @@ use pretty::RcDoc;
 
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let vpat = &f.norm_arena.svpats[self];
+        let vpat = &f.norm_arena.inner.svpats[self];
         // let Some(vpat) = &f.norm_arena.svpats.get(self) else {
         //     return self.pretty(&f.sps_formatter);
         //     return RcDoc::text(format!("[vpat:{}]", self.concise()));
@@ -74,7 +74,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let value = &f.norm_arena.svalues[self];
+        let value = &f.norm_arena.inner.svalues[self];
         value.pretty(f)
     }
 }
@@ -142,7 +142,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
 
 impl<'a> Pretty<'a, Formatter<'a>> for StackId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let stack = &f.norm_arena.sstacks[self];
+        let stack = &f.norm_arena.inner.sstacks[self];
         stack.pretty(f)
     }
 }
@@ -289,7 +289,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<NonJoin> {
                 ])
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
-                let arity = f.stackir_arena.builtins[function].arity;
+                let arity = f.stackir_arena.admin.builtins[function].arity;
                 let fun_str = format!("<extern:{}/{}>", function, arity);
                 RcDoc::concat([RcDoc::text(fun_str), RcDoc::space(), stack.pretty(f)])
             }
@@ -331,7 +331,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SComputation {
 
 impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Some(scompu) = f.norm_arena.scompus.get(self) else {
+        let Some(scompu) = f.norm_arena.inner.scompus.get(self) else {
             // return f.stackir_arena.compus[self].pretty(&f.sps_formatter);
             return RcDoc::text(format!("[compu:{}]", self.concise()));
         };
@@ -344,7 +344,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SNormArena {
         let mut doc = RcDoc::nil();
 
         // Print all builtins (same as sps Formatter)
-        let builtins = &f.stackir_arena.builtins;
+        let builtins = &f.stackir_arena.admin.builtins;
         for (name, builtin) in
             builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Operator)
         {
@@ -359,7 +359,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SNormArena {
         }
 
         // Print all entries (each entry compu may start with let chain)
-        for (compu_id, _) in self.entry.iter() {
+        for (compu_id, _) in self.inner.entry.iter() {
             doc = doc
                 .append(RcDoc::text("[entry]"))
                 .append(RcDoc::concat([RcDoc::line(), compu_id.pretty(f)]).nest(f.indent))

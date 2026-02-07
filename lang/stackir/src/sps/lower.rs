@@ -143,7 +143,7 @@ impl<'a> CompilerPass for Lowerer<'a> {
             };
 
             // Register as entry point
-            self.arena.entry.insert(wrapped, ());
+            self.arena.inner.entry.insert(wrapped, ());
         }
         Ok(self.arena)
     }
@@ -159,7 +159,7 @@ impl Lower for ss::VAliasBody {
         let binder_vpat = binder.lower(lo, ());
         // Extract DefId from binder (should be a Var pattern)
         use ValuePattern as VPat;
-        let def_id = match lo.arena.vpats[&binder_vpat] {
+        let def_id = match lo.arena.inner.vpats[&binder_vpat] {
             | VPat::Var(def) => def,
             | _ => {
                 let fmt = super::fmt::Formatter::new(&lo.arena, lo.scoped, lo.statics);
@@ -185,7 +185,7 @@ impl Lower for ss::VAliasHead {
         let binder_vpat = binder.lower(lo, ());
         // Extract DefId from binder (should be a Var pattern)
         use ValuePattern as VPat;
-        let def = match &lo.arena.vpats[&binder_vpat] {
+        let def = match &lo.arena.inner.vpats[&binder_vpat] {
             | VPat::Var(def) => *def,
             | _ => {
                 let fmt = super::fmt::Formatter::new(&lo.arena, lo.scoped, lo.statics);
@@ -196,7 +196,7 @@ impl Lower for ss::VAliasHead {
             }
         };
         let name = lo.scoped.defs[&def].plain();
-        let Some(builtin) = lo.arena.builtins.get(name.as_str()).cloned() else {
+        let Some(builtin) = lo.arena.admin.builtins.get(name.as_str()).cloned() else {
             panic!("Undefined builtin extern:\n{}", name);
         };
         // Create the builtin value and store it in globals

@@ -8,7 +8,7 @@ pub trait Vars {
 
 impl Vars for VPatId {
     fn vars(self, arena: &impl AsRef<StackirArena>) -> Context<DefId> {
-        let vpat = arena.as_ref().vpats[&self].clone();
+        let vpat = arena.as_ref().inner.vpats[&self].clone();
         use ValuePattern as VPat;
         match vpat {
             | VPat::Hole(Hole) => Context::new(),
@@ -27,7 +27,7 @@ pub trait FreeVars {
 
 impl FreeVars for ValueId {
     fn free_vars(self, arena: &impl AsRef<StackirArena>) -> CoContext<DefId> {
-        let value = arena.as_ref().values[&self].clone();
+        let value = arena.as_ref().inner.values[&self].clone();
         match value {
             | Value::Var(def_id) => CoContext::singleton(def_id),
             | Value::Closure(Closure { capture: _, stack: Bullet, body }) => body.free_vars(arena),
@@ -44,7 +44,7 @@ impl FreeVars for ValueId {
 
 impl FreeVars for StackId {
     fn free_vars(self, arena: &impl AsRef<StackirArena>) -> CoContext<DefId> {
-        let stack = arena.as_ref().stacks[&self].clone();
+        let stack = arena.as_ref().inner.stacks[&self].clone();
         match stack {
             | Stack::Kont(Kont { binder, body }) => body.free_vars(arena) - binder.vars(arena),
             | Stack::Var(Bullet) => CoContext::new(),
@@ -56,7 +56,7 @@ impl FreeVars for StackId {
 
 impl FreeVars for CompuId {
     fn free_vars(self, arena: &impl AsRef<StackirArena>) -> CoContext<DefId> {
-        let compu = arena.as_ref().compus[&self].clone();
+        let compu = arena.as_ref().inner.compus[&self].clone();
         use Computation as Compu;
         match compu {
             | Compu::Hole(Hole) => CoContext::new(),

@@ -10,9 +10,19 @@ use zydeco_derive::{AsMutSelf, AsRefSelf};
 /// [`zydeco_statics::tyck::syntax::StaticsArena`].
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct StackirArena {
-    /// arena allocator
-    pub allocator: IndexAlloc<usize>,
+    /// administrative arena
+    #[as_ref]
+    #[as_mut]
+    pub admin: AdminArena,
 
+    /// inner arena that stores the nodes and associated properties
+    #[as_ref]
+    #[as_mut]
+    pub inner: StackirInnerArena,
+}
+
+#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
+pub struct StackirInnerArena {
     /// value pattern arena
     pub vpats: ArenaAssoc<VPatId, ValuePattern>,
     /// value arena
@@ -22,31 +32,23 @@ pub struct StackirArena {
     /// computation arena
     pub compus: ArenaAssoc<CompuId, Computation<LetJoin>>,
 
-    /// builtin operators and functions
-    pub builtins: BuiltinMap,
     /// entry point(s), i.e. declarations that are marked as entry points;
     /// each entry compu is wrapped in a let chain binding globals (in order) then the body
     /// typically the main function, which normally should only be unique
     pub entry: ArenaAssoc<CompuId, ()>,
-
-    /// Zydeco to ZIR bijective maps for patterns
-    pub pats: ArenaBijective<ss::PatId, VPatId>,
-    /// Zydeco to ZIR bijective maps for terms
-    pub terms: ArenaBijective<ss::TermId, TermId>,
 }
 
 impl StackirArena {
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
         Self {
-            allocator: alloc.alloc(),
-            vpats: ArenaAssoc::new(),
-            values: ArenaAssoc::new(),
-            stacks: ArenaAssoc::new(),
-            compus: ArenaAssoc::new(),
-            builtins: Builtin::all(),
-            entry: ArenaAssoc::new(),
-            pats: ArenaBijective::new(),
-            terms: ArenaBijective::new(),
+            admin: AdminArena::new(alloc.alloc()),
+            inner: StackirInnerArena {
+                vpats: ArenaAssoc::new(),
+                values: ArenaAssoc::new(),
+                stacks: ArenaAssoc::new(),
+                compus: ArenaAssoc::new(),
+                entry: ArenaAssoc::new(),
+            },
         }
     }
 }
@@ -66,10 +68,10 @@ where
     type Site = ss::PatId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> VPatId {
         let this = &mut *arena.as_mut();
-        let vpat_id = this.allocator.alloc();
-        this.vpats.insert(vpat_id, self.into());
+        let vpat_id = this.admin.allocator.alloc();
+        this.inner.vpats.insert(vpat_id, self.into());
         if let Some(site) = site {
-            this.pats.insert(site, vpat_id);
+            this.admin.pats.insert(site, vpat_id);
         }
         vpat_id
     }
@@ -83,10 +85,10 @@ where
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> ValueId {
         let this = &mut *arena.as_mut();
-        let value_id = this.allocator.alloc();
-        this.values.insert(value_id, self.into());
+        let value_id = this.admin.allocator.alloc();
+        this.inner.values.insert(value_id, self.into());
         if let Some(site) = site {
-            this.terms.insert(site, TermId::Value(value_id));
+            this.admin.terms.insert(site, TermId::Value(value_id));
         }
         value_id
     }
@@ -100,10 +102,10 @@ where
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> StackId {
         let this = &mut *arena.as_mut();
-        let stack_id = this.allocator.alloc();
-        this.stacks.insert(stack_id, self.into());
+        let stack_id = this.admin.allocator.alloc();
+        this.inner.stacks.insert(stack_id, self.into());
         if let Some(site) = site {
-            this.terms.insert(site, TermId::Stack(stack_id));
+            this.admin.terms.insert(site, TermId::Stack(stack_id));
         }
         stack_id
     }
@@ -117,10 +119,10 @@ where
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {
         let this = &mut *arena.as_mut();
-        let compu_id = this.allocator.alloc();
-        this.compus.insert(compu_id, self.into());
+        let compu_id = this.admin.allocator.alloc();
+        this.inner.compus.insert(compu_id, self.into());
         if let Some(site) = site {
-            this.terms.insert(site, TermId::Compu(compu_id));
+            this.admin.terms.insert(site, TermId::Compu(compu_id));
         }
         compu_id
     }

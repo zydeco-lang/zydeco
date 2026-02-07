@@ -469,7 +469,14 @@ impl BuildSystem {
                 log::trace!("ZIR after closure conversion:\n{}", buf);
             }
         }
-        let snorm = zydeco_stackir::Elaborator::new(&spans, &statics, &mut stackir).run()?;
+        let snorm = zydeco_stackir::Elaborator::new(
+            // we'll eventually replace this by taking ownership of admin in stackir
+            unsafe { stackir.admin.duplicate() },
+            &spans,
+            &statics,
+            &mut stackir.inner,
+        )
+        .run()?;
         {
             use zydeco_stackir::norm::fmt::*;
             let fmt = Formatter::new(&snorm, &stackir, &scoped, &statics);
@@ -480,7 +487,7 @@ impl BuildSystem {
                 log::trace!("Normalized ZIR:\n{}", buf);
             }
             if verbose {
-                let users = snorm.users.iter().collect::<Vec<_>>();
+                let users = snorm.inner.users.iter().collect::<Vec<_>>();
                 let users = users
                     .iter()
                     .map(|(def, user)| {

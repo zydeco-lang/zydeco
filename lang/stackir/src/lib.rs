@@ -4,6 +4,8 @@ use zydeco_statics::tyck::syntax as static_syntax;
 
 /// Stack IR syntax and identifiers.
 pub mod syntax;
+/// Arenas and builders for stack IR nodes.
+pub mod arena;
 /// Builtin definitions for externs in stack IR.
 pub mod builtin;
 pub use builtin::*;

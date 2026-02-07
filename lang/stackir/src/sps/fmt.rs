@@ -36,7 +36,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for DefId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let vpat = &f.arena.vpats[self];
+        let vpat = &f.arena.inner.vpats[self];
         use super::syntax::{Cons, Ctor, ValuePattern as VPat};
         match vpat {
             | VPat::Hole(_) => RcDoc::text("_"),
@@ -66,7 +66,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let value = &f.arena.values[self];
+        let value = &f.arena.inner.values[self];
         value.pretty(f)
     }
 }
@@ -153,7 +153,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
 
 impl<'a> Pretty<'a, Formatter<'a>> for StackId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let stack = &f.arena.stacks[self];
+        let stack = &f.arena.inner.stacks[self];
         stack.pretty(f)
     }
 }
@@ -209,7 +209,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Kont {
 
 impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let compu = &f.arena.compus[self];
+        let compu = &f.arena.inner.compus[self];
         compu.pretty(f)
     }
 }
@@ -350,7 +350,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                 ])
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
-                let arity = f.arena.builtins[function].arity;
+                let arity = f.arena.admin.builtins[function].arity;
                 let fun_str = format!("<extern:{}/{}>", function, arity);
                 RcDoc::concat([RcDoc::text(fun_str), RcDoc::space(), stack.pretty(f)])
             }
@@ -371,23 +371,24 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
 impl<'a> Pretty<'a, Formatter<'a>> for StackirArena {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let mut doc = RcDoc::nil();
+        let builtins = &f.arena.admin.builtins;
 
         // Print all builtins
         for (name, builtin) in
-            self.builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Operator)
+            builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Operator)
         {
             doc = doc.append(RcDoc::text(format!("[operator:{}] {}", name, builtin)));
             doc = doc.append(RcDoc::line());
         }
         for (name, builtin) in
-            self.builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Function)
+            builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Function)
         {
             doc = doc.append(RcDoc::text(format!("[function:{}] {}", name, builtin)));
             doc = doc.append(RcDoc::line());
         }
 
         // Print all entries (each entry compu is let g1 = v1 in ... in body)
-        for (compu_id, _) in self.entry.iter() {
+        for (compu_id, _) in self.inner.entry.iter() {
             doc = doc
                 .append(RcDoc::text("[entry]"))
                 .append(RcDoc::concat([RcDoc::line(), compu_id.pretty(f)]).nest(f.indent))

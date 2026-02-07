@@ -25,13 +25,13 @@ pub trait SubstVarInPlace {
 impl SubstVarInPlace for ValueId {
     fn subst_var_in_place(self, arena: &mut impl AsMut<StackirArena>, map: &SubstVarMap) {
         let mut arena_mut = arena.as_mut();
-        let value = arena_mut.values[&self].clone();
+        let value = arena_mut.inner.values[&self].clone();
 
         match value {
             | Value::Var(def_id) => match map.values.get(&def_id) {
                 | Some(new_value_id) => {
-                    let new_value = arena_mut.values[new_value_id].clone();
-                    arena_mut.values.replace(self, new_value);
+                    let new_value = arena_mut.inner.values[new_value_id].clone();
+                    arena_mut.inner.values.replace(self, new_value);
                 }
                 | None => {}
             },
@@ -62,7 +62,7 @@ impl SubstVarInPlace for ValueId {
 impl SubstVarInPlace for StackId {
     fn subst_var_in_place(self, arena: &mut impl AsMut<StackirArena>, map: &SubstVarMap) {
         let mut arena_mut = arena.as_mut();
-        let stack = arena_mut.stacks[&self].clone();
+        let stack = arena_mut.inner.stacks[&self].clone();
 
         match stack {
             | Stack::Kont(Kont { binder: _, body }) => {
@@ -80,8 +80,8 @@ impl SubstVarInPlace for StackId {
             }
             | Stack::Var(Bullet) => match &map.stack {
                 | Some(new_stack_id) => {
-                    let new_stack = arena_mut.stacks[new_stack_id].clone();
-                    arena_mut.stacks.replace(self, new_stack);
+                    let new_stack = arena_mut.inner.stacks[new_stack_id].clone();
+                    arena_mut.inner.stacks.replace(self, new_stack);
                 }
                 | None => {}
             },
@@ -92,7 +92,7 @@ impl SubstVarInPlace for StackId {
 impl SubstVarInPlace for CompuId {
     fn subst_var_in_place(self, arena: &mut impl AsMut<StackirArena>, map: &SubstVarMap) {
         let mut arena_mut = arena.as_mut();
-        let compu = arena_mut.compus[&self].clone();
+        let compu = arena_mut.inner.compus[&self].clone();
 
         match compu {
             | Computation::Hole(Hole) => {}

@@ -41,7 +41,7 @@ impl<'a> ClosureConverter<'a> {
 
     pub fn convert(mut self) {
         // Transform Fix computations
-        let fixes: Vec<_> = (self.arena.compus.iter())
+        let fixes: Vec<_> = (self.arena.inner.compus.iter())
             .filter_map(|(id, compu)| match compu {
                 | Computation::Fix(fix) => Some((*id, fix.clone())),
                 | _ => None,
@@ -52,7 +52,7 @@ impl<'a> ClosureConverter<'a> {
         }
 
         // Transform Clo values (thunks)
-        let clos: Vec<_> = (self.arena.values.iter())
+        let clos: Vec<_> = (self.arena.inner.values.iter())
             .filter_map(|(id, value)| match value {
                 | Value::Closure(clo) => Some((*id, clo.clone())),
                 | _ => None,
@@ -64,7 +64,7 @@ impl<'a> ClosureConverter<'a> {
 
         // Update Force operations to handle converted closures
         // Find all Force operations and update them to unpack the closure pair
-        let forces: Vec<_> = (self.arena.compus.iter())
+        let forces: Vec<_> = (self.arena.inner.compus.iter())
             .filter_map(|(id, compu)| match compu {
                 | Computation::Force(force) => Some((*id, force.clone())),
                 | _ => None,
@@ -77,12 +77,12 @@ impl<'a> ClosureConverter<'a> {
 
     /// Get the ss::TermId site for a CompuId, if it exists.
     fn get_compu_site(&self, compu_id: CompuId) -> Option<ss::TermId> {
-        self.arena.terms.back(&TermId::Compu(compu_id)).copied()
+        self.arena.admin.terms.back(&TermId::Compu(compu_id)).copied()
     }
 
     /// Get the ss::TermId site for a ValueId, if it exists.
     fn get_value_site(&self, value_id: ValueId) -> Option<ss::TermId> {
-        self.arena.terms.back(&TermId::Value(value_id)).copied()
+        self.arena.admin.terms.back(&TermId::Value(value_id)).copied()
     }
 
     /// Compute free variables in a computation using cocontext from scoped.
@@ -175,7 +175,7 @@ impl<'a> ClosureConverter<'a> {
                 .build(self, site);
         // Wrap the Fix in a LetStack that pushes captures, then runs the Fix
         // Update the Fix in place with the wrapped computation
-        self.arena.compus.replace(
+        self.arena.inner.compus.replace(
             old_compu_id,
             Computation::Join(LetJoin::Stack(Let {
                 binder: Bullet,
@@ -238,7 +238,7 @@ impl<'a> ClosureConverter<'a> {
         .build(self, site);
 
         // Update the value in place with the pair: (captures, body_closure)
-        self.arena.values.replace_into(old_value_id, Cons(capture_pair, body_closure));
+        self.arena.inner.values.replace_into(old_value_id, Cons(capture_pair, body_closure));
     }
 
     /// Convert a Force computation to handle converted closures.
@@ -270,7 +270,7 @@ impl<'a> ClosureConverter<'a> {
         // LetValue to destructure: let Cons(capture_pair, body_closure) = thunk in ...
         // This will destructure the pair at runtime.
         // Replace the original Force with the transformed computation
-        self.arena.compus.replace(
+        self.arena.inner.compus.replace(
             compu_id,
             Computation::Join(LetJoin::Value(Let {
                 binder: pair_pattern,

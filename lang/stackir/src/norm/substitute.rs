@@ -48,5 +48,16 @@ pub trait SubstPatInPlace {
     /// The [`DefId`]s in the pattern part of the map are guaranteed to be free.
     fn subst_pat_in_place<T>(self, arena: &mut T, map: &SubstPatMap)
     where
-        T: AsMut<StackirArena> + AsMut<SNormArena>;
+        T: AsMut<SNormArena>;
+}
+
+impl SubstPatInPlace for ValueId {
+    fn subst_pat_in_place<T>(self, arena: &mut T, map: &SubstPatMap)
+    where
+        T: AsMut<SNormArena>,
+    {
+        let mut arena_mut = arena.as_mut();
+        let value = arena_mut.inner.svalues[&self].clone();
+        todo!()
+    }
 }

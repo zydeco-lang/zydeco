@@ -42,7 +42,7 @@ impl<'a> Lowerer<'a> {
 
     pub fn run(mut self) -> AssemblyArena {
         // Lower all builtins
-        for (_, builtin) in self.stackir.builtins.iter() {
+        for (_, builtin) in self.stackir.admin.builtins.iter() {
             let sk::Builtin { name, arity, sort } = builtin.clone();
             if sort == sk::BuiltinSort::Function {
                 self.arena.externs.push(Extern { name, arity });
@@ -51,7 +51,7 @@ impl<'a> Lowerer<'a> {
 
         // Lower entry points from StackArena to AssemblyArena.
         // Each entry compu is already let g1 = v1 in ... in body, so lowering it handles globals.
-        for (compu_id, ()) in &self.stackir.entry {
+        for (compu_id, ()) in &self.stackir.inner.entry {
             let whole = (*compu_id).lower(&mut self, Context::new());
             self.arena.entry.insert(whole, ());
         }
@@ -71,6 +71,7 @@ impl<'a> Lowerer<'a> {
         // Get the corresponding statics value
         let ss::TermId::Value(value) = self
             .stackir
+            .admin
             .terms
             .back(&sk::TermId::Value(value_id))
             .expect("Constructor value not found")
@@ -97,8 +98,12 @@ impl<'a> Lowerer<'a> {
         &self, compu_id: sk::CompuId, dtor_name: &zydeco_syntax::DtorName,
     ) -> usize {
         // Get the corresponding statics computation
-        let ss::TermId::Compu(compu) =
-            self.stackir.terms.back(&sk::TermId::Compu(compu_id)).expect("Computation not found")
+        let ss::TermId::Compu(compu) = self
+            .stackir
+            .admin
+            .terms
+            .back(&sk::TermId::Compu(compu_id))
+            .expect("Computation not found")
         else {
             unreachable!("Computation is not a computation in statics")
         };
@@ -114,7 +119,7 @@ impl<'a> Lowerer<'a> {
     ) -> usize {
         // Get the corresponding statics stack
         let ss::TermId::Compu(compu) =
-            self.stackir.terms.back(&sk::TermId::Stack(stack_id)).expect("Stack not found")
+            self.stackir.admin.terms.back(&sk::TermId::Stack(stack_id)).expect("Stack not found")
         else {
             unreachable!("Stack is not a computation in statics")
         };
@@ -129,7 +134,7 @@ impl<'a> Lower<'a> for sk::VPatId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
-        let vpat = lo.stackir.vpats[self].clone();
+        let vpat = lo.stackir.inner.vpats[self].clone();
         use sk::ValuePattern as VPat;
         match vpat {
             | VPat::Hole(Hole) => {
@@ -203,7 +208,7 @@ impl<'a> Lower<'a> for sk::ValueId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
-        let value = lo.stackir.values[self].clone();
+        let value = lo.stackir.inner.values[self].clone();
         use sk::Value;
         match value {
             | Value::Hole(Hole) => Abort.build(lo, cx),
@@ -323,7 +328,7 @@ impl<'a> Lower<'a> for sk::StackId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, With { info: cx, inner: kont }: Self::Kont) -> Self::Out {
-        let stack = lo.stackir.stacks[self].clone();
+        let stack = lo.stackir.inner.stacks[self].clone();
         use sk::Stack;
         match stack {
             | Stack::Kont(sk::Kont { binder, body }) => {
@@ -422,7 +427,7 @@ impl<'a> Lower<'a> for sk::CompuId {
     type Out = ProgId;
 
     fn lower(&self, lo: &mut Lowerer<'a>, cx: Self::Kont) -> Self::Out {
-        let compu = lo.stackir.compus[self].clone();
+        let compu = lo.stackir.inner.compus[self].clone();
         use sk::Computation as Compu;
         match compu {
             | Compu::Hole(Hole) => Abort.build(lo, cx),
@@ -516,7 +521,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                                     for Matcher { binder, tail } in arms {
                                         // The binder is a constructor or other things.
                                         use sk::ValuePattern as VPat;
-                                        match lo.stackir.vpats[&binder].clone() {
+                                        match lo.stackir.inner.vpats[&binder].clone() {
                                             | VPat::Ctor(Ctor(ctor, binder)) => {
                                                 let idx =
                                                     lo.find_ctor_tag_idx(&data, &ctor);

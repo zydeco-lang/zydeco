@@ -20,14 +20,15 @@ pub struct Elaborator<'a> {
     pub statics: &'a StaticsArena,
     #[as_ref]
     #[as_mut]
-    pub stackir: &'a mut StackirArena,
+    pub stackir: &'a mut StackirInnerArena,
 }
 
 impl<'a> Elaborator<'a> {
     pub fn new(
-        spans: &'a SpanArena, statics: &'a StaticsArena, stackir: &'a mut StackirArena,
+        admin: AdminArena, spans: &'a SpanArena, statics: &'a StaticsArena,
+        stackir: &'a mut StackirInnerArena,
     ) -> Self {
-        Self { arena: SNormArena::new(), spans, statics, stackir }
+        Self { arena: SNormArena::new(admin), spans, statics, stackir }
     }
 }
 
@@ -36,7 +37,7 @@ impl<'a> CompilerPass for Elaborator<'a> {
     type Out = SNormArena;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<SNormArena, Self::Error> {
-        self.arena.entry = self
+        self.arena.inner.entry = self
             .stackir
             .entry
             .clone()
@@ -76,7 +77,7 @@ impl<'a> Elaborate for ValueId {
         match value {
             | Value::Hole(Hole) => Hole.sbuild(el, self, ()),
             | Value::Var(def) => {
-                let user = el.arena.users.entry(def).or_insert(0);
+                let user = el.arena.inner.users.entry(def).or_insert(0);
                 *user += 1;
                 def.sbuild(el, self, ())
             }
@@ -167,13 +168,13 @@ impl<'a> Elaborate for CompuId {
                     let bindee = bindee.elaborate(el);
                     let binder = binder.elaborate(el);
                     let tail = tail.elaborate(el);
-                    el.arena.scompus[&tail].map.cascade_value(binder, bindee);
+                    el.arena.inner.scompus[&tail].map.cascade_value(binder, bindee);
                     tail
                 }
                 | LetJoin::Stack(Let { binder: Bullet, bindee, tail }) => {
                     let bindee = bindee.elaborate(el);
                     let tail = tail.elaborate(el);
-                    el.arena.scompus[&tail].map.cascade_stack(bindee);
+                    el.arena.inner.scompus[&tail].map.cascade_stack(bindee);
                     tail
                 }
             },

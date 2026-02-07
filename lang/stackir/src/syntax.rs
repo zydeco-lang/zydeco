@@ -1,4 +1,4 @@
-pub use super::builtin::*;
+pub use super::{arena::*, builtin::*};
 pub use zydeco_syntax::{fmt, *};
 pub use zydeco_utils::{arena::*, context::Context};
 
