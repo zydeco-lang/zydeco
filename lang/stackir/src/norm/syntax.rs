@@ -17,5 +17,5 @@ where
 #[derive(Clone, Debug)]
 pub struct SComputation {
     pub compu: Computation<NonJoin>,
-    pub map: SubstPatMap,
+    pub assignments: SubstAssignVec,
 }

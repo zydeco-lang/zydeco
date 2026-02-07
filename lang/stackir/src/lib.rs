@@ -39,7 +39,7 @@ pub mod norm {
     pub mod fmt;
     /// Elaboration pass from stack IR into normalized stack IR.
     pub mod elaborate;
-    /// In-place substitution helpers for normalized stack IR.
+    /// Reconstructing substitution from normalized stack IR into stack IR.
     pub mod substitute;
 }
 

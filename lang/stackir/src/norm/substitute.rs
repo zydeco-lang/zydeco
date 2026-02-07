@@ -2,108 +2,15 @@ use super::syntax::*;
 use crate::sps::syntax::*;
 use derive_more::From;
 use im::Vector;
-use indexmap::IndexMap;
 
-#[derive(Clone, Debug)]
-pub struct SubstPatMap {
-    /// Ordered map of value patterns to their corresponding values.
-    /// The order is from innermost to outermost, namely,
-    /// - we should apply the substitution to the underlying body from the innermost to the outermost.
-    /// - or equivalently, we should apply the outermost substitution to both all inner substitutions
-    ///   and the underlying body, and then take one step inner, and so on.
-    ///
-    /// If you feel confused, simply think of it as a bunch of reversed let bindings.
-    values: IndexMap<VPatId, ValueId>,
-    /// Ordered list of stacks substitutions.
-    /// The order is from innermost to outermost.
-    ///
-    /// Reversed stack-let bindings similar to reversed value-let bindings [`Self::values`].
-    stacks: Vec<StackId>,
-}
-
-impl SubstPatMap {
-    pub fn new() -> Self {
-        Self { values: IndexMap::new(), stacks: Vec::new() }
-    }
-    /// Substitute a pattern for a value,
-    /// syntactically wrapping a layer of let-binding for the value,
-    /// semantically substituting the pattern with the value.
-    pub fn cascade_value(&mut self, pat: VPatId, value: ValueId) {
-        self.values.insert(pat, value);
-    }
-    /// Add another layer of stack on top of the current stack,
-    /// syntactically wrapping a layer of let-binding for the stack,
-    /// semantically substituting the current bullet with the new (prev) stack.
-    pub fn cascade_stack(&mut self, prev: StackId) {
-        self.stacks.push(prev);
-    }
-    /// Iterate over value pattern substitutions.
-    pub fn values(&self) -> impl Iterator<Item = (&VPatId, &ValueId)> {
-        self.values.iter()
-    }
-    /// Iterate over stack substitutions.
-    pub fn stacks(&self) -> impl Iterator<Item = &StackId> {
-        self.stacks.iter()
-    }
-}
-
-/// In-place substitution for normalized stack IR nodes.
-pub trait SubstPatInPlace {
-    /// Substitute the free variables in the term in place.
-    ///
-    /// The [`DefId`]s in the pattern part of the map are guaranteed to be free.
-    fn subst_pat_in_place<T>(self, arena: &mut T, map: SubstPatMap)
-    where
-        T: AsMut<SNormArena>;
-}
-
-// No need to implement SubstPatInPlace for VPatId,
-// because there's no shadowing/capturing of variables in value patterns.
-
-// impl SubstPatInPlace for ValueId {
-//     fn subst_pat_in_place<T>(self, arena: &mut T, map: SubstPatMap)
-//     where
-//         T: AsMut<SNormArena>,
-//     {
-//         let mut arena_mut = arena.as_mut();
-//         let value = arena_mut.inner.svalues[&self].clone();
-//         todo!()
-//     }
-// }
-
-// impl SubstPatInPlace for StackId {
-//     fn subst_pat_in_place<T>(self, arena: &mut T, map: SubstPatMap)
-//     where
-//         T: AsMut<SNormArena>,
-//     {
-//         let mut arena_mut = arena.as_mut();
-//         let stack = arena_mut.inner.sstacks[&self].clone();
-//         todo!()
-//     }
-// }
-
-// impl SubstPatInPlace for CompuId {
-//     fn subst_pat_in_place<T>(self, arena: &mut T, map: SubstPatMap)
-//     where
-//         T: AsMut<SNormArena>,
-//     {
-//         let mut arena_mut = arena.as_mut();
-//         let SComputation { compu, map } = arena_mut.inner.scompus[&self].clone();
-//         use Computation as Compu;
-//         match compu {
-//             | Compu::Hole(hole) => todo!(),
-//             | Compu::Force(sforce) => todo!(),
-//             | Compu::Ret(sreturn) => todo!(),
-//             | Compu::Fix(sfix) => todo!(),
-//             | Compu::Case(_) => todo!(),
-//             | Compu::Join(_) => todo!(),
-//             | Compu::LetArg(_) => todo!(),
-//             | Compu::CoCase(co_match) => todo!(),
-//             | Compu::ExternCall(extern_call) => todo!(),
-//         }
-//     }
-// }
-
+/// Assignments of values and stacks.
+///
+/// The order is from innermost to outermost, namely,
+/// - we should apply the substitution to the underlying body from the innermost to the outermost.
+/// - or equivalently, we should apply the outermost substitution to both all inner substitutions
+///   and the underlying body, and then take one step inner, and so on.
+///
+/// Consider them as a bunch of reversed let bindings / join points.
 #[derive(Clone, Debug)]
 pub struct SubstAssignVec {
     pub items: Vector<AssignItem>,
@@ -120,6 +27,13 @@ pub struct AssignDef {
     pub def: DefId,
     pub value: ValueId,
 }
+/// Assignment of values to their corresponding value patterns.
+/// The order is from innermost to outermost, namely,
+/// - we should apply the substitution to the underlying body from the innermost to the outermost.
+/// - or equivalently, we should apply the outermost substitution to both all inner substitutions
+///   and the underlying body, and then take one step inner, and so on.
+///
+/// If you feel confused, simply think of it as a bunch of reversed let bindings.
 #[derive(Clone, Debug)]
 pub struct AssignPattern {
     pub pat: VPatId,
@@ -136,6 +50,12 @@ mod impls {
     impl SubstAssignVec {
         pub fn new() -> Self {
             Self { items: Vector::new() }
+        }
+        pub fn cascade_value(&mut self, pat: VPatId, value: ValueId) {
+            self.items.push_back(AssignItem::Pattern(AssignPattern { pat, value }));
+        }
+        pub fn cascade_stack(&mut self, stack: StackId) {
+            self.items.push_back(AssignItem::Stack(AssignStack { stack }));
         }
     }
 
@@ -197,5 +117,207 @@ mod impls {
                 }
             }
         }
+    }
+}
+
+/// In-place substitution for normalized stack IR nodes.
+pub trait SubstAssignItemInPlace {
+    /// Substitute the free variables in the term in place.
+    ///
+    /// The [`DefId`]s in the pattern part of the map are guaranteed to be free.
+    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
+    where
+        T: AsMut<SNormArena>;
+}
+
+// No need to implement SubstAssignItemInPlace for VPatId,
+// because there's no shadowing/capturing of variables in value patterns.
+
+impl SubstAssignItemInPlace for ValueId {
+    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
+    where
+        T: AsMut<SNormArena>,
+    {
+        let arena_mut = arena.as_mut();
+        let value = arena_mut.inner.svalues[&self].clone();
+        let AssignItem::Def(assign_def) = item.clone() else {
+            // If the item is not a definition assignment, do nothing.
+            return;
+        };
+        use Value;
+        match value {
+            | Value::Hole(Hole) => {}
+            | Value::Var(def) if def == assign_def.def => {
+                let new_value = arena_mut.inner.svalues[&assign_def.value].clone();
+                arena_mut.inner.svalues.replace(self, new_value);
+            }
+            | Value::Var(_) => {}
+            | Value::Closure(Closure { capture: _, stack: Bullet, body }) => {
+                body.subst_assign_item_in_place(arena, item);
+            }
+            | Value::Ctor(Ctor(_, body)) => {
+                body.subst_assign_item_in_place(arena, item);
+            }
+            | Value::Triv(Triv) => {}
+            | Value::VCons(Cons(a, b)) => {
+                a.subst_assign_item_in_place(arena, item.clone());
+                b.subst_assign_item_in_place(arena, item);
+            }
+            | Value::Literal(_) => {}
+            | Value::Complex(Complex { operator: _, operands }) => {
+                operands.into_iter().for_each(|operand| {
+                    operand.subst_assign_item_in_place(arena, item.clone());
+                });
+            }
+        }
+    }
+}
+
+impl SubstAssignItemInPlace for StackId {
+    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
+    where
+        T: AsMut<SNormArena>,
+    {
+        let arena_mut = arena.as_mut();
+        let stack = arena_mut.inner.sstacks[&self].clone();
+        use Stack;
+        match stack {
+            | Stack::Kont(Kont { binder: _, body }) => {
+                body.subst_assign_item_in_place(arena, item);
+            }
+            | Stack::Var(Bullet) => match item {
+                | AssignItem::Def(_) | AssignItem::Pattern(_) => {}
+                | AssignItem::Stack(AssignStack { stack: assigned }) => {
+                    let assigned = arena_mut.inner.sstacks[&assigned].clone();
+                    arena_mut.inner.sstacks.replace(self, assigned);
+                }
+            },
+            | Stack::Arg(Cons(value, stack)) => {
+                value.subst_assign_item_in_place(arena, item.clone());
+                stack.subst_assign_item_in_place(arena, item);
+            }
+            | Stack::Tag(Cons(_, stack)) => {
+                stack.subst_assign_item_in_place(arena, item);
+            }
+        }
+    }
+}
+
+impl SubstAssignItemInPlace for CompuId {
+    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
+    where
+        T: AsMut<SNormArena>,
+    {
+        let arena_mut = arena.as_mut();
+        enum Action {
+            Replace(AssignItem),
+            KeepDef(AssignDef),
+            KeepPattern(AssignPattern),
+        }
+        let action = match &item {
+            | AssignItem::Def(AssignDef { def, value: _ }) if arena_mut.inner.users[&def] <= 1 => {
+                Action::Replace(item)
+            }
+            | AssignItem::Stack(_) => Action::Replace(item),
+            | AssignItem::Def(assign_def) => Action::KeepDef(assign_def.clone()),
+            | AssignItem::Pattern(assign_pattern) => Action::KeepPattern(assign_pattern.clone()),
+        };
+        match action {
+            | Action::Replace(item) => {
+                let SComputation { compu, mut assignments } =
+                    arena_mut.inner.scompus[&self].clone();
+                assignments.subst_assign_item_in_place(arena, item.clone());
+                use Computation as Compu;
+                match compu {
+                    | Compu::Hole(Hole) => {}
+                    | Compu::Force(SForce { thunk, stack }) => {
+                        thunk.subst_assign_item_in_place(arena, item.clone());
+                        stack.subst_assign_item_in_place(arena, item);
+                    }
+                    | Compu::Ret(SReturn { stack, value }) => {
+                        stack.subst_assign_item_in_place(arena, item.clone());
+                        value.subst_assign_item_in_place(arena, item);
+                    }
+                    | Compu::Fix(SFix { capture: _, param: _, body }) => {
+                        body.subst_assign_item_in_place(arena, item);
+                    }
+                    | Compu::Case(Match { scrut, arms }) => {
+                        scrut.subst_assign_item_in_place(arena, item.clone());
+                        arms.into_iter().for_each(|Matcher { binder: _, tail }| {
+                            tail.subst_assign_item_in_place(arena, item.clone());
+                        });
+                    }
+                    | Compu::Join(join) => match join {},
+                    | Compu::LetArg(Let { binder: _, bindee, tail }) => {
+                        bindee.subst_assign_item_in_place(arena, item.clone());
+                        tail.subst_assign_item_in_place(arena, item);
+                    }
+                    | Compu::CoCase(CoMatch { arms }) => {
+                        arms.into_iter().for_each(|CoMatcher { dtor: _, tail }| {
+                            tail.subst_assign_item_in_place(arena, item.clone());
+                        });
+                    }
+                    | Compu::ExternCall(ExternCall { function: _, stack: Bullet }) => {}
+                }
+            }
+            | Action::KeepDef(_) => {
+                todo!()
+            }
+            | Action::KeepPattern(_) => {
+                todo!()
+            }
+        }
+    }
+}
+
+impl SubstAssignItemInPlace for &mut SubstAssignVec {
+    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
+    where
+        T: AsMut<SNormArena>,
+    {
+        for inspecting in self.items.iter_mut().rev() {
+            inspecting.subst_assign_item_in_place(arena, item.clone());
+        }
+    }
+}
+
+impl SubstAssignItemInPlace for &mut AssignItem {
+    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
+    where
+        T: AsMut<SNormArena>,
+    {
+        match self {
+            | AssignItem::Def(assign_def) => assign_def.subst_assign_item_in_place(arena, item),
+            | AssignItem::Pattern(assign_pattern) => {
+                assign_pattern.subst_assign_item_in_place(arena, item)
+            }
+            | AssignItem::Stack(assign_stack) => {
+                assign_stack.subst_assign_item_in_place(arena, item)
+            }
+        }
+    }
+}
+impl SubstAssignItemInPlace for &mut AssignDef {
+    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
+    where
+        T: AsMut<SNormArena>,
+    {
+        self.value.subst_assign_item_in_place(arena, item)
+    }
+}
+impl SubstAssignItemInPlace for &mut AssignPattern {
+    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
+    where
+        T: AsMut<SNormArena>,
+    {
+        self.value.subst_assign_item_in_place(arena, item)
+    }
+}
+impl SubstAssignItemInPlace for &mut AssignStack {
+    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
+    where
+        T: AsMut<SNormArena>,
+    {
+        self.stack.subst_assign_item_in_place(arena, item)
     }
 }

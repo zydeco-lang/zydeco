@@ -30,9 +30,7 @@ pub struct SNormInnerArena {
     /// users of variables
     pub users: ArenaAssoc<DefId, usize>,
     /// hole (bullet) in stacks. LHS is the stack, RHS is the bullet stack id.
-    pub holes_stack: ArenaAssoc<StackId, StackId>,
-    /// hole (bullet) in computations. LHS is the computation, RHS is the bullet stack id.
-    pub holes_compu: ArenaAssoc<CompuId, StackId>,
+    pub holes: ArenaAssoc<StackId, StackId>,
 
     // entry points (each compu may start with a let chain binding former globals)
     pub entry: ArenaAssoc<CompuId, ()>,
@@ -48,8 +46,7 @@ impl SNormArena {
                 sstacks: ArenaAssoc::new(),
                 scompus: ArenaAssoc::new(),
                 users: ArenaAssoc::new(),
-                holes_stack: ArenaAssoc::new(),
-                holes_compu: ArenaAssoc::new(),
+                holes: ArenaAssoc::new(),
                 entry: ArenaAssoc::new(),
             },
         }
@@ -105,11 +102,11 @@ where
 {
     type Id = StackId;
     /// The stack id of the hole in the stack.
-    type Structure = ();
-    fn sbuild(self, arena: &mut Arena, id: Self::Id, (): Self::Structure) -> StackId {
+    type Structure = StackId;
+    fn sbuild(self, arena: &mut Arena, id: Self::Id, hole: Self::Structure) -> StackId {
         let this = &mut *arena.as_mut();
         this.inner.sstacks.insert(id, self.into());
-        // this.inner.holes_stack.insert(id, hole);
+        this.inner.holes.insert(id, hole);
         id
     }
 }
@@ -120,10 +117,10 @@ where
     U: Into<Computation<NonJoin>>,
 {
     type Id = CompuId;
-    type Structure = SubstPatMap;
-    fn sbuild(self, arena: &mut Arena, id: Self::Id, map: Self::Structure) -> CompuId {
+    type Structure = SubstAssignVec;
+    fn sbuild(self, arena: &mut Arena, id: Self::Id, assignments: Self::Structure) -> CompuId {
         let this = &mut *arena.as_mut();
-        this.inner.scompus.insert(id, SComputation { compu: self.into(), map });
+        this.inner.scompus.insert(id, SComputation { compu: self.into(), assignments });
         id
     }
 }

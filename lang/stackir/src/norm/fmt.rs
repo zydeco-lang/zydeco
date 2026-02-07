@@ -38,6 +38,13 @@ impl<'arena> Formatter<'arena> {
 
 use pretty::RcDoc;
 
+impl<'a> Pretty<'a, Formatter<'a>> for DefId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let name = &f.scoped.defs[self];
+        RcDoc::text(format!("{}{}", name.plain(), self.concise()))
+    }
+}
+
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let vpat = &f.norm_arena.inner.svpats[self];
@@ -303,23 +310,32 @@ impl<'a> Pretty<'a, Formatter<'a>> for SComputation {
         let mut doc = RcDoc::nil();
 
         // Print value pattern substitutions: [pat := value]\n[pat := value]...
-        for (pat, value) in self.map.values() {
-            doc = doc.append(RcDoc::text("[ "));
-            doc = doc.append(pat.pretty(f));
-            doc = doc.append(RcDoc::text(" := "));
-            doc = doc.append(value.pretty(f));
-            doc = doc.append(RcDoc::text(" ]"));
-            doc = doc.append(RcDoc::line());
-        }
-
         // Print stack substitutions: [• := stack]\n...
-        for stack in self.map.stacks() {
-            doc = doc.append(RcDoc::text("[ "));
-            doc = doc.append(Bullet.pretty(f));
-            doc = doc.append(RcDoc::text(" := "));
-            doc = doc.append(stack.pretty(f));
-            doc = doc.append(RcDoc::text(" ]"));
-            doc = doc.append(RcDoc::line());
+
+        for item in self.assignments.items.iter() {
+            match item {
+                | AssignItem::Def(AssignDef { def, value }) => {
+                    doc = doc.append(RcDoc::text("[ "));
+                    doc = doc.append(def.pretty(f));
+                    doc = doc.append(RcDoc::text(" := "));
+                    doc = doc.append(value.pretty(f));
+                    doc = doc.append(RcDoc::text(" ]"));
+                }
+                | AssignItem::Pattern(AssignPattern { pat, value }) => {
+                    doc = doc.append(RcDoc::text("[ "));
+                    doc = doc.append(pat.pretty(f));
+                    doc = doc.append(RcDoc::text(" := "));
+                    doc = doc.append(value.pretty(f));
+                    doc = doc.append(RcDoc::text(" ]"));
+                }
+                | AssignItem::Stack(AssignStack { stack }) => {
+                    doc = doc.append(RcDoc::text("[ "));
+                    doc = doc.append(Bullet.pretty(f));
+                    doc = doc.append(RcDoc::text(" := "));
+                    doc = doc.append(stack.pretty(f));
+                    doc = doc.append(RcDoc::text(" ]"));
+                }
+            }
         }
 
         // Print the computation on the next line

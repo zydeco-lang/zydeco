@@ -113,17 +113,21 @@ impl<'a> Elaborate for StackId {
             | Stack::Kont(Kont { binder, body }) => {
                 let binder = binder.elaborate(el);
                 let body = body.elaborate(el);
-                Kont { binder, body }.sbuild(el, self, ())
+                let hole = el.arena.admin.allocator.alloc();
+                el.arena.inner.scompus[&body].assignments.cascade_stack(hole);
+                Kont { binder, body }.sbuild(el, self, hole)
             }
-            | Stack::Var(Bullet) => Bullet.sbuild(el, self, ()),
+            | Stack::Var(Bullet) => Bullet.sbuild(el, self, self),
             | Stack::Arg(Cons(value, stack)) => {
                 let value = value.elaborate(el);
                 let stack = stack.elaborate(el);
-                Cons(value, stack).sbuild(el, self, ())
+                let hole = el.arena.inner.holes[&stack];
+                Cons(value, stack).sbuild(el, self, hole)
             }
             | Stack::Tag(Cons(dtor, stack)) => {
                 let stack = stack.elaborate(el);
-                Cons(dtor, stack).sbuild(el, self, ())
+                let hole = el.arena.inner.holes[&stack];
+                Cons(dtor, stack).sbuild(el, self, hole)
             }
         }
     }
@@ -135,21 +139,21 @@ impl<'a> Elaborate for CompuId {
         use Computation as Compu;
         let compu = el.stackir.compus[&self].clone();
         match compu {
-            | Compu::Hole(Hole) => Compu::Hole(Hole).sbuild(el, self, SubstPatMap::new()),
+            | Compu::Hole(Hole) => Compu::Hole(Hole).sbuild(el, self, SubstAssignVec::new()),
             | Compu::Force(SForce { thunk, stack }) => {
                 let thunk = thunk.elaborate(el);
                 let stack = stack.elaborate(el);
-                Compu::Force(SForce { thunk, stack }).sbuild(el, self, SubstPatMap::new())
+                Compu::Force(SForce { thunk, stack }).sbuild(el, self, SubstAssignVec::new())
             }
             | Compu::Ret(SReturn { stack, value }) => {
                 let stack = stack.elaborate(el);
                 let value = value.elaborate(el);
-                Compu::Ret(SReturn { stack, value }).sbuild(el, self, SubstPatMap::new())
+                Compu::Ret(SReturn { stack, value }).sbuild(el, self, SubstAssignVec::new())
             }
             | Compu::Fix(SFix { capture, param, body }) => {
                 assert!(capture.iter().count() == 0, "capture must be empty");
                 let body = body.elaborate(el);
-                Compu::Fix(SFix { capture, param, body }).sbuild(el, self, SubstPatMap::new())
+                Compu::Fix(SFix { capture, param, body }).sbuild(el, self, SubstAssignVec::new())
             }
             | Compu::Case(Match { scrut, arms }) => {
                 let scrut = scrut.elaborate(el);
@@ -161,20 +165,20 @@ impl<'a> Elaborate for CompuId {
                         Matcher { binder, tail }
                     })
                     .collect();
-                Match { scrut, arms }.sbuild(el, self, SubstPatMap::new())
+                Match { scrut, arms }.sbuild(el, self, SubstAssignVec::new())
             }
             | Compu::Join(join) => match join {
                 | LetJoin::Value(Let { binder, bindee, tail }) => {
                     let bindee = bindee.elaborate(el);
                     let binder = binder.elaborate(el);
                     let tail = tail.elaborate(el);
-                    el.arena.inner.scompus[&tail].map.cascade_value(binder, bindee);
+                    el.arena.inner.scompus[&tail].assignments.cascade_value(binder, bindee);
                     tail
                 }
                 | LetJoin::Stack(Let { binder: Bullet, bindee, tail }) => {
                     let bindee = bindee.elaborate(el);
                     let tail = tail.elaborate(el);
-                    el.arena.inner.scompus[&tail].map.cascade_stack(bindee);
+                    el.arena.inner.scompus[&tail].assignments.cascade_stack(bindee);
                     tail
                 }
             },
@@ -185,7 +189,7 @@ impl<'a> Elaborate for CompuId {
                 Let { binder: Cons(param, Bullet), bindee, tail }.sbuild(
                     el,
                     self,
-                    SubstPatMap::new(),
+                    SubstAssignVec::new(),
                 )
             }
             | Compu::CoCase(CoMatch { arms }) => {
@@ -196,10 +200,10 @@ impl<'a> Elaborate for CompuId {
                         CoMatcher { dtor, tail }
                     })
                     .collect();
-                CoMatch { arms }.sbuild(el, self, SubstPatMap::new())
+                CoMatch { arms }.sbuild(el, self, SubstAssignVec::new())
             }
             | Compu::ExternCall(ExternCall { function, stack: Bullet }) => {
-                ExternCall { function, stack: Bullet }.sbuild(el, self, SubstPatMap::new())
+                ExternCall { function, stack: Bullet }.sbuild(el, self, SubstAssignVec::new())
             }
         }
     }
