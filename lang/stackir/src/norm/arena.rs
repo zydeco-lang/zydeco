@@ -27,8 +27,12 @@ pub struct SNormInnerArena {
     /// computation arena
     pub scompus: ArenaAssoc<CompuId, SComputation>,
 
-    // users of variables
+    /// users of variables
     pub users: ArenaAssoc<DefId, usize>,
+    /// hole (bullet) in stacks. LHS is the stack, RHS is the bullet stack id.
+    pub holes_stack: ArenaAssoc<StackId, StackId>,
+    /// hole (bullet) in computations. LHS is the computation, RHS is the bullet stack id.
+    pub holes_compu: ArenaAssoc<CompuId, StackId>,
 
     // entry points (each compu may start with a let chain binding former globals)
     pub entry: ArenaAssoc<CompuId, ()>,
@@ -44,10 +48,17 @@ impl SNormArena {
                 sstacks: ArenaAssoc::new(),
                 scompus: ArenaAssoc::new(),
                 users: ArenaAssoc::new(),
+                holes_stack: ArenaAssoc::new(),
+                holes_compu: ArenaAssoc::new(),
                 entry: ArenaAssoc::new(),
             },
         }
     }
+}
+
+pub struct HoleInStack {
+    pub hole: StackId,
+    pub stack: StackId,
 }
 
 pub trait SConstruct<S, T, Arena>: Sized + Into<S> {
@@ -93,10 +104,12 @@ where
     U: Into<Stack>,
 {
     type Id = StackId;
+    /// The stack id of the hole in the stack.
     type Structure = ();
     fn sbuild(self, arena: &mut Arena, id: Self::Id, (): Self::Structure) -> StackId {
         let this = &mut *arena.as_mut();
         this.inner.sstacks.insert(id, self.into());
+        // this.inner.holes_stack.insert(id, hole);
         id
     }
 }

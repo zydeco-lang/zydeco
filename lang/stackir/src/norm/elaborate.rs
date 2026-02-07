@@ -106,7 +106,7 @@ impl<'a> Elaborate for ValueId {
 }
 
 impl<'a> Elaborate for StackId {
-    type Out = Self;
+    type Out = StackId;
     fn elaborate(self, el: &mut Elaborator) -> Self::Out {
         let stack = el.stackir.stacks[&self].clone();
         match stack {

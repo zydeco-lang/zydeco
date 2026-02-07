@@ -1,16 +1,16 @@
 use super::syntax::*;
 use crate::sps::arena::StackirArena;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 #[derive(Clone, Debug)]
 pub struct SubstVarMap {
-    pub values: HashMap<DefId, ValueId>,
+    pub values: IndexMap<DefId, ValueId>,
     pub stack: Option<StackId>,
 }
 
 impl SubstVarMap {
     pub fn new() -> Self {
-        Self { values: HashMap::new(), stack: None }
+        Self { values: IndexMap::new(), stack: None }
     }
 }
 

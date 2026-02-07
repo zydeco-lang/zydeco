@@ -22,3 +22,4 @@ log = { workspace = true }
 serde = { workspace = true }
 serde_plain = { workspace = true }
 indexmap = { workspace = true }
+im = { workspace = true }
