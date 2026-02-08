@@ -28,7 +28,7 @@ pub struct SNormInnerArena {
     pub scompus: ArenaAssoc<CompuId, SComputation>,
 
     /// users of variables
-    pub users: ArenaAssoc<DefId, usize>,
+    pub users: ArenaAssoc<DefId, Vec<ValueId>>,
     /// hole (bullet) in stacks. LHS is the stack, RHS is the bullet stack id.
     pub holes: ArenaAssoc<StackId, StackId>,
 
@@ -38,26 +38,35 @@ pub struct SNormInnerArena {
 
 impl SNormArena {
     pub fn new(admin: AdminArena) -> Self {
+        Self { admin, inner: SNormInnerArena::new() }
+    }
+}
+
+impl SNormInnerArena {
+    pub fn new() -> Self {
         Self {
-            admin,
-            inner: SNormInnerArena {
-                svpats: ArenaAssoc::new(),
-                svalues: ArenaAssoc::new(),
-                sstacks: ArenaAssoc::new(),
-                scompus: ArenaAssoc::new(),
-                users: ArenaAssoc::new(),
-                holes: ArenaAssoc::new(),
-                entry: ArenaAssoc::new(),
-            },
+            svpats: ArenaAssoc::new(),
+            svalues: ArenaAssoc::new(),
+            sstacks: ArenaAssoc::new(),
+            scompus: ArenaAssoc::new(),
+            users: ArenaAssoc::new(),
+            holes: ArenaAssoc::new(),
+            entry: ArenaAssoc::new(),
         }
     }
 }
 
-pub struct HoleInStack {
-    pub hole: StackId,
-    pub stack: StackId,
+#[derive(AsRef, AsMut)]
+pub struct SNormArenaMut<'a> {
+    #[as_ref]
+    #[as_mut]
+    pub admin: &'a mut AdminArena,
+    #[as_ref]
+    #[as_mut]
+    pub inner: &'a mut SNormInnerArena,
 }
 
+/// Construct a normalized stack IR node without allocating a new id.
 pub trait SConstruct<S, T, Arena>: Sized + Into<S> {
     /// The previous id of the node.
     type Id;
@@ -117,7 +126,7 @@ where
     U: Into<Computation<NonJoin>>,
 {
     type Id = CompuId;
-    type Structure = SubstAssignVec;
+    type Structure = SubstAssignments;
     fn sbuild(self, arena: &mut Arena, id: Self::Id, assignments: Self::Structure) -> CompuId {
         let this = &mut *arena.as_mut();
         this.inner.scompus.insert(id, SComputation { compu: self.into(), assignments });

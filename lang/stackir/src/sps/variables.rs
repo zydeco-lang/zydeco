@@ -1,5 +1,4 @@
 use super::syntax::*;
-use zydeco_utils::prelude::CoContext;
 
 /// Collect bound variables from patterns.
 pub trait Vars {

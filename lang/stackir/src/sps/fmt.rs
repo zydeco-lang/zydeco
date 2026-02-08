@@ -9,16 +9,18 @@ use zydeco_surface::scoped::syntax::ScopedArena;
 pub use zydeco_syntax::Pretty;
 /// Formatter for stack IR using scoped and statics naming.
 pub struct Formatter<'arena> {
-    arena: &'arena StackirArena,
+    admin: &'arena AdminArena,
+    inner: &'arena StackirInnerArena,
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,
     pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
     pub fn new(
-        arena: &'arena StackirArena, scoped: &'arena ScopedArena, statics: &'arena StaticsArena,
+        admin: &'arena AdminArena, inner: &'arena StackirInnerArena, scoped: &'arena ScopedArena,
+        statics: &'arena StaticsArena,
     ) -> Self {
-        Formatter { arena, scoped, statics, indent: 2 }
+        Formatter { admin, inner, scoped, statics, indent: 2 }
     }
 }
 
@@ -36,7 +38,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for DefId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let vpat = &f.arena.inner.vpats[self];
+        let vpat = &f.inner.vpats[self];
         use super::syntax::{Cons, Ctor, ValuePattern as VPat};
         match vpat {
             | VPat::Hole(_) => RcDoc::text("_"),
@@ -66,7 +68,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let value = &f.arena.inner.values[self];
+        let value = &f.inner.values[self];
         value.pretty(f)
     }
 }
@@ -153,7 +155,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
 
 impl<'a> Pretty<'a, Formatter<'a>> for StackId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let stack = &f.arena.inner.stacks[self];
+        let stack = &f.inner.stacks[self];
         stack.pretty(f)
     }
 }
@@ -209,7 +211,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Kont {
 
 impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let compu = &f.arena.inner.compus[self];
+        let compu = &f.inner.compus[self];
         compu.pretty(f)
     }
 }
@@ -350,7 +352,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                 ])
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
-                let arity = f.arena.admin.builtins[function].arity;
+                let arity = f.admin.builtins[function].arity;
                 let fun_str = format!("<extern:{}/{}>", function, arity);
                 RcDoc::concat([RcDoc::text(fun_str), RcDoc::space(), stack.pretty(f)])
             }
@@ -371,7 +373,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TermId {
 impl<'a> Pretty<'a, Formatter<'a>> for StackirArena {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let mut doc = RcDoc::nil();
-        let builtins = &f.arena.admin.builtins;
+        let builtins = &f.admin.builtins;
 
         // Print all builtins
         for (name, builtin) in

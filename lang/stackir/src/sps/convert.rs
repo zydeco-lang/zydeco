@@ -87,7 +87,7 @@ impl<'a> ClosureConverter<'a> {
 
     /// Compute free variables in a computation using cocontext from scoped.
     fn free_vars_compu(&self, compu_id: CompuId) -> CoContext<DefId> {
-        use super::free::FreeVars;
+        use super::variables::FreeVars;
         compu_id.free_vars(&self)
     }
 

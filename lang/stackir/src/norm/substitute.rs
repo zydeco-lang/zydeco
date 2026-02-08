@@ -1,7 +1,15 @@
 use super::syntax::*;
+use super::variables::{FreeVars, Vars};
 use crate::sps::syntax::*;
 use derive_more::From;
-use im::Vector;
+use derive_more::{AsMut, AsRef};
+use std::{
+    cmp::{Ordering, PartialEq, PartialOrd},
+    collections::{BTreeSet, VecDeque},
+};
+use zydeco_statics::surface_syntax::ScopedArena;
+use zydeco_statics::tyck::arena::StaticsArena;
+use zydeco_utils::pass::CompilerPass;
 
 /// Assignments of values and stacks.
 ///
@@ -12,10 +20,9 @@ use im::Vector;
 ///
 /// Consider them as a bunch of reversed let bindings / join points.
 #[derive(Clone, Debug)]
-pub struct SubstAssignVec {
-    pub items: Vector<AssignItem>,
+pub struct SubstAssignments {
+    pub items: VecDeque<AssignItem>,
 }
-
 #[derive(From, Clone, Debug)]
 pub enum AssignItem {
     Def(AssignDef),
@@ -27,13 +34,6 @@ pub struct AssignDef {
     pub def: DefId,
     pub value: ValueId,
 }
-/// Assignment of values to their corresponding value patterns.
-/// The order is from innermost to outermost, namely,
-/// - we should apply the substitution to the underlying body from the innermost to the outermost.
-/// - or equivalently, we should apply the outermost substitution to both all inner substitutions
-///   and the underlying body, and then take one step inner, and so on.
-///
-/// If you feel confused, simply think of it as a bunch of reversed let bindings.
 #[derive(Clone, Debug)]
 pub struct AssignPattern {
     pub pat: VPatId,
@@ -44,12 +44,19 @@ pub struct AssignStack {
     pub stack: StackId,
 }
 
+/// Decorate the assign items with the variable introductions and free references.
+pub struct IntroRefItem {
+    pub intros: Context<DefId>,
+    pub mentions: CoContext<DefId>,
+    pub item: AssignItem,
+}
+
 mod impls {
     use super::*;
 
-    impl SubstAssignVec {
+    impl SubstAssignments {
         pub fn new() -> Self {
-            Self { items: Vector::new() }
+            Self { items: VecDeque::new() }
         }
         pub fn cascade_value(&mut self, pat: VPatId, value: ValueId) {
             self.items.push_back(AssignItem::Pattern(AssignPattern { pat, value }));
@@ -57,9 +64,59 @@ mod impls {
         pub fn cascade_stack(&mut self, stack: StackId) {
             self.items.push_back(AssignItem::Stack(AssignStack { stack }));
         }
+        pub fn normalize(self, arena: &mut SNormArenaMut) -> Self {
+            // Individually normalize the assign items and flatten the result.
+            let flattened = self
+                .items
+                .into_iter()
+                .flat_map(|item| match item {
+                    | AssignItem::Def(assign_def) => vec![AssignItem::Def(assign_def)],
+                    | AssignItem::Pattern(assign_pattern) => assign_pattern.normalize(arena),
+                    | AssignItem::Stack(assign_stack) => assign_stack.normalize(arena),
+                })
+                .collect::<Vec<_>>();
+
+            // Try to move outer (closer to end) stack assignments to inner (closer to begin)
+            // A bubble-sort-like algorithm; implemented using the [`Ord`] trait and [`BTreeMap`].
+            let ordered: BTreeSet<AssignItem> = flattened.into_iter().rev().collect();
+            let items = ordered.into_iter().collect();
+            Self { items }
+        }
+
+        /// Extract all join points from the assignments,
+        /// and perform all substitutions available.
+        pub fn extract<Arena>(mut self, arena: &mut Arena) -> Self
+        where
+            Arena: AsRef<SNormInnerArena> + AsMut<SNormInnerArena>,
+        {
+            let mut items = VecDeque::new();
+            while let Some(item) = self.items.pop_front() {
+                match item {
+                    | AssignItem::Def(AssignDef { def, value }) => {
+                        match arena.as_ref().users.get(&def).cloned().unwrap_or_default().as_slice()
+                        {
+                            | [] => {}
+                            | [user] => {
+                                // directly substitute all users of the variable with the value
+                                let value = arena.as_mut().svalues[&value].clone();
+                                arena.as_mut().svalues.replace(*user, value);
+                            }
+                            | _ => {
+                                items.push_back(item);
+                            }
+                        }
+                    }
+                    | AssignItem::Pattern(AssignPattern { .. }) => {
+                        items.push_back(item);
+                    }
+                    | AssignItem::Stack(AssignStack { .. }) => items.push_back(item),
+                }
+            }
+            Self { items }
+        }
     }
 
-    impl<T> std::ops::AddAssign<T> for SubstAssignVec
+    impl<T> std::ops::AddAssign<T> for SubstAssignments
     where
         T: Into<AssignItem>,
     {
@@ -68,7 +125,7 @@ mod impls {
         }
     }
 
-    impl<T> std::ops::Add<T> for SubstAssignVec
+    impl<T> std::ops::Add<T> for SubstAssignments
     where
         T: Into<AssignItem>,
     {
@@ -80,11 +137,45 @@ mod impls {
         }
     }
 
+    /// No item is equal to another.
+    impl PartialEq for AssignItem {
+        fn eq(&self, _other: &Self) -> bool {
+            false
+        }
+    }
+    impl Eq for AssignItem {}
+    /// Delegated to the [`Ord`] implementation.
+    impl PartialOrd for AssignItem {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+    /// IMPORTANT: This is to ensure that stack assignments are moved to inner positions,
+    /// so that the later reductions with computations can happen more easily.
+    ///
+    /// The move happens if `other` is smaller, namely returning [`Ordering::Greater`].
+    impl Ord for AssignItem {
+        fn cmp(&self, other: &Self) -> Ordering {
+            match &other {
+                // if the RHS is a stack assignment, ...
+                | AssignItem::Stack(_) => {
+                    match &self {
+                        // if LHS is also a stack assignment, hold still
+                        | AssignItem::Stack(_) => Ordering::Less,
+                        // otherwise, swap
+                        | _ => Ordering::Greater,
+                    }
+                }
+                // otherwise, remain still
+                | _ => Ordering::Less,
+            }
+        }
+    }
+
     impl AssignPattern {
-        pub fn normalize(self, arena: &mut SNormArena) -> Vec<AssignItem> {
-            let arena_mut: &mut SNormArena = arena.as_mut();
-            let pat = arena_mut.inner.svpats[&self.pat].clone();
-            let value = arena_mut.inner.svalues[&self.value].clone();
+        pub fn normalize(self, arena: &mut SNormArenaMut) -> Vec<AssignItem> {
+            let pat = arena.inner.svpats[&self.pat].clone();
+            let value = arena.inner.svalues[&self.value].clone();
             use Value;
             use ValuePattern as VPat;
             match (pat, value) {
@@ -118,206 +209,304 @@ mod impls {
             }
         }
     }
+
+    impl AssignStack {
+        pub fn normalize(self, arena: &mut SNormArenaMut) -> Vec<AssignItem> {
+            let stack = arena.inner.sstacks[&self.stack].clone();
+            match stack {
+                | Stack::Kont(_) => vec![self.into()],
+                | Stack::Var(Bullet) => Vec::new(),
+                | Stack::Arg(Cons(value, stack)) => {
+                    let v = AssignStack { stack }.normalize(arena);
+                    let bullet = arena.admin.allocator.alloc();
+                    arena.inner.sstacks.insert(bullet, Bullet.into());
+                    arena.inner.holes.insert(bullet, bullet);
+                    let arg = arena.admin.allocator.alloc();
+                    arena.inner.sstacks.insert(arg, Stack::Arg(Cons(value, bullet)));
+                    arena.inner.holes.insert(arg, bullet);
+                    std::iter::empty().chain([AssignStack { stack: arg }.into()]).chain(v).collect()
+                }
+                | Stack::Tag(Cons(dtor, stack)) => {
+                    let v = AssignStack { stack }.normalize(arena);
+                    let bullet = arena.admin.allocator.alloc();
+                    arena.inner.sstacks.insert(bullet, Bullet.into());
+                    arena.inner.holes.insert(bullet, bullet);
+                    let tag = arena.admin.allocator.alloc();
+                    arena.inner.sstacks.insert(tag, Stack::Tag(Cons(dtor, bullet)));
+                    arena.inner.holes.insert(tag, bullet);
+                    std::iter::empty().chain([AssignStack { stack: tag }.into()]).chain(v).collect()
+                }
+            }
+        }
+    }
+
+    impl IntroRefItem {
+        pub fn from_assign_item<Arena>(item: AssignItem, arena: &Arena) -> Self
+        where
+            Arena: AsRef<SNormArena>,
+        {
+            match item {
+                | AssignItem::Def(AssignDef { def, value }) => IntroRefItem {
+                    intros: Context::singleton(def.clone()),
+                    mentions: value.free_vars(arena),
+                    item: AssignDef { def, value }.into(),
+                },
+                | AssignItem::Pattern(AssignPattern { pat, value }) => IntroRefItem {
+                    intros: pat.vars(arena),
+                    mentions: value.free_vars(arena),
+                    item: AssignPattern { pat, value }.into(),
+                },
+                | AssignItem::Stack(AssignStack { stack }) => IntroRefItem {
+                    intros: Context::new(),
+                    mentions: stack.free_vars(arena),
+                    item: AssignStack { stack }.into(),
+                },
+            }
+        }
+    }
 }
 
-/// In-place substitution for normalized stack IR nodes.
-pub trait SubstAssignItemInPlace {
-    /// Substitute the free variables in the term in place.
+/// Re-construction-style substitution.
+///
+/// Perform substitution of normalized stack IR nodes into stack IR arena.
+/// During the substitution, the [`SNormArena`] is destructed,
+/// and the [`StackirArena`] is reconstructed.
+pub trait Substitute<Assign> {
+    /// The output type of the substitution.
+    type Out;
+    /// Perform the substitution defined by the assign item.
     ///
     /// The [`DefId`]s in the pattern part of the map are guaranteed to be free.
-    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
-    where
-        T: AsMut<SNormArena>;
+    fn substitute(self, su: &mut Substitutor, assign: Assign) -> Self::Out;
 }
 
-// No need to implement SubstAssignItemInPlace for VPatId,
-// because there's no shadowing/capturing of variables in value patterns.
+#[derive(AsRef, AsMut)]
+pub struct Substitutor<'a> {
+    #[as_ref]
+    #[as_mut]
+    pub arena: StackirArena,
+    #[as_ref]
+    #[as_mut]
+    pub snorm: &'a mut SNormInnerArena,
+    pub scoped: &'a ScopedArena,
+    pub statics: &'a StaticsArena,
+}
 
-impl SubstAssignItemInPlace for ValueId {
-    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
-    where
-        T: AsMut<SNormArena>,
-    {
-        let arena_mut = arena.as_mut();
-        let value = arena_mut.inner.svalues[&self].clone();
-        let AssignItem::Def(assign_def) = item.clone() else {
-            // If the item is not a definition assignment, do nothing.
-            return;
+impl<'a> Substitutor<'a> {
+    pub fn new(
+        admin: AdminArena, snorm: &'a mut SNormInnerArena, scoped: &'a ScopedArena,
+        statics: &'a StaticsArena,
+    ) -> Self {
+        Self {
+            arena: StackirArena { admin, inner: StackirInnerArena::new() },
+            snorm,
+            scoped,
+            statics,
+        }
+    }
+}
+
+impl<'a> CompilerPass for Substitutor<'a> {
+    type Arena = StackirArena;
+    type Out = StackirArena;
+    type Error = std::convert::Infallible;
+    fn run(mut self) -> Result<StackirArena, Self::Error> {
+        self.arena.inner.entry = self
+            .snorm
+            .entry
+            .clone()
+            .into_iter()
+            .map(|(compu_id, ())| {
+                let new_compu_id = compu_id.substitute(&mut self, ());
+                (new_compu_id, ())
+            })
+            .collect();
+        Ok(self.arena)
+    }
+}
+
+impl Substitute<()> for CompuId {
+    type Out = CompuId;
+
+    fn substitute(self, su: &mut Substitutor, (): ()) -> Self::Out {
+        let SComputation { compu, assignments } = su.snorm.scompus[&self].clone();
+        compu.substitute(su, assignments)
+    }
+}
+
+impl Substitute<SubstAssignments> for Computation<NonJoin> {
+    type Out = CompuId;
+
+    fn substitute(self, su: &mut Substitutor, assignments: SubstAssignments) -> Self::Out {
+        let assignments = {
+            let mut arena_mut = SNormArenaMut { admin: &mut su.arena.admin, inner: &mut su.snorm };
+            assignments.normalize(&mut arena_mut)
         };
+        // Pretty print the assignments.
+        {
+            use crate::norm::fmt::*;
+            let fmt = Formatter::new(
+                &su.arena.admin,
+                &su.snorm,
+                &su.arena.inner,
+                &su.scoped,
+                &su.statics,
+            );
+            let doc = assignments.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            log::trace!("assignments:\n{}", buf);
+        }
+        let assignments = assignments.extract(&mut su.snorm);
+        use Computation as Compu;
+        let mut tail = match self {
+            | Compu::Hole(Hole) => Hole.build(su, None),
+            | Compu::Force(SForce { thunk, stack }) => {
+                let thunk = thunk.substitute(su, ());
+                let stack = stack.substitute(su, ());
+                SForce { thunk, stack }.build(su, None)
+            }
+            | Compu::Ret(SReturn { stack, value }) => {
+                let stack = stack.substitute(su, ());
+                let value = value.substitute(su, ());
+                SReturn { stack, value }.build(su, None)
+            }
+            | Compu::Fix(SFix { capture, param, body }) => {
+                let body = body.substitute(su, ());
+                SFix { capture, param, body }.build(su, None)
+            }
+            | Compu::Case(Match { scrut, arms }) => {
+                let scrut = scrut.substitute(su, ());
+                let arms = arms
+                    .iter()
+                    .map(|Matcher { binder, tail }| {
+                        let binder = binder.substitute(su, ());
+                        let tail = tail.substitute(su, ());
+                        Matcher { binder, tail }
+                    })
+                    .collect();
+                Match { scrut, arms }.build(su, None)
+            }
+            | Compu::Join(join) => match join {},
+            | Compu::LetArg(Let { binder: Cons(param, Bullet), bindee, tail }) => {
+                let param = param.substitute(su, ());
+                let bindee = bindee.substitute(su, ());
+                let tail = tail.substitute(su, ());
+                Let { binder: Cons(param, Bullet), bindee, tail }.build(su, None)
+            }
+            | Compu::CoCase(CoMatch { arms }) => {
+                let arms = arms
+                    .into_iter()
+                    .map(|CoMatcher { dtor, tail }| {
+                        let tail = tail.substitute(su, ());
+                        CoMatcher { dtor, tail }
+                    })
+                    .collect();
+                CoMatch { arms }.build(su, None)
+            }
+            | Compu::ExternCall(ExternCall { function, stack: Bullet }) => {
+                ExternCall { function, stack: Bullet }.build(su, None)
+            }
+        };
+        // Create join points from the assignments.
+        for item in assignments.items {
+            match item {
+                | AssignItem::Def(AssignDef { def, value }) => {
+                    let binder = def.build(su, None);
+                    let bindee = value.substitute(su, ());
+                    tail = Let { binder, bindee, tail }.build(su, None);
+                }
+                | AssignItem::Pattern(AssignPattern { pat, value }) => {
+                    let pat = pat.substitute(su, ());
+                    let value = value.substitute(su, ());
+                    tail = Let { binder: pat, bindee: value, tail }.build(su, None);
+                }
+                | AssignItem::Stack(AssignStack { stack }) => {
+                    let bindee = stack.substitute(su, ());
+                    tail = Let { binder: Bullet, bindee, tail }.build(su, None);
+                }
+            }
+        }
+        tail
+    }
+}
+
+impl Substitute<()> for StackId {
+    type Out = StackId;
+
+    fn substitute(self, su: &mut Substitutor, (): ()) -> Self::Out {
+        let stack = su.snorm.sstacks[&self].clone();
+        match stack {
+            | Stack::Kont(Kont { binder, body }) => {
+                let binder = binder.substitute(su, ());
+                let body = body.substitute(su, ());
+                Kont { binder, body }.build(su, None)
+            }
+            | Stack::Var(Bullet) => Bullet.build(su, None),
+            | Stack::Arg(Cons(value, stack)) => {
+                let value = value.substitute(su, ());
+                let stack = stack.substitute(su, ());
+                Cons(value, stack).build(su, None)
+            }
+            | Stack::Tag(Cons(dtor, stack)) => {
+                let stack = stack.substitute(su, ());
+                Cons(dtor, stack).build(su, None)
+            }
+        }
+    }
+}
+
+impl Substitute<()> for ValueId {
+    type Out = ValueId;
+
+    fn substitute(self, su: &mut Substitutor, (): ()) -> Self::Out {
+        let value = su.snorm.svalues[&self].clone();
         use Value;
         match value {
-            | Value::Hole(Hole) => {}
-            | Value::Var(def) if def == assign_def.def => {
-                let new_value = arena_mut.inner.svalues[&assign_def.value].clone();
-                arena_mut.inner.svalues.replace(self, new_value);
+            | Value::Hole(Hole) => Hole.build(su, None),
+            | Value::Var(def_id) => def_id.build(su, None),
+            | Value::Closure(Closure { capture, stack, body }) => {
+                let body = body.substitute(su, ());
+                Closure { capture, stack, body }.build(su, None)
             }
-            | Value::Var(_) => {}
-            | Value::Closure(Closure { capture: _, stack: Bullet, body }) => {
-                body.subst_assign_item_in_place(arena, item);
+            | Value::Ctor(Ctor(ctor, body)) => {
+                let body = body.substitute(su, ());
+                Ctor(ctor, body).build(su, None)
             }
-            | Value::Ctor(Ctor(_, body)) => {
-                body.subst_assign_item_in_place(arena, item);
-            }
-            | Value::Triv(Triv) => {}
+            | Value::Triv(Triv) => Triv.build(su, None),
             | Value::VCons(Cons(a, b)) => {
-                a.subst_assign_item_in_place(arena, item.clone());
-                b.subst_assign_item_in_place(arena, item);
+                let a = a.substitute(su, ());
+                let b = b.substitute(su, ());
+                Cons(a, b).build(su, None)
             }
-            | Value::Literal(_) => {}
-            | Value::Complex(Complex { operator: _, operands }) => {
-                operands.into_iter().for_each(|operand| {
-                    operand.subst_assign_item_in_place(arena, item.clone());
-                });
-            }
-        }
-    }
-}
-
-impl SubstAssignItemInPlace for StackId {
-    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
-    where
-        T: AsMut<SNormArena>,
-    {
-        let arena_mut = arena.as_mut();
-        let stack = arena_mut.inner.sstacks[&self].clone();
-        use Stack;
-        match stack {
-            | Stack::Kont(Kont { binder: _, body }) => {
-                body.subst_assign_item_in_place(arena, item);
-            }
-            | Stack::Var(Bullet) => match item {
-                | AssignItem::Def(_) | AssignItem::Pattern(_) => {}
-                | AssignItem::Stack(AssignStack { stack: assigned }) => {
-                    let assigned = arena_mut.inner.sstacks[&assigned].clone();
-                    arena_mut.inner.sstacks.replace(self, assigned);
-                }
-            },
-            | Stack::Arg(Cons(value, stack)) => {
-                value.subst_assign_item_in_place(arena, item.clone());
-                stack.subst_assign_item_in_place(arena, item);
-            }
-            | Stack::Tag(Cons(_, stack)) => {
-                stack.subst_assign_item_in_place(arena, item);
+            | Value::Literal(literal) => literal.build(su, None),
+            | Value::Complex(Complex { operator, operands }) => {
+                let operands = operands.iter().map(|operand| operand.substitute(su, ())).collect();
+                Complex { operator, operands }.build(su, None)
             }
         }
     }
 }
 
-impl SubstAssignItemInPlace for CompuId {
-    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
-    where
-        T: AsMut<SNormArena>,
-    {
-        let arena_mut = arena.as_mut();
-        enum Action {
-            Replace(AssignItem),
-            KeepDef(AssignDef),
-            KeepPattern(AssignPattern),
-        }
-        let action = match &item {
-            | AssignItem::Def(AssignDef { def, value: _ }) if arena_mut.inner.users[&def] <= 1 => {
-                Action::Replace(item)
-            }
-            | AssignItem::Stack(_) => Action::Replace(item),
-            | AssignItem::Def(assign_def) => Action::KeepDef(assign_def.clone()),
-            | AssignItem::Pattern(assign_pattern) => Action::KeepPattern(assign_pattern.clone()),
-        };
-        match action {
-            | Action::Replace(item) => {
-                let SComputation { compu, mut assignments } =
-                    arena_mut.inner.scompus[&self].clone();
-                assignments.subst_assign_item_in_place(arena, item.clone());
-                use Computation as Compu;
-                match compu {
-                    | Compu::Hole(Hole) => {}
-                    | Compu::Force(SForce { thunk, stack }) => {
-                        thunk.subst_assign_item_in_place(arena, item.clone());
-                        stack.subst_assign_item_in_place(arena, item);
-                    }
-                    | Compu::Ret(SReturn { stack, value }) => {
-                        stack.subst_assign_item_in_place(arena, item.clone());
-                        value.subst_assign_item_in_place(arena, item);
-                    }
-                    | Compu::Fix(SFix { capture: _, param: _, body }) => {
-                        body.subst_assign_item_in_place(arena, item);
-                    }
-                    | Compu::Case(Match { scrut, arms }) => {
-                        scrut.subst_assign_item_in_place(arena, item.clone());
-                        arms.into_iter().for_each(|Matcher { binder: _, tail }| {
-                            tail.subst_assign_item_in_place(arena, item.clone());
-                        });
-                    }
-                    | Compu::Join(join) => match join {},
-                    | Compu::LetArg(Let { binder: _, bindee, tail }) => {
-                        bindee.subst_assign_item_in_place(arena, item.clone());
-                        tail.subst_assign_item_in_place(arena, item);
-                    }
-                    | Compu::CoCase(CoMatch { arms }) => {
-                        arms.into_iter().for_each(|CoMatcher { dtor: _, tail }| {
-                            tail.subst_assign_item_in_place(arena, item.clone());
-                        });
-                    }
-                    | Compu::ExternCall(ExternCall { function: _, stack: Bullet }) => {}
-                }
-            }
-            | Action::KeepDef(_) => {
-                todo!()
-            }
-            | Action::KeepPattern(_) => {
-                todo!()
-            }
-        }
-    }
-}
+impl Substitute<()> for VPatId {
+    type Out = VPatId;
 
-impl SubstAssignItemInPlace for &mut SubstAssignVec {
-    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
-    where
-        T: AsMut<SNormArena>,
-    {
-        for inspecting in self.items.iter_mut().rev() {
-            inspecting.subst_assign_item_in_place(arena, item.clone());
-        }
-    }
-}
-
-impl SubstAssignItemInPlace for &mut AssignItem {
-    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
-    where
-        T: AsMut<SNormArena>,
-    {
-        match self {
-            | AssignItem::Def(assign_def) => assign_def.subst_assign_item_in_place(arena, item),
-            | AssignItem::Pattern(assign_pattern) => {
-                assign_pattern.subst_assign_item_in_place(arena, item)
+    fn substitute(self, su: &mut Substitutor, (): ()) -> Self::Out {
+        let vpat = su.snorm.svpats[&self].clone();
+        use ValuePattern as VPat;
+        match vpat {
+            | VPat::Hole(Hole) => Hole.build(su, None),
+            | VPat::Var(def) => def.build(su, None),
+            | VPat::Ctor(Ctor(ctor, body)) => {
+                let body = body.substitute(su, ());
+                Ctor(ctor, body).build(su, None)
             }
-            | AssignItem::Stack(assign_stack) => {
-                assign_stack.subst_assign_item_in_place(arena, item)
+            | VPat::Triv(Triv) => Triv.build(su, None),
+            | VPat::VCons(Cons(a, b)) => {
+                let a = a.substitute(su, ());
+                let b = b.substitute(su, ());
+                Cons(a, b).build(su, None)
             }
         }
-    }
-}
-impl SubstAssignItemInPlace for &mut AssignDef {
-    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
-    where
-        T: AsMut<SNormArena>,
-    {
-        self.value.subst_assign_item_in_place(arena, item)
-    }
-}
-impl SubstAssignItemInPlace for &mut AssignPattern {
-    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
-    where
-        T: AsMut<SNormArena>,
-    {
-        self.value.subst_assign_item_in_place(arena, item)
-    }
-}
-impl SubstAssignItemInPlace for &mut AssignStack {
-    fn subst_assign_item_in_place<T>(self, arena: &mut T, item: AssignItem)
-    where
-        T: AsMut<SNormArena>,
-    {
-        self.stack.subst_assign_item_in_place(arena, item)
     }
 }

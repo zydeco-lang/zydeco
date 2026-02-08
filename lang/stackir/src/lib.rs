@@ -25,7 +25,7 @@ pub mod sps {
     /// In-place substitution helpers for stack IR.
     pub mod substitute;
     /// Free-variable analysis for stack IR.
-    pub mod free;
+    pub mod variables;
 }
 
 pub use sps::{arena::*, convert::ClosureConverter, lower::Lowerer};
@@ -41,6 +41,8 @@ pub mod norm {
     pub mod elaborate;
     /// Reconstructing substitution from normalized stack IR into stack IR.
     pub mod substitute;
+    /// Variable introduction analysis for normalized stack IR.
+    pub mod variables;
 }
 
-pub use norm::elaborate::Elaborator;
+pub use norm::{arena::*, elaborate::Elaborator, substitute::Substitutor};

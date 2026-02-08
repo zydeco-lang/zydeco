@@ -55,6 +55,8 @@ pub mod prelude {
 
     pub use zydeco_stackir::sps::syntax as sk;
 
+    pub use zydeco_stackir::norm::syntax as sn;
+
     pub use zydeco_assembly::syntax as sa;
 }
 
@@ -305,7 +307,7 @@ impl BuildSystem {
             self.__compile_zir_pack(pack, ArcGlobalAlloc::new(), verbose)?;
         // pretty print the ZIR
         use zydeco_stackir::sps::fmt::*;
-        let fmt = Formatter::new(&stackir, &scoped, &statics);
+        let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
         let doc = stackir.pretty(&fmt);
         let mut buf = String::new();
         doc.render_fmt(100, &mut buf).unwrap();
@@ -450,7 +452,7 @@ impl BuildSystem {
             zydeco_stackir::Lowerer::new(alloc.clone(), &spans, &mut scoped, &statics).run()?;
         {
             use zydeco_stackir::sps::fmt::*;
-            let fmt = Formatter::new(&stackir, &scoped, &statics);
+            let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
             let doc = stackir.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
@@ -461,7 +463,7 @@ impl BuildSystem {
         zydeco_stackir::ClosureConverter::new(&mut stackir, &mut scoped, &statics).convert();
         {
             use zydeco_stackir::sps::fmt::*;
-            let fmt = Formatter::new(&stackir, &scoped, &statics);
+            let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
             let doc = stackir.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
@@ -469,17 +471,15 @@ impl BuildSystem {
                 log::trace!("ZIR after closure conversion:\n{}", buf);
             }
         }
+        let zydeco_stackir::StackirArena { admin, mut inner } = stackir;
         let snorm = zydeco_stackir::Elaborator::new(
             // we'll eventually replace this by taking ownership of admin in stackir
-            unsafe { stackir.admin.duplicate() },
-            &spans,
-            &statics,
-            &mut stackir.inner,
+            admin, &spans, &statics, &mut inner,
         )
         .run()?;
         {
             use zydeco_stackir::norm::fmt::*;
-            let fmt = Formatter::new(&snorm, &stackir, &scoped, &statics);
+            let fmt = Formatter::new(&snorm.admin, &snorm.inner, &inner, &scoped, &statics);
             let doc = snorm.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
@@ -492,10 +492,31 @@ impl BuildSystem {
                     .iter()
                     .map(|(def, user)| {
                         let name = &scoped.defs[def];
-                        format!("{}{}: {}", name.0, def.concise(), user)
+                        let user: Vec<String> = user
+                            .iter()
+                            .map(|u| {
+                                let mut buf = String::new();
+                                u.pretty(&fmt).render_fmt(100, &mut buf).unwrap();
+                                buf
+                            })
+                            .collect();
+                        format!("{}{}: {}", name.0, def.concise(), user.join(", "))
                     })
                     .collect::<Vec<_>>();
                 log::trace!("Normalized ZIR users:\n{}", users.join("\n"));
+            }
+        }
+        let zydeco_stackir::SNormArena { admin, mut inner } = snorm;
+        let stackir =
+            zydeco_stackir::Substitutor::new(admin, &mut inner, &scoped, &statics).run()?;
+        {
+            use zydeco_stackir::sps::fmt::*;
+            let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
+            let doc = stackir.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            if verbose {
+                log::trace!("ZIR after substitution:\n{}", buf);
             }
         }
         Ok(PackageStack { spans, scoped, statics, stackir })

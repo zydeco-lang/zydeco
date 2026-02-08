@@ -1,6 +1,9 @@
 pub use super::{arena::*, builtin::*};
 pub use zydeco_syntax::{fmt, *};
-pub use zydeco_utils::{arena::*, context::Context};
+pub use zydeco_utils::{
+    arena::*,
+    context::{CoContext, Context},
+};
 
 use crate::static_syntax as ss;
 use derive_more::From;

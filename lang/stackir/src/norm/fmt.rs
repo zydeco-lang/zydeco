@@ -10,8 +10,8 @@ use zydeco_surface::scoped::syntax::ScopedArena;
 pub use zydeco_syntax::Pretty;
 /// Formatter for normalized stack IR using scoped and statics naming.
 pub struct Formatter<'arena> {
-    norm_arena: &'arena SNormArena,
-    stackir_arena: &'arena StackirArena,
+    admin: &'arena AdminArena,
+    norm_arena: &'arena SNormInnerArena,
     scoped: &'arena ScopedArena,
     statics: &'arena StaticsArena,
     sps_formatter: sps_fmt::Formatter<'arena>,
@@ -20,15 +20,16 @@ pub struct Formatter<'arena> {
 
 impl<'arena> Formatter<'arena> {
     pub fn new(
-        norm_arena: &'arena SNormArena, stackir_arena: &'arena StackirArena,
-        scoped: &'arena ScopedArena, statics: &'arena StaticsArena,
+        admin: &'arena AdminArena, norm_arena: &'arena SNormInnerArena,
+        stackir_arena: &'arena StackirInnerArena, scoped: &'arena ScopedArena,
+        statics: &'arena StaticsArena,
     ) -> Self {
         Formatter {
+            admin,
             norm_arena,
-            stackir_arena,
             scoped,
             statics,
-            sps_formatter: sps_fmt::Formatter::new(stackir_arena, scoped, statics),
+            sps_formatter: sps_fmt::Formatter::new(admin, stackir_arena, scoped, statics),
             indent: 2,
         }
     }
@@ -47,7 +48,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for DefId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let vpat = &f.norm_arena.inner.svpats[self];
+        let vpat = &f.norm_arena.svpats[self];
         // let Some(vpat) = &f.norm_arena.svpats.get(self) else {
         //     return self.pretty(&f.sps_formatter);
         //     return RcDoc::text(format!("[vpat:{}]", self.concise()));
@@ -81,7 +82,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let value = &f.norm_arena.inner.svalues[self];
+        let value = &f.norm_arena.svalues[self];
         value.pretty(f)
     }
 }
@@ -149,7 +150,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
 
 impl<'a> Pretty<'a, Formatter<'a>> for StackId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let stack = &f.norm_arena.inner.sstacks[self];
+        let stack = &f.norm_arena.sstacks[self];
         stack.pretty(f)
     }
 }
@@ -296,12 +297,53 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<NonJoin> {
                 ])
             }
             | Computation::ExternCall(ExternCall { function, stack }) => {
-                let arity = f.stackir_arena.admin.builtins[function].arity;
+                let arity = f.admin.builtins[function].arity;
                 let fun_str = format!("<extern:{}/{}>", function, arity);
                 RcDoc::concat([RcDoc::text(fun_str), RcDoc::space(), stack.pretty(f)])
             }
             | Computation::Join(_) => unreachable!(),
         }
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for AssignItem {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let mut doc = RcDoc::nil();
+        match self {
+            | AssignItem::Def(AssignDef { def, value }) => {
+                doc = doc.append(RcDoc::text("[ "));
+                doc = doc.append(def.pretty(f));
+                doc = doc.append(RcDoc::text(" := "));
+                doc = doc.append(value.pretty(f));
+                doc = doc.append(RcDoc::text(" ]"));
+            }
+            | AssignItem::Pattern(AssignPattern { pat, value }) => {
+                doc = doc.append(RcDoc::text("[ "));
+                doc = doc.append(pat.pretty(f));
+                doc = doc.append(RcDoc::text(" := "));
+                doc = doc.append(value.pretty(f));
+                doc = doc.append(RcDoc::text(" ]"));
+            }
+            | AssignItem::Stack(AssignStack { stack }) => {
+                doc = doc.append(RcDoc::text("[ "));
+                doc = doc.append(Bullet.pretty(f));
+                doc = doc.append(RcDoc::text(" := "));
+                doc = doc.append(stack.pretty(f));
+                doc = doc.append(RcDoc::text(" ]"));
+            }
+        }
+        doc
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for SubstAssignments {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let mut doc = RcDoc::nil();
+        for item in self.items.iter() {
+            doc = doc.append(item.pretty(f));
+            doc = doc.append(RcDoc::line());
+        }
+        doc
     }
 }
 
@@ -312,31 +354,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SComputation {
         // Print value pattern substitutions: [pat := value]\n[pat := value]...
         // Print stack substitutions: [• := stack]\n...
 
-        for item in self.assignments.items.iter() {
-            match item {
-                | AssignItem::Def(AssignDef { def, value }) => {
-                    doc = doc.append(RcDoc::text("[ "));
-                    doc = doc.append(def.pretty(f));
-                    doc = doc.append(RcDoc::text(" := "));
-                    doc = doc.append(value.pretty(f));
-                    doc = doc.append(RcDoc::text(" ]"));
-                }
-                | AssignItem::Pattern(AssignPattern { pat, value }) => {
-                    doc = doc.append(RcDoc::text("[ "));
-                    doc = doc.append(pat.pretty(f));
-                    doc = doc.append(RcDoc::text(" := "));
-                    doc = doc.append(value.pretty(f));
-                    doc = doc.append(RcDoc::text(" ]"));
-                }
-                | AssignItem::Stack(AssignStack { stack }) => {
-                    doc = doc.append(RcDoc::text("[ "));
-                    doc = doc.append(Bullet.pretty(f));
-                    doc = doc.append(RcDoc::text(" := "));
-                    doc = doc.append(stack.pretty(f));
-                    doc = doc.append(RcDoc::text(" ]"));
-                }
-            }
-        }
+        doc = doc.append(self.assignments.pretty(f));
 
         // Print the computation on the next line
         doc = doc.append(self.compu.pretty(f));
@@ -347,7 +365,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SComputation {
 
 impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Some(scompu) = f.norm_arena.inner.scompus.get(self) else {
+        let Some(scompu) = f.norm_arena.scompus.get(self) else {
             // return f.stackir_arena.compus[self].pretty(&f.sps_formatter);
             return RcDoc::text(format!("[compu:{}]", self.concise()));
         };
@@ -360,7 +378,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for SNormArena {
         let mut doc = RcDoc::nil();
 
         // Print all builtins (same as sps Formatter)
-        let builtins = &f.stackir_arena.admin.builtins;
+        let builtins = &f.admin.builtins;
         for (name, builtin) in
             builtins.iter().filter(|(_, builtin)| builtin.sort == BuiltinSort::Operator)
         {

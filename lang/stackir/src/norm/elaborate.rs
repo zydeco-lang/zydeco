@@ -77,8 +77,8 @@ impl<'a> Elaborate for ValueId {
         match value {
             | Value::Hole(Hole) => Hole.sbuild(el, self, ()),
             | Value::Var(def) => {
-                let user = el.arena.inner.users.entry(def).or_insert(0);
-                *user += 1;
+                let user = el.arena.inner.users.entry(def).or_insert_with(Vec::new);
+                user.push(self);
                 def.sbuild(el, self, ())
             }
             | Value::Closure(Closure { capture, stack: Bullet, body }) => {
@@ -139,21 +139,21 @@ impl<'a> Elaborate for CompuId {
         use Computation as Compu;
         let compu = el.stackir.compus[&self].clone();
         match compu {
-            | Compu::Hole(Hole) => Compu::Hole(Hole).sbuild(el, self, SubstAssignVec::new()),
+            | Compu::Hole(Hole) => Compu::Hole(Hole).sbuild(el, self, SubstAssignments::new()),
             | Compu::Force(SForce { thunk, stack }) => {
                 let thunk = thunk.elaborate(el);
                 let stack = stack.elaborate(el);
-                Compu::Force(SForce { thunk, stack }).sbuild(el, self, SubstAssignVec::new())
+                Compu::Force(SForce { thunk, stack }).sbuild(el, self, SubstAssignments::new())
             }
             | Compu::Ret(SReturn { stack, value }) => {
                 let stack = stack.elaborate(el);
                 let value = value.elaborate(el);
-                Compu::Ret(SReturn { stack, value }).sbuild(el, self, SubstAssignVec::new())
+                Compu::Ret(SReturn { stack, value }).sbuild(el, self, SubstAssignments::new())
             }
             | Compu::Fix(SFix { capture, param, body }) => {
                 assert!(capture.iter().count() == 0, "capture must be empty");
                 let body = body.elaborate(el);
-                Compu::Fix(SFix { capture, param, body }).sbuild(el, self, SubstAssignVec::new())
+                Compu::Fix(SFix { capture, param, body }).sbuild(el, self, SubstAssignments::new())
             }
             | Compu::Case(Match { scrut, arms }) => {
                 let scrut = scrut.elaborate(el);
@@ -165,7 +165,7 @@ impl<'a> Elaborate for CompuId {
                         Matcher { binder, tail }
                     })
                     .collect();
-                Match { scrut, arms }.sbuild(el, self, SubstAssignVec::new())
+                Match { scrut, arms }.sbuild(el, self, SubstAssignments::new())
             }
             | Compu::Join(join) => match join {
                 | LetJoin::Value(Let { binder, bindee, tail }) => {
@@ -189,7 +189,7 @@ impl<'a> Elaborate for CompuId {
                 Let { binder: Cons(param, Bullet), bindee, tail }.sbuild(
                     el,
                     self,
-                    SubstAssignVec::new(),
+                    SubstAssignments::new(),
                 )
             }
             | Compu::CoCase(CoMatch { arms }) => {
@@ -200,10 +200,10 @@ impl<'a> Elaborate for CompuId {
                         CoMatcher { dtor, tail }
                     })
                     .collect();
-                CoMatch { arms }.sbuild(el, self, SubstAssignVec::new())
+                CoMatch { arms }.sbuild(el, self, SubstAssignments::new())
             }
             | Compu::ExternCall(ExternCall { function, stack: Bullet }) => {
-                ExternCall { function, stack: Bullet }.sbuild(el, self, SubstAssignVec::new())
+                ExternCall { function, stack: Bullet }.sbuild(el, self, SubstAssignments::new())
             }
         }
     }

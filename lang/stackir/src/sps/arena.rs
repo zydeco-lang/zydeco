@@ -40,15 +40,18 @@ pub struct StackirInnerArena {
 
 impl StackirArena {
     pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
+        Self { admin: AdminArena::new(alloc.alloc()), inner: StackirInnerArena::new() }
+    }
+}
+
+impl StackirInnerArena {
+    pub fn new() -> Self {
         Self {
-            admin: AdminArena::new(alloc.alloc()),
-            inner: StackirInnerArena {
-                vpats: ArenaAssoc::new(),
-                values: ArenaAssoc::new(),
-                stacks: ArenaAssoc::new(),
-                compus: ArenaAssoc::new(),
-                entry: ArenaAssoc::new(),
-            },
+            vpats: ArenaAssoc::new(),
+            values: ArenaAssoc::new(),
+            stacks: ArenaAssoc::new(),
+            compus: ArenaAssoc::new(),
+            entry: ArenaAssoc::new(),
         }
     }
 }

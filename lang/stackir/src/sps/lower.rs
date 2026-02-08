@@ -162,7 +162,12 @@ impl Lower for ss::VAliasBody {
         let def_id = match lo.arena.inner.vpats[&binder_vpat] {
             | VPat::Var(def) => def,
             | _ => {
-                let fmt = super::fmt::Formatter::new(&lo.arena, lo.scoped, lo.statics);
+                let fmt = super::fmt::Formatter::new(
+                    &lo.arena.admin,
+                    &lo.arena.inner,
+                    lo.scoped,
+                    lo.statics,
+                );
                 let binder_doc = binder_vpat.pretty(&fmt);
                 let mut binder_str = String::new();
                 binder_doc.render_fmt(80, &mut binder_str).unwrap();
@@ -188,7 +193,12 @@ impl Lower for ss::VAliasHead {
         let def = match &lo.arena.inner.vpats[&binder_vpat] {
             | VPat::Var(def) => *def,
             | _ => {
-                let fmt = super::fmt::Formatter::new(&lo.arena, lo.scoped, lo.statics);
+                let fmt = super::fmt::Formatter::new(
+                    &lo.arena.admin,
+                    &lo.arena.inner,
+                    lo.scoped,
+                    lo.statics,
+                );
                 let binder_doc = binder_vpat.pretty(&fmt);
                 let mut binder_str = String::new();
                 binder_doc.render_fmt(usize::MAX, &mut binder_str).unwrap();
