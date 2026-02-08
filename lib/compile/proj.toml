@@ -26,6 +26,8 @@ bins = [
     "triple.zy",
     "sum.zy",
     "fact.zy",
+    # stackir
+    "let-stack.zy",
     # interactive
     "echo.zy",
     "echo-none.zy",

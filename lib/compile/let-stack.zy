@@ -1,0 +1,7 @@
+extern def exit : Thk (Int -> OS) end
+
+main
+  let x = 0 in
+  (let y = 42 in
+  ! exit) x
+end
