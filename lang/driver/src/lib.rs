@@ -471,52 +471,42 @@ impl BuildSystem {
                 log::trace!("ZIR after closure conversion:\n{}", buf);
             }
         }
-        let zydeco_stackir::StackirArena { admin, mut inner } = stackir;
-        let snorm = zydeco_stackir::Elaborator::new(
-            // we'll eventually replace this by taking ownership of admin in stackir
-            admin, &spans, &statics, &mut inner,
-        )
-        .run()?;
-        {
-            use zydeco_stackir::norm::fmt::*;
-            let fmt = Formatter::new(&snorm.admin, &snorm.inner, &inner, &scoped, &statics);
-            let doc = snorm.pretty(&fmt);
-            let mut buf = String::new();
-            doc.render_fmt(100, &mut buf).unwrap();
-            if verbose {
-                log::trace!("Normalized ZIR:\n{}", buf);
+        let mut stackir = stackir;
+        let mut count = 0;
+        loop {
+            if count > 10 {
+                break;
             }
-            if verbose {
-                let users = snorm.inner.users.iter().collect::<Vec<_>>();
-                let users = users
-                    .iter()
-                    .map(|(def, user)| {
-                        let name = &scoped.defs[def];
-                        let user: Vec<String> = user
-                            .iter()
-                            .map(|u| {
-                                let mut buf = String::new();
-                                u.pretty(&fmt).render_fmt(100, &mut buf).unwrap();
-                                buf
-                            })
-                            .collect();
-                        format!("{}{}: {}", name.0, def.concise(), user.join(", "))
-                    })
-                    .collect::<Vec<_>>();
-                log::trace!("Normalized ZIR users:\n{}", users.join("\n"));
+            count += 1;
+            let zydeco_stackir::StackirArena { admin, mut inner } = stackir;
+            let snorm = zydeco_stackir::Elaborator::new(
+                // we'll eventually replace this by taking ownership of admin in stackir
+                admin, &spans, &statics, &mut inner,
+            )
+            .run()?;
+            {
+                use zydeco_stackir::norm::fmt::*;
+                let fmt = Formatter::new(&snorm.admin, &snorm.inner, &inner, &scoped, &statics);
+                let doc = snorm.pretty(&fmt);
+                let mut buf = String::new();
+                doc.render_fmt(100, &mut buf).unwrap();
+                if verbose {
+                    log::trace!("Normalized ZIR:\n{}", buf);
+                }
             }
-        }
-        let zydeco_stackir::SNormArena { admin, mut inner } = snorm;
-        let stackir =
-            zydeco_stackir::Substitutor::new(admin, &mut inner, &scoped, &statics).run()?;
-        {
-            use zydeco_stackir::sps::fmt::*;
-            let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
-            let doc = stackir.pretty(&fmt);
-            let mut buf = String::new();
-            doc.render_fmt(100, &mut buf).unwrap();
-            if verbose {
-                log::trace!("ZIR after substitution:\n{}", buf);
+            let zydeco_stackir::SNormArena { admin, mut inner } = snorm;
+            let new_stackir =
+                zydeco_stackir::Substitutor::new(admin, &mut inner, &scoped, &statics).run()?;
+            stackir = new_stackir;
+            {
+                use zydeco_stackir::sps::fmt::*;
+                let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
+                let doc = stackir.pretty(&fmt);
+                let mut buf = String::new();
+                doc.render_fmt(100, &mut buf).unwrap();
+                if verbose {
+                    log::trace!("ZIR after substitution:\n{}", buf);
+                }
             }
         }
         Ok(PackageStack { spans, scoped, statics, stackir })

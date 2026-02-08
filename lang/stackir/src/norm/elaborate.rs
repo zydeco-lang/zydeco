@@ -114,6 +114,7 @@ impl<'a> Elaborate for StackId {
                 let binder = binder.elaborate(el);
                 let body = body.elaborate(el);
                 let hole = el.arena.admin.allocator.alloc();
+                let hole = Bullet.sbuild(el, hole, hole);
                 el.arena.inner.scompus[&body].assignments.cascade_stack(hole);
                 Kont { binder, body }.sbuild(el, self, hole)
             }
@@ -138,7 +139,7 @@ impl<'a> Elaborate for CompuId {
     fn elaborate(self, el: &mut Elaborator) -> Self::Out {
         use Computation as Compu;
         let compu = el.stackir.compus[&self].clone();
-        match compu {
+        let elaborated = match compu {
             | Compu::Hole(Hole) => Compu::Hole(Hole).sbuild(el, self, SubstAssignments::new()),
             | Compu::Force(SForce { thunk, stack }) => {
                 let thunk = thunk.elaborate(el);
@@ -148,7 +149,11 @@ impl<'a> Elaborate for CompuId {
             | Compu::Ret(SReturn { stack, value }) => {
                 let stack = stack.elaborate(el);
                 let value = value.elaborate(el);
-                Compu::Ret(SReturn { stack, value }).sbuild(el, self, SubstAssignments::new())
+                let mut assignments = SubstAssignments::new();
+                assignments.cascade_stack(stack);
+                let hole = el.arena.admin.allocator.alloc();
+                let hole = Bullet.sbuild(el, hole, hole);
+                Compu::Ret(SReturn { stack: hole, value }).sbuild(el, self, assignments)
             }
             | Compu::Fix(SFix { capture, param, body }) => {
                 assert!(capture.iter().count() == 0, "capture must be empty");
@@ -186,10 +191,14 @@ impl<'a> Elaborate for CompuId {
                 let bindee = bindee.elaborate(el);
                 let param = param.elaborate(el);
                 let tail = tail.elaborate(el);
-                Let { binder: Cons(param, Bullet), bindee, tail }.sbuild(
+                let mut assignments = SubstAssignments::new();
+                assignments.cascade_stack(bindee);
+                let hole = el.arena.admin.allocator.alloc();
+                let hole = Bullet.sbuild(el, hole, hole);
+                Let { binder: Cons(param, Bullet), bindee: hole, tail }.sbuild(
                     el,
                     self,
-                    SubstAssignments::new(),
+                    assignments,
                 )
             }
             | Compu::CoCase(CoMatch { arms }) => {
@@ -205,6 +214,15 @@ impl<'a> Elaborate for CompuId {
             | Compu::ExternCall(ExternCall { function, stack: Bullet }) => {
                 ExternCall { function, stack: Bullet }.sbuild(el, self, SubstAssignments::new())
             }
-        }
+        };
+
+        // Normalize the assignments.
+        let assignments = el.arena.inner.scompus[&elaborated].assignments.clone();
+        let mut arena_mut =
+            SNormArenaMut { admin: &mut el.arena.admin, inner: &mut el.arena.inner };
+        let normalized_assignments = assignments.normalize(&mut arena_mut);
+        el.arena.inner.scompus[&elaborated].assignments = normalized_assignments;
+
+        elaborated
     }
 }

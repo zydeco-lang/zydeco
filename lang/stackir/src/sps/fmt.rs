@@ -68,8 +68,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let value = &f.inner.values[self];
-        value.pretty(f)
+        if let Some(value) = f.inner.values.get(self) {
+            value.pretty(f)
+        } else {
+            RcDoc::text(format!("<value:{}>", self.concise()))
+        }
+        // let value = &f.inner.values[self];
+        // value.pretty(f)
     }
 }
 
@@ -211,8 +216,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for Kont {
 
 impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let compu = &f.inner.compus[self];
-        compu.pretty(f)
+        if let Some(compu) = f.inner.compus.get(self) {
+            compu.pretty(f)
+        } else {
+            RcDoc::text(format!("<compu:{}>", self.concise()))
+        }
+        // let compu = &f.inner.compus[self];
+        // compu.pretty(f)
     }
 }
 

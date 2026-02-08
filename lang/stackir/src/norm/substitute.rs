@@ -84,8 +84,8 @@ mod impls {
         }
 
         /// Extract all join points from the assignments,
-        /// and perform all substitutions available.
-        pub fn extract<Arena>(mut self, arena: &mut Arena) -> Self
+        /// and perform all inline substitutions available.
+        pub fn extract_or_inline<Arena>(mut self, arena: &mut Arena) -> Self
         where
             Arena: AsRef<SNormInnerArena> + AsMut<SNormInnerArena>,
         {
@@ -101,8 +101,14 @@ mod impls {
                                 let value = arena.as_mut().svalues[&value].clone();
                                 arena.as_mut().svalues.replace(*user, value);
                             }
-                            | _ => {
+                            | _users => {
                                 items.push_back(item);
+                                // // Note: dangerous explosion
+                                // for user in _users {
+                                //     // directly substitute all users of the variable with the value
+                                //     let value = arena.as_mut().svalues[&value].clone();
+                                //     arena.as_mut().svalues.replace(*user, value);
+                                // }
                             }
                         }
                     }
@@ -338,39 +344,62 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
     type Out = CompuId;
 
     fn substitute(self, su: &mut Substitutor, assignments: SubstAssignments) -> Self::Out {
-        let assignments = {
-            let mut arena_mut = SNormArenaMut { admin: &mut su.arena.admin, inner: &mut su.snorm };
-            assignments.normalize(&mut arena_mut)
+        // let assignments = {
+        //     let mut arena_mut = SNormArenaMut { admin: &mut su.arena.admin, inner: &mut su.snorm };
+        //     assignments.normalize(&mut arena_mut)
+        // };
+        // // Pretty print the assignments.
+        // {
+        //     use crate::norm::fmt::*;
+        //     let fmt = Formatter::new(
+        //         &su.arena.admin,
+        //         &su.snorm,
+        //         &su.arena.inner,
+        //         &su.scoped,
+        //         &su.statics,
+        //     );
+        //     let doc = assignments.pretty(&fmt);
+        //     let mut buf = String::new();
+        //     doc.render_fmt(100, &mut buf).unwrap();
+        //     // log::trace!("assignments:\n{}", buf);
+        // }
+        let mut assignments = assignments.extract_or_inline(&mut su.snorm);
+        let frontier = match assignments.items.front() {
+            | Some(AssignItem::Stack(AssignStack { stack })) => {
+                Some(su.snorm.sstacks[&stack].clone())
+            }
+            | _ => None,
         };
-        // Pretty print the assignments.
-        {
-            use crate::norm::fmt::*;
-            let fmt = Formatter::new(
-                &su.arena.admin,
-                &su.snorm,
-                &su.arena.inner,
-                &su.scoped,
-                &su.statics,
-            );
-            let doc = assignments.pretty(&fmt);
-            let mut buf = String::new();
-            doc.render_fmt(100, &mut buf).unwrap();
-            log::trace!("assignments:\n{}", buf);
-        }
-        let assignments = assignments.extract(&mut su.snorm);
         use Computation as Compu;
         let mut tail = match self {
             | Compu::Hole(Hole) => Hole.build(su, None),
-            | Compu::Force(SForce { thunk, stack }) => {
-                let thunk = thunk.substitute(su, ());
-                let stack = stack.substitute(su, ());
-                SForce { thunk, stack }.build(su, None)
-            }
-            | Compu::Ret(SReturn { stack, value }) => {
-                let stack = stack.substitute(su, ());
-                let value = value.substitute(su, ());
-                SReturn { stack, value }.build(su, None)
-            }
+            | Compu::Force(SForce { thunk, stack }) => match su.snorm.svalues[&thunk].clone() {
+                | Value::Closure(Closure { capture: _, stack: Bullet, body }) => {
+                    let body = body.substitute(su, ());
+                    let stack = stack.substitute(su, ());
+                    Let { binder: Bullet, bindee: stack, tail: body }.build(su, None)
+                }
+                | _ => {
+                    let thunk = thunk.substitute(su, ());
+                    let stack = stack.substitute(su, ());
+                    SForce { thunk, stack }.build(su, None)
+                }
+            },
+            | Compu::Ret(SReturn { stack, value }) => match frontier {
+                | Some(Stack::Kont(Kont { binder, body })) => {
+                    assert!(matches!(su.snorm.sstacks[&stack], Stack::Var(Bullet)));
+                    assignments.items.pop_front();
+                    let binder = binder.substitute(su, ());
+                    let body = body.substitute(su, ());
+                    let value = value.substitute(su, ());
+                    Let { binder, bindee: value, tail: body }.build(su, None)
+                }
+                | _ => {
+                    let stack = stack.substitute(su, ());
+                    let value = value.substitute(su, ());
+                    SReturn { stack, value }.build(su, None)
+                }
+            },
             | Compu::Fix(SFix { capture, param, body }) => {
                 let body = body.substitute(su, ());
                 SFix { capture, param, body }.build(su, None)
@@ -388,12 +417,24 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
                 Match { scrut, arms }.build(su, None)
             }
             | Compu::Join(join) => match join {},
-            | Compu::LetArg(Let { binder: Cons(param, Bullet), bindee, tail }) => {
-                let param = param.substitute(su, ());
-                let bindee = bindee.substitute(su, ());
-                let tail = tail.substitute(su, ());
-                Let { binder: Cons(param, Bullet), bindee, tail }.build(su, None)
-            }
+            | Compu::LetArg(Let { binder: Cons(param, Bullet), bindee, tail }) => match frontier {
+                | Some(Stack::Arg(Cons(arg, next))) => {
+                    assignments.items.pop_front();
+                    let param = param.substitute(su, ());
+                    assert!(matches!(su.snorm.sstacks[&bindee], Stack::Var(Bullet)));
+                    let tail = tail.substitute(su, ());
+                    let arg = arg.substitute(su, ());
+                    let next = next.substitute(su, ());
+                    let tail = Let { binder: param, bindee: arg, tail }.build(su, None);
+                    Let { binder: Bullet, bindee: next, tail }.build(su, None)
+                }
+                | _ => {
+                    let param = param.substitute(su, ());
+                    let bindee = bindee.substitute(su, ());
+                    let tail = tail.substitute(su, ());
+                    Let { binder: Cons(param, Bullet), bindee, tail }.build(su, None)
+                }
+            },
             | Compu::CoCase(CoMatch { arms }) => {
                 let arms = arms
                     .into_iter()
