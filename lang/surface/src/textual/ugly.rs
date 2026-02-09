@@ -197,7 +197,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for DtorName {
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Ctor<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Ctor<CtorName, T>
 where
     T: Ugly<'a, Formatter<'a>>,
 {
@@ -226,7 +226,7 @@ where
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Dtor<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Dtor<T, DtorName>
 where
     T: Ugly<'a, Formatter<'a>>,
 {

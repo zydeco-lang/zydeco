@@ -150,7 +150,7 @@ pub mod syntax {
     pub struct Forall<Param, FBody>(pub Param, pub FBody);
 
     /// `+Ctor(<tail>)`
-    pub struct Ctor<Name, Tail>(pub Name, pub Tail);
+    pub struct Ctor<Tag, Tail>(pub Tag, pub Tail);
     /// `match_ty <t> | <f> ... end`
     ///
     /// `Ty` here should be DataId
@@ -160,7 +160,7 @@ pub mod syntax {
     /// `Ty` here should be CoDataId
     pub struct CoMatch<Ty, F>(pub Ty, pub F);
     /// `<head> .dtor`
-    pub struct Dtor<Head, Name>(pub Head, pub Name);
+    pub struct Dtor<Head, Tag>(pub Head, pub Tag);
     /// `comatch end`
     pub struct Top;
 
@@ -1089,7 +1089,7 @@ where
 //     }
 // }
 // dtor
-impl<'a, T> Construct<Tycker<'a>, CompuId> for Dtor<T>
+impl<'a, T> Construct<Tycker<'a>, CompuId> for Dtor<T, DtorName>
 where
     T: Construct<Tycker<'a>, CompuId>,
 {

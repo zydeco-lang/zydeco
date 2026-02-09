@@ -1008,7 +1008,7 @@ where
     }
 }
 // dtor
-impl<T> MonConstruct<CompuId> for Dtor<T>
+impl<T> MonConstruct<CompuId> for Dtor<T, DtorName>
 where
     T: MonConstruct<CompuId>,
 {

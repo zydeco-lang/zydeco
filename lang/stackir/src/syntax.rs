@@ -31,7 +31,7 @@ pub enum TermId {
 pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
-    Ctor(Ctor<VPatId>),
+    Ctor(Ctor<CtorName, VPatId>),
     Triv(Triv),
     VCons(Cons<VPatId, VPatId>),
 }
@@ -56,7 +56,7 @@ pub enum Value {
     Hole(Hole),
     Var(DefId),
     Closure(Closure),
-    Ctor(Ctor<ValueId>),
+    Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),
     VCons(Cons<ValueId, ValueId>),
     Literal(Literal),
@@ -123,6 +123,6 @@ pub enum Computation<Join> {
     #[from(ignore)]
     Join(Join),
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
-    CoCase(CoMatch<CompuId, Cons<DtorName, Bullet>>),
+    CoCase(CoMatch<Cons<DtorName, Bullet>, CompuId>),
     ExternCall(ExternCall),
 }

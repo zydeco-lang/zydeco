@@ -295,7 +295,7 @@ macro_rules! AllocValuePattern {
 AllocValuePattern! {
     Hole
     DefId
-    Ctor<VPatId>
+    Ctor<CtorName, VPatId>
     Triv
     Cons<VPatId, VPatId>
     Cons<TPatId, VPatId>
@@ -336,7 +336,7 @@ AllocValue! {
     Hole
     DefId
     Thunk<CompuId>
-    Ctor<ValueId>
+    Ctor<CtorName, ValueId>
     Triv
     Cons<ValueId, ValueId>
     Cons<TypeId, ValueId>
@@ -386,6 +386,6 @@ AllocComputation! {
     Bind<VPatId, CompuId, CompuId>
     Let<VPatId, ValueId, CompuId>
     Match<ValueId, VPatId, CompuId>
-    CoMatch<CompuId>
-    Dtor<CompuId>
+    CoMatch<DtorName, CompuId>
+    Dtor<CompuId, DtorName>
 }

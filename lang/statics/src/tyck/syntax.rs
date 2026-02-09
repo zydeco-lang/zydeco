@@ -383,7 +383,7 @@ mod impls_types {
 pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
-    Ctor(Ctor<VPatId>),
+    Ctor(Ctor<CtorName, VPatId>),
     Triv(Triv),
     VCons(Cons<VPatId, VPatId>),
     TCons(Cons<TPatId, VPatId>),
@@ -394,7 +394,7 @@ pub enum Value {
     Hole(Hole),
     Var(DefId),
     Thunk(Thunk<CompuId>),
-    Ctor(Ctor<ValueId>),
+    Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),
     VCons(Cons<ValueId, ValueId>),
     TCons(Cons<TypeId, ValueId>),
@@ -416,8 +416,8 @@ pub enum Computation {
     Do(Bind<VPatId, CompuId, CompuId>),
     Let(Let<VPatId, ValueId, CompuId>),
     Match(Match<ValueId, VPatId, CompuId>),
-    CoMatch(CoMatch<CompuId>),
-    Dtor(Dtor<CompuId>),
+    CoMatch(CoMatch<DtorName, CompuId>),
+    Dtor(Dtor<CompuId, DtorName>),
 }
 
 /* -------------------------------- TopLevel -------------------------------- */

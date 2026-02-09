@@ -85,7 +85,7 @@ pub enum Pattern {
     Ann(Ann<PatId, TermId>),
     Hole(Hole),
     Var(DefId),
-    Ctor(Ctor<PatId>),
+    Ctor(Ctor<CtorName, PatId>),
     Paren(Paren<PatId>),
 }
 
@@ -206,10 +206,10 @@ pub enum Term {
     MoBlock(MoBlock),
     Data(Data),
     CoData(CoData),
-    Ctor(Ctor<TermId>),
+    Ctor(Ctor<CtorName, TermId>),
     Match(Match<TermId, PatId, TermId>),
     CoMatch(CoMatchParam),
-    Dtor(Dtor<TermId>),
+    Dtor(Dtor<TermId, DtorName>),
     Lit(Literal),
 }
 

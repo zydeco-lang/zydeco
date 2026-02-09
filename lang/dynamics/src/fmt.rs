@@ -165,7 +165,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for SemCompu {
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Ctor<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Ctor<CtorName, T>
 where
     T: Ugly<'a, Formatter<'a>>,
 {

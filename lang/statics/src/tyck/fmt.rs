@@ -370,7 +370,7 @@ where
     }
 }
 
-impl<'a, Tail> Ugly<'a, Formatter<'a>> for Ctor<Tail>
+impl<'a, Tail> Ugly<'a, Formatter<'a>> for Ctor<CtorName, Tail>
 where
     Tail: Ugly<'a, Formatter<'a>>,
 {
@@ -380,7 +380,7 @@ where
     }
 }
 
-impl<'a, Tail> Ugly<'a, Formatter<'a>> for Dtor<Tail>
+impl<'a, Tail> Ugly<'a, Formatter<'a>> for Dtor<Tail, DtorName>
 where
     Tail: Ugly<'a, Formatter<'a>>,
 {
@@ -435,7 +435,7 @@ where
     }
 }
 
-impl<'a, Tail> Ugly<'a, Formatter<'a>> for CoMatch<Tail>
+impl<'a, Tail> Ugly<'a, Formatter<'a>> for CoMatch<DtorName, Tail>
 where
     Tail: Ugly<'a, Formatter<'a>>,
 {
@@ -905,7 +905,7 @@ where
     }
 }
 
-impl<'a, Tail> Pretty<'a, Formatter<'a>> for Ctor<Tail>
+impl<'a, Tail> Pretty<'a, Formatter<'a>> for Ctor<CtorName, Tail>
 where
     Tail: Pretty<'a, Formatter<'a>>,
 {
@@ -915,7 +915,7 @@ where
     }
 }
 
-impl<'a, Tail> Pretty<'a, Formatter<'a>> for Dtor<Tail>
+impl<'a, Tail> Pretty<'a, Formatter<'a>> for Dtor<Tail, DtorName>
 where
     Tail: Pretty<'a, Formatter<'a>>,
 {
@@ -991,7 +991,7 @@ where
     }
 }
 
-impl<'a, Tail> Pretty<'a, Formatter<'a>> for CoMatch<Tail>
+impl<'a, Tail> Pretty<'a, Formatter<'a>> for CoMatch<DtorName, Tail>
 where
     Tail: Pretty<'a, Formatter<'a>>,
 {

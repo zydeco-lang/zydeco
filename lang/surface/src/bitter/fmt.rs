@@ -225,7 +225,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for DtorName {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Ctor<TermId> {
+impl<'a> Ugly<'a, Formatter<'a>> for Ctor<CtorName, TermId> {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         let Ctor(name, tail) = self;
@@ -237,7 +237,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Ctor<TermId> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for Ctor<PatId> {
+impl<'a> Ugly<'a, Formatter<'a>> for Ctor<CtorName, PatId> {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         let Ctor(name, tail) = self;
@@ -271,7 +271,7 @@ where
     }
 }
 
-impl<'a, T> Ugly<'a, Formatter<'a>> for Dtor<T>
+impl<'a, T> Ugly<'a, Formatter<'a>> for Dtor<T, DtorName>
 where
     T: Ugly<'a, Formatter<'a>>,
 {
@@ -469,7 +469,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for Match<TermId, PatId, TermId> {
     }
 }
 
-impl<'a> Ugly<'a, Formatter<'a>> for CoMatch<TermId> {
+impl<'a> Ugly<'a, Formatter<'a>> for CoMatch<DtorName, TermId> {
     fn ugly(&self, f: &'a Formatter) -> String {
         let mut s = String::new();
         let CoMatch { arms } = self;

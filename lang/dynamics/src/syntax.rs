@@ -28,7 +28,7 @@ pub type DeclId = ss::DeclId;
 pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
-    Ctor(Ctor<RcVPat>),
+    Ctor(Ctor<CtorName, RcVPat>),
     Triv(Triv),
     VCons(Cons<RcVPat, RcVPat>),
 }
@@ -39,7 +39,7 @@ pub enum Value {
     Hole(Hole),
     Var(DefId),
     Thunk(Thunk<RcCompu>),
-    Ctor(Ctor<RcValue>),
+    Ctor(Ctor<CtorName, RcValue>),
     Triv(Triv),
     VCons(Cons<RcValue, RcValue>),
     Lit(Literal),
@@ -71,8 +71,8 @@ pub enum Computation {
     Do(Bind<RcVPat, RcCompu, RcCompu>),
     Let(Let<RcVPat, RcValue, RcCompu>),
     Match(Match<RcValue, RcVPat, RcCompu>),
-    CoMatch(CoMatch<RcCompu>),
-    Dtor(Dtor<RcCompu>),
+    CoMatch(CoMatch<DtorName, RcCompu>),
+    Dtor(Dtor<RcCompu, DtorName>),
     Prim(Prim),
 }
 
@@ -119,7 +119,7 @@ pub struct EnvThunk {
 #[derive(From, Clone, Debug)]
 pub enum SemValue {
     Thunk(EnvThunk),
-    Ctor(Ctor<Box<SemValue>>),
+    Ctor(Ctor<CtorName, Box<SemValue>>),
     Triv(Triv),
     VCons(Cons<Box<SemValue>, Box<SemValue>>),
     Literal(Literal),
