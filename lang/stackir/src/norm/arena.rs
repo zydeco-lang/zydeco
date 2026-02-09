@@ -78,35 +78,35 @@ pub trait SConstruct<S, T, Arena>: Sized + Into<S> {
 
 impl<U, Arena> SConstruct<ValuePattern, VPatId, Arena> for U
 where
-    Arena: AsMut<SNormArena>,
+    Arena: AsMut<SNormInnerArena>,
     U: Into<ValuePattern>,
 {
     type Id = VPatId;
     type Structure = ();
     fn sbuild(self, arena: &mut Arena, id: Self::Id, (): Self::Structure) -> VPatId {
         let this = &mut *arena.as_mut();
-        this.inner.svpats.insert(id, self.into());
+        this.svpats.insert(id, self.into());
         id
     }
 }
 
 impl<U, Arena> SConstruct<Value, ValueId, Arena> for U
 where
-    Arena: AsMut<SNormArena>,
+    Arena: AsMut<SNormInnerArena>,
     U: Into<Value>,
 {
     type Id = ValueId;
     type Structure = ();
     fn sbuild(self, arena: &mut Arena, id: Self::Id, (): Self::Structure) -> ValueId {
         let this = &mut *arena.as_mut();
-        this.inner.svalues.insert(id, self.into());
+        this.svalues.insert(id, self.into());
         id
     }
 }
 
 impl<U, Arena> SConstruct<Stack, StackId, Arena> for U
 where
-    Arena: AsMut<SNormArena>,
+    Arena: AsMut<SNormInnerArena>,
     U: Into<Stack>,
 {
     type Id = StackId;
@@ -114,22 +114,22 @@ where
     type Structure = StackId;
     fn sbuild(self, arena: &mut Arena, id: Self::Id, hole: Self::Structure) -> StackId {
         let this = &mut *arena.as_mut();
-        this.inner.sstacks.insert(id, self.into());
-        this.inner.holes.insert(id, hole);
+        this.sstacks.insert(id, self.into());
+        this.holes.insert(id, hole);
         id
     }
 }
 
 impl<U, Arena> SConstruct<Computation<NonJoin>, CompuId, Arena> for U
 where
-    Arena: AsMut<SNormArena>,
+    Arena: AsMut<SNormInnerArena>,
     U: Into<Computation<NonJoin>>,
 {
     type Id = CompuId;
     type Structure = SubstAssignments;
     fn sbuild(self, arena: &mut Arena, id: Self::Id, assignments: Self::Structure) -> CompuId {
         let this = &mut *arena.as_mut();
-        this.inner.scompus.insert(id, SComputation { compu: self.into(), assignments });
+        this.scompus.insert(id, SComputation { compu: self.into(), assignments });
         id
     }
 }

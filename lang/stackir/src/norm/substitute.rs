@@ -1,8 +1,10 @@
 use super::syntax::*;
-use super::variables::{FreeVars, Vars};
+use super::{
+    clone::DeepClone,
+    variables::{FreeVars, Vars},
+};
 use crate::sps::syntax::*;
-use derive_more::From;
-use derive_more::{AsMut, AsRef};
+use derive_more::{AsMut, AsRef, From};
 use std::{
     cmp::{Ordering, PartialEq, PartialOrd},
     collections::{BTreeSet, VecDeque},
@@ -87,7 +89,10 @@ mod impls {
         /// and perform all inline substitutions available.
         pub fn extract_or_inline<Arena>(mut self, arena: &mut Arena) -> Self
         where
-            Arena: AsRef<SNormInnerArena> + AsMut<SNormInnerArena>,
+            Arena: AsMut<AdminArena>
+                + AsRef<SNormInnerArena>
+                + AsMut<SNormInnerArena>
+                + AsMut<ScopedArena>,
         {
             let mut items = VecDeque::new();
             while let Some(item) = self.items.pop_front() {
@@ -98,17 +103,20 @@ mod impls {
                             | [] => {}
                             | [user] => {
                                 // directly substitute all users of the variable with the value
-                                let value = arena.as_mut().svalues[&value].clone();
-                                arena.as_mut().svalues.replace(*user, value);
+                                let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
+                                let value = arena_mut.svalues[&value].clone();
+                                arena_mut.svalues.replace(*user, value);
                             }
                             | _users => {
-                                items.push_back(item);
-                                // // Note: dangerous explosion
-                                // for user in _users {
-                                //     // directly substitute all users of the variable with the value
-                                //     let value = arena.as_mut().svalues[&value].clone();
-                                //     arena.as_mut().svalues.replace(*user, value);
-                                // }
+                                // items.push_back(item);
+                                // Note: dangerous explosion
+                                for user in _users {
+                                    // directly substitute all users of the variable with the value
+                                    let value = value.deep_clone(arena, &mut Default::default());
+                                    let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
+                                    let value = arena_mut.svalues[&value].clone();
+                                    arena_mut.svalues.replace(*user, value);
+                                }
                             }
                         }
                     }
@@ -291,16 +299,23 @@ pub struct Substitutor<'a> {
     #[as_ref]
     #[as_mut]
     pub arena: StackirArena,
-    #[as_ref]
-    #[as_mut]
+    #[as_ref(SNormInnerArena)]
+    #[as_mut(SNormInnerArena)]
     pub snorm: &'a mut SNormInnerArena,
-    pub scoped: &'a ScopedArena,
+    #[as_ref(ScopedArena)]
+    #[as_mut(ScopedArena)]
+    pub scoped: &'a mut ScopedArena,
     pub statics: &'a StaticsArena,
+}
+impl<'a> AsMut<AdminArena> for Substitutor<'a> {
+    fn as_mut(&mut self) -> &mut AdminArena {
+        &mut self.arena.admin
+    }
 }
 
 impl<'a> Substitutor<'a> {
     pub fn new(
-        admin: AdminArena, snorm: &'a mut SNormInnerArena, scoped: &'a ScopedArena,
+        admin: AdminArena, snorm: &'a mut SNormInnerArena, scoped: &'a mut ScopedArena,
         statics: &'a StaticsArena,
     ) -> Self {
         Self {
@@ -344,6 +359,7 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
     type Out = CompuId;
 
     fn substitute(self, su: &mut Substitutor, assignments: SubstAssignments) -> Self::Out {
+        // Note: normalization is done in the elaboration pass.
         // let assignments = {
         //     let mut arena_mut = SNormArenaMut { admin: &mut su.arena.admin, inner: &mut su.snorm };
         //     assignments.normalize(&mut arena_mut)
@@ -363,7 +379,7 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
         //     doc.render_fmt(100, &mut buf).unwrap();
         //     // log::trace!("assignments:\n{}", buf);
         // }
-        let mut assignments = assignments.extract_or_inline(&mut su.snorm);
+        let mut assignments = assignments.extract_or_inline(su);
         let frontier = match assignments.items.front() {
             | Some(AssignItem::Stack(AssignStack { stack })) => {
                 Some(su.snorm.sstacks[&stack].clone())

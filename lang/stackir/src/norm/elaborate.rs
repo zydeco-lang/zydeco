@@ -13,8 +13,8 @@ pub trait Elaborate {
 /// Stateful lowering pass from typed syntax into stack IR.
 #[derive(AsRef, AsMut)]
 pub struct Elaborator<'a> {
-    #[as_ref]
-    #[as_mut]
+    #[as_ref(SNormInnerArena)]
+    #[as_mut(SNormInnerArena)]
     pub arena: SNormArena,
     pub spans: &'a SpanArena,
     pub statics: &'a StaticsArena,
@@ -33,7 +33,7 @@ impl<'a> Elaborator<'a> {
 }
 
 impl<'a> CompilerPass for Elaborator<'a> {
-    type Arena = SNormArena;
+    type Arena = SNormInnerArena;
     type Out = SNormArena;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<SNormArena, Self::Error> {

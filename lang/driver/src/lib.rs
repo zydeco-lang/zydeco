@@ -496,7 +496,7 @@ impl BuildSystem {
             }
             let zydeco_stackir::SNormArena { admin, mut inner } = snorm;
             let new_stackir =
-                zydeco_stackir::Substitutor::new(admin, &mut inner, &scoped, &statics).run()?;
+                zydeco_stackir::Substitutor::new(admin, &mut inner, &mut scoped, &statics).run()?;
             stackir = new_stackir;
             {
                 use zydeco_stackir::sps::fmt::*;

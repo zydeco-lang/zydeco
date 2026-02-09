@@ -43,6 +43,8 @@ pub mod norm {
     pub mod substitute;
     /// Variable introduction analysis for normalized stack IR.
     pub mod variables;
+    /// Deep cloning of nodes in normalized stack IR.
+    pub mod clone;
 }
 
 pub use norm::{arena::*, elaborate::Elaborator, substitute::Substitutor};
