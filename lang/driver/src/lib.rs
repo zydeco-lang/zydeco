@@ -471,6 +471,7 @@ impl BuildSystem {
                 log::trace!("ZIR after closure conversion:\n{}", buf);
             }
         }
+        zydeco_stackir::sps::check::check(&stackir, &scoped);
         let mut stackir = stackir;
         let mut count = 0;
         loop {
@@ -508,6 +509,7 @@ impl BuildSystem {
                     log::trace!("ZIR after substitution:\n{}", buf);
                 }
             }
+            zydeco_stackir::sps::check::check(&stackir, &scoped);
         }
         Ok(PackageStack { spans, scoped, statics, stackir })
     }

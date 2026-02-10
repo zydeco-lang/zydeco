@@ -95,7 +95,7 @@ mod impls {
                 + AsMut<ScopedArena>,
         {
             let mut items = VecDeque::new();
-            while let Some(item) = self.items.pop_front() {
+            while let Some(item) = self.items.pop_back() {
                 match item {
                     | AssignItem::Def(AssignDef { def, value }) => {
                         match arena.as_ref().users.get(&def).cloned().unwrap_or_default().as_slice()
@@ -121,9 +121,9 @@ mod impls {
                         }
                     }
                     | AssignItem::Pattern(AssignPattern { .. }) => {
-                        items.push_back(item);
+                        items.push_front(item);
                     }
-                    | AssignItem::Stack(AssignStack { .. }) => items.push_back(item),
+                    | AssignItem::Stack(AssignStack { .. }) => items.push_front(item),
                 }
             }
             Self { items }
@@ -199,7 +199,7 @@ mod impls {
                     vec![AssignItem::Def(AssignDef { def, value })]
                 }
                 | (VPat::Ctor(Ctor(ctor, _)), _) => {
-                    unreachable!("ctor patterns ({}) are not expected in assignments", ctor.0)
+                    unreachable!("ctor patterns ({}) are not expected in assignments", ctor.name)
                 }
                 | (VPat::Triv(Triv), _) => Vec::new(),
                 | (VPat::VCons(_), Value::Hole(_) | Value::Var(_)) => {

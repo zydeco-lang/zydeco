@@ -20,6 +20,8 @@ pub mod sps {
     pub mod fmt;
     /// Lowering from typed syntax into stack IR.
     pub mod lower;
+    /// Double check the stack IR is well-formed. For debugging purposes only.
+    pub mod check;
     /// Closure conversion over stack IR.
     pub mod convert;
     /// In-place substitution helpers for stack IR.
