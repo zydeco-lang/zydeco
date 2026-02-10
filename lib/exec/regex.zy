@@ -113,7 +113,7 @@ def ! demo (syn: Syn) (str: String) (kont: Thunk OS): OS =
 end
 
 main
-  # p*q*(xos|sox)
+  -- p*q*(xos|sox)
   ! demo (+Concat(+Kleene(+Str("p")), +Concat(+Kleene(+Str("q")), +Choose(+Str("xos"), +Str("sox"))))) "pppqqqsox\\^o^/" {
   ! exit 0 }
 end

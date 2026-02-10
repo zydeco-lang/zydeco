@@ -1,6 +1,6 @@
-# This file implements an interpreter for a simple CBV language.
+-- This file implements an interpreter for a simple CBV language.
 
-# As it is a CBV language, our syntax only contains expressions.
+-- As it is a CBV language, our syntax only contains expressions.
 data Expr where
 | +Var : String
 | +True : Unit
@@ -10,7 +10,7 @@ data Expr where
 | +If : Expr * Expr * Expr
 end
 
-# Environments are implemented as association lists.
+-- Environments are implemented as association lists.
 data Env where
 | +Empty : Unit
 | +Cons : String * Value * Env
@@ -28,8 +28,8 @@ def fix lookup (x : String) (g : Env) : Ret (Answer Value) =
   end
 end
 
-# The interpreter works with semantic values, which do not include variables.
-# We use closures in the interpreter to implement semantic thunks.
+-- The interpreter works with semantic values, which do not include variables.
+-- We use closures in the interpreter to implement semantic thunks.
 data Value where
 | +True    : Unit
 | +False   : Unit
@@ -51,13 +51,13 @@ codata Stack where
 | .bind : Ret (Answer Value)
 end
 
-# The "final answer" of the interpreter is either the final value or an error.
+-- The "final answer" of the interpreter is either the final value or an error.
 data Answer (A : VType) where
 | +Ok  : A
 | +Err : Unit
 end
 
-# The error handler.
+-- The error handler.
 def fix error: Stack =
   comatch
   | .fun _ -> ! error
@@ -67,8 +67,8 @@ def fix error: Stack =
   end
 end
 
-# The abstract machine is a co-data type that describes the interpreter state:
-# either descending into an expression or returning a value.
+-- The abstract machine is a co-data type that describes the interpreter state:
+-- either descending into an expression or returning a value.
 codata Machine where
 | .descend : Expr * Env -> Stack
 | .return  : Value -> Stack
@@ -89,8 +89,8 @@ def fix interp : Machine =
     | +False() ->
       ! interp .return +False()
     | +Lam(x, expr) ->
-      # Creates a host language thunk that runs the function body with an
-      # extended environment.
+      -- Creates a host language thunk that runs the function body with an
+      -- extended environment.
       ! interp .return +Closure {
         fn v -> ! interp .descend (expr, +Cons(x, v, env))
       }
@@ -108,7 +108,7 @@ def fix interp : Machine =
       | +True  _ -> ! error
       | +False _ -> ! error
       | +Closure fun ->
-        # call the function and follow its continuation
+        -- call the function and follow its continuation
         ! fun v
       end
     | .if (t, f, env) ->
@@ -121,7 +121,7 @@ def fix interp : Machine =
   end
 end
 
-# Examples
+-- Examples
 
 def identity: Expr =
   +Lam("x", +Var("x"))

@@ -2,10 +2,12 @@ codata Y (B : CType) where
   | .y : U(Y B) -> B
 end
 
-# \f. (\x. f (x x)) (\x. f (x x))
-# The famous Y combinator in call-by-name sense actually works
-# under call-by-push-value - thanks to thunks, we are able to
-# preserve the intention of lazy evaluation in `x` above.
+/-
+  \f. (\x. f (x x)) (\x. f (x x))
+  The famous Y combinator in call-by-name sense actually works
+  under call-by-push-value - thanks to thunks, we are able to
+  preserve the intention of lazy evaluation in `x` above.
+-/
 
 def ! fix' (B : CType) (f: U(U B -> B)): F(U B) =
   let prim : U(Y B) = { comatch | .y -> fn x -> ! f { ! x .y x } end } in
@@ -13,7 +15,7 @@ def ! fix' (B : CType) (f: U(U B -> B)): F(U B) =
 end
 
 main
-  # good old factorial
+  -- good old factorial
   let ! fact (f: U(Int -> F Int)) (n: Int): F Int =
     do is_zero <- ! int_eq n 0;
     match is_zero
@@ -29,7 +31,7 @@ main
 
   do fact <- ! fix' (Int -> F Int) fact;
 
-  # tests
+  -- tests
   let ! demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
     do x <- ! fact input;
     do correct <- ! int_eq x expected;

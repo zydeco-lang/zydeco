@@ -313,7 +313,7 @@ pub def ! hash_insert (K : VType) (V : VType) (k : K) (v : V) (tree : Hash K V) 
   end
 end
 
-# in search, a default value for v is needed, because the type of v is unknown
+--| in search, a default value for v is needed, because the type of v is unknown
 pub def ! hash_search (K : VType) (V : VType) (k : K) (default : V) (hash : Hash K V) : Ret (Option V) =
   match hash
   | +Hash(body, insert_cmp, search_cmp, equal_cmp) ->

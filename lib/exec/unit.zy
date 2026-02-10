@@ -1,4 +1,4 @@
-# Unit defined in std.zydeco
+-- Unit defined in std.zydeco
 
 main
   let v: Unit = () in

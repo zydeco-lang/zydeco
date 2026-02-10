@@ -1,10 +1,10 @@
-# Don't defunctionalize the kontinuation, objectify the computation!
+-- Don't defunctionalize the kontinuation, objectify the computation!
 
-# Let's consider a simple example of a recursive function, summing up
-# the numbers in a list.
+-- Let's consider a simple example of a recursive function, summing up
+-- the numbers in a list.
 
 codata Summer where
-  | .done : Ret Int # The equivalent of CALLERS_KONT
+  | .done : Ret Int -- The equivalent of CALLERS_KONT
   | .addN : Int -> Summer
 end
 
@@ -21,21 +21,21 @@ def fix sumBad (xs : List Int) : Ret(Int) =
   end
 end
 
-# This is a bad algorithm because it uses stack space linear in the
-# size of the input list. Why is that? each time we have a cons, we do
-# a *bind*, which pushes a kontinuation onto the stack. So if we have a list
+-- This is a bad algorithm because it uses stack space linear in the
+-- size of the input list. Why is that? each time we have a cons, we do
+-- a *bind*, which pushes a kontinuation onto the stack. So if we have a list
 
-# +Cons(5, +Cons(13, Nil))
+-- +Cons(5, +Cons(13, Nil))
 
-# when we get to the recursive call, the stack looks like:
+-- when we get to the recursive call, the stack looks like:
 
-# (n <- -. ! add n 13) :: (n <- -. ! add n 5) :: CALLERS_KONT
+-- (n <- -. ! add n 13) :: (n <- -. ! add n 5) :: CALLERS_KONT
 
-# We can make this recursive stack structure explicit in the program
-# by changing the return type from Ret(Int) to a new special codata
-# type Summer (see above)
+-- We can make this recursive stack structure explicit in the program
+-- by changing the return type from Ret(Int) to a new special codata
+-- type Summer (see above)
 
-# and changing the implementation as follows:
+-- and changing the implementation as follows:
 
 def fix retSummer (n : Int) : Summer =
   comatch
@@ -53,38 +53,38 @@ def fix sumOk (xs : List Int) : Summer =
   end
 end
 
-# Now instead of pushing a "real" continuation we add a "method"
-# .addN(n) with the captured variables of the continuation as
-# arguments (in this case, just n).
+-- Now instead of pushing a "real" continuation we add a "method"
+-- .addN(n) with the captured variables of the continuation as
+-- arguments (in this case, just n).
 
-# So when we get to empty, the stack looks like:
+-- So when we get to empty, the stack looks like:
 
-# .addN 13 .addN 5 .done
+-- .addN 13 .addN 5 .done
 
-# Since each of these is no longer a *real* continuation, we can't
-# just use `ret` to return, so we need to implement a new function
-# "retSummer" that interprets each of these "abstract" continuations
-# as the operation the original continuation performed.
+-- Since each of these is no longer a *real* continuation, we can't
+-- just use `ret` to return, so we need to implement a new function
+-- "retSummer" that interprets each of these "abstract" continuations
+-- as the operation the original continuation performed.
 
-# But note that this algorithm is *just* as bad as before, in that it
-# still uses linear stack space, we've just changed from continuations
-# to methods.
+-- But note that this algorithm is *just* as bad as before, in that it
+-- still uses linear stack space, we've just changed from continuations
+-- to methods.
 
-# To get a better algorithm we need to make a key insight:
+-- To get a better algorithm we need to make a key insight:
 
-# when we run ! retSummer x .addN y .addN z
+-- when we run ! retSummer x .addN y .addN z
 
-# we will evaluate to ! retSummer .addN (x + y) .addN (z)
-# and then            ! retSummer .addN ((x + y) + z)
+-- we will evaluate to ! retSummer .addN (x + y) .addN (z)
+-- and then            ! retSummer .addN ((x + y) + z)
 
-# which is clearly equivalent to ! retSummer .addN (x + (y + z))
-# by the associativity of addition.
+-- which is clearly equivalent to ! retSummer .addN (x + (y + z))
+-- by the associativity of addition.
 
-# but this is what we would have evaluated to if we had run
-# ! retSummer x .addN (y + z)
+-- but this is what we would have evaluated to if we had run
+-- ! retSummer x .addN (y + z)
 
-# So when we pushed .addN (y) on the stack, we could have instead added
-# it to `z` and not increased the size of the stack(!)
+-- So when we pushed .addN (y) on the stack, we could have instead added
+-- it to `z` and not increased the size of the stack(!)
 
 
 def fix sumBetter (xs : List Int) : Summer =
@@ -100,19 +100,19 @@ def fix sumBetter (xs : List Int) : Summer =
   end
 end
 
-# This is better in that it uses *constant* space to implement the
-# same algorithm, but we can make a couple of more improvements:
+-- This is better in that it uses *constant* space to implement the
+-- same algorithm, but we can make a couple of more improvements:
 
-# 1. We are branching on what the stack is every time we have a
-#    Cons. but what if we instead ensured that there was always an
-#    .add n on the stack so we wouldn't have to guess? We can do this
-#    by changing our codata type to only have one case (see above, Summer'):
+-- 1. We are branching on what the stack is every time we have a
+--    Cons. but what if we instead ensured that there was always an
+--    .add n on the stack so we wouldn't have to guess? We can do this
+--    by changing our codata type to only have one case (see above, Summer'):
 
-# This no longer needs to be recursive because we know there will only
-# be at most one add, i.e., because we use constant stack space!
-# 
-# We can implement the .done method from before by pushing .add(0)
-# (using that it is the additive unit).
+-- This no longer needs to be recursive because we know there will only
+-- be at most one add, i.e., because we use constant stack space!
+-- 
+-- We can implement the .done method from before by pushing .add(0)
+-- (using that it is the additive unit).
 
 def fix sumBest (xs : List Int) : Summer' =
   match xs

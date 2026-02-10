@@ -32,7 +32,7 @@ def fix' : Thunk (Thunk (Thunk FnInt -> FnInt) -> Ret (Thunk FnInt)) = {
 
 -- The rest is just a test bench.
 main
-  # good old factorial
+  -- good old factorial
   let ! fact (f: U(Int -> F Int)) (n: Int): F Int =
     do is_zero <- ! int_eq n 0;
     match is_zero
@@ -48,7 +48,7 @@ main
 
   do fact <- ! fix' fact;
 
-  # tests
+  -- tests
   let ! demo (input: Int) (expected: Int) (t: Thunk(OS)): OS =
     do x <- ! fact input;
     do correct <- ! int_eq x expected;

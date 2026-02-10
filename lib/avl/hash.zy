@@ -11,7 +11,7 @@ main
   do h <- ! hash_insert (Int) (String) 9 "nine" h;
   do h <- ! hash_insert (Int) (String) 10 "ten" h;
 
-  # answer
+  -- answer
   do h1 <- ! hash_new (Int) (String) int_lt int_eq str_eq;
   do h1 <- ! hash_insert (Int) (String) 1 "one change" h1;
   do h1 <- ! hash_insert (Int) (String) 2 "two" h1;
@@ -22,7 +22,7 @@ main
   do h1 <- ! hash_insert (Int) (String) 9 "nine" h1;
   do h1 <- ! hash_insert (Int) (String) 10 "ten change" h1;
 
-  # start deleting, changing and searching
+  -- start deleting, changing and searching
   do h <- ! hash_delete (Int) (String) 5 "default" h;
   do h <- ! hash_delete (Int) (String) 6 "default" h;
   do h <- ! hash_change (Int) (String) 1 "one change" h;

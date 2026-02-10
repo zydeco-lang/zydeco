@@ -58,7 +58,7 @@ def ! paren_counter_step (c : Tok) (k : Thunk(ParenCounterTrans)) (state : Paren
   | +LParen() -> ! k state .some
   | +RParen() ->
   (comatch
-  | .none -> ! k (+Reject() : ParenCounterState) .none # Note: would be more efficient to just ! reject here
+  | .none -> ! k (+Reject() : ParenCounterState) .none -- Note: would be more efficient to just ! reject here
   | .some -> ! k state
   end)
   end

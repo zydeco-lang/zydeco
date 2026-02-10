@@ -3,7 +3,6 @@ use std::fmt::{Debug, Display};
 
 /// Tokens produced by the surface lexer.
 #[derive(Logos, Clone, Debug, PartialEq)]
-#[logos(skip r"#.*\n")]
 #[logos(skip r"[ \t\n\f]+")]
 #[logos(subpattern ident = r"[a-zA-Z0-9_]|'|\?|\+|\*|-|=|~")]
 pub enum Tok<'input> {
