@@ -60,6 +60,8 @@ pub struct StaticsArena {
     pub codatas: ArenaDense<CoDataId, CoData>,
     /// hints for values that need data annotations
     pub data_hints: ArenaAssoc<ValueId, DataId>,
+    /// hints for value patterns that need data annotations
+    pub data_pat_hints: ArenaAssoc<VPatId, DataId>,
     /// hints for computations that need codata annotations
     pub codata_hints: ArenaAssoc<CompuId, CoDataId>,
     /// arena for inlinable definitions, typically global (necessity modality) definitions
@@ -131,6 +133,7 @@ impl StaticsArena {
             datas: ArenaDense::new(alloc.alloc()),
             codatas: ArenaDense::new(alloc.alloc()),
             data_hints: ArenaAssoc::new(),
+            data_pat_hints: ArenaAssoc::new(),
             codata_hints: ArenaAssoc::new(),
             inlinables: ArenaAssoc::new(),
             global_defs: ArenaAssoc::new(),

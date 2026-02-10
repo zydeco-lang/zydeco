@@ -43,9 +43,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
         match vpat {
             | VPat::Hole(_) => RcDoc::text("_"),
             | VPat::Var(def) => def.pretty(f),
-            | VPat::Ctor(Ctor(name, tail)) => {
+            | VPat::Ctor(Ctor(ctor, tail)) => {
                 use zydeco_syntax::CtorName;
-                let CtorName(name_str) = &name;
+                let CtorName(name_str) = &ctor.name;
                 RcDoc::concat([
                     RcDoc::text(name_str.clone()),
                     RcDoc::text("("),
@@ -116,10 +116,10 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                     .group(),
                 )
             }
-            | Value::Ctor(Ctor(name, val)) => {
+            | Value::Ctor(Ctor(ctor, val)) => {
                 let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([
-                    RcDoc::text(name.ugly(&statics_fmt)),
+                    RcDoc::text(ctor.name.ugly(&statics_fmt)),
                     RcDoc::text("("),
                     val.pretty(f),
                     RcDoc::text(")"),
@@ -183,7 +183,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for Stack {
                 let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([
                     RcDoc::text("tag("),
-                    RcDoc::text(dtor.ugly(&statics_fmt)),
+                    RcDoc::text(dtor.name.ugly(&statics_fmt)),
                     RcDoc::text(")"),
                     RcDoc::space(),
                     RcDoc::text("::"),
@@ -344,13 +344,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                 RcDoc::concat([
                     RcDoc::text("cocase"),
                     RcDoc::concat(arms.iter().map(|CoMatcher { dtor, tail }| {
-                        let Cons(dtor_name, Bullet) = dtor;
+                        let Cons(dtor, Bullet) = dtor;
                         RcDoc::concat([
                             RcDoc::line(),
                             RcDoc::text("|"),
                             RcDoc::space(),
                             RcDoc::text("tag("),
-                            RcDoc::text(dtor_name.ugly(&statics_fmt)),
+                            RcDoc::text(dtor.name.ugly(&statics_fmt)),
                             RcDoc::text(")"),
                             RcDoc::space(),
                             RcDoc::text("->"),

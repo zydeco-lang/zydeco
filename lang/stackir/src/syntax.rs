@@ -25,13 +25,25 @@ pub enum TermId {
     Stack(StackId),
 }
 
+#[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CtorIdx {
+    pub idx: usize,
+    pub name: CtorName,
+}
+
+#[derive(From, Clone, Debug, Eq, Hash, PartialEq)]
+pub struct DtorIdx {
+    pub idx: usize,
+    pub name: DtorName,
+}
+
 /* ---------------------------------- Value --------------------------------- */
 
 #[derive(From, Clone, Debug)]
 pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
-    Ctor(Ctor<CtorName, VPatId>),
+    Ctor(Ctor<CtorIdx, VPatId>),
     Triv(Triv),
     VCons(Cons<VPatId, VPatId>),
 }
@@ -56,7 +68,7 @@ pub enum Value {
     Hole(Hole),
     Var(DefId),
     Closure(Closure),
-    Ctor(Ctor<CtorName, ValueId>),
+    Ctor(Ctor<CtorIdx, ValueId>),
     Triv(Triv),
     VCons(Cons<ValueId, ValueId>),
     Literal(Literal),
@@ -82,7 +94,7 @@ pub enum Stack {
     Kont(Kont),
     Var(Bullet),
     Arg(Cons<ValueId, StackId>),
-    Tag(Cons<DtorName, StackId>),
+    Tag(Cons<DtorIdx, StackId>),
 }
 
 /* ------------------------------- Computation ------------------------------ */
@@ -123,6 +135,6 @@ pub enum Computation<Join> {
     #[from(ignore)]
     Join(Join),
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
-    CoCase(CoMatch<Cons<DtorName, Bullet>, CompuId>),
+    CoCase(CoMatch<Cons<DtorIdx, Bullet>, CompuId>),
     ExternCall(ExternCall),
 }

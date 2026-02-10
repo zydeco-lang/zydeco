@@ -238,7 +238,13 @@ impl Lower for ss::VPatId {
                 use zydeco_syntax::Ctor;
                 let Ctor(name, tail) = ctor;
                 let tail_vpat = tail.lower(lo, ());
-                Ctor(name, tail_vpat).into()
+                let data_id = lo.statics.data_pat_hints[&self];
+                let idx = lo.statics.datas[&data_id]
+                    .iter()
+                    .position(|(tag_branch, _ty)| tag_branch == &name)
+                    .expect("Constructor tag not found");
+                let ctor_idx = CtorIdx { idx, name };
+                Ctor(ctor_idx, tail_vpat).into()
             }
             | SSVPat::Triv(triv) => triv.into(),
             | SSVPat::VCons(cons) => {
@@ -280,13 +286,21 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
                 let value_id = Closure { capture, stack: Bullet, body: body_compu }.build(lo, site);
                 kont(value_id, lo)
             }
-            | ss::Value::Ctor(Ctor(ctor, body)) => Phantom::new(body).lower(
-                lo,
-                Box::new(move |body_val, lo| {
-                    let value_id = Ctor(ctor, body_val).build(lo, site);
-                    kont(value_id, lo)
-                }),
-            ),
+            | ss::Value::Ctor(Ctor(name, body)) => {
+                let data_id = lo.statics.data_hints[&self];
+                let idx = lo.statics.datas[&data_id]
+                    .iter()
+                    .position(|(tag_branch, _ty)| tag_branch == &name)
+                    .expect("Constructor tag not found");
+                let ctor_idx = CtorIdx { idx, name };
+                Phantom::new(body).lower(
+                    lo,
+                    Box::new(move |body_val, lo| {
+                        let value_id = Ctor(ctor_idx, body_val).build(lo, site);
+                        kont(value_id, lo)
+                    }),
+                )
+            }
             | ss::Value::Triv(_) => {
                 let value_id = Triv.build(lo, site);
                 kont(value_id, lo)
@@ -417,19 +431,31 @@ impl Lower for ss::CompuId {
             }
             | Compu::CoMatch(CoMatch { arms }) => {
                 let lowered_arms = arms
-                    .iter()
+                    .into_iter()
                     .map(|arm| {
-                        let CoMatcher { dtor, tail } = arm;
+                        let CoMatcher { dtor: name, tail } = arm;
+                        let codata_id = lo.statics.codata_hints[&self];
+                        let idx = lo.statics.codatas[&codata_id]
+                            .iter()
+                            .position(|(tag_branch, _ty)| tag_branch == &name)
+                            .expect("Destructor tag not found");
+                        let dtor_idx = DtorIdx { idx, name };
                         let body_compu = tail.lower(lo, ());
-                        CoMatcher { dtor: Cons(dtor.clone(), Bullet), tail: body_compu }
+                        CoMatcher { dtor: Cons(dtor_idx, Bullet), tail: body_compu }
                     })
                     .collect();
                 CoMatch { arms: lowered_arms }.build(lo, site)
             }
-            | Compu::Dtor(Dtor(body, dtor)) => {
+            | Compu::Dtor(Dtor(body, name)) => {
                 // Destructor: push the destructor onto the stack and continue with body
                 let next_stack = Bullet.build(lo, Some(ss::TermId::Compu(body)));
-                let tag_stack_id = Cons(dtor.clone(), next_stack).build(lo, site);
+                let codata_id = lo.statics.codata_hints[&body];
+                let idx = lo.statics.codatas[&codata_id]
+                    .iter()
+                    .position(|(tag_branch, _ty)| tag_branch == &name)
+                    .expect("Destructor tag not found");
+                let dtor_idx = DtorIdx { idx, name };
+                let tag_stack_id = Cons(dtor_idx, next_stack).build(lo, site);
                 let body_compu = body.lower(lo, ());
                 // Create LetStack to bind from the stack with the tag to the current stack, then run body
                 Let { binder: Bullet, bindee: tag_stack_id, tail: body_compu }.build(lo, site)

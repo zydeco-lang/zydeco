@@ -700,6 +700,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     let (args, _) = args_out_ann.as_value();
                     let pat =
                         Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), args), ann_ty, &self.info);
+                    tycker.statics.data_pat_hints.insert(pat, data_id.to_owned());
                     PatAnnId::Value(pat, ann_ty)
                 }
             },
