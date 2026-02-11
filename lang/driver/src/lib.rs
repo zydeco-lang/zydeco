@@ -55,7 +55,7 @@ pub mod prelude {
 
     pub use zydeco_stackir::sps::syntax as sk;
 
-    pub use zydeco_stackir::norm::syntax as sn;
+    pub use zydeco_stackir::snorm::syntax as sn;
 
     pub use zydeco_assembly::syntax as sa;
 }
@@ -486,7 +486,7 @@ impl BuildSystem {
             )
             .run()?;
             {
-                use zydeco_stackir::norm::fmt::*;
+                use zydeco_stackir::snorm::fmt::*;
                 let fmt = Formatter::new(&snorm.admin, &snorm.inner, &inner, &scoped, &statics);
                 let doc = snorm.pretty(&fmt);
                 let mut buf = String::new();

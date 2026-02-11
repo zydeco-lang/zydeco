@@ -32,7 +32,7 @@ pub mod sps {
 
 pub use sps::{arena::*, convert::ClosureConverter, lower::Lowerer};
 
-pub mod norm {
+pub mod snorm {
     /// Extra syntax for normalization.
     pub mod syntax;
     /// Arenas and builders for normalized stack IR.
@@ -49,4 +49,4 @@ pub mod norm {
     pub mod clone;
 }
 
-pub use norm::{arena::*, elaborate::Elaborator, substitute::Substitutor};
+pub use snorm::{arena::*, elaborate::Elaborator, substitute::Substitutor};
