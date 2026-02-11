@@ -230,12 +230,7 @@ impl<'a> ClosureConverter<'a> {
         // We'll store it as a closure that takes the captures as argument
         // The pair will be: (capture_values, body_closure)
         // where body_closure is a closure whose body is the original body
-        let body_closure = Closure {
-            capture: Context(vec![]), // Body closure doesn't need additional captures
-            stack: Bullet,
-            body: transformed_body,
-        }
-        .build(self, site);
+        let body_closure = Closure { stack: Bullet, body: transformed_body }.build(self, site);
 
         // Update the value in place with the pair: (captures, body_closure)
         self.arena.inner.values.replace_into(old_value_id, Cons(capture_pair, body_closure));

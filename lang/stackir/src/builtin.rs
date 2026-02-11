@@ -94,7 +94,7 @@ impl Builtin {
             tail = Computation::LetArg(Let { binder, bindee, tail }).build(arena, None);
         }
         // construct the closure wrapping the whole computation
-        Closure { capture: Context::new(), stack: Bullet, body: tail }.build(arena, None)
+        Closure { stack: Bullet, body: tail }.build(arena, None)
     }
 
     /// Wrap a builtin function definition with closure.
@@ -104,6 +104,6 @@ impl Builtin {
     {
         let function = self.name;
         let body = ExternCall { function, stack: Bullet }.build(arena, None);
-        Closure { capture: Context::new(), stack: Bullet, body }.build(arena, None)
+        Closure { stack: Bullet, body }.build(arena, None)
     }
 }

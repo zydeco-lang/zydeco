@@ -390,7 +390,7 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
         let mut tail = match self {
             | Compu::Hole(Hole) => Hole.build(su, None),
             | Compu::Force(SForce { thunk, stack }) => match su.snorm.svalues[&thunk].clone() {
-                | Value::Closure(Closure { capture: _, stack: Bullet, body }) => {
+                | Value::Closure(Closure { stack: Bullet, body }) => {
                     let body = body.substitute(su, ());
                     let stack = stack.substitute(su, ());
                     Let { binder: Bullet, bindee: stack, tail: body }.build(su, None)
@@ -522,9 +522,9 @@ impl Substitute<()> for ValueId {
         match value {
             | Value::Hole(Hole) => Hole.build(su, None),
             | Value::Var(def_id) => def_id.build(su, None),
-            | Value::Closure(Closure { capture, stack, body }) => {
+            | Value::Closure(Closure { stack, body }) => {
                 let body = body.substitute(su, ());
-                Closure { capture, stack, body }.build(su, None)
+                Closure { stack, body }.build(su, None)
             }
             | Value::Ctor(Ctor(ctor, body)) => {
                 let body = body.substitute(su, ());

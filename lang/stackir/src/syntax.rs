@@ -49,9 +49,9 @@ pub enum ValuePattern {
 }
 
 /// A closure that captures minimal environment.
+/// The capture list is implicit and computed during closure conversion.
 #[derive(Clone, Debug)]
 pub struct Closure {
-    pub capture: Context<DefId>,
     pub stack: Bullet,
     pub body: CompuId,
 }

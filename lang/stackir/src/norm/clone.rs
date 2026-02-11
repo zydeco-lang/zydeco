@@ -76,10 +76,9 @@ where
                 let def = map[&def];
                 build(def, arena)
             }
-            | Value::Closure(Closure { capture, stack: Bullet, body }) => {
-                assert!(capture.iter().count() == 0, "capture must be empty");
+            | Value::Closure(Closure { stack: Bullet, body }) => {
                 let body = body.deep_clone(arena, map);
-                build(Closure { capture, stack: Bullet, body }, arena)
+                build(Closure { stack: Bullet, body }, arena)
             }
             | Value::Ctor(Ctor(ctor, body)) => {
                 let body = body.deep_clone(arena, map);

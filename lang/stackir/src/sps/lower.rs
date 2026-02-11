@@ -282,8 +282,7 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
             | ss::Value::Thunk(Thunk(body)) => {
                 let body_compu = body.lower(lo, ());
                 // Get minimal capture from cocontext information
-                let capture = lo.compute_capture(body, None);
-                let value_id = Closure { capture, stack: Bullet, body: body_compu }.build(lo, site);
+                let value_id = Closure { stack: Bullet, body: body_compu }.build(lo, site);
                 kont(value_id, lo)
             }
             | ss::Value::Ctor(Ctor(name, body)) => {

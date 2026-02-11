@@ -92,20 +92,17 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
         match self {
             | Value::Hole(Hole) => RcDoc::text("_"),
             | Value::Var(def) => def.pretty(&f.sps_formatter),
-            | Value::Closure(Closure { capture, stack, body }) => {
-                assert!(capture.iter().count() == 0, "capture must be empty");
-                RcDoc::concat([
-                    RcDoc::text("{"),
-                    RcDoc::space(),
-                    stack.pretty(f),
-                    RcDoc::space(),
-                    RcDoc::text("->"),
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
-                    RcDoc::space(),
-                    RcDoc::text("}"),
-                ])
-                .group()
-            }
+            | Value::Closure(Closure { stack, body }) => RcDoc::concat([
+                RcDoc::text("{"),
+                RcDoc::space(),
+                stack.pretty(f),
+                RcDoc::space(),
+                RcDoc::text("->"),
+                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                RcDoc::space(),
+                RcDoc::text("}"),
+            ])
+            .group(),
             | Value::Ctor(Ctor(ctor, val)) => {
                 let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([

@@ -83,39 +83,17 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
         match self {
             | Value::Hole(Hole) => RcDoc::text("_"),
             | Value::Var(def) => def.pretty(f),
-            | Value::Closure(Closure { capture, stack, body }) => {
-                let mut doc = RcDoc::nil();
-                let capture_doc = RcDoc::concat(
-                    capture
-                        .iter()
-                        .map(|d| d.pretty(f))
-                        .enumerate()
-                        .flat_map(
-                            |(i, d)| {
-                                if i == 0 { vec![d] } else { vec![RcDoc::text(", "), d] }
-                            },
-                        )
-                        .collect::<Vec<_>>(),
-                );
-                doc = doc
-                    .append(RcDoc::text("["))
-                    .append(capture_doc)
-                    .append(RcDoc::text("] "))
-                    .group();
-                doc.append(
-                    RcDoc::concat([
-                        RcDoc::text("{"),
-                        RcDoc::space(),
-                        stack.pretty(f),
-                        RcDoc::space(),
-                        RcDoc::text("->"),
-                        RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
-                        RcDoc::space(),
-                        RcDoc::text("}"),
-                    ])
-                    .group(),
-                )
-            }
+            | Value::Closure(Closure { stack, body }) => RcDoc::concat([
+                RcDoc::text("{"),
+                RcDoc::space(),
+                stack.pretty(f),
+                RcDoc::space(),
+                RcDoc::text("->"),
+                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+                RcDoc::space(),
+                RcDoc::text("}"),
+            ])
+            .group(),
             | Value::Ctor(Ctor(ctor, val)) => {
                 let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([

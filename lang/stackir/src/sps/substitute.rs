@@ -35,7 +35,7 @@ impl SubstVarInPlace for ValueId {
                 }
                 | None => {}
             },
-            | Value::Closure(Closure { capture: _, stack: Bullet, body }) => {
+            | Value::Closure(Closure { stack: Bullet, body }) => {
                 // Recursively substitute in the body
                 body.subst_var_in_place(&mut arena_mut, map)
             }

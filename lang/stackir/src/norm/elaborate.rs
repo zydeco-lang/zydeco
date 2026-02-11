@@ -81,10 +81,9 @@ impl<'a> Elaborate for ValueId {
                 user.push(self);
                 def.sbuild(el, self, ())
             }
-            | Value::Closure(Closure { capture, stack: Bullet, body }) => {
-                assert!(capture.iter().count() == 0, "capture must be empty");
+            | Value::Closure(Closure { stack: Bullet, body }) => {
                 let body = body.elaborate(el);
-                Closure { capture, stack: Bullet, body }.sbuild(el, self, ())
+                Closure { stack: Bullet, body }.sbuild(el, self, ())
             }
             | Value::Ctor(Ctor(name, body)) => {
                 let body = body.elaborate(el);

@@ -28,7 +28,7 @@ impl FreeVars for ValueId {
         let value = arena.as_ref().inner.svalues[&self].clone();
         match value {
             | Value::Var(def_id) => CoContext::singleton(def_id),
-            | Value::Closure(Closure { capture: _, stack: Bullet, body }) => body.free_vars(arena),
+            | Value::Closure(Closure { stack: Bullet, body }) => body.free_vars(arena),
             | Value::Ctor(Ctor(_ctor, body)) => body.free_vars(arena),
             | Value::VCons(Cons(a, b)) => a.free_vars(arena) + b.free_vars(arena),
             | Value::Complex(Complex { operator: _, operands }) => operands

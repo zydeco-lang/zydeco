@@ -153,8 +153,7 @@ impl<'a> Lower<'a> for sk::ValueId {
                 // Push the atom onto the stack
                 Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
-            | Value::Closure(sk::Closure { capture, stack: sk::Bullet, body }) => {
-                assert!(capture.iter().count() == 0, "Capture is not empty");
+            | Value::Closure(sk::Closure { stack: sk::Bullet, body }) => {
                 let body = body.lower(lo, Context::new());
                 // Label the closure code
                 let sym = body.build(lo, (Some(String::from("clo")), None));
