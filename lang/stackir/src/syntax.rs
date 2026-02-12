@@ -113,7 +113,6 @@ pub struct SReturn {
 
 #[derive(Clone, Debug)]
 pub struct SFix {
-    pub capture: Context<DefId>,
     pub param: DefId,
     pub body: CompuId,
 }

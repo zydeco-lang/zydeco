@@ -2,7 +2,7 @@ use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_utils::{arena::ArcGlobalAlloc, context::Context, pass::CompilerPass, phantom::Phantom};
+use zydeco_utils::{arena::ArcGlobalAlloc, pass::CompilerPass, phantom::Phantom};
 
 /// Lower typed syntax nodes into stack IR.
 pub trait Lower {
@@ -35,52 +35,6 @@ impl<'a> Lowerer<'a> {
     ) -> Self {
         let arena = StackirArena::new_arc(alloc);
         Self { arena, sequence: Vec::new(), globals: ArenaAssoc::new(), spans, scoped, statics }
-    }
-
-    /// Compute the minimal capture list for a closure from a computation body.
-    /// Filters out type and kind identifiers, keeping only term-level (value/computation) identifiers.
-    /// Excludes the fix parameter from the capture list.
-    fn compute_capture(&self, body: ss::CompuId, param: Option<ss::DefId>) -> Context<DefId> {
-        // Convert CompuId to statics TermId
-        let ss_term_id = ss::TermId::Compu(body);
-        // Map from statics TermId to scoped TermId
-        let su_term_id = self.statics.terms.back(&ss_term_id).unwrap_or_else(|| {
-            let fmt = zydeco_statics::tyck::fmt::Formatter::new(self.scoped, self.statics);
-            let body_str = body.ugly(&fmt);
-            // Try to get span information if we can map to scoped TermId
-            // (this will likely also fail since the mapping already failed)
-            let span_str = self
-                .statics
-                .terms
-                .back(&ss_term_id)
-                .and_then(|su_term_id| {
-                    use zydeco_surface::scoped::syntax::EntityId as SuEntityId;
-                    let entity_id: SuEntityId = (*su_term_id).into();
-                    self.scoped.textual.back(&entity_id)
-                })
-                .map(|entity| format!(" ({})", &self.spans[entity]))
-                .unwrap_or_default();
-            panic!("Failed to map statics CompuId to scoped TermId ({}):\n{}", span_str, body_str);
-        });
-        // Get cocontext (free variables) from scoped arena
-        // This gives us the minimal set of variables that need to be captured
-        let coctx = self.scoped.coctxs_term_local[su_term_id].clone();
-        // Convert CoContext to Context<DefId>, filtering out type and kind identifiers
-        // Only keep term-level (value/computation) identifiers
-        coctx
-            .iter()
-            .cloned()
-            .filter(|def_id| {
-                // Check if this is a term-level definition (value/computation)
-                // by checking if it has a Type annotation (not Kind or Set)
-                self.statics
-                    .annotations_var
-                    .get(def_id)
-                    .map(|ann| matches!(ann, ss::AnnId::Type(_)))
-                    .unwrap_or(false)
-            })
-            .filter(|def_id| param.map(|param| *def_id != param).unwrap_or(true))
-            .collect()
     }
 }
 
@@ -374,9 +328,8 @@ impl Lower for ss::CompuId {
                         panic!("Fix param must be a variable, found:\n{}", param_str);
                     }
                 };
-                let capture = lo.compute_capture(body, Some(def_id));
                 let body_compu = body.lower(lo, ());
-                SFix { capture, param: def_id, body: body_compu }.build(lo, site)
+                SFix { param: def_id, body: body_compu }.build(lo, site)
             }
             | Compu::Force(Force(body)) => Phantom::new(body).lower(
                 lo,

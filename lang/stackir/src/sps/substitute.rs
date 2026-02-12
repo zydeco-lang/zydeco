@@ -106,7 +106,7 @@ impl SubstVarInPlace for CompuId {
                 stack.subst_var_in_place(&mut arena_mut, map);
                 value.subst_var_in_place(&mut arena_mut, map);
             }
-            | Computation::Fix(SFix { capture: _, param: _, body }) => {
+            | Computation::Fix(SFix { param: _, body }) => {
                 // Recursively substitute in the body
                 // Note: param is bound, so we don't substitute it
                 body.subst_var_in_place(&mut arena_mut, map);

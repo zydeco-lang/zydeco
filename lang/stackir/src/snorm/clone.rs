@@ -183,11 +183,10 @@ where
                 let value = value.deep_clone(arena, map);
                 build(SReturn { stack, value }, new_str, arena)
             }
-            | Compu::Fix(SFix { capture, param, body }) => {
-                assert!(capture.iter().count() == 0, "capture must be empty");
+            | Compu::Fix(SFix { param, body }) => {
                 let param = param.deep_clone(arena, map);
                 let body = body.deep_clone(arena, map);
-                build(SFix { capture, param, body }, new_str, arena)
+                build(SFix { param, body }, new_str, arena)
             }
             | Compu::Case(Match { scrut, arms }) => {
                 let scrut = scrut.deep_clone(arena, map);

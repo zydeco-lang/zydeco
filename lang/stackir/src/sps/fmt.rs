@@ -208,32 +208,14 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
             | Computation::Hole(Hole) => RcDoc::text("_"),
-            | Computation::Fix(SFix { capture, param, body }) => {
-                let capture_doc = RcDoc::concat(
-                    capture
-                        .iter()
-                        .map(|d| d.pretty(f))
-                        .enumerate()
-                        .flat_map(
-                            |(i, d)| {
-                                if i == 0 { vec![d] } else { vec![RcDoc::text(", "), d] }
-                            },
-                        )
-                        .collect::<Vec<_>>(),
-                );
-                RcDoc::concat([
-                    RcDoc::text("["),
-                    capture_doc,
-                    RcDoc::text("]"),
-                    RcDoc::space(),
-                    RcDoc::text("fix"),
-                    RcDoc::space(),
-                    param.pretty(f),
-                    RcDoc::space(),
-                    RcDoc::text("->"),
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
-                ])
-            }
+            | Computation::Fix(SFix { param, body }) => RcDoc::concat([
+                RcDoc::text("fix"),
+                RcDoc::space(),
+                param.pretty(f),
+                RcDoc::space(),
+                RcDoc::text("->"),
+                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+            ]),
             | Computation::Force(SForce { thunk, stack }) => RcDoc::concat([
                 thunk.pretty(f),
                 RcDoc::space(),

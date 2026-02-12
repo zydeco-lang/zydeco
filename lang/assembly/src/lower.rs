@@ -409,11 +409,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
-            | Compu::Fix(sk::SFix { capture, param, body }) => {
-                assert!(
-                    capture.iter().count() == 0,
-                    "ZASM requires empty capture. Please perform closure conversion first."
-                );
+            | Compu::Fix(sk::SFix { param, body }) => {
                 // Label the body code; using trivial value as a placeholder
                 let name = lo.scoped.defs[&param].plain();
                 let sym = Undefined.build(lo, (Some(name.to_string()), Some(param)));

@@ -205,17 +205,14 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<NonJoin> {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
             | Computation::Hole(Hole) => RcDoc::text("_"),
-            | Computation::Fix(SFix { capture, param, body }) => {
-                assert!(capture.iter().count() == 0, "capture must be empty");
-                RcDoc::concat([
-                    RcDoc::text("fix"),
-                    RcDoc::space(),
-                    param.pretty(&f.sps_formatter),
-                    RcDoc::space(),
-                    RcDoc::text("->"),
-                    RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
-                ])
-            }
+            | Computation::Fix(SFix { param, body }) => RcDoc::concat([
+                RcDoc::text("fix"),
+                RcDoc::space(),
+                param.pretty(&f.sps_formatter),
+                RcDoc::space(),
+                RcDoc::text("->"),
+                RcDoc::concat([RcDoc::line(), body.pretty(f)]).nest(f.indent).group(),
+            ]),
             | Computation::Force(SForce { thunk, stack }) => RcDoc::concat([
                 thunk.pretty(f),
                 RcDoc::space(),

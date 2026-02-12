@@ -9,7 +9,7 @@ use {
     zydeco_statics::tyck::{arena::StaticsArena, syntax as ss},
     zydeco_surface::scoped::arena::ScopedArena,
     zydeco_syntax::VarName,
-    zydeco_utils::prelude::{CoContext, CompilerPass, Context},
+    zydeco_utils::prelude::{CoContext, CompilerPass},
 };
 
 /// Perform closure conversion on the stack arena.
@@ -170,9 +170,7 @@ impl<'a> ClosureConverter<'a> {
         let bullet_stack = Bullet.build(self, site);
         let capture_stack = Cons(capture_pair, bullet_stack).build(self, site);
         // Create the Fix computation
-        let fix_compu =
-            SFix { capture: Context::new(), param: fix.param, body: transformed_arg_body }
-                .build(self, site);
+        let fix_compu = SFix { param: fix.param, body: transformed_arg_body }.build(self, site);
         // Wrap the Fix in a LetStack that pushes captures, then runs the Fix
         // Update the Fix in place with the wrapped computation
         self.arena.inner.compus.replace(

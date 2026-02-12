@@ -416,9 +416,9 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
                     SReturn { stack, value }.build(su, None)
                 }
             },
-            | Compu::Fix(SFix { capture, param, body }) => {
+            | Compu::Fix(SFix { param, body }) => {
                 let body = body.substitute(su, ());
-                SFix { capture, param, body }.build(su, None)
+                SFix { param, body }.build(su, None)
             }
             | Compu::Case(Match { scrut, arms }) => {
                 let scrut = scrut.substitute(su, ());

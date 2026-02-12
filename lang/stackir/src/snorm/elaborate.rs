@@ -154,10 +154,9 @@ impl<'a> Elaborate for CompuId {
                 let hole = Bullet.sbuild(el, hole, hole);
                 Compu::Ret(SReturn { stack: hole, value }).sbuild(el, self, assignments)
             }
-            | Compu::Fix(SFix { capture, param, body }) => {
-                assert!(capture.iter().count() == 0, "capture must be empty");
+            | Compu::Fix(SFix { param, body }) => {
                 let body = body.elaborate(el);
-                Compu::Fix(SFix { capture, param, body }).sbuild(el, self, SubstAssignments::new())
+                Compu::Fix(SFix { param, body }).sbuild(el, self, SubstAssignments::new())
             }
             | Compu::Case(Match { scrut, arms }) => {
                 let scrut = scrut.elaborate(el);
