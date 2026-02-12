@@ -460,6 +460,18 @@ impl BuildSystem {
                 log::trace!("ZIR right after lowering:\n{}", buf);
             }
         }
+        zydeco_stackir::sps::inline::Inliner::new(&mut stackir, &mut scoped).run()?;
+        {
+            use zydeco_stackir::sps::fmt::*;
+            let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
+            let doc = stackir.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            if verbose {
+                log::trace!("ZIR after inlining:\n{}", buf);
+            }
+        }
+        zydeco_stackir::sps::check::check(&stackir, &scoped);
         zydeco_stackir::ClosureConverter::new(&mut stackir, &mut scoped, &statics).convert();
         {
             use zydeco_stackir::sps::fmt::*;

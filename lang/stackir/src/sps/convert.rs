@@ -18,6 +18,8 @@ pub struct ClosureConverter<'a> {
     #[as_ref(StackirArena)]
     #[as_mut(StackirArena)]
     arena: &'a mut StackirArena,
+    #[as_ref(ScopedArena)]
+    #[as_mut(ScopedArena)]
     scoped: &'a mut ScopedArena,
     _statics: &'a StaticsArena,
 }
@@ -113,7 +115,7 @@ impl<'a> ClosureConverter<'a> {
         let mut subst_map = SubstVarMap::new();
         for (&old_def, &new_def) in free_var_renames.iter() {
             let new_value_id = new_def.build(self, None);
-            subst_map.values.insert(old_def, new_value_id);
+            subst_map.insert(old_def, new_value_id);
         }
         fix.body.subst_var_in_place(self, &subst_map);
 
@@ -142,7 +144,7 @@ impl<'a> ClosureConverter<'a> {
             // Substitute the closure def into the transformed body to replace fix.param
             let closure_def_value: ValueId = closure_def.build(self, site);
             let mut subst_map = SubstVarMap::new();
-            subst_map.values.insert(fix.param, closure_def_value);
+            subst_map.insert(fix.param, closure_def_value);
             fix.body.subst_var_in_place(self, &subst_map);
             fix.body
         };
@@ -214,7 +216,7 @@ impl<'a> ClosureConverter<'a> {
         let mut subst_map = SubstVarMap::new();
         for (&old_def, &new_def) in free_var_renames.iter() {
             let new_value_id = new_def.build(self, None);
-            subst_map.values.insert(old_def, new_value_id);
+            subst_map.insert(old_def, new_value_id);
         }
         clo.body.subst_var_in_place(self, &subst_map);
 

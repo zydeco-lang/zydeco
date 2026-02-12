@@ -8,7 +8,7 @@ pub trait DeepClone<Arena> {
 /// Clone a pattern def id, creating a new one and updating the map.
 impl<Arena> DeepClone<Arena> for DefId
 where
-    Arena: AsMut<AdminArena> + AsMut<SNormInnerArena> + AsMut<ScopedArena>,
+    Arena: AsMut<ScopedArena>,
 {
     fn deep_clone(&self, arena: &mut Arena, map: &mut DefMap) -> Self {
         let scoped = AsMut::<ScopedArena>::as_mut(arena);
@@ -21,33 +21,27 @@ where
 
 impl<Arena> DeepClone<Arena> for VPatId
 where
-    Arena: AsMut<AdminArena> + AsMut<SNormInnerArena> + AsMut<ScopedArena>,
+    Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
 {
     fn deep_clone(&self, arena: &mut Arena, map: &mut DefMap) -> Self {
-        let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
-        let vpat = arena_mut.svpats[self].clone();
-        fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
-            vpat: impl Into<ValuePattern>, arena: &mut Arena,
-        ) -> VPatId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).allocator.alloc();
-            vpat.sbuild(arena, new_id, ())
-        }
+        let arena_mut = AsMut::<StackirArena>::as_mut(arena);
+        let vpat = arena_mut.inner.vpats[self].clone();
         use ValuePattern as VPat;
         match vpat {
-            | VPat::Hole(Hole) => build(Hole, arena),
+            | VPat::Hole(Hole) => Hole.build(arena, None),
             | VPat::Var(def) => {
                 let new_def = def.deep_clone(arena, map);
-                build(new_def, arena)
+                new_def.build(arena, None)
             }
             | VPat::Ctor(Ctor(ctor, pat)) => {
                 let pat = pat.deep_clone(arena, map);
-                build(Ctor(ctor, pat), arena)
+                Ctor(ctor, pat).build(arena, None)
             }
-            | VPat::Triv(triv) => build(triv, arena),
+            | VPat::Triv(triv) => triv.build(arena, None),
             | VPat::VCons(Cons(a, b)) => {
                 let a = a.deep_clone(arena, map);
                 let b = b.deep_clone(arena, map);
-                build(Cons(a, b), arena)
+                Cons(a, b).build(arena, None)
             }
         }
     }
@@ -55,43 +49,37 @@ where
 
 impl<Arena> DeepClone<Arena> for ValueId
 where
-    Arena: AsMut<AdminArena> + AsMut<SNormInnerArena> + AsMut<ScopedArena>,
+    Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
 {
     fn deep_clone(&self, arena: &mut Arena, map: &mut DefMap) -> Self {
-        let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
-        let value = arena_mut.svalues[self].clone();
-        fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
-            value: impl Into<Value>, arena: &mut Arena,
-        ) -> ValueId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).allocator.alloc();
-            value.sbuild(arena, new_id, ())
-        }
+        let arena_mut = AsMut::<StackirArena>::as_mut(arena);
+        let value = arena_mut.inner.values[self].clone();
         use Value;
         match value {
-            | Value::Hole(Hole) => build(Hole, arena),
+            | Value::Hole(Hole) => Hole.build(arena, None),
             | Value::Var(def) => {
                 let def = map[&def];
-                build(def, arena)
+                def.build(arena, None)
             }
             | Value::Closure(Closure { stack: Bullet, body }) => {
                 let body = body.deep_clone(arena, map);
-                build(Closure { stack: Bullet, body }, arena)
+                Closure { stack: Bullet, body }.build(arena, None)
             }
             | Value::Ctor(Ctor(ctor, body)) => {
                 let body = body.deep_clone(arena, map);
-                build(Ctor(ctor, body), arena)
+                Ctor(ctor, body).build(arena, None)
             }
-            | Value::Triv(Triv) => build(Triv, arena),
+            | Value::Triv(Triv) => Triv.build(arena, None),
             | Value::VCons(Cons(a, b)) => {
                 let a = a.deep_clone(arena, map);
                 let b = b.deep_clone(arena, map);
-                build(Cons(a, b), arena)
+                Cons(a, b).build(arena, None)
             }
-            | Value::Literal(literal) => build(literal, arena),
+            | Value::Literal(literal) => literal.build(arena, None),
             | Value::Complex(Complex { operator, operands }) => {
                 let operands =
                     operands.iter().map(|operand| operand.deep_clone(arena, map)).collect();
-                build(Complex { operator, operands }, arena)
+                Complex { operator, operands }.build(arena, None)
             }
         }
     }
@@ -99,34 +87,27 @@ where
 
 impl<Arena> DeepClone<Arena> for StackId
 where
-    Arena: AsMut<AdminArena> + AsMut<SNormInnerArena> + AsMut<ScopedArena>,
+    Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
 {
     fn deep_clone(&self, arena: &mut Arena, map: &mut DefMap) -> Self {
-        let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
-        let stack = arena_mut.sstacks[self].clone();
-        fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
-            stack: impl Into<Stack>, arena: &mut Arena,
-        ) -> StackId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).allocator.alloc();
-            // Fixme: hole is not correct here
-            stack.sbuild(arena, new_id, new_id)
-        }
+        let arena_mut = AsMut::<StackirArena>::as_mut(arena);
+        let stack = arena_mut.inner.stacks[self].clone();
         use Stack;
         match stack {
             | Stack::Kont(Kont { binder, body }) => {
                 let binder = binder.deep_clone(arena, map);
                 let body = body.deep_clone(arena, map);
-                build(Kont { binder, body }, arena)
+                Kont { binder, body }.build(arena, None)
             }
-            | Stack::Var(Bullet) => build(Bullet, arena),
+            | Stack::Var(Bullet) => Bullet.build(arena, None),
             | Stack::Arg(Cons(arg, stack)) => {
                 let arg = arg.deep_clone(arena, map);
                 let stack = stack.deep_clone(arena, map);
-                build(Cons(arg, stack), arena)
+                Cons(arg, stack).build(arena, None)
             }
             | Stack::Tag(Cons(dtor, stack)) => {
                 let stack = stack.deep_clone(arena, map);
-                build(Cons(dtor, stack), arena)
+                Cons(dtor, stack).build(arena, None)
             }
         }
     }
@@ -134,59 +115,31 @@ where
 
 impl<Arena> DeepClone<Arena> for CompuId
 where
-    Arena: AsMut<AdminArena> + AsMut<SNormInnerArena> + AsMut<ScopedArena>,
+    Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
 {
     fn deep_clone(&self, arena: &mut Arena, map: &mut DefMap) -> Self {
-        let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
-        let SComputation { compu, assignments } = arena_mut.scompus[self].clone();
-        fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
-            compu: impl Into<Computation<NonJoin>>, new_str: SubstAssignments, arena: &mut Arena,
-        ) -> CompuId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).allocator.alloc();
-            compu.sbuild(arena, new_id, new_str)
-        }
-        let new_str = SubstAssignments {
-            items: assignments
-                .items
-                .into_iter()
-                .map(|item| match item {
-                    | AssignItem::Def(AssignDef { def, value }) => {
-                        let def = def.deep_clone(arena, map);
-                        let value = value.deep_clone(arena, map);
-                        AssignDef { def, value }.into()
-                    }
-                    | AssignItem::Pattern(AssignPattern { pat, value }) => {
-                        let pat = pat.deep_clone(arena, map);
-                        let value = value.deep_clone(arena, map);
-                        AssignPattern { pat, value }.into()
-                    }
-                    | AssignItem::Stack(AssignStack { stack }) => {
-                        let stack = stack.deep_clone(arena, map);
-                        AssignStack { stack }.into()
-                    }
-                })
-                .collect(),
-        };
+        let arena_mut = AsMut::<StackirArena>::as_mut(arena);
+        let compu = arena_mut.inner.compus[self].clone();
         use Computation as Compu;
         match compu {
             | Compu::Hole(SHole(tail)) => {
                 let tail = tail.deep_clone(arena, map);
-                build(SHole(tail), new_str, arena)
+                SHole(tail).build(arena, None)
             }
             | Compu::Force(SForce { thunk, stack }) => {
                 let thunk = thunk.deep_clone(arena, map);
                 let stack = stack.deep_clone(arena, map);
-                build(SForce { thunk, stack }, new_str, arena)
+                SForce { thunk, stack }.build(arena, None)
             }
             | Compu::Ret(SReturn { stack, value }) => {
                 let stack = stack.deep_clone(arena, map);
                 let value = value.deep_clone(arena, map);
-                build(SReturn { stack, value }, new_str, arena)
+                SReturn { stack, value }.build(arena, None)
             }
             | Compu::Fix(SFix { param, body }) => {
                 let param = param.deep_clone(arena, map);
                 let body = body.deep_clone(arena, map);
-                build(SFix { param, body }, new_str, arena)
+                SFix { param, body }.build(arena, None)
             }
             | Compu::Case(Match { scrut, arms }) => {
                 let scrut = scrut.deep_clone(arena, map);
@@ -198,14 +151,26 @@ where
                         Matcher { binder, tail }.into()
                     })
                     .collect();
-                build(Match { scrut, arms }, new_str, arena)
+                Match { scrut, arms }.build(arena, None)
             }
-            | Compu::Join(join) => match join {},
+            | Compu::Join(join) => match join {
+                | LetJoin::Value(Let { binder, bindee, tail }) => {
+                    let binder = binder.deep_clone(arena, map);
+                    let bindee = bindee.deep_clone(arena, map);
+                    let tail = tail.deep_clone(arena, map);
+                    Let { binder, bindee, tail }.build(arena, None)
+                }
+                | LetJoin::Stack(Let { binder: Bullet, bindee, tail }) => {
+                    let bindee = bindee.deep_clone(arena, map);
+                    let tail = tail.deep_clone(arena, map);
+                    Let { binder: Bullet, bindee, tail }.build(arena, None)
+                }
+            },
             | Compu::LetArg(Let { binder: Cons(param, Bullet), bindee, tail }) => {
                 let bindee = bindee.deep_clone(arena, map);
                 let param = param.deep_clone(arena, map);
                 let tail = tail.deep_clone(arena, map);
-                build(Let { binder: Cons(param, Bullet), bindee, tail }, new_str, arena)
+                Let { binder: Cons(param, Bullet), bindee, tail }.build(arena, None)
             }
             | Compu::CoCase(SCoMatch { scrut, arms }) => {
                 let scrut = scrut.deep_clone(arena, map);
@@ -216,11 +181,11 @@ where
                         CoMatcher { dtor, tail }.into()
                     })
                     .collect();
-                build(SCoMatch { scrut, arms }, new_str, arena)
+                SCoMatch { scrut, arms }.build(arena, None)
             }
             | Compu::ExternCall(ExternCall { function, stack }) => {
                 let stack = stack.deep_clone(arena, map);
-                build(ExternCall { function, stack }, new_str, arena)
+                ExternCall { function, stack }.build(arena, None)
             }
         }
     }

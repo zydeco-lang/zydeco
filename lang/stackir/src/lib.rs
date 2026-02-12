@@ -10,6 +10,9 @@ pub mod arena;
 pub mod builtin;
 pub use builtin::*;
 
+/// Deep cloning of nodes in stack IR.
+pub mod clone;
+
 /// Passes and utilities specific to stack IR.
 pub mod sps {
     /// Specific syntax and identifiers for stack IR
@@ -22,12 +25,17 @@ pub mod sps {
     pub mod lower;
     /// Double check the stack IR is well-formed. For debugging purposes only.
     pub mod check;
+    /// Inlining of "must inline" items.
+    /// One feasiable approach: inline all "top-level" definition let-bindings.
+    pub mod inline;
     /// Closure conversion over stack IR.
     pub mod convert;
     /// In-place substitution helpers for stack IR.
     pub mod substitute;
     /// Free-variable analysis for stack IR.
     pub mod variables;
+    /// Deep cloning of nodes in stack IR.
+    pub mod clone;
 }
 
 pub use sps::{arena::*, convert::ClosureConverter, lower::Lowerer};
