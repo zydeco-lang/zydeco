@@ -150,8 +150,15 @@ impl Desugar for t::DeclId {
                     // pat & sealed -> alias
                     b::AliasBody { binder: pat, bindee: sealed }.into()
                 } else {
-                    assert!(external);
-                    assert!(!comp);
+                    {
+                        let span = desugarer.spans[&self.into()].clone();
+                        if !external {
+                            Err(DesugarError::EmptyDeclNotExternal(span.make(self)))?
+                        }
+                        if comp {
+                            Err(DesugarError::ExternCompNotAllowed(span.make(self)))?
+                        }
+                    }
                     let binder = binder.desugar(desugarer)?;
                     let ty = if let Some(ty) = ty {
                         let mut ty = ty.desugar(desugarer)?;

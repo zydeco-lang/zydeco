@@ -28,6 +28,7 @@ bins = [
     "fact.zy",
     # stackir
     "let-stack.zy",
+    "kont-clone.zy",
     # interactive
     "echo.zy",
     "echo-none.zy",
