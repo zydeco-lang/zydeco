@@ -257,22 +257,23 @@ mod impls {
     impl IntroRefItem {
         pub fn from_assign_item<Arena>(item: AssignItem, arena: &Arena) -> Self
         where
-            Arena: AsRef<SNormArena>,
+            Arena: AsRef<SNormInnerArena>,
         {
+            let arena_ref = arena.as_ref();
             match item {
                 | AssignItem::Def(AssignDef { def, value }) => IntroRefItem {
                     intros: Context::singleton(def.clone()),
-                    mentions: value.free_vars(arena),
+                    mentions: value.free_vars(arena_ref),
                     item: AssignDef { def, value }.into(),
                 },
                 | AssignItem::Pattern(AssignPattern { pat, value }) => IntroRefItem {
-                    intros: pat.vars(arena),
-                    mentions: value.free_vars(arena),
+                    intros: pat.vars(arena_ref),
+                    mentions: value.free_vars(arena_ref),
                     item: AssignPattern { pat, value }.into(),
                 },
                 | AssignItem::Stack(AssignStack { stack }) => IntroRefItem {
                     intros: Context::new(),
-                    mentions: stack.free_vars(arena),
+                    mentions: stack.free_vars(arena_ref),
                     item: AssignStack { stack }.into(),
                 },
             }

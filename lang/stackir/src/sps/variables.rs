@@ -65,9 +65,7 @@ impl FreeVars for CompuId {
             | Compu::Ret(SReturn { stack, value }) => {
                 stack.free_vars(arena) + value.free_vars(arena)
             }
-            | Compu::Fix(SFix { param, body }) => {
-                body.free_vars(arena) - Context::singleton(param)
-            }
+            | Compu::Fix(SFix { param, body }) => body.free_vars(arena) - Context::singleton(param),
             | Compu::Case(Match { scrut, arms }) => {
                 scrut.free_vars(arena)
                     + arms
