@@ -291,7 +291,10 @@ impl Lower for ss::CompuId {
         let site = Some(ss::TermId::Compu(*self));
         use ss::Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => Hole.build(lo, site),
+            | Compu::Hole(Hole) => {
+                let tail = Bullet.build(lo, site);
+                SHole(tail).build(lo, site)
+            }
             | Compu::VAbs(Abs(param, body)) => {
                 let param_vpat = param.lower(lo, ());
                 let body_compu = body.lower(lo, ());
@@ -382,7 +385,7 @@ impl Lower for ss::CompuId {
                 )
             }
             | Compu::CoMatch(CoMatch { arms }) => {
-                let lowered_arms = arms
+                let arms = arms
                     .into_iter()
                     .map(|arm| {
                         let CoMatcher { dtor: name, tail } = arm;
@@ -396,7 +399,8 @@ impl Lower for ss::CompuId {
                         CoMatcher { dtor: Cons(dtor_idx, Bullet), tail: body_compu }
                     })
                     .collect();
-                CoMatch { arms: lowered_arms }.build(lo, site)
+                let scrut = Bullet.build(lo, site);
+                SCoMatch { scrut, arms }.build(lo, site)
             }
             | Compu::Dtor(Dtor(body, name)) => {
                 // Destructor: push the destructor onto the stack and continue with body

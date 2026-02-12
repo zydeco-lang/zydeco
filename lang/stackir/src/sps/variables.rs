@@ -58,7 +58,7 @@ impl FreeVars for CompuId {
         let compu = arena.as_ref().inner.compus[&self].clone();
         use Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => CoContext::new(),
+            | Compu::Hole(SHole(tail)) => tail.free_vars(arena),
             | Compu::Force(SForce { thunk, stack }) => {
                 thunk.free_vars(arena) + stack.free_vars(arena)
             }
@@ -82,11 +82,14 @@ impl FreeVars for CompuId {
             | Compu::LetArg(Let { binder: Cons(param, Bullet), bindee, tail }) => {
                 tail.free_vars(arena) - param.vars(arena) + bindee.free_vars(arena)
             }
-            | Compu::CoCase(CoMatch { arms }) => arms
-                .into_iter()
-                .map(|CoMatcher { dtor: _, tail }| tail.free_vars(arena))
-                .fold(CoContext::new(), |acc, x| acc + x),
-            | Compu::ExternCall(ExternCall { function: _, stack: Bullet }) => CoContext::new(),
+            | Compu::CoCase(SCoMatch { scrut, arms }) => {
+                scrut.free_vars(arena)
+                    + arms
+                        .into_iter()
+                        .map(|CoMatcher { dtor: _, tail }| tail.free_vars(arena))
+                        .fold(CoContext::new(), |acc, x| acc + x)
+            }
+            | Compu::ExternCall(ExternCall { function: _, stack }) => stack.free_vars(arena),
         }
     }
 }

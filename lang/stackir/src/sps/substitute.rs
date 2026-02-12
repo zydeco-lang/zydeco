@@ -36,20 +36,14 @@ impl SubstVarInPlace for ValueId {
                 | None => {}
             },
             | Value::Closure(Closure { stack: Bullet, body }) => {
-                // Recursively substitute in the body
                 body.subst_var_in_place(&mut arena_mut, map)
             }
-            | Value::Ctor(Ctor(_ctor, body)) => {
-                // Recursively substitute in the body
-                body.subst_var_in_place(&mut arena_mut, map)
-            }
+            | Value::Ctor(Ctor(_ctor, body)) => body.subst_var_in_place(&mut arena_mut, map),
             | Value::VCons(Cons(a, b)) => {
-                // Recursively substitute in both components
                 a.subst_var_in_place(&mut arena_mut, map);
                 b.subst_var_in_place(&mut arena_mut, map);
             }
             | Value::Complex(Complex { operator: _, operands }) => {
-                // Recursively substitute in all operands
                 operands.into_iter().for_each(|operand| {
                     operand.subst_var_in_place(&mut arena_mut, map);
                 });
@@ -66,16 +60,13 @@ impl SubstVarInPlace for StackId {
 
         match stack {
             | Stack::Kont(Kont { binder: _, body }) => {
-                // Recursively substitute in the body
                 body.subst_var_in_place(&mut arena_mut, map);
             }
             | Stack::Arg(Cons(val, stack)) => {
-                // Recursively substitute in both the value and the rest of the stack
                 val.subst_var_in_place(&mut arena_mut, map);
                 stack.subst_var_in_place(&mut arena_mut, map);
             }
             | Stack::Tag(Cons(_dtor, stack)) => {
-                // Recursively substitute in the rest of the stack
                 stack.subst_var_in_place(&mut arena_mut, map);
             }
             | Stack::Var(Bullet) => match &map.stack {
@@ -95,51 +86,48 @@ impl SubstVarInPlace for CompuId {
         let compu = arena_mut.inner.compus[&self].clone();
 
         match compu {
-            | Computation::Hole(Hole) => {}
+            | Computation::Hole(SHole(tail)) => {
+                tail.subst_var_in_place(&mut arena_mut, map);
+            }
             | Computation::Force(SForce { thunk, stack }) => {
-                // Recursively substitute in both the thunk and the stack
                 thunk.subst_var_in_place(&mut arena_mut, map);
                 stack.subst_var_in_place(&mut arena_mut, map);
             }
             | Computation::Ret(SReturn { stack, value }) => {
-                // Recursively substitute in both the stack and the value
                 stack.subst_var_in_place(&mut arena_mut, map);
                 value.subst_var_in_place(&mut arena_mut, map);
             }
             | Computation::Fix(SFix { param: _, body }) => {
-                // Recursively substitute in the body
                 // Note: param is bound, so we don't substitute it
                 body.subst_var_in_place(&mut arena_mut, map);
             }
             | Computation::Case(Match { scrut, arms }) => {
-                // Recursively substitute in the scrutinee and all arm bodies
                 scrut.subst_var_in_place(&mut arena_mut, map);
                 arms.into_iter().for_each(|Matcher { binder: _, tail }| {
                     tail.subst_var_in_place(&mut arena_mut, map);
                 });
             }
             | Computation::Join(LetJoin::Value(Let { binder: _, bindee, tail })) => {
-                // Recursively substitute in the bindee and tail
                 bindee.subst_var_in_place(&mut arena_mut, map);
                 tail.subst_var_in_place(&mut arena_mut, map);
             }
             | Computation::Join(LetJoin::Stack(Let { binder: Bullet, bindee, tail })) => {
-                // Recursively substitute in the bindee and tail
                 bindee.subst_var_in_place(&mut arena_mut, map);
                 tail.subst_var_in_place(&mut arena_mut, map);
             }
             | Computation::LetArg(Let { binder: Cons(_param, Bullet), bindee, tail }) => {
-                // Recursively substitute in the bindee and tail
                 bindee.subst_var_in_place(&mut arena_mut, map);
                 tail.subst_var_in_place(&mut arena_mut, map);
             }
-            | Computation::CoCase(CoMatch { arms }) => {
-                // Recursively substitute in all arm bodies
+            | Computation::CoCase(SCoMatch { scrut, arms }) => {
+                scrut.subst_var_in_place(&mut arena_mut, map);
                 arms.into_iter().for_each(|CoMatcher { dtor: _, tail }| {
                     tail.subst_var_in_place(&mut arena_mut, map);
                 });
             }
-            | Computation::ExternCall(ExternCall { function: _, stack: Bullet }) => {}
+            | Computation::ExternCall(ExternCall { function: _, stack }) => {
+                stack.subst_var_in_place(&mut arena_mut, map);
+            }
         }
     }
 }

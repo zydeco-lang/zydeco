@@ -139,7 +139,10 @@ impl<'a> Elaborate for CompuId {
         use Computation as Compu;
         let compu = el.stackir.compus[&self].clone();
         let elaborated = match compu {
-            | Compu::Hole(Hole) => Compu::Hole(Hole).sbuild(el, self, SubstAssignments::new()),
+            | Compu::Hole(SHole(tail)) => {
+                let tail = tail.elaborate(el);
+                SHole(tail).sbuild(el, self, SubstAssignments::new())
+            }
             | Compu::Force(SForce { thunk, stack }) => {
                 let thunk = thunk.elaborate(el);
                 let stack = stack.elaborate(el);
@@ -199,18 +202,20 @@ impl<'a> Elaborate for CompuId {
                     assignments,
                 )
             }
-            | Compu::CoCase(CoMatch { arms }) => {
+            | Compu::CoCase(SCoMatch { scrut, arms }) => {
+                let scrut = scrut.elaborate(el);
                 let arms = arms
                     .into_iter()
                     .map(|CoMatcher { dtor, tail }| {
                         let tail = tail.elaborate(el);
-                        CoMatcher { dtor, tail }
+                        CoMatcher { dtor, tail }.into()
                     })
                     .collect();
-                CoMatch { arms }.sbuild(el, self, SubstAssignments::new())
+                SCoMatch { scrut, arms }.sbuild(el, self, SubstAssignments::new())
             }
-            | Compu::ExternCall(ExternCall { function, stack: Bullet }) => {
-                ExternCall { function, stack: Bullet }.sbuild(el, self, SubstAssignments::new())
+            | Compu::ExternCall(ExternCall { function, stack }) => {
+                let stack = stack.elaborate(el);
+                ExternCall { function, stack }.sbuild(el, self, SubstAssignments::new())
             }
         };
 

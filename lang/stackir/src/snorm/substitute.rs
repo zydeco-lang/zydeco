@@ -380,7 +380,10 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
         //     doc.render_fmt(100, &mut buf).unwrap();
         //     // log::trace!("assignments:\n{}", buf);
         // }
+
+        // Beta reduction of assignments over computation.
         let mut assignments = assignments.extract_or_inline(su);
+
         let frontier = match assignments.items.front() {
             | Some(AssignItem::Stack(AssignStack { stack })) => {
                 Some(su.snorm.sstacks[&stack].clone())
@@ -389,7 +392,10 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
         };
         use Computation as Compu;
         let mut tail = match self {
-            | Compu::Hole(Hole) => Hole.build(su, None),
+            | Compu::Hole(SHole(tail)) => {
+                let tail = tail.substitute(su, ());
+                SHole(tail).build(su, None)
+            }
             | Compu::Force(SForce { thunk, stack }) => match su.snorm.svalues[&thunk].clone() {
                 | Value::Closure(Closure { stack: Bullet, body }) => {
                     let body = body.substitute(su, ());
@@ -452,7 +458,8 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
                     Let { binder: Cons(param, Bullet), bindee, tail }.build(su, None)
                 }
             },
-            | Compu::CoCase(CoMatch { arms }) => {
+            | Compu::CoCase(SCoMatch { scrut, arms }) => {
+                let scrut = scrut.substitute(su, ());
                 let arms = arms
                     .into_iter()
                     .map(|CoMatcher { dtor, tail }| {
@@ -460,10 +467,11 @@ impl Substitute<SubstAssignments> for Computation<NonJoin> {
                         CoMatcher { dtor, tail }
                     })
                     .collect();
-                CoMatch { arms }.build(su, None)
+                SCoMatch { scrut, arms }.build(su, None)
             }
-            | Compu::ExternCall(ExternCall { function, stack: Bullet }) => {
-                ExternCall { function, stack: Bullet }.build(su, None)
+            | Compu::ExternCall(ExternCall { function, stack }) => {
+                let stack = stack.substitute(su, ());
+                ExternCall { function, stack }.build(su, None)
             }
         };
         // Create join points from the assignments.

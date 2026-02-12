@@ -354,7 +354,9 @@ impl<'a> Lower<'a> for sk::CompuId {
         let compu = lo.stackir.inner.compus[self].clone();
         use sk::Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => Abort.build(lo, cx),
+            | Compu::Hole(sk::SHole(tail)) => {
+                tail.lower(lo, With::new(cx, Box::new(move |lo, cx| Abort.build(lo, cx))))
+            }
             | Compu::Force(sk::SForce { thunk, stack }) => {
                 // Lower the stack first
                 stack.lower(
@@ -564,24 +566,42 @@ impl<'a> Lower<'a> for sk::CompuId {
                     ),
                 )
             }
-            | Compu::CoCase(CoMatch { arms }) => {
-                let mut lowered_arms = Vec::new();
-                for CoMatcher { dtor: Cons(dtor, sk::Bullet), tail } in arms {
-                    // Lower the tail
-                    let tail_prog = tail.lower(lo, cx.clone());
-                    let idx = dtor.idx;
-                    let name = dtor.name.plain().to_string();
-                    let tag = Tag { idx, name: Some(name) };
-                    // Nominate the tail program
-                    let _sym = tail_prog.build(lo, (Some(String::from("coarm")), None));
-                    // Add to the jump table
-                    lowered_arms.push((tag, tail_prog));
-                }
-                // Create the co-case program
-                PopBranch(lowered_arms).build(lo, cx)
+            | Compu::CoCase(sk::SCoMatch { scrut, arms }) => {
+                scrut.lower(
+                    lo,
+                    With::new(
+                        cx.clone(),
+                        Box::new(move |lo, cx| {
+                            let arms = arms
+                                .into_iter()
+                                .map(|CoMatcher { dtor: Cons(dtor, sk::Bullet), tail }| {
+                                    // Lower the tail
+                                    let tail_prog = tail.lower(lo, cx.clone());
+                                    let idx = dtor.idx;
+                                    let name = dtor.name.plain().to_string();
+                                    let tag = Tag { idx, name: Some(name) };
+                                    // Nominate the tail program
+                                    let _sym =
+                                        tail_prog.build(lo, (Some(String::from("coarm")), None));
+                                    // Add to the jump table
+                                    (tag, tail_prog)
+                                })
+                                .collect();
+                            // Create the co-case program
+                            PopBranch(arms).build(lo, cx)
+                        }),
+                    ),
+                )
             }
-            | Compu::ExternCall(sk::ExternCall { function, stack: sk::Bullet }) => {
-                Extern { name: function, arity: 0 }.build(lo, cx)
+            | Compu::ExternCall(sk::ExternCall { function, stack }) => {
+                let arity = lo.stackir.admin.builtins[function].arity;
+                stack.lower(
+                    lo,
+                    With::new(
+                        cx,
+                        Box::new(move |lo, cx| Extern { name: function, arity }.build(lo, cx)),
+                    ),
+                )
             }
         }
     }

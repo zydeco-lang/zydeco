@@ -100,6 +100,9 @@ pub enum Stack {
 /* ------------------------------- Computation ------------------------------ */
 
 #[derive(Clone, Debug)]
+pub struct SHole(pub StackId);
+
+#[derive(Clone, Debug)]
 pub struct SForce {
     pub thunk: ValueId,
     pub stack: StackId,
@@ -118,15 +121,21 @@ pub struct SFix {
 }
 
 #[derive(Clone, Debug)]
+pub struct SCoMatch<Sc, Br, Tail> {
+    pub scrut: Sc,
+    pub arms: Vec<CoMatcher<Br, Tail>>,
+}
+
+#[derive(Clone, Debug)]
 pub struct ExternCall {
     /// External function name; can be found in builtins map
     pub function: &'static str,
-    pub stack: Bullet,
+    pub stack: StackId,
 }
 
 #[derive(From, Clone, Debug)]
 pub enum Computation<Join> {
-    Hole(Hole),
+    Hole(SHole),
     Force(SForce),
     Ret(SReturn),
     Fix(SFix),
@@ -134,6 +143,6 @@ pub enum Computation<Join> {
     #[from(ignore)]
     Join(Join),
     LetArg(Let<Cons<VPatId, Bullet>, StackId, CompuId>),
-    CoCase(CoMatch<Cons<DtorIdx, Bullet>, CompuId>),
+    CoCase(SCoMatch<StackId, Cons<DtorIdx, Bullet>, CompuId>),
     ExternCall(ExternCall),
 }

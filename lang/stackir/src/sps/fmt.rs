@@ -207,7 +207,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for CompuId {
 impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | Computation::Hole(Hole) => RcDoc::text("_"),
+            | Computation::Hole(SHole(tail)) => {
+                RcDoc::concat([RcDoc::text("_"), RcDoc::space(), tail.pretty(f)])
+            }
             | Computation::Fix(SFix { param, body }) => RcDoc::concat([
                 RcDoc::text("fix"),
                 RcDoc::space(),
@@ -299,19 +301,19 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<LetJoin> {
                     RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
                 ])
             }
-            | Computation::CoCase(CoMatch { arms }) => {
+            | Computation::CoCase(SCoMatch { scrut, arms }) => {
                 let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([
                     RcDoc::text("cocase"),
+                    RcDoc::space(),
+                    scrut.pretty(f),
                     RcDoc::concat(arms.iter().map(|CoMatcher { dtor, tail }| {
                         let Cons(dtor, Bullet) = dtor;
                         RcDoc::concat([
                             RcDoc::line(),
                             RcDoc::text("|"),
                             RcDoc::space(),
-                            RcDoc::text("tag("),
                             RcDoc::text(dtor.name.ugly(&statics_fmt)),
-                            RcDoc::text(")"),
                             RcDoc::space(),
                             RcDoc::text("->"),
                             RcDoc::concat([RcDoc::line(), tail.pretty(f)]).nest(f.indent),

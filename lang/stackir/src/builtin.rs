@@ -103,7 +103,8 @@ impl Builtin {
         Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
     {
         let function = self.name;
-        let body = ExternCall { function, stack: Bullet }.build(arena, None);
+        let stack = Bullet.build(arena, None);
+        let body = ExternCall { function, stack }.build(arena, None);
         Closure { stack: Bullet, body }.build(arena, None)
     }
 }

@@ -57,7 +57,7 @@ impl FreeVars for CompuId {
         let sc = arena.as_ref().scompus[&self].clone();
         use Computation as Compu;
         let compu_fv = match &sc.compu {
-            | Compu::Hole(Hole) => CoContext::new(),
+            | Compu::Hole(SHole(tail)) => tail.free_vars(arena),
             | Compu::Force(SForce { thunk, stack }) => {
                 thunk.free_vars(arena) + stack.free_vars(arena)
             }
@@ -78,11 +78,14 @@ impl FreeVars for CompuId {
             | Compu::LetArg(Let { binder: Cons(param, Bullet), bindee, tail }) => {
                 tail.free_vars(arena) - param.vars(arena) + bindee.free_vars(arena)
             }
-            | Compu::CoCase(CoMatch { arms }) => arms
-                .iter()
-                .map(|CoMatcher { dtor: _, tail }| tail.free_vars(arena))
-                .fold(CoContext::new(), |acc, x| acc + x),
-            | Compu::ExternCall(ExternCall { function: _, stack: Bullet }) => CoContext::new(),
+            | Compu::CoCase(SCoMatch { scrut, arms }) => {
+                scrut.free_vars(arena)
+                    + arms
+                        .iter()
+                        .map(|CoMatcher { dtor: _, tail }| tail.free_vars(arena))
+                        .fold(CoContext::new(), |acc, x| acc + x)
+            }
+            | Compu::ExternCall(ExternCall { function: _, stack }) => stack.free_vars(arena),
         };
         sc.assignments.items.iter().fold(compu_fv, |acc, item| match item {
             | AssignItem::Def(AssignDef { def, value }) => {
@@ -126,7 +129,7 @@ impl StackHoles for CompuId {
         }
         use Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => unreachable!("stack hole is currently not supported"),
+            | Compu::Hole(SHole(tail)) => tail.stack_holes(arena),
             | Compu::Force(SForce { thunk: _, stack }) => stack.stack_holes(arena),
             | Compu::Ret(SReturn { stack, value: _ }) => stack.stack_holes(arena),
             | Compu::Fix(SFix { .. }) => todo!(),
@@ -138,10 +141,8 @@ impl StackHoles for CompuId {
             | Compu::LetArg(Let { binder: Cons(_param, Bullet), bindee, tail: _ }) => {
                 bindee.stack_holes(arena)
             }
-            | Compu::CoCase(CoMatch { .. }) => {
-                todo!()
-            }
-            | Compu::ExternCall(ExternCall { function: _, stack: Bullet }) => todo!(),
+            | Compu::CoCase(SCoMatch { scrut, arms: _ }) => scrut.stack_holes(arena),
+            | Compu::ExternCall(ExternCall { function: _, stack }) => stack.stack_holes(arena),
         }
     }
 }

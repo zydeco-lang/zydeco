@@ -172,7 +172,10 @@ where
         };
         use Computation as Compu;
         match compu {
-            | Compu::Hole(Hole) => build(Hole, new_str, arena),
+            | Compu::Hole(SHole(tail)) => {
+                let tail = tail.deep_clone(arena, map);
+                build(SHole(tail), new_str, arena)
+            }
             | Compu::Force(SForce { thunk, stack }) => {
                 let thunk = thunk.deep_clone(arena, map);
                 let stack = stack.deep_clone(arena, map);
@@ -207,7 +210,8 @@ where
                 let tail = tail.deep_clone(arena, map);
                 build(Let { binder: Cons(param, Bullet), bindee, tail }, new_str, arena)
             }
-            | Compu::CoCase(CoMatch { arms }) => {
+            | Compu::CoCase(SCoMatch { scrut, arms }) => {
+                let scrut = scrut.deep_clone(arena, map);
                 let arms = arms
                     .into_iter()
                     .map(|CoMatcher { dtor, tail }| {
@@ -215,10 +219,11 @@ where
                         CoMatcher { dtor, tail }.into()
                     })
                     .collect();
-                build(CoMatch { arms }, new_str, arena)
+                build(SCoMatch { scrut, arms }, new_str, arena)
             }
-            | Compu::ExternCall(ExternCall { function, stack: Bullet }) => {
-                build(ExternCall { function, stack: Bullet }, new_str, arena)
+            | Compu::ExternCall(ExternCall { function, stack }) => {
+                let stack = stack.deep_clone(arena, map);
+                build(ExternCall { function, stack }, new_str, arena)
             }
         }
     }

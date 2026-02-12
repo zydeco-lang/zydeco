@@ -204,7 +204,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Kont {
 impl<'a> Pretty<'a, Formatter<'a>> for Computation<NonJoin> {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         match self {
-            | Computation::Hole(Hole) => RcDoc::text("_"),
+            | Computation::Hole(SHole(tail)) => {
+                RcDoc::concat([RcDoc::text("_"), RcDoc::space(), tail.pretty(f)])
+            }
             | Computation::Fix(SFix { param, body }) => RcDoc::concat([
                 RcDoc::text("fix"),
                 RcDoc::space(),
@@ -268,10 +270,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for Computation<NonJoin> {
                     RcDoc::concat([RcDoc::line(), tail.pretty(f)]).group(),
                 ])
             }
-            | Computation::CoCase(CoMatch { arms }) => {
+            | Computation::CoCase(SCoMatch { scrut, arms }) => {
                 let statics_fmt = zydeco_statics::tyck::fmt::Formatter::new(f.scoped, f.statics);
                 RcDoc::concat([
                     RcDoc::text("cocase"),
+                    RcDoc::space(),
+                    scrut.pretty(f),
                     RcDoc::concat(arms.iter().map(|CoMatcher { dtor, tail }| {
                         let Cons(dtor, Bullet) = dtor;
                         RcDoc::concat([
