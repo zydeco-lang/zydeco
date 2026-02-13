@@ -28,3 +28,5 @@ amd64_proj_bin!(compile, tuple_do, "tuple-do");
 amd64_proj_bin!(compile, triple, "triple");
 amd64_proj_bin!(compile, sum, "sum");
 amd64_proj_bin!(compile, fact, "fact");
+amd64_proj_bin!(compile, let_stack, "let-stack");
+amd64_proj_bin!(compile, kont_clone, "kont-clone");

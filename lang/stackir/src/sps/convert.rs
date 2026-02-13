@@ -117,7 +117,7 @@ impl<'a> ClosureConverter<'a> {
             let new_value_id = new_def.build(self, None);
             subst_map.insert(old_def, new_value_id);
         }
-        fix.body.subst_var_in_place(self, &subst_map);
+        fix.body.subst_var_in_place(self, &mut subst_map);
 
         // 3. Wrap body in a let arg to retrieve captures from stack
         // Create a nested value pattern to destructure all captures from a nested pair
@@ -145,7 +145,7 @@ impl<'a> ClosureConverter<'a> {
             let closure_def_value: ValueId = closure_def.build(self, site);
             let mut subst_map = SubstVarMap::new();
             subst_map.insert(fix.param, closure_def_value);
-            fix.body.subst_var_in_place(self, &subst_map);
+            fix.body.subst_var_in_place(self, &mut subst_map);
             fix.body
         };
         // LetValue the closure pair to a closure definition
@@ -218,7 +218,7 @@ impl<'a> ClosureConverter<'a> {
             let new_value_id = new_def.build(self, None);
             subst_map.insert(old_def, new_value_id);
         }
-        clo.body.subst_var_in_place(self, &subst_map);
+        clo.body.subst_var_in_place(self, &mut subst_map);
 
         // Use a single LetArg to extract all captures from the stack
         let capture_stack = Bullet.build(self, site);

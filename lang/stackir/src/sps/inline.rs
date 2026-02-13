@@ -81,7 +81,7 @@ impl<'a> InlineTopLevel<'a> for CompuId {
                         | _ => None,
                     };
                     if let Some(def_id) = def_id {
-                        tail.subst_var_in_place(il, &SubstVarMap::from_iter([(def_id, bindee)]));
+                        tail.subst_var_in_place(il, &mut SubstVarMap::from_iter([(def_id, bindee)]));
                         tail.inline_top_level(il)
                     } else {
                         let tail = tail.inline_top_level(il);

@@ -40,23 +40,24 @@ pub trait SubstVarInPlace {
     ///
     /// The [`DefId`]s in the map are guaranteed to be free.
     fn subst_var_in_place(
-        self, arena: &mut (impl AsMut<StackirArena> + AsMut<ScopedArena>), map: &SubstVarMap,
+        self, arena: &mut (impl AsMut<StackirArena> + AsMut<ScopedArena>), map: &mut SubstVarMap,
     );
 }
 
 impl SubstVarInPlace for ValueId {
     fn subst_var_in_place(
-        self, arena: &mut (impl AsMut<StackirArena> + AsMut<ScopedArena>), map: &SubstVarMap,
+        self, arena: &mut (impl AsMut<StackirArena> + AsMut<ScopedArena>), map: &mut SubstVarMap,
     ) {
         let value = AsMut::<StackirArena>::as_mut(arena).inner.values[&self].clone();
 
         match value {
-            | Value::Var(def_id) => match map.values.get(&def_id) {
+            | Value::Var(def_id) => match map.values.get_mut(&def_id) {
                 | Some(SubstValue { value: new_value_id, count }) => {
                     let mut new_value_id = *new_value_id;
                     if *count > 0 {
                         new_value_id = new_value_id.deep_clone(arena, &mut Default::default());
                     }
+                    *count += 1;
                     let new_value =
                         AsMut::<StackirArena>::as_mut(arena).inner.values[&new_value_id].clone();
                     AsMut::<StackirArena>::as_mut(arena).inner.values.replace(self, new_value);
@@ -83,7 +84,7 @@ impl SubstVarInPlace for ValueId {
 
 impl SubstVarInPlace for StackId {
     fn subst_var_in_place(
-        self, arena: &mut (impl AsMut<StackirArena> + AsMut<ScopedArena>), map: &SubstVarMap,
+        self, arena: &mut (impl AsMut<StackirArena> + AsMut<ScopedArena>), map: &mut SubstVarMap,
     ) {
         let stack = AsMut::<StackirArena>::as_mut(arena).inner.stacks[&self].clone();
 
@@ -105,7 +106,7 @@ impl SubstVarInPlace for StackId {
 
 impl SubstVarInPlace for CompuId {
     fn subst_var_in_place(
-        self, arena: &mut (impl AsMut<StackirArena> + AsMut<ScopedArena>), map: &SubstVarMap,
+        self, arena: &mut (impl AsMut<StackirArena> + AsMut<ScopedArena>), map: &mut SubstVarMap,
     ) {
         let arena_mut = AsMut::<StackirArena>::as_mut(arena);
         let compu = arena_mut.inner.compus[&self].clone();
