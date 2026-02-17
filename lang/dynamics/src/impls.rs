@@ -350,7 +350,7 @@ pub fn arg_list(
 pub fn random_int(
     args: Vec<ZValue>, _: &mut dyn BufRead, _: &mut dyn Write, _: &[String],
 ) -> Result<ZCompute, i32> {
-    use rand::Rng;
+    use rand::RngExt;
     match args.as_slice() {
         | [k] => {
             let mut rng = rand::rng();
