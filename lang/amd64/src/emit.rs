@@ -138,7 +138,7 @@ impl<'e> CompilerPass for Emitter<'e> {
                     }
                     let mut buf_doc = String::new();
                     use zydeco_assembly::fmt::*;
-                    let fmter = Formatter::new(self.assembly);
+                    let fmter = Formatter::new(self.assembly, None, None);
                     let doc = match &self.assembly.programs[prog] {
                         | Program::Terminator(terminator) => terminator.pretty(&fmter),
                         | Program::Instruction(instruction, _) => instruction.pretty(&fmter),

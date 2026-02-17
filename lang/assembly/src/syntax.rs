@@ -4,7 +4,10 @@
 //! - Symbols, whose values are statically assigned.
 //! - Programs, which are sequences of instructions.
 
-pub use super::arena::*;
+pub use super::{
+    analyze::{Layout, Slot, SlotId},
+    arena::*,
+};
 pub use zydeco_syntax::*;
 pub use zydeco_utils::arena::*;
 

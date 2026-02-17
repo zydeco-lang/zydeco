@@ -5,11 +5,16 @@ use super::syntax::*;
 pub use zydeco_syntax::{Pretty, Ugly};
 pub struct Formatter<'arena> {
     arena: &'arena AssemblyArena,
+    layouts: Option<&'arena ArenaAssoc<ProgId, Layout>>,
+    slots: Option<&'arena ArenaSparse<SlotId, Slot>>,
     pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
-    pub fn new(arena: &'arena AssemblyArena) -> Self {
-        Formatter { arena, indent: 2 }
+    pub fn new(
+        arena: &'arena AssemblyArena, layouts: Option<&'arena ArenaAssoc<ProgId, Layout>>,
+        slots: Option<&'arena ArenaSparse<SlotId, Slot>>,
+    ) -> Self {
+        Formatter { arena, layouts, slots, indent: 2 }
     }
 }
 
@@ -46,24 +51,37 @@ impl<'a> Pretty<'a, Formatter<'a>> for AssemblyArena {
 
 impl<'a> Pretty<'a, Formatter<'a>> for ProgId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        f.arena.programs[self].pretty(f)
+        let layout = f.layouts.and_then(|layouts| layouts.get(self).map(|layout| layout.clone()));
+        RcDoc::concat([
+            layout.map(|layout| layout.pretty(f)).unwrap_or_else(|| RcDoc::nil()),
+            f.arena.programs[self].pretty(f),
+        ])
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for VarId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let trailing = f
-            .arena
-            .defs
-            .back(&DefId::Var(*self))
-            .map_or_else(String::new, |def| format!("/{}", def.concise_inner()));
-        RcDoc::text(format!("{}[{}{}]", f.arena.variables[self], self.concise_inner(), trailing))
+        // let trailing = f
+        //     .arena
+        //     .defs
+        //     .back(&DefId::Var(*self))
+        //     .map_or_else(String::new, |def| format!("/{}", def.concise_inner()));
+        // RcDoc::text(format!("{}[{}{}]", f.arena.variables[self], self.concise_inner(), trailing))
+        RcDoc::text(format!("{}{}", f.arena.variables[self], self.concise()))
     }
 }
 
 impl<'a> Pretty<'a, Formatter<'a>> for SymId {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text(f.arena.sym_label(self))
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for SlotId {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        f.slots
+            .and_then(|slots| slots.get(self).map(|slot| slot.pretty(f)))
+            .unwrap_or_else(|| RcDoc::nil())
     }
 }
 
@@ -336,5 +354,57 @@ impl<'a> Pretty<'a, Formatter<'a>> for Context {
             ),
             RcDoc::text("}"),
         ])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Layout {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let control = self.control.iter().map(|slot| slot.pretty(f));
+        let context = self
+            .context
+            .iter()
+            .map(|(var, slot)| RcDoc::concat([var.pretty(f), RcDoc::text("="), slot.pretty(f)]));
+        RcDoc::concat([
+            RcDoc::concat([
+                RcDoc::text("["),
+                RcDoc::text("control:"),
+                RcDoc::space(),
+                RcDoc::intersperse(control, RcDoc::text(", ")),
+                RcDoc::text("]"),
+            ])
+            .group(),
+            RcDoc::concat([
+                RcDoc::line(),
+                RcDoc::text("["),
+                RcDoc::text("context:"),
+                RcDoc::space(),
+                RcDoc::intersperse(context, RcDoc::text(", ")),
+                RcDoc::text("]"),
+                RcDoc::line(),
+            ])
+            .group(),
+        ])
+        .nest(f.indent)
+        .nest(f.indent)
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for Slot {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        match self {
+            | Slot::Sym(sym) => sym.pretty(f),
+            | Slot::Imm(imm) => imm.pretty(f),
+            | Slot::Pair(p) => {
+                let (a, b) = p.as_ref();
+                RcDoc::concat([
+                    RcDoc::text("("),
+                    a.pretty(f),
+                    RcDoc::text(","),
+                    b.pretty(f),
+                    RcDoc::text(")"),
+                ])
+            }
+            | Slot::Unknown => RcDoc::text("<?>"),
+        }
     }
 }

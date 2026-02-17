@@ -328,7 +328,7 @@ impl BuildSystem {
         } else {
             // pretty print the ZASM
             use zydeco_assembly::fmt::*;
-            let fmt = Formatter::new(&assembly);
+            let fmt = Formatter::new(&assembly, None, None);
             let doc = assembly.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
@@ -531,7 +531,7 @@ impl BuildSystem {
     ) -> Result<PackageAssembly> {
         let PackageStack { spans, scoped, statics, stackir } =
             self.__compile_zir_pack(pack, alloc.clone(), verbose)?;
-        let assembly = zydeco_assembly::lower::Lowerer::new(
+        let mut assembly = zydeco_assembly::lower::Lowerer::new(
             alloc.clone(),
             &spans,
             &scoped,
@@ -541,12 +541,25 @@ impl BuildSystem {
         .run();
         {
             use zydeco_assembly::fmt::*;
-            let fmt = Formatter::new(&assembly);
+            let fmt = Formatter::new(&assembly, None, None);
             let doc = assembly.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
             if verbose {
                 log::trace!("ZASM:\n{}", buf);
+            }
+        }
+        let analyzer =
+            zydeco_assembly::analyze::StackAnalyzer::new(alloc.clone(), &mut assembly).run()?;
+        {
+            use zydeco_assembly::fmt::*;
+            let fmt =
+                Formatter::new(&analyzer.arena, Some(&analyzer.layouts), Some(&analyzer.slots));
+            let doc = analyzer.arena.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            if verbose {
+                log::trace!("ZASM after inlining:\n{}", buf);
             }
         }
         Ok(PackageAssembly { spans, scoped, statics, stackir, assembly })
