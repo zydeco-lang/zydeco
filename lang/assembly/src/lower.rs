@@ -417,8 +417,6 @@ impl<'a> Lower<'a> for sk::CompuId {
                 let sym = Undefined.build(lo, (Some(name.to_string()), Some(param)));
                 // Lower the body
                 let body_prog = body.lower(lo, cx.clone());
-                // Nominate the body program
-                *lo.arena.blocks.entry(body_prog).or_insert(0) += 2;
                 lo.arena.symbols.replace(
                     sym,
                     NamedSymbol { name: name.to_string(), inner: Symbol::Prog(body_prog) },

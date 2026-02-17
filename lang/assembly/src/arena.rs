@@ -25,11 +25,6 @@ pub struct AssemblyArena {
     pub labels: ArenaAssoc<ProgId, SymId>,
     /// Externs that are variables.
     pub externs: Vec<Extern>,
-    /// Number of nominations of a program as an individual block.
-    /// - If 0 / unexist, the program should be obliviated.
-    /// - If 1, the program is inlined.
-    /// - If > 1, the program is a block.
-    pub blocks: ArenaAssoc<ProgId, usize>,
     /// The whole object has an optional entry point.
     pub entry: ArenaAssoc<ProgId, ()>,
 }
@@ -45,7 +40,6 @@ impl AssemblyArena {
             deps: DepGraph::new(),
             labels: ArenaAssoc::new(),
             externs: Vec::new(),
-            blocks: ArenaAssoc::new(),
             entry: ArenaAssoc::new(),
         }
     }
@@ -106,8 +100,6 @@ where
         };
         let id = this.symbols.alloc(symbol);
         if let Some(prog_id) = is_prog {
-            // Strongly nominate the symbol if it is a program, ensuring a block.
-            *this.blocks.entry(prog_id).or_insert(0) += 2;
             // Add a label to the program.
             this.labels.insert(prog_id, id);
         }
@@ -146,25 +138,6 @@ where
     fn build<'f: 'a>(self, arena: &'f mut Arena, cx: Self::Site) -> ProgId {
         let this = &mut *arena.as_mut();
         let program = self.into();
-        // Nominate inner programs if they are mentioned in the program.
-        let mut nominate = |&prog| {
-            *this.blocks.entry(prog).or_insert(0) += 1;
-        };
-        match &program {
-            | Program::Instruction(_, prog_id) => nominate(prog_id),
-            | Program::Terminator(t) => match t {
-                | Terminator::Jump(Jump(prog_id)) => nominate(prog_id),
-                | Terminator::PopJump(PopJump) => {}
-                | Terminator::LeapJump(LeapJump) => {}
-                | Terminator::PopBranch(PopBranch(brs)) => {
-                    for (_, prog_id) in brs {
-                        nominate(prog_id);
-                    }
-                }
-                | Terminator::Extern(Extern { .. }) => {}
-                | Terminator::Abort(Abort) => {}
-            },
-        }
         let id = this.programs.alloc(program.clone());
         this.contexts.insert(id, cx);
 
