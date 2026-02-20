@@ -2708,6 +2708,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zydeco-llvm"
+version = "0.2.2"
+dependencies = [
+ "derive_more",
+ "im",
+ "log",
+ "zydeco-assembly",
+ "zydeco-stackir",
+ "zydeco-statics",
+ "zydeco-surface",
+ "zydeco-syntax",
+ "zydeco-utils",
+]
+
+[[package]]
 name = "zydeco-runtime"
 version = "0.0.0"
 dependencies = [

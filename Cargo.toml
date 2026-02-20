@@ -10,6 +10,7 @@ members = [
     "lang/stackir",
     "lang/assembly",
     "lang/amd64",
+    "lang/llvm",
     "lang/driver",
     "lang/tests",
     "cli",
@@ -39,6 +40,7 @@ zydeco-surface = { path = "lang/surface" }
 zydeco-statics = { path = "lang/statics" }
 zydeco-dynamics = { path = "lang/dynamics" }
 zydeco-amd64 = { path = "lang/amd64" }
+zydeco-llvm = { path = "lang/llvm" }
 zydeco-assembly = { path = "lang/assembly" }
 zydeco-stackir = { path = "lang/stackir" }
 zydeco-driver = { path = "lang/driver" }
