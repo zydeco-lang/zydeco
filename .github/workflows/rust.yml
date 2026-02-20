@@ -15,11 +15,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt
     - name: Install build tools
       run: |
         sudo apt-get update
         sudo apt-get install -y nasm binutils
+    - name: Check format
+      run: cargo fmt -- --check
     - name: Build
       run: cargo build-all --verbose
     - name: Run Tests

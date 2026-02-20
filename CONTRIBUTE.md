@@ -78,3 +78,15 @@ cargo doc --package zydeco-statics --no-deps
 ```
 
 The HTML output is written to `target/doc/`.
+
+## Pre-commit hooks
+
+Optional hooks run `cargo fmt -- --check` and `cargo check-all` before each
+commit. Install [pre-commit](https://pre-commit.com), then from the repo root:
+
+```sh
+pre-commit install
+```
+
+To format and fix before committing, run `cargo fmt` and `cargo check-all`
+yourself when the hook fails.

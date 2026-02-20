@@ -1,0 +1,14 @@
+# See https://pre-commit.com for more information
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt -- --check
+        language: system
+        pass_filenames: false
+      - id: cargo-check-all
+        name: cargo check-all
+        entry: cargo check-all
+        language: system
+        pass_filenames: false
