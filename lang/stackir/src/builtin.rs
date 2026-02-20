@@ -45,13 +45,14 @@ impl Builtin {
             // Builtin::new("char_to_str", 1, Function),
             // Builtin::new("char_to_int", 1, Function),
             // Builtin::new("str_to_int", 1, Function),
-            // Builtin::new("write_str", 2, Function),
+            Builtin::new("write_str", 2, Function),
+            Builtin::new("write_int", 2, Function),
             Builtin::new("write_line", 2, Function),
             Builtin::new("read_line", 1, Function),
-            // Builtin::new("read_line_as_int", 1, Function),
+            Builtin::new("read_line_as_int", 1, Function),
             // Builtin::new("read_till_eof", 1, Function),
             // Builtin::new("arg_list", 1, Function),
-            // Builtin::new("random_int", 1, Function),
+            Builtin::new("random_int", 1, Function),
             Builtin::new("exit", 1, Function),
         ]
         .into_iter()
