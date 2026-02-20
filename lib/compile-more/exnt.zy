@@ -1,0 +1,89 @@
+--| Monad transformer implementation for the `Exn` monad
+--|
+--| This file contains the automatically generated implementation of monad transformer for `ExnT`.
+--| The reader can compare the implementation to the manually implemented implementation.
+--|
+--| Check `exnkt.zydeco` for the implementation of `ExnK`, which is the church encoded version of `Exn`.
+
+alias Exn (E: VType) (A: VType) : CType =
+  Ret (Either E A)
+end
+
+--| Change `Ret` in `Exn` to `M`
+alias ExnT (E: VType) (M: VType -> CType) (A: VType) : CType =
+  M (Either E A)
+end
+
+--| Monad implementation for `Exn`
+def ! mo_exn (E: VType) : Monad (Exn E) =
+  comatch
+  | .return A a ->
+    ret +Right(a)
+  | .bind A A' m f ->
+    do a? <- ! m;
+    match a?
+    | +Left(e) -> ret +Left(e)
+    | +Right(a) -> ! f a
+    end
+  end
+end
+
+--| Automatically generated implementation of the monad transformer for `ExnT`
+--|
+--| Note that the generation for all relative monads to their transformers is
+--| done mechanically, and the same piece of stub code demonstrated here can
+--| be used for all relative monads.
+def ! mt_exn (E: VType) : MonadTrans (ExnT E) =
+  let ! mt' (M: VType -> CType) (mo: Thk (Monad M)) =
+    -- The @[debug(...)] macro can be used to print the terms and their types
+    -- during compilation.
+    -- Readers can utilize this feature to observe the generated code,
+    -- and verify that the algebra translation is correct.
+    @[debug("generated and applied")]
+    monadic fn (E: VType) ->
+      @[debug("original")]
+      let mo_exn = mo_exn in
+      comatch
+      | .monad -> ! mo_exn E
+      | .lift A m ->
+        do a <- ! m; ! mo_exn E .return A a
+      end
+    :
+      forall (E: VType) . MonadTransInner (Exn E)
+      -- The following is what MonadTransInner gets expanded to
+      --
+      -- forall (E: VType) . codata
+      -- | .monad : Monad (Exn E)
+      -- | .lift  : forall (A: VType) . Thk (Ret A) -> Exn E A
+      -- end
+    end M mo E triv
+  in
+  ! detriv-mt (ExnT E) mt'
+end
+
+
+--| Manual implementation of the monad transformer for `ExnT`
+--| 
+--| Provided for reference.
+def ! mt_exn_manual (E: VType) : MonadTrans (ExnT E) = fn M mo ->
+  comatch
+  | .monad ->
+    comatch
+    | .return A a ->
+      ! mo .return (Either E A) +Right(a)
+    | .bind A A' m f ->
+      ! mo .bind (Either E A) (Either E A') { ! m }
+      { fn a? ->
+          match a?
+          | +Left(e) -> ! mo .return (Either E A') +Left(e)
+          | +Right(a) -> ! f a
+          end }
+    end
+  | .lift A m ->
+    ! mo .bind A (Either E A) m
+    { fn a ->
+      ! mo .return (Either E A) +Right(a) }
+  end
+end
+
+main ! exit 0 end
