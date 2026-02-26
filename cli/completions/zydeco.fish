@@ -39,7 +39,7 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand check" -s h -l help -d 'Pr
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l bin -d 'Name of the binary' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-os -d 'Target OS (defaults to host OS)' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l target-arch -d 'Target architecture (defaults to host architecture)' -r
-complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d 'Target backend (zir, zasm, asm, exe)' -r
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s t -l target -d 'Target backend (zir, zasm, asm, llvm, exe, llvm-exe)' -r
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s b -l build-dir -d 'Build Directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir -d 'Runtime directory' -r -F
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l link-existing -d 'Skip dumping assembly and only link existing files'

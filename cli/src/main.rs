@@ -64,7 +64,7 @@ fn build_files(
     _dry: bool, verbose: bool,
 ) -> zydeco_driver::Result<i32> {
     let build_conf = match target.as_str() {
-        | "asm" | "exe" => Some(build_conf),
+        | "asm" | "exe" | "llvm" | "llvm-exe" => Some(build_conf),
         | _ => None,
     };
     let Driver { mut build_sys } = Driver::setup(paths)?;
@@ -87,10 +87,23 @@ fn build_files(
             build_sys.codegen_amd64_pack(pack, verbose)?;
             Ok(0)
         }
+        | "llvm" => {
+            build_sys.codegen_llvm_pack(pack, verbose)?;
+            Ok(0)
+        }
         | "exe" => {
             let amd64 = build_sys.codegen_amd64_pack(pack, verbose)?;
             // link with stub
             let executable = amd64.link()?;
+            if !execute {
+                return Ok(0);
+            }
+            let status = executable.run()?;
+            Ok(status.code().unwrap_or(0))
+        }
+        | "llvm-exe" => {
+            let llvm = build_sys.codegen_llvm_pack(pack, verbose)?;
+            let executable = llvm.link()?;
             if !execute {
                 return Ok(0);
             }

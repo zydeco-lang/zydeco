@@ -56,7 +56,7 @@ pub enum Commands {
         /// Target architecture (defaults to host architecture)
         #[arg(long)]
         target_arch: Option<String>,
-        /// Target backend (zir, zasm, asm, exe)
+        /// Target backend (zir, zasm, asm, llvm, exe, llvm-exe)
         #[arg(short, long, default_value = "exe")]
         target: String,
         /// Build Directory
