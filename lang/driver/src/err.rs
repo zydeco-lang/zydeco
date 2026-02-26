@@ -15,6 +15,10 @@ pub enum BuildError {
     #[error("Program terminated with {0}")]
     Amd64RunError(std::process::ExitStatus),
     #[error("{0}")]
+    LlvmLinkError(#[from] crate::llvm::err::LinkError),
+    #[error("Program terminated with {0}")]
+    LlvmRunError(std::process::ExitStatus),
+    #[error("{0}")]
     AssemblyInterpError(#[from] crate::zasm::err::AssemblyInterpError),
     #[error("Duplicate package marked name: {0}")]
     DuplicateMark(String),

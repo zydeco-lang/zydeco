@@ -18,6 +18,7 @@ zydeco-surface = { workspace = true }
 zydeco-statics = { workspace = true }
 zydeco-dynamics = { workspace = true }
 zydeco-amd64 = { workspace = true }
+zydeco-llvm = { workspace = true }
 zydeco-assembly = { workspace = true }
 zydeco-stackir = { workspace = true }
 derive_more = { workspace = true }

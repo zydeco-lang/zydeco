@@ -2685,6 +2685,7 @@ dependencies = [
  "zydeco-assembly",
  "zydeco-derive",
  "zydeco-dynamics",
+ "zydeco-llvm",
  "zydeco-stackir",
  "zydeco-statics",
  "zydeco-surface",

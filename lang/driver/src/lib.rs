@@ -40,6 +40,12 @@ pub mod amd64 {
     pub use pack::PackageAmd64;
 }
 
+pub mod llvm {
+    pub mod pack;
+    pub mod err;
+    pub use pack::PackageLlvm;
+}
+
 /// Namespaces for the Zydeco language ecosystem.
 /// Newlines are added to prevent reordering of the imports.
 pub mod prelude {
@@ -69,6 +75,7 @@ pub use zydeco_dynamics::ProgKont;
 use crate::{
     amd64::PackageAmd64,
     check::{PackageChecked, PackageStew},
+    llvm::PackageLlvm,
     zasm::pack::PackageAssembly,
     zir::pack::PackageStack,
 };
@@ -78,6 +85,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use zydeco_amd64::TargetFormat;
+use zydeco_llvm::TargetTriple as LlvmTargetTriple;
 use zydeco_utils::prelude::{
     ArcGlobalAlloc, ArenaAccess, ArenaAssoc, ArenaDense, CompilerPass, DepGraph, Kosaraju,
 };
@@ -369,6 +377,40 @@ impl BuildSystem {
         let executable = amd64.link()?;
         let status = executable.run()?;
         if status.success() { Ok(()) } else { Err(BuildError::Amd64RunError(status)) }
+    }
+    pub fn codegen_llvm_pack(&self, pack: PackId, verbose: bool) -> Result<PackageLlvm> {
+        let build_conf = self
+            .build_confs
+            .get(&pack)
+            .cloned()
+            .ok_or_else(|| BuildError::MissingBuildConf(self.packages[&pack].name()))?;
+        let target_triple = match build_conf.target_os.as_str() {
+            | "linux" => LlvmTargetTriple::X86_64Linux,
+            | "macos" | "darwin" => LlvmTargetTriple::X86_64MacOS,
+            | other => return Err(BuildError::UnsupportedTargetOs(other.to_string())),
+        };
+        let PackageAssembly { spans, scoped, statics, stackir, assembly } =
+            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
+        let ir = zydeco_llvm::Emitter::new(
+            &spans,
+            &scoped,
+            &statics,
+            &stackir,
+            &assembly,
+            target_triple,
+        )
+        .run()?
+        .to_string();
+        if verbose {
+            log::trace!("llvm ir:\n{}", &ir);
+        }
+        Ok(llvm::PackageLlvm { name: self.packages[&pack].name(), ir, build_conf })
+    }
+    pub fn test_llvm_pack(&self, pack: PackId, verbose: bool) -> Result<()> {
+        let llvm = self.codegen_llvm_pack(pack, verbose)?;
+        let executable = llvm.link()?;
+        let status = executable.run()?;
+        if status.success() { Ok(()) } else { Err(BuildError::LlvmRunError(status)) }
     }
 }
 
