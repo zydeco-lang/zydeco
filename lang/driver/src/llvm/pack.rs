@@ -1,5 +1,5 @@
 use super::err::{LinkError, Result};
-use crate::BuildConf;
+use crate::{BuildConf, backend::RuntimeFiles};
 use std::{
     fs::File,
     io::Write,
@@ -28,22 +28,14 @@ impl PackageLlvm {
             | (arch, _) => return Err(LinkError::UnsupportedTargetArch(arch.to_string())),
         };
 
-        if !link_existing {
-            std::fs::remove_dir_all(&build_dir).ok();
-            std::fs::create_dir_all(&build_dir).expect("Failed to create build dir");
-        }
-
-        // Copy runtime files
-        for entry in std::fs::read_dir(&runtime_dir).expect("Failed to read runtime dir") {
-            let entry = entry.expect("Failed to read entry");
-            let path = entry.path();
-            let target = build_dir.join(path.file_name().unwrap());
-            std::fs::copy(&path, &target).expect("Failed to copy entry");
-        }
+        RuntimeFiles::new(&build_dir, &runtime_dir, link_existing)
+            .prepare()
+            .map_err(LinkError::BuildPreparationError)?;
 
         // Write LLVM IR to file
         let ir_fname = build_dir.join(format!("{}.ll", name));
-        let mut ir_file = File::create(&ir_fname).map_err(|e| LinkError::LlvmCompileError(e.to_string()))?;
+        let mut ir_file =
+            File::create(&ir_fname).map_err(|e| LinkError::LlvmCompileError(e.to_string()))?;
         ir_file.write(ir.as_bytes()).map_err(|e| LinkError::LlvmCompileError(e.to_string()))?;
         ir_file.flush().map_err(|e| LinkError::LlvmCompileError(e.to_string()))?;
 

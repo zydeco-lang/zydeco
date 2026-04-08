@@ -1,6 +1,7 @@
 //! A minimal build system for the zydeco language.
 
 pub mod conf;
+pub(crate) mod backend;
 pub mod diagnostics;
 pub mod err;
 pub mod package;

@@ -9,6 +9,8 @@ pub enum LinkError {
     UnsupportedTargetOs(String),
     #[error("Failed to write to assembly file: {0}")]
     AssemblyWriteError(io::Error),
+    #[error("Failed to prepare build artifacts: {0}")]
+    BuildPreparationError(io::Error),
     #[error("Failed to run nasm: {0}")]
     NasmRunError(io::Error),
     #[error("Failure in nasm call: {0}")]

@@ -1,5 +1,5 @@
 use super::err::{LinkError, Result};
-use crate::BuildConf;
+use crate::{BuildConf, backend::RuntimeFiles};
 use std::{
     fs::File,
     io::Write,
@@ -22,20 +22,9 @@ impl PackageAmd64 {
             | "x86" | "x86_64" | "amd64" => "x86_64",
             | _ => return Err(LinkError::UnsupportedTargetArch(target_arch)),
         };
-        if !link_existing {
-            // Hack: clean build dir and create it
-            // Todo: make it safer by checking build profile if not nonexistent or empty
-            std::fs::remove_dir_all(&build_dir).ok();
-            std::fs::create_dir_all(&build_dir).expect("Failed to create build dir");
-        }
-
-        // copy everything in runtime dir to build dir
-        for entry in std::fs::read_dir(&runtime_dir).expect("Failed to read runtime dir") {
-            let entry = entry.expect("Failed to read entry");
-            let path = entry.path();
-            let target = build_dir.join(path.file_name().unwrap());
-            std::fs::copy(&path, &target).expect("Failed to copy entry");
-        }
+        RuntimeFiles::new(&build_dir, &runtime_dir, link_existing)
+            .prepare()
+            .map_err(LinkError::BuildPreparationError)?;
 
         let lib_name = format!("zy{}", name);
 

@@ -6,5 +6,5 @@
 pub mod syntax;
 pub mod emit;
 
-pub use syntax::TargetTriple;
 pub use emit::Emitter;
+pub use syntax::TargetTriple;

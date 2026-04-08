@@ -38,11 +38,7 @@ impl ResolveError {
             | ResolveError::DuplicateDefinition(var1, var2) => {
                 let (file_path1, range1) = var1.info.to_ariadne_span();
                 let (file_path2, range2) = var2.info.to_ariadne_span();
-                let primary_span = if file_path1 == file_path2 {
-                    (file_path1.clone(), range1.clone())
-                } else {
-                    (file_path1.clone(), range1.clone())
-                };
+                let primary_span = (file_path1.clone(), range1.clone());
                 let mut report = Report::build(ReportKind::Error, primary_span)
                     .with_message("Duplicate definition")
                     .with_label(
