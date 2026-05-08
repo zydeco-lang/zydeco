@@ -1,5 +1,5 @@
 use super::err::{LinkError, Result};
-use crate::{BuildConf, backend::RuntimeFiles};
+use crate::{BuildConf, Verbosity, backend::RuntimeFiles};
 use std::{
     fs::File,
     io::Write,
@@ -11,11 +11,12 @@ pub struct PackageAmd64 {
     pub name: String,
     pub assembly: String,
     pub build_conf: BuildConf,
+    pub verbosity: Verbosity,
 }
 
 impl PackageAmd64 {
     pub fn link(self) -> Result<PackageAmd64Executable> {
-        let PackageAmd64 { name, assembly, build_conf } = self;
+        let PackageAmd64 { name, assembly, build_conf, verbosity } = self;
         let BuildConf { build_dir, runtime_dir, link_existing, target_arch, target_os } =
             build_conf;
         let target_arch = match target_arch.as_str() {
@@ -121,7 +122,7 @@ impl PackageAmd64 {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
-        let executable = PackageAmd64Executable { name, executable: exe_fname };
+        let executable = PackageAmd64Executable { name, executable: exe_fname, verbosity };
         Ok(executable)
     }
 }
@@ -129,15 +130,19 @@ impl PackageAmd64 {
 pub struct PackageAmd64Executable {
     pub name: String,
     pub executable: PathBuf,
+    pub verbosity: Verbosity,
 }
 
 impl PackageAmd64Executable {
     pub fn run(self) -> Result<ExitStatus> {
-        let PackageAmd64Executable { name, executable } = self;
+        let PackageAmd64Executable { name, executable, verbosity } = self;
         log::info!("Running program: {}", name);
         // run the program with interactive I/O
-        let mut child = Command::new(&executable)
-            // .env("RUST_LOG", "trace")
+        let mut command = Command::new(&executable);
+        if verbosity.enables_runtime_trace_env() {
+            command.env("RUST_LOG", "trace");
+        }
+        let mut child = command
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())

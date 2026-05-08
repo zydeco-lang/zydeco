@@ -5,6 +5,7 @@ pub(crate) mod backend;
 pub mod diagnostics;
 pub mod err;
 pub mod package;
+pub mod verbosity;
 
 /// the topmost compilation pipeline led by a package configuration
 pub mod local {
@@ -71,6 +72,7 @@ pub use conf::{BuildConf, Conf};
 pub use err::{BuildError, Result};
 pub use local::LocalPackage;
 pub use package::{Dependency, Package};
+pub use verbosity::Verbosity;
 pub use zydeco_dynamics::ProgKont;
 
 use crate::{
@@ -290,10 +292,10 @@ impl BuildSystem {
         }
     }
     pub fn run_pack(
-        &self, pack: PackId, args: &[String], dry: bool, verbose: bool,
+        &self, pack: PackId, args: &[String], dry: bool, verbosity: Verbosity,
     ) -> Result<ProgKont> {
         let alloc = ArcGlobalAlloc::new();
-        let checked = self.__tyck_pack(pack, alloc, verbose)?;
+        let checked = self.__tyck_pack(pack, alloc, verbosity)?;
         let name = self.packages[&pack].name();
         let runtime = Package::link_interp(name.as_str(), checked)?;
         if dry {
@@ -304,16 +306,16 @@ impl BuildSystem {
     pub fn test_pack(&self, pack: PackId, dry: bool) -> Result<()> {
         let name = self.packages[&pack].name();
         let alloc = ArcGlobalAlloc::new();
-        let checked = self.__tyck_pack(pack, alloc, false)?;
+        let checked = self.__tyck_pack(pack, alloc, Verbosity::silent())?;
         let runtime = Package::link_interp(name.as_str(), checked)?;
         if dry {
             return Ok(());
         }
         Package::test_interp(runtime, name.as_str(), false)
     }
-    pub fn codegen_zir_pack(&self, pack: PackId, verbose: bool) -> Result<()> {
+    pub fn codegen_zir_pack(&self, pack: PackId, verbosity: Verbosity) -> Result<()> {
         let PackageStack { stackir, scoped, statics, .. } =
-            self.__compile_zir_pack(pack, ArcGlobalAlloc::new(), verbose)?;
+            self.__compile_zir_pack(pack, ArcGlobalAlloc::new(), verbosity)?;
         // pretty print the ZIR
         use zydeco_stackir::sps::fmt::*;
         let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
@@ -323,9 +325,11 @@ impl BuildSystem {
         println!("{}", buf);
         Ok(())
     }
-    pub fn codegen_zasm_pack(&self, pack: PackId, execute: bool, verbose: bool) -> Result<()> {
+    pub fn codegen_zasm_pack(
+        &self, pack: PackId, execute: bool, verbosity: Verbosity,
+    ) -> Result<()> {
         let PackageAssembly { assembly, .. } =
-            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
+            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbosity)?;
         if execute {
             let interpreter = zydeco_assembly::interp::Interpreter::new(assembly);
             let output = interpreter.run()?;
@@ -345,7 +349,7 @@ impl BuildSystem {
         }
         Ok(())
     }
-    pub fn codegen_amd64_pack(&self, pack: PackId, verbose: bool) -> Result<PackageAmd64> {
+    pub fn codegen_amd64_pack(&self, pack: PackId, verbosity: Verbosity) -> Result<PackageAmd64> {
         let build_conf = self
             .build_confs
             .get(&pack)
@@ -357,7 +361,7 @@ impl BuildSystem {
             | other => return Err(BuildError::UnsupportedTargetOs(other.to_string())),
         };
         let PackageAssembly { spans, scoped, statics, stackir, assembly } =
-            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
+            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbosity)?;
         let assembly = zydeco_amd64::Emitter::new(
             &spans,
             &scoped,
@@ -368,18 +372,23 @@ impl BuildSystem {
         )
         .run()?
         .to_string();
-        if verbose {
+        if verbosity.enables_stage_dumps() {
             log::trace!("amd64 assembly:\n{}", &assembly);
         }
-        Ok(amd64::PackageAmd64 { name: self.packages[&pack].name(), assembly, build_conf })
+        Ok(amd64::PackageAmd64 {
+            name: self.packages[&pack].name(),
+            assembly,
+            build_conf,
+            verbosity,
+        })
     }
-    pub fn test_amd64_pack(&self, pack: PackId, verbose: bool) -> Result<()> {
-        let amd64 = self.codegen_amd64_pack(pack, verbose)?;
+    pub fn test_amd64_pack(&self, pack: PackId, verbosity: Verbosity) -> Result<()> {
+        let amd64 = self.codegen_amd64_pack(pack, verbosity)?;
         let executable = amd64.link()?;
         let status = executable.run()?;
         if status.success() { Ok(()) } else { Err(BuildError::Amd64RunError(status)) }
     }
-    pub fn codegen_llvm_pack(&self, pack: PackId, verbose: bool) -> Result<PackageLlvm> {
+    pub fn codegen_llvm_pack(&self, pack: PackId, verbosity: Verbosity) -> Result<PackageLlvm> {
         let build_conf = self
             .build_confs
             .get(&pack)
@@ -391,7 +400,7 @@ impl BuildSystem {
             | other => return Err(BuildError::UnsupportedTargetOs(other.to_string())),
         };
         let PackageAssembly { spans, scoped, statics, stackir, assembly } =
-            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbose)?;
+            self.__compile_zasm_pack(pack, ArcGlobalAlloc::new(), verbosity)?;
         let ir = zydeco_llvm::Emitter::new(
             &spans,
             &scoped,
@@ -402,13 +411,13 @@ impl BuildSystem {
         )
         .run()?
         .to_string();
-        if verbose {
+        if verbosity.enables_stage_dumps() {
             log::trace!("llvm ir:\n{}", &ir);
         }
-        Ok(llvm::PackageLlvm { name: self.packages[&pack].name(), ir, build_conf })
+        Ok(llvm::PackageLlvm { name: self.packages[&pack].name(), ir, build_conf, verbosity })
     }
-    pub fn test_llvm_pack(&self, pack: PackId, verbose: bool) -> Result<()> {
-        let llvm = self.codegen_llvm_pack(pack, verbose)?;
+    pub fn test_llvm_pack(&self, pack: PackId, verbosity: Verbosity) -> Result<()> {
+        let llvm = self.codegen_llvm_pack(pack, verbosity)?;
         let executable = llvm.link()?;
         let status = executable.run()?;
         if status.success() { Ok(()) } else { Err(BuildError::LlvmRunError(status)) }
@@ -457,7 +466,7 @@ impl BuildSystem {
     }
     /// type check a package
     fn __tyck_pack(
-        &self, pack: PackId, alloc: ArcGlobalAlloc, _verbose: bool,
+        &self, pack: PackId, alloc: ArcGlobalAlloc, _verbosity: Verbosity,
     ) -> Result<PackageChecked> {
         let mut scc = Kosaraju::new(&self.depends_on).run();
         scc.keep_only([pack]);
@@ -487,10 +496,10 @@ impl BuildSystem {
     }
     /// compile a package to ZIR
     fn __compile_zir_pack(
-        &self, pack: PackId, alloc: ArcGlobalAlloc, verbose: bool,
+        &self, pack: PackId, alloc: ArcGlobalAlloc, verbosity: Verbosity,
     ) -> Result<PackageStack> {
         let PackageChecked { spans, mut scoped, statics } =
-            self.__tyck_pack(pack, alloc.clone(), verbose)?;
+            self.__tyck_pack(pack, alloc.clone(), verbosity)?;
         let mut stackir =
             zydeco_stackir::Lowerer::new(alloc.clone(), &spans, &mut scoped, &statics).run()?;
         {
@@ -499,7 +508,7 @@ impl BuildSystem {
             let doc = stackir.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
-            if verbose {
+            if verbosity.enables_stage_dumps() {
                 log::trace!("ZIR right after lowering:\n{}", buf);
             }
         }
@@ -510,7 +519,7 @@ impl BuildSystem {
             let doc = stackir.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
-            if verbose {
+            if verbosity.enables_stage_dumps() {
                 log::trace!("ZIR after inlining:\n{}", buf);
             }
         }
@@ -522,7 +531,7 @@ impl BuildSystem {
             let doc = stackir.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
-            if verbose {
+            if verbosity.enables_stage_dumps() {
                 log::trace!("ZIR after closure conversion:\n{}", buf);
             }
         }
@@ -546,7 +555,7 @@ impl BuildSystem {
                 let doc = snorm.pretty(&fmt);
                 let mut buf = String::new();
                 doc.render_fmt(100, &mut buf).unwrap();
-                if verbose {
+                if verbosity.enables_stage_dumps() {
                     log::trace!("Normalized ZIR:\n{}", buf);
                 }
             }
@@ -560,7 +569,7 @@ impl BuildSystem {
                 let doc = stackir.pretty(&fmt);
                 let mut buf = String::new();
                 doc.render_fmt(100, &mut buf).unwrap();
-                if verbose {
+                if verbosity.enables_stage_dumps() {
                     log::trace!("ZIR after substitution:\n{}", buf);
                 }
             }
@@ -570,10 +579,10 @@ impl BuildSystem {
     }
     /// compile a package to ZASM
     fn __compile_zasm_pack(
-        &self, pack: PackId, alloc: ArcGlobalAlloc, verbose: bool,
+        &self, pack: PackId, alloc: ArcGlobalAlloc, verbosity: Verbosity,
     ) -> Result<PackageAssembly> {
         let PackageStack { spans, scoped, statics, stackir } =
-            self.__compile_zir_pack(pack, alloc.clone(), verbose)?;
+            self.__compile_zir_pack(pack, alloc.clone(), verbosity)?;
         let mut assembly = zydeco_assembly::lower::Lowerer::new(
             alloc.clone(),
             &spans,
@@ -588,7 +597,7 @@ impl BuildSystem {
             let doc = assembly.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
-            if verbose {
+            if verbosity.enables_stage_dumps() {
                 log::trace!("ZASM:\n{}", buf);
             }
         }
@@ -601,7 +610,7 @@ impl BuildSystem {
             let doc = analyzer.arena.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();
-            if verbose {
+            if verbosity.enables_stage_dumps() {
                 log::trace!("ZASM after inlining:\n{}", buf);
             }
         }

@@ -1,5 +1,5 @@
 use super::err::{LinkError, Result};
-use crate::{BuildConf, backend::RuntimeFiles};
+use crate::{BuildConf, Verbosity, backend::RuntimeFiles};
 use std::{
     fs::File,
     io::Write,
@@ -11,11 +11,12 @@ pub struct PackageLlvm {
     pub name: String,
     pub ir: String,
     pub build_conf: BuildConf,
+    pub verbosity: Verbosity,
 }
 
 impl PackageLlvm {
     pub fn link(self) -> Result<PackageLlvmExecutable> {
-        let PackageLlvm { name, ir, build_conf } = self;
+        let PackageLlvm { name, ir, build_conf, verbosity } = self;
         let BuildConf { build_dir, runtime_dir, link_existing, target_arch, target_os } =
             build_conf;
 
@@ -78,7 +79,7 @@ impl PackageLlvm {
             return Err(LinkError::LlvmCompileError(format!("linking failed: {}", stderr)));
         }
 
-        let executable = PackageLlvmExecutable { name, executable: exe_fname };
+        let executable = PackageLlvmExecutable { name, executable: exe_fname, verbosity };
         Ok(executable)
     }
 }
@@ -102,13 +103,18 @@ fn find_llvm_tool(name: &str) -> Option<String> {
 pub struct PackageLlvmExecutable {
     pub name: String,
     pub executable: PathBuf,
+    pub verbosity: Verbosity,
 }
 
 impl PackageLlvmExecutable {
     pub fn run(self) -> Result<ExitStatus> {
-        let PackageLlvmExecutable { name, executable } = self;
+        let PackageLlvmExecutable { name, executable, verbosity } = self;
         log::info!("Running program: {}", name);
-        let mut child = Command::new(&executable)
+        let mut command = Command::new(&executable);
+        if verbosity.enables_runtime_trace_env() {
+            command.env("RUST_LOG", "trace");
+        }
+        let mut child = command
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())

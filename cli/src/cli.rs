@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -22,8 +22,8 @@ pub enum Commands {
         #[arg(long, default_value_t = false)]
         dry: bool,
         /// Level of verbosity
-        #[arg(short, long, default_value_t = false)]
-        verbose: bool,
+        #[arg(short, long, action = ArgAction::Count)]
+        verbose: u8,
         /// Environmental arguments to pass to the program
         #[arg(last = true)]
         args: Vec<String>,
@@ -34,8 +34,8 @@ pub enum Commands {
         #[arg(value_name = "FILE")]
         files: Vec<PathBuf>,
         /// Level of verbosity
-        #[arg(short, long, default_value_t = false)]
-        verbose: bool,
+        #[arg(short, long, action = ArgAction::Count)]
+        verbose: u8,
     },
     // /// Start a REPL
     // Repl {
@@ -75,7 +75,17 @@ pub enum Commands {
         #[arg(long, default_value_t = false)]
         dry: bool,
         /// Level of verbosity
-        #[arg(short, long, default_value_t = false)]
-        verbose: bool,
+        #[arg(short, long, action = ArgAction::Count)]
+        verbose: u8,
     },
+}
+
+impl Commands {
+    pub fn verbosity(&self) -> u8 {
+        match self {
+            | Commands::Run { verbose, .. }
+            | Commands::Check { verbose, .. }
+            | Commands::Build { verbose, .. } => *verbose,
+        }
+    }
 }

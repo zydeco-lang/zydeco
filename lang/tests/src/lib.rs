@@ -1,6 +1,6 @@
 pub mod utils {
     use std::path::PathBuf;
-    use zydeco_driver::{BuildConf, BuildSystem, Driver};
+    use zydeco_driver::{BuildConf, BuildSystem, Driver, Verbosity};
 
     pub fn interp_proj_bin_aux(proj_path: impl Into<PathBuf>, bin_path: impl Into<PathBuf>) {
         let mut build_sys = BuildSystem::new();
@@ -30,7 +30,7 @@ pub mod utils {
             link_existing: false,
         };
         build_sys.build_confs.insert(pack, build_conf);
-        match build_sys.test_amd64_pack(pack, true) {
+        match build_sys.test_amd64_pack(pack, Verbosity::new(3)) {
             | Ok(_) => {}
             | Err(err) => {
                 eprintln!("{}", err);

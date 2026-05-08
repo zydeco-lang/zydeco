@@ -12,7 +12,6 @@ description = "Command-line interface for the Zydeco programming language"
 
 [dependencies]
 clap = { workspace = true }
-env_logger = { workspace = true }
 zydeco-driver = { workspace = true }
 
 [build-dependencies]

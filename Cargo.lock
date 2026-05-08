@@ -2587,7 +2587,6 @@ version = "0.2.2"
 dependencies = [
  "clap",
  "clap_complete",
- "env_logger",
  "zydeco-driver",
 ]
 
