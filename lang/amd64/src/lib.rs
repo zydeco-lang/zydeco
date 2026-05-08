@@ -7,4 +7,4 @@
 pub mod syntax;
 pub mod emit;
 
-pub use emit::{Emitter, TargetFormat};
+pub use emit::{EmitDiagnostics, Emitter, TargetFormat};

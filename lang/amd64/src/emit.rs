@@ -18,6 +18,26 @@ pub enum TargetFormat {
     MachO,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct EmitDiagnostics {
+    dump_instruction_scc_graph: bool,
+}
+
+impl EmitDiagnostics {
+    pub const fn new() -> Self {
+        Self { dump_instruction_scc_graph: false }
+    }
+
+    pub const fn with_instruction_scc_graph(mut self, enabled: bool) -> Self {
+        self.dump_instruction_scc_graph = enabled;
+        self
+    }
+
+    pub const fn dump_instruction_scc_graph(self) -> bool {
+        self.dump_instruction_scc_graph
+    }
+}
+
 pub trait Emit<'a> {
     type Env;
     fn emit(&self, env: Self::Env, em: &mut Emitter);
@@ -33,6 +53,7 @@ pub struct Emitter<'e> {
     pub asm: AsmFile,
 
     target_format: TargetFormat,
+    diagnostics: EmitDiagnostics,
     tables: Vec<JumpTable>,
     visited: HashSet<ProgId>,
 }
@@ -62,9 +83,15 @@ impl<'e> Emitter<'e> {
             assembly,
             asm: AsmFile::new(),
             target_format,
+            diagnostics: EmitDiagnostics::new(),
             tables: Vec::new(),
             visited: HashSet::new(),
         }
+    }
+
+    pub fn with_diagnostics(mut self, diagnostics: EmitDiagnostics) -> Self {
+        self.diagnostics = diagnostics;
+        self
     }
 }
 
@@ -123,8 +150,7 @@ impl<'e> CompilerPass for Emitter<'e> {
         let (entry, ()) = self.assembly.entry.iter().next().unwrap();
         entry.emit((), &mut self);
 
-        // Debug print the scc graph
-        {
+        if self.diagnostics.dump_instruction_scc_graph() {
             use std::fmt::Write;
             let mut buf = String::new();
             let mut scc = zydeco_utils::graph::Kosaraju::new(&self.assembly.deps).run();

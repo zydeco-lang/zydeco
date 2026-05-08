@@ -87,7 +87,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use zydeco_amd64::TargetFormat;
+use zydeco_amd64::{EmitDiagnostics, TargetFormat};
 use zydeco_llvm::TargetTriple as LlvmTargetTriple;
 use zydeco_utils::prelude::{
     ArcGlobalAlloc, ArenaAccess, ArenaAssoc, ArenaDense, CompilerPass, DepGraph, Kosaraju,
@@ -369,6 +369,9 @@ impl BuildSystem {
             &stackir,
             &assembly,
             target_format,
+        )
+        .with_diagnostics(
+            EmitDiagnostics::new().with_instruction_scc_graph(verbosity.enables_deep_diagnostics()),
         )
         .run()?
         .to_string();

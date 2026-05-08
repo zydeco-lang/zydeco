@@ -1,7 +1,8 @@
 /// Controls how much driver diagnostic output is emitted.
 ///
-/// Level 0 is silent, 1 enables info logs, 2 enables trace logs, and 3+ also
-/// enables the stage dumps that used to be guarded by the boolean verbose flag.
+/// Level 0 is silent, 1 enables info logs, 2 enables the pass dumps that used
+/// to be guarded by the boolean verbose flag, and 3+ additionally enables deep
+/// backend diagnostics.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Verbosity {
     level: u8,
@@ -21,6 +22,10 @@ impl Verbosity {
     }
 
     pub const fn enables_stage_dumps(self) -> bool {
+        self.level >= 2
+    }
+
+    pub const fn enables_deep_diagnostics(self) -> bool {
         self.level >= 3
     }
 
