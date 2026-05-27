@@ -2,7 +2,7 @@ use clap::Parser;
 use std::path::PathBuf;
 // use zydeco_cli::{Cli, Commands, Repl};
 use zydeco_cli::{Cli, Commands};
-use zydeco_driver::{BuildConf, Driver, ProgKont, Verbosity};
+use zydeco_driver::{BuildConf, Driver, PipelineConf, ProgKont, Verbosity};
 
 fn main() -> Result<(), ()> {
     let command = Cli::parse().command;
@@ -26,6 +26,7 @@ fn main() -> Result<(), ()> {
             link_existing,
             execute,
             dry,
+            no_cps,
             verbose: _,
         } => {
             let build_conf = BuildConf::default()
@@ -34,7 +35,8 @@ fn main() -> Result<(), ()> {
                 .with_link_existing(link_existing)
                 .with_target_os(target_os)
                 .with_target_arch(target_arch);
-            build_files(files, bin, target, build_conf, execute, dry, verbosity)
+            let pipeline_conf = PipelineConf::default().with_cps(!no_cps);
+            build_files(files, bin, target, build_conf, pipeline_conf, execute, dry, verbosity)
         }
     };
     match res {
@@ -62,14 +64,15 @@ fn run_files(
 }
 
 fn build_files(
-    paths: Vec<PathBuf>, bin: Option<String>, target: String, build_conf: BuildConf, execute: bool,
-    _dry: bool, verbosity: Verbosity,
+    paths: Vec<PathBuf>, bin: Option<String>, target: String, build_conf: BuildConf,
+    pipeline_conf: PipelineConf, execute: bool, _dry: bool, verbosity: Verbosity,
 ) -> zydeco_driver::Result<i32> {
     let build_conf = match target.as_str() {
         | "asm" | "exe" | "llvm" | "llvm-exe" => Some(build_conf),
         | _ => None,
     };
     let Driver { mut build_sys } = Driver::setup(paths)?;
+    build_sys.pipeline_conf = pipeline_conf;
     let pack = build_sys.pick_marked(bin)?;
     // set build configuration for the marked package
     if let Some(build_config) = build_conf {

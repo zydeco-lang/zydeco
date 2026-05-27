@@ -61,6 +61,7 @@ Register-ArgumentCompleter -Native -CommandName 'zydeco' -ScriptBlock {
             [CompletionResult]::new('-x', '-x', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--execute', '--execute', [CompletionResultType]::ParameterName, 'Run the program after building')
             [CompletionResult]::new('--dry', '--dry', [CompletionResultType]::ParameterName, 'Dry run (don''t execute)')
+            [CompletionResult]::new('--no-cps', '--no-cps', [CompletionResultType]::ParameterName, 'Skip CPS translation in the StackIR pipeline')
             [CompletionResult]::new('-v', '-v', [CompletionResultType]::ParameterName, 'Level of verbosity')
             [CompletionResult]::new('--verbose', '--verbose', [CompletionResultType]::ParameterName, 'Level of verbosity')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')

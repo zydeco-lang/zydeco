@@ -55,6 +55,7 @@ set edit:completion:arg-completer[zydeco] = {|@words|
             cand -x 'Run the program after building'
             cand --execute 'Run the program after building'
             cand --dry 'Dry run (don''t execute)'
+            cand --no-cps 'Skip CPS translation in the StackIR pipeline'
             cand -v 'Level of verbosity'
             cand --verbose 'Level of verbosity'
             cand -h 'Print help'

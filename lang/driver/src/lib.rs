@@ -68,7 +68,7 @@ pub mod prelude {
     pub use zydeco_assembly::syntax as sa;
 }
 
-pub use conf::{BuildConf, Conf};
+pub use conf::{BuildConf, Conf, PipelineConf};
 pub use err::{BuildError, Result};
 pub use local::LocalPackage;
 pub use package::{Dependency, Package};
@@ -199,6 +199,8 @@ pub struct BuildSystem {
     pub depends_on: DepGraph<PackId>,
     /// per-package build config
     pub build_confs: ArenaAssoc<PackId, BuildConf>,
+    /// middle-end pipeline config
+    pub pipeline_conf: PipelineConf,
 }
 
 impl Default for BuildSystem {
@@ -226,6 +228,7 @@ impl BuildSystem {
             marked: HashMap::new(),
             depends_on: DepGraph::new(),
             build_confs: ArenaAssoc::default(),
+            pipeline_conf: PipelineConf::default(),
         };
         for path in build_sys.conf.default_packages.clone() {
             build_sys.add_local_package(path.clone()).unwrap();
@@ -527,8 +530,8 @@ impl BuildSystem {
             }
         }
         zydeco_stackir::sps::check::check(&stackir, &scoped);
-        zydeco_stackir::CpsTranslator::new(&mut stackir, &mut scoped).translate();
-        {
+        if self.pipeline_conf.enable_cps {
+            zydeco_stackir::CpsTranslator::new(&mut stackir, &mut scoped).translate();
             use zydeco_stackir::sps::fmt::*;
             let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
             let doc = stackir.pretty(&fmt);
@@ -537,8 +540,10 @@ impl BuildSystem {
             if verbosity.enables_stage_dumps() {
                 log::trace!("ZIR after CPS translation:\n{}", buf);
             }
+            zydeco_stackir::sps::check::check(&stackir, &scoped);
+        } else if verbosity.enables_stage_dumps() {
+            log::trace!("ZIR CPS translation skipped");
         }
-        zydeco_stackir::sps::check::check(&stackir, &scoped);
         zydeco_stackir::ClosureConverter::new(&mut stackir, &mut scoped, &statics).convert();
         {
             use zydeco_stackir::sps::fmt::*;

@@ -74,6 +74,9 @@ pub enum Commands {
         /// Dry run (don't execute)
         #[arg(long, default_value_t = false)]
         dry: bool,
+        /// Skip CPS translation in the StackIR pipeline
+        #[arg(long, default_value_t = false)]
+        no_cps: bool,
         /// Level of verbosity
         #[arg(short, long, action = ArgAction::Count)]
         verbose: u8,

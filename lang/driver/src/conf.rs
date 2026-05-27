@@ -40,6 +40,24 @@ impl Default for BuildConf {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct PipelineConf {
+    pub enable_cps: bool,
+}
+
+impl Default for PipelineConf {
+    fn default() -> Self {
+        Self { enable_cps: true }
+    }
+}
+
+impl PipelineConf {
+    pub fn with_cps(mut self, enable_cps: bool) -> Self {
+        self.enable_cps = enable_cps;
+        self
+    }
+}
+
 impl BuildConf {
     pub fn with_build_dir(mut self, build_dir: Option<PathBuf>) -> Self {
         if let Some(build_dir) = build_dir {

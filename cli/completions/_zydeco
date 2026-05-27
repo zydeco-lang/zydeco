@@ -63,6 +63,7 @@ _arguments "${_arguments_options[@]}" : \
 '-x[Run the program after building]' \
 '--execute[Run the program after building]' \
 '--dry[Dry run (don'\''t execute)]' \
+'--no-cps[Skip CPS translation in the StackIR pipeline]' \
 '*-v[Level of verbosity]' \
 '*--verbose[Level of verbosity]' \
 '-h[Print help]' \

@@ -45,6 +45,7 @@ complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s r -l runtime-dir
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l link-existing -d 'Skip dumping assembly and only link existing files'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s x -l execute -d 'Run the program after building'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l dry -d 'Dry run (don\'t execute)'
+complete -c zydeco -n "__fish_zydeco_using_subcommand build" -l no-cps -d 'Skip CPS translation in the StackIR pipeline'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s v -l verbose -d 'Level of verbosity'
 complete -c zydeco -n "__fish_zydeco_using_subcommand build" -s h -l help -d 'Print help'
 complete -c zydeco -n "__fish_zydeco_using_subcommand help; and not __fish_seen_subcommand_from run check build help" -f -a "run" -d 'Run a zydeco program'
