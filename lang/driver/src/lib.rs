@@ -527,6 +527,18 @@ impl BuildSystem {
             }
         }
         zydeco_stackir::sps::check::check(&stackir, &scoped);
+        zydeco_stackir::CpsTranslator::new(&mut stackir, &mut scoped).translate();
+        {
+            use zydeco_stackir::sps::fmt::*;
+            let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
+            let doc = stackir.pretty(&fmt);
+            let mut buf = String::new();
+            doc.render_fmt(100, &mut buf).unwrap();
+            if verbosity.enables_stage_dumps() {
+                log::trace!("ZIR after CPS translation:\n{}", buf);
+            }
+        }
+        zydeco_stackir::sps::check::check(&stackir, &scoped);
         zydeco_stackir::ClosureConverter::new(&mut stackir, &mut scoped, &statics).convert();
         {
             use zydeco_stackir::sps::fmt::*;

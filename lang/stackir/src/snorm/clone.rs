@@ -70,7 +70,7 @@ where
         match value {
             | Value::Hole(Hole) => build(Hole, arena),
             | Value::Var(def) => {
-                let def = map[&def];
+                let def = map.get(&def).copied().unwrap_or(def);
                 build(def, arena)
             }
             | Value::Closure(Closure { stack: Bullet, body }) => {

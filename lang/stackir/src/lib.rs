@@ -28,6 +28,8 @@ pub mod sps {
     /// Inlining of "must inline" items.
     /// One feasiable approach: inline all "top-level" definition let-bindings.
     pub mod inline;
+    /// CPS translation over stack IR.
+    pub mod cps;
     /// Closure conversion over stack IR.
     pub mod convert;
     /// In-place substitution helpers for stack IR.
@@ -38,7 +40,7 @@ pub mod sps {
     pub mod clone;
 }
 
-pub use sps::{arena::*, convert::ClosureConverter, lower::Lowerer};
+pub use sps::{arena::*, convert::ClosureConverter, cps::CpsTranslator, lower::Lowerer};
 
 pub mod snorm {
     /// Extra syntax for normalization.

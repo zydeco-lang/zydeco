@@ -58,7 +58,7 @@ where
         match value {
             | Value::Hole(Hole) => Hole.build(arena, None),
             | Value::Var(def) => {
-                let def = map[&def];
+                let def = map.get(&def).copied().unwrap_or(def);
                 def.build(arena, None)
             }
             | Value::Closure(Closure { stack: Bullet, body }) => {

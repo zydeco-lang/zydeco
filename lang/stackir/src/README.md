@@ -17,6 +17,7 @@ closure conversion and later backend work.
 
 - The `syntax` and `arena` modules define the stack-passing AST and its arenas.
 - `lower` translates typed syntax into stack form, preserving source mappings.
+- `cps` translates `Ret`/`do` continuations into explicit thunk calls.
 - `convert` performs closure conversion by making captures explicit.
 - `substitution` and `free` provide utilities for in-place substitution and
   free-variable analysis in the stack IR.
