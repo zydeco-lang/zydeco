@@ -16,7 +16,7 @@ pub struct SNormArena {
     pub inner: SNormInnerArena,
 }
 
-#[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
+#[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SNormInnerArena {
     /// value pattern arena
     pub svpats: ArenaAssoc<VPatId, ValuePattern>,
@@ -44,15 +44,7 @@ impl SNormArena {
 
 impl SNormInnerArena {
     pub fn new() -> Self {
-        Self {
-            svpats: ArenaAssoc::new(),
-            svalues: ArenaAssoc::new(),
-            sstacks: ArenaAssoc::new(),
-            scompus: ArenaAssoc::new(),
-            users: ArenaAssoc::new(),
-            holes: ArenaAssoc::new(),
-            entry: ArenaAssoc::new(),
-        }
+        Self::default()
     }
 }
 

@@ -184,7 +184,8 @@ impl<'a> CpsTranslator<'a> {
     }
 
     fn translate_return(&mut self, continuation_stack: StackId, value: ValueId) -> CompuId {
-        let kont = self.scoped.defs.alloc(VarName("__k__".into()));
+        let kont = self.arena.admin.fresh();
+        self.scoped.insert_def(kont, VarName("__k__".into()));
         let kont_pat: VPatId = kont.build(self, None);
         let kont_value: ValueId = kont.build(self, None);
         let tail = Bullet.build(self, None);

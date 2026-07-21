@@ -1,8 +1,8 @@
+use derive_more::{Index, IntoIterator};
 pub use la_arena::RawIdx;
 use la_arena::{Arena as LaArena, Idx as LaIdx};
 use std::{
     collections::HashMap,
-    fmt::Debug,
     hash::Hash,
     marker::PhantomData,
     ops::AddAssign,
@@ -27,13 +27,19 @@ pub trait ArenaId: Copy + Eq + Hash {
 
 /* -------------------------------- KeySpace -------------------------------- */
 
-/// Process-unique identity of a [`KeySpace`].
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+/// Process-unique identity domain for generated IDs.
+#[derive(Copy, Clone, derive_more::Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[debug("{_0}")]
 pub struct KeySpaceId(u64);
 
-impl Debug for KeySpaceId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+impl KeySpaceId {
+    fn fresh() -> Self {
+        static NEXT_KEY_SPACE_ID: AtomicU64 = AtomicU64::new(0);
+
+        let id = NEXT_KEY_SPACE_ID
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .expect("key-space identity range exhausted");
+        Self(id)
     }
 }
 
@@ -48,13 +54,13 @@ pub struct KeySpace {
 }
 
 impl KeySpace {
-    fn with_id(id: KeySpaceId) -> Self {
-        Self { id, next: 0 }
+    /// Create an independent sequential ID issuer.
+    ///
+    /// Construction claims one identity atomically. Allocation after that only
+    /// mutates this value's local cursor, so separate key spaces do not contend.
+    pub fn new() -> Self {
+        Self { id: KeySpaceId::fresh(), next: 0 }
     }
-    pub fn id(&self) -> KeySpaceId {
-        self.id
-    }
-
     pub fn alloc<Id>(&mut self) -> Id
     where
         Id: ArenaId,
@@ -62,26 +68,6 @@ impl KeySpace {
         let raw = self.next;
         self.next = self.next.checked_add(1).expect("key space exhausted its u32 index range");
         Id::from_raw_parts(ArenaIdToken(()), self.id, RawIdx::from_u32(raw))
-    }
-}
-
-static NEXT_KEY_SPACE_ID: AtomicU64 = AtomicU64::new(0);
-
-/// Non-cloneable capability for creating distinct [`KeySpace`] values.
-/// It can be shared by reference, but each issuing key space has one owner.
-#[derive(Debug, Default)]
-pub struct KeySpaceFactory;
-
-impl KeySpaceFactory {
-    pub fn new() -> Self {
-        Self
-    }
-
-    pub fn fresh(&self) -> KeySpace {
-        let id = NEXT_KEY_SPACE_ID
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-            .expect("key-space identity range exhausted");
-        KeySpace::with_id(KeySpaceId(id))
     }
 }
 
@@ -102,55 +88,59 @@ pub trait ArenaAccess<Id, T>: Index<Id, Output = T> + IndexMut<Id, Output = T> {
 pub struct Forth<'a, T>(pub &'a T);
 pub struct Back<'a, T>(pub &'a T);
 
-/// A dense arena with a sequential allocator.
-/// Conceptually, it owns all data stored in the arena, and data are densely allocated.
+/// Dense owning storage whose raw indices are issued by `la-arena` itself.
+/// It retains an identity tag, but no separate sequential [`KeySpace`] cursor.
 #[derive(Debug)]
 pub struct ArenaDense<Id: ArenaId, T> {
-    key_space: KeySpace,
+    key_space: KeySpaceId,
     arena: LaArena<T>,
     marker: PhantomData<fn() -> Id>,
 }
 
-/// A sparse arena with a sparse allocator.
-/// Conceptually, it owns all data stored in the arena, and data are sparsely allocated.
-#[derive(Debug)]
+/// Sparse owning storage for externally issued IDs.
+/// Allocation belongs to the pass that owns the appropriate [`KeySpace`].
+#[derive(Debug, Index, IntoIterator)]
 pub struct ArenaSparse<Id: ArenaId, T> {
-    key_space: KeySpace,
+    #[into_iterator(owned, ref)]
     map: HashMap<Id, T>,
-    marker: PhantomData<fn() -> Id>,
 }
 
 /// An arena that maps keys of externally-owned data to their properties.
 /// Conceptually, it doesn't own the data, but it owns the properties bound to the data.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Index, IntoIterator)]
 pub struct ArenaAssoc<Id, T> {
+    #[into_iterator(owned, ref)]
     map: HashMap<Id, T>,
 }
 
 /// A bidirectional single-to-multi-map; a "widen" map.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, IntoIterator)]
 pub struct ArenaForth<P, Q> {
+    #[into_iterator(owned, ref)]
     forward: ArenaAssoc<P, Vec<Q>>,
     backward: ArenaAssoc<Q, P>,
 }
 
 /// A bidirectional multi-to-single-map; a "narrowing" map.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, IntoIterator)]
 pub struct ArenaBack<P, Q> {
+    #[into_iterator(owned, ref)]
     forward: ArenaAssoc<P, Q>,
     backward: ArenaAssoc<Q, Vec<P>>,
 }
 
 /// A bidirectional bijective map.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, IntoIterator)]
 pub struct ArenaBijective<P, Q> {
+    #[into_iterator(owned, ref)]
     forward: ArenaAssoc<P, Q>,
     backward: ArenaAssoc<Q, P>,
 }
 
 /// A bidirectional multi-map.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, IntoIterator)]
 pub struct ArenaBipartite<P, Q> {
+    #[into_iterator(owned, ref)]
     forward: ArenaAssoc<P, Vec<Q>>,
     backward: ArenaAssoc<Q, Vec<P>>,
 }
@@ -173,8 +163,8 @@ where
     Id: ArenaId,
     Query: Clone + Eq + std::hash::Hash,
 {
-    pub fn new(key_space: KeySpace) -> Self {
-        Self { defs: ArenaDense::new(key_space), tbls: ArenaAssoc::new(), eqs: ArenaAssoc::new() }
+    pub fn new() -> Self {
+        Self { defs: ArenaDense::new(), tbls: ArenaAssoc::new(), eqs: ArenaAssoc::new() }
     }
     pub fn lookup_or_alloc(&mut self, def: Definition, query: Query) -> Id {
         if let Some(id) = self.eqs.get(&query) {
@@ -200,7 +190,7 @@ mod impls {
         Id: ArenaId,
     {
         fn default() -> Self {
-            Self::new(KeySpaceFactory::new().fresh())
+            Self::new()
         }
     }
 
@@ -226,17 +216,15 @@ mod impls {
     where
         Id: ArenaId,
     {
-        pub fn new(key_space: KeySpace) -> Self {
-            Self { key_space, arena: LaArena::new(), marker: PhantomData }
+        pub fn new() -> Self {
+            Self { key_space: KeySpaceId::fresh(), arena: LaArena::new(), marker: PhantomData }
         }
         pub fn alloc(&mut self, val: T) -> Id {
-            let id: Id = self.key_space.alloc();
             let idx = self.arena.alloc(val);
-            assert_eq!(id.raw(), idx.into_raw(), "dense arena and key space diverged");
-            id
+            Id::from_raw_parts(ArenaIdToken(()), self.key_space, idx.into_raw())
         }
         pub fn iter(&self) -> impl Iterator<Item = (Id, &T)> {
-            let key_space = self.key_space.id();
+            let key_space = self.key_space;
             self.arena.iter().map(move |(idx, val)| {
                 (Id::from_raw_parts(ArenaIdToken(()), key_space, idx.into_raw()), val)
             })
@@ -245,7 +233,7 @@ mod impls {
             self.arena.len()
         }
         fn index(&self, id: Id) -> Option<LaIdx<T>> {
-            if id.key_space() != self.key_space.id() {
+            if id.key_space() != self.key_space {
                 return None;
             }
             let idx = id.raw();
@@ -289,7 +277,7 @@ mod impls {
         type IntoIter = ArenaDenseIntoIter<Id, T>;
         fn into_iter(self) -> Self::IntoIter {
             ArenaDenseIntoIter {
-                key_space: self.key_space.id(),
+                key_space: self.key_space,
                 inner: self.arena.into_iter(),
                 marker: PhantomData,
             }
@@ -298,13 +286,12 @@ mod impls {
 
     /* ------------------------------- ArenaSparse ------------------------------ */
 
-    impl<Id, T> Index<&Id> for ArenaSparse<Id, T>
+    impl<Id, T> Default for ArenaSparse<Id, T>
     where
         Id: ArenaId,
     {
-        type Output = T;
-        fn index(&self, id: &Id) -> &Self::Output {
-            self.get(id).unwrap()
+        fn default() -> Self {
+            Self::new()
         }
     }
 
@@ -321,19 +308,18 @@ mod impls {
     where
         Id: ArenaId,
     {
-        pub fn new(key_space: KeySpace) -> Self {
-            Self { key_space, map: HashMap::new(), marker: PhantomData }
+        pub fn new() -> Self {
+            Self { map: HashMap::new() }
         }
-        pub fn alloc(&mut self, val: T) -> Id {
-            let id = self.key_space.alloc();
+        /// Insert a value whose externally-issued ID must not already be present.
+        pub fn insert_new(&mut self, id: Id, val: T) {
             use std::collections::hash_map::Entry;
             match self.map.entry(id) {
                 | Entry::Vacant(entry) => {
                     entry.insert(val);
                 }
-                | Entry::Occupied(_) => panic!("fresh key was already present in sparse arena"),
+                | Entry::Occupied(_) => panic!("duplicate key in sparse arena"),
             }
-            id
         }
         pub fn iter(&self) -> impl Iterator<Item = (&Id, &T)> {
             self.into_iter()
@@ -352,44 +338,16 @@ mod impls {
         }
     }
 
-    // no FromIterator for ArenaSparse because it's designed to be allocated ground up
-
-    impl<Id, T> IntoIterator for ArenaSparse<Id, T>
-    where
-        Id: ArenaId,
-    {
-        type Item = (Id, T);
-        type IntoIter = <HashMap<Id, T> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.map.into_iter()
-        }
-    }
-    impl<'a, Id, T> IntoIterator for &'a ArenaSparse<Id, T>
-    where
-        Id: ArenaId,
-    {
-        type Item = (&'a Id, &'a T);
-        type IntoIter = <&'a HashMap<Id, T> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.map.iter()
-        }
-    }
+    // No FromIterator: sparse owning storage is assembled explicitly or by
+    // merging fragments with duplicate validation.
 
     impl<Id, T> Extend<(Id, T)> for ArenaSparse<Id, T>
     where
         Id: ArenaId,
     {
         fn extend<I: IntoIterator<Item = (Id, T)>>(&mut self, iter: I) {
-            use std::collections::hash_map::Entry;
             for (id, val) in iter {
-                match self.map.entry(id) {
-                    | Entry::Vacant(entry) => {
-                        entry.insert(val);
-                    }
-                    | Entry::Occupied(_) => {
-                        panic!("duplicate key while merging sparse arenas")
-                    }
-                }
+                self.insert_new(id, val);
             }
         }
     }
@@ -408,42 +366,42 @@ mod impls {
         Id: ArenaId,
     {
         pub fn map_id<U>(self, f: impl Fn(Id) -> U) -> ArenaSparse<Id, U> {
-            let Self { key_space, map, marker } = self;
+            let Self { map } = self;
             let map = map.into_keys().map(|id| (id, f(id))).collect();
-            ArenaSparse { key_space, map, marker }
+            ArenaSparse { map }
         }
         pub fn map_value<U>(self, f: impl Fn(T) -> U) -> ArenaSparse<Id, U> {
-            let Self { key_space, map, marker } = self;
+            let Self { map } = self;
             let map = map.into_iter().map(|(id, val)| (id, f(val))).collect();
-            ArenaSparse { key_space, map, marker }
+            ArenaSparse { map }
         }
         pub fn map<U>(self, f: impl Fn(Id, T) -> U) -> ArenaSparse<Id, U> {
-            let Self { key_space, map, marker } = self;
+            let Self { map } = self;
             let map = map.into_iter().map(|(id, val)| (id, f(id, val))).collect();
-            ArenaSparse { key_space, map, marker }
+            ArenaSparse { map }
         }
         pub fn filter_map_id<U>(self, f: impl Fn(Id) -> Option<U>) -> ArenaSparse<Id, U> {
-            let Self { key_space, map, marker } = self;
+            let Self { map } = self;
             let map = map.into_keys().filter_map(|id| f(id).map(|val| (id, val))).collect();
-            ArenaSparse { key_space, map, marker }
+            ArenaSparse { map }
         }
         pub fn filter_map_id_mut<U>(
             self, mut f: impl FnMut(Id) -> Option<U>,
         ) -> ArenaSparse<Id, U> {
-            let Self { key_space, map, marker } = self;
+            let Self { map } = self;
             let map = map.into_keys().filter_map(|id| f(id).map(|val| (id, val))).collect();
-            ArenaSparse { key_space, map, marker }
+            ArenaSparse { map }
         }
         pub fn filter_map_value<U>(self, f: impl Fn(T) -> Option<U>) -> ArenaSparse<Id, U> {
-            let Self { key_space, map, marker } = self;
+            let Self { map } = self;
             let map = map.into_iter().filter_map(|(id, val)| f(val).map(|val| (id, val))).collect();
-            ArenaSparse { key_space, map, marker }
+            ArenaSparse { map }
         }
         pub fn filter_map<U>(self, f: impl Fn(Id, T) -> Option<U>) -> ArenaSparse<Id, U> {
-            let Self { key_space, map, marker } = self;
+            let Self { map } = self;
             let map =
                 map.into_iter().filter_map(|(id, val)| f(id, val).map(|val| (id, val))).collect();
-            ArenaSparse { key_space, map, marker }
+            ArenaSparse { map }
         }
         pub fn len(&self) -> usize {
             self.map.len()
@@ -554,16 +512,6 @@ mod impls {
         }
     }
 
-    impl<Id, T> Index<&Id> for ArenaAssoc<Id, T>
-    where
-        Id: Eq + Hash,
-    {
-        type Output = T;
-        fn index(&self, id: &Id) -> &Self::Output {
-            self.get(id).unwrap()
-        }
-    }
-
     impl<Id, T> IndexMut<&Id> for ArenaAssoc<Id, T>
     where
         Id: Eq + Hash,
@@ -593,21 +541,6 @@ mod impls {
             let mut arena = Self::new();
             arena.extend(iter);
             arena
-        }
-    }
-
-    impl<Id, T> IntoIterator for ArenaAssoc<Id, T> {
-        type Item = (Id, T);
-        type IntoIter = <HashMap<Id, T> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.map.into_iter()
-        }
-    }
-    impl<'a, Id, T> IntoIterator for &'a ArenaAssoc<Id, T> {
-        type Item = (&'a Id, &'a T);
-        type IntoIter = <&'a HashMap<Id, T> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.map.iter()
         }
     }
 
@@ -735,22 +668,6 @@ mod impls {
         }
     }
 
-    impl<P, Q> IntoIterator for ArenaForth<P, Q> {
-        type Item = (P, Vec<Q>);
-        type IntoIter = <HashMap<P, Vec<Q>> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.forward.map.into_iter()
-        }
-    }
-
-    impl<'a, P, Q> IntoIterator for &'a ArenaForth<P, Q> {
-        type Item = (&'a P, &'a Vec<Q>);
-        type IntoIter = <&'a HashMap<P, Vec<Q>> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.forward.map.iter()
-        }
-    }
-
     impl<P, Q> Extend<(P, Vec<Q>)> for ArenaForth<P, Q>
     where
         P: Eq + Hash + Clone,
@@ -866,22 +783,6 @@ mod impls {
             let mut arena = Self::new();
             arena.extend(iter);
             arena
-        }
-    }
-
-    impl<P, Q> IntoIterator for ArenaBack<P, Q> {
-        type Item = (P, Q);
-        type IntoIter = <HashMap<P, Q> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.forward.map.into_iter()
-        }
-    }
-
-    impl<'a, P, Q> IntoIterator for &'a ArenaBack<P, Q> {
-        type Item = (&'a P, &'a Q);
-        type IntoIter = <&'a HashMap<P, Q> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.forward.map.iter()
         }
     }
 
@@ -1005,22 +906,6 @@ mod impls {
         }
     }
 
-    impl<P, Q> IntoIterator for ArenaBijective<P, Q> {
-        type Item = (P, Q);
-        type IntoIter = <HashMap<P, Q> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.forward.map.into_iter()
-        }
-    }
-
-    impl<'a, P, Q> IntoIterator for &'a ArenaBijective<P, Q> {
-        type Item = (&'a P, &'a Q);
-        type IntoIter = <&'a HashMap<P, Q> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.forward.map.iter()
-        }
-    }
-
     impl<P, Q> Extend<(P, Q)> for ArenaBijective<P, Q>
     where
         P: Eq + Hash + Clone,
@@ -1134,22 +1019,6 @@ mod impls {
         }
     }
 
-    impl<P, Q> IntoIterator for ArenaBipartite<P, Q> {
-        type Item = (P, Vec<Q>);
-        type IntoIter = <HashMap<P, Vec<Q>> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.forward.map.into_iter()
-        }
-    }
-
-    impl<'a, P, Q> IntoIterator for &'a ArenaBipartite<P, Q> {
-        type Item = (&'a P, &'a Vec<Q>);
-        type IntoIter = <&'a HashMap<P, Vec<Q>> as IntoIterator>::IntoIter;
-        fn into_iter(self) -> Self::IntoIter {
-            self.forward.map.iter()
-        }
-    }
-
     impl<P, Q> Extend<(P, Vec<Q>)> for ArenaBipartite<P, Q>
     where
         P: Eq + Hash + Clone,
@@ -1231,9 +1100,8 @@ mod tests {
 
     #[test]
     fn dense_arena_rejects_an_id_from_another_key_space() {
-        let factory = KeySpaceFactory::new();
-        let mut left = ArenaDense::<DenseId, _>::new(factory.fresh());
-        let mut right = ArenaDense::<DenseId, _>::new(factory.fresh());
+        let mut left = ArenaDense::<DenseId, _>::new();
+        let mut right = ArenaDense::<DenseId, _>::new();
         let left_id = left.alloc("left");
         let right_id = right.alloc("right");
 
@@ -1243,6 +1111,25 @@ mod tests {
         assert_ne!(left_id.concise_inner(), right_id.concise_inner());
         assert_eq!(left.get(&left_id), Some(&"left"));
         assert_eq!(left.get(&right_id), None);
+    }
+
+    #[test]
+    fn sparse_storage_accepts_ids_from_independent_key_spaces() {
+        let mut left_keys = KeySpace::new();
+        let mut right_keys = KeySpace::new();
+        let left_id: SparseId = left_keys.alloc();
+        let right_id: SparseId = right_keys.alloc();
+        assert_eq!(left_id.raw(), right_id.raw());
+        assert_ne!(left_id.key_space(), right_id.key_space());
+        assert_ne!(left_id.concise(), right_id.concise());
+        assert_ne!(left_id.concise_inner(), right_id.concise_inner());
+
+        let mut arena = ArenaSparse::new();
+        arena.insert_new(left_id, "left");
+        arena.insert_new(right_id, "right");
+        assert_eq!(arena.len(), 2);
+        assert_eq!(arena.get(&left_id), Some(&"left"));
+        assert_eq!(arena.get(&right_id), Some(&"right"));
     }
 
     #[test]
@@ -1272,16 +1159,15 @@ mod tests {
 
     #[test]
     fn sparse_arena_merge_rejects_duplicate_ids() {
-        let id = KeySpaceId(7);
-        let mut left = ArenaSparse::<SparseId, _>::new(KeySpace::with_id(id));
-        let mut right = ArenaSparse::<SparseId, _>::new(KeySpace::with_id(id));
-        let left_id = left.alloc("left");
-        let right_id = right.alloc("right");
-        assert_eq!(left_id.concise(), right_id.concise());
-        assert_eq!(left_id.concise_inner(), right_id.concise_inner());
+        let mut key_space = KeySpace::new();
+        let id = key_space.alloc();
+        let mut left = ArenaSparse::<SparseId, _>::new();
+        let mut right = ArenaSparse::<SparseId, _>::new();
+        left.insert_new(id, "left");
+        right.insert_new(id, "right");
         let conflict = catch_unwind(AssertUnwindSafe(|| left += right));
         assert!(conflict.is_err());
-        assert_eq!(left.get(&left_id), Some(&"left"));
+        assert_eq!(left.get(&id), Some(&"left"));
     }
 
     #[test]

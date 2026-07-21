@@ -11,7 +11,6 @@ use zydeco_surface::{
     textual::{HashLexer, Lexer, ParseError, TopLevelParser},
 };
 use zydeco_utils::{
-    arena::*,
     pass::CompilerPass,
     span::{FileInfo, LocationCtx},
 };
@@ -71,8 +70,7 @@ impl LocalPackage {
         })
     }
     pub fn parse_package<'f>(
-        alloc: &KeySpaceFactory, name: &str, path: &std::path::Path,
-        srcs: impl Iterator<Item = &'f PathBuf>,
+        name: &str, path: &std::path::Path, srcs: impl Iterator<Item = &'f PathBuf>,
     ) -> Result<PackageStew> {
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
         // parallelized w/ rayon
@@ -85,7 +83,7 @@ impl LocalPackage {
         let pack = files
             .into_par_iter()
             .map(|f| -> Result<_> {
-                let f = f.parse(t::Parser::new(alloc.fresh()))?;
+                let f = f.parse(t::Parser::new())?;
                 // // Debug: print the parsed files
                 // if cfg!(debug_assertions) {
                 //     println!(">>> [{}] parsed", f.path.display());
@@ -93,7 +91,7 @@ impl LocalPackage {
                 //     println!("{}", f.top.ugly(&Formatter::new(&f.arena)));
                 //     println!("<<< [{}]", f.path.display());
                 // }
-                let f = f.desugar(b::BitterArena::new(alloc))?;
+                let f = f.desugar(b::BitterArena::new())?;
                 // // Debug: print the desugared package
                 // if cfg!(debug_assertions) {
                 //     use zydeco_surface::bitter::fmt::*;
@@ -112,7 +110,7 @@ impl LocalPackage {
                     | (None, None) => Ok(None),
                 },
             )?
-            .unwrap_or_else(|| PackageStew::new(alloc));
+            .unwrap_or_else(PackageStew::new);
 
         let _ = name;
 
@@ -171,7 +169,7 @@ impl FileLoaded {
                 LocalError::ParseError(ParseError { error, file_info: &info }.to_string())
             })?;
 
-        let t::Parser { spans, arena } = parser;
+        let (spans, arena) = parser.finish();
         Ok(FileParsed { path, source, spans, arena, top })
     }
 }

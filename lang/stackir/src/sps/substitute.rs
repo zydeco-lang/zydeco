@@ -3,7 +3,7 @@ use crate::sps::{arena::StackirArena, clone::DeepClone as _};
 use indexmap::IndexMap;
 use zydeco_surface::scoped::arena::ScopedArena;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SubstVarMap {
     pub values: IndexMap<DefId, SubstValue>,
 }
@@ -17,7 +17,7 @@ pub struct SubstValue {
 
 impl SubstVarMap {
     pub fn new() -> Self {
-        Self { values: IndexMap::new() }
+        Self::default()
     }
     pub fn insert(&mut self, def_id: DefId, value_id: ValueId) {
         self.values.insert(def_id, SubstValue { value: value_id, count: 0 });

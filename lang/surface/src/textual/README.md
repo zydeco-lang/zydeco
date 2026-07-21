@@ -21,9 +21,10 @@ resolution.
 - `EntityId` is a tagged enum over those categories; it is not an unchecked
   shared raw index.
 - `SpanArena` stores `Span` values for every textual entity so later phases can
-  report precise locations.
+  report precise locations; it is storage-only and retains no ID allocator.
 - `Parser` combines `TextArena` and `SpanArena` and is passed through the
-  LALRPOP-generated parser to allocate nodes as they are parsed.
+  LALRPOP-generated parser. It owns the `KeySpace` only while nodes are being
+  parsed, then `finish` returns the two durable arenas and drops the issuer.
 
 ## Lexing and parsing
 

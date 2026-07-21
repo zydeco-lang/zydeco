@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use super::syntax::*;
+use derive_more::{AsMut, AsRef, Display};
 use std::collections::HashSet;
-use std::fmt;
 use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike},
     syntax::{self as sa, Atom, Instruction, Intrinsic, ProgId, Program, Symbol, Terminator},
@@ -19,7 +19,8 @@ pub trait Emit<'a> {
 }
 
 /// LLVM IR module representation
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Display)]
+#[display("{ir}")]
 pub struct LlvmModule {
     pub ir: String,
     declarations: Vec<String>,
@@ -59,12 +60,6 @@ impl LlvmModule {
     }
 }
 
-impl fmt::Display for LlvmModule {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.ir)
-    }
-}
-
 /// Value stack for tracking values on the stack
 #[derive(Clone, Default)]
 struct ValueStack {
@@ -88,6 +83,7 @@ struct StackEntry {
     value_stack: ValueStack,
 }
 
+#[derive(AsRef, AsMut)]
 pub struct Emitter<'e> {
     spans: &'e SpanArena,
     scoped: &'e ScopedArena,
@@ -96,6 +92,8 @@ pub struct Emitter<'e> {
     assembly: &'e AssemblyArena,
 
     target_triple: TargetTriple,
+    #[as_ref]
+    #[as_mut]
     module: LlvmModule,
 
     visited: HashSet<ProgId>,
@@ -104,18 +102,6 @@ pub struct Emitter<'e> {
     stack: StackEntry,
     local_counter: usize,
     block_counter: usize,
-}
-
-impl<'e> AsRef<LlvmModule> for Emitter<'e> {
-    fn as_ref(&self) -> &LlvmModule {
-        &self.module
-    }
-}
-
-impl<'e> AsMut<LlvmModule> for Emitter<'e> {
-    fn as_mut(&mut self) -> &mut LlvmModule {
-        &mut self.module
-    }
 }
 
 impl<'e> Emitter<'e> {

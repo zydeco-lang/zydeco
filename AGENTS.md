@@ -111,3 +111,7 @@ If build can borrow,
 - Prefer a finalizer `fn build(&self) -> T` so the builder can be reused.
 Expose an associated entry point `fn new(required, ...)`,
 and use `with_*/set_*` names consistently for optional configuration.
+
+Prefer `derive` and `derive_more` over manual implementations
+when their generated behavior exactly matches the intended semantics;
+write a manual implementation only when it must enforce additional invariants.

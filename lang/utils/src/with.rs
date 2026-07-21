@@ -1,7 +1,5 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    ops::{Deref, DerefMut},
-};
+use derive_more::{AsMut, AsRef, Deref, DerefMut};
+use std::borrow::{Borrow, BorrowMut};
 
 /// A value of type `A` paired with attached metadata `M`.
 ///
@@ -46,9 +44,13 @@ use std::{
 /// Map-style operations on `With` apply the function to the `A` field while leaving `M`
 /// untouched (see [`With::mk`]). When sequencing/composition combines metadata,
 /// `M` takes on "log/writer" semantics (e.g. requires some kind of append).
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, AsRef, AsMut, Deref, DerefMut)]
 pub struct With<M, A> {
     pub info: M,
+    #[as_ref]
+    #[as_mut]
+    #[deref]
+    #[deref_mut]
     pub inner: A,
 }
 
@@ -79,27 +81,6 @@ impl<M, A> With<M, A> {
     }
 }
 
-impl<M, A> AsRef<A> for With<M, A> {
-    fn as_ref(&self) -> &A {
-        &self.inner
-    }
-}
-impl<M, A> AsMut<A> for With<M, A> {
-    fn as_mut(&mut self) -> &mut A {
-        &mut self.inner
-    }
-}
-impl<M, A> Deref for With<M, A> {
-    type Target = A;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-impl<M, A> DerefMut for With<M, A> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
 impl<M, A> Borrow<A> for With<M, A> {
     fn borrow(&self) -> &A {
         &self.inner

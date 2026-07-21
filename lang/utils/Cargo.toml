@@ -14,7 +14,12 @@ description = "utilities for zydeco"
 la-arena = { workspace = true }
 im = { workspace = true }
 derive_more = { workspace = true, features = [
+    "as_ref",
+    "debug",
     "deref",
     "deref_mut",
+    "display",
+    "from",
+    "index",
     "into_iterator",
 ] }

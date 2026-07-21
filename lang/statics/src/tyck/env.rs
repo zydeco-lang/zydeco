@@ -115,7 +115,7 @@ pub type SubstAbstEnv = im::HashMap<AbstId, AbstId>;
 pub type SubstEnvT<T> = With<SubstEnv, T>;
 
 /// Structure environment used during algebra translation.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct StrEnv {
     // Todo: remove this useless non-sense
     pub def_map: im::HashMap<DefId, AbstId>,
@@ -125,15 +125,9 @@ pub struct StrEnv {
 mod impls_str_env {
     use super::*;
 
-    impl Default for StrEnv {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
     impl StrEnv {
         pub fn new() -> Self {
-            Self { def_map: im::HashMap::new(), absts: im::HashMap::new() }
+            Self::default()
         }
         // pub fn extended(
         //     &self, abst: AbstId, def: Option<DefId>, str: impl MonConstruct<ValueId>,

@@ -57,14 +57,23 @@ Common patterns in each phase include `syntax`, `arena`, `err`, `fmt`, and
 
 Compiler-owned IDs contain an opaque `KeySpaceId` and a `la-arena` raw index.
 `KeySpace` is the only safe issuer of those IDs and is deliberately
-non-cloneable; the non-cloneable `KeySpaceFactory` is shared between passes by
-reference and creates independently identified spaces.
+non-cloneable. Creating one claims a process-unique identity once; subsequent
+allocation only mutates its local cursor. Independent key spaces can therefore
+allocate in parallel, and their identity tags keep merged IDs distinct.
 
-- Dense storage wraps `la_arena::Arena` and rejects IDs from another key
-  space, even when their raw indices happen to match.
+- Dense storage wraps `la_arena::Arena`. The `la-arena` allocation itself
+  supplies the raw index, so a dense arena retains only its identity tag and
+  rejects IDs from another dense arena even when raw indices happen to match.
 - Sparse storage is used where passes merge fragments or rewrite nodes while
-  retaining IDs. Associative side tables require callers to choose explicit
-  `insert_new`, `replace_existing`, `upsert`, or set-like `ensure` semantics.
+  retaining IDs. It is storage-only: the phase-level owner issues an ID and
+  inserts it explicitly. Associative side tables require callers to choose
+  explicit `insert_new`, `replace_existing`, `upsert`, or set-like `ensure`
+  semantics.
+- Issuers live on the operation that creates nodes: `Parser`, `Desugarer`,
+  `Tycker`, assembly `Lowerer`, and stack analysis. Their output arenas do not
+  retain the cursor. Stack IR deliberately keeps one issuer in `AdminArena`
+  because normalization, substitution, CPS, and closure-conversion passes all
+  continue creating nodes in the same IR.
 - Provenance tables encode their actual cardinality. In particular, repeated
   type checking and transparent syntax make surface-to-typed provenance
   many-to-many, while one typed node can lower to many stack-IR nodes.

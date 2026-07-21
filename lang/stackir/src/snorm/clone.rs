@@ -11,9 +11,9 @@ where
     Arena: AsMut<AdminArena> + AsMut<SNormInnerArena> + AsMut<ScopedArena>,
 {
     fn deep_clone(&self, arena: &mut Arena, map: &mut DefMap) -> Self {
-        let scoped = AsMut::<ScopedArena>::as_mut(arena);
-        let name = scoped.defs[self].clone();
-        let new_def = scoped.defs.alloc(name);
+        let name = AsMut::<ScopedArena>::as_mut(arena).defs[self].clone();
+        let new_def = AsMut::<AdminArena>::as_mut(arena).fresh();
+        AsMut::<ScopedArena>::as_mut(arena).insert_def(new_def, name);
         map.insert(*self, new_def);
         new_def
     }
@@ -29,7 +29,7 @@ where
         fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
             vpat: impl Into<ValuePattern>, arena: &mut Arena,
         ) -> VPatId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).key_space.alloc();
+            let new_id = AsMut::<AdminArena>::as_mut(arena).fresh();
             vpat.sbuild(arena, new_id, ())
         }
         use ValuePattern as VPat;
@@ -63,7 +63,7 @@ where
         fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
             value: impl Into<Value>, arena: &mut Arena,
         ) -> ValueId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).key_space.alloc();
+            let new_id = AsMut::<AdminArena>::as_mut(arena).fresh();
             value.sbuild(arena, new_id, ())
         }
         use Value;
@@ -107,7 +107,7 @@ where
         fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
             stack: impl Into<Stack>, arena: &mut Arena,
         ) -> StackId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).key_space.alloc();
+            let new_id = AsMut::<AdminArena>::as_mut(arena).fresh();
             // Fixme: hole is not correct here
             stack.sbuild(arena, new_id, new_id)
         }
@@ -142,7 +142,7 @@ where
         fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
             compu: impl Into<Computation<NonJoin>>, new_str: SubstAssignments, arena: &mut Arena,
         ) -> CompuId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).key_space.alloc();
+            let new_id = AsMut::<AdminArena>::as_mut(arena).fresh();
             compu.sbuild(arena, new_id, new_str)
         }
         let new_str = SubstAssignments {

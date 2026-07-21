@@ -5,7 +5,7 @@ use crate::{
 };
 use derive_more::{AsMut, AsRef};
 use zydeco_syntax::SpanView;
-use zydeco_utils::prelude::CompilerPass;
+use zydeco_utils::prelude::{ArenaId, CompilerPass, KeySpace};
 
 /// Desugar a textual node into bitter syntax using a shared `Desugarer`.
 pub trait Desugar {
@@ -16,6 +16,7 @@ pub trait Desugar {
 /// Stateful desugaring pass from textual to bitter syntax.
 #[derive(AsRef, AsMut)]
 pub struct Desugarer<'a> {
+    key_space: KeySpace,
     pub spans: &'a t::SpanArena,
     pub textual: &'a t::TextArena,
     pub top: t::TopLevel,
@@ -29,7 +30,18 @@ impl<'a> Desugarer<'a> {
         spans: &'a t::SpanArena, textual: &'a t::TextArena, top: t::TopLevel,
         bitter: b::BitterArena,
     ) -> Self {
-        Self { spans, textual, top, bitter, prim: b::PrimTerms::default() }
+        Self {
+            key_space: KeySpace::new(),
+            spans,
+            textual,
+            top,
+            bitter,
+            prim: b::PrimTerms::default(),
+        }
+    }
+
+    pub(crate) fn fresh<Id: ArenaId>(&mut self) -> Id {
+        self.key_space.alloc()
     }
 }
 

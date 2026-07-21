@@ -3,7 +3,7 @@
 /// Level 0 is silent, 1 enables info logs, 2 enables the pass dumps that used
 /// to be guarded by the boolean verbose flag, and 3+ additionally enables deep
 /// backend diagnostics.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, derive_more::From)]
 pub struct Verbosity {
     level: u8,
 }
@@ -49,11 +49,5 @@ impl Verbosity {
             | 1 => Some(log::LevelFilter::Info),
             | _ => Some(log::LevelFilter::Trace),
         }
-    }
-}
-
-impl From<u8> for Verbosity {
-    fn from(level: u8) -> Self {
-        Self::new(level)
     }
 }

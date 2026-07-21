@@ -10,7 +10,6 @@ use zydeco_surface::{
     textual::{Lexer, ParseError, TopLevelParser},
 };
 use zydeco_utils::{
-    arena::*,
     pass::CompilerPass,
     span::{FileInfo, LocationCtx},
 };
@@ -61,23 +60,21 @@ pub enum Dependency {
 }
 
 impl Package {
-    pub fn parse_package(&self, alloc: &KeySpaceFactory) -> Result<PackageStew> {
+    pub fn parse_package(&self) -> Result<PackageStew> {
         match self {
             | Package::Local(LocalPackage { path, name, srcs, deps: _, bins: _, std: _ }) => {
-                let stew = LocalPackage::parse_package(alloc, name.as_str(), path, srcs.iter())?;
+                let stew = LocalPackage::parse_package(name.as_str(), path, srcs.iter())?;
                 Ok(stew)
             }
             | Package::Binary(path) => {
                 let source = std::fs::read_to_string(path.as_path())?;
-                Package::parse_source(alloc, source, Some(path.to_owned()))
+                Package::parse_source(source, Some(path.to_owned()))
             }
-            | Package::Repl(source) => Package::parse_source(alloc, source.clone(), None),
+            | Package::Repl(source) => Package::parse_source(source.clone(), None),
         }
     }
-    pub fn parse_source(
-        alloc: &KeySpaceFactory, source: String, path: Option<PathBuf>,
-    ) -> Result<PackageStew> {
-        let mut parser = t::Parser::new(alloc.fresh());
+    pub fn parse_source(source: String, path: Option<PathBuf>) -> Result<PackageStew> {
+        let mut parser = t::Parser::new();
         let (loc, path) = match path {
             | Some(path) => {
                 let loc = LocationCtx::File(FileInfo::new(&source, Some(Arc::new(path.clone()))));
@@ -98,8 +95,8 @@ impl Package {
                 )
             })?;
 
-        let t::Parser { spans, arena: textual } = parser;
-        let bitter = b::BitterArena::new(alloc);
+        let (spans, textual) = parser.finish();
+        let bitter = b::BitterArena::new();
         let desugarer = Desugarer::new(&spans, &textual, top, bitter);
         let DesugarOut { arena, prim: prim_term, top } =
             desugarer.run().map_err(|err| LocalError::DesugarError(err.to_string()))?;
@@ -112,13 +109,11 @@ impl Package {
             top,
         })
     }
-    pub fn check_package(
-        alloc: &KeySpaceFactory, name: &str, pack: PackageStew,
-    ) -> Result<PackageChecked> {
+    pub fn check_package(name: &str, pack: PackageStew) -> Result<PackageChecked> {
         // resolving
         let pack = pack.resolve()?.self_check(name);
         // tycking
-        let checked = pack.tyck(alloc, name)?;
+        let checked = pack.tyck(name)?;
         Ok(checked)
     }
     pub fn link_interp(name: &str, pack: PackageChecked) -> Result<PackageRuntime> {

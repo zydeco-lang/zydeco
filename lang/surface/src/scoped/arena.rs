@@ -49,6 +49,13 @@ pub struct ScopedArena {
     pub top: SccGraph<DeclId>,
 }
 
+impl ScopedArena {
+    /// Insert a synthetic definition issued by the pass creating it.
+    pub fn insert_def(&mut self, id: DefId, name: VarName) {
+        self.defs.insert_new(id, name);
+    }
+}
+
 impl ArenaScoped for ScopedArena {
     fn def(&self, id: &DefId) -> VarName {
         self.defs[id].to_owned()

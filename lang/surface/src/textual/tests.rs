@@ -1,12 +1,11 @@
 use crate::textual::syntax::{CoPatId, DeclId, DefId, EntityId, Parser, PatId, TermId};
-use zydeco_utils::{arena::KeySpaceFactory, span::LocationCtx};
+use zydeco_utils::{arena::KeySpace, span::LocationCtx};
 
 use super::*;
 
 #[test]
 fn textual_entities_retain_their_category_tags() {
-    let alloc = KeySpaceFactory::new();
-    let mut key_space = alloc.fresh();
+    let mut key_space = KeySpace::new();
     let def: DefId = key_space.alloc();
     let pat: PatId = key_space.alloc();
     let copat: CoPatId = key_space.alloc();
@@ -23,8 +22,7 @@ fn textual_entities_retain_their_category_tags() {
 #[test]
 fn parsing_1() {
     let source = "!(!1)";
-    let alloc = KeySpaceFactory::new();
-    let mut parser = Parser::new(alloc.fresh());
+    let mut parser = Parser::new();
     let t = parser::SingleTermParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
@@ -33,8 +31,7 @@ fn parsing_1() {
 #[test]
 fn parsing_2() {
     let source = "main { let x = 1 in ! exit x } end";
-    let alloc = KeySpaceFactory::new();
-    let mut parser = Parser::new(alloc.fresh());
+    let mut parser = Parser::new();
     let t = parser::TopLevelParser::new()
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();

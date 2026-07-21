@@ -90,7 +90,7 @@ use std::{
 use zydeco_amd64::{EmitDiagnostics, TargetFormat};
 use zydeco_llvm::TargetTriple as LlvmTargetTriple;
 use zydeco_utils::prelude::{
-    ArenaAccess, ArenaAssoc, ArenaDense, CompilerPass, DepGraph, KeySpaceFactory, Kosaraju,
+    ArenaAccess, ArenaAssoc, ArenaDense, CompilerPass, DepGraph, Kosaraju,
 };
 
 zydeco_utils::new_key_type! {
@@ -223,7 +223,7 @@ impl BuildSystem {
         });
         let mut build_sys = Self {
             conf,
-            packages: ArenaDense::default(),
+            packages: ArenaDense::new(),
             seen: HashMap::new(),
             marked: HashMap::new(),
             depends_on: DepGraph::new(),
@@ -297,8 +297,7 @@ impl BuildSystem {
     pub fn run_pack(
         &self, pack: PackId, args: &[String], dry: bool, verbosity: Verbosity,
     ) -> Result<ProgKont> {
-        let alloc = KeySpaceFactory::new();
-        let checked = self.__tyck_pack(pack, &alloc, verbosity)?;
+        let checked = self.__tyck_pack(pack, verbosity)?;
         let name = self.packages[&pack].name();
         let runtime = Package::link_interp(name.as_str(), checked)?;
         if dry {
@@ -308,8 +307,7 @@ impl BuildSystem {
     }
     pub fn test_pack(&self, pack: PackId, dry: bool) -> Result<()> {
         let name = self.packages[&pack].name();
-        let alloc = KeySpaceFactory::new();
-        let checked = self.__tyck_pack(pack, &alloc, Verbosity::silent())?;
+        let checked = self.__tyck_pack(pack, Verbosity::silent())?;
         let runtime = Package::link_interp(name.as_str(), checked)?;
         if dry {
             return Ok(());
@@ -317,9 +315,8 @@ impl BuildSystem {
         Package::test_interp(runtime, name.as_str(), false)
     }
     pub fn codegen_zir_pack(&self, pack: PackId, verbosity: Verbosity) -> Result<()> {
-        let alloc = KeySpaceFactory::new();
         let PackageStack { stackir, scoped, statics, .. } =
-            self.__compile_zir_pack(pack, &alloc, verbosity)?;
+            self.__compile_zir_pack(pack, verbosity)?;
         // pretty print the ZIR
         use zydeco_stackir::sps::fmt::*;
         let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
@@ -332,8 +329,7 @@ impl BuildSystem {
     pub fn codegen_zasm_pack(
         &self, pack: PackId, execute: bool, verbosity: Verbosity,
     ) -> Result<()> {
-        let alloc = KeySpaceFactory::new();
-        let PackageAssembly { assembly, .. } = self.__compile_zasm_pack(pack, &alloc, verbosity)?;
+        let PackageAssembly { assembly, .. } = self.__compile_zasm_pack(pack, verbosity)?;
         if execute {
             let interpreter = zydeco_assembly::interp::Interpreter::new(assembly);
             let output = interpreter.run()?;
@@ -364,9 +360,8 @@ impl BuildSystem {
             | "macos" | "darwin" => TargetFormat::MachO,
             | other => return Err(BuildError::UnsupportedTargetOs(other.to_string())),
         };
-        let alloc = KeySpaceFactory::new();
         let PackageAssembly { spans, scoped, statics, stackir, assembly } =
-            self.__compile_zasm_pack(pack, &alloc, verbosity)?;
+            self.__compile_zasm_pack(pack, verbosity)?;
         let assembly = zydeco_amd64::Emitter::new(
             &spans,
             &scoped,
@@ -407,9 +402,8 @@ impl BuildSystem {
             | "macos" | "darwin" => LlvmTargetTriple::X86_64MacOS,
             | other => return Err(BuildError::UnsupportedTargetOs(other.to_string())),
         };
-        let alloc = KeySpaceFactory::new();
         let PackageAssembly { spans, scoped, statics, stackir, assembly } =
-            self.__compile_zasm_pack(pack, &alloc, verbosity)?;
+            self.__compile_zasm_pack(pack, verbosity)?;
         let ir = zydeco_llvm::Emitter::new(
             &spans,
             &scoped,
@@ -474,9 +468,7 @@ impl BuildSystem {
         Ok(deps_new)
     }
     /// type check a package
-    fn __tyck_pack(
-        &self, pack: PackId, alloc: &KeySpaceFactory, _verbosity: Verbosity,
-    ) -> Result<PackageChecked> {
+    fn __tyck_pack(&self, pack: PackId, _verbosity: Verbosity) -> Result<PackageChecked> {
         let mut scc = Kosaraju::new(&self.depends_on).run();
         scc.keep_only([pack]);
         let mut stew = None;
@@ -488,7 +480,7 @@ impl BuildSystem {
             for group in active {
                 for pack in group {
                     log::info!("Checking {}{}", self.packages[&pack].name(), pack.concise());
-                    let stew_ = self.packages[&pack].parse_package(alloc)?;
+                    let stew_ = self.packages[&pack].parse_package()?;
                     if let Some(s) = stew {
                         stew = Some(s + stew_);
                     } else {
@@ -499,18 +491,14 @@ impl BuildSystem {
             }
         }
         let name = self.packages[&pack].name();
-        let stew = stew.unwrap_or_else(|| PackageStew::new(alloc));
-        let checked = Package::check_package(alloc, name.as_str(), stew)?;
+        let stew = stew.unwrap_or_else(PackageStew::new);
+        let checked = Package::check_package(name.as_str(), stew)?;
         Ok(checked)
     }
     /// compile a package to ZIR
-    fn __compile_zir_pack(
-        &self, pack: PackId, alloc: &KeySpaceFactory, verbosity: Verbosity,
-    ) -> Result<PackageStack> {
-        let PackageChecked { spans, mut scoped, statics } =
-            self.__tyck_pack(pack, alloc, verbosity)?;
-        let mut stackir =
-            zydeco_stackir::Lowerer::new(alloc, &spans, &mut scoped, &statics).run()?;
+    fn __compile_zir_pack(&self, pack: PackId, verbosity: Verbosity) -> Result<PackageStack> {
+        let PackageChecked { spans, mut scoped, statics } = self.__tyck_pack(pack, verbosity)?;
+        let mut stackir = zydeco_stackir::Lowerer::new(&spans, &mut scoped, &statics).run()?;
         {
             use zydeco_stackir::sps::fmt::*;
             let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);
@@ -601,13 +589,11 @@ impl BuildSystem {
         Ok(PackageStack { spans, scoped, statics, stackir })
     }
     /// compile a package to ZASM
-    fn __compile_zasm_pack(
-        &self, pack: PackId, alloc: &KeySpaceFactory, verbosity: Verbosity,
-    ) -> Result<PackageAssembly> {
+    fn __compile_zasm_pack(&self, pack: PackId, verbosity: Verbosity) -> Result<PackageAssembly> {
         let PackageStack { spans, scoped, statics, stackir } =
-            self.__compile_zir_pack(pack, alloc, verbosity)?;
+            self.__compile_zir_pack(pack, verbosity)?;
         let mut assembly =
-            zydeco_assembly::lower::Lowerer::new(alloc, &spans, &scoped, &statics, &stackir).run();
+            zydeco_assembly::lower::Lowerer::new(&spans, &scoped, &statics, &stackir).run();
         {
             use zydeco_assembly::fmt::*;
             let fmt = Formatter::new(&assembly, None, None);
@@ -618,11 +604,11 @@ impl BuildSystem {
                 log::trace!("ZASM:\n{}", buf);
             }
         }
-        let analyzer = zydeco_assembly::analyze::StackAnalyzer::new(alloc, &mut assembly).run()?;
+        let analyzer = zydeco_assembly::analyze::StackAnalyzer::new(&mut assembly).run()?;
         {
             use zydeco_assembly::fmt::*;
             let fmt =
-                Formatter::new(&analyzer.arena, Some(&analyzer.layouts), Some(&analyzer.slots));
+                Formatter::new(analyzer.arena, Some(&analyzer.layouts), Some(&analyzer.slots));
             let doc = analyzer.arena.pretty(&fmt);
             let mut buf = String::new();
             doc.render_fmt(100, &mut buf).unwrap();

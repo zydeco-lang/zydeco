@@ -2,7 +2,7 @@ use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_utils::{arena::KeySpaceFactory, pass::CompilerPass, phantom::Phantom};
+use zydeco_utils::{pass::CompilerPass, phantom::Phantom};
 
 /// Lower typed syntax nodes into stack IR.
 pub trait Lower {
@@ -30,10 +30,9 @@ pub struct Lowerer<'a> {
 impl<'a> Lowerer<'a> {
     /// Create a new lowerer with fresh stack arenas.
     pub fn new(
-        alloc: &KeySpaceFactory, spans: &'a SpanArena, scoped: &'a mut ScopedArena,
-        statics: &'a StaticsArena,
+        spans: &'a SpanArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
     ) -> Self {
-        let arena = StackirArena::new(alloc);
+        let arena = StackirArena::new();
         Self { arena, sequence: Vec::new(), globals: ArenaAssoc::new(), spans, scoped, statics }
     }
 }

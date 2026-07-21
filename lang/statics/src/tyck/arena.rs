@@ -13,7 +13,7 @@ pub use zydeco_surface::arena::*;
 pub use zydeco_surface::scoped::arena::*;
 
 /// Typed arena plus annotation tables and translation metadata.
-#[derive(Debug, AsRefSelf, AsMutSelf)]
+#[derive(Debug, Default, AsRefSelf, AsMutSelf)]
 pub struct StaticsArena {
     /// kind arena before normalization
     pub kinds_pre: ArenaSparse<KindId, Fillable<Kind>>,
@@ -110,54 +110,8 @@ pub struct StaticsArena {
 }
 
 impl StaticsArena {
-    pub fn new(alloc: &KeySpaceFactory) -> Self {
-        Self {
-            kinds_pre: ArenaSparse::new(alloc.fresh()),
-            tpats: ArenaSparse::new(alloc.fresh()),
-            types_pre: ArenaSparse::new(alloc.fresh()),
-            vpats: ArenaSparse::new(alloc.fresh()),
-            values: ArenaSparse::new(alloc.fresh()),
-            compus: ArenaSparse::new(alloc.fresh()),
-            decls: ArenaAssoc::new(),
-
-            entry: ArenaAssoc::new(),
-
-            pats: ArenaBipartite::new(),
-            terms: ArenaBipartite::new(),
-
-            absts: ArenaDense::new(alloc.fresh()),
-            seals: ArenaAssoc::new(),
-            abst_hints: ArenaAssoc::new(),
-            fills: ArenaDense::new(alloc.fresh()),
-            solus: ArenaAssoc::new(),
-            fill_hints: ArenaAssoc::new(),
-            datas: ArenaDense::new(alloc.fresh()),
-            codatas: ArenaDense::new(alloc.fresh()),
-            data_hints: ArenaAssoc::new(),
-            data_pat_hints: ArenaAssoc::new(),
-            codata_hints: ArenaAssoc::new(),
-            inlinables: ArenaAssoc::new(),
-            global_defs: ArenaAssoc::new(),
-            global_terms: ArenaAssoc::new(),
-            def_hints: ArenaAssoc::new(),
-
-            annotations_var: ArenaAssoc::new(),
-            annotations_abst: ArenaAssoc::new(),
-            annotations_tpat: ArenaAssoc::new(),
-            annotations_type: ArenaAssoc::new(),
-            annotations_vpat: ArenaAssoc::new(),
-            annotations_value: ArenaAssoc::new(),
-            annotations_compu: ArenaAssoc::new(),
-
-            env_tpat: ArenaAssoc::new(),
-            env_type: ArenaAssoc::new(),
-            env_vpat: ArenaAssoc::new(),
-            env_value: ArenaAssoc::new(),
-            env_compu: ArenaAssoc::new(),
-
-            kinds_normalized: ArenaAssoc::new(),
-            types_normalized: ArenaAssoc::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 

@@ -77,7 +77,7 @@ pub enum BinderId {
     Abst(AbstId),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct Debruijn {
     level: usize,
     lhs: HashMap<BinderId, usize>,
@@ -86,7 +86,7 @@ struct Debruijn {
 
 impl Debruijn {
     fn new() -> Self {
-        Self { level: 0, lhs: HashMap::new(), rhs: HashMap::new() }
+        Self::default()
     }
     fn insert<T>(mut self, lhs: Option<T>, rhs: Option<T>) -> Self
     where

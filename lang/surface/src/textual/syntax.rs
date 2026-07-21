@@ -227,42 +227,61 @@ pub struct TopLevel(pub Vec<DeclId>);
 /* --------------------------------- Parser --------------------------------- */
 
 pub struct Parser {
+    key_space: KeySpace,
     pub spans: SpanArena,
     pub arena: TextArena,
 }
 
+impl Default for Parser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Parser {
-    /// Create a parser whose spans and textual IDs share the given key space.
-    pub fn new(key_space: KeySpace) -> Self {
-        Self { spans: SpanArena::new(key_space), arena: TextArena::default() }
+    /// Create a parser with one ID issuer for all textual entity categories.
+    pub fn new() -> Self {
+        Self { key_space: KeySpace::new(), spans: SpanArena::new(), arena: TextArena::default() }
+    }
+    /// Finish parsing, dropping the issuer and returning only durable storage.
+    pub fn finish(self) -> (SpanArena, TextArena) {
+        (self.spans, self.arena)
+    }
+    fn alloc<Id>(&mut self, span: Span) -> Id
+    where
+        Id: ArenaId + Into<EntityId>,
+    {
+        let id = self.key_space.alloc();
+        self.spans.insert_new(id, span);
+        id
     }
     /// Allocate a definition node and record its span.
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
-        let id = self.spans.alloc(def.info);
+        let id = self.alloc(def.info);
         self.arena.defs.insert_new(id, def.inner);
         id
     }
     /// Allocate a pattern node and record its span.
     pub fn pat(&mut self, pat: Sp<Pattern>) -> PatId {
-        let id = self.spans.alloc(pat.info);
+        let id = self.alloc(pat.info);
         self.arena.pats.insert_new(id, pat.inner);
         id
     }
     /// Allocate a copattern node and record its span.
     pub fn copat(&mut self, copat: Sp<CoPattern>) -> CoPatId {
-        let id = self.spans.alloc(copat.info);
+        let id = self.alloc(copat.info);
         self.arena.copats.insert_new(id, copat.inner);
         id
     }
     /// Allocate a term node and record its span.
     pub fn term(&mut self, term: Sp<Term>) -> TermId {
-        let id = self.spans.alloc(term.info);
+        let id = self.alloc(term.info);
         self.arena.terms.insert_new(id, term.inner);
         id
     }
     /// Allocate a declaration node and record its span.
     pub fn decl(&mut self, decl: Sp<Modifiers<Declaration>>) -> DeclId {
-        let id = self.spans.alloc(decl.info);
+        let id = self.alloc(decl.info);
         self.arena.decls.insert_new(id, decl.inner);
         id
     }

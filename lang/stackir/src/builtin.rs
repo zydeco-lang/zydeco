@@ -6,7 +6,8 @@ use zydeco_statics::surface_syntax::ScopedArena;
 
 pub type BuiltinMap = HashMap<&'static str, Builtin>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, derive_more::Display)]
+#[display("{name}/{arity}")]
 pub struct Builtin {
     pub name: &'static str,
     pub arity: usize,
@@ -17,12 +18,6 @@ pub struct Builtin {
 pub enum BuiltinSort {
     Operator,
     Function,
-}
-
-impl std::fmt::Display for Builtin {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}/{}", self.name, self.arity)
-    }
 }
 
 impl Builtin {
@@ -77,8 +72,9 @@ impl Builtin {
         let params: Vec<_> = (0..self.arity)
             .map(|i| {
                 let param = VarName::from(format!("param_{}", i));
-                let scoped: &mut ScopedArena = arena.as_mut();
-                scoped.defs.alloc(param)
+                let id = AsMut::<StackirArena>::as_mut(arena).admin.fresh();
+                AsMut::<ScopedArena>::as_mut(arena).insert_def(id, param);
+                id
             })
             .collect();
         let operands = params.iter().map(|def| def.build(arena, None)).collect();

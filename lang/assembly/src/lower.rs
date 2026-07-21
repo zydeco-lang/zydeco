@@ -12,7 +12,7 @@ use derive_more::{AsMut, AsRef};
 use zydeco_stackir::{StackirArena, sps::syntax as sk};
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_utils::{arena::KeySpaceFactory, with::With};
+use zydeco_utils::with::With;
 
 pub trait Lower<'a> {
     type Kont;
@@ -22,6 +22,9 @@ pub trait Lower<'a> {
 
 #[derive(AsRef, AsMut)]
 pub struct Lowerer<'a> {
+    /// Sequential issuer scoped to this lowering run.
+    #[as_mut(KeySpace)]
+    key_space: KeySpace,
     #[as_ref]
     #[as_mut]
     pub arena: AssemblyArena,
@@ -33,11 +36,11 @@ pub struct Lowerer<'a> {
 
 impl<'a> Lowerer<'a> {
     pub fn new(
-        alloc: &KeySpaceFactory, spans: &'a SpanArena, scoped: &'a ScopedArena,
-        statics: &'a StaticsArena, stackir: &'a StackirArena,
+        spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
+        stackir: &'a StackirArena,
     ) -> Self {
-        let arena = AssemblyArena::new(alloc);
-        Self { arena, spans, scoped, statics, stackir }
+        let arena = AssemblyArena::new();
+        Self { key_space: KeySpace::new(), arena, spans, scoped, statics, stackir }
     }
 
     pub fn run(mut self) -> AssemblyArena {

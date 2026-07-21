@@ -3,7 +3,7 @@ use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_stackir::sps::syntax as sk;
 use zydeco_utils::{graph::DepGraph, with::With};
 
-#[derive(AsRefSelf, AsMutSelf)]
+#[derive(Default, AsRefSelf, AsMutSelf)]
 pub struct AssemblyArena {
     /// All programs are attached with a ProgId.
     pub programs: ArenaSparse<ProgId, Program>,
@@ -30,18 +30,8 @@ pub struct AssemblyArena {
 }
 
 impl AssemblyArena {
-    pub fn new(alloc: &KeySpaceFactory) -> Self {
-        Self {
-            programs: ArenaSparse::new(alloc.fresh()),
-            variables: ArenaSparse::new(alloc.fresh()),
-            symbols: ArenaSparse::new(alloc.fresh()),
-            defs: ArenaBijective::new(),
-            contexts: ArenaAssoc::new(),
-            deps: DepGraph::new(),
-            labels: ArenaAssoc::new(),
-            externs: Vec::new(),
-            entry: ArenaAssoc::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -71,13 +61,14 @@ pub trait Construct<'a, S, T, Arena>: Sized + Into<S> {
 
 impl<'a, U, Arena> Construct<'a, VarName, VarId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena>,
+    Arena: AsMut<AssemblyArena> + AsMut<KeySpace>,
     U: Into<VarName>,
 {
     type Site = Option<sk::DefId>;
     fn build<'f: 'a>(self, arena: &'f mut Arena, site: Self::Site) -> VarId {
-        let this = &mut *arena.as_mut();
-        let id = this.variables.alloc(self.into());
+        let id = AsMut::<KeySpace>::as_mut(arena).alloc();
+        let this = AsMut::<AssemblyArena>::as_mut(arena);
+        this.variables.insert_new(id, self.into());
         if let Some(site) = site {
             this.defs.insert_new(site, DefId::Var(id));
         }
@@ -87,18 +78,19 @@ where
 
 impl<'a, U, Arena> Construct<'a, Symbol, SymId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena>,
+    Arena: AsMut<AssemblyArena> + AsMut<KeySpace>,
     U: Into<Symbol>,
 {
     type Site = (Option<String>, Option<sk::DefId>);
     fn build<'f: 'a>(self, arena: &'f mut Arena, (name, site): Self::Site) -> SymId {
-        let this = &mut *arena.as_mut();
+        let id = AsMut::<KeySpace>::as_mut(arena).alloc();
+        let this = AsMut::<AssemblyArena>::as_mut(arena);
         let symbol = NamedSymbol { name: name.unwrap_or_default(), inner: self.into() };
         let is_prog = match symbol.inner {
             | Symbol::Prog(prog_id) => Some(prog_id),
             | _ => None,
         };
-        let id = this.symbols.alloc(symbol);
+        this.symbols.insert_new(id, symbol);
         if let Some(prog_id) = is_prog {
             // Add a label to the program.
             this.labels.insert_new(prog_id, id);
@@ -131,14 +123,15 @@ impl<'a, Arena> CxKont<'a, Arena> {
 /// Allocate a program that is anonymous, i.e. has no meaningful label.
 impl<'a, U, Arena> Construct<'a, Program, ProgId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena>,
+    Arena: AsMut<AssemblyArena> + AsMut<KeySpace>,
     U: Into<Program>,
 {
     type Site = Context;
     fn build<'f: 'a>(self, arena: &'f mut Arena, cx: Self::Site) -> ProgId {
-        let this = &mut *arena.as_mut();
+        let id = AsMut::<KeySpace>::as_mut(arena).alloc();
+        let this = AsMut::<AssemblyArena>::as_mut(arena);
         let program = self.into();
-        let id = this.programs.alloc(program.clone());
+        this.programs.insert_new(id, program.clone());
         this.contexts.insert_new(id, cx);
 
         // Update dependencies.
@@ -164,7 +157,7 @@ where
 
 impl<'a, U, Arena> Construct<'a, Terminator, ProgId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena>,
+    Arena: AsMut<AssemblyArena> + AsMut<KeySpace>,
     U: Into<Terminator>,
 {
     type Site = Context;
@@ -176,7 +169,7 @@ where
 
 impl<'a, U, Arena> Construct<'a, Instruction, ProgId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena> + 'a,
+    Arena: AsMut<AssemblyArena> + AsMut<KeySpace> + 'a,
     U: Into<Instruction>,
 {
     /// The continuation.

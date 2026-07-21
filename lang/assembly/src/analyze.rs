@@ -33,6 +33,8 @@ pub struct StackAnalyzer<'a> {
     #[as_ref(AssemblyArena)]
     #[as_mut(AssemblyArena)]
     pub arena: &'a mut AssemblyArena,
+    /// Issuer scoped to this analysis run's temporary stack slots.
+    key_space: KeySpace,
     /// The stack layouts *before* each program point.
     pub layouts: ArenaAssoc<ProgId, Layout>,
     /// The slots in the control stack.
@@ -41,17 +43,27 @@ pub struct StackAnalyzer<'a> {
     pub inlined: ArenaAssoc<SlotId, bool>,
 }
 
+/// Durable results of stack analysis; the temporary slot issuer has been dropped.
+pub struct StackAnalysis<'a> {
+    pub arena: &'a mut AssemblyArena,
+    pub layouts: ArenaAssoc<ProgId, Layout>,
+    pub slots: ArenaSparse<SlotId, Slot>,
+    pub inlined: ArenaAssoc<SlotId, bool>,
+}
+
 impl<'a> StackAnalyzer<'a> {
-    pub fn new(alloc: &KeySpaceFactory, arena: &'a mut AssemblyArena) -> Self {
+    pub fn new(arena: &'a mut AssemblyArena) -> Self {
         Self {
             arena,
+            key_space: KeySpace::new(),
             layouts: ArenaAssoc::new(),
-            slots: ArenaSparse::new(alloc.fresh()),
+            slots: ArenaSparse::new(),
             inlined: ArenaAssoc::new(),
         }
     }
     pub fn push_control(&mut self, layout: &mut Layout, slot: Slot) -> SlotId {
-        let slot_id = self.slots.alloc(slot);
+        let slot_id = self.key_space.alloc();
+        self.slots.insert_new(slot_id, slot);
         self.inlined.insert_new(slot_id, false);
         layout.control.push_back(slot_id);
         slot_id
@@ -64,7 +76,7 @@ impl<'a> StackAnalyzer<'a> {
 
 impl<'a> CompilerPass for StackAnalyzer<'a> {
     type Arena = AssemblyArena;
-    type Out = Self;
+    type Out = StackAnalysis<'a>;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<Self::Out, Self::Error> {
         let symbol_programs: Vec<_> = self
@@ -102,7 +114,8 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
         for entry in entries {
             entry.stack_inline(&mut self);
         }
-        Ok(self)
+        let Self { arena, key_space: _, layouts, slots, inlined } = self;
+        Ok(StackAnalysis { arena, layouts, slots, inlined })
     }
 }
 

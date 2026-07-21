@@ -1,4 +1,5 @@
 use super::syntax::*;
+use derive_more::{AsMut, AsRef};
 use std::collections::{BTreeMap, HashSet};
 use zydeco_assembly::{
     arena::{AssemblyArena, AssemblyArenaRefLike},
@@ -43,6 +44,7 @@ pub trait Emit<'a> {
     fn emit(&self, env: Self::Env, em: &mut Emitter);
 }
 
+#[derive(AsRef, AsMut)]
 pub struct Emitter<'e> {
     pub spans: &'e SpanArena,
     pub scoped: &'e ScopedArena,
@@ -50,24 +52,14 @@ pub struct Emitter<'e> {
     pub stackir: &'e StackirArena,
     pub assembly: &'e AssemblyArena,
 
+    #[as_ref]
+    #[as_mut]
     pub asm: AsmFile,
 
     target_format: TargetFormat,
     diagnostics: EmitDiagnostics,
     tables: Vec<JumpTable>,
     visited: HashSet<ProgId>,
-}
-
-impl<'e> AsRef<AsmFile> for Emitter<'e> {
-    fn as_ref(&self) -> &AsmFile {
-        &self.asm
-    }
-}
-
-impl<'e> AsMut<AsmFile> for Emitter<'e> {
-    fn as_mut(&mut self) -> &mut AsmFile {
-        &mut self.asm
-    }
 }
 
 impl<'e> Emitter<'e> {

@@ -112,7 +112,7 @@ impl<'a> Elaborate for StackId {
             | Stack::Kont(Kont { binder, body }) => {
                 let binder = binder.elaborate(el);
                 let body = body.elaborate(el);
-                let hole = el.arena.admin.key_space.alloc();
+                let hole = el.arena.admin.fresh();
                 let hole = Bullet.sbuild(el, hole, hole);
                 el.arena.inner.scompus[&body].assignments.cascade_stack(hole);
                 Kont { binder, body }.sbuild(el, self, hole)
@@ -153,7 +153,7 @@ impl<'a> Elaborate for CompuId {
                 let value = value.elaborate(el);
                 let mut assignments = SubstAssignments::new();
                 assignments.cascade_stack(stack);
-                let hole = el.arena.admin.key_space.alloc();
+                let hole = el.arena.admin.fresh();
                 let hole = Bullet.sbuild(el, hole, hole);
                 Compu::Ret(SReturn { stack: hole, value }).sbuild(el, self, assignments)
             }
@@ -194,7 +194,7 @@ impl<'a> Elaborate for CompuId {
                 let tail = tail.elaborate(el);
                 let mut assignments = SubstAssignments::new();
                 assignments.cascade_stack(bindee);
-                let hole = el.arena.admin.key_space.alloc();
+                let hole = el.arena.admin.fresh();
                 let hole = Bullet.sbuild(el, hole, hole);
                 Let { binder: Cons(param, Bullet), bindee: hole, tail }.sbuild(
                     el,

@@ -1,6 +1,6 @@
 use crate::with::With;
 use std::{
-    fmt::{Debug, Display},
+    fmt::Display,
     // hash::Hash,
     path::PathBuf,
     rc::Rc,
@@ -88,7 +88,8 @@ impl FileInfo {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Default, derive_more::Debug, PartialEq, Eq)]
+#[debug("{self}")]
 pub struct Span {
     span1: (Cursor1, Cursor1),
     span2: OnceLock<(Cursor2, Cursor2)>,
@@ -164,12 +165,6 @@ impl Span {
     }
 }
 
-impl Default for Span {
-    fn default() -> Self {
-        Span::dummy()
-    }
-}
-
 impl Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (l, r) = self.span1;
@@ -187,26 +182,14 @@ impl Display for Span {
     }
 }
 
-impl Debug for Span {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self, f)
-    }
-}
-
 pub type Cursor1 = usize;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, derive_more::Display, PartialEq, Eq)]
+#[display("{}:{}", line + 1, column + 1)]
 pub struct Cursor2 {
     pub line: usize,
     pub column: usize,
 }
-impl Display for Cursor2 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Cursor2 { line, column } = self;
-        write!(f, "{}:{}", line + 1, column + 1)
-    }
-}
-
 pub type Sp<T> = With<Span, T>;
 
 // #[derive(Default, Clone, Debug)]
@@ -299,7 +282,9 @@ impl<T: Display> Display for Sp<T> {
 }
 
 /// A wrapper around `PathBuf` that implements `Display` for use with ariadne's `Cache` trait.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, derive_more::Display, derive_more::From, PartialEq, Eq, Hash)]
+#[display("{}", _0.display())]
+#[from(PathBuf, &PathBuf)]
 pub struct PathDisplay(PathBuf);
 
 impl PathDisplay {
@@ -313,23 +298,5 @@ impl PathDisplay {
 
     pub fn into_path_buf(self) -> PathBuf {
         self.0
-    }
-}
-
-impl Display for PathDisplay {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.display())
-    }
-}
-
-impl From<PathBuf> for PathDisplay {
-    fn from(path: PathBuf) -> Self {
-        PathDisplay(path)
-    }
-}
-
-impl From<&PathBuf> for PathDisplay {
-    fn from(path: &PathBuf) -> Self {
-        PathDisplay(path.clone())
     }
 }

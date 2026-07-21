@@ -1,7 +1,9 @@
+use derive_more::Display;
 use std::fmt;
 
 /// Unadorned reg is a 64-bit reg
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[display(rename_all = "lowercase")]
 pub enum Reg {
     Rax,
     Rbx,
@@ -21,7 +23,8 @@ pub enum Reg {
     R15,
 }
 
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[display(rename_all = "lowercase")]
 pub enum Reg8 {
     Ah,
     Al,
@@ -45,7 +48,8 @@ pub enum Reg8 {
     R15b,
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[display(rename_all = "lowercase")]
 pub enum ConditionCode {
     E,
     NE,
@@ -74,32 +78,38 @@ pub struct RelLabel {
     pub offset: Option<(Reg, i32)>,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Arg64 {
     Reg(Reg),
     Signed(i64),
+    #[display("0x{_0:016x}")]
     Unsigned(u64),
+    #[display("QWORD {_0}")]
     Mem(MemRef),
     Label(String),
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Arg32 {
     Reg(Reg),
     Signed(i32),
+    #[display("0x{_0:08x}")]
     Unsigned(u32),
+    #[display("QWORD {_0}")]
     Mem(MemRef),
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Reg32 {
     Reg(Reg),
     Imm(i32),
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MovArgs {
+    #[display("{_0}, {_1}")]
     ToReg(Reg, Arg64),
+    #[display("QWORD {_0}, {_1}")]
     ToMem(MemRef, Reg32),
 }
 
@@ -109,19 +119,22 @@ pub enum LeaArgs {
     RelLabel(RelLabel),
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BinArgs {
+    #[display("{_0}, {_1}")]
     ToReg(Reg, Arg32),
+    #[display("QWORD {_0}, {_1}")]
     ToMem(MemRef, Reg32),
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[display("{reg}, {by}")]
 pub struct ShArgs {
     pub reg: Reg,
     pub by: u8,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum JmpArgs {
     Label(String),
     Reg(Reg),
@@ -129,49 +142,78 @@ pub enum JmpArgs {
     RelLabel(RelLabel),
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Loc {
     Reg(Reg),
+    #[display("QWORD {_0}")]
     Mem(MemRef),
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Instr {
+    #[display("        mov {_0}")]
     Mov(MovArgs),
+    #[display("        lea {_0}, {_1}")]
     Lea(Reg, LeaArgs),
 
+    #[display("        add {_0}")]
     Add(BinArgs),
+    #[display("        sub {_0}")]
     Sub(BinArgs),
+    #[display("        imul {_0}")]
     IMul(BinArgs),
+    #[display("        and {_0}")]
     And(BinArgs),
+    #[display("        or {_0}")]
     Or(BinArgs),
+    #[display("        xor {_0}")]
     Xor(BinArgs),
+    #[display("        sal {_0}")]
     Sal(ShArgs),
+    #[display("        sar {_0}")]
     Sar(ShArgs),
+    #[display("        shl {_0}")]
     Shl(ShArgs),
+    #[display("        shr {_0}")]
     Shr(ShArgs),
+    #[display("        cmp {_0}")]
     Cmp(BinArgs),
+    #[display("        test {_0}")]
     Test(BinArgs),
+    #[display("        xchg {_0}, {_1}")]
     Xchg(Reg, Reg),
 
+    #[display("        push {_0}")]
     Push(Arg32),
+    #[display("        pop {_0}")]
     Pop(Loc),
 
+    #[display("{_0}:")]
     Label(String),
+    #[display(";;; {_0}")]
     Comment(String),
+    #[display("        global {_0}")]
     Global(String),
+    #[display("        extern {_0}")]
     Extern(String),
 
+    #[display("        jmp {_0}")]
     Jmp(JmpArgs),
+    #[display("        call {_0}")]
     Call(JmpArgs),
+    #[display("        ret")]
     Ret,
 
     // Conditional mov, jmp and set
+    #[display("        cmov{_0} {_1}")]
     CMovCC(ConditionCode, BinArgs),
+    #[display("        j{_0} {_1}")]
     JCC(ConditionCode, JmpArgs),
+    #[display("        set{_0} {_1}")]
     SetCC(ConditionCode, Reg8),
 
     // Define data
+    #[display("        dq {_0}")]
     Dq(String),
 }
 
@@ -206,77 +248,7 @@ pub struct AsmFile {
 
 impl AsmFile {
     pub fn new() -> Self {
-        Self { text: Vec::new(), data: Vec::new(), rodata: Vec::new(), bss: Vec::new() }
-    }
-}
-
-impl fmt::Display for ConditionCode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use ConditionCode::*;
-        match self {
-            | E => write!(f, "e"),
-            | NE => write!(f, "ne"),
-            | L => write!(f, "l"),
-            | LE => write!(f, "le"),
-            | G => write!(f, "g"),
-            | GE => write!(f, "ge"),
-            | S => write!(f, "s"),
-            | Z => write!(f, "z"),
-            | NZ => write!(f, "nz"),
-            | O => write!(f, "o"),
-            | NO => write!(f, "no"),
-        }
-    }
-}
-
-impl fmt::Display for Reg8 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use Reg8::*;
-        match self {
-            | Al => write!(f, "al"),
-            | Ah => write!(f, "ah"),
-            | Cl => write!(f, "cl"),
-            | Ch => write!(f, "ch"),
-            | Dl => write!(f, "dl"),
-            | Dh => write!(f, "dh"),
-            | Bl => write!(f, "bl"),
-            | Bh => write!(f, "bh"),
-            | Spl => write!(f, "spl"),
-            | Bpl => write!(f, "bpl"),
-            | Sil => write!(f, "sil"),
-            | Dil => write!(f, "dil"),
-            | R8b => write!(f, "r8b"),
-            | R9b => write!(f, "r9b"),
-            | R10b => write!(f, "r10b"),
-            | R11b => write!(f, "r11b"),
-            | R12b => write!(f, "r12b"),
-            | R13b => write!(f, "r13b"),
-            | R14b => write!(f, "r14b"),
-            | R15b => write!(f, "r15b"),
-        }
-    }
-}
-
-impl fmt::Display for Reg {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            | Reg::Rax => write!(f, "rax"),
-            | Reg::Rbx => write!(f, "rbx"),
-            | Reg::Rcx => write!(f, "rcx"),
-            | Reg::Rdx => write!(f, "rdx"),
-            | Reg::Rsi => write!(f, "rsi"),
-            | Reg::Rdi => write!(f, "rdi"),
-            | Reg::Rsp => write!(f, "rsp"),
-            | Reg::Rbp => write!(f, "rbp"),
-            | Reg::R8 => write!(f, "r8"),
-            | Reg::R9 => write!(f, "r9"),
-            | Reg::R10 => write!(f, "r10"),
-            | Reg::R11 => write!(f, "r11"),
-            | Reg::R12 => write!(f, "r12"),
-            | Reg::R13 => write!(f, "r13"),
-            | Reg::R14 => write!(f, "r14"),
-            | Reg::R15 => write!(f, "r15"),
-        }
+        Self::default()
     }
 }
 
@@ -301,47 +273,6 @@ impl fmt::Display for RelLabel {
     }
 }
 
-impl fmt::Display for Reg32 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            | Reg32::Reg(r) => write!(f, "{}", r),
-            | Reg32::Imm(i) => write!(f, "{}", i),
-        }
-    }
-}
-
-impl fmt::Display for Arg32 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            | Arg32::Reg(r) => write!(f, "{}", r),
-            | Arg32::Signed(i) => write!(f, "{}", i),
-            | Arg32::Unsigned(u) => write!(f, "0x{:08x}", u),
-            | Arg32::Mem(m) => write!(f, "QWORD {}", m),
-        }
-    }
-}
-
-impl fmt::Display for Arg64 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            | Arg64::Reg(r) => write!(f, "{}", r),
-            | Arg64::Signed(i) => write!(f, "{}", i),
-            | Arg64::Unsigned(u) => write!(f, "0x{:016x}", u),
-            | Arg64::Mem(m) => write!(f, "QWORD {}", m),
-            | Arg64::Label(l) => write!(f, "{}", l),
-        }
-    }
-}
-
-impl fmt::Display for MovArgs {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            | MovArgs::ToReg(r, arg) => write!(f, "{}, {}", r, arg),
-            | MovArgs::ToMem(mem, arg) => write!(f, "QWORD {}, {}", mem, arg),
-        }
-    }
-}
-
 impl fmt::Display for LeaArgs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -353,132 +284,6 @@ impl fmt::Display for LeaArgs {
                 write!(f, "[{}{}{}]", base, scaled_index, offset)
             }
             | LeaArgs::RelLabel(rl) => write!(f, "{}", rl),
-        }
-    }
-}
-
-impl fmt::Display for BinArgs {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            | BinArgs::ToReg(r, arg) => write!(f, "{}, {}", r, arg),
-            | BinArgs::ToMem(mem, arg) => write!(f, "QWORD {}, {}", mem, arg),
-        }
-    }
-}
-
-impl fmt::Display for ShArgs {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}, {}", self.reg, self.by)
-    }
-}
-
-impl fmt::Display for JmpArgs {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            | JmpArgs::Label(l) => write!(f, "{}", l),
-            | JmpArgs::Reg(r) => write!(f, "{}", r),
-            | JmpArgs::Mem(m) => write!(f, "{}", m),
-            | JmpArgs::RelLabel(rl) => write!(f, "{}", rl),
-        }
-    }
-}
-
-impl fmt::Display for Loc {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            | Loc::Reg(r) => write!(f, "{}", r),
-            | Loc::Mem(m) => write!(f, "QWORD {}", m),
-        }
-    }
-}
-
-impl fmt::Display for Instr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            | Instr::Mov(args) => {
-                write!(f, "        mov {}", args)
-            }
-            | Instr::Lea(r, args) => {
-                write!(f, "        lea {}, {}", r, args)
-            }
-            | Instr::Add(args) => {
-                write!(f, "        add {}", args)
-            }
-            | Instr::Sub(args) => {
-                write!(f, "        sub {}", args)
-            }
-            | Instr::IMul(args) => {
-                write!(f, "        imul {}", args)
-            }
-            | Instr::And(args) => {
-                write!(f, "        and {}", args)
-            }
-            | Instr::Or(args) => {
-                write!(f, "        or {}", args)
-            }
-            | Instr::Xor(args) => {
-                write!(f, "        xor {}", args)
-            }
-            | Instr::Sal(args) => {
-                write!(f, "        sal {}", args)
-            }
-            | Instr::Sar(args) => {
-                write!(f, "        sar {}", args)
-            }
-            | Instr::Shl(args) => {
-                write!(f, "        shl {}", args)
-            }
-            | Instr::Shr(args) => {
-                write!(f, "        shr {}", args)
-            }
-            | Instr::Cmp(args) => {
-                write!(f, "        cmp {}", args)
-            }
-            | Instr::Test(args) => {
-                write!(f, "        test {}", args)
-            }
-            | Instr::Xchg(r1, r2) => {
-                write!(f, "        xchg {}, {}", r1, r2)
-            }
-            | Instr::Push(arg) => {
-                write!(f, "        push {}", arg)
-            }
-            | Instr::Pop(loc) => {
-                write!(f, "        pop {}", loc)
-            }
-            | Instr::Label(s) => {
-                write!(f, "{}:", s)
-            }
-            | Instr::Comment(s) => {
-                write!(f, ";;; {}", s)
-            }
-            | Instr::Global(s) => {
-                write!(f, "        global {}", s)
-            }
-            | Instr::Extern(s) => {
-                write!(f, "        extern {}", s)
-            }
-            | Instr::Jmp(s) => {
-                write!(f, "        jmp {}", s)
-            }
-            | Instr::Call(s) => {
-                write!(f, "        call {}", s)
-            }
-            | Instr::Ret => {
-                write!(f, "        ret")
-            }
-            | Instr::CMovCC(cc, args) => {
-                write!(f, "        cmov{} {}", cc, args)
-            }
-            | Instr::JCC(cc, l) => {
-                write!(f, "        j{} {}", cc, l)
-            }
-            | Instr::SetCC(cc, a) => {
-                write!(f, "        set{} {}", cc, a)
-            }
-            | Instr::Dq(s) => {
-                write!(f, "        dq {}", s)
-            }
         }
     }
 }

@@ -30,6 +30,7 @@ pub enum Value {
     Tag(Tag),
 }
 
+#[derive(Default)]
 pub struct Runtime {
     pub stack: Vec<Value>,
     pub heap: Vec<Value>,
@@ -38,12 +39,7 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn new() -> Self {
-        Self { stack: Vec::new(), heap: Vec::new(), context: im::HashMap::new() }
-    }
-}
-impl Default for Runtime {
-    fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }
 

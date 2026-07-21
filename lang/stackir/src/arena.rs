@@ -13,7 +13,7 @@ use zydeco_derive::{AsMutSelf, AsRefSelf};
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct AdminArena {
     /// Key space shared by all stack-IR node categories.
-    pub key_space: KeySpace,
+    key_space: KeySpace,
 
     /// builtin operators and functions
     pub builtins: BuiltinMap,
@@ -27,12 +27,22 @@ pub struct AdminArena {
 }
 
 impl AdminArena {
-    pub fn new(key_space: KeySpace) -> Self {
+    pub fn new() -> Self {
         Self {
-            key_space,
+            key_space: KeySpace::new(),
             builtins: Builtin::all(),
             pats: ArenaForth::new(),
             terms: ArenaForth::new(),
         }
+    }
+
+    pub(crate) fn fresh<Id: ArenaId>(&mut self) -> Id {
+        self.key_space.alloc()
+    }
+}
+
+impl Default for AdminArena {
+    fn default() -> Self {
+        Self::new()
     }
 }

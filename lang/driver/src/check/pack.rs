@@ -4,8 +4,9 @@ use std::{collections::HashMap, path::PathBuf};
 use zydeco_dynamics::Linker;
 use zydeco_statics::tyck::Tycker;
 use zydeco_surface::scoped::{ResolveOut, Resolver};
-use zydeco_utils::{pass::CompilerPass, prelude::KeySpaceFactory};
+use zydeco_utils::pass::CompilerPass;
 
+#[derive(Default)]
 pub struct PackageStew {
     pub sources: HashMap<PathBuf, String>,
     pub spans: t::SpanArena,
@@ -28,14 +29,8 @@ impl std::ops::Add for PackageStew {
 }
 
 impl PackageStew {
-    pub fn new(alloc: &KeySpaceFactory) -> Self {
-        PackageStew {
-            sources: HashMap::new(),
-            spans: t::SpanArena::new(alloc.fresh()),
-            arena: b::BitterArena::new(alloc),
-            prim_term: b::PrimTerms::default(),
-            top: b::TopLevel(Vec::new()),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
     pub fn resolve(self) -> Result<PackageScoped> {
         let PackageStew { sources, spans, arena: bitter, prim_term, top } = self;
@@ -229,10 +224,10 @@ impl PackageScoped {
         PackageScoped { sources, spans, prim, arena }
     }
 
-    pub fn tyck(self, alloc: &KeySpaceFactory, name: &str) -> Result<PackageChecked> {
+    pub fn tyck(self, name: &str) -> Result<PackageChecked> {
         // type-checking
         let PackageScoped { sources, spans, prim, arena: mut scoped } = self;
-        let tycker = Tycker::new(&spans, &prim, &mut scoped, alloc);
+        let tycker = Tycker::new(&spans, &prim, &mut scoped);
         let statics = match tycker.run() {
             | Ok(statics) => statics,
             | Err(errors) => {

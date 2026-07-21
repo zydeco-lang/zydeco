@@ -1,29 +1,14 @@
 //! Context and CoContext types for ordered and unordered collections.
 
+use derive_more::IntoIterator;
+
 /// Contexts are ordered sets of elements.
-#[derive(Clone, Debug)]
-pub struct Context<T>(pub Vec<T>);
+#[derive(Clone, Debug, IntoIterator)]
+pub struct Context<T>(#[into_iterator(owned, ref)] pub Vec<T>);
 
 impl<T> FromIterator<T> for Context<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Context(iter.into_iter().collect())
-    }
-}
-
-// Note: can we derive this, as well as as_ref, as_mut, deref, deref_mut, and borrow?
-impl<T> IntoIterator for Context<T> {
-    type Item = T;
-    type IntoIter = <Vec<T> as IntoIterator>::IntoIter;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-impl<'a, T> IntoIterator for &'a Context<T> {
-    type Item = &'a T;
-    type IntoIter = <&'a Vec<T> as IntoIterator>::IntoIter;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.iter()
     }
 }
 
@@ -59,8 +44,8 @@ where
 }
 
 /// CoContexts are unordered sets of elements.
-#[derive(Clone, Debug)]
-pub struct CoContext<T: std::hash::Hash + Eq>(pub im::HashSet<T>);
+#[derive(Clone, Debug, IntoIterator)]
+pub struct CoContext<T: std::hash::Hash + Eq>(#[into_iterator(owned, ref)] pub im::HashSet<T>);
 
 impl<T> FromIterator<T> for CoContext<T>
 where
@@ -68,28 +53,6 @@ where
 {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         CoContext(iter.into_iter().collect())
-    }
-}
-
-impl<T> IntoIterator for CoContext<T>
-where
-    T: std::hash::Hash + Eq + Clone,
-{
-    type Item = T;
-    type IntoIter = im::hashset::ConsumingIter<T>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-impl<'a, T> IntoIterator for &'a CoContext<T>
-where
-    T: std::hash::Hash + Eq,
-{
-    type Item = &'a T;
-    type IntoIter = im::hashset::Iter<'a, T>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.iter()
     }
 }
 

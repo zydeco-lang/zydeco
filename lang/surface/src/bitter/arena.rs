@@ -4,7 +4,7 @@ use crate::textual::syntax as t;
 /* ---------------------------------- Arena --------------------------------- */
 
 /// Storage for all bitter syntax nodes plus a back-map into textual entities.
-#[derive(Debug, derive_more::AddAssign)]
+#[derive(Default, Debug, derive_more::AddAssign)]
 pub struct BitterArena {
     // arenas
     pub defs: ArenaSparse<DefId, VarName>,
@@ -17,14 +17,7 @@ pub struct BitterArena {
 }
 
 impl BitterArena {
-    pub fn new(alloc: &KeySpaceFactory) -> Self {
-        BitterArena {
-            defs: ArenaSparse::new(alloc.fresh()),
-            pats: ArenaSparse::new(alloc.fresh()),
-            terms: ArenaSparse::new(alloc.fresh()),
-            decls: ArenaSparse::new(alloc.fresh()),
-
-            textual: ArenaForth::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 }

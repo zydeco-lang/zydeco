@@ -1,7 +1,8 @@
-use std::fmt;
+use derive_more::Display;
 
 /// Target triple for LLVM compilation
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Display, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[display("{}", self.as_str())]
 pub enum TargetTriple {
     X86_64Linux,
     X86_64MacOS,
@@ -17,11 +18,5 @@ impl TargetTriple {
             | TargetTriple::Aarch64Linux => "aarch64-unknown-linux-gnu",
             | TargetTriple::Aarch64MacOS => "aarch64-apple-darwin",
         }
-    }
-}
-
-impl fmt::Display for TargetTriple {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.as_str())
     }
 }

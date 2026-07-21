@@ -20,10 +20,7 @@ use zydeco_surface::scoped::{
     syntax::{DefId, Term, TermId},
 };
 use zydeco_syntax::SpanView;
-use zydeco_utils::{
-    arena::KeySpaceFactory,
-    span::{Cursor2, FileInfo},
-};
+use zydeco_utils::span::{Cursor2, FileInfo};
 
 /// Parsed project information
 /// SAFETY: This is marked as Sync even though Span contains OnceCell.
@@ -39,17 +36,14 @@ pub struct Cajun {
     client: Client,
     projects: Arc<RwLock<HashMap<PathBuf, ProjectState>>>,
     open_documents: Arc<RwLock<HashMap<PathBuf, String>>>,
-    alloc: KeySpaceFactory,
 }
 
 impl Cajun {
     pub fn new(client: Client) -> Self {
-        let alloc = KeySpaceFactory::new();
         Self {
             client,
             projects: Arc::new(RwLock::new(HashMap::new())),
             open_documents: Arc::new(RwLock::new(HashMap::new())),
-            alloc,
         }
     }
 
@@ -99,7 +93,7 @@ impl Cajun {
                     continue;
                 }
                 let source = read_source(&path, overrides)?;
-                let part = Package::parse_source(&self.alloc, source, Some(path.clone()))
+                let part = Package::parse_source(source, Some(path.clone()))
                     .map_err(|e| format!("Parse error: {}", e))?;
                 stew = Some(match stew {
                     | Some(s) => s + part,
@@ -110,7 +104,7 @@ impl Cajun {
 
         if !included.contains(&focus_path) {
             let source = read_source(&focus_path, overrides)?;
-            let part = Package::parse_source(&self.alloc, source, Some(focus_path.clone()))
+            let part = Package::parse_source(source, Some(focus_path.clone()))
                 .map_err(|e| format!("Parse error: {}", e))?;
             stew = Some(match stew {
                 | Some(s) => s + part,
@@ -118,7 +112,7 @@ impl Cajun {
             });
         }
 
-        let stew = stew.unwrap_or_else(|| PackageStew::new(&self.alloc));
+        let stew = stew.unwrap_or_else(PackageStew::new);
         let scoped = stew
             .resolve()
             .map_err(|e| format!("Resolve error: {}", e))?
@@ -147,7 +141,7 @@ impl Cajun {
                             continue;
                         }
                         let source = read_source(&path, overrides)?;
-                        let part = Package::parse_source(&self.alloc, source, Some(path.clone()))
+                        let part = Package::parse_source(source, Some(path.clone()))
                             .map_err(|e| format!("Parse error: {}", e))?;
                         stew = Some(match stew {
                             | Some(s) => s + part,
@@ -161,7 +155,7 @@ impl Cajun {
                         continue;
                     }
                     let source = read_source(&path, overrides)?;
-                    let part = Package::parse_source(&self.alloc, source, Some(path.clone()))
+                    let part = Package::parse_source(source, Some(path.clone()))
                         .map_err(|e| format!("Parse error: {}", e))?;
                     stew = Some(match stew {
                         | Some(s) => s + part,
@@ -173,7 +167,7 @@ impl Cajun {
         }
         if !included.contains(&file_path) {
             let source = read_source(&file_path, overrides)?;
-            let part = Package::parse_source(&self.alloc, source, Some(file_path.clone()))
+            let part = Package::parse_source(source, Some(file_path.clone()))
                 .map_err(|e| format!("Parse error: {}", e))?;
             stew = Some(match stew {
                 | Some(s) => s + part,
@@ -181,7 +175,7 @@ impl Cajun {
             });
         }
 
-        let stew = stew.unwrap_or_else(|| PackageStew::new(&self.alloc));
+        let stew = stew.unwrap_or_else(PackageStew::new);
         let scoped =
             stew.resolve().map_err(|e| format!("Resolve error: {}", e))?.self_check("<orphan>");
         let file_infos = build_file_infos(&scoped);

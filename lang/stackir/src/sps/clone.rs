@@ -8,12 +8,12 @@ pub trait DeepClone<Arena> {
 /// Clone a pattern def id, creating a new one and updating the map.
 impl<Arena> DeepClone<Arena> for DefId
 where
-    Arena: AsMut<ScopedArena>,
+    Arena: AsMut<StackirArena> + AsMut<ScopedArena>,
 {
     fn deep_clone(&self, arena: &mut Arena, map: &mut DefMap) -> Self {
-        let scoped = AsMut::<ScopedArena>::as_mut(arena);
-        let name = scoped.defs[self].clone();
-        let new_def = scoped.defs.alloc(name);
+        let name = AsMut::<ScopedArena>::as_mut(arena).defs[self].clone();
+        let new_def = AsMut::<StackirArena>::as_mut(arena).admin.fresh();
+        AsMut::<ScopedArena>::as_mut(arena).insert_def(new_def, name);
         map.insert(*self, new_def);
         new_def
     }

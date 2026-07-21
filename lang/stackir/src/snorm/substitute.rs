@@ -21,7 +21,7 @@ use zydeco_utils::pass::CompilerPass;
 ///   and the underlying body, and then take one step inner, and so on.
 ///
 /// Consider them as a bunch of reversed let bindings / join points.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SubstAssignments {
     pub items: VecDeque<AssignItem>,
 }
@@ -58,7 +58,7 @@ mod impls {
 
     impl SubstAssignments {
         pub fn new() -> Self {
-            Self { items: VecDeque::new() }
+            Self::default()
         }
         pub fn cascade_value(&mut self, pat: VPatId, value: ValueId) {
             self.items.push_back(AssignItem::Pattern(AssignPattern { pat, value }));
@@ -232,20 +232,20 @@ mod impls {
                 | Stack::Var(Bullet) => Vec::new(),
                 | Stack::Arg(Cons(value, stack)) => {
                     let v = AssignStack { stack }.normalize(arena);
-                    let bullet = arena.admin.key_space.alloc();
+                    let bullet = arena.admin.fresh();
                     arena.inner.sstacks.insert_new(bullet, Bullet.into());
                     arena.inner.holes.insert_new(bullet, bullet);
-                    let arg = arena.admin.key_space.alloc();
+                    let arg = arena.admin.fresh();
                     arena.inner.sstacks.insert_new(arg, Stack::Arg(Cons(value, bullet)));
                     arena.inner.holes.insert_new(arg, bullet);
                     std::iter::empty().chain([AssignStack { stack: arg }.into()]).chain(v).collect()
                 }
                 | Stack::Tag(Cons(dtor, stack)) => {
                     let v = AssignStack { stack }.normalize(arena);
-                    let bullet = arena.admin.key_space.alloc();
+                    let bullet = arena.admin.fresh();
                     arena.inner.sstacks.insert_new(bullet, Bullet.into());
                     arena.inner.holes.insert_new(bullet, bullet);
-                    let tag = arena.admin.key_space.alloc();
+                    let tag = arena.admin.fresh();
                     arena.inner.sstacks.insert_new(tag, Stack::Tag(Cons(dtor, bullet)));
                     arena.inner.holes.insert_new(tag, bullet);
                     std::iter::empty().chain([AssignStack { stack: tag }.into()]).chain(v).collect()
@@ -298,7 +298,7 @@ pub trait Substitute<Assign> {
 #[derive(AsRef, AsMut)]
 pub struct Substitutor<'a> {
     #[as_ref]
-    #[as_mut]
+    #[as_mut(StackirArena, AdminArena)]
     pub arena: StackirArena,
     #[as_ref(SNormInnerArena)]
     #[as_mut(SNormInnerArena)]
@@ -308,12 +308,6 @@ pub struct Substitutor<'a> {
     pub scoped: &'a mut ScopedArena,
     pub statics: &'a StaticsArena,
 }
-impl<'a> AsMut<AdminArena> for Substitutor<'a> {
-    fn as_mut(&mut self) -> &mut AdminArena {
-        &mut self.arena.admin
-    }
-}
-
 impl<'a> Substitutor<'a> {
     pub fn new(
         admin: AdminArena, snorm: &'a mut SNormInnerArena, scoped: &'a mut ScopedArena,

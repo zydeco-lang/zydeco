@@ -77,6 +77,12 @@ impl<'a> ClosureConverter<'a> {
         }
     }
 
+    fn alloc_def(&mut self, name: VarName) -> DefId {
+        let id = self.arena.admin.fresh();
+        self.scoped.insert_def(id, name);
+        id
+    }
+
     /// Get the ss::TermId site for a CompuId, if it exists.
     fn get_compu_site(&self, compu_id: CompuId) -> Option<ss::TermId> {
         self.arena.admin.terms.back(&TermId::Compu(compu_id)).copied()
@@ -103,7 +109,7 @@ impl<'a> ClosureConverter<'a> {
         let mut renamed_captures = Vec::with_capacity(free_vars.len());
         for &capture in free_vars.iter() {
             let VarName(original_name) = self.scoped.defs[&capture].clone();
-            let new_def = self.scoped.defs.alloc(VarName(format!("{original_name}#cap")));
+            let new_def = self.alloc_def(VarName(format!("{original_name}#cap")));
             free_var_renames.insert(capture, new_def);
             renamed_captures.push(new_def);
         }
@@ -137,7 +143,7 @@ impl<'a> ClosureConverter<'a> {
         let closure_pair = Cons(capture_pack, param_value).build(self, site);
         let closure_def = {
             let original_name = self.scoped.defs[&fix.param].clone();
-            self.scoped.defs.alloc(VarName(format!("{original_name}#clo")))
+            self.alloc_def(VarName(format!("{original_name}#clo")))
         };
         let closure_vpat = closure_def.build(self, None);
         let transformed_body = {
@@ -200,7 +206,7 @@ impl<'a> ClosureConverter<'a> {
         let mut capture_pattern = Triv.build(self, None);
         for &capture in free_vars.iter().rev() {
             let VarName(original_name) = self.scoped.defs[&capture].clone();
-            let new_def = self.scoped.defs.alloc(VarName(format!("{original_name}#cap")));
+            let new_def = self.alloc_def(VarName(format!("{original_name}#cap")));
             free_var_renames.insert(capture, new_def);
 
             let capture_val = capture.build(self, site);
@@ -246,8 +252,8 @@ impl<'a> ClosureConverter<'a> {
         let site = self.get_compu_site(compu_id);
 
         // Create fresh DefIds for the pattern binders
-        let capture_pair_def = self.scoped.defs.alloc(VarName("__env__".into()));
-        let body_closure_def = self.scoped.defs.alloc(VarName("__code__".into()));
+        let capture_pair_def = self.alloc_def(VarName("__env__".into()));
+        let body_closure_def = self.alloc_def(VarName("__code__".into()));
 
         // Create Var patterns to bind the destructured values
         let capture_pair_vpat = capture_pair_def.build(self, None);

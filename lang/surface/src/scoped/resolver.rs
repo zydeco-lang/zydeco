@@ -92,11 +92,17 @@ impl<'a> Resolver<'a> {
             exts,
             deps,
         } = self;
-        let defs = bitter.defs.filter_map_id(|id| defs.get(&id).cloned());
-        let pats = bitter.pats.filter_map_id(|id| pats.get(&id).cloned());
-        let terms = bitter.terms.filter_map_id(|id| terms.get(&id).cloned());
-        let decls = bitter.decls.filter_map_id(|id| decls.get(&id).cloned());
-        let textual = bitter.textual;
+        let BitterArena {
+            defs: bitter_defs,
+            pats: bitter_pats,
+            terms: bitter_terms,
+            decls: bitter_decls,
+            textual,
+        } = bitter;
+        let defs = bitter_defs.filter_map_id(|id| defs.get(&id).cloned());
+        let pats = bitter_pats.filter_map_id(|id| pats.get(&id).cloned());
+        let terms = bitter_terms.filter_map_id(|id| terms.get(&id).cloned());
+        let decls = bitter_decls.filter_map_id(|id| decls.get(&id).cloned());
         let ctxs_term = ArenaAssoc::default();
         let ctxs_pat_local = ArenaAssoc::default();
         let coctxs_pat_local = ArenaAssoc::default();

@@ -8,12 +8,15 @@ use {
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
         *,
     },
-    zydeco_utils::prelude::{ArenaAccess, CompilerPass, KeySpaceFactory, SccGroup},
+    zydeco_utils::prelude::{ArenaAccess, CompilerPass, KeySpace, SccGroup},
 };
 
 /// Type-checking driver that consumes scoped syntax and produces typed arenas.
 #[derive(AsRef, AsMut)]
 pub struct Tycker<'a> {
+    /// Sequential issuer scoped to this type-checking run.
+    #[as_mut(KeySpace)]
+    key_space: KeySpace,
     pub spans: &'a SpanArena,
     pub prim: &'a PrimDefs,
     #[as_ref(ScopedArena)]
@@ -38,15 +41,13 @@ pub struct Tycker<'a> {
 
 impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
-    pub fn new(
-        spans: &'a SpanArena, prim: &'a PrimDefs, scoped: &'a mut ScopedArena,
-        alloc: &KeySpaceFactory,
-    ) -> Self {
+    pub fn new(spans: &'a SpanArena, prim: &'a PrimDefs, scoped: &'a mut ScopedArena) -> Self {
         Self {
+            key_space: KeySpace::new(),
             spans,
             prim,
             scoped,
-            statics: StaticsArena::new(alloc),
+            statics: StaticsArena::new(),
             tasks: im::Vector::new(),
             metas: im::Vector::new(),
             errors: Vec::new(),
