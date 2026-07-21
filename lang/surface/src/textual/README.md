@@ -18,6 +18,8 @@ resolution.
 
 - `TextArena` stores parsed definitions, patterns, copatterns, terms, and
   declarations keyed by IDs (`DefId`, `PatId`, `CoPatId`, `TermId`, `DeclId`).
+- `EntityId` is a tagged enum over those categories; it is not an unchecked
+  shared raw index.
 - `SpanArena` stores `Span` values for every textual entity so later phases can
   report precise locations.
 - `Parser` combines `TextArena` and `SpanArena` and is passed through the

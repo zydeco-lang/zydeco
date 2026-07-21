@@ -21,7 +21,7 @@ use zydeco_surface::scoped::{
 };
 use zydeco_syntax::SpanView;
 use zydeco_utils::{
-    arena::ArcGlobalAlloc,
+    arena::KeySpaceFactory,
     span::{Cursor2, FileInfo},
 };
 
@@ -39,12 +39,12 @@ pub struct Cajun {
     client: Client,
     projects: Arc<RwLock<HashMap<PathBuf, ProjectState>>>,
     open_documents: Arc<RwLock<HashMap<PathBuf, String>>>,
-    alloc: ArcGlobalAlloc,
+    alloc: KeySpaceFactory,
 }
 
 impl Cajun {
     pub fn new(client: Client) -> Self {
-        let alloc = ArcGlobalAlloc::new();
+        let alloc = KeySpaceFactory::new();
         Self {
             client,
             projects: Arc::new(RwLock::new(HashMap::new())),
@@ -99,7 +99,7 @@ impl Cajun {
                     continue;
                 }
                 let source = read_source(&path, overrides)?;
-                let part = Package::parse_source(self.alloc.clone(), source, Some(path.clone()))
+                let part = Package::parse_source(&self.alloc, source, Some(path.clone()))
                     .map_err(|e| format!("Parse error: {}", e))?;
                 stew = Some(match stew {
                     | Some(s) => s + part,
@@ -110,7 +110,7 @@ impl Cajun {
 
         if !included.contains(&focus_path) {
             let source = read_source(&focus_path, overrides)?;
-            let part = Package::parse_source(self.alloc.clone(), source, Some(focus_path.clone()))
+            let part = Package::parse_source(&self.alloc, source, Some(focus_path.clone()))
                 .map_err(|e| format!("Parse error: {}", e))?;
             stew = Some(match stew {
                 | Some(s) => s + part,
@@ -118,9 +118,9 @@ impl Cajun {
             });
         }
 
-        let stew = stew.unwrap_or_else(|| PackageStew::new(self.alloc.clone()));
+        let stew = stew.unwrap_or_else(|| PackageStew::new(&self.alloc));
         let scoped = stew
-            .resolve(self.alloc.alloc())
+            .resolve()
             .map_err(|e| format!("Resolve error: {}", e))?
             .self_check(root_name.as_str());
         let file_infos = build_file_infos(&scoped);
@@ -147,9 +147,8 @@ impl Cajun {
                             continue;
                         }
                         let source = read_source(&path, overrides)?;
-                        let part =
-                            Package::parse_source(self.alloc.clone(), source, Some(path.clone()))
-                                .map_err(|e| format!("Parse error: {}", e))?;
+                        let part = Package::parse_source(&self.alloc, source, Some(path.clone()))
+                            .map_err(|e| format!("Parse error: {}", e))?;
                         stew = Some(match stew {
                             | Some(s) => s + part,
                             | None => part,
@@ -162,9 +161,8 @@ impl Cajun {
                         continue;
                     }
                     let source = read_source(&path, overrides)?;
-                    let part =
-                        Package::parse_source(self.alloc.clone(), source, Some(path.clone()))
-                            .map_err(|e| format!("Parse error: {}", e))?;
+                    let part = Package::parse_source(&self.alloc, source, Some(path.clone()))
+                        .map_err(|e| format!("Parse error: {}", e))?;
                     stew = Some(match stew {
                         | Some(s) => s + part,
                         | None => part,
@@ -175,7 +173,7 @@ impl Cajun {
         }
         if !included.contains(&file_path) {
             let source = read_source(&file_path, overrides)?;
-            let part = Package::parse_source(self.alloc.clone(), source, Some(file_path.clone()))
+            let part = Package::parse_source(&self.alloc, source, Some(file_path.clone()))
                 .map_err(|e| format!("Parse error: {}", e))?;
             stew = Some(match stew {
                 | Some(s) => s + part,
@@ -183,11 +181,9 @@ impl Cajun {
             });
         }
 
-        let stew = stew.unwrap_or_else(|| PackageStew::new(self.alloc.clone()));
-        let scoped = stew
-            .resolve(self.alloc.alloc())
-            .map_err(|e| format!("Resolve error: {}", e))?
-            .self_check("<orphan>");
+        let stew = stew.unwrap_or_else(|| PackageStew::new(&self.alloc));
+        let scoped =
+            stew.resolve().map_err(|e| format!("Resolve error: {}", e))?.self_check("<orphan>");
         let file_infos = build_file_infos(&scoped);
 
         Ok(ProjectState { scoped, file_infos })

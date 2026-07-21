@@ -105,7 +105,7 @@ mod impls {
                                 // directly substitute all users of the variable with the value
                                 let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
                                 let value = arena_mut.svalues[&value].clone();
-                                arena_mut.svalues.replace(*user, value);
+                                arena_mut.svalues.replace_existing(*user, value);
                             }
                             | _users => {
                                 // items.push_back(item);
@@ -115,7 +115,7 @@ mod impls {
                                     let value = value.deep_clone(arena, &mut Default::default());
                                     let arena_mut = AsMut::<SNormInnerArena>::as_mut(arena);
                                     let value = arena_mut.svalues[&value].clone();
-                                    arena_mut.svalues.replace(*user, value);
+                                    arena_mut.svalues.replace_existing(*user, value);
                                 }
                             }
                         }
@@ -232,22 +232,22 @@ mod impls {
                 | Stack::Var(Bullet) => Vec::new(),
                 | Stack::Arg(Cons(value, stack)) => {
                     let v = AssignStack { stack }.normalize(arena);
-                    let bullet = arena.admin.allocator.alloc();
-                    arena.inner.sstacks.insert(bullet, Bullet.into());
-                    arena.inner.holes.insert(bullet, bullet);
-                    let arg = arena.admin.allocator.alloc();
-                    arena.inner.sstacks.insert(arg, Stack::Arg(Cons(value, bullet)));
-                    arena.inner.holes.insert(arg, bullet);
+                    let bullet = arena.admin.key_space.alloc();
+                    arena.inner.sstacks.insert_new(bullet, Bullet.into());
+                    arena.inner.holes.insert_new(bullet, bullet);
+                    let arg = arena.admin.key_space.alloc();
+                    arena.inner.sstacks.insert_new(arg, Stack::Arg(Cons(value, bullet)));
+                    arena.inner.holes.insert_new(arg, bullet);
                     std::iter::empty().chain([AssignStack { stack: arg }.into()]).chain(v).collect()
                 }
                 | Stack::Tag(Cons(dtor, stack)) => {
                     let v = AssignStack { stack }.normalize(arena);
-                    let bullet = arena.admin.allocator.alloc();
-                    arena.inner.sstacks.insert(bullet, Bullet.into());
-                    arena.inner.holes.insert(bullet, bullet);
-                    let tag = arena.admin.allocator.alloc();
-                    arena.inner.sstacks.insert(tag, Stack::Tag(Cons(dtor, bullet)));
-                    arena.inner.holes.insert(tag, bullet);
+                    let bullet = arena.admin.key_space.alloc();
+                    arena.inner.sstacks.insert_new(bullet, Bullet.into());
+                    arena.inner.holes.insert_new(bullet, bullet);
+                    let tag = arena.admin.key_space.alloc();
+                    arena.inner.sstacks.insert_new(tag, Stack::Tag(Cons(dtor, bullet)));
+                    arena.inner.holes.insert_new(tag, bullet);
                     std::iter::empty().chain([AssignStack { stack: tag }.into()]).chain(v).collect()
                 }
             }

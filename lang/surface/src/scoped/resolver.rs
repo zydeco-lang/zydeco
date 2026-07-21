@@ -11,12 +11,18 @@ pub struct Global {
     pub(super) under_map: im::HashMap<DefId, DeclId>,
 }
 /// Local name environment built from pattern binders.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Local {
     /// which global declaration is the local scope checking in
     under: DeclId,
     /// map from variable names to their definitions
     var_to_def: im::HashMap<VarName, DefId>,
+}
+
+impl Local {
+    fn new(under: DeclId) -> Self {
+        Self { under, var_to_def: im::HashMap::new() }
+    }
 }
 
 /// Name-resolution state and accumulators.
@@ -189,7 +195,7 @@ impl Resolve for DeclId {
         // register the global binder in deps
         resolver.deps.add(*self, []);
         let decl = resolver.bitter.decls[self].clone();
-        let local = Local { under: *self, ..Local::default() };
+        let local = Local::new(*self);
         let Modifiers { public: _, external: _, inner } = decl;
         match inner.clone() {
             | Declaration::Meta(decl) => {
@@ -199,7 +205,7 @@ impl Resolve for DeclId {
                     metas.extend(old);
                 }
                 metas.push_back(meta);
-                resolver.metas.insert(decl, metas);
+                resolver.metas.insert_new(decl, metas);
                 resolver.deps.add(*self, [decl]);
                 let () = decl.resolve(resolver, global)?;
             }
@@ -226,7 +232,7 @@ impl Resolve for DeclId {
             }
         };
         // no id changed, reuse old inner decl structure
-        resolver.decls.insert(*self, inner);
+        resolver.decls.insert_new(*self, inner);
         Ok(())
     }
 }
@@ -236,7 +242,7 @@ impl Resolve for DefId {
     type Lookup<'a> = ();
 
     fn resolve(&self, resolver: &mut Resolver, _lookup: Self::Lookup<'_>) -> Result<Self::Out> {
-        resolver.defs.insert(*self, resolver.bitter.defs[self].clone());
+        resolver.defs.insert_new(*self, resolver.bitter.defs[self].clone());
         Ok(())
     }
 }
@@ -280,7 +286,7 @@ impl Resolve for PatId {
             }
         };
         // no id changed, reuse old inner pat structure
-        resolver.pats.insert(*self, pat);
+        resolver.pats.insert_new(*self, pat);
         Ok(local)
     }
 }
@@ -305,7 +311,7 @@ impl Resolve for TermId {
                 let decl = global.under_map[&def];
                 resolver.deps.add(local.under, [decl]);
                 // no need update the term as def
-                resolver.terms.insert(*self, Term::Var(def));
+                resolver.terms.insert_new(*self, Term::Var(def));
                 return Ok(());
             }
             | Term::Sealed(term) => {
@@ -327,15 +333,15 @@ impl Resolve for TermId {
                 // first, try to find the variable locally
                 if let Some(def) = local.var_to_def.get(var.leaf()) {
                     // if found, we're done
-                    resolver.terms.insert(*self, Term::Var(*def));
-                    resolver.users.insert(*def, *self);
+                    resolver.terms.insert_new(*self, Term::Var(*def));
+                    resolver.users.insert_new(*def, *self);
                     return Ok(());
                 }
                 // otherwise, try to find the variable globally
                 if let Some(def) = global.var_to_def.get(var.leaf()) {
                     // if found, also add dependency
-                    resolver.terms.insert(*self, Term::Var(*def));
-                    resolver.users.insert(*def, *self);
+                    resolver.terms.insert_new(*self, Term::Var(*def));
+                    resolver.users.insert_new(*def, *self);
                     resolver.deps.add(local.under, [global.under_map[def]]);
                     return Ok(());
                 }
@@ -467,7 +473,7 @@ impl Resolve for TermId {
             | Term::Lit(term) => term.into(),
         };
         // save the new term structure
-        resolver.terms.insert(*self, res);
+        resolver.terms.insert_new(*self, res);
         Ok(())
     }
 }
@@ -552,7 +558,7 @@ impl Collect for SccGroup<DeclId> {
                     }
                 } else {
                     // add the declaration to unis
-                    collector.unis.insert(*id, ());
+                    collector.unis.insert_new(*id, ());
                     // collect context for bindee before collecting for the binder
                     let decl = collector.decls[id].clone();
                     match decl {

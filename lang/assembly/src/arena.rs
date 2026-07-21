@@ -30,11 +30,11 @@ pub struct AssemblyArena {
 }
 
 impl AssemblyArena {
-    pub fn new(alloc: ArcGlobalAlloc) -> Self {
+    pub fn new(alloc: &KeySpaceFactory) -> Self {
         Self {
-            programs: ArenaSparse::new(alloc.alloc()),
-            variables: ArenaSparse::new(alloc.alloc()),
-            symbols: ArenaSparse::new(alloc.alloc()),
+            programs: ArenaSparse::new(alloc.fresh()),
+            variables: ArenaSparse::new(alloc.fresh()),
+            symbols: ArenaSparse::new(alloc.fresh()),
             defs: ArenaBijective::new(),
             contexts: ArenaAssoc::new(),
             deps: DepGraph::new(),
@@ -79,7 +79,7 @@ where
         let this = &mut *arena.as_mut();
         let id = this.variables.alloc(self.into());
         if let Some(site) = site {
-            this.defs.insert(site, DefId::Var(id));
+            this.defs.insert_new(site, DefId::Var(id));
         }
         id
     }
@@ -101,10 +101,10 @@ where
         let id = this.symbols.alloc(symbol);
         if let Some(prog_id) = is_prog {
             // Add a label to the program.
-            this.labels.insert(prog_id, id);
+            this.labels.insert_new(prog_id, id);
         }
         if let Some(site) = site {
-            this.defs.insert(site, DefId::Sym(id));
+            this.defs.insert_new(site, DefId::Sym(id));
         }
         id
     }
@@ -139,7 +139,7 @@ where
         let this = &mut *arena.as_mut();
         let program = self.into();
         let id = this.programs.alloc(program.clone());
-        this.contexts.insert(id, cx);
+        this.contexts.insert_new(id, cx);
 
         // Update dependencies.
         match program {

@@ -477,7 +477,7 @@ impl FillId {
     pub fn fill(&self, tycker: &mut Tycker<'_>, mut ann: AnnId) -> Result<AnnId> {
         if let Some(ann_) = tycker.statics.solus.insert_or_get(*self, ann) {
             ann = Lub::lub(ann, ann_, tycker)?;
-            tycker.statics.solus.replace(*self, ann);
+            tycker.statics.solus.replace_existing(*self, ann);
         }
         Ok(ann)
     }
@@ -803,8 +803,8 @@ impl KindId {
         memo.insert(self, res);
         memo.insert(res, res);
         if let Fillable::Done(kind) = tycker.statics.kinds_pre[&res].to_owned() {
-            tycker.statics.kinds_normalized.insert(self, kind.clone());
-            tycker.statics.kinds_normalized.insert(res, kind);
+            let _ = tycker.statics.kinds_normalized.upsert(self, kind.clone());
+            let _ = tycker.statics.kinds_normalized.upsert(res, kind);
         }
         Ok(res)
     }
@@ -1005,8 +1005,8 @@ impl TypeId {
         memo.insert(self, res);
         memo.insert(res, res);
         if let Fillable::Done(ty) = tycker.statics.types_pre[&res].to_owned() {
-            tycker.statics.types_normalized.insert(self, ty.clone());
-            tycker.statics.types_normalized.insert(res, ty);
+            let _ = tycker.statics.types_normalized.upsert(self, ty.clone());
+            let _ = tycker.statics.types_normalized.upsert(res, ty);
         }
         Ok(res)
     }

@@ -41,7 +41,7 @@ impl<'a> CpsTranslator<'a> {
         let mut new_entries = ArenaAssoc::new();
         for (entry, ()) in entries {
             let entry = self.translate_compu(entry);
-            new_entries.insert(entry, ());
+            new_entries.ensure(entry);
         }
         self.arena.inner.entry = new_entries;
     }

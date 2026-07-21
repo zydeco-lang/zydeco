@@ -12,7 +12,7 @@ use derive_more::{AsMut, AsRef};
 use zydeco_stackir::{StackirArena, sps::syntax as sk};
 use zydeco_statics::tyck::arena::StaticsArena;
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_utils::{arena::ArcGlobalAlloc, with::With};
+use zydeco_utils::{arena::KeySpaceFactory, with::With};
 
 pub trait Lower<'a> {
     type Kont;
@@ -33,7 +33,7 @@ pub struct Lowerer<'a> {
 
 impl<'a> Lowerer<'a> {
     pub fn new(
-        alloc: ArcGlobalAlloc, spans: &'a SpanArena, scoped: &'a ScopedArena,
+        alloc: &KeySpaceFactory, spans: &'a SpanArena, scoped: &'a ScopedArena,
         statics: &'a StaticsArena, stackir: &'a StackirArena,
     ) -> Self {
         let arena = AssemblyArena::new(alloc);
@@ -53,7 +53,7 @@ impl<'a> Lowerer<'a> {
         // Each entry compu is already let g1 = v1 in ... in body, so lowering it handles globals.
         for (compu_id, ()) in &self.stackir.inner.entry {
             let whole = (*compu_id).lower(&mut self, Context::new());
-            self.arena.entry.insert(whole, ());
+            self.arena.entry.ensure(whole);
         }
         self.arena
     }
@@ -417,11 +417,11 @@ impl<'a> Lower<'a> for sk::CompuId {
                 let sym = Undefined.build(lo, (Some(name.to_string()), Some(param)));
                 // Lower the body
                 let body_prog = body.lower(lo, cx.clone());
-                lo.arena.symbols.replace(
+                lo.arena.symbols.replace_existing(
                     sym,
                     NamedSymbol { name: name.to_string(), inner: Symbol::Prog(body_prog) },
                 );
-                lo.arena.labels.insert(body_prog, sym);
+                lo.arena.labels.insert_new(body_prog, sym);
                 // Jump to the body
                 Jump(body_prog).build(lo, cx)
             }

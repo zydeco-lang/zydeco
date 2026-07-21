@@ -9,36 +9,30 @@ use zydeco_derive::{AsMutSelf, AsRefSelf};
 /// This arena is shared by other arenas in the stack IR.
 ///
 /// It is used to store the builtin operators and functions,
-/// and the Zydeco to ZIR bijective maps for patterns and terms.
+/// and the one-to-many Zydeco-to-ZIR provenance maps for patterns and terms.
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct AdminArena {
-    /// arena allocator for associative arenas
-    pub allocator: IndexAlloc<usize>,
+    /// Key space shared by all stack-IR node categories.
+    pub key_space: KeySpace,
 
     /// builtin operators and functions
     pub builtins: BuiltinMap,
 
-    /// Zydeco to ZIR bijective maps for patterns
-    pub pats: ArenaBijective<ss::PatId, VPatId>,
-    /// Zydeco to ZIR bijective maps for terms
-    pub terms: ArenaBijective<ss::TermId, TermId>,
+    /// One source pattern may originate multiple generated ZIR patterns; every
+    /// generated pattern has at most one source pattern.
+    pub pats: ArenaForth<ss::PatId, VPatId>,
+    /// One source term may originate multiple generated ZIR nodes; every
+    /// generated node has at most one source term.
+    pub terms: ArenaForth<ss::TermId, TermId>,
 }
 
 impl AdminArena {
-    pub fn new(allocator: IndexAlloc<usize>) -> Self {
+    pub fn new(key_space: KeySpace) -> Self {
         Self {
-            allocator,
+            key_space,
             builtins: Builtin::all(),
-            pats: ArenaBijective::new(),
-            terms: ArenaBijective::new(),
-        }
-    }
-    pub unsafe fn duplicate(&self) -> Self {
-        Self {
-            allocator: self.allocator.clone(),
-            builtins: self.builtins.clone(),
-            pats: self.pats.clone(),
-            terms: self.terms.clone(),
+            pats: ArenaForth::new(),
+            terms: ArenaForth::new(),
         }
     }
 }

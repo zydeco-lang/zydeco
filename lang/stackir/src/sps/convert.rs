@@ -175,7 +175,7 @@ impl<'a> ClosureConverter<'a> {
         let fix_compu = SFix { param: fix.param, body: transformed_arg_body }.build(self, site);
         // Wrap the Fix in a LetStack that pushes captures, then runs the Fix
         // Update the Fix in place with the wrapped computation
-        self.arena.inner.compus.replace(
+        self.arena.inner.compus.replace_existing(
             old_compu_id,
             Computation::Join(LetJoin::Stack(Let {
                 binder: Bullet,
@@ -233,7 +233,10 @@ impl<'a> ClosureConverter<'a> {
         let body_closure = Closure { stack: Bullet, body: transformed_body }.build(self, site);
 
         // Update the value in place with the pair: (captures, body_closure)
-        self.arena.inner.values.replace_into(old_value_id, Cons(capture_pair, body_closure));
+        self.arena
+            .inner
+            .values
+            .replace_existing_with(old_value_id, Cons(capture_pair, body_closure));
     }
 
     /// Convert a Force computation to handle converted closures.
@@ -265,7 +268,7 @@ impl<'a> ClosureConverter<'a> {
         // LetValue to destructure: let Cons(capture_pair, body_closure) = thunk in ...
         // This will destructure the pair at runtime.
         // Replace the original Force with the transformed computation
-        self.arena.inner.compus.replace(
+        self.arena.inner.compus.replace_existing(
             compu_id,
             Computation::Join(LetJoin::Value(Let {
                 binder: pair_pattern,

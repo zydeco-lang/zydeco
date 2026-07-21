@@ -2,7 +2,7 @@ use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_utils::{arena::ArcGlobalAlloc, pass::CompilerPass, phantom::Phantom};
+use zydeco_utils::{arena::KeySpaceFactory, pass::CompilerPass, phantom::Phantom};
 
 /// Lower typed syntax nodes into stack IR.
 pub trait Lower {
@@ -30,10 +30,10 @@ pub struct Lowerer<'a> {
 impl<'a> Lowerer<'a> {
     /// Create a new lowerer with fresh stack arenas.
     pub fn new(
-        alloc: ArcGlobalAlloc, spans: &'a SpanArena, scoped: &'a mut ScopedArena,
+        alloc: &KeySpaceFactory, spans: &'a SpanArena, scoped: &'a mut ScopedArena,
         statics: &'a StaticsArena,
     ) -> Self {
-        let arena = StackirArena::new_arc(alloc);
+        let arena = StackirArena::new(alloc);
         Self { arena, sequence: Vec::new(), globals: ArenaAssoc::new(), spans, scoped, statics }
     }
 }
@@ -97,7 +97,7 @@ impl<'a> CompilerPass for Lowerer<'a> {
             };
 
             // Register as entry point
-            self.arena.inner.entry.insert(wrapped, ());
+            self.arena.inner.entry.insert_new(wrapped, ());
         }
         Ok(self.arena)
     }
@@ -130,7 +130,7 @@ impl Lower for ss::VAliasBody {
         };
         let value_id = Phantom::new(bindee).lower(lo, Box::new(move |val_id, _lo| val_id));
         lo.sequence.push(def_id);
-        lo.globals.insert(def_id, value_id);
+        lo.globals.insert_new(def_id, value_id);
     }
 }
 
@@ -169,7 +169,7 @@ impl Lower for ss::VAliasHead {
             | BuiltinSort::Function => builtin.make_function(lo),
         };
         lo.sequence.push(def);
-        lo.globals.insert(def, value);
+        lo.globals.insert_new(def, value);
     }
 }
 

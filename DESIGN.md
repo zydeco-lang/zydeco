@@ -53,6 +53,24 @@ The phases are spread across three core crates:
 Common patterns in each phase include `syntax`, `arena`, `err`, `fmt`, and
 `span` modules.
 
+### Arena and ID invariants
+
+Compiler-owned IDs contain an opaque `KeySpaceId` and a `la-arena` raw index.
+`KeySpace` is the only safe issuer of those IDs and is deliberately
+non-cloneable; the non-cloneable `KeySpaceFactory` is shared between passes by
+reference and creates independently identified spaces.
+
+- Dense storage wraps `la_arena::Arena` and rejects IDs from another key
+  space, even when their raw indices happen to match.
+- Sparse storage is used where passes merge fragments or rewrite nodes while
+  retaining IDs. Associative side tables require callers to choose explicit
+  `insert_new`, `replace_existing`, `upsert`, or set-like `ensure` semantics.
+- Provenance tables encode their actual cardinality. In particular, repeated
+  type checking and transparent syntax make surface-to-typed provenance
+  many-to-many, while one typed node can lower to many stack-IR nodes.
+- Parsed entities use a tagged `EntityId` enum, so definitions, patterns,
+  copatterns, terms, and declarations cannot be confused through raw-ID casts.
+
 ## Repository Layout
 
 - `lang/`: language implementation and tests.

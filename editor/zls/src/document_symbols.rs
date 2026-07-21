@@ -2,18 +2,19 @@ use async_lsp::lsp_types::{DocumentSymbol, DocumentSymbolResponse, Range, Symbol
 use async_lsp::{ErrorCode, ResponseError};
 use lsp_textdocument::FullTextDocument;
 use zydeco_driver::{check::pack::PackageStew, prelude::b, Package};
-use zydeco_utils::arena::ArcGlobalAlloc;
+use zydeco_utils::arena::KeySpaceFactory;
 
 use crate::text_position::span_to_range;
 
 pub fn handle(
     document: &FullTextDocument,
 ) -> Result<Option<DocumentSymbolResponse>, ResponseError> {
-    let alloc = ArcGlobalAlloc::new();
+    let alloc = KeySpaceFactory::new();
 
-    let stew = Package::Repl(document.get_content(None).to_string()).parse_package(alloc).map_err(
-        |err| ResponseError::new(ErrorCode::REQUEST_FAILED, format!("parsing error: {err}")),
-    )?;
+    let stew =
+        Package::Repl(document.get_content(None).to_string()).parse_package(&alloc).map_err(
+            |err| ResponseError::new(ErrorCode::REQUEST_FAILED, format!("parsing error: {err}")),
+        )?;
 
     let symbols = stew
         .top

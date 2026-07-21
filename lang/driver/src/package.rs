@@ -61,24 +61,23 @@ pub enum Dependency {
 }
 
 impl Package {
-    pub fn parse_package(&self, alloc: ArcGlobalAlloc) -> Result<PackageStew> {
+    pub fn parse_package(&self, alloc: &KeySpaceFactory) -> Result<PackageStew> {
         match self {
             | Package::Local(LocalPackage { path, name, srcs, deps: _, bins: _, std: _ }) => {
-                let stew =
-                    LocalPackage::parse_package(alloc.clone(), name.as_str(), path, srcs.iter())?;
+                let stew = LocalPackage::parse_package(alloc, name.as_str(), path, srcs.iter())?;
                 Ok(stew)
             }
             | Package::Binary(path) => {
                 let source = std::fs::read_to_string(path.as_path())?;
-                Package::parse_source(alloc.clone(), source, Some(path.to_owned()))
+                Package::parse_source(alloc, source, Some(path.to_owned()))
             }
-            | Package::Repl(source) => Package::parse_source(alloc.clone(), source.clone(), None),
+            | Package::Repl(source) => Package::parse_source(alloc, source.clone(), None),
         }
     }
     pub fn parse_source(
-        alloc: ArcGlobalAlloc, source: String, path: Option<PathBuf>,
+        alloc: &KeySpaceFactory, source: String, path: Option<PathBuf>,
     ) -> Result<PackageStew> {
-        let mut parser = t::Parser::new(alloc.alloc());
+        let mut parser = t::Parser::new(alloc.fresh());
         let (loc, path) = match path {
             | Some(path) => {
                 let loc = LocationCtx::File(FileInfo::new(&source, Some(Arc::new(path.clone()))));
@@ -100,7 +99,7 @@ impl Package {
             })?;
 
         let t::Parser { spans, arena: textual } = parser;
-        let bitter = b::BitterArena::new_arc(alloc.clone());
+        let bitter = b::BitterArena::new(alloc);
         let desugarer = Desugarer::new(&spans, &textual, top, bitter);
         let DesugarOut { arena, prim: prim_term, top } =
             desugarer.run().map_err(|err| LocalError::DesugarError(err.to_string()))?;
@@ -114,10 +113,10 @@ impl Package {
         })
     }
     pub fn check_package(
-        alloc: ArcGlobalAlloc, name: &str, pack: PackageStew,
+        alloc: &KeySpaceFactory, name: &str, pack: PackageStew,
     ) -> Result<PackageChecked> {
         // resolving
-        let pack = pack.resolve(alloc.alloc())?.self_check(name);
+        let pack = pack.resolve()?.self_check(name);
         // tycking
         let checked = pack.tyck(alloc, name)?;
         Ok(checked)

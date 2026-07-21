@@ -76,7 +76,7 @@ fn build_files(
     let pack = build_sys.pick_marked(bin)?;
     // set build configuration for the marked package
     if let Some(build_config) = build_conf {
-        build_sys.build_confs.insert(pack, build_config);
+        build_sys.build_confs.insert_new(pack, build_config);
     }
 
     match target.as_str() {

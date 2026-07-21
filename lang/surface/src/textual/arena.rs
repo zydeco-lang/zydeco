@@ -1,5 +1,4 @@
 use super::syntax::*;
-use derive_more::{AddAssign, Index, IntoIterator};
 
 /* ---------------------------------- Arena --------------------------------- */
 
@@ -14,27 +13,45 @@ pub struct TextArena {
 }
 
 /// Span storage keyed by textual entity IDs.
-#[derive(Clone, Debug, AddAssign, Index, IntoIterator)]
-pub struct SpanArena(#[into_iterator(owned, ref, ref_mut)] ArenaSparse<EntityId, Span>);
+#[derive(Debug)]
+pub struct SpanArena {
+    key_space: KeySpace,
+    spans: ArenaAssoc<EntityId, Span>,
+}
 
 mod impl_span_arena {
     use super::*;
 
     impl SpanArena {
-        /// Create a new span arena with a shared allocator.
-        pub fn new(allocator: IndexAlloc<usize>) -> Self {
-            Self(ArenaSparse::new(allocator))
+        /// Create a span arena that owns the given key space.
+        pub fn new(key_space: KeySpace) -> Self {
+            Self { key_space, spans: ArenaAssoc::new() }
         }
-        /// Allocate a span and return its textual entity ID.
-        pub fn alloc(&mut self, span: Span) -> EntityId {
-            self.0.alloc(span)
+        /// Allocate a typed textual ID and associate its tagged form with a span.
+        pub fn alloc<Id>(&mut self, span: Span) -> Id
+        where
+            Id: ArenaId + Into<EntityId>,
+        {
+            let id: Id = self.key_space.alloc();
+            self.spans.insert_new(id.into(), span);
+            id
+        }
+        /// Iterate over stored spans with their IDs.
+        pub fn iter(&self) -> impl Iterator<Item = (&EntityId, &Span)> {
+            self.spans.iter()
         }
     }
 
-    impl<'a> SpanArena {
-        /// Iterate over stored spans with their IDs.
-        pub fn iter(&'a self) -> <&'a Self as IntoIterator>::IntoIter {
-            self.into_iter()
+    impl std::ops::Index<&EntityId> for SpanArena {
+        type Output = Span;
+        fn index(&self, id: &EntityId) -> &Self::Output {
+            &self.spans[id]
+        }
+    }
+
+    impl std::ops::AddAssign for SpanArena {
+        fn add_assign(&mut self, rhs: Self) {
+            self.spans += rhs.spans;
         }
     }
 }

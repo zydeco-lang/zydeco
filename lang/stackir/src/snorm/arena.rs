@@ -85,7 +85,7 @@ where
     type Structure = ();
     fn sbuild(self, arena: &mut Arena, id: Self::Id, (): Self::Structure) -> VPatId {
         let this = &mut *arena.as_mut();
-        this.svpats.insert(id, self.into());
+        this.svpats.insert_new(id, self.into());
         id
     }
 }
@@ -99,7 +99,7 @@ where
     type Structure = ();
     fn sbuild(self, arena: &mut Arena, id: Self::Id, (): Self::Structure) -> ValueId {
         let this = &mut *arena.as_mut();
-        this.svalues.insert(id, self.into());
+        this.svalues.insert_new(id, self.into());
         id
     }
 }
@@ -114,8 +114,8 @@ where
     type Structure = StackId;
     fn sbuild(self, arena: &mut Arena, id: Self::Id, hole: Self::Structure) -> StackId {
         let this = &mut *arena.as_mut();
-        this.sstacks.insert(id, self.into());
-        this.holes.insert(id, hole);
+        this.sstacks.insert_new(id, self.into());
+        this.holes.insert_new(id, hole);
         id
     }
 }
@@ -129,7 +129,7 @@ where
     type Structure = SubstAssignments;
     fn sbuild(self, arena: &mut Arena, id: Self::Id, assignments: Self::Structure) -> CompuId {
         let this = &mut *arena.as_mut();
-        this.scompus.insert(id, SComputation { compu: self.into(), assignments });
+        this.scompus.insert_new(id, SComputation { compu: self.into(), assignments });
         id
     }
 }

@@ -1,4 +1,3 @@
-use crate::arena::IndexAlloc;
 use derive_more::{Deref, DerefMut, IntoIterator};
 use std::{
     collections::{HashMap, HashSet},
@@ -6,9 +5,15 @@ use std::{
 };
 
 /// dependency graph; LHS depends on all RHSs
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct DepGraph<Id: Hash + Eq + Clone> {
     pub(crate) map: HashMap<Id, HashSet<Id>>,
+}
+
+impl<Id: Hash + Eq + Clone> Default for DepGraph<Id> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<Id: Hash + Eq + Clone> DepGraph<Id>
@@ -62,9 +67,15 @@ impl<Id: Hash + Eq + Clone> DepGraph<Id>
 }
 
 /// co-dependency graph
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct SrcGraph<Id: Hash + Eq + Clone> {
     pub(crate) map: HashMap<Id, HashSet<Id>>,
+}
+
+impl<Id: Hash + Eq + Clone> Default for SrcGraph<Id> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<Id: Hash + Eq + Clone> SrcGraph<Id>
@@ -111,7 +122,7 @@ impl<Id: Hash + Eq + Clone> SrcGraph<Id>
 //     // stack of nodes
 //     seen: Vec<Id>,
 //     // dfs index allocator
-//     alloc: IndexAlloc<()>,
+//     next_dfs: usize,
 //     // dfs index of nodes
 //     dfs: HashMap<Id, usize>,
 //     // low link of nodes
@@ -155,7 +166,7 @@ impl<Id: Hash + Eq + Clone> SrcGraph<Id>
 //         Self {
 //             deps,
 //             unvisited: deps.nodes(),
-//             alloc: IndexAlloc::new(),
+//             next_dfs: 0,
 //             seen: Vec::new(),
 //             dfs: HashMap::new(),
 //             low: HashMap::new(),
@@ -170,7 +181,8 @@ impl<Id: Hash + Eq + Clone> SrcGraph<Id>
 //         Some(id)
 //     }
 //     fn assign_dfs_index(&mut self, id: Id) -> usize {
-//         let idx = self.alloc.next().unwrap().1;
+//         let idx = self.next_dfs;
+//         self.next_dfs += 1;
 //         self.dfs.insert(id, idx);
 //         idx
 //     }
@@ -208,10 +220,11 @@ impl<'a, Id: Hash + Eq + Clone> Kosaraju<'a, Id>
         }
         let mut belongs = HashMap::new();
         {
-            let mut alloc = IndexAlloc::new();
+            let mut next_scc = 0usize;
             for id in stack.iter().rev() {
                 if !belongs.contains_key(id) {
-                    let idx = alloc.next().unwrap().1;
+                    let idx = next_scc;
+                    next_scc += 1;
                     self.dfs_backward(idx, &mut belongs, id.clone());
                 }
             }
@@ -237,8 +250,14 @@ impl<'a, Id: Hash + Eq + Clone> Kosaraju<'a, Id>
     }
 }
 
-#[derive(Clone, Default, Deref, DerefMut, IntoIterator, PartialEq, Eq, Debug)]
+#[derive(Clone, Deref, DerefMut, IntoIterator, PartialEq, Eq, Debug)]
 pub struct SccGroup<Id: Hash + Eq + Clone>(#[into_iterator(owned, ref)] pub HashSet<Id>);
+
+impl<Id: Hash + Eq + Clone> Default for SccGroup<Id> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<Id: Hash + Eq + Clone> SccGroup<Id> {
     pub fn new() -> Self {

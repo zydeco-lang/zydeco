@@ -39,8 +39,8 @@ pub struct StackirInnerArena {
 }
 
 impl StackirArena {
-    pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
-        Self { admin: AdminArena::new(alloc.alloc()), inner: StackirInnerArena::new() }
+    pub fn new(alloc: &KeySpaceFactory) -> Self {
+        Self { admin: AdminArena::new(alloc.fresh()), inner: StackirInnerArena::new() }
     }
 }
 
@@ -71,10 +71,10 @@ where
     type Site = ss::PatId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> VPatId {
         let this = &mut *arena.as_mut();
-        let vpat_id = this.admin.allocator.alloc();
-        this.inner.vpats.insert(vpat_id, self.into());
+        let vpat_id = this.admin.key_space.alloc();
+        this.inner.vpats.insert_new(vpat_id, self.into());
         if let Some(site) = site {
-            this.admin.pats.insert(site, vpat_id);
+            this.admin.pats.insert_new(site, vpat_id);
         }
         vpat_id
     }
@@ -88,10 +88,10 @@ where
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> ValueId {
         let this = &mut *arena.as_mut();
-        let value_id = this.admin.allocator.alloc();
-        this.inner.values.insert(value_id, self.into());
+        let value_id = this.admin.key_space.alloc();
+        this.inner.values.insert_new(value_id, self.into());
         if let Some(site) = site {
-            this.admin.terms.insert(site, TermId::Value(value_id));
+            this.admin.terms.insert_new(site, TermId::Value(value_id));
         }
         value_id
     }
@@ -105,10 +105,10 @@ where
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> StackId {
         let this = &mut *arena.as_mut();
-        let stack_id = this.admin.allocator.alloc();
-        this.inner.stacks.insert(stack_id, self.into());
+        let stack_id = this.admin.key_space.alloc();
+        this.inner.stacks.insert_new(stack_id, self.into());
         if let Some(site) = site {
-            this.admin.terms.insert(site, TermId::Stack(stack_id));
+            this.admin.terms.insert_new(site, TermId::Stack(stack_id));
         }
         stack_id
     }
@@ -122,10 +122,10 @@ where
     type Site = ss::TermId;
     fn build(self, arena: &mut Arena, site: Option<Self::Site>) -> CompuId {
         let this = &mut *arena.as_mut();
-        let compu_id = this.admin.allocator.alloc();
-        this.inner.compus.insert(compu_id, self.into());
+        let compu_id = this.admin.key_space.alloc();
+        this.inner.compus.insert_new(compu_id, self.into());
         if let Some(site) = site {
-            this.admin.terms.insert(site, TermId::Compu(compu_id));
+            this.admin.terms.insert_new(site, TermId::Compu(compu_id));
         }
         compu_id
     }

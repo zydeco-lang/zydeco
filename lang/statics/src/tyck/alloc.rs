@@ -39,7 +39,7 @@ where
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, (): &Self::Env) -> DefId {
         let id = AsMut::<ScopedArena>::as_mut(arena).defs.alloc(val);
-        AsMut::<StaticsArena>::as_mut(arena).annotations_var.insert(id, ann);
+        AsMut::<StaticsArena>::as_mut(arena).annotations_var.insert_new(id, ann);
         id
     }
 }
@@ -54,8 +54,8 @@ where
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, _env: &Self::Env) -> AbstId {
         let abst = arena.as_mut().absts.alloc(());
-        arena.as_mut().annotations_abst.insert(abst, ann);
-        arena.as_mut().abst_hints.insert(abst, val);
+        arena.as_mut().annotations_abst.insert_new(abst, ann);
+        arena.as_mut().abst_hints.insert_new(abst, val);
         abst
     }
 }
@@ -67,9 +67,9 @@ where
     type Env = ();
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, _env: &Self::Env) -> AbstId {
         let abst = arena.as_mut().absts.alloc(());
-        arena.as_mut().annotations_abst.insert(abst, ann);
+        arena.as_mut().annotations_abst.insert_new(abst, ann);
         if let Some(def) = val {
-            arena.as_mut().abst_hints.insert(abst, def);
+            arena.as_mut().abst_hints.insert_new(abst, def);
         }
         abst
     }
@@ -153,8 +153,8 @@ where
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> TPatId {
         let tpat = arena.as_mut().tpats.alloc(val);
-        arena.as_mut().annotations_tpat.insert(tpat, ann);
-        arena.as_mut().env_tpat.insert(tpat, env.clone());
+        arena.as_mut().annotations_tpat.insert_new(tpat, ann);
+        arena.as_mut().env_tpat.insert_new(tpat, env.clone());
         tpat
     }
 }
@@ -189,17 +189,8 @@ where
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann, env: &Self::Env) -> TypeId {
         let ty = arena.as_mut().types_pre.alloc(val.into());
-        arena
-            .as_mut()
-            .annotations_type
-            .insert_or_else(ty, kd, |_old, _new| -> std::result::Result<KindId, ()> {
-                panic!("duplicate keys: {:?} = {:?}, {:?}", ty, _old, _new)
-                // // Todo: handle duplicate keys
-                // let res: std::result::Result<KindId, ()> = Ok(_new);
-                // res
-            })
-            .unwrap();
-        arena.as_mut().env_type.insert(ty, env.clone());
+        arena.as_mut().annotations_type.insert_new(ty, kd);
+        arena.as_mut().env_type.insert_new(ty, env.clone());
         ty
     }
 }
@@ -211,17 +202,8 @@ where
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, kd: Self::Ann, env: &Self::Env) -> TypeId {
         let ty = arena.as_mut().types_pre.alloc(Fillable::Done(val));
-        arena
-            .as_mut()
-            .annotations_type
-            .insert_or_else(ty, kd, |_old, _new| -> std::result::Result<KindId, ()> {
-                panic!("duplicate keys: {:?} = {:?}, {:?}", ty, _old, _new)
-                // // Todo: handle duplicate keys
-                // let res: std::result::Result<KindId, ()> = Ok(_new);
-                // res
-            })
-            .unwrap();
-        arena.as_mut().env_type.insert(ty, env.clone());
+        arena.as_mut().annotations_type.insert_new(ty, kd);
+        arena.as_mut().env_type.insert_new(ty, env.clone());
         ty
     }
 }
@@ -271,8 +253,8 @@ where
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> VPatId {
         let vpat = arena.as_mut().vpats.alloc(val);
-        arena.as_mut().annotations_vpat.insert(vpat, ann);
-        arena.as_mut().env_vpat.insert(vpat, env.clone());
+        arena.as_mut().annotations_vpat.insert_new(vpat, ann);
+        arena.as_mut().env_vpat.insert_new(vpat, env.clone());
         vpat
     }
 }
@@ -311,8 +293,8 @@ where
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> ValueId {
         let value = arena.as_mut().values.alloc(val);
-        arena.as_mut().annotations_value.insert(value, ann);
-        arena.as_mut().env_value.insert(value, env.clone());
+        arena.as_mut().annotations_value.insert_new(value, ann);
+        arena.as_mut().env_value.insert_new(value, env.clone());
         value
     }
 }
@@ -353,8 +335,8 @@ where
     type Env = TyEnv;
     fn alloc(arena: &mut Arena, val: Self, ann: Self::Ann, env: &Self::Env) -> CompuId {
         let compu = arena.as_mut().compus.alloc(val);
-        arena.as_mut().annotations_compu.insert(compu, ann);
-        arena.as_mut().env_compu.insert(compu, env.clone());
+        arena.as_mut().annotations_compu.insert_new(compu, ann);
+        arena.as_mut().env_compu.insert_new(compu, env.clone());
         compu
     }
 }

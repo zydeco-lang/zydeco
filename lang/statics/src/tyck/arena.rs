@@ -13,8 +13,7 @@ pub use zydeco_surface::arena::*;
 pub use zydeco_surface::scoped::arena::*;
 
 /// Typed arena plus annotation tables and translation metadata.
-// Clone is derived only for coping with wf in driver
-#[derive(Debug, Clone, AsRefSelf, AsMutSelf)]
+#[derive(Debug, AsRefSelf, AsMutSelf)]
 pub struct StaticsArena {
     /// kind arena before normalization
     pub kinds_pre: ArenaSparse<KindId, Fillable<Kind>>,
@@ -35,10 +34,12 @@ pub struct StaticsArena {
     /// typically the main function, which normally should only be unique
     pub entry: ArenaAssoc<DeclId, ()>,
 
-    /// untyped to typed bijective maps for patterns
-    pub pats: ArenaBijective<su::PatId, PatId>,
-    /// untyped to typed bijective maps for terms
-    pub terms: ArenaBijective<su::TermId, TermId>,
+    /// Untyped-to-typed pattern provenance. A surface pattern can be checked
+    /// more than once, while transparent wrappers can share a typed pattern.
+    pub pats: ArenaBipartite<su::PatId, PatId>,
+    /// Untyped-to-typed term provenance. A surface term can be checked more
+    /// than once, while erased constructs can share a typed term.
+    pub terms: ArenaBipartite<su::TermId, TermId>,
 
     /// arena for abstract types
     pub absts: ArenaDense<AbstId, ()>,
@@ -109,29 +110,29 @@ pub struct StaticsArena {
 }
 
 impl StaticsArena {
-    pub fn new_arc(alloc: ArcGlobalAlloc) -> Self {
+    pub fn new(alloc: &KeySpaceFactory) -> Self {
         Self {
-            kinds_pre: ArenaSparse::new(alloc.alloc()),
-            tpats: ArenaSparse::new(alloc.alloc()),
-            types_pre: ArenaSparse::new(alloc.alloc()),
-            vpats: ArenaSparse::new(alloc.alloc()),
-            values: ArenaSparse::new(alloc.alloc()),
-            compus: ArenaSparse::new(alloc.alloc()),
+            kinds_pre: ArenaSparse::new(alloc.fresh()),
+            tpats: ArenaSparse::new(alloc.fresh()),
+            types_pre: ArenaSparse::new(alloc.fresh()),
+            vpats: ArenaSparse::new(alloc.fresh()),
+            values: ArenaSparse::new(alloc.fresh()),
+            compus: ArenaSparse::new(alloc.fresh()),
             decls: ArenaAssoc::new(),
 
             entry: ArenaAssoc::new(),
 
-            pats: ArenaBijective::new(),
-            terms: ArenaBijective::new(),
+            pats: ArenaBipartite::new(),
+            terms: ArenaBipartite::new(),
 
-            absts: ArenaDense::new(alloc.alloc()),
+            absts: ArenaDense::new(alloc.fresh()),
             seals: ArenaAssoc::new(),
             abst_hints: ArenaAssoc::new(),
-            fills: ArenaDense::new(alloc.alloc()),
+            fills: ArenaDense::new(alloc.fresh()),
             solus: ArenaAssoc::new(),
             fill_hints: ArenaAssoc::new(),
-            datas: ArenaDense::new(alloc.alloc()),
-            codatas: ArenaDense::new(alloc.alloc()),
+            datas: ArenaDense::new(alloc.fresh()),
+            codatas: ArenaDense::new(alloc.fresh()),
             data_hints: ArenaAssoc::new(),
             data_pat_hints: ArenaAssoc::new(),
             codata_hints: ArenaAssoc::new(),

@@ -313,7 +313,7 @@ impl<'a> PrimitiveRegistry<'a> {
                 },
             )
             .cloned()?;
-        exts.insert(decl, (internal, prim));
+        exts.insert_new(decl, (internal, prim));
         internal_to_def.extend(terms.all().iter().map(|term| (*term, prim)));
         Ok(prim)
     }

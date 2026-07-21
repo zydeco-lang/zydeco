@@ -29,7 +29,7 @@ where
         fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
             vpat: impl Into<ValuePattern>, arena: &mut Arena,
         ) -> VPatId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).allocator.alloc();
+            let new_id = AsMut::<AdminArena>::as_mut(arena).key_space.alloc();
             vpat.sbuild(arena, new_id, ())
         }
         use ValuePattern as VPat;
@@ -63,7 +63,7 @@ where
         fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
             value: impl Into<Value>, arena: &mut Arena,
         ) -> ValueId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).allocator.alloc();
+            let new_id = AsMut::<AdminArena>::as_mut(arena).key_space.alloc();
             value.sbuild(arena, new_id, ())
         }
         use Value;
@@ -107,7 +107,7 @@ where
         fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
             stack: impl Into<Stack>, arena: &mut Arena,
         ) -> StackId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).allocator.alloc();
+            let new_id = AsMut::<AdminArena>::as_mut(arena).key_space.alloc();
             // Fixme: hole is not correct here
             stack.sbuild(arena, new_id, new_id)
         }
@@ -142,7 +142,7 @@ where
         fn build<Arena: AsMut<AdminArena> + AsMut<SNormInnerArena>>(
             compu: impl Into<Computation<NonJoin>>, new_str: SubstAssignments, arena: &mut Arena,
         ) -> CompuId {
-            let new_id = AsMut::<AdminArena>::as_mut(arena).allocator.alloc();
+            let new_id = AsMut::<AdminArena>::as_mut(arena).key_space.alloc();
             compu.sbuild(arena, new_id, new_str)
         }
         let new_str = SubstAssignments {

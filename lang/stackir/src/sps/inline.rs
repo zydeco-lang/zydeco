@@ -32,7 +32,7 @@ impl<'a> CompilerPass for Inliner<'a> {
     fn run(mut self) -> Result<(), Self::Error> {
         let mut new_entry = ArenaAssoc::new();
         for (compu_id, ()) in self.stackir.inner.entry.clone() {
-            new_entry.insert(compu_id.inline_top_level(&mut self), ());
+            new_entry.ensure(compu_id.inline_top_level(&mut self));
         }
         self.stackir.inner.entry = new_entry;
         Ok(())

@@ -12,7 +12,7 @@ impl Tycker<'_> {
             | AnnId::Set | AnnId::Type(_) => unreachable!(),
         };
         let ty = Alloc::alloc(self, prim, kd, &env.info);
-        self.statics.annotations_var.insert(def, kd.into());
+        self.statics.annotations_var.insert_new(def, kd.into());
         env.info += [(def, ty.into())];
         Ok(env)
     }
@@ -27,35 +27,35 @@ impl Tycker<'_> {
                 match internal {
                     | su::Internal::VType => {
                         let kd = Alloc::alloc(self, VType, (), &());
-                        self.statics.annotations_var.insert(def, AnnId::Set);
+                        self.statics.annotations_var.insert_new(def, AnnId::Set);
                         env.info += [(def, kd.into())];
                         // should also be added to global
-                        self.statics.global_defs.insert(def, ());
+                        self.statics.global_defs.ensure(def);
                     }
                     | su::Internal::CType => {
                         let kd = Alloc::alloc(self, CType, (), &());
-                        self.statics.annotations_var.insert(def, AnnId::Set);
+                        self.statics.annotations_var.insert_new(def, AnnId::Set);
                         env.info += [(def, kd.into())];
                         // should also be added to global
-                        self.statics.global_defs.insert(def, ());
+                        self.statics.global_defs.ensure(def);
                     }
                     | su::Internal::Thk => {
                         let kd = ty.unwrap();
                         env = self.register_prim_ty(env, def, ThkTy.into(), kd)?;
                         // should also be added to global
-                        self.statics.global_defs.insert(def, ());
+                        self.statics.global_defs.ensure(def);
                     }
                     | su::Internal::Ret => {
                         let kd = ty.unwrap();
                         env = self.register_prim_ty(env, def, RetTy.into(), kd)?;
                         // should also be added to global
-                        self.statics.global_defs.insert(def, ());
+                        self.statics.global_defs.ensure(def);
                     }
                     | su::Internal::Unit => {
                         let kd = ty.unwrap();
                         env = self.register_prim_ty(env, def, UnitTy.into(), kd)?;
                         // should also be added to global
-                        self.statics.global_defs.insert(def, ());
+                        self.statics.global_defs.ensure(def);
                     }
                     | su::Internal::Int => {
                         let kd = ty.unwrap();
@@ -97,7 +97,7 @@ impl Tycker<'_> {
                     | PatAnnId::Type(_, _) => unreachable!(),
                     | PatAnnId::Value(vpat, _) => vpat,
                 };
-                self.statics.decls.insert(*id, VAliasHead { binder, ty }.into());
+                self.statics.decls.insert_new(*id, VAliasHead { binder, ty }.into());
 
                 // should NOT be added to global
                 // match binder.try_destruct_def(self) {

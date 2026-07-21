@@ -8,7 +8,7 @@ use {
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
         *,
     },
-    zydeco_utils::prelude::{ArcGlobalAlloc, ArenaAccess, CompilerPass, SccGroup},
+    zydeco_utils::prelude::{ArenaAccess, CompilerPass, KeySpaceFactory, SccGroup},
 };
 
 /// Type-checking driver that consumes scoped syntax and produces typed arenas.
@@ -38,15 +38,15 @@ pub struct Tycker<'a> {
 
 impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
-    pub fn new_arc(
+    pub fn new(
         spans: &'a SpanArena, prim: &'a PrimDefs, scoped: &'a mut ScopedArena,
-        alloc: ArcGlobalAlloc,
+        alloc: &KeySpaceFactory,
     ) -> Self {
         Self {
             spans,
             prim,
             scoped,
-            statics: StaticsArena::new_arc(alloc),
+            statics: StaticsArena::new(alloc),
             tasks: im::Vector::new(),
             metas: im::Vector::new(),
             errors: Vec::new(),
@@ -123,7 +123,7 @@ impl<'a> Tycker<'a> {
                     self.err_k(TyckError::MissingSolution(fills), std::panic::Location::caller());
             }
             let ty = self.statics.types_pre[&solu].to_owned();
-            self.statics.types_pre.replace(id, ty);
+            self.statics.types_pre.replace_existing(id, ty);
         }
     }
     /// Print all hole solutions as a reference for the user.
@@ -347,7 +347,7 @@ impl<'a> Tyck<'a> for TyEnvT<SccGroup<su::DeclId>> {
                             // administrative
                             tycker.tasks.push_back(TyckTask::Exec(id.to_owned()));
                             // mark the exec as an entry point
-                            tycker.statics.entry.insert(id.to_owned(), ());
+                            tycker.statics.entry.insert_new(id.to_owned(), ());
                             let su::Exec(term) = decl;
                             // check if the exec is annotated as pure
                             if let Some(meta) = tycker.scoped.metas.get(id).and_then(|v| v.last())
@@ -359,14 +359,20 @@ impl<'a> Tyck<'a> for TyEnvT<SccGroup<su::DeclId>> {
                                     .mk(term)
                                     .tyck_k(tycker, Action::ana(ret_app_hole.into()))?;
                                 let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
-                                tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
+                                tycker
+                                    .statics
+                                    .decls
+                                    .insert_new(id.to_owned(), ss::Exec(body).into());
                             } else {
                                 // check with OS
                                 let os = ss::OSTy.build(tycker, &env.info);
                                 let out_ann =
                                     env.mk(term).tyck_k(tycker, Action::ana(os.into()))?;
                                 let TermAnnId::Compu(body, _) = out_ann else { unreachable!() };
-                                tycker.statics.decls.insert(id.to_owned(), ss::Exec(body).into());
+                                tycker
+                                    .statics
+                                    .decls
+                                    .insert_new(id.to_owned(), ss::Exec(body).into());
                             }
                             Ok(env)
                         })
@@ -415,9 +421,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
                 let bindee = if is_sealed {
                     let abst = tycker.statics.absts.alloc(());
                     if let (Some(def), _kd) = binder.try_destruct_def(tycker) {
-                        tycker.statics.abst_hints.insert(abst, def);
+                        tycker.statics.abst_hints.insert_new(abst, def);
                     }
-                    tycker.statics.seals.insert(abst, ty);
+                    tycker.statics.seals.insert_new(abst, ty);
                     Alloc::alloc(tycker, abst, kd, &env.info)
                 } else {
                     bindee
@@ -430,7 +436,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
                 tycker
                     .statics
                     .decls
-                    .insert(id.to_owned(), ss::TAliasBody { binder, bindee }.into());
+                    .insert_new(id.to_owned(), ss::TAliasBody { binder, bindee }.into());
                 // should also be added to global if it only depends on global definitions
                 match binder.try_destruct_def(tycker) {
                     | (Some(def), _) => {
@@ -439,7 +445,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
                             .into_iter()
                             .all(|id| tycker.statics.global_defs.get(&id).is_some())
                         {
-                            tycker.statics.global_defs.insert(def, ());
+                            tycker.statics.global_defs.ensure(def);
                         }
                     }
                     | (None, _) => {}
@@ -453,7 +459,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
                 tycker
                     .statics
                     .decls
-                    .insert(id.to_owned(), ss::VAliasBody { binder, bindee }.into());
+                    .insert_new(id.to_owned(), ss::VAliasBody { binder, bindee }.into());
                 // should also be added to global if it only depends on global definitions
                 match binder.try_destruct_def(tycker) {
                     | (Some(def), _) => {
@@ -462,9 +468,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
                             .into_iter()
                             .all(|id| tycker.statics.global_defs.get(&id).is_some())
                         {
-                            tycker.statics.global_defs.insert(def, ());
+                            tycker.statics.global_defs.ensure(def);
                             // consider adding it to the inlinables as well
-                            tycker.statics.inlinables.insert(def, bindee);
+                            let _ = tycker.statics.inlinables.upsert(def, bindee);
                         }
                     }
                     | (None, _) => {}
@@ -531,7 +537,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
             let (def, kd) = binder.try_destruct_def(tycker);
             if let Some(def) = def {
                 let abst = tycker.statics.absts.alloc(());
-                tycker.statics.abst_hints.insert(abst, def);
+                tycker.statics.abst_hints.insert_new(abst, def);
                 let abst_ty = Alloc::alloc(tycker, abst, kd, &env.info);
                 env.info += [(def, abst_ty.into())];
                 abst_map.insert(id.to_owned(), (abst, kd));
@@ -562,7 +568,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
             let bindee_subst = bindee.subst_env_k(tycker, &env.info)?;
             // add the types to the seal arena
             let (abst, kd) = abst_map[id];
-            tycker.statics.seals.insert(abst, bindee_subst);
+            tycker.statics.seals.insert_new(abst, bindee_subst);
             let abst_ty = Alloc::alloc(tycker, abst, kd, &env.info);
             // add the type into the environment
             let TyEnvT { info: new_env, inner: () } =
@@ -657,7 +663,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                 };
                 if let Some(ann_) = tycker.statics.annotations_var.insert_or_get(def, ann) {
                     let ann = Lub::lub_k(ann_, ann, tycker)?;
-                    tycker.statics.annotations_var.replace(def, ann);
+                    tycker.statics.annotations_var.replace_existing(def, ann);
                 }
 
                 PatAnnId::mk_var(tycker, &self.info, def, ann)
@@ -700,7 +706,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     let (args, _) = args_out_ann.as_value();
                     let pat =
                         Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), args), ann_ty, &self.info);
-                    tycker.statics.data_pat_hints.insert(pat, data_id.to_owned());
+                    tycker.statics.data_pat_hints.insert_new(pat, data_id.to_owned());
                     PatAnnId::Value(pat, ann_ty)
                 }
             },
@@ -784,7 +790,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
         };
 
         // maintain back mapping
-        tycker.statics.pats.insert(self.inner, pat_ann.as_pat());
+        tycker.statics.pats.ensure(self.inner, pat_ann.as_pat());
 
         Ok(pat_ann)
     }
@@ -875,7 +881,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 | AnnId::Kind(kd) => match tycker.statics.kinds_pre[&kd].to_owned() {
                     | Fillable::Fill(fill) => match self.tyck_k(tycker, Action::syn())? {
                         | TermAnnId::Type(ty, kd) => {
-                            tycker.statics.solus.insert(fill, kd.into());
+                            let kd = fill.fill_k(tycker, kd.into())?.as_kind();
                             return Ok(TermAnnId::Type(ty, kd));
                         }
                         | TermAnnId::Hole(_)
@@ -1027,15 +1033,15 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         match tycker.kind_filled_k(&kd)?.to_owned() {
                             | ss::Kind::VType(ss::VType) => {
                                 let hole = Alloc::alloc(tycker, self.inner, (), &());
-                                tycker.statics.solus.insert(hole, ty.into());
-                                tycker.statics.fill_hints.insert(hole, ());
+                                tycker.statics.solus.insert_new(hole, ty.into());
+                                tycker.statics.fill_hints.insert_new(hole, ());
                                 let hole = Alloc::alloc(tycker, ss::Hole, ty, &self.info);
                                 TermAnnId::Value(hole, ty)
                             }
                             | ss::Kind::CType(ss::CType) => {
                                 let hole = Alloc::alloc(tycker, self.inner, (), &());
-                                tycker.statics.solus.insert(hole, ty.into());
-                                tycker.statics.fill_hints.insert(hole, ());
+                                tycker.statics.solus.insert_new(hole, ty.into());
+                                tycker.statics.fill_hints.insert_new(hole, ());
                                 let hole = Alloc::alloc(tycker, ss::Hole, ty, &self.info);
                                 TermAnnId::Compu(hole, ty)
                             }
@@ -2012,7 +2018,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             | (Some(def), _) => {
                                 // consider adding it to the globals if bindee is global
                                 if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
-                                    tycker.statics.global_defs.insert(def, ());
+                                    tycker.statics.global_defs.ensure(def);
                                 }
                             }
                             | (None, _) => {}
@@ -2046,9 +2052,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             | (Some(def), _) => {
                                 // consider adding it to the globals if bindee is global
                                 if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
-                                    tycker.statics.global_defs.insert(def, ());
+                                    tycker.statics.global_defs.ensure(def);
                                     // consider adding it to the inlinables as well
-                                    tycker.statics.inlinables.insert(def, bindee_out);
+                                    let _ = tycker.statics.inlinables.upsert(def, bindee_out);
                                 }
                             }
                             | (None, _) => {}
@@ -2234,7 +2240,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let TermAnnId::Value(arg, _arg_ty) = arg_out_ann else { unreachable!() };
                 let ctor = Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), arg), ana_ty, &self.info);
                 // hint the ctor to be associated with the definition name
-                tycker.statics.data_hints.insert(ctor, data_id);
+                tycker.statics.data_hints.insert_new(ctor, data_id);
                 TermAnnId::Value(ctor, ana_ty)
             }
             | Tm::Match(term) => {
@@ -2249,7 +2255,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 // hint the scrut to be associated with the data type
                 match tycker.type_filled_k(&scrut_ty_unroll)? {
                     | ss::Type::Data(data_id) => {
-                        tycker.statics.data_hints.insert(scrut, data_id);
+                        let _ = tycker.statics.data_hints.upsert(scrut, data_id);
                     }
                     | _ => {}
                 }
@@ -2375,7 +2381,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let whole_term =
                     Alloc::alloc(tycker, ss::CoMatch { arms: comatchers_new }, ana_ty, &self.info);
                 // hint the whole computation to be associated with the codata type
-                tycker.statics.codata_hints.insert(whole_term, codata_id);
+                tycker.statics.codata_hints.insert_new(whole_term, codata_id);
                 TermAnnId::Compu(whole_term, ana_ty)
             }
             | Tm::Dtor(term) => {
@@ -2395,7 +2401,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     )?
                 };
                 // hint the body to be associated with the codata type
-                tycker.statics.codata_hints.insert(body, codata_id);
+                let _ = tycker.statics.codata_hints.upsert(body, codata_id);
                 let whole_ty = match tycker.statics.codatas[&codata_id].get(&dtor) {
                     | Some(ty) => ty.to_owned(),
                     | None => tycker.err_k(
@@ -2463,7 +2469,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
 
         if let Some(out) = out_ann.as_term() {
             // maintain back mapping
-            tycker.statics.terms.insert(self.inner, out);
+            tycker.statics.terms.ensure(self.inner, out);
 
             // check if the term is global
             let coctx = tycker.scoped.coctxs_term_local[&self.inner].to_owned();
@@ -2486,7 +2492,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             // };
 
             if global {
-                tycker.statics.global_terms.insert(out, ());
+                tycker.statics.global_terms.ensure(out);
             }
             // if !global {
             //     // Debug: print

@@ -60,7 +60,10 @@ impl SubstVarInPlace for ValueId {
                     *count += 1;
                     let new_value =
                         AsMut::<StackirArena>::as_mut(arena).inner.values[&new_value_id].clone();
-                    AsMut::<StackirArena>::as_mut(arena).inner.values.replace(self, new_value);
+                    AsMut::<StackirArena>::as_mut(arena)
+                        .inner
+                        .values
+                        .replace_existing(self, new_value);
                 }
                 | None => {}
             },

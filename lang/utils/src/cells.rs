@@ -43,9 +43,15 @@ impl<T> Default for SingCell<T> {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct MultiCell<T> {
     cells: Vec<T>,
+}
+
+impl<T> Default for MultiCell<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> MultiCell<T> {

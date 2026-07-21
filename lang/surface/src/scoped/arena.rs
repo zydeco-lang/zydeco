@@ -17,8 +17,7 @@ pub trait ArenaScoped {
 }
 
 /// Resolved arena plus name-resolution metadata and dependency/context analysis.
-// Clone is derived only for coping with wf in driver
-#[derive(Debug, Clone, AsRefSelf, AsMutSelf)]
+#[derive(Debug, AsRefSelf, AsMutSelf)]
 pub struct ScopedArena {
     // arenas
     pub defs: ArenaSparse<DefId, VarName>,
@@ -102,8 +101,8 @@ impl LocalFoldScoped<Context> for Collector {
         match item {
             | Pattern::Ann(inner) => {
                 let Ann { tm, ty } = inner;
-                self.ctxs_pat_local.insert(pat, self.ctxs_pat_local[&tm].to_owned());
-                self.coctxs_pat_local.insert(pat, {
+                self.ctxs_pat_local.insert_new(pat, self.ctxs_pat_local[&tm].to_owned());
+                self.coctxs_pat_local.insert_new(pat, {
                     let co_tm = self.coctxs_pat_local[&tm].to_owned();
                     let co_ty = self.coctxs_term_local[&ty].to_owned();
                     co_tm + co_ty
@@ -111,32 +110,32 @@ impl LocalFoldScoped<Context> for Collector {
             }
             | Pattern::Hole(inner) => {
                 let Hole = inner;
-                self.ctxs_pat_local.insert(pat, Context::new());
-                self.coctxs_pat_local.insert(pat, CoContext::new());
+                self.ctxs_pat_local.insert_new(pat, Context::new());
+                self.coctxs_pat_local.insert_new(pat, CoContext::new());
             }
             | Pattern::Var(inner) => {
                 let def = inner;
-                self.ctxs_pat_local.insert(pat, Context::singleton(def));
-                self.coctxs_pat_local.insert(pat, CoContext::new());
+                self.ctxs_pat_local.insert_new(pat, Context::singleton(def));
+                self.coctxs_pat_local.insert_new(pat, CoContext::new());
             }
             | Pattern::Ctor(inner) => {
                 let Ctor(_ctorv, body) = inner;
-                self.ctxs_pat_local.insert(pat, self.ctxs_pat_local[&body].to_owned());
-                self.coctxs_pat_local.insert(pat, self.coctxs_pat_local[&body].to_owned());
+                self.ctxs_pat_local.insert_new(pat, self.ctxs_pat_local[&body].to_owned());
+                self.coctxs_pat_local.insert_new(pat, self.coctxs_pat_local[&body].to_owned());
             }
             | Pattern::Triv(inner) => {
                 let Triv = inner;
-                self.ctxs_pat_local.insert(pat, Context::new());
-                self.coctxs_pat_local.insert(pat, CoContext::new());
+                self.ctxs_pat_local.insert_new(pat, Context::new());
+                self.coctxs_pat_local.insert_new(pat, CoContext::new());
             }
             | Pattern::Cons(inner) => {
                 let Cons(a, b) = inner;
-                self.ctxs_pat_local.insert(pat, {
+                self.ctxs_pat_local.insert_new(pat, {
                     let ctx_a = self.ctxs_pat_local[&a].to_owned();
                     let ctx_b = self.ctxs_pat_local[&b].to_owned();
                     ctx_a + ctx_b
                 });
-                self.coctxs_pat_local.insert(pat, {
+                self.coctxs_pat_local.insert_new(pat, {
                     let co_a = self.coctxs_pat_local[&a].to_owned();
                     let co_b = self.coctxs_pat_local[&b].to_owned();
                     co_a + co_b
@@ -147,13 +146,13 @@ impl LocalFoldScoped<Context> for Collector {
 
     /// Updates [`Self::ctxs_term`] and [`Self::coctxs_term_local`].
     fn action_term(&mut self, term: TermId, ctx: &Context) {
-        self.ctxs_term.insert(term, ctx.to_owned());
+        self.ctxs_term.insert_new(term, ctx.to_owned());
         let item = self.term(&term);
         match item {
             | Term::Meta(inner) => {
                 let MetaT(_meta, inner) = inner;
                 let co_term = self.coctxs_term_local[&inner].to_owned();
-                self.coctxs_term_local.insert(term, co_term);
+                self.coctxs_term_local.insert_new(term, co_term);
             }
             | Term::Internal(_) => {
                 unreachable!()
@@ -161,11 +160,11 @@ impl LocalFoldScoped<Context> for Collector {
             | Term::Sealed(inner) => {
                 let Sealed(inner) = inner;
                 let co_inner = self.coctxs_term_local[&inner].to_owned();
-                self.coctxs_term_local.insert(term, co_inner);
+                self.coctxs_term_local.insert_new(term, co_inner);
             }
             | Term::Ann(inner) => {
                 let Ann { tm, ty } = inner;
-                self.coctxs_term_local.insert(term, {
+                self.coctxs_term_local.insert_new(term, {
                     let co_tm = self.coctxs_term_local[&tm].to_owned();
                     let co_ty = self.coctxs_term_local[&ty].to_owned();
                     co_tm + co_ty
@@ -173,19 +172,19 @@ impl LocalFoldScoped<Context> for Collector {
             }
             | Term::Hole(inner) => {
                 let Hole = inner;
-                self.coctxs_term_local.insert(term, CoContext::new());
+                self.coctxs_term_local.insert_new(term, CoContext::new());
             }
             | Term::Var(inner) => {
                 let def = inner;
-                self.coctxs_term_local.insert(term, CoContext::singleton(def));
+                self.coctxs_term_local.insert_new(term, CoContext::singleton(def));
             }
             | Term::Triv(inner) => {
                 let Triv = inner;
-                self.coctxs_term_local.insert(term, CoContext::new());
+                self.coctxs_term_local.insert_new(term, CoContext::new());
             }
             | Term::Cons(inner) => {
                 let Cons(a, b) = inner;
-                self.coctxs_term_local.insert(term, {
+                self.coctxs_term_local.insert_new(term, {
                     let co_a = self.coctxs_term_local[&a].to_owned();
                     let co_b = self.coctxs_term_local[&b].to_owned();
                     co_a + co_b
@@ -196,49 +195,49 @@ impl LocalFoldScoped<Context> for Collector {
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 let cx_pat = self.ctxs_pat_local[&pat].to_owned();
                 let co_pat = self.coctxs_pat_local[&pat].to_owned();
-                self.coctxs_term_local.insert(term, co_body - cx_pat + co_pat);
+                self.coctxs_term_local.insert_new(term, co_body - cx_pat + co_pat);
             }
             | Term::App(inner) => {
                 let App(a, b) = inner;
                 let co_a = self.coctxs_term_local[&a].to_owned();
                 let co_b = self.coctxs_term_local[&b].to_owned();
-                self.coctxs_term_local.insert(term, co_a + co_b);
+                self.coctxs_term_local.insert_new(term, co_a + co_b);
             }
             | Term::Fix(inner) => {
                 let Fix(pat, body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 let cx_pat = self.ctxs_pat_local[&pat].to_owned();
                 let co_pat = self.coctxs_pat_local[&pat].to_owned();
-                self.coctxs_term_local.insert(term, co_body - cx_pat + co_pat);
+                self.coctxs_term_local.insert_new(term, co_body - cx_pat + co_pat);
             }
             | Term::Pi(inner) => {
                 let Pi(pat, body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 let cx_pat = self.ctxs_pat_local[&pat].to_owned();
                 let co_pat = self.coctxs_pat_local[&pat].to_owned();
-                self.coctxs_term_local.insert(term, co_body - cx_pat + co_pat);
+                self.coctxs_term_local.insert_new(term, co_body - cx_pat + co_pat);
             }
             | Term::Sigma(inner) => {
                 let Sigma(pat, body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 let cx_pat = self.ctxs_pat_local[&pat].to_owned();
                 let co_pat = self.coctxs_pat_local[&pat].to_owned();
-                self.coctxs_term_local.insert(term, co_body - cx_pat + co_pat);
+                self.coctxs_term_local.insert_new(term, co_body - cx_pat + co_pat);
             }
             | Term::Thunk(inner) => {
                 let Thunk(body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
-                self.coctxs_term_local.insert(term, co_body);
+                self.coctxs_term_local.insert_new(term, co_body);
             }
             | Term::Force(inner) => {
                 let Force(body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
-                self.coctxs_term_local.insert(term, co_body);
+                self.coctxs_term_local.insert_new(term, co_body);
             }
             | Term::Ret(inner) => {
                 let Return(body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
-                self.coctxs_term_local.insert(term, co_body);
+                self.coctxs_term_local.insert_new(term, co_body);
             }
             | Term::Do(inner) => {
                 let Bind { binder, bindee, tail } = inner;
@@ -246,7 +245,8 @@ impl LocalFoldScoped<Context> for Collector {
                 let cx_binder = self.ctxs_pat_local[&binder].to_owned();
                 let co_binder = self.coctxs_pat_local[&binder].to_owned();
                 let co_bindee = self.coctxs_term_local[&bindee].to_owned();
-                self.coctxs_term_local.insert(term, co_tail - cx_binder + co_binder + co_bindee);
+                self.coctxs_term_local
+                    .insert_new(term, co_tail - cx_binder + co_binder + co_bindee);
             }
             | Term::Let(inner) => {
                 let Let { binder, bindee, tail } = inner;
@@ -254,31 +254,32 @@ impl LocalFoldScoped<Context> for Collector {
                 let cx_binder = self.ctxs_pat_local[&binder].to_owned();
                 let co_binder = self.coctxs_pat_local[&binder].to_owned();
                 let co_bindee = self.coctxs_term_local[&bindee].to_owned();
-                self.coctxs_term_local.insert(term, co_tail - cx_binder + co_binder + co_bindee);
+                self.coctxs_term_local
+                    .insert_new(term, co_tail - cx_binder + co_binder + co_bindee);
             }
             | Term::MoBlock(inner) => {
                 let MoBlock(body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
-                self.coctxs_term_local.insert(term, co_body);
+                self.coctxs_term_local.insert_new(term, co_body);
             }
             | Term::Data(inner) => {
                 let Data { arms } = inner;
                 let co_arms = CoContext::from_iter(arms.into_iter().flat_map(
                     |DataArm { name: _, param }| self.coctxs_term_local[&param].to_owned(),
                 ));
-                self.coctxs_term_local.insert(term, co_arms);
+                self.coctxs_term_local.insert_new(term, co_arms);
             }
             | Term::CoData(inner) => {
                 let CoData { arms } = inner;
                 let co_arms = CoContext::from_iter(arms.into_iter().flat_map(
                     |CoDataArm { name: _, out }| self.coctxs_term_local[&out].to_owned(),
                 ));
-                self.coctxs_term_local.insert(term, co_arms);
+                self.coctxs_term_local.insert_new(term, co_arms);
             }
             | Term::Ctor(inner) => {
                 let Ctor(_name, body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
-                self.coctxs_term_local.insert(term, co_body);
+                self.coctxs_term_local.insert_new(term, co_body);
             }
             | Term::Match(inner) => {
                 let Match { scrut, arms } = inner;
@@ -290,23 +291,23 @@ impl LocalFoldScoped<Context> for Collector {
                         co_tail - cx_binder + co_binder
                     }));
                 let co_scrut = self.coctxs_term_local[&scrut].to_owned();
-                self.coctxs_term_local.insert(term, co_arms + co_scrut);
+                self.coctxs_term_local.insert_new(term, co_arms + co_scrut);
             }
             | Term::CoMatch(inner) => {
                 let CoMatch { arms } = inner;
                 let co_arms = CoContext::from_iter(arms.into_iter().flat_map(
                     |CoMatcher { dtor: _, tail }| self.coctxs_term_local[&tail].to_owned(),
                 ));
-                self.coctxs_term_local.insert(term, co_arms);
+                self.coctxs_term_local.insert_new(term, co_arms);
             }
             | Term::Dtor(inner) => {
                 let Dtor(body, _name) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
-                self.coctxs_term_local.insert(term, co_body);
+                self.coctxs_term_local.insert_new(term, co_body);
             }
             | Term::Lit(inner) => {
                 let _lit = inner;
-                self.coctxs_term_local.insert(term, CoContext::new());
+                self.coctxs_term_local.insert_new(term, CoContext::new());
             }
         }
     }

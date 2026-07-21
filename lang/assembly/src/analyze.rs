@@ -42,17 +42,17 @@ pub struct StackAnalyzer<'a> {
 }
 
 impl<'a> StackAnalyzer<'a> {
-    pub fn new(alloc: ArcGlobalAlloc, arena: &'a mut AssemblyArena) -> Self {
+    pub fn new(alloc: &KeySpaceFactory, arena: &'a mut AssemblyArena) -> Self {
         Self {
             arena,
             layouts: ArenaAssoc::new(),
-            slots: ArenaSparse::new(alloc.alloc()),
+            slots: ArenaSparse::new(alloc.fresh()),
             inlined: ArenaAssoc::new(),
         }
     }
     pub fn push_control(&mut self, layout: &mut Layout, slot: Slot) -> SlotId {
         let slot_id = self.slots.alloc(slot);
-        self.inlined.insert(slot_id, false);
+        self.inlined.insert_new(slot_id, false);
         layout.control.push_back(slot_id);
         slot_id
     }
@@ -67,19 +67,28 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
     type Out = Self;
     type Error = std::convert::Infallible;
     fn run(mut self) -> Result<Self::Out, Self::Error> {
-        for (_, sym) in self.arena.symbols.clone().iter() {
-            if let Symbol::Prog(prog) = &sym.inner {
-                let context = self.arena.contexts[prog]
-                    .to_owned()
-                    .into_iter()
-                    .map(|var| (var, Slot::Unknown))
-                    .collect();
-                let layout = Layout { control: im::Vector::new(), context };
-                prog.stack_measure(&mut self, layout);
-            }
+        let symbol_programs: Vec<_> = self
+            .arena
+            .symbols
+            .iter()
+            .filter_map(|(_, sym)| match sym.inner {
+                | Symbol::Prog(prog) => Some(prog),
+                | Symbol::Undefined(_) | Symbol::StringLiteral(_) => None,
+            })
+            .collect();
+        let entries: Vec<_> = self.arena.entry.iter().map(|(entry, ())| *entry).collect();
+
+        for prog in symbol_programs.iter().copied() {
+            let context = self.arena.contexts[&prog]
+                .to_owned()
+                .into_iter()
+                .map(|var| (var, Slot::Unknown))
+                .collect();
+            let layout = Layout { control: im::Vector::new(), context };
+            prog.stack_measure(&mut self, layout);
         }
-        for (entry, ()) in self.arena.entry.clone().iter() {
-            let context = self.arena.contexts[entry]
+        for entry in entries.iter().copied() {
+            let context = self.arena.contexts[&entry]
                 .to_owned()
                 .into_iter()
                 .map(|var| (var, Slot::Unknown))
@@ -87,12 +96,10 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
             let layout = Layout { control: im::Vector::new(), context };
             entry.stack_measure(&mut self, layout);
         }
-        for (_, sym) in self.arena.symbols.clone().iter() {
-            if let Symbol::Prog(prog) = &sym.inner {
-                prog.stack_inline(&mut self);
-            }
+        for prog in symbol_programs {
+            prog.stack_inline(&mut self);
         }
-        for (entry, ()) in self.arena.entry.clone().iter() {
+        for entry in entries {
             entry.stack_inline(&mut self);
         }
         Ok(self)
@@ -102,7 +109,7 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
 impl<'a> StackMeasure<'a> for ProgId {
     fn stack_measure(self, si: &mut StackAnalyzer<'a>, mut layout: Layout) {
         let prog = si.arena.programs[&self].to_owned();
-        si.layouts.insert(self, layout.to_owned());
+        let _ = si.layouts.upsert(self, layout.to_owned());
         match prog {
             | Program::Terminator(terminator) => match terminator {
                 | Terminator::Jump(Jump(_)) => {}
@@ -216,9 +223,10 @@ impl<'a> StackInline<'a> for ProgId {
                     let slot = si.slots[&slot_id].clone();
                     match slot {
                         | Slot::Sym(sym) => match si.arena.symbols[&sym].inner {
-                            | Symbol::Prog(target) => {
-                                si.arena.programs.replace(self, Terminator::Jump(Jump(target)))
-                            }
+                            | Symbol::Prog(target) => si
+                                .arena
+                                .programs
+                                .replace_existing(self, Terminator::Jump(Jump(target))),
                             | _ => {}
                         },
                         | Slot::Imm(_) | Slot::Pair(_) | Slot::Unknown => {}
@@ -241,7 +249,7 @@ impl<'a> StackInline<'a> for ProgId {
                         if si.inlined[&new_slot] {
                             next.stack_inline(si);
                             let prog = si.arena.programs[&next].to_owned();
-                            si.arena.programs.replace(self, prog);
+                            si.arena.programs.replace_existing(self, prog);
                             return;
                         }
                     }

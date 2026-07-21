@@ -38,12 +38,12 @@ impl Lub for KindId {
                     }
                     | AnnId::Kind(old) => {
                         let kd = Lub::lub(old, kd, tycker)?;
-                        tycker.statics.solus.insert(fill, kd.into());
+                        tycker.statics.solus.insert_new(fill, kd.into());
                         Ok(kd)
                     }
                 },
                 | None => {
-                    tycker.statics.solus.insert(fill, kd.into());
+                    tycker.statics.solus.insert_new(fill, kd.into());
                     Ok(kd)
                 }
             }
@@ -137,7 +137,7 @@ impl Debruijn {
                     }
                 },
                 | None => {
-                    tycker.statics.solus.insert(fill, ty.into());
+                    tycker.statics.solus.insert_new(fill, ty.into());
                     Ok(ty)
                 }
             }

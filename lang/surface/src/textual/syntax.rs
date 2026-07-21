@@ -15,67 +15,16 @@ zydeco_utils::new_key_type! {
     pub struct CoPatId;
     pub struct TermId;
     pub struct DeclId;
-
-    pub struct EntityId;
 }
 
-mod impls_identifier {
-    use super::*;
-    impl From<DefId> for EntityId {
-        fn from(DefId(meta, idx): DefId) -> Self {
-            EntityId::new(meta, idx)
-        }
-    }
-    impl From<EntityId> for DefId {
-        fn from(val: EntityId) -> Self {
-            let EntityId(meta, idx) = val;
-            DefId::new(meta, idx)
-        }
-    }
-    impl From<PatId> for EntityId {
-        fn from(PatId(meta, idx): PatId) -> Self {
-            EntityId::new(meta, idx)
-        }
-    }
-    impl From<EntityId> for PatId {
-        fn from(val: EntityId) -> Self {
-            let EntityId(meta, idx) = val;
-            PatId::new(meta, idx)
-        }
-    }
-    impl From<CoPatId> for EntityId {
-        fn from(CoPatId(meta, idx): CoPatId) -> Self {
-            EntityId::new(meta, idx)
-        }
-    }
-    impl From<EntityId> for CoPatId {
-        fn from(val: EntityId) -> Self {
-            let EntityId(meta, idx) = val;
-            CoPatId::new(meta, idx)
-        }
-    }
-    impl From<TermId> for EntityId {
-        fn from(TermId(meta, idx): TermId) -> Self {
-            EntityId::new(meta, idx)
-        }
-    }
-    impl From<EntityId> for TermId {
-        fn from(val: EntityId) -> Self {
-            let EntityId(meta, idx) = val;
-            TermId::new(meta, idx)
-        }
-    }
-    impl From<DeclId> for EntityId {
-        fn from(DeclId(meta, idx): DeclId) -> Self {
-            EntityId::new(meta, idx)
-        }
-    }
-    impl From<EntityId> for DeclId {
-        fn from(val: EntityId) -> Self {
-            let EntityId(meta, idx) = val;
-            DeclId::new(meta, idx)
-        }
-    }
+/// Identifier for any textual entity. The tag prevents cross-category casts.
+#[derive(From, Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum EntityId {
+    Def(DefId),
+    Pat(PatId),
+    CoPat(CoPatId),
+    Term(TermId),
+    Decl(DeclId),
 }
 
 /* --------------------------------- Pattern -------------------------------- */
@@ -283,38 +232,38 @@ pub struct Parser {
 }
 
 impl Parser {
-    /// Create a parser with arenas backed by the given allocator.
-    pub fn new(allocator: IndexAlloc<usize>) -> Self {
-        Self { spans: SpanArena::new(allocator), arena: TextArena::default() }
+    /// Create a parser whose spans and textual IDs share the given key space.
+    pub fn new(key_space: KeySpace) -> Self {
+        Self { spans: SpanArena::new(key_space), arena: TextArena::default() }
     }
     /// Allocate a definition node and record its span.
     pub fn def(&mut self, def: Sp<VarName>) -> DefId {
-        let id = self.spans.alloc(def.info).into();
-        self.arena.defs.insert(id, def.inner);
+        let id = self.spans.alloc(def.info);
+        self.arena.defs.insert_new(id, def.inner);
         id
     }
     /// Allocate a pattern node and record its span.
     pub fn pat(&mut self, pat: Sp<Pattern>) -> PatId {
-        let id = self.spans.alloc(pat.info).into();
-        self.arena.pats.insert(id, pat.inner);
+        let id = self.spans.alloc(pat.info);
+        self.arena.pats.insert_new(id, pat.inner);
         id
     }
     /// Allocate a copattern node and record its span.
     pub fn copat(&mut self, copat: Sp<CoPattern>) -> CoPatId {
-        let id = self.spans.alloc(copat.info).into();
-        self.arena.copats.insert(id, copat.inner);
+        let id = self.spans.alloc(copat.info);
+        self.arena.copats.insert_new(id, copat.inner);
         id
     }
     /// Allocate a term node and record its span.
     pub fn term(&mut self, term: Sp<Term>) -> TermId {
-        let id = self.spans.alloc(term.info).into();
-        self.arena.terms.insert(id, term.inner);
+        let id = self.spans.alloc(term.info);
+        self.arena.terms.insert_new(id, term.inner);
         id
     }
     /// Allocate a declaration node and record its span.
     pub fn decl(&mut self, decl: Sp<Modifiers<Declaration>>) -> DeclId {
-        let id = self.spans.alloc(decl.info).into();
-        self.arena.decls.insert(id, decl.inner);
+        let id = self.spans.alloc(decl.info);
+        self.arena.decls.insert_new(id, decl.inner);
         id
     }
 }

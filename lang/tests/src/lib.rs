@@ -29,7 +29,7 @@ pub mod utils {
             target_os: std::env::consts::OS.to_string(),
             link_existing: false,
         };
-        build_sys.build_confs.insert(pack, build_conf);
+        build_sys.build_confs.insert_new(pack, build_conf);
         match build_sys.test_amd64_pack(pack, Verbosity::new(3)) {
             | Ok(_) => {}
             | Err(err) => {

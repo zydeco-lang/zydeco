@@ -71,7 +71,7 @@ impl LocalPackage {
         })
     }
     pub fn parse_package<'f>(
-        alloc: ArcGlobalAlloc, name: &str, path: &std::path::Path,
+        alloc: &KeySpaceFactory, name: &str, path: &std::path::Path,
         srcs: impl Iterator<Item = &'f PathBuf>,
     ) -> Result<PackageStew> {
         let files = srcs.into_iter().map(|src| File { path: path.join(src) }).collect::<Vec<_>>();
@@ -85,7 +85,7 @@ impl LocalPackage {
         let pack = files
             .into_par_iter()
             .map(|f| -> Result<_> {
-                let f = f.parse(t::Parser::new(alloc.alloc()))?;
+                let f = f.parse(t::Parser::new(alloc.fresh()))?;
                 // // Debug: print the parsed files
                 // if cfg!(debug_assertions) {
                 //     println!(">>> [{}] parsed", f.path.display());
@@ -93,7 +93,7 @@ impl LocalPackage {
                 //     println!("{}", f.top.ugly(&Formatter::new(&f.arena)));
                 //     println!("<<< [{}]", f.path.display());
                 // }
-                let f = f.desugar(b::BitterArena::new_arc(alloc.clone()))?;
+                let f = f.desugar(b::BitterArena::new(alloc))?;
                 // // Debug: print the desugared package
                 // if cfg!(debug_assertions) {
                 //     use zydeco_surface::bitter::fmt::*;
