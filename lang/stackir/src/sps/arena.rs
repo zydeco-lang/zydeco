@@ -5,6 +5,19 @@ use crate::static_syntax as ss;
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 
+impl ArenaSchema<VPatId> for StackirScope {
+    type Item = ValuePattern;
+}
+impl ArenaSchema<ValueId> for StackirScope {
+    type Item = Value;
+}
+impl ArenaSchema<StackId> for StackirScope {
+    type Item = Stack;
+}
+impl ArenaSchema<CompuId> for StackirScope {
+    type Item = Computation<LetJoin>;
+}
+
 /// All arenas for the stack-passing style ZIR.
 /// The definitions and patterns are equivalent to the ones in
 /// [`zydeco_statics::tyck::syntax::StaticsArena`].
@@ -24,13 +37,13 @@ pub struct StackirArena {
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct StackirInnerArena {
     /// value pattern arena
-    pub vpats: ArenaAssoc<VPatId, ValuePattern>,
+    pub vpats: ArenaSparse<StackirScope, VPatId>,
     /// value arena
-    pub values: ArenaAssoc<ValueId, Value>,
+    pub values: ArenaSparse<StackirScope, ValueId>,
     /// stack arena
-    pub stacks: ArenaAssoc<StackId, Stack>,
+    pub stacks: ArenaSparse<StackirScope, StackId>,
     /// computation arena
-    pub compus: ArenaAssoc<CompuId, Computation<LetJoin>>,
+    pub compus: ArenaSparse<StackirScope, CompuId>,
 
     /// entry point(s), i.e. declarations that are marked as entry points;
     /// each entry compu is wrapped in a let chain binding globals (in order) then the body

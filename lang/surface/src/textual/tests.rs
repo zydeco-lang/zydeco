@@ -1,16 +1,19 @@
-use crate::textual::syntax::{CoPatId, DeclId, DefId, EntityId, Parser, PatId, TermId};
-use zydeco_utils::{arena::KeySpace, span::LocationCtx};
+use crate::textual::{
+    arena::TextualScope,
+    syntax::{CoPatId, DeclId, DefId, EntityId, Parser, PatId, TermId},
+};
+use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
 
 use super::*;
 
 #[test]
 fn textual_entities_retain_their_category_tags() {
-    let mut key_space = KeySpace::new();
-    let def: DefId = key_space.alloc();
-    let pat: PatId = key_space.alloc();
-    let copat: CoPatId = key_space.alloc();
-    let term: TermId = key_space.alloc();
-    let decl: DeclId = key_space.alloc();
+    let mut allocator = IdAllocator::<TextualScope>::new();
+    let def: DefId = allocator.alloc();
+    let pat: PatId = allocator.alloc();
+    let copat: CoPatId = allocator.alloc();
+    let term: TermId = allocator.alloc();
+    let decl: DeclId = allocator.alloc();
 
     assert!(matches!(EntityId::from(def), EntityId::Def(id) if id == def));
     assert!(matches!(EntityId::from(pat), EntityId::Pat(id) if id == pat));

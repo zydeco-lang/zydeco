@@ -22,7 +22,7 @@ impl Linker {
     /// Lower all statics declarations into the dynamic arena.
     pub fn run(self) -> DynamicsArena {
         let Linker { scoped, statics } = self;
-        let defs = scoped.defs;
+        let defs = scoped.defs.rebind::<ds::DynamicsScope>();
         let mut top = scoped.top;
         let mut invalid = Vec::new();
         let decls = scoped.decls.filter_map_id_mut(|id| match id.link((&statics, &defs)) {
@@ -38,7 +38,7 @@ impl Linker {
 }
 
 impl Link for ss::DeclId {
-    type Arena<'a> = (&'a StaticsArena, &'a ArenaSparse<ds::DefId, VarName>);
+    type Arena<'a> = (&'a StaticsArena, &'a ArenaSparse<ds::DynamicsScope, ds::DefId>);
     type Out = Option<ds::Declaration>;
 
     fn link(&self, (statics, defs): Self::Arena<'_>) -> Self::Out {

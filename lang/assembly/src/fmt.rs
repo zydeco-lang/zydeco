@@ -1,18 +1,19 @@
 //! Formatters for the assembly language.
 
 use super::syntax::*;
+use crate::analyze::StackAnalysisScope;
 
 pub use zydeco_syntax::{Pretty, Ugly};
 pub struct Formatter<'arena> {
     arena: &'arena AssemblyArena,
     layouts: Option<&'arena ArenaAssoc<ProgId, Layout>>,
-    slots: Option<&'arena ArenaSparse<SlotId, Slot>>,
+    slots: Option<&'arena ArenaSparse<StackAnalysisScope, SlotId>>,
     pub indent: isize,
 }
 impl<'arena> Formatter<'arena> {
     pub fn new(
         arena: &'arena AssemblyArena, layouts: Option<&'arena ArenaAssoc<ProgId, Layout>>,
-        slots: Option<&'arena ArenaSparse<SlotId, Slot>>,
+        slots: Option<&'arena ArenaSparse<StackAnalysisScope, SlotId>>,
     ) -> Self {
         Formatter { arena, layouts, slots, indent: 2 }
     }

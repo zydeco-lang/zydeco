@@ -25,7 +25,7 @@ pub trait ArenaId: Copy + Eq + Hash {
     fn raw(self) -> RawIdx;
 }
 
-/* -------------------------------- KeySpace -------------------------------- */
+/* ------------------------------ IdAllocator ------------------------------- */
 
 /// Process-unique identity domain for generated IDs.
 #[derive(Copy, Clone, derive_more::Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -43,35 +43,88 @@ impl KeySpaceId {
     }
 }
 
-/// Issues typed keys within one identity domain.
+/// Declares that an allocator scope may issue a particular identifier type.
 ///
-/// A key space deliberately cannot be cloned: cloning its cursor would allow two
-/// owners to issue the same future key.
+/// This relation is intentionally independent from [`ArenaSchema`]: a pass may
+/// create identifiers whose contents are stored in another compiler arena.
+pub trait Allocates<Id: ArenaId> {}
+
+/// Issues typed identifiers within one identity domain.
+///
+/// An ID allocator deliberately cannot be cloned: cloning its cursor would
+/// allow two owners to issue the same future identifier. Independent allocators
+/// receive independent [`KeySpaceId`]s, so they can allocate in parallel and
+/// their sparse arena fragments can later be merged without collisions.
+///
+/// An allocator cannot issue an identifier absent from its scope:
+///
+/// ```compile_fail
+/// use zydeco_utils::{
+///     arena::IdAllocator,
+///     new_key_type,
+/// };
+///
+/// new_key_type! { struct NodeId; }
+/// enum EmptyScope {}
+///
+/// let mut allocator = IdAllocator::<EmptyScope>::new();
+/// let _: NodeId = allocator.alloc();
+/// ```
 #[derive(Debug)]
-pub struct KeySpace {
-    id: KeySpaceId,
+pub struct IdAllocator<Scope> {
+    key_space: KeySpaceId,
     next: u32,
+    marker: PhantomData<fn() -> Scope>,
 }
 
-impl KeySpace {
+impl<Scope> IdAllocator<Scope> {
     /// Create an independent sequential ID issuer.
     ///
     /// Construction claims one identity atomically. Allocation after that only
-    /// mutates this value's local cursor, so separate key spaces do not contend.
+    /// mutates this value's local cursor, so separate allocators do not contend.
     pub fn new() -> Self {
-        Self { id: KeySpaceId::fresh(), next: 0 }
+        Self { key_space: KeySpaceId::fresh(), next: 0, marker: PhantomData }
     }
     pub fn alloc<Id>(&mut self) -> Id
     where
         Id: ArenaId,
+        Scope: Allocates<Id>,
     {
         let raw = self.next;
-        self.next = self.next.checked_add(1).expect("key space exhausted its u32 index range");
-        Id::from_raw_parts(ArenaIdToken(()), self.id, RawIdx::from_u32(raw))
+        self.next = self.next.checked_add(1).expect("ID allocator exhausted its u32 index range");
+        Id::from_raw_parts(ArenaIdToken(()), self.key_space, RawIdx::from_u32(raw))
     }
 }
 
 /* ---------------------------------- Arena --------------------------------- */
+
+/// Associates an owning arena scope and identifier type with its stored item.
+///
+/// The identifier is a trait parameter rather than an associated type so one
+/// arena scope can own several identifier categories and one identifier type
+/// can inhabit several representation-specific arena scopes.
+///
+/// The schema fixes the item type accepted by owning storage:
+///
+/// ```compile_fail
+/// use zydeco_utils::{
+///     arena::{Allocates, ArenaSchema, ArenaSparse, IdAllocator},
+///     new_key_type,
+/// };
+///
+/// new_key_type! { struct NodeId; }
+/// enum Nodes {}
+/// impl Allocates<NodeId> for Nodes {}
+/// impl ArenaSchema<NodeId> for Nodes { type Item = u32; }
+///
+/// let mut allocator = IdAllocator::<Nodes>::new();
+/// let id = allocator.alloc();
+/// let mut arena = ArenaSparse::<Nodes, NodeId>::new();
+/// arena.insert_new(id, "not a u32");
+/// ```
+pub trait ArenaSchema<Id: ArenaId> {
+    type Item;
+}
 
 pub trait ArenaAccess<Id, T>: Index<Id, Output = T> + IndexMut<Id, Output = T> {
     fn get(&self, id: Id) -> Option<&T>;
@@ -89,20 +142,30 @@ pub struct Forth<'a, T>(pub &'a T);
 pub struct Back<'a, T>(pub &'a T);
 
 /// Dense owning storage whose raw indices are issued by `la-arena` itself.
-/// It retains an identity tag, but no separate sequential [`KeySpace`] cursor.
+/// It retains an identity tag, but no separate sequential [`IdAllocator`].
 #[derive(Debug)]
-pub struct ArenaDense<Id: ArenaId, T> {
+pub struct ArenaDense<Scope, Id>
+where
+    Id: ArenaId,
+    Scope: ArenaSchema<Id>,
+{
     key_space: KeySpaceId,
-    arena: LaArena<T>,
-    marker: PhantomData<fn() -> Id>,
+    arena: LaArena<Scope::Item>,
+    marker: PhantomData<fn() -> (Scope, Id)>,
 }
 
 /// Sparse owning storage for externally issued IDs.
-/// Allocation belongs to the pass that owns the appropriate [`KeySpace`].
+/// Allocation belongs to the pass that owns the appropriate [`IdAllocator`].
 #[derive(Debug, Index, IntoIterator)]
-pub struct ArenaSparse<Id: ArenaId, T> {
+pub struct ArenaSparse<Scope, Id>
+where
+    Id: ArenaId,
+    Scope: ArenaSchema<Id>,
+{
+    #[index]
     #[into_iterator(owned, ref)]
-    map: HashMap<Id, T>,
+    map: HashMap<Id, Scope::Item>,
+    marker: PhantomData<fn() -> Scope>,
 }
 
 /// An arena that maps keys of externally-owned data to their properties.
@@ -147,26 +210,28 @@ pub struct ArenaBipartite<P, Q> {
 
 /// An arena of equivalence classes, designed for types, and structurally shared
 /// `data` and `codata` definitions.
-pub struct ArenaEquiv<Id, Definition, Query>
+pub struct ArenaEquiv<Scope, Id, Query>
 where
     Id: ArenaId,
+    Scope: ArenaSchema<Id>,
 {
     /// arena for definitions
-    pub defs: ArenaDense<Id, Definition>,
+    pub defs: ArenaDense<Scope, Id>,
     /// arena for query hashmap
     pub tbls: ArenaAssoc<Id, Query>,
     /// arena for equivalence classes
     pub eqs: ArenaAssoc<Query, Id>,
 }
-impl<Id, Definition, Query> ArenaEquiv<Id, Definition, Query>
+impl<Scope, Id, Query> ArenaEquiv<Scope, Id, Query>
 where
     Id: ArenaId,
+    Scope: ArenaSchema<Id>,
     Query: Clone + Eq + std::hash::Hash,
 {
     pub fn new() -> Self {
         Self { defs: ArenaDense::new(), tbls: ArenaAssoc::new(), eqs: ArenaAssoc::new() }
     }
-    pub fn lookup_or_alloc(&mut self, def: Definition, query: Query) -> Id {
+    pub fn lookup_or_alloc(&mut self, def: Scope::Item, query: Query) -> Id {
         if let Some(id) = self.eqs.get(&query) {
             // if the query is already registered, just return the id
             *id
@@ -185,45 +250,49 @@ mod impls {
 
     /* ------------------------------- ArenaDense ------------------------------- */
 
-    impl<Id, T> Default for ArenaDense<Id, T>
+    impl<Scope, Id> Default for ArenaDense<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
         fn default() -> Self {
             Self::new()
         }
     }
 
-    impl<Id, T> Index<&Id> for ArenaDense<Id, T>
+    impl<Scope, Id> Index<&Id> for ArenaDense<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
-        type Output = T;
+        type Output = Scope::Item;
         fn index(&self, id: &Id) -> &Self::Output {
             self.get(id).unwrap()
         }
     }
-    impl<Id, T> IndexMut<&Id> for ArenaDense<Id, T>
+    impl<Scope, Id> IndexMut<&Id> for ArenaDense<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
         fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
             self.get_mut(id).unwrap()
         }
     }
 
-    impl<Id, T> ArenaDense<Id, T>
+    impl<Scope, Id> ArenaDense<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
         pub fn new() -> Self {
             Self { key_space: KeySpaceId::fresh(), arena: LaArena::new(), marker: PhantomData }
         }
-        pub fn alloc(&mut self, val: T) -> Id {
+        pub fn alloc(&mut self, val: Scope::Item) -> Id {
             let idx = self.arena.alloc(val);
             Id::from_raw_parts(ArenaIdToken(()), self.key_space, idx.into_raw())
         }
-        pub fn iter(&self) -> impl Iterator<Item = (Id, &T)> {
+        pub fn iter(&self) -> impl Iterator<Item = (Id, &Scope::Item)> {
             let key_space = self.key_space;
             self.arena.iter().map(move |(idx, val)| {
                 (Id::from_raw_parts(ArenaIdToken(()), key_space, idx.into_raw()), val)
@@ -232,7 +301,7 @@ mod impls {
         pub fn len(&self) -> usize {
             self.arena.len()
         }
-        fn index(&self, id: Id) -> Option<LaIdx<T>> {
+        fn index(&self, id: Id) -> Option<LaIdx<Scope::Item>> {
             if id.key_space() != self.key_space {
                 return None;
             }
@@ -241,27 +310,36 @@ mod impls {
         }
     }
 
-    impl<Id, T> ArenaAccess<&Id, T> for ArenaDense<Id, T>
+    impl<Scope, Id> ArenaAccess<&Id, Scope::Item> for ArenaDense<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
-        fn get(&self, id: &Id) -> Option<&T> {
+        fn get(&self, id: &Id) -> Option<&Scope::Item> {
             self.index(*id).map(|idx| &self.arena[idx])
         }
-        fn get_mut(&mut self, id: &Id) -> Option<&mut T> {
+        fn get_mut(&mut self, id: &Id) -> Option<&mut Scope::Item> {
             let idx = self.index(*id)?;
             Some(&mut self.arena[idx])
         }
     }
 
-    pub struct ArenaDenseIntoIter<Id: ArenaId, T> {
+    pub struct ArenaDenseIntoIter<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
         key_space: KeySpaceId,
-        inner: la_arena::IntoIter<T>,
-        marker: PhantomData<fn() -> Id>,
+        inner: la_arena::IntoIter<Scope::Item>,
+        marker: PhantomData<fn() -> (Scope, Id)>,
     }
 
-    impl<Id: ArenaId, T> Iterator for ArenaDenseIntoIter<Id, T> {
-        type Item = (Id, T);
+    impl<Scope, Id> Iterator for ArenaDenseIntoIter<Scope, Id>
+    where
+        Id: ArenaId,
+        Scope: ArenaSchema<Id>,
+    {
+        type Item = (Id, Scope::Item);
         fn next(&mut self) -> Option<Self::Item> {
             self.inner.next().map(|(idx, val)| {
                 (Id::from_raw_parts(ArenaIdToken(()), self.key_space, idx.into_raw()), val)
@@ -269,12 +347,13 @@ mod impls {
         }
     }
 
-    impl<Id, T> IntoIterator for ArenaDense<Id, T>
+    impl<Scope, Id> IntoIterator for ArenaDense<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
-        type Item = (Id, T);
-        type IntoIter = ArenaDenseIntoIter<Id, T>;
+        type Item = (Id, Scope::Item);
+        type IntoIter = ArenaDenseIntoIter<Scope, Id>;
         fn into_iter(self) -> Self::IntoIter {
             ArenaDenseIntoIter {
                 key_space: self.key_space,
@@ -286,33 +365,36 @@ mod impls {
 
     /* ------------------------------- ArenaSparse ------------------------------ */
 
-    impl<Id, T> Default for ArenaSparse<Id, T>
+    impl<Scope, Id> Default for ArenaSparse<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
         fn default() -> Self {
             Self::new()
         }
     }
 
-    impl<Id, T> IndexMut<&Id> for ArenaSparse<Id, T>
+    impl<Scope, Id> IndexMut<&Id> for ArenaSparse<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
         fn index_mut(&mut self, id: &Id) -> &mut Self::Output {
             self.get_mut(id).unwrap()
         }
     }
 
-    impl<Id, T> ArenaSparse<Id, T>
+    impl<Scope, Id> ArenaSparse<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
         pub fn new() -> Self {
-            Self { map: HashMap::new() }
+            Self { map: HashMap::new(), marker: PhantomData }
         }
         /// Insert a value whose externally-issued ID must not already be present.
-        pub fn insert_new(&mut self, id: Id, val: T) {
+        pub fn insert_new(&mut self, id: Id, val: Scope::Item) {
             use std::collections::hash_map::Entry;
             match self.map.entry(id) {
                 | Entry::Vacant(entry) => {
@@ -321,19 +403,20 @@ mod impls {
                 | Entry::Occupied(_) => panic!("duplicate key in sparse arena"),
             }
         }
-        pub fn iter(&self) -> impl Iterator<Item = (&Id, &T)> {
+        pub fn iter(&self) -> impl Iterator<Item = (&Id, &Scope::Item)> {
             self.into_iter()
         }
     }
 
-    impl<Id, T> ArenaAccess<&Id, T> for ArenaSparse<Id, T>
+    impl<Scope, Id> ArenaAccess<&Id, Scope::Item> for ArenaSparse<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
-        fn get(&self, id: &Id) -> Option<&T> {
+        fn get(&self, id: &Id) -> Option<&Scope::Item> {
             self.map.get(&id)
         }
-        fn get_mut(&mut self, id: &Id) -> Option<&mut T> {
+        fn get_mut(&mut self, id: &Id) -> Option<&mut Scope::Item> {
             self.map.get_mut(&id)
         }
     }
@@ -341,79 +424,126 @@ mod impls {
     // No FromIterator: sparse owning storage is assembled explicitly or by
     // merging fragments with duplicate validation.
 
-    impl<Id, T> Extend<(Id, T)> for ArenaSparse<Id, T>
+    impl<Scope, Id> Extend<(Id, Scope::Item)> for ArenaSparse<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
-        fn extend<I: IntoIterator<Item = (Id, T)>>(&mut self, iter: I) {
+        fn extend<I: IntoIterator<Item = (Id, Scope::Item)>>(&mut self, iter: I) {
             for (id, val) in iter {
                 self.insert_new(id, val);
             }
         }
     }
 
-    impl<Id, T> AddAssign for ArenaSparse<Id, T>
+    impl<Scope, Id> AddAssign for ArenaSparse<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
-        fn add_assign(&mut self, rhs: ArenaSparse<Id, T>) {
+        fn add_assign(&mut self, rhs: ArenaSparse<Scope, Id>) {
             self.extend(rhs);
         }
     }
 
-    impl<Id, T> ArenaSparse<Id, T>
+    impl<Scope, Id> ArenaSparse<Scope, Id>
     where
         Id: ArenaId,
+        Scope: ArenaSchema<Id>,
     {
-        pub fn map_id<U>(self, f: impl Fn(Id) -> U) -> ArenaSparse<Id, U> {
-            let Self { map } = self;
+        /// Rebind the same identifiers and items to another owning arena scope.
+        pub fn rebind<Target>(self) -> ArenaSparse<Target, Id>
+        where
+            Target: ArenaSchema<Id, Item = Scope::Item>,
+        {
+            let Self { map, marker: _ } = self;
+            ArenaSparse { map, marker: PhantomData }
+        }
+        pub fn map_id<Target>(self, f: impl Fn(Id) -> Target::Item) -> ArenaSparse<Target, Id>
+        where
+            Target: ArenaSchema<Id>,
+        {
+            let Self { map, marker: _ } = self;
             let map = map.into_keys().map(|id| (id, f(id))).collect();
-            ArenaSparse { map }
+            ArenaSparse { map, marker: PhantomData }
         }
-        pub fn map_value<U>(self, f: impl Fn(T) -> U) -> ArenaSparse<Id, U> {
-            let Self { map } = self;
+        pub fn map_value<Target>(
+            self, f: impl Fn(Scope::Item) -> Target::Item,
+        ) -> ArenaSparse<Target, Id>
+        where
+            Target: ArenaSchema<Id>,
+        {
+            let Self { map, marker: _ } = self;
             let map = map.into_iter().map(|(id, val)| (id, f(val))).collect();
-            ArenaSparse { map }
+            ArenaSparse { map, marker: PhantomData }
         }
-        pub fn map<U>(self, f: impl Fn(Id, T) -> U) -> ArenaSparse<Id, U> {
-            let Self { map } = self;
+        pub fn map<Target>(
+            self, f: impl Fn(Id, Scope::Item) -> Target::Item,
+        ) -> ArenaSparse<Target, Id>
+        where
+            Target: ArenaSchema<Id>,
+        {
+            let Self { map, marker: _ } = self;
             let map = map.into_iter().map(|(id, val)| (id, f(id, val))).collect();
-            ArenaSparse { map }
+            ArenaSparse { map, marker: PhantomData }
         }
-        pub fn filter_map_id<U>(self, f: impl Fn(Id) -> Option<U>) -> ArenaSparse<Id, U> {
-            let Self { map } = self;
+        pub fn filter_map_id<Target>(
+            self, f: impl Fn(Id) -> Option<Target::Item>,
+        ) -> ArenaSparse<Target, Id>
+        where
+            Target: ArenaSchema<Id>,
+        {
+            let Self { map, marker: _ } = self;
             let map = map.into_keys().filter_map(|id| f(id).map(|val| (id, val))).collect();
-            ArenaSparse { map }
+            ArenaSparse { map, marker: PhantomData }
         }
-        pub fn filter_map_id_mut<U>(
-            self, mut f: impl FnMut(Id) -> Option<U>,
-        ) -> ArenaSparse<Id, U> {
-            let Self { map } = self;
+        pub fn filter_map_id_mut<Target>(
+            self, mut f: impl FnMut(Id) -> Option<Target::Item>,
+        ) -> ArenaSparse<Target, Id>
+        where
+            Target: ArenaSchema<Id>,
+        {
+            let Self { map, marker: _ } = self;
             let map = map.into_keys().filter_map(|id| f(id).map(|val| (id, val))).collect();
-            ArenaSparse { map }
+            ArenaSparse { map, marker: PhantomData }
         }
-        pub fn filter_map_value<U>(self, f: impl Fn(T) -> Option<U>) -> ArenaSparse<Id, U> {
-            let Self { map } = self;
+        pub fn filter_map_value<Target>(
+            self, f: impl Fn(Scope::Item) -> Option<Target::Item>,
+        ) -> ArenaSparse<Target, Id>
+        where
+            Target: ArenaSchema<Id>,
+        {
+            let Self { map, marker: _ } = self;
             let map = map.into_iter().filter_map(|(id, val)| f(val).map(|val| (id, val))).collect();
-            ArenaSparse { map }
+            ArenaSparse { map, marker: PhantomData }
         }
-        pub fn filter_map<U>(self, f: impl Fn(Id, T) -> Option<U>) -> ArenaSparse<Id, U> {
-            let Self { map } = self;
+        pub fn filter_map<Target>(
+            self, f: impl Fn(Id, Scope::Item) -> Option<Target::Item>,
+        ) -> ArenaSparse<Target, Id>
+        where
+            Target: ArenaSchema<Id>,
+        {
+            let Self { map, marker: _ } = self;
             let map =
                 map.into_iter().filter_map(|(id, val)| f(id, val).map(|val| (id, val))).collect();
-            ArenaSparse { map }
+            ArenaSparse { map, marker: PhantomData }
         }
         pub fn len(&self) -> usize {
             self.map.len()
         }
-        pub fn replace_existing(&mut self, id: Id, val: impl Into<T>) {
+        /// Replace an existing owned item.
+        pub fn replace_existing(&mut self, id: Id, val: Scope::Item) {
             use std::collections::hash_map::Entry;
             match self.map.entry(id) {
                 | Entry::Occupied(mut entry) => {
-                    entry.insert(val.into());
+                    entry.insert(val);
                 }
                 | Entry::Vacant(_) => panic!("key not found"),
             }
+        }
+        /// Convert and replace an existing owned item.
+        pub fn replace_existing_with(&mut self, id: Id, val: impl Into<Scope::Item>) {
+            self.replace_existing(id, val.into())
         }
     }
 
@@ -1098,10 +1228,24 @@ mod tests {
         struct SparseId;
     }
 
+    enum TestScope {}
+    enum AlternateScope {}
+
+    impl Allocates<SparseId> for TestScope {}
+    impl ArenaSchema<DenseId> for TestScope {
+        type Item = &'static str;
+    }
+    impl ArenaSchema<SparseId> for TestScope {
+        type Item = &'static str;
+    }
+    impl ArenaSchema<SparseId> for AlternateScope {
+        type Item = usize;
+    }
+
     #[test]
     fn dense_arena_rejects_an_id_from_another_key_space() {
-        let mut left = ArenaDense::<DenseId, _>::new();
-        let mut right = ArenaDense::<DenseId, _>::new();
+        let mut left = ArenaDense::<TestScope, DenseId>::new();
+        let mut right = ArenaDense::<TestScope, DenseId>::new();
         let left_id = left.alloc("left");
         let right_id = right.alloc("right");
 
@@ -1115,21 +1259,35 @@ mod tests {
 
     #[test]
     fn sparse_storage_accepts_ids_from_independent_key_spaces() {
-        let mut left_keys = KeySpace::new();
-        let mut right_keys = KeySpace::new();
-        let left_id: SparseId = left_keys.alloc();
-        let right_id: SparseId = right_keys.alloc();
+        let mut left_allocator = IdAllocator::<TestScope>::new();
+        let mut right_allocator = IdAllocator::<TestScope>::new();
+        let left_id: SparseId = left_allocator.alloc();
+        let right_id: SparseId = right_allocator.alloc();
         assert_eq!(left_id.raw(), right_id.raw());
         assert_ne!(left_id.key_space(), right_id.key_space());
         assert_ne!(left_id.concise(), right_id.concise());
         assert_ne!(left_id.concise_inner(), right_id.concise_inner());
 
-        let mut arena = ArenaSparse::new();
+        let mut arena = ArenaSparse::<TestScope, SparseId>::new();
         arena.insert_new(left_id, "left");
         arena.insert_new(right_id, "right");
         assert_eq!(arena.len(), 2);
         assert_eq!(arena.get(&left_id), Some(&"left"));
         assert_eq!(arena.get(&right_id), Some(&"right"));
+    }
+
+    #[test]
+    fn one_id_type_can_inhabit_multiple_arena_scopes() {
+        let mut allocator = IdAllocator::<TestScope>::new();
+        let id = allocator.alloc();
+        let mut source = ArenaSparse::<TestScope, SparseId>::new();
+        let mut alternate = ArenaSparse::<AlternateScope, SparseId>::new();
+
+        source.insert_new(id, "source");
+        alternate.insert_new(id, 42);
+
+        assert_eq!(source.get(&id), Some(&"source"));
+        assert_eq!(alternate.get(&id), Some(&42));
     }
 
     #[test]
@@ -1159,10 +1317,10 @@ mod tests {
 
     #[test]
     fn sparse_arena_merge_rejects_duplicate_ids() {
-        let mut key_space = KeySpace::new();
-        let id = key_space.alloc();
-        let mut left = ArenaSparse::<SparseId, _>::new();
-        let mut right = ArenaSparse::<SparseId, _>::new();
+        let mut allocator = IdAllocator::<TestScope>::new();
+        let id = allocator.alloc();
+        let mut left = ArenaSparse::<TestScope, SparseId>::new();
+        let mut right = ArenaSparse::<TestScope, SparseId>::new();
         left.insert_new(id, "left");
         right.insert_new(id, "right");
         let conflict = catch_unwind(AssertUnwindSafe(|| left += right));

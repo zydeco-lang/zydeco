@@ -31,9 +31,13 @@ pub trait Alloc<Arena, T> {
 
 /// Allocation capability held by a live type-checking pass, separate from its
 /// durable [`StaticsArena`] storage.
-pub trait StaticsAlloc: AsMut<KeySpace> + AsMut<StaticsArena> {
-    fn fresh<Id: ArenaId>(&mut self) -> Id {
-        AsMut::<KeySpace>::as_mut(self).alloc()
+pub trait StaticsAlloc: AsMut<IdAllocator<StaticsScope>> + AsMut<StaticsArena> {
+    fn fresh<Id>(&mut self) -> Id
+    where
+        Id: ArenaId,
+        StaticsScope: Allocates<Id>,
+    {
+        AsMut::<IdAllocator<StaticsScope>>::as_mut(self).alloc()
     }
 
     fn alloc_kind_pre(&mut self, value: Fillable<Kind>) -> KindId {
@@ -73,7 +77,10 @@ pub trait StaticsAlloc: AsMut<KeySpace> + AsMut<StaticsArena> {
     }
 }
 
-impl<Arena> StaticsAlloc for Arena where Arena: AsMut<KeySpace> + AsMut<StaticsArena> {}
+impl<Arena> StaticsAlloc for Arena where
+    Arena: AsMut<IdAllocator<StaticsScope>> + AsMut<StaticsArena>
+{
+}
 
 /* ------------------------------- Definition ------------------------------- */
 

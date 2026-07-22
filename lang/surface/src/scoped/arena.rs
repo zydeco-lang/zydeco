@@ -7,6 +7,23 @@ pub use crate::arena::*;
 
 /* ---------------------------------- Arena --------------------------------- */
 
+/// Owning storage scope for name-resolved surface syntax.
+#[derive(Debug)]
+pub enum ScopedScope {}
+
+impl ArenaSchema<DefId> for ScopedScope {
+    type Item = VarName;
+}
+impl ArenaSchema<PatId> for ScopedScope {
+    type Item = Pattern;
+}
+impl ArenaSchema<TermId> for ScopedScope {
+    type Item = Term<DefId>;
+}
+impl ArenaSchema<DeclId> for ScopedScope {
+    type Item = Declaration;
+}
+
 /// Item projectors out of the scoped arena.
 #[auto_impl::auto_impl(&, &mut, Box, Rc, Arc)]
 pub trait ArenaScoped {
@@ -20,10 +37,10 @@ pub trait ArenaScoped {
 #[derive(Debug, AsRefSelf, AsMutSelf)]
 pub struct ScopedArena {
     // arenas
-    pub defs: ArenaSparse<DefId, VarName>,
-    pub pats: ArenaSparse<PatId, Pattern>,
-    pub terms: ArenaSparse<TermId, Term<DefId>>,
-    pub decls: ArenaSparse<DeclId, Declaration>,
+    pub defs: ArenaSparse<ScopedScope, DefId>,
+    pub pats: ArenaSparse<ScopedScope, PatId>,
+    pub terms: ArenaSparse<ScopedScope, TermId>,
+    pub decls: ArenaSparse<ScopedScope, DeclId>,
     /// entity maps from textural syntax
     pub textual: ArenaForth<t::EntityId, EntityId>,
 

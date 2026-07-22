@@ -56,17 +56,34 @@ Common patterns in each phase include `syntax`, `arena`, `err`, `fmt`, and
 ### Arena and ID invariants
 
 Compiler-owned IDs contain an opaque `KeySpaceId` and a `la-arena` raw index.
-`KeySpace` is the only safe issuer of those IDs and is deliberately
-non-cloneable. Creating one claims a process-unique identity once; subsequent
-allocation only mutates its local cursor. Independent key spaces can therefore
-allocate in parallel, and their identity tags keep merged IDs distinct.
+Externally issued IDs come from a non-cloneable `IdAllocator<Scope>`. Creating
+an allocator claims a process-unique identity once; subsequent allocation only
+mutates its local cursor. Independent allocators can therefore run in parallel,
+and their identity tags keep merged IDs distinct.
+
+Two separate type-level relations constrain IDs:
+
+- `Scope: Allocates<Id>` declares which ID categories an allocator may issue.
+  The scope belongs to the operation or pipeline lifetime that creates nodes;
+  it is not stored on the ID and does not prevent independent allocators with
+  the same scope.
+- `Scope: ArenaSchema<Id, Item = T>` declares the contents owned by an arena
+  representation. Since `Id` is a trait parameter, one scope can own several
+  ID categories and the same ID can inhabit several representation scopes.
+  This is used, for example, by the stack-passing and substitution-normal forms
+  of Stack IR.
 
 - Dense storage wraps `la_arena::Arena`. The `la-arena` allocation itself
   supplies the raw index, so a dense arena retains only its identity tag and
   rejects IDs from another dense arena even when raw indices happen to match.
+  Dense-only IDs have no external `Allocates` implementation.
 - Sparse storage is used where passes merge fragments or rewrite nodes while
   retaining IDs. It is storage-only: the phase-level owner issues an ID and
-  inserts it explicitly. Associative side tables require callers to choose
+  inserts it explicitly. Both dense and sparse owning stores are constrained by
+  `ArenaSchema`.
+- Associative side tables are deliberately not constrained by `ArenaSchema`:
+  annotations, provenance, environments, caches, and relations legitimately
+  associate one ID with many property types. They require callers to choose
   explicit `insert_new`, `replace_existing`, `upsert`, or set-like `ensure`
   semantics.
 - Issuers live on the operation that creates nodes: `Parser`, `Desugarer`,

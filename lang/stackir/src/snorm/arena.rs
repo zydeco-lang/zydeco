@@ -2,6 +2,23 @@ use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 
+/// Owning storage scope for substitution-normal stack IR.
+#[derive(Debug)]
+pub enum SNormScope {}
+
+impl ArenaSchema<VPatId> for SNormScope {
+    type Item = ValuePattern;
+}
+impl ArenaSchema<ValueId> for SNormScope {
+    type Item = Value;
+}
+impl ArenaSchema<StackId> for SNormScope {
+    type Item = Stack;
+}
+impl ArenaSchema<CompuId> for SNormScope {
+    type Item = SComputation;
+}
+
 /// Arena for substitution normal form of stack IR.
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SNormArena {
@@ -19,13 +36,13 @@ pub struct SNormArena {
 #[derive(Debug, Default, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct SNormInnerArena {
     /// value pattern arena
-    pub svpats: ArenaAssoc<VPatId, ValuePattern>,
+    pub svpats: ArenaSparse<SNormScope, VPatId>,
     /// value arena
-    pub svalues: ArenaAssoc<ValueId, Value>,
+    pub svalues: ArenaSparse<SNormScope, ValueId>,
     /// stack arena
-    pub sstacks: ArenaAssoc<StackId, Stack>,
+    pub sstacks: ArenaSparse<SNormScope, StackId>,
     /// computation arena
-    pub scompus: ArenaAssoc<CompuId, SComputation>,
+    pub scompus: ArenaSparse<SNormScope, CompuId>,
 
     /// users of variables
     pub users: ArenaAssoc<DefId, Vec<ValueId>>,

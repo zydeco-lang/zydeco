@@ -1,6 +1,7 @@
 use derive_more::{AsMut, AsRef};
 use {
     super::{
+        arena::StaticsScope,
         syntax::{AnnId, Fillable, PatAnnId, StaticsArena, TermAnnId, TyEnvT},
         *,
     },
@@ -8,15 +9,15 @@ use {
         surface_syntax::{PrimDefs, ScopedArena, SpanArena},
         *,
     },
-    zydeco_utils::prelude::{ArenaAccess, CompilerPass, KeySpace, SccGroup},
+    zydeco_utils::prelude::{ArenaAccess, CompilerPass, IdAllocator, SccGroup},
 };
 
 /// Type-checking driver that consumes scoped syntax and produces typed arenas.
 #[derive(AsRef, AsMut)]
 pub struct Tycker<'a> {
     /// Sequential issuer scoped to this type-checking run.
-    #[as_mut(KeySpace)]
-    key_space: KeySpace,
+    #[as_mut(IdAllocator<StaticsScope>)]
+    allocator: IdAllocator<StaticsScope>,
     pub spans: &'a SpanArena,
     pub prim: &'a PrimDefs,
     #[as_ref(ScopedArena)]
@@ -43,7 +44,7 @@ impl<'a> Tycker<'a> {
     /// Create a type checker with fresh statics arenas.
     pub fn new(spans: &'a SpanArena, prim: &'a PrimDefs, scoped: &'a mut ScopedArena) -> Self {
         Self {
-            key_space: KeySpace::new(),
+            allocator: IdAllocator::new(),
             spans,
             prim,
             scoped,

@@ -6,6 +6,15 @@ zydeco_utils::new_key_type! {
     pub struct SlotId;
 }
 
+/// Allocation and owning storage scope for temporary stack-analysis slots.
+#[derive(Debug)]
+pub enum StackAnalysisScope {}
+
+impl Allocates<SlotId> for StackAnalysisScope {}
+impl ArenaSchema<SlotId> for StackAnalysisScope {
+    type Item = Slot;
+}
+
 #[derive(Clone)]
 pub struct Layout {
     pub control: im::Vector<SlotId>,
@@ -34,11 +43,11 @@ pub struct StackAnalyzer<'a> {
     #[as_mut(AssemblyArena)]
     pub arena: &'a mut AssemblyArena,
     /// Issuer scoped to this analysis run's temporary stack slots.
-    key_space: KeySpace,
+    allocator: IdAllocator<StackAnalysisScope>,
     /// The stack layouts *before* each program point.
     pub layouts: ArenaAssoc<ProgId, Layout>,
     /// The slots in the control stack.
-    pub slots: ArenaSparse<SlotId, Slot>,
+    pub slots: ArenaSparse<StackAnalysisScope, SlotId>,
     /// Whether the slot will be inlined.
     pub inlined: ArenaAssoc<SlotId, bool>,
 }
@@ -47,7 +56,7 @@ pub struct StackAnalyzer<'a> {
 pub struct StackAnalysis<'a> {
     pub arena: &'a mut AssemblyArena,
     pub layouts: ArenaAssoc<ProgId, Layout>,
-    pub slots: ArenaSparse<SlotId, Slot>,
+    pub slots: ArenaSparse<StackAnalysisScope, SlotId>,
     pub inlined: ArenaAssoc<SlotId, bool>,
 }
 
@@ -55,14 +64,14 @@ impl<'a> StackAnalyzer<'a> {
     pub fn new(arena: &'a mut AssemblyArena) -> Self {
         Self {
             arena,
-            key_space: KeySpace::new(),
+            allocator: IdAllocator::new(),
             layouts: ArenaAssoc::new(),
             slots: ArenaSparse::new(),
             inlined: ArenaAssoc::new(),
         }
     }
     pub fn push_control(&mut self, layout: &mut Layout, slot: Slot) -> SlotId {
-        let slot_id = self.key_space.alloc();
+        let slot_id = self.allocator.alloc();
         self.slots.insert_new(slot_id, slot);
         self.inlined.insert_new(slot_id, false);
         layout.control.push_back(slot_id);
@@ -114,7 +123,7 @@ impl<'a> CompilerPass for StackAnalyzer<'a> {
         for entry in entries {
             entry.stack_inline(&mut self);
         }
-        let Self { arena, key_space: _, layouts, slots, inlined } = self;
+        let Self { arena, allocator: _, layouts, slots, inlined } = self;
         Ok(StackAnalysis { arena, layouts, slots, inlined })
     }
 }
@@ -239,7 +248,7 @@ impl<'a> StackInline<'a> for ProgId {
                             | Symbol::Prog(target) => si
                                 .arena
                                 .programs
-                                .replace_existing(self, Terminator::Jump(Jump(target))),
+                                .replace_existing_with(self, Terminator::Jump(Jump(target))),
                             | _ => {}
                         },
                         | Slot::Imm(_) | Slot::Pair(_) | Slot::Unknown => {}

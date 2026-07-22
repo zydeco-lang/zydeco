@@ -6,7 +6,7 @@ use std::{
     io::{BufRead, Write},
     rc::Rc,
 };
-use zydeco_utils::prelude::{ArenaSparse, SccGraph};
+use zydeco_utils::prelude::{ArenaSchema, ArenaSparse, SccGraph};
 
 /* ------------------------------- Identifier ------------------------------- */
 
@@ -98,11 +98,22 @@ pub enum Declaration {
 
 /* ---------------------------------- Arena --------------------------------- */
 
+/// Owning storage scope for linked runtime syntax.
+#[derive(Debug)]
+pub enum DynamicsScope {}
+
+impl ArenaSchema<DefId> for DynamicsScope {
+    type Item = VarName;
+}
+impl ArenaSchema<DeclId> for DynamicsScope {
+    type Item = Declaration;
+}
+
 /// Storage for dynamic declarations and dependency tracking.
 pub struct DynamicsArena {
     // arenas
-    pub defs: ArenaSparse<DefId, VarName>,
-    pub decls: ArenaSparse<DeclId, Declaration>,
+    pub defs: ArenaSparse<DynamicsScope, DefId>,
+    pub decls: ArenaSparse<DynamicsScope, DeclId>,
     pub top: SccGraph<DeclId>,
 }
 

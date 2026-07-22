@@ -3,6 +3,16 @@ use crate::static_syntax as ss;
 use derive_more::{AsMut, AsRef};
 use zydeco_derive::{AsMutSelf, AsRefSelf};
 
+/// Allocation scope for stack IR nodes and synthetic scoped definitions.
+#[derive(Debug)]
+pub enum StackirScope {}
+
+impl Allocates<VPatId> for StackirScope {}
+impl Allocates<ValueId> for StackirScope {}
+impl Allocates<StackId> for StackirScope {}
+impl Allocates<CompuId> for StackirScope {}
+impl Allocates<DefId> for StackirScope {}
+
 /// Administrative arena for stack IR.
 ///
 /// This arena is used to store the administrative information for the stack IR.
@@ -12,8 +22,8 @@ use zydeco_derive::{AsMutSelf, AsRefSelf};
 /// and the one-to-many Zydeco-to-ZIR provenance maps for patterns and terms.
 #[derive(Debug, AsRef, AsMut, AsRefSelf, AsMutSelf)]
 pub struct AdminArena {
-    /// Key space shared by all stack-IR node categories.
-    key_space: KeySpace,
+    /// ID allocator shared by all stack-IR node categories.
+    allocator: IdAllocator<StackirScope>,
 
     /// builtin operators and functions
     pub builtins: BuiltinMap,
@@ -29,15 +39,19 @@ pub struct AdminArena {
 impl AdminArena {
     pub fn new() -> Self {
         Self {
-            key_space: KeySpace::new(),
+            allocator: IdAllocator::new(),
             builtins: Builtin::all(),
             pats: ArenaForth::new(),
             terms: ArenaForth::new(),
         }
     }
 
-    pub(crate) fn fresh<Id: ArenaId>(&mut self) -> Id {
-        self.key_space.alloc()
+    pub(crate) fn fresh<Id>(&mut self) -> Id
+    where
+        Id: ArenaId,
+        StackirScope: Allocates<Id>,
+    {
+        self.allocator.alloc()
     }
 }
 

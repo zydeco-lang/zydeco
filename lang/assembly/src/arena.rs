@@ -3,14 +3,32 @@ use zydeco_derive::{AsMutSelf, AsRefSelf};
 use zydeco_stackir::sps::syntax as sk;
 use zydeco_utils::{graph::DepGraph, with::With};
 
+/// Allocation and owning storage scope for assembly nodes.
+#[derive(Debug)]
+pub enum AssemblyScope {}
+
+impl Allocates<VarId> for AssemblyScope {}
+impl Allocates<SymId> for AssemblyScope {}
+impl Allocates<ProgId> for AssemblyScope {}
+
+impl ArenaSchema<VarId> for AssemblyScope {
+    type Item = VarName;
+}
+impl ArenaSchema<SymId> for AssemblyScope {
+    type Item = NamedSymbol;
+}
+impl ArenaSchema<ProgId> for AssemblyScope {
+    type Item = Program;
+}
+
 #[derive(Default, AsRefSelf, AsMutSelf)]
 pub struct AssemblyArena {
     /// All programs are attached with a ProgId.
-    pub programs: ArenaSparse<ProgId, Program>,
+    pub programs: ArenaSparse<AssemblyScope, ProgId>,
     /// All variables are named.
-    pub variables: ArenaSparse<VarId, VarName>,
+    pub variables: ArenaSparse<AssemblyScope, VarId>,
     /// All symbols are named.
-    pub symbols: ArenaSparse<SymId, NamedSymbol>,
+    pub symbols: ArenaSparse<AssemblyScope, SymId>,
 
     /// Map from DefId to VarId or SymId
     pub defs: ArenaBijective<sk::DefId, DefId>,
@@ -61,12 +79,12 @@ pub trait Construct<'a, S, T, Arena>: Sized + Into<S> {
 
 impl<'a, U, Arena> Construct<'a, VarName, VarId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena> + AsMut<KeySpace>,
+    Arena: AsMut<AssemblyArena> + AsMut<IdAllocator<AssemblyScope>>,
     U: Into<VarName>,
 {
     type Site = Option<sk::DefId>;
     fn build<'f: 'a>(self, arena: &'f mut Arena, site: Self::Site) -> VarId {
-        let id = AsMut::<KeySpace>::as_mut(arena).alloc();
+        let id = AsMut::<IdAllocator<AssemblyScope>>::as_mut(arena).alloc();
         let this = AsMut::<AssemblyArena>::as_mut(arena);
         this.variables.insert_new(id, self.into());
         if let Some(site) = site {
@@ -78,12 +96,12 @@ where
 
 impl<'a, U, Arena> Construct<'a, Symbol, SymId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena> + AsMut<KeySpace>,
+    Arena: AsMut<AssemblyArena> + AsMut<IdAllocator<AssemblyScope>>,
     U: Into<Symbol>,
 {
     type Site = (Option<String>, Option<sk::DefId>);
     fn build<'f: 'a>(self, arena: &'f mut Arena, (name, site): Self::Site) -> SymId {
-        let id = AsMut::<KeySpace>::as_mut(arena).alloc();
+        let id = AsMut::<IdAllocator<AssemblyScope>>::as_mut(arena).alloc();
         let this = AsMut::<AssemblyArena>::as_mut(arena);
         let symbol = NamedSymbol { name: name.unwrap_or_default(), inner: self.into() };
         let is_prog = match symbol.inner {
@@ -123,12 +141,12 @@ impl<'a, Arena> CxKont<'a, Arena> {
 /// Allocate a program that is anonymous, i.e. has no meaningful label.
 impl<'a, U, Arena> Construct<'a, Program, ProgId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena> + AsMut<KeySpace>,
+    Arena: AsMut<AssemblyArena> + AsMut<IdAllocator<AssemblyScope>>,
     U: Into<Program>,
 {
     type Site = Context;
     fn build<'f: 'a>(self, arena: &'f mut Arena, cx: Self::Site) -> ProgId {
-        let id = AsMut::<KeySpace>::as_mut(arena).alloc();
+        let id = AsMut::<IdAllocator<AssemblyScope>>::as_mut(arena).alloc();
         let this = AsMut::<AssemblyArena>::as_mut(arena);
         let program = self.into();
         this.programs.insert_new(id, program.clone());
@@ -157,7 +175,7 @@ where
 
 impl<'a, U, Arena> Construct<'a, Terminator, ProgId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena> + AsMut<KeySpace>,
+    Arena: AsMut<AssemblyArena> + AsMut<IdAllocator<AssemblyScope>>,
     U: Into<Terminator>,
 {
     type Site = Context;
@@ -169,7 +187,7 @@ where
 
 impl<'a, U, Arena> Construct<'a, Instruction, ProgId, Arena> for U
 where
-    Arena: AsMut<AssemblyArena> + AsMut<KeySpace> + 'a,
+    Arena: AsMut<AssemblyArena> + AsMut<IdAllocator<AssemblyScope>> + 'a,
     U: Into<Instruction>,
 {
     /// The continuation.

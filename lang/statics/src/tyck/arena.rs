@@ -10,25 +10,71 @@ pub use zydeco_surface::arena::*;
 
 /* ---------------------------------- Arena --------------------------------- */
 
+/// Allocation and owning storage scope for typed syntax.
+#[derive(Debug)]
+pub enum StaticsScope {}
+
+impl Allocates<KindId> for StaticsScope {}
+impl Allocates<TPatId> for StaticsScope {}
+impl Allocates<TypeId> for StaticsScope {}
+impl Allocates<VPatId> for StaticsScope {}
+impl Allocates<ValueId> for StaticsScope {}
+impl Allocates<CompuId> for StaticsScope {}
+impl Allocates<DefId> for StaticsScope {}
+
+impl ArenaSchema<KindId> for StaticsScope {
+    type Item = Fillable<Kind>;
+}
+impl ArenaSchema<TPatId> for StaticsScope {
+    type Item = TypePattern;
+}
+impl ArenaSchema<TypeId> for StaticsScope {
+    type Item = Fillable<Type>;
+}
+impl ArenaSchema<VPatId> for StaticsScope {
+    type Item = ValuePattern;
+}
+impl ArenaSchema<ValueId> for StaticsScope {
+    type Item = Value;
+}
+impl ArenaSchema<CompuId> for StaticsScope {
+    type Item = Computation;
+}
+impl ArenaSchema<DeclId> for StaticsScope {
+    type Item = Declaration;
+}
+impl ArenaSchema<AbstId> for StaticsScope {
+    type Item = ();
+}
+impl ArenaSchema<FillId> for StaticsScope {
+    type Item = su::TermId;
+}
+impl ArenaSchema<DataId> for StaticsScope {
+    type Item = Data;
+}
+impl ArenaSchema<CoDataId> for StaticsScope {
+    type Item = CoData;
+}
+
 pub use zydeco_surface::scoped::arena::*;
 
 /// Typed arena plus annotation tables and translation metadata.
 #[derive(Debug, Default, AsRefSelf, AsMutSelf)]
 pub struct StaticsArena {
     /// kind arena before normalization
-    pub kinds_pre: ArenaSparse<KindId, Fillable<Kind>>,
+    pub kinds_pre: ArenaSparse<StaticsScope, KindId>,
     /// type pattern arena
-    pub tpats: ArenaSparse<TPatId, TypePattern>,
+    pub tpats: ArenaSparse<StaticsScope, TPatId>,
     /// type arena before normalization
-    pub types_pre: ArenaSparse<TypeId, Fillable<Type>>,
+    pub types_pre: ArenaSparse<StaticsScope, TypeId>,
     /// value pattern arena
-    pub vpats: ArenaSparse<VPatId, ValuePattern>,
+    pub vpats: ArenaSparse<StaticsScope, VPatId>,
     /// value arena
-    pub values: ArenaSparse<ValueId, Value>,
+    pub values: ArenaSparse<StaticsScope, ValueId>,
     /// computation arena
-    pub compus: ArenaSparse<CompuId, Computation>,
+    pub compus: ArenaSparse<StaticsScope, CompuId>,
     /// declaration arena
-    pub decls: ArenaAssoc<DeclId, Declaration>,
+    pub decls: ArenaSparse<StaticsScope, DeclId>,
 
     /// entry point(s), i.e. declarations that are marked as entry points;
     /// typically the main function, which normally should only be unique
@@ -42,23 +88,23 @@ pub struct StaticsArena {
     pub terms: ArenaBipartite<su::TermId, TermId>,
 
     /// arena for abstract types
-    pub absts: ArenaDense<AbstId, ()>,
+    pub absts: ArenaDense<StaticsScope, AbstId>,
     /// the abstract types generated from sealed types
     pub seals: ArenaAssoc<AbstId, TypeId>,
     /// name hints for abstract types
     pub abst_hints: ArenaAssoc<AbstId, DefId>,
     /// arena for filling context-constrained holes; the [`su::TermId`] is the site;
     /// only types and kinds are now fillable
-    pub fills: ArenaDense<FillId, su::TermId>,
+    pub fills: ArenaDense<StaticsScope, FillId>,
     /// arena for the solutions of fillings,
     /// i.e. the the [`FillId`] should be assigned as the [`AnnId`]
     pub solus: ArenaAssoc<FillId, AnnId>,
     /// which holes are introduced by the user and should be reported
     pub fill_hints: ArenaAssoc<FillId, ()>,
     /// arena for `data`; plural plural
-    pub datas: ArenaDense<DataId, Data>,
+    pub datas: ArenaDense<StaticsScope, DataId>,
     /// arena for `codata`; plural plural
-    pub codatas: ArenaDense<CoDataId, CoData>,
+    pub codatas: ArenaDense<StaticsScope, CoDataId>,
     /// hints for values that need data annotations
     pub data_hints: ArenaAssoc<ValueId, DataId>,
     /// hints for value patterns that need data annotations

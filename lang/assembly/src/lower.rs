@@ -23,8 +23,8 @@ pub trait Lower<'a> {
 #[derive(AsRef, AsMut)]
 pub struct Lowerer<'a> {
     /// Sequential issuer scoped to this lowering run.
-    #[as_mut(KeySpace)]
-    key_space: KeySpace,
+    #[as_mut(IdAllocator<AssemblyScope>)]
+    allocator: IdAllocator<AssemblyScope>,
     #[as_ref]
     #[as_mut]
     pub arena: AssemblyArena,
@@ -40,7 +40,7 @@ impl<'a> Lowerer<'a> {
         stackir: &'a StackirArena,
     ) -> Self {
         let arena = AssemblyArena::new();
-        Self { key_space: KeySpace::new(), arena, spans, scoped, statics, stackir }
+        Self { allocator: IdAllocator::new(), arena, spans, scoped, statics, stackir }
     }
 
     pub fn run(mut self) -> AssemblyArena {

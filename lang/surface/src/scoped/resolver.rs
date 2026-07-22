@@ -35,10 +35,10 @@ pub struct Resolver<'a> {
     pub internal_to_def: ArenaAssoc<TermId, DefId>,
 
     // arenas
-    pub defs: ArenaAssoc<DefId, VarName>,
-    pub pats: ArenaAssoc<PatId, Pattern>,
-    pub terms: ArenaAssoc<TermId, Term<DefId>>,
-    pub decls: ArenaAssoc<DeclId, Declaration>,
+    pub defs: ArenaSparse<ScopedScope, DefId>,
+    pub pats: ArenaSparse<ScopedScope, PatId>,
+    pub terms: ArenaSparse<ScopedScope, TermId>,
+    pub decls: ArenaSparse<ScopedScope, DeclId>,
 
     pub users: ArenaForth<DefId, TermId>,
     pub metas: ArenaAssoc<DeclId, im::Vector<Meta>>,
@@ -61,10 +61,10 @@ impl<'a> Resolver<'a> {
             prim_def: PrimDefs::default(),
             internal_to_def: ArenaAssoc::default(),
 
-            defs: ArenaAssoc::default(),
-            pats: ArenaAssoc::default(),
-            terms: ArenaAssoc::default(),
-            decls: ArenaAssoc::default(),
+            defs: ArenaSparse::default(),
+            pats: ArenaSparse::default(),
+            terms: ArenaSparse::default(),
+            decls: ArenaSparse::default(),
 
             users: ArenaForth::default(),
             metas: ArenaAssoc::default(),
@@ -486,10 +486,10 @@ impl Resolve for TermId {
 
 /// See [`ScopedArena`] for more detail.
 pub struct Collector {
-    pub defs: ArenaSparse<DefId, VarName>,
-    pub pats: ArenaSparse<PatId, Pattern>,
-    pub terms: ArenaSparse<TermId, Term<DefId>>,
-    pub decls: ArenaSparse<DeclId, Declaration>,
+    pub defs: ArenaSparse<ScopedScope, DefId>,
+    pub pats: ArenaSparse<ScopedScope, PatId>,
+    pub terms: ArenaSparse<ScopedScope, TermId>,
+    pub decls: ArenaSparse<ScopedScope, DeclId>,
     pub textual: ArenaForth<t::EntityId, EntityId>,
 
     pub users: ArenaForth<DefId, TermId>,

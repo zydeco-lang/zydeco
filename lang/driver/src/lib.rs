@@ -90,11 +90,19 @@ use std::{
 use zydeco_amd64::{EmitDiagnostics, TargetFormat};
 use zydeco_llvm::TargetTriple as LlvmTargetTriple;
 use zydeco_utils::prelude::{
-    ArenaAccess, ArenaAssoc, ArenaDense, CompilerPass, DepGraph, Kosaraju,
+    ArenaAccess, ArenaAssoc, ArenaDense, ArenaSchema, CompilerPass, DepGraph, Kosaraju,
 };
 
 zydeco_utils::new_key_type! {
     pub struct PackId;
+}
+
+/// Owning storage scope for build-system packages.
+#[derive(Debug)]
+pub enum BuildScope {}
+
+impl ArenaSchema<PackId> for BuildScope {
+    type Item = Package;
 }
 
 pub struct Driver {
@@ -190,7 +198,7 @@ pub struct BuildSystem {
     /// configuration
     pub conf: Conf,
     /// all the packages in the build system
-    pub packages: ArenaDense<PackId, Package>,
+    pub packages: ArenaDense<BuildScope, PackId>,
     /// a map from the canonicalized path of package file to the package id
     pub seen: HashMap<PathBuf, PackId>,
     /// a map from the named packages to their package id, typically for binaries

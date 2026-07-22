@@ -227,7 +227,7 @@ pub struct TopLevel(pub Vec<DeclId>);
 /* --------------------------------- Parser --------------------------------- */
 
 pub struct Parser {
-    key_space: KeySpace,
+    allocator: IdAllocator<TextualScope>,
     pub spans: SpanArena,
     pub arena: TextArena,
 }
@@ -241,7 +241,7 @@ impl Default for Parser {
 impl Parser {
     /// Create a parser with one ID issuer for all textual entity categories.
     pub fn new() -> Self {
-        Self { key_space: KeySpace::new(), spans: SpanArena::new(), arena: TextArena::default() }
+        Self { allocator: IdAllocator::new(), spans: SpanArena::new(), arena: TextArena::default() }
     }
     /// Finish parsing, dropping the issuer and returning only durable storage.
     pub fn finish(self) -> (SpanArena, TextArena) {
@@ -250,8 +250,9 @@ impl Parser {
     fn alloc<Id>(&mut self, span: Span) -> Id
     where
         Id: ArenaId + Into<EntityId>,
+        TextualScope: Allocates<Id>,
     {
-        let id = self.key_space.alloc();
+        let id = self.allocator.alloc();
         self.spans.insert_new(id, span);
         id
     }
