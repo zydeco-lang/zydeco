@@ -36,6 +36,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for PatId {
             | Pattern::Ann(p) => s += &p.ugly(f),
             | Pattern::Hole(p) => s += &p.ugly(f),
             | Pattern::Var(p) => s += &p.ugly(f),
+            | Pattern::Named(p) => s += &p.ugly(f),
             | Pattern::Ctor(p) => s += &p.ugly(f),
             | Pattern::Paren(p) => s += &p.ugly(f),
         }
@@ -65,6 +66,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Ann(t) => s += &t.ugly(f),
             | Term::Hole(t) => s += &t.ugly(f),
             | Term::Var(t) => s += &t.ugly(f),
+            | Term::Named(t) => s += &t.ugly(f),
             | Term::Paren(t) => s += &t.ugly(f),
             | Term::Abs(t) => s += &t.ugly(f),
             | Term::App(t) => s += &t.ugly(f),
@@ -157,10 +159,26 @@ impl<'a> Ugly<'a, Formatter<'a>> for Hole {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for FieldName {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        self.plain()
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for VarName {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let VarName(name) = self;
         name.clone()
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for Named<FieldName, T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Named(name, inner) = self;
+        format!("{} = {}", name.ugly(f), inner.ugly(f))
     }
 }
 

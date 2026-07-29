@@ -1,6 +1,9 @@
 use crate::textual::{
     arena::TextualScope,
-    syntax::{CoPatId, DeclId, DefId, EntityId, Parser, PatId, TermId},
+    syntax::{
+        Ann, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Literal, Named, Paren, Parser, PatId,
+        Pattern, Term, TermId,
+    },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
 
@@ -39,4 +42,182 @@ fn parsing_2() {
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
     println!("{:?}", t);
+}
+
+#[test]
+fn parses_named_term_fields() {
+    let source = "(x = 1, y = 2)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized named tuple")
+    };
+    let fields = fields
+        .iter()
+        .map(|field| {
+            let Term::Named(Named(name, body)) = &parser.arena.terms[field] else {
+                panic!("expected a named term")
+            };
+            let Term::Lit(Literal::Int(value)) = &parser.arena.terms[body] else {
+                panic!("expected an integer payload")
+            };
+            (name.plain(), *value)
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(fields, vec![("x".to_string(), 1), ("y".to_string(), 2)]);
+}
+
+#[test]
+fn parses_named_term_payload_annotation() {
+    let source = "(name = 1 : _)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized named tuple")
+    };
+    let [field] = fields.as_slice() else { panic!("expected one named field") };
+    let Term::Named(Named(name, body)) = &parser.arena.terms[field] else {
+        panic!("expected a named term")
+    };
+    let Term::Ann(Ann { tm, ty }) = &parser.arena.terms[body] else {
+        panic!("expected the field payload to be annotated")
+    };
+
+    assert_eq!(name.plain(), "name");
+    assert!(matches!(parser.arena.terms[tm], Term::Lit(Literal::Int(1))));
+    assert!(matches!(parser.arena.terms[ty], Term::Hole(Hole)));
+}
+
+#[test]
+fn parses_chained_named_terms() {
+    let source = "(outer = inner = 1)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized named tuple")
+    };
+    let [field] = fields.as_slice() else { panic!("expected one named field") };
+    let Term::Named(Named(outer, body)) = &parser.arena.terms[field] else {
+        panic!("expected an outer named term")
+    };
+    let Term::Named(Named(inner, body)) = &parser.arena.terms[body] else {
+        panic!("expected an inner named term")
+    };
+
+    assert_eq!(outer.plain(), "outer");
+    assert_eq!(inner.plain(), "inner");
+    assert!(matches!(parser.arena.terms[body], Term::Lit(Literal::Int(1))));
+}
+
+#[test]
+fn parses_named_pattern_fields() {
+    let source = "(x = left, y = right)";
+    let mut parser = Parser::new();
+    let pattern = parser::SinglePatternParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
+        panic!("expected a parenthesized named tuple pattern")
+    };
+    let fields = fields
+        .iter()
+        .map(|field| {
+            let Pattern::Named(Named(name, body)) = &parser.arena.pats[field] else {
+                panic!("expected a named pattern")
+            };
+            let Pattern::Var(payload) = &parser.arena.pats[body] else {
+                panic!("expected a variable payload")
+            };
+            (name.plain(), parser.arena.defs[payload].plain())
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        fields,
+        vec![("x".to_string(), "left".to_string()), ("y".to_string(), "right".to_string()),]
+    );
+}
+
+#[test]
+fn parses_named_pattern_payload_annotation() {
+    let source = "(name = payload : _)";
+    let mut parser = Parser::new();
+    let pattern = parser::SinglePatternParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
+        panic!("expected a parenthesized named tuple pattern")
+    };
+    let [field] = fields.as_slice() else { panic!("expected one named field") };
+    let Pattern::Named(Named(name, body)) = &parser.arena.pats[field] else {
+        panic!("expected a named pattern")
+    };
+    let Pattern::Ann(Ann { tm, ty }) = &parser.arena.pats[body] else {
+        panic!("expected the field payload to be annotated")
+    };
+    let Pattern::Var(payload) = &parser.arena.pats[tm] else {
+        panic!("expected a variable payload")
+    };
+
+    assert_eq!(name.plain(), "name");
+    assert_eq!(parser.arena.defs[payload].plain(), "payload");
+    assert!(matches!(parser.arena.terms[ty], Term::Hole(Hole)));
+}
+
+#[test]
+fn parses_chained_named_patterns() {
+    let source = "(outer = inner = payload)";
+    let mut parser = Parser::new();
+    let pattern = parser::SinglePatternParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
+        panic!("expected a parenthesized named tuple pattern")
+    };
+    let [field] = fields.as_slice() else { panic!("expected one named field") };
+    let Pattern::Named(Named(outer, body)) = &parser.arena.pats[field] else {
+        panic!("expected an outer named pattern")
+    };
+    let Pattern::Named(Named(inner, body)) = &parser.arena.pats[body] else {
+        panic!("expected an inner named pattern")
+    };
+    let Pattern::Var(payload) = &parser.arena.pats[body] else {
+        panic!("expected a variable payload")
+    };
+
+    assert_eq!(outer.plain(), "outer");
+    assert_eq!(inner.plain(), "inner");
+    assert_eq!(parser.arena.defs[payload].plain(), "payload");
+}
+
+#[test]
+fn parses_chained_dot_elimination() {
+    let source = "rectangle .top_left .x";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Dtor(Dtor(inner, x)) = &parser.arena.terms[&term] else {
+        panic!("expected an outer dot elimination")
+    };
+    let Term::Dtor(Dtor(_, top_left)) = &parser.arena.terms[inner] else {
+        panic!("expected an inner dot elimination")
+    };
+
+    assert_eq!(top_left.plain(), "top_left");
+    assert_eq!(x.plain(), "x");
 }

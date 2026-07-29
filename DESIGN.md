@@ -39,6 +39,23 @@ element count, allowing explicit nested grouping to use suffix pointers
 without changing the canonical layout. Product layouts are always nonempty;
 `Triv` is carried separately through the backends.
 
+### Named Components
+
+Names are an orthogonal wrapper rather than a separate record calculus.
+`Named(field, A)` labels a type, while `Named(field, term)` and
+`Named(field, pattern)` introduce or eliminate a payload with the same label.
+A fixed-field product such as `(x = A, y = B)` is therefore the existing
+product `Named(x, A) * Named(y, B)`, and its term and pattern forms reuse
+`ConsN`. Product order, grouping, and runtime layout remain unchanged; labels
+are checked statically and may be erased afterward.
+
+The parser preserves `field = ...` as `Named` syntax and continues to defer its
+sort to type checking. Postfix `term .field` shares the existing dot-elimination
+syntax used by codata destructors; type checking distinguishes named projection
+from codata elimination using the receiver type. Projection searches only the
+immediate product spine, requires a unique matching field, and exposes the
+payload beneath `Named`.
+
 ## Relative Monads and Monadic Blocks
 
 Relative monads are defined as codata in the standard library (see

@@ -34,6 +34,7 @@ pub enum Pattern {
     Ann(Ann<PatId, TermId>),
     Hole(Hole),
     Var(DefId),
+    Named(Named<FieldName, PatId>),
     Ctor(Ctor<CtorName, PatId>),
     Paren(Paren<PatId>),
 }
@@ -136,6 +137,7 @@ pub enum Term {
     Ann(Ann<TermId, TermId>),
     Hole(Hole),
     Var(NameRef<VarName>),
+    Named(Named<FieldName, TermId>),
     Paren(Paren<TermId>),
     Abs(Abs<CoPatId, TermId>),
     App(Appli<TermId>),

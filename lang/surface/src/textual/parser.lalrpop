@@ -13,7 +13,7 @@ grammar<'input, 'arena>(
 
 extern {
     type Location = usize;
-    
+
     // Token mapping must stay in sync with `textual::lexer::Tok`.
     enum Tok<'input> {
         "UpperId" => Tok::UpperIdent(<&'input str>),
@@ -116,6 +116,7 @@ Literal: Literal = {
 MixedId: String = { <"UpperId"> => <>.into(), <"LowerId"> => <>.into(), };
 
 VarName: VarName = <MixedId> => VarName(<>);
+FieldName: FieldName = <"LowerId"> => FieldName(<>.into());
 CtorName: CtorName = <"CtorId"> => CtorName(<>.into());
 DtorName: DtorName = <"DtorId"> => DtorName(<>.into());
 
@@ -164,14 +165,28 @@ Meta: Meta = {
 PatternGen<P>: PatId = <Sp<P>> => parser.pat(<>);
 
 #[inline]
+PatternAnnId: PatId = <PatternGen<PatternAnn>>;
+PatternAnn: Pattern = {
+    #[precedence(level="0")]
+    <Pattern>,
+
+    #[precedence(level="1")] #[assoc(side="none")]
+    <Ann<PatternGen<PatternAnn>, TermId>> => <>.into(),
+
+    #[precedence(level="2")] #[assoc(side="right")]
+    <name:FieldName> "=" <inner:PatternGen<PatternAnn>> => Named(name, inner).into(),
+};
+
+#[inline]
 PatId: PatId = <PatternGen<Pattern>>;
 Pattern: Pattern = {
-    "(" <Ann<PatId, TermId>> ")" => <>.into(),
     <Hole> => <>.into(),
     <DefId> => <>.into(),
     <ctor:CtorName> <pat:PatId> => Ctor(<>).into(),
-    <Paren<PatId>> => <>.into(),
+    <Paren<PatternAnnId>> => <>.into(),
 };
+
+pub SinglePattern: PatId = PatId;
 
 CoPatternGen<P>: CoPatId = <Sp<P>> => parser.copat(<>);
 
@@ -226,8 +241,14 @@ CoMatcher: CoMatcherParam = {
 #[inline]
 TermAnnId: TermId = <TermGen<TermAnn>>;
 TermAnn: Term = {
+    #[precedence(level="0")]
     <Term>,
-    <Ann<TermId, TermId>> => <>.into(),
+
+    #[precedence(level="1")] #[assoc(side="none")]
+    <Ann<TermGen<TermAnn>, TermId>> => <>.into(),
+
+    #[precedence(level="2")] #[assoc(side="right")]
+    <name:FieldName> "=" <inner:TermGen<TermAnn>> => Named(name, inner).into(),
 };
 
 #[inline]
@@ -238,7 +259,7 @@ Term: Term = {
     // Direct ones (TermGen<Term>) are only atomic (precedence -= 1) terms.
 
     // Precedence summary (tightest -> loosest):
-    // level 0 (atom) < level 1 (app/dtor) < level 2 (*) < level 3 (->)
+    // level 0 (atom) < level 1 (app/dot) < level 2 (*) < level 3 (->)
     // < level 4 (pi/forall/sigma/exists) < level 5 (binders/blocks).
 
     #[precedence(level="0")]
@@ -278,7 +299,7 @@ Term: Term = {
     #[precedence(level="2")] #[assoc(side="right")]
     // product
     <ty_l:TermGen<Term>> "*" <ty_r:TermGen<Term>> => Prod(<>).into(),
-    
+
     // Arrow associates to the right: A -> B -> C == A -> (B -> C).
     #[precedence(level="3")] #[assoc(side="right")]
     // arrow

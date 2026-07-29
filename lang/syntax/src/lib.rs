@@ -12,6 +12,8 @@ use derive_more::From;
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VarName(pub String);
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FieldName(pub String);
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SymName(pub String);
 /// `+C`, including the plus
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -31,6 +33,10 @@ pub struct Ann<Tm, Ty> {
 /// `_` for synthesize mode motivator
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Hole;
+
+/// `field = inner` labels a type, term, or pattern.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Named<Tag, Inner>(pub Tag, pub Inner);
 
 /// any binding structure
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

@@ -279,6 +279,10 @@ impl Desugar for t::PatId {
                 let name = name.desugar(desugarer)?.into();
                 Alloc::alloc(desugarer, name, self.into())
             }
+            | Pat::Named(_) => {
+                let span = desugarer.spans[&t::EntityId::from(self)].clone();
+                Err(DesugarError::NamedPatternNotSupported(span.make(self)))?
+            }
             | Pat::Ctor(pat) => {
                 let t::Ctor(name, pat) = pat;
                 let pat = pat.desugar(desugarer)?;
@@ -370,6 +374,10 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Hole.into(), self.into())
             }
             | Tm::Var(name) => Alloc::alloc(desugarer, b::Term::Var(name), self.into()),
+            | Tm::Named(_) => {
+                let span = desugarer.spans[&t::EntityId::from(self)].clone();
+                Err(DesugarError::NamedTermNotSupported(span.make(self)))?
+            }
             | Tm::Paren(term) => {
                 let t::Paren(terms) = term;
                 let mut terms = terms.desugar(desugarer)?;
