@@ -352,8 +352,8 @@ main ! exit 0 end
 }
 
 #[test]
-fn translates_package_dependent_destructors_in_monadic_blocks() {
-    PackPiCase::check(
+fn runs_package_dependent_destructors_after_a_monadic_bind() {
+    PackPiCase::run(
         r#"
 alias Box =
   exists (X : VType) . X
@@ -365,7 +365,7 @@ alias Service : CType =
   end
 end
 
-def ! translated : Service =
+def ! translated =
   monadic
     do _ <- ret ();
     (comatch
@@ -375,7 +375,56 @@ def ! translated : Service =
   end
 end
 
-main ! exit 0 end
+main
+  do value <- ! translated Ret { ! mo-ret } .unbox (Int, triv, 41);
+  do status <- ! sub value 41;
+  ! exit status
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn runs_package_dependent_destructors_with_an_abstract_computation_witness() {
+    PackPiCase::run(
+        r#"
+alias Core =
+  exists (OS : CType) . Thk OS
+end
+
+alias Runner : CType =
+  codata
+  | .run : pi ((OS, _) : Core) . OS
+  end
+end
+
+def ! ret-algebra (R : CType) : Algebra Ret R =
+  comatch X computation continuation ->
+    do value <- ! computation;
+    ! continuation value
+  end
+end
+
+def ! translated =
+  monadic
+    do _ <- ret ();
+    (comatch
+    | .run ->
+      fn ((OS, computation) : Core) -> ! computation
+    end : Runner)
+  end
+end
+
+main
+  do value <- ! translated Ret { ! mo-ret } .run (
+    Ret Int,
+    { ! ret-algebra (Ret Int) },
+    { ret 41 },
+  );
+  do status <- ! sub value 41;
+  ! exit status
+end
 "#,
     )
     .unwrap();

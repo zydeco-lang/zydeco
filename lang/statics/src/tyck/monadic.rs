@@ -250,6 +250,53 @@ fn signature_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result
     Ok(res)
 }
 
+/// Structure translation for a codata type.
+///
+/// The source codata directs the recursive structure translations of its
+/// destructor signatures, while the translated codata is the interface
+/// inhabited by the resulting `comatch`.
+struct CoDataStructureTranslation {
+    source: TypeId,
+    source_codata: CoDataId,
+}
+
+impl MonConstruct<CompuId> for CoDataStructureTranslation {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+        let Self { source, source_codata } = self;
+        let source_arms = tycker.statics.codatas[&source_codata].clone();
+        let (env, target) = cs::TypeLift { ty: source }.mbuild(tycker, env)?;
+        let target_view = target.unroll(tycker)?;
+        let Type::CoData(target_codata) = tycker.type_filled(&target_view)?.to_owned() else {
+            unreachable!("translated codata type must remain codata")
+        };
+        let monad_ty = env.monad_ty;
+
+        Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, carrier| {
+            let monadic_value_ty = cs::Thk(App(monad_ty, carrier));
+            Abs(cs::Pat("mz", monadic_value_ty), move |monadic_value: VPatId| {
+                let function_ty = cs::Thk(Arrow(carrier, target));
+                let source_arms = source_arms.clone();
+                Abs(cs::Pat("f", function_ty), move |function: VPatId| {
+                    cs::CoMatch(target_codata, move |dtor, _target_signature| {
+                        let source_signature = source_arms
+                            .get(&dtor)
+                            .expect("translated codata must preserve its destructors");
+                        let continuation = Abs(cs::Pat("z", carrier), move |value: VPatId| {
+                            Dtor(App(Force(cs::Value(function)), cs::Value(value)), dtor)
+                        });
+                        let structure = cs::Structure { ty: source_signature };
+                        App(
+                            App(App(structure, cs::Ty(carrier)), cs::Value(monadic_value)),
+                            Thunk(continuation),
+                        )
+                    })
+                })
+            })
+        })
+        .mbuild(tycker, env)
+    }
+}
+
 /// Allocate a computation abstraction whose parameter opens the witnesses
 /// bound by a package-dependent arrow.
 struct PackPiAbstraction {
@@ -455,7 +502,6 @@ impl PackPiStructureTranslation {
 fn structure_translation(
     tycker: &mut Tycker, env: MonEnv, ty: TypeId,
 ) -> Result<(MonEnv, CompuId)> {
-    let monad_ty = env.monad_ty;
     let monad_impl = env.monad_impl;
     let res = match tycker.type_filled(&ty)? {
         | Type::Var(def) => {
@@ -545,30 +591,8 @@ fn structure_translation(
             })
             .mbuild(tycker, env)?
         }
-        | Type::CoData(coda) => {
-            // output: fn (Z : VType) (mz : Thk (M Z)) (f: Thk (Z -> &_n[B_n])) -> <body>
-            Abs(cs::Ty(cs::Pat("Z", VType)), move |_tvar, abst_z| {
-                let mz_ty = cs::Thk(App(monad_ty, abst_z));
-                Abs(cs::Pat("mz", mz_ty), move |mz: VPatId| {
-                    let ty_ = cs::TypeLift { ty };
-                    let f_ty = cs::Thk(Arrow(abst_z, ty_));
-                    Abs(cs::Pat("f", f_ty), move |f: VPatId| {
-                        // <body> =
-                        // comatch
-                        // | .dtor_n -> Str(B_n) Z mz { fn (z : Z) -> ! f z .dtor_n }
-                        // | ...
-                        // end
-                        cs::CoMatch(coda, move |dtor, ty| {
-                            let kont = Abs(cs::Pat("z", abst_z), move |z: VPatId| {
-                                Dtor(App(Force(cs::Value(f)), cs::Value(z)), dtor)
-                            });
-                            let str = cs::Structure { ty };
-                            App(App(App(str, cs::Ty(abst_z)), cs::Value(mz)), Thunk(kont))
-                        })
-                    })
-                })
-            })
-            .mbuild(tycker, env)?
+        | Type::CoData(source_codata) => {
+            CoDataStructureTranslation { source: ty, source_codata }.mbuild(tycker, env)?
         }
         | Type::Arrow(ty) => {
             // input: A -> B
