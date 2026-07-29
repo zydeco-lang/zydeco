@@ -32,7 +32,7 @@ root:
 You can also run a specific OOPSLA example directly:
 
 ```sh
-zydeco run lib/oopsla/proj.toml --bin=polynomial
+zydeco run lib/tests/oopsla/proj.toml --bin=polynomial
 ```
 
 ## Run Tests
@@ -55,7 +55,7 @@ deps = [
   { local = "../std/proj.toml" },
 ]
 bins = [
-  "play.zydeco",
+  "main.zydeco",
 ]
 std = "nostd"
 ```

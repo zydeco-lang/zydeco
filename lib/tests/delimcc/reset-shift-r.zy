@@ -40,4 +40,3 @@ main
   do x <- ! ex;
   ! write_int_line x { do zero <- ! sub x 25; ! exit zero }
 end
-

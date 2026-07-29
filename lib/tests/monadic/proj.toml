@@ -4,7 +4,7 @@ srcs = [
     "molib.zy",
 ]
 deps = [
-    { local = "../std/core.toml" }
+    { local = "../../std/core.toml" }
 ]
 bins = [
     "exnt.zy",

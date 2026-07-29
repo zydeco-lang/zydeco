@@ -11,14 +11,15 @@ All crates then use `dependency = { workspace = true }` to refer to the workspac
 
 - Zydeco is a proof-of-concept programming language based on call-by-push-value.
 - The implementation is a Rust workspace with multiple crates under `lang/`.
-- The standard library and examples live under `lib/`, including `lib/oopsla`.
+- The standard library and reusable examples live under `lib/`;
+  regression and end-to-end projects live under `lib/tests/`.
 
 ## Key Docs
 
 - `README.md`: top-level usage and quick start.
 - `DESIGN.md`: language model, translation pipeline, and limitations.
 - `CONTRIBUTE.md`: build/test workflows and contribution notes.
-- `lib/oopsla/README.md`: artifact overview and detailed examples.
+- `lib/tests/oopsla/README.md`: artifact overview and detailed examples.
 
 ## Common Workflows
 
@@ -49,7 +50,8 @@ cargo test-all
 ## Repository Layout
 
 - `lang/`: parser, type checker, interpreter, driver, and tests.
-- `lib/`: standard library and example programs.
+- `lib/`: standard library, example programs, and test projects under
+  `lib/tests/`.
 - `cli/`: command-line interface.
 - `docs/`: literate Zydeco tutorial material (see `docs/spell`).
 - `editor/`: editor integrations (TextMate grammar and VSCode extension).

@@ -1,7 +1,7 @@
 name = "stack"
 
 srcs = []
-deps = [{ local = "../std/proj.toml" }]
+deps = [{ local = "../../std/proj.toml" }]
 
 bins = [
   "invert.zydeco",

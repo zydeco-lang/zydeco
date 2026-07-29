@@ -1,7 +1,7 @@
 name = "batch-tests"
 
 srcs = []
-deps = [{ local = "../std/proj.toml" }]
+deps = [{ local = "../../std/proj.toml" }]
 bins = [
     "abort.zy",
     "add.zy",

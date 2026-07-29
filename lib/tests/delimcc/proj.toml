@@ -4,10 +4,10 @@ srcs = [
     "lib.zy",
 ]
 deps = [
-    { local = "../std/proj.toml" },
+    { local = "../../std/proj.toml" },
 ]
 bins = [
-    "reset-shift.zy",
+    "reset-shift-r.zy",
     "reset-shift-k.zy",
     "try-catch.zy",
 ]

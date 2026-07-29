@@ -1,6 +1,6 @@
 name = "fail"
 
-deps = [{ local = "../std/proj.toml" }]
+deps = [{ local = "../../std/proj.toml" }]
 srcs = []
 bins = [
     "unbound.zy",

@@ -129,10 +129,11 @@ constrained by the removed scaffolding.
 ## Relative Monads and Monadic Blocks
 
 Relative monads are defined as codata in the standard library (see
-`lib/oopsla/core.zydeco`). Zydeco also implements *monadic blocks*, a
+`lib/tests/oopsla/core.zydeco`). Zydeco also implements *monadic blocks*, a
 generalized do-notation. A monadic block is translated during type checking
-via the algebra translation implemented in `lang/statics/src/monadic.rs` and
-invoked in `lang/statics/src/tyck.rs`.
+via the algebra translation implemented in
+`lang/statics/src/tyck/monadic.rs` and invoked from
+`lang/statics/src/tyck/check.rs`.
 
 Monadic blocks are designed to be closed in the paper, but the artifact allows
 use of global types and terms. These global definitions are reinterpreted under
@@ -209,7 +210,7 @@ Two separate type-level relations constrain IDs:
 ## Repository Layout
 
 - `lang/`: language implementation and tests.
-- `lib/`: Zydeco standard library and examples (including `lib/oopsla`).
+- `lib/`: Zydeco standard library, examples, and projects under `lib/tests`.
 - `cli/`: command-line interface for running and checking programs.
 - `docs/`: literate Zydeco tutorial material (see `docs/spell`).
 - `editor/`: editor integrations (TextMate grammar and VSCode extension).

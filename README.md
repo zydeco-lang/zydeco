@@ -6,7 +6,8 @@ Zydeco is a proof-of-concept programming language based on Call-by-push-value.
 
 ## OOPSLA Artifact Evaluation
 
-The instructions are located in [lib/oopsla/README.md](lib/oopsla/README.md).
+The instructions are located in
+[lib/tests/oopsla/README.md](lib/tests/oopsla/README.md).
 
 ## Documentation
 
@@ -103,7 +104,8 @@ The output is written to `target/doc/`.
 
 - `lang/`: the library implementing the parser, type checker and
 interpreter for the Zydeco language.
-- `lib/`: standard library and example code (also serving as test cases)
+- `lib/`: standard library, reusable examples, and `lib/tests/` regression
+  projects
 - `cli/` Command-line interface
 - `web/` Web interface
 

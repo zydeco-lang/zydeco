@@ -1,34 +1,36 @@
-use zydeco_tests::amd64_proj_bin;
+use zydeco_tests::e2e_proj_bins;
 
-amd64_proj_bin!(compile, exit, "exit");
-// amd64_proj_bin!(compile, echo, "echo");
-// amd64_proj_bin!(compile, echo_none, "echo-none");
-// amd64_proj_bin!(compile, echo_none_cap, "echo-none-cap");
-// amd64_proj_bin!(compile, echo_none_twice, "echo-none-twice");
-// amd64_proj_bin!(compile, echo_once, "echo-once");
-amd64_proj_bin!(compile, env, "env");
-amd64_proj_bin!(compile, add0, "add0");
-amd64_proj_bin!(compile, add, "add");
-amd64_proj_bin!(compile, sub, "sub");
-amd64_proj_bin!(compile, mul, "mul");
-amd64_proj_bin!(compile, nested, "nested");
-amd64_proj_bin!(compile, nested_out, "nested-out");
-amd64_proj_bin!(compile, r#match, "match");
-amd64_proj_bin!(compile, cmp, "cmp");
-amd64_proj_bin!(compile, label, "label");
-amd64_proj_bin!(compile, id, "id");
-amd64_proj_bin!(compile, r#const, "const");
-amd64_proj_bin!(compile, hof, "hof");
-// amd64_proj_bin!(compile, r#loop, "loop");
-// amd64_proj_bin!(compile, looping, "looping");
-amd64_proj_bin!(compile, comatch, "comatch");
-amd64_proj_bin!(compile, fn_cmp_ret, "fn-cmp-ret");
-amd64_proj_bin!(compile, tuple, "tuple");
-amd64_proj_bin!(compile, tuple_do, "tuple-do");
-amd64_proj_bin!(compile, triple, "triple");
-amd64_proj_bin!(compile, sum, "sum");
-amd64_proj_bin!(compile, fact, "fact");
-amd64_proj_bin!(compile, let_stack, "let-stack");
-amd64_proj_bin!(compile, kont_clone, "kont-clone");
-amd64_proj_bin!(compile, named_mixed, "named-mixed");
-amd64_proj_bin!(compile, named, "named");
+e2e_proj_bins!(tests / compile, {
+    exit => "exit",
+    // echo => "echo",
+    // echo_none => "echo-none",
+    // echo_none_cap => "echo-none-cap",
+    // echo_none_twice => "echo-none-twice",
+    // echo_once => "echo-once",
+    env => "env",
+    add0 => "add0",
+    add => "add",
+    sub => "sub",
+    mul => "mul",
+    nested => "nested",
+    nested_out => "nested-out",
+    r#match => "match",
+    cmp => "cmp",
+    label => "label",
+    id => "id",
+    r#const => "const",
+    hof => "hof",
+    // r#loop => "loop",
+    // looping => "looping",
+    comatch => "comatch",
+    fn_cmp_ret => "fn-cmp-ret",
+    tuple => "tuple",
+    tuple_do => "tuple-do",
+    triple => "triple",
+    sum => "sum",
+    fact => "fact",
+    let_stack => "let-stack",
+    kont_clone => "kont-clone",
+    named_mixed => "named-mixed",
+    named => "named",
+});
