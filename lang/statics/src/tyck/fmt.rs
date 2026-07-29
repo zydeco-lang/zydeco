@@ -68,6 +68,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
                 | Type::Abst(abst) => abst.ugly(f),
                 | Type::Abs(ty) => ty.ugly(f),
                 | Type::App(ty) => ty.ugly(f),
+                | Type::Named(ty) => ty.ugly(f),
                 | Type::Thk(ThkTy) => "Thk".to_string(),
                 | Type::Ret(RetTy) => "Ret".to_string(),
                 | Type::Unit(UnitTy) => "Unit".to_string(),
@@ -93,6 +94,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for VPatId {
         match vpat {
             | VPat::Hole(vpat) => vpat.ugly(f),
             | VPat::Var(vpat) => vpat.ugly(f),
+            | VPat::Named(vpat) => vpat.ugly(f),
             | VPat::Ctor(vpat) => vpat.ugly(f),
             | VPat::Triv(vpat) => vpat.ugly(f),
             | VPat::VCons(vpat) => vpat.ugly(f),
@@ -107,11 +109,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for ValueId {
         match value {
             | Value::Hole(value) => value.ugly(f),
             | Value::Var(value) => value.ugly(f),
+            | Value::Named(value) => value.ugly(f),
             | Value::Thunk(value) => value.ugly(f),
             | Value::Ctor(value) => value.ugly(f),
             | Value::Triv(value) => value.ugly(f),
             | Value::VCons(value) => value.ugly(f),
             | Value::TCons(value) => value.ugly(f),
+            | Value::Proj(value) => value.ugly(f),
             | Value::Lit(value) => value.ugly(f),
         }
     }
@@ -214,6 +218,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for VarName {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for FieldName {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        self.plain()
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for CtorName {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let CtorName(name) = self;
@@ -253,6 +263,16 @@ where
     fn ugly(&self, f: &'a Formatter) -> String {
         let App(s, t) = self;
         format!("({} {})", s.ugly(f), t.ugly(f))
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for Named<FieldName, T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Named(name, inner) = self;
+        format!("({} = {})", name.ugly(f), inner.ugly(f))
     }
 }
 
@@ -392,6 +412,22 @@ where
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for ResolvedField {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        self.name.ugly(f)
+    }
+}
+
+impl<'a, Head> Ugly<'a, Formatter<'a>> for Proj<Head, ResolvedField>
+where
+    Head: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Proj(head, field) = self;
+        format!("{}/{}", head.ugly(f), field.ugly(f))
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for Literal {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let mut s = String::new();
@@ -523,6 +559,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::Abst(abst) => abst.pretty(f),
                 | Type::Abs(ty) => ty.pretty(f),
                 | Type::App(ty) => ty.pretty(f),
+                | Type::Named(ty) => ty.pretty(f),
                 | Type::Thk(ThkTy) => RcDoc::text("Thk"),
                 | Type::Ret(RetTy) => RcDoc::text("Ret"),
                 | Type::Unit(UnitTy) => RcDoc::text("Unit"),
@@ -548,6 +585,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
         match vpat {
             | VPat::Hole(vpat) => vpat.pretty(f),
             | VPat::Var(vpat) => vpat.pretty(f),
+            | VPat::Named(vpat) => vpat.pretty(f),
             | VPat::Ctor(vpat) => vpat.pretty(f),
             | VPat::Triv(vpat) => vpat.pretty(f),
             | VPat::VCons(vpat) => vpat.pretty(f),
@@ -562,11 +600,13 @@ impl<'a> Pretty<'a, Formatter<'a>> for ValueId {
         match value {
             | Value::Hole(value) => value.pretty(f),
             | Value::Var(value) => value.pretty(f),
+            | Value::Named(value) => value.pretty(f),
             | Value::Thunk(value) => value.pretty(f),
             | Value::Ctor(value) => value.pretty(f),
             | Value::Triv(value) => value.pretty(f),
             | Value::VCons(value) => value.pretty(f),
             | Value::TCons(value) => value.pretty(f),
+            | Value::Proj(value) => value.pretty(f),
             | Value::Lit(value) => value.pretty(f),
         }
     }
@@ -685,6 +725,12 @@ impl<'a> Pretty<'a, Formatter<'a>> for VarName {
     }
 }
 
+impl<'a> Pretty<'a, Formatter<'a>> for FieldName {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        RcDoc::text(self.ugly(f))
+    }
+}
+
 impl<'a> Pretty<'a, Formatter<'a>> for CtorName {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         RcDoc::text(self.ugly(f))
@@ -750,6 +796,24 @@ where
             RcDoc::text("->"),
             RcDoc::space(),
             arg.pretty(f),
+        ])
+    }
+}
+
+impl<'a, T> Pretty<'a, Formatter<'a>> for Named<FieldName, T>
+where
+    T: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Named(name, inner) = self;
+        RcDoc::concat([
+            RcDoc::text("("),
+            name.pretty(f),
+            RcDoc::space(),
+            RcDoc::text("="),
+            RcDoc::space(),
+            inner.pretty(f),
+            RcDoc::text(")"),
         ])
     }
 }
@@ -922,6 +986,22 @@ where
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
         let Dtor(tail, name) = self;
         RcDoc::concat([tail.pretty(f), RcDoc::space(), name.pretty(f)])
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for ResolvedField {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        self.name.pretty(f)
+    }
+}
+
+impl<'a, Head> Pretty<'a, Formatter<'a>> for Proj<Head, ResolvedField>
+where
+    Head: Pretty<'a, Formatter<'a>>,
+{
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let Proj(head, field) = self;
+        RcDoc::concat([head.pretty(f), RcDoc::text("/"), field.pretty(f)])
     }
 }
 

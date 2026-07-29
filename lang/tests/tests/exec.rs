@@ -27,6 +27,7 @@ interp_proj_bin!(exec, list, "list");
 interp_proj_bin!(exec, listm, "listm");
 interp_proj_bin!(exec, loop_, "loop");
 interp_proj_bin!(exec, loopy, "loopy");
+interp_proj_bin!(exec, named, "named");
 interp_proj_bin!(exec, num, "num");
 interp_proj_bin!(exec, oo, "oo");
 interp_proj_bin!(exec, optiont, "optiont");

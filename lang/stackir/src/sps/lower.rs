@@ -204,6 +204,10 @@ impl Lower for ss::VPatId {
         let stack_vpat: StackVPat = match ss_vpat {
             | SSVPat::Hole(hole) => hole.into(),
             | SSVPat::Var(def) => def.into(),
+            | SSVPat::Named(Named(_, inner)) => {
+                let vpat = inner.lower(lo, ());
+                lo.arena.inner.vpats[&vpat].clone()
+            }
             | SSVPat::Ctor(ctor) => {
                 use zydeco_syntax::Ctor;
                 let Ctor(name, tail) = ctor;
@@ -249,6 +253,7 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
                 let value_id = def.build(lo, site);
                 kont(value_id, lo)
             }
+            | ss::Value::Named(Named(_, inner)) => Phantom::new(inner).lower(lo, kont),
             | ss::Value::Thunk(Thunk(body)) => {
                 let body_compu = body.lower(lo, ());
                 // Get minimal capture from cocontext information
@@ -291,6 +296,12 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
                 // Type cons values are erased
                 Phantom::new(inner).lower(lo, kont)
             }
+            | ss::Value::Proj(Proj(head, field)) => match field.position {
+                | None => Phantom::new(head).lower(lo, kont),
+                | Some(_) => {
+                    unimplemented!("native lowering for named product projection")
+                }
+            },
             | ss::Value::Lit(lit) => {
                 let value_id = lit.build(lo, site);
                 kont(value_id, lo)

@@ -44,10 +44,37 @@ without changing the canonical layout. Product layouts are always nonempty;
 Names are an orthogonal wrapper rather than a separate record calculus.
 `Named(field, A)` labels a type, while `Named(field, term)` and
 `Named(field, pattern)` introduce or eliminate a payload with the same label.
-A fixed-field product such as `(x = A, y = B)` is therefore the existing
-product `Named(x, A) * Named(y, B)`, and its term and pattern forms reuse
-`ConsN`. Product order, grouping, and runtime layout remain unchanged; labels
-are checked statically and may be erased afterward.
+Surface syntax uses `field = inner` for all three forms. For example, if
+`value : A`, then `(field = value) : (field = A)`, and a pattern
+`(field = pattern)` checks its payload against `A`.
+
+Named product types use the existing product operator:
+
+```zydeco
+(x = A) * (y = B)
+```
+
+Their term and pattern forms use the existing comma tuple syntax:
+
+```zydeco
+(x = a, y = b)
+(x = p, y = q)
+```
+
+In particular, `(x = A, y = B)` is not alternate product-type syntax. It is
+parsed as the same comma tuple used in every other term position, and its sort
+and validity are left to type checking. Only `*` forms a product type. This
+keeps `Named` modular: it labels one type, term, or pattern, while `Prod` and
+`ConsN` continue to supply product formation and tuple introduction or
+elimination.
+
+For the MVP, named types are value types. A named term checks against a named
+type only when its field label agrees and its payload checks against the
+underlying value type; named patterns follow the same rule. Computations can be
+stored in named products through their thunks. Product order and explicit
+grouping remain significant, and named and unnamed components may be mixed.
+Labels affect static equality and checking, but not runtime layout, so they may
+be erased after type checking.
 
 The parser preserves `field = ...` as `Named` syntax and continues to defer its
 sort to type checking. Named projection uses postfix slash syntax:
@@ -58,11 +85,12 @@ statically rather than resolved as variables. Slash is reserved exclusively
 for named projection; dot remains exclusively the elimination syntax for
 computation destructors, preserving the value/computation distinction.
 
-Named projection searches only the immediate product spine, requires a unique
-matching field, and exposes the payload beneath `Named`. Reusing slash is
-intentional: named terms internalize namespace-like name management in the
-expression language instead of introducing a parallel projection mechanism for
-each sort or abstraction level.
+Named projection accepts a directly named value or searches only the immediate
+product spine. It requires exactly one matching field and exposes the payload
+beneath `Named`; missing and duplicate matches are distinct type errors.
+Reusing slash is intentional: named terms internalize namespace-like name
+management in the expression language instead of introducing a parallel
+projection mechanism for each sort or abstraction level.
 
 ### Source Organization and Modules
 

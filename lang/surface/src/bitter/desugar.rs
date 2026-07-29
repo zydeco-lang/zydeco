@@ -243,9 +243,10 @@ impl Desugar for t::PatId {
                 let name = name.desugar(desugarer)?.into();
                 Alloc::alloc(desugarer, name, self.into())
             }
-            | Pat::Named(_) => {
-                let span = desugarer.spans[&t::EntityId::from(self)].clone();
-                Err(DesugarError::NamedPatternNotSupported(span.make(self)))?
+            | Pat::Named(pat) => {
+                let t::Named(name, inner) = pat;
+                let inner = inner.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::Named(name, inner).into(), self.into())
             }
             | Pat::Ctor(pat) => {
                 let t::Ctor(name, pat) = pat;
@@ -338,9 +339,10 @@ impl Desugar for t::TermId {
                 Alloc::alloc(desugarer, b::Hole.into(), self.into())
             }
             | Tm::Var(name) => Alloc::alloc(desugarer, b::Term::Var(name), self.into()),
-            | Tm::Named(_) => {
-                let span = desugarer.spans[&t::EntityId::from(self)].clone();
-                Err(DesugarError::NamedTermNotSupported(span.make(self)))?
+            | Tm::Named(term) => {
+                let t::Named(name, inner) = term;
+                let inner = inner.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::Named(name, inner).into(), self.into())
             }
             | Tm::Paren(term) => {
                 let t::Paren(terms) = term;
@@ -644,9 +646,10 @@ impl Desugar for t::TermId {
                 let term = term.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Dtor(term, name).into(), self.into())
             }
-            | Tm::Proj(_) => {
-                let span = desugarer.spans[&t::EntityId::from(self)].clone();
-                Err(DesugarError::NamedProjectionNotSupported(span.make(self)))?
+            | Tm::Proj(term) => {
+                let t::Proj(head, name) = term;
+                let head = head.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::Proj(head, name).into(), self.into())
             }
             | Tm::Lit(term) => {
                 use zydeco_syntax::Literal as Lit;

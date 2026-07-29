@@ -231,6 +231,15 @@ impl<'rt> Eval<'rt> for Value {
                 let tail = mk_box(tail.as_ref().clone().eval(runtime));
                 Step::Done(ConsN(items, tail).into())
             }
+            | Value::Proj(Proj(head, position)) => {
+                let head = head.as_ref().clone().eval(runtime);
+                let projected = head
+                    .into_product_fields()
+                    .into_iter()
+                    .nth(position)
+                    .expect("type-checked product projection must have a matching field");
+                Step::Done(projected)
+            }
             | Value::Lit(lit) => Step::Done(lit.into()),
             | Value::SemValue(sem) => Step::Done(sem),
         }

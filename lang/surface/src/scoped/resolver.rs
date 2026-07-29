@@ -275,6 +275,10 @@ impl Resolve for PatId {
                 local.var_to_def.insert(resolver.bitter.defs[def].clone(), *def);
                 local
             }
+            | Pattern::Named(pat) => {
+                let Named(_name, inner) = pat;
+                inner.resolve(resolver, (local, global))?
+            }
             | Pattern::Ctor(pat) => {
                 let Ctor(_ctor, args) = pat;
                 args.resolve(resolver, (local, global))?
@@ -350,6 +354,11 @@ impl Resolve for TermId {
                 // if not found, report an error
                 let span = &self.span(resolver);
                 Err(ResolveError::UnboundVar(span.make(var.clone())))?
+            }
+            | Term::Named(term) => {
+                let Named(_name, inner) = &term;
+                let () = inner.resolve(resolver, (local, global))?;
+                term.into()
             }
             | Term::Triv(term) => {
                 let Triv = &term;
@@ -470,6 +479,11 @@ impl Resolve for TermId {
             | Term::Dtor(term) => {
                 let Dtor(body, _dtor) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
+                term.into()
+            }
+            | Term::Proj(term) => {
+                let Proj(head, _name) = &term;
+                let () = head.resolve(resolver, (local, global))?;
                 term.into()
             }
             | Term::Lit(term) => term.into(),

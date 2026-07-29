@@ -355,6 +355,7 @@ pub enum Type {
     Abst(AbstId),
     Abs(Abs<TPatId, TypeId>),
     App(App<TypeId, TypeId>),
+    Named(Named<FieldName, TypeId>),
     Thk(ThkTy),
     Ret(RetTy),
     Unit(UnitTy),
@@ -383,6 +384,7 @@ mod impls_types {
 pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
+    Named(Named<FieldName, VPatId>),
     Ctor(Ctor<CtorName, VPatId>),
     Triv(Triv),
     VCons(ConsN<VPatId, VPatId>),
@@ -393,12 +395,24 @@ pub enum ValuePattern {
 pub enum Value {
     Hole(Hole),
     Var(DefId),
+    Named(Named<FieldName, ValueId>),
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),
     VCons(ConsN<ValueId, ValueId>),
     TCons(ConsN<TypeId, ValueId>),
+    Proj(Proj<ValueId, ResolvedField>),
     Lit(Literal),
+}
+
+/// A statically resolved named projection.
+///
+/// `position` is absent when projection merely removes a direct `Named`
+/// wrapper, and present when selecting a component from a product spine.
+#[derive(Clone, Debug)]
+pub struct ResolvedField {
+    pub name: FieldName,
+    pub position: Option<usize>,
 }
 
 /* ------------------------------- Computation ------------------------------ */

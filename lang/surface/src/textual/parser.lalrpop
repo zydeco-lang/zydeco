@@ -223,6 +223,8 @@ TermAnn: Term = {
     #[precedence(level="1")] #[assoc(side="none")]
     <Ann<TermGen<TermAnn>, TermId>> => <>.into(),
 
+    // A name labels one inner term. Named product types compose parenthesized
+    // labels with `*`; comma remains ordinary tuple syntax.
     #[precedence(level="2")] #[assoc(side="right")]
     <name:FieldName> "=" <inner:TermGen<TermAnn>> => Named(name, inner).into(),
 };

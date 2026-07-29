@@ -91,6 +91,7 @@ impl Link for ss::VPatId {
         let vpat = match vpat {
             | VPat::Hole(_) => Hole.into(),
             | VPat::Var(def) => (*def).into(),
+            | VPat::Named(Named(_, inner)) => inner.link(statics).as_ref().to_owned(),
             | VPat::Ctor(Ctor(ctor, pat)) => {
                 let ctor = ctor.to_owned();
                 let pat = pat.link(statics);
@@ -121,6 +122,7 @@ impl Link for ss::ValueId {
         let value = match value {
             | Value::Hole(Hole) => Hole.into(),
             | Value::Var(def) => (*def).into(),
+            | Value::Named(Named(_, inner)) => inner.link(statics).as_ref().to_owned(),
             | Value::Thunk(Thunk(body)) => {
                 let body = body.link(statics);
                 Thunk(body).into()
@@ -139,6 +141,13 @@ impl Link for ss::ValueId {
             | Value::TCons(ss::ConsN(_, body)) => {
                 let body = body.link(statics);
                 body.as_ref().to_owned()
+            }
+            | Value::Proj(Proj(head, field)) => {
+                let head = head.link(statics);
+                match field.position {
+                    | Some(position) => Proj(head, position).into(),
+                    | None => head.as_ref().to_owned(),
+                }
             }
             | Value::Lit(lit) => lit.to_owned().into(),
         };

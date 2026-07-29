@@ -34,6 +34,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for PatId {
             | Pattern::Ann(p) => s += &p.ugly(f),
             | Pattern::Hole(p) => s += &p.ugly(f),
             | Pattern::Var(p) => s += &p.ugly(f),
+            | Pattern::Named(p) => s += &p.ugly(f),
             | Pattern::Ctor(p) => s += &p.ugly(f),
             | Pattern::Triv(p) => s += &p.ugly(f),
             | Pattern::Cons(p) => s += &p.ugly(f),
@@ -53,6 +54,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Ann(t) => s += &t.ugly(f),
             | Term::Hole(t) => s += &t.ugly(f),
             | Term::Var(t) => s += &t.ugly(f),
+            | Term::Named(t) => s += &t.ugly(f),
             | Term::Triv(t) => s += &t.ugly(f),
             | Term::Cons(t) => s += &t.ugly(f),
             | Term::Abs(t) => s += &t.ugly(f),
@@ -73,6 +75,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Match(t) => s += &t.ugly(f),
             | Term::CoMatch(t) => s += &t.ugly(f),
             | Term::Dtor(t) => s += &t.ugly(f),
+            | Term::Proj(t) => s += &t.ugly(f),
             | Term::Lit(t) => s += &t.ugly(f),
         }
         s
@@ -188,6 +191,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for VarName {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for FieldName {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        self.plain()
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for CtorName {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let CtorName(name) = self;
@@ -240,6 +249,16 @@ where
     }
 }
 
+impl<'a, T> Ugly<'a, Formatter<'a>> for Named<FieldName, T>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Named(name, inner) = self;
+        format!("{} = {}", name.ugly(f), inner.ugly(f))
+    }
+}
+
 impl<'a, T> Ugly<'a, Formatter<'a>> for Dtor<T, DtorName>
 where
     T: Ugly<'a, Formatter<'a>>,
@@ -251,6 +270,16 @@ where
         s += " ";
         s += &name.ugly(f);
         s
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for Proj<T, FieldName>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Proj(head, name) = self;
+        format!("{}/{}", head.ugly(f), name.ugly(f))
     }
 }
 

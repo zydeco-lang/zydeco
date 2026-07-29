@@ -23,6 +23,10 @@ impl SyntacticallyUsed for su::PatId {
             }
             | Pat::Triv(su::Triv) => false,
             | Pat::Var(def) => def.syntactically_used(tycker),
+            | Pat::Named(pat) => {
+                let su::Named(_name, inner) = pat;
+                inner.syntactically_used(tycker)
+            }
             | Pat::Ctor(pat) => {
                 let su::Ctor(_ctor, pat) = pat;
                 pat.syntactically_used(tycker)
@@ -55,6 +59,10 @@ impl SyntacticallyUsed for ss::VPatId {
             }
             | Pat::Triv(ss::Triv) => false,
             | Pat::Var(def) => def.syntactically_used(tycker),
+            | Pat::Named(pat) => {
+                let ss::Named(_name, inner) = pat;
+                inner.syntactically_used(tycker)
+            }
             | Pat::Ctor(pat) => {
                 let ss::Ctor(_ctor, pat) = pat;
                 pat.syntactically_used(tycker)
@@ -114,6 +122,7 @@ impl SyntacticallyAnnotated for su::TermId {
             }
             | Tm::Abs(_)
             | Tm::Var(_)
+            | Tm::Named(_)
             | Tm::Hole(_)
             | Tm::Triv(_)
             | Tm::Cons(_)
@@ -133,6 +142,7 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::Match(_)
             | Tm::CoMatch(_)
             | Tm::Dtor(_)
+            | Tm::Proj(_)
             | Tm::Lit(_) => None,
         }
     }
@@ -160,6 +170,7 @@ impl SyntacticallySealed for su::TermId {
             | Tm::Ann(_)
             | Tm::Hole(_)
             | Tm::Var(_)
+            | Tm::Named(_)
             | Tm::Triv(_)
             | Tm::Cons(_)
             | Tm::Abs(_)
@@ -179,6 +190,7 @@ impl SyntacticallySealed for su::TermId {
             | Tm::Match(_)
             | Tm::CoMatch(_)
             | Tm::Dtor(_)
+            | Tm::Proj(_)
             | Tm::Lit(_) => None,
         }
     }

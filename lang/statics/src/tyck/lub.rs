@@ -210,6 +210,31 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
+                | (
+                    Type::Named(Named(lhs_name, lhs_inner)),
+                    Type::Named(Named(rhs_name, rhs_inner)),
+                ) => {
+                    if lhs_name != rhs_name {
+                        tycker.err(
+                            TyckError::NamedLabelMismatch {
+                                expected: lhs_name.clone(),
+                                found: rhs_name,
+                            },
+                            std::panic::Location::caller(),
+                        )?
+                    }
+                    let inner = self.lub(lhs_inner, rhs_inner, tycker)?;
+                    if inner == lhs_inner {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        Alloc::alloc(tycker, Named(lhs_name, inner), kd, &env)
+                    }
+                }
+                | (Type::Named(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
                 | (Type::Thk(ThkTy), Type::Thk(ThkTy)) => lhs_id,
                 | (Type::Thk(_), _) => tycker.err(
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },

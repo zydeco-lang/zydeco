@@ -2,7 +2,7 @@ use crate::textual::{
     arena::TextualScope,
     syntax::{
         Ann, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Literal, Named, Paren, Parser, PatId,
-        Pattern, Proj, Term, TermId,
+        Pattern, Prod, Proj, Term, TermId,
     },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
@@ -72,7 +72,7 @@ fn parses_named_term_fields() {
 }
 
 #[test]
-fn parses_named_type_fields_without_early_sorting() {
+fn parses_comma_separated_named_terms_without_early_sorting() {
     let source = "(x = Int, y = String)";
     let mut parser = Parser::new();
     let term = parser::SingleTermParser::new()
@@ -99,6 +99,45 @@ fn parses_named_type_fields_without_early_sorting() {
         fields,
         vec![("x".to_string(), "Int".to_string()), ("y".to_string(), "String".to_string()),]
     );
+}
+
+#[test]
+fn parses_named_product_type() {
+    let source = "(x = Int) * (y = String)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Prod(Prod(left, right)) = &parser.arena.terms[&term] else {
+        panic!("expected a product type")
+    };
+    let Term::Paren(Paren(left_fields)) = &parser.arena.terms[left] else {
+        panic!("expected a parenthesized left component")
+    };
+    let [left_field] = left_fields.as_slice() else { panic!("expected one left component") };
+    let Term::Named(Named(left_name, left_body)) = &parser.arena.terms[left_field] else {
+        panic!("expected a named left component")
+    };
+    let Term::Var(left_type) = &parser.arena.terms[left_body] else {
+        panic!("expected a left component type")
+    };
+
+    let Term::Paren(Paren(right_fields)) = &parser.arena.terms[right] else {
+        panic!("expected a parenthesized right component")
+    };
+    let [right_field] = right_fields.as_slice() else { panic!("expected one right component") };
+    let Term::Named(Named(right_name, right_body)) = &parser.arena.terms[right_field] else {
+        panic!("expected a named right component")
+    };
+    let Term::Var(right_type) = &parser.arena.terms[right_body] else {
+        panic!("expected a right component type")
+    };
+
+    assert_eq!(left_name.plain(), "x");
+    assert_eq!(left_type.plain(), "Int");
+    assert_eq!(right_name.plain(), "y");
+    assert_eq!(right_type.plain(), "String");
 }
 
 #[test]

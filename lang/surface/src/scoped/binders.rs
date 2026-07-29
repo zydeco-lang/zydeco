@@ -26,6 +26,10 @@ impl Binders for PatId {
                 let def = pat;
                 im::hashmap! { arena.defs[def].clone() => *def }
             }
+            | Pattern::Named(pat) => {
+                let Named(_name, inner) = pat;
+                inner.binders(arena)
+            }
             | Pattern::Ctor(pat) => {
                 let Ctor(_ctor, args) = pat;
                 args.binders(arena)

@@ -31,6 +31,7 @@ bins = [
     "listm.zydeco",
     "loop.zydeco",
     "loopy.zy",
+    "named.zy",
     "num.zy",
     "oo.zydeco",
     "optiont.zy",

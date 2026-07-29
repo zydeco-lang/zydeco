@@ -56,6 +56,9 @@ impl<'a> Ugly<'a, Formatter<'a>> for Value {
             | Value::Ctor(value) => value.ugly(f),
             | Value::Triv(value) => value.ugly(f),
             | Value::VCons(value) => value.ugly(f),
+            | Value::Proj(Proj(head, position)) => {
+                format!("{}[{}]", head.ugly(f), position)
+            }
             | Value::Lit(lit) => {
                 format!("{:?}", lit)
             }

@@ -65,6 +65,7 @@ impl TypeId {
             | Type::Var(_)
             | Type::Abst(_)
             | Type::Abs(_)
+            | Type::Named(_)
             | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
@@ -211,6 +212,7 @@ impl VPatId {
         match tycker.statics.vpats[self].to_owned() {
             | VPat::Hole(Hole) => (None, ty),
             | VPat::Var(def) => (Some(def), ty),
+            | VPat::Named(_) => (None, ty),
             | VPat::Ctor(_) => (None, ty),
             | VPat::Triv(_) => (None, ty),
             | VPat::VCons(_) => (None, ty),
@@ -226,6 +228,11 @@ impl VPatId {
         match tycker.statics.vpats[self].to_owned() {
             | VPat::Hole(Hole) => Alloc::alloc(tycker, Hole, ty, &env),
             | VPat::Var(def) => Alloc::alloc(tycker, def, ty, &env),
+            | VPat::Named(vpat) => {
+                let Named(name, inner) = vpat;
+                let inner = inner.reify(tycker);
+                Alloc::alloc(tycker, Named(name, inner), ty, &env)
+            }
             | VPat::Triv(Triv) => Alloc::alloc(tycker, Triv, ty, &env),
             | VPat::Ctor(vpat) => {
                 let Ctor(ctor, vpat) = vpat;

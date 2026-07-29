@@ -18,6 +18,9 @@ pub enum TyckError {
     KindMismatch,
     TypeMismatch { expected: TypeId, found: TypeId },
     TypeExpected { expected: String, found: TypeId },
+    NamedLabelMismatch { expected: FieldName, found: FieldName },
+    MissingNamedField { field: FieldName, found: TypeId },
+    DuplicateNamedField { field: FieldName, found: TypeId },
     MissingDataArm(CtorName),
     MissingCoDataArm(DtorName),
     NonExhaustiveCoDataArms(std::collections::HashMap<DtorName, TypeId>),
@@ -35,6 +38,18 @@ pub struct TyckErrorEntry {
 }
 
 impl<'a> Tycker<'a> {
+    fn statics_term_ariadne_span(&self, term: TermId) -> Option<(PathDisplay, Range<usize>)> {
+        self.statics.terms.back(&term).last().map(|term| term.span(self).to_ariadne_span())
+    }
+
+    fn statics_pat_ariadne_span(&self, pat: PatId) -> Option<(PathDisplay, Range<usize>)> {
+        self.statics.pats.back(&pat).last().map(|pat| pat.span(self).to_ariadne_span())
+    }
+
+    fn type_ariadne_span(&self, ty: &TypeId) -> Option<(PathDisplay, Range<usize>)> {
+        self.statics_term_ariadne_span((*ty).into())
+    }
+
     fn error_output(&'a self, error: TyckError) -> String {
         match error {
             | TyckError::MissingAnnotation => "Missing annotation".to_string(),
@@ -64,6 +79,21 @@ impl<'a> Tycker<'a> {
                 format!(
                     "Type expected: {}, found {}",
                     expected,
+                    self.pretty_statics_nested(found, "\t")
+                )
+            }
+            | TyckError::NamedLabelMismatch { expected, found } => {
+                format!("Named label mismatch: expected `{expected}`, found `{found}`")
+            }
+            | TyckError::MissingNamedField { field, found } => {
+                format!(
+                    "Missing named field `{field}` in {}",
+                    self.pretty_statics_nested(found, "\t")
+                )
+            }
+            | TyckError::DuplicateNamedField { field, found } => {
+                format!(
+                    "Duplicate named field `{field}` in {}",
                     self.pretty_statics_nested(found, "\t")
                 )
             }
@@ -246,10 +276,12 @@ impl<'a> Tycker<'a> {
         match error {
             | TyckError::TypeMismatch { expected: _, found } => {
                 // Use the found type's span as primary
-                Some(found.span(self).to_ariadne_span())
+                self.type_ariadne_span(found)
             }
-            | TyckError::TypeExpected { found, .. } => Some(found.span(self).to_ariadne_span()),
-            | TyckError::MissingStructure(ty) => Some(ty.span(self).to_ariadne_span()),
+            | TyckError::TypeExpected { found, .. } => self.type_ariadne_span(found),
+            | TyckError::MissingNamedField { found, .. }
+            | TyckError::DuplicateNamedField { found, .. } => self.type_ariadne_span(found),
+            | TyckError::MissingStructure(ty) => self.type_ariadne_span(ty),
             | TyckError::MissingSolution(fills) => fills.first().map(|fill| {
                 let site = self.statics.fills[fill];
                 site.span(self).to_ariadne_span()
@@ -286,6 +318,21 @@ impl<'a> Tycker<'a> {
                 format!(
                     "Type expected: {}, found {}",
                     expected,
+                    self.pretty_statics_nested(*found, "")
+                )
+            }
+            | TyckError::NamedLabelMismatch { expected, found } => {
+                format!("Named label mismatch: expected `{expected}`, found `{found}`")
+            }
+            | TyckError::MissingNamedField { field, found } => {
+                format!(
+                    "Missing named field `{field}` in {}",
+                    self.pretty_statics_nested(*found, "")
+                )
+            }
+            | TyckError::DuplicateNamedField { field, found } => {
+                format!(
+                    "Duplicate named field `{field}` in {}",
                     self.pretty_statics_nested(*found, "")
                 )
             }
@@ -334,34 +381,21 @@ impl<'a> Tycker<'a> {
         // Add labels for the error itself if we have specific error spans
         match &error {
             | TyckError::TypeMismatch { expected, found } => {
-                let expected_span = expected.span(self).to_ariadne_span();
-                let found_span = found.span(self).to_ariadne_span();
-                if expected_span.0 == found_span.0 {
-                    // Same file
+                let expected_span = self.type_ariadne_span(expected);
+                let found_span = self.type_ariadne_span(found);
+                if let Some(found_span) = found_span {
                     report = report.with_label(
-                        Label::new(found_span.clone())
+                        Label::new(found_span)
                             .with_message("found this type")
                             .with_color(primary_color),
                     );
-                    let secondary_color = colors.next();
+                }
+                if let Some(expected_span) = expected_span {
                     report = report.with_label(
                         Label::new(expected_span)
                             .with_message("expected this type")
-                            .with_color(secondary_color),
+                            .with_color(colors.next()),
                     );
-                } else {
-                    // Different files
-                    report = report
-                        .with_label(
-                            Label::new(found_span)
-                                .with_message("found this type")
-                                .with_color(primary_color),
-                        )
-                        .with_label(
-                            Label::new(expected_span)
-                                .with_message("expected this type")
-                                .with_color(primary_color),
-                        );
                 }
             }
             | TyckError::MissingSolution(fills) => {
@@ -433,8 +467,8 @@ impl<'a> Tycker<'a> {
                     // AnnId can be Set, Kind, or Type - extract span if possible
                     match lhs {
                         | AnnId::Set => None,
-                        | AnnId::Kind(kd) => Some(kd.span(self).to_ariadne_span()),
-                        | AnnId::Type(ty) => Some(ty.span(self).to_ariadne_span()),
+                        | AnnId::Kind(kd) => self.statics_term_ariadne_span((*kd).into()),
+                        | AnnId::Type(ty) => self.type_ariadne_span(ty),
                     }
                     .map(|span| Label::new(span).with_message("when computing least upper bound"))
                 }
@@ -442,8 +476,8 @@ impl<'a> Tycker<'a> {
                     // AnnId can be Set, Kind, or Type - extract span if possible
                     match ann {
                         | AnnId::Set => None,
-                        | AnnId::Kind(kd) => Some(kd.span(self).to_ariadne_span()),
-                        | AnnId::Type(ty) => Some(ty.span(self).to_ariadne_span()),
+                        | AnnId::Kind(kd) => self.statics_term_ariadne_span((*kd).into()),
+                        | AnnId::Type(ty) => self.type_ariadne_span(ty),
                     }
                     .map(|span| Label::new(span).with_message("when generating signature"))
                 }
@@ -451,44 +485,32 @@ impl<'a> Tycker<'a> {
                     // AnnId can be Set, Kind, or Type - extract span if possible
                     match ann {
                         | AnnId::Set => None,
-                        | AnnId::Kind(kd) => Some(kd.span(self).to_ariadne_span()),
-                        | AnnId::Type(ty) => Some(ty.span(self).to_ariadne_span()),
+                        | AnnId::Kind(kd) => self.statics_term_ariadne_span((*kd).into()),
+                        | AnnId::Type(ty) => self.type_ariadne_span(ty),
                     }
                     .map(|span| Label::new(span).with_message("when generating structure"))
                 }
                 | TyckTask::MonadicLiftPat(pat) => match pat {
-                    | PatId::Type(ty) => {
-                        let span = ty.span(self).to_ariadne_span();
-                        Some(
-                            Label::new(span)
-                                .with_message("when performing monadic lift of type pattern"),
-                        )
-                    }
-                    | PatId::Value(value) => {
-                        let span = value.span(self).to_ariadne_span();
-                        Some(
-                            Label::new(span)
-                                .with_message("when performing monadic lift of value pattern"),
-                        )
-                    }
+                    | PatId::Type(_) => self.statics_pat_ariadne_span(*pat).map(|span| {
+                        Label::new(span)
+                            .with_message("when performing monadic lift of type pattern")
+                    }),
+                    | PatId::Value(_) => self.statics_pat_ariadne_span(*pat).map(|span| {
+                        Label::new(span)
+                            .with_message("when performing monadic lift of value pattern")
+                    }),
                 },
                 | TyckTask::MonadicLiftTerm(term) => match term {
                     | TermId::Kind(_) => None,
-                    | TermId::Type(ty) => {
-                        let span = ty.span(self).to_ariadne_span();
-                        Some(Label::new(span).with_message("when performing monadic lift of type"))
-                    }
-                    | TermId::Value(value) => {
-                        let span = value.span(self).to_ariadne_span();
-                        Some(Label::new(span).with_message("when performing monadic lift of value"))
-                    }
-                    | TermId::Compu(compu) => {
-                        let span = compu.span(self).to_ariadne_span();
-                        Some(
-                            Label::new(span)
-                                .with_message("when performing monadic lift of computation"),
-                        )
-                    }
+                    | TermId::Type(_) => self.statics_term_ariadne_span(*term).map(|span| {
+                        Label::new(span).with_message("when performing monadic lift of type")
+                    }),
+                    | TermId::Value(_) => self.statics_term_ariadne_span(*term).map(|span| {
+                        Label::new(span).with_message("when performing monadic lift of value")
+                    }),
+                    | TermId::Compu(_) => self.statics_term_ariadne_span(*term).map(|span| {
+                        Label::new(span).with_message("when performing monadic lift of computation")
+                    }),
                 },
             };
 

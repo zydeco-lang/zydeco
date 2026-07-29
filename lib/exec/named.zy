@@ -1,0 +1,13 @@
+alias Point = (x = Int) * (y = Int) end
+alias Rectangle = (top_left = Point) * (status = Int) end
+
+def rectangle : Rectangle = (
+  top_left = (x = 0, y = 1),
+  status = 2
+) end
+
+main
+  let (top_left = point, status = _) = rectangle in
+  let direct = (code = point/x) in
+  ! exit (direct/code)
+end

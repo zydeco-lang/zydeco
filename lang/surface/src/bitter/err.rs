@@ -11,12 +11,6 @@ pub enum DesugarError {
     EmptyDeclNotExternal(Sp<t::DeclId>),
     #[error("Extern declarations are not allowed to have `!` modifiers")]
     ExternCompNotAllowed(Sp<t::DeclId>),
-    #[error("Named patterns are not supported past parsing yet")]
-    NamedPatternNotSupported(Sp<t::PatId>),
-    #[error("Named terms are not supported past parsing yet")]
-    NamedTermNotSupported(Sp<t::TermId>),
-    #[error("Named projection is not supported past parsing yet")]
-    NamedProjectionNotSupported(Sp<t::TermId>),
 }
 
 pub type Result<T> = std::result::Result<T, DesugarError>;

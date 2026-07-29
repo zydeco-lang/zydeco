@@ -312,7 +312,7 @@ fn structure_translation(
         | Type::Int(_) | Type::Char(_) | Type::String(_) => unreachable!(),
         // unit, product, and existential types have the trivial structure `top`
         // (so should data types)
-        | Type::Unit(UnitTy) | Type::Prod(_) | Type::Exists(_) | Type::Data(_) => {
+        | Type::Named(_) | Type::Unit(UnitTy) | Type::Prod(_) | Type::Exists(_) | Type::Data(_) => {
             cs::Top.mbuild(tycker, env)?
         }
         // the thunk type is itself a type constructor,
@@ -498,6 +498,12 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let ty_a_ = cs::TypeLift { ty: ty_a };
             App(ty_f_, ty_a_).mbuild(tycker, env)?
         }
+        | Type::Named(ty) => {
+            let Named(name, inner) = ty;
+            let (env, inner) = cs::TypeLift { ty: inner }.mbuild(tycker, env)?;
+            let named = Alloc::alloc(tycker, Named(name, inner), kd, &env.ty);
+            (env, named)
+        }
         | Type::Thk(ThkTy) => {
             let alloc = Alloc::alloc(tycker, ThkTy, kd, &env.ty);
             (env, alloc)
@@ -627,6 +633,12 @@ fn value_pattern_translation(
             // create a fresh variable, and track the substitution
             cs::Pat(def, ty_).mbuild(tycker, env)?
         }
+        | VPat::Named(vpat) => {
+            let Named(name, inner) = vpat;
+            let (env, inner) = value_pattern_translation(tycker, env, inner)?;
+            let named = Alloc::alloc(tycker, Named(name, inner), ty_, &env.ty);
+            (env, named)
+        }
         | VPat::Ctor(vpat) => {
             let Ctor(ctor, body) = vpat;
             let body_ = cs::TermLift { tm: body };
@@ -675,6 +687,12 @@ fn value_translation(
                 }
             }
         }
+        | Value::Named(value) => {
+            let Named(name, inner) = value;
+            let (env, inner) = value_translation(tycker, env, inner)?;
+            let named = Alloc::alloc(tycker, Named(name, inner), ty_, &env.ty);
+            (env, named)
+        }
         | Value::Thunk(value) => {
             let Thunk(body) = value;
             Thunk(cs::TermLift { tm: body }).mbuild(tycker, env)?
@@ -695,6 +713,12 @@ fn value_translation(
         | Value::TCons(value) => {
             let ConsN(witnesses, body) = value;
             package_value_translation(tycker, env, &witnesses, body, ty_)?
+        }
+        | Value::Proj(value) => {
+            let Proj(head, field) = value;
+            let (env, head) = value_translation(tycker, env, head)?;
+            let projected = Alloc::alloc(tycker, Proj(head, field), ty_, &env.ty);
+            (env, projected)
         }
     };
     Ok((env, res))

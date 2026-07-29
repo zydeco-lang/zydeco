@@ -80,6 +80,7 @@ impl DocumentSymbolContext<'_> {
                 let def = p;
                 vec![self.definition(def)]
             }
+            | b::Pattern::Named(b::Named(_name, inner)) => self.pattern(inner),
             | b::Pattern::Ctor(p) => {
                 let b::Ctor(_ctorv, body) = p;
                 let body = self.pattern(body);
@@ -128,6 +129,7 @@ impl DocumentSymbolContext<'_> {
                     None,
                 )]
             }
+            | b::Term::Named(b::Named(_name, inner)) => self.term(inner),
             | b::Term::Triv(b::Triv) => vec![],
             | b::Term::Cons(items) => items.iter().flat_map(|item| self.term(item)).collect(),
             | b::Term::Abs(t) => {
@@ -223,6 +225,7 @@ impl DocumentSymbolContext<'_> {
                 let body = self.term(body);
                 [].into_iter().chain(body).collect()
             }
+            | b::Term::Proj(b::Proj(head, _name)) => self.term(head),
             | b::Term::Lit(t) => {
                 let _ = t;
                 vec![]

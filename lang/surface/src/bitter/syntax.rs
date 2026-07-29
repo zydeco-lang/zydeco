@@ -37,6 +37,7 @@ pub enum Pattern {
     Ann(Ann<PatId, TermId>),
     Hole(Hole),
     Var(DefId),
+    Named(Named<FieldName, PatId>),
     Ctor(Ctor<CtorName, PatId>),
     Triv(Triv),
     Cons(ConsN<PatId, PatId>),
@@ -94,6 +95,7 @@ pub enum Term<Ref> {
     Hole(Hole),
     #[from(ignore)]
     Var(Ref),
+    Named(Named<FieldName, TermId>),
     Triv(Triv),
     Cons(ConsN<TermId, TermId>),
     Abs(Abs<PatId, TermId>),
@@ -117,6 +119,7 @@ pub enum Term<Ref> {
     Match(Match<TermId, PatId, TermId>),
     CoMatch(CoMatch<DtorName, TermId>),
     Dtor(Dtor<TermId, DtorName>),
+    Proj(Proj<TermId, FieldName>),
     Lit(Literal),
 }
 

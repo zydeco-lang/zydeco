@@ -287,6 +287,7 @@ AllocType! {
     AbstId
     Abs<TPatId, TypeId>
     App<TypeId, TypeId>
+    Named<FieldName, TypeId>
     ThkTy
     RetTy
     UnitTy
@@ -337,6 +338,7 @@ macro_rules! AllocValuePattern {
 AllocValuePattern! {
     Hole
     DefId
+    Named<FieldName, VPatId>
     Ctor<CtorName, VPatId>
     Triv
     ConsN<VPatId, VPatId>
@@ -378,11 +380,13 @@ macro_rules! AllocValue {
 AllocValue! {
     Hole
     DefId
+    Named<FieldName, ValueId>
     Thunk<CompuId>
     Ctor<CtorName, ValueId>
     Triv
     ConsN<ValueId, ValueId>
     ConsN<TypeId, ValueId>
+    Proj<ValueId, ResolvedField>
     Literal
 }
 

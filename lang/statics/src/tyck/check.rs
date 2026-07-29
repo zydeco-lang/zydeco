@@ -669,6 +669,66 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
 
                 PatAnnId::mk_var(tycker, &self.info, def, ann)
             }
+            | Pat::Named(pat) => {
+                let su::Named(name, inner) = pat;
+                match switch {
+                    | Switch::Syn => {
+                        let checked = self.mk(inner).tyck_k(tycker, Action::syn())?;
+                        let (inner, inner_ty) = checked.try_as_value(
+                            tycker,
+                            TyckError::SortMismatch,
+                            std::panic::Location::caller(),
+                        )?;
+                        let vtype = ss::VType.build(tycker, &self.info);
+                        let named_ty = Alloc::alloc(
+                            tycker,
+                            ss::Named(name.clone(), inner_ty),
+                            vtype,
+                            &self.info,
+                        );
+                        let named =
+                            Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
+                        PatAnnId::Value(named, named_ty)
+                    }
+                    | Switch::Ana(AnnId::Type(expected)) => {
+                        let expected_view =
+                            expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                        let ss::Type::Named(ss::Named(expected_name, inner_ty)) =
+                            tycker.type_filled_k(&expected_view)?.to_owned()
+                        else {
+                            tycker.err_k(
+                                TyckError::TypeExpected {
+                                    expected: "a named value type".to_string(),
+                                    found: expected,
+                                },
+                                std::panic::Location::caller(),
+                            )?
+                        };
+                        if name != expected_name {
+                            tycker.err_k(
+                                TyckError::NamedLabelMismatch {
+                                    expected: expected_name,
+                                    found: name.clone(),
+                                },
+                                std::panic::Location::caller(),
+                            )?
+                        }
+                        let checked =
+                            self.mk(inner).tyck_k(tycker, Action::ana(inner_ty.into()))?;
+                        let (inner, _) = checked.try_as_value(
+                            tycker,
+                            TyckError::SortMismatch,
+                            std::panic::Location::caller(),
+                        )?;
+                        let named =
+                            Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
+                        PatAnnId::Value(named, expected)
+                    }
+                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                }
+            }
             | Pat::Ctor(pat) => match switch {
                 | Switch::Syn => {
                     tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
@@ -1203,6 +1263,86 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     | AnnId::Type(ty) => {
                         let val = Alloc::alloc(tycker, def, ty, &self.info);
                         TermAnnId::Value(val, ty)
+                    }
+                }
+            }
+            | Tm::Named(term) => {
+                let su::Named(name, inner) = term;
+                match switch {
+                    | Switch::Syn => match self.mk(inner).tyck_k(tycker, Action::syn())? {
+                        | TermAnnId::Type(inner, kd) => {
+                            let vtype = ss::VType.build(tycker, &self.info);
+                            let vtype = Lub::lub_k(vtype, kd, tycker)?;
+                            let named =
+                                Alloc::alloc(tycker, ss::Named(name, inner), vtype, &self.info);
+                            TermAnnId::Type(named, vtype)
+                        }
+                        | TermAnnId::Value(inner, inner_ty) => {
+                            let vtype = ss::VType.build(tycker, &self.info);
+                            let named_ty = Alloc::alloc(
+                                tycker,
+                                ss::Named(name.clone(), inner_ty),
+                                vtype,
+                                &self.info,
+                            );
+                            let named =
+                                Alloc::alloc(tycker, ss::Named(name, inner), named_ty, &self.info);
+                            TermAnnId::Value(named, named_ty)
+                        }
+                        | TermAnnId::Hole(_) => tycker
+                            .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
+                        | TermAnnId::Kind(_) | TermAnnId::Compu(_, _) => {
+                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                        }
+                    },
+                    | Switch::Ana(AnnId::Kind(kd)) => {
+                        let vtype = ss::VType.build(tycker, &self.info);
+                        let vtype = Lub::lub_k(vtype, kd, tycker)?;
+                        let checked = self.mk(inner).tyck_k(tycker, Action::ana(vtype.into()))?;
+                        let (inner, _) = checked.try_as_type(
+                            tycker,
+                            TyckError::SortMismatch,
+                            std::panic::Location::caller(),
+                        )?;
+                        let named = Alloc::alloc(tycker, ss::Named(name, inner), vtype, &self.info);
+                        TermAnnId::Type(named, vtype)
+                    }
+                    | Switch::Ana(AnnId::Type(expected)) => {
+                        let expected_view =
+                            expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                        let ss::Type::Named(ss::Named(expected_name, inner_ty)) =
+                            tycker.type_filled_k(&expected_view)?.to_owned()
+                        else {
+                            tycker.err_k(
+                                TyckError::TypeExpected {
+                                    expected: "a named value type".to_string(),
+                                    found: expected,
+                                },
+                                std::panic::Location::caller(),
+                            )?
+                        };
+                        if name != expected_name {
+                            tycker.err_k(
+                                TyckError::NamedLabelMismatch {
+                                    expected: expected_name,
+                                    found: name.clone(),
+                                },
+                                std::panic::Location::caller(),
+                            )?
+                        }
+                        let checked =
+                            self.mk(inner).tyck_k(tycker, Action::ana(inner_ty.into()))?;
+                        let (inner, _) = checked.try_as_value(
+                            tycker,
+                            TyckError::SortMismatch,
+                            std::panic::Location::caller(),
+                        )?;
+                        let named =
+                            Alloc::alloc(tycker, ss::Named(name, inner), expected, &self.info);
+                        TermAnnId::Value(named, expected)
+                    }
+                    | Switch::Ana(AnnId::Set) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 }
             }
@@ -2702,6 +2842,105 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         TermAnnId::Compu(whole, whole_ty)
                     }
                 }
+            }
+            | Tm::Proj(term) => {
+                let su::Proj(head, name) = term;
+                let checked = self.mk(head).tyck_k(tycker, Action::syn())?;
+                let (head, head_ty) = checked.try_as_value(
+                    tycker,
+                    TyckError::SortMismatch,
+                    std::panic::Location::caller(),
+                )?;
+                let head_view = head_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                let (position, projected_ty) = match tycker.type_filled_k(&head_view)?.to_owned() {
+                    | ss::Type::Named(ss::Named(found, projected_ty)) => {
+                        if name != found {
+                            tycker.err_k(
+                                TyckError::MissingNamedField {
+                                    field: name.clone(),
+                                    found: head_ty,
+                                },
+                                std::panic::Location::caller(),
+                            )?
+                        }
+                        (None, projected_ty)
+                    }
+                    | ss::Type::Prod(_) => {
+                        let mut next = Some(head_view);
+                        let components = std::iter::from_fn(|| {
+                            let current = next.take()?;
+                            let view = match current
+                                .unroll_k(tycker)
+                                .and_then(|ty| ty.subst_env_k(tycker, &self.info))
+                            {
+                                | Ok(view) => view,
+                                | Err(()) => return Some(Err(())),
+                            };
+                            match tycker.type_filled_k(&view) {
+                                | Ok(ss::Type::Prod(ss::Prod(item, tail))) => {
+                                    next = Some(tail);
+                                    Some(Ok(item))
+                                }
+                                | Ok(_) => Some(Ok(view)),
+                                | Err(()) => Some(Err(())),
+                            }
+                        })
+                        .collect::<ResultKont<Vec<_>>>()?;
+                        let matches = components
+                            .into_iter()
+                            .enumerate()
+                            .map(|(position, component)| -> ResultKont<_> {
+                                let view =
+                                    component.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                                Ok(match tycker.type_filled_k(&view)?.to_owned() {
+                                    | ss::Type::Named(ss::Named(found, projected_ty))
+                                        if found == name =>
+                                    {
+                                        Some((position, projected_ty))
+                                    }
+                                    | _ => None,
+                                })
+                            })
+                            .collect::<ResultKont<Vec<_>>>()?
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<_>>();
+                        match matches.as_slice() {
+                            | [] => tycker.err_k(
+                                TyckError::MissingNamedField {
+                                    field: name.clone(),
+                                    found: head_ty,
+                                },
+                                std::panic::Location::caller(),
+                            )?,
+                            | [(position, projected_ty)] => (Some(*position), *projected_ty),
+                            | _ => tycker.err_k(
+                                TyckError::DuplicateNamedField {
+                                    field: name.clone(),
+                                    found: head_ty,
+                                },
+                                std::panic::Location::caller(),
+                            )?,
+                        }
+                    }
+                    | _ => tycker.err_k(
+                        TyckError::MissingNamedField { field: name.clone(), found: head_ty },
+                        std::panic::Location::caller(),
+                    )?,
+                };
+                let projected_ty = match switch {
+                    | Switch::Syn => projected_ty,
+                    | Switch::Ana(AnnId::Type(expected)) => {
+                        Lub::lub_k(projected_ty, expected, tycker)?
+                    }
+                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
+                };
+                let field = ss::ResolvedField { name, position };
+                let projected =
+                    Alloc::alloc(tycker, ss::Proj(head, field), projected_ty, &self.info);
+                TermAnnId::Value(projected, projected_ty)
             }
             | Tm::Lit(lit) => {
                 fn check_against_ty<'a>(

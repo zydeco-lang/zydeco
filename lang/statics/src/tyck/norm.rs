@@ -52,6 +52,15 @@ impl TypeId {
                         Alloc::alloc(tycker, App(ty1_, ty2_), kd, env)
                     }
                 }
+                | Type::Named(named) => {
+                    let Named(name, inner) = named;
+                    let inner_ = inner.subst_env(tycker, env)?;
+                    if inner == inner_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, Named(name, inner_), kd, env)
+                    }
+                }
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
@@ -219,6 +228,15 @@ impl TypeId {
                         Alloc::alloc(tycker, App(ty1_, ty2_), kd, &env)
                     }
                 }
+                | Type::Named(named) => {
+                    let Named(name, inner) = named;
+                    let inner_ = inner.subst_abst(tycker, assign)?;
+                    if inner == inner_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, Named(name, inner_), kd, &env)
+                    }
+                }
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
@@ -350,6 +368,7 @@ impl TypeId {
             // | Type::Fill(_) // unchanged because terms with unfilled types can't be matched against
             | Type::Var(_) // unchanged because type-variable-typed terms are abstract
             | Type::Abs(_) // unchanged because type-abstration-typed terms are ill-formed
+            | Type::Named(_)
             | Type::Thk(_)
             | Type::Ret(_)
             | Type::Unit(_)
@@ -399,6 +418,7 @@ impl TypeId {
                 | Type::Var(_)
                 | Type::Abst(_)
                 | Type::Abs(_)
+                | Type::Named(_)
                 | Type::Thk(_)
                 | Type::Ret(_)
                 | Type::Unit(_)
@@ -539,6 +559,21 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             App(f_ty_, a_ty_),
+                            tycker.statics.annotations_type[&res],
+                            &env,
+                        )
+                    }
+                }
+                | Type::Named(ty) => {
+                    let Named(name, inner) = ty;
+                    let (inner_, fills_) = inner.solution(tycker)?;
+                    fills.extend(fills_);
+                    if inner == inner_ {
+                        res
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            Named(name, inner_),
                             tycker.statics.annotations_type[&res],
                             &env,
                         )
@@ -897,6 +932,15 @@ impl TypeId {
                                 Alloc::alloc(tycker, App(f_norm, a_norm), kd_norm, &env)
                             }
                         }
+                    }
+                }
+                | Type::Named(named) => {
+                    let Named(name, inner) = named;
+                    let inner_norm = inner.filled_norm_id(tycker, memo, memo_kd)?;
+                    if inner_norm == inner && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(tycker, Named(name, inner_norm), kd_norm, &env)
                     }
                 }
                 | Type::Thk(ThkTy) => {

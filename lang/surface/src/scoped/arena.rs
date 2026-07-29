@@ -142,6 +142,11 @@ impl LocalFoldScoped<Context> for Collector {
                 self.ctxs_pat_local.insert_new(pat, Context::singleton(def));
                 self.coctxs_pat_local.insert_new(pat, CoContext::new());
             }
+            | Pattern::Named(inner) => {
+                let Named(_name, inner) = inner;
+                self.ctxs_pat_local.insert_new(pat, self.ctxs_pat_local[&inner].to_owned());
+                self.coctxs_pat_local.insert_new(pat, self.coctxs_pat_local[&inner].to_owned());
+            }
             | Pattern::Triv(Triv) => {
                 self.ctxs_pat_local.insert_new(pat, Context::new());
                 self.coctxs_pat_local.insert_new(pat, CoContext::new());
@@ -197,6 +202,11 @@ impl LocalFoldScoped<Context> for Collector {
             | Term::Var(inner) => {
                 let def = inner;
                 self.coctxs_term_local.insert_new(term, CoContext::singleton(def));
+            }
+            | Term::Named(inner) => {
+                let Named(_name, inner) = inner;
+                let co_inner = self.coctxs_term_local[&inner].to_owned();
+                self.coctxs_term_local.insert_new(term, co_inner);
             }
             | Term::Triv(Triv) => {
                 self.coctxs_term_local.insert_new(term, CoContext::new());
@@ -322,6 +332,11 @@ impl LocalFoldScoped<Context> for Collector {
                 let co_body = self.coctxs_term_local[&body].to_owned();
                 self.coctxs_term_local.insert_new(term, co_body);
             }
+            | Term::Proj(inner) => {
+                let Proj(head, _name) = inner;
+                let co_head = self.coctxs_term_local[&head].to_owned();
+                self.coctxs_term_local.insert_new(term, co_head);
+            }
             | Term::Lit(inner) => {
                 let _lit = inner;
                 self.coctxs_term_local.insert_new(term, CoContext::new());
@@ -387,6 +402,10 @@ mod impl_obverse_local_post {
                     let def = inner;
                     def.obverse_local_post(f, ctx);
                 }
+                | Pattern::Named(inner) => {
+                    let Named(_name, inner) = inner;
+                    inner.obverse_local_post(f, ctx);
+                }
                 | Pattern::Triv(Triv) => {}
                 | Pattern::Ctor(inner) => {
                     let Ctor(_ctorv, body) = inner;
@@ -429,6 +448,10 @@ mod impl_obverse_local_post {
                 | Term::Var(inner) => {
                     let def = inner;
                     def.obverse_local_post(f, ctx);
+                }
+                | Term::Named(inner) => {
+                    let Named(_name, inner) = inner;
+                    inner.obverse_local_post(f, ctx);
                 }
                 | Term::Triv(Triv) => {}
                 | Term::Cons(inner) => {
@@ -522,6 +545,10 @@ mod impl_obverse_local_post {
                 | Term::Dtor(inner) => {
                     let Dtor(body, _name) = inner;
                     body.obverse_local_post(f, ctx);
+                }
+                | Term::Proj(inner) => {
+                    let Proj(head, _name) = inner;
+                    head.obverse_local_post(f, ctx);
                 }
                 | Term::Lit(inner) => {
                     let _lit = inner;

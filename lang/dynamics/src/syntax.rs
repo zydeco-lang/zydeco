@@ -42,6 +42,7 @@ pub enum Value {
     Ctor(Ctor<CtorName, RcValue>),
     Triv(Triv),
     VCons(ConsN<RcValue, RcValue>),
+    Proj(Proj<RcValue, usize>),
     Lit(Literal),
     SemValue(SemValue),
 }

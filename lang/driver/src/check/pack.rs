@@ -84,6 +84,9 @@ impl PackageScoped {
                 }
                 | Tm::Hole(sc::Hole) => {}
                 | Tm::Var(_def) => {}
+                | Tm::Named(sc::Named(_name, inner)) => {
+                    rm(inner);
+                }
                 | Tm::Triv(sc::Triv) => {}
                 | Tm::Cons(items) => {
                     for item in items {
@@ -144,6 +147,9 @@ impl PackageScoped {
                 }
                 | Tm::Dtor(sc::Dtor(body, _dtor)) => {
                     rm(body);
+                }
+                | Tm::Proj(sc::Proj(head, _name)) => {
+                    rm(head);
                 }
                 | Tm::Lit(_) => {}
             }
