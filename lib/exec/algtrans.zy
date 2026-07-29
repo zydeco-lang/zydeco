@@ -28,7 +28,7 @@ end
 
 -- test algebra generation for ret and bind
 def ! mo-return (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
-  use mo
+  -- use mo
   monadic
     do a <- ret 1;
     ret a
@@ -37,7 +37,7 @@ end
 
 -- test algebra generation for thunk
 def ! mo-thunk (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
-  use mo
+  -- use mo
   monadic
     do _ <- ret 1;
     ! { ret 1 }
@@ -46,7 +46,7 @@ end
 
 -- test algebra generation for thunk at argument position
 def ! mo-thunk-arg (E: VType) (mo: U (Monad (Exn E))) : Exn E Int =
-  use mo
+  -- use mo
   monadic
     do _ <- ret 1;
     (fn (x: Thunk _) -> ! x) { ret 1 }
@@ -55,7 +55,7 @@ end
 
 -- test algebra generation for forall vtype
 def ! mo-forallv (E: VType) (mo: U (Monad (Exn E))) : forall (X: VType) . X -> Exn E X =
-  use mo
+  -- use mo
   monadic
     do _ <- ret -1;
     fn (X: VType) (a: X) -> ret a
@@ -83,7 +83,7 @@ def ! mo-forallc (E: VType)
   -- .bindA Int { ! mo .return Int -1 }
   -- { fn (_: Int) -> fn (X: CType) (algX: U (Algebra (Exn E) X)) (b: U X) -> ! b }
 
-  use mo
+  -- use mo
   monadic
     do _ <- ret -1;
     fn (X: CType) (b: U X) -> ! b
@@ -201,4 +201,3 @@ main
   -- ! _mo-prim-id~
   -- ! _mo-prim-id~'
 end
-

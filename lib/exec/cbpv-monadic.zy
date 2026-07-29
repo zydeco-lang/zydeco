@@ -70,7 +70,7 @@ data SCompu where
   | +Env : SCompu
 end
 
-module MExnOS where
+-- module MExnOS
   def ! mexn : Monad MExnOS =
     comatch
     | .return A a ->
@@ -154,9 +154,9 @@ module MExnOS where
       end
     end
   end
-end
+-- end module MExnOS
 
-module Print where
+-- module Print
   codata PrintSCbpv where
     | .value : SValue -> U OS -> OS
     | .compu : SCompu -> U OS -> OS
@@ -265,9 +265,9 @@ module Print where
   def ! print-compu : U Compu -> U OS -> OS =
     ! print-cbpv .compu
   end
-end
+-- end module Print
 
-module Env where
+-- module Env
   data EnvT where
     | +Empty : Unit
     | +Extend : String * Value * EnvT
@@ -307,9 +307,9 @@ module Env where
       end) env
     end
   end
-end
+-- end module Env
 
-module Trace where
+-- module Trace
   data TraceItem where
     | +App : Value
     -- | +App : SValue * Value
@@ -349,11 +349,11 @@ module Trace where
       ! kont
     end
   end
-end
+-- end module Trace
 
 /- Parser -/
 
-module Parser where
+-- module Parser
   codata Parser (A: VType) where
     | .run : String -> Int -> MExnOS (Pair A Int)
   end
@@ -624,7 +624,7 @@ module Parser where
       }
     end
   end
-end
+-- end module Parser
 
 /- Interpretor -/
 
@@ -742,7 +742,7 @@ def fix interp (env: U EnvO) : Interp =
   end
 end
 
-module Utils where
+-- module Utils
   def ! value-eq (v1: Value) (v2: Value) (k: U OS) : OS =
     let expect-bool-panic = { ! panic "expected bool value" } in
     let expect-int-panic = { ! panic "expected int value" } in
@@ -797,7 +797,7 @@ module Utils where
     | +TypeError() -> ! panic "type error"
     end
   end
-end
+-- end module Utils
 
 def ! nil-env : EnvO =
   ! envo +Empty()

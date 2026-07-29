@@ -47,11 +47,6 @@ impl DocumentSymbolContext<'_> {
                 let ty = ty.map(|ty| self.term(&ty)).unwrap_or_default();
                 [].into_iter().chain(binder).chain(ty).collect()
             }
-            | b::Declaration::Module(d) => {
-                let b::Module { name: _, top } = d;
-                let top = top.0.iter().flat_map(|decl| self.declaration(decl)).collect();
-                top
-            }
             | b::Declaration::Exec(d) => {
                 let b::Exec(term) = d;
                 self.term(term)
@@ -126,7 +121,7 @@ impl DocumentSymbolContext<'_> {
                 let def = t;
                 let name_range = span_to_range(span, self.document);
                 vec![document_symbol_new(
-                    def.2.to_string(),
+                    def.to_string(),
                     SymbolKind::VARIABLE,
                     name_range,
                     name_range,

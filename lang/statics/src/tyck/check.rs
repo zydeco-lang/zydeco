@@ -343,7 +343,6 @@ impl<'a> Tyck<'a> for TyEnvT<SccGroup<su::DeclId>> {
                             Ok(env)
                         })
                     }
-                    | Decl::Module(_) => unreachable!(),
                     | Decl::Exec(decl) => {
                         tycker.guarded(|tycker| {
                             // administrative

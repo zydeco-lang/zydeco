@@ -1,4 +1,4 @@
-module Builtin where
+-- module Builtin
   --| VType and CType
   pub extern def VType end
   pub extern def CType end
@@ -34,10 +34,10 @@ module Builtin where
   pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
     forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
   end
-end
+-- end module Builtin
 
 
-module Monad where
+-- module Monad
   --| interface for monad transformers
   pub alias MonadTrans (T: (VType -> CType) -> VType -> CType) : CType =
     forall (M: VType -> CType) . Thk (Monad M) -> codata
@@ -90,10 +90,10 @@ module Monad where
     | .lift A -> ! mt M mo .lift A triv
     end
   end
-end
+-- end module Monad
 
 
-module Core where
+-- module Core
   pub alias Empty : VType = data end end
   pub alias Top : CType = codata end end
 
@@ -133,18 +133,18 @@ module Core where
     | +Nil : Unit
     | +Cons : A * List A
   end
-end
+-- end module Core
 
 
-module String where
+-- module String
   pub extern def str_length : Thunk(String -> Ret Int) end
   pub extern def str_append : Thunk(String -> String -> Ret String) end
   pub extern def str_eq : Thunk(String -> String -> Ret Bool) end
   pub extern def str_index : Thunk(String -> Int -> Ret Char) end
-end
+-- end module String
 
 
-module OS where
+-- module OS
   pub extern def write_str : Thunk(String -> Thunk(OS) -> OS) end
   pub extern def read_line : Thunk(Thunk(String -> OS) -> OS) end
   pub extern def read_line_as_int : Thunk(Thunk(Option Int -> OS) -> OS) end
@@ -162,4 +162,4 @@ module OS where
       do msg <- ! str_append "Program panicked with message: " msg;
       ! write_line msg { ! exit 1 }
   } end
-end
+-- end module OS

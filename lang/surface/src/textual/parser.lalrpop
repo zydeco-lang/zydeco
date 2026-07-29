@@ -24,9 +24,6 @@ extern {
         "where" => Tok::Where,
         "end" => Tok::End,
         "pub" => Tok::Public,
-        "module" => Tok::Module,
-        "root" => Tok::Root,
-        "use" => Tok::Use,
         "data" => Tok::Data,
         "codata" => Tok::Codata,
         "alias" => Tok::Alias,
@@ -70,7 +67,6 @@ extern {
         "+" => Tok::Plus,
         "*" => Tok::Star,
         "." => Tok::Dot,
-        ".." => Tok::DotDot,
         "->" => Tok::Arrow,
         "<-" => Tok::Assign,
         "_" => Tok::Hole,
@@ -121,28 +117,8 @@ CtorName: CtorName = <"CtorId"> => CtorName(<>.into());
 DtorName: DtorName = <"DtorId"> => DtorName(<>.into());
 
 NameDef<T>: NameDef<T> = <T> => NameDef(<>);
-PathSeg: VarName = {
-    <VarName> => <>.into(),
-};
-// `root/` is an optional prefix; paths use `/` separators.
-NameRef<T>: NameRef<T> = {
-    <root:("root" "/")?> <path:(<VarName> "/")*> <inner:T> => {
-        NameRef(root.is_some(), path, inner)
-    },
-};
 
 DefId: DefId = <NameDef<Sp<VarName>>> => parser.def(<>.0);
-
-//* ----------------------------------- Use ---------------------------------- */
-
-UsePath: UsePath = <NameRef<UseEnum>> => UsePath(<>);
-UseEnum: UseEnum = {
-    <VarName> => <>.into(),
-    <binder:VarName> "=" <origin:VarName> => UseAlias(<>).into(),
-    "*" => UseAll.into(),
-    <Uses> => <>.into(),
-};
-Uses: Uses = <SepByDelim<"(", ",", <UsePath>, ")">> => Uses(<>);
 
 //* ------------------------------- Structural ------------------------------- */
 
@@ -267,7 +243,7 @@ Term: Term = {
     <Paren<TermAnnId>> => <>.into(),
     // hole and variable
     <Hole> => <>.into(),
-    <NameRef<VarName>> => <>.into(),
+    <VarName> => <>.into(),
     // thunk & force
     "{" <TermId> "}" => Thunk(<>).into(),
     "!" <TermGen<Term>> => Force(<>).into(),
@@ -364,11 +340,6 @@ Declaration: Declaration = {
     <CoDataDef> => <>.into(),
     "define" <GenBind<("=" <TermId>)?>> "end" => Define(<>).into(),
     "alias" <GenBindTerm> "end" => Alias(<>).into(),
-    "module" <name:(<NameRef<VarName>>)?>
-    <top:("where" <TopLevel>)> "end" => Module {<>}.into(),
-    // "use" <uses:UsePath> "where" <top:TopLevel> "end" => UseBlock {
-    //     uses, top
-    // }.into(),
     "main" <TermId> "end" => Exec(<>).into(),
 };
 

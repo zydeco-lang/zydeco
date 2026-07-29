@@ -22,12 +22,6 @@ pub enum Tok<'input> {
     Where,
     #[token("end")]
     End,
-    #[token("module")]
-    Module,
-    #[token("root")]
-    Root,
-    #[token("use")]
-    Use,
     #[token("data")]
     Data,
     #[token("codata")]
@@ -113,8 +107,6 @@ pub enum Tok<'input> {
     Star,
     #[token(".")]
     Dot,
-    #[token("..")]
-    DotDot,
     #[token("->")]
     Arrow,
     #[token("<-")]
@@ -146,9 +138,6 @@ impl Display for Tok<'_> {
             | Tok::Where => write!(f, "where"),
             | Tok::End => write!(f, "end"),
             | Tok::Public => write!(f, "pub"),
-            | Tok::Module => write!(f, "module"),
-            | Tok::Root => write!(f, "root"),
-            | Tok::Use => write!(f, "use"),
             | Tok::Data => write!(f, "data"),
             | Tok::Codata => write!(f, "codata"),
             | Tok::Alias => write!(f, "alias"),
@@ -190,7 +179,6 @@ impl Display for Tok<'_> {
             | Tok::Plus => write!(f, "+"),
             | Tok::Star => write!(f, "*"),
             | Tok::Dot => write!(f, "."),
-            | Tok::DotDot => write!(f, ".."),
             | Tok::Arrow => write!(f, "->"),
             | Tok::Assign => write!(f, "<-"),
             | Tok::Hole => write!(f, "_"),

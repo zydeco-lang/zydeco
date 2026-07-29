@@ -231,7 +231,6 @@ impl Resolve for DeclId {
                 }
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
             }
-            | Declaration::Module(_) => unreachable!(),
             | Declaration::Exec(decl) => {
                 let Exec(term) = decl;
                 let () = term.resolve(resolver, (local.clone(), global))?;
@@ -334,14 +333,14 @@ impl Resolve for TermId {
             }
             | Term::Var(var) => {
                 // first, try to find the variable locally
-                if let Some(def) = local.var_to_def.get(var.leaf()) {
+                if let Some(def) = local.var_to_def.get(&var) {
                     // if found, we're done
                     resolver.terms.insert_new(*self, Term::Var(*def));
                     resolver.users.insert_new(*def, *self);
                     return Ok(());
                 }
                 // otherwise, try to find the variable globally
-                if let Some(def) = global.var_to_def.get(var.leaf()) {
+                if let Some(def) = global.var_to_def.get(&var) {
                     // if found, also add dependency
                     resolver.terms.insert_new(*self, Term::Var(*def));
                     resolver.users.insert_new(*def, *self);
@@ -553,9 +552,7 @@ impl Collect for SccGroup<DeclId> {
                             ctx = binder.collect(collector, ctx)?;
                             let () = bindee.collect(collector, ctx.to_owned())?;
                         }
-                        | Declaration::AliasHead(_)
-                        | Declaration::Module(_)
-                        | Declaration::Exec(_) => {
+                        | Declaration::AliasHead(_) | Declaration::Exec(_) => {
                             unreachable!()
                         }
                     }
@@ -582,7 +579,6 @@ impl Collect for SccGroup<DeclId> {
                             }
                             ctx = binder.collect(collector, ctx)?;
                         }
-                        | Declaration::Module(_) => unreachable!(),
                         | Declaration::Exec(decl) => {
                             let Exec(term) = decl;
                             let () = term.collect(collector, ctx.to_owned())?;
@@ -606,9 +602,7 @@ impl Collect for SccGroup<DeclId> {
                                 let AliasBody { binder, bindee: _ } = decl;
                                 break ctx = binder.collect(collector, ctx)?;
                             }
-                            | Declaration::AliasHead(_)
-                            | Declaration::Module(_)
-                            | Declaration::Exec(_) => {
+                            | Declaration::AliasHead(_) | Declaration::Exec(_) => {
                                 unreachable!()
                             }
                         }
@@ -627,9 +621,7 @@ impl Collect for SccGroup<DeclId> {
                                 let AliasBody { binder: _, bindee } = decl;
                                 break bindee.collect(collector, ctx.to_owned())?;
                             }
-                            | Declaration::AliasHead(_)
-                            | Declaration::Module(_)
-                            | Declaration::Exec(_) => {
+                            | Declaration::AliasHead(_) | Declaration::Exec(_) => {
                                 unreachable!()
                             }
                         }

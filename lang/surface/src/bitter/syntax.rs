@@ -28,11 +28,7 @@ pub enum EntityId {
 
 /* --------------------------------- Binder --------------------------------- */
 
-pub use t::{NameDef, NameRef};
-
-/* ----------------------------------- Use ---------------------------------- */
-
-pub use t::{UseAlias, UseAll, UseEnum, UsePath, Uses};
+pub use t::NameDef;
 
 /* --------------------------------- Pattern -------------------------------- */
 
@@ -61,13 +57,6 @@ pub struct Pi(pub PatId, pub TermId);
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Sigma(pub PatId, pub TermId);
-
-// /// `use let x = a in ...`
-// #[derive(Clone, Debug)]
-// pub struct UseBind {
-//     pub uses: UsePath,
-//     pub tail: TermId,
-// }
 
 /// `monadic ... end`
 #[derive(Clone, Debug)]
@@ -121,7 +110,6 @@ pub enum Term<Ref> {
     Ret(Return<TermId>),
     Do(Bind<PatId, TermId, TermId>),
     Let(Let<PatId, TermId, TermId>),
-    // UseLet(UseBind),
     MoBlock(MoBlock),
     Data(Data),
     CoData(CoData),
@@ -147,18 +135,6 @@ pub struct AliasHead {
 }
 
 #[derive(Clone, Debug)]
-pub struct Module {
-    pub name: Option<NameRef<VarName>>,
-    pub top: TopLevel,
-}
-
-// #[derive(Clone, Debug)]
-// pub struct UseBlock {
-//     pub uses: UsePath,
-//     pub top: TopLevel,
-// }
-
-#[derive(Clone, Debug)]
 pub struct Exec(pub TermId);
 
 #[derive(Clone, From, Debug)]
@@ -166,8 +142,6 @@ pub enum Declaration {
     Meta(MetaT<DeclId>),
     AliasBody(AliasBody),
     AliasHead(AliasHead),
-    Module(Module),
-    // UseBlock(UseBlock),
     Exec(Exec),
 }
 

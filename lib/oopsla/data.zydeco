@@ -1,4 +1,4 @@
-module Identity where
+-- module Identity
   --| identity functions
   pub def id : Thunk(forall (A : VType) . A -> Ret A) = {
     fn A a -> ret a
@@ -6,9 +6,9 @@ module Identity where
   pub def id~ : Thunk(forall (B : CType) . Thunk B -> B) = {
     fn B b -> ! b
   } end
-end
+-- end module Identity
 
-module Pair where
+-- module Pair
   pub alias Pair (A : VType) (A' : VType) : VType =
     data
     | +Cons : A * A'
@@ -18,9 +18,9 @@ module Pair where
   pub def ! pair (A : VType) (A' : VType) (x : A) (y : A') : Ret (Pair A A') = 
     ret +Cons(x, y)
   end
-end
+-- end module Pair
 
-module Bool where
+-- module Bool
   pub def true : Bool = +True() end
   pub def false : Bool = +False() end
 
@@ -100,9 +100,9 @@ module Bool where
     do b <- ! b;
     ! if B b thn els
   end
-end
+-- end module Bool
 
-module Nat where
+-- module Nat
   pub data Nat where
     | +Z : Unit
     | +S : Nat
@@ -116,9 +116,9 @@ module Nat where
       ! f x'
     end
   end
-end
+-- end module Nat
 
-module List where
+-- module List
   pub data List (A : VType) where
     | +Nil : Unit
     | +Cons : A * List A
@@ -173,9 +173,9 @@ module List where
   pub def ! get_element (A : VType) (xs : List A) (index : Int) : F(Option A) =
     ! get_rec A xs index
   end
-end
+-- end module List
 
-module LList where
+-- module LList
   --| Lazy List
   pub data LListV (A : VType) (B : CType) where
     | +Nil : Unit
@@ -438,9 +438,9 @@ module LList where
         ! cons (Char) c acc
     }  
   end
-end
+-- end module LList
 
-module Arith where
+-- module Arith
   pub def ! int_le (x: Int) (y: Int) : Ret Bool =
     ! not~ { ! int_gt x y }
   end
@@ -462,9 +462,9 @@ module Arith where
       | +False() -> ret y
       end
   end
-end
+-- end module Arith
 
-module String where
+-- module String
   pub extern def str_split_once : Thunk(String -> Char -> Ret (Option (Pair String String))) end
   pub extern def str_split_n : Thunk(String -> Int -> Ret (Option (Pair String String))) end
 
@@ -505,4 +505,4 @@ module String where
       ret ""
     }
   end
-end
+-- end module String

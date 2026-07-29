@@ -136,7 +136,7 @@ pub enum Term {
     Meta(MetaT<TermId>),
     Ann(Ann<TermId, TermId>),
     Hole(Hole),
-    Var(NameRef<VarName>),
+    Var(VarName),
     Named(Named<FieldName, TermId>),
     Paren(Paren<TermId>),
     Abs(Abs<CoPatId, TermId>),
@@ -186,15 +186,6 @@ pub struct Define(pub GenBind<Option<TermId>>);
 #[derive(Clone, Debug)]
 pub struct Alias(pub GenBind<TermId>);
 
-#[derive(Clone, Debug)]
-pub struct Module {
-    pub name: Option<NameRef<VarName>>,
-    pub top: TopLevel,
-}
-
-#[derive(From, Clone, Debug)]
-pub struct UseDef(pub UsePath);
-
 // Todo: Add a way to specify the expected output of the execution
 #[derive(Clone, Debug)]
 pub enum ExecType {
@@ -213,7 +204,6 @@ pub enum Declaration {
     CoDataDef(CoDataDef),
     Define(Define),
     Alias(Alias),
-    Module(Module),
     Exec(Exec),
 }
 

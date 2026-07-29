@@ -50,11 +50,30 @@ product `Named(x, A) * Named(y, B)`, and its term and pattern forms reuse
 are checked statically and may be erased afterward.
 
 The parser preserves `field = ...` as `Named` syntax and continues to defer its
-sort to type checking. Postfix `term .field` shares the existing dot-elimination
-syntax used by codata destructors; type checking distinguishes named projection
-from codata elimination using the receiver type. Projection searches only the
-immediate product spine, requires a unique matching field, and exposes the
-payload beneath `Named`.
+sort to type checking. Named projection uses postfix slash syntax:
+`term/field`. Selection associates to the left, making
+`term/outer/inner` a path through nested named terms. Its receiver undergoes
+ordinary lexical or global name resolution, while field labels are checked
+statically rather than resolved as variables. Slash is reserved exclusively
+for named projection; dot remains exclusively the elimination syntax for
+computation destructors, preserving the value/computation distinction.
+
+Named projection searches only the immediate product spine, requires a unique
+matching field, and exposes the payload beneath `Named`. Reusing slash is
+intentional: named terms internalize namespace-like name management in the
+expression language instead of introducing a parallel projection mechanism for
+each sort or abstraction level.
+
+### Source Organization and Modules
+
+Zydeco temporarily has no source-language module, namespace, import, layer, or
+qualified-name machinery. Files that previously used module blocks are
+flattened into one global declaration scope, with comments retaining any useful
+organizational boundaries. Name resolution therefore maps ordinary local and
+global `VarName`s directly to their definitions. Filesystem paths in project
+dependency configuration remain a driver concern and do not introduce paths
+into the language. A future module system will be designed afresh rather than
+constrained by the removed scaffolding.
 
 ## Relative Monads and Monadic Blocks
 
@@ -151,7 +170,7 @@ The artifact documents a few important limitations:
 
 - The LLVM emitter is experimental; the tested native backend targets AMD64.
 - The package manager supports only local dependencies.
-- `module`, `pub`, and `use` are reserved but not implemented.
+- `pub` is parsed, but declaration visibility is not enforced.
 - Debug builds use a larger stack to avoid overflow on large tests.
 - Monadic blocks pass monad instances at runtime; inlining is not implemented,
   and only global definitions can be referenced inside blocks.

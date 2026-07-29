@@ -534,13 +534,12 @@ The following are some limitations of the artifact:
 
 + Though designed to be an idealized intermediate representation, Zydeco is not currently compiled to any low-level language. The efficient compilation of Zydeco is left as future work.
 + A basic package manager is implemented in [`zydeco-driver`](../../lang/driver/). However, it only supports local dependencies, and the standard library can only be manually added to the project.
-+ The namespace feature is not implemented. Keywords `module`, `pub`, and `use` are reserved but they have no effect.
++ The source language currently has no module, namespace, import, or qualified-name machinery. Former module groups are flattened into the global scope and retained as comments; `pub` is parsed but visibility is not enforced.
 + When running Zydeco in debug mode, the stack size is extended to 4MB to pass all test cases, because under debug profile Rust generates large debuginfo on the stack, causing large test cases to stack overflow. This is not a problem in release mode.
 + There're several caveats in using monadic blocks as a Zydeco programmer.
   + The monadic blocks are compiled to a function that accepts a monad instance as function argument, which is passed in at runtime. However, an efficient implementation is to inline the monad instance into the monadic block if it's known at compile time, which is feasible in most cases, but not currently supported in the artifact.
   + As mentioned in previous sections, the monadic blocks requires its inner computation to be closed in the paper. Even with the improvement in the artifact, it can only allow for the use of global types and terms.
   + As a result, to use monad-specific features e.g. using `raise` with the `Exn` monad, the user must pass in the implementation of the `raise` function as a function argument to the monadic block, and introduce a function parameter inside the monadic block. It's therefore recommended to abstract the monad-specific features into an existential type interface, which requires the user to learn as a style of programming. Similar to the monad instance, the inline optimization oppotunity exists for the instance of the existential type interface, but just like the case of the monad instance, the application of instances are not currently optimized in the artifact.
-
 
 
 

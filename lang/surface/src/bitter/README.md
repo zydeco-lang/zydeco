@@ -27,8 +27,8 @@ but removes syntactic sugar and inserts explicit nodes the later passes rely on.
 - `PrimTerms`: collects the inserted internal terms (like `VType`, `CType`, `Thk`,
   `Ret`, etc.) so name resolution can treat them as primitives and avoid capture.
 
-This pass keeps names as `NameRef<VarName>` in `Term` until the `scoped` pass
-rewrites them to bound variables.
+This pass keeps names as `VarName` in `Term` until the `scoped` pass rewrites
+them to bound variables.
 
 ## Desugaring pass
 
@@ -42,8 +42,6 @@ rewrites them to bound variables.
 - Inserts type annotations for literals, `ret`, and `thunk` so later phases see
   explicit types.
 - Wraps definitions in `Sealed` when they should not be expanded accidentally.
-- Lifts `module` declarations by flattening the inner `TopLevel` into the parent
-  (see `Desugar for t::TopLevel`).
 - Builds `PrimTerms` by inserting the internal kind/type terms and storing their
   `TermId`s in a `MultiCell`.
 

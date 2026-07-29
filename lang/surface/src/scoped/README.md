@@ -1,7 +1,7 @@
 # Scoped (Name Resolution)
 
 `scoped` performs name resolution on the desugared surface syntax (`bitter`).
-It replaces `NameRef` occurrences with `DefId`s, checks scoping rules, and
+It replaces `VarName` occurrences with `DefId`s, checks scoping rules, and
 builds a `ScopedArena` enriched with dependency graphs and local contexts.
 
 ## Role in the pipeline
@@ -11,7 +11,7 @@ textual -> bitter -> scoped -> statics
 ```
 
 This pass is where variable names become bound identifiers (ABT-style), so later
-phases no longer need to inspect name paths.
+phases operate directly on definition IDs.
 
 ## Data model
 

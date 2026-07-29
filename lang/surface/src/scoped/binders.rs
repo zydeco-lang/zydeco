@@ -247,7 +247,6 @@ impl<'a> Resolver<'a> {
                     }
                     self.check_duplicate_and_update_global(id, binders, &mut global)?;
                 }
-                | Declaration::Module(_) => unreachable!(),
                 | Declaration::Exec(_) => {}
             }
         }

@@ -8,7 +8,7 @@ use zydeco_utils::span::PathDisplay;
 #[derive(Error, Debug, Clone)]
 pub enum ResolveError {
     #[error("Unbound variable: {0}")]
-    UnboundVar(Sp<NameRef<VarName>>),
+    UnboundVar(Sp<VarName>),
     #[error("Duplicate definition: {0} and {1}")]
     DuplicateDefinition(Sp<VarName>, Sp<VarName>),
     #[error("Undefined primitive: {0}")]
@@ -17,8 +17,6 @@ pub enum ResolveError {
     DuplicatePrimitive(Sp<VarName>, Sp<VarName>),
     #[error("Missing primitive: {0}")]
     MissingPrim(&'static str),
-    #[error("No such module found: {0}")]
-    ModuleNotFound(Sp<NameRef<VarName>>),
 }
 
 impl ResolveError {
@@ -97,18 +95,6 @@ impl ResolveError {
             .with_message(format!("Missing primitive: {}", name))
             .with_note(format!("The primitive `{}` must be defined but is missing", name))
             .finish(),
-            | ResolveError::ModuleNotFound(module_ref) => {
-                let (file_path, range) = module_ref.info.to_ariadne_span();
-                Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
-                    .with_message("Module not found")
-                    .with_label(
-                        Label::new((file_path, range)).with_message(format!(
-                            "module `{}` could not be found",
-                            module_ref.inner
-                        )),
-                    )
-                    .finish()
-            }
         }
     }
 }

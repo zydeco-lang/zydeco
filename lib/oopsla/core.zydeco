@@ -1,4 +1,4 @@
-module Builtin where
+-- module Builtin
   --| Value Type and Computation Type
   pub extern def VType end
   pub extern def CType end
@@ -25,10 +25,10 @@ module Builtin where
   pub extern alias Algebra (M: VType -> CType) (R: CType) : CType =
     forall (A: VType) . Thk (M A) -> Thk (A -> R) -> R
   end
-end
+-- end module Builtin
 
 
-module Monad where
+-- module Monad
   --| Interface for Monad Transformers
   pub alias MonadTrans (T: (VType -> CType) -> VType -> CType) : CType =
     forall (M: VType -> CType) . Thk (Monad M) -> codata
@@ -81,10 +81,10 @@ module Monad where
     | .lift A -> ! mt M mo .lift A triv
     end
   end
-end
+-- end module Monad
 
 
-module Core where
+-- module Core
   pub alias Empty : VType = data end end
   pub alias Top : CType = codata end end
 
@@ -108,10 +108,10 @@ module Core where
     | +False : Unit
     end
   end
-end
+-- end module Core
 
 
-module Arith where
+-- module Arith
   pub extern def add : Thk(Int -> Int -> Ret Int) end
   pub extern def sub : Thk(Int -> Int -> Ret Int) end
   pub extern def mul : Thk(Int -> Int -> Ret Int) end
@@ -123,10 +123,10 @@ module Arith where
   pub extern def int_eq : Thk(Int -> Int -> Ret Bool) end
   pub extern def int_lt : Thk(Int -> Int -> Ret Bool) end
   pub extern def int_gt : Thk(Int -> Int -> Ret Bool) end
-end
+-- end module Arith
 
 
-module String where
+-- module String
   pub extern def str_length : Thk(String -> Ret Int) end
   pub extern def str_append : Thk(String -> String -> Ret String) end
   pub extern def str_eq : Thk(String -> String -> Ret Bool) end
@@ -147,10 +147,10 @@ module String where
   pub extern def char_to_str : Thk(Char -> Ret String) end
   pub extern def char_to_int : Thk(Char -> Ret Int) end
   pub extern def str_to_int : Thk(String -> Ret Int) end
-end
+-- end module String
 
 
-module OS where
+-- module OS
   pub extern def write_str : Thk(String -> Thk(OS) -> OS) end
   pub extern def read_line : Thk(Thk(String -> OS) -> OS) end
   pub extern def read_line_as_int : Thk(Thk(Option Int -> OS) -> OS) end
@@ -182,4 +182,4 @@ module OS where
       do s <- ! int_to_str i;
       ! write_line s k
   } end
-end
+-- end module OS

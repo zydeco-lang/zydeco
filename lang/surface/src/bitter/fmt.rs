@@ -94,10 +94,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
             | Decl::Meta(d) => s += &d.ugly(f),
             | Decl::AliasBody(d) => s += &d.ugly(f),
             | Decl::AliasHead(d) => s += &d.ugly(f),
-            | Decl::Module(d) => s += &d.ugly(f),
-            // Decl::Layer(d) => s += &d.ugly(f),
-            // Decl::UseDef(d) => s += &d.ugly(f),
-            // Decl::UseBlock(d) => s += &d.ugly(f),
             | Decl::Exec(d) => s += &d.ugly(f),
         }
         s
@@ -189,25 +185,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for VarName {
     fn ugly(&self, _f: &'a Formatter) -> String {
         let VarName(name) = self;
         name.clone()
-    }
-}
-
-impl<'a, T> Ugly<'a, Formatter<'a>> for NameRef<T>
-where
-    T: Ugly<'a, Formatter<'a>>,
-{
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let NameRef(root, path, name) = self;
-        if *root {
-            s += "root/";
-        }
-        for p in path {
-            s += &p.ugly(f);
-            s += "/";
-        }
-        s += &name.ugly(f);
-        s
     }
 }
 
@@ -489,112 +466,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for Literal {
         s
     }
 }
-
-// impl<'a> Ugly<'a, Formatter<'a>> for UseBind {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let UseBind { uses, tail } = self;
-//         s += "use ";
-//         s += &uses.ugly(f);
-//         s += " in ";
-//         s += &tail.ugly(f);
-//         s
-//     }
-// }
-
-// impl<'a> Ugly<'a, Formatter<'a>> for UsePath {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let UsePath(u) = self;
-//         s += &u.ugly(f);
-//         s
-//     }
-// }
-
-// impl<'a> Ugly<'a, Formatter<'a>> for UseEnum {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         match self {
-//             | UseEnum::Name(n) => s += &n.ugly(f),
-//             | UseEnum::Alias(UseAlias(binder, origin)) => {
-//                 s += &binder.ugly(f);
-//                 s += " = ";
-//                 s += &origin.ugly(f);
-//             }
-//             | UseEnum::All(UseAll) => {
-//                 s += "..";
-//             }
-//             | UseEnum::Cluster(Uses(u)) => {
-//                 s += "( ";
-//                 s += &u.iter().map(|u| u.ugly(f)).collect::<Vec<_>>().join(", ");
-//                 s += " )";
-//             }
-//         }
-//         s
-//     }
-// }
-
-// impl<'a> Ugly<'a, Formatter<'a>> for UseDef {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let UseDef(u) = self;
-//         s += "use ";
-//         s += &u.ugly(f);
-//         s += " end";
-//         s
-//     }
-// }
-
-// impl<'a> Ugly<'a, Formatter<'a>> for UseBlock {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let UseBlock { uses, top } = self;
-//         s += "use ";
-//         s += &uses.ugly(f);
-//         s += " where\n";
-//         s += &top.ugly(f);
-//         s += "\nend";
-//         s
-//     }
-// }
-
-impl<'a> Ugly<'a, Formatter<'a>> for Module {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Module { name, top } = self;
-        s += "module";
-        if let Some(name) = name {
-            s += " ";
-            s += &name.ugly(f);
-        }
-        s += " where\n";
-        s += &top.ugly(f);
-        s += "\nend";
-        s
-    }
-}
-
-// impl<'a> Ugly<'a, Formatter<'a>> for Layer {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let Layer { name, uses, top } = self;
-//         if let Some(name) = name {
-//             s += "layer ";
-//             s += &name.ugly(f);
-//         }
-//         for Modifiers { public, inner } in uses {
-//             if *public {
-//                 s += " pub";
-//             }
-//             s += " use ";
-//             s += &inner.ugly(f);
-//         }
-//         s += " where\n";
-//         s += &top.ugly(f);
-//         s += "\nend";
-//         s
-//     }
-// }
 
 impl<'a> Ugly<'a, Formatter<'a>> for AliasBody {
     fn ugly(&self, f: &'a Formatter) -> String {

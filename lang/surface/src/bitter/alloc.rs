@@ -28,7 +28,7 @@ impl Alloc for b::PatId {
     }
 }
 impl Alloc for b::TermId {
-    type Entity = b::Term<b::NameRef<b::VarName>>;
+    type Entity = b::Term<b::VarName>;
     type Prev = t::EntityId;
     fn alloc(desugarer: &mut Desugarer, entity: Self::Entity, prev: Self::Prev) -> Self {
         let curr = desugarer.fresh();

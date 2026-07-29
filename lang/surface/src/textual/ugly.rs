@@ -114,8 +114,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
             | Decl::CoDataDef(d) => s += &d.ugly(f),
             | Decl::Define(d) => s += &d.ugly(f),
             | Decl::Alias(d) => s += &d.ugly(f),
-            | Decl::Module(d) => s += &d.ugly(f),
-            // Decl::UseBlock(d) => s += &d.ugly(f),
             | Decl::Exec(d) => s += &d.ugly(f),
         }
         s
@@ -179,25 +177,6 @@ where
     fn ugly(&self, f: &'a Formatter) -> String {
         let Named(name, inner) = self;
         format!("{} = {}", name.ugly(f), inner.ugly(f))
-    }
-}
-
-impl<'a, T> Ugly<'a, Formatter<'a>> for NameRef<T>
-where
-    T: Ugly<'a, Formatter<'a>>,
-{
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let NameRef(root, path, name) = self;
-        if *root {
-            s += "root/";
-        }
-        for p in path {
-            s += &p.ugly(f);
-            s += "/";
-        }
-        s += &name.ugly(f);
-        s
     }
 }
 
@@ -598,79 +577,6 @@ where
         s += "]";
         s += " ";
         s += &(*decl).ugly(f);
-        s
-    }
-}
-
-//<'a> impl Ugly<'a, Formatter<'a>> for UseBind {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let UseBind { uses, tail } = self;
-//         s += "use ";
-//         s += &uses.ugly(f);
-//         s += " in ";
-//         s += &tail.ugly(f);
-//         s
-//     }
-// }
-
-//<'a> impl Ugly<'a, Formatter<'a>> for UsePath {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let UsePath(u) = self;
-//         s += &u.ugly(f);
-//         s
-//     }
-// }
-
-//<'a> impl Ugly<'a, Formatter<'a>> for UseEnum {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         match self {
-//             | UseEnum::Name(n) => s += &n.ugly(f),
-//             | UseEnum::Alias(UseAlias(binder, origin)) => {
-//                 s += &binder.ugly(f);
-//                 s += " = ";
-//                 s += &origin.ugly(f);
-//             }
-//             | UseEnum::All(UseAll) => {
-//                 s += "..";
-//             }
-//             | UseEnum::Cluster(Uses(u)) => {
-//                 s += "( ";
-//                 s += &u.iter().map(|u| u.ugly(f)).collect::<Vec<_>>().join(", ");
-//                 s += " )";
-//             }
-//         }
-//         s
-//     }
-// }
-
-//<'a> impl Ugly<'a, Formatter<'a>> for UseBlock {
-//     fn ugly(&self, f: &'a Formatter) -> String {
-//         let mut s = String::new();
-//         let UseBlock { uses, top } = self;
-//         s += "use ";
-//         s += &uses.ugly(f);
-//         s += " where\n";
-//         s += &top.ugly(f);
-//         s += "\nend";
-//         s
-//     }
-// }
-
-impl<'a> Ugly<'a, Formatter<'a>> for Module {
-    fn ugly(&self, f: &'a Formatter) -> String {
-        let mut s = String::new();
-        let Module { name, top } = self;
-        s += "module";
-        if let Some(name) = name {
-            s += " ";
-            s += &name.ugly(f);
-        }
-        s += " where\n";
-        s += &top.ugly(f);
-        s += "\nend";
         s
     }
 }

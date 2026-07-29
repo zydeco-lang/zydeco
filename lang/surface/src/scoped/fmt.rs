@@ -93,8 +93,6 @@ impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
             | Decl::Meta(d) => s += &d.ugly(f),
             | Decl::AliasBody(d) => s += &d.ugly(f),
             | Decl::AliasHead(d) => s += &d.ugly(f),
-            | Decl::Module(_) => unreachable!(),
-            // Decl::UseBlock(d) => s += &d.ugly(f),
             | Decl::Exec(d) => s += &d.ugly(f),
         }
         s

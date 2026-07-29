@@ -19,7 +19,7 @@ impl ArenaSchema<PatId> for BitterScope {
     type Item = Pattern;
 }
 impl ArenaSchema<TermId> for BitterScope {
-    type Item = Term<NameRef<VarName>>;
+    type Item = Term<VarName>;
 }
 impl ArenaSchema<DeclId> for BitterScope {
     type Item = Modifiers<Declaration>;

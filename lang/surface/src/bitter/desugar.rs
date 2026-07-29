@@ -82,20 +82,7 @@ impl Desugar for t::TopLevel {
     type Out = b::TopLevel;
     fn desugar(self, desugarer: &mut Desugarer) -> Result<Self::Out> {
         let t::TopLevel(decls) = self;
-        // b::TopLevel(decls.into_iter().map(|decl| decl.desugar(desugarer)).collect())
-        let mut decls_ = Vec::new();
-        for decl in decls {
-            let decl = decl.desugar(desugarer)?;
-            match &desugarer.bitter.decls[&decl] {
-                | Modifiers { public: _, external: _, inner: b::Declaration::Module(module) } => {
-                    let b::Module { name: _, top: b::TopLevel(decls) } = module;
-                    decls_.extend(decls)
-                }
-                | _ => decls_.push(decl),
-            }
-        }
-        let res = b::TopLevel(decls_);
-        Ok(res)
+        Ok(b::TopLevel(decls.desugar(desugarer)?))
     }
 }
 
@@ -208,29 +195,6 @@ impl Desugar for t::DeclId {
                 // pat & term -> alias
                 b::AliasBody { binder: pat, bindee: term }.into()
             }
-            | Decl::Module(decl) => {
-                let t::Module { name, top } = decl;
-                let top = top.desugar(desugarer)?;
-                b::Module { name, top }.into()
-            }
-            // Decl::Layer(decl) => {
-            //     let t::Layer { name, uses, top } = decl;
-            //     let top = top.desugar(desugarer)?;
-            //     let uses = uses
-            //         .into_iter()
-            //         .map(|Modifiers { public, inner }| Modifiers { public, inner })
-            //         .collect();
-            //     b::Layer { name, uses, top }.into()
-            // }
-            // Decl::UseDef(decl) => {
-            //     let t::UseDef(uses) = decl;
-            //     b::UseDef(uses).into()
-            // }
-            // Decl::UseBlock(decl) => {
-            //     let t::UseBlock { uses, top } = decl;
-            //     let top = top.desugar(desugarer)?;
-            //     b::UseBlock { uses, top }.into()
-            // }
             | Decl::Exec(decl) => {
                 let t::Exec(term) = decl;
                 let term = term.desugar(desugarer)?;
@@ -615,12 +579,6 @@ impl Desugar for t::TermId {
                 let tail = tail.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Let { binder, bindee, tail }.into(), self.into())
             }
-            // Tm::UseLet(term) => {
-            //     let t::UseBind { uses, tail } = term;
-            //     // Todo: uses
-            //     let tail = tail.desugar(desugarer)?;
-            //     Alloc::alloc(desugarer, b::UseBind { uses, tail }.into(), self.into())
-            // }
             | Tm::MoBlock(term) => {
                 let t::MoBlock(body) = term;
                 let body = body.desugar(desugarer)?;
