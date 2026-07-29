@@ -93,7 +93,7 @@ impl Tycker<'_> {
                     | AnnId::Set | AnnId::Kind(_) => unreachable!(),
                 };
                 let pat_out_ann = env.mk(binder).tyck_k(self, Action::ana(ty.into()))?;
-                let binder = match pat_out_ann {
+                let binder = match pat_out_ann.annotation {
                     | PatAnnId::Type(_, _) => unreachable!(),
                     | PatAnnId::Value(vpat, _) => vpat,
                 };

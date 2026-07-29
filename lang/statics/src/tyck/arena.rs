@@ -93,12 +93,16 @@ pub struct StaticsArena {
     pub seals: ArenaAssoc<AbstId, TypeId>,
     /// name hints for abstract types
     pub abst_hints: ArenaAssoc<AbstId, DefId>,
+    /// abstract types introduced by existential elimination
+    pub existential_skolems: ArenaAssoc<AbstId, ()>,
     /// arena for filling context-constrained holes; the [`su::TermId`] is the site;
     /// only types and kinds are now fillable
     pub fills: ArenaDense<StaticsScope, FillId>,
     /// arena for the solutions of fillings,
     /// i.e. the the [`FillId`] should be assigned as the [`AnnId`]
     pub solus: ArenaAssoc<FillId, AnnId>,
+    /// existential witnesses that each type hole is allowed to mention
+    pub fill_scopes: ArenaAssoc<FillId, SkolemScope>,
     /// which holes are introduced by the user and should be reported
     pub fill_hints: ArenaAssoc<FillId, ()>,
     /// arena for `data`; plural plural

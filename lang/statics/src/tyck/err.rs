@@ -24,6 +24,7 @@ pub enum TyckError {
     MissingDataArm(CtorName),
     MissingCoDataArm(DtorName),
     NonExhaustiveCoDataArms(std::collections::HashMap<DtorName, TypeId>),
+    EscapingExistential { witnesses: Vec<AbstId>, result: TypeId },
     Expressivity(&'static str),
     NotInlinable(DefId),
     NotInlinableSeal(AbstId),
@@ -101,6 +102,18 @@ impl<'a> Tycker<'a> {
             | TyckError::MissingCoDataArm(dtor) => format!("Missing codata arm: {:?}", dtor),
             | TyckError::NonExhaustiveCoDataArms(arms) => {
                 format!("Non-exhaustive data arms: {:?}", arms)
+            }
+            | TyckError::EscapingExistential { witnesses, result } => {
+                let witnesses = witnesses
+                    .into_iter()
+                    .map(|witness| self.pretty_statics_nested(witness, "\t"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "Existential witness escapes its scope through result type {}: {}",
+                    self.pretty_statics_nested(result, "\t"),
+                    witnesses
+                )
             }
             | TyckError::Expressivity(s) => s.to_string(),
             | TyckError::NotInlinable(def) => {
@@ -282,6 +295,7 @@ impl<'a> Tycker<'a> {
             | TyckError::MissingNamedField { found, .. }
             | TyckError::DuplicateNamedField { found, .. } => self.type_ariadne_span(found),
             | TyckError::MissingStructure(ty) => self.type_ariadne_span(ty),
+            | TyckError::EscapingExistential { result, .. } => self.type_ariadne_span(result),
             | TyckError::MissingSolution(fills) => fills.first().map(|fill| {
                 let site = self.statics.fills[fill];
                 site.span(self).to_ariadne_span()
@@ -341,6 +355,10 @@ impl<'a> Tycker<'a> {
             | TyckError::NonExhaustiveCoDataArms(arms) => {
                 format!("Non-exhaustive codata arms: {} missing", arms.len())
             }
+            | TyckError::EscapingExistential { result, .. } => format!(
+                "Existential witness escapes through result type {}",
+                self.pretty_statics_nested(*result, "")
+            ),
             | TyckError::Expressivity(s) => s.to_string(),
             | TyckError::NotInlinable(_) => "Cannot inline definition".to_string(),
             | TyckError::NotInlinableSeal(_) => "Cannot inline sealed abstract type".to_string(),

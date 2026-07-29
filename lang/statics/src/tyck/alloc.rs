@@ -249,6 +249,10 @@ where
         let statics = AsMut::<StaticsArena>::as_mut(arena);
         statics.annotations_type.insert_new(ty, kd);
         statics.env_type.insert_new(ty, env.clone());
+        let scope = env.skolem_scope().clone();
+        if let Some(existing) = statics.fill_scopes.insert_or_get(val, scope.clone()) {
+            statics.fill_scopes.replace_existing(val, existing.intersection(&scope));
+        }
         ty
     }
 }

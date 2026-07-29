@@ -31,22 +31,7 @@ impl Lub for KindId {
         let lhs = tycker.statics.kinds_pre[&self].clone();
         let rhs = tycker.statics.kinds_pre[&other].clone();
         fn fill_kd(tycker: &mut Tycker, fill: FillId, kd: KindId) -> Result<KindId> {
-            match tycker.statics.solus.remove(&fill) {
-                | Some(old) => match old {
-                    | AnnId::Set | AnnId::Type(_) => {
-                        tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
-                    }
-                    | AnnId::Kind(old) => {
-                        let kd = Lub::lub(old, kd, tycker)?;
-                        tycker.statics.solus.insert_new(fill, kd.into());
-                        Ok(kd)
-                    }
-                },
-                | None => {
-                    tycker.statics.solus.insert_new(fill, kd.into());
-                    Ok(kd)
-                }
-            }
+            Ok(fill.fill(tycker, kd.into())?.as_kind())
         }
         let res = match (lhs, rhs) {
             | (_, Fillable::Fill(rhs)) => fill_kd(tycker, rhs, self)?,
@@ -125,22 +110,7 @@ impl Debruijn {
         let rhs = tycker.statics.types_pre[&rhs_id].clone();
         let env = tycker.statics.env_type[&lhs_id].clone();
         fn fill_ty(tycker: &mut Tycker, fill: FillId, ty: TypeId) -> Result<TypeId> {
-            match tycker.statics.solus.remove(&fill) {
-                | Some(old) => match old {
-                    | AnnId::Set | AnnId::Kind(_) => {
-                        tycker.err(TyckError::SortMismatch, std::panic::Location::caller())?
-                    }
-                    | AnnId::Type(old) => {
-                        let ty = Lub::lub(old, ty, tycker)?;
-                        let ty_ = fill.fill(tycker, ty.into())?.as_type();
-                        Ok(ty_)
-                    }
-                },
-                | None => {
-                    tycker.statics.solus.insert_new(fill, ty.into());
-                    Ok(ty)
-                }
-            }
+            Ok(fill.fill(tycker, ty.into())?.as_type())
         }
         let res = match (lhs, rhs) {
             | (_, Fillable::Fill(rhs)) => fill_ty(tycker, rhs, lhs_id)?,

@@ -1,5 +1,176 @@
 use super::{syntax::*, *};
+use std::collections::HashSet;
 use zydeco_utils::arena::ArenaAccess;
+
+/* ------------------------- Existential type scope ------------------------- */
+
+impl TypeId {
+    /// Require this type to be well scoped under `scope`.
+    ///
+    /// Unsolved inference holes inherit the requirement by narrowing the
+    /// witnesses their eventual solutions may mention. Solved holes are
+    /// checked immediately under that narrowed scope.
+    #[track_caller]
+    pub fn constrain_to_scope(&self, tycker: &mut Tycker<'_>, scope: &SkolemScope) -> Result<()> {
+        let support = TypeSupport::of(*self, tycker)?;
+        let mut witnesses = support
+            .skolems
+            .into_iter()
+            .filter(|skolem| !scope.contains(skolem))
+            .collect::<Vec<_>>();
+        witnesses.sort_unstable();
+        if !witnesses.is_empty() {
+            return tycker.err(
+                TyckError::EscapingExistential { witnesses, result: *self },
+                std::panic::Location::caller(),
+            );
+        }
+
+        let constraints = support
+            .fills
+            .into_iter()
+            .map(|fill| {
+                let scope = tycker
+                    .statics
+                    .fill_scopes
+                    .get(&fill)
+                    .map(|current| current.intersection(scope))
+                    .unwrap_or_else(|| scope.clone());
+                (fill, scope)
+            })
+            .collect::<Vec<_>>();
+        constraints.into_iter().for_each(|(fill, scope)| {
+            let _ = tycker.statics.fill_scopes.upsert(fill, scope);
+        });
+        Ok(())
+    }
+
+    #[track_caller]
+    pub fn constrain_to_scope_k(
+        &self, tycker: &mut Tycker<'_>, scope: &SkolemScope,
+    ) -> ResultKont<()> {
+        let result = self.constrain_to_scope(tycker, scope);
+        tycker.err_p_to_k(result)
+    }
+}
+
+#[derive(Default)]
+struct TypeSupport {
+    skolems: HashSet<AbstId>,
+    fills: HashSet<FillId>,
+}
+
+impl TypeSupport {
+    fn of(root: TypeId, tycker: &Tycker<'_>) -> Result<Self> {
+        let mut collector = TypeSupportCollector::new();
+        collector.visit(root, tycker)?;
+        Ok(collector.support)
+    }
+}
+
+struct TypeSupportCollector {
+    support: TypeSupport,
+    bound: HashSet<AbstId>,
+    visiting_fills: HashSet<FillId>,
+    visiting_vars: HashSet<(DefId, TypeId)>,
+    visiting_datas: HashSet<DataId>,
+    visiting_codatas: HashSet<CoDataId>,
+}
+
+impl TypeSupportCollector {
+    fn new() -> Self {
+        Self {
+            support: TypeSupport::default(),
+            bound: HashSet::new(),
+            visiting_fills: HashSet::new(),
+            visiting_vars: HashSet::new(),
+            visiting_datas: HashSet::new(),
+            visiting_codatas: HashSet::new(),
+        }
+    }
+
+    fn visit(&mut self, id: TypeId, tycker: &Tycker<'_>) -> Result<()> {
+        match tycker.statics.types_pre[&id].to_owned() {
+            | Fillable::Fill(fill) => {
+                self.support.fills.insert(fill);
+                let solution = tycker.statics.solus.get(&fill).cloned();
+                if self.visiting_fills.insert(fill) {
+                    let result = match solution {
+                        | Some(AnnId::Type(solution)) => self.visit(solution, tycker),
+                        | Some(AnnId::Set | AnnId::Kind(_)) => {
+                            tycker.err(TyckError::SortMismatch, std::panic::Location::caller())
+                        }
+                        | None => Ok(()),
+                    };
+                    self.visiting_fills.remove(&fill);
+                    result?;
+                }
+            }
+            | Fillable::Done(ty) => match ty {
+                | Type::Var(def) => {
+                    let target = tycker.statics.env_type[&id].get(&def).copied();
+                    if let Some(AnnId::Type(target)) = target {
+                        let key = (def, target);
+                        if self.visiting_vars.insert(key) {
+                            let result = self.visit(target, tycker);
+                            self.visiting_vars.remove(&key);
+                            result?;
+                        }
+                    }
+                }
+                | Type::Abst(abst) => {
+                    if tycker.statics.existential_skolems.get(&abst).is_some()
+                        && !self.bound.contains(&abst)
+                    {
+                        self.support.skolems.insert(abst);
+                    }
+                }
+                | Type::Abs(Abs(_, body)) => self.visit(body, tycker)?,
+                | Type::App(App(function, argument)) => {
+                    [function, argument].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
+                }
+                | Type::Named(Named(_, inner)) => self.visit(inner, tycker)?,
+                | Type::Thk(_)
+                | Type::Ret(_)
+                | Type::Unit(_)
+                | Type::Int(_)
+                | Type::Char(_)
+                | Type::String(_)
+                | Type::OS(_) => {}
+                | Type::Arrow(Arrow(input, output)) | Type::Prod(Prod(input, output)) => {
+                    [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
+                }
+                | Type::Forall(Forall(abst, body)) | Type::Exists(Exists(abst, body)) => {
+                    let newly_bound = self.bound.insert(abst);
+                    let result = self.visit(body, tycker);
+                    if newly_bound {
+                        self.bound.remove(&abst);
+                    }
+                    result?;
+                }
+                | Type::Data(data) => {
+                    if self.visiting_datas.insert(data) {
+                        let arms = tycker.statics.datas[&data].clone();
+                        let result =
+                            arms.into_iter().try_for_each(|(_, arm)| self.visit(arm, tycker));
+                        self.visiting_datas.remove(&data);
+                        result?;
+                    }
+                }
+                | Type::CoData(codata) => {
+                    if self.visiting_codatas.insert(codata) {
+                        let arms = tycker.statics.codatas[&codata].clone();
+                        let result =
+                            arms.into_iter().try_for_each(|(_, arm)| self.visit(arm, tycker));
+                        self.visiting_codatas.remove(&codata);
+                        result?;
+                    }
+                }
+            },
+        }
+        Ok(())
+    }
+}
 
 /* ------------------------------ Substitution ------------------------------ */
 
@@ -190,7 +361,9 @@ impl TypeId {
         tycker.err_p_to_k(res)
     }
     pub fn subst(&self, tycker: &mut Tycker<'_>, var: DefId, with: TypeId) -> Result<TypeId> {
-        self.subst_env(tycker, &TyEnv::from_iter([(var, with.into())]))
+        let scope = tycker.statics.env_type[self].skolem_scope().clone();
+        let env = TyEnv::from_iter([(var, with.into())]).with_skolem_scope(scope);
+        self.subst_env(tycker, &env)
     }
 }
 
@@ -494,12 +667,21 @@ impl FillId {
         let res = self.fill(tycker, ann);
         tycker.err_p_to_k(res)
     }
-    pub fn fill(&self, tycker: &mut Tycker<'_>, mut ann: AnnId) -> Result<AnnId> {
-        if let Some(ann_) = tycker.statics.solus.insert_or_get(*self, ann) {
-            ann = Lub::lub(ann, ann_, tycker)?;
-            tycker.statics.solus.replace_existing(*self, ann);
+    pub fn fill(&self, tycker: &mut Tycker<'_>, candidate: AnnId) -> Result<AnnId> {
+        let current = tycker.statics.solus.get(self).copied();
+        let solution =
+            current.map_or(Ok(candidate), |current| Lub::lub(current, candidate, tycker))?;
+        self.constrain_solution(tycker, solution)?;
+        let _ = tycker.statics.solus.upsert(*self, solution);
+        Ok(solution)
+    }
+
+    fn constrain_solution(&self, tycker: &mut Tycker<'_>, solution: AnnId) -> Result<()> {
+        match (solution, tycker.statics.fill_scopes.get(self).cloned()) {
+            | (AnnId::Type(ty), Some(scope)) => ty.constrain_to_scope(tycker, &scope),
+            | (AnnId::Set | AnnId::Kind(_), Some(_))
+            | (AnnId::Set | AnnId::Kind(_) | AnnId::Type(_), None) => Ok(()),
         }
-        Ok(ann)
     }
 }
 

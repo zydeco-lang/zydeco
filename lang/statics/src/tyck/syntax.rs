@@ -48,6 +48,17 @@ pub enum PatAnnId {
     Type(TPatId, KindId),
     Value(VPatId, TypeId),
 }
+/// The result of checking a pattern.
+///
+/// Value patterns can open existential packages. Such openings extend the
+/// environment in which the pattern's body is checked and introduce fresh
+/// abstract types whose scope must not escape the enclosing binder.
+#[derive(Clone, Debug)]
+pub struct PatternElaboration {
+    pub annotation: PatAnnId,
+    pub env: TyEnv,
+    pub skolems: Vec<AbstId>,
+}
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, From)]
 pub enum TermAnnId {
     Hole(FillId),
@@ -153,6 +164,38 @@ mod impls_identifiers {
                 | PatAnnId::Value(pat, ty) => Ok((pat, ty)),
                 | PatAnnId::Type(_, _) => tycker.err_k(err, blame),
             }
+        }
+    }
+
+    impl PatternElaboration {
+        pub fn new(annotation: PatAnnId, env: TyEnv) -> Self {
+            Self { annotation, env, skolems: Vec::new() }
+        }
+
+        pub fn with_annotation(self, annotation: PatAnnId) -> Self {
+            Self { annotation, ..self }
+        }
+
+        pub fn as_type(&self) -> (TPatId, KindId) {
+            self.annotation.as_type()
+        }
+
+        pub fn as_value(&self) -> (VPatId, TypeId) {
+            self.annotation.as_value()
+        }
+
+        pub fn try_as_type(
+            &self, tycker: &mut Tycker<'_>, err: TyckError,
+            blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<(TPatId, KindId)> {
+            self.annotation.try_as_type(tycker, err, blame)
+        }
+
+        pub fn try_as_value(
+            &self, tycker: &mut Tycker<'_>, err: TyckError,
+            blame: &'static std::panic::Location<'static>,
+        ) -> ResultKont<(VPatId, TypeId)> {
+            self.annotation.try_as_value(tycker, err, blame)
         }
     }
 

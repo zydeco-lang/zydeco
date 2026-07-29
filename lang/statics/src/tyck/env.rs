@@ -54,15 +54,72 @@ mod impls_env {
     }
 }
 
-/// Typing environment mapping defs to annotations.
-pub type TyEnv = Env<AnnId>;
+/// Existential witnesses visible at a typing site.
+///
+/// The set is persistent: extending or narrowing a scope produces a new value,
+/// so a typing environment also records the lexical scope in which it arose.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SkolemScope(im::HashSet<AbstId>);
+
+mod impls_skolem_scope {
+    use super::*;
+
+    impl SkolemScope {
+        pub fn contains(&self, skolem: &AbstId) -> bool {
+            self.0.contains(skolem)
+        }
+
+        pub fn with(&self, skolem: AbstId) -> Self {
+            let mut scope = self.clone();
+            scope.0.insert(skolem);
+            scope
+        }
+
+        pub fn without<'a>(&self, skolems: impl IntoIterator<Item = &'a AbstId>) -> Self {
+            skolems.into_iter().fold(self.clone(), |mut scope, skolem| {
+                scope.0.remove(skolem);
+                scope
+            })
+        }
+
+        pub fn intersection(&self, other: &Self) -> Self {
+            Self(self.0.iter().filter(|skolem| other.contains(skolem)).copied().collect())
+        }
+    }
+}
+
+/// Typing environment mapping definitions to annotations together with the
+/// existential witnesses visible at that point.
+#[derive(Clone, Debug)]
+pub struct TyEnv {
+    defs: Env<AnnId>,
+    skolems: SkolemScope,
+}
 
 mod impls_ty_env {
     use super::*;
 
     impl TyEnv {
+        pub fn new() -> Self {
+            Self { defs: Env::new(), skolems: SkolemScope::default() }
+        }
+
+        pub fn skolem_scope(&self) -> &SkolemScope {
+            &self.skolems
+        }
+
+        pub fn with_skolem(mut self, skolem: AbstId) -> Self {
+            self.skolems = self.skolems.with(skolem);
+            self
+        }
+
+        pub fn with_skolem_scope(mut self, scope: SkolemScope) -> Self {
+            self.skolems = scope;
+            self
+        }
+
         pub fn monadic_new(tycker: &mut Tycker<'_>, ori: &TyEnv) -> Self {
-            let mut env = Env::new();
+            let mut env = TyEnv::new().with_skolem_scope(ori.skolems.clone());
             env += [
                 (tycker.prim.vtype.get().to_owned(), VType.build(tycker, ori).into()),
                 (tycker.prim.ctype.get().to_owned(), CType.build(tycker, ori).into()),
@@ -82,7 +139,7 @@ mod impls_ty_env {
             env
         }
         pub fn recursively_get_type(&self, tycker: &Tycker<'_>, def: &DefId) -> Option<&AnnId> {
-            let ann = self.0.get(def)?;
+            let ann = self.defs.get(def)?;
             match ann {
                 | AnnId::Set | AnnId::Kind(_) => unreachable!(),
                 | AnnId::Type(ty) => {
@@ -95,6 +152,71 @@ mod impls_ty_env {
                     }
                 }
             }
+        }
+    }
+
+    impl Default for TyEnv {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl std::ops::Deref for TyEnv {
+        type Target = Env<AnnId>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.defs
+        }
+    }
+
+    impl std::ops::DerefMut for TyEnv {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.defs
+        }
+    }
+
+    impl<Iter> Add<Iter> for TyEnv
+    where
+        Iter: IntoIterator<Item = (DefId, AnnId)>,
+    {
+        type Output = Self;
+
+        fn add(mut self, iter: Iter) -> Self::Output {
+            self += iter;
+            self
+        }
+    }
+
+    impl<Iter> AddAssign<Iter> for TyEnv
+    where
+        Iter: IntoIterator<Item = (DefId, AnnId)>,
+    {
+        fn add_assign(&mut self, iter: Iter) {
+            self.defs += iter;
+        }
+    }
+
+    impl FromIterator<(DefId, AnnId)> for TyEnv {
+        fn from_iter<I: IntoIterator<Item = (DefId, AnnId)>>(iter: I) -> Self {
+            Self { defs: iter.into_iter().collect(), skolems: SkolemScope::default() }
+        }
+    }
+
+    impl IntoIterator for TyEnv {
+        type Item = (DefId, AnnId);
+        type IntoIter = <Env<AnnId> as IntoIterator>::IntoIter;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.defs.into_iter()
+        }
+    }
+
+    impl<'a> IntoIterator for &'a TyEnv {
+        type Item = (&'a DefId, &'a AnnId);
+        type IntoIter = <&'a Env<AnnId> as IntoIterator>::IntoIter;
+
+        fn into_iter(self) -> Self::IntoIter {
+            (&self.defs).into_iter()
         }
     }
 }
