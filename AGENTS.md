@@ -73,15 +73,40 @@ modules.
 
 ## Notes for Changes
 
-- Prefer updating `DESIGN.md` or `CONTRIBUTE.md` when modifying architecture or
-  workflows.
+- Prefer updating `DESIGN.md` or `CONTRIBUTE.md` when modifying architecture or workflows.
 - Keep doc examples consistent with CLI flags and scripts in the repo.
-- If you add new example projects under `lib/`, consider wiring them into
-  `lang/tests`.
+- If you add new example projects under `lib/`, consider wiring them into `lang/tests`.
+
+## Documentation Style
+
+Wrap prose to approximately 90~120 characters per line.
+Prefer one complete sentence within one line without breaking the natural flow of the paragraph.
+If not, prefer breaks after punctuation (especially prefer period) or before connective words,
+and relax the target for the final sentence of a paragraph rather than forcing an unnatural break.
+Preserve the formatting of code blocks and other structurally significant Markdown.
+
+Write for a reader encountering the design in sequence.
+Establish the motivation and relevant context before introducing machinery,
+and make clear which question each mechanism answers.
+Reveal the argument gradually instead of presenting every consequence at once.
+Use connective sentences to explain why one paragraph or section leads to the next,
+especially before increasing the level of technical detail.
+These connections should carry reasoning rather than serve as generic transitions.
+
+Use programming-languages terminology when it adds precision,
+but explain specialized terms at first use and relate them to source-level intuition or a concrete example.
+Prefer positive accounts of what a construct provides.
+Use definition by contrast or negation when the distinction itself matters,
+but avoid making repeated "not X, but Y" formulations the main mode of explanation.
+
+Let paragraph and sentence length follow the needs of the argument.
+Avoid formulaic prose in which every paragraph has the same rhythm or structure.
+After revising documentation, read it from beginning to end and check that the storyline unfolds naturally,
+the information density rises gradually, and no paragraph depends on concepts introduced only later.
 
 ## Rust Code Style Guideline
 
-Always prefer typed data structures over strings + parsers, and
+Always prefer typed data structures over strings + parsers;
 Never be afraid of defining too many types.
 For examples,
 - Include specific types of errors when creating an error type, not just strings.
