@@ -1,5 +1,5 @@
 use super::{syntax::*, *};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use zydeco_utils::arena::ArenaAccess;
 
 /* ------------------------- Existential type scope ------------------------- */
@@ -29,13 +29,14 @@ impl TypeId {
         let constraints = support
             .fills
             .into_iter()
-            .map(|fill| {
+            .map(|(fill, locally_bound)| {
+                let admissible = scope.union(&locally_bound);
                 let scope = tycker
                     .statics
                     .fill_scopes
                     .get(&fill)
-                    .map(|current| current.intersection(scope))
-                    .unwrap_or_else(|| scope.clone());
+                    .map(|current| current.intersection(&admissible))
+                    .unwrap_or(admissible);
                 (fill, scope)
             })
             .collect::<Vec<_>>();
@@ -57,7 +58,11 @@ impl TypeId {
 #[derive(Default)]
 struct TypeSupport {
     skolems: HashSet<AbstId>,
-    fills: HashSet<FillId>,
+    /// Package witnesses bound at every occurrence of an inference hole.
+    ///
+    /// A shared hole may occur under different package binders, so the
+    /// admissible local scope is the intersection of those occurrences.
+    fills: HashMap<FillId, SkolemScope>,
 }
 
 impl TypeSupport {
@@ -71,6 +76,7 @@ impl TypeSupport {
 struct TypeSupportCollector {
     support: TypeSupport,
     bound: HashSet<AbstId>,
+    pack_scope: SkolemScope,
     visiting_fills: HashSet<FillId>,
     visiting_vars: HashSet<(DefId, TypeId)>,
     visiting_datas: HashSet<DataId>,
@@ -82,6 +88,7 @@ impl TypeSupportCollector {
         Self {
             support: TypeSupport::default(),
             bound: HashSet::new(),
+            pack_scope: SkolemScope::default(),
             visiting_fills: HashSet::new(),
             visiting_vars: HashSet::new(),
             visiting_datas: HashSet::new(),
@@ -92,7 +99,12 @@ impl TypeSupportCollector {
     fn visit(&mut self, id: TypeId, tycker: &Tycker<'_>) -> Result<()> {
         match tycker.statics.types_pre[&id].to_owned() {
             | Fillable::Fill(fill) => {
-                self.support.fills.insert(fill);
+                let local_scope = self.pack_scope.clone();
+                self.support
+                    .fills
+                    .entry(fill)
+                    .and_modify(|scope| *scope = scope.intersection(&local_scope))
+                    .or_insert(local_scope);
                 let solution = tycker.statics.solus.get(&fill).cloned();
                 if self.visiting_fills.insert(fill) {
                     let result = match solution {
@@ -146,6 +158,17 @@ impl TypeSupportCollector {
                     if newly_bound {
                         self.bound.remove(&abst);
                     }
+                    result?;
+                }
+                | Type::PackPi(PackPi { domain, witnesses, codomain }) => {
+                    self.visit(domain, tycker)?;
+                    let outer_bound = self.bound.clone();
+                    let outer_pack_scope = self.pack_scope.clone();
+                    self.bound.extend(witnesses.iter().copied());
+                    self.pack_scope = self.pack_scope.union(&witnesses.iter().copied().collect());
+                    let result = self.visit(codomain, tycker);
+                    self.bound = outer_bound;
+                    self.pack_scope = outer_pack_scope;
                     result?;
                 }
                 | Type::Data(data) => {
@@ -253,6 +276,16 @@ impl TypeId {
                     let Forall(tpat, ty) = forall;
                     let ty_ = ty.subst_env(tycker, env)?;
                     if ty == ty_ { *self } else { Alloc::alloc(tycker, Forall(tpat, ty_), kd, env) }
+                }
+                | Type::PackPi(pack_pi) => {
+                    let PackPi { domain, witnesses, codomain } = pack_pi;
+                    let domain_ = domain.subst_env(tycker, env)?;
+                    let codomain_ = codomain.subst_env(tycker, env)?;
+                    if domain == domain_ && codomain == codomain_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, PackPi::new(domain_, witnesses, codomain_), kd, env)
+                    }
                 }
                 | Type::Prod(prod) => {
                     let Prod(ty1, ty2) = prod;
@@ -436,6 +469,20 @@ impl TypeId {
                         Alloc::alloc(tycker, Forall(tpat, ty_), kd, &env)
                     }
                 }
+                | Type::PackPi(pack_pi) => {
+                    let PackPi { domain, witnesses, codomain } = pack_pi;
+                    let domain_ = domain.subst_abst(tycker, assign)?;
+                    let codomain_ = if witnesses.contains(&assign.0) {
+                        codomain
+                    } else {
+                        codomain.subst_abst(tycker, assign)?
+                    };
+                    if domain == domain_ && codomain == codomain_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, PackPi::new(domain_, witnesses, codomain_), kd, &env)
+                    }
+                }
                 | Type::Prod(prod) => {
                     let Prod(ty1, ty2) = prod;
                     let ty1_ = ty1.subst_abst(tycker, assign)?;
@@ -551,6 +598,7 @@ impl TypeId {
             | Type::OS(_) => self,
             | Type::Arrow(_)
             | Type::Forall(_)
+            | Type::PackPi(_)
             | Type::Prod(_)
             | Type::Exists(_) => self,
             | Type::Data(_)
@@ -601,6 +649,7 @@ impl TypeId {
                 | Type::OS(_)
                 | Type::Arrow(_)
                 | Type::Forall(_)
+                | Type::PackPi(_)
                 | Type::Prod(_)
                 | Type::Exists(_)
                 | Type::Data(_)
@@ -796,6 +845,23 @@ impl TypeId {
                         Alloc::alloc(
                             tycker,
                             Forall(tpat_, ty_),
+                            tycker.statics.annotations_type[&res],
+                            &env,
+                        )
+                    }
+                }
+                | Type::PackPi(pack_pi) => {
+                    let PackPi { domain, witnesses, codomain } = pack_pi;
+                    let (domain_, domain_fills) = domain.solution(tycker)?;
+                    fills.extend(domain_fills);
+                    let (codomain_, codomain_fills) = codomain.solution(tycker)?;
+                    fills.extend(codomain_fills);
+                    if domain == domain_ && codomain == codomain_ {
+                        res
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            PackPi::new(domain_, witnesses, codomain_),
                             tycker.statics.annotations_type[&res],
                             &env,
                         )
@@ -1191,6 +1257,21 @@ impl TypeId {
                         self
                     } else {
                         Alloc::alloc(tycker, Forall(abst, body_norm), kd_norm, &env)
+                    }
+                }
+                | Type::PackPi(pack_pi) => {
+                    let PackPi { domain, witnesses, codomain } = pack_pi;
+                    let domain_norm = domain.filled_norm_id(tycker, memo, memo_kd)?;
+                    let codomain_norm = codomain.filled_norm_id(tycker, memo, memo_kd)?;
+                    if domain_norm == domain && codomain_norm == codomain && kd_norm == kd {
+                        self
+                    } else {
+                        Alloc::alloc(
+                            tycker,
+                            PackPi::new(domain_norm, witnesses, codomain_norm),
+                            kd_norm,
+                            &env,
+                        )
                     }
                 }
                 | Type::Prod(prod) => {

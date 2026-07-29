@@ -301,6 +301,7 @@ AllocType! {
     OSTy
     ArrowU<TypeId>
     Forall
+    PackPi
     ProdU<TypeId>
     Exists
     DataId

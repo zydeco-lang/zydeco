@@ -75,6 +75,7 @@ impl TypeId {
             | Type::OS(_)
             | Type::Arrow(_)
             | Type::Forall(_)
+            | Type::PackPi(_)
             | Type::Prod(_)
             | Type::Exists(_)
             | Type::Data(_)
@@ -135,6 +136,12 @@ impl TypeId {
     pub fn destruct_forall(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
         match tycker.type_filled(self).ok()?.to_owned() {
             | Type::Forall(Forall(abst, ty)) => Some((abst, ty)),
+            | _ => None,
+        }
+    }
+    pub fn destruct_pack_pi(&self, tycker: &mut Tycker) -> Option<PackPi> {
+        match tycker.type_filled(self).ok()?.to_owned() {
+            | Type::PackPi(pack_pi) => Some(pack_pi),
             | _ => None,
         }
     }

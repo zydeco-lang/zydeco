@@ -433,6 +433,10 @@ fn structure_translation(
             })
             .mbuild(tycker, env)?
         }
+        | Type::PackPi(_) => tycker.err(
+            TyckError::Expressivity("package-dependent arrows in monadic blocks"),
+            std::panic::Location::caller(),
+        )?,
     };
     Ok(res)
 }
@@ -559,6 +563,15 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
                 Arrow(cs::Thk(cs::Signature { ty: abst }), cs::TypeLift { ty })
             })
             .mbuild(tycker, env)?
+        }
+        | Type::PackPi(pack_pi) => {
+            let PackPi { domain, witnesses, codomain } = pack_pi;
+            let (env, domain) = cs::TypeLift { ty: domain }.mbuild(tycker, env)?;
+            let witnesses =
+                witnesses.map(|witness| env.subst_abst.get(&witness).copied().unwrap_or(witness));
+            let (env, codomain) = cs::TypeLift { ty: codomain }.mbuild(tycker, env)?;
+            let alloc = Alloc::alloc(tycker, PackPi::new(domain, witnesses, codomain), kd, &env.ty);
+            (env, alloc)
         }
     };
     Ok((env, res))

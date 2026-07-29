@@ -78,6 +78,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TypeId {
                 | Type::OS(OSTy) => "OS".to_string(),
                 | Type::Arrow(ty) => ty.ugly(f),
                 | Type::Forall(ty) => ty.ugly(f),
+                | Type::PackPi(ty) => ty.ugly(f),
                 | Type::Prod(ty) => ty.ugly(f),
                 | Type::Exists(ty) => ty.ugly(f),
                 | Type::Data(ty) => ty.ugly(f),
@@ -448,6 +449,18 @@ impl<'a> Ugly<'a, Formatter<'a>> for Forall {
     }
 }
 
+impl<'a> Ugly<'a, Formatter<'a>> for PackPi {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let witnesses = self.witnesses.iter().map(|witness| witness.ugly(f)).collect::<Vec<_>>();
+        format!(
+            "(pack-pi ([{}] : {}) . {})",
+            witnesses.join(", "),
+            self.domain.ugly(f),
+            self.codomain.ugly(f)
+        )
+    }
+}
+
 impl<'a> Ugly<'a, Formatter<'a>> for Exists {
     fn ugly(&self, f: &'a Formatter) -> String {
         let Exists(tpat, ty) = self;
@@ -569,6 +582,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for TypeId {
                 | Type::OS(OSTy) => RcDoc::text("OS"),
                 | Type::Arrow(ty) => ty.pretty(f),
                 | Type::Forall(ty) => ty.pretty(f),
+                | Type::PackPi(ty) => ty.pretty(f),
                 | Type::Prod(ty) => ty.pretty(f),
                 | Type::Exists(ty) => ty.pretty(f),
                 | Type::Data(ty) => ty.pretty(f),
@@ -1021,6 +1035,26 @@ impl<'a> Pretty<'a, Formatter<'a>> for Forall {
             RcDoc::space(),
             RcDoc::text("."),
             RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
+        ])
+        .group()
+    }
+}
+
+impl<'a> Pretty<'a, Formatter<'a>> for PackPi {
+    fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
+        let witnesses = self.witnesses.iter().map(|witness| witness.pretty(f));
+        RcDoc::concat([
+            RcDoc::text("pack-pi"),
+            RcDoc::space(),
+            RcDoc::text("(["),
+            RcDoc::intersperse(witnesses, RcDoc::text(", ")),
+            RcDoc::text("] :"),
+            RcDoc::space(),
+            self.domain.pretty(f),
+            RcDoc::text(")"),
+            RcDoc::space(),
+            RcDoc::text("."),
+            RcDoc::concat([RcDoc::line(), self.codomain.pretty(f)]).group().nest(f.indent),
         ])
         .group()
     }

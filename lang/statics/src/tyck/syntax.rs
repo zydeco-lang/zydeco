@@ -338,6 +338,27 @@ pub struct OSTy;
 #[derive(Clone, Debug)]
 pub struct Forall(pub AbstId, pub TypeId);
 
+/// The non-empty telescope of abstract type witnesses bound by a [`PackPi`].
+///
+/// The order records how the witnesses correspond to the existential binders
+/// opened from the package domain.
+#[derive(Clone, Debug)]
+pub struct PackTelescope {
+    first: AbstId,
+    rest: im::Vector<AbstId>,
+}
+
+/// A package-dependent computation arrow.
+///
+/// `witnesses` are abstract type identities obtained by opening `domain`.
+/// They are bound in `codomain`, but not in `domain`.
+#[derive(Clone, Debug)]
+pub struct PackPi {
+    pub domain: TypeId,
+    pub witnesses: PackTelescope,
+    pub codomain: TypeId,
+}
+
 /// `sigma (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Exists(pub AbstId, pub TypeId);
@@ -358,6 +379,42 @@ pub struct CoData {
 
 mod impls_structs {
     use super::*;
+
+    impl PackTelescope {
+        pub fn new(first: AbstId, rest: impl IntoIterator<Item = AbstId>) -> Self {
+            Self { first, rest: rest.into_iter().collect() }
+        }
+
+        pub fn singleton(witness: AbstId) -> Self {
+            Self::new(witness, [])
+        }
+
+        pub fn iter(&self) -> impl Iterator<Item = &AbstId> {
+            std::iter::once(&self.first).chain(self.rest.iter())
+        }
+
+        pub fn contains(&self, witness: &AbstId) -> bool {
+            self.iter().any(|candidate| candidate == witness)
+        }
+
+        pub fn len(&self) -> usize {
+            1 + self.rest.len()
+        }
+
+        pub fn is_empty(&self) -> bool {
+            false
+        }
+
+        pub fn map(self, mut f: impl FnMut(AbstId) -> AbstId) -> Self {
+            Self::new(f(self.first), self.rest.into_iter().map(f))
+        }
+    }
+
+    impl PackPi {
+        pub fn new(domain: TypeId, witnesses: PackTelescope, codomain: TypeId) -> Self {
+            Self { domain, witnesses, codomain }
+        }
+    }
 
     impl Data {
         pub fn new(arms: impl IntoIterator<Item = (CtorName, TypeId)>) -> Self {
@@ -408,6 +465,7 @@ pub enum Type {
     OS(OSTy),
     Arrow(ArrowU<TypeId>),
     Forall(Forall),
+    PackPi(PackPi),
     Prod(ProdU<TypeId>),
     Exists(Exists),
     Data(DataId),

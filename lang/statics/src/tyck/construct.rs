@@ -611,6 +611,12 @@ where
         Alloc::alloc(tycker, Arrow(ty_1, ty_2), ctype, env)
     }
 }
+impl<'a> Construct<Tycker<'a>, TypeId> for PackPi {
+    fn build(self, tycker: &mut Tycker<'a>, env: &TyEnv) -> TypeId {
+        let ctype = CType.build(tycker, env);
+        Alloc::alloc(tycker, self, ctype, env)
+    }
+}
 impl<'a, F, A, T> Construct<Tycker<'a>, TypeId> for cs::Forall<A, F>
 where
     F: FnOnce(AbstId) -> T,

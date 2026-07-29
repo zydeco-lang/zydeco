@@ -272,6 +272,47 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
+                | (
+                    Type::PackPi(PackPi {
+                        domain: lhs_domain,
+                        witnesses: lhs_witnesses,
+                        codomain: lhs_codomain,
+                    }),
+                    Type::PackPi(PackPi {
+                        domain: rhs_domain,
+                        witnesses: rhs_witnesses,
+                        codomain: rhs_codomain,
+                    }),
+                ) => {
+                    if lhs_witnesses.len() != rhs_witnesses.len() {
+                        tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?
+                    }
+                    let domain = self.clone().lub(lhs_domain, rhs_domain, tycker)?;
+                    let body_context = lhs_witnesses
+                        .iter()
+                        .copied()
+                        .zip(rhs_witnesses.iter().copied())
+                        .try_fold(self, |context, (lhs, rhs)| -> Result<_> {
+                            let lhs_kind = tycker.statics.annotations_abst[&lhs];
+                            let rhs_kind = tycker.statics.annotations_abst[&rhs];
+                            let _ = Lub::lub(lhs_kind, rhs_kind, tycker)?;
+                            Ok(context.insert(Some(lhs), Some(rhs)))
+                        })?;
+                    let codomain = body_context.lub(lhs_codomain, rhs_codomain, tycker)?;
+                    if domain == lhs_domain && codomain == lhs_codomain {
+                        lhs_id
+                    } else {
+                        let kd = tycker.statics.annotations_type[&lhs_id];
+                        Alloc::alloc(tycker, PackPi::new(domain, lhs_witnesses, codomain), kd, &env)
+                    }
+                }
+                | (Type::PackPi(_), _) => tycker.err(
+                    TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                    std::panic::Location::caller(),
+                )?,
                 | (Type::Prod(Prod(la, lb)), Type::Prod(Prod(ra, rb))) => {
                     let a = self.clone().lub(la, ra, tycker)?;
                     let b = self.lub(lb, rb, tycker)?;

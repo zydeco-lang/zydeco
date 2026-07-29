@@ -85,6 +85,16 @@ mod impls_skolem_scope {
         pub fn intersection(&self, other: &Self) -> Self {
             Self(self.0.iter().filter(|skolem| other.contains(skolem)).copied().collect())
         }
+
+        pub fn union(&self, other: &Self) -> Self {
+            Self(self.0.iter().chain(other.0.iter()).copied().collect())
+        }
+    }
+
+    impl FromIterator<AbstId> for SkolemScope {
+        fn from_iter<I: IntoIterator<Item = AbstId>>(iter: I) -> Self {
+            Self(iter.into_iter().collect())
+        }
     }
 }
 
