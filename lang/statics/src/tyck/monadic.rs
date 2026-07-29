@@ -198,15 +198,15 @@ mod syntax_impl {
             let (env, ty) = cs::Thk(cs::Signature { ty: cs::Type(abst) }).mbuild(tycker, env)?;
             let (env, var) = var.mbuild(tycker, env)?;
             let def = Alloc::alloc(tycker, var, ty.into(), &());
-            let (env, str) = cs::Value(def).mbuild(tycker, env)?;
             let (env, tvar) = tvar.mbuild(tycker, env)?;
+            let (env, pattern) = cs::Pat(def, ty).mbuild(tycker, env)?;
+            let structure = pattern.reify(tycker);
             let mut env = env;
-            env.structure.absts.insert(abst, str);
+            env.structure.absts.insert(abst, structure);
             if let Some(tvar) = tvar {
                 env.structure.def_map.insert(tvar, abst);
             }
-            let (env, ty) = ty.mbuild(tycker, env)?;
-            cs::Pat(def, ty).mbuild(tycker, env)
+            Ok((env, pattern))
         }
     }
 
@@ -248,6 +248,207 @@ fn signature_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result
         .mbuild(tycker, env)?,
     };
     Ok(res)
+}
+
+/// Allocate a computation abstraction whose parameter opens the witnesses
+/// bound by a package-dependent arrow.
+struct PackPiAbstraction {
+    binder: VPatId,
+    body: CompuId,
+    signature: TypeId,
+}
+
+impl PackPiAbstraction {
+    fn build(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> CompuId {
+        Alloc::alloc(tycker, Abs(self.binder, self.body), self.signature, env)
+    }
+}
+
+/// Allocate an application after its package-dependent result has been
+/// instantiated.
+struct PackPiApplication {
+    function: CompuId,
+    argument: ValueId,
+    result: TypeId,
+}
+
+impl PackPiApplication {
+    fn build(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> CompuId {
+        Alloc::alloc(tycker, App(self.function, self.argument), self.result, env)
+    }
+}
+
+/// Construct a source package pattern that opens exactly the witnesses bound
+/// by a `PackPi`. The pattern is used only as input to monadic translation.
+struct PackPiBinderPattern {
+    signature: PackPi,
+}
+
+impl PackPiBinderPattern {
+    fn build(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<VPatId> {
+        let PackPi { domain, witnesses, .. } = self.signature;
+        let (body_ty, witness_patterns) = witnesses.iter().copied().enumerate().try_fold(
+            (domain, Vec::<TPatId>::with_capacity(witnesses.len())),
+            |(body_ty, mut witness_patterns), (index, witness)| {
+                let view = body_ty.unroll(tycker)?.subst_env(tycker, env)?;
+                let Type::Exists(Exists(domain_abst, next_ty)) =
+                    tycker.type_filled(&view)?.to_owned()
+                else {
+                    return tycker.err(
+                        TyckError::PackageWitnessArityMismatch {
+                            expected: witnesses.len(),
+                            found: index,
+                        },
+                        std::panic::Location::caller(),
+                    );
+                };
+                let kind = tycker.statics.annotations_abst[&witness];
+                let witness_def = Alloc::alloc(
+                    tycker,
+                    VarName(format!("pack_witness_{index}")),
+                    kind.into(),
+                    &(),
+                );
+                let witness_pattern: TPatId = Alloc::alloc(tycker, witness_def, kind, env);
+                let witness_ty = Alloc::alloc(tycker, witness, kind, env);
+                let body_ty = next_ty.subst_abst(tycker, (domain_abst, witness_ty))?;
+                witness_patterns.push(witness_pattern);
+                Ok((body_ty, witness_patterns))
+            },
+        )?;
+        let body_def = Alloc::alloc(tycker, VarName("pack_body".to_string()), body_ty.into(), &());
+        let body_pattern: VPatId = Alloc::alloc(tycker, body_def, body_ty, env);
+        Ok(Alloc::alloc(tycker, ConsN(witness_patterns, body_pattern), domain, env))
+    }
+}
+
+/// Translate a package pattern while associating its source `PackPi`
+/// witnesses with the fresh witnesses introduced by the translated pattern.
+struct PackPiPatternTranslation {
+    pattern: VPatId,
+    witnesses: Vec<AbstId>,
+}
+
+impl PackPiPatternTranslation {
+    fn new(pattern: VPatId, witnesses: &PackTelescope) -> Self {
+        Self { pattern, witnesses: witnesses.iter().copied().collect() }
+    }
+
+    fn translate(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
+        let (env, ty) = cs::TypeOf(self.pattern).mbuild(tycker, env)?;
+        let (env, translated_ty) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+        match tycker.statics.vpats[&self.pattern].to_owned() {
+            | ValuePattern::Named(Named(name, inner)) => {
+                let (env, inner) =
+                    Self { pattern: inner, witnesses: self.witnesses }.translate(tycker, env)?;
+                let named = Alloc::alloc(tycker, Named(name, inner), translated_ty, &env.ty);
+                Ok((env, named))
+            }
+            | ValuePattern::TCons(ConsN(witnesses, body)) => package_pattern_translation(
+                tycker,
+                env,
+                &witnesses,
+                Some(&self.witnesses),
+                body,
+                translated_ty,
+            ),
+            | ValuePattern::Hole(_)
+            | ValuePattern::Var(_)
+            | ValuePattern::Ctor(_)
+            | ValuePattern::Triv(_)
+            | ValuePattern::VCons(_) => tycker.err(
+                TyckError::PackageWitnessArityMismatch { expected: self.witnesses.len(), found: 0 },
+                std::panic::Location::caller(),
+            ),
+        }
+    }
+}
+
+/// The continuation passed to the translated codomain structure.
+struct PackPiStructureContinuation {
+    function: VPatId,
+    argument: ValueId,
+    codomain: TypeId,
+    carrier: VPatId,
+}
+
+impl MonConstruct<CompuId> for PackPiStructureContinuation {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+        let (env, function) =
+            App(Force(cs::Value(self.function)), cs::Value(self.carrier)).mbuild(tycker, env)?;
+        let (env, codomain) = cs::TypeLift { ty: self.codomain }.mbuild(tycker, env)?;
+        let application = PackPiApplication { function, argument: self.argument, result: codomain }
+            .build(tycker, &env.ty);
+        Ok((env, application))
+    }
+}
+
+/// The package-dependent function produced by `Str(PackPi)`.
+struct PackPiStructureBody {
+    source: TypeId,
+    signature: PackPi,
+    carrier: AbstId,
+    monadic_value: VPatId,
+    function: VPatId,
+}
+
+impl MonConstruct<CompuId> for PackPiStructureBody {
+    fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+        let source_pattern =
+            PackPiBinderPattern { signature: self.signature.clone() }.build(tycker, &env.ty)?;
+        let (env, binder) =
+            PackPiPatternTranslation::new(source_pattern, &self.signature.witnesses)
+                .translate(tycker, env)?;
+        let argument = binder.reify(tycker);
+        let continuation = Abs(cs::Pat("z", self.carrier), {
+            let function = self.function;
+            let codomain = self.signature.codomain;
+            move |carrier| PackPiStructureContinuation { function, argument, codomain, carrier }
+        });
+        let (env, body) = App(
+            App(
+                App(cs::Structure { ty: self.signature.codomain }, cs::Ty(self.carrier)),
+                cs::Value(self.monadic_value),
+            ),
+            Thunk(continuation),
+        )
+        .mbuild(tycker, env)?;
+        let (env, signature) = cs::TypeLift { ty: self.source }.mbuild(tycker, env)?;
+        let abstraction = PackPiAbstraction { binder, body, signature }.build(tycker, &env.ty);
+        Ok((env, abstraction))
+    }
+}
+
+/// Structure translation for a package-dependent computation arrow:
+///
+/// `Str(PackPi(P; As. B)) Z mz f`
+/// `  = fn package -> Str(B) Z mz { fn z -> ! f z package }`.
+///
+/// Translating `package` also binds the structures associated with `As`, so
+/// `Str(B)` is formed in precisely the environment selected by that package.
+struct PackPiStructureTranslation {
+    source: TypeId,
+    signature: PackPi,
+}
+
+impl PackPiStructureTranslation {
+    fn translate(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
+        let source = self.source;
+        let signature = self.signature;
+        Abs(cs::Ty(cs::Pat("Z", VType)), move |_carrier_pattern, carrier| {
+            Abs(cs::Pat("mz", cs::Thk(App(env.monad_ty, carrier))), move |monadic_value| {
+                let function_ty = cs::Thk(Arrow(carrier, cs::TypeLift { ty: source }));
+                Abs(cs::Pat("f", function_ty), move |function| PackPiStructureBody {
+                    source,
+                    signature,
+                    carrier,
+                    monadic_value,
+                    function,
+                })
+            })
+        })
+        .mbuild(tycker, env)
+    }
 }
 
 /// Structure Translation `Str(T)`
@@ -433,10 +634,9 @@ fn structure_translation(
             })
             .mbuild(tycker, env)?
         }
-        | Type::PackPi(_) => tycker.err(
-            TyckError::Expressivity("package-dependent arrows in monadic blocks"),
-            std::panic::Location::caller(),
-        )?,
+        | Type::PackPi(signature) => {
+            PackPiStructureTranslation { source: ty, signature }.translate(tycker, env)?
+        }
     };
     Ok(res)
 }
@@ -579,30 +779,73 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
 
 /// Value Pattern Translation `[VPat]`
 fn package_pattern_translation(
-    tycker: &mut Tycker, env: MonEnv, witnesses: &[TPatId], body: VPatId, translated_ty: TypeId,
+    tycker: &mut Tycker, env: MonEnv, witnesses: &[TPatId], source_skolems: Option<&[AbstId]>,
+    body: VPatId, translated_ty: TypeId,
 ) -> Result<(MonEnv, VPatId)> {
     let Some((&witness, remaining)) = witnesses.split_first() else {
+        if let Some(source_skolems) = source_skolems
+            && !source_skolems.is_empty()
+        {
+            return tycker.err(
+                TyckError::PackageWitnessArityMismatch { expected: source_skolems.len(), found: 0 },
+                std::panic::Location::caller(),
+            );
+        }
         return cs::TermLift { tm: body }.mbuild(tycker, env);
     };
-    let Some((abst, translated_body_ty)) = translated_ty.destruct_exists(tycker) else {
+    let Some((domain_abst, translated_body_ty)) = translated_ty.destruct_exists(tycker) else {
         unreachable!("translated package type must remain existential")
+    };
+    let (source_skolem, remaining_source_skolems) = match source_skolems {
+        | Some(source_skolems) => {
+            let Some((source_skolem, remaining)) = source_skolems.split_first() else {
+                return tycker.err(
+                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
+                    std::panic::Location::caller(),
+                );
+            };
+            (Some(*source_skolem), Some(remaining))
+        }
+        | None => (None, None),
+    };
+
+    let (env, witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
+    let (witness_var, _) = witness.try_destruct_def(tycker);
+    let mut env = env;
+    let pattern_abst = match source_skolem {
+        | Some(source_skolem) => {
+            let pattern_abst = Alloc::alloc(tycker, witness, (), &());
+            tycker.statics.existential_skolems.ensure(pattern_abst);
+            env.ty = env.ty.with_skolem(pattern_abst);
+            env.subst_abst.insert(source_skolem, pattern_abst);
+            pattern_abst
+        }
+        | None => domain_abst,
+    };
+    let (env, abst_ty) = cs::Type(pattern_abst).mbuild(tycker, env)?;
+    let translated_body_ty = if pattern_abst == domain_abst {
+        translated_body_ty
+    } else {
+        translated_body_ty.subst_abst(tycker, (domain_abst, abst_ty))?
     };
     let Type::Prod(Prod(structure_ty, translated_tail_ty)) =
         tycker.type_filled(&translated_body_ty)?.to_owned()
     else {
         unreachable!("translated existential body must contain its structure")
     };
-
-    let (env, witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
-    let (witness_var, _) = witness.try_destruct_def(tycker);
-    let (env, abst_ty) = cs::Type(abst).mbuild(tycker, env)?;
     let mut env = env;
     if let Some(witness_var) = witness_var {
         env.ty += [(witness_var, abst_ty.into())];
     }
-    let (env, structure) = cs::StrPat("str", abst, witness_var).mbuild(tycker, env)?;
-    let (env, body) =
-        package_pattern_translation(tycker, env, remaining, body, translated_tail_ty)?;
+    let (env, structure) = cs::StrPat("str", pattern_abst, witness_var).mbuild(tycker, env)?;
+    let (env, body) = package_pattern_translation(
+        tycker,
+        env,
+        remaining,
+        remaining_source_skolems,
+        body,
+        translated_tail_ty,
+    )?;
     let product = Alloc::alloc(tycker, ConsN(vec![structure], body), translated_body_ty, &env.ty);
     let package = Alloc::alloc(tycker, ConsN(vec![witness], product), translated_ty, &env.ty);
     let _ = structure_ty;
@@ -666,7 +909,7 @@ fn value_pattern_translation(
         }
         | VPat::TCons(vpat) => {
             let ConsN(witnesses, body) = vpat;
-            package_pattern_translation(tycker, env, &witnesses, body, ty_)?
+            package_pattern_translation(tycker, env, &witnesses, None, body, ty_)?
         }
     };
     Ok((env, vpat_))
@@ -751,14 +994,38 @@ fn computation_translation(
         }
         | Compu::VAbs(compu) => {
             let Abs(vpat, compu) = compu;
-            Abs(cs::TermLift { tm: vpat }, move |_def| cs::TermLift { tm: compu })
-                .mbuild(tycker, env)?
+            match ty.destruct_pack_pi(tycker) {
+                | Some(signature) => {
+                    let (env, vpat) = PackPiPatternTranslation::new(vpat, &signature.witnesses)
+                        .translate(tycker, env)?;
+                    let (env, compu) = cs::TermLift { tm: compu }.mbuild(tycker, env)?;
+                    let (env, signature) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+                    let abstraction = PackPiAbstraction { binder: vpat, body: compu, signature }
+                        .build(tycker, &env.ty);
+                    (env, abstraction)
+                }
+                | None => Abs(cs::TermLift { tm: vpat }, move |_def| cs::TermLift { tm: compu })
+                    .mbuild(tycker, env)?,
+            }
         }
         | Compu::VApp(compu) => {
             let App(fun, arg) = compu;
-            let fun_ = cs::TermLift { tm: fun };
-            let arg_ = cs::TermLift { tm: arg };
-            App(fun_, arg_).mbuild(tycker, env)?
+            let fun_ty = tycker.statics.annotations_compu[&fun];
+            match fun_ty.destruct_pack_pi(tycker) {
+                | Some(_) => {
+                    let (env, fun) = cs::TermLift { tm: fun }.mbuild(tycker, env)?;
+                    let (env, arg) = cs::TermLift { tm: arg }.mbuild(tycker, env)?;
+                    let (env, result) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+                    let application = PackPiApplication { function: fun, argument: arg, result }
+                        .build(tycker, &env.ty);
+                    (env, application)
+                }
+                | None => {
+                    let fun_ = cs::TermLift { tm: fun };
+                    let arg_ = cs::TermLift { tm: arg };
+                    App(fun_, arg_).mbuild(tycker, env)?
+                }
+            }
         }
         | Compu::TAbs(compu) => {
             let Abs(tpat, compu) = compu;
