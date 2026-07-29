@@ -112,7 +112,7 @@ Literal: Literal = {
 MixedId: String = { <"UpperId"> => <>.into(), <"LowerId"> => <>.into(), };
 
 VarName: VarName = <MixedId> => VarName(<>);
-FieldName: FieldName = <"LowerId"> => FieldName(<>.into());
+FieldName: FieldName = <name:VarName> => FieldName(name.0);
 CtorName: CtorName = <"CtorId"> => CtorName(<>.into());
 DtorName: DtorName = <"DtorId"> => DtorName(<>.into());
 
@@ -149,6 +149,14 @@ PatternAnn: Pattern = {
     #[precedence(level="1")] #[assoc(side="none")]
     <Ann<PatternGen<PatternAnn>, TermId>> => <>.into(),
 
+    #[precedence(level="2")] #[assoc(side="right")]
+    "=" <l:@L> <field:Sp<FieldName>> <ty:(":" <TermId>)?> <r:@R> => {
+        let ty = ty.map(|ty| Sp {
+            info: Span::new(l, r).under_loc_ctx(loc),
+            inner: ty,
+        });
+        parser.pun_pattern(field, ty)
+    },
     #[precedence(level="2")] #[assoc(side="right")]
     <name:FieldName> "=" <inner:PatternGen<PatternAnn>> => Named(name, inner).into(),
 };
@@ -225,6 +233,14 @@ TermAnn: Term = {
 
     // A name labels one inner term. Named product types compose parenthesized
     // labels with `*`; comma remains ordinary tuple syntax.
+    #[precedence(level="2")] #[assoc(side="right")]
+    "=" <l:@L> <field:Sp<FieldName>> <ty:(":" <TermId>)?> <r:@R> => {
+        let ty = ty.map(|ty| Sp {
+            info: Span::new(l, r).under_loc_ctx(loc),
+            inner: ty,
+        });
+        parser.pun_term(field, ty)
+    },
     #[precedence(level="2")] #[assoc(side="right")]
     <name:FieldName> "=" <inner:TermGen<TermAnn>> => Named(name, inner).into(),
 };

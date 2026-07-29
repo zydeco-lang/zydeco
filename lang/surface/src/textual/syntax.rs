@@ -273,6 +273,33 @@ impl Parser {
         self.arena.terms.insert_new(id, term.inner);
         id
     }
+    /// Expand `= field` into a named term whose payload is the same-spelled
+    /// variable, optionally annotated.
+    pub fn pun_term(&mut self, field: Sp<FieldName>, ty: Option<Sp<TermId>>) -> Term {
+        let variable = self.term(field.mk(VarName(field.inner.0.clone()).into()));
+        let inner = match ty {
+            | Some(ty) => {
+                let annotation = Ann { tm: variable, ty: ty.inner };
+                self.term(ty.mk(annotation.into()))
+            }
+            | None => variable,
+        };
+        Named(field.inner, inner).into()
+    }
+    /// Expand `= field` into a named pattern whose payload is a fresh
+    /// same-spelled binder, optionally annotated.
+    pub fn pun_pattern(&mut self, field: Sp<FieldName>, ty: Option<Sp<TermId>>) -> Pattern {
+        let binder = self.def(field.mk(VarName(field.inner.0.clone())));
+        let variable = self.pat(field.mk(binder.into()));
+        let inner = match ty {
+            | Some(ty) => {
+                let annotation = Ann { tm: variable, ty: ty.inner };
+                self.pat(ty.mk(annotation.into()))
+            }
+            | None => variable,
+        };
+        Named(field.inner, inner).into()
+    }
     /// Allocate a declaration node and record its span.
     pub fn decl(&mut self, decl: Sp<Modifiers<Declaration>>) -> DeclId {
         let id = self.alloc(decl.info);

@@ -33,6 +33,7 @@ interp_proj_bin!(exec, named_pattern, "named-pattern");
 interp_proj_bin!(exec, named_data, "named-data");
 interp_proj_bin!(exec, named_function, "named-function");
 interp_proj_bin!(exec, named_codata, "named-codata");
+interp_proj_bin!(exec, named_pun, "named-pun");
 interp_proj_bin!(exec, named_mixed, "named-mixed");
 interp_proj_bin!(exec, named, "named");
 interp_proj_bin!(exec, num, "num");

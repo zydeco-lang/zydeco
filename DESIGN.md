@@ -61,6 +61,21 @@ Their term and pattern forms use the existing comma tuple syntax:
 (x = p, y = q)
 ```
 
+When a field and a variable or pattern binder have the same name, prefix `=`
+provides field-punning syntax:
+
+```zydeco
+(= x, = y)                 -- equivalent to (x = x, y = y)
+(= x : Int, middle, = y)  -- the annotation describes the payload x
+```
+
+The set of valid field names is exactly the set of valid variable names. The
+parser expands the shorthand directly into `Named` syntax. In a term it creates
+an ordinary same-spelled variable reference; in a pattern it creates an
+ordinary same-spelled binder. Because parsing remains sort-agnostic, the same
+syntax may refer to a type variable in a type position. Non-variable payloads
+must continue to use the explicit `field = term` form.
+
 In particular, `(x = A, y = B)` is not alternate product-type syntax. It is
 parsed as the same comma tuple used in every other term position, and its sort
 and validity are left to type checking. Only `*` forms a product type. This

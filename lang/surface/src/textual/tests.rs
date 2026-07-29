@@ -165,6 +165,94 @@ fn parses_named_term_payload_annotation() {
 }
 
 #[test]
+fn parses_punned_named_terms_and_payload_annotations() {
+    let source = "(= left, middle, = right : Int)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized mixed tuple")
+    };
+    let [left, middle, right] = fields.as_slice() else {
+        panic!("expected three tuple components")
+    };
+
+    let Term::Named(Named(left_name, left)) = &parser.arena.terms[left] else {
+        panic!("expected a punned left component")
+    };
+    let Term::Var(left) = &parser.arena.terms[left] else {
+        panic!("expected the left payload to be a variable")
+    };
+    let Term::Var(middle) = &parser.arena.terms[middle] else {
+        panic!("expected an unnamed middle component")
+    };
+    let Term::Named(Named(right_name, right)) = &parser.arena.terms[right] else {
+        panic!("expected a punned right component")
+    };
+    let Term::Ann(Ann { tm: right, ty }) = &parser.arena.terms[right] else {
+        panic!("expected the right payload to be annotated")
+    };
+    let Term::Var(right) = &parser.arena.terms[right] else {
+        panic!("expected the right payload to be a variable")
+    };
+    let Term::Var(ty) = &parser.arena.terms[ty] else { panic!("expected a variable annotation") };
+
+    assert_eq!(left_name.plain(), "left");
+    assert_eq!(left.plain(), "left");
+    assert_eq!(middle.plain(), "middle");
+    assert_eq!(right_name.plain(), "right");
+    assert_eq!(right.plain(), "right");
+    assert_eq!(ty.plain(), "Int");
+}
+
+#[test]
+fn field_names_and_puns_accept_uppercase_variable_names() {
+    let source = "(Explicit = payload, = Inferred)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized named tuple")
+    };
+    let [explicit, inferred] = fields.as_slice() else { panic!("expected two named components") };
+    let Term::Named(Named(explicit_name, explicit)) = &parser.arena.terms[explicit] else {
+        panic!("expected an explicit named component")
+    };
+    let Term::Var(explicit) = &parser.arena.terms[explicit] else {
+        panic!("expected an explicit variable payload")
+    };
+    let Term::Named(Named(inferred_name, inferred)) = &parser.arena.terms[inferred] else {
+        panic!("expected a punned named component")
+    };
+    let Term::Var(inferred) = &parser.arena.terms[inferred] else {
+        panic!("expected a punned variable payload")
+    };
+
+    assert_eq!(explicit_name.plain(), "Explicit");
+    assert_eq!(explicit.plain(), "payload");
+    assert_eq!(inferred_name.plain(), "Inferred");
+    assert_eq!(inferred.plain(), "Inferred");
+}
+
+#[test]
+fn rejects_punning_a_non_variable_term() {
+    let source = "(= 1)";
+    let mut parser = Parser::new();
+    let parsed = parser::SingleTermParser::new().parse(
+        source,
+        &LocationCtx::Plain,
+        &mut parser,
+        lexer::Lexer::new(source),
+    );
+
+    assert!(parsed.is_err());
+}
+
+#[test]
 fn parses_chained_named_terms() {
     let source = "(outer = inner = 1)";
     let mut parser = Parser::new();
@@ -243,6 +331,49 @@ fn parses_named_pattern_payload_annotation() {
     assert_eq!(name.plain(), "name");
     assert_eq!(parser.arena.defs[payload].plain(), "payload");
     assert!(matches!(parser.arena.terms[ty], Term::Hole(Hole)));
+}
+
+#[test]
+fn parses_punned_named_patterns_and_payload_annotations() {
+    let source = "(= left : Int, middle, = right)";
+    let mut parser = Parser::new();
+    let pattern = parser::SinglePatternParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Pattern::Paren(Paren(fields)) = &parser.arena.pats[&pattern] else {
+        panic!("expected a parenthesized mixed tuple pattern")
+    };
+    let [left, middle, right] = fields.as_slice() else {
+        panic!("expected three tuple pattern components")
+    };
+
+    let Pattern::Named(Named(left_name, left)) = &parser.arena.pats[left] else {
+        panic!("expected a punned left pattern")
+    };
+    let Pattern::Ann(Ann { tm: left, ty }) = &parser.arena.pats[left] else {
+        panic!("expected the left payload to be annotated")
+    };
+    let Pattern::Var(left) = &parser.arena.pats[left] else {
+        panic!("expected the left payload to be a variable pattern")
+    };
+    let Term::Var(ty) = &parser.arena.terms[ty] else { panic!("expected a variable annotation") };
+    let Pattern::Var(middle) = &parser.arena.pats[middle] else {
+        panic!("expected an unnamed middle pattern")
+    };
+    let Pattern::Named(Named(right_name, right)) = &parser.arena.pats[right] else {
+        panic!("expected a punned right pattern")
+    };
+    let Pattern::Var(right) = &parser.arena.pats[right] else {
+        panic!("expected the right payload to be a variable pattern")
+    };
+
+    assert_eq!(left_name.plain(), "left");
+    assert_eq!(parser.arena.defs[left].plain(), "left");
+    assert_eq!(ty.plain(), "Int");
+    assert_eq!(parser.arena.defs[middle].plain(), "middle");
+    assert_eq!(right_name.plain(), "right");
+    assert_eq!(parser.arena.defs[right].plain(), "right");
 }
 
 #[test]

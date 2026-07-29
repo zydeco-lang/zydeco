@@ -37,6 +37,7 @@ bins = [
     "named-data.zy",
     "named-function.zy",
     "named-codata.zy",
+    "named-pun.zy",
     "named-mixed.zy",
     "named.zy",
     "num.zy",
