@@ -93,10 +93,7 @@ impl Tycker<'_> {
                     | AnnId::Set | AnnId::Kind(_) => unreachable!(),
                 };
                 let pat_out_ann = env.mk(binder).tyck_k(self, Action::ana(ty.into()))?;
-                let binder = match pat_out_ann.annotation {
-                    | PatAnnId::Type(_, _) => unreachable!(),
-                    | PatAnnId::Value(vpat, _) => vpat,
-                };
+                let (binder, _) = pat_out_ann.as_value();
                 self.statics.decls.insert_new(*id, VAliasHead { binder, ty }.into());
 
                 // should NOT be added to global

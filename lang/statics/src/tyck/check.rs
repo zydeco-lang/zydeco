@@ -1,8 +1,8 @@
-use derive_more::{AsMut, AsRef};
+use derive_more::{AsMut, AsRef, Deref};
 use {
     super::{
         arena::StaticsScope,
-        syntax::{AnnId, Fillable, PatAnnId, PatternElaboration, StaticsArena, TermAnnId, TyEnvT},
+        syntax::{AbstId, AnnId, Fillable, PatAnnId, StaticsArena, TermAnnId, TyEnvT},
         *,
     },
     crate::{
@@ -34,13 +34,49 @@ pub struct Tycker<'a> {
     pub errors: Vec<TyckErrorEntry>,
 }
 
-impl PatternElaboration {
+/// Non-contextual output of the pattern-checking judgment.
+///
+/// The surrounding [`TyEnvT`] carries the environment after the pattern. This
+/// payload records only the checked pattern and the existential identities it
+/// opened, in source order.
+#[derive(Clone, Debug, Deref)]
+pub struct PatternCheck {
+    #[deref]
+    annotation: PatAnnId,
+    opened: Vec<AbstId>,
+}
+
+/// A checked pattern paired with the environment it makes available to its
+/// body.
+pub type CheckedPattern = TyEnvT<PatternCheck>;
+
+impl PatternCheck {
+    fn new(annotation: PatAnnId) -> Self {
+        Self { annotation, opened: Vec::new() }
+    }
+
+    fn with_opened(annotation: PatAnnId, opened: Vec<AbstId>) -> Self {
+        Self { annotation, opened }
+    }
+}
+
+trait CheckedPatternExt {
+    fn with_annotation(self, annotation: PatAnnId) -> Self;
+    fn close_scope_k(&self, tycker: &mut Tycker<'_>, result: ss::TypeId) -> ResultKont<()>;
+}
+
+impl CheckedPatternExt for CheckedPattern {
+    fn with_annotation(self, annotation: PatAnnId) -> Self {
+        let TyEnvT { info, inner } = self;
+        TyEnvT::new(info, PatternCheck::with_opened(annotation, inner.opened))
+    }
+
     #[track_caller]
     fn close_scope_k(&self, tycker: &mut Tycker<'_>, result: ss::TypeId) -> ResultKont<()> {
-        if self.skolems.is_empty() {
+        if self.inner.opened.is_empty() {
             return Ok(());
         }
-        let outer = self.env.skolem_scope().without(&self.skolems);
+        let outer = self.info.skolem_scope().without(&self.inner.opened);
         result.constrain_to_scope_k(tycker, &outer)
     }
 }
@@ -314,6 +350,19 @@ impl<Ann> Action<Ann> {
 pub struct Assign<Br, Be>(pub Br, pub Be);
 pub struct FixPoint<T>(pub T);
 
+/// Formation input for a computation type with an elaborated value-pattern
+/// domain.
+struct ValuePiFormation {
+    binder: CheckedPattern,
+    codomain: su::TermId,
+}
+
+impl ValuePiFormation {
+    fn new(binder: CheckedPattern, codomain: su::TermId) -> Self {
+        Self { binder, codomain }
+    }
+}
+
 impl<'a> Tyck<'a> for TyEnvT<SccGroup<su::DeclId>> {
     type Out = TyEnvT<()>;
     type Action = ();
@@ -469,7 +518,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
                 let (binder, _) = binder_elaboration.as_value();
                 // Existential package patterns introduce abstract types whose
                 // scope extends over the following declarations.
-                env.info = binder_elaboration.env;
+                env.info = binder_elaboration.info;
                 tycker
                     .statics
                     .decls
@@ -594,7 +643,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
 }
 
 impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
-    type Out = PatternElaboration;
+    type Out = CheckedPattern;
     type Action = Action<AnnId>;
 
     fn tyck_k(
@@ -653,10 +702,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                 match switch {
                     | Switch::Syn => tycker
                         .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
-                    | Switch::Ana(ann) => PatternElaboration::new(
-                        PatAnnId::mk_hole(tycker, &self.info, ann),
-                        self.info.clone(),
-                    ),
+                    | Switch::Ana(ann) => {
+                        self.mk(PatternCheck::new(PatAnnId::mk_hole(tycker, &self.info, ann)))
+                    }
                 }
             }
             | Pat::Var(def) => {
@@ -683,10 +731,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     tycker.statics.annotations_var.replace_existing(def, ann);
                 }
 
-                PatternElaboration::new(
-                    PatAnnId::mk_var(tycker, &self.info, def, ann),
-                    self.info.clone(),
-                )
+                self.mk(PatternCheck::new(PatAnnId::mk_var(tycker, &self.info, def, ann)))
             }
             | Pat::Named(pat) => {
                 let su::Named(name, inner) = pat;
@@ -800,7 +845,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     }
                 };
                 let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
-                PatternElaboration::new(PatAnnId::Value(triv, ann), self.info.clone())
+                self.mk(PatternCheck::new(PatAnnId::Value(triv, ann)))
             }
             | Pat::Cons(pat) => {
                 let su::ConsN(items, tail) = pat;
@@ -812,7 +857,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     | ss::Type::Prod(_) => {
                         let mut expected_item = expected_view;
                         let mut pattern_env = self.info.clone();
-                        let mut skolems = Vec::new();
+                        let mut opened = Vec::new();
                         let mut output = Vec::with_capacity(items.len());
                         let mut annotations = Vec::with_capacity(items.len());
                         for item in items {
@@ -838,8 +883,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 TyckError::SortMismatch,
                                 std::panic::Location::caller(),
                             )?;
-                            pattern_env = checked.env;
-                            skolems.extend(checked.skolems);
+                            pattern_env = checked.info;
+                            opened.extend(checked.inner.opened);
                             output.push(item);
                             annotations.push(annotation);
                         }
@@ -851,25 +896,24 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             TyckError::SortMismatch,
                             std::panic::Location::caller(),
                         )?;
-                        pattern_env = checked.env;
-                        skolems.extend(checked.skolems);
+                        pattern_env = checked.info;
+                        opened.extend(checked.inner.opened);
                         let vtype = ss::VType.build(tycker, &pattern_env);
                         let ann = annotations.into_iter().rev().fold(ann, |ann, head| {
                             Alloc::alloc(tycker, ss::Prod(head, ann), vtype, &pattern_env)
                         });
                         let cons = Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &self.info);
-                        PatternElaboration {
-                            annotation: PatAnnId::Value(cons, ann),
-                            env: pattern_env,
-                            skolems,
-                        }
+                        TyEnvT::new(
+                            pattern_env,
+                            PatternCheck::with_opened(PatAnnId::Value(cons, ann), opened),
+                        )
                     }
                     | ss::Type::Exists(_) => {
                         let mut body_env = self.info.clone();
                         let mut body_ty = expected;
                         let mut body_index = items.len();
                         let mut witnesses = Vec::new();
-                        let mut skolems = Vec::new();
+                        let mut opened = Vec::new();
                         for (index, item) in items.iter().copied().enumerate() {
                             let view = body_ty.unroll_k(tycker)?.subst_env_k(tycker, &body_env)?;
                             let ss::Type::Exists(ss::Exists(source_abst, next_ty)) =
@@ -886,8 +930,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 TyckError::SortMismatch,
                                 std::panic::Location::caller(),
                             )?;
-                            body_env = checked.env;
-                            skolems.extend(checked.skolems);
+                            body_env = checked.info;
+                            opened.extend(checked.inner.opened);
 
                             // Every package opening gets a distinct abstract type.
                             // The existential's binder describes the package type;
@@ -901,7 +945,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             }
                             body_ty = next_ty.subst_abst_k(tycker, (source_abst, abstract_ty))?;
                             witnesses.push(witness);
-                            skolems.push(skolem);
+                            opened.push(skolem);
                         }
 
                         if witnesses.is_empty() {
@@ -923,8 +967,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 TyckError::SortMismatch,
                                 std::panic::Location::caller(),
                             )?;
-                            body_env = checked.env;
-                            skolems.extend(checked.skolems);
+                            body_env = checked.info;
+                            opened.extend(checked.inner.opened);
                             body
                         } else {
                             let body_view =
@@ -967,8 +1011,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
                                 )?;
-                                body_env = checked.env;
-                                skolems.extend(checked.skolems);
+                                body_env = checked.info;
+                                opened.extend(checked.inner.opened);
                                 output.push(item);
                                 annotations.push(annotation);
                             }
@@ -980,8 +1024,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 TyckError::SortMismatch,
                                 std::panic::Location::caller(),
                             )?;
-                            body_env = checked.env;
-                            skolems.extend(checked.skolems);
+                            body_env = checked.info;
+                            opened.extend(checked.inner.opened);
                             let vtype = ss::VType.build(tycker, &body_env);
                             let ann = annotations.into_iter().rev().fold(ann, |ann, head| {
                                 Alloc::alloc(tycker, ss::Prod(head, ann), vtype, &body_env)
@@ -990,11 +1034,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                         };
                         let cons =
                             Alloc::alloc(tycker, ss::ConsN(witnesses, body), expected, &self.info);
-                        PatternElaboration {
-                            annotation: PatAnnId::Value(cons, expected),
-                            env: body_env,
-                            skolems,
-                        }
+                        TyEnvT::new(
+                            body_env,
+                            PatternCheck::with_opened(PatAnnId::Value(cons, expected), opened),
+                        )
                     }
                     | _ => tycker.err_k(
                         TyckError::TypeExpected {
@@ -1038,6 +1081,50 @@ impl<'a> Tyck<'a> for TyEnvT<Assign<ss::TPatId, ss::TypeId>> {
                 Ok(TyEnvT { info: env, inner: () })
             }
         }
+    }
+}
+
+impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
+    type Out = TermAnnId;
+    type Action = Action<AnnId>;
+
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+        let ValuePiFormation { binder, codomain } = &self.inner;
+        let (pattern, domain) =
+            binder.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        if pattern.syntactically_used(tycker) {
+            tycker.err_k(
+                TyckError::Expressivity("dependent types are not supported yet"),
+                std::panic::Location::caller(),
+            )?
+        }
+
+        let domain_kind = tycker.statics.annotations_type[&domain];
+        let vtype = ss::VType.build(tycker, &self.info);
+        Lub::lub_k(vtype, domain_kind, tycker)?;
+
+        let codomain = TyEnvT::new(binder.info.clone(), *codomain).tyck_k(tycker, action)?;
+        let (codomain, codomain_kind) = codomain.try_as_type(
+            tycker,
+            TyckError::SortMismatch,
+            std::panic::Location::caller(),
+        )?;
+        let ctype = ss::CType.build(tycker, &self.info);
+        Lub::lub_k(ctype, codomain_kind, tycker)?;
+
+        let pi = match binder.inner.opened.split_first() {
+            | None => Alloc::alloc(tycker, ss::Arrow(domain, codomain), ctype, &self.info),
+            | Some((first, rest)) => {
+                let witnesses = ss::PackTelescope::new(*first, rest.iter().copied());
+                Alloc::alloc(
+                    tycker,
+                    ss::PackPi::new(domain, witnesses, codomain),
+                    ctype,
+                    &self.info,
+                )
+            }
+        };
+        Ok(TermAnnId::Type(pi, ctype))
     }
 }
 
@@ -1713,7 +1800,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             }
                             | PatAnnId::Value(vpat, ty) => {
                                 // a term-term function
-                                let body_out_ann = TyEnvT::new(pat_out_ann.env.clone(), body)
+                                let body_out_ann = TyEnvT::new(pat_out_ann.info.clone(), body)
                                     .tyck_k(tycker, Action::syn())?;
                                 let (compu, body_ty) = body_out_ann.try_as_compu(
                                     tycker,
@@ -1784,7 +1871,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             std::panic::Location::caller(),
                                         )?;
                                         let body_out_ann =
-                                            TyEnvT::new(binder_elaboration.env.clone(), body)
+                                            TyEnvT::new(binder_elaboration.info.clone(), body)
                                                 .tyck_k(tycker, Action::ana(ty_2.into()))?;
                                         let (body_out, body_ty) = body_out_ann.try_as_compu(
                                             tycker,
@@ -2024,7 +2111,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     let ss::App(_ret_ty, body_ty) = ret_app_body_ty;
                     (binder, body_ty)
                 };
-                let body_out_ann = TyEnvT::new(binder_elaboration.env.clone(), body)
+                let body_out_ann = TyEnvT::new(binder_elaboration.info.clone(), body)
                     .tyck_k(tycker, Action::ana(binder_ty.into()))?;
                 let (body_out, fix_ty) = body_out_ann.try_as_compu(
                     tycker,
@@ -2092,33 +2179,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         )?,
                                 }
                             }
-                            | PatAnnId::Value(vpat, ty_1) => {
-                                // type arrow; vpat should not be used
-                                if vpat.syntactically_used(tycker) {
-                                    tycker.err_k(
-                                        TyckError::Expressivity(
-                                            "dependent types are not supported yet",
-                                        ),
-                                        std::panic::Location::caller(),
-                                    )?
-                                }
-                                let kd_1 = tycker.statics.annotations_type[&ty_1].to_owned();
-                                // kd_1 should be of vtype
-                                let vtype = ss::VType.build(tycker, &self.info);
-                                Lub::lub_k(vtype, kd_1, tycker)?;
-                                let ty_2 = self.mk(body).tyck_k(tycker, Action::syn())?;
-                                let (ty_2, kd_2) = ty_2.try_as_type(
-                                    tycker,
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?;
-                                // kd_2 should be of ctype
-                                let ctype = ss::CType.build(tycker, &self.info);
-                                Lub::lub_k(ctype, kd_2, tycker)?;
-                                let arr =
-                                    Alloc::alloc(tycker, ss::Arrow(ty_1, ty_2), ctype, &self.info);
-                                TermAnnId::Type(arr, ctype)
-                            }
+                            | PatAnnId::Value(_, _) => self
+                                .mk(ValuePiFormation::new(binder_out_ann, body))
+                                .tyck_k(tycker, Action::syn())?,
                         }
                     }
                     | Switch::Ana(ana) => match ana {
@@ -2168,39 +2231,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             );
                                             TermAnnId::Type(forall, ctype)
                                         }
-                                        | PatAnnId::Value(vpat, ty_1) => {
-                                            // type arrow; vpat should not be used
-                                            if vpat.syntactically_used(tycker) {
-                                                tycker.err_k(
-                                                    TyckError::Expressivity(
-                                                        "dependent types are not supported yet",
-                                                    ),
-                                                    std::panic::Location::caller(),
-                                                )?
-                                            }
-                                            let kd_1 =
-                                                tycker.statics.annotations_type[&ty_1].to_owned();
-                                            // kd_1 should be of vtype
-                                            let vtype = ss::VType.build(tycker, &self.info);
-                                            Lub::lub_k(vtype, kd_1, tycker)?;
-                                            // synthesize the body as ty_2, which should be of ctype
+                                        | PatAnnId::Value(_, _) => {
                                             let ctype = ss::CType.build(tycker, &self.info);
-                                            let ty_2 = self
-                                                .mk(body)
-                                                .tyck_k(tycker, Action::ana(ctype.into()))?;
-                                            let (ty_2, _ctype) = ty_2.try_as_type(
-                                                tycker,
-                                                TyckError::SortMismatch,
-                                                std::panic::Location::caller(),
-                                            )?;
-                                            let ctype = ss::CType.build(tycker, &self.info);
-                                            let arr = Alloc::alloc(
-                                                tycker,
-                                                ss::Arrow(ty_1, ty_2),
-                                                ctype,
-                                                &self.info,
-                                            );
-                                            TermAnnId::Type(arr, ctype)
+                                            self.mk(ValuePiFormation::new(binder_out_ann, body))
+                                                .tyck_k(tycker, Action::ana(ctype.into()))?
                                         }
                                     }
                                 }
@@ -2442,7 +2476,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let (binder_out, _binder_ty) = binder_elaboration.as_value();
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
-                    let tail_out_ann = TyEnvT::new(binder_elaboration.env.clone(), tail)
+                    let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
                         .tyck_k(tycker, Action::switch(switch))?;
                     tail_out_ann.try_as_compu(
                         tycker,
@@ -2521,7 +2555,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         }
                         // finally, we tyck the tail
                         let (tail_out, tail_ty) = {
-                            let tail_out_ann = TyEnvT::new(binder_elaboration.env.clone(), tail)
+                            let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
                                 .tyck_k(tycker, Action::switch(switch))?;
                             tail_out_ann.try_as_compu(
                                 tycker,
@@ -2732,7 +2766,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     )?;
                     match switch {
                         | Switch::Syn => {
-                            let tail_out_ann = TyEnvT::new(binder_elaboration.env.clone(), tail)
+                            let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
                                 .tyck_k(tycker, Action::syn())?;
                             let TermAnnId::Compu(tail, ty) = tail_out_ann else {
                                 tycker.err_k(
@@ -2745,7 +2779,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             arms_ty.push(ty);
                         }
                         | Switch::Ana(ana_ty) => {
-                            let tail_out_ann = TyEnvT::new(binder_elaboration.env.clone(), tail)
+                            let tail_out_ann = TyEnvT::new(binder_elaboration.info.clone(), tail)
                                 .tyck_k(tycker, Action::ana(ana_ty))?;
                             let TermAnnId::Compu(tail, ty) = tail_out_ann else {
                                 tycker.err_k(
