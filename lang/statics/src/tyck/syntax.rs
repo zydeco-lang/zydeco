@@ -407,12 +407,18 @@ pub enum Value {
 
 /// A statically resolved named projection.
 ///
-/// `position` is absent when projection merely removes a direct `Named`
-/// wrapper, and present when selecting a component from a product spine.
+/// The field name remains available for typed formatting, while `target`
+/// records how the projection is erased.
 #[derive(Clone, Debug)]
 pub struct ResolvedField {
     pub name: FieldName,
-    pub position: Option<usize>,
+    pub target: ProjTarget,
+}
+
+#[derive(Clone, Debug)]
+pub enum ProjTarget {
+    Direct,
+    Product(usize),
 }
 
 /* ------------------------------- Computation ------------------------------ */

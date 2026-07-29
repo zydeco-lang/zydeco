@@ -1,0 +1,32 @@
+-- Flat products may freely mix named and unnamed components. Projection skips
+-- unnamed components but preserves their physical positions.
+alias Mixed =
+  (left = Int) * (Int * (right = Int))
+end
+
+def mixed : Mixed = (
+  left = 2 : Int,
+  3 : Int,
+  right = 4 : Int
+) end
+
+main
+  let (
+    left = left : Int,
+    middle : Int,
+    right = right : Int
+  ) = mixed in
+
+  do tens <- ! mul middle 10;
+  do hundreds <- ! mul right 100;
+  do low <- ! add left tens;
+  do checksum <- ! add low hundreds;
+  do layout_check <- ! sub checksum 432;
+
+  do left_projection_check <- ! sub mixed/left 2;
+  do right_projection_check <- ! sub mixed/right 4;
+
+  do total <- ! add layout_check left_projection_check;
+  do total <- ! add total right_projection_check;
+  ! exit total
+end

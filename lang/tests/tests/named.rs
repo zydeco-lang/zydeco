@@ -51,6 +51,59 @@ end
 }
 
 #[test]
+fn rejects_named_pattern_on_unnamed_mixed_component() {
+    NamedCase::assert_type_error(
+        r#"
+alias Mixed = (left = Int) * (Int * (right = Int)) end
+def value : Mixed = (left = 1, 2, right = 3) end
+main
+  let (
+    left = left : Int,
+    middle = middle : Int,
+    right = right : Int
+  ) = value in
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_mismatched_named_pattern_in_nested_mixed_product() {
+    NamedCase::assert_type_error(
+        r#"
+alias Nested = ((left = Int) * Int) * (right = Int) end
+def value : Nested = ((left = 1, 2), right = 3) end
+main
+  let (
+    (wrong = left : Int, middle : Int),
+    right = right : Int
+  ) = value in
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
+fn rejects_incompatible_named_payload_annotation_in_mixed_pattern() {
+    NamedCase::assert_type_error(
+        r#"
+alias Mixed = (left = Int) * (Int * (right = Int)) end
+def value : Mixed = (left = 1, 2, right = 3) end
+main
+  let (
+    left = left : String,
+    middle : Int,
+    right = right : Int
+  ) = value in
+  ! exit 0
+end
+"#,
+    );
+}
+
+#[test]
 fn rejects_named_computation_type_during_type_checking() {
     NamedCase::assert_type_error(
         r#"

@@ -24,6 +24,8 @@ bins = [
     "tuple.zy",
     "tuple-do.zy",
     "triple.zy",
+    "named-mixed.zy",
+    "named.zy",
     "sum.zy",
     "fact.zy",
     # stackir

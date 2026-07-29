@@ -83,7 +83,9 @@ sort to type checking. Named projection uses postfix slash syntax:
 ordinary lexical or global name resolution, while field labels are checked
 statically rather than resolved as variables. Slash is reserved exclusively
 for named projection; dot remains exclusively the elimination syntax for
-computation destructors, preserving the value/computation distinction.
+computation destructors, preserving the value/computation distinction. Slash
+binds tighter than application, so `f value/field` means
+`f (value/field)`.
 
 Named projection accepts a directly named value or searches only the immediate
 product spine. It requires exactly one matching field and exposes the payload
@@ -91,6 +93,12 @@ beneath `Named`; missing and duplicate matches are distinct type errors.
 Reusing slash is intentional: named terms internalize namespace-like name
 management in the expression language instead of introducing a parallel
 projection mechanism for each sort or abstraction level.
+
+Named structure does not enter StackIR. Type checking resolves each projection
+either to the payload of a directly named value or to a physical product
+position. Lowering erases the former as an identity and the latter as an
+ordinary full-arity tuple pattern and `let`; subsequent backends therefore see
+only the existing tuple representation and layout.
 
 ### Source Organization and Modules
 

@@ -1,8 +1,8 @@
 use crate::textual::{
     arena::TextualScope,
     syntax::{
-        Ann, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Literal, Named, Paren, Parser, PatId,
-        Pattern, Prod, Proj, Term, TermId,
+        Ann, Appli, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Literal, Named, Paren, Parser,
+        PatId, Pattern, Prod, Proj, Term, TermId,
     },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
@@ -293,6 +293,37 @@ fn parses_chained_named_projection() {
     assert_eq!(rectangle.plain(), "rectangle");
     assert_eq!(top_left.plain(), "top_left");
     assert_eq!(x.plain(), "x");
+}
+
+#[test]
+fn named_projection_binds_tighter_than_application() {
+    let source = "service/inspect rectangle/top_left";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::App(Appli(items)) = &parser.arena.terms[&term] else {
+        panic!("expected an application")
+    };
+    let [function, argument] = items.as_slice() else { panic!("expected a binary application") };
+    let Term::Proj(Proj(function, function_field)) = &parser.arena.terms[function] else {
+        panic!("expected the application function to be a projection")
+    };
+    let Term::Var(function) = &parser.arena.terms[function] else {
+        panic!("expected a variable function receiver")
+    };
+    let Term::Proj(Proj(receiver, field)) = &parser.arena.terms[argument] else {
+        panic!("expected the application argument to be a projection")
+    };
+    let Term::Var(receiver) = &parser.arena.terms[receiver] else {
+        panic!("expected a variable projection receiver")
+    };
+
+    assert_eq!(function.plain(), "service");
+    assert_eq!(function_field.plain(), "inspect");
+    assert_eq!(receiver.plain(), "rectangle");
+    assert_eq!(field.plain(), "top_left");
 }
 
 #[test]

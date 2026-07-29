@@ -1,0 +1,29 @@
+-- Data constructors treat a named tuple as an ordinary payload type.
+data Packet where
+  | +Packet : (tag = Int) * (Int * (payload = Int))
+  | +Empty : Unit
+end
+
+def packet : Packet = +Packet(
+  tag = 7 : Int,
+  8 : Int,
+  payload = 9 : Int
+) end
+
+main
+  match packet
+  | +Packet(
+      tag = tag : Int,
+      body : Int,
+      payload = payload : Int
+    ) ->
+    do tag_check <- ! sub tag 7;
+    do body_check <- ! sub body 8;
+    do payload_check <- ! sub payload 9;
+    do total <- ! add tag_check body_check;
+    do total <- ! add total payload_check;
+    ! exit total
+  | +Empty() ->
+    ! exit 1
+  end
+end

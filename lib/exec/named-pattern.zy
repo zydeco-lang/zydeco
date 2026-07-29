@@ -1,0 +1,54 @@
+-- Named components support payload annotations, opaque variable bindings,
+-- whole-pattern annotations, and holes alongside unnamed patterns.
+alias PatternTarget =
+  (left = Int) * (Int * (right = Int))
+end
+
+def pattern_target : PatternTarget = (
+  left = 1,
+  2,
+  right = 3
+) end
+
+main
+  -- Payload annotations on named patterns coexist with an annotated unnamed
+  -- component.
+  let (
+    left = direct_left : Int,
+    direct_middle : Int,
+    right = direct_right : Int
+  ) = pattern_target in
+
+  -- Variable patterns may bind named values without opening them.
+  let (
+    left_field : (left = Int),
+    opaque_middle : Int,
+    right_field : (right = Int)
+  ) = pattern_target in
+
+  -- The field can later be opened with either an annotation on the complete
+  -- named pattern or an annotation on only its payload.
+  let ((left = opaque_left) : (left = Int)) = left_field in
+  let (right = opaque_right : Int) = right_field in
+
+  -- Holes still check the surrounding field labels and product structure.
+  let (
+    left = _,
+    _,
+    right = _
+  ) = pattern_target in
+
+  do direct_left_check <- ! sub direct_left 1;
+  do direct_middle_check <- ! sub direct_middle 2;
+  do direct_right_check <- ! sub direct_right 3;
+  do opaque_left_check <- ! sub opaque_left 1;
+  do opaque_middle_check <- ! sub opaque_middle 2;
+  do opaque_right_check <- ! sub opaque_right 3;
+
+  do total <- ! add direct_left_check direct_middle_check;
+  do total <- ! add total direct_right_check;
+  do total <- ! add total opaque_left_check;
+  do total <- ! add total opaque_middle_check;
+  do total <- ! add total opaque_right_check;
+  ! exit total
+end

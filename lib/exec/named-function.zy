@@ -1,0 +1,43 @@
+-- Arrows do not gain special named-field behavior. Their ordinary value
+-- parameter and result types may contain names, and a thunked arrow may occupy
+-- a named tuple component.
+alias Arguments =
+  (lhs = Int) * Int
+end
+
+alias FunctionResult =
+  Int * (sum = Int)
+end
+
+alias FunctionBox =
+  (apply = Thunk (Arguments -> Ret FunctionResult)) * Int
+end
+
+def combine : Thunk (Arguments -> Ret FunctionResult) = {
+  fn (lhs = lhs : Int, rhs : Int) ->
+    do sum <- ! add lhs rhs;
+    ret (lhs, sum = sum : Int)
+} end
+
+def function_box : FunctionBox = (
+  apply = combine,
+  0
+) end
+
+main
+  let (
+    apply = apply : Thunk (Arguments -> Ret FunctionResult),
+    marker : Int
+  ) = function_box in
+  do result <- ! apply (lhs = 10 : Int, 11 : Int);
+  let (
+    echoed : Int,
+    sum = sum : Int
+  ) = result in
+
+  do echoed_check <- ! sub echoed 10;
+  do sum_check <- ! sub sum 21;
+  do total <- ! add marker echoed_check;
+  do total <- ! add total sum_check;
+  ! exit total
+end

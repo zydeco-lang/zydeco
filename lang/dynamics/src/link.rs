@@ -144,9 +144,9 @@ impl Link for ss::ValueId {
             }
             | Value::Proj(Proj(head, field)) => {
                 let head = head.link(statics);
-                match field.position {
-                    | Some(position) => Proj(head, position).into(),
-                    | None => head.as_ref().to_owned(),
+                match field.target {
+                    | ss::ProjTarget::Product(position) => Proj(head, position).into(),
+                    | ss::ProjTarget::Direct => head.as_ref().to_owned(),
                 }
             }
             | Value::Lit(lit) => lit.to_owned().into(),

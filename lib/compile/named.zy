@@ -1,3 +1,6 @@
+pub extern def add : Thk (Int -> Int -> Ret Int) end
+pub extern def exit : Thk (Int -> OS) end
+
 alias Point = (x = Int) * (y = Int) end
 alias Rectangle = (top_left = Point) * (status = Int) end
 alias Triple = (first = Int) * ((middle = Int) * (last = Int)) end

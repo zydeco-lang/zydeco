@@ -2852,7 +2852,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     std::panic::Location::caller(),
                 )?;
                 let head_view = head_ty.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                let (position, projected_ty) = match tycker.type_filled_k(&head_view)?.to_owned() {
+                let (target, projected_ty) = match tycker.type_filled_k(&head_view)?.to_owned() {
                     | ss::Type::Named(ss::Named(found, projected_ty)) => {
                         if name != found {
                             tycker.err_k(
@@ -2863,7 +2863,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 std::panic::Location::caller(),
                             )?
                         }
-                        (None, projected_ty)
+                        (ss::ProjTarget::Direct, projected_ty)
                     }
                     | ss::Type::Prod(_) => {
                         let mut next = Some(head_view);
@@ -2913,7 +2913,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 },
                                 std::panic::Location::caller(),
                             )?,
-                            | [(position, projected_ty)] => (Some(*position), *projected_ty),
+                            | [(position, projected_ty)] => {
+                                (ss::ProjTarget::Product(*position), *projected_ty)
+                            }
                             | _ => tycker.err_k(
                                 TyckError::DuplicateNamedField {
                                     field: name.clone(),
@@ -2937,7 +2939,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 };
-                let field = ss::ResolvedField { name, position };
+                let field = ss::ResolvedField { name, target };
                 let projected =
                     Alloc::alloc(tycker, ss::Proj(head, field), projected_ty, &self.info);
                 TermAnnId::Value(projected, projected_ty)

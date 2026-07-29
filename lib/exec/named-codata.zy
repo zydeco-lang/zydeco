@@ -1,0 +1,50 @@
+-- Codata destructors remain dot eliminations. Their arguments and results may
+-- use named value types, and slash can project from a returned named value.
+codata Gauge where
+  | .read : Ret ((reading = Int) * Int)
+  | .shift : (delta = Int) -> Ret (reading = Int)
+end
+
+alias GaugeBox =
+  Int * (gauge = Thunk Gauge)
+end
+
+def gauge : Thunk Gauge = {
+  comatch
+  | .read ->
+    ret (reading = 12 : Int, 13 : Int)
+  | .shift (delta = delta : Int) ->
+    ret (reading = delta : Int)
+  end
+} end
+
+def gauge_box : GaugeBox = (
+  0,
+  gauge = gauge
+) end
+
+main
+  let (
+    marker : Int,
+    gauge = active_gauge : Thunk Gauge
+  ) = gauge_box in
+
+  do observation <- ! active_gauge .read;
+  let (
+    reading = reading : Int,
+    drift : Int
+  ) = observation in
+  do reading_check <- ! sub reading 12;
+  do drift_check <- ! sub drift 13;
+
+  do shifted <- ! active_gauge .shift (delta = 14 : Int);
+  let (reading = shifted_reading : Int) = shifted in
+  do shifted_pattern_check <- ! sub shifted_reading 14;
+  do shifted_projection_check <- ! sub shifted/reading 14;
+
+  do total <- ! add marker reading_check;
+  do total <- ! add total drift_check;
+  do total <- ! add total shifted_pattern_check;
+  do total <- ! add total shifted_projection_check;
+  ! exit total
+end

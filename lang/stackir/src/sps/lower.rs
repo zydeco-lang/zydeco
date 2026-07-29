@@ -2,13 +2,64 @@ use super::syntax::*;
 use derive_more::{AsMut, AsRef};
 use zydeco_statics::{tyck::arena::StaticsArena, tyck::syntax as ss};
 use zydeco_surface::{scoped::arena::ScopedArena, textual::arena::SpanArena};
-use zydeco_utils::{pass::CompilerPass, phantom::Phantom};
+use zydeco_utils::pass::CompilerPass;
 
 /// Lower typed syntax nodes into stack IR.
-pub trait Lower {
+trait Lower {
     type Kont;
     type Out;
     fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out;
+}
+
+#[derive(Clone)]
+struct ValueBinding {
+    binder: VPatId,
+    bindee: ValueId,
+    site: Option<ss::TermId>,
+}
+
+#[derive(Clone)]
+struct ValuePlan<T> {
+    bindings: Vec<ValueBinding>,
+    value: T,
+}
+
+impl<T> ValuePlan<T> {
+    fn pure(value: T) -> Self {
+        Self { bindings: Vec::new(), value }
+    }
+
+    fn map<U>(self, f: impl FnOnce(T) -> U) -> ValuePlan<U> {
+        let Self { bindings, value } = self;
+        ValuePlan { bindings, value: f(value) }
+    }
+
+    fn with_binding<U>(self, binding: ValueBinding, value: U) -> ValuePlan<U> {
+        let Self { bindings, value: _ } = self;
+        ValuePlan {
+            bindings: bindings.into_iter().chain(std::iter::once(binding)).collect(),
+            value,
+        }
+    }
+
+    fn sequence(plans: impl IntoIterator<Item = Self>) -> ValuePlan<Vec<T>> {
+        let (bindings, values): (Vec<_>, Vec<_>) =
+            plans.into_iter().map(|Self { bindings, value }| (bindings, value)).unzip();
+        ValuePlan { bindings: bindings.into_iter().flatten().collect(), value: values }
+    }
+}
+
+impl ValuePlan<ValueId> {
+    fn lower_into(
+        self, lo: &mut Lowerer, kont: impl FnOnce(ValueId, &mut Lowerer) -> CompuId,
+    ) -> CompuId {
+        let Self { bindings, value } = self;
+        let tail = kont(value, lo);
+        bindings.into_iter().rev().fold(tail, |tail, binding| {
+            let ValueBinding { binder, bindee, site } = binding;
+            Let { binder, bindee, tail }.build(lo, site)
+        })
+    }
 }
 
 /// Stateful lowering pass from typed syntax into stack IR.
@@ -18,9 +69,9 @@ pub struct Lowerer<'a> {
     #[as_mut]
     pub arena: StackirArena,
     /// initialization order of globals (built during lowering, folded into entry lets at end)
-    pub sequence: Vec<DefId>,
+    sequence: Vec<DefId>,
     /// global def -> value (built during lowering, folded into entry lets at end)
-    pub globals: ArenaAssoc<DefId, ValueId>,
+    globals: ArenaAssoc<DefId, ValuePlan<ValueId>>,
     pub spans: &'a SpanArena,
     #[as_mut(ScopedArena)]
     pub scoped: &'a mut ScopedArena,
@@ -51,6 +102,29 @@ impl<'a> Lowerer<'a> {
 
     fn product_layout(&self, ty: ss::TypeId) -> ProductLayout {
         ProductLayout::new(self.product_arity(ty))
+    }
+
+    fn alloc_projection_def(&mut self) -> DefId {
+        let def = self.arena.admin.fresh();
+        self.scoped.insert_def(def, VarName("__proj__".to_owned()));
+        def
+    }
+
+    fn projection_binding(
+        &mut self, head: ValueId, position: usize, layout: ProductLayout, site: Option<ss::TermId>,
+    ) -> (ValueBinding, ValueId) {
+        assert!(position < layout.arity);
+        let selected = self.alloc_projection_def();
+        let fields = (0..layout.arity)
+            .map(|index| {
+                if index == position { selected.build(self, None) } else { Hole.build(self, None) }
+            })
+            .collect::<Vec<VPatId>>();
+        let fields =
+            ConsN::from_vec(fields).expect("a projected product must have at least one field");
+        let binder = VCons::new(fields, layout).build(self, None);
+        let projected = selected.build(self, site);
+        (ValueBinding { binder, bindee: head, site }, projected)
     }
 }
 
@@ -103,13 +177,14 @@ impl<'a> CompilerPass for Lowerer<'a> {
 
             // Wrap in let bindings for all globals (in sequence order)
             let wrapped = {
-                let mut tail = lowered;
-                for &def in self.sequence.iter().rev() {
-                    let bindee = self.globals[&def];
+                let sequence = self.sequence.clone();
+                sequence.into_iter().rev().fold(lowered, |tail, def| {
+                    let bindee = self.globals[&def].clone();
                     let binder = ValuePattern::Var(def).build(&mut self.arena, None);
-                    tail = Let { binder, bindee, tail }.build(&mut self.arena, None);
-                }
-                tail
+                    bindee.lower_into(&mut self, move |bindee, lo| {
+                        Let { binder, bindee, tail }.build(lo, None)
+                    })
+                })
             };
 
             // Register as entry point
@@ -144,9 +219,9 @@ impl Lower for ss::VAliasBody {
                 panic!("VAliasBody binder must be a variable, found:\n{}", binder_str);
             }
         };
-        let value_id = Phantom::new(bindee).lower(lo, Box::new(move |val_id, _lo| val_id));
+        let value = bindee.lower(lo, ());
         lo.sequence.push(def_id);
-        lo.globals.insert_new(def_id, value_id);
+        lo.globals.insert_new(def_id, value);
     }
 }
 
@@ -185,7 +260,7 @@ impl Lower for ss::VAliasHead {
             | BuiltinSort::Function => builtin.make_function(lo),
         };
         lo.sequence.push(def);
-        lo.globals.insert_new(def, value);
+        lo.globals.insert_new(def, ValuePlan::pure(value));
     }
 }
 
@@ -237,102 +312,65 @@ impl Lower for ss::VPatId {
     }
 }
 
-impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
-    type Kont = Box<dyn FnOnce(ValueId, &mut Lowerer) -> T>;
-    type Out = T;
+impl Lower for ss::ValueId {
+    type Kont = ();
+    type Out = ValuePlan<ValueId>;
 
-    fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
-        let value = lo.statics.values[self.as_ref()].clone();
-        let site = Some(ss::TermId::Value(self.clone_inner()));
+    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
+        let value = lo.statics.values[self].clone();
+        let site = Some(ss::TermId::Value(*self));
         match value {
-            | ss::Value::Hole(_) => {
-                let value_id = Hole.build(lo, site);
-                kont(value_id, lo)
-            }
-            | ss::Value::Var(def) => {
-                let value_id = def.build(lo, site);
-                kont(value_id, lo)
-            }
-            | ss::Value::Named(Named(_, inner)) => Phantom::new(inner).lower(lo, kont),
+            | ss::Value::Hole(_) => ValuePlan::pure(Hole.build(lo, site)),
+            | ss::Value::Var(def) => ValuePlan::pure(def.build(lo, site)),
+            | ss::Value::Named(Named(_, inner)) => inner.lower(lo, ()),
             | ss::Value::Thunk(Thunk(body)) => {
-                let body_compu = body.lower(lo, ());
-                // Get minimal capture from cocontext information
-                let value_id = Closure { stack: Bullet, body: body_compu }.build(lo, site);
-                kont(value_id, lo)
+                let body = body.lower(lo, ());
+                ValuePlan::pure(Closure { stack: Bullet, body }.build(lo, site))
             }
             | ss::Value::Ctor(Ctor(name, body)) => {
-                let data_id = lo.statics.data_hints[&self];
+                let data_id = lo.statics.data_hints[self];
                 let idx = lo.statics.datas[&data_id]
                     .iter()
                     .position(|(tag_branch, _ty)| tag_branch == &name)
                     .expect("Constructor tag not found");
-                let ctor_idx = CtorIdx { idx, name };
-                Phantom::new(body).lower(
-                    lo,
-                    Box::new(move |body_val, lo| {
-                        let value_id = Ctor(ctor_idx, body_val).build(lo, site);
-                        kont(value_id, lo)
-                    }),
-                )
+                let body = body.lower(lo, ());
+                body.map(|body| Ctor(CtorIdx { idx, name }, body).build(lo, site))
             }
-            | ss::Value::Triv(Triv) => {
-                let value_id = Triv.build(lo, site);
-                kont(value_id, lo)
-            }
+            | ss::Value::Triv(Triv) => ValuePlan::pure(Triv.build(lo, site)),
             | ss::Value::VCons(items) => {
-                let ty = lo.statics.annotations_value[self.as_ref()];
-                let layout = lo.product_layout(ty);
-                Phantom::new(items.into_vec()).lower(
-                    lo,
-                    Box::new(move |items, lo| {
-                        let items =
-                            ConsN::from_vec(items).expect("non-empty product value in stack IR");
-                        let value_id = VCons::new(items, layout).build(lo, site);
-                        kont(value_id, lo)
-                    }),
-                )
+                let layout = lo.product_layout(lo.statics.annotations_value[self]);
+                let items = items.into_vec().lower(lo, ());
+                items.map(|items| {
+                    let items =
+                        ConsN::from_vec(items).expect("non-empty product value in stack IR");
+                    VCons::new(items, layout).build(lo, site)
+                })
             }
             | ss::Value::TCons(ss::ConsN(_witnesses, inner)) => {
-                // Type cons values are erased
-                Phantom::new(inner).lower(lo, kont)
+                // Type cons values are erased.
+                inner.lower(lo, ())
             }
-            | ss::Value::Proj(Proj(head, field)) => match field.position {
-                | None => Phantom::new(head).lower(lo, kont),
-                | Some(_) => {
-                    unimplemented!("native lowering for named product projection")
+            | ss::Value::Proj(Proj(head, field)) => match field.target {
+                | ss::ProjTarget::Direct => head.lower(lo, ()),
+                | ss::ProjTarget::Product(position) => {
+                    let layout = lo.product_layout(lo.statics.annotations_value[&head]);
+                    let head = head.lower(lo, ());
+                    let (binding, projected) =
+                        lo.projection_binding(head.value, position, layout, site);
+                    head.with_binding(binding, projected)
                 }
             },
-            | ss::Value::Lit(lit) => {
-                let value_id = lit.build(lo, site);
-                kont(value_id, lo)
-            }
+            | ss::Value::Lit(lit) => ValuePlan::pure(lit.build(lo, site)),
         }
     }
 }
 
-impl<T: 'static> Lower for Phantom<Vec<ss::ValueId>, T> {
-    type Kont = Box<dyn FnOnce(Vec<ValueId>, &mut Lowerer) -> T>;
-    type Out = T;
+impl Lower for Vec<ss::ValueId> {
+    type Kont = ();
+    type Out = ValuePlan<Vec<ValueId>>;
 
-    fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
-        fn lower_next<T: 'static>(
-            mut input: std::vec::IntoIter<ss::ValueId>, mut output: Vec<ValueId>, lo: &mut Lowerer,
-            kont: Box<dyn FnOnce(Vec<ValueId>, &mut Lowerer) -> T>,
-        ) -> T {
-            let Some(item) = input.next() else {
-                return kont(output, lo);
-            };
-            Phantom::new(item).lower(
-                lo,
-                Box::new(move |item, lo| {
-                    output.push(item);
-                    lower_next(input, output, lo, kont)
-                }),
-            )
-        }
-
-        let input = self.clone_inner().into_iter();
-        lower_next(input, Vec::new(), lo, kont)
+    fn lower(&self, lo: &mut Lowerer, (): Self::Kont) -> Self::Out {
+        ValuePlan::sequence(self.iter().map(|item| item.lower(lo, ())))
     }
 }
 
@@ -356,16 +394,15 @@ impl Lower for ss::CompuId {
                 Let { binder: Cons(param_vpat, Bullet), bindee: stack_id, tail: body_compu }
                     .build(lo, site)
             }
-            | Compu::VApp(App(body, arg)) => Phantom::new(arg).lower(
-                lo,
-                Box::new(move |arg_val, lo| {
+            | Compu::VApp(App(body, arg)) => {
+                let arg = arg.lower(lo, ());
+                arg.lower_into(lo, move |arg, lo| {
                     let next_stack = Bullet.build(lo, site);
-                    let stack_id = Cons(arg_val, next_stack).build(lo, site);
-                    let body_compu = body.lower(lo, ());
-                    let let_stack = Let { binder: Bullet, bindee: stack_id, tail: body_compu };
-                    let_stack.build(lo, site)
-                }),
-            ),
+                    let stack = Cons(arg, next_stack).build(lo, site);
+                    let body = body.lower(lo, ());
+                    Let { binder: Bullet, bindee: stack, tail: body }.build(lo, site)
+                })
+            }
             | Compu::TAbs(Abs(_param, body)) => {
                 // Type abstractions are erased
                 body.lower(lo, ())
@@ -388,19 +425,19 @@ impl Lower for ss::CompuId {
                 let body_compu = body.lower(lo, ());
                 SFix { param: def_id, body: body_compu }.build(lo, site)
             }
-            | Compu::Force(Force(body)) => Phantom::new(body).lower(
-                lo,
-                Box::new(move |thunk_val, lo| {
-                    SForce { thunk: thunk_val, stack: Bullet.build(lo, site) }.build(lo, site)
-                }),
-            ),
-            | Compu::Ret(Return(body)) => Phantom::new(body).lower(
-                lo,
-                Box::new(move |value, lo| {
+            | Compu::Force(Force(body)) => {
+                let body = body.lower(lo, ());
+                body.lower_into(lo, move |thunk, lo| {
+                    SForce { thunk, stack: Bullet.build(lo, site) }.build(lo, site)
+                })
+            }
+            | Compu::Ret(Return(body)) => {
+                let body = body.lower(lo, ());
+                body.lower_into(lo, move |value, lo| {
                     let stack_id = Bullet.build(lo, site);
                     SReturn { stack: stack_id, value }.build(lo, site)
-                }),
-            ),
+                })
+            }
             | Compu::Do(Bind { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
                 let tail_compu = tail.lower(lo, ());
@@ -410,33 +447,28 @@ impl Lower for ss::CompuId {
             }
             | Compu::Let(Let { binder, bindee, tail }) => {
                 let binder_vpat = binder.lower(lo, ());
-                Phantom::new(bindee).lower(
-                    lo,
-                    Box::new(move |bindee_val, lo| {
-                        let tail_compu = tail.lower(lo, ());
-                        Let { binder: binder_vpat, bindee: bindee_val, tail: tail_compu }
-                            .build(lo, site)
-                    }),
-                )
+                let bindee = bindee.lower(lo, ());
+                bindee.lower_into(lo, move |bindee, lo| {
+                    let tail_compu = tail.lower(lo, ());
+                    Let { binder: binder_vpat, bindee, tail: tail_compu }.build(lo, site)
+                })
             }
             | Compu::Match(Match { scrut, arms }) => {
                 // Match: lower the scrutinee, then create a case statement
-                Phantom::new(scrut).lower(
-                    lo,
-                    Box::new(move |scrut_val, lo| {
-                        // Lower all the arms - arms are (VPatId, CompuId) in statics
-                        let lowered_arms: Vec<_> = arms
-                            .iter()
-                            .map(|arm| {
-                                let Matcher { binder, tail } = arm;
-                                let binder_vpat = binder.lower(lo, ());
-                                let body_compu = tail.lower(lo, ());
-                                Matcher { binder: binder_vpat, tail: body_compu }
-                            })
-                            .collect();
-                        Match { scrut: scrut_val, arms: lowered_arms }.build(lo, site)
-                    }),
-                )
+                let scrut = scrut.lower(lo, ());
+                scrut.lower_into(lo, move |scrut, lo| {
+                    // Lower all the arms - arms are (VPatId, CompuId) in statics
+                    let lowered_arms: Vec<_> = arms
+                        .iter()
+                        .map(|arm| {
+                            let Matcher { binder, tail } = arm;
+                            let binder_vpat = binder.lower(lo, ());
+                            let body_compu = tail.lower(lo, ());
+                            Matcher { binder: binder_vpat, tail: body_compu }
+                        })
+                        .collect();
+                    Match { scrut, arms: lowered_arms }.build(lo, site)
+                })
             }
             | Compu::CoMatch(CoMatch { arms }) => {
                 let arms = arms

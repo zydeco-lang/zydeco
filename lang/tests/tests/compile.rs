@@ -30,3 +30,5 @@ amd64_proj_bin!(compile, sum, "sum");
 amd64_proj_bin!(compile, fact, "fact");
 amd64_proj_bin!(compile, let_stack, "let-stack");
 amd64_proj_bin!(compile, kont_clone, "kont-clone");
+amd64_proj_bin!(compile, named_mixed, "named-mixed");
+amd64_proj_bin!(compile, named, "named");

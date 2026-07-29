@@ -1,0 +1,173 @@
+-- Named components remain ordinary product components. They may be mixed with
+-- unnamed components, nested explicitly, and destructured by ordinary tuple
+-- patterns.
+alias FlatMixed =
+  (first = Int) * (Int * (third = Int))
+end
+
+alias NestedMixed =
+  ((left = Int) * Int) * (right = Int)
+end
+
+def flat_mixed : FlatMixed = (
+  first = 1 : Int,
+  2 : Int,
+  third = 3 : Int
+) end
+
+def nested_mixed : NestedMixed = (
+  (left = 4 : Int, 5 : Int),
+  right = 6 : Int
+) end
+
+-- Data constructors do not interpret field names. Their payload may simply be
+-- a mixed product, whose labels are checked when its pattern is checked.
+data Packet where
+  | +Packet : (kind = Int) * (Int * (payload = Int))
+  | +Empty : Unit
+end
+
+def packet : Packet = +Packet(
+  kind = 7 : Int,
+  8 : Int,
+  payload = 9 : Int
+) end
+
+-- Named value types may contain thunked arrows. The arrow itself is unchanged:
+-- its parameter and result are merely ordinary value types containing names.
+alias FunctionInput =
+  (lhs = Int) * Int
+end
+
+alias FunctionOutput =
+  Int * (result = Int)
+end
+
+alias FunctionBox =
+  (apply = Thunk (FunctionInput -> Ret FunctionOutput)) * Int
+end
+
+def transform : Thunk (FunctionInput -> Ret FunctionOutput) = {
+  fn (lhs = lhs : Int, rhs : Int) ->
+    do result <- ! add lhs rhs;
+    ret (lhs, result = result)
+} end
+
+def function_box : FunctionBox = (
+  apply = transform,
+  0
+) end
+
+-- Codata also remains unchanged. A destructor may accept or return named value
+-- types, and a thunked codata object may itself occupy a named product field.
+codata Gauge where
+  | .read : Ret ((reading = Int) * Int)
+  | .shift : (delta = Int) -> Ret (reading = Int)
+end
+
+alias GaugeBox =
+  Int * (gauge = Thunk Gauge)
+end
+
+def gauge : Thunk Gauge = {
+  comatch
+  | .read ->
+    ret (reading = 12 : Int, 13 : Int)
+  | .shift (delta = delta : Int) ->
+    ret (reading = delta : Int)
+  end
+} end
+
+def gauge_box : GaugeBox = (
+  0,
+  gauge = gauge
+) end
+
+-- Positional weighting makes an accidental field permutation visible.
+def ! checksum3 (a : Int) (b : Int) (c : Int) : Ret Int =
+  do tens <- ! mul b 10;
+  do hundreds <- ! mul c 100;
+  do low <- ! add a tens;
+  ! add low hundreds
+end
+
+main
+  let (
+    first = first : Int,
+    middle : Int,
+    third = third : Int
+  ) = flat_mixed in
+  do flat_checksum <- ! checksum3 first middle third;
+  do flat_check <- ! sub flat_checksum 321;
+
+  -- A variable pattern may bind a named component opaquely. It can then be
+  -- opened by either a whole-pattern annotation or a payload annotation.
+  let (
+    first_field : (first = Int),
+    opaque_middle : Int,
+    third_field : (third = Int)
+  ) = flat_mixed in
+  let ((first = opaque_first) : (first = Int)) = first_field in
+  let (third = opaque_third : Int) = third_field in
+  do opaque_checksum <- ! checksum3 opaque_first opaque_middle opaque_third;
+  do opaque_check <- ! sub opaque_checksum 321;
+
+  let (
+    (left = left : Int, center : Int),
+    right = right : Int
+  ) = nested_mixed in
+  do nested_checksum <- ! checksum3 left center right;
+  do nested_check <- ! sub nested_checksum 654;
+
+  match packet
+  | +Packet(
+      kind = kind : Int,
+      body : Int,
+      payload = payload : Int
+    ) ->
+    do packet_checksum <- ! checksum3 kind body payload;
+    do packet_check <- ! sub packet_checksum 987;
+
+    let (
+      apply = apply : Thunk (FunctionInput -> Ret FunctionOutput),
+      function_marker : Int
+    ) = function_box in
+    do transformed <- ! apply (lhs = 10 : Int, 11 : Int);
+    let (
+      echoed : Int,
+      result = result : Int
+    ) = transformed in
+    do function_checksum <- ! checksum3 echoed result 0;
+    do function_check <- ! sub function_checksum 220;
+
+    let (
+      gauge_marker : Int,
+      gauge = active_gauge : Thunk Gauge
+    ) = gauge_box in
+    do observation <- ! active_gauge .read;
+    let (
+      reading = reading : Int,
+      drift : Int
+    ) = observation in
+    do gauge_checksum <- ! checksum3 reading drift 0;
+    do gauge_check <- ! sub gauge_checksum 142;
+
+    do shifted <- ! active_gauge .shift (delta = 14 : Int);
+    let (reading = shifted_reading : Int) = shifted in
+    do shift_pattern_check <- ! sub shifted_reading 14;
+    do shift_projection_check <- ! sub shifted/reading 14;
+
+    do total <- ! add flat_check nested_check;
+    do total <- ! add total opaque_check;
+    do total <- ! add total packet_check;
+    do total <- ! add total function_marker;
+    do total <- ! add total function_check;
+    do total <- ! add total gauge_marker;
+    do total <- ! add total gauge_check;
+    do total <- ! add total shift_pattern_check;
+    do total <- ! add total shift_projection_check;
+    ! exit total
+  | +Empty() ->
+    ! exit 1
+  end
+end

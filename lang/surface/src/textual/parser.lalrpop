@@ -237,8 +237,9 @@ Term: Term = {
     // Direct ones (TermGen<Term>) are only atomic (precedence -= 1) terms.
 
     // Precedence summary (tightest -> loosest):
-    // level 0 (atom) < level 1 (app/dtor/proj) < level 2 (*) < level 3 (->)
-    // < level 4 (pi/forall/sigma/exists) < level 5 (binders/blocks).
+    // level 0 (atom) < level 1 (proj) < level 2 (app/dtor) < level 3 (*)
+    // < level 4 (->) < level 5 (pi/forall/sigma/exists)
+    // < level 6 (binders/blocks).
 
     #[precedence(level="0")]
     // parentheses
@@ -266,27 +267,29 @@ Term: Term = {
     "comatch" <arms:(<CoMatcher>)*> "end" => CoMatchParam {<>}.into(),
     <Literal> => <>.into(),
 
-    // Application binds tighter than operators to avoid extra parens.
+    // Named projection is a tight postfix value operator.
     #[precedence(level="1")] #[assoc(side="left")]
+    <term:TermGen<Term>> "/" <name:FieldName> => Proj(<>).into(),
+
+    // Application and computation destruction bind tighter than type operators.
+    #[precedence(level="2")] #[assoc(side="left")]
     // application
     <term:TermGen<Term>> <arg:TermGen<Term>> => Appli(vec![<>]).into(),
     // destructor
     <term:TermGen<Term>> <name:DtorName> => Dtor(<>).into(),
-    // named projection
-    <term:TermGen<Term>> "/" <name:FieldName> => Proj(<>).into(),
 
     // Product associates to the right: A * B * C == A * (B * C).
-    #[precedence(level="2")] #[assoc(side="right")]
+    #[precedence(level="3")] #[assoc(side="right")]
     // product
     <ty_l:TermGen<Term>> "*" <ty_r:TermGen<Term>> => Prod(<>).into(),
 
     // Arrow associates to the right: A -> B -> C == A -> (B -> C).
-    #[precedence(level="3")] #[assoc(side="right")]
+    #[precedence(level="4")] #[assoc(side="right")]
     // arrow
     <ty_in:TermGen<Term>> "->" <ty_out:TermGen<Term>> => Arrow(<>).into(),
 
     // Quantifiers/types bind looser than arrows/products, tighter than binders.
-    #[precedence(level="4")]
+    #[precedence(level="5")]
     // pi
     "pi" <params:CoPatId> "." <term:TermGen<Term>> => Pi(<>).into(),
     // forall
@@ -297,7 +300,7 @@ Term: Term = {
     "exists" <params:CoPatId> "." <ty:TermGen<Term>> => Exists(<>).into(),
 
     // Bindings are loosest to capture the largest possible tail.
-    #[precedence(level="5")]
+    #[precedence(level="6")]
     // abstraction
     "fn" <params:CoPatId> "->" <term:TermGen<Term>> => Abs(<>).into(),
     // fixed point
