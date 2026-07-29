@@ -15,6 +15,8 @@ pub enum DesugarError {
     NamedPatternNotSupported(Sp<t::PatId>),
     #[error("Named terms are not supported past parsing yet")]
     NamedTermNotSupported(Sp<t::TermId>),
+    #[error("Named projection is not supported past parsing yet")]
+    NamedProjectionNotSupported(Sp<t::TermId>),
 }
 
 pub type Result<T> = std::result::Result<T, DesugarError>;

@@ -235,7 +235,7 @@ Term: Term = {
     // Direct ones (TermGen<Term>) are only atomic (precedence -= 1) terms.
 
     // Precedence summary (tightest -> loosest):
-    // level 0 (atom) < level 1 (app/dot) < level 2 (*) < level 3 (->)
+    // level 0 (atom) < level 1 (app/dtor/proj) < level 2 (*) < level 3 (->)
     // < level 4 (pi/forall/sigma/exists) < level 5 (binders/blocks).
 
     #[precedence(level="0")]
@@ -270,6 +270,8 @@ Term: Term = {
     <term:TermGen<Term>> <arg:TermGen<Term>> => Appli(vec![<>]).into(),
     // destructor
     <term:TermGen<Term>> <name:DtorName> => Dtor(<>).into(),
+    // named projection
+    <term:TermGen<Term>> "/" <name:FieldName> => Proj(<>).into(),
 
     // Product associates to the right: A * B * C == A * (B * C).
     #[precedence(level="2")] #[assoc(side="right")]

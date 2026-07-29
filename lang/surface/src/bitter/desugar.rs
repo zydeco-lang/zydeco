@@ -644,6 +644,10 @@ impl Desugar for t::TermId {
                 let term = term.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Dtor(term, name).into(), self.into())
             }
+            | Tm::Proj(_) => {
+                let span = desugarer.spans[&t::EntityId::from(self)].clone();
+                Err(DesugarError::NamedProjectionNotSupported(span.make(self)))?
+            }
             | Tm::Lit(term) => {
                 use zydeco_syntax::Literal as Lit;
                 let lit_term = Alloc::alloc(desugarer, term.clone().into(), self.into());

@@ -161,6 +161,7 @@ pub enum Term {
     Match(Match<TermId, PatId, TermId>),
     CoMatch(CoMatchParam),
     Dtor(Dtor<TermId, DtorName>),
+    Proj(Proj<TermId, FieldName>),
     Lit(Literal),
 }
 

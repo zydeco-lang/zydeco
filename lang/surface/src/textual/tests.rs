@@ -2,7 +2,7 @@ use crate::textual::{
     arena::TextualScope,
     syntax::{
         Ann, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Literal, Named, Paren, Parser, PatId,
-        Pattern, Term, TermId,
+        Pattern, Proj, Term, TermId,
     },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
@@ -69,6 +69,36 @@ fn parses_named_term_fields() {
         .collect::<Vec<_>>();
 
     assert_eq!(fields, vec![("x".to_string(), 1), ("y".to_string(), 2)]);
+}
+
+#[test]
+fn parses_named_type_fields_without_early_sorting() {
+    let source = "(x = Int, y = String)";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Paren(Paren(fields)) = &parser.arena.terms[&term] else {
+        panic!("expected a parenthesized named type")
+    };
+    let fields = fields
+        .iter()
+        .map(|field| {
+            let Term::Named(Named(name, body)) = &parser.arena.terms[field] else {
+                panic!("expected a named type field")
+            };
+            let Term::Var(payload) = &parser.arena.terms[body] else {
+                panic!("expected a type payload")
+            };
+            (name.plain(), payload.plain())
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        fields,
+        vec![("x".to_string(), "Int".to_string()), ("y".to_string(), "String".to_string()),]
+    );
 }
 
 #[test]
@@ -201,6 +231,29 @@ fn parses_chained_named_patterns() {
     assert_eq!(outer.plain(), "outer");
     assert_eq!(inner.plain(), "inner");
     assert_eq!(parser.arena.defs[payload].plain(), "payload");
+}
+
+#[test]
+fn parses_chained_named_projection() {
+    let source = "rectangle/top_left/x";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Proj(Proj(inner, x)) = &parser.arena.terms[&term] else {
+        panic!("expected an outer named projection")
+    };
+    let Term::Proj(Proj(receiver, top_left)) = &parser.arena.terms[inner] else {
+        panic!("expected an inner named projection")
+    };
+    let Term::Var(rectangle) = &parser.arena.terms[receiver] else {
+        panic!("expected a variable projection receiver")
+    };
+
+    assert_eq!(rectangle.plain(), "rectangle");
+    assert_eq!(top_left.plain(), "top_left");
+    assert_eq!(x.plain(), "x");
 }
 
 #[test]

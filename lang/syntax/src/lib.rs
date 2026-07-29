@@ -148,6 +148,10 @@ pub struct CoMatcher<Tag, Tail> {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Dtor<Head, Tag>(pub Head, pub Tag);
 
+/// `term/field`
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Proj<Head, Tag>(pub Head, pub Tag);
+
 /// literals in term
 #[derive(From, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Literal {

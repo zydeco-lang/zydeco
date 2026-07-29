@@ -91,6 +91,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Match(t) => s += &t.ugly(f),
             | Term::CoMatch(t) => s += &t.ugly(f),
             | Term::Dtor(t) => s += &t.ugly(f),
+            | Term::Proj(t) => s += &t.ugly(f),
             | Term::Lit(t) => s += &t.ugly(f),
         }
         s
@@ -234,6 +235,16 @@ where
         s += " ";
         s += &name.ugly(f);
         s
+    }
+}
+
+impl<'a, T> Ugly<'a, Formatter<'a>> for Proj<T, FieldName>
+where
+    T: Ugly<'a, Formatter<'a>>,
+{
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Proj(head, name) = self;
+        format!("{}/{}", head.ugly(f), name.ugly(f))
     }
 }
 
