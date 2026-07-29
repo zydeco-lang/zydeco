@@ -115,6 +115,8 @@ pub struct StaticsArena {
     pub data_pat_hints: ArenaAssoc<VPatId, DataId>,
     /// hints for computations that need codata annotations
     pub codata_hints: ArenaAssoc<CompuId, CoDataId>,
+    /// immutable value aliases available to static inspection
+    pub value_aliases: ArenaAssoc<DefId, ValueId>,
     /// arena for inlinable definitions, typically global (necessity modality) definitions
     pub inlinables: ArenaAssoc<DefId, ValueId>,
     /// definitions that are marked global

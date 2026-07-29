@@ -99,3 +99,175 @@ main ! exit 0 end
 "#,
     );
 }
+
+#[test]
+fn checks_and_applies_a_package_dependent_abstraction() {
+    PackPiCase::check(
+        r#"
+alias Box =
+  exists (X : VType) . X
+end
+
+alias Unbox =
+  pi ((X, _) : Box) . Ret X
+end
+
+def unbox : Thk Unbox = {
+  fn ((X, value) : Box) -> ret value
+} end
+
+def boxed : Box = (Int, 41) end
+
+main
+  do value <- ! unbox boxed;
+  ! exit value
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn synthesizes_a_package_dependent_abstraction() {
+    PackPiCase::check(
+        r#"
+alias Box =
+  exists (X : VType) . X
+end
+
+def unbox = {
+  fn ((X, value) : Box) -> ret value
+} end
+
+def boxed : Box = (Int, 41) end
+
+main
+  do value <- ! unbox boxed;
+  ! exit value
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn instantiates_multiple_package_witnesses() {
+    PackPiCase::check(
+        r#"
+alias PairBox =
+  exists (X : VType) .
+  exists (Y : VType) .
+  X * Y
+end
+
+alias UnboxPair =
+  pi ((X, Y, _, _) : PairBox) . Ret (X * Y)
+end
+
+def unbox_pair : Thk UnboxPair = {
+  fn ((X, Y, x, y) : PairBox) -> ret (x, y)
+} end
+
+def boxed : PairBox = (Int, Char, 41, 'z') end
+
+main
+  do (value, _) <- ! unbox_pair boxed;
+  ! exit value
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn preserves_an_opened_witness_across_applications() {
+    PackPiCase::check(
+        r#"
+alias Box =
+  exists (X : VType) .
+  X * Thk (X -> Ret Int)
+end
+
+alias Reveal =
+  pi ((X, _, _) : Box) . Ret X
+end
+
+def reveal : Thk Reveal = {
+  fn ((X, value, _) : Box) -> ret value
+} end
+
+def consume_twice : Thk (Box -> Ret Int) = {
+  fn ((X, value, consume) : Box) ->
+    do first <- ! reveal (X, value, consume);
+    do second <- ! reveal (X, first, consume);
+    ! consume second
+} end
+
+def boxed : Box = (
+  Int,
+  41,
+  { fn (value : Int) -> ret value },
+) end
+
+main
+  do status <- ! consume_twice boxed;
+  ! exit status
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn infers_a_hole_in_the_package_dependent_codomain() {
+    PackPiCase::check(
+        r#"
+alias Box =
+  exists (X : VType) . X
+end
+
+alias Unbox : CType =
+  pi ((X, _) : Box) . (_ : CType)
+end
+
+def unbox : Thk Unbox = {
+  fn ((X, value) : Box) -> ret value
+} end
+
+def boxed : Box = (Int, 41) end
+
+main
+  do value <- ! unbox boxed;
+  ! exit value
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn rejects_application_to_a_package_with_hidden_witnesses() {
+    PackPiCase::assert_type_error(
+        r#"
+alias Box =
+  exists (X : VType) . X
+end
+
+alias Unbox =
+  pi ((X, _) : Box) . Ret X
+end
+
+def unbox : Thk Unbox = {
+  fn ((X, value) : Box) -> ret value
+} end
+
+def hidden : Thk (Box -> Ret Int) = {
+  fn (boxed : Box) ->
+    do _ <- ! unbox boxed;
+    ret 0
+} end
+
+main ! exit 0 end
+"#,
+    );
+}

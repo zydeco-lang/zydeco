@@ -24,6 +24,8 @@ pub enum TyckError {
     MissingDataArm(CtorName),
     MissingCoDataArm(DtorName),
     NonExhaustiveCoDataArms(std::collections::HashMap<DtorName, TypeId>),
+    PackageWitnessesUnavailable { package: ValueId },
+    PackageWitnessArityMismatch { expected: usize, found: usize },
     EscapingExistential { witnesses: Vec<AbstId>, result: TypeId },
     Expressivity(&'static str),
     NotInlinable(DefId),
@@ -102,6 +104,19 @@ impl<'a> Tycker<'a> {
             | TyckError::MissingCoDataArm(dtor) => format!("Missing codata arm: {:?}", dtor),
             | TyckError::NonExhaustiveCoDataArms(arms) => {
                 format!("Non-exhaustive data arms: {:?}", arms)
+            }
+            | TyckError::PackageWitnessesUnavailable { package } => {
+                format!(
+                    "Package-dependent application requires manifest existential witnesses, \
+                     but they are hidden by {}",
+                    self.pretty_statics_nested(package, "\t")
+                )
+            }
+            | TyckError::PackageWitnessArityMismatch { expected, found } => {
+                format!(
+                    "Package witness arity mismatch: expected {expected} witness(es), \
+                     found {found}"
+                )
             }
             | TyckError::EscapingExistential { witnesses, result } => {
                 let witnesses = witnesses
@@ -295,6 +310,9 @@ impl<'a> Tycker<'a> {
             | TyckError::MissingNamedField { found, .. }
             | TyckError::DuplicateNamedField { found, .. } => self.type_ariadne_span(found),
             | TyckError::MissingStructure(ty) => self.type_ariadne_span(ty),
+            | TyckError::PackageWitnessesUnavailable { package } => {
+                self.statics_term_ariadne_span((*package).into())
+            }
             | TyckError::EscapingExistential { result, .. } => self.type_ariadne_span(result),
             | TyckError::MissingSolution(fills) => fills.first().map(|fill| {
                 let site = self.statics.fills[fill];
@@ -354,6 +372,16 @@ impl<'a> Tycker<'a> {
             | TyckError::MissingCoDataArm(dtor) => format!("Missing codata arm: {:?}", dtor),
             | TyckError::NonExhaustiveCoDataArms(arms) => {
                 format!("Non-exhaustive codata arms: {} missing", arms.len())
+            }
+            | TyckError::PackageWitnessesUnavailable { package } => format!(
+                "Package-dependent application requires manifest existential witnesses, \
+                 but they are hidden by {}",
+                self.pretty_statics_nested(*package, "")
+            ),
+            | TyckError::PackageWitnessArityMismatch { expected, found } => {
+                format!(
+                    "Package witness arity mismatch: expected {expected} witness(es), found {found}"
+                )
             }
             | TyckError::EscapingExistential { result, .. } => format!(
                 "Existential witness escapes through result type {}",

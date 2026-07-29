@@ -226,6 +226,27 @@ impl VPatId {
             | VPat::TCons(_) => (None, ty),
         }
     }
+
+    /// Return the number of existential witnesses opened at the boundary of
+    /// this pattern.
+    ///
+    /// Named wrappers are transparent, but witnesses opened inside products
+    /// or constructors are not part of the package boundary.
+    pub fn package_witness_arity(&self, tycker: &Tycker<'_>) -> Option<usize> {
+        let mut pattern = *self;
+        loop {
+            match tycker.statics.vpats[&pattern].to_owned() {
+                | ValuePattern::Named(Named(_, inner)) => pattern = inner,
+                | ValuePattern::TCons(ConsN(witnesses, _)) => return Some(witnesses.len()),
+                | ValuePattern::Hole(_)
+                | ValuePattern::Var(_)
+                | ValuePattern::Ctor(_)
+                | ValuePattern::Triv(_)
+                | ValuePattern::VCons(_) => return None,
+            }
+        }
+    }
+
     /// Turn a value pattern into a value of the same type by assuming the variables
     /// in the pattern are bound in the environment.
     pub fn reify(&self, tycker: &mut Tycker) -> ValueId {
@@ -258,6 +279,34 @@ impl VPatId {
                     witnesses.into_iter().map(|witness| witness.reify(tycker)).collect();
                 let body = body.reify(tycker);
                 Alloc::alloc(tycker, ConsN(witnesses, body), ty, &env)
+            }
+        }
+    }
+}
+
+impl ValueId {
+    /// Recover the manifest witness prefix of an existential package.
+    ///
+    /// Following immutable value aliases preserves the identity of their
+    /// witness types. Named wrappers are transparent.
+    pub fn package_witnesses(&self, tycker: &Tycker<'_>) -> Option<Vec<TypeId>> {
+        let mut value = *self;
+        let mut visited = std::collections::HashSet::new();
+        loop {
+            if !visited.insert(value) {
+                return None;
+            }
+            match tycker.statics.values[&value].to_owned() {
+                | Value::Var(def) => value = *tycker.statics.value_aliases.get(&def)?,
+                | Value::Named(Named(_, inner)) => value = inner,
+                | Value::TCons(ConsN(witnesses, _)) => return Some(witnesses),
+                | Value::Hole(_)
+                | Value::Thunk(_)
+                | Value::Ctor(_)
+                | Value::Triv(_)
+                | Value::VCons(_)
+                | Value::Proj(_)
+                | Value::Lit(_) => return None,
             }
         }
     }

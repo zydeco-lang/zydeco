@@ -162,18 +162,19 @@ main ! exit 0 end
 }
 
 #[test]
-fn rejects_a_function_result_indexed_by_an_opened_witness() {
-    ExistentialCase::assert_type_error(
+fn synthesizes_a_package_dependent_function_result() {
+    ExistentialCase::check(
         r#"
 alias Box = exists (X : VType) . X end
 
-def leak = {
+def unpack = {
   fn ((X, value) : Box) -> ret value
 } end
 
 main ! exit 0 end
 "#,
-    );
+    )
+    .unwrap();
 }
 
 #[test]

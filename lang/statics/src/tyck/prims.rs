@@ -92,7 +92,7 @@ impl Tycker<'_> {
                     | AnnId::Type(ty) => ty,
                     | AnnId::Set | AnnId::Kind(_) => unreachable!(),
                 };
-                let pat_out_ann = env.mk(binder).tyck_k(self, Action::ana(ty.into()))?;
+                let pat_out_ann = env.mk(binder).tyck_k(self, PatternAction::ana(ty.into()))?;
                 let (binder, _) = pat_out_ann.as_value();
                 self.statics.decls.insert_new(*id, VAliasHead { binder, ty }.into());
 

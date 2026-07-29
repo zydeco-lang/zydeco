@@ -63,6 +63,8 @@ impl PatternCheck {
 trait CheckedPatternExt {
     fn with_annotation(self, annotation: PatAnnId) -> Self;
     fn close_scope_k(&self, tycker: &mut Tycker<'_>, result: ss::TypeId) -> ResultKont<()>;
+    fn package_telescope_k(&self, tycker: &mut Tycker<'_>)
+    -> ResultKont<Option<ss::PackTelescope>>;
 }
 
 impl CheckedPatternExt for CheckedPattern {
@@ -78,6 +80,31 @@ impl CheckedPatternExt for CheckedPattern {
         }
         let outer = self.info.skolem_scope().without(&self.inner.opened);
         result.constrain_to_scope_k(tycker, &outer)
+    }
+
+    #[track_caller]
+    fn package_telescope_k(
+        &self, tycker: &mut Tycker<'_>,
+    ) -> ResultKont<Option<ss::PackTelescope>> {
+        let Some((first, rest)) = self.inner.opened.split_first() else {
+            return Ok(None);
+        };
+        let (pattern, _) = self.inner.annotation.try_as_value(
+            tycker,
+            TyckError::SortMismatch,
+            std::panic::Location::caller(),
+        )?;
+        let boundary_arity = pattern.package_witness_arity(tycker).unwrap_or_default();
+        if boundary_arity != self.inner.opened.len() {
+            tycker.err_k(
+                TyckError::PackageWitnessArityMismatch {
+                    expected: self.inner.opened.len(),
+                    found: boundary_arity,
+                },
+                std::panic::Location::caller(),
+            )?
+        }
+        Ok(Some(ss::PackTelescope::new(*first, rest.iter().copied())))
     }
 }
 
@@ -347,6 +374,46 @@ impl<Ann> Action<Ann> {
     }
 }
 
+/// Canonical existential identities assigned to package-pattern components.
+#[derive(Clone, Debug, Default)]
+struct PatternSkolems(im::HashMap<su::PatId, ss::AbstId>);
+
+impl PatternSkolems {
+    fn new(assignments: impl IntoIterator<Item = (su::PatId, ss::AbstId)>) -> Self {
+        Self(assignments.into_iter().collect())
+    }
+
+    fn get(&self, pattern: &su::PatId) -> Option<ss::AbstId> {
+        self.0.get(pattern).copied()
+    }
+}
+
+/// Pattern-checking mode together with any canonical package witnesses.
+#[derive(Clone, Debug)]
+pub struct PatternAction {
+    switch: Switch<AnnId>,
+    skolems: PatternSkolems,
+}
+
+impl PatternAction {
+    pub fn syn() -> Self {
+        Self { switch: Switch::Syn, skolems: PatternSkolems::default() }
+    }
+
+    pub fn ana(ann: AnnId) -> Self {
+        Self { switch: Switch::Ana(ann), skolems: PatternSkolems::default() }
+    }
+
+    pub fn switch(switch: Switch<AnnId>) -> Self {
+        Self { switch, skolems: PatternSkolems::default() }
+    }
+
+    fn with_skolems(mut self, skolems: PatternSkolems) -> Self {
+        self.skolems = skolems;
+        self
+    }
+}
+
 pub struct Assign<Br, Be>(pub Br, pub Be);
 pub struct FixPoint<T>(pub T);
 
@@ -360,6 +427,93 @@ struct ValuePiFormation {
 impl ValuePiFormation {
     fn new(binder: CheckedPattern, codomain: su::TermId) -> Self {
         Self { binder, codomain }
+    }
+}
+
+/// Instantiate the bound witnesses of a package-dependent arrow.
+struct PackPiInstantiation {
+    signature: ss::PackPi,
+    witnesses: Vec<ss::TypeId>,
+}
+
+impl PackPiInstantiation {
+    fn new(signature: ss::PackPi, witnesses: Vec<ss::TypeId>) -> Self {
+        Self { signature, witnesses }
+    }
+}
+
+/// Check a value abstraction against a package-dependent arrow.
+struct PackPiIntroduction {
+    binder: su::PatId,
+    body: su::TermId,
+    signature: ss::PackPi,
+}
+
+impl PackPiIntroduction {
+    fn new(binder: su::PatId, body: su::TermId, signature: ss::PackPi) -> Self {
+        Self { binder, body, signature }
+    }
+}
+
+/// Associate a package pattern's leading type components with a `PackPi`
+/// telescope.
+struct PackPiPatternSkolems {
+    pattern: su::PatId,
+    witnesses: ss::PackTelescope,
+}
+
+impl PackPiPatternSkolems {
+    fn new(pattern: su::PatId, witnesses: ss::PackTelescope) -> Self {
+        Self { pattern, witnesses }
+    }
+}
+
+/// Apply a package-dependent function to a package with manifest witnesses.
+struct PackPiElimination {
+    function: ss::CompuId,
+    argument: su::TermId,
+    signature: ss::PackPi,
+}
+
+impl PackPiElimination {
+    fn new(function: ss::CompuId, argument: su::TermId, signature: ss::PackPi) -> Self {
+        Self { function, argument, signature }
+    }
+}
+
+impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
+    type Out = PatternSkolems;
+    type Action = ();
+
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
+        let PackPiPatternSkolems { pattern, witnesses } = &self.inner;
+        let mut pattern = *pattern;
+        loop {
+            match tycker.scoped.pats[&pattern].to_owned() {
+                | su::Pattern::Ann(su::Ann { tm, .. }) => pattern = tm,
+                | su::Pattern::Named(su::Named(_, inner)) => pattern = inner,
+                | su::Pattern::Cons(su::ConsN(items, _)) => {
+                    let expected = witnesses.len();
+                    let found = items.len();
+                    if found < expected {
+                        tycker.err_k(
+                            TyckError::PackageWitnessArityMismatch { expected, found },
+                            std::panic::Location::caller(),
+                        )?
+                    }
+                    return Ok(PatternSkolems::new(
+                        items.into_iter().take(expected).zip(witnesses.iter().copied()),
+                    ));
+                }
+                | su::Pattern::Hole(_)
+                | su::Pattern::Var(_)
+                | su::Pattern::Ctor(_)
+                | su::Pattern::Triv(_) => tycker.err_k(
+                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
+                    std::panic::Location::caller(),
+                )?,
+            }
+        }
     }
 }
 
@@ -475,7 +629,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
             | TermAnnId::Hole(_) | TermAnnId::Kind(_) => unreachable!(),
             | TermAnnId::Type(ty, kd) => {
                 let bindee = ty;
-                let binder = env.mk(binder).tyck_k(tycker, Action::ana(kd.into()))?;
+                let binder = env.mk(binder).tyck_k(tycker, PatternAction::ana(kd.into()))?;
                 let (binder, _kd) = binder.as_type();
 
                 // seal the type if needed
@@ -514,7 +668,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
                 env
             }
             | TermAnnId::Value(bindee, ty) => {
-                let binder_elaboration = env.mk(binder).tyck_k(tycker, Action::ana(ty.into()))?;
+                let binder_elaboration =
+                    env.mk(binder).tyck_k(tycker, PatternAction::ana(ty.into()))?;
                 let (binder, _) = binder_elaboration.as_value();
                 // Existential package patterns introduce abstract types whose
                 // scope extends over the following declarations.
@@ -526,6 +681,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::DeclId> {
                 // should also be added to global if it only depends on global definitions
                 match binder.try_destruct_def(tycker) {
                     | (Some(def), _) => {
+                        let _ = tycker.statics.value_aliases.upsert(def, bindee);
                         // coctx defines what the bindee is using that is not local
                         if (tycker.scoped.coctxs_term_local[&surface_bindee].clone())
                             .into_iter()
@@ -593,7 +749,7 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
             // the binder should be a type; register it before analyzing the bindee
             let kd =
                 ann.try_as_kind(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
-            let binder = env.mk(binder).tyck_k(tycker, Action::ana(kd.into()))?;
+            let binder = env.mk(binder).tyck_k(tycker, PatternAction::ana(kd.into()))?;
             let (binder, _kd) = binder.as_type();
             binder_map.insert(id.to_owned(), binder);
             // register the def with abstract type
@@ -644,21 +800,18 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<SccGroup<su::DeclId>>> {
 
 impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
     type Out = CheckedPattern;
-    type Action = Action<AnnId>;
+    type Action = PatternAction;
 
-    fn tyck_k(
-        &self, tycker: &mut Tycker<'a>, Action { switch }: Self::Action,
-    ) -> ResultKont<Self::Out> {
+    fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         tycker.guarded(|tycker| {
             // administrative
-            tycker.tasks.push_back(TyckTask::Pat(self.inner, switch));
-            self.tyck_inner_k(tycker, Action { switch })
+            tycker.tasks.push_back(TyckTask::Pat(self.inner, action.switch));
+            self.tyck_inner_k(tycker, action)
         })
     }
 
-    fn tyck_inner_k(
-        &self, tycker: &mut Tycker<'a>, Action { switch }: Self::Action,
-    ) -> ResultKont<Self::Out> {
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
+        let PatternAction { switch, skolems } = action;
         // // Debug: print
         // {
         //     use colored::Colorize;
@@ -689,11 +842,14 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     }
                 };
                 match switch {
-                    | Switch::Syn => self.mk(tm).tyck_k(tycker, Action::ana(ty_tm))?,
+                    | Switch::Syn => self
+                        .mk(tm)
+                        .tyck_k(tycker, PatternAction::ana(ty_tm).with_skolems(skolems.clone()))?,
                     | Switch::Ana(ty_ana) => {
                         let ty = Lub::lub_k(ty_tm, ty_ana, tycker)?;
 
-                        self.mk(tm).tyck_k(tycker, Action::ana(ty))?
+                        self.mk(tm)
+                            .tyck_k(tycker, PatternAction::ana(ty).with_skolems(skolems.clone()))?
                     }
                 }
             }
@@ -737,7 +893,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                 let su::Named(name, inner) = pat;
                 match switch {
                     | Switch::Syn => {
-                        let checked = self.mk(inner).tyck_k(tycker, Action::syn())?;
+                        let checked = self
+                            .mk(inner)
+                            .tyck_k(tycker, PatternAction::syn().with_skolems(skolems.clone()))?;
                         let (inner, inner_ty) = checked.try_as_value(
                             tycker,
                             TyckError::SortMismatch,
@@ -777,8 +935,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 std::panic::Location::caller(),
                             )?
                         }
-                        let checked =
-                            self.mk(inner).tyck_k(tycker, Action::ana(inner_ty.into()))?;
+                        let checked = self.mk(inner).tyck_k(
+                            tycker,
+                            PatternAction::ana(inner_ty.into()).with_skolems(skolems.clone()),
+                        )?;
                         let (inner, _) = checked.try_as_value(
                             tycker,
                             TyckError::SortMismatch,
@@ -826,8 +986,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             std::panic::Location::caller(),
                         )?,
                     };
-                    let args_out_ann =
-                        self.mk(args).tyck_k(tycker, Action::ana(arm_ty.to_owned().into()))?;
+                    let args_out_ann = self.mk(args).tyck_k(
+                        tycker,
+                        PatternAction::ana(arm_ty.to_owned().into()).with_skolems(skolems.clone()),
+                    )?;
                     let (args, _) = args_out_ann.as_value();
                     let pat =
                         Alloc::alloc(tycker, ss::Ctor(ctor.to_owned(), args), ann_ty, &self.info);
@@ -876,8 +1038,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 )?
                             };
                             expected_item = next_ty;
-                            let checked = TyEnvT::new(pattern_env.clone(), item)
-                                .tyck_k(tycker, Action::ana(item_ty.into()))?;
+                            let checked = TyEnvT::new(pattern_env.clone(), item).tyck_k(
+                                tycker,
+                                PatternAction::ana(item_ty.into()).with_skolems(skolems.clone()),
+                            )?;
                             let (item, annotation) = checked.try_as_value(
                                 tycker,
                                 TyckError::SortMismatch,
@@ -889,8 +1053,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             annotations.push(annotation);
                         }
 
-                        let checked = TyEnvT::new(pattern_env.clone(), tail)
-                            .tyck_k(tycker, Action::ana(expected_item.into()))?;
+                        let checked = TyEnvT::new(pattern_env.clone(), tail).tyck_k(
+                            tycker,
+                            PatternAction::ana(expected_item.into()).with_skolems(skolems.clone()),
+                        )?;
                         let (tail, ann) = checked.try_as_value(
                             tycker,
                             TyckError::SortMismatch,
@@ -923,8 +1089,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 break;
                             };
                             let kd = tycker.statics.annotations_abst[&source_abst];
-                            let checked = TyEnvT::new(body_env.clone(), item)
-                                .tyck_k(tycker, Action::ana(kd.into()))?;
+                            let checked = TyEnvT::new(body_env.clone(), item).tyck_k(
+                                tycker,
+                                PatternAction::ana(kd.into()).with_skolems(skolems.clone()),
+                            )?;
                             let (witness, _) = checked.try_as_type(
                                 tycker,
                                 TyckError::SortMismatch,
@@ -933,10 +1101,17 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             body_env = checked.info;
                             opened.extend(checked.inner.opened);
 
-                            // Every package opening gets a distinct abstract type.
-                            // The existential's binder describes the package type;
-                            // it is not the identity revealed by this elimination.
-                            let skolem = Alloc::alloc(tycker, witness, (), &());
+                            // Ordinary elimination is fresh. Checking a PackPi
+                            // introduction instead reuses the signature's
+                            // canonical identity for this pattern component.
+                            let skolem = match skolems.get(&item) {
+                                | Some(skolem) => {
+                                    let expected = tycker.statics.annotations_abst[&skolem];
+                                    Lub::lub_k(expected, kd, tycker)?;
+                                    skolem
+                                }
+                                | None => Alloc::alloc(tycker, witness, (), &()),
+                            };
                             tycker.statics.existential_skolems.ensure(skolem);
                             body_env = body_env.with_skolem(skolem);
                             let abstract_ty = Alloc::alloc(tycker, skolem, kd, &body_env);
@@ -960,8 +1135,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
 
                         let body_items = &items[body_index..];
                         let body = if body_items.is_empty() {
-                            let checked = TyEnvT::new(body_env.clone(), tail)
-                                .tyck_k(tycker, Action::ana(body_ty.into()))?;
+                            let checked = TyEnvT::new(body_env.clone(), tail).tyck_k(
+                                tycker,
+                                PatternAction::ana(body_ty.into()).with_skolems(skolems.clone()),
+                            )?;
                             let (body, _) = checked.try_as_value(
                                 tycker,
                                 TyckError::SortMismatch,
@@ -1004,8 +1181,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                     )?
                                 };
                                 expected_item = next_ty;
-                                let checked = TyEnvT::new(body_env.clone(), item)
-                                    .tyck_k(tycker, Action::ana(item_ty.into()))?;
+                                let checked = TyEnvT::new(body_env.clone(), item).tyck_k(
+                                    tycker,
+                                    PatternAction::ana(item_ty.into())
+                                        .with_skolems(skolems.clone()),
+                                )?;
                                 let (item, annotation) = checked.try_as_value(
                                     tycker,
                                     TyckError::SortMismatch,
@@ -1017,8 +1197,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                                 annotations.push(annotation);
                             }
 
-                            let checked = TyEnvT::new(body_env.clone(), tail)
-                                .tyck_k(tycker, Action::ana(expected_item.into()))?;
+                            let checked = TyEnvT::new(body_env.clone(), tail).tyck_k(
+                                tycker,
+                                PatternAction::ana(expected_item.into())
+                                    .with_skolems(skolems.clone()),
+                            )?;
                             let (tail, ann) = checked.try_as_value(
                                 tycker,
                                 TyckError::SortMismatch,
@@ -1112,19 +1295,125 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
         let ctype = ss::CType.build(tycker, &self.info);
         Lub::lub_k(ctype, codomain_kind, tycker)?;
 
-        let pi = match binder.inner.opened.split_first() {
+        let pi = match binder.package_telescope_k(tycker)? {
             | None => Alloc::alloc(tycker, ss::Arrow(domain, codomain), ctype, &self.info),
-            | Some((first, rest)) => {
-                let witnesses = ss::PackTelescope::new(*first, rest.iter().copied());
-                Alloc::alloc(
-                    tycker,
-                    ss::PackPi::new(domain, witnesses, codomain),
-                    ctype,
-                    &self.info,
-                )
-            }
+            | Some(witnesses) => Alloc::alloc(
+                tycker,
+                ss::PackPi::new(domain, witnesses, codomain),
+                ctype,
+                &self.info,
+            ),
         };
         Ok(TermAnnId::Type(pi, ctype))
+    }
+}
+
+impl<'a> Tyck<'a> for TyEnvT<PackPiInstantiation> {
+    type Out = ss::TypeId;
+    type Action = ();
+
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
+        let PackPiInstantiation { signature, witnesses } = &self.inner;
+        let expected = signature.witnesses.len();
+        let found = witnesses.len();
+        if expected != found {
+            tycker.err_k(
+                TyckError::PackageWitnessArityMismatch { expected, found },
+                std::panic::Location::caller(),
+            )?
+        }
+
+        signature.witnesses.iter().copied().zip(witnesses.iter().copied()).try_fold(
+            signature.codomain,
+            |codomain, (binder, witness)| {
+                let binder_kind = tycker.statics.annotations_abst[&binder];
+                let witness_kind = tycker.statics.annotations_type[&witness];
+                Lub::lub_k(binder_kind, witness_kind, tycker)?;
+                codomain.subst_abst_k(tycker, (binder, witness))
+            },
+        )
+    }
+}
+
+impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
+    type Out = TermAnnId;
+    type Action = ();
+
+    fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
+        let PackPiIntroduction { binder, body, signature } = &self.inner;
+        let skolems = self
+            .mk(PackPiPatternSkolems::new(*binder, signature.witnesses.clone()))
+            .tyck_k(tycker, ())?;
+        let binder = self
+            .mk(*binder)
+            .tyck_k(tycker, PatternAction::ana(signature.domain.into()).with_skolems(skolems))?;
+        let (pattern, domain) =
+            binder.try_as_value(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+        Lub::lub_k(signature.domain, domain, tycker)?;
+
+        let Some(witnesses) = binder.package_telescope_k(tycker)? else {
+            tycker.err_k(
+                TyckError::PackageWitnessArityMismatch {
+                    expected: signature.witnesses.len(),
+                    found: 0,
+                },
+                std::panic::Location::caller(),
+            )?
+        };
+        let body = TyEnvT::new(binder.info.clone(), *body)
+            .tyck_k(tycker, Action::ana(signature.codomain.into()))?;
+        let (body, codomain) =
+            body.try_as_compu(tycker, TyckError::SortMismatch, std::panic::Location::caller())?;
+
+        let ctype = ss::CType.build(tycker, &self.info);
+        let signature =
+            Alloc::alloc(tycker, ss::PackPi::new(domain, witnesses, codomain), ctype, &self.info);
+        signature.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
+        let abstraction = Alloc::alloc(tycker, ss::Abs(pattern, body), signature, &self.info);
+        Ok(TermAnnId::Compu(abstraction, signature))
+    }
+}
+
+impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
+    type Out = TermAnnId;
+    type Action = Action<AnnId>;
+
+    fn tyck_inner_k(
+        &self, tycker: &mut Tycker<'a>, Action { switch }: Self::Action,
+    ) -> ResultKont<Self::Out> {
+        let PackPiElimination { function, argument, signature } = &self.inner;
+        let argument = self.mk(*argument).tyck_k(tycker, Action::ana(signature.domain.into()))?;
+        let (argument, _) = argument.try_as_value(
+            tycker,
+            TyckError::SortMismatch,
+            std::panic::Location::caller(),
+        )?;
+        let Some(witnesses) = argument.package_witnesses(tycker) else {
+            tycker.err_k(
+                TyckError::PackageWitnessesUnavailable { package: argument },
+                std::panic::Location::caller(),
+            )?
+        };
+        let expected = signature.witnesses.len();
+        if witnesses.len() < expected {
+            tycker.err_k(
+                TyckError::PackageWitnessArityMismatch { expected, found: witnesses.len() },
+                std::panic::Location::caller(),
+            )?
+        }
+        let witnesses = witnesses.into_iter().take(expected).collect();
+        let codomain =
+            self.mk(PackPiInstantiation::new(signature.clone(), witnesses)).tyck_k(tycker, ())?;
+        codomain.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
+        let codomain = match switch {
+            | Switch::Syn => codomain,
+            | Switch::Ana(AnnId::Type(expected)) => Lub::lub_k(codomain, expected, tycker)?,
+            | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+            }
+        };
+        let application = Alloc::alloc(tycker, ss::App(*function, argument), codomain, &self.info);
+        Ok(TermAnnId::Compu(application, codomain))
     }
 }
 
@@ -1736,7 +2025,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let su::Abs(pat, body) = term;
                 match switch {
                     | Switch::Syn => {
-                        let pat_out_ann = self.mk(pat).tyck_k(tycker, Action::syn())?;
+                        let pat_out_ann = self.mk(pat).tyck_k(tycker, PatternAction::syn())?;
                         match pat_out_ann.annotation {
                             | PatAnnId::Type(tpat, kd) => {
                                 // could be either type-polymorphic function or type function
@@ -1807,10 +2096,31 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
                                 )?;
-                                pat_out_ann.close_scope_k(tycker, body_ty)?;
                                 let ctype = ss::CType.build(tycker, &self.info);
-                                let ann =
-                                    Alloc::alloc(tycker, ss::Arrow(ty, body_ty), ctype, &self.info);
+                                let ann = match pat_out_ann.package_telescope_k(tycker)? {
+                                    | None => {
+                                        pat_out_ann.close_scope_k(tycker, body_ty)?;
+                                        Alloc::alloc(
+                                            tycker,
+                                            ss::Arrow(ty, body_ty),
+                                            ctype,
+                                            &self.info,
+                                        )
+                                    }
+                                    | Some(witnesses) => {
+                                        let signature = Alloc::alloc(
+                                            tycker,
+                                            ss::PackPi::new(ty, witnesses, body_ty),
+                                            ctype,
+                                            &self.info,
+                                        );
+                                        signature.constrain_to_scope_k(
+                                            tycker,
+                                            self.info.skolem_scope(),
+                                        )?;
+                                        signature
+                                    }
+                                };
                                 let abs =
                                     Alloc::alloc(tycker, ss::Abs(vpat, compu), ann, &self.info);
                                 TermAnnId::Compu(abs, ann)
@@ -1833,7 +2143,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 };
                                 let ss::Arrow(kd_1, kd_2) = kd_arr;
                                 let binder =
-                                    self.mk(pat).tyck_k(tycker, Action::ana(kd_1.into()))?;
+                                    self.mk(pat).tyck_k(tycker, PatternAction::ana(kd_1.into()))?;
                                 let (binder, binder_kd) = binder.try_as_type(
                                     tycker,
                                     TyckError::SortMismatch,
@@ -1864,7 +2174,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         let ss::Arrow(ty_1, ty_2) = ty;
                                         let binder_elaboration = self
                                             .mk(pat)
-                                            .tyck_k(tycker, Action::ana(ty_1.into()))?;
+                                            .tyck_k(tycker, PatternAction::ana(ty_1.into()))?;
                                         let (binder, binder_ty) = binder_elaboration.try_as_value(
                                             tycker,
                                             TyckError::SortMismatch,
@@ -1894,11 +2204,15 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         );
                                         TermAnnId::Compu(abs, ann)
                                     }
+                                    | ss::Type::PackPi(signature) => self
+                                        .mk(PackPiIntroduction::new(pat, body, signature))
+                                        .tyck_k(tycker, ())?,
                                     | ss::Type::Forall(ty) => {
                                         let ss::Forall(abst, ty_body) = ty;
                                         let kd = tycker.statics.annotations_abst[&abst].to_owned();
-                                        let binder =
-                                            self.mk(pat).tyck_k(tycker, Action::ana(kd.into()))?;
+                                        let binder = self
+                                            .mk(pat)
+                                            .tyck_k(tycker, PatternAction::ana(kd.into()))?;
                                         let (binder, _binder_kd) = binder.try_as_type(
                                             tycker,
                                             TyckError::SortMismatch,
@@ -1938,7 +2252,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     }
                                     | _ => tycker.err_k(
                                         TyckError::TypeExpected {
-                                            expected: "one of `_ -> _` or `forall _ . _`"
+                                            expected: "one of `_ -> _`, a package-dependent \
+                                                       arrow, or `forall _ . _`"
                                                 .to_string(),
                                             found: ty,
                                         },
@@ -2073,9 +2388,14 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     Alloc::alloc(tycker, ss::App(f_out, a_ty), ty_out, &self.info);
                                 TermAnnId::Compu(app, body_ty_subst)
                             }
+                            | ss::Type::PackPi(signature) => self
+                                .mk(PackPiElimination::new(f_out, a, signature))
+                                .tyck_k(tycker, Action::switch(switch))?,
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {
-                                    expected: "one of `_ -> _` or `forall _ . _`".to_string(),
+                                    expected: "one of `_ -> _`, a package-dependent arrow, or \
+                                               `forall _ . _`"
+                                        .to_string(),
                                     found: f_ty,
                                 },
                                 std::panic::Location::caller(),
@@ -2097,7 +2417,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             | _ => switch,
                         }
                     };
-                    self.mk(pat).tyck_k(tycker, Action::switch(switch))?
+                    self.mk(pat).tyck_k(tycker, PatternAction::switch(switch))?
                 };
                 let (binder, binder_ty) = binder_elaboration.try_as_value(
                     tycker,
@@ -2126,7 +2446,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let su::Pi(binder, body) = term;
                 match switch {
                     | Switch::Syn => {
-                        let binder_out_ann = self.mk(binder).tyck_k(tycker, Action::syn())?;
+                        let binder_out_ann =
+                            self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
                         match binder_out_ann.annotation {
                             | PatAnnId::Type(tpat, kd_1) => {
                                 let abst = Alloc::alloc(tycker, tpat, (), &());
@@ -2198,7 +2519,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     // could be forall or type arrow
                                     // synthesize the binder
                                     let binder_out_ann =
-                                        self.mk(binder).tyck_k(tycker, Action::syn())?;
+                                        self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
                                     match binder_out_ann.annotation {
                                         | PatAnnId::Type(tpat, _kd_1) => {
                                             // forall
@@ -2242,8 +2563,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     // kind arrow
                                     let ss::Arrow(kd_1, kd_2) = kd_arr;
                                     // ana binder with kd_1
-                                    let binder_out_ann =
-                                        self.mk(binder).tyck_k(tycker, Action::ana(kd_1.into()))?;
+                                    let binder_out_ann = self
+                                        .mk(binder)
+                                        .tyck_k(tycker, PatternAction::ana(kd_1.into()))?;
                                     let (tpat, kd_1) = binder_out_ann.try_as_type(
                                         tycker,
                                         TyckError::SortMismatch,
@@ -2281,7 +2603,8 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 match switch {
                     | Switch::Syn => {
                         // either a prod or an exists
-                        let binder_out_ann = self.mk(binder).tyck_k(tycker, Action::syn())?;
+                        let binder_out_ann =
+                            self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
                         match binder_out_ann.annotation {
                             | PatAnnId::Type(tpat, _kd) => {
                                 // exists
@@ -2472,7 +2795,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 };
                 let ss::App(_ret_ty, binder_ty) = ret_app_binder_ty;
                 let binder_elaboration =
-                    self.mk(binder).tyck_k(tycker, Action::ana(binder_ty.into()))?;
+                    self.mk(binder).tyck_k(tycker, PatternAction::ana(binder_ty.into()))?;
                 let (binder_out, _binder_ty) = binder_elaboration.as_value();
                 // finally, we tyck the tail
                 let (tail_out, tail_ty) = {
@@ -2503,7 +2826,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         // a type alias
                         // then, ana binder with bindee_kd
                         let binder_out_ann =
-                            self.mk(binder).tyck_k(tycker, Action::ana(bindee_kd.into()))?;
+                            self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_kd.into()))?;
                         let (binder_out, _binder_kd) = binder_out_ann.as_type();
                         // and then assign bindee_out to binder_out;
                         // the type is effectively inlined
@@ -2540,10 +2863,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         // a value alias
                         // then, ana binder with bindee_ty
                         let binder_elaboration =
-                            self.mk(binder).tyck_k(tycker, Action::ana(bindee_ty.into()))?;
+                            self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_ty.into()))?;
                         let (binder_out, _binder_ty) = binder_elaboration.as_value();
                         match binder_out.try_destruct_def(tycker) {
                             | (Some(def), _) => {
+                                let _ = tycker.statics.value_aliases.upsert(def, bindee_out);
                                 // consider adding it to the globals if bindee is global
                                 if tycker.statics.global_terms.get(&bindee_out.into()).is_some() {
                                     tycker.statics.global_defs.ensure(def);
@@ -2757,8 +3081,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 let mut matchers = Vec::new();
                 let mut arms_ty = Vec::new();
                 for su::Matcher { binder, tail } in arms {
-                    let binder_elaboration =
-                        self.mk(binder).tyck_k(tycker, Action::ana(scrut_ty_unroll.into()))?;
+                    let binder_elaboration = self
+                        .mk(binder)
+                        .tyck_k(tycker, PatternAction::ana(scrut_ty_unroll.into()))?;
                     let (binder, _ty) = binder_elaboration.try_as_value(
                         tycker,
                         TyckError::SortMismatch,
