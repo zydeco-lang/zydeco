@@ -306,7 +306,12 @@ impl Debruijn {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
-                        Alloc::alloc(tycker, PackPi::new(domain, lhs_witnesses, codomain), kd, &env)
+                        Alloc::alloc(
+                            tycker,
+                            PackPi { domain, witnesses: lhs_witnesses, codomain },
+                            kd,
+                            &env,
+                        )
                     }
                 }
                 | (Type::PackPi(_), _) => tycker.err(

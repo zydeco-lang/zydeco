@@ -323,7 +323,7 @@ impl<'a> Substitutor<'a> {
         statics: &'a StaticsArena,
     ) -> Self {
         Self {
-            arena: StackirArena { admin, inner: StackirInnerArena::new() },
+            arena: StackirArena { admin, inner: StackirInnerArena::default() },
             snorm,
             scoped,
             statics,

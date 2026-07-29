@@ -37,9 +37,3 @@ pub struct BitterArena {
     /// entity maps from textural syntax
     pub textual: ArenaForth<t::EntityId, EntityId>,
 }
-
-impl BitterArena {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}

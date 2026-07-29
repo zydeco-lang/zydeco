@@ -161,12 +161,6 @@ pub struct StaticsArena {
     pub types_normalized: ArenaAssoc<TypeId, Type>,
 }
 
-impl StaticsArena {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 /* -------------------------------- LocalFold ------------------------------- */
 
 /// A set of local actions on static arena items.

@@ -45,12 +45,6 @@ pub struct ProductLayout {
     pub arity: usize,
 }
 
-impl ProductLayout {
-    pub fn new(arity: usize) -> Self {
-        Self { arity }
-    }
-}
-
 /// A logical value cons together with its canonical physical product layout.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct VCons<T> {

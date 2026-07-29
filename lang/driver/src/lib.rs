@@ -517,7 +517,8 @@ impl BuildSystem {
                 log::trace!("ZIR right after lowering:\n{}", buf);
             }
         }
-        zydeco_stackir::sps::inline::Inliner::new(&mut stackir, &mut scoped).run()?;
+        zydeco_stackir::sps::inline::Inliner { stackir: &mut stackir, scoped: &mut scoped }
+            .run()?;
         {
             use zydeco_stackir::sps::fmt::*;
             let fmt = Formatter::new(&stackir.admin, &stackir.inner, &scoped, &statics);

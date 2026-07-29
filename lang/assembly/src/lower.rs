@@ -39,7 +39,7 @@ impl<'a> Lowerer<'a> {
         spans: &'a SpanArena, scoped: &'a ScopedArena, statics: &'a StaticsArena,
         stackir: &'a StackirArena,
     ) -> Self {
-        let arena = AssemblyArena::new();
+        let arena = AssemblyArena::default();
         Self { allocator: IdAllocator::new(), arena, spans, scoped, statics, stackir }
     }
 

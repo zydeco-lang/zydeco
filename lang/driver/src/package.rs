@@ -96,7 +96,7 @@ impl Package {
             })?;
 
         let (spans, textual) = parser.finish();
-        let bitter = b::BitterArena::new();
+        let bitter = b::BitterArena::default();
         let desugarer = Desugarer::new(&spans, &textual, top, bitter);
         let DesugarOut { arena, prim: prim_term, top } =
             desugarer.run().map_err(|err| LocalError::DesugarError(err.to_string()))?;

@@ -284,7 +284,12 @@ impl TypeId {
                     if domain == domain_ && codomain == codomain_ {
                         *self
                     } else {
-                        Alloc::alloc(tycker, PackPi::new(domain_, witnesses, codomain_), kd, env)
+                        Alloc::alloc(
+                            tycker,
+                            PackPi { domain: domain_, witnesses, codomain: codomain_ },
+                            kd,
+                            env,
+                        )
                     }
                 }
                 | Type::Prod(prod) => {
@@ -480,7 +485,12 @@ impl TypeId {
                     if domain == domain_ && codomain == codomain_ {
                         *self
                     } else {
-                        Alloc::alloc(tycker, PackPi::new(domain_, witnesses, codomain_), kd, &env)
+                        Alloc::alloc(
+                            tycker,
+                            PackPi { domain: domain_, witnesses, codomain: codomain_ },
+                            kd,
+                            &env,
+                        )
                     }
                 }
                 | Type::Prod(prod) => {
@@ -861,7 +871,7 @@ impl TypeId {
                     } else {
                         Alloc::alloc(
                             tycker,
-                            PackPi::new(domain_, witnesses, codomain_),
+                            PackPi { domain: domain_, witnesses, codomain: codomain_ },
                             tycker.statics.annotations_type[&res],
                             &env,
                         )
@@ -1268,7 +1278,7 @@ impl TypeId {
                     } else {
                         Alloc::alloc(
                             tycker,
-                            PackPi::new(domain_norm, witnesses, codomain_norm),
+                            PackPi { domain: domain_norm, witnesses, codomain: codomain_norm },
                             kd_norm,
                             &env,
                         )

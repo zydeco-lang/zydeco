@@ -51,18 +51,6 @@ pub struct StackirInnerArena {
     pub entry: ArenaAssoc<CompuId, ()>,
 }
 
-impl StackirArena {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl StackirInnerArena {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 /// Build a stack IR node and optionally record its source site mapping.
 pub trait Construct<S, T, Arena>: Sized + Into<S> {
     type Site;

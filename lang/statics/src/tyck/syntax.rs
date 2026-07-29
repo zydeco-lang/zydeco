@@ -367,12 +367,6 @@ mod impls_structs {
         }
     }
 
-    impl PackPi {
-        pub fn new(domain: TypeId, witnesses: PackTelescope, codomain: TypeId) -> Self {
-            Self { domain, witnesses, codomain }
-        }
-    }
-
     impl Data {
         pub fn new(arms: impl IntoIterator<Item = (CtorName, TypeId)>) -> Self {
             Self { arms: arms.into_iter().collect() }

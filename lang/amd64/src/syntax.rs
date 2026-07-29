@@ -246,12 +246,6 @@ pub struct AsmFile {
     pub bss: Vec<Instr>,
 }
 
-impl AsmFile {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 impl fmt::Display for MemRef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use std::cmp::Ordering;

@@ -47,12 +47,6 @@ pub struct AssemblyArena {
     pub entry: ArenaAssoc<ProgId, ()>,
 }
 
-impl AssemblyArena {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 pub trait AssemblyArenaRefLike {
     fn sym_label(&self, sym: &SymId) -> String;
     fn prog_label(&self, prog: &ProgId) -> Option<String>;

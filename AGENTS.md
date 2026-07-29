@@ -4,7 +4,8 @@ This file is guidance for automated assistants working in this repository.
 
 ## Adding a Dependency
 
-All Rust dependencies are managed in the top-level `Cargo.toml` file, under `[workspace.dependencies]`. All crates then use `dependency = { workspace = true }` to refer to the workspace-registered dependencies in their own `Cargo.toml`.
+All Rust dependencies are managed in the top-level `Cargo.toml` file, under `[workspace.dependencies]`.
+All crates then use `dependency = { workspace = true }` to refer to the workspace-registered dependencies in their own `Cargo.toml`.
 
 ## Project Snapshot
 
@@ -108,6 +109,10 @@ When wrapping the functions, abide by the following rules:
 - Use associated functions (similar to static methods) when the struct is purely a namespace;
   specifically, write `fn new` for "constructors" with no perspective,
   and `fn with_*` for "constructors" that hints how the struct is created.
+- Avoid an `fn new` wrapper when it would be the struct's only method
+  and merely repackages a struct literal.
+- Prefer direct construction unless the constructor performs additional work
+  or establishes an intentional visibility boundary for the fields.
 
 For builder patterns, pick receivers based on whether the finalizer must move owned fields out.
 If build/finish consumes,

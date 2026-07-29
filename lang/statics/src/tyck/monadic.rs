@@ -570,7 +570,7 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             let witnesses =
                 witnesses.map(|witness| env.subst_abst.get(&witness).copied().unwrap_or(witness));
             let (env, codomain) = cs::TypeLift { ty: codomain }.mbuild(tycker, env)?;
-            let alloc = Alloc::alloc(tycker, PackPi::new(domain, witnesses, codomain), kd, &env.ty);
+            let alloc = Alloc::alloc(tycker, PackPi { domain, witnesses, codomain }, kd, &env.ty);
             (env, alloc)
         }
     };

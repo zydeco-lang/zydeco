@@ -83,7 +83,7 @@ impl<'a> Lowerer<'a> {
     pub fn new(
         spans: &'a SpanArena, scoped: &'a mut ScopedArena, statics: &'a StaticsArena,
     ) -> Self {
-        let arena = StackirArena::new();
+        let arena = StackirArena::default();
         Self { arena, sequence: Vec::new(), globals: ArenaAssoc::new(), spans, scoped, statics }
     }
 
@@ -101,7 +101,7 @@ impl<'a> Lowerer<'a> {
     }
 
     fn product_layout(&self, ty: ss::TypeId) -> ProductLayout {
-        ProductLayout::new(self.product_arity(ty))
+        ProductLayout { arity: self.product_arity(ty) }
     }
 
     fn alloc_projection_def(&mut self) -> DefId {

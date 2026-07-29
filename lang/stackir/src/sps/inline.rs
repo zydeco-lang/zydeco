@@ -19,12 +19,6 @@ pub struct Inliner<'a> {
     pub scoped: &'a mut ScopedArena,
 }
 
-impl<'a> Inliner<'a> {
-    pub fn new(stackir: &'a mut StackirArena, scoped: &'a mut ScopedArena) -> Self {
-        Self { stackir, scoped }
-    }
-}
-
 impl<'a> CompilerPass for Inliner<'a> {
     type Arena = StackirArena;
     type Out = ();

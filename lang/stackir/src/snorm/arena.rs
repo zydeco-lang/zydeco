@@ -55,13 +55,7 @@ pub struct SNormInnerArena {
 
 impl SNormArena {
     pub fn new(admin: AdminArena) -> Self {
-        Self { admin, inner: SNormInnerArena::new() }
-    }
-}
-
-impl SNormInnerArena {
-    pub fn new() -> Self {
-        Self::default()
+        Self { admin, inner: SNormInnerArena::default() }
     }
 }
 

@@ -73,7 +73,7 @@ impl<'e> Emitter<'e> {
             statics,
             stackir,
             assembly,
-            asm: AsmFile::new(),
+            asm: AsmFile::default(),
             target_format,
             diagnostics: EmitDiagnostics::new(),
             tables: Vec::new(),

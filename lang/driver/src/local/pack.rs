@@ -91,7 +91,7 @@ impl LocalPackage {
                 //     println!("{}", f.top.ugly(&Formatter::new(&f.arena)));
                 //     println!("<<< [{}]", f.path.display());
                 // }
-                let f = f.desugar(b::BitterArena::new())?;
+                let f = f.desugar(b::BitterArena::default())?;
                 // // Debug: print the desugared package
                 // if cfg!(debug_assertions) {
                 //     use zydeco_surface::bitter::fmt::*;

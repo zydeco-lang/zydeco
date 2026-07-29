@@ -102,7 +102,7 @@ impl<'a> ClosureConverter<'a> {
     fn build_product_pattern(&mut self, items: Vec<VPatId>) -> VPatId {
         let arity = items.len();
         match ConsN::from_vec(items) {
-            | Some(items) => VCons::new(items, ProductLayout::new(arity)).build(self, None),
+            | Some(items) => VCons::new(items, ProductLayout { arity }).build(self, None),
             | None => Triv.build(self, None),
         }
     }
@@ -110,7 +110,7 @@ impl<'a> ClosureConverter<'a> {
     fn build_product_value(&mut self, items: Vec<ValueId>, site: Option<ss::TermId>) -> ValueId {
         let arity = items.len();
         match ConsN::from_vec(items) {
-            | Some(items) => VCons::new(items, ProductLayout::new(arity)).build(self, site),
+            | Some(items) => VCons::new(items, ProductLayout { arity }).build(self, site),
             | None => Triv.build(self, site),
         }
     }
@@ -155,7 +155,7 @@ impl<'a> ClosureConverter<'a> {
         // Add a variable that re-packs the captures and the param into a thunk pair
         let param_value: ValueId = fix.param.build(self, site);
         let closure_pair =
-            VCons::new(ConsN(vec![capture_pack], param_value), ProductLayout::new(2))
+            VCons::new(ConsN(vec![capture_pack], param_value), ProductLayout { arity: 2 })
                 .build(self, site);
         let closure_def = {
             let original_name = self.scoped.defs[&fix.param].clone();
@@ -257,7 +257,7 @@ impl<'a> ClosureConverter<'a> {
         // Update the value in place with the pair: (captures, body_closure)
         self.arena.inner.values.replace_existing_with(
             old_value_id,
-            VCons::new(ConsN(vec![capture_pair], body_closure), ProductLayout::new(2)),
+            VCons::new(ConsN(vec![capture_pair], body_closure), ProductLayout { arity: 2 }),
         );
     }
 
@@ -274,9 +274,11 @@ impl<'a> ClosureConverter<'a> {
         // Create Var patterns to bind the destructured values
         let capture_pair_vpat = capture_pair_def.build(self, None);
         let body_closure_vpat = body_closure_def.build(self, None);
-        let pair_pattern =
-            VCons::new(ConsN(vec![capture_pair_vpat], body_closure_vpat), ProductLayout::new(2))
-                .build(self, None);
+        let pair_pattern = VCons::new(
+            ConsN(vec![capture_pair_vpat], body_closure_vpat),
+            ProductLayout { arity: 2 },
+        )
+        .build(self, None);
 
         // After destructuring with LetValue, we need to:
         // 1. Push capture_pair onto the stack

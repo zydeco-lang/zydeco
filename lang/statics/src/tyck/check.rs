@@ -122,7 +122,7 @@ impl<'a> Tycker<'a> {
             spans,
             prim,
             scoped,
-            statics: StaticsArena::new(),
+            statics: StaticsArena::default(),
             tasks: im::Vector::new(),
             metas: im::Vector::new(),
             errors: Vec::new(),
@@ -424,22 +424,10 @@ struct ValuePiFormation {
     codomain: su::TermId,
 }
 
-impl ValuePiFormation {
-    fn new(binder: CheckedPattern, codomain: su::TermId) -> Self {
-        Self { binder, codomain }
-    }
-}
-
 /// Instantiate the bound witnesses of a package-dependent arrow.
 struct PackPiInstantiation {
     signature: ss::PackPi,
     witnesses: Vec<ss::TypeId>,
-}
-
-impl PackPiInstantiation {
-    fn new(signature: ss::PackPi, witnesses: Vec<ss::TypeId>) -> Self {
-        Self { signature, witnesses }
-    }
 }
 
 /// Check a value abstraction against a package-dependent arrow.
@@ -449,12 +437,6 @@ struct PackPiIntroduction {
     signature: ss::PackPi,
 }
 
-impl PackPiIntroduction {
-    fn new(binder: su::PatId, body: su::TermId, signature: ss::PackPi) -> Self {
-        Self { binder, body, signature }
-    }
-}
-
 /// Associate a package pattern's leading type components with a `PackPi`
 /// telescope.
 struct PackPiPatternSkolems {
@@ -462,23 +444,11 @@ struct PackPiPatternSkolems {
     witnesses: ss::PackTelescope,
 }
 
-impl PackPiPatternSkolems {
-    fn new(pattern: su::PatId, witnesses: ss::PackTelescope) -> Self {
-        Self { pattern, witnesses }
-    }
-}
-
 /// Apply a package-dependent function to a package with manifest witnesses.
 struct PackPiElimination {
     function: ss::CompuId,
     argument: su::TermId,
     signature: ss::PackPi,
-}
-
-impl PackPiElimination {
-    fn new(function: ss::CompuId, argument: su::TermId, signature: ss::PackPi) -> Self {
-        Self { function, argument, signature }
-    }
 }
 
 impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
@@ -1297,12 +1267,9 @@ impl<'a> Tyck<'a> for TyEnvT<ValuePiFormation> {
 
         let pi = match binder.package_telescope_k(tycker)? {
             | None => Alloc::alloc(tycker, ss::Arrow(domain, codomain), ctype, &self.info),
-            | Some(witnesses) => Alloc::alloc(
-                tycker,
-                ss::PackPi::new(domain, witnesses, codomain),
-                ctype,
-                &self.info,
-            ),
+            | Some(witnesses) => {
+                Alloc::alloc(tycker, ss::PackPi { domain, witnesses, codomain }, ctype, &self.info)
+            }
         };
         Ok(TermAnnId::Type(pi, ctype))
     }
@@ -1342,7 +1309,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
     fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
         let PackPiIntroduction { binder, body, signature } = &self.inner;
         let skolems = self
-            .mk(PackPiPatternSkolems::new(*binder, signature.witnesses.clone()))
+            .mk(PackPiPatternSkolems { pattern: *binder, witnesses: signature.witnesses.clone() })
             .tyck_k(tycker, ())?;
         let binder = self
             .mk(*binder)
@@ -1367,7 +1334,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
 
         let ctype = ss::CType.build(tycker, &self.info);
         let signature =
-            Alloc::alloc(tycker, ss::PackPi::new(domain, witnesses, codomain), ctype, &self.info);
+            Alloc::alloc(tycker, ss::PackPi { domain, witnesses, codomain }, ctype, &self.info);
         signature.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
         let abstraction = Alloc::alloc(tycker, ss::Abs(pattern, body), signature, &self.info);
         Ok(TermAnnId::Compu(abstraction, signature))
@@ -1402,8 +1369,9 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
             )?
         }
         let witnesses = witnesses.into_iter().take(expected).collect();
-        let codomain =
-            self.mk(PackPiInstantiation::new(signature.clone(), witnesses)).tyck_k(tycker, ())?;
+        let codomain = self
+            .mk(PackPiInstantiation { signature: signature.clone(), witnesses })
+            .tyck_k(tycker, ())?;
         codomain.constrain_to_scope_k(tycker, self.info.skolem_scope())?;
         let codomain = match switch {
             | Switch::Syn => codomain,
@@ -2110,7 +2078,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                     | Some(witnesses) => {
                                         let signature = Alloc::alloc(
                                             tycker,
-                                            ss::PackPi::new(ty, witnesses, body_ty),
+                                            ss::PackPi { domain: ty, witnesses, codomain: body_ty },
                                             ctype,
                                             &self.info,
                                         );
@@ -2205,7 +2173,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         TermAnnId::Compu(abs, ann)
                                     }
                                     | ss::Type::PackPi(signature) => self
-                                        .mk(PackPiIntroduction::new(pat, body, signature))
+                                        .mk(PackPiIntroduction { binder: pat, body, signature })
                                         .tyck_k(tycker, ())?,
                                     | ss::Type::Forall(ty) => {
                                         let ss::Forall(abst, ty_body) = ty;
@@ -2389,7 +2357,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 TermAnnId::Compu(app, body_ty_subst)
                             }
                             | ss::Type::PackPi(signature) => self
-                                .mk(PackPiElimination::new(f_out, a, signature))
+                                .mk(PackPiElimination { function: f_out, argument: a, signature })
                                 .tyck_k(tycker, Action::switch(switch))?,
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {
@@ -2501,7 +2469,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 }
                             }
                             | PatAnnId::Value(_, _) => self
-                                .mk(ValuePiFormation::new(binder_out_ann, body))
+                                .mk(ValuePiFormation { binder: binder_out_ann, codomain: body })
                                 .tyck_k(tycker, Action::syn())?,
                         }
                     }
@@ -2554,8 +2522,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                         }
                                         | PatAnnId::Value(_, _) => {
                                             let ctype = ss::CType.build(tycker, &self.info);
-                                            self.mk(ValuePiFormation::new(binder_out_ann, body))
-                                                .tyck_k(tycker, Action::ana(ctype.into()))?
+                                            self.mk(ValuePiFormation {
+                                                binder: binder_out_ann,
+                                                codomain: body,
+                                            })
+                                            .tyck_k(tycker, Action::ana(ctype.into()))?
                                         }
                                     }
                                 }

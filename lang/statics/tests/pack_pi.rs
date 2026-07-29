@@ -25,7 +25,7 @@ impl TestFixture {
     ) -> TypeId {
         Alloc::alloc(
             tycker,
-            PackPi::new(domain, PackTelescope::singleton(witness), codomain),
+            PackPi { domain, witnesses: PackTelescope::singleton(witness), codomain },
             ctype,
             &TyEnv::new(),
         )

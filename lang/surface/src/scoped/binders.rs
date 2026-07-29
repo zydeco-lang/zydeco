@@ -71,14 +71,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.monad,
-                                    &self.prim_term.monad,
-                                    *id,
-                                    *def,
-                                    "Monad",
-                                    Internal::Monad,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.monad,
+                                    terms: &self.prim_term.monad,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "Monad",
+                                    internal: Internal::Monad,
+                                },
                             )?;
                             break 'out;
                         }
@@ -86,14 +86,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.algebra,
-                                    &self.prim_term.algebra,
-                                    *id,
-                                    *def,
-                                    "Algebra",
-                                    Internal::Algebra,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.algebra,
+                                    terms: &self.prim_term.algebra,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "Algebra",
+                                    internal: Internal::Algebra,
+                                },
                             )?;
                             break 'out;
                         }
@@ -112,14 +112,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.vtype,
-                                    &self.prim_term.vtype,
-                                    *id,
-                                    *def,
-                                    "VType",
-                                    Internal::VType,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.vtype,
+                                    terms: &self.prim_term.vtype,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "VType",
+                                    internal: Internal::VType,
+                                },
                             )?;
                             break 'out;
                         }
@@ -127,14 +127,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.ctype,
-                                    &self.prim_term.ctype,
-                                    *id,
-                                    *def,
-                                    "CType",
-                                    Internal::CType,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.ctype,
+                                    terms: &self.prim_term.ctype,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "CType",
+                                    internal: Internal::CType,
+                                },
                             )?;
                             break 'out;
                         }
@@ -142,14 +142,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.thk,
-                                    &self.prim_term.thk,
-                                    *id,
-                                    *def,
-                                    "Thk",
-                                    Internal::Thk,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.thk,
+                                    terms: &self.prim_term.thk,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "Thk",
+                                    internal: Internal::Thk,
+                                },
                             )?;
                             break 'out;
                         }
@@ -157,14 +157,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.ret,
-                                    &self.prim_term.ret,
-                                    *id,
-                                    *def,
-                                    "Ret",
-                                    Internal::Ret,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.ret,
+                                    terms: &self.prim_term.ret,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "Ret",
+                                    internal: Internal::Ret,
+                                },
                             )?;
                             break 'out;
                         }
@@ -172,14 +172,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.unit,
-                                    &self.prim_term.unit,
-                                    *id,
-                                    *def,
-                                    "Unit",
-                                    Internal::Unit,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.unit,
+                                    terms: &self.prim_term.unit,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "Unit",
+                                    internal: Internal::Unit,
+                                },
                             )?;
                             break 'out;
                         }
@@ -187,14 +187,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.int,
-                                    &self.prim_term.int,
-                                    *id,
-                                    *def,
-                                    "Int",
-                                    Internal::Int,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.int,
+                                    terms: &self.prim_term.int,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "Int",
+                                    internal: Internal::Int,
+                                },
                             )?;
                             break 'out;
                         }
@@ -202,14 +202,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.char,
-                                    &self.prim_term.char,
-                                    *id,
-                                    *def,
-                                    "Char",
-                                    Internal::Char,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.char,
+                                    terms: &self.prim_term.char,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "Char",
+                                    internal: Internal::Char,
+                                },
                             )?;
                             break 'out;
                         }
@@ -217,14 +217,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.string,
-                                    &self.prim_term.string,
-                                    *id,
-                                    *def,
-                                    "String",
-                                    Internal::String,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.string,
+                                    terms: &self.prim_term.string,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "String",
+                                    internal: Internal::String,
+                                },
                             )?;
                             break 'out;
                         }
@@ -232,14 +232,14 @@ impl<'a> Resolver<'a> {
                             PrimitiveRegistry::new(self.spans, &self.bitter.textual).alloc(
                                 &mut self.exts,
                                 &mut self.internal_to_def,
-                                PrimitiveSpec::new(
-                                    &mut self.prim_def.os,
-                                    &self.prim_term.os,
-                                    *id,
-                                    *def,
-                                    "OS",
-                                    Internal::OS,
-                                ),
+                                PrimitiveSpec {
+                                    cell: &mut self.prim_def.os,
+                                    terms: &self.prim_term.os,
+                                    decl: *id,
+                                    def: *def,
+                                    name: "OS",
+                                    internal: Internal::OS,
+                                },
                             )?;
                             break 'out;
                         }
@@ -322,13 +322,4 @@ struct PrimitiveSpec<'a> {
     def: DefId,
     name: &'static str,
     internal: Internal,
-}
-
-impl<'a> PrimitiveSpec<'a> {
-    fn new(
-        cell: &'a mut SingCell<DefId>, terms: &'a MultiCell<TermId>, decl: DeclId, def: DefId,
-        name: &'static str, internal: Internal,
-    ) -> Self {
-        Self { cell, terms, decl, def, name, internal }
-    }
 }

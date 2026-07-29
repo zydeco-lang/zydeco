@@ -13,7 +13,7 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new(arena: AssemblyArena) -> Self {
-        Self { arena, runtime: Runtime::new() }
+        Self { arena, runtime: Runtime::default() }
     }
 }
 
@@ -35,12 +35,6 @@ pub struct Runtime {
     pub stack: Vec<Value>,
     pub heap: Vec<Value>,
     pub context: im::HashMap<VarId, Value>,
-}
-
-impl Runtime {
-    pub fn new() -> Self {
-        Self::default()
-    }
 }
 
 #[derive(Debug, Error)]
