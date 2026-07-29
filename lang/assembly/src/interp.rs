@@ -142,26 +142,61 @@ impl Eval for Instruction {
     type Output = ();
     fn eval(self, interp: &mut Interpreter) -> Result<Self::Output, Error> {
         match self {
-            | Instruction::PackProduct(Pack(ProductMarker)) => {
-                log::trace!("packproduct");
+            | Instruction::PackProduct(Pack(layout)) => {
+                log::trace!("packproduct: {:?}", layout);
                 let pointer = interp.runtime.heap.len();
-                let a = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                let b = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
-                interp.runtime.heap.push(a);
-                interp.runtime.heap.push(b);
+                for index in 0..layout.elements {
+                    let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
+                    if index + 1 == layout.elements && layout.elements < layout.arity {
+                        let Value::Pointer(suffix) = value else {
+                            Err(Error::TypeError(format!(
+                                "expected product suffix, got {:?}",
+                                value
+                            )))?
+                        };
+                        let suffix_arity = layout.arity - index;
+                        let suffix = interp
+                            .runtime
+                            .heap
+                            .get(suffix..suffix + suffix_arity)
+                            .ok_or_else(|| {
+                                Error::TypeError(format!(
+                                    "product suffix at {} has fewer than {} fields",
+                                    suffix, suffix_arity
+                                ))
+                            })?
+                            .to_vec();
+                        interp.runtime.heap.extend(suffix);
+                    } else {
+                        interp.runtime.heap.push(value);
+                    }
+                }
+                debug_assert_eq!(interp.runtime.heap.len(), pointer + layout.arity);
                 interp.runtime.stack.push(Value::Pointer(pointer));
                 Ok(())
             }
-            | Instruction::UnpackProduct(Unpack(ProductMarker)) => {
-                log::trace!("unpackproduct");
+            | Instruction::UnpackProduct(Unpack(layout)) => {
+                log::trace!("unpackproduct: {:?}", layout);
                 let value = interp.runtime.stack.pop().ok_or(Error::StackUnderflow)?;
                 let Value::Pointer(pointer) = value else {
                     Err(Error::TypeError(format!("expected pointer, got {:?}", value)))?
                 };
-                let b = interp.runtime.heap[pointer + 1].clone();
-                let a = interp.runtime.heap[pointer].clone();
-                interp.runtime.stack.push(b);
-                interp.runtime.stack.push(a);
+                if pointer + layout.arity > interp.runtime.heap.len() {
+                    Err(Error::TypeError(format!(
+                        "product at {} has fewer than {} fields",
+                        pointer, layout.arity
+                    )))?
+                }
+
+                let last = layout.elements - 1;
+                if layout.elements < layout.arity {
+                    interp.runtime.stack.push(Value::Pointer(pointer + last));
+                } else {
+                    interp.runtime.stack.push(interp.runtime.heap[pointer + last].clone());
+                }
+                for index in (0..last).rev() {
+                    interp.runtime.stack.push(interp.runtime.heap[pointer + index].clone());
+                }
                 Ok(())
             }
             | Instruction::PushContext(Push(ContextMarker)) => {

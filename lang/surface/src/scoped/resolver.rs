@@ -270,6 +270,7 @@ impl Resolve for PatId {
                 let Hole = pat;
                 local
             }
+            | Pattern::Triv(Triv) => local,
             | Pattern::Var(def) => {
                 let () = def.resolve(resolver, ())?;
                 local.var_to_def.insert(resolver.bitter.defs[def].clone(), *def);
@@ -279,15 +280,11 @@ impl Resolve for PatId {
                 let Ctor(_ctor, args) = pat;
                 args.resolve(resolver, (local, global))?
             }
-            | Pattern::Triv(pat) => {
-                let Triv = pat;
-                local
-            }
             | Pattern::Cons(pat) => {
-                let Cons(a, b) = pat;
-                // can be dependent on the previous binders
-                local = a.resolve(resolver, (local, global))?;
-                local = b.resolve(resolver, (local, global))?;
+                // Later items can depend on binders introduced by earlier items.
+                for item in pat {
+                    local = item.resolve(resolver, (local, global))?;
+                }
                 local
             }
         };
@@ -360,9 +357,9 @@ impl Resolve for TermId {
                 term.into()
             }
             | Term::Cons(term) => {
-                let Cons(a, b) = &term;
-                let () = a.resolve(resolver, (local.clone(), global))?;
-                let () = b.resolve(resolver, (local.clone(), global))?;
+                for item in &term {
+                    let () = item.resolve(resolver, (local.clone(), global))?;
+                }
                 term.into()
             }
             | Term::Abs(term) => {

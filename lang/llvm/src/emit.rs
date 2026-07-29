@@ -304,23 +304,20 @@ impl<'a> Emit<'a> for Instruction {
     type Env = ProgId;
     fn emit(&self, _id: Self::Env, em: &mut Emitter) {
         match self {
-            | Instruction::PackProduct(sa::Pack(sa::ProductMarker)) => {
-                let size = "16";
+            | Instruction::PackProduct(sa::Pack(layout)) => {
                 let ptr = em.new_local();
-                let _call_ir = format!("  {} = call i64 @zydeco_alloc(i64 {})\n", ptr, size);
-                let second = em.emit_pop();
-                let first = em.emit_pop();
-                let _ = (first, second);
+                let _call_ir =
+                    format!("  {} = call i64 @zydeco_alloc(i64 {})\n", ptr, layout.arity);
+                let values = (0..layout.elements).map(|_| em.emit_pop()).collect::<Vec<String>>();
+                let _ = values;
                 em.emit_push(ptr);
             }
-            | Instruction::UnpackProduct(sa::Unpack(sa::ProductMarker)) => {
-                let ptr = em.emit_pop();
-                let _ptr = ptr; // suppress unused warning
-                let first = em.new_local();
-                let second = em.new_local();
-                let _ = (first.clone(), second.clone());
-                em.emit_push(first);
-                em.emit_push(second);
+            | Instruction::UnpackProduct(sa::Unpack(layout)) => {
+                let _ptr = em.emit_pop();
+                let values = (0..layout.elements).map(|_| em.new_local()).collect::<Vec<String>>();
+                for value in values.into_iter().rev() {
+                    em.emit_push(value);
+                }
             }
             | Instruction::PushContext(sa::Push(sa::ContextMarker)) => {
                 em.emit_push("%env".to_string());

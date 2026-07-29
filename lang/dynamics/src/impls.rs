@@ -32,18 +32,9 @@ fn ctor(ctor: &str, args: Vec<Rc<ZValue>>) -> ZValue {
         | 0 => mk_box(Triv.into()),
         | 1 => mk_box(args[0].as_ref().to_owned()),
         | _ => {
-            // re-expand from right to left, like:
-            // (t1, (t2, (t3, t4)))
-            let mut iter = args.into_iter().rev();
-            let snd = iter.next().unwrap().as_ref().to_owned();
-            let fst = iter.next().unwrap().as_ref().to_owned();
-            let mut body: SemValue = Cons(mk_box(fst), mk_box(snd)).into();
-            for term in iter {
-                let term = term.as_ref().to_owned();
-                let id = body;
-                body = Cons(mk_box(term), mk_box(id)).into()
-            }
-            mk_box(body)
+            let args = args.into_iter().map(|arg| arg.as_ref().to_owned()).collect();
+            let ConsN(items, tail) = ConsN::from_vec(args).expect("non-empty constructor payload");
+            mk_box(ConsN(items, Box::new(tail)).into())
         }
     };
     Ctor(CtorName(ctor.to_string()), args).into()

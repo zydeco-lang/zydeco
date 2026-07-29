@@ -14,7 +14,10 @@ impl Vars for VPatId {
             | VPat::Var(def_id) => Context::singleton(def_id),
             | VPat::Ctor(Ctor(_ctor, body)) => body.vars(arena),
             | VPat::Triv(Triv) => Context::new(),
-            | VPat::VCons(Cons(a, b)) => a.vars(arena) + b.vars(arena),
+            | VPat::VCons(VCons { items, layout: _ }) => items
+                .into_iter()
+                .map(|item| item.vars(arena))
+                .fold(Context::new(), |vars, item| vars + item),
         }
     }
 }
@@ -31,7 +34,10 @@ impl FreeVars for ValueId {
             | Value::Var(def_id) => CoContext::singleton(def_id),
             | Value::Closure(Closure { stack: Bullet, body }) => body.free_vars(arena),
             | Value::Ctor(Ctor(_ctor, body)) => body.free_vars(arena),
-            | Value::VCons(Cons(a, b)) => a.free_vars(arena) + b.free_vars(arena),
+            | Value::VCons(VCons { items, layout: _ }) => items
+                .into_iter()
+                .map(|item| item.free_vars(arena))
+                .fold(CoContext::new(), |vars, item| vars + item),
             | Value::Complex(Complex { operator: _, operands }) => operands
                 .into_iter()
                 .map(|operand| operand.free_vars(arena))

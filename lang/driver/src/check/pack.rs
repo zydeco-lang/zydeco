@@ -85,9 +85,10 @@ impl PackageScoped {
                 | Tm::Hole(sc::Hole) => {}
                 | Tm::Var(_def) => {}
                 | Tm::Triv(sc::Triv) => {}
-                | Tm::Cons(sc::Cons(a, b)) => {
-                    rm(a);
-                    rm(b);
+                | Tm::Cons(items) => {
+                    for item in items {
+                        rm(item);
+                    }
                 }
                 | Tm::Abs(sc::Abs(_binder, body)) => {
                     rm(body);

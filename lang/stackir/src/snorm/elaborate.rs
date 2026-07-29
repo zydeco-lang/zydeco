@@ -60,10 +60,10 @@ impl<'a> Elaborate for VPatId {
                 Ctor(name, tail).sbuild(el, self, ())
             }
             | ValuePattern::Triv(Triv) => Triv.sbuild(el, self, ()),
-            | ValuePattern::VCons(Cons(a, b)) => {
-                let a = a.elaborate(el);
-                let b = b.elaborate(el);
-                Cons(a, b).sbuild(el, self, ())
+            | ValuePattern::VCons(VCons { items: ConsN(items, tail), layout }) => {
+                let items = items.into_iter().map(|item| item.elaborate(el)).collect();
+                let tail = tail.elaborate(el);
+                VCons::new(ConsN(items, tail), layout).sbuild(el, self, ())
             }
         }
     }
@@ -90,10 +90,10 @@ impl<'a> Elaborate for ValueId {
                 Ctor(name, body).sbuild(el, self, ())
             }
             | Value::Triv(Triv) => Triv.sbuild(el, self, ()),
-            | Value::VCons(Cons(a, b)) => {
-                let a = a.elaborate(el);
-                let b = b.elaborate(el);
-                Cons(a, b).sbuild(el, self, ())
+            | Value::VCons(VCons { items: ConsN(items, tail), layout }) => {
+                let items = items.into_iter().map(|item| item.elaborate(el)).collect();
+                let tail = tail.elaborate(el);
+                VCons::new(ConsN(items, tail), layout).sbuild(el, self, ())
             }
             | Value::Literal(lit) => lit.sbuild(el, self, ()),
             | Value::Complex(Complex { operator, operands }) => {

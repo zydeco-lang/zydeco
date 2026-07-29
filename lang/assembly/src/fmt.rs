@@ -244,9 +244,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Swap {
     }
 }
 
-impl<'a> Pretty<'a, Formatter<'a>> for ProductMarker {
+impl<'a> Pretty<'a, Formatter<'a>> for ProductLayout {
     fn pretty(&self, _f: &'a Formatter) -> RcDoc<'a> {
-        RcDoc::text("<product>")
+        RcDoc::text(format!("<product:{}/{}>", self.elements, self.arity))
     }
 }
 
@@ -395,16 +395,11 @@ impl<'a> Pretty<'a, Formatter<'a>> for Slot {
         match self {
             | Slot::Sym(sym) => sym.pretty(f),
             | Slot::Imm(imm) => imm.pretty(f),
-            | Slot::Pair(p) => {
-                let (a, b) = p.as_ref();
-                RcDoc::concat([
-                    RcDoc::text("("),
-                    a.pretty(f),
-                    RcDoc::text(","),
-                    b.pretty(f),
-                    RcDoc::text(")"),
-                ])
-            }
+            | Slot::Product(items) => RcDoc::concat([
+                RcDoc::text("("),
+                RcDoc::intersperse(items.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
+                RcDoc::text(")"),
+            ]),
             | Slot::Unknown => RcDoc::text("<?>"),
         }
     }

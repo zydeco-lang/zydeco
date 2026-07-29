@@ -53,7 +53,7 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
         //     return self.pretty(&f.sps_formatter);
         //     return RcDoc::text(format!("[vpat:{}]", self.concise()));
         // };
-        use crate::sps::syntax::{Cons, Ctor, ValuePattern as VPat};
+        use crate::sps::syntax::{Ctor, ValuePattern as VPat};
         match vpat {
             | VPat::Hole(_) => RcDoc::text("_"),
             | VPat::Var(def) => def.pretty(&f.sps_formatter),
@@ -68,12 +68,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for VPatId {
                 ])
             }
             | VPat::Triv(_) => RcDoc::text("()"),
-            | VPat::VCons(Cons(a, b)) => RcDoc::concat([
+            | VPat::VCons(VCons { items, layout: _ }) => RcDoc::concat([
                 RcDoc::text("("),
-                a.pretty(f),
-                RcDoc::text(","),
-                RcDoc::space(),
-                b.pretty(f),
+                RcDoc::intersperse(items.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
                 RcDoc::text(")"),
             ]),
         }
@@ -113,12 +110,9 @@ impl<'a> Pretty<'a, Formatter<'a>> for Value {
                 ])
             }
             | Value::Triv(Triv) => RcDoc::text("()"),
-            | Value::VCons(Cons(a, b)) => RcDoc::concat([
+            | Value::VCons(VCons { items, layout: _ }) => RcDoc::concat([
                 RcDoc::text("("),
-                a.pretty(f),
-                RcDoc::text(","),
-                RcDoc::space(),
-                b.pretty(f),
+                RcDoc::intersperse(items.iter().map(|item| item.pretty(f)), RcDoc::text(", ")),
                 RcDoc::text(")"),
             ]),
             | Value::Literal(lit) => {

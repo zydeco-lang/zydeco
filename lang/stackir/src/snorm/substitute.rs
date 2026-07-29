@@ -205,10 +205,19 @@ mod impls {
                 | (VPat::VCons(_), Value::Hole(_) | Value::Var(_)) => {
                     vec![AssignItem::Pattern(AssignPattern { pat: self.pat, value: self.value })]
                 }
-                | (VPat::VCons(Cons(pa, pb)), Value::VCons(Cons(va, vb))) => {
-                    let a = AssignPattern { pat: pa, value: va }.normalize(arena);
-                    let b = AssignPattern { pat: pb, value: vb }.normalize(arena);
-                    std::iter::empty().chain(a).chain(b).collect()
+                | (
+                    VPat::VCons(VCons { items: patterns, layout: pattern_layout }),
+                    Value::VCons(VCons { items: values, layout: value_layout }),
+                ) => {
+                    assert_eq!(pattern_layout, value_layout);
+                    if patterns.len() != values.len() {
+                        return vec![AssignItem::Pattern(self)];
+                    }
+                    patterns
+                        .into_iter()
+                        .zip(values)
+                        .flat_map(|(pat, value)| AssignPattern { pat, value }.normalize(arena))
+                        .collect()
                 }
                 | (
                     VPat::VCons(_),
@@ -534,10 +543,10 @@ impl Substitute<()> for ValueId {
                 Ctor(ctor, body).build(su, None)
             }
             | Value::Triv(Triv) => Triv.build(su, None),
-            | Value::VCons(Cons(a, b)) => {
-                let a = a.substitute(su, ());
-                let b = b.substitute(su, ());
-                Cons(a, b).build(su, None)
+            | Value::VCons(VCons { items: ConsN(items, tail), layout }) => {
+                let items = items.into_iter().map(|item| item.substitute(su, ())).collect();
+                let tail = tail.substitute(su, ());
+                VCons::new(ConsN(items, tail), layout).build(su, None)
             }
             | Value::Literal(literal) => literal.build(su, None),
             | Value::Complex(Complex { operator, operands }) => {
@@ -562,10 +571,10 @@ impl Substitute<()> for VPatId {
                 Ctor(ctor, body).build(su, None)
             }
             | VPat::Triv(Triv) => Triv.build(su, None),
-            | VPat::VCons(Cons(a, b)) => {
-                let a = a.substitute(su, ());
-                let b = b.substitute(su, ());
-                Cons(a, b).build(su, None)
+            | VPat::VCons(VCons { items: ConsN(items, tail), layout }) => {
+                let items = items.into_iter().map(|item| item.substitute(su, ())).collect();
+                let tail = tail.substitute(su, ());
+                VCons::new(ConsN(items, tail), layout).build(su, None)
             }
         }
     }

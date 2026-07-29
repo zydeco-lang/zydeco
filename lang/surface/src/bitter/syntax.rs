@@ -43,7 +43,7 @@ pub enum Pattern {
     Var(DefId),
     Ctor(Ctor<CtorName, PatId>),
     Triv(Triv),
-    Cons(Cons<PatId, PatId>),
+    Cons(ConsN<PatId, PatId>),
 }
 
 #[derive(From, Clone, Debug)]
@@ -106,7 +106,7 @@ pub enum Term<Ref> {
     #[from(ignore)]
     Var(Ref),
     Triv(Triv),
-    Cons(Cons<TermId, TermId>),
+    Cons(ConsN<TermId, TermId>),
     Abs(Abs<PatId, TermId>),
     App(App<TermId, TermId>),
     Fix(Fix<PatId, TermId>),

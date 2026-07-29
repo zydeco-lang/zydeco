@@ -71,9 +71,10 @@ impl SubstVarInPlace for ValueId {
                 body.subst_var_in_place(arena, map)
             }
             | Value::Ctor(Ctor(_ctor, body)) => body.subst_var_in_place(arena, map),
-            | Value::VCons(Cons(a, b)) => {
-                a.subst_var_in_place(arena, map);
-                b.subst_var_in_place(arena, map);
+            | Value::VCons(VCons { items, layout: _ }) => {
+                for item in items {
+                    item.subst_var_in_place(arena, map);
+                }
             }
             | Value::Complex(Complex { operator: _, operands }) => {
                 operands.into_iter().for_each(|operand| {

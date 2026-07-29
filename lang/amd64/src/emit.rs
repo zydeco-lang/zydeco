@@ -376,47 +376,89 @@ impl<'a> Emit<'a> for Instruction {
     type Env = ProgId;
     fn emit(&self, id: Self::Env, em: &mut Emitter) {
         match self {
-            | Instruction::PackProduct(sa::Pack(sa::ProductMarker)) => {
-                // Pack two values into a pair
+            | Instruction::PackProduct(sa::Pack(layout)) => {
+                em.asm.text.push(Instr::Comment(format!(
+                    "pack_product {}/{}",
+                    layout.elements, layout.arity
+                )));
                 em.asm.text.extend([
-                    Instr::Comment("pack_product".to_string()),
-                    Instr::Mov(MovArgs::ToReg(Reg::Rdi, Arg64::Signed(2))),
+                    Instr::Mov(MovArgs::ToReg(
+                        Reg::Rdi,
+                        Arg64::Signed(i64::try_from(layout.arity).expect("product arity overflow")),
+                    )),
                     Instr::Call(JmpArgs::Label("zydeco_alloc".to_string())),
-                    // returned pointer is in rax
-                    // pop, and store to [rax]
-                    Instr::Pop(Loc::Reg(Reg::Rcx)),
-                    Instr::Mov(MovArgs::ToMem(
-                        MemRef { reg: Reg::Rax, offset: 0 },
-                        Reg32::Reg(Reg::Rcx),
-                    )),
-                    // pop again, and store to [rax + 8]
-                    Instr::Pop(Loc::Reg(Reg::Rcx)),
-                    Instr::Mov(MovArgs::ToMem(
-                        MemRef { reg: Reg::Rax, offset: 8 },
-                        Reg32::Reg(Reg::Rcx),
-                    )),
-                    // push the pointer back to stack
-                    Instr::Push(Arg32::Reg(Reg::Rax)),
                 ]);
+                for index in 0..layout.elements {
+                    let destination = i32::try_from(index * 8).expect("product offset overflow");
+                    if index + 1 == layout.elements && layout.elements < layout.arity {
+                        em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rdx)));
+                        for field in index..layout.arity {
+                            let source = i32::try_from((field - index) * 8)
+                                .expect("product offset overflow");
+                            let destination =
+                                i32::try_from(field * 8).expect("product offset overflow");
+                            em.asm.text.extend([
+                                Instr::Mov(MovArgs::ToReg(
+                                    Reg::Rcx,
+                                    Arg64::Mem(MemRef { reg: Reg::Rdx, offset: source }),
+                                )),
+                                Instr::Mov(MovArgs::ToMem(
+                                    MemRef { reg: Reg::Rax, offset: destination },
+                                    Reg32::Reg(Reg::Rcx),
+                                )),
+                            ]);
+                        }
+                    } else {
+                        em.asm.text.extend([
+                            Instr::Pop(Loc::Reg(Reg::Rcx)),
+                            Instr::Mov(MovArgs::ToMem(
+                                MemRef { reg: Reg::Rax, offset: destination },
+                                Reg32::Reg(Reg::Rcx),
+                            )),
+                        ]);
+                    }
+                }
+                em.asm.text.push(Instr::Push(Arg32::Reg(Reg::Rax)));
             }
-            | Instruction::UnpackProduct(sa::Unpack(sa::ProductMarker)) => {
-                // Unpack a pair into two values
-                em.asm.text.extend([
-                    Instr::Comment("unpack_product".to_string()),
-                    Instr::Pop(Loc::Reg(Reg::Rax)),
-                    // load [rax + 8] and push
-                    Instr::Mov(MovArgs::ToReg(
-                        Reg::Rcx,
-                        Arg64::Mem(MemRef { reg: Reg::Rax, offset: 8 }),
-                    )),
-                    Instr::Push(Arg32::Reg(Reg::Rcx)),
-                    // load [rax] and push
-                    Instr::Mov(MovArgs::ToReg(
-                        Reg::Rcx,
-                        Arg64::Mem(MemRef { reg: Reg::Rax, offset: 0 }),
-                    )),
-                    Instr::Push(Arg32::Reg(Reg::Rcx)),
-                ]);
+            | Instruction::UnpackProduct(sa::Unpack(layout)) => {
+                em.asm.text.push(Instr::Comment(format!(
+                    "unpack_product {}/{}",
+                    layout.elements, layout.arity
+                )));
+                em.asm.text.push(Instr::Pop(Loc::Reg(Reg::Rax)));
+                let last = layout.elements - 1;
+                let last_offset = i32::try_from(last * 8).expect("product offset overflow");
+                if layout.elements < layout.arity {
+                    em.asm.text.extend([
+                        Instr::Lea(
+                            Reg::Rcx,
+                            LeaArgs::Displace {
+                                base: Reg::Rax,
+                                scaled_index: None,
+                                offset: Some(last_offset),
+                            },
+                        ),
+                        Instr::Push(Arg32::Reg(Reg::Rcx)),
+                    ]);
+                } else {
+                    em.asm.text.extend([
+                        Instr::Mov(MovArgs::ToReg(
+                            Reg::Rcx,
+                            Arg64::Mem(MemRef { reg: Reg::Rax, offset: last_offset }),
+                        )),
+                        Instr::Push(Arg32::Reg(Reg::Rcx)),
+                    ]);
+                }
+                for index in (0..last).rev() {
+                    let offset = i32::try_from(index * 8).expect("product offset overflow");
+                    em.asm.text.extend([
+                        Instr::Mov(MovArgs::ToReg(
+                            Reg::Rcx,
+                            Arg64::Mem(MemRef { reg: Reg::Rax, offset }),
+                        )),
+                        Instr::Push(Arg32::Reg(Reg::Rcx)),
+                    ]);
+                }
             }
             | Instruction::PushContext(sa::Push(sa::ContextMarker)) => {
                 // Push context pointer onto stack
@@ -563,7 +605,7 @@ impl<'a> Emit<'a> for Atom {
             | Atom::Imm(imm) => match imm.clone() {
                 | sa::Imm::Triv(Triv) => {
                     em.asm.text.push(Instr::Comment("push_imm_triv".to_string()));
-                    em.asm.text.extend([Instr::Push(Arg32::Signed(0))]);
+                    em.asm.text.push(Instr::Push(Arg32::Signed(0)));
                 }
                 | sa::Imm::Int(i) => {
                     em.asm.text.push(Instr::Comment(format!("push_imm_int {:?}", i)));

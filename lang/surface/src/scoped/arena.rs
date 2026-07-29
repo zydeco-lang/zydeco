@@ -142,28 +142,24 @@ impl LocalFoldScoped<Context> for Collector {
                 self.ctxs_pat_local.insert_new(pat, Context::singleton(def));
                 self.coctxs_pat_local.insert_new(pat, CoContext::new());
             }
+            | Pattern::Triv(Triv) => {
+                self.ctxs_pat_local.insert_new(pat, Context::new());
+                self.coctxs_pat_local.insert_new(pat, CoContext::new());
+            }
             | Pattern::Ctor(inner) => {
                 let Ctor(_ctorv, body) = inner;
                 self.ctxs_pat_local.insert_new(pat, self.ctxs_pat_local[&body].to_owned());
                 self.coctxs_pat_local.insert_new(pat, self.coctxs_pat_local[&body].to_owned());
             }
-            | Pattern::Triv(inner) => {
-                let Triv = inner;
-                self.ctxs_pat_local.insert_new(pat, Context::new());
-                self.coctxs_pat_local.insert_new(pat, CoContext::new());
-            }
             | Pattern::Cons(inner) => {
-                let Cons(a, b) = inner;
-                self.ctxs_pat_local.insert_new(pat, {
-                    let ctx_a = self.ctxs_pat_local[&a].to_owned();
-                    let ctx_b = self.ctxs_pat_local[&b].to_owned();
-                    ctx_a + ctx_b
+                let local = inner
+                    .iter()
+                    .fold(Context::new(), |ctx, item| ctx + self.ctxs_pat_local[item].to_owned());
+                let colocal = inner.iter().fold(CoContext::new(), |ctx, item| {
+                    ctx + self.coctxs_pat_local[item].to_owned()
                 });
-                self.coctxs_pat_local.insert_new(pat, {
-                    let co_a = self.coctxs_pat_local[&a].to_owned();
-                    let co_b = self.coctxs_pat_local[&b].to_owned();
-                    co_a + co_b
-                });
+                self.ctxs_pat_local.insert_new(pat, local);
+                self.coctxs_pat_local.insert_new(pat, colocal);
             }
         }
     }
@@ -202,17 +198,14 @@ impl LocalFoldScoped<Context> for Collector {
                 let def = inner;
                 self.coctxs_term_local.insert_new(term, CoContext::singleton(def));
             }
-            | Term::Triv(inner) => {
-                let Triv = inner;
+            | Term::Triv(Triv) => {
                 self.coctxs_term_local.insert_new(term, CoContext::new());
             }
             | Term::Cons(inner) => {
-                let Cons(a, b) = inner;
-                self.coctxs_term_local.insert_new(term, {
-                    let co_a = self.coctxs_term_local[&a].to_owned();
-                    let co_b = self.coctxs_term_local[&b].to_owned();
-                    co_a + co_b
+                let colocal = inner.iter().fold(CoContext::new(), |ctx, item| {
+                    ctx + self.coctxs_term_local[item].to_owned()
                 });
+                self.coctxs_term_local.insert_new(term, colocal);
             }
             | Term::Abs(inner) => {
                 let Abs(pat, body) = inner;
@@ -394,17 +387,15 @@ mod impl_obverse_local_post {
                     let def = inner;
                     def.obverse_local_post(f, ctx);
                 }
+                | Pattern::Triv(Triv) => {}
                 | Pattern::Ctor(inner) => {
                     let Ctor(_ctorv, body) = inner;
                     body.obverse_local_post(f, ctx);
                 }
-                | Pattern::Triv(inner) => {
-                    let Triv = inner;
-                }
                 | Pattern::Cons(inner) => {
-                    let Cons(a, b) = inner;
-                    a.obverse_local_post(f, ctx);
-                    b.obverse_local_post(f, ctx);
+                    for item in inner {
+                        item.obverse_local_post(f, ctx);
+                    }
                 }
             }
             f.action_pat(self, ctx)
@@ -439,13 +430,11 @@ mod impl_obverse_local_post {
                     let def = inner;
                     def.obverse_local_post(f, ctx);
                 }
-                | Term::Triv(inner) => {
-                    let Triv = inner;
-                }
+                | Term::Triv(Triv) => {}
                 | Term::Cons(inner) => {
-                    let Cons(a, b) = inner;
-                    a.obverse_local_post(f, ctx);
-                    b.obverse_local_post(f, ctx);
+                    for item in inner {
+                        item.obverse_local_post(f, ctx);
+                    }
                 }
                 | Term::Abs(inner) => {
                     let Abs(pat, body) = inner;

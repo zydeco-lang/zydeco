@@ -25,7 +25,7 @@ pub struct Layout {
 pub enum Slot {
     Sym(SymId),
     Imm(Imm),
-    Pair(Box<(Slot, Slot)>),
+    Product(Vec<Slot>),
     Unknown,
 }
 
@@ -143,7 +143,7 @@ impl<'a> StackMeasure<'a> for ProgId {
                             | Symbol::Prog(_) => si.inlined[&slot_id] = true,
                             | _ => {}
                         },
-                        | Slot::Imm(_) | Slot::Pair(_) | Slot::Unknown => {}
+                        | Slot::Imm(_) | Slot::Product(_) | Slot::Unknown => {}
                     }
                 }
                 | Terminator::LeapJump(_) => {}
@@ -153,16 +153,23 @@ impl<'a> StackMeasure<'a> for ProgId {
             },
             | Program::Instruction(instruction, next) => {
                 let layout = match instruction {
-                    | Instruction::PackProduct(Pack(ProductMarker)) => {
-                        si.pop_control(&mut layout);
-                        si.pop_control(&mut layout);
-                        si.push_control(&mut layout, Slot::Unknown);
+                    | Instruction::PackProduct(Pack(product)) => {
+                        let items = (0..product.elements)
+                            .map(|_| si.pop_control(&mut layout).unwrap_or(Slot::Unknown))
+                            .collect();
+                        si.push_control(&mut layout, Slot::Product(items));
                         layout
                     }
-                    | Instruction::UnpackProduct(Unpack(ProductMarker)) => {
-                        si.pop_control(&mut layout);
-                        si.push_control(&mut layout, Slot::Unknown);
-                        si.push_control(&mut layout, Slot::Unknown);
+                    | Instruction::UnpackProduct(Unpack(product)) => {
+                        let items = match si.pop_control(&mut layout) {
+                            | Some(Slot::Product(items)) if items.len() == product.elements => {
+                                items
+                            }
+                            | _ => vec![Slot::Unknown; product.elements],
+                        };
+                        for item in items.into_iter().rev() {
+                            si.push_control(&mut layout, item);
+                        }
                         layout
                     }
                     | Instruction::PushContext(Push(ContextMarker)) => {
@@ -251,7 +258,7 @@ impl<'a> StackInline<'a> for ProgId {
                                 .replace_existing_with(self, Terminator::Jump(Jump(target))),
                             | _ => {}
                         },
-                        | Slot::Imm(_) | Slot::Pair(_) | Slot::Unknown => {}
+                        | Slot::Imm(_) | Slot::Product(_) | Slot::Unknown => {}
                     }
                 }
                 | Terminator::LeapJump(LeapJump) => {}
@@ -261,8 +268,8 @@ impl<'a> StackInline<'a> for ProgId {
             },
             | Program::Instruction(instruction, next) => {
                 match instruction {
-                    | Instruction::PackProduct(Pack(ProductMarker)) => {}
-                    | Instruction::UnpackProduct(Unpack(ProductMarker)) => {}
+                    | Instruction::PackProduct(Pack(_)) => {}
+                    | Instruction::UnpackProduct(Unpack(_)) => {}
                     | Instruction::PushContext(Push(ContextMarker)) => {}
                     | Instruction::PopContext(Pop(ContextMarker)) => {}
                     | Instruction::AllocContext(Alloc(ContextMarker)) => {}

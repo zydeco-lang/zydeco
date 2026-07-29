@@ -99,6 +99,22 @@ impl<'a> ClosureConverter<'a> {
         compu_id.free_vars(&self)
     }
 
+    fn build_product_pattern(&mut self, items: Vec<VPatId>) -> VPatId {
+        let arity = items.len();
+        match ConsN::from_vec(items) {
+            | Some(items) => VCons::new(items, ProductLayout::new(arity)).build(self, None),
+            | None => Triv.build(self, None),
+        }
+    }
+
+    fn build_product_value(&mut self, items: Vec<ValueId>, site: Option<ss::TermId>) -> ValueId {
+        let arity = items.len();
+        match ConsN::from_vec(items) {
+            | Some(items) => VCons::new(items, ProductLayout::new(arity)).build(self, site),
+            | None => Triv.build(self, site),
+        }
+    }
+
     /// Convert a Fix computation to explicit closure form.
     fn convert_fix(&mut self, old_compu_id: CompuId, fix: &SFix) {
         let site = self.get_compu_site(old_compu_id);
@@ -125,22 +141,22 @@ impl<'a> ClosureConverter<'a> {
         }
         fix.body.subst_var_in_place(self, &mut subst_map);
 
-        // 3. Wrap body in a let arg to retrieve captures from stack
-        // Create a nested value pattern to destructure all captures from a nested pair
-        // Build nested Cons pattern: Cons(capture1, Cons(capture2, ... Cons(captureN, Triv)))
-        let mut capture_pattern = Triv.build(self, None);
-        let mut capture_pack = Triv.build(self, None);
-        for &capture in free_vars.iter().rev() {
+        // 3. Wrap body in a let arg to retrieve the flat capture product from the stack.
+        let mut capture_patterns = Vec::with_capacity(free_vars.len());
+        let mut capture_values = Vec::with_capacity(free_vars.len());
+        for &capture in &free_vars {
             let capture_var = *free_var_renames.get(&capture).unwrap();
-            let capture_vpat = capture_var.build(self, None);
-            capture_pattern = Cons(capture_vpat, capture_pattern).build(self, None);
-            let capture_valu = capture_var.build(self, None);
-            capture_pack = Cons(capture_valu, capture_pack).build(self, None);
+            capture_patterns.push(capture_var.build(self, None));
+            capture_values.push(capture_var.build(self, None));
         }
+        let capture_pattern = self.build_product_pattern(capture_patterns);
+        let capture_pack = self.build_product_value(capture_values, None);
 
         // Add a variable that re-packs the captures and the param into a thunk pair
         let param_value: ValueId = fix.param.build(self, site);
-        let closure_pair = Cons(capture_pack, param_value).build(self, site);
+        let closure_pair =
+            VCons::new(ConsN(vec![capture_pack], param_value), ProductLayout::new(2))
+                .build(self, site);
         let closure_def = {
             let original_name = self.scoped.defs[&fix.param].clone();
             self.alloc_def(VarName(format!("{original_name}#clo")))
@@ -168,15 +184,17 @@ impl<'a> ClosureConverter<'a> {
         .build(self, site);
 
         // 4. Push the capture list onto the stack first, then run the fix.
-        // Build the capture pair value from free_vars
-        let mut capture_pair: ValueId = Triv.build(self, site);
-        for &capture in free_vars.iter().rev() {
-            let capture_val = capture.build(self, site);
-            capture_pair = Cons(capture_val, capture_pair).build(self, site);
-        }
+        let capture_values: Vec<ValueId> = free_vars
+            .iter()
+            .map(|&capture| {
+                let value: ValueId = capture.build(self, site);
+                value
+            })
+            .collect();
+        let capture_pair = self.build_product_value(capture_values, site);
         // Push the capture pair onto the stack
         let bullet_stack = Bullet.build(self, site);
-        let capture_stack = Cons(capture_pair, bullet_stack).build(self, site);
+        let capture_stack: StackId = Cons(capture_pair, bullet_stack).build(self, site);
         // Create the Fix computation
         let fix_compu = SFix { param: fix.param, body: transformed_arg_body }.build(self, site);
         // Wrap the Fix in a LetStack that pushes captures, then runs the Fix
@@ -200,21 +218,19 @@ impl<'a> ClosureConverter<'a> {
         let free_vars: Vec<DefId> = self.free_vars_compu(clo.body).into_iter().collect();
         let mut free_var_renames = HashMap::new();
 
-        // 2. Make the closure a pair of (capture list, body function)
-        // Build the capture pair value from free_vars
-        let mut capture_pair = Triv.build(self, site);
-        let mut capture_pattern = Triv.build(self, None);
-        for &capture in free_vars.iter().rev() {
+        // 2. Make the closure a pair of (capture list, body function).
+        let mut capture_values = Vec::with_capacity(free_vars.len());
+        let mut capture_patterns = Vec::with_capacity(free_vars.len());
+        for &capture in &free_vars {
             let VarName(original_name) = self.scoped.defs[&capture].clone();
             let new_def = self.alloc_def(VarName(format!("{original_name}#cap")));
             free_var_renames.insert(capture, new_def);
 
-            let capture_val = capture.build(self, site);
-            capture_pair = Cons(capture_val, capture_pair).build(self, site);
-
-            let capture_vpat = new_def.build(self, None);
-            capture_pattern = Cons(capture_vpat, capture_pattern).build(self, None);
+            capture_values.push(capture.build(self, site));
+            capture_patterns.push(new_def.build(self, None));
         }
+        let capture_pair = self.build_product_value(capture_values, site);
+        let capture_pattern = self.build_product_pattern(capture_patterns);
 
         // Substitute free variables in the closure body to refer to the freshly
         // bound capture variables.
@@ -239,10 +255,10 @@ impl<'a> ClosureConverter<'a> {
         let body_closure = Closure { stack: Bullet, body: transformed_body }.build(self, site);
 
         // Update the value in place with the pair: (captures, body_closure)
-        self.arena
-            .inner
-            .values
-            .replace_existing_with(old_value_id, Cons(capture_pair, body_closure));
+        self.arena.inner.values.replace_existing_with(
+            old_value_id,
+            VCons::new(ConsN(vec![capture_pair], body_closure), ProductLayout::new(2)),
+        );
     }
 
     /// Convert a Force computation to handle converted closures.
@@ -258,7 +274,9 @@ impl<'a> ClosureConverter<'a> {
         // Create Var patterns to bind the destructured values
         let capture_pair_vpat = capture_pair_def.build(self, None);
         let body_closure_vpat = body_closure_def.build(self, None);
-        let pair_pattern = Cons(capture_pair_vpat, body_closure_vpat).build(self, None);
+        let pair_pattern =
+            VCons::new(ConsN(vec![capture_pair_vpat], body_closure_vpat), ProductLayout::new(2))
+                .build(self, None);
 
         // After destructuring with LetValue, we need to:
         // 1. Push capture_pair onto the stack

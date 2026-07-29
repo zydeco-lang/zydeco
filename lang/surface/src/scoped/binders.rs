@@ -21,6 +21,7 @@ impl Binders for PatId {
                 let Hole = pat;
                 im::HashMap::new()
             }
+            | Pattern::Triv(Triv) => im::HashMap::new(),
             | Pattern::Var(pat) => {
                 let def = pat;
                 im::hashmap! { arena.defs[def].clone() => *def }
@@ -29,17 +30,9 @@ impl Binders for PatId {
                 let Ctor(_ctor, args) = pat;
                 args.binders(arena)
             }
-            | Pattern::Triv(pat) => {
-                let Triv = pat;
-                im::HashMap::new()
-            }
-            | Pattern::Cons(pat) => {
-                let Cons(a, b) = pat;
-                let mut res = im::HashMap::new();
-                res = res.union(a.binders(arena));
-                res = res.union(b.binders(arena));
-                res
-            }
+            | Pattern::Cons(pat) => pat
+                .iter()
+                .fold(im::HashMap::new(), |binders, item| binders.union(item.binders(arena))),
         }
     }
 }

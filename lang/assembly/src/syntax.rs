@@ -52,11 +52,11 @@ pub enum Terminator {
 /// Stack transformations in ZIR.
 #[derive(From, Clone, Debug)]
 pub enum Instruction {
-    /// Construct a pair. Pop two values off the stack, and push one "pair" value onto the stack.
+    /// Construct a product using its canonical flat layout.
     /// Destructed by [`Instruction::UnpackProduct`].
-    PackProduct(Pack<ProductMarker>),
-    /// Destruct a pair. Pop a "pair" value off the stack, and push two values back onto the stack.
-    UnpackProduct(Unpack<ProductMarker>),
+    PackProduct(Pack<ProductLayout>),
+    /// Destruct a product into its logical elements.
+    UnpackProduct(Unpack<ProductLayout>),
     /// Save current context. Push the pointer to the current context onto the stack.
     PushContext(Push<ContextMarker>),
     /// Restore current context. Pop a pointer to the context off the stack, and replace the current context with it.
@@ -92,8 +92,25 @@ pub struct Alloc<T>(pub T);
 #[derive(Clone, Debug)]
 pub struct Swap;
 
-#[derive(Clone, Debug)]
-pub struct ProductMarker;
+/// The physical product arity and the number of logical stack elements.
+///
+/// When `elements < arity`, the final logical element is a pointer to the
+/// suffix beginning at field `elements - 1`.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ProductLayout {
+    pub arity: usize,
+    pub elements: usize,
+}
+
+impl ProductLayout {
+    pub fn new(arity: usize, elements: usize) -> Self {
+        assert!(arity > 0);
+        assert!(elements > 0);
+        assert!(elements <= arity);
+        Self { arity, elements }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ContextMarker;
 
@@ -125,7 +142,6 @@ pub enum Atom {
 /// Symbols represent statically determined values.
 ///
 /// In our implementation, we track the following statically known symbols:
-/// - Triv, the unit value
 /// - Program, which are labelled blocks
 /// - External functions
 /// - Literals

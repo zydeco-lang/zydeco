@@ -286,25 +286,15 @@ impl Desugar for t::PatId {
             }
             | Pat::Paren(pat) => {
                 let t::Paren(pats) = pat;
-                let pats = pats.desugar(desugarer)?;
+                let mut pats = pats.desugar(desugarer)?;
                 match pats.len() {
-                    // if there is no pat like `()`, replace it with `unit`
                     | 0 => Alloc::alloc(desugarer, b::Triv.into(), self.into()),
                     // if there is only one pat like `(p)`, remove the redundant paren
                     | 1 => pats.into_iter().next().unwrap(),
-                    // otherwise, re-expand the paren into cons
+                    // Multi-element parens are preserved as one n-ary cons.
                     | _ => {
-                        // re-expand from right to left, like:
-                        // (p1, (p2, (p3, p4)))
-                        let mut iter = pats.into_iter().rev();
-                        let snd = iter.next().unwrap();
-                        let fst = iter.next().unwrap();
-                        let mut body = b::Cons(fst, snd).into();
-                        for pat in iter {
-                            let id = Alloc::alloc(desugarer, body, self.into());
-                            body = b::Cons(pat, id).into()
-                        }
-                        Alloc::alloc(desugarer, body, self.into())
+                        let tail = pats.pop().unwrap();
+                        Alloc::alloc(desugarer, b::ConsN(pats, tail).into(), self.into())
                     }
                 }
             }
@@ -382,41 +372,15 @@ impl Desugar for t::TermId {
             | Tm::Var(name) => Alloc::alloc(desugarer, b::Term::Var(name), self.into()),
             | Tm::Paren(term) => {
                 let t::Paren(terms) = term;
-                let mut iter = terms.into_iter();
-                let mut terms = Vec::new();
-                // merge the first nested paren
-                if let Some(head) = iter.next() {
-                    if let Tm::Paren(term) = desugarer.lookup_term(head) {
-                        let t::Paren(inner) = term;
-                        terms.extend(
-                            inner
-                                .into_iter()
-                                .map(|term| term.desugar(desugarer))
-                                .collect::<Result<Vec<_>>>()?,
-                        );
-                    } else {
-                        terms.push(head.desugar(desugarer)?)
-                    }
-                }
-                terms.extend(iter.map(|term| term.desugar(desugarer)).collect::<Result<Vec<_>>>()?);
+                let mut terms = terms.desugar(desugarer)?;
                 match terms.len() {
-                    // if there is no term like `()`, replace it with `unit`
                     | 0 => Alloc::alloc(desugarer, b::Triv.into(), self.into()),
                     // if there is only one term like `(t)`, remove the redundant paren
                     | 1 => terms.into_iter().next().unwrap(),
-                    // otherwise, re-expand the paren into cons
+                    // Multi-element parens are preserved as one n-ary cons.
                     | _ => {
-                        // re-expand from right to left, like:
-                        // (t1, (t2, (t3, t4)))
-                        let mut iter = terms.into_iter().rev();
-                        let snd = iter.next().unwrap();
-                        let fst = iter.next().unwrap();
-                        let mut body = b::Cons(fst, snd).into();
-                        for term in iter {
-                            let id = Alloc::alloc(desugarer, body, self.into());
-                            body = b::Cons(term, id).into()
-                        }
-                        Alloc::alloc(desugarer, body, self.into())
+                        let tail = terms.pop().unwrap();
+                        Alloc::alloc(desugarer, b::ConsN(terms, tail).into(), self.into())
                     }
                 }
             }

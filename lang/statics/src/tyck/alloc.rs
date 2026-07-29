@@ -339,8 +339,8 @@ AllocValuePattern! {
     DefId
     Ctor<CtorName, VPatId>
     Triv
-    Cons<VPatId, VPatId>
-    Cons<TPatId, VPatId>
+    ConsN<VPatId, VPatId>
+    ConsN<TPatId, VPatId>
 }
 
 /* ---------------------------------- Value --------------------------------- */
@@ -381,8 +381,8 @@ AllocValue! {
     Thunk<CompuId>
     Ctor<CtorName, ValueId>
     Triv
-    Cons<ValueId, ValueId>
-    Cons<TypeId, ValueId>
+    ConsN<ValueId, ValueId>
+    ConsN<TypeId, ValueId>
     Literal
 }
 

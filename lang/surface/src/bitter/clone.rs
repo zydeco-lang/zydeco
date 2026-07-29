@@ -31,17 +31,15 @@ impl DeepClone for b::PatId {
             }
             | b::Pattern::Hole(_pat) => b::Hole.into(),
             | b::Pattern::Var(pat) => pat.deep_clone(desugarer).into(),
+            | b::Pattern::Triv(_pat) => b::Triv.into(),
             | b::Pattern::Ctor(pat) => {
                 let b::Ctor(name, pat) = pat;
                 let pat = pat.deep_clone(desugarer);
                 b::Ctor(name.clone(), pat).into()
             }
-            | b::Pattern::Triv(_pat) => b::Triv.into(),
             | b::Pattern::Cons(pat) => {
-                let b::Cons(a, b) = pat;
-                let a = a.deep_clone(desugarer);
-                let b = b.deep_clone(desugarer);
-                b::Cons(a, b).into()
+                let b::ConsN(pats, tail) = pat;
+                b::ConsN(pats.deep_clone(desugarer), tail.deep_clone(desugarer)).into()
             }
         };
         Alloc::alloc(desugarer, pat, prev)
@@ -108,10 +106,8 @@ impl DeepClone for b::TermId {
             | b::Term::Var(name) => b::Term::Var(name.clone()),
             | b::Term::Triv(_term) => b::Triv.into(),
             | b::Term::Cons(term) => {
-                let b::Cons(a, b) = term;
-                let a = a.deep_clone(desugarer);
-                let b = b.deep_clone(desugarer);
-                b::Cons(a, b).into()
+                let b::ConsN(terms, tail) = term;
+                b::ConsN(terms.deep_clone(desugarer), tail.deep_clone(desugarer)).into()
             }
             | b::Term::Abs(term) => {
                 let b::Abs(params, tail) = term;

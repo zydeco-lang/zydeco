@@ -21,6 +21,24 @@ The core types include:
 
 The main program is required to have type `OS`.
 
+## Products and Existential Packages
+
+Parenthesized comma sequences are preserved by the surface `Cons` variant using
+the shared n-ary `ConsN` syntax. The type checker interprets them as value
+products or existential packages from the expected type, and applies the same
+rules to patterns. `()` is the explicit `Triv` term or pattern and checks at
+`Unit`; a nonempty `ConsN<S, T>(Vec<S>, T)` stores an initial sequence and a
+distinguished final element. The ordinary binary `Cons<S, T>` remains available
+for compiler structures that are intrinsically pairs.
+
+Product types remain binary. Stack IR derives a canonical physical arity from
+their right-associated `Prod` spine, so `A * (B * C)` is laid out as three
+contiguous fields while `(A * B) * C` stores the left product by pointer.
+Assembly pack and unpack instructions carry both physical arity and logical
+element count, allowing explicit nested grouping to use suffix pointers
+without changing the canonical layout. Product layouts are always nonempty;
+`Triv` is carried separately through the backends.
+
 ## Relative Monads and Monadic Blocks
 
 Relative monads are defined as codata in the standard library (see
@@ -35,20 +53,24 @@ the block's ambient monad during translation.
 
 ## Implementation Architecture
 
-Zydeco is implemented as a pipeline of phases:
+Zydeco is implemented as a pipeline with an interpreter and native-code branch:
 
 1. parsing (`lang/surface/src/textual`)
 2. desugaring (`lang/surface/src/bitter`)
 3. name resolution (`lang/surface/src/scoped`)
 4. type checking (`lang/statics/src`)
-5. linking (`lang/dynamics/src`)
-6. evaluation (`lang/dynamics/src`)
+5. linking and evaluation (`lang/dynamics/src`), or
+6. Stack IR and substitution normalization (`lang/stackir/src`)
+7. assembly lowering (`lang/assembly/src`)
+8. AMD64 or LLVM emission (`lang/amd64/src`, `lang/llvm/src`)
 
-The phases are spread across three core crates:
+The phases are spread across several core crates:
 
 - `zydeco-surface` (surface syntax, parsing, desugaring, name resolution)
 - `zydeco-statics` (static semantics and algebra translation)
 - `zydeco-dynamics` (operational semantics and interpreter)
+- `zydeco-stackir` and `zydeco-assembly` (lowered, stack-oriented IRs)
+- `zydeco-amd64` and `zydeco-llvm` (native-code backends)
 
 Common patterns in each phase include `syntax`, `arena`, `err`, `fmt`, and
 `span` modules.
@@ -110,7 +132,7 @@ Two separate type-level relations constrain IDs:
 
 The artifact documents a few important limitations:
 
-- Zydeco is not compiled to low-level code yet; it is interpreted.
+- The LLVM emitter is experimental; the tested native backend targets AMD64.
 - The package manager supports only local dependencies.
 - `module`, `pub`, and `use` are reserved but not implemented.
 - Debug builds use a larger stack to avoid overflow on large tests.

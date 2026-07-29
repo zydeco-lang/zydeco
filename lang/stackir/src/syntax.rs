@@ -39,13 +39,40 @@ pub struct DtorIdx {
 
 /* ---------------------------------- Value --------------------------------- */
 
+/// Physical layout of a product value.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ProductLayout {
+    pub arity: usize,
+}
+
+impl ProductLayout {
+    pub fn new(arity: usize) -> Self {
+        Self { arity }
+    }
+}
+
+/// A logical value cons together with its canonical physical product layout.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct VCons<T> {
+    pub items: ConsN<T, T>,
+    pub layout: ProductLayout,
+}
+
+impl<T> VCons<T> {
+    pub fn new(items: ConsN<T, T>, layout: ProductLayout) -> Self {
+        assert!(layout.arity > 0);
+        assert!(items.len() <= layout.arity);
+        Self { items, layout }
+    }
+}
+
 #[derive(From, Clone, Debug)]
 pub enum ValuePattern {
     Hole(Hole),
     Var(DefId),
     Ctor(Ctor<CtorIdx, VPatId>),
     Triv(Triv),
-    VCons(Cons<VPatId, VPatId>),
+    VCons(VCons<VPatId>),
 }
 
 /// A closure that captures minimal environment.
@@ -70,7 +97,7 @@ pub enum Value {
     Closure(Closure),
     Ctor(Ctor<CtorIdx, ValueId>),
     Triv(Triv),
-    VCons(Cons<ValueId, ValueId>),
+    VCons(VCons<ValueId>),
     Literal(Literal),
     Complex(Complex),
 }

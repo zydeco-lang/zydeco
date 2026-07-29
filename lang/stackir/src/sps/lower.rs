@@ -35,6 +35,23 @@ impl<'a> Lowerer<'a> {
         let arena = StackirArena::new();
         Self { arena, sequence: Vec::new(), globals: ArenaAssoc::new(), spans, scoped, statics }
     }
+
+    fn product_arity(&self, ty: ss::TypeId) -> usize {
+        match &self.statics.types_normalized[&ty] {
+            | ss::Type::Unit(_) => 0,
+            | ss::Type::Prod(ss::Prod(_, tail)) => {
+                1 + match &self.statics.types_normalized[tail] {
+                    | ss::Type::Prod(_) => self.product_arity(*tail),
+                    | _ => 1,
+                }
+            }
+            | _ => unreachable!("VCons must have Unit or product type"),
+        }
+    }
+
+    fn product_layout(&self, ty: ss::TypeId) -> ProductLayout {
+        ProductLayout::new(self.product_arity(ty))
+    }
 }
 
 impl<'a> CompilerPass for Lowerer<'a> {
@@ -199,16 +216,16 @@ impl Lower for ss::VPatId {
                 let ctor_idx = CtorIdx { idx, name };
                 Ctor(ctor_idx, tail_vpat).into()
             }
-            | SSVPat::Triv(triv) => triv.into(),
-            | SSVPat::VCons(cons) => {
-                use zydeco_syntax::Cons;
-                let Cons(a, b) = cons;
-                let a_vpat = a.lower(lo, ());
-                let b_vpat = b.lower(lo, ());
-                Cons(a_vpat, b_vpat).into()
+            | SSVPat::Triv(Triv) => Triv.into(),
+            | SSVPat::VCons(ss::ConsN(items, tail)) => {
+                let items = items.into_iter().map(|item| item.lower(lo, ())).collect();
+                let tail = tail.lower(lo, ());
+                let ty = lo.statics.annotations_vpat[self];
+                VCons::new(ConsN(items, tail), lo.product_layout(ty)).into()
             }
-            | SSVPat::TCons(_) => {
-                panic!("TCons patterns should not appear in stack IR")
+            | SSVPat::TCons(ss::ConsN(_, body)) => {
+                let vpat = body.lower(lo, ());
+                lo.arena.inner.vpats[&vpat].clone()
             }
         };
         // Create new VPatId in stack arena and store the mapping
@@ -253,23 +270,24 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
                     }),
                 )
             }
-            | ss::Value::Triv(_) => {
+            | ss::Value::Triv(Triv) => {
                 let value_id = Triv.build(lo, site);
                 kont(value_id, lo)
             }
-            | ss::Value::VCons(Cons(a, b)) => Phantom::new(a).lower(
-                lo,
-                Box::new(move |a_val, lo| {
-                    Phantom::new(b).lower(
-                        lo,
-                        Box::new(move |b_val, lo| {
-                            let value_id = Cons(a_val, b_val).build(lo, site);
-                            kont(value_id, lo)
-                        }),
-                    )
-                }),
-            ),
-            | ss::Value::TCons(Cons(_ty, inner)) => {
+            | ss::Value::VCons(items) => {
+                let ty = lo.statics.annotations_value[self.as_ref()];
+                let layout = lo.product_layout(ty);
+                Phantom::new(items.into_vec()).lower(
+                    lo,
+                    Box::new(move |items, lo| {
+                        let items =
+                            ConsN::from_vec(items).expect("non-empty product value in stack IR");
+                        let value_id = VCons::new(items, layout).build(lo, site);
+                        kont(value_id, lo)
+                    }),
+                )
+            }
+            | ss::Value::TCons(ss::ConsN(_witnesses, inner)) => {
                 // Type cons values are erased
                 Phantom::new(inner).lower(lo, kont)
             }
@@ -278,6 +296,32 @@ impl<T: 'static> Lower for Phantom<ss::ValueId, T> {
                 kont(value_id, lo)
             }
         }
+    }
+}
+
+impl<T: 'static> Lower for Phantom<Vec<ss::ValueId>, T> {
+    type Kont = Box<dyn FnOnce(Vec<ValueId>, &mut Lowerer) -> T>;
+    type Out = T;
+
+    fn lower(&self, lo: &mut Lowerer, kont: Self::Kont) -> Self::Out {
+        fn lower_next<T: 'static>(
+            mut input: std::vec::IntoIter<ss::ValueId>, mut output: Vec<ValueId>, lo: &mut Lowerer,
+            kont: Box<dyn FnOnce(Vec<ValueId>, &mut Lowerer) -> T>,
+        ) -> T {
+            let Some(item) = input.next() else {
+                return kont(output, lo);
+            };
+            Phantom::new(item).lower(
+                lo,
+                Box::new(move |item, lo| {
+                    output.push(item);
+                    lower_next(input, output, lo, kont)
+                }),
+            )
+        }
+
+        let input = self.clone_inner().into_iter();
+        lower_next(input, Vec::new(), lo, kont)
     }
 }
 

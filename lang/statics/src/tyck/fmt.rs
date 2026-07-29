@@ -273,14 +273,16 @@ impl<'a> Ugly<'a, Formatter<'a>> for Triv {
     }
 }
 
-impl<'a, S, T> Ugly<'a, Formatter<'a>> for Cons<S, T>
+impl<'a, S, T> Ugly<'a, Formatter<'a>> for ConsN<S, T>
 where
     S: Ugly<'a, Formatter<'a>>,
     T: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let Cons(s, t) = self;
-        format!("({}, {})", s.ugly(f), t.ugly(f))
+        let ConsN(items, tail) = self;
+        let mut items = items.iter().map(|item| item.ugly(f)).collect::<Vec<_>>();
+        items.push(tail.ugly(f));
+        format!("({})", items.join(", "))
     }
 }
 
@@ -758,19 +760,17 @@ impl<'a> Pretty<'a, Formatter<'a>> for Triv {
     }
 }
 
-impl<'a, S, T> Pretty<'a, Formatter<'a>> for Cons<S, T>
+impl<'a, S, T> Pretty<'a, Formatter<'a>> for ConsN<S, T>
 where
     S: Pretty<'a, Formatter<'a>>,
     T: Pretty<'a, Formatter<'a>>,
 {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Cons(head, tail) = self;
+        let ConsN(items, tail) = self;
+        let items = items.iter().map(|item| item.pretty(f)).chain(std::iter::once(tail.pretty(f)));
         RcDoc::concat([
             RcDoc::text("("),
-            head.pretty(f),
-            RcDoc::text(","),
-            RcDoc::space(),
-            tail.pretty(f),
+            RcDoc::intersperse(items, RcDoc::text(", ")),
             RcDoc::text(")"),
         ])
     }

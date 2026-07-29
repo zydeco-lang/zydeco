@@ -97,14 +97,14 @@ impl Link for ss::VPatId {
                 Ctor(ctor, pat).into()
             }
             | VPat::Triv(Triv) => Triv.into(),
-            | VPat::VCons(Cons(a, b)) => {
-                let a = a.link(statics);
-                let b = b.link(statics);
-                Cons(a, b).into()
+            | VPat::VCons(ss::ConsN(items, tail)) => {
+                let items = items.iter().map(|item| item.link(statics)).collect();
+                let tail = tail.link(statics);
+                ds::ConsN(items, tail).into()
             }
-            | VPat::TCons(Cons(_, pat)) => {
-                let pat = pat.link(statics);
-                pat.as_ref().to_owned()
+            | VPat::TCons(ss::ConsN(_, body)) => {
+                let body = body.link(statics);
+                body.as_ref().to_owned()
             }
         };
         Rc::new(vpat)
@@ -131,12 +131,12 @@ impl Link for ss::ValueId {
                 Ctor(ctor, body).into()
             }
             | Value::Triv(Triv) => Triv.into(),
-            | Value::VCons(Cons(a, b)) => {
-                let a = a.link(statics);
-                let b = b.link(statics);
-                Cons(a, b).into()
+            | Value::VCons(ss::ConsN(items, tail)) => {
+                let items = items.iter().map(|item| item.link(statics)).collect();
+                let tail = tail.link(statics);
+                ds::ConsN(items, tail).into()
             }
-            | Value::TCons(Cons(_, body)) => {
+            | Value::TCons(ss::ConsN(_, body)) => {
                 let body = body.link(statics);
                 body.as_ref().to_owned()
             }

@@ -64,10 +64,10 @@ impl<'a> CpsTranslator<'a> {
                 Ctor(ctor, body).build(self, None)
             }
             | Value::Triv(Triv) => Triv.build(self, None),
-            | Value::VCons(Cons(a, b)) => {
-                let a = self.translate_value(a);
-                let b = self.translate_value(b);
-                Cons(a, b).build(self, None)
+            | Value::VCons(VCons { items: ConsN(items, tail), layout }) => {
+                let items = items.into_iter().map(|item| self.translate_value(item)).collect();
+                let tail = self.translate_value(tail);
+                VCons::new(ConsN(items, tail), layout).build(self, None)
             }
             | Value::Literal(literal) => literal.build(self, None),
             | Value::Complex(Complex { operator, operands }) => {

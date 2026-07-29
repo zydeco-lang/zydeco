@@ -183,16 +183,16 @@ impl<'a> Ugly<'a, Formatter<'a>> for Triv {
     }
 }
 
-impl<'a, A, B> Ugly<'a, Formatter<'a>> for Cons<A, B>
+impl<'a, S, T> Ugly<'a, Formatter<'a>> for ConsN<S, T>
 where
-    A: Ugly<'a, Formatter<'a>>,
-    B: Ugly<'a, Formatter<'a>>,
+    S: Ugly<'a, Formatter<'a>>,
+    T: Ugly<'a, Formatter<'a>>,
 {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let Cons(a, b) = self;
-        let a = a.ugly(f);
-        let b = b.ugly(f);
-        format!("({}, {})", a, b)
+        let ConsN(items, tail) = self;
+        let mut items = items.iter().map(|item| item.ugly(f)).collect::<Vec<_>>();
+        items.push(tail.ugly(f));
+        format!("({})", items.join(", "))
     }
 }
 

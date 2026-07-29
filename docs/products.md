@@ -1,31 +1,83 @@
-## Why Product Syntax should be Right-Associative
+## N-ary Products and Existential Packages
 
-N-nray products can be desugared into binary products, but to which direction? I think right-associative works better, and I have two reasons.
+Parentheses and commas have one surface representation. The parser does not
+decide whether a sequence is a value product or an existential package; that
+decision remains type-directed.
 
-First, being right-associative enables a local-style desugaring of projection. Consider a 3-tuple:
+- `()` becomes `Triv` and checks at `Unit`.
+- `(term)` is a parenthesized term, not a unary product.
+- `(a, b, ...)` remains one `Cons(ConsN<_, _>)` through surface syntax and
+  name resolution.
+- In synthesis mode, a non-empty `Cons` synthesizes a product.
+- Against a product type, its terms or patterns are product components.
+- Against an existential type, its leading terms or patterns are witnesses and
+  the remaining component or components form the package body.
 
+For example, against
+
+```text
+exists (X : VType) . exists (Y : VType) . X * Y
 ```
-(0, 1, 2) => (0, (1, 2))
-.0 => .0
-.1 => .1.0
-.2 => .1.1
+
+the term `(Int, Char, 0, 'z')` contains two witnesses and a two-component
+product body. The pattern `(Left, Right, number, letter)` eliminates the same
+package. Sort checking therefore happens in the type checker, not in the
+parser.
+
+## Typed Representation
+
+Product types remain binary because `*` is the binary type operator, and
+`Unit` remains the nullary product type. A right-associated product spine gives
+the component types for an n-ary value:
+
+```text
+(a, b, c) : A * (B * C)
 ```
 
-A part from the last bit, it's a direct traslation into the number of `.1`s.
-It will work even better if we drag nullary-product (unit) into the picture.
+The shared structural nodes are:
 
+```rust
+struct Triv;
+struct Cons<S, T>(S, T);
+struct ConsN<S, T>(Vec<S>, T);
 ```
-(0, 1, 2) => (0, (1, (2, ())))
+
+`Cons` remains the representation for structures that are genuinely binary.
+`ConsN` is nonempty: the vector is the possibly empty initial sequence and
+`T` is the distinguished final element. Source tuples contain at least two
+elements, but compiler-generated structures such as a singleton closure
+environment may use `ConsN(vec![], value)`.
+
+Typed product values and patterns use `VCons(ConsN<Value, Value>)`. Typed
+existential packages use `TCons(ConsN<Type, Value>)`, with the witness prefix in
+the vector and the package body as the final element. The corresponding
+type-pattern form has the same shape. Explicit grouping is preserved, so
+`(a, b, c)` and `(a, (b, c))` are different term trees even when they have the
+same type.
+
+The empty value and pattern are explicit `Triv` nodes throughout the compiler.
+They inhabit `Unit`; they are not empty `ConsN` values.
+
+## Canonical Backend Layout
+
+Stack IR records the logical `ConsN` elements inside `VCons` alongside the
+physical arity derived from the product type. Assembly packing then uses a
+canonical layout for each binary product type:
+
+```text
+A * (B * C)  => [a, b, c]
+(A * B) * C  => [pointer-to-[a, b], c]
 ```
 
-Then the nth-projection will just be written as `(.1)`^n`.0`. Easy. In comparison, the left-associative approach will make the desugaring dependent on the length of the product, which is not ideal.
+Only the right product spine is flattened. A nested product in any other
+position remains a pointer.
 
-By the way, nullary products can also give rise to unary product syntax `(0,) => (0, ())`, where `,` is really what makes a product term looks like a product, so `(0, 1)` should be normalized into `(0, 1,)`. Maybe `(,0 ,1)` also works. Oops, off-topic.
+Logical grouping need not match physical arity. When a two-element pattern
+`(a, rest)` eliminates a three-field `A * (B * C)`, `rest` is an interior
+pointer to `[b, c]`. Conversely, packing `(a, (b, c))` copies the final suffix
+into the canonical three-field allocation. This keeps representation
+type-directed and stable without reintroducing binary tuple desugaring.
 
-Second, it works better with existential types. The left hand side is the witness/parameter, and the right hand side is the body/interface. The left-associative approach doesn't make sense anymore because the left hand side is a type term / type pattern, which is usually not a product itself. However, there should not be a nullary or unary form of existentials, since `(0, 1, 2) => (0, (1, (2, ())))` will completely change whether `2` from a body to a witness.
-
-## Why Products should not be Desugared into its Binary Form
-
-Because nullary and unary cases will always be special cases and will be very difficult to work with if we follow this desugaring design choice. Instead, we can parse product term syntax as `Vec`s and translate nullary case into `triv` (term of unit type), and unary case into a normal AST node, leaving products that are at least binary.
-
-Unary product is similar to precedence parentheses in syntax, making it difficult to distinguish. And all mechanisms that unary product brings can (arguably) be replaced by other devices, like `box`ing (heap allocation), `align`ing (memory layout), or `data` type (type-dependent implementations; newtype pattern).
+Every `VCons` layout is nonempty. `Triv` travels through Stack IR and assembly
+separately, where it is emitted as the backend's zero immediate and does not
+allocate a heap product.

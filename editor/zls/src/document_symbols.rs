@@ -90,16 +90,8 @@ impl DocumentSymbolContext<'_> {
                 let body = self.pattern(body);
                 [].into_iter().chain(body).collect()
             }
-            | b::Pattern::Triv(p) => {
-                let b::Triv = p;
-                vec![]
-            }
-            | b::Pattern::Cons(p) => {
-                let b::Cons(a, b) = p;
-                let a = self.pattern(a);
-                let b = self.pattern(b);
-                [].into_iter().chain(a).chain(b).collect()
-            }
+            | b::Pattern::Triv(b::Triv) => vec![],
+            | b::Pattern::Cons(items) => items.iter().flat_map(|item| self.pattern(item)).collect(),
         }
     }
     fn term(&self, id: &b::TermId) -> Vec<DocumentSymbol> {
@@ -141,16 +133,8 @@ impl DocumentSymbolContext<'_> {
                     None,
                 )]
             }
-            | b::Term::Triv(t) => {
-                let b::Triv = t;
-                vec![]
-            }
-            | b::Term::Cons(t) => {
-                let b::Cons(a, b) = t;
-                let a = self.term(a);
-                let b = self.term(b);
-                [].into_iter().chain(a).chain(b).collect()
-            }
+            | b::Term::Triv(b::Triv) => vec![],
+            | b::Term::Cons(items) => items.iter().flat_map(|item| self.term(item)).collect(),
             | b::Term::Abs(t) => {
                 let b::Abs(binder, body) = t;
                 let binder = self.pattern(binder);

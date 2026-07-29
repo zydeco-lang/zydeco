@@ -385,8 +385,8 @@ pub enum ValuePattern {
     Var(DefId),
     Ctor(Ctor<CtorName, VPatId>),
     Triv(Triv),
-    VCons(Cons<VPatId, VPatId>),
-    TCons(Cons<TPatId, VPatId>),
+    VCons(ConsN<VPatId, VPatId>),
+    TCons(ConsN<TPatId, VPatId>),
 }
 
 #[derive(From, Clone, Debug)]
@@ -396,8 +396,8 @@ pub enum Value {
     Thunk(Thunk<CompuId>),
     Ctor(Ctor<CtorName, ValueId>),
     Triv(Triv),
-    VCons(Cons<ValueId, ValueId>),
-    TCons(Cons<TypeId, ValueId>),
+    VCons(ConsN<ValueId, ValueId>),
+    TCons(ConsN<TypeId, ValueId>),
     Lit(Literal),
 }
 

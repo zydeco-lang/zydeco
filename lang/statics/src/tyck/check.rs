@@ -712,81 +712,202 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                     PatAnnId::Value(pat, ann_ty)
                 }
             },
-            | Pat::Triv(pat) => {
-                let su::Triv = pat;
-                let ann = ss::UnitTy.build(tycker, &self.info);
-                let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
-                match switch {
-                    | Switch::Syn => PatAnnId::Value(triv, ann),
-                    | Switch::Ana(ana) => {
-                        let AnnId::Type(ana) = ana else {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        };
-                        let ann = Lub::lub_k(ann, ana, tycker)?;
-                        PatAnnId::Value(triv, ann)
+            | Pat::Triv(su::Triv) => {
+                let unit = ss::UnitTy.build(tycker, &self.info);
+                let ann = match switch {
+                    | Switch::Syn => unit,
+                    | Switch::Ana(AnnId::Type(ana)) => Lub::lub_k(unit, ana, tycker)?,
+                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
-                }
+                };
+                let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
+                PatAnnId::Value(triv, ann)
             }
             | Pat::Cons(pat) => {
-                let su::Cons(a, b) = pat;
-                match switch {
-                    | Switch::Syn => tycker
-                        .err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?,
-                    | Switch::Ana(ann) => {
-                        let AnnId::Type(ann_ty) = ann else {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        };
-                        match tycker.type_filled_k(&ann_ty)?.to_owned() {
-                            | ss::Type::Prod(ty) => {
-                                let ss::Prod(ty_a, ty_b) = ty;
-                                let a_out_ann =
-                                    self.mk(a).tyck_k(tycker, Action::ana(ty_a.into()))?;
-                                let b_out_ann =
-                                    self.mk(b).tyck_k(tycker, Action::ana(ty_b.into()))?;
-                                let (a_out, a_ann) = a_out_ann.as_value();
-                                let (b_out, b_ann) = b_out_ann.as_value();
-                                let vtype = ss::VType.build(tycker, &self.info);
-                                let ann =
-                                    Alloc::alloc(tycker, ss::Prod(a_ann, b_ann), vtype, &self.info);
-                                let pat =
-                                    Alloc::alloc(tycker, ss::Cons(a_out, b_out), ann, &self.info);
-                                PatAnnId::Value(pat, ann)
-                            }
-                            | ss::Type::Exists(ty) => {
-                                let ss::Exists(abst, ty_body) = ty;
-                                let kd = tycker.statics.annotations_abst[&abst];
-                                let a_out_ann =
-                                    self.mk(a).tyck_k(tycker, Action::ana(kd.into()))?;
-                                let (a_out, _a_kd) = a_out_ann.as_type();
-                                let mut subst_vec = Vec::new();
-                                if let (Some(def), _kd) = a_out.try_destruct_def(tycker) {
-                                    let ty_abst = Alloc::alloc(tycker, abst, kd, &self.info);
-                                    subst_vec.push((def, ty_abst.into()));
-                                }
-                                let b_out_ann = self
-                                    .mk_add(subst_vec, b)
-                                    .tyck_k(tycker, Action::ana(ty_body.into()))?;
-                                let (b_out, ty_body) = b_out_ann.as_value();
-                                let vtype = ss::VType.build(tycker, &self.info);
-                                let ann = Alloc::alloc(
+                let su::ConsN(items, tail) = pat;
+                let Switch::Ana(AnnId::Type(expected)) = switch else {
+                    tycker.err_k(TyckError::MissingAnnotation, std::panic::Location::caller())?
+                };
+                let expected_view = expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                match tycker.type_filled_k(&expected_view)?.to_owned() {
+                    | ss::Type::Prod(_) => {
+                        let mut expected_item = expected_view;
+                        let (output, annotations): (Vec<_>, Vec<_>) = items
+                            .into_iter()
+                            .map(|item| -> ResultKont<_> {
+                                let view = expected_item
+                                    .unroll_k(tycker)?
+                                    .subst_env_k(tycker, &self.info)?;
+                                let ss::Type::Prod(ss::Prod(item_ty, next_ty)) =
+                                    tycker.type_filled_k(&view)?.to_owned()
+                                else {
+                                    tycker.err_k(
+                                        TyckError::TypeExpected {
+                                            expected: "a product with enough components"
+                                                .to_string(),
+                                            found: expected_item,
+                                        },
+                                        std::panic::Location::caller(),
+                                    )?
+                                };
+                                expected_item = next_ty;
+                                let checked =
+                                    self.mk(item).tyck_k(tycker, Action::ana(item_ty.into()))?;
+                                checked.try_as_value(
                                     tycker,
-                                    ss::Exists(abst, ty_body),
-                                    vtype,
-                                    &self.info,
-                                );
-                                let pat =
-                                    Alloc::alloc(tycker, ss::Cons(a_out, b_out), ann, &self.info);
-                                PatAnnId::Value(pat, ann)
-                            }
-                            | _ => tycker.err_k(
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )
+                            })
+                            .collect::<ResultKont<Vec<_>>>()?
+                            .into_iter()
+                            .unzip();
+
+                        let checked =
+                            self.mk(tail).tyck_k(tycker, Action::ana(expected_item.into()))?;
+                        let (tail, ann) = checked.try_as_value(
+                            tycker,
+                            TyckError::SortMismatch,
+                            std::panic::Location::caller(),
+                        )?;
+                        let vtype = ss::VType.build(tycker, &self.info);
+                        let ann = annotations.into_iter().rev().fold(ann, |ann, head| {
+                            Alloc::alloc(tycker, ss::Prod(head, ann), vtype, &self.info)
+                        });
+                        let cons = Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &self.info);
+                        PatAnnId::Value(cons, ann)
+                    }
+                    | ss::Type::Exists(_) => {
+                        let mut body_env = self.info.clone();
+                        let mut body_ty = expected;
+                        let mut body_index = items.len();
+
+                        let witnesses = items
+                            .iter()
+                            .copied()
+                            .enumerate()
+                            .map_while(|(index, item)| {
+                                (|| -> ResultKont<Option<ss::TPatId>> {
+                                    let view =
+                                        body_ty.unroll_k(tycker)?.subst_env_k(tycker, &body_env)?;
+                                    let ss::Type::Exists(ss::Exists(abst, next_ty)) =
+                                        tycker.type_filled_k(&view)?.to_owned()
+                                    else {
+                                        body_index = index;
+                                        return Ok(None);
+                                    };
+                                    let kd = tycker.statics.annotations_abst[&abst];
+                                    let checked = TyEnvT::new(body_env.clone(), item)
+                                        .tyck_k(tycker, Action::ana(kd.into()))?;
+                                    let (witness, _) = checked.try_as_type(
+                                        tycker,
+                                        TyckError::SortMismatch,
+                                        std::panic::Location::caller(),
+                                    )?;
+                                    if let (Some(def), _) = witness.try_destruct_def(tycker) {
+                                        let abstract_ty = Alloc::alloc(tycker, abst, kd, &body_env);
+                                        body_env += [(def, abstract_ty.into())];
+                                    }
+                                    body_ty = next_ty;
+                                    Ok(Some(witness))
+                                })()
+                                .transpose()
+                            })
+                            .collect::<ResultKont<Vec<_>>>()?;
+
+                        if witnesses.is_empty() {
+                            tycker.err_k(
                                 TyckError::TypeExpected {
-                                    expected: "one of `_ * _` or `exists _ . _`".to_string(),
-                                    found: ann_ty,
+                                    expected: "an existential package".to_string(),
+                                    found: expected,
                                 },
                                 std::panic::Location::caller(),
-                            )?,
+                            )?
                         }
+
+                        let body_items = &items[body_index..];
+                        let body = if body_items.is_empty() {
+                            let checked = TyEnvT::new(body_env.clone(), tail)
+                                .tyck_k(tycker, Action::ana(body_ty.into()))?;
+                            checked
+                                .try_as_value(
+                                    tycker,
+                                    TyckError::SortMismatch,
+                                    std::panic::Location::caller(),
+                                )?
+                                .0
+                        } else {
+                            let body_view =
+                                body_ty.unroll_k(tycker)?.subst_env_k(tycker, &body_env)?;
+                            let ss::Type::Prod(_) = tycker.type_filled_k(&body_view)?.to_owned()
+                            else {
+                                tycker.err_k(
+                                    TyckError::TypeExpected {
+                                        expected: "one of `_ * _` or `exists _ . _`".to_string(),
+                                        found: body_ty,
+                                    },
+                                    std::panic::Location::caller(),
+                                )?
+                            };
+
+                            let mut expected_item = body_view;
+                            let (output, annotations): (Vec<_>, Vec<_>) = body_items
+                                .iter()
+                                .copied()
+                                .map(|item| -> ResultKont<_> {
+                                    let view = expected_item
+                                        .unroll_k(tycker)?
+                                        .subst_env_k(tycker, &body_env)?;
+                                    let ss::Type::Prod(ss::Prod(item_ty, next_ty)) =
+                                        tycker.type_filled_k(&view)?.to_owned()
+                                    else {
+                                        tycker.err_k(
+                                            TyckError::TypeExpected {
+                                                expected: "a product with enough components"
+                                                    .to_string(),
+                                                found: expected_item,
+                                            },
+                                            std::panic::Location::caller(),
+                                        )?
+                                    };
+                                    expected_item = next_ty;
+                                    let checked = TyEnvT::new(body_env.clone(), item)
+                                        .tyck_k(tycker, Action::ana(item_ty.into()))?;
+                                    checked.try_as_value(
+                                        tycker,
+                                        TyckError::SortMismatch,
+                                        std::panic::Location::caller(),
+                                    )
+                                })
+                                .collect::<ResultKont<Vec<_>>>()?
+                                .into_iter()
+                                .unzip();
+
+                            let checked = TyEnvT::new(body_env.clone(), tail)
+                                .tyck_k(tycker, Action::ana(expected_item.into()))?;
+                            let (tail, ann) = checked.try_as_value(
+                                tycker,
+                                TyckError::SortMismatch,
+                                std::panic::Location::caller(),
+                            )?;
+                            let vtype = ss::VType.build(tycker, &body_env);
+                            let ann = annotations.into_iter().rev().fold(ann, |ann, head| {
+                                Alloc::alloc(tycker, ss::Prod(head, ann), vtype, &body_env)
+                            });
+                            Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &body_env)
+                        };
+                        let cons =
+                            Alloc::alloc(tycker, ss::ConsN(witnesses, body), expected, &self.info);
+                        PatAnnId::Value(cons, expected)
                     }
+                    | _ => tycker.err_k(
+                        TyckError::TypeExpected {
+                            expected: "one of `_ * _` or `exists _ . _`".to_string(),
+                            found: expected,
+                        },
+                        std::panic::Location::caller(),
+                    )?,
                 }
             }
         };
@@ -1086,30 +1207,45 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                     }
                 }
             }
-            | Tm::Triv(term) => {
-                let su::Triv = term;
+            | Tm::Triv(su::Triv) => {
                 let unit = ss::UnitTy.build(tycker, &self.info);
-                let triv = Alloc::alloc(tycker, ss::Triv, unit, &self.info);
-                match switch {
-                    | Switch::Syn => TermAnnId::Value(triv, unit),
-                    | Switch::Ana(ana) => {
-                        let AnnId::Type(ana) = ana else {
-                            tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
-                        };
-                        let unit = Lub::lub_k(unit, ana, tycker)?;
-                        TermAnnId::Value(triv, unit)
+                let ann = match switch {
+                    | Switch::Syn => unit,
+                    | Switch::Ana(AnnId::Type(ana)) => Lub::lub_k(unit, ana, tycker)?,
+                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
-                }
+                };
+                let triv = Alloc::alloc(tycker, ss::Triv, ann, &self.info);
+                TermAnnId::Value(triv, ann)
             }
             | Tm::Cons(term) => {
-                let su::Cons(a, b) = term;
+                let su::ConsN(items, tail) = term;
                 match switch {
                     | Switch::Syn => {
-                        let a_out_ann = self.mk(a).tyck_k(tycker, Action::syn())?;
-                        let b_out_ann = self.mk(b).tyck_k(tycker, Action::syn())?;
-                        // `a` can be a value, but to be a type needs annotation
-                        let (a_out, a_ty) = match a_out_ann {
-                            | TermAnnId::Value(a_out, a_ty) => (a_out, a_ty),
+                        let (output, annotations): (Vec<_>, Vec<_>) = items
+                            .into_iter()
+                            .map(|item| -> ResultKont<_> {
+                                match self.mk(item).tyck_k(tycker, Action::syn())? {
+                                    | TermAnnId::Value(item, item_ty) => Ok((item, item_ty)),
+                                    | TermAnnId::Type(_, _) => tycker.err_k(
+                                        TyckError::MissingAnnotation,
+                                        std::panic::Location::caller(),
+                                    ),
+                                    | TermAnnId::Hole(_)
+                                    | TermAnnId::Kind(_)
+                                    | TermAnnId::Compu(_, _) => tycker.err_k(
+                                        TyckError::SortMismatch,
+                                        std::panic::Location::caller(),
+                                    ),
+                                }
+                            })
+                            .collect::<ResultKont<Vec<_>>>()?
+                            .into_iter()
+                            .unzip();
+                        let checked = self.mk(tail).tyck_k(tycker, Action::syn())?;
+                        let (tail, ann) = match checked {
+                            | TermAnnId::Value(tail, tail_ty) => (tail, tail_ty),
                             | TermAnnId::Type(_, _) => tycker.err_k(
                                 TyckError::MissingAnnotation,
                                 std::panic::Location::caller(),
@@ -1121,76 +1257,216 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 )?
                             }
                         };
-                        let (b_out, b_ty) = b_out_ann.try_as_value(
-                            tycker,
-                            TyckError::SortMismatch,
-                            std::panic::Location::caller(),
-                        )?;
                         let vtype = ss::VType.build(tycker, &self.info);
-                        let prod = Alloc::alloc(tycker, ss::Prod(a_ty, b_ty), vtype, &self.info);
-                        let cons = Alloc::alloc(tycker, ss::Cons(a_out, b_out), prod, &self.info);
-                        TermAnnId::Value(cons, prod)
+                        let ann = annotations.into_iter().rev().fold(ann, |ann, head| {
+                            Alloc::alloc(tycker, ss::Prod(head, ann), vtype, &self.info)
+                        });
+                        let cons = Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &self.info);
+                        TermAnnId::Value(cons, ann)
                     }
-                    | Switch::Ana(ana) => {
-                        let ana_ty = match ana {
-                            | AnnId::Set | AnnId::Kind(_) => tycker
-                                .err_k(TyckError::SortMismatch, std::panic::Location::caller())?,
-                            | AnnId::Type(ty) => ty,
-                        };
-                        match tycker.type_filled_k(&ana_ty)?.to_owned() {
-                            | ss::Type::Prod(ty) => {
-                                let ss::Prod(ty_a, ty_b) = ty;
-                                let a_out_ann =
-                                    self.mk(a).tyck_k(tycker, Action::ana(ty_a.into()))?;
-                                let b_out_ann =
-                                    self.mk(b).tyck_k(tycker, Action::ana(ty_b.into()))?;
-                                let (a_out, a_ty) = a_out_ann.try_as_value(
-                                    tycker,
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?;
-                                let (b_out, b_ty) = b_out_ann.try_as_value(
+                    | Switch::Ana(AnnId::Type(expected)) => {
+                        let expected_view =
+                            expected.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
+                        match tycker.type_filled_k(&expected_view)?.to_owned() {
+                            | ss::Type::Prod(_) => {
+                                let mut expected_item = expected_view;
+                                let (output, annotations): (Vec<_>, Vec<_>) = items
+                                    .into_iter()
+                                    .map(|item| -> ResultKont<_> {
+                                        let view = expected_item
+                                            .unroll_k(tycker)?
+                                            .subst_env_k(tycker, &self.info)?;
+                                        let ss::Type::Prod(ss::Prod(item_ty, next_ty)) =
+                                            tycker.type_filled_k(&view)?.to_owned()
+                                        else {
+                                            tycker.err_k(
+                                                TyckError::TypeExpected {
+                                                    expected: "a product with enough components"
+                                                        .to_string(),
+                                                    found: expected_item,
+                                                },
+                                                std::panic::Location::caller(),
+                                            )?
+                                        };
+                                        expected_item = next_ty;
+                                        let checked = self
+                                            .mk(item)
+                                            .tyck_k(tycker, Action::ana(item_ty.into()))?;
+                                        checked.try_as_value(
+                                            tycker,
+                                            TyckError::SortMismatch,
+                                            std::panic::Location::caller(),
+                                        )
+                                    })
+                                    .collect::<ResultKont<Vec<_>>>()?
+                                    .into_iter()
+                                    .unzip();
+
+                                let checked = self
+                                    .mk(tail)
+                                    .tyck_k(tycker, Action::ana(expected_item.into()))?;
+                                let (tail, ann) = checked.try_as_value(
                                     tycker,
                                     TyckError::SortMismatch,
                                     std::panic::Location::caller(),
                                 )?;
                                 let vtype = ss::VType.build(tycker, &self.info);
-                                let prod =
-                                    Alloc::alloc(tycker, ss::Prod(a_ty, b_ty), vtype, &self.info);
+                                let ann = annotations.into_iter().rev().fold(ann, |ann, head| {
+                                    Alloc::alloc(tycker, ss::Prod(head, ann), vtype, &self.info)
+                                });
                                 let cons =
-                                    Alloc::alloc(tycker, ss::Cons(a_out, b_out), prod, &self.info);
-                                TermAnnId::Value(cons, prod)
+                                    Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &self.info);
+                                TermAnnId::Value(cons, ann)
                             }
-                            | ss::Type::Exists(ty) => {
-                                let ss::Exists(abst, body_ty) = ty;
-                                let kd = tycker.statics.annotations_abst[&abst];
-                                let a_out_ann =
-                                    self.mk(a).tyck_k(tycker, Action::ana(kd.into()))?;
-                                let (a_ty, _a_kd) = a_out_ann.try_as_type(
+                            | ss::Type::Exists(_) => {
+                                let mut body_ty = expected;
+                                let mut body_index = items.len();
+
+                                let witnesses = items
+                                    .iter()
+                                    .copied()
+                                    .enumerate()
+                                    .map_while(|(index, item)| {
+                                        (|| -> ResultKont<Option<ss::TypeId>> {
+                                            let view = body_ty
+                                                .unroll_k(tycker)?
+                                                .subst_env_k(tycker, &self.info)?;
+                                            let ss::Type::Exists(ss::Exists(abst, next_ty)) =
+                                                tycker.type_filled_k(&view)?.to_owned()
+                                            else {
+                                                body_index = index;
+                                                return Ok(None);
+                                            };
+                                            let kd = tycker.statics.annotations_abst[&abst];
+                                            let checked = self
+                                                .mk(item)
+                                                .tyck_k(tycker, Action::ana(kd.into()))?;
+                                            let (witness, _) = checked.try_as_type(
+                                                tycker,
+                                                TyckError::SortMismatch,
+                                                std::panic::Location::caller(),
+                                            )?;
+                                            body_ty =
+                                                next_ty.subst_abst_k(tycker, (abst, witness))?;
+                                            Ok(Some(witness))
+                                        })()
+                                        .transpose()
+                                    })
+                                    .collect::<ResultKont<Vec<_>>>()?;
+
+                                if witnesses.is_empty() {
+                                    tycker.err_k(
+                                        TyckError::TypeExpected {
+                                            expected: "an existential package".to_string(),
+                                            found: expected,
+                                        },
+                                        std::panic::Location::caller(),
+                                    )?
+                                }
+
+                                let body_items = &items[body_index..];
+                                let body = if body_items.is_empty() {
+                                    let checked = self
+                                        .mk(tail)
+                                        .tyck_k(tycker, Action::ana(body_ty.into()))?;
+                                    checked
+                                        .try_as_value(
+                                            tycker,
+                                            TyckError::SortMismatch,
+                                            std::panic::Location::caller(),
+                                        )?
+                                        .0
+                                } else {
+                                    let body_view = body_ty
+                                        .unroll_k(tycker)?
+                                        .subst_env_k(tycker, &self.info)?;
+                                    let ss::Type::Prod(_) =
+                                        tycker.type_filled_k(&body_view)?.to_owned()
+                                    else {
+                                        tycker.err_k(
+                                            TyckError::TypeExpected {
+                                                expected: "one of `_ * _` or `exists _ . _`"
+                                                    .to_string(),
+                                                found: body_ty,
+                                            },
+                                            std::panic::Location::caller(),
+                                        )?
+                                    };
+
+                                    let mut expected_item = body_view;
+                                    let (output, annotations): (Vec<_>, Vec<_>) = body_items
+                                        .iter()
+                                        .copied()
+                                        .map(|item| -> ResultKont<_> {
+                                            let view = expected_item
+                                                .unroll_k(tycker)?
+                                                .subst_env_k(tycker, &self.info)?;
+                                            let ss::Type::Prod(ss::Prod(item_ty, next_ty)) =
+                                                tycker.type_filled_k(&view)?.to_owned()
+                                            else {
+                                                tycker.err_k(
+                                                    TyckError::TypeExpected {
+                                                        expected:
+                                                            "a product with enough components"
+                                                                .to_string(),
+                                                        found: expected_item,
+                                                    },
+                                                    std::panic::Location::caller(),
+                                                )?
+                                            };
+                                            expected_item = next_ty;
+                                            let checked = self
+                                                .mk(item)
+                                                .tyck_k(tycker, Action::ana(item_ty.into()))?;
+                                            checked.try_as_value(
+                                                tycker,
+                                                TyckError::SortMismatch,
+                                                std::panic::Location::caller(),
+                                            )
+                                        })
+                                        .collect::<ResultKont<Vec<_>>>()?
+                                        .into_iter()
+                                        .unzip();
+
+                                    let checked = self
+                                        .mk(tail)
+                                        .tyck_k(tycker, Action::ana(expected_item.into()))?;
+                                    let (tail, ann) = checked.try_as_value(
+                                        tycker,
+                                        TyckError::SortMismatch,
+                                        std::panic::Location::caller(),
+                                    )?;
+                                    let vtype = ss::VType.build(tycker, &self.info);
+                                    let ann =
+                                        annotations.into_iter().rev().fold(ann, |ann, head| {
+                                            Alloc::alloc(
+                                                tycker,
+                                                ss::Prod(head, ann),
+                                                vtype,
+                                                &self.info,
+                                            )
+                                        });
+                                    Alloc::alloc(tycker, ss::ConsN(output, tail), ann, &self.info)
+                                };
+                                let cons = Alloc::alloc(
                                     tycker,
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?;
-                                let body_ty_subst = body_ty.subst_abst_k(tycker, (abst, a_ty))?;
-                                let b_out_ann =
-                                    self.mk(b).tyck_k(tycker, Action::ana(body_ty_subst.into()))?;
-                                let (val, _) = b_out_ann.try_as_value(
-                                    tycker,
-                                    TyckError::SortMismatch,
-                                    std::panic::Location::caller(),
-                                )?;
-                                let cons =
-                                    Alloc::alloc(tycker, ss::Cons(a_ty, val), body_ty, &self.info);
-                                TermAnnId::Value(cons, ana_ty)
+                                    ss::ConsN(witnesses, body),
+                                    expected,
+                                    &self.info,
+                                );
+                                TermAnnId::Value(cons, expected)
                             }
                             | _ => tycker.err_k(
                                 TyckError::TypeExpected {
                                     expected: "one of `_ * _` or `exists _ . _`".to_string(),
-                                    found: ana_ty,
+                                    found: expected,
                                 },
                                 std::panic::Location::caller(),
                             )?,
                         }
+                    }
+                    | Switch::Ana(AnnId::Set | AnnId::Kind(_)) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 }
             }

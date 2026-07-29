@@ -37,11 +37,11 @@ where
                 let pat = pat.deep_clone(arena, map);
                 Ctor(ctor, pat).build(arena, None)
             }
-            | VPat::Triv(triv) => triv.build(arena, None),
-            | VPat::VCons(Cons(a, b)) => {
-                let a = a.deep_clone(arena, map);
-                let b = b.deep_clone(arena, map);
-                Cons(a, b).build(arena, None)
+            | VPat::Triv(Triv) => Triv.build(arena, None),
+            | VPat::VCons(VCons { items: ConsN(items, tail), layout }) => {
+                let items = items.iter().map(|item| item.deep_clone(arena, map)).collect();
+                let tail = tail.deep_clone(arena, map);
+                VCons::new(ConsN(items, tail), layout).build(arena, None)
             }
         }
     }
@@ -70,10 +70,10 @@ where
                 Ctor(ctor, body).build(arena, None)
             }
             | Value::Triv(Triv) => Triv.build(arena, None),
-            | Value::VCons(Cons(a, b)) => {
-                let a = a.deep_clone(arena, map);
-                let b = b.deep_clone(arena, map);
-                Cons(a, b).build(arena, None)
+            | Value::VCons(VCons { items: ConsN(items, tail), layout }) => {
+                let items = items.iter().map(|item| item.deep_clone(arena, map)).collect();
+                let tail = tail.deep_clone(arena, map);
+                VCons::new(ConsN(items, tail), layout).build(arena, None)
             }
             | Value::Literal(literal) => literal.build(arena, None),
             | Value::Complex(Complex { operator, operands }) => {

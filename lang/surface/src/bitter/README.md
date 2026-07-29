@@ -34,8 +34,9 @@ rewrites them to bound variables.
 
 `bitter::desugar` implements the `Desugarer` compiler pass. It:
 
-- Expands sugar into core forms (e.g., parens to `Cons` chains, `Arrow` to `Pi`,
-  `Prod` to `Sigma`, `forall`/`exists` to annotated `Pi`/`Sigma`).
+- Expands sugar into core forms (e.g., empty parens to `Triv`,
+  comma-separated parens to `Cons(ConsN<_, _>)`, `Arrow` to `Pi`, `Prod` to
+  `Sigma`, and `forall`/`exists` to annotated `Pi`/`Sigma`).
 - Normalizes multi-parameter abstractions and applications into nested `Abs` and
   `App` nodes.
 - Inserts type annotations for literals, `ret`, and `thunk` so later phases see

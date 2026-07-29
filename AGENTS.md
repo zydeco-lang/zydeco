@@ -89,6 +89,13 @@ For examples,
   Is it really relying on string deduplication?
   Or it's actually a "dynamic object", that might be concluded by a few traits?
 
+Prefer a functional programming style whenever suitable.
+Use iterator transformations instead of manual loops with mutable accumulators.
+In particular, avoid mutable `Vec`s and repeated `push` calls when the same result
+can be expressed clearly with operations such as `map`, fallible `collect`, `unzip`, or `fold`.
+Keep mutation when it represents essential sequential state,
+or when a functional rewrite would materially harm clarity or performance.
+
 Prefer to use structs to pack a group of useful functions; prefer methods over functions.
 Rust structs have better namespace-ish features than Rust modules.
 Never write plain functions that are not wrapped in a struct with your best effort

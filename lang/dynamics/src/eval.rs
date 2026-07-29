@@ -143,13 +143,22 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
                     return Step::Done(Err(()));
                 }
             },
-            | VPat::VCons(Cons(a, b)) => match sem {
-                | SemValue::VCons(Cons(a_, b_)) => {
-                    match Assign(a.to_owned(), *a_).eval(runtime) {
-                        | Ok(()) => {}
-                        | Err(()) => return Step::Done(Err(())),
+            | VPat::VCons(ConsN(patterns, tail_pattern)) => match sem {
+                | SemValue::VCons(values) => {
+                    let mut values = SemValue::VCons(values).into_product_fields();
+                    if values.len() <= patterns.len() {
+                        return Step::Done(Err(()));
                     }
-                    match Assign(b.to_owned(), *b_).eval(runtime) {
+
+                    let prefix_len = patterns.len();
+                    for (pattern, value) in patterns.iter().zip(values.drain(..prefix_len)) {
+                        match Assign(pattern.to_owned(), value).eval(runtime) {
+                            | Ok(()) => {}
+                            | Err(()) => return Step::Done(Err(())),
+                        }
+                    }
+                    let value = SemValue::from_product_fields(values);
+                    match Assign(tail_pattern.to_owned(), value).eval(runtime) {
                         | Ok(()) => {}
                         | Err(()) => return Step::Done(Err(())),
                     }
@@ -161,6 +170,32 @@ impl<'rt> Eval<'rt> for Assign<RcVPat, SemValue> {
             },
         }
         Step::Done(Ok(()))
+    }
+}
+
+impl SemValue {
+    fn into_product_fields(self) -> Vec<Self> {
+        let SemValue::VCons(ConsN(mut fields, tail)) = self else {
+            unreachable!("only products have product fields")
+        };
+        match *tail {
+            | SemValue::VCons(tail) => {
+                fields.extend(SemValue::VCons(tail).into_product_fields());
+            }
+            | tail => fields.push(tail),
+        }
+        fields
+    }
+
+    fn from_product_fields(mut fields: Vec<Self>) -> Self {
+        match fields.len() {
+            | 0 => Triv.into(),
+            | 1 => fields.pop().unwrap(),
+            | _ => {
+                let ConsN(items, tail) = ConsN::from_vec(fields).expect("non-empty product fields");
+                ConsN(items, Box::new(tail)).into()
+            }
+        }
     }
 }
 
@@ -190,10 +225,11 @@ impl<'rt> Eval<'rt> for Value {
                 Step::Done(Ctor(ctor, arg).into())
             }
             | Value::Triv(Triv) => Step::Done(Triv.into()),
-            | Value::VCons(Cons(a, b)) => {
-                let a = mk_box(a.as_ref().clone().eval(runtime));
-                let b = mk_box(b.as_ref().clone().eval(runtime));
-                Step::Done(Cons(a, b).into())
+            | Value::VCons(ConsN(items, tail)) => {
+                let items =
+                    items.into_iter().map(|item| item.as_ref().clone().eval(runtime)).collect();
+                let tail = mk_box(tail.as_ref().clone().eval(runtime));
+                Step::Done(ConsN(items, tail).into())
             }
             | Value::Lit(lit) => Step::Done(lit.into()),
             | Value::SemValue(sem) => Step::Done(sem),

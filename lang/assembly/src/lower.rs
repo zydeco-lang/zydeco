@@ -88,7 +88,7 @@ impl<'a> Lower<'a> for sk::VPatId {
                 unreachable!("Ctor patterns should not directly appear in ZASM");
                 // let vpat_data = *self;
                 // // Unpack the pair value
-                // Unpack(ProductMarker).build(
+                // Unpack(ProductLayout::new(2, 2)).build(
                 //     lo,
                 //     Box::new(move |lo: &mut Lowerer| {
                 //         // Compile the remaining pattern
@@ -108,28 +108,17 @@ impl<'a> Lower<'a> for sk::VPatId {
                 // )
             }
             | VPat::Triv(Triv) => {
-                // Pop and do nothing
                 let var = VarName::from("_").build(lo, None);
                 let incr = Box::new(move |cx: &Context| cx.clone() + [var]);
                 Pop(var).build(lo, With::new(cx, CxKont { incr, kont }))
             }
-            | VPat::VCons(Cons(a, b)) => {
-                // Unpack the pair value from the stack, and then process a and b
-                Unpack(ProductMarker).build(lo, {
-                    With::new(
-                        cx,
-                        CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
-                            a.lower(lo, {
-                                With::new(
-                                    cx,
-                                    Box::new(move |lo: &mut Lowerer, cx| {
-                                        b.lower(lo, With::new(cx, kont))
-                                    }),
-                                )
-                            })
-                        })),
-                    )
-                })
+            | VPat::VCons(sk::VCons { items, layout }) => {
+                let product = ProductLayout::new(layout.arity, items.len());
+                let kont =
+                    items.into_iter().rev().fold(kont, |kont: Kont<'a, Lowerer<'a>>, item| {
+                        Box::new(move |lo, cx| item.lower(lo, With::new(cx, kont)))
+                    });
+                Unpack(product).build(lo, With::new(cx, CxKont::same(kont)))
             }
         }
     }
@@ -181,7 +170,7 @@ impl<'a> Lower<'a> for sk::ValueId {
                                     cx,
                                     CxKont::same(Box::new(move |lo: &mut Lowerer, cx| {
                                         // Pack them into a pair value
-                                        Pack(ProductMarker)
+                                        Pack(ProductLayout::new(2, 2))
                                             .build(lo, With::new(cx, CxKont::same(kont)))
                                     })),
                                 ),
@@ -191,31 +180,18 @@ impl<'a> Lower<'a> for sk::ValueId {
                 )
             }
             | Value::Triv(Triv) => {
-                // Push the trivial value onto the stack
                 let atom = Atom::Imm(Imm::Triv(Triv));
                 Push(atom).build(lo, With::new(cx, CxKont::same(kont)))
             }
-            | Value::VCons(Cons(a, b)) => {
-                // Push b and then a onto the stack
-                b.lower(
-                    lo,
-                    With::new(
-                        cx,
-                        Box::new(move |lo, cx| {
-                            a.lower(
-                                lo,
-                                With::new(
-                                    cx,
-                                    Box::new(move |lo, cx| {
-                                        // and then pack the pair value
-                                        Pack(ProductMarker)
-                                            .build(lo, With::new(cx, CxKont::same(kont)))
-                                    }),
-                                ),
-                            )
-                        }),
-                    ),
-                )
+            | Value::VCons(sk::VCons { items, layout }) => {
+                let product = ProductLayout::new(layout.arity, items.len());
+                let kont: Kont<'a, Lowerer<'a>> = Box::new(move |lo, cx| {
+                    Pack(product).build(lo, With::new(cx, CxKont::same(kont)))
+                });
+                let kont = items.into_iter().fold(kont, |kont: Kont<'a, Lowerer<'a>>, item| {
+                    Box::new(move |lo, cx| item.lower(lo, With::new(cx, kont)))
+                });
+                kont(lo, cx)
             }
             | Value::Literal(Literal::Int(i)) => {
                 // Push the literal value onto the stack
@@ -415,7 +391,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                 )
             }
             | Compu::Fix(sk::SFix { param, body }) => {
-                // Label the body code; using trivial value as a placeholder
+                // Label the body code; use an undefined symbol as a placeholder.
                 let name = lo.scoped.defs[&param].plain();
                 let sym = Undefined.build(lo, (Some(name.to_string()), Some(param)));
                 // Lower the body
@@ -478,7 +454,7 @@ impl<'a> Lower<'a> for sk::CompuId {
                                     }
                                 }
                                 // Unpack the value
-                                Unpack(ProductMarker).build(
+                                Unpack(ProductLayout::new(2, 2)).build(
                                     lo,
                                     With::new(
                                         cx,

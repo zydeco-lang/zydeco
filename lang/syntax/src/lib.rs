@@ -46,13 +46,17 @@ pub struct Arrow<S, T>(pub S, pub T);
 /// unary arrow that applies the same component
 pub type ArrowU<T> = Arrow<T, T>;
 
-/// `()` as unit type
+/// A binary cons cell used by internal structures.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Cons<S, T>(pub S, pub T);
+
+/// `()` as the nullary value constructor.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Triv;
 
-/// `(...)` as paren-shaped container
+/// A non-empty n-ary cons cell with a distinguished final element.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Cons<S, T>(pub S, pub T);
+pub struct ConsN<S, T>(pub Vec<S>, pub T);
 
 /// a * b shaped product
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

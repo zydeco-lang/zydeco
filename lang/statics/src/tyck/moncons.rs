@@ -590,7 +590,6 @@ where
 }
 impl MonConstruct<VPatId> for Triv {
     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
-        let Triv = self;
         let (env, ty) = UnitTy.mbuild(tycker, env)?;
         cs::Ann(Triv, ty).mbuild(tycker, env)
     }
@@ -607,7 +606,32 @@ where
         let (env, b) = b.mbuild(tycker, env)?;
         let b_ty = tycker.statics.annotations_vpat[&b];
         let (env, ty) = Prod(a_ty, b_ty).mbuild(tycker, env)?;
-        cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
+        cs::Ann(ConsN(vec![a], b), ty).mbuild(tycker, env)
+    }
+}
+impl<S, T> MonConstruct<VPatId> for ConsN<S, T>
+where
+    S: MonConstruct<VPatId>,
+    T: MonConstruct<VPatId>,
+{
+    fn mbuild(self, tycker: &mut Tycker<'_>, mut env: MonEnv) -> Result<(MonEnv, VPatId)> {
+        let ConsN(items, tail) = self;
+        let mut output = Vec::with_capacity(items.len());
+        for item in items {
+            let (next_env, item) = item.mbuild(tycker, env)?;
+            env = next_env;
+            output.push(item);
+        }
+        let (next_env, tail) = tail.mbuild(tycker, env)?;
+        env = next_env;
+        let mut ty = tycker.statics.annotations_vpat[&tail];
+        for head in output.iter().rev() {
+            let head_ty = tycker.statics.annotations_vpat[head];
+            let (next_env, next_ty) = Prod(head_ty, ty).mbuild(tycker, env)?;
+            env = next_env;
+            ty = next_ty;
+        }
+        cs::Ann(ConsN(output, tail), ty).mbuild(tycker, env)
     }
 }
 impl<S, F, V, T> MonConstruct<VPatId> for cs::Pat<cs::TCons<S, F>, T>
@@ -629,7 +653,7 @@ where
             env.ty += [(a_var, a_ty.into())];
         }
         let (env, b) = f(a_var, abst).mbuild(tycker, env)?;
-        cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
+        cs::Ann(ConsN(vec![a], b), ty).mbuild(tycker, env)
     }
 }
 
@@ -699,7 +723,33 @@ where
         let (env, b) = b.mbuild(tycker, env)?;
         let b_ty = tycker.statics.annotations_value[&b];
         let (env, ty) = Prod(a_ty, b_ty).mbuild(tycker, env)?;
-        let alloc = Alloc::alloc(tycker, Cons(a, b), ty, &env.ty);
+        let alloc = Alloc::alloc(tycker, ConsN(vec![a], b), ty, &env.ty);
+        Ok((env, alloc))
+    }
+}
+impl<S, T> MonConstruct<ValueId> for ConsN<S, T>
+where
+    S: MonConstruct<ValueId>,
+    T: MonConstruct<ValueId>,
+{
+    fn mbuild(self, tycker: &mut Tycker<'_>, mut env: MonEnv) -> Result<(MonEnv, ValueId)> {
+        let ConsN(items, tail) = self;
+        let mut output = Vec::with_capacity(items.len());
+        for item in items {
+            let (next_env, item) = item.mbuild(tycker, env)?;
+            env = next_env;
+            output.push(item);
+        }
+        let (next_env, tail) = tail.mbuild(tycker, env)?;
+        env = next_env;
+        let mut ty = tycker.statics.annotations_value[&tail];
+        for head in output.iter().rev() {
+            let head_ty = tycker.statics.annotations_value[head];
+            let (next_env, next_ty) = Prod(head_ty, ty).mbuild(tycker, env)?;
+            env = next_env;
+            ty = next_ty;
+        }
+        let alloc = Alloc::alloc(tycker, ConsN(output, tail), ty, &env.ty);
         Ok((env, alloc))
     }
 }
@@ -714,7 +764,7 @@ where
         let (env, a) = a.mbuild(tycker, env)?;
         let (env, b) = b.mbuild(tycker, env)?;
         let (env, ty) = ty.mbuild(tycker, env)?;
-        cs::Ann(Cons(a, b), ty).mbuild(tycker, env)
+        cs::Ann(ConsN(vec![a], b), ty).mbuild(tycker, env)
     }
 }
 impl<C, V, T> MonConstruct<ValueId> for cs::Ann<cs::Ctor<C, V>, T>

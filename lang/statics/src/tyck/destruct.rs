@@ -226,26 +226,24 @@ impl VPatId {
         match tycker.statics.vpats[self].to_owned() {
             | VPat::Hole(Hole) => Alloc::alloc(tycker, Hole, ty, &env),
             | VPat::Var(def) => Alloc::alloc(tycker, def, ty, &env),
+            | VPat::Triv(Triv) => Alloc::alloc(tycker, Triv, ty, &env),
             | VPat::Ctor(vpat) => {
                 let Ctor(ctor, vpat) = vpat;
                 let vpat_ = vpat.reify(tycker);
                 Alloc::alloc(tycker, Ctor(ctor, vpat_), ty, &env)
             }
-            | VPat::Triv(vpat) => {
-                let Triv = vpat;
-                Alloc::alloc(tycker, Triv, ty, &env)
-            }
             | VPat::VCons(vpat) => {
-                let Cons(a, b) = vpat;
-                let a_ = a.reify(tycker);
-                let b_ = b.reify(tycker);
-                Alloc::alloc(tycker, Cons(a_, b_), ty, &env)
+                let ConsN(items, tail) = vpat;
+                let items = items.into_iter().map(|item| item.reify(tycker)).collect();
+                let tail = tail.reify(tycker);
+                Alloc::alloc(tycker, ConsN(items, tail), ty, &env)
             }
             | VPat::TCons(vpat) => {
-                let Cons(a, b) = vpat;
-                let a_ = a.reify(tycker);
-                let b_ = b.reify(tycker);
-                Alloc::alloc(tycker, Cons(a_, b_), ty, &env)
+                let ConsN(witnesses, body) = vpat;
+                let witnesses =
+                    witnesses.into_iter().map(|witness| witness.reify(tycker)).collect();
+                let body = body.reify(tycker);
+                Alloc::alloc(tycker, ConsN(witnesses, body), ty, &env)
             }
         }
     }

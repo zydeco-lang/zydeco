@@ -559,6 +559,62 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
 }
 
 /// Value Pattern Translation `[VPat]`
+fn package_pattern_translation(
+    tycker: &mut Tycker, env: MonEnv, witnesses: &[TPatId], body: VPatId, translated_ty: TypeId,
+) -> Result<(MonEnv, VPatId)> {
+    let Some((&witness, remaining)) = witnesses.split_first() else {
+        return cs::TermLift { tm: body }.mbuild(tycker, env);
+    };
+    let Some((abst, translated_body_ty)) = translated_ty.destruct_exists(tycker) else {
+        unreachable!("translated package type must remain existential")
+    };
+    let Type::Prod(Prod(structure_ty, translated_tail_ty)) =
+        tycker.type_filled(&translated_body_ty)?.to_owned()
+    else {
+        unreachable!("translated existential body must contain its structure")
+    };
+
+    let (env, witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
+    let (witness_var, _) = witness.try_destruct_def(tycker);
+    let (env, abst_ty) = cs::Type(abst).mbuild(tycker, env)?;
+    let mut env = env;
+    if let Some(witness_var) = witness_var {
+        env.ty += [(witness_var, abst_ty.into())];
+    }
+    let (env, structure) = cs::StrPat("str", abst, witness_var).mbuild(tycker, env)?;
+    let (env, body) =
+        package_pattern_translation(tycker, env, remaining, body, translated_tail_ty)?;
+    let product = Alloc::alloc(tycker, ConsN(vec![structure], body), translated_body_ty, &env.ty);
+    let package = Alloc::alloc(tycker, ConsN(vec![witness], product), translated_ty, &env.ty);
+    let _ = structure_ty;
+    Ok((env, package))
+}
+
+fn package_value_translation(
+    tycker: &mut Tycker, env: MonEnv, witnesses: &[TypeId], body: ValueId, translated_ty: TypeId,
+) -> Result<(MonEnv, ValueId)> {
+    let Some((&witness, remaining)) = witnesses.split_first() else {
+        return cs::TermLift { tm: body }.mbuild(tycker, env);
+    };
+    let Some((_abst, translated_body_ty)) = translated_ty.destruct_exists(tycker) else {
+        unreachable!("translated package type must remain existential")
+    };
+    let Type::Prod(Prod(_structure_ty, translated_tail_ty)) =
+        tycker.type_filled(&translated_body_ty)?.to_owned()
+    else {
+        unreachable!("translated existential body must contain its structure")
+    };
+
+    let (env, translated_witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
+    let (env, structure) = cs::Structure { ty: witness }.mbuild(tycker, env)?;
+    let (env, structure) = Thunk(structure).mbuild(tycker, env)?;
+    let (env, body) = package_value_translation(tycker, env, remaining, body, translated_tail_ty)?;
+    let product = Alloc::alloc(tycker, ConsN(vec![structure], body), translated_body_ty, &env.ty);
+    let package =
+        Alloc::alloc(tycker, ConsN(vec![translated_witness], product), translated_ty, &env.ty);
+    Ok((env, package))
+}
+
 fn value_pattern_translation(
     tycker: &mut Tycker, env: MonEnv, vpat: VPatId,
 ) -> Result<(MonEnv, VPatId)> {
@@ -576,22 +632,16 @@ fn value_pattern_translation(
             let body_ = cs::TermLift { tm: body };
             cs::Pat(cs::Ctor(ctor, body_), ty_).mbuild(tycker, env)?
         }
-        | VPat::Triv(triv) => triv.mbuild(tycker, env)?,
+        | VPat::Triv(Triv) => Triv.mbuild(tycker, env)?,
         | VPat::VCons(vpat) => {
-            let Cons(a, b) = vpat;
-            let a_ = cs::TermLift { tm: a };
-            let b_ = cs::TermLift { tm: b };
-            Cons(a_, b_).mbuild(tycker, env)?
+            let ConsN(items, tail) = vpat;
+            let items = items.into_iter().map(|tm| cs::TermLift { tm }).collect();
+            let tail = cs::TermLift { tm: tail };
+            ConsN(items, tail).mbuild(tycker, env)?
         }
         | VPat::TCons(vpat) => {
-            let Cons(tpat, body) = vpat;
-            cs::Pat(
-                cs::TCons(cs::TypeLift { ty: tpat }, move |tvar, abst| {
-                    Cons(cs::StrPat("str", abst, tvar), cs::TermLift { tm: body })
-                }),
-                ty_,
-            )
-            .mbuild(tycker, env)?
+            let ConsN(witnesses, body) = vpat;
+            package_pattern_translation(tycker, env, &witnesses, body, ty_)?
         }
     };
     Ok((env, vpat_))
@@ -637,18 +687,14 @@ fn value_translation(
         }
         | Value::Triv(Triv) => Triv.mbuild(tycker, env)?,
         | Value::VCons(value) => {
-            let Cons(value_1, value_2) = value;
-            let value_1_ = cs::TermLift { tm: value_1 };
-            let value_2_ = cs::TermLift { tm: value_2 };
-            Cons(value_1_, value_2_).mbuild(tycker, env)?
+            let ConsN(items, tail) = value;
+            let items = items.into_iter().map(|tm| cs::TermLift { tm }).collect();
+            let tail = cs::TermLift { tm: tail };
+            ConsN(items, tail).mbuild(tycker, env)?
         }
         | Value::TCons(value) => {
-            let Cons(a_ty, body) = value;
-            let a_str = cs::Structure { ty: a_ty };
-            let body_ = cs::TermLift { tm: body };
-            let a_ty_ = cs::TypeLift { ty: a_ty };
-            // existential type construct should be type-guided
-            cs::Ann(Cons(cs::Ty(a_ty_), Cons(Thunk(a_str), body_)), ty_).mbuild(tycker, env)?
+            let ConsN(witnesses, body) = value;
+            package_value_translation(tycker, env, &witnesses, body, ty_)?
         }
     };
     Ok((env, res))

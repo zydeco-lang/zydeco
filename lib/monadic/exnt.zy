@@ -18,12 +18,20 @@ def ! mt-exn-derived (E: VType) : MonadTrans (ExnT E) =
     -- and verify that the algebra translation is correct.
     @[debug("generated and applied")]
     monadic fn (E: VType) ->
-      @[debug("original")]
-      let mo-exn = mo-exn in
-      comatch
-      | .monad -> ! mo-exn E
-      | .lift A m ->
-        do a <- ! m; ! mo-exn E .return A a
+      -- Keep a multi-witness package in the block so its algebra translation
+      -- exercises both n-ary package introduction and elimination.
+      let packed : exists (X : VType) . exists (Y : VType) . X * Y =
+        (Unit, Unit, (), ())
+      in
+      match packed
+      | (Left, Right, left, right) ->
+        @[debug("original")]
+        let mo-exn = mo-exn in
+        comatch
+        | .monad -> ! mo-exn E
+        | .lift A m ->
+          do a <- ! m; ! mo-exn E .return A a
+        end
       end
     :
       forall (E: VType) . MonadTransInner (Exn E)

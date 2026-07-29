@@ -21,19 +21,13 @@ impl SyntacticallyUsed for su::PatId {
                 let su::Hole = pat;
                 false
             }
+            | Pat::Triv(su::Triv) => false,
             | Pat::Var(def) => def.syntactically_used(tycker),
             | Pat::Ctor(pat) => {
                 let su::Ctor(_ctor, pat) = pat;
                 pat.syntactically_used(tycker)
             }
-            | Pat::Triv(pat) => {
-                let su::Triv = pat;
-                false
-            }
-            | Pat::Cons(pat) => {
-                let su::Cons(pat1, pat2) = pat;
-                pat1.syntactically_used(tycker) || pat2.syntactically_used(tycker)
-            }
+            | Pat::Cons(pat) => pat.into_iter().any(|item| item.syntactically_used(tycker)),
         }
     }
 }
@@ -59,25 +53,19 @@ impl SyntacticallyUsed for ss::VPatId {
                 let ss::Hole = pat;
                 false
             }
+            | Pat::Triv(ss::Triv) => false,
             | Pat::Var(def) => def.syntactically_used(tycker),
             | Pat::Ctor(pat) => {
                 let ss::Ctor(_ctor, pat) = pat;
                 pat.syntactically_used(tycker)
             }
-            | Pat::Triv(pat) => {
-                let ss::Triv = pat;
-                false
-            }
-            | Pat::VCons(pat) => {
-                let ss::Cons(pat1, pat2) = pat;
-                pat1.syntactically_used(tycker) || pat2.syntactically_used(tycker)
-            }
+            | Pat::VCons(pat) => pat.into_iter().any(|item| item.syntactically_used(tycker)),
             | Pat::TCons(pat) => {
-                let ss::Cons(_pat1, pat2) = pat;
+                let ss::ConsN(_witnesses, body) = pat;
                 // Hack: assuming that we don't care whether the abstracted type is used
                 //       well, technically, it's not syntactic but semantic,
                 //       so indeed not syntactically used
-                pat2.syntactically_used(tycker)
+                body.syntactically_used(tycker)
             }
         }
     }
