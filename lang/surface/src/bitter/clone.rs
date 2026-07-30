@@ -189,6 +189,45 @@ impl DeepClone for b::TermId {
                 let tail = tail.deep_clone(desugarer);
                 b::Let { binder, bindee, tail }.into()
             }
+            | b::Term::MobileParam(term) => {
+                let b::MobileParam { binder, tail } = term;
+                b::MobileParam {
+                    binder: binder.deep_clone(desugarer),
+                    tail: tail.deep_clone(desugarer),
+                }
+                .into()
+            }
+            | b::Term::MobileBind(term) => {
+                let b::MobileBind { binder, bindee, tail } = term;
+                b::MobileBind {
+                    binder: binder.deep_clone(desugarer),
+                    bindee: bindee.deep_clone(desugarer),
+                    tail: tail.deep_clone(desugarer),
+                }
+                .into()
+            }
+            | b::Term::Residual(term) => {
+                let b::Residual(body) = term;
+                b::Residual(body.deep_clone(desugarer)).into()
+            }
+            | b::Term::Block(term) => {
+                let b::Block(body) = term;
+                b::Block(body.deep_clone(desugarer)).into()
+            }
+            | b::Term::RecGroup(term) => {
+                let b::RecGroup { definitions, tail } = term;
+                b::RecGroup {
+                    definitions: definitions
+                        .iter()
+                        .map(|b::AliasBody { binder, bindee }| b::AliasBody {
+                            binder: binder.deep_clone(desugarer),
+                            bindee: bindee.deep_clone(desugarer),
+                        })
+                        .collect(),
+                    tail: tail.deep_clone(desugarer),
+                }
+                .into()
+            }
             | b::Term::MoBlock(term) => {
                 let b::MoBlock(body) = term;
                 let body = body.deep_clone(desugarer);

@@ -69,7 +69,11 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Ret(t) => s += &t.ugly(f),
             | Term::Do(t) => s += &t.ugly(f),
             | Term::Let(t) => s += &t.ugly(f),
-            // Term::UseLet(t) => s += &t.ugly(f),
+            | Term::MobileParam(t) => s += &t.ugly(f),
+            | Term::MobileBind(t) => s += &t.ugly(f),
+            | Term::Residual(t) => s += &t.ugly(f),
+            | Term::Block(t) => s += &t.ugly(f),
+            | Term::RecGroup(t) => s += &t.ugly(f),
             | Term::MoBlock(t) => s += &t.ugly(f),
             | Term::Data(t) => s += &t.ugly(f),
             | Term::CoData(t) => s += &t.ugly(f),
@@ -423,6 +427,48 @@ impl<'a> Ugly<'a, Formatter<'a>> for Let<PatId, TermId, TermId> {
         s += " in ";
         s += &tail.ugly(f);
         s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for MobileParam {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let MobileParam { binder, tail } = self;
+        format!("param {} that {}", binder.ugly(f), tail.ugly(f))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for MobileBind {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let MobileBind { binder, bindee, tail } = self;
+        format!("let {} = {} that {}", binder.ugly(f), bindee.ugly(f), tail.ugly(f))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Residual {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Residual(body) = self;
+        body.ugly(f)
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Block {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Block(body) = self;
+        format!("begin {} end", body.ugly(f))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for RecGroup {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let RecGroup { definitions, tail } = self;
+        let definitions = definitions
+            .iter()
+            .map(|AliasBody { binder, bindee }| {
+                format!("def {} = {}", binder.ugly(f), bindee.ugly(f))
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        format!("rec [{}] in {}", definitions, tail.ugly(f))
     }
 }
 

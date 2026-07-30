@@ -94,7 +94,10 @@ impl Tycker<'_> {
                 };
                 let pat_out_ann = env.mk(binder).tyck_k(self, PatternAction::ana(ty.into()))?;
                 let (binder, _) = pat_out_ann.as_value();
-                self.statics.decls.insert_new(*id, VAliasHead { binder, ty }.into());
+                self.statics.decls.insert_new(
+                    id.declaration().expect("an external must originate at a declaration"),
+                    VAliasHead { binder, ty }.into(),
+                );
 
                 // should NOT be added to global
                 // match binder.try_destruct_def(self) {

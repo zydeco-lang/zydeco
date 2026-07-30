@@ -31,6 +31,7 @@ e2e_proj_bins!(tests / compile, {
     fact => "fact",
     let_stack => "let-stack",
     kont_clone => "kont-clone",
+    uniform => "uniform",
     named_mixed => "named-mixed",
     named => "named",
 });

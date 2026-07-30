@@ -22,6 +22,8 @@ pub enum Tok<'input> {
     Where,
     #[token("end")]
     End,
+    #[token("begin")]
+    Begin,
     #[token("data")]
     Data,
     #[token("codata")]
@@ -39,8 +41,12 @@ pub enum Tok<'input> {
     Exec,
     #[token("let")]
     Let,
+    #[token("param")]
+    Param,
     #[token("in")]
     In,
+    #[token("that")]
+    That,
     #[token("do")]
     Do,
     #[token("do~")]
@@ -139,6 +145,7 @@ impl Display for Tok<'_> {
             | Tok::DtorIdent(s) => write!(f, "DtorIdent({})", s),
             | Tok::Where => write!(f, "where"),
             | Tok::End => write!(f, "end"),
+            | Tok::Begin => write!(f, "begin"),
             | Tok::Public => write!(f, "pub"),
             | Tok::Data => write!(f, "data"),
             | Tok::Codata => write!(f, "codata"),
@@ -148,7 +155,9 @@ impl Display for Tok<'_> {
             | Tok::Extern => write!(f, "extern"),
             | Tok::Exec => write!(f, "main"),
             | Tok::Let => write!(f, "let"),
+            | Tok::Param => write!(f, "param"),
             | Tok::In => write!(f, "in"),
+            | Tok::That => write!(f, "that"),
             | Tok::Do => write!(f, "do"),
             | Tok::DoTilde => write!(f, "do~"),
             | Tok::Ret => write!(f, "ret"),

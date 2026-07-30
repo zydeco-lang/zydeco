@@ -190,6 +190,25 @@ dependency configuration remain a driver concern and do not introduce paths
 into the language. A future module system will be designed afresh rather than
 constrained by the removed scaffolding.
 
+The same representation supports nested context-forming terms. A
+`begin ... end` term collects `param`, `let`, and `def` forms connected by
+`that` up to the nearest block boundary. Name resolution installs all of their
+pattern binders before resolving the block, records dependencies from right-hand
+sides and pattern annotations, and retains the resulting condensation DAG in
+`ScopedArena`. Dependencies also propagate through nested blocks to any
+enclosing context binding, so using a global definition inside a block still
+orders the source-level definition that contains the block.
+
+The scoped block also carries a dependency-ordered elaboration for the existing
+static judgments. Acyclic parameters become `Abs` terms, and acyclic transparent
+or nominal definitions become `Let` terms; nominal right-hand sides retain a
+`Sealed` marker. Recursive components remain explicit `RecGroup` terms so the
+checker can introduce all type identities before checking their equations.
+`in` forms elaborate directly to the corresponding lexical `Abs` or `Let`.
+This division keeps dependency analysis in the scoped language while reusing
+the established CBPV rules for type functions, polymorphic computations, value
+functions, and local definitions.
+
 ## Relative Monads and Monadic Blocks
 
 Relative monads are defined as codata in the standard library (see

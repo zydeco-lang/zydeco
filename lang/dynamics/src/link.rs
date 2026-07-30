@@ -42,8 +42,9 @@ impl Linker {
                 scoped
                     .root
                     .context
-                    .dependencies(&id)
+                    .dependencies(&id.into())
                     .into_iter()
+                    .filter_map(|dependency| dependency.declaration())
                     .filter(|dependency| dynamic_ids.contains(dependency))
                     .collect()
             };

@@ -101,6 +101,42 @@ pub struct GenLet {
     pub tail: TermId,
 }
 
+/// Whether a context-forming binder stays lexical or moves to its nearest
+/// enclosing block.
+#[derive(Copy, Clone, Debug)]
+pub enum Placement {
+    In,
+    That,
+}
+
+/// The identity discipline of a term-level definition.
+#[derive(Copy, Clone, Debug)]
+pub enum DefinitionMode {
+    Transparent,
+    Nominal,
+}
+
+/// `param p in e` or `param p that e`.
+#[derive(Clone, Debug)]
+pub struct Param {
+    pub binder: PatId,
+    pub placement: Placement,
+    pub tail: TermId,
+}
+
+/// `let p = e ...` or `def p = e ...`.
+#[derive(Clone, Debug)]
+pub struct ContextBind {
+    pub mode: DefinitionMode,
+    pub binding: GenBind<TermId>,
+    pub placement: Placement,
+    pub tail: TermId,
+}
+
+/// `begin ... end`
+#[derive(Clone, Debug)]
+pub struct Block(pub TermId);
+
 /// `monadic ... end`
 #[derive(Clone, Debug)]
 pub struct MoBlock(pub TermId);
@@ -164,6 +200,9 @@ pub enum Term {
     Ret(Return<TermId>),
     Do(Bind<PatId, TermId, TermId>),
     Let(GenLet),
+    Param(Param),
+    ContextBind(ContextBind),
+    Block(Block),
     MoBlock(MoBlock),
     Data(Data),
     CoData(CoData),

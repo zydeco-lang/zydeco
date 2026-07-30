@@ -23,6 +23,7 @@ extern {
 
         "where" => Tok::Where,
         "end" => Tok::End,
+        "begin" => Tok::Begin,
         "pub" => Tok::Public,
         "data" => Tok::Data,
         "codata" => Tok::Codata,
@@ -32,7 +33,9 @@ extern {
         "extern" => Tok::Extern,
         "main" => Tok::Exec,
         "let" => Tok::Let,
+        "param" => Tok::Param,
         "in" => Tok::In,
+        "that" => Tok::That,
         "do" => Tok::Do,
         "do~" => Tok::DoTilde,
         "ret" => Tok::Ret,
@@ -205,6 +208,11 @@ GenBind<T>: GenBind<T> = {
 GenBindTerm: GenBind<TermId> = GenBind<("=" <TermId>)>;
 GenBindNull: GenBind<()> = GenBind<()>;
 
+Placement: Placement = {
+    "in" => Placement::In,
+    "that" => Placement::That,
+};
+
 Data: Data = <arms:DataArm*> => Data {<>};
 #[inline]
 DataArm: DataArm = {
@@ -273,6 +281,8 @@ Term: Term = {
     "ret" <TermGen<Term>> => Return(<>).into(),
     // monadic block
     "monadic" <TermAnnId> "end" => MoBlock(<>).into(),
+    // context-forming block
+    "begin" <TermAnnId> "end" => Block(<>).into(),
     // abstraction (alternative syntax)
     "comatch" <params:CoPatId> "->" <term:TermId> "end" => Abs(<>).into(),
     // structural types
@@ -336,9 +346,25 @@ Term: Term = {
     "do" <binder:PatId> "<-" <bindee:TermGen<Term>> ";" <tail:TermGen<Term>> => {
         Bind {<>}.into()
     },
-    // pure bind
-    "let" <binding:GenBindTerm> "in" <tail:TermGen<Term>> => {
-        GenLet {<>}.into()
+    // context-forming binders
+    "param" <binder:PatternAnnId> <placement:Placement> <tail:TermGen<Term>> => {
+        Param {<>}.into()
+    },
+    "let" <binding:GenBindTerm> <placement:Placement> <tail:TermGen<Term>> => {
+        ContextBind {
+            mode: DefinitionMode::Transparent,
+            binding,
+            placement,
+            tail,
+        }.into()
+    },
+    "define" <binding:GenBindTerm> <placement:Placement> <tail:TermGen<Term>> => {
+        ContextBind {
+            mode: DefinitionMode::Nominal,
+            binding,
+            placement,
+            tail,
+        }.into()
     },
     // meta annotated term
     <MetaT<TermGen<Term>>> => <>.into(),

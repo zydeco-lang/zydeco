@@ -133,6 +133,19 @@ impl PackageScoped {
                     rm(bindee);
                     rm(tail);
                 }
+                | Tm::MobileParam(_) | Tm::MobileBind(_) => {
+                    unreachable!("mobile syntax must be eliminated during name resolution")
+                }
+                | Tm::Residual(sc::Residual(body)) => {
+                    rm(body);
+                }
+                | Tm::Block(sc::Block(body)) => {
+                    rm(body);
+                }
+                | Tm::RecGroup(sc::RecGroup { definitions, tail }) => {
+                    definitions.iter().for_each(|definition| rm(&definition.bindee));
+                    rm(tail);
+                }
                 | Tm::MoBlock(sc::MoBlock(body)) => {
                     rm(body);
                 }

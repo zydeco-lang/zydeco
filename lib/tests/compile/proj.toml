@@ -31,6 +31,7 @@ bins = [
     # stackir
     "let-stack.zy",
     "kont-clone.zy",
+    "uniform.zy",
     # interactive
     "echo.zy",
     "echo-none.zy",

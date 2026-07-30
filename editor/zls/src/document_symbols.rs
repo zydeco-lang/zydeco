@@ -196,6 +196,26 @@ impl DocumentSymbolContext<'_> {
                 let tail = self.term(tail);
                 [].into_iter().chain(binder).chain(bindee).chain(tail).collect()
             }
+            | b::Term::MobileParam(b::MobileParam { binder, tail }) => {
+                self.pattern(binder).into_iter().chain(self.term(tail)).collect()
+            }
+            | b::Term::MobileBind(b::MobileBind { binder, bindee, tail }) => self
+                .pattern(binder)
+                .into_iter()
+                .chain(self.term(bindee))
+                .chain(self.term(tail))
+                .collect(),
+            | b::Term::Residual(b::Residual(body)) => self.term(body),
+            | b::Term::Block(b::Block(body)) => self.term(body),
+            | b::Term::RecGroup(b::RecGroup { definitions, tail }) => definitions
+                .iter()
+                .flat_map(|definition| {
+                    self.pattern(&definition.binder)
+                        .into_iter()
+                        .chain(self.term(&definition.bindee))
+                })
+                .chain(self.term(tail))
+                .collect(),
             | b::Term::MoBlock(t) => {
                 let b::MoBlock(body) = t;
                 self.term(body)

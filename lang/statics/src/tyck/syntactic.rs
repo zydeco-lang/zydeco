@@ -86,6 +86,7 @@ pub trait SyntacticallyAnnotated {
 impl SyntacticallyAnnotated for su::Binding {
     fn syntactically_annotated(&self, tycker: &mut Tycker) -> Option<su::TermId> {
         match &self.inner {
+            | su::BindingForm::Parameter(_) => None,
             | su::BindingForm::Definition(su::Definition { binder, bindee }) => {
                 let _ = binder;
                 bindee.syntactically_annotated(tycker)
@@ -133,6 +134,9 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::Ret(_)
             | Tm::Do(_)
             | Tm::Let(_)
+            | Tm::MobileParam(_)
+            | Tm::MobileBind(_)
+            | Tm::RecGroup(_)
             | Tm::MoBlock(_)
             | Tm::Data(_)
             | Tm::CoData(_)
@@ -142,6 +146,8 @@ impl SyntacticallyAnnotated for su::TermId {
             | Tm::Dtor(_)
             | Tm::Proj(_)
             | Tm::Lit(_) => None,
+            | Tm::Residual(su::Residual(body)) => body.syntactically_annotated(tycker),
+            | Tm::Block(su::Block(body)) => body.syntactically_annotated(tycker),
         }
     }
 }
@@ -183,6 +189,9 @@ impl SyntacticallySealed for su::TermId {
             | Tm::Ret(_)
             | Tm::Do(_)
             | Tm::Let(_)
+            | Tm::MobileParam(_)
+            | Tm::MobileBind(_)
+            | Tm::RecGroup(_)
             | Tm::MoBlock(_)
             | Tm::Data(_)
             | Tm::CoData(_)
@@ -192,6 +201,8 @@ impl SyntacticallySealed for su::TermId {
             | Tm::Dtor(_)
             | Tm::Proj(_)
             | Tm::Lit(_) => None,
+            | Tm::Residual(su::Residual(body)) => body.syntactically_sealed(tycker),
+            | Tm::Block(su::Block(body)) => body.syntactically_sealed(tycker),
         }
     }
 }

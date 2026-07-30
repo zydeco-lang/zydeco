@@ -12,6 +12,7 @@ pub use crate::arena::*;
 pub enum ScopedScope {}
 
 impl Allocates<ContextNodeId> for ScopedScope {}
+impl Allocates<TermId> for ScopedScope {}
 
 impl ArenaSchema<DefId> for ScopedScope {
     type Item = VarName;
@@ -189,6 +190,8 @@ pub struct ScopedArena {
     pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
     /// externs to defs
     pub exts: ArenaAssoc<BindingId, (Internal, DefId)>,
+    /// Context DAGs retained for nested `begin` terms.
+    pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
     /// The whole name-resolved program, represented as one contextual term.
     pub root: ContextualTerm<BindingContext>,
 }
@@ -424,6 +427,32 @@ impl LocalFoldScoped<Context> for Collector {
                 self.coctxs_term_local
                     .insert_new(term, co_tail - cx_binder + co_binder + co_bindee);
             }
+            | Term::MobileParam(_) | Term::MobileBind(_) => {
+                unreachable!("mobile syntax must be eliminated during name resolution")
+            }
+            | Term::Residual(inner) => {
+                let Residual(body) = inner;
+                let co_body = self.coctxs_term_local[&body].to_owned();
+                self.coctxs_term_local.insert_new(term, co_body);
+            }
+            | Term::Block(inner) => {
+                let Block(body) = inner;
+                let co_body = self.coctxs_term_local[&body].to_owned();
+                self.coctxs_term_local.insert_new(term, co_body);
+            }
+            | Term::RecGroup(inner) => {
+                let RecGroup { definitions, tail } = inner;
+                let bound = definitions.iter().fold(Context::new(), |ctx, definition| {
+                    ctx + self.ctxs_pat_local[&definition.binder].to_owned()
+                });
+                let free_definitions =
+                    definitions.iter().fold(CoContext::new(), |ctx, definition| {
+                        ctx + self.coctxs_pat_local[&definition.binder].to_owned()
+                            + self.coctxs_term_local[&definition.bindee].to_owned()
+                    });
+                let free_tail = self.coctxs_term_local[&tail].to_owned();
+                self.coctxs_term_local.insert_new(term, free_definitions + free_tail - bound);
+            }
             | Term::MoBlock(inner) => {
                 let MoBlock(body) = inner;
                 let co_body = self.coctxs_term_local[&body].to_owned();
@@ -656,6 +685,25 @@ mod impl_obverse_local_post {
                     binder.obverse_local_post(f, ctx);
                     tail.obverse_local_post(f, ctx);
                 }
+                | Term::MobileParam(_) | Term::MobileBind(_) => {
+                    unreachable!("mobile syntax must be eliminated during name resolution")
+                }
+                | Term::Residual(inner) => {
+                    let Residual(body) = inner;
+                    body.obverse_local_post(f, ctx);
+                }
+                | Term::Block(inner) => {
+                    let Block(body) = inner;
+                    body.obverse_local_post(f, ctx);
+                }
+                | Term::RecGroup(inner) => {
+                    let RecGroup { definitions, tail } = inner;
+                    for AliasBody { binder, bindee } in definitions {
+                        binder.obverse_local_post(f, ctx);
+                        bindee.obverse_local_post(f, ctx);
+                    }
+                    tail.obverse_local_post(f, ctx);
+                }
                 | Term::MoBlock(inner) => {
                     let MoBlock(body) = inner;
                     body.obverse_local_post(f, ctx);
@@ -728,7 +776,8 @@ mod tests {
         }
 
         fn add_binding(&mut self, source_order: usize) -> BindingId {
-            let id = self.allocator.alloc();
+            let declaration: DeclId = self.allocator.alloc();
+            let id = BindingId::Declaration(declaration);
             let binder = self.allocator.alloc();
             let bindee = self.allocator.alloc();
             self.bindings.insert_new(

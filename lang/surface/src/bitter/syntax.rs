@@ -72,6 +72,40 @@ pub struct ManifestExists {
 /// Monadic block body kept as a single node until later translation.
 pub struct MoBlock(pub TermId);
 
+/// A term whose nested `that` forms contribute to one block context.
+#[derive(Clone, Debug)]
+pub struct Block(pub TermId);
+
+/// A parameter contributed to the nearest enclosing block.
+#[derive(Clone, Debug)]
+pub struct MobileParam {
+    pub binder: PatId,
+    pub tail: TermId,
+}
+
+/// A transparent or sealed definition contributed to the nearest enclosing
+/// block. Sealing is represented directly on `bindee`.
+#[derive(Clone, Debug)]
+pub struct MobileBind {
+    pub binder: PatId,
+    pub bindee: TermId,
+    pub tail: TermId,
+}
+
+/// The residual left at the source position of a mobile binding.
+///
+/// This indirection preserves tree ownership after the binding itself moves
+/// into the block context.
+#[derive(Clone, Debug)]
+pub struct Residual(pub TermId);
+
+/// A recursive type component followed by the residual term of its block.
+#[derive(Clone, Debug)]
+pub struct RecGroup {
+    pub definitions: Vec<AliasBody>,
+    pub tail: TermId,
+}
+
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug)]
 pub struct Data {
@@ -122,6 +156,11 @@ pub enum Term<Ref> {
     Ret(Return<TermId>),
     Do(Bind<PatId, TermId, TermId>),
     Let(Let<PatId, TermId, TermId>),
+    MobileParam(MobileParam),
+    MobileBind(MobileBind),
+    Residual(Residual),
+    Block(Block),
+    RecGroup(RecGroup),
     MoBlock(MoBlock),
     Data(Data),
     CoData(CoData),

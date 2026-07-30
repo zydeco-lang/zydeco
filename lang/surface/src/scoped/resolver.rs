@@ -8,32 +8,61 @@ pub struct Global {
     /// map from variable names to their definitions
     pub(super) var_to_def: im::HashMap<VarName, DefId>,
     /// map from definitions to their context bindings
-    pub(super) under_map: im::HashMap<DefId, BindingId>,
+    pub(super) under_map: im::HashMap<DefId, BindingSite>,
 }
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(super) enum ContextOwner {
+    Root,
+    Block(TermId),
+}
+
+#[derive(Copy, Clone, Debug)]
+pub(super) struct BindingSite {
+    pub(super) owner: ContextOwner,
+    pub(super) id: BindingId,
+}
+
 /// Local name environment built from pattern binders.
 #[derive(Clone, Debug)]
 pub struct Local {
-    /// The context binding whose dependencies are currently being collected.
-    /// An executable body is outside the context DAG and therefore has no
-    /// enclosing binding.
-    under: Option<BindingId>,
+    /// Context bindings whose dependencies are currently being collected,
+    /// from outermost to innermost.
+    pub(super) under: im::Vector<BindingSite>,
     /// map from variable names to their definitions
-    var_to_def: im::HashMap<VarName, DefId>,
+    pub(super) var_to_def: im::HashMap<VarName, DefId>,
+    /// Context candidates associated with block-wide definitions.
+    pub(super) under_map: im::HashMap<DefId, BindingSite>,
+    /// The nearest block currently resolving its residual syntax.
+    pub(super) boundary: Option<TermId>,
 }
 
 impl Local {
-    fn for_binding(under: BindingId) -> Self {
-        Self { under: Some(under), var_to_def: im::HashMap::new() }
+    fn for_binding(under: DeclId) -> Self {
+        Self {
+            under: im::vector![BindingSite {
+                owner: ContextOwner::Root,
+                id: BindingId::Declaration(under),
+            }],
+            var_to_def: im::HashMap::new(),
+            under_map: im::HashMap::new(),
+            boundary: None,
+        }
     }
 
     fn for_body() -> Self {
-        Self { under: None, var_to_def: im::HashMap::new() }
+        Self {
+            under: im::Vector::new(),
+            var_to_def: im::HashMap::new(),
+            under_map: im::HashMap::new(),
+            boundary: None,
+        }
     }
 }
 
 /// Name-resolution state and accumulators.
 pub struct Resolver<'a> {
-    allocator: IdAllocator<ScopedScope>,
+    pub(super) allocator: IdAllocator<ScopedScope>,
     pub spans: &'a SpanArena,
     pub bitter: BitterArena,
     pub prim_term: PrimTerms,
@@ -47,11 +76,13 @@ pub struct Resolver<'a> {
     pub terms: ArenaSparse<ScopedScope, TermId>,
     pub bindings: ArenaAssoc<BindingId, Binding>,
     pub body: Option<ContextBody>,
+    pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
 
     pub users: ArenaForth<DefId, TermId>,
     pub metas: ArenaAssoc<DeclId, im::Vector<Meta>>,
     pub exts: ArenaAssoc<BindingId, (Internal, DefId)>,
     pub deps: DepGraph<BindingId>,
+    pub(super) block_deps: ArenaAssoc<TermId, DepGraph<BindingId>>,
     source_order: ArenaAssoc<BindingId, usize>,
 }
 
@@ -76,11 +107,13 @@ impl<'a> Resolver<'a> {
             terms: ArenaSparse::default(),
             bindings: ArenaAssoc::default(),
             body: None,
+            blocks: ArenaAssoc::default(),
 
             users: ArenaForth::default(),
             metas: ArenaAssoc::default(),
             exts: ArenaAssoc::default(),
             deps: DepGraph::default(),
+            block_deps: ArenaAssoc::default(),
             source_order: ArenaAssoc::default(),
         }
     }
@@ -100,23 +133,17 @@ impl<'a> Resolver<'a> {
             terms,
             bindings,
             body,
+            blocks,
 
             users,
             metas: _,
             exts,
             deps,
+            block_deps,
             source_order: _,
         } = self;
-        let BitterArena {
-            defs: bitter_defs,
-            pats: bitter_pats,
-            terms: bitter_terms,
-            decls: _,
-            textual,
-        } = bitter;
-        let defs = bitter_defs.filter_map_id(|id| defs.get(&id).cloned());
-        let pats = bitter_pats.filter_map_id(|id| pats.get(&id).cloned());
-        let terms = bitter_terms.filter_map_id(|id| terms.get(&id).cloned());
+        assert!(block_deps.iter().next().is_none(), "every block dependency graph must be closed");
+        let BitterArena { defs: _, pats: _, terms: _, decls: _, textual } = bitter;
         let ctxs_term = ArenaAssoc::default();
         let ctxs_pat_local = ArenaAssoc::default();
         let coctxs_pat_local = ArenaAssoc::default();
@@ -135,6 +162,7 @@ impl<'a> Resolver<'a> {
             ctxs_pat_local,
             coctxs_pat_local,
             coctxs_term_local,
+            blocks,
             root,
         } = Collector {
             defs,
@@ -146,6 +174,7 @@ impl<'a> Resolver<'a> {
             ctxs_pat_local,
             coctxs_pat_local,
             coctxs_term_local,
+            blocks,
             root,
         }
         .run()?;
@@ -162,15 +191,21 @@ impl<'a> Resolver<'a> {
                 coctxs_pat_local,
                 coctxs_term_local,
                 exts,
+                blocks,
                 root,
             },
         })
     }
 
-    fn add_dependency(&mut self, local: &Local, dependency: BindingId) {
-        if let Some(binding) = local.under {
-            self.deps.add(binding, [dependency]);
-        }
+    fn add_dependency(&mut self, local: &Local, dependency: BindingSite) {
+        local.under.iter().copied().filter(|binding| binding.owner == dependency.owner).for_each(
+            |binding| match binding.owner {
+                | ContextOwner::Root => self.deps.add(binding.id, [dependency.id]),
+                | ContextOwner::Block(block) => {
+                    self.block_deps[&block].add(binding.id, [dependency.id])
+                }
+            },
+        );
     }
 
     fn source_items(&self, declaration: DeclId) -> Vec<DeclId> {
@@ -195,10 +230,9 @@ impl<'a> Resolver<'a> {
                 )
             })
             .collect::<Vec<_>>();
-        bindings
-            .into_iter()
-            .enumerate()
-            .for_each(|(order, binding)| self.source_order.insert_new(binding, order));
+        bindings.into_iter().enumerate().for_each(|(order, binding)| {
+            self.source_order.insert_new(BindingId::Declaration(binding), order)
+        });
     }
 }
 
@@ -253,7 +287,8 @@ impl Resolve for DeclId {
                 let () = decl.resolve(resolver, global)?;
             }
             | Declaration::AliasBody(decl) => {
-                resolver.deps.add(*self, []);
+                let id = BindingId::Declaration(*self);
+                resolver.deps.add(id, []);
                 let local = Local::for_binding(*self);
                 let AliasBody { binder, bindee } = decl;
                 // resolve bindee first
@@ -262,17 +297,18 @@ impl Resolve for DeclId {
                 // since it's global and has been collected already
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
                 resolver.bindings.insert_new(
-                    *self,
+                    id,
                     Binding {
-                        id: *self,
+                        id,
                         inner: BindingForm::Definition(Definition { binder, bindee }),
                         metas: resolver.metas.remove(self).unwrap_or_default(),
-                        source_order: resolver.source_order[self],
+                        source_order: resolver.source_order[&id],
                     },
                 );
             }
             | Declaration::AliasHead(decl) => {
-                resolver.deps.add(*self, []);
+                let id = BindingId::Declaration(*self);
+                resolver.deps.add(id, []);
                 let local = Local::for_binding(*self);
                 let AliasHead { binder, ty } = decl;
                 // no more bindee, but we still need to resolve the binders just for the type mentioned
@@ -281,12 +317,12 @@ impl Resolve for DeclId {
                 }
                 let _ = binder.resolve(resolver, (local.clone(), global))?;
                 resolver.bindings.insert_new(
-                    *self,
+                    id,
                     Binding {
-                        id: *self,
+                        id,
                         inner: BindingForm::External(External { binder, classifier: ty }),
                         metas: resolver.metas.remove(self).unwrap_or_default(),
-                        source_order: resolver.source_order[self],
+                        source_order: resolver.source_order[&id],
                     },
                 );
             }
@@ -410,6 +446,9 @@ impl Resolve for TermId {
                     // if found, we're done
                     resolver.terms.insert_new(*self, Term::Var(*def));
                     resolver.users.insert_new(*def, *self);
+                    if let Some(binding) = local.under_map.get(def) {
+                        resolver.add_dependency(&local, *binding);
+                    }
                     return Ok(());
                 }
                 // otherwise, try to find the variable globally
@@ -510,6 +549,32 @@ impl Resolve for TermId {
                 let () = tail.resolve(resolver, (local, global))?;
                 term.into()
             }
+            | Term::MobileParam(term) => {
+                let MobileParam { binder: _, tail } = term;
+                if local.boundary.is_none() {
+                    Err(ResolveError::UnenclosedThat(self.span(resolver).clone()))?
+                }
+                tail.resolve(resolver, (local, global))?;
+                Residual(tail).into()
+            }
+            | Term::MobileBind(term) => {
+                let MobileBind { binder: _, bindee: _, tail } = term;
+                if local.boundary.is_none() {
+                    Err(ResolveError::UnenclosedThat(self.span(resolver).clone()))?
+                }
+                tail.resolve(resolver, (local, global))?;
+                Residual(tail).into()
+            }
+            | Term::Residual(_) => {
+                unreachable!("residual nodes are introduced only during name resolution")
+            }
+            | Term::Block(term) => {
+                let Block(body) = term;
+                resolver.resolve_block(*self, body, local, global)?
+            }
+            | Term::RecGroup(_) => {
+                unreachable!("recursive groups are introduced only after name resolution")
+            }
             | Term::MoBlock(term) => {
                 let MoBlock(body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
@@ -588,6 +653,7 @@ pub struct Collector {
     pub coctxs_pat_local: ArenaAssoc<PatId, CoContext>,
     pub coctxs_term_local: ArenaAssoc<TermId, CoContext>,
 
+    pub blocks: ArenaAssoc<TermId, ContextualTerm<BindingContext, BlockBody>>,
     pub root: ContextualTerm<BindingContext>,
 }
 
@@ -619,6 +685,9 @@ impl Collect for ContextNode {
     fn collect(&self, collector: &mut Collector, ctx: Context) -> Result<Self::Out> {
         match self {
             | ContextNode::Acyclic(binding) => match &binding.inner {
+                | BindingForm::Parameter(_) => {
+                    unreachable!("the root context cannot contain parameters")
+                }
                 | BindingForm::Definition(Definition { binder, bindee }) => {
                     bindee.collect(collector, ctx.clone())?;
                     binder.collect(collector, ctx)
@@ -632,6 +701,9 @@ impl Collect for ContextNode {
             },
             | ContextNode::Recursive(bindings) => {
                 let ctx = bindings.iter().try_fold(ctx, |ctx, binding| match &binding.inner {
+                    | BindingForm::Parameter(_) => {
+                        unreachable!("the root context cannot contain parameters")
+                    }
                     | BindingForm::Definition(Definition { binder, .. }) => {
                         binder.collect(collector, ctx)
                     }
@@ -640,6 +712,9 @@ impl Collect for ContextNode {
                     }
                 })?;
                 bindings.iter().try_for_each(|binding| match &binding.inner {
+                    | BindingForm::Parameter(_) => {
+                        unreachable!("the root context cannot contain parameters")
+                    }
                     | BindingForm::Definition(Definition { bindee, .. }) => {
                         bindee.collect(collector, ctx.clone())
                     }

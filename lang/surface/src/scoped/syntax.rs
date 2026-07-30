@@ -7,10 +7,33 @@ use zydeco_utils::cells::SingCell;
 
 /* --------------------------- Contextual program --------------------------- */
 
-/// Context bindings retain the identity of the source declaration that
-/// introduced them, but declarations themselves do not survive name
-/// resolution.
-pub type BindingId = DeclId;
+/// The source site that contributed a binding to a contextual term.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum BindingId {
+    Declaration(DeclId),
+    Term(TermId),
+}
+
+impl BindingId {
+    pub fn declaration(self) -> Option<DeclId> {
+        match self {
+            | BindingId::Declaration(id) => Some(id),
+            | BindingId::Term(_) => None,
+        }
+    }
+}
+
+impl From<DeclId> for BindingId {
+    fn from(id: DeclId) -> Self {
+        Self::Declaration(id)
+    }
+}
+
+impl From<TermId> for BindingId {
+    fn from(id: TermId) -> Self {
+        Self::Term(id)
+    }
+}
 
 zydeco_utils::new_key_type! {
     /// Identifier for a node in the condensation DAG of context bindings.
@@ -31,6 +54,12 @@ pub struct External {
     pub classifier: Option<TermId>,
 }
 
+/// A parameter contributed by `param ... that ...`.
+#[derive(Clone, Debug)]
+pub struct Parameter {
+    pub binder: PatId,
+}
+
 /// A single binding stored in a contextual term.
 #[derive(Clone, Debug)]
 pub struct Binding {
@@ -40,14 +69,19 @@ pub struct Binding {
     pub(crate) source_order: usize,
 }
 
-/// The two binding forms admitted by the legacy top-level syntax.
+/// The forms admitted by contextual terms.
 #[derive(Clone, Debug)]
 pub enum BindingForm {
+    Parameter(Parameter),
     Definition(Definition),
     External(External),
 }
 
 impl Binding {
+    pub fn from_term(source: TermId, inner: BindingForm, source_order: usize) -> Self {
+        Self { id: BindingId::Term(source), inner, metas: im::Vector::new(), source_order }
+    }
+
     pub fn source_order(&self) -> usize {
         self.source_order
     }
@@ -94,9 +128,16 @@ pub struct ContextBody {
 /// The context representation is supplied by the owning compiler arena. The
 /// optional body permits checking libraries that do not define an entry point.
 #[derive(Debug)]
-pub struct ContextualTerm<C> {
+pub struct ContextualTerm<C, B = Option<ContextBody>> {
     pub context: C,
-    pub body: Option<ContextBody>,
+    pub body: B,
+}
+
+/// The source residual and dependency-ordered elaboration of a `begin` block.
+#[derive(Clone, Debug)]
+pub struct BlockBody {
+    pub residual: TermId,
+    pub elaborated: TermId,
 }
 
 /* --------------------------------- Context -------------------------------- */

@@ -17,6 +17,10 @@ pub enum ResolveError {
     DuplicatePrimitive(Sp<VarName>, Sp<VarName>),
     #[error("Multiple executable bodies")]
     DuplicateEntry(Span, Span),
+    #[error("`that` requires an enclosing `begin` block")]
+    UnenclosedThat(Span),
+    #[error("A recursive context component cannot contain a parameter")]
+    RecursiveParameter(Span),
     #[error("Missing primitive: {0}")]
     MissingPrim(&'static str),
 }
@@ -105,6 +109,26 @@ impl ResolveError {
                                 .with_message("first executable body"),
                         );
                 report.finish()
+            }
+            | ResolveError::UnenclosedThat(span) => {
+                let (file_path, range) = span.to_ariadne_span();
+                Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
+                    .with_message("Mobile binding without a block")
+                    .with_label(
+                        Label::new((file_path, range))
+                            .with_message("`that` contributes to the nearest `begin` block"),
+                    )
+                    .finish()
+            }
+            | ResolveError::RecursiveParameter(span) => {
+                let (file_path, range) = span.to_ariadne_span();
+                Report::build(ReportKind::Error, (file_path.clone(), range.clone()))
+                    .with_message("Recursive parameter component")
+                    .with_label(
+                        Label::new((file_path, range))
+                            .with_message("parameters must remain acyclic"),
+                    )
+                    .finish()
             }
             | ResolveError::MissingPrim(name) => Report::build(
                 ReportKind::Error,

@@ -1,0 +1,80 @@
+alias TypeIdentity =
+  begin
+    let Result = A that
+    param (A : VType) that
+    Result
+  end
+end
+
+alias IdentityResult = TypeIdentity Int end
+
+alias InferredType : VType -> VType =
+  begin
+    param A that
+    A
+  end
+end
+
+alias LexicalTypeIdentity =
+  param (A : VType) in
+  let Result = A in
+  Result
+end
+
+alias LexicalHidden =
+  def Secret : VType = Int in
+  Secret
+end
+
+alias Hidden =
+  begin
+    def Secret : VType = Int that
+    Secret
+  end
+end
+
+alias LocalList =
+  begin
+    def LocalList : VType =
+      data
+      | +Nil : Unit
+      | +Cons : Int * LocalList
+      end
+    that
+    LocalList
+  end
+end
+
+def plain : Int = begin 42 end end
+
+def inferred : Thunk (Int -> Ret Int) = {
+  begin
+    param value that
+    ret value
+  end
+} end
+
+def lexical_run = {
+  param (value : Int) in
+  def expected : Int = 42 in
+  let answer = value in
+  do status <- ! sub answer expected;
+  ! exit status
+} end
+
+def run = {
+  begin
+    let answer : Number = seed that
+    param (seed : Number) that
+    def expected : Int = 42 that
+    let Number = A that
+    param (A : VType) that
+    def Opaque : VType = Int that
+    do status <- ! sub expected 42;
+    ! exit status
+  end
+} end
+
+main
+  ! run Int 42
+end

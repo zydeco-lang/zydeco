@@ -624,6 +624,45 @@ impl Desugar for t::TermId {
                 let tail = tail.desugar(desugarer)?;
                 Alloc::alloc(desugarer, b::Let { binder, bindee, tail }.into(), self.into())
             }
+            | Tm::Param(term) => {
+                let t::Param { binder, placement, tail } = term;
+                let binder = binder.desugar(desugarer)?;
+                let tail = tail.desugar(desugarer)?;
+                match placement {
+                    | t::Placement::In => {
+                        Alloc::alloc(desugarer, b::Abs(binder, tail).into(), self.into())
+                    }
+                    | t::Placement::That => {
+                        Alloc::alloc(desugarer, b::MobileParam { binder, tail }.into(), self.into())
+                    }
+                }
+            }
+            | Tm::ContextBind(term) => {
+                let t::ContextBind { mode, binding, placement, tail } = term;
+                let (binder, bindee) = binding.desugar(desugarer)?;
+                let bindee = match mode {
+                    | t::DefinitionMode::Transparent => bindee,
+                    | t::DefinitionMode::Nominal => {
+                        Alloc::alloc(desugarer, b::Sealed(bindee).into(), self.into())
+                    }
+                };
+                let tail = tail.desugar(desugarer)?;
+                match placement {
+                    | t::Placement::In => {
+                        Alloc::alloc(desugarer, b::Let { binder, bindee, tail }.into(), self.into())
+                    }
+                    | t::Placement::That => Alloc::alloc(
+                        desugarer,
+                        b::MobileBind { binder, bindee, tail }.into(),
+                        self.into(),
+                    ),
+                }
+            }
+            | Tm::Block(term) => {
+                let t::Block(body) = term;
+                let body = body.desugar(desugarer)?;
+                Alloc::alloc(desugarer, b::Block(body).into(), self.into())
+            }
             | Tm::MoBlock(term) => {
                 let t::MoBlock(body) = term;
                 let body = body.desugar(desugarer)?;

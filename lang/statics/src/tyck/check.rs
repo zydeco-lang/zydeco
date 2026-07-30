@@ -684,12 +684,25 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
 
     fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         match &self.inner.inner {
+            | su::BindingForm::Parameter(_) => {
+                unreachable!("the root context cannot contain parameters")
+            }
             | su::BindingForm::Definition(_) => tycker.guarded(|tycker| {
-                tycker.tasks.push_back(TyckTask::DeclUni(self.inner.id));
+                tycker.tasks.push_back(TyckTask::DeclUni(
+                    self.inner
+                        .id
+                        .declaration()
+                        .expect("a root definition must originate at a declaration"),
+                ));
                 self.tyck_inner_k(tycker, action)
             }),
             | su::BindingForm::External(external) => tycker.guarded(|tycker| {
-                tycker.tasks.push_back(TyckTask::DeclHead(self.inner.id));
+                tycker.tasks.push_back(TyckTask::DeclHead(
+                    self.inner
+                        .id
+                        .declaration()
+                        .expect("a root external must originate at a declaration"),
+                ));
                 tycker.register_prim_decl(external.clone(), &self.inner.id, self.mk(()))
             }),
         }
@@ -732,10 +745,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
                 let TyEnvT { info: new_env, inner: () } =
                     env.mk(Assign(binder, bindee)).tyck_k(tycker, ())?;
                 env.info = new_env;
-                tycker
-                    .statics
-                    .decls
-                    .insert_new(id.to_owned(), ss::TAliasBody { binder, bindee }.into());
+                if let Some(id) = id.declaration() {
+                    tycker.statics.decls.insert_new(id, ss::TAliasBody { binder, bindee }.into());
+                }
                 // should also be added to global if it only depends on global definitions
                 match binder.try_destruct_def(tycker) {
                     | (Some(def), _) => {
@@ -758,10 +770,9 @@ impl<'a> Tyck<'a> for TyEnvT<su::Binding> {
                 // Existential package patterns introduce abstract types whose
                 // scope extends over the following declarations.
                 env.info = binder_elaboration.info;
-                tycker
-                    .statics
-                    .decls
-                    .insert_new(id.to_owned(), ss::VAliasBody { binder, bindee }.into());
+                if let Some(id) = id.declaration() {
+                    tycker.statics.decls.insert_new(id, ss::VAliasBody { binder, bindee }.into());
+                }
                 // should also be added to global if it only depends on global definitions
                 match binder.try_destruct_def(tycker) {
                     | (Some(def), _) => {
@@ -800,11 +811,19 @@ impl<'a> Tyck<'a> for FixPoint<TyEnvT<Vec<su::Binding>>> {
 
     fn tyck_k(&self, tycker: &mut Tycker<'a>, action: Self::Action) -> ResultKont<Self::Out> {
         let FixPoint(group_under_env) = self;
-        let bindings = group_under_env.inner.iter().map(|binding| binding.id).collect();
-        tycker.guarded(|tycker| {
-            tycker.tasks.push_back(TyckTask::DeclScc(bindings));
+        let declarations = group_under_env
+            .inner
+            .iter()
+            .filter_map(|binding| binding.id.declaration())
+            .collect::<Vec<_>>();
+        if declarations.is_empty() {
             self.tyck_inner_k(tycker, action)
-        })
+        } else {
+            tycker.guarded(|tycker| {
+                tycker.tasks.push_back(TyckTask::DeclScc(declarations));
+                self.tyck_inner_k(tycker, action)
+            })
+        }
     }
 
     fn tyck_inner_k<'f>(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
@@ -1798,13 +1817,17 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                 }
             }
             | Tm::Var(def) => {
+                let annotation =
+                    tycker.statics.annotations_var.get(&def).copied().unwrap_or_else(|| {
+                        panic!(
+                            "resolved variable `{}` reached the checker before its binder",
+                            tycker.scoped.defs[&def].plain()
+                        )
+                    });
                 let ann = {
                     match switch {
-                        | Switch::Syn => tycker.statics.annotations_var[&def],
-                        | Switch::Ana(ana) => {
-                            let ann = tycker.statics.annotations_var[&def];
-                            Lub::lub_k(ann, ana, tycker)?
-                        }
+                        | Switch::Syn => annotation,
+                        | Switch::Ana(ana) => Lub::lub_k(annotation, ana, tycker)?,
                     }
                 };
                 match ann {
@@ -3125,6 +3148,10 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
             }
             | Tm::Let(term) => {
                 let su::Let { binder, bindee, tail } = term;
+                let (bindee, is_sealed) = match bindee.syntactically_sealed(tycker) {
+                    | Some(bindee) => (bindee, true),
+                    | None => (bindee, false),
+                };
                 // first, synthesize bindee
                 let bindee_out_ann = self.mk(bindee).tyck_k(tycker, Action::syn())?;
                 match bindee_out_ann {
@@ -3134,6 +3161,16 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         let binder_out_ann =
                             self.mk(binder).tyck_k(tycker, PatternAction::ana(bindee_kd.into()))?;
                         let (binder_out, _binder_kd) = binder_out_ann.as_type();
+                        let bindee_out = if is_sealed {
+                            let abst = tycker.statics.absts.alloc(());
+                            if let (Some(def), _) = binder_out.try_destruct_def(tycker) {
+                                tycker.statics.abst_hints.insert_new(abst, def);
+                            }
+                            tycker.statics.seals.insert_new(abst, bindee_out);
+                            Alloc::alloc(tycker, abst, bindee_kd, &self.info)
+                        } else {
+                            bindee_out
+                        };
                         // and then assign bindee_out to binder_out;
                         // the type is effectively inlined
                         let env = self.mk(Assign(binder_out, bindee_out)).tyck_k(tycker, ())?;
@@ -3207,6 +3244,33 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                         tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                     }
                 }
+            }
+            | Tm::MobileParam(_) | Tm::MobileBind(_) => {
+                unreachable!("mobile syntax must be eliminated during name resolution")
+            }
+            | Tm::Residual(term) => {
+                let su::Residual(body) = term;
+                self.mk(body).tyck_k(tycker, Action::switch(switch))?
+            }
+            | Tm::Block(term) => {
+                let su::Block(body) = term;
+                self.mk(body).tyck_k(tycker, Action::switch(switch))?
+            }
+            | Tm::RecGroup(term) => {
+                let su::RecGroup { definitions, tail } = term;
+                let bindings = definitions
+                    .into_iter()
+                    .enumerate()
+                    .map(|(source_order, su::AliasBody { binder, bindee })| {
+                        su::Binding::from_term(
+                            bindee,
+                            su::BindingForm::Definition(su::Definition { binder, bindee }),
+                            source_order,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let env = FixPoint(self.mk(bindings)).tyck_k(tycker, ())?;
+                env.mk(tail).tyck_k(tycker, Action::switch(switch))?
             }
             | Tm::MoBlock(term) => {
                 let su::MoBlock(body) = term;

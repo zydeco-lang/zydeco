@@ -1,8 +1,9 @@
 use crate::textual::{
     arena::TextualScope,
     syntax::{
-        Ann, Appli, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Label, Literal, ManifestExists,
-        Named, Paren, Parser, PatId, Pattern, Prod, Proj, Term, TermId,
+        Ann, Appli, Block, CoPatId, ContextBind, DeclId, DefId, DefinitionMode, Dtor, EntityId,
+        Hole, Label, Literal, ManifestExists, Named, Param, Paren, Parser, PatId, Pattern,
+        Placement, Prod, Proj, Term, TermId,
     },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
@@ -42,6 +43,46 @@ fn parsing_2() {
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
     println!("{:?}", t);
+}
+
+#[test]
+fn parses_uniform_term_composition_forms() {
+    let source = "begin let answer = seed that param seed that ret answer end";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::Block(Block(body)) = &parser.arena.terms[&term] else {
+        panic!("expected a context-forming block")
+    };
+    let Term::ContextBind(ContextBind {
+        mode: DefinitionMode::Transparent,
+        placement: Placement::That,
+        tail,
+        ..
+    }) = &parser.arena.terms[body]
+    else {
+        panic!("expected a mobile transparent definition")
+    };
+    let Term::Param(Param { placement: Placement::That, tail, .. }) = &parser.arena.terms[tail]
+    else {
+        panic!("expected a mobile parameter")
+    };
+    assert!(matches!(parser.arena.terms[tail], Term::Ret(_)));
+
+    let nominal = "def Hidden = Int in Hidden";
+    let nominal = parser::SingleTermParser::new()
+        .parse(nominal, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(nominal))
+        .unwrap();
+    assert!(matches!(
+        parser.arena.terms[&nominal],
+        Term::ContextBind(ContextBind {
+            mode: DefinitionMode::Nominal,
+            placement: Placement::In,
+            ..
+        })
+    ));
 }
 
 #[test]

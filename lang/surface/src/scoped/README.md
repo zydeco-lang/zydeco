@@ -20,9 +20,14 @@ scoped boundary.
 - `ScopedArena` stores resolved patterns and `Term<DefId>` nodes.
 - Its root is a `ContextualTerm<BindingContext>`, consisting of a context and an
   optional executable body. The absent-body case permits checking a library.
-- A context binding is either a `Definition` with a right-hand side or an
-  `External` with an optional classifier. Metadata is attached directly to the
-  binding or body rather than represented by wrapper nodes.
+- A context binding is a `Parameter`, a `Definition` with a right-hand side, or
+  an `External` with an optional classifier. Root contexts currently use the
+  latter two forms; nested `begin` contexts use parameters and definitions.
+  Metadata is attached directly to a binding or body rather than represented by
+  wrapper nodes.
+- `ScopedArena::blocks` retains the contextual term for every nested
+  `begin ... end`. Its body records both the residual source term and a
+  dependency-ordered elaboration into ordinary abstractions and bindings.
 - `ContextNode::Acyclic` represents a singleton SCC without a self edge.
   `ContextNode::Recursive` represents a self-recursive singleton or a mutually
   recursive group. The nodes form the condensation DAG of the binding dependency
@@ -44,9 +49,22 @@ a `(Local, Global)` lookup:
 - An executable body may refer to the complete global context, but it is not a
   binding and therefore does not become a graph node.
 
+For a nested `begin`, resolution first collects every `that` contribution up to
+the next nested block and installs all of its pattern binders. It then resolves
+each candidate under the complete block scope. Active context bindings form a
+stack: a reference can add an edge to the block-local DAG and, when relevant,
+to an enclosing block or root definition. This propagation preserves outer
+dependency ordering without treating already available outer bindings as nodes
+of the inner DAG.
+
 After resolution, SCC analysis classifies each binding component and constructs
 its condensation DAG. Source order is retained within recursive groups and breaks
 ties between independent nodes.
+
+The block elaboration follows the resulting topological order. Parameters become
+`Abs`, definitions become `Let`, and a recursive type component becomes
+`RecGroup`. A `Residual` indirection remains at each original mobile site, which
+preserves tree ownership of term IDs after its binder moves to the block context.
 
 ## Context collection
 

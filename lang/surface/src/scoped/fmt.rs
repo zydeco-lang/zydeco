@@ -65,7 +65,12 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Ret(t) => s += &t.ugly(f),
             | Term::Do(t) => s += &t.ugly(f),
             | Term::Let(t) => s += &t.ugly(f),
-            // Term::UseLet(t) => s += &t.ugly(f),
+            | Term::MobileParam(_) | Term::MobileBind(_) => {
+                unreachable!("mobile syntax must be eliminated during name resolution")
+            }
+            | Term::Residual(t) => s += &t.ugly(f),
+            | Term::Block(t) => s += &t.ugly(f),
+            | Term::RecGroup(t) => s += &t.ugly(f),
             | Term::MoBlock(t) => s += &t.ugly(f),
             | Term::Data(t) => s += &t.ugly(f),
             | Term::CoData(t) => s += &t.ugly(f),
@@ -94,10 +99,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for DeclId {
             .nodes
             .iter()
             .flat_map(|(_, node)| node.bindings())
-            .find(|binding| binding.id == *self)
+            .find(|binding| binding.id == BindingId::Declaration(*self))
             .expect("a scoped binding id must occur in its contextual term");
         let prefix = binding.metas.iter().map(|meta| meta.ugly(f)).collect::<Vec<_>>().join(" ");
         let body = match &binding.inner {
+            | BindingForm::Parameter(_) => {
+                unreachable!("the root context cannot contain parameters")
+            }
             | BindingForm::Definition(Definition { binder, bindee }) => {
                 AliasBody { binder: *binder, bindee: *bindee }.ugly(f)
             }
@@ -428,6 +436,34 @@ impl<'a> Ugly<'a, Formatter<'a>> for Let<PatId, TermId, TermId> {
         s += " in ";
         s += &tail.ugly(f);
         s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Block {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Block(body) = self;
+        format!("begin {} end", body.ugly(f))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Residual {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Residual(body) = self;
+        body.ugly(f)
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for RecGroup {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let RecGroup { definitions, tail } = self;
+        let definitions = definitions
+            .iter()
+            .map(|AliasBody { binder, bindee }| {
+                format!("def {} = {}", binder.ugly(f), bindee.ugly(f))
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        format!("rec [{}] in {}", definitions, tail.ugly(f))
     }
 }
 

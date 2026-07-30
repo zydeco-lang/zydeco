@@ -85,6 +85,8 @@ pub mod scoped {
     /// Binder collection and primitive allocation helpers.
     pub mod binders;
     pub use binders::*;
+    /// Collection, dependency analysis, and elaboration of nested term blocks.
+    mod blocks;
     /// Name resolution driver and context collection.
     pub mod resolver;
     pub use resolver::*;

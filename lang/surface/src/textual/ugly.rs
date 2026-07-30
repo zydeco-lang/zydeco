@@ -85,7 +85,9 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Ret(t) => s += &t.ugly(f),
             | Term::Do(t) => s += &t.ugly(f),
             | Term::Let(t) => s += &t.ugly(f),
-            // Term::UseLet(t) => s += &t.ugly(f),
+            | Term::Param(t) => s += &t.ugly(f),
+            | Term::ContextBind(t) => s += &t.ugly(f),
+            | Term::Block(t) => s += &t.ugly(f),
             | Term::MoBlock(t) => s += &t.ugly(f),
             | Term::Data(t) => s += &t.ugly(f),
             | Term::CoData(t) => s += &t.ugly(f),
@@ -453,6 +455,40 @@ impl<'a> Ugly<'a, Formatter<'a>> for GenLet {
         s += " in ";
         s += &tail.ugly(f);
         s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Placement {
+    fn ugly(&self, _f: &'a Formatter) -> String {
+        match self {
+            | Placement::In => "in".to_string(),
+            | Placement::That => "that".to_string(),
+        }
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Param {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Param { binder, placement, tail } = self;
+        format!("param {} {} {}", binder.ugly(f), placement.ugly(f), tail.ugly(f))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for ContextBind {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let ContextBind { mode, binding, placement, tail } = self;
+        let keyword = match mode {
+            | DefinitionMode::Transparent => "let",
+            | DefinitionMode::Nominal => "def",
+        };
+        format!("{} {} {} {}", keyword, binding.ugly(f), placement.ugly(f), tail.ugly(f))
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for Block {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let Block(body) = self;
+        format!("begin {} end", body.ugly(f))
     }
 }
 

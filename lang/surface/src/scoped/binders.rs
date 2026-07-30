@@ -270,8 +270,9 @@ impl<'a> Resolver<'a> {
             }
         }
         // update names
+        let site = BindingSite { owner: ContextOwner::Root, id: BindingId::Declaration(*under) };
         global.under_map =
-            global.under_map.clone().union(binders.values().map(|def| (*def, *under)).collect());
+            global.under_map.clone().union(binders.values().map(|def| (*def, site)).collect());
         global.var_to_def = global.var_to_def.clone().union(binders);
         Ok(())
     }
@@ -290,7 +291,7 @@ impl<'a> PrimitiveRegistry<'a> {
     }
 
     fn alloc(
-        &self, exts: &mut ArenaAssoc<DeclId, (Internal, DefId)>,
+        &self, exts: &mut ArenaAssoc<BindingId, (Internal, DefId)>,
         internal_to_def: &mut ArenaAssoc<TermId, DefId>, spec: PrimitiveSpec<'_>,
     ) -> Result<DefId> {
         let PrimitiveSpec { cell, terms, decl, def, name, internal } = spec;
@@ -309,7 +310,7 @@ impl<'a> PrimitiveRegistry<'a> {
                 },
             )
             .cloned()?;
-        exts.insert_new(decl, (internal, prim));
+        exts.insert_new(BindingId::Declaration(decl), (internal, prim));
         internal_to_def.extend(terms.all().iter().map(|term| (*term, prim)));
         Ok(prim)
     }

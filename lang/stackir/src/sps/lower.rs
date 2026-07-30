@@ -137,7 +137,7 @@ impl<'a> CompilerPass for Lowerer<'a> {
         // Topologically traverse context bindings and translate runtime values.
         for node_id in self.scoped.root.context.topological_order() {
             let node = self.scoped.root.context.nodes[&node_id].clone();
-            for decl_id in node.bindings().iter().map(|binding| binding.id) {
+            for decl_id in node.bindings().iter().filter_map(|binding| binding.id.declaration()) {
                 let Some(decl) = self.statics.decls.get(&decl_id).cloned() else {
                     continue;
                 };
