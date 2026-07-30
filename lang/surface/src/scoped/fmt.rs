@@ -68,6 +68,7 @@ impl<'a> Ugly<'a, Formatter<'a>> for TermId {
             | Term::Fix(t) => s += &t.ugly(f),
             | Term::Pi(t) => s += &t.ugly(f),
             | Term::Sigma(t) => s += &t.ugly(f),
+            | Term::ManifestExists(t) => s += &t.ugly(f),
             | Term::Thunk(t) => s += &t.ugly(f),
             | Term::Force(t) => s += &t.ugly(f),
             | Term::Ret(t) => s += &t.ugly(f),
@@ -356,6 +357,13 @@ impl<'a> Ugly<'a, Formatter<'a>> for Sigma {
         s += " . ";
         s += &t.ugly(f);
         s
+    }
+}
+
+impl<'a> Ugly<'a, Formatter<'a>> for ManifestExists {
+    fn ugly(&self, f: &'a Formatter) -> String {
+        let ManifestExists { binder, definition, body } = self;
+        format!("exists ({} as {}) . {}", binder.ugly(f), definition.ugly(f), body.ugly(f))
     }
 }
 

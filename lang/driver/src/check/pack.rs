@@ -112,6 +112,10 @@ impl PackageScoped {
                 | Tm::Sigma(sc::Sigma(_binder, body)) => {
                     rm(body);
                 }
+                | Tm::ManifestExists(sc::ManifestExists { definition, body, .. }) => {
+                    rm(definition);
+                    rm(body);
+                }
                 | Tm::Thunk(sc::Thunk(body)) => {
                     rm(body);
                 }

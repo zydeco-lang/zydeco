@@ -27,6 +27,7 @@ extern {
         "data" => Tok::Data,
         "codata" => Tok::Codata,
         "alias" => Tok::Alias,
+        "as" => Tok::As,
         "define" => Tok::Define,
         "extern" => Tok::Extern,
         "main" => Tok::Exec,
@@ -315,6 +316,10 @@ Term: Term = {
     // sigma
     "sigma" <params:CoPatId> "." <ty:TermGen<Term>> => Sigma(<>).into(),
     // exists
+    "exists" "(" <binder:PatternAnnId> "as" <definition:TermGen<Term>>
+        ":" <kind:TermId> ")" "." <body:TermGen<Term>> => {
+        ManifestExists { binder, definition, kind, body }.into()
+    },
     "exists" <params:CoPatId> "." <ty:TermGen<Term>> => Exists(<>).into(),
 
     // Bindings are loosest to capture the largest possible tail.

@@ -56,6 +56,29 @@ pub struct DesugarOut {
     pub top: b::TopLevel,
 }
 
+struct PatternPayloadAnnotation {
+    pattern: b::PatId,
+    ty: b::TermId,
+    source: t::EntityId,
+}
+
+impl PatternPayloadAnnotation {
+    fn build(self, desugarer: &mut Desugarer) -> b::PatId {
+        match desugarer.bitter.pats[&self.pattern].clone() {
+            | b::Pattern::Named(b::Named(name, inner)) => {
+                let inner =
+                    Self { pattern: inner, ty: self.ty, source: self.source }.build(desugarer);
+                Alloc::alloc(desugarer, b::Named(name, inner).into(), self.source)
+            }
+            | _ => Alloc::alloc(
+                desugarer,
+                b::Ann { tm: self.pattern, ty: self.ty }.into(),
+                self.source,
+            ),
+        }
+    }
+}
+
 impl CompilerPass for Desugarer<'_> {
     type Arena = b::BitterArena;
     type Out = DesugarOut;
@@ -543,6 +566,21 @@ impl Desugar for t::TermId {
                 // exists -> ann
                 let vtype = desugarer.vtype(self.into());
                 Alloc::alloc(desugarer, b::Ann { tm: exists, ty: vtype }.into(), self.into())
+            }
+            | Tm::ManifestExists(term) => {
+                let t::ManifestExists { binder, definition, kind, body } = term;
+                let binder = binder.desugar(desugarer)?;
+                let definition = definition.desugar(desugarer)?;
+                let kind = kind.desugar(desugarer)?;
+                let binder =
+                    PatternPayloadAnnotation { pattern: binder, ty: kind, source: self.into() }
+                        .build(desugarer);
+                let body = body.desugar(desugarer)?;
+                Alloc::alloc(
+                    desugarer,
+                    b::ManifestExists { binder, definition, body }.into(),
+                    self.into(),
+                )
             }
             | Tm::Thunk(term) => {
                 let t::Thunk(body) = term;

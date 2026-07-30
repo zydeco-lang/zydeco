@@ -459,6 +459,33 @@ main ! exit 0 end
 }
 
 #[test]
+fn translates_a_manifest_component_before_a_pack_pi_witness() {
+    PackPiCase::check(
+        r#"
+alias Mixed =
+  exists (Y as Unit : VType) .
+  exists (X : VType) .
+  exists (Z as X : VType) .
+    Z
+end
+
+def ! translated =
+  monadic
+    let reveal = {
+      do _ <- ret ();
+      fn ((Y, X, Z, value) : Mixed) -> ret value
+    } in
+    ! reveal (Unit, Unit, Unit, ())
+  end
+end
+
+main ! exit 0 end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
 fn preserves_an_opened_witness_across_monadic_applications() {
     PackPiCase::check(
         r#"

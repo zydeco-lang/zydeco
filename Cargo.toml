@@ -102,6 +102,12 @@ tower-lsp = { version = "0.20", features = ["proposed"] }
 [profile.dev.package."*"]
 opt-level = 2
 
+# Deeply nested programs exercise recursive type checking;
+# optimizing this crate keeps its test stack frames small
+# without changing the profile.
+[profile.test.package.zydeco-statics]
+opt-level = 1
+
 [profile.release]
 lto = "thin"
 # codegen-units = 1

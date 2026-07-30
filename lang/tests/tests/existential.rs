@@ -28,6 +28,121 @@ impl ExistentialCase {
 }
 
 #[test]
+fn opens_a_manifest_witness_as_its_disclosed_type() {
+    ExistentialCase::check(
+        r#"
+alias Transparent =
+  exists (X as Int : VType) . X
+end
+
+def packed : Transparent = (Int, 42) end
+
+def consume : Thk (Transparent -> Ret Int) = {
+  fn ((X, value) : Transparent) -> ret value
+} end
+
+main
+  do status <- ! consume packed;
+  ! exit status
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn rejects_a_witness_that_disagrees_with_the_manifest_definition() {
+    ExistentialCase::assert_type_error(
+        r#"
+alias Transparent =
+  exists (X as Int : VType) . X
+end
+
+def packed : Transparent = (Char, 'x') end
+
+main ! exit 0 end
+"#,
+    );
+}
+
+#[test]
+fn composes_manifest_existentials_with_named_package_fields() {
+    ExistentialCase::check(
+        r#"
+alias CounterLibrary =
+  exists (Counter = Representation as Int : VType) .
+    (zero :: Representation)
+end
+
+def library : CounterLibrary = (
+  Counter = Int,
+  zero = 0,
+) end
+
+def consume : Thk (CounterLibrary -> Ret Int) = {
+  fn ((= Counter, = zero) : CounterLibrary) -> ret zero
+} end
+
+main
+  do status <- ! consume library;
+  ! exit status
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn substitutes_an_outer_abstract_witness_through_a_manifest_definition() {
+    ExistentialCase::check(
+        r#"
+alias Mixed =
+  exists (X : VType) .
+  exists (Y as X : VType) .
+    Y
+end
+
+def packed : Mixed = (Int, Int, 7) end
+
+def unpack = {
+  fn ((X, Y, value) : Mixed) -> ret value
+} end
+
+main
+  do value <- ! unpack packed;
+  ! exit value
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn skips_a_leading_manifest_component_when_instantiating_pack_pi() {
+    ExistentialCase::check(
+        r#"
+alias Mixed =
+  exists (Y as Int : VType) .
+  exists (X : VType) .
+    X
+end
+
+def packed : Mixed = (Int, Int, 9) end
+
+def unpack = {
+  fn ((Y, X, value) : Mixed) -> ret value
+} end
+
+main
+  do value <- ! unpack packed;
+  ! exit value
+end
+"#,
+    )
+    .unwrap();
+}
+
+#[test]
 fn accepts_payload_at_its_fresh_witness() {
     ExistentialCase::check(
         r#"

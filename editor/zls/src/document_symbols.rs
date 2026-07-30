@@ -163,6 +163,13 @@ impl DocumentSymbolContext<'_> {
                 let body = self.term(body);
                 [].into_iter().chain(binder).chain(body).collect()
             }
+            | b::Term::ManifestExists(t) => {
+                let b::ManifestExists { binder, definition, body } = t;
+                let binder = self.pattern(binder);
+                let definition = self.term(definition);
+                let body = self.term(body);
+                [].into_iter().chain(binder).chain(definition).chain(body).collect()
+            }
             | b::Term::Thunk(t) => {
                 let b::Thunk(body) = t;
                 self.term(body)

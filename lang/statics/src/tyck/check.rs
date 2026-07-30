@@ -95,7 +95,7 @@ impl CheckedPatternExt for CheckedPattern {
             std::panic::Location::caller(),
         )?;
         let boundary_arity = pattern.package_witness_arity(tycker).unwrap_or_default();
-        if boundary_arity != self.inner.opened.len() {
+        if boundary_arity < self.inner.opened.len() {
             tycker.err_k(
                 TyckError::PackageWitnessArityMismatch {
                     expected: self.inner.opened.len(),
@@ -430,6 +430,89 @@ struct PackPiInstantiation {
     witnesses: Vec<ss::TypeId>,
 }
 
+/// State for recursively instantiating a `PackPi` through the physical
+/// existential prefix of its package argument.
+struct PackPiInstantiationState<'a> {
+    domain: ss::TypeId,
+    codomain: ss::TypeId,
+    canonical: &'a [ss::AbstId],
+    actual: &'a [ss::TypeId],
+    expected: usize,
+    found: usize,
+}
+
+impl<'a> PackPiInstantiationState<'a> {
+    fn new(signature: &ss::PackPi, canonical: &'a [ss::AbstId], actual: &'a [ss::TypeId]) -> Self {
+        Self {
+            domain: signature.domain,
+            codomain: signature.codomain,
+            canonical,
+            actual,
+            expected: canonical.len(),
+            found: actual.len(),
+        }
+    }
+
+    fn instantiate_k(self, tycker: &mut Tycker<'_>, env: &ss::TyEnv) -> ResultKont<ss::TypeId> {
+        if self.canonical.is_empty() {
+            return Ok(self.codomain);
+        }
+        let Some((&witness, actual)) = self.actual.split_first() else {
+            return self.mismatch_k(tycker);
+        };
+        let view = self.domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
+        let ss::Type::Exists(ss::Exists { binder, mode, body }) =
+            tycker.type_filled_k(&view)?.to_owned()
+        else {
+            return self.mismatch_k(tycker);
+        };
+        let payload = binder.pattern.bind_argument_k(tycker, witness)?;
+
+        match mode {
+            | ss::ExistsMode::Abstract => {
+                let Some((&canonical, remaining)) = self.canonical.split_first() else {
+                    unreachable!()
+                };
+                let canonical_kind = tycker.statics.annotations_abst[&canonical];
+                let payload_kind = tycker.statics.annotations_type[&payload];
+                Lub::lub_k(canonical_kind, payload_kind, tycker)?;
+                let codomain = self.codomain.subst_abst_k(tycker, (canonical, payload))?;
+                let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
+                Self {
+                    domain,
+                    codomain,
+                    canonical: remaining,
+                    actual,
+                    expected: self.expected,
+                    found: self.found,
+                }
+                .instantiate_k(tycker, env)
+            }
+            | ss::ExistsMode::Manifest(definition) => {
+                let payload = Lub::lub_k(definition, payload, tycker)?;
+                let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
+                Self {
+                    domain,
+                    codomain: self.codomain,
+                    canonical: self.canonical,
+                    actual,
+                    expected: self.expected,
+                    found: self.found,
+                }
+                .instantiate_k(tycker, env)
+            }
+        }
+    }
+
+    #[track_caller]
+    fn mismatch_k<T>(&self, tycker: &mut Tycker<'_>) -> ResultKont<T> {
+        tycker.err_k(
+            TyckError::PackageWitnessArityMismatch { expected: self.expected, found: self.found },
+            std::panic::Location::caller(),
+        )
+    }
+}
+
 /// Check a value abstraction against a package-dependent arrow.
 struct PackPiIntroduction {
     binder: su::PatId,
@@ -441,7 +524,100 @@ struct PackPiIntroduction {
 /// telescope.
 struct PackPiPatternSkolems {
     pattern: su::PatId,
-    witnesses: ss::PackTelescope,
+    signature: ss::PackPi,
+}
+
+/// Traverse a package pattern and its domain in lockstep until every abstract
+/// witness in a `PackPi` has a corresponding pattern component.
+struct PackPiPatternAssignments<'a> {
+    items: &'a [su::PatId],
+    witnesses: &'a [ss::AbstId],
+    domain: ss::TypeId,
+    expected: usize,
+    found: usize,
+}
+
+impl<'a> PackPiPatternAssignments<'a> {
+    fn new(items: &'a [su::PatId], witnesses: &'a [ss::AbstId], domain: ss::TypeId) -> Self {
+        Self { items, witnesses, domain, expected: witnesses.len(), found: items.len() }
+    }
+
+    fn collect_k(
+        self, tycker: &mut Tycker<'_>, env: &ss::TyEnv,
+    ) -> ResultKont<Vec<(su::PatId, ss::AbstId)>> {
+        if self.witnesses.is_empty() {
+            return Ok(Vec::new());
+        }
+        let Some((&item, items)) = self.items.split_first() else {
+            return self.mismatch_k(tycker);
+        };
+        let view = self.domain.unroll_k(tycker)?.subst_env_k(tycker, env)?;
+        let ss::Type::Exists(ss::Exists { binder, mode, body }) =
+            tycker.type_filled_k(&view)?.to_owned()
+        else {
+            return self.mismatch_k(tycker);
+        };
+
+        match mode {
+            | ss::ExistsMode::Abstract => {
+                let Some((&witness, witnesses)) = self.witnesses.split_first() else {
+                    unreachable!()
+                };
+                let kind = tycker.statics.annotations_abst[&witness];
+                let payload = Alloc::alloc(tycker, witness, kind, env);
+                let domain = body.subst_abst_k(tycker, (binder.witness, payload))?;
+                let tail =
+                    Self { items, witnesses, domain, expected: self.expected, found: self.found }
+                        .collect_k(tycker, env)?;
+                Ok(std::iter::once((item, witness)).chain(tail).collect())
+            }
+            | ss::ExistsMode::Manifest(definition) => {
+                let domain = body.subst_abst_k(tycker, (binder.witness, definition))?;
+                Self {
+                    items,
+                    witnesses: self.witnesses,
+                    domain,
+                    expected: self.expected,
+                    found: self.found,
+                }
+                .collect_k(tycker, env)
+            }
+        }
+    }
+
+    #[track_caller]
+    fn mismatch_k<T>(&self, tycker: &mut Tycker<'_>) -> ResultKont<T> {
+        tycker.err_k(
+            TyckError::PackageWitnessArityMismatch { expected: self.expected, found: self.found },
+            std::panic::Location::caller(),
+        )
+    }
+}
+
+impl PackPiPatternSkolems {
+    fn assignments_k(
+        &self, tycker: &mut Tycker<'_>, env: &ss::TyEnv, pattern: su::PatId,
+    ) -> ResultKont<Vec<(su::PatId, ss::AbstId)>> {
+        match tycker.scoped.pats[&pattern].to_owned() {
+            | su::Pattern::Ann(su::Ann { tm, .. }) => self.assignments_k(tycker, env, tm),
+            | su::Pattern::Named(su::Named(_, inner)) => self.assignments_k(tycker, env, inner),
+            | su::Pattern::Cons(su::ConsN(items, _)) => {
+                let witnesses = self.signature.witnesses.iter().copied().collect::<Vec<_>>();
+                PackPiPatternAssignments::new(&items, &witnesses, self.signature.domain)
+                    .collect_k(tycker, env)
+            }
+            | su::Pattern::Hole(_)
+            | su::Pattern::Var(_)
+            | su::Pattern::Ctor(_)
+            | su::Pattern::Triv(_) => tycker.err_k(
+                TyckError::PackageWitnessArityMismatch {
+                    expected: self.signature.witnesses.len(),
+                    found: 0,
+                },
+                std::panic::Location::caller(),
+            ),
+        }
+    }
 }
 
 /// Apply a package-dependent function to a package with manifest witnesses.
@@ -456,34 +632,8 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiPatternSkolems> {
     type Action = ();
 
     fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
-        let PackPiPatternSkolems { pattern, witnesses } = &self.inner;
-        let mut pattern = *pattern;
-        loop {
-            match tycker.scoped.pats[&pattern].to_owned() {
-                | su::Pattern::Ann(su::Ann { tm, .. }) => pattern = tm,
-                | su::Pattern::Named(su::Named(_, inner)) => pattern = inner,
-                | su::Pattern::Cons(su::ConsN(items, _)) => {
-                    let expected = witnesses.len();
-                    let found = items.len();
-                    if found < expected {
-                        tycker.err_k(
-                            TyckError::PackageWitnessArityMismatch { expected, found },
-                            std::panic::Location::caller(),
-                        )?
-                    }
-                    return Ok(PatternSkolems::new(
-                        items.into_iter().take(expected).zip(witnesses.iter().copied()),
-                    ));
-                }
-                | su::Pattern::Hole(_)
-                | su::Pattern::Var(_)
-                | su::Pattern::Ctor(_)
-                | su::Pattern::Triv(_) => tycker.err_k(
-                    TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
-                    std::panic::Location::caller(),
-                )?,
-            }
-        }
+        let assignments = self.inner.assignments_k(tycker, &self.info, self.inner.pattern)?;
+        Ok(PatternSkolems::new(assignments))
     }
 }
 
@@ -1100,8 +1250,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                         let mut opened = Vec::new();
                         for (index, item) in items.iter().copied().enumerate() {
                             let view = body_ty.unroll_k(tycker)?.subst_env_k(tycker, &body_env)?;
-                            let ss::Type::Exists(ss::Exists(source_binder, next_ty)) =
-                                tycker.type_filled_k(&view)?.to_owned()
+                            let ss::Type::Exists(ss::Exists {
+                                binder: source_binder,
+                                mode,
+                                body: next_ty,
+                            }) = tycker.type_filled_k(&view)?.to_owned()
                             else {
                                 body_index = index;
                                 break;
@@ -1121,33 +1274,57 @@ impl<'a> Tyck<'a> for TyEnvT<su::PatId> {
                             body_env = checked.info;
                             opened.extend(checked.inner.opened);
 
-                            // Ordinary elimination is fresh. Checking a PackPi
-                            // introduction instead reuses the signature's
-                            // canonical identity for this pattern component.
-                            let skolem = match skolems.get(&item) {
-                                | Some(skolem) => {
-                                    let expected = tycker.statics.annotations_abst[&skolem];
-                                    Lub::lub_k(expected, payload_kind, tycker)?;
-                                    skolem
+                            match mode {
+                                | ss::ExistsMode::Abstract => {
+                                    // Ordinary elimination is fresh. Checking a PackPi
+                                    // introduction instead reuses the signature's
+                                    // canonical identity for this pattern component.
+                                    let skolem = match skolems.get(&item) {
+                                        | Some(skolem) => {
+                                            let expected = tycker.statics.annotations_abst[&skolem];
+                                            Lub::lub_k(expected, payload_kind, tycker)?;
+                                            skolem
+                                        }
+                                        | None => {
+                                            let (def, _) = witness.try_destruct_def(tycker);
+                                            Alloc::alloc(tycker, def, payload_kind, &())
+                                        }
+                                    };
+                                    tycker.statics.existential_skolems.ensure(skolem);
+                                    body_env = body_env.with_skolem(skolem);
+                                    let abstract_ty =
+                                        Alloc::alloc(tycker, skolem, payload_kind, &body_env);
+                                    let full_witness = source_binder
+                                        .pattern
+                                        .introduce_payload(tycker, abstract_ty);
+                                    let full_witness = tycker.err_p_to_k(full_witness)?;
+                                    body_env = TyEnvT::new(body_env, Assign(witness, full_witness))
+                                        .tyck_k(tycker, ())?
+                                        .info;
+                                    body_ty = next_ty.subst_abst_k(
+                                        tycker,
+                                        (source_binder.witness, abstract_ty),
+                                    )?;
+                                    opened.push(skolem);
                                 }
-                                | None => {
-                                    let (def, _) = witness.try_destruct_def(tycker);
-                                    Alloc::alloc(tycker, def, payload_kind, &())
+                                | ss::ExistsMode::Manifest(definition) => {
+                                    let definition_kind =
+                                        tycker.statics.annotations_type[&definition];
+                                    Lub::lub_k(payload_kind, definition_kind, tycker)?;
+                                    let full_definition =
+                                        source_binder.pattern.introduce_payload(tycker, definition);
+                                    let full_definition = tycker.err_p_to_k(full_definition)?;
+                                    body_env =
+                                        TyEnvT::new(body_env, Assign(witness, full_definition))
+                                            .tyck_k(tycker, ())?
+                                            .info;
+                                    body_ty = next_ty.subst_abst_k(
+                                        tycker,
+                                        (source_binder.witness, definition),
+                                    )?;
                                 }
-                            };
-                            tycker.statics.existential_skolems.ensure(skolem);
-                            body_env = body_env.with_skolem(skolem);
-                            let abstract_ty = Alloc::alloc(tycker, skolem, payload_kind, &body_env);
-                            let full_witness =
-                                source_binder.pattern.introduce_payload(tycker, abstract_ty);
-                            let full_witness = tycker.err_p_to_k(full_witness)?;
-                            body_env = TyEnvT::new(body_env, Assign(witness, full_witness))
-                                .tyck_k(tycker, ())?
-                                .info;
-                            body_ty = next_ty
-                                .subst_abst_k(tycker, (source_binder.witness, abstract_ty))?;
+                            }
                             witnesses.push(witness);
-                            opened.push(skolem);
                         }
 
                         if witnesses.is_empty() {
@@ -1344,42 +1521,9 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiInstantiation> {
 
     fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
         let PackPiInstantiation { signature, witnesses } = &self.inner;
-        let expected = signature.witnesses.len();
-        let found = witnesses.len();
-        if expected != found {
-            tycker.err_k(
-                TyckError::PackageWitnessArityMismatch { expected, found },
-                std::panic::Location::caller(),
-            )?
-        }
-
-        signature
-            .witnesses
-            .iter()
-            .copied()
-            .zip(witnesses.iter().copied())
-            .try_fold(
-                (signature.codomain, signature.domain),
-                |(codomain, domain), (canonical, witness)| {
-                    let view = domain.unroll_k(tycker)?.subst_env_k(tycker, &self.info)?;
-                    let ss::Type::Exists(ss::Exists(source, next_domain)) =
-                        tycker.type_filled_k(&view)?.to_owned()
-                    else {
-                        return tycker.err_k(
-                            TyckError::PackageWitnessArityMismatch { expected, found },
-                            std::panic::Location::caller(),
-                        );
-                    };
-                    let payload = source.pattern.bind_argument_k(tycker, witness)?;
-                    let canonical_kind = tycker.statics.annotations_abst[&canonical];
-                    let payload_kind = tycker.statics.annotations_type[&payload];
-                    Lub::lub_k(canonical_kind, payload_kind, tycker)?;
-                    let codomain = codomain.subst_abst_k(tycker, (canonical, payload))?;
-                    let domain = next_domain.subst_abst_k(tycker, (source.witness, payload))?;
-                    Ok((codomain, domain))
-                },
-            )
-            .map(|(codomain, _)| codomain)
+        let canonical = signature.witnesses.iter().copied().collect::<Vec<_>>();
+        PackPiInstantiationState::new(signature, &canonical, witnesses)
+            .instantiate_k(tycker, &self.info)
     }
 }
 
@@ -1390,7 +1534,7 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiIntroduction> {
     fn tyck_inner_k(&self, tycker: &mut Tycker<'a>, (): Self::Action) -> ResultKont<Self::Out> {
         let PackPiIntroduction { binder, body, signature } = &self.inner;
         let skolems = self
-            .mk(PackPiPatternSkolems { pattern: *binder, witnesses: signature.witnesses.clone() })
+            .mk(PackPiPatternSkolems { pattern: *binder, signature: signature.clone() })
             .tyck_k(tycker, ())?;
         let binder = self
             .mk(*binder)
@@ -1442,14 +1586,6 @@ impl<'a> Tyck<'a> for TyEnvT<PackPiElimination> {
                 std::panic::Location::caller(),
             )?
         };
-        let expected = signature.witnesses.len();
-        if witnesses.len() < expected {
-            tycker.err_k(
-                TyckError::PackageWitnessArityMismatch { expected, found: witnesses.len() },
-                std::panic::Location::caller(),
-            )?
-        }
-        let witnesses = witnesses.into_iter().take(expected).collect();
         let codomain = self
             .mk(PackPiInstantiation { signature: signature.clone(), witnesses })
             .tyck_k(tycker, ())?;
@@ -1997,8 +2133,11 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             let view = body_ty
                                                 .unroll_k(tycker)?
                                                 .subst_env_k(tycker, &self.info)?;
-                                            let ss::Type::Exists(ss::Exists(binder, next_ty)) =
-                                                tycker.type_filled_k(&view)?.to_owned()
+                                            let ss::Type::Exists(ss::Exists {
+                                                binder,
+                                                mode,
+                                                body: next_ty,
+                                            }) = tycker.type_filled_k(&view)?.to_owned()
                                             else {
                                                 body_index = index;
                                                 return Ok(None);
@@ -2014,6 +2153,12 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                             )?;
                                             let payload =
                                                 binder.pattern.bind_argument_k(tycker, witness)?;
+                                            let payload = match mode {
+                                                | ss::ExistsMode::Abstract => payload,
+                                                | ss::ExistsMode::Manifest(definition) => {
+                                                    Lub::lub_k(definition, payload, tycker)?
+                                                }
+                                            };
                                             body_ty = next_ty
                                                 .subst_abst_k(tycker, (binder.witness, payload))?;
                                             Ok(Some(witness))
@@ -2770,7 +2915,7 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                                 let binder = ss::TypeBinder { pattern: tpat, witness: abst };
                                 let exists = Alloc::alloc(
                                     tycker,
-                                    ss::Exists(binder, body_ty),
+                                    ss::Exists::new(binder, body_ty),
                                     vtype,
                                     &self.info,
                                 );
@@ -2816,6 +2961,59 @@ impl<'a> Tyck<'a> for TyEnvT<su::TermId> {
                             tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
                         }
                     },
+                }
+            }
+            | Tm::ManifestExists(term) => {
+                let su::ManifestExists { binder, definition, body } = term;
+                match switch {
+                    | Switch::Syn => {
+                        let definition = self.mk(definition).tyck_k(tycker, Action::syn())?;
+                        let (definition, definition_kind) = definition.try_as_type(
+                            tycker,
+                            TyckError::SortMismatch,
+                            std::panic::Location::caller(),
+                        )?;
+
+                        let binder = self.mk(binder).tyck_k(tycker, PatternAction::syn())?;
+                        let (pattern, _domain_kind) = binder.try_as_type(
+                            tycker,
+                            TyckError::SortMismatch,
+                            std::panic::Location::caller(),
+                        )?;
+                        let witness = Alloc::alloc(tycker, pattern, (), &());
+                        let payload_kind = tycker.statics.annotations_abst[&witness];
+                        Lub::lub_k(payload_kind, definition_kind, tycker)?;
+
+                        let full_definition = pattern.introduce_payload(tycker, definition);
+                        let full_definition = tycker.err_p_to_k(full_definition)?;
+                        let body_env =
+                            self.mk(Assign(pattern, full_definition)).tyck_k(tycker, ())?.info;
+                        let body = TyEnvT::new(body_env, body).tyck_k(tycker, Action::syn())?;
+                        let (body, body_kind) = body.try_as_type(
+                            tycker,
+                            TyckError::SortMismatch,
+                            std::panic::Location::caller(),
+                        )?;
+                        let vtype = ss::VType.build(tycker, &self.info);
+                        Lub::lub_k(vtype, body_kind, tycker)?;
+
+                        let binder = ss::TypeBinder { pattern, witness };
+                        let exists = Alloc::alloc(
+                            tycker,
+                            ss::Exists::with_manifest(binder, definition, body),
+                            vtype,
+                            &self.info,
+                        );
+                        TermAnnId::Type(exists, vtype)
+                    }
+                    | Switch::Ana(AnnId::Kind(kind)) => {
+                        let vtype = ss::VType.build(tycker, &self.info);
+                        Lub::lub_k(vtype, kind, tycker)?;
+                        self.tyck_k(tycker, Action::syn())?
+                    }
+                    | Switch::Ana(AnnId::Set | AnnId::Type(_)) => {
+                        tycker.err_k(TyckError::SortMismatch, std::panic::Location::caller())?
+                    }
                 }
             }
             | Tm::Thunk(term) => {

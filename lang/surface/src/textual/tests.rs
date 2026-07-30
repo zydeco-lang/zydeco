@@ -1,8 +1,8 @@
 use crate::textual::{
     arena::TextualScope,
     syntax::{
-        Ann, Appli, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Label, Literal, Named, Paren,
-        Parser, PatId, Pattern, Prod, Proj, Term, TermId,
+        Ann, Appli, CoPatId, DeclId, DefId, Dtor, EntityId, Hole, Label, Literal, ManifestExists,
+        Named, Paren, Parser, PatId, Pattern, Prod, Proj, Term, TermId,
     },
 };
 use zydeco_utils::{arena::IdAllocator, span::LocationCtx};
@@ -42,6 +42,38 @@ fn parsing_2() {
         .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
         .unwrap();
     println!("{:?}", t);
+}
+
+#[test]
+fn parses_manifest_existential_with_a_punned_field_binder() {
+    let source = "exists (= Counter as Int : VType) . Counter";
+    let mut parser = Parser::new();
+    let term = parser::SingleTermParser::new()
+        .parse(source, &LocationCtx::Plain, &mut parser, lexer::Lexer::new(source))
+        .unwrap();
+
+    let Term::ManifestExists(ManifestExists { binder, definition, kind, body }) =
+        &parser.arena.terms[&term]
+    else {
+        panic!("expected a manifest existential")
+    };
+    let Pattern::Named(Named(field, binder)) = &parser.arena.pats[binder] else {
+        panic!("expected a punned named binder")
+    };
+    let Pattern::Var(binder) = &parser.arena.pats[binder] else {
+        panic!("expected the field payload to be a type variable")
+    };
+    let Term::Var(definition) = &parser.arena.terms[definition] else {
+        panic!("expected a manifest definition")
+    };
+    let Term::Var(kind) = &parser.arena.terms[kind] else { panic!("expected a binder kind") };
+    let Term::Var(body) = &parser.arena.terms[body] else { panic!("expected a package body") };
+
+    assert_eq!(field.plain(), "Counter");
+    assert_eq!(parser.arena.defs[binder].plain(), "Counter");
+    assert_eq!(definition.plain(), "Int");
+    assert_eq!(kind.plain(), "VType");
+    assert_eq!(body.plain(), "Counter");
 }
 
 #[test]

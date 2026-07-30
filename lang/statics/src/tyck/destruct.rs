@@ -283,7 +283,7 @@ impl TypeId {
     }
     pub fn destruct_exists(&self, tycker: &mut Tycker) -> Option<(AbstId, TypeId)> {
         match tycker.type_filled(self).ok()?.to_owned() {
-            | Type::Exists(Exists(binder, ty)) => Some((binder.witness, ty)),
+            | Type::Exists(Exists { binder, body, .. }) => Some((binder.witness, body)),
             | _ => None,
         }
     }

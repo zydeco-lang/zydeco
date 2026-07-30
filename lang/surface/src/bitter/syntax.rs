@@ -59,6 +59,14 @@ pub struct Pi(pub PatId, pub TermId);
 #[derive(Clone, Debug)]
 pub struct Sigma(pub PatId, pub TermId);
 
+/// `exists (X as A : K) . B`
+#[derive(Clone, Debug)]
+pub struct ManifestExists {
+    pub binder: PatId,
+    pub definition: TermId,
+    pub body: TermId,
+}
+
 /// `monadic ... end`
 #[derive(Clone, Debug)]
 /// Monadic block body kept as a single node until later translation.
@@ -106,6 +114,7 @@ pub enum Term<Ref> {
     // Arrow(Arrow),
     // Forall(Forall),
     Sigma(Sigma),
+    ManifestExists(ManifestExists),
     // Prod(Prod),
     // Exists(Exists),
     Thunk(Thunk<TermId>),

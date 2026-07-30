@@ -85,6 +85,14 @@ pub struct Sigma(pub CoPatId, pub TermId);
 /// `exists (x: A) . A'`
 #[derive(Clone, Debug)]
 pub struct Exists(pub CoPatId, pub TermId);
+/// `exists (X as A : K) . B`
+#[derive(Clone, Debug)]
+pub struct ManifestExists {
+    pub binder: PatId,
+    pub definition: TermId,
+    pub kind: TermId,
+    pub body: TermId,
+}
 
 /// `let x = a in ...`
 #[derive(Clone, Debug)]
@@ -149,6 +157,7 @@ pub enum Term {
     Arrow(ArrowU<TermId>),
     Sigma(Sigma),
     Exists(Exists),
+    ManifestExists(ManifestExists),
     Prod(ProdU<TermId>),
     Thunk(Thunk<TermId>),
     Force(Force<TermId>),

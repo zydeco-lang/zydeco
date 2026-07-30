@@ -330,9 +330,20 @@ pub struct PackPi {
     pub codomain: TypeId,
 }
 
-/// `exists (x: A) . A'`
+/// Whether an existential binder is abstract or discloses its definition.
 #[derive(Clone, Debug)]
-pub struct Exists(pub TypeBinder, pub TypeId);
+pub enum ExistsMode {
+    Abstract,
+    Manifest(TypeId),
+}
+
+/// `exists (X : K) . B` or `exists (X as A : K) . B`
+#[derive(Clone, Debug)]
+pub struct Exists {
+    pub binder: TypeBinder,
+    pub mode: ExistsMode,
+    pub body: TypeId,
+}
 
 /// data | C_1 ty | ... end
 #[derive(Clone, Debug, IntoIterator)]
@@ -350,6 +361,23 @@ pub struct CoData {
 
 mod impls_structs {
     use super::*;
+
+    impl Exists {
+        pub fn new(binder: TypeBinder, body: TypeId) -> Self {
+            Self { binder, mode: ExistsMode::Abstract, body }
+        }
+
+        pub fn with_manifest(binder: TypeBinder, definition: TypeId, body: TypeId) -> Self {
+            Self { binder, mode: ExistsMode::Manifest(definition), body }
+        }
+
+        pub fn definition(&self) -> Option<TypeId> {
+            match self.mode {
+                | ExistsMode::Abstract => None,
+                | ExistsMode::Manifest(definition) => Some(definition),
+            }
+        }
+    }
 
     impl PackTelescope {
         pub fn new(first: AbstId, rest: impl IntoIterator<Item = AbstId>) -> Self {

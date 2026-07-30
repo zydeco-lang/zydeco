@@ -563,7 +563,7 @@ where
         let ty = ty(abst).build(tycker, env);
         let vtype = VType.build(tycker, env);
         let binder = TypeBinder::with_witness(tycker, abst, env);
-        Alloc::alloc(tycker, Exists(binder, ty), vtype, env)
+        Alloc::alloc(tycker, Exists::new(binder, ty), vtype, env)
     }
 }
 impl<'a> Construct<Tycker<'a>, TypeId> for OSTy {

@@ -426,7 +426,7 @@ where
         let (env, ty) = ty(abst).mbuild(tycker, env)?;
         let (env, vtype) = VType.mbuild(tycker, env)?;
         let binder = TypeBinder::with_witness(tycker, abst, &env.ty);
-        let alloc = Alloc::alloc(tycker, Exists(binder, ty), vtype, &env.ty);
+        let alloc = Alloc::alloc(tycker, Exists::new(binder, ty), vtype, &env.ty);
         Ok((env, alloc))
     }
 }

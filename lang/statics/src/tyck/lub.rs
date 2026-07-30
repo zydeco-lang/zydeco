@@ -405,20 +405,40 @@ impl Debruijn {
                     TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
                     std::panic::Location::caller(),
                 )?,
-                | (Type::Exists(Exists(lbind, lbody)), Type::Exists(Exists(rbind, rbody))) => {
+                | (
+                    Type::Exists(Exists { binder: lbind, mode: lmode, body: lbody }),
+                    Type::Exists(Exists { binder: rbind, mode: rmode, body: rbody }),
+                ) => {
                     let _domain =
                         Lub::lub(lbind.domain_kind(tycker), rbind.domain_kind(tycker), tycker)?;
                     let _payload =
                         Lub::lub(lbind.payload_kind(tycker), rbind.payload_kind(tycker), tycker)?;
+                    let (mode, mode_unchanged) = match (lmode, rmode) {
+                        | (ExistsMode::Abstract, ExistsMode::Abstract) => {
+                            (ExistsMode::Abstract, true)
+                        }
+                        | (
+                            ExistsMode::Manifest(ldefinition),
+                            ExistsMode::Manifest(rdefinition),
+                        ) => {
+                            let definition = self.clone().lub(ldefinition, rdefinition, tycker)?;
+                            (ExistsMode::Manifest(definition), definition == ldefinition)
+                        }
+                        | (ExistsMode::Abstract, ExistsMode::Manifest(_))
+                        | (ExistsMode::Manifest(_), ExistsMode::Abstract) => tycker.err(
+                            TyckError::TypeMismatch { expected: lhs_id, found: rhs_id },
+                            std::panic::Location::caller(),
+                        )?,
+                    };
                     let body = self
                         .insert(Some(lbind.witness), Some(rbind.witness))
                         .lub(lbody, rbody, tycker)?;
-                    if body == lbody {
+                    if mode_unchanged && body == lbody {
                         lhs_id
                     } else {
                         let kd = tycker.statics.annotations_type[&lhs_id];
 
-                        Alloc::alloc(tycker, Exists(lbind, body), kd, &env)
+                        Alloc::alloc(tycker, Exists { binder: lbind, mode, body }, kd, &env)
                     }
                 }
                 | (Type::Exists(_), _) => tycker.err(

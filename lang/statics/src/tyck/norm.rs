@@ -155,7 +155,18 @@ impl TypeSupportCollector {
                 | Type::Arrow(Arrow(input, output)) | Type::Prod(Prod(input, output)) => {
                     [input, output].into_iter().try_for_each(|ty| self.visit(ty, tycker))?;
                 }
-                | Type::Forall(Forall(binder, body)) | Type::Exists(Exists(binder, body)) => {
+                | Type::Forall(Forall(binder, body)) => {
+                    let newly_bound = self.bound.insert(binder.witness);
+                    let result = self.visit(body, tycker);
+                    if newly_bound {
+                        self.bound.remove(&binder.witness);
+                    }
+                    result?;
+                }
+                | Type::Exists(Exists { binder, mode, body }) => {
+                    if let ExistsMode::Manifest(definition) = mode {
+                        self.visit(definition, tycker)?;
+                    }
                     let newly_bound = self.bound.insert(binder.witness);
                     let result = self.visit(body, tycker);
                     if newly_bound {
@@ -324,9 +335,20 @@ impl TypeId {
                     }
                 }
                 | Type::Exists(exists) => {
-                    let Exists(tpat, ty) = exists;
-                    let ty_ = ty.subst_env(tycker, env)?;
-                    if ty == ty_ { *self } else { Alloc::alloc(tycker, Exists(tpat, ty_), kd, env) }
+                    let Exists { binder, mode, body } = exists;
+                    let (mode, definition_changed) = match mode {
+                        | ExistsMode::Abstract => (ExistsMode::Abstract, false),
+                        | ExistsMode::Manifest(definition) => {
+                            let definition_ = definition.subst_env(tycker, env)?;
+                            (ExistsMode::Manifest(definition_), definition != definition_)
+                        }
+                    };
+                    let body_ = body.subst_env(tycker, env)?;
+                    if !definition_changed && body == body_ {
+                        *self
+                    } else {
+                        Alloc::alloc(tycker, Exists { binder, mode, body: body_ }, kd, env)
+                    }
                 }
                 | Type::Data(id) => {
                     // // Debug: print
@@ -543,12 +565,19 @@ impl TypeId {
                     }
                 }
                 | Type::Exists(exists) => {
-                    let Exists(tpat, ty) = exists;
-                    let ty_ = ty.subst_abst(tycker, assign)?;
-                    if ty == ty_ {
+                    let Exists { binder, mode, body } = exists;
+                    let (mode, definition_changed) = match mode {
+                        | ExistsMode::Abstract => (ExistsMode::Abstract, false),
+                        | ExistsMode::Manifest(definition) => {
+                            let definition_ = definition.subst_abst(tycker, assign)?;
+                            (ExistsMode::Manifest(definition_), definition != definition_)
+                        }
+                    };
+                    let body_ = body.subst_abst(tycker, assign)?;
+                    if !definition_changed && body == body_ {
                         *self
                     } else {
-                        Alloc::alloc(tycker, Exists(tpat, ty_), kd, &env)
+                        Alloc::alloc(tycker, Exists { binder, mode, body: body_ }, kd, &env)
                     }
                 }
                 | Type::Data(id) => {
@@ -996,16 +1025,23 @@ impl TypeId {
                     }
                 }
                 | Type::Exists(ty) => {
-                    let Exists(tpat, ty) = ty;
-                    let tpat_ = tpat;
-                    let (ty_, fills_) = ty.solution(tycker)?;
-                    fills.extend(fills_);
-                    if ty == ty_ {
+                    let Exists { binder, mode, body } = ty;
+                    let (mode, definition_changed) = match mode {
+                        | ExistsMode::Abstract => (ExistsMode::Abstract, false),
+                        | ExistsMode::Manifest(definition) => {
+                            let (definition_, definition_fills) = definition.solution(tycker)?;
+                            fills.extend(definition_fills);
+                            (ExistsMode::Manifest(definition_), definition != definition_)
+                        }
+                    };
+                    let (body_, body_fills) = body.solution(tycker)?;
+                    fills.extend(body_fills);
+                    if !definition_changed && body == body_ {
                         res
                     } else {
                         Alloc::alloc(
                             tycker,
-                            Exists(tpat_, ty_),
+                            Exists { binder, mode, body: body_ },
                             tycker.statics.annotations_type[&res],
                             &env,
                         )
@@ -1425,12 +1461,25 @@ impl TypeId {
                     }
                 }
                 | Type::Exists(exists) => {
-                    let Exists(abst, body) = exists;
+                    let Exists { binder, mode, body } = exists;
+                    let (mode, definition_changed) = match mode {
+                        | ExistsMode::Abstract => (ExistsMode::Abstract, false),
+                        | ExistsMode::Manifest(definition) => {
+                            let definition_norm =
+                                definition.filled_norm_id(tycker, memo, memo_kd)?;
+                            (ExistsMode::Manifest(definition_norm), definition_norm != definition)
+                        }
+                    };
                     let body_norm = body.filled_norm_id(tycker, memo, memo_kd)?;
-                    if body_norm == body && kd_norm == kd {
+                    if !definition_changed && body_norm == body && kd_norm == kd {
                         self
                     } else {
-                        Alloc::alloc(tycker, Exists(abst, body_norm), kd_norm, &env)
+                        Alloc::alloc(
+                            tycker,
+                            Exists { binder, mode, body: body_norm },
+                            kd_norm,
+                            &env,
+                        )
                     }
                 }
                 | Type::Data(data) => {

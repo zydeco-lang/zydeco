@@ -389,39 +389,127 @@ struct PackPiBinderPattern {
     signature: PackPi,
 }
 
-impl PackPiBinderPattern {
-    fn build(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<VPatId> {
-        let PackPi { domain, witnesses, .. } = self.signature;
-        let (body_ty, witness_patterns) = witnesses.iter().copied().enumerate().try_fold(
-            (domain, Vec::<TPatId>::with_capacity(witnesses.len())),
-            |(body_ty, mut witness_patterns), (index, witness)| {
-                let view = body_ty.unroll(tycker)?.subst_env(tycker, env)?;
-                let Type::Exists(Exists(domain_binder, next_ty)) =
-                    tycker.type_filled(&view)?.to_owned()
-                else {
-                    return tycker.err(
-                        TyckError::PackageWitnessArityMismatch {
-                            expected: witnesses.len(),
-                            found: index,
-                        },
-                        std::panic::Location::caller(),
-                    );
+#[derive(Clone, Copy)]
+enum PackPiWitnessLayoutEntry {
+    Abstract(AbstId),
+    Manifest,
+}
+
+enum PackagePatternStructure {
+    Abstract,
+    Manifest,
+}
+
+#[derive(Clone)]
+struct PackPiWitnessLayout(Vec<PackPiWitnessLayoutEntry>);
+
+struct PackPiWitnessLayoutState<'a> {
+    domain: TypeId,
+    witnesses: &'a [AbstId],
+    expected: usize,
+}
+
+impl<'a> PackPiWitnessLayoutState<'a> {
+    fn collect(
+        self, tycker: &mut Tycker<'_>, env: &TyEnv,
+    ) -> Result<Vec<PackPiWitnessLayoutEntry>> {
+        let view = self.domain.unroll(tycker)?.subst_env(tycker, env)?;
+        let Type::Exists(Exists { binder, mode, body }) = tycker.type_filled(&view)?.to_owned()
+        else {
+            return if self.witnesses.is_empty() { Ok(Vec::new()) } else { self.mismatch(tycker) };
+        };
+
+        let (entry, witnesses, payload) = match mode {
+            | ExistsMode::Abstract => {
+                let Some((&witness, witnesses)) = self.witnesses.split_first() else {
+                    return self.mismatch(tycker);
                 };
                 let kind = tycker.statics.annotations_abst[&witness];
+                (
+                    PackPiWitnessLayoutEntry::Abstract(witness),
+                    witnesses,
+                    Alloc::alloc(tycker, witness, kind, env),
+                )
+            }
+            | ExistsMode::Manifest(definition) => {
+                (PackPiWitnessLayoutEntry::Manifest, self.witnesses, definition)
+            }
+        };
+        let domain = body.subst_abst(tycker, (binder.witness, payload))?;
+        let tail = Self { domain, witnesses, expected: self.expected }.collect(tycker, env)?;
+        Ok(std::iter::once(entry).chain(tail).collect())
+    }
+
+    #[track_caller]
+    fn mismatch<T>(&self, tycker: &mut Tycker<'_>) -> Result<T> {
+        tycker.err(
+            TyckError::PackageWitnessArityMismatch {
+                expected: self.expected,
+                found: self.expected - self.witnesses.len(),
+            },
+            std::panic::Location::caller(),
+        )
+    }
+}
+
+impl PackPiWitnessLayout {
+    fn new(signature: &PackPi, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<Self> {
+        let witnesses = signature.witnesses.iter().copied().collect::<Vec<_>>();
+        let state = PackPiWitnessLayoutState {
+            domain: signature.domain,
+            witnesses: &witnesses,
+            expected: witnesses.len(),
+        };
+        state.collect(tycker, env).map(Self)
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl PackPiBinderPattern {
+    fn build(self, tycker: &mut Tycker<'_>, env: &TyEnv) -> Result<VPatId> {
+        let layout = PackPiWitnessLayout::new(&self.signature, tycker, env)?;
+        let domain = self.signature.domain;
+        let PackPiWitnessLayout(entries) = layout;
+        let capacity = entries.len();
+        let (body_ty, witness_patterns) = entries.into_iter().enumerate().try_fold(
+            (domain, Vec::with_capacity(capacity)),
+            |(body_ty, mut witness_patterns), (index, entry)| -> Result<(TypeId, Vec<TPatId>)> {
+                let view = body_ty.unroll(tycker)?.subst_env(tycker, env)?;
+                let Type::Exists(Exists { binder, mode, body }) =
+                    tycker.type_filled(&view)?.to_owned()
+                else {
+                    unreachable!()
+                };
+                let kind = binder.payload_kind(tycker);
                 let witness_def = Alloc::alloc(
                     tycker,
                     VarName(format!("pack_witness_{index}")),
                     kind.into(),
                     &(),
                 );
-                let witness_pattern =
-                    domain_binder.pattern.rebind_payload(tycker, Some(witness_def), env);
-                let witness_ty = Alloc::alloc(tycker, witness, kind, env);
-                let body_ty = next_ty.subst_abst(tycker, (domain_binder.witness, witness_ty))?;
-                witness_patterns.push(witness_pattern);
+                witness_patterns.push(binder.pattern.rebind_payload(
+                    tycker,
+                    Some(witness_def),
+                    env,
+                ));
+                let payload = match (entry, mode) {
+                    | (PackPiWitnessLayoutEntry::Abstract(witness), ExistsMode::Abstract) => {
+                        Alloc::alloc(tycker, witness, kind, env)
+                    }
+                    | (PackPiWitnessLayoutEntry::Manifest, ExistsMode::Manifest(definition)) => {
+                        definition
+                    }
+                    | (PackPiWitnessLayoutEntry::Abstract(_), ExistsMode::Manifest(_))
+                    | (PackPiWitnessLayoutEntry::Manifest, ExistsMode::Abstract) => unreachable!(),
+                };
+                let body_ty = body.subst_abst(tycker, (binder.witness, payload))?;
                 Ok((body_ty, witness_patterns))
             },
         )?;
+
         let body_def = Alloc::alloc(tycker, VarName("pack_body".to_string()), body_ty.into(), &());
         let body_pattern: VPatId = Alloc::alloc(tycker, body_def, body_ty, env);
         Ok(Alloc::alloc(tycker, ConsN(witness_patterns, body_pattern), domain, env))
@@ -432,12 +520,14 @@ impl PackPiBinderPattern {
 /// witnesses with the fresh witnesses introduced by the translated pattern.
 struct PackPiPatternTranslation {
     pattern: VPatId,
-    witnesses: Vec<AbstId>,
+    layout: PackPiWitnessLayout,
 }
 
 impl PackPiPatternTranslation {
-    fn new(pattern: VPatId, witnesses: &PackTelescope) -> Self {
-        Self { pattern, witnesses: witnesses.iter().copied().collect() }
+    fn new(
+        pattern: VPatId, signature: &PackPi, tycker: &mut Tycker<'_>, env: &TyEnv,
+    ) -> Result<Self> {
+        Ok(Self { pattern, layout: PackPiWitnessLayout::new(signature, tycker, env)? })
     }
 
     fn translate(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, VPatId)> {
@@ -446,7 +536,7 @@ impl PackPiPatternTranslation {
         match tycker.statics.vpats[&self.pattern].to_owned() {
             | ValuePattern::Named(Named(name, inner)) => {
                 let (env, inner) =
-                    Self { pattern: inner, witnesses: self.witnesses }.translate(tycker, env)?;
+                    Self { pattern: inner, layout: self.layout }.translate(tycker, env)?;
                 let named = Alloc::alloc(tycker, Named(name, inner), translated_ty, &env.ty);
                 Ok((env, named))
             }
@@ -454,7 +544,7 @@ impl PackPiPatternTranslation {
                 tycker,
                 env,
                 &witnesses,
-                Some(&self.witnesses),
+                Some(&self.layout.0),
                 body,
                 translated_ty,
             ),
@@ -463,7 +553,7 @@ impl PackPiPatternTranslation {
             | ValuePattern::Ctor(_)
             | ValuePattern::Triv(_)
             | ValuePattern::VCons(_) => tycker.err(
-                TyckError::PackageWitnessArityMismatch { expected: self.witnesses.len(), found: 0 },
+                TyckError::PackageWitnessArityMismatch { expected: self.layout.len(), found: 0 },
                 std::panic::Location::caller(),
             ),
         }
@@ -502,9 +592,9 @@ impl MonConstruct<CompuId> for PackPiStructureBody {
     fn mbuild(self, tycker: &mut Tycker<'_>, env: MonEnv) -> Result<(MonEnv, CompuId)> {
         let source_pattern =
             PackPiBinderPattern { signature: self.signature.clone() }.build(tycker, &env.ty)?;
-        let (env, binder) =
-            PackPiPatternTranslation::new(source_pattern, &self.signature.witnesses)
-                .translate(tycker, env)?;
+        let translation =
+            PackPiPatternTranslation::new(source_pattern, &self.signature, tycker, &env.ty)?;
+        let (env, binder) = translation.translate(tycker, env)?;
         let argument = binder.reify(tycker);
         let continuation = Abs(cs::Pat("z", self.carrier), {
             let function = self.function;
@@ -867,15 +957,24 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
             Prod(ty_1_, ty_2_).mbuild(tycker, env)?
         }
         | Type::Exists(ty) => {
-            let Exists(binder, ty) = ty;
+            let Exists { binder, mode, body } = ty;
             let (env, pattern) = type_pattern_translation(tycker, env, binder.pattern)?;
             let witness = env.subst_abst.get(&binder.witness).copied().unwrap_or(binder.witness);
-            let (env, structure) = cs::Thk(cs::Signature { ty: witness }).mbuild(tycker, env)?;
-            let (env, body) = cs::TypeLift { ty }.mbuild(tycker, env)?;
+            let witness_ty = Alloc::alloc(tycker, witness, binder.payload_kind(tycker), &env.ty);
+            let (env, mode, structure_ty) = match mode {
+                | ExistsMode::Abstract => (env, ExistsMode::Abstract, witness_ty),
+                | ExistsMode::Manifest(definition) => {
+                    let (env, definition) = cs::TypeLift { ty: definition }.mbuild(tycker, env)?;
+                    (env, ExistsMode::Manifest(definition), definition)
+                }
+            };
+            let (env, structure) =
+                cs::Thk(cs::Signature { ty: structure_ty }).mbuild(tycker, env)?;
+            let (env, body) = cs::TypeLift { ty: body }.mbuild(tycker, env)?;
             let (env, body) = Prod(structure, body).mbuild(tycker, env)?;
             let (env, vtype) = VType.mbuild(tycker, env)?;
             let binder = TypeBinder { pattern, witness };
-            let exists = Alloc::alloc(tycker, Exists(binder, body), vtype, &env.ty);
+            let exists = Alloc::alloc(tycker, Exists { binder, mode, body }, vtype, &env.ty);
             (env, exists)
         }
         // os type is also not allowed in monadic blocks
@@ -918,32 +1017,38 @@ fn type_translation(tycker: &mut Tycker, env: MonEnv, ty: TypeId) -> Result<(Mon
 
 /// Value Pattern Translation `[VPat]`
 fn package_pattern_translation(
-    tycker: &mut Tycker, env: MonEnv, witnesses: &[TPatId], source_skolems: Option<&[AbstId]>,
-    body: VPatId, translated_ty: TypeId,
+    tycker: &mut Tycker, env: MonEnv, witnesses: &[TPatId],
+    source_layout: Option<&[PackPiWitnessLayoutEntry]>, body: VPatId, translated_ty: TypeId,
 ) -> Result<(MonEnv, VPatId)> {
     let Some((&witness, remaining)) = witnesses.split_first() else {
-        if let Some(source_skolems) = source_skolems
-            && !source_skolems.is_empty()
+        if let Some(source_layout) = source_layout
+            && !source_layout.is_empty()
         {
             return tycker.err(
-                TyckError::PackageWitnessArityMismatch { expected: source_skolems.len(), found: 0 },
+                TyckError::PackageWitnessArityMismatch { expected: source_layout.len(), found: 0 },
                 std::panic::Location::caller(),
             );
         }
         return cs::TermLift { tm: body }.mbuild(tycker, env);
     };
-    let Some((domain_abst, translated_body_ty)) = translated_ty.destruct_exists(tycker) else {
+    let Type::Exists(Exists {
+        binder: translated_binder,
+        mode: translated_mode,
+        body: translated_body_ty,
+    }) = tycker.type_filled(&translated_ty)?.to_owned()
+    else {
         unreachable!("translated package type must remain existential")
     };
-    let (source_skolem, remaining_source_skolems) = match source_skolems {
-        | Some(source_skolems) => {
-            let Some((source_skolem, remaining)) = source_skolems.split_first() else {
+    let domain_abst = translated_binder.witness;
+    let (source_entry, remaining_source_layout) = match source_layout {
+        | Some(source_layout) => {
+            let Some((&source_entry, remaining)) = source_layout.split_first() else {
                 return tycker.err(
                     TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
                     std::panic::Location::caller(),
                 );
             };
-            (Some(*source_skolem), Some(remaining))
+            (Some(source_entry), Some(remaining))
         }
         | None => (None, None),
     };
@@ -951,21 +1056,37 @@ fn package_pattern_translation(
     let (env, witness) = cs::TypeLift { ty: witness }.mbuild(tycker, env)?;
     let (witness_var, _) = witness.try_destruct_def(tycker);
     let mut env = env;
-    let pattern_abst = match source_skolem {
-        | Some(source_skolem) => {
+    let (pattern_abst, bound_ty, structure) = match (source_entry, translated_mode) {
+        | (Some(PackPiWitnessLayoutEntry::Abstract(source_skolem)), ExistsMode::Abstract) => {
             let pattern_abst = Alloc::alloc(tycker, witness, (), &());
             tycker.statics.existential_skolems.ensure(pattern_abst);
             env.ty = env.ty.with_skolem(pattern_abst);
             env.subst_abst.insert(source_skolem, pattern_abst);
-            pattern_abst
+            let (env_, abst_ty) = cs::Type(pattern_abst).mbuild(tycker, env)?;
+            env = env_;
+            (pattern_abst, abst_ty, PackagePatternStructure::Abstract)
         }
-        | None => domain_abst,
+        | (None, ExistsMode::Abstract) => {
+            let (env_, abst_ty) = cs::Type(domain_abst).mbuild(tycker, env)?;
+            env = env_;
+            (domain_abst, abst_ty, PackagePatternStructure::Abstract)
+        }
+        | (Some(PackPiWitnessLayoutEntry::Manifest), ExistsMode::Manifest(definition))
+        | (None, ExistsMode::Manifest(definition)) => {
+            (domain_abst, definition, PackagePatternStructure::Manifest)
+        }
+        | (Some(PackPiWitnessLayoutEntry::Abstract(_)), ExistsMode::Manifest(_))
+        | (Some(PackPiWitnessLayoutEntry::Manifest), ExistsMode::Abstract) => {
+            return tycker.err(
+                TyckError::PackageWitnessArityMismatch { expected: witnesses.len(), found: 0 },
+                std::panic::Location::caller(),
+            );
+        }
     };
-    let (env, abst_ty) = cs::Type(pattern_abst).mbuild(tycker, env)?;
     let translated_body_ty = if pattern_abst == domain_abst {
         translated_body_ty
     } else {
-        translated_body_ty.subst_abst(tycker, (domain_abst, abst_ty))?
+        translated_body_ty.subst_abst(tycker, (domain_abst, bound_ty))?
     };
     let Type::Prod(Prod(structure_ty, translated_tail_ty)) =
         tycker.type_filled(&translated_body_ty)?.to_owned()
@@ -974,14 +1095,19 @@ fn package_pattern_translation(
     };
     let mut env = env;
     if let Some(witness_var) = witness_var {
-        env.ty += [(witness_var, abst_ty.into())];
+        env.ty += [(witness_var, bound_ty.into())];
     }
-    let (env, structure) = cs::StrPat("str", pattern_abst, witness_var).mbuild(tycker, env)?;
+    let (env, structure) = match structure {
+        | PackagePatternStructure::Abstract => {
+            cs::StrPat("str", pattern_abst, witness_var).mbuild(tycker, env)?
+        }
+        | PackagePatternStructure::Manifest => cs::Pat("str", structure_ty).mbuild(tycker, env)?,
+    };
     let (env, body) = package_pattern_translation(
         tycker,
         env,
         remaining,
-        remaining_source_skolems,
+        remaining_source_layout,
         body,
         translated_tail_ty,
     )?;
@@ -1135,8 +1261,9 @@ fn computation_translation(
             let Abs(vpat, compu) = compu;
             match ty.destruct_pack_pi(tycker) {
                 | Some(signature) => {
-                    let (env, vpat) = PackPiPatternTranslation::new(vpat, &signature.witnesses)
-                        .translate(tycker, env)?;
+                    let translation =
+                        PackPiPatternTranslation::new(vpat, &signature, tycker, &env.ty)?;
+                    let (env, vpat) = translation.translate(tycker, env)?;
                     let (env, compu) = cs::TermLift { tm: compu }.mbuild(tycker, env)?;
                     let (env, signature) = cs::TypeLift { ty }.mbuild(tycker, env)?;
                     let abstraction = PackPiAbstraction { binder: vpat, body: compu, signature }

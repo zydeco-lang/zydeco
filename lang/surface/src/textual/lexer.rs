@@ -28,6 +28,8 @@ pub enum Tok<'input> {
     Codata,
     #[token("alias")]
     Alias,
+    #[token("as")]
+    As,
     #[token("def")]
     #[token("define")]
     Define,
@@ -141,6 +143,7 @@ impl Display for Tok<'_> {
             | Tok::Data => write!(f, "data"),
             | Tok::Codata => write!(f, "codata"),
             | Tok::Alias => write!(f, "alias"),
+            | Tok::As => write!(f, "as"),
             | Tok::Define => write!(f, "define"),
             | Tok::Extern => write!(f, "extern"),
             | Tok::Exec => write!(f, "main"),

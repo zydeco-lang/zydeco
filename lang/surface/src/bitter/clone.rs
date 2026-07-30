@@ -151,6 +151,15 @@ impl DeepClone for b::TermId {
                 let ty = ty.deep_clone(desugarer);
                 b::Sigma(params, ty).into()
             }
+            | b::Term::ManifestExists(term) => {
+                let b::ManifestExists { binder, definition, body } = term;
+                b::ManifestExists {
+                    binder: binder.deep_clone(desugarer),
+                    definition: definition.deep_clone(desugarer),
+                    body: body.deep_clone(desugarer),
+                }
+                .into()
+            }
             | b::Term::Thunk(term) => {
                 let b::Thunk(term) = term;
                 let term = term.deep_clone(desugarer);

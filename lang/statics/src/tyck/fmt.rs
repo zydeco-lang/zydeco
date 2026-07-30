@@ -491,8 +491,19 @@ impl<'a> Ugly<'a, Formatter<'a>> for PackPi {
 
 impl<'a> Ugly<'a, Formatter<'a>> for Exists {
     fn ugly(&self, f: &'a Formatter) -> String {
-        let Exists(tpat, ty) = self;
-        format!("(exists {} . {})", tpat.ugly(f), ty.ugly(f))
+        let binder = match self.mode {
+            | ExistsMode::Abstract => self.binder.ugly(f),
+            | ExistsMode::Manifest(definition) => {
+                let kind = f.statics.annotations_tpat[&self.binder.pattern];
+                format!(
+                    "({} as {} : {})",
+                    self.binder.pattern.ugly(f),
+                    definition.ugly(f),
+                    kind.ugly(f)
+                )
+            }
+        };
+        format!("(exists {} . {})", binder, self.body.ugly(f))
     }
 }
 
@@ -1125,14 +1136,30 @@ impl<'a> Pretty<'a, Formatter<'a>> for PackPi {
 
 impl<'a> Pretty<'a, Formatter<'a>> for Exists {
     fn pretty(&self, f: &'a Formatter) -> RcDoc<'a> {
-        let Exists(tpat, ty) = self;
+        let binder = match self.mode {
+            | ExistsMode::Abstract => self.binder.pretty(f),
+            | ExistsMode::Manifest(definition) => {
+                let kind = f.statics.annotations_tpat[&self.binder.pattern];
+                RcDoc::concat([
+                    RcDoc::text("("),
+                    self.binder.pattern.pretty(f),
+                    RcDoc::text(" as"),
+                    RcDoc::space(),
+                    definition.pretty(f),
+                    RcDoc::text(" :"),
+                    RcDoc::space(),
+                    kind.pretty(f),
+                    RcDoc::text(")"),
+                ])
+            }
+        };
         RcDoc::concat([
             RcDoc::text("exists"),
             RcDoc::space(),
-            tpat.pretty(f),
+            binder,
             RcDoc::space(),
             RcDoc::text("."),
-            RcDoc::concat([RcDoc::line(), ty.pretty(f)]).group().nest(f.indent),
+            RcDoc::concat([RcDoc::line(), self.body.pretty(f)]).group().nest(f.indent),
         ])
         .group()
     }

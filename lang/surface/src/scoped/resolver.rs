@@ -405,6 +405,13 @@ impl Resolve for TermId {
                 let () = body.resolve(resolver, (local, global))?;
                 term.into()
             }
+            | Term::ManifestExists(term) => {
+                let ManifestExists { binder, definition, body } = &term;
+                let () = definition.resolve(resolver, (local.clone(), global))?;
+                local = binder.resolve(resolver, (local, global))?;
+                let () = body.resolve(resolver, (local, global))?;
+                term.into()
+            }
             | Term::Thunk(term) => {
                 let Thunk(body) = &term;
                 let () = body.resolve(resolver, (local.clone(), global))?;
