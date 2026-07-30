@@ -1,0 +1,20 @@
+alias Transparent =
+  exists (Representation as Int : VType) .
+    Representation
+end
+
+def packed : Transparent = (
+  Int,
+  42,
+) end
+
+def reveal : Thk (Transparent -> Ret Int) = {
+  fn ((Representation, value) : Transparent) ->
+    ret value
+} end
+
+main
+  do value <- ! reveal packed;
+  do status <- ! sub value 42;
+  ! exit status
+end

@@ -1,0 +1,12 @@
+name = "pack"
+
+srcs = []
+deps = [{ local = "../../std/proj.toml" }]
+bins = [
+    "manifest.zy",
+    "interleaved.zy",
+    "named.zy",
+    "monadic.zy",
+]
+
+std = "nostd"

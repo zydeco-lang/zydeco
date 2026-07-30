@@ -1,0 +1,39 @@
+alias Mixed =
+  exists (Leading as Unit : VType) .
+  exists (X : VType) .
+  exists (AliasX as X : VType) .
+  exists (Trailing as Unit : VType) .
+    X
+end
+
+def ! mo_ret : Monad Ret =
+  comatch
+  | .return A value ->
+    ret value
+  | .bind A B computation continuation ->
+    do value <- ! computation;
+    ! continuation value
+  end
+end
+
+def ! translated =
+  monadic
+    let reveal = {
+      do _ <- ret ();
+      fn ((Leading, X, AliasX, Trailing, value) : Mixed) ->
+        ret value
+    } in
+    ! reveal (
+      Unit,
+      Unit,
+      Unit,
+      Unit,
+      (),
+    )
+  end
+end
+
+main
+  do _ <- ! translated Ret { ! mo_ret };
+  ! exit 0
+end

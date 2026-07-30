@@ -1,0 +1,25 @@
+alias CounterLibrary =
+  exists (Counter = Representation as Int : VType) .
+    (zero :: Representation) *
+    (increment :: Thunk (Representation -> Ret Representation))
+end
+
+def counter : CounterLibrary = (
+  Counter = Int,
+  zero = 0,
+  increment = {
+    fn (value : Int) ->
+      ! add value 1
+  },
+) end
+
+def use_counter : Thk (CounterLibrary -> Ret Int) = {
+  fn ((= Counter, = zero, = increment) : CounterLibrary) ->
+    ! increment zero
+} end
+
+main
+  do value <- ! use_counter counter;
+  do status <- ! sub value 1;
+  ! exit status
+end

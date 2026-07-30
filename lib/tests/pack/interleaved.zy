@@ -1,0 +1,58 @@
+alias Interleaved =
+  exists (Leading as Unit : VType) .
+  exists (X : VType) .
+  exists (AliasX as X : VType) .
+  exists (Middle as Unit : VType) .
+  exists (Y : VType) .
+  exists (AliasY as Y : VType) .
+    X * Y
+end
+
+alias Reveal =
+  pi (
+    (
+      Leading,
+      X,
+      AliasX,
+      Middle,
+      Y,
+      AliasY,
+      _,
+      _
+    ) : Interleaved
+  ) .
+    Ret (X * Y)
+end
+
+def reveal : Thk Reveal = {
+  fn (
+    (
+      Leading,
+      X,
+      AliasX,
+      Middle,
+      Y,
+      AliasY,
+      x,
+      y
+    ) : Interleaved
+  ) ->
+    ret (x, y)
+} end
+
+def packed : Interleaved = (
+  Unit,
+  Int,
+  Int,
+  Unit,
+  Char,
+  Char,
+  40,
+  'z',
+) end
+
+main
+  do (value, _) <- ! reveal packed;
+  do status <- ! sub value 40;
+  ! exit status
+end
